@@ -43,7 +43,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | V16 | days with both: AHF 50, estimate 40 (×10 days); then estimate-only days at 40 | factor 1.25; those estimate days count as 50 | AHF calibrates the estimates |
 | V17 | AHF and estimate both present on a day | AHF used for that day; the estimate is still stored | estimates never stop |
 | V18 | item has an AHF factor 1.25 and a mail factor 0.6 | estimate days use 1.25 only | one calibration, AHF preferred |
-| V19 | two complete local scans 3 h apart on the same day: Linen 50c ×20 long ×5 → ×3 | `books` volume for that day: sold 40; reading the same files again leaves it at 40 | scans feed volume, idempotently |
+| V19 | two complete local scans 2 h apart on the same day: Linen 50c ×20 long ×5 → ×3 (long auctions cannot have run out in 2 h) | `books` volume for that day: sold 40; reading the same files again leaves it at 40 | scans feed volume, idempotently |
 | V20 | a complete scan at 10:00 and a partial scan (coverage 0.6) at 12:00 | no `books` volume from that pair | partial books never feed volume |
 | V21 | a local scan at 14:20 lists Linen at 45c (×20, ×2) and 50c (×20, ×1) | `current` local: 45c, qty 40; `candles_h1` local for 14:00: close 45c, qty 60 | a scan becomes local prices |
 

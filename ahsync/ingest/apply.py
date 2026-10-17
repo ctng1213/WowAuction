@@ -25,6 +25,7 @@ from pathlib import Path
 
 from ahsync.clock import Clock
 from ahsync.ingest import savedvars as sv
+from ahsync.ingest.scans import derive_from_scans
 from ahsync.store.db import BookScan, Database
 from ahsync.sync.scheduler import STABLE_MS, file_mtime_ms
 
@@ -147,6 +148,7 @@ class _Apply:
         self.problems: list[str] = []
         self.pruning = _Pruning()
         self.follows: set[str] = set()     # characters whose professions and known recipes follow this file
+        self.new_scans: list[tuple[str, str, int, bool]] = []   # (market, scan id, at, complete) stored now
 
     def guarded(self, what: str, write: Callable[[], None]) -> bool:
         """Run one row's writes; a failure undoes only that row and is recorded (SPEC §5.2 rule 6).
@@ -294,6 +296,7 @@ class _Apply:
         groups = _group_counts(scan.entries)
         self.db.store_book(BookScan(scan.scan_id, market, "local", scan.char_id, scan.at_ms, scan.kind,
                                     scan.coverage), [(*k, n) for k, n in sorted(groups.items())])
+        self.new_scans.append((market, scan.scan_id, scan.at_ms, scan.kind == "full" and scan.coverage >= 1))
         self.mark(k[0] for k in groups)
 
     def events(self, events: Iterable[sv.Event]) -> None:
@@ -401,6 +404,7 @@ def apply_data(db: Database, data: sv.AHProfitData, realms: Mapping[str, str], n
         work.recipes(data)
         work.snapshots(data)
         work.scans(data.scans)
+        work.mark(derive_from_scans(db, work.new_scans))     # local prices and book volume (SPEC §4.2)
         work.events(data.events)
         work.rules(data.rules)
     advanced = _advance_ingested_until(db, work.pruning.candidates())

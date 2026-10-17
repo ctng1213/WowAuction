@@ -225,6 +225,63 @@ class RefreshStore:
         """
         return {r[0] for r in self.conn.execute("SELECT key FROM vendor_reagents")}
 
+    # ------------------------------------------------------------ local scans (SPEC §4.2)
+
+    def local_full_scans(self, market: str, from_ms: int, to_ms: int) -> list[tuple[str, int]]:
+        """Complete local scans of a market in a time range.
+
+        Args:
+            market: Market id.
+            from_ms: Start, inclusive.
+            to_ms: End, inclusive.
+
+        Returns:
+            (scan id, time ms), oldest first (ties: scan id).
+        """
+        return [tuple(r) for r in self.conn.execute(
+            "SELECT scan_id, at FROM scans WHERE market = ? AND src = 'local' AND kind = 'full' AND coverage >= 1 "
+            "AND at BETWEEN ? AND ? ORDER BY at, scan_id", (market, from_ms, to_ms))]
+
+    def scan_entries(self, scan_id: str) -> list[tuple[int, int, int, int, int]]:
+        """One stored book's rows.
+
+        Args:
+            scan_id: The scan.
+
+        Returns:
+            (key, unit price, stack, band, count), sorted.
+        """
+        return [tuple(r) for r in self.conn.execute(
+            "SELECT key, price, stack, band, count FROM book_entries WHERE scan_id = ? ORDER BY key, price, stack, band",
+            (scan_id,))]
+
+    def upsert_local_current(self, market: str, rows: list[tuple[int, int, int, int]]) -> None:
+        """Local `cur` from a scan; a row only replaces an older one (an old file read late changes nothing).
+
+        Args:
+            market: Market id.
+            rows: (key, lowest unit price, units at it, scan time ms).
+        """
+        self.conn.executemany(
+            "INSERT INTO current(market, key, price, qty, at, src) VALUES (?, ?, ?, ?, ?, 'local') "
+            "ON CONFLICT(market, key, src) DO UPDATE SET price = excluded.price, qty = excluded.qty, "
+            "at = excluded.at WHERE excluded.at >= current.at", [(market, *row) for row in rows])
+
+    def replace_volume_day(self, market: str, day: int, src: str, rows: dict[int, tuple[float, float, float]]) -> None:
+        """Write one day's volume for one source whole (idempotent: recomputed, never added to).
+
+        Args:
+            market: Market id.
+            day: Day number.
+            src: Volume source, e.g. "books".
+            rows: key -> (sold, expired, listed).
+        """
+        self.conn.execute("DELETE FROM volume_d1 WHERE market = ? AND day = ? AND src = ?", (market, day, src))
+        self.conn.executemany(
+            "INSERT INTO volume_d1(market, key, day, listed, sold, expired, src, conf) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [(market, key, day, listed, sold, expired, src, "medium")
+             for key, (sold, expired, listed) in sorted(rows.items())])
+
     # ------------------------------------------------------------ staged writes and publish
 
     def stage_item_stats(self, market: str, key: int, stats: dict, updated_ms: int) -> None:
