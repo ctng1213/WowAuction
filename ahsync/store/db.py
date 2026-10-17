@@ -30,7 +30,8 @@ CANDLE_TABLES = ("candles_h1", "candles_d1")
 # Tables and time columns prune may delete from (SPEC §3.2 retention). Guards the SQL built in delete_before.
 PRUNABLE = {
     "candles_h1": "t", "candles_d1": "t", "volume_d1": "day", "posts": "at", "purchases": "at",
-    "crafts": "at", "auction_mail": "at", "mail_sent": "at", "actions": "run_at", "fetch_failures": "hour",
+    "crafts": "at", "auction_mail": "at", "mail_sent": "at", "skips": "at", "actions": "run_at",
+    "fetch_failures": "hour",
 }
 
 
