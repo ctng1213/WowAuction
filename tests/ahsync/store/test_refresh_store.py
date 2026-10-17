@@ -108,3 +108,9 @@ def test_skip_action_changes_only_open_actions(db):
     assert db.skip_action("a1", 99) is True
     assert db.skip_action("a2", 99) is False and db.skip_action("nope", 99) is False
     assert db.conn.execute("SELECT status, done_at FROM actions WHERE action_id = 'a1'").fetchone() == ("skipped", 99)
+
+
+def test_skill_of_a_character(db):
+    sql(db, "INSERT INTO professions(char_id, profession, skill, max_skill) VALUES (?, ?, ?, ?)",
+        ("A-R", "Mining", 60, 75))
+    assert db.skill_of("A-R", "Mining") == 60 and db.skill_of("A-R", "Herbalism") is None

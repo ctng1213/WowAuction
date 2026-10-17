@@ -4,7 +4,7 @@
 
 # M1 sync and storage
 SEC1-SEC7
-FM5 FM7-FM9 FM14 FM17-FM24
+FM5 FM14 FM17-FM24
 FI1
 
 # M3-M4 engine

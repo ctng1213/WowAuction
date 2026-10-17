@@ -161,6 +161,20 @@ class RefreshStore:
                                 (profession, *char_ids)).fetchone()
         return row[0]
 
+    def skill_of(self, char_id: str, profession: str) -> int | None:
+        """A character's skill in a profession.
+
+        Args:
+            char_id: Character id.
+            profession: enUS profession name.
+
+        Returns:
+            The skill, or None when the character doesn't have it.
+        """
+        row = self.conn.execute("SELECT skill FROM professions WHERE char_id = ? AND profession = ?",
+                                (char_id, profession)).fetchone()
+        return row[0] if row else None
+
     def known_recipes(self, char_ids: list[str]) -> list[RecipeRow]:
         """Recipes known by any of the characters, with reagents and crafters.
 
