@@ -8,7 +8,8 @@ WowAuction: **AHSync** (Python companion app: sync + engine + dashboard) and **A
 python -m pip install -r requirements-dev.txt     # once: pytest + coverage (dev-only)
 tools/test.ps1                 # all tests: regenerates Lua scenario fixtures, then pytest + Lua runner (-NoLua skips Lua)
 python -m pytest tests/ahsync  # Python tests only
-python tools/gen_lua_fixtures.py                  # tests/scenarios/*.json -> Lua (run before the Lua runner alone)
+python tools/gen_lua_fixtures.py                  # tests/scenarios/*.json + tests/properties/*.json -> Lua (run before the Lua runner alone)
+python tools/gen_properties.py                    # regenerate LP1 property cases after changing a ported formula
 lua5.1 tests/support/lua/runner.lua tests/addon   # Lua tests only
 python -m ahsync               # run the app
 python tools/deploy.py         # copy addon/* into the WoW AddOns folder (never overwrites a generated Data.lua; --dry-run)

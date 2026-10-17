@@ -268,6 +268,8 @@ All the heavy lifting happens in AHSync, and only in a **full refresh**. Everyth
 - Items on any list get the full 24 × 8 grid. Other items, which only need the tooltip, get 24 × 3 (0, 5 and 20 ahead), to stay within the `Data.lua` budget.
 - **Encoding: one character per point.** Each `P` is quantized to 2% steps, `n = floor(P × 50 + 0.5)` (0–50), and written as `string.char(35 + n)`, row by row, in the item's string. Codes 35–85 contain no `"` and no `\`, so no escaping is needed. A 9k-item market then needs about 650 KB of curves, which leaves room in the 2 MB budget for everything else. **AHSync uses the quantized curve too**, not the raw simulation result, so Python and Lua read identical values (IU11).
 
+In each column the units ahead are modelled as one block that stays the whole window, which is conservative: the curve can't know which future competitors expire when. Each value is stored in 2% steps (below).
+
 When a price or the competition changes, AHSync and the addon both pick the row for the current hour and interpolate linearly between the units-ahead points, in O(1) time. More than 24 h after the refresh, they reuse the row for the same clock hour, and the age badge already warns that the data is old. The full simulation is never run live.
 
 **Idle means idle.**
@@ -387,7 +389,7 @@ Scale linearly per extra market.
 |---|---|
 | `cur`, `curQty`, `curAge` | newest lowest buyout (AHF or local, whichever is newer), quantity, age; nil when nothing is listed |
 | `curOthers` | lowest buyout that is not one of your own auctions (`own_auctions`). It uses the next price in the newest local book if you hold the lowest one; nil if unknown |
-| `med7`, `med30` | median of hourly closes in the window (one per item and hour, §2.2). With fewer than 24 hourly closes, it uses the median of daily closes instead; nil when there are neither |
+| `med7`, `med30` | median of hourly closes in the window (one per item and hour, §2.2). With fewer than 24 hourly closes, it uses the median of daily closes instead, or the few hourly closes when there are no daily ones; nil when there are neither |
 | `p10_30`, `p90_30` | nearest-rank 10th and 90th percentiles of hourly closes over 30 days |
 | `trend7` | least-squares slope of the daily medians over the last 7 days ÷ `med7` × 100, in % per day. It needs at least 4 days of data, otherwise it is 0 |
 | `sold/day`, `sellThru` | **sales volume**; see §3.3.1 for its sources |
@@ -458,7 +460,7 @@ Both use the same formulas with or without Premium. Premium only supplies better
 - **Days of supply** = `N ÷ S`, e.g. "3.1 days of supply".
 
 **1. Queue simulation** (`sellprob.simulate`). It runs over the window's clock hours `k = 0 … W−1` (slot `t_k`) and is deterministic:
-- **Demand.** In hour `k`, buyers take `S ÷ 24 × sales_how[t_k]` units from the cheapest listings available, oldest-cheapest first. `sales_how` is the hourly sales profile (§3.3), so a window that covers the evening rush sees more buyers than one overnight.
+- **Demand.** In hour `k`, buyers take `S ÷ 24 × sales_how[t_k]` units from the cheapest listings available, oldest-cheapest first. At an equal price the book's order stands in for "oldest"; the order never depends on the time-left band, so a competitor expiring sooner can't reorder the queue (PI12). `sales_how` is the hourly sales profile (§3.3), so a window that covers the evening rush sees more buyers than one overnight.
 - **Who is ahead of you.** Competing auctions priced at or below `p` are ahead. At an equal price they are also ahead of you, which is the conservative choice.
 - **Competitors expire.** An auction with band midpoint `m` is available during hour `k` only while `k < m`. The midpoints are: short 0.25 h, medium 1.25 h, long 5 h, very long `(8 + longest duration) ÷ 2`. When an auction expires, its unsold units leave the queue and stop absorbing demand. The band bounds are the same as §3.3.1 and still need verifying (§6).
 - **New undercutters.** At the start of each hour, `L × u(p) ÷ 24` new units appear priced below you. They are the cheapest listings from then on and stay up for the rest of the window.
@@ -543,7 +545,8 @@ The week's 168 hours are treated as **repeating slots**: every Tuesday 19:00 is 
   2. Join adjacent qualifying slots into windows; a window can cross midnight.
   3. Rank the windows by the sum of their scores, and keep the top 3.
   4. Each window carries its average price ratio (`how`) and the number of weeks of data behind it.
-- **Pattern strength**, from the weeks of data in the window's slots: under 3 weeks is "early pattern", 3–5 is "pattern", 6 or more is "established". It feeds the window's confidence. With no pattern, the item has no windows and the plan uses posting now.
+- A week whose every slot qualifies (a flat score) has no best window: posting time doesn't matter, so the plan posts now.
+- **Pattern strength**, from the weeks of data in the window's slots (the fewest weeks of any slot in the window): under 3 weeks is "early pattern", 3–5 is "pattern", 6 or more is "established". It feeds the window's confidence. With no pattern, the item has no windows and the plan uses posting now.
 - **Where windows are used.** The Week plan's peak slot is the best slot inside the top window, and the post is placed 8 h before it (§3.4C). Windows are also shown on the tooltip ("Best time to sell"), on the item detail (heat map plus windows) and in Inventory.
 - **Forecast.** The expected price in a window next week = `med30 × how × (1 + trend7/100 × days ahead)` (§3.4C). The chance to sell there is the simulation over that window (§3.3.2), using `sales_how` for demand. Both get more confident as the pattern strengthens.
 
@@ -1007,7 +1010,7 @@ tests/
   pending_scenarios.txt  listed IDs not built yet (§8.1)
 pyproject.toml         pytest and coverage settings only (no runtime dependencies)
 requirements-dev.txt   pytest, coverage
-tools/                 record_fixtures.py, gen_lua_fixtures.py, gen_bonus_suffixes.py, deploy.py, savedvars_report.py (what the addon captured; §6 checks), visual.py, bench.py (performance budgets, §3.1.2)
+tools/                 record_fixtures.py, gen_lua_fixtures.py, gen_properties.py (LP1 cases, §8.7), gen_bonus_suffixes.py, deploy.py, savedvars_report.py (what the addon captured; §6 checks), visual.py, bench.py (performance budgets, §3.1.2)
 docs/SPEC.md, docs/SCENARIOS.md, docs/mockups/addon.html (in game), docs/mockups/dashboard.html (desktop)
 CLAUDE.md
 ```

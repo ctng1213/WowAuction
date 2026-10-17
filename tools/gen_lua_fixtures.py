@@ -1,4 +1,4 @@
-"""Convert the shared engine scenarios (tests/scenarios/*.json) to Lua (SPEC §8.1).
+"""Convert the shared engine scenarios and LP1 property cases to Lua (SPEC §8.1, §8.7).
 
 Writes tests/addon/generated/<name>.lua for each JSON file. Each Lua file
 returns the same data as a table, so the Lua engine port is checked against the
@@ -14,6 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCENARIOS = ROOT / "tests" / "scenarios"
+PROPERTIES = ROOT / "tests" / "properties"   # LP1 cases from tools/gen_properties.py
 OUT = ROOT / "tests" / "addon" / "generated"
 
 
@@ -92,13 +93,13 @@ def generate(scenarios_dir: Path = SCENARIOS, out_dir: Path = OUT) -> list[Path]
     for source in sorted(scenarios_dir.glob("*.json")):
         data = json.loads(source.read_text(encoding="utf-8"))
         target = out_dir / f"{source.stem}.lua"
-        header = f"-- Generated from tests/scenarios/{source.name} by tools/gen_lua_fixtures.py. Do not edit.\n"
+        header = f"-- Generated from {source.relative_to(ROOT).as_posix()} by tools/gen_lua_fixtures.py. Do not edit.\n"
         target.write_text(header + "return " + to_lua(data) + "\n", encoding="utf-8", newline="\n")
         written.append(target)
     return written
 
 
 if __name__ == "__main__":
-    paths = generate()
+    paths = generate() + generate(PROPERTIES, OUT / "properties")
     print(f"gen_lua_fixtures: {len(paths)} file(s) -> {OUT.relative_to(ROOT).as_posix()}")
     sys.exit(0)

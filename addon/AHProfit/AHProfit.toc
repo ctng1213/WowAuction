@@ -13,3 +13,4 @@ Capture\Professions.lua
 Capture\Inventory.lua
 Core\Diagnostics.lua
 Engine\Fees.lua
+Engine\SellProb.lua
