@@ -43,6 +43,9 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | V16 | days with both: AHF 50, estimate 40 (×10 days); then estimate-only days at 40 | factor 1.25; those estimate days count as 50 | AHF calibrates the estimates |
 | V17 | AHF and estimate both present on a day | AHF used for that day; the estimate is still stored | estimates never stop |
 | V18 | item has an AHF factor 1.25 and a mail factor 0.6 | estimate days use 1.25 only | one calibration, AHF preferred |
+| V19 | two complete local scans 3 h apart on the same day: Linen 50c ×20 long ×5 → ×3 | `books` volume for that day: sold 40; reading the same files again leaves it at 40 | scans feed volume, idempotently |
+| V20 | a complete scan at 10:00 and a partial scan (coverage 0.6) at 12:00 | no `books` volume from that pair | partial books never feed volume |
+| V21 | a local scan at 14:20 lists Linen at 45c (×20, ×2) and 50c (×20, ×1) | `current` local: 45c, qty 40; `candles_h1` local for 14:00: close 45c, qty 60 | a scan becomes local prices |
 
 **Sync and storage** (`sync/catchup`, `store/prune`):
 
@@ -310,6 +313,9 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | A3 | a `Data.lua` with 20k items | loads in Lua 5.1 without hitting the constant limit |
 | A4 | `Data.lua` with `ingestedUntil` = T | scans, posts, purchases, crafts and mail at or before T are removed from SavedVariables; later ones are kept |
 | A5 | an engine error is raised during a re-rank | caught at the UI boundary and shown as a status line; no Lua error popup; the list keeps its last good state |
+| A6 | the AH opens and another addon's `ReplicateItems` answers with 3 auctions (Linen 45c ×20 long, Linen 45c ×20 long, Copper Bar 1s ×5 short) | one `full` scan, coverage 1, rows `2589,45,20,3,2;2840,100,5,1,1`; AHProfit made no ReplicateItems call |
+| A7 | the AH opens and no scan result arrives within 30 s | AHProfit calls `ReplicateItems` once; opening the AH again 5 min later doesn't call it again (20-min rule) |
+| A8 | a 10,000-auction result | read over several frames, no step over the 4 ms budget (counted by the stub clock); entering combat pauses it and leaving combat finishes it |
 
 ## 2. Visual tests (UI1–UI11)
 

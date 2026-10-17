@@ -870,7 +870,14 @@ Everything in §2.2. Recipe definitions are keyed by profession, so they are sto
 
 ### 4.2 Scan
 
-A button on the AH frame runs a full scan (`ReplicateItems`, if Forever supports it) or a scan of the current page or search. Its results feed AHSync as source `local`. They also immediately update prices in the addon for this session, which matters for disenchant and flip targets.
+**Full scans are shared, not requested** (verified 2026-10-16). Forever has `C_AuctionHouse.ReplicateItems`, which returns the whole auction house (about 95k auctions on our realm). The AuctionHouseFYI addon already calls it when the AH opens, at most every 20 minutes, backing off when the server throttles it (3 to 17 minutes). The results arrive as the `REPLICATE_ITEM_LIST_UPDATE` event, which any addon can read.
+- **Listen.** While the AH window is open, AHProfit listens for `REPLICATE_ITEM_LIST_UPDATE` and reads every auction (`GetNumReplicateItems`, `GetReplicateItemInfo`, `GetReplicateItemLink`, `GetReplicateItemTimeLeft`). It costs no request of its own, so it never competes with AuctionHouseFYI for the throttle. Reading is read-only.
+- **Fall back.** When no scan result has arrived 30 s after the AH opened, and AHProfit hasn't called `ReplicateItems` in the last 20 minutes this session, it calls it itself (same back-off: a call that gets no answer doubles the wait, up to 2 h).
+- **Store.** Auctions are grouped as `key, unit price, stack, band → count` (unit price = buyout ÷ stack; auctions without a buyout are left out) and saved as one `scans` entry (§2.2.1) with kind `full` and coverage 1. Closing the AH, a disconnect or a `/reload` before the end saves it as `partial` with the coverage reached (FM19); partial scans never feed volume (§3.3.1). At most 4 un-ingested full scans are kept; the oldest is dropped first (FM22).
+- **AHSync** turns each stored scan into source `local` data: `current` (each key's lowest unit price and the units at it) and `candles_h1` (that price as the hour's close, with the units listed as its quantity). For each pair of consecutive complete local scans of a market at most 6 h apart, the order-book diff (§3.3.1) gives `books` volume, summed per day and written whole for that day, so re-reading a file changes nothing.
+- A scan of a search or page (the Browse list) is not captured in v1.
+
+The scan's results also update the addon's prices for this session, which matters for disenchant and flip targets (M5).
 
 ### 4.3 Show
 
@@ -1048,7 +1055,7 @@ The addon must never be noticeable in game: **no work while idle, a few millisec
 | **Pooled, virtual lists** | Only the visible rows exist (about 15 frames per list), reused while scrolling. Rows are never created per item. |
 | **Lazy data decode** | `Data.lua` keeps items as compact strings keyed by item id. A row is decoded only when needed (tooltip, list) and kept in a small cache of about 500 entries. Login never builds 9k tables. |
 | **Cheap tooltip** | One cache lookup plus a few `AddDoubleLine` calls. No string building beyond formatting the numbers. |
-| **Chunked full scans** | A full scan (`ReplicateItems`) is processed in a coroutine with a **4 ms budget per frame**, so it never stalls the game. It runs only on a click, never automatically, and never in combat. |
+| **Chunked full scans** | A full scan's results (`ReplicateItems`, usually requested by AuctionHouseFYI, §4.2) are read in a coroutine with a **4 ms budget per frame**, stepped by one-shot timers, so it never stalls the game. Reading pauses in combat and resumes after it. AHProfit requests a scan itself only as the §4.2 fallback. |
 | **No per-frame allocations** | Reuse tables, cache globals in locals, and avoid string concatenation in loops (already in CLAUDE.md). |
 | **Small SavedVariables** | Order books are stored as compact strings. At most 4 un-ingested full scans are kept (the oldest is dropped first, with a status warning), and the pruning handshake (§2.2) removes ingested data. Target: ≤ 5 MB on disk. |
 | **Respect AH throttles** | Searches go through one queue that obeys `CanSendAuctionQuery` or its Forever equivalent (§6). |

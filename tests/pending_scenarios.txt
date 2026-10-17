@@ -30,3 +30,6 @@ VW1
 # M2/M5 addon
 A2-A5
 UI1-UI11
+
+# Full scans shared with AuctionHouseFYI (SPEC 4.2)
+V19-V21 A6-A8
