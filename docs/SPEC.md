@@ -977,7 +977,7 @@ ahsync/
   export/     lua_data.py
   web/        server.py, static/
 addon/AHProfit/
-  Core/       Adapter.lua (every game API call), Events.lua
+  Core/       Adapter.lua (every game API call), Events.lua, DB.lua (AHProfitDB setup, migrations, pruning; §2.2.1)
   Capture/    Characters.lua, Professions.lua, Inventory.lua, Mail.lua, Posts.lua, Purchases.lua, Crafts.lua
   Scan/       Search.lua, Replicate.lua
   Engine/     Fees.lua, SellProb.lua, Disenchant.lua, Craft.lua   (ports of ahsync/engine)
