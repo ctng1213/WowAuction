@@ -13,7 +13,8 @@ local Replicate = {}
 AHProfit.Scan = AHProfit.Scan or {}
 AHProfit.Scan.Replicate = Replicate
 
-Replicate.BUDGET_MS = 4              -- SPEC §5.1: work per frame
+Replicate.BUDGET_MS = 4              -- SPEC §5.1: work per frame, the ceiling
+Replicate.TARGET_MS = 3              -- where a step aims to stop: 1 ms left for a collector step or a slow row
 Replicate.FALLBACK_WAIT_S = 30       -- SPEC §4.2: no answer this long after opening → call it ourselves
 Replicate.MIN_CALL_GAP_S = 1200      -- SPEC §4.2: at most one own call per 20 min
 Replicate.MAX_CALL_GAP_S = 7200      -- an unanswered call doubles the gap, up to 2 h
@@ -127,16 +128,18 @@ local function EndReading(complete)
   run.phase = "sort"
 end
 
---- Whether one more unit of work would likely cross the frame budget. The next unit is
---- assumed to cost twice this step's average so far: one slow row or item, a cache miss or
---- a collector step, then still fits (measured 2026-10-17: 4.18 ms with 1× the average).
+--- Whether one more unit of work would likely cross the step's target. The next unit is
+--- assumed to cost twice this step's average so far, and the target leaves 1 ms below the
+--- 4 ms ceiling for what averages can't foresee: a collector step, a new link to parse, an
+--- item with many price levels (measured 2026-10-17: 4.18 ms aiming at 4 with 1× the
+--- average, 4.50 ms with 2×).
 ---@param start number  Step start, ProfileMs
 ---@param done number   Units of work done this step
 ---@return boolean      true to stop this step now
 local function BudgetSpent(start, done)
   if done == 0 then return false end
   local elapsed = Adapter.ProfileMs() - start
-  return elapsed + 2 * elapsed / done > Replicate.BUDGET_MS
+  return elapsed + 2 * elapsed / done > Replicate.TARGET_MS
 end
 
 --- Count one auction's raw time left for the diagnostics histogram (A11, A12).

@@ -75,7 +75,7 @@ describe("Replicate", function()
     Stubs.Advance(5)
     local stats, scan = Replicate.Stats(), AHProfitDB.scans[1]
     assert_eq(stats.maxStepMs <= Replicate.BUDGET_MS, true, "no step over 4 ms (" .. stats.maxStepMs .. ")")
-    assert_eq(stats.steps >= 10000 * 0.25 / 4, true, "15 auctions per 4 ms step (the 16th would cross at twice the average): at least 625 steps")
+    assert_eq(stats.steps >= 10000 * 0.25 / 4, true, "11 auctions per step (the 12th would cross the 3 ms target at twice the average): at least 625 steps")
     local units = 0
     for _, a in ipairs(ManyAuctions(10000)) do units = units + a.count end
     assert_eq({ scan.kind, Units(scan.rows) }, { "full", units }, "every auction's units are in the book")
@@ -134,18 +134,18 @@ describe("Replicate", function()
   end)
 
   it("FM19 the AH closed at 40% of a full scan is saved as partial", function()
-    Boot({ auctions = ManyAuctions(75), costMs = 0.25 })
+    Boot({ auctions = ManyAuctions(55), costMs = 0.25 })
     Stubs.FireEvent("AUCTION_HOUSE_SHOW")
-    Stubs.FireEvent("REPLICATE_ITEM_LIST_UPDATE")    -- reads 15
-    Stubs.RunDueTimers()                             -- reads 15 more: 32 of 80
+    Stubs.FireEvent("REPLICATE_ITEM_LIST_UPDATE")    -- reads 11
+    Stubs.RunDueTimers()                             -- reads 11 more: 32 of 80
     Stubs.FireEvent("AUCTION_HOUSE_CLOSED")
     Stubs.Advance(1)
     local scan = AHProfitDB.scans[1]
-    assert_eq({ scan.kind, scan.coverage }, { "partial", 0.4 }, "30 of 75 auctions read")
+    assert_eq({ scan.kind, scan.coverage }, { "partial", 0.4 }, "22 of 55 auctions read")
   end)
 
   it("a /reload mid-read saves what was read as partial", function()
-    Boot({ auctions = ManyAuctions(75), costMs = 0.25 })
+    Boot({ auctions = ManyAuctions(55), costMs = 0.25 })
     Stubs.FireEvent("AUCTION_HOUSE_SHOW")
     Stubs.FireEvent("REPLICATE_ITEM_LIST_UPDATE")
     Stubs.FireEvent("PLAYER_LOGOUT")
