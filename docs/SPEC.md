@@ -133,7 +133,9 @@ Reading rules:
 
 - AHSync re-reads the file only after its modification time has been unchanged for 2 seconds, so it never parses a half-written file.
 - The file carries `formatVersion`, and every event carries a unique `event_id`, so ingest is idempotent. A file that won't parse is retried from WoW's `AHProfit.lua.bak` (§5.2).
-- **Pruning handshake.** Order books, events and mail would make SavedVariables grow without limit, which slows login and logout. AHSync writes `ingestedUntil` (the newest event time it has stored, in ms) into `Data.lua` (§3.5). On load, the addon deletes scans, posts, purchases, crafts and mail rows at or before that time. It keeps unconfirmed attempts younger than 1 h (§5.2), so a confirmation that arrives later still reaches AHSync, which upserts the event by its id.
+- **Pruning handshake.** Order books, events and mail would make SavedVariables grow without limit, which slows login and logout. AHSync writes `ingestedUntil` into `Data.lua` (§3.5) as a **map from character id to time** (ms): for each character, the newest event or scan time stored for that character. On load, the addon deletes each character's scans, posts, purchases, crafts and mail rows at or before that character's value.
+  - **Per character, because `Data.lua` is shared by every account** on the machine: one global time could pass events of another account whose file couldn't be read.
+  - **Never past a row that was set aside.** When any of a character's rows (a scan or an event) was not stored, for example a scan from a realm missing in `[realms]` or a row the parser rejected, that character's value stops 1 s before the oldest such row. The addon then keeps it, and it is ingested once the problem is fixed. It keeps unconfirmed attempts younger than 1 h (§5.2), so a confirmation that arrives later still reaches AHSync, which upserts the event by its id.
 
 #### 2.2.1 SavedVariables layout (format version 1)
 
@@ -203,6 +205,7 @@ AHProfitDB = {
 | `skip` | `action` (action id from `Data.lua`) | the row menu's "Mark as skipped" |
 
 - **`diagnostics`** (written by `Core/Diagnostics.lua` at `PLAYER_LOGOUT`, which also fires on `/reload`): `{ at, client, apis, errors, skillLines, merchant, tradeSkill, namespaces, professions, setupError }`. It holds the client build, which of the APIs the addon depends on exist (`"name=type;…"`), the handler errors caught this session (at most 10), the raw Skills-tab rows, the last merchant's raw items, the last trade skill window's raw state, the function names inside the modern API namespaces (`"C_X=FnA FnB;…"`), the raw `GetProfessions` slots, and any database setup error. It exists so `tools/savedvars_report.py` can explain a missing capture without Lua error popups (§6). AHSync never ingests it, and each session replaces it.
+- **Professions and known recipes follow the file.** The addon writes a character's professions whole and only ever adds known recipes. AHSync replaces that character's professions and known recipes with the file's when the file's `characters[id].updated` is at least the stored one; an older file changes nothing. So an unlearned profession disappears, and a relearned one starts again at its new skill.
 - `confirmed` starts `false` when the hook fires and turns `true` when the action is confirmed (§5.2). The same row is updated in place.
 - Untracked changes (FM21) are not events. AHSync derives them by comparing consecutive inventory snapshots with the events between them.
 
@@ -308,7 +311,7 @@ Storage rules:
 - backup = copy the file
 - handles tens of millions of rows
 
-All DB access lives in `db.py`. Moving to Postgres would only mean replacing that module, if this ever becomes multi-user or hosted.
+All DB access lives in `store/` (`db.py`, plus modules split off it by responsibility, such as the SavedVariables ingest writes). Moving to Postgres would only mean replacing that package, if this ever becomes multi-user or hosted.
 
 ```
 items(key PK, item_id, name, quality, ilvl, class, subclass, vendor_buy, vendor_sell, stack, updated)
@@ -319,10 +322,10 @@ calibration(market, key, source, factor, samples, updated,   PK(market,key,sourc
 current(market, key, price, qty, at, src,                    PK(market,key,src))
 scans(scan_id PK, market, src, char_id, at, kind)            -- src: local (your scan) | ahf (Premium books); char_id null for ahf
 book_entries(scan_id, key, price, stack, band, count,        PK(scan_id,key,price,stack,band))
-auction_mail(char_id, key, qty, price, outcome, at,          PK(char_id,key,at,outcome))
+auction_mail(event_id PK, char_id, key, qty, price, outcome, at)   -- index (char_id,key,at,outcome)
 posts(post_id PK, char_id, market, key, stack, price, cost_each, p_at_post, duration_h, deposit, at, outcome, resolved_at, action_id)
-purchases(char_id, key, qty, price, source, at, action_id,   PK(char_id,key,at))
-crafts(char_id, spell_id, count, cost_each, at, action_id,   PK(char_id,spell_id,at))
+purchases(event_id PK, char_id, key, qty, price, source, at, action_id, confirmed)   -- index (char_id,key,at)
+crafts(event_id PK, char_id, spell_id, count, cost_each, at, action_id)   -- index (char_id,spell_id,at)
 cost_basis(key PK, qty, total_cost, untracked_qty)
 actions(action_id PK, run_at, slot_ms, char_id, kind, key, qty, price, expected_net, conf, status, done_qty, done_at, parent_id,
         window_start_ms, window_end_ms, anchor_net, anchor_window_ms, replaces_id, week_start_ms)
@@ -333,7 +336,10 @@ recipes(profession, spell_id, product_key, yield_min, yield_max, skill_req, cool
 reagents(profession, spell_id, key, count,                   PK(profession,spell_id,key))
 known_recipes(char_id, spell_id,                             PK(char_id,spell_id))
 inventory(char_id, location, key, qty, bound,                PK(char_id,location,key,bound))
-own_auctions(char_id, key, price, stack, band, count, seen,  PK(char_id,key,price,stack))
+own_auctions(char_id, key, price, stack, band, count, seen,  PK(char_id,key,price,stack,band))
+snapshots(char_id, location, at,                             PK(char_id,location))   -- capture time of each place, incl. auctions
+skips(event_id PK, char_id, action_id, at)                   -- "Mark as skipped" from the addon; applied when the action exists
+vendor_reagents(key PK)                                      -- seen at a merchant (add-only)
 sync_state(market PK, last_hour, last_d1, last_volume, live_since, last_run)
 meta(name PK, value)                                         -- e.g. savedvars_ingested_until
 mail_sent(event_id PK, char_id, to_char, key, qty, at, action_id)
@@ -354,7 +360,9 @@ fetch_failures(market, hour, failures, last_error, last_at,  PK(market,hour))   
   - Items you already held when tracking started count as cost 0, and `untracked_qty` marks them, so the UI can say "before tracking".
 - `item_rules.rule` is `no_buy`, `ignore`, `keep` or `none` (§3.4.2). `source` is `dashboard` or `addon`. Clearing a rule writes `none` with a new `set_at` rather than deleting the row. That tombstone is what lets a clear beat an older rule from the other side. Tombstones older than 90 days are pruned.
 - **Failure handling (§5.2):**
-  - **Event ids.** Every event table (`posts`, `purchases`, `crafts`, `auction_mail`, mail sent) also carries `event_id` (`charId:timeMs:seq`, unique), and ingest upserts on it.
+  - **Event ids.** Every event table (`posts`, `purchases`, `crafts`, `auction_mail`, `mail_sent`, `skips`) is keyed by `event_id` (`charId:timeMs:seq`, unique), and ingest upserts on it. A natural key such as (character, item, time) would merge two identical buys in the same second.
+  - **Snapshots.** `snapshots` holds each place's capture time, so an older file never overwrites a newer snapshot, not even an empty one.
+  - **Skips** follow the 90-day retention. A skip whose action doesn't exist yet is applied when matching creates it (§3.4.1, M4).
   - **Attempts.** `purchases` and `posts` have `confirmed` (0/1); unconfirmed rows older than 1 h are ignored.
   - **Scan coverage.** `scans` has `coverage` (0–1); only `kind = full` with coverage 1 feeds volume diffs.
   - **Materialized stats.** `item_stats` (§3.1.1) is the per-item stats table that refresh writes. It has `item_stats_new` and `plan_new` as staging twins.
@@ -769,7 +777,7 @@ You set or clear a rule from any dashboard row, from the **Rules** page, or by r
    - compact prices per item, stored as strings so the file stays under Lua's constant limits, with the sell-probability curve encoded one character per point (§3.1.1)
    - the same action list the dashboard shows, with action ids so the addon can mark them done
    - your sell record per item (`s`, `x`, `streak`) and the item rules
-   - `ingestedUntil` for the pruning handshake (§2.2), written only after the database commit
+   - `ingestedUntil` for the pruning handshake (§2.2): character id → time, written only after the database commit
    - a header with `formatVersion`, `generatedAt`, `basedOnUntil` (the newest event it includes) and a checksum of the body. The addon refuses a file whose version or checksum doesn't match and shows why (§5.2)
 
    The addon reads it at login or `/reload`.

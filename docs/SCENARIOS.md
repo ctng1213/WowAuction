@@ -74,7 +74,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | FM8 | one item's stats raise an error | that item is excluded and listed on Status; all others refreshed |
 | FM9 | disk full on the 3rd write of a refresh | no partial tables; Status error; old numbers served |
 | FM10 | `quick_check` fails on start | restored from the newest backup; hours after it are re-fetched where available; Status says what was restored |
-| FM11 | SavedVariables ends mid-table | not ingested; `.bak` parsed instead; `ingestedUntil` unchanged |
+| FM11 | SavedVariables ends mid-table | not ingested; `.bak` parsed instead; `ingestedUntil` moves no further than what was stored |
 | FM12 | the same SavedVariables ingested twice | event ids dedupe; counts unchanged |
 | FM13 | SavedVariables format version newer than AHSync | not ingested; "Update AHSync" |
 | FM14 | `Data.lua` rename fails 3 times | old `Data.lua` kept; Status warning |
