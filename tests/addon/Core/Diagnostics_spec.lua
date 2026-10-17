@@ -52,4 +52,18 @@ describe("Diagnostics", function()
     GetBuildInfo = nil
     assert_eq(build, "1.60.1 70009")
   end)
+
+  it("records the last modern trade skill window's raw state", function()
+    Stubs.Reset()
+    Stubs.Define("C_TradeSkillUI", Stubs.ModernTradeSkill({ name = "Cooking", rank = 28, max = 75, recipes = {
+      { id = 2538, out = 2679, learned = true, reagents = { { 2672, 1 } } },
+      { id = 2539, out = 2680, learned = false, reagents = { { 2672, 1 }, { 2678, 1 } } },
+    } }))
+    Stubs.Login()
+    Stubs.FireEvent("TRADE_SKILL_SHOW")
+    Stubs.Advance(AHProfit.Events.DEBOUNCE_S)
+    Stubs.FireEvent("PLAYER_LOGOUT")
+    assert_eq(AHProfitDB.diagnostics.tradeSkill,
+      "name=Cooking|parent=nil|level=28|max=75|ready=true|linked=false|ids=2|learned=1|first=2538:2679:1:1:1")
+  end)
 end)

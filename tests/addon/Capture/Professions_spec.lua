@@ -158,4 +158,47 @@ describe("Professions", function()
     assert_eq(Stubs.IsRegistered("TRADE_SKILL_LIST_UPDATE"), false)
     assert_eq(AHProfit.Events.Errors(), {})
   end)
+
+  local COOKING = {
+    name = "Cooking", rank = 28, max = 75, recipes = {
+      { id = 2538, out = 2679, learned = true, reagents = { { 2672, 1 }, { 2678, 1, optional = true } } },
+      { id = 2539, out = 2680, learned = false, reagents = { { 2672, 1 }, { 2678, 1 } } },
+    },
+  }
+
+  it("the modern window defines every recipe but marks only learned ones known", function()
+    Stubs.Reset()
+    Stubs.Define("C_TradeSkillUI", Stubs.ModernTradeSkill(COOKING))
+    Stubs.Login()
+    Stubs.FireEvent("TRADE_SKILL_SHOW")
+    Stubs.Advance(0.5)
+    assert_eq(AHProfitDB.recipes.Cooking, {
+      [2538] = { product = 2679, yieldMin = 1, yieldMax = 1, reagents = "2672,1" },   -- optional slot left out
+      [2539] = { product = 2680, yieldMin = 1, yieldMax = 1, reagents = "2672,1;2678,1" },
+    })
+    assert_eq(AHProfitDB.knownRecipes["Amaya-Grommash"], "2538")
+    assert_eq(AHProfit.Events.Errors(), {})
+  end)
+
+  it("a linked window (someone else's profession) or one still loading is not recorded", function()
+    for _, variant in ipairs({ { linked = true }, { ready = false } }) do
+      Stubs.Reset()
+      local window = { name = COOKING.name, rank = 28, max = 75, recipes = COOKING.recipes,
+                       linked = variant.linked, ready = variant.ready }
+      Stubs.Define("C_TradeSkillUI", Stubs.ModernTradeSkill(window))
+      Stubs.Login()
+      Stubs.FireEvent("TRADE_SKILL_SHOW")
+      Stubs.Advance(0.5)
+      assert_eq(AHProfitDB.recipes, {})
+      assert_eq(AHProfitDB.knownRecipes, {})
+    end
+  end)
+
+  it("with C_TradeSkillUI the unknown Classic craft-window events are not registered", function()
+    Stubs.Reset()
+    Stubs.world.unknownEvents = { CRAFT_SHOW = true, CRAFT_CLOSE = true }
+    Stubs.Define("C_TradeSkillUI", Stubs.ModernTradeSkill(COOKING))
+    Stubs.Login()
+    assert_eq(AHProfit.Events.Errors(), {})
+  end)
 end)

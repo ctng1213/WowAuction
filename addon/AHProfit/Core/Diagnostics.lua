@@ -27,9 +27,10 @@ Diagnostics.APIS = {
 Diagnostics.NAMESPACES = { "C_TradeSkillUI", "C_MerchantFrame", "C_AuctionHouse", "C_Container", "C_Item" }
 
 local lastMerchant = nil   -- DescribeMerchant() text from the last merchant this session
+local lastTradeSkill = nil -- DescribeTradeSkill() text from the last trade skill window this session
 
 --- Build the diagnostics table from the current session.
----@return table  { at, client, apis, errors, skillLines, merchant, namespaces, professions, setupError } (SPEC §2.2.1)
+---@return table  { at, client, apis, errors, skillLines, merchant, tradeSkill, namespaces, professions, setupError } (SPEC §2.2.1)
 function Diagnostics.Build()
   local errors = {}
   for i, message in ipairs(Events.Errors()) do errors[i] = message end
@@ -40,6 +41,7 @@ function Diagnostics.Build()
     errors = errors,
     skillLines = Adapter.DescribeSkillLines(),
     merchant = lastMerchant,
+    tradeSkill = lastTradeSkill,
     namespaces = Adapter.DescribeNamespaces(Diagnostics.NAMESPACES),
     professions = Adapter.DescribeProfessions(),
     setupError = DB.SetupError(),
@@ -56,6 +58,16 @@ local function OnMerchantShow()
   Events.Debounce("diagnostics.merchant", RecordMerchant)
 end
 
+--- Remember the open trade skill window's raw state for the next save.
+local function RecordTradeSkill()
+  lastTradeSkill = Adapter.DescribeTradeSkill()
+end
+
+--- TRADE_SKILL_SHOW: read the modern window once it has loaded (debounced).
+local function OnTradeSkill()
+  if not Adapter.HasCraftWindow() then Events.Debounce("diagnostics.trade", RecordTradeSkill) end
+end
+
 --- PLAYER_LOGOUT (also on /reload): write diagnostics into the live database.
 local function OnLogout()
   local db = DB.Get()
@@ -63,4 +75,5 @@ local function OnLogout()
 end
 
 Events.Register("MERCHANT_SHOW", OnMerchantShow)
+Events.Register("TRADE_SKILL_SHOW", OnTradeSkill)
 Events.Register("PLAYER_LOGOUT", OnLogout)

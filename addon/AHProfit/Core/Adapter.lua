@@ -244,13 +244,88 @@ local function ReadRecipe(api, index)
     skill = nil,
     cooldown = nil,
     reagents = reagents,
+    learned = true,   -- the Classic window lists only learned recipes
   }
+end
+
+-- Modern trade skill window (C_TradeSkillUI, Dragonflight-era shape; Forever has it,
+-- verified 2026-10-16). Recipe ids are spell ids. UNVERIFIED: every table field below.
+
+--- Whether the open window shows the player's own profession, fully loaded.
+---@return boolean  false while loading, or for a linked, guild or NPC-crafting window
+local function ModernWindowIsOwnAndReady()
+  local T = C_TradeSkillUI
+  if T.IsTradeSkillReady and not T.IsTradeSkillReady() then return false end
+  if T.IsDataSourceChanging and T.IsDataSourceChanging() then return false end
+  if T.IsTradeSkillLinked and T.IsTradeSkillLinked() then return false end
+  if T.IsTradeSkillGuild and T.IsTradeSkillGuild() then return false end
+  if T.IsNPCCrafting and T.IsNPCCrafting() then return false end
+  return true
+end
+
+--- Required reagents of a recipe schematic.
+---@param schematic table  C_TradeSkillUI.GetRecipeSchematic result
+---@return table[]|nil     { key, count } per required slot (its first reagent); nil when one is unreadable
+local function ModernReagents(schematic)
+  local reagents = {}
+  for _, slot in ipairs(schematic.reagentSlotSchematics or {}) do
+    if slot.required ~= false then   -- optional and finishing slots have required = false
+      local first = slot.reagents and slot.reagents[1]
+      if not first or not first.itemID or not slot.quantityRequired then return nil end
+      reagents[#reagents + 1] = { key = first.itemID, count = slot.quantityRequired }
+    end
+  end
+  return reagents
+end
+
+--- One recipe of the modern window.
+---@param recipeId number  Recipe id (= spell id)
+---@return table|nil       Same row as ReadRecipe, plus learned; nil when unreadable
+local function ModernRecipe(recipeId)
+  local info = C_TradeSkillUI.GetRecipeInfo(recipeId)
+  local schematic = C_TradeSkillUI.GetRecipeSchematic(recipeId, false)
+  if not info or not schematic then return nil end
+  local reagents = ModernReagents(schematic)
+  if not reagents then return nil end
+  local yieldMin = schematic.quantityMin or 1
+  return {
+    spell = recipeId,
+    product = schematic.outputItemID,   -- nil for enchants, which make no item
+    yieldMin = yieldMin,
+    yieldMax = schematic.quantityMax or yieldMin,
+    skill = nil,      -- no API for the skill needed; omitted = unknown (SPEC §2.2.1)
+    cooldown = nil,   -- GetRecipeCooldown gives the time remaining, not the period
+    reagents = reagents,
+    learned = info.learned == true,
+  }
+end
+
+--- Everything in the open modern trade skill window.
+---@return table|nil  { profession, rank, max, recipes }; nil when not ready or not the player's own
+local function ReadModernWindow()
+  if not ModernWindowIsOwnAndReady() then return nil end
+  local base = C_TradeSkillUI.GetBaseProfessionInfo()
+  local name = base and (base.parentProfessionName or base.professionName)
+  if not name or name == "" then return nil end
+  local recipes = {}
+  for _, recipeId in ipairs(C_TradeSkillUI.GetAllRecipeIDs() or {}) do
+    local recipe = ModernRecipe(recipeId)
+    if recipe then recipes[#recipes + 1] = recipe end
+  end
+  return { profession = name, rank = base.skillLevel, max = base.maxSkillLevel, recipes = recipes }
+end
+
+--- Whether this client has the Classic craft window (Enchanting); Forever doesn't.
+---@return boolean  false when C_TradeSkillUI exists (CRAFT_SHOW is then an unknown event)
+function Adapter.HasCraftWindow()
+  return type(C_TradeSkillUI) ~= "table"
 end
 
 --- Everything in the open trade skill or craft window.
 ---@param kind string  "trade" (trade skill window) or "craft" (craft window, Enchanting)
----@return table|nil   { profession, rank, max, recipes = { ReadRecipe rows } }; nil when unreadable
+---@return table|nil   { profession, rank, max, recipes = { rows with learned } }; nil when unreadable
 function Adapter.ReadRecipeWindow(kind)
+  if kind == "trade" and type(C_TradeSkillUI) == "table" then return ReadModernWindow() end
   local api = RECIPE_API[kind]
   local profession, rank, maxRank = CallIfExists(api.line)
   if not profession or profession == "UNKNOWN" then return nil end
@@ -494,5 +569,33 @@ function Adapter.DescribeProfessions()
       rows[slot] = table.concat({ slot, Field(index), Field(name), Field(rank), Field(maxRank) }, "|")
     end
     return table.concat(rows, ";")
+  end)
+end
+
+--- The open modern trade skill window as the API reports it, to check the recipe reader.
+---@return string  "name=..|parent=..|level=..|max=..|ready=..|linked=..|ids=..|learned=..|first=id:out:min:max:slots"
+function Adapter.DescribeTradeSkill()
+  return Describe(function()
+    local T = C_TradeSkillUI
+    local base = T.GetBaseProfessionInfo() or {}
+    local ids = T.GetAllRecipeIDs() or {}
+    local learned = 0
+    for _, id in ipairs(ids) do
+      local info = T.GetRecipeInfo(id)
+      if info and info.learned then learned = learned + 1 end
+    end
+    local first = "none"
+    if ids[1] then
+      local sc = T.GetRecipeSchematic(ids[1], false) or {}
+      first = table.concat({ ids[1], Field(sc.outputItemID), Field(sc.quantityMin), Field(sc.quantityMax),
+                             #(sc.reagentSlotSchematics or {}) }, ":")
+    end
+    return table.concat({
+      "name=" .. Field(base.professionName), "parent=" .. Field(base.parentProfessionName),
+      "level=" .. Field(base.skillLevel), "max=" .. Field(base.maxSkillLevel),
+      "ready=" .. Field(T.IsTradeSkillReady and T.IsTradeSkillReady()),
+      "linked=" .. Field(T.IsTradeSkillLinked and T.IsTradeSkillLinked()),
+      "ids=" .. #ids, "learned=" .. learned, "first=" .. first,
+    }, "|")
   end)
 end

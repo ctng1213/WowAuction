@@ -202,7 +202,7 @@ AHProfitDB = {
 | `auction_mail` | `outcome` (`sold` / `expired` / `cancelled` / `won`), `key`, `qty`, `price` (sold and won only) | `Capture/Mail` |
 | `skip` | `action` (action id from `Data.lua`) | the row menu's "Mark as skipped" |
 
-- **`diagnostics`** (written by `Core/Diagnostics.lua` at `PLAYER_LOGOUT`, which also fires on `/reload`): `{ at, client, apis, errors, skillLines, merchant, namespaces, professions, setupError }`. It holds the client build, which of the APIs the addon depends on exist (`"name=type;…"`), the handler errors caught this session (at most 10), the raw Skills-tab rows, the last merchant's raw items, the function names inside the modern API namespaces (`"C_X=FnA FnB;…"`), the raw `GetProfessions` slots, and any database setup error. It exists so `tools/savedvars_report.py` can explain a missing capture without Lua error popups (§6). AHSync never ingests it, and each session replaces it.
+- **`diagnostics`** (written by `Core/Diagnostics.lua` at `PLAYER_LOGOUT`, which also fires on `/reload`): `{ at, client, apis, errors, skillLines, merchant, tradeSkill, namespaces, professions, setupError }`. It holds the client build, which of the APIs the addon depends on exist (`"name=type;…"`), the handler errors caught this session (at most 10), the raw Skills-tab rows, the last merchant's raw items, the last trade skill window's raw state, the function names inside the modern API namespaces (`"C_X=FnA FnB;…"`), the raw `GetProfessions` slots, and any database setup error. It exists so `tools/savedvars_report.py` can explain a missing capture without Lua error popups (§6). AHSync never ingests it, and each session replaces it.
 - `confirmed` starts `false` when the hook fires and turns `true` when the action is confirmed (§5.2). The same row is updated in place.
 - Untracked changes (FM21) are not events. AHSync derives them by comparing consecutive inventory snapshots with the events between them.
 
@@ -1122,7 +1122,9 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `Data.lua` → 
    - Present: `GetProfessions`/`GetProfessionInfo`, `C_TradeSkillUI`, `C_MerchantFrame`, `C_Container`, the `GetInbox*` mail functions, `C_AuctionHouse`.
    - Missing: `GetNumSkillLines`/`GetSkillLineInfo` (there is no Classic Skills tab), `GetTradeSkill*`, `GetCraft*`, `GetMerchantItemInfo`, the legacy `GetContainerItemInfo`, `QueryAuctionItems`/`CanSendAuctionQuery`/`GetAuctionItemInfo`. The event `TRADE_SKILL_UPDATE` is unknown.
    - Bags and bank capture work through `C_Container`. Professions and the merchant now use the modern calls (`Adapter.lua` picks them when present).
-   - Still to check: which functions `C_TradeSkillUI` and `C_AuctionHouse` contain (the diagnostics list them), to write the recipe reader and the M6 scanner against them; and the tooltip hook.
+   - `C_TradeSkillUI` is the Dragonflight-era shape (`GetAllRecipeIDs`, `GetRecipeInfo`, `GetRecipeSchematic`, `GetBaseProfessionInfo`, `IsTradeSkillLinked`, …). Recipe ids are spell ids. The window lists unlearned recipes too, so only `learned` ones are marked known; linked, guild and NPC windows are not recorded. There is no Classic craft window (`CRAFT_SHOW` is unknown); Enchanting uses the trade skill UI.
+   - `C_AuctionHouse` is the modern API, including `ReplicateItems`, `GetReplicateItemInfo`, `GetReplicateItemTimeLeft` and `GetTimeLeftBandInfo`, so the full scan of §4.2 is possible. M6 is written against it.
+   - Still to check: the recipe reader's field names against a real window (the `tradeSkill` diagnostic shows them), and the tooltip hook.
 3. **Disenchant tables and skill brackets** on Forever.
 4. **AH fees and auction durations**: deposit rate per duration, 5% / 15% cut, and the available durations.
 5. **Time-left bands**: the bounds of short / medium / long / very long (§3.3.1).

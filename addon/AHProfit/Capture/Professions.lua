@@ -72,7 +72,8 @@ function Professions.CaptureRecipes(db, charId, kind)
       cooldown = recipe.cooldown,   -- seconds; nil when unknown, 0 = no cooldown
       reagents = EncodeReagents(recipe.reagents),
     }
-    known[recipe.spell] = true
+    -- The modern window also lists unlearned recipes: define them, but don't mark them known.
+    if recipe.learned then known[recipe.spell] = true end
   end
   db.knownRecipes[charId] = DB.EncodeIdSet(known)
   return window.profession
@@ -177,7 +178,9 @@ Events.Register("PLAYER_LOGIN", OnLogin)
 Events.Register("SKILL_LINES_CHANGED", OnSkillsChanged)
 Events.Register("TRADE_SKILL_SHOW", OnTradeWindow)
 Events.Register("TRADE_SKILL_CLOSE", OnTradeWindow)
-Events.Register("CRAFT_SHOW", OnCraftWindow)
-Events.Register("CRAFT_CLOSE", OnCraftWindow)
+if Adapter.HasCraftWindow() then   -- Classic only; unknown events on Forever
+  Events.Register("CRAFT_SHOW", OnCraftWindow)
+  Events.Register("CRAFT_CLOSE", OnCraftWindow)
+end
 Events.Register("MERCHANT_SHOW", OnMerchantWindow)
 Events.Register("MERCHANT_CLOSED", OnMerchantWindow)

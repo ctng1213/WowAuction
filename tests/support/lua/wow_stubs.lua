@@ -186,6 +186,42 @@ function Stubs.Define(name, value)
   Define(name, value)
 end
 
+--- A fake modern C_TradeSkillUI (Dragonflight-era shape) showing one open profession window.
+--- Define it with Stubs.Define("C_TradeSkillUI", Stubs.ModernTradeSkill{...}) before Stubs.Login().
+---@param window table  { name, rank, max, linked = bool, ready = bool (default true),
+---                      recipes = { { id, out (item id|nil), learned = bool,
+---                                    reagents = { { itemId, count, optional = bool } } } } }
+---@return table        The fake namespace
+function Stubs.ModernTradeSkill(window)
+  local byId = {}
+  for _, recipe in ipairs(window.recipes) do byId[recipe.id] = recipe end
+  local api = {}
+  function api.IsTradeSkillReady() return window.ready ~= false end
+  function api.IsDataSourceChanging() return false end
+  function api.IsTradeSkillLinked() return window.linked == true end
+  function api.IsTradeSkillGuild() return false end
+  function api.IsNPCCrafting() return false end
+  function api.GetBaseProfessionInfo()
+    return { professionName = window.name, skillLevel = window.rank, maxSkillLevel = window.max }
+  end
+  function api.GetAllRecipeIDs()
+    local ids = {}
+    for i, recipe in ipairs(window.recipes) do ids[i] = recipe.id end
+    return ids
+  end
+  function api.GetRecipeInfo(id) return { recipeID = id, learned = byId[id].learned } end
+  function api.GetRecipeSchematic(id)
+    local slots = {}
+    for i, reagent in ipairs(byId[id].reagents) do
+      slots[i] = { reagents = { { itemID = reagent[1] } }, quantityRequired = reagent[2],
+                   required = not reagent.optional }
+    end
+    return { recipeID = id, outputItemID = byId[id].out, quantityMin = 1, quantityMax = 1,
+             reagentSlotSchematics = slots }
+  end
+  return api
+end
+
 --- The recipe at an index of a fake recipe window.
 ---@param window table|nil  world.tradeSkill or world.craft
 ---@param i number          1-based index

@@ -92,7 +92,7 @@ describe("Adapter", function()
       { name = "Copper Rod", spell = 2663, product = 6217, min = 1, max = 2, reagents = { { 2840, 2 } } },
     } }
     assert_eq(Adapter.ReadRecipeWindow("trade"), { profession = "Blacksmithing", rank = 115, max = 150, recipes = {
-      { spell = 2663, product = 6217, yieldMin = 1, yieldMax = 2, reagents = { { key = 2840, count = 2 } } },
+      { spell = 2663, product = 6217, yieldMin = 1, yieldMax = 2, reagents = { { key = 2840, count = 2 } }, learned = true },
     } })
   end)
 
@@ -108,7 +108,7 @@ describe("Adapter", function()
       { name = "Enchant Bracer - Minor Health", spell = 7418, reagents = { { 10940, 1 } } },
     } }
     local expected = { profession = "Enchanting", rank = 142, max = 150, recipes = {
-      { spell = 7418, yieldMin = 1, yieldMax = 1, reagents = { { key = 10940, count = 1 } } },
+      { spell = 7418, yieldMin = 1, yieldMax = 1, reagents = { { key = 10940, count = 1 } }, learned = true },
     } }
     assert_eq(Adapter.ReadRecipeWindow("craft"), expected)
     GetCraftRecipeLink = nil

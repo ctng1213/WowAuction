@@ -24,7 +24,7 @@ from deploy import wow_path_from_config  # noqa: E402
 LOCATIONS = ("bags", "bank", "mail")
 HINTS = {
     "professions": "open the Skills tab with every header expanded (Adapter: GetSkillLineInfo)",
-    "recipes": "open each profession window; Enchanting uses the Craft window (Adapter: GetTradeSkill*/GetCraft*)",
+    "recipes": "open each profession window (Adapter: ReadModernWindow, C_TradeSkillUI)",
     "bags": "move an item in your bags; if still missing, check C_Container.GetContainerItemInfo",
     "bank": "open your bank (Adapter: bank containers -1 and 5-10)",
     "mail": "open your mailbox; with more than 50 mails it is skipped on purpose (GetInboxNumItems)",
@@ -121,6 +121,7 @@ def report_diagnostics(data: AHProfitData) -> None:
     for namespace, functions in d.namespaces:
         listed = "MISSING" if functions is None else f"{len(functions)} functions: {' '.join(functions)}"
         print(f"  {namespace}: {listed}")
+    print(f"  last trade skill window: {(d.trade_skill or 'none opened this session').replace('|', '  ')}")
     print("  last merchant (item key | available, -1 = unlimited | extended cost):")
     for row in (d.merchant or "no merchant opened this session").split(";"):
         print(f"    {row.replace('|', ' | ')}")
