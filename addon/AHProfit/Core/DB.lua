@@ -160,7 +160,10 @@ function DB.OnAddonLoaded(_, addonName)
   Events.Unregister("ADDON_LOADED", DB.OnAddonLoaded)
   local db, err = DB.Setup(Adapter.LoadSaved(DB.SAVED_NAME))
   current, setupError = db, err
-  if db then Adapter.StoreSaved(DB.SAVED_NAME, db) end
+  if db then
+    DB.SeedEventIds(db)
+    Adapter.StoreSaved(DB.SAVED_NAME, db)
+  end
 end
 
 --- The live database.
@@ -191,6 +194,24 @@ function DB.NewEventId(charId, timeMs)
   return charId .. ":" .. DB.FormatNumber(timeMs) .. ":" .. seq
 end
 
+--- Continue the seq counter after the newest saved event and scan ids, so ids
+--- stay unique after a /reload within the same second.
+---@param db table  The database; read only
+function DB.SeedEventIds(db)
+  for _, rows in ipairs({ db.scans, db.events }) do
+    local last = rows[#rows]
+    local id = type(last) == "table" and type(last.id) == "string" and last.id or ""
+    local charId, timeMs, seq = id:match("^(.+):(%d+):(%d+)$")
+    if charId then
+      local second = math.floor(tonumber(timeMs) / 1000)
+      local nextSeq = tonumber(seq) + 1
+      if seqSecond[charId] ~= second or seqNext[charId] < nextSeq then
+        seqSecond[charId], seqNext[charId] = second, nextSeq
+      end
+    end
+  end
+end
+
 --- Append an event, giving it an id (SPEC §2.2.1 event table).
 ---@param db table     The database
 ---@param event table  Event fields; must have char (charId) and at (ms); id is set here
@@ -207,8 +228,9 @@ end
 ---@param row table            A scan or event with at (ms) and optional confirmed
 ---@param ingestedUntilMs number Newest event time AHSync has committed, ms
 ---@param nowMs number         Current time, ms
----@return boolean             true to keep the row
+---@return boolean             true to keep the row; a non-table row is junk and dropped
 local function KeepRow(row, ingestedUntilMs, nowMs)
+  if type(row) ~= "table" then return false end
   if type(row.at) ~= "number" or row.at > ingestedUntilMs then return true end
   return row.confirmed == false and nowMs - row.at < DB.UNCONFIRMED_KEEP_MS
 end

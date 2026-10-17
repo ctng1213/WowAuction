@@ -82,8 +82,8 @@ class Recipe:
     product_key: int | None   # None for enchants, which make no item
     yield_min: int
     yield_max: int
-    skill_req: int            # 0 = unknown (no Classic API)
-    cooldown_s: int           # 0 = none or unknown
+    skill_req: int | None     # None = unknown (no Classic API; omitted in the file)
+    cooldown_s: int | None    # None = unknown; 0 = no cooldown
     reagents: tuple[Reagent, ...]
 
 
@@ -107,16 +107,16 @@ class InventoryRow:
 
 
 @dataclass(frozen=True, slots=True)
-class InventorySnapshot:
-    """A character's latest inventory snapshot.
+class InventoryLocation:
+    """The latest complete snapshot of one place of one character (SPEC §2.2.1).
 
-    ``locations`` lists the places captured at least once; a place not in it is
-    unknown (never visited), which is different from empty.
+    A place never visited has no InventoryLocation at all, which is different
+    from a visited, empty place (no rows).
     """
 
     char_id: str
-    at_ms: int
-    locations: tuple[str, ...]
+    location: str         # "bags" | "bank" | "mail"
+    at_ms: int            # when this place was captured
     rows: tuple[InventoryRow, ...]
 
 
@@ -201,12 +201,41 @@ class AHProfitData:
     recipes: tuple[Recipe, ...]
     vendor_reagents: tuple[int, ...]
     known_recipes: tuple[KnownRecipe, ...]
-    inventories: tuple[InventorySnapshot, ...]
+    inventories: tuple[InventoryLocation, ...]
     own_auctions: tuple[OwnAuctionSnapshot, ...]
     scans: tuple[Scan, ...]
     events: tuple[Event, ...]
     rules: tuple[ItemRule, ...]
     problems: tuple[str, ...]
+
+
+# ---------------------------------------------------------------- item keys
+
+def is_unknown_suffix(key: int) -> bool:
+    """Whether an item key stands for some random-suffix variant with `v` unknown (SPEC §2.2.1).
+
+    The addon writes such items as ``-itemId`` until the link -> `v` mapping is
+    known (§6 item 11). Callers store them but leave them out of valuation.
+
+    Args:
+        key: An item key from the file.
+
+    Returns:
+        True for a negative key.
+    """
+    return key < 0
+
+
+def base_item_id(key: int) -> int:
+    """The base item id of any item key (SPEC §2.1).
+
+    Args:
+        key: An AHF item key, or -itemId for an unknown-suffix item.
+
+    Returns:
+        The item id.
+    """
+    return -key if key < 0 else key % 2147483648
 
 
 # ---------------------------------------------------------------- field helpers
@@ -445,51 +474,78 @@ def _character(char_id: object, row: object) -> list[Character]:
     )]
 
 
-def _professions(char_id: object, skills: object) -> list[Profession]:
-    """Convert one character's professions.
+def _profession(char_id: str, name: object, row: object) -> list[Profession]:
+    """Convert one profession of one character.
+
+    Args:
+        char_id: "Name-Realm".
+        name: The profession name.
+        row: { skill, max }.
+
+    Returns:
+        One Profession.
+    """
+    row = _table(row, "profession")
+    return [Profession(char_id, _str(name, "profession"), _int(row.get("skill"), "skill"),
+                       _int(row.get("max"), "max"))]
+
+
+def _professions(char_id: object, skills: object, problems: list[str]) -> list[Profession]:
+    """Convert one character's professions; a bad profession row is set aside alone.
 
     Args:
         char_id: Its key, "Name-Realm".
         skills: Profession name -> { skill, max }.
+        problems: Problem list, appended to.
 
     Returns:
-        One Profession per profession, by name.
+        One Profession per good profession, by name.
     """
     char_id = _str(char_id, "character id")
-    records = []
-    for name, row in _sorted_items(_table(skills, "professions")):
-        row = _table(row, "profession")
-        records.append(Profession(char_id, _str(name, "profession"),
-                                  _int(row.get("skill"), "skill"), _int(row.get("max"), "max")))
-    return records
+    return _each(_table(skills, "professions"), f"professions[{char_id!r}]", problems,
+                 lambda name, row: _profession(char_id, name, row))
 
 
-def _recipes(profession: object, definitions: object) -> list[Recipe]:
-    """Convert one profession's recipe definitions.
+def _recipe(profession: str, spell_id: object, row: object) -> list[Recipe]:
+    """Convert one recipe definition.
+
+    Args:
+        profession: The profession name.
+        spell_id: Its key, the spell id.
+        row: { product, yieldMin, yieldMax, skill, cooldown, reagents }; skill and
+            cooldown are omitted when unknown.
+
+    Returns:
+        One Recipe.
+    """
+    row = _table(row, "recipe")
+    reagents = _compact_rows(row.get("reagents", ""), 2, "reagents")
+    return [Recipe(
+        profession=profession,
+        spell_id=_int(spell_id, "spell id"),
+        product_key=_opt_int(row.get("product"), "product"),
+        yield_min=_int(row.get("yieldMin"), "yieldMin"),
+        yield_max=_int(row.get("yieldMax"), "yieldMax"),
+        skill_req=_opt_int(row.get("skill"), "skill"),
+        cooldown_s=_opt_int(row.get("cooldown"), "cooldown"),
+        reagents=tuple(Reagent(key, count) for key, count in reagents),
+    )]
+
+
+def _recipes(profession: object, definitions: object, problems: list[str]) -> list[Recipe]:
+    """Convert one profession's recipe definitions; a bad recipe is set aside alone.
 
     Args:
         profession: Its key, the profession name.
         definitions: Spell id -> definition table.
+        problems: Problem list, appended to.
 
     Returns:
-        One Recipe per spell id, ascending.
+        One Recipe per good spell id, ascending.
     """
     profession = _str(profession, "profession")
-    recipes = []
-    for spell_id, row in _sorted_items(_table(definitions, "recipes")):
-        row = _table(row, "recipe")
-        reagents = _compact_rows(row.get("reagents", ""), 2, "reagents")
-        recipes.append(Recipe(
-            profession=profession,
-            spell_id=_int(spell_id, "spell id"),
-            product_key=_opt_int(row.get("product"), "product"),
-            yield_min=_int(row.get("yieldMin"), "yieldMin"),
-            yield_max=_int(row.get("yieldMax"), "yieldMax"),
-            skill_req=_int(row.get("skill", 0), "skill"),
-            cooldown_s=_int(row.get("cooldown", 0), "cooldown"),
-            reagents=tuple(Reagent(key, count) for key, count in reagents),
-        ))
-    return recipes
+    return _each(_table(definitions, "recipes"), f"recipes[{profession!r}]", problems,
+                 lambda spell_id, row: _recipe(profession, spell_id, row))
 
 
 def _known_recipes(char_id: object, spells: object) -> list[KnownRecipe]:
@@ -506,25 +562,48 @@ def _known_recipes(char_id: object, spells: object) -> list[KnownRecipe]:
     return [KnownRecipe(char_id, spell) for (spell,) in sorted(_compact_rows(spells, 1, "spell ids"))]
 
 
-def _inventory(char_id: object, entry: object) -> list[InventorySnapshot]:
-    """Convert one character's inventory snapshot.
+_TIME_FIELDS = {"bags": "bagsAt", "bank": "bankAt", "mail": "mailAt"}
+
+
+def _inventory_location(char_id: str, location: str, entry: LuaTable) -> list[InventoryLocation]:
+    """Convert one place of a character's inventory, all or nothing.
+
+    Args:
+        char_id: "Name-Realm".
+        location: "bags", "bank" or "mail".
+        entry: The character's inventory table.
+
+    Returns:
+        One InventoryLocation, or none when the place was never visited.
+    """
+    if location not in entry:
+        return []
+    rows = tuple(InventoryRow(char_id, location, key, qty, bool(bound))
+                 for key, qty, bound in _compact_rows(entry[location], 3, location))
+    time_field = _TIME_FIELDS[location]
+    return [InventoryLocation(char_id, location, _int(entry.get(time_field), time_field), rows)]
+
+
+def _inventory(char_id: object, entry: object, problems: list[str]) -> list[InventoryLocation]:
+    """Convert one character's inventory; a bad place is set aside alone.
 
     Args:
         char_id: Its key, "Name-Realm".
-        entry: { at, bags, bank, mail }; a missing place was never visited.
+        entry: { bags, bagsAt, bank, bankAt, mail, mailAt }; a missing place was never visited.
+        problems: Problem list, appended to.
 
     Returns:
-        One InventorySnapshot; rows by place (bags, bank, mail), then as stored.
+        One InventoryLocation per good visited place, in the order bags, bank, mail.
     """
     char_id = _str(char_id, "character id")
     entry = _table(entry, "inventory")
-    locations, rows = [], []
+    records = []
     for location in LOCATIONS:
-        if location in entry:
-            locations.append(location)
-            rows += [InventoryRow(char_id, location, key, qty, bool(bound))
-                     for key, qty, bound in _compact_rows(entry[location], 3, location)]
-    return [InventorySnapshot(char_id, _int(entry.get("at"), "at"), tuple(locations), tuple(rows))]
+        try:
+            records += _inventory_location(char_id, location, entry)
+        except _RowError as exc:
+            problems.append(f"inventory[{char_id!r}].{location}: {exc}")
+    return records
 
 
 def _auction_rows(text: object, what: str) -> tuple[AuctionRow, ...]:
@@ -651,14 +730,16 @@ def _rule(key: object, row: object) -> list[ItemRule]:
 
 # ---------------------------------------------------------------- entry points
 
-def _header(db: object) -> tuple[int, str | None, int | None]:
+def _header(db: object, problems: list[str]) -> tuple[int, str | None, int | None]:
     """Check AHProfitDB's header fields.
 
     Args:
         db: The AHProfitDB value.
+        problems: Problem list, appended to.
 
     Returns:
         (format version, addon version or None, refresh request time in ms or None).
+        A malformed refreshRequestedAt is reported in problems and read as None.
 
     Raises:
         SavedVarsError: When AHProfitDB is missing, not a table, or has no usable formatVersion.
@@ -673,8 +754,11 @@ def _header(db: object) -> tuple[int, str | None, int | None]:
         raise UnsupportedFormatError(
             f"{GLOBAL_NAME} is format {version}; this AHSync reads up to {SUPPORTED_FORMAT_VERSION}. Update AHSync.")
     addon_version = db.get("addonVersion")
-    refresh = db.get("refreshRequestedAt")
-    refresh_ms = refresh if isinstance(refresh, int) and not isinstance(refresh, bool) else None
+    try:
+        refresh_ms = _opt_int(db.get("refreshRequestedAt"), "refreshRequestedAt")
+    except _RowError as exc:
+        problems.append(str(exc))
+        refresh_ms = None
     return version, addon_version if isinstance(addon_version, str) else None, refresh_ms
 
 
@@ -713,18 +797,20 @@ def read_ahprofit(text: str) -> AHProfitData:
         UnsupportedFormatError: When the file is from a newer addon (FM13).
     """
     db = parse_lua(text).get(GLOBAL_NAME)
-    version, addon_version, refresh_ms = _header(db)
     problems: list[str] = []
+    version, addon_version, refresh_ms = _header(db, problems)
     return AHProfitData(
         format_version=version,
         addon_version=addon_version,
         refresh_requested_at_ms=refresh_ms,
         characters=tuple(_each(db.get("characters"), "characters", problems, _character)),
-        professions=tuple(_each(db.get("professions"), "professions", problems, _professions)),
-        recipes=tuple(_each(db.get("recipes"), "recipes", problems, _recipes)),
+        professions=tuple(_each(db.get("professions"), "professions", problems,
+                                     lambda k, v: _professions(k, v, problems))),
+        recipes=tuple(_each(db.get("recipes"), "recipes", problems, lambda k, v: _recipes(k, v, problems))),
         vendor_reagents=_vendor_reagents(db.get("vendorReagents"), problems),
         known_recipes=tuple(_each(db.get("knownRecipes"), "knownRecipes", problems, _known_recipes)),
-        inventories=tuple(_each(db.get("inventory"), "inventory", problems, _inventory)),
+        inventories=tuple(_each(db.get("inventory"), "inventory", problems,
+                                     lambda k, v: _inventory(k, v, problems))),
         own_auctions=tuple(_each(db.get("ownAuctions"), "ownAuctions", problems, _own_auctions)),
         scans=tuple(_each(db.get("scans"), "scans", problems, _scan)),
         events=tuple(_each(db.get("events"), "events", problems, _event)),

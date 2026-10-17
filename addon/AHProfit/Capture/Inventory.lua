@@ -36,27 +36,45 @@ function Inventory.Encode(items)
   return DB.EncodeRows(rows)
 end
 
---- Replace one location of the character's inventory snapshot.
--- SPEC GAP: the snapshot has one `at` for all three locations; it is the time of
--- the latest capture of any location, and bank/mail keep their older strings.
----@param db table        The database; db.inventory[charId] changes
----@param charId string   "Name-Realm"
----@param location string "bags", "bank" or "mail"
----@param items table[]   { key, qty, bound } as read by the Adapter
+-- Time field of each location (SPEC §2.2.1: each location has its own time).
+local TIME_FIELD = { bags = "bagsAt", bank = "bankAt", mail = "mailAt" }
+
+--- Replace one location of the character's inventory, with its own capture time.
+--- Nothing is written when the read was incomplete (SPEC §2.2.1: complete snapshots only);
+--- the next update event retries.
+---@param db table          The database; db.inventory[charId] changes
+---@param charId string     "Name-Realm"
+---@param location string   "bags", "bank" or "mail"
+---@param items table[]|nil { key, qty, bound } as read by the Adapter; nil when incomplete
+---@return boolean          true when written
 function Inventory.CaptureLocation(db, charId, location, items)
+  if not items then return false end
   local entry = db.inventory[charId] or {}
   db.inventory[charId] = entry
   entry[location] = Inventory.Encode(items)
-  entry.at = Adapter.NowMs()
+  entry[TIME_FIELD[location]] = Adapter.NowMs()
+  return true
 end
 
+local OnItemInfo
+
 --- Capture the bags (and the bank, if open) into the live database.
+--- An incomplete bag read waits for item info to arrive and retries once.
 local function CaptureBagsLive()
   local db = DB.Get()
   if not db then return end
   local charId = Characters.CurrentId()
-  Inventory.CaptureLocation(db, charId, "bags", Adapter.ReadBags())
+  if not Inventory.CaptureLocation(db, charId, "bags", Adapter.ReadBags()) then
+    -- UNVERIFIED: GET_ITEM_INFO_RECEIVED fires when an uncached item's info arrives.
+    Events.Register("GET_ITEM_INFO_RECEIVED", OnItemInfo)
+  end
   if bankOpen then Inventory.CaptureLocation(db, charId, "bank", Adapter.ReadBank()) end
+end
+
+--- GET_ITEM_INFO_RECEIVED after an incomplete bag read: stop listening and retry, debounced.
+function OnItemInfo()
+  Events.Unregister("GET_ITEM_INFO_RECEIVED", OnItemInfo)
+  Events.Debounce("inventory.bags", CaptureBagsLive)
 end
 
 --- Capture the bank into the live database, if it is still open.

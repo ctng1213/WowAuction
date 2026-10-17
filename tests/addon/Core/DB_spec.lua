@@ -101,6 +101,18 @@ describe("DB", function()
     assert_eq(DB.NewEventId("Amaya-Grommash", 1760000001000), "Amaya-Grommash:1760000001000:0")
   end)
 
+  it("event ids continue after the newest saved event after a /reload in the same second", function()
+    Stubs.Reset()
+    AHProfitDB = { formatVersion = 1, scans = {}, events = {
+      { id = "Amaya-Grommash:1760000000000:0", type = "craft", char = "Amaya-Grommash", at = 1760000000000 },
+      { id = "Amaya-Grommash:1760000000000:1", type = "craft", char = "Amaya-Grommash", at = 1760000000000 },
+    } }
+    Stubs.LoadAddon()
+    Stubs.FireEvent("ADDON_LOADED", "AHProfit")
+    assert_eq(AHProfit.DB.NewEventId("Amaya-Grommash", 1760000000000), "Amaya-Grommash:1760000000000:2")
+    assert_eq(AHProfit.DB.NewEventId("Amaya-Grommash", 1760000001000), "Amaya-Grommash:1760000001000:0")
+  end)
+
   it("AppendEvent gives the event an id and appends it", function()
     local DB = Boot(nil)
     local db = DB.Get()
@@ -135,6 +147,14 @@ describe("DB.Prune", function()
     }
     DB.Prune(db, T, T + HOUR - 1)
     assert_eq(db.events, { { id = "young", type = "purchase", at = T, confirmed = false } })
+  end)
+
+  it("drops junk rows that are not tables", function()
+    local DB = Boot(nil)
+    local db = DB.NewDB()
+    db.events = { "junk", { id = "e", type = "craft", at = T + 1 } }
+    DB.Prune(db, T, T)
+    assert_eq(db.events, { { id = "e", type = "craft", at = T + 1 } })
   end)
 
   it("drops an unconfirmed attempt exactly 1 h old", function()

@@ -22,16 +22,21 @@ local windowOpen = { trade = false, craft = false }
 local merchantOpen = false
 
 --- Write the character's professions and skill levels, replacing the old entry.
+--- Skipped (old entry kept) when a collapsed Skills header hides lines (SPEC §2.2.1).
 ---@param db table      The database; db.professions[charId] is replaced
 ---@param charId string "Name-Realm"
+---@return boolean      true when written
 function Professions.CaptureSkills(db, charId)
+  local lines = Adapter.ReadSkillLines()
+  if not lines then return false end
   local skills = {}
-  for _, line in ipairs(Adapter.ReadSkillLines()) do
+  for _, line in ipairs(lines) do
     if Professions.NAMES[line.name] then
       skills[line.name] = { skill = line.rank, max = line.max }
     end
   end
   db.professions[charId] = skills
+  return true
 end
 
 --- Encode a recipe's reagents, ascending by key (SPEC §2.2.1 "key,count;key,count").
@@ -62,8 +67,8 @@ function Professions.CaptureRecipes(db, charId, kind)
       product = recipe.product,
       yieldMin = recipe.yieldMin,
       yieldMax = recipe.yieldMax,
-      skill = recipe.skill,
-      cooldown = recipe.cooldown,   -- seconds
+      skill = recipe.skill,         -- nil (omitted) when unknown (SPEC §2.2.1)
+      cooldown = recipe.cooldown,   -- seconds; nil when unknown, 0 = no cooldown
       reagents = EncodeReagents(recipe.reagents),
     }
     known[recipe.spell] = true

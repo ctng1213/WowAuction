@@ -96,21 +96,24 @@ local function SplitFields(itemString)
   end
 end
 
---- AHF's suffix value `v` for an item string (SPEC §2.1, §6 item 11).
+--- AHF's suffix value `v` for an item string (SPEC §2.1, §2.2.1, §6 item 11).
 --- UNVERIFIED: the mapping from a link to AHF's `v` is unknown. It is not the
 --- classic suffix id (a recorded key has v = 28592, suffix ids are ~14,300).
---- Until it is verified, suffixed items fall back to v = 0 (the base item key),
---- so all suffixes of one item share a key. Fix it here and only here.
+--- Until it is known, a suffixed item returns nil and is written as key = -itemId
+--- (SPEC §2.2.1). Fix it here and only here.
 ---@param fields string[]  Item string fields from SplitFields
----@return number          v, an integer >= 0
+---@return number|nil      v (0 for an item without a random suffix); nil when unknown
 local function SuffixValue(fields)
-  local _ = fields[SUFFIX_FIELD]  -- UNVERIFIED: the classic suffix id; how it (or a bonus id) maps to v is unknown
+  -- UNVERIFIED: field 7 holds the classic suffix id; Forever may use bonus ids instead.
+  local suffixId = tonumber(fields[SUFFIX_FIELD] or "")
+  if suffixId and suffixId ~= 0 then return nil end
   return 0
 end
 
 --- AHF item key from an item link or item string (SPEC §2.1, §2.2.1).
 ---@param link string|nil  "|cff...|Hitem:2840:...|h[Copper Bar]|h|r" or "item:2840:..."
----@return number|nil      key = itemId + 2147483648 × v; nil when not an item link
+---@return number|nil      key = itemId + 2147483648 × v; -itemId for a random-suffix
+---                        item (v unknown); nil when not an item link
 function Adapter.ItemKey(link)
   if type(link) ~= "string" then return nil end
   local itemString = link:match("|Hitem:([^|]*)|h") or link:match("^item:([^|]*)$")
@@ -118,7 +121,9 @@ function Adapter.ItemKey(link)
   local fields = SplitFields(itemString)
   local itemId = tonumber(fields[1])
   if not itemId then return nil end
-  return itemId + KEY_SUFFIX_FACTOR * SuffixValue(fields)
+  local v = SuffixValue(fields)
+  if not v then return -itemId end
+  return itemId + KEY_SUFFIX_FACTOR * v
 end
 
 --- Spell id from a recipe link ("|Henchant:2663|h" or "|Hspell:2663|h").
@@ -134,11 +139,13 @@ end
 
 --- The character's skill lines (professions, weapon skills, languages, ...).
 --- UNVERIFIED: Classic GetNumSkillLines/GetSkillLineInfo; collapsed headers hide their lines.
----@return table[]  { name, rank, max } per non-header line, in game order
+---@return table[]|nil  { name, rank, max } per non-header line, in game order; nil when a
+---                     collapsed header hides lines (SPEC §2.2.1: complete snapshots only)
 function Adapter.ReadSkillLines()
   local lines = {}
   for i = 1, GetNumSkillLines() do
-    local name, isHeader, _, rank, _, _, maxRank = GetSkillLineInfo(i)
+    local name, isHeader, isExpanded, rank, _, _, maxRank = GetSkillLineInfo(i)
+    if isHeader and not isExpanded then return nil end
     if name and not isHeader then
       lines[#lines + 1] = { name = name, rank = rank, max = maxRank }
     end
@@ -192,7 +199,7 @@ end
 --- One recipe in a recipe window, or nil for headers and unreadable rows.
 ---@param api table     A RECIPE_API entry
 ---@param index number  1-based recipe index in the window
----@return table|nil    { spell, product (key|nil), yieldMin, yieldMax, skill, cooldown, reagents }
+---@return table|nil    { spell, product (key|nil), yieldMin, yieldMax, skill (nil), cooldown (nil), reagents }
 local function ReadRecipe(api, index)
   local info = { CallIfExists(api.info, index) }
   if info[1] == nil or info[api.headerField] == "header" then return nil end
@@ -207,10 +214,10 @@ local function ReadRecipe(api, index)
     product = Adapter.ItemKey(itemLink),   -- nil for enchants, which make no item
     yieldMin = yieldMin or 1,
     yieldMax = yieldMax or yieldMin or 1,
-    -- SPEC GAP: Classic has no API for the skill a recipe needs or for its cooldown
-    -- period (only time remaining; §6 item 7). Both are written as 0 = unknown.
-    skill = 0,
-    cooldown = 0,
+    -- Classic has no API for the skill a recipe needs or for its cooldown period
+    -- (only time remaining; §6 item 7), so both stay nil = unknown (SPEC §2.2.1).
+    skill = nil,
+    cooldown = nil,
     reagents = reagents,
   }
 end
@@ -274,27 +281,31 @@ end
 
 --- Items in a list of containers, one entry per occupied slot.
 ---@param bagIds number[]  Container ids
----@return table[]         { key, qty, bound } per slot, in container then slot order
+---@return table[]|nil     { key, qty, bound } per slot, in container then slot order; nil when
+---                        an occupied slot has no item link yet (SPEC §2.2.1: complete snapshots only)
 local function ReadContainers(bagIds)
   local items = {}
   for _, bag in ipairs(bagIds) do
     for slot = 1, NumSlots(bag) do
       local link, count, bound = ReadSlot(bag, slot)
-      local key = Adapter.ItemKey(link)
-      if key and count then items[#items + 1] = { key = key, qty = count, bound = bound } end
+      if count then
+        local key = Adapter.ItemKey(link)
+        if not key then return nil end
+        items[#items + 1] = { key = key, qty = count, bound = bound }
+      end
     end
   end
   return items
 end
 
 --- Items in the character's bags.
----@return table[]  { key, qty, bound } per occupied slot
+---@return table[]|nil  { key, qty, bound } per occupied slot; nil when not fully loaded
 function Adapter.ReadBags()
   return ReadContainers(BAG_IDS)
 end
 
 --- Items in the bank; only readable while the bank is open.
----@return table[]  { key, qty, bound } per occupied slot
+---@return table[]|nil  { key, qty, bound } per occupied slot; nil when not fully loaded
 function Adapter.ReadBank()
   return ReadContainers(BANK_IDS)
 end
@@ -302,14 +313,22 @@ end
 --- Items attached to mail in the inbox; only readable while the mailbox is open.
 --- UNVERIFIED: Classic GetInboxNumItems/GetInboxItem/GetInboxItemLink. Soulbound
 --- items can't be mailed, so every mail item is written as not bound.
----@return table[]  { key, qty, bound = false } per attachment
+---@return table[]|nil  { key, qty, bound = false } per attachment; nil when the inbox is not
+---                     fully loaded (SPEC §2.2.1: complete snapshots only)
 function Adapter.ReadInbox()
+  local shown, total = GetInboxNumItems()
+  -- UNVERIFIED: the 2nd return is the total on the server; fewer shown means not all mail is loaded.
+  -- (Classic shows at most 50, so an inbox of more than 50 mails is never written.)
+  if total and total > shown then return nil end
   local items = {}
-  for i = 1, GetInboxNumItems() do
+  for i = 1, shown do
     for a = 1, MAIL_ATTACHMENTS do
-      local key = Adapter.ItemKey(GetInboxItemLink(i, a))
       local _, _, _, count = GetInboxItem(i, a)
-      if key and count then items[#items + 1] = { key = key, qty = count, bound = false } end
+      if count then
+        local key = Adapter.ItemKey(GetInboxItemLink(i, a))
+        if not key then return nil end
+        items[#items + 1] = { key = key, qty = count, bound = false }
+      end
     end
   end
   return items

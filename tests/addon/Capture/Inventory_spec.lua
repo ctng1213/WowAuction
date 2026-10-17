@@ -18,7 +18,7 @@ describe("Inventory", function()
     Stubs.Reset()
     Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 2840, count = 6 } } } }
     Stubs.Login()
-    assert_eq(AHProfitDB.inventory["Amaya-Grommash"], { at = 1760000000000, bags = "2840,6,0" })
+    assert_eq(AHProfitDB.inventory["Amaya-Grommash"], { bags = "2840,6,0", bagsAt = 1760000000000 })
   end)
 
   it("a burst of bag updates captures once after the debounce", function()
@@ -82,9 +82,47 @@ describe("Inventory", function()
     Stubs.FireEvent("MAIL_INBOX_UPDATE")
     Stubs.Advance(0.5)
     assert_eq(AHProfitDB.inventory["Amaya-Grommash"].mail, "2592,20,0")
-    assert_eq(AHProfitDB.inventory["Amaya-Grommash"].at, 1760000060000)
+    assert_eq(AHProfitDB.inventory["Amaya-Grommash"].mailAt, 1760000060000)
+    assert_eq(AHProfitDB.inventory["Amaya-Grommash"].bagsAt, 1760000000000)
     Stubs.FireEvent("MAIL_CLOSED")
     assert_eq(Stubs.IsRegistered("MAIL_INBOX_UPDATE"), false)
+  end)
+
+  it("an incomplete bag read keeps the old bags and retries when item info arrives", function()
+    Stubs.Reset()
+    Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 2840, count = 6 } } } }
+    Stubs.Login()
+    Stubs.Advance(5)
+    Stubs.world.containers[0].slots[2] = { id = 2589, count = 4, noLink = true }
+    Stubs.FireEvent("BAG_UPDATE", 0)
+    Stubs.Advance(0.5)
+    assert_eq(AHProfitDB.inventory["Amaya-Grommash"], { bags = "2840,6,0", bagsAt = 1760000000000 })
+    assert_eq(Stubs.IsRegistered("GET_ITEM_INFO_RECEIVED"), true)
+    Stubs.world.containers[0].slots[2].noLink = nil
+    Stubs.FireEvent("GET_ITEM_INFO_RECEIVED", 2589)
+    assert_eq(Stubs.IsRegistered("GET_ITEM_INFO_RECEIVED"), false)
+    Stubs.Advance(0.5)
+    assert_eq(AHProfitDB.inventory["Amaya-Grommash"], { bags = "2589,4,0;2840,6,0", bagsAt = 1760000006000 })
+  end)
+
+  it("an incomplete bank or inbox read keeps the old value; the next update retries", function()
+    Stubs.Reset()
+    Stubs.world.containers = { [-1] = { size = 1, slots = { [1] = { id = 4306, count = 10, noLink = true } } } }
+    Stubs.world.inbox = { { { 2592, 20 } } }
+    Stubs.world.inboxTotal = 2
+    Stubs.Login()
+    Stubs.FireEvent("BANKFRAME_OPENED")
+    Stubs.FireEvent("MAIL_SHOW")
+    Stubs.FireEvent("MAIL_INBOX_UPDATE")
+    Stubs.Advance(0.5)
+    local entry = AHProfitDB.inventory["Amaya-Grommash"]
+    assert_eq({ entry.bank, entry.bankAt, entry.mail, entry.mailAt }, {})
+    Stubs.world.containers[-1].slots[1].noLink = nil
+    Stubs.FireEvent("PLAYERBANKSLOTS_CHANGED", 1)
+    Stubs.world.inbox[2] = {}
+    Stubs.FireEvent("MAIL_INBOX_UPDATE")
+    Stubs.Advance(0.5)
+    assert_eq({ entry.bank, entry.mail }, { "4306,10,0", "2592,20,0" })
   end)
 
   it("an inbox update that comes due after the mailbox closed writes nothing", function()

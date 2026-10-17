@@ -16,7 +16,7 @@ Stubs.ITEM_NAMES = {
   [2320] = "Coarse Thread", [2321] = "Fine Thread", [2589] = "Linen Cloth", [2592] = "Wool Cloth",
   [2835] = "Rough Stone", [2840] = "Copper Bar", [2852] = "Copper Chain Pants",
   [2862] = "Rough Sharpening Stone", [4306] = "Silk Cloth", [6217] = "Copper Rod",
-  [6218] = "Runed Copper Rod", [6270] = "Pattern: Blue Linen Vest", [6948] = "Hearthstone",
+  [6218] = "Runed Copper Rod", [6270] = "Pattern: Blue Linen Vest", [6585] = "Scouting Gloves", [6948] = "Hearthstone",
   [10938] = "Lesser Magic Essence", [10940] = "Strange Dust",
 }
 
@@ -35,9 +35,10 @@ function Stubs.NewWorld()
     money = 0,                -- copper
     serverTime = 1760000000,  -- seconds; GetServerTime floors it
     inCombat = false,
-    skillLines = {},          -- { name, header = bool, rank, max }
-    containers = {},          -- [bagId] = { size = n, slots = { [slot] = { id, count, bound, suffix } } }
-    inbox = {},               -- one array of { id, count } attachments per mail
+    skillLines = {},          -- { name, header = bool, collapsed = bool, rank, max }
+    containers = {},          -- [bagId] = { size = n, slots = { [slot] = { id, count, bound, suffix, noLink } } }
+    inbox = {},               -- one array of { id, count, noLink = bool } attachments per mail
+    inboxTotal = nil,         -- mails on the server; default #inbox (all loaded)
     merchant = {},            -- { id, numAvailable (-1 = unlimited), extendedCost = bool }
     tradeSkill = nil,         -- { name, rank, max, recipes = { { header = "Name" } | recipe } }
     craft = nil,              -- same shape as tradeSkill
@@ -272,16 +273,18 @@ local function InstallItems()
     GetContainerItemInfo = function(bag, slot)
       local item = SlotItem(bag, slot)
       if not item then return nil end
-      return { stackCount = item.count, hyperlink = Stubs.ItemLink(item.id, item.suffix),
+      return { stackCount = item.count, hyperlink = not item.noLink and Stubs.ItemLink(item.id, item.suffix) or nil,
                isBound = item.bound or false, itemID = item.id }
     end,
   })
   Define("GetContainerNumSlots", numSlots)
   Define("GetContainerItemInfo", function(bag, slot)
     local item = SlotItem(bag, slot)
-    if item then return "icon", item.count, false, 1, false, false, Stubs.ItemLink(item.id, item.suffix) end
+    if item then
+      return "icon", item.count, false, 1, false, false, not item.noLink and Stubs.ItemLink(item.id, item.suffix) or nil
+    end
   end)
-  Define("GetInboxNumItems", function() return #Stubs.world.inbox, #Stubs.world.inbox end)
+  Define("GetInboxNumItems", function() return #Stubs.world.inbox, Stubs.world.inboxTotal or #Stubs.world.inbox end)
   Define("GetInboxItem", function(i, a)
     local mail = Stubs.world.inbox[i]
     local item = mail and mail[a]
@@ -290,7 +293,7 @@ local function InstallItems()
   Define("GetInboxItemLink", function(i, a)
     local mail = Stubs.world.inbox[i]
     local item = mail and mail[a]
-    return item and Stubs.ItemLink(item[1])
+    if item and not item.noLink then return Stubs.ItemLink(item[1]) end
   end)
   Define("GetMerchantNumItems", function() return #Stubs.world.merchant end)
   Define("GetMerchantItemInfo", function(i)
@@ -328,7 +331,7 @@ local function InstallCore()
   Define("GetSkillLineInfo", function(i)
     local line = Stubs.world.skillLines[i]
     if not line then return nil end
-    if line.header then return line.name, true, true, 0, 0, 0, 0 end
+    if line.header then return line.name, true, not line.collapsed, 0, 0, 0, 0 end
     return line.name, false, nil, line.rank, 0, 0, line.max
   end)
 end

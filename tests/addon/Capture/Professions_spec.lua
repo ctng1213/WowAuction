@@ -42,9 +42,20 @@ describe("Professions", function()
     Stubs.Login()
     Stubs.FireEvent("TRADE_SKILL_SHOW")
     Stubs.Advance(0.5)
+    -- skill and cooldown are unknown on Classic APIs, so they are left out (SPEC §2.2.1).
     assert_eq(AHProfitDB.recipes.Blacksmithing, { [2663] = { product = 6217, yieldMin = 1, yieldMax = 1,
-      skill = 0, cooldown = 0, reagents = "2840,2" } })
+      reagents = "2840,2" } })
     assert_eq(AHProfitDB.knownRecipes["Amaya-Grommash"], "2663")
+  end)
+
+  it("a collapsed Skills header keeps the old professions instead of writing a partial list", function()
+    Stubs.Reset()
+    Stubs.world.skillLines = { { name = "Professions", header = true }, { name = "Mining", rank = 120, max = 150 } }
+    Stubs.Login()
+    Stubs.world.skillLines = { { name = "Professions", header = true, collapsed = true } }
+    Stubs.FireEvent("SKILL_LINES_CHANGED")
+    Stubs.Advance(0.5)
+    assert_eq(AHProfitDB.professions["Amaya-Grommash"], { Mining = { skill = 120, max = 150 } })
   end)
 
   it("known recipes only grow, so a filtered window doesn't forget recipes", function()

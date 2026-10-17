@@ -38,14 +38,18 @@ AHProfitDB = {
 	["formatVersion"] = 1,
 	["inventory"] = {
 		["Amaya-Grommash"] = {
-			["at"] = 1760000120000,
-			["bags"] = "2589,20,0;6948,1,1;10938,2,0;10940,3,0",
+			["bags"] = "-6585,1,0;2589,20,0;6948,1,1;10938,2,0;10940,3,0",
+			["bagsAt"] = 1760000000000,
 			["bank"] = "2589,7,0;4306,10,0",
+			["bankAt"] = 1760000060000,
 			["mail"] = "2592,20,0;10940,3,0",
+			["mailAt"] = 1760000120000,
 		},
 		["Brugan-Grommash"] = {
-			["at"] = 1760003600000,
 			["bags"] = "2835,12,0;2840,6,0;6217,5,0;6948,1,1",
+			["bagsAt"] = 1760003600000,
+			["bank"] = "",
+			["bankAt"] = 1760003610000,
 		},
 	},
 	["knownRecipes"] = {
@@ -79,43 +83,33 @@ AHProfitDB = {
 	["recipes"] = {
 		["Blacksmithing"] = {
 			[2660] = {
-				["cooldown"] = 0,
 				["product"] = 2862,
 				["reagents"] = "2835,1",
-				["skill"] = 0,
 				["yieldMax"] = 1,
 				["yieldMin"] = 1,
 			},
 			[2662] = {
-				["cooldown"] = 0,
 				["product"] = 2852,
 				["reagents"] = "2840,4",
-				["skill"] = 0,
 				["yieldMax"] = 1,
 				["yieldMin"] = 1,
 			},
 			[2663] = {
-				["cooldown"] = 0,
 				["product"] = 6217,
 				["reagents"] = "2840,2",
-				["skill"] = 0,
 				["yieldMax"] = 1,
 				["yieldMin"] = 1,
 			},
 		},
 		["Enchanting"] = {
 			[7418] = {
-				["cooldown"] = 0,
 				["reagents"] = "10940,1",
-				["skill"] = 0,
 				["yieldMax"] = 1,
 				["yieldMin"] = 1,
 			},
 			[7421] = {
-				["cooldown"] = 0,
 				["product"] = 6218,
 				["reagents"] = "6217,1;10938,1;10940,1",
-				["skill"] = 0,
 				["yieldMax"] = 1,
 				["yieldMin"] = 1,
 			},

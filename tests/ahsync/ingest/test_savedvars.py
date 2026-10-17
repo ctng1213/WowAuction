@@ -6,9 +6,9 @@ from pathlib import Path
 import pytest
 
 from ahsync.ingest.savedvars import (
-    AuctionRow, Character, Event, InventoryRow, InventorySnapshot, ItemRule, KnownRecipe,
+    AuctionRow, Character, Event, InventoryLocation, InventoryRow, ItemRule, KnownRecipe,
     OwnAuctionSnapshot, Profession, Reagent, Recipe, SavedVarsError, SavedVarsParseError, Scan,
-    UnsupportedFormatError, read_ahprofit, read_ahprofit_file,
+    UnsupportedFormatError, base_item_id, is_unknown_suffix, read_ahprofit, read_ahprofit_file,
 )
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -50,12 +50,14 @@ def test_A1_capture_writes_savedvariables_that_ingest_parses_back_to_the_same_re
         Profession(BRUGAN, "Mining", 120, 150),
     )
     # Copper Rod (6217) from 2 Copper Bar (2840); the enchant makes no item; reagents ascend by key.
+    # Skill and cooldown are unknown on Classic APIs, so the file omits them and they read as None.
     assert data.recipes == (
-        Recipe("Blacksmithing", 2660, 2862, 1, 1, 0, 0, (Reagent(2835, 1),)),
-        Recipe("Blacksmithing", 2662, 2852, 1, 1, 0, 0, (Reagent(2840, 4),)),
-        Recipe("Blacksmithing", 2663, 6217, 1, 1, 0, 0, (Reagent(2840, 2),)),
-        Recipe("Enchanting", 7418, None, 1, 1, 0, 0, (Reagent(10940, 1),)),
-        Recipe("Enchanting", 7421, 6218, 1, 1, 0, 0, (Reagent(6217, 1), Reagent(10938, 1), Reagent(10940, 1))),
+        Recipe("Blacksmithing", 2660, 2862, 1, 1, None, None, (Reagent(2835, 1),)),
+        Recipe("Blacksmithing", 2662, 2852, 1, 1, None, None, (Reagent(2840, 4),)),
+        Recipe("Blacksmithing", 2663, 6217, 1, 1, None, None, (Reagent(2840, 2),)),
+        Recipe("Enchanting", 7418, None, 1, 1, None, None, (Reagent(10940, 1),)),
+        Recipe("Enchanting", 7421, 6218, 1, 1, None, None,
+               (Reagent(6217, 1), Reagent(10938, 1), Reagent(10940, 1))),
     )
     assert data.known_recipes == (
         KnownRecipe(AMAYA, 7418), KnownRecipe(AMAYA, 7421),
@@ -64,25 +66,35 @@ def test_A1_capture_writes_savedvariables_that_ingest_parses_back_to_the_same_re
     # The limited-supply pattern (6270) is not a vendor reagent.
     assert data.vendor_reagents == (2320, 2321)
     # Linen 15 + 5 in bags -> 20; the Hearthstone is bound; mail Strange Dust 2 + 1 -> 3.
-    # Amaya's snapshot time is her mailbox visit (login + 120 s); Brugan never opened bank or mail.
+    # Scouting Gloves of the Monkey (item 6585, random suffix) is key -6585: v unknown.
+    # Each place has its own time: Amaya logs in at T, bank T+60 s, mail T+120 s.
+    # Brugan logs in at T+3600 s and opens an empty bank 10 s later; he never opens mail.
     assert data.inventories == (
-        InventorySnapshot(AMAYA, 1760000120000, ("bags", "bank", "mail"), (
+        InventoryLocation(AMAYA, "bags", 1760000000000, (
+            InventoryRow(AMAYA, "bags", -6585, 1, False),
             InventoryRow(AMAYA, "bags", 2589, 20, False),
             InventoryRow(AMAYA, "bags", 6948, 1, True),
             InventoryRow(AMAYA, "bags", 10938, 2, False),
             InventoryRow(AMAYA, "bags", 10940, 3, False),
+        )),
+        InventoryLocation(AMAYA, "bank", 1760000060000, (
             InventoryRow(AMAYA, "bank", 2589, 7, False),
             InventoryRow(AMAYA, "bank", 4306, 10, False),
+        )),
+        InventoryLocation(AMAYA, "mail", 1760000120000, (
             InventoryRow(AMAYA, "mail", 2592, 20, False),
             InventoryRow(AMAYA, "mail", 10940, 3, False),
         )),
-        InventorySnapshot(BRUGAN, 1760003600000, ("bags",), (
+        InventoryLocation(BRUGAN, "bags", 1760003600000, (
             InventoryRow(BRUGAN, "bags", 2835, 12, False),
             InventoryRow(BRUGAN, "bags", 2840, 6, False),
             InventoryRow(BRUGAN, "bags", 6217, 5, False),
             InventoryRow(BRUGAN, "bags", 6948, 1, True),
         )),
+        InventoryLocation(BRUGAN, "bank", 1760003610000, ()),
     )
+    assert is_unknown_suffix(data.inventories[0].rows[0].key)
+    assert base_item_id(data.inventories[0].rows[0].key) == 6585
     assert data.events == (
         Event(f"{BRUGAN}:1760003660000:0", "post", BRUGAN, 1760003660000, key=6217, stack=5,
               price_copper=4100, duration_h=24, deposit_copper=60, confirmed=True),
@@ -163,15 +175,58 @@ def test_scans_events_rules_and_own_auctions_from_the_spec_example():
 
 
 def test_empty_inventory_place_differs_from_a_place_never_visited():
-    data = read_ahprofit(db_text('inventory = { ["Amaya-Grommash"] = { at = 5, bags = "" } },'))
-    assert data.inventories == (InventorySnapshot(AMAYA, 5, ("bags",), ()),)
+    data = read_ahprofit(db_text('inventory = { ["Amaya-Grommash"] = { bags = "", bagsAt = 5 } },'))
+    assert data.inventories == (InventoryLocation(AMAYA, "bags", 5, ()),)
+
+
+def test_item_keys_base_ids_and_unknown_suffixes():
+    assert (is_unknown_suffix(-6585), base_item_id(-6585)) == (True, 6585)
+    assert (is_unknown_suffix(2589), base_item_id(2589)) == (False, 2589)
+    assert base_item_id(2147483648 * 28592 + 2589) == 2589
+
+
+def test_cooldown_zero_means_no_cooldown_and_omitted_means_unknown():
+    body = ('recipes = { Alchemy = { [11479] = { product = 3577, yieldMin = 1, yieldMax = 1, skill = 225,'
+            ' cooldown = 86400, reagents = "3575,1" }, [2330] = { yieldMin = 1, yieldMax = 1, cooldown = 0 } } },')
+    data = read_ahprofit(db_text(body))
+    assert [(r.spell_id, r.skill_req, r.cooldown_s) for r in data.recipes] == [(2330, None, 0), (11479, 225, 86400)]
+
+
+def test_a_bad_reagent_string_sets_aside_only_that_recipe():
+    body = ('recipes = { Blacksmithing = { [2662] = { yieldMin = 1, yieldMax = 1, reagents = "2840,x" },'
+            ' [2663] = { product = 6217, yieldMin = 1, yieldMax = 1, reagents = "2840,2" } } },')
+    data = read_ahprofit(db_text(body))
+    assert [r.spell_id for r in data.recipes] == [2663]
+    assert data.problems == ("recipes['Blacksmithing'][2662]: reagents: bad row '2840,x' (expected 2 integers)",)
+
+
+def test_a_bad_profession_row_sets_aside_only_that_profession():
+    data = read_ahprofit(db_text('professions = { ["X-Y"] = { Mining = 5, Tailoring = { skill = 1, max = 75 } } },'))
+    assert data.professions == (Profession("X-Y", "Tailoring", 1, 75),)
+    assert data.problems == ("professions['X-Y']['Mining']: profession is not a table: 5",)
+
+
+def test_inventory_is_all_or_nothing_per_place():
+    body = ('inventory = { ["X-Y"] = { bags = "2840,6,0;bad", bagsAt = 5, bank = "4306,10,0",'
+            ' mail = "", mailAt = 7 } },')
+    data = read_ahprofit(db_text(body))
+    assert data.inventories == (InventoryLocation("X-Y", "mail", 7, ()),)
+    assert data.problems == ("inventory['X-Y'].bags: bags: bad row 'bad' (expected 3 integers)",
+                             "inventory['X-Y'].bank: bankAt is not a number: None")
+
+
+def test_malformed_refresh_request_is_a_problem_and_reads_as_none():
+    data = read_ahprofit("AHProfitDB = { formatVersion = 1, refreshRequestedAt = 'soon' }")
+    assert data.refresh_requested_at_ms is None
+    assert data.problems == ("refreshRequestedAt is not a number: 'soon'",)
 
 
 @pytest.mark.parametrize("body, problem", [
     ('characters = { ["X-Y"] = { name = "X" } },', "characters['X-Y']: realm is not a string"),
-    ('inventory = { ["X-Y"] = { at = 5, bags = "2840,20" } },', "inventory['X-Y']: bags: bad row '2840,20'"),
+    ('inventory = { ["X-Y"] = { bagsAt = 5, bags = "2840,20" } },',
+     "inventory['X-Y'].bags: bags: bad row '2840,20'"),
     ('recipes = { Blacksmithing = { [2663] = { yieldMin = 1, yieldMax = 1, reagents = "2840,x" } } },',
-     "recipes['Blacksmithing']: reagents: bad row"),
+     "recipes['Blacksmithing'][2663]: reagents: bad row"),
     ('events = { { id = "e", type = "dance", char = "A", at = 1 } },', "events[1]: type is 'dance'"),
     ('events = { { id = "e", type = "craft", char = "A", at = 1, spell = 1 } },', "craft event has no count"),
     ('events = { { id = "e", type = "auction_mail", char = "A", at = 1, outcome = "won", key = 1, qty = 1 } },',

@@ -23,9 +23,10 @@ describe("Adapter", function()
     assert_eq(Adapter.ItemKey("item:2589:0:0:0:0:0:0:0:60"), 2589)
   end)
 
-  it("item key falls back to the base item for a suffixed item until §6 item 11 is verified", function()
+  it("a random-suffix item's key is minus its item id until §6 item 11 is verified", function()
     local Adapter = Boot()
-    assert_eq(Adapter.ItemKey(Stubs.ItemLink(6588, 1017)), 6588)
+    assert_eq(Adapter.ItemKey(Stubs.ItemLink(6585, 1017)), -6585)
+    assert_eq(Adapter.ItemKey("item:6585:0:0:0:0:0:0:0:60"), 6585)
   end)
 
   it("item key is nil for non-item links and nil", function()
@@ -49,6 +50,35 @@ describe("Adapter", function()
     assert_eq(Adapter.InCombat(), false)
   end)
 
+  it("a collapsed Skills header makes the skill lines unreadable (nil)", function()
+    local Adapter = Boot()
+    Stubs.world.skillLines = { { name = "Professions", header = true, collapsed = true },
+                               { name = "Weapon Skills", header = true }, { name = "Staves", rank = 1, max = 5 } }
+    assert_eq(Adapter.ReadSkillLines(), nil)
+  end)
+
+  it("an occupied slot without an item link makes bags and bank unreadable (nil)", function()
+    local Adapter = Boot()
+    Stubs.world.containers = {
+      [0] = { size = 2, slots = { [1] = { id = 2840, count = 6 }, [2] = { id = 2589, count = 1, noLink = true } } },
+      [-1] = { size = 1, slots = { [1] = { id = 4306, count = 1, noLink = true } } },
+    }
+    assert_eq(Adapter.ReadBags(), nil)
+    assert_eq(Adapter.ReadBank(), nil)
+    C_Container = nil
+    assert_eq(Adapter.ReadBags(), nil)
+  end)
+
+  it("an inbox with mail not loaded yet, or an attachment without a link, is unreadable (nil)", function()
+    local Adapter = Boot()
+    Stubs.world.inbox = { { { 2592, 20 } } }
+    Stubs.world.inboxTotal = 2
+    assert_eq(Adapter.ReadInbox(), nil)
+    Stubs.world.inboxTotal = nil
+    Stubs.world.inbox = { { { 2592, 20 }, { 10940, 1, noLink = true } } }
+    assert_eq(Adapter.ReadInbox(), nil)
+  end)
+
   it("reads skill lines without headers", function()
     local Adapter = Boot()
     Stubs.world.skillLines = { { name = "Professions", header = true }, { name = "Mining", rank = 120, max = 150 } }
@@ -62,8 +92,7 @@ describe("Adapter", function()
       { name = "Copper Rod", spell = 2663, product = 6217, min = 1, max = 2, reagents = { { 2840, 2 } } },
     } }
     assert_eq(Adapter.ReadRecipeWindow("trade"), { profession = "Blacksmithing", rank = 115, max = 150, recipes = {
-      { spell = 2663, product = 6217, yieldMin = 1, yieldMax = 2, skill = 0, cooldown = 0,
-        reagents = { { key = 2840, count = 2 } } },
+      { spell = 2663, product = 6217, yieldMin = 1, yieldMax = 2, reagents = { { key = 2840, count = 2 } } },
     } })
   end)
 
@@ -79,7 +108,7 @@ describe("Adapter", function()
       { name = "Enchant Bracer - Minor Health", spell = 7418, reagents = { { 10940, 1 } } },
     } }
     local expected = { profession = "Enchanting", rank = 142, max = 150, recipes = {
-      { spell = 7418, yieldMin = 1, yieldMax = 1, skill = 0, cooldown = 0, reagents = { { key = 10940, count = 1 } } },
+      { spell = 7418, yieldMin = 1, yieldMax = 1, reagents = { { key = 10940, count = 1 } } },
     } }
     assert_eq(Adapter.ReadRecipeWindow("craft"), expected)
     GetCraftRecipeLink = nil

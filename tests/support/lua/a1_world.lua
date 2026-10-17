@@ -2,10 +2,11 @@
 --- Two characters on Grommash (Horde) play one session each into the same
 --- AHProfitDB; the result is compared with tests/fixtures/savedvars/a1.lua,
 --- which tests/ahsync/ingest/test_savedvars.py parses back.
----   Amaya-Grommash: mage 60, Enchanting 142/150 and Cooking 45/75; bags, bank
+---   Amaya-Grommash: mage 60, Enchanting 142/150 and Cooking 45/75; bags (with a
+---     random-suffix item, key -6585), bank
 ---     and mailbox visited; craft window opened; a merchant visited.
 ---   Brugan-Grommash: warrior 40, Blacksmithing 115/150 and Mining 120/150;
----     bags only; trade skill window opened; posts 5 Copper Rods (event).
+---     bags, an empty bank; trade skill window opened; posts 5 Copper Rods (event).
 
 local A1 = {}
 
@@ -35,7 +36,10 @@ local function AmayaWorld(world)
       [3] = { id = 2589, count = 5 },
       [4] = { id = 10940, count = 3 },                 -- Strange Dust
     } },
-    [1] = { size = 6, slots = { [2] = { id = 10938, count = 2 } } },   -- Lesser Magic Essence
+    [1] = { size = 6, slots = {
+      [2] = { id = 10938, count = 2 },                 -- Lesser Magic Essence
+      [3] = { id = 6585, count = 1, suffix = 1017 },   -- Scouting Gloves "of the Monkey": key -6585
+    } },
     [-1] = { size = 24, slots = { [1] = { id = 4306, count = 10 } } }, -- bank: Silk Cloth
     [5] = { size = 6, slots = { [1] = { id = 2589, count = 7 } } },    -- bank bag: Linen Cloth
   }
@@ -121,7 +125,10 @@ local function PlayBrugan(Stubs)
   Stubs.Reset({ keepSaved = true })
   BruganWorld(Stubs.world)
   Stubs.Login()
-  Stubs.Advance(30)
+  Stubs.Advance(10)
+  Stubs.FireEvent("BANKFRAME_OPENED")   -- an empty bank: written as "" with its bankAt
+  Stubs.FireEvent("BANKFRAME_CLOSED")
+  Stubs.Advance(20)
   Stubs.FireEvent("TRADE_SKILL_SHOW")
   Stubs.FireEvent("TRADE_SKILL_UPDATE")
   Stubs.Advance(1)
