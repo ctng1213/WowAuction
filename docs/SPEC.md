@@ -1133,7 +1133,10 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `Data.lua` → 
 8. **Tracking hooks**: the post and buy functions to hook, the sold / expired / won system messages, the mail invoice API, and the send-mail hook. Also check whether mail between your own characters arrives instantly or after a delay (it changes how mail steps are spaced in a chain).
 9. **wow-ui-sim spike** (§8.4, layer 3): can it load a Classic-style addon (`## Interface: 16001`) and render AHProfit's frames headless through Docker on Windows? It targets the retail client, and Classic support is not documented.
 10. **Folder name after launch.**
-11. **Item key from a link**: how to get AHF's suffix value `v` (§2.1) from an item link, so `Adapter.lua` can compute keys that match AHF (§2.2.1). It is **not** the classic suffix id: a recorded key has `v` = 28592, while `/items` suffix ids are around 14,300. `/items` also lists `bonusLists` and `bonusTrees`, so Forever probably encodes suffixes as bonus ids. Compare a few in-game links with `/items.variants`.
+11. **Item key from a link** (half verified 2026-10-16).
+   - **AHF's side is known:** for all 523 suffix variants in `/items`, `v = 2 × suffix id` (e.g. "of the Owl" is suffix 14299, so v = 28598). `/items.bonusLists` maps a bonus ID to `[suffix id, stats]`, and `/items.bonusTrees` lists the bonus IDs an item can roll.
+   - **Forever's links use the modern format:** `item:id:enchant:gem1:gem2:gem3:gem4:suffixID:unique:level:spec:modifiersMask:context:numBonusIDs:bonusID…:…:crafterGUID`. A crafted green (Embossed Leather Gloves) had an empty suffix field and no bonus IDs.
+   - **Hypothesis to confirm with one real "… of the X" link:** the link carries one bonus ID from `bonusLists`, and `v = 2 × bonusLists[bonusID][1]`. The addon then needs the bonus → suffix table (345 entries), which AHSync can ship in `Data.lua` (§3.5). Until confirmed, suffixed items stay `key = −itemId` (§2.2.1).
 
 ## 7. Milestones
 
