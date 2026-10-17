@@ -1,0 +1,24 @@
+# AHSync local state: database, backups, logs, lock (SPEC §3.2, §5.2)
+data/
+# Local config may hold an API key (SPEC §3.6); keep it out of the repo
+config.toml
+*.key
+
+# Generated test output (golden files under tests/visual/golden/ ARE committed)
+tests/visual/out/
+.coverage
+htmlcov/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+build/
+dist/
+*.spec
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

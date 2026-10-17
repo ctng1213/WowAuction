@@ -1,0 +1,1190 @@
+# WowAuction — Spec (draft v0.4, 2026-10-16)
+
+Two pieces:
+
+1. **AHSync**: a desktop companion app and the **brain**.
+   - Start it whenever you're ready to play. It works out where it left off and catches up on auctionhouse.fyi prices.
+   - It keeps a local 90-day history, works out every recommendation, and shows them in a **local dashboard** (out of game).
+   - It also writes the same results into the addon.
+2. **AHProfit**: an in-game addon that acts as the **eyes and hands**.
+   - It records your characters, professions, recipes, inventory and gold.
+   - It runs its own auction house scans.
+   - In game, it shows the recommendations, adds tooltip lines, and searches the auction house so you can buy with one click.
+
+What it recommends:
+
+1. buy and disenchant
+2. craft and sell now
+3. a weekly plan: buy or craft now and sell later, plus **when to sell what you already own** for the most profit
+
+Names are placeholders.
+
+---
+
+## 1. Constraints that shape the design
+
+| Fact | Consequence |
+|---|---|
+| A WoW addon runs in a Lua sandbox with **no network access**. It reads files only at login or `/reload`, and it writes its SavedVariables to disk only at logout, `/reload` or disconnect. | AHSync does all the HTTP work and the calculations. The two talk through files: the addon's SavedVariables go to AHSync, and a generated `Data.lua` comes back to the addon. |
+| WoW: Forever has **no official Blizzard AH API**. auctionhouse.fyi (AHF) prices come from players scanning in game. | Data is only as fresh as someone's last scan. Every price keeps its observation time, and results show their age and a confidence level. |
+| AHF CDN retention: public **hour candles 7 days**, public **day candles 7 days**. Premium adds 14 days of hours and 90 days of days. | We build our own 90-day hourly history. See §2.1. |
+| Addons **cannot buy or post automatically**. Each action needs a hardware click. | We recommend and pre-fill searches. You click. |
+| Forever client: folder `_classic_beta_` (may be renamed at the Nov 4 launch), `## Interface: 16001`, client build 1.60.x. | The WoW path is configurable, and every game-API call goes through a thin adapter. |
+
+## 2. Data sources
+
+### 2.1 auctionhouse.fyi API v1
+
+- Base: `https://auctionhouse.fyi/api/v1`. CDN: `https://cdn.auctionhouse.fyi/` (from `GET /config`).
+- Auth is optional: `Authorization: Bearer ak_…`. The key stays in local config and never goes into logs or URLs.
+- Units: price is integer **copper per unit**, times are **Unix ms**, hour = `floor(ms/3600000)`, day = `floor(ms/86400000)`. A `null` price means nothing listed, never zero.
+- Market id: `forever.<normal|pvp|rp>.<alliance|horde>.us`. Configurable as a list; the default is **`forever.pvp.horde.us`**.
+- Item **key**: `item + 2147483648 × v`, where `v` encodes the random suffix. Base item id = `key mod 2147483648`.
+- `429` comes with `Retry-After`, and we honour it. `403 {feature}` means our tier lacks it, so we skip that feature.
+
+| Purpose | Call | Without key | With Premium |
+|---|---|---|---|
+| Capabilities | `GET /me` | `historyDays 7`, 60 requests/min | `historyDays 90`, + `prices.live`, `depth`, `books` |
+| File index | `GET /ah/:market/files` → `sealed.h1`, `d1`, `caps.*` | ✔ | ✔ with capability URLs |
+| Hour candles | CDN `candles/v1/h1/<m>/<hour>.json.gz` | last 7 days | + days 8–14 via `h1c` |
+| Day candles | CDN `candles/v1/d1/<m>/<day>.json.gz` (7 days per file) | ✔ | `d1c` = 90 days in one file |
+| Current prices | `GET /ah/:market/snapshot` (as of the top of the hour) | ✔ | live table `GET /ah/:market?since=` |
+| Volume (listed/sold/expired per day) | `caps.volume` | ✗ (estimated, §3.3.1) | ✔ |
+| Item metadata | `GET /items` (name, quality, ilvl, class/subclass, vendor buy/sell, stack, variants) | ✔ | ✔ |
+
+Rules:
+
+- **Only request files we were told exist** (hours ≤ `sealed.h1`). A guessed future file caches a 404 at the edge.
+- **Building 90 days without Premium.** Public hour files cover 7 days, so running AHSync at least once every **6 days** misses nothing. Over time the local DB fills to the full 90 days. AHSync warns when the gap since the last run gets close to 7 days. Premium only speeds up the first fill and adds real volume data and live prices. Premium is also earned for free by uploading scans with the AHF addon (7 days per credited scan).
+- **A gap of more than 7 days without Premium loses those hours for good.** Public day candles are also kept only 7 days, so nothing covers them. AHSync reports the lost range on the Status page.
+- **Characters map to markets** as `forever.<ruleset>.<faction>.us`. The faction comes from the character, and the ruleset from the config `[realms]` table (§3.6). AHF has no neutral-AH market, so the neutral AH is not planned in v1 (§9).
+
+Verified 2026-10-16, without a key: `/me`, `/files`, the snapshot, public h1 and d1 files, and `/items` all work.
+
+**Verified 2026-10-16 with our key.** The key gives the Premium feature set through the **contributor** role, not a paid plan:
+
+| | Without key | With our key (roles `free`, `contributor`) |
+|---|---|---|
+| `historyDays` | 7 | **90** |
+| `apiPerMinute` | 60 | **600** |
+| `feedMinutes` | 60 | 1 |
+| Features | `prices.snapshot`, `candles.daily`, `candles.hourly` | adds `prices.live`, `candles.minute`, `books`, `depth`, `signals`, `live`, watchlist, alerts and boards, plus the API and upload features |
+| `/files` caps | — | `d1`, `h1`, `m1`, `volume` (plus top-level `books` and `live`) |
+
+- **Contributor access expires.** `/me` returns `contributor.until`, which was 2026-10-23 (7 days out), with `scans7d` = 4. Every credited scan uploaded with the AHF addon extends it.
+- **So AHSync must re-check `/me` on every run** and degrade cleanly when Premium features disappear (§2.1 `403` rule).
+- **The Status page shows the expiry**: "Premium via contributor until 23 Oct · upload scans to keep it". It warns 2 days before.
+- **Minute candles (`m1`, `candles.minute`)** are available but not used in v1.
+
+**The app works fully without Premium.** Each Premium feature only improves something that already has a free fallback:
+
+| Premium feature | Used for | Without it |
+|---|---|---|
+| `volume` / `depth` | real daily listed / sold / expired, the main input to the sell probability | our own estimates (order-book diffs, mail, quantity drops; §3.3.1) |
+| `historyDays 90` (`h1c`, `d1c`) | filling the 90-day history quickly, and recovering gaps up to 14 days | AHSync builds the history itself by running at least every 6 days (§2.1 rules) |
+| `prices.live` | prices refreshed every 15 minutes | the hourly snapshot and your own in-game scans |
+| `books` | AHF's full order books | your own scans' order books |
+| `apiPerMinute 600` | faster catch-up | 60 per minute: the first sync is slower, but nothing is lost |
+
+The choice is made per run from `/me`, and per item and day for volume (§3.3.1). Losing Premium therefore changes the quality of the estimates, never whether the app works. Scenarios S11 and V14–V17 cover it.
+
+**Coverage warning (beta).** `forever.pvp.horde.us` had 8,929 items, all from **one scan about 7 days old**, with 1 contributor in 7 days. Its public h1 files were empty. Our own scans (§2.2) are therefore a first-class source.
+
+### 2.2 The AHProfit addon's SavedVariables
+
+AHSync reads `WTF/Account/*/SavedVariables/AHProfit.lua`. It watches the file and re-reads it whenever WoW rewrites it (on logout or `/reload`). The addon records:
+
+| Data | Captured when |
+|---|---|
+| **Characters**: id `Name-Realm`, name, realm, faction, class, level, gold | login, money change |
+| **Professions** and skill level per character | login, skill change |
+| **Recipe definitions per profession** (account-wide): product, yield min/max, reagents with counts, vendor-sold reagents, skill needed, cooldown | profession window opened (once per profession is enough) |
+| **Known recipes per character**: spell ids | profession window opened on that character |
+| **Inventory per character**: bags, bank, mail, each with a **bound** flag | bag/bank/mail events |
+| **Own active auctions**: item, unit price, stack, time-left band | AH events |
+| **Own AH scans** (full or partial): scan time, kind, and the order book as rows `[key, unitPrice, stack, band, count]` | AH open + scan button / auto |
+| **Posts**: character, item, stack, unit price, duration, deposit, time | a hook on the post call |
+| **Purchases**: character, item, quantity, unit price, source (AH or vendor), time | AH: a hook on the buy call (`hooksecurefunc`, which only observes), confirmed by the "auction won" message and mail. Vendor: a hook on the merchant buy call |
+| **Crafts**: character, recipe, count, time | spellcast success + bag change |
+| **Mail to your own characters**: from, to, item, quantity, time (matches plan `mail` actions) | a hook on the send-mail call |
+| **Auction mail**: sold / expired / cancelled / won, item, quantity, price (from the invoice), time | live system messages; mailbox opened |
+| **Item rules** set in game (blacklist, §3.4.2) | a right-click on a row |
+
+**You never have to report anything by hand.** The inventory snapshot (bags, bank, mail, own auctions) is the source of truth for *what* you own, so a missed event can't make the app think you own something you don't. Events only say *where* items came from and *what they cost*. Items from outside the AH (farmed, traded, mailed between characters) have no recorded cost and are valued at their opportunity cost. Auctions that sell or expire while you're offline are learned at your next mailbox visit.
+
+The app merges own scans into the price tables as source `local`, next to AHF data. **One close per (item, hour):** when AHF and a local scan both have a value for the same item and hour, statistics use the local one. It is an exact observation, and it may be the very scan you uploaded to AHF, which would otherwise be counted twice.
+
+Reading rules:
+
+- AHSync re-reads the file only after its modification time has been unchanged for 2 seconds, so it never parses a half-written file.
+- The file carries `formatVersion`, and every event carries a unique `event_id`, so ingest is idempotent. A file that won't parse is retried from WoW's `AHProfit.lua.bak` (§5.2).
+- **Pruning handshake.** Order books, events and mail would make SavedVariables grow without limit, which slows login and logout. AHSync writes `ingestedUntil` (the newest event time it has stored, in ms) into `Data.lua` (§3.5). On load, the addon deletes scans, posts, purchases, crafts and mail rows at or before that time.
+
+## 3. AHSync (companion app)
+
+### 3.1 Lifecycle
+
+```
+start
+ ├─ load config.toml; open SQLite data/ahsync.db
+ ├─ GET /me → features; warn if > 6 days since last run (risk of missing hours)
+ ├─ refresh item metadata if > 24h old
+ ├─ read AHProfit SavedVariables (characters, recipes, inventory, own scans, events, item rules)
+ ├─ match events to plan actions and posts to outcomes (§3.4.1)
+ ├─ CATCH-UP per market
+ │    last = sync_state.last_hour
+ │    target = files.sealed.h1
+ │    for each missing hour in (last, target]:
+ │        ≤ 7 days old   → public h1
+ │        7–14 days old  → h1c (if Premium)
+ │        older          → d1c day candles if Premium; otherwise lost (§2.1)
+ │    day candles: public d1 (7 days) or d1c (90 days); current: snapshot or live table
+ │    volume: once a day if Premium
+ │    commit and advance sync_state after each hour, so a crash resumes there
+ ├─ prune > 90 days
+ ├─ FULL REFRESH (§3.1.1) → item_stats, plan, dashboard data, addon Data.lua
+ ├─ serve dashboard at http://localhost:8765
+ └─ STEADY STATE (mostly idle; see §3.1.1)
+      every hour at :06 → store the new h1 hour + snapshot (+ AHF order book if Premium `books`); no recompute
+      every 15 min (Premium) → store the live table; no recompute
+      every hour at :00 → STATUS PASS (§3.1.1): late / missed transitions, missed-peak re-plans; no history reads
+      SavedVariables changed → re-read → INCREMENTAL UPDATE of the changed items only (§3.1.1)
+      first run after `daily_refresh_time`, or "Refresh now" → FULL REFRESH
+      daily → d1/volume refresh, prune; weekly VACUUM
+```
+
+Every write is an idempotent upsert, so re-running any range is harmless.
+
+#### 3.1.1 Refresh model: heavy work rarely, small updates often
+
+All the heavy lifting happens in AHSync, and only in a **full refresh**. Everything else is a small, targeted update.
+
+**Full refresh** (`engine.refresh_all`). It runs at start, at the first run after `daily_refresh_time` (default 06:00 local), on the dashboard's **Refresh now** button, or when the addon sets a refresh request (`/ahp refresh`, picked up on the next `/reload` or logout). This is the only time AHSync reads through history:
+1. **Builds `item_stats`**, one materialized row per item and market with everything §3.3 defines: medians, percentiles, trend, `how`, `sales_how`, `sell_score`, best windows, volume per source, tier sell-through, undercut share, calibration and confidence components. It works item by item and streams the candle and book tables in key order, so memory stays flat.
+2. **Precomputes each item's options:** sell values and hold values (§3.4), disenchant EV, the crafting options with their sourcing, flip candidates, and the sell-probability curve (below).
+3. **Builds the plan, views and `Data.lua`.**
+
+**Incremental update** (`engine.update_items`). It runs when SavedVariables changes: inventory, posts, purchases, crafts, mail, rules or a new scan.
+- The changed events mark items **dirty**. Only those items' options, plan actions and view rows are recomputed, from their precomputed `item_stats` row, with no history reads.
+- The plan's budget allocation re-runs over the precomputed candidates, which is a cheap greedy pass with no simulation.
+- A new in-game scan updates `cur`, `curQty` and the book for the scanned items only.
+- Hourly and live AHF data are **stored but not applied** until the next full refresh, so the numbers stay stable through the day. The exception is items you scanned in game, whose prices update immediately. The dashboard shows "prices newer than numbers · Refresh now" when newer data is waiting.
+
+**Status pass** (`plan.status_pass`, run by `sync/scheduler`). Time passing changes the plan even when no data does, so AHSync runs this once an hour at :00. It runs on precomputed options only, with no history reads and no simulation:
+- It moves `pending` actions to `late` or `missed` by the rules in §3.4.1.
+- For each post that just became `missed`, it runs the missed-peak re-plan (§3.4.0), which only compares the item's precomputed windows.
+- It re-runs the cheap budget allocation and rewrites the views and `Data.lua` if anything changed.
+
+**Sell-probability curve.** The queue simulation (§3.3.2) runs **only in AHSync**, during a full refresh. The chance of a post made now depends on the hour you post it, because the window catches different buyers (P21, P22). So the curve is a grid:
+- **Rows:** one for each of the 24 clock hours, starting at the refresh hour. Each row is `P` for a post made at the start of that hour over the posting-now window.
+- **Columns:** 8 points of units ahead: 0, 1, 2, 5, 10, 20, 50, 100.
+- It is computed at the current price tier, and it carries the inputs needed to blend it.
+- Items on any list get the full 24 × 8 grid. Other items, which only need the tooltip, get 24 × 3 (0, 5 and 20 ahead), to stay within the `Data.lua` budget.
+
+When a price or the competition changes, AHSync and the addon both pick the row for the current hour and interpolate linearly between the units-ahead points, in O(1) time. More than 24 h after the refresh, they reuse the row for the same clock hour, and the age badge already warns that the data is old. The full simulation is never run live.
+
+**Idle means idle.**
+- Between events AHSync sleeps on timers. It checks the SavedVariables modification time every 5 s, which is a single file stat.
+- The dashboard serves precomputed JSON and does no computation per request.
+
+A full refresh builds into staging tables and swaps them in with one transaction, so a failure halfway leaves the previous numbers in place (§5.2).
+
+#### 3.1.2 Performance budgets (AHSync)
+
+| What | Budget |
+|---|---|
+| CPU when idle | ≈ 0% (timers and one file stat every 5 s) |
+| Memory when idle | ≤ 150 MB |
+| Memory during a full refresh | ≤ 400 MB peak (streaming, item by item) |
+| Full refresh time | ≤ 60 s for one market of about 9k items |
+| Incremental update | ≤ 1 s for up to 50 dirty items |
+| Dashboard request | ≤ 50 ms (precomputed JSON, paged at 100 rows) |
+| `Data.lua` size | ≤ 2 MB |
+
+Storage rules:
+- SQLite runs in WAL mode.
+- Every write batch is one transaction.
+- Indexes on `(market, key, t)`; candle tables are `WITHOUT ROWID`.
+- AHF files are streamed and decompressed one hour at a time, never all at once.
+- `item_stats` is replaced atomically, so the dashboard never sees half a refresh.
+
+`tools/bench.py` runs a full refresh and an incremental update on a generated 9k-item world and reports time and peak memory against these budgets.
+
+### 3.2 Storage: SQLite
+
+**Why SQLite rather than Postgres:**
+
+- one user, one machine, one writer process
+- a single file, built into Python, nothing to install or run
+- backup = copy the file
+- handles tens of millions of rows
+
+All DB access lives in `db.py`. Moving to Postgres would only mean replacing that module, if this ever becomes multi-user or hosted.
+
+```
+items(key PK, item_id, name, quality, ilvl, class, subclass, vendor_buy, vendor_sell, stack, updated)
+candles_h1(market, key, t, open, high, low, close, qty, src,   PK(market,key,t,src))   WITHOUT ROWID
+candles_d1(market, key, t, open, high, low, close, qty, src,   PK(market,key,t,src))   WITHOUT ROWID
+volume_d1(market, key, day, listed, sold, expired, src, conf, PK(market,key,day,src))
+calibration(market, key, source, factor, samples, updated,   PK(market,key,source))   -- source: ahf | mail
+current(market, key, price, qty, at, src,                    PK(market,key,src))
+scans(scan_id PK, market, src, char_id, at, kind)            -- src: local (your scan) | ahf (Premium books); char_id null for ahf
+book_entries(scan_id, key, price, stack, band, count,        PK(scan_id,key,price,stack,band))
+auction_mail(char_id, key, qty, price, outcome, at,          PK(char_id,key,at,outcome))
+posts(post_id PK, char_id, market, key, stack, price, cost_each, p_at_post, duration_h, deposit, at, outcome, resolved_at, action_id)
+purchases(char_id, key, qty, price, source, at, action_id,   PK(char_id,key,at))
+crafts(char_id, spell_id, count, cost_each, at, action_id,   PK(char_id,spell_id,at))
+cost_basis(key PK, qty, total_cost, untracked_qty)
+actions(action_id PK, run_at, slot_ms, char_id, kind, key, qty, price, expected_net, conf, status, done_qty, done_at, parent_id,
+        window_start_ms, window_end_ms, anchor_net, anchor_window_ms, replaces_id, week_start_ms)
+item_rules(key PK, rule, set_at, source)
+characters(id PK, name, realm, faction, market, class, level, gold, updated)
+professions(char_id, profession, skill, max_skill,           PK(char_id,profession))
+recipes(profession, spell_id, product_key, yield_min, yield_max, skill_req, cooldown_s,  PK(profession,spell_id))
+reagents(profession, spell_id, key, count,                   PK(profession,spell_id,key))
+known_recipes(char_id, spell_id,                             PK(char_id,spell_id))
+inventory(char_id, location, key, qty, bound,                PK(char_id,location,key,bound))
+own_auctions(char_id, key, price, stack, band, count, seen,  PK(char_id,key,price,stack))
+sync_state(market PK, last_hour, last_d1, last_volume, live_since, last_run)
+meta(name PK, value)                                         -- e.g. savedvars_ingested_until
+```
+
+- Candle and `current` `src` is `ahf` or `local`.
+- Volume `src` is `ahf` (Premium depth), `books` (own order-book diffs), `mail` or `qty_drop`, ranked in that order of trust (§3.3.1). `conf` is `high`, `medium` or `low`.
+- Scan `kind` is `full` or `partial`. Mail `outcome` is `sold`, `expired`, `cancelled` or `won`. Post `outcome` is null while pending, then `sold`, `expired` or `cancelled`.
+- `location` is `bags`, `bank` or `mail`. Items on the AH live in `own_auctions`.
+- Action `kind` is `buy`, `craft`, `mail`, `post`, `hold`, `de` or `vendor`. `status` is `pending`, `late`, `partial`, `done`, `missed` or `skipped`. A replacement post points to the missed one with `replaces_id` and carries the original `anchor_net` and `anchor_window_ms` (§3.4.0). `parent_id` links a sell action to the buy or craft that created the stock.
+- `cost_basis` is **what you actually paid**, as an average per unit across all your characters. It is account-wide, so mailing an item to an alt keeps its cost. It is used for display (Inventory, On the AH, "below what you paid"). Planning uses opportunity cost instead (§3.4).
+  - A purchase (AH or vendor, `purchases.source`) adds `qty × price`.
+  - Items you found (looted, farmed, gifted) add their quantity at cost 0.
+  - A craft adds its reagents' own cost basis, so a craft from found mats costs 0. The cost per product is stored in `crafts.cost_each`.
+  - Selling, vendoring, disenchanting or using an item as a reagent removes units at the average cost. A post records the average at posting time in `posts.cost_each`.
+  - Items you already held when tracking started count as cost 0, and `untracked_qty` marks them, so the UI can say "before tracking".
+- `item_rules.rule` is `no_buy`, `ignore`, `keep` or `none` (§3.4.2). `source` is `dashboard` or `addon`. Clearing a rule writes `none` with a new `set_at` rather than deleting the row. That tombstone is what lets a clear beat an older rule from the other side. Tombstones older than 90 days are pruned.
+- **Failure handling (§5.2):**
+  - **Event ids.** Every event table (`posts`, `purchases`, `crafts`, `auction_mail`, mail sent) also carries `event_id` (`charId:timeMs:seq`, unique), and ingest upserts on it.
+  - **Attempts.** `purchases` and `posts` have `confirmed` (0/1); unconfirmed rows older than 1 h are ignored.
+  - **Scan coverage.** `scans` has `coverage` (0–1); only `kind = full` with coverage 1 feeds volume diffs.
+  - **Materialized stats.** `item_stats` (§3.1.1) is the per-item stats table that refresh writes. It has `item_stats_new` and `plan_new` as staging twins.
+  - **Format version.** `meta` stores `schema_version`, and migrations run on start.
+
+**Retention: 90 days**, matching AHF's longest window, for candles, volume, posts, purchases, crafts, mail and actions. `cost_basis` and `item_rules` are kept until they no longer apply. Order books (`scans`, `book_entries`, both sources) are kept **30 days**, which is what the undercut share and the price-tier sell-through need (§3.3.2). Hourly AHF books for about 9k items are the largest table; the size estimate below assumes them.
+
+**Size estimate** for one market of about 9k items, at about 40–60 bytes per hour row:
+
+| Scan frequency | 1 week | 90 days |
+|---|---|---|
+| Today (about 1 scan a week) | < 1 MB | about 10 MB |
+| About 5 scans a day (likely post-launch) | about 20 MB | about 250 MB |
+| Every item every hour (worst case) | about 90 MB | about 1.2 GB |
+| Hourly AHF order books (Premium), kept 30 days | about 250 MB | about 1 GB at 30 days (about 5 price groups per item, about 30 bytes per row) |
+
+Scale linearly per extra market.
+
+### 3.3 Pricing primitives (per item, per market)
+
+**Numeric rules** (Python and Lua must follow them exactly, or the two engines drift apart):
+
+- Prices, costs, deposits and budgets are **integer copper**. Deposits are floored.
+- Anything multiplied by a probability or a ratio (`P`, expected values, `how`-adjusted prices) is a **float in copper**. It is rounded half up, `floor(x + 0.5)`, only when shown or exported. Never use Python's `round()`, which rounds half to even.
+- **Median** of an even count = floor of the mean of the two middle values.
+- **Percentile** p = nearest rank: sort ascending and take the value at 1-based index `ceil(p × n)`.
+- **Time** is UTC ms internally. The hour of week uses the UTC date: `weekday = (floor(ms/86400000) + 3) mod 7` with 0 = Monday (1970-01-01 was a Thursday), and `hour = floor(ms/3600000) mod 24`. Display uses the machine's local time. The ±2-hour smoothing absorbs daylight-saving shifts.
+
+| Field | Meaning |
+|---|---|
+| `cur`, `curQty`, `curAge` | newest lowest buyout (AHF or local, whichever is newer), quantity, age; nil when nothing is listed |
+| `curOthers` | lowest buyout that is not one of your own auctions (`own_auctions`). It uses the next price in the newest local book if you hold the lowest one; nil if unknown |
+| `med7`, `med30` | median of hourly closes in the window (one per item and hour, §2.2). With fewer than 24 hourly closes, it uses the median of daily closes instead; nil when there are neither |
+| `p10_30`, `p90_30` | nearest-rank 10th and 90th percentiles of hourly closes over 30 days |
+| `trend7` | least-squares slope of the daily medians over the last 7 days ÷ `med7` × 100, in % per day. It needs at least 4 days of data, otherwise it is 0 |
+| `sold/day`, `sellThru` | **sales volume**; see §3.3.1 for its sources |
+| `how[7×24]` | **hour-of-week profile**: median close per (weekday, hour) ÷ `med30`, smoothed as the mean of the slot and the 2 slots on each side. A slot with data from at least 3 different weeks is used with confidence high. With 1–2 weeks it falls back to the weekday-only ratio (median of that weekday ÷ `med30`), confidence low. With no data it is flat (1.0) |
+| `sales_how[7×24]` | **hourly sales profile**: units sold in each hour-of-week slot ÷ the average hour. Its mean over the 168 slots is 1.0. It is measured from consecutive hourly order books (AHF `books` with Premium, or your scans), smoothed like `how`. It needs data from at least 3 weeks per slot (else the weekday-only value, else flat 1.0). It drives demand in the sell-probability simulation (§3.3.2) |
+| `sell_score[7×24]` | **how good each hour of the week is for selling**: `how[slot] × sales_how[slot] ÷ max(sales_how)`, i.e. the price you get there × how busy buyers are relative to the busiest hour. A high price with no buyers scores low |
+| `sell_windows` | the item's **best selling windows**, derived from `sell_score` (§3.3.4), e.g. "Tue 18:00–21:00, Wed 19:00–22:00" |
+| `n`, `conf` | `n` = hourly closes in the last 30 days. `conf` = a **confidence percentage** (0–100%) for each result, defined in §3.3.5. Its level (high ≥ 75%, medium ≥ 45%, low below that) is only for the dot colour; rankings use the percentage itself |
+
+#### 3.3.1 Sales volume
+
+The free API gives only the **quantity listed**, not sales. Sales volume is the main input for the probability that something sells, so it comes from the best source available. Each value carries its source.
+
+1. **AHF Premium `depth`** (best): daily `listed / sold / expired`, worked out by comparing consecutive complete order books.
+2. **Own order-book diffs** (same method, our data): the addon stores the full order book from each full scan. It records each auction's item, unit price, stack size and time-left band; `ReplicateItems` gives this. For two scans at most 6 hours apart, per `(item, price, stack)` group:
+   - Time left is **not** part of the group. Otherwise an auction whose band ticks from long to medium would count as gone plus new.
+   - `prev` and `next` = auction counts in the two books; `g` = time between them.
+   - Each time-left band covers `[lo, hi)`: short 0–30 min, medium 30 min–2 h, long 2–8 h, very long 8 h to the longest duration. These are the Classic bands and must be verified for Forever (§6). An auction is assumed to sit anywhere in its band with equal chance. So the expected number of the old book's auctions that ran out during the gap is `expiring = Σ count_band × clamp((g − lo) / (hi − lo), 0, 1)`.
+   - `gone = max(0, prev − next)` and `new = max(0, next − prev)`
+   - `expired = min(gone, expiring)` and `sold = gone − expired`. Both can be fractional.
+   - Units = counts × stack. Item totals sum their groups.
+   - Known errors: a cancelled auction counts as sold, and a repost at a new price counts as sold plus new.
+   - Scanning at the start and end of a play session gives one sample.
+3. **Your own sales**: "auction successful" and "auction expired" mail is real ground truth for your own items. It also calibrates source 2: `factor = mail-confirmed sold ÷ book-estimated sold` for your auctions of that item, stored in `calibration` and multiplied into book-based `sold/day`.
+4. **Quantity-drop heuristic** (weakest): `max(0, qty_prev − qty_next)` between consecutive AHF observations is an upper bound on sold + expired + cancelled. It is useful only when observations are a few hours apart, and is flagged `low confidence`.
+
+**Choosing the source, per item and per day:**
+- **All available sources are always computed and stored** in `volume_d1`, one row per source. The estimates (2–4) keep running even while Premium is active, so there is no gap when it lapses.
+- `sold/day` uses, for each day, the best source that has a row for that day, in the order 1 → 4. A 30-day `sold/day` can therefore mix days of real AHF volume with days of estimates, for example when Premium lapsed halfway through the month.
+- AHF volume already stored is history and stays valid after Premium lapses.
+- **AHF volume calibrates the estimates.** On days where both AHF volume and an order-book estimate exist for an item, `factor = AHF sold ÷ estimated sold` is stored in `calibration`, the same table the mail calibration uses. It is applied to that item's estimates on days without AHF data. The more weeks of Premium you have had, the better the estimates are afterwards. With no overlap, the factor is 1. When an item has both an AHF factor and a mail factor, only the AHF one is applied: it covers the whole market, not just your own auctions. The two are never multiplied together.
+- Every `sold/day` shows its source mix on the item detail and in the Status page, e.g. "sold/day 38 · 22 days AHF, 8 days estimated".
+
+#### 3.3.2 Sell probability and expected value
+
+`P` = the expected fraction of your `q` units that sell **within the post's sell window**. It depends on *when* you post, because demand changes through the day and the week.
+
+**The sell window** is always made of whole clock hours (the current hour counts in full):
+
+| Context | Window |
+|---|---|
+| Posting now: Today, Disenchant (selling the mats), Craft (craft now and sell), a sell value (§3.4) | the next `sell_window_hours` (8) from now |
+| A planned post in the Week plan, including the sale half of a flip or a craft-to-sell | from the post time (`post_lead_hours` = 8 before the best hour of its target selling window, §3.3.4) through the end of that window. If the post time has already passed, it starts now. If the window has ended, the peak was missed (§3.4.0) |
+
+- The auction duration is the shortest one that covers the window.
+- Sales after the window are not counted, which is conservative: the auction may still sell later.
+
+`P` combines two views:
+- a **queue simulation** of what happens to your auction given today's competition;
+- the **historical sell-through** of auctions priced like yours.
+
+Both use the same formulas with or without Premium. Premium only supplies better inputs.
+
+**Inputs** (per item and market):
+
+| Input | Meaning | With Premium | Without |
+|---|---|---|---|
+| `S` | units sold per day (7-day average) | AHF `volume` | estimates (§3.3.1) |
+| `X` | units expired per day | AHF `volume` | estimates |
+| `L` | units newly listed per day | AHF `volume` | estimates |
+| book | every competing auction: unit price, units, time-left band | AHF `books` (latest) | your newest scan, if under 24 h old |
+| `u(p)` | **undercut share**: of the units newly listed over the last 7 days, the share priced at or below your price relative to the lowest price at the time they were listed | AHF book history | your scans' history, else `default_undercut_share` (0.5) |
+| `ST_tier` | **sell-through by price tier**: of the auctions that disappeared in the last 30 days, the share that sold rather than expired, grouped by how their price compared with the cheapest competitor | AHF book history | your scans' history, else none |
+
+**Market facts shown with every result** (informational):
+- **Market sell-through** = `S ÷ (S + X)`, e.g. "72% of auctions sell".
+- **Supply on the AH** = the total units listed now, `N`.
+- **Days of supply** = `N ÷ S`, e.g. "3.1 days of supply".
+
+**1. Queue simulation** (`sellprob.simulate`). It runs over the window's clock hours `k = 0 … W−1` (slot `t_k`) and is deterministic:
+- **Demand.** In hour `k`, buyers take `S ÷ 24 × sales_how[t_k]` units from the cheapest listings available, oldest-cheapest first. `sales_how` is the hourly sales profile (§3.3), so a window that covers the evening rush sees more buyers than one overnight.
+- **Who is ahead of you.** Competing auctions priced at or below `p` are ahead. At an equal price they are also ahead of you, which is the conservative choice.
+- **Competitors expire.** An auction with band midpoint `m` is available during hour `k` only while `k < m`. The midpoints are: short 0.25 h, medium 1.25 h, long 5 h, very long `(8 + longest duration) ÷ 2`. When an auction expires, its unsold units leave the queue and stop absorbing demand. The band bounds are the same as §3.3.1 and still need verifying (§6).
+- **New undercutters.** At the start of each hour, `L × u(p) ÷ 24` new units appear priced below you. They are the cheapest listings from then on and stay up for the rest of the window.
+- **Your sales.** Demand left over after everything ahead of you goes to you, until your `q` units are gone.
+- **Result.** `P_queue = your units sold ÷ q`.
+
+**2. Price-tier sell-through.** Your tier is `r = p ÷ curOthers`:
+
+| Tier | Your price vs. the cheapest competitor |
+|---|---|
+| T1 | `r ≤ 1.00` (you are the cheapest) |
+| T2 | `r ≤ 1.05` |
+| T3 | `r ≤ 1.15` |
+| T4 | above that |
+
+`ST_tier = sold ÷ (sold + expired)` for that item's auctions in the tier, using the order-book diff method of §3.3.1. `n_tier` is how many auctions it is based on.
+
+**3. Blend.**
+- `e = 0.5 × min(1, n_tier ÷ 30)`, with `e = 0` when there is no tier history.
+- `P = (1 − e) × P_queue + e × ST_tier`.
+- The history never counts for more than half. The simulation sees today's competition, and the history catches what the simulation misses, such as buyers who skip an item at any price.
+
+**4. Your own record** is applied after this: `P'` (§3.3.3).
+
+**Fallbacks:**
+- **No volume data at all** (`S` unknown): `P = default_sell_prob` (0.25), marked "volume unknown".
+- **No usable book:** there are no band or price details. The simulation uses a single block of `curQty` units ahead of you, but only when `p ≥ cur`, and that block stays available for the whole window.
+- **Confidence:** every `P` carries a `conf` percentage (§3.3.5), which drops as inputs weaken: estimated instead of real volume, an old or missing book, a default undercut share, a short pattern.
+
+**Why the old one-line formula was not enough:** `clamp((S·W/24 − ahead) ÷ q)` assumed three things: demand is the same every hour, every competing listing absorbs buyers for the whole window, and no one undercuts you. The simulation is identical to it with a flat sales profile, nothing ahead expiring, and `u = 0`. That equivalence is tested (PI10), so the old formula is a special case, not a different answer.
+
+**Explaining the number.** Every `P'` can be expanded on the dashboard (item detail, and hovering a Chance cell) into its parts, for example: "market sells 72% · 3.1 days of supply · 6 units ahead of you (all expire in 5 h) · ~6 undercuts expected · queue 95% · tier history 80% (30 auctions) → 88% · your record → 85%".
+
+**Expected net of posting** `q` units at unit price `p`:
+
+`E_post = P·q·p·(1 − cut) + (1 − P)·(q·fallback − deposit)`
+
+- The deposit is **refunded when the auction sells** and lost only when it expires.
+- Unsold units come back to you, worth `fallback` = max(vendor sell price, DE value per unit if one of your characters can disenchant it). Relisting is not modelled, to avoid recursion.
+
+**Anything you pay for now** (a buy or a craft): `expected profit = E_post − cost`. So an unsold flip shows as a loss, not just as a smaller profit.
+
+Items that sell only a few units a week get a low `P`, so they rank low however big their margin.
+
+#### 3.3.3 Your own sell record
+
+The market model can be wrong about an item, and your own posts are the best evidence of that. For each item and market, over the last `own_record_days` (30) days, across all your characters:
+
+- `s` = your posts that sold, `x` = your posts that expired. Cancelled posts don't count. A post is one auction, so its outcome is either sold or expired.
+- Each expiry gets a **cause**, worked out from the observations during the post's lifetime (local books and AHF `cur`):
+  - `undercut`: something cheaper than your price was listed at some point, so price was the problem.
+  - `lowest`: you were the cheapest in every observation, so demand was the problem.
+  - `unknown`: there were no observations; it is treated as `lowest`.
+- `streak` = `lowest` or `unknown` expiries in a row since your last sale of that item. Undercut expiries don't add to it.
+- If you chose **Keep** for the item (§3.4.2), only posts after that choice count. The record starts fresh.
+
+It changes recommendations in four ways:
+
+1. **Probability.** `P` is blended with your record, with the model counting as `k = own_record_weight` (4) posts of evidence:
+   `P' = (k·P + s) / (k + s + x)`.
+   With no record, `P' = P`. `P'` replaces `P` everywhere in §3.3.2 and §3.4.
+2. **Quantity.** The quantity planned for posting is multiplied by `0.5^streak`, rounded down to whole stacks, with a minimum of 1 stack. A sale resets `streak` to 0.
+3. **Price.**
+   - After a `lowest` or `unknown` expiry, the planned price is multiplied by `(1 − reprice_step)^streak` (5% per step) and floored to whole copper.
+   - It never goes below `ceil(fallback / (1 − cut))`. Below that price, vendoring or disenchanting pays more, so the plan picks one of those instead.
+   - After an `undercut` expiry, the next post's price is capped at `curOthers − 1` when you post, even if the plan's peak-slot price is higher.
+4. **Priority.** When `streak ≥ struggle_streak` (3), the item is flagged **not selling**. After a Keep, the threshold is `keep_retry_streak` (1) instead, so a single further expiry while cheapest brings the question back.
+   - It is left out of buy-to-flip and craft-to-sell, so no new stock is bought or made.
+   - Stock you already own stays in the sell plan, where vendor or disenchant often wins once `P'` is low.
+   - The dashboard and the addon offer **Blacklist** or **Keep** (§3.4.2).
+
+It is always visible. Every action row for an item with a record shows (the tooltip only reflects it in Chance to sell), for example, "Your record (30 d): 2 of 5 sold · expired 2× while cheapest · P 80% → 58% · price −10% · qty ¼". So you can see when and why your own history changed a recommendation. Old failures stop counting after 30 days, so an item can recover.
+
+#### 3.3.4 Weekly patterns and best selling windows
+
+The week's 168 hours are treated as **repeating slots**: every Tuesday 19:00 is the same slot. Each week of history adds one more observation to each slot. So the patterns sharpen over time and become a forecast for the coming week.
+
+- **Recency weighting.** `how` and `sales_how` use a weighted median per slot. Each week's observation has weight `0.5 ^ (age_in_weeks ÷ pattern_half_life_weeks)` (4), so a pattern from last month counts half as much as last week's. A shift in when people buy, say after a patch, shows up within a few weeks.
+  - Weighted median, deterministic: sort the values, then take the first value where the cumulative weight reaches half the total.
+- **Best selling windows** (`patterns.sell_windows`):
+  1. Take the slots whose `sell_score` is at least `window_threshold` (90%) of the item's best slot.
+  2. Join adjacent qualifying slots into windows; a window can cross midnight.
+  3. Rank the windows by the sum of their scores, and keep the top 3.
+  4. Each window carries its average price ratio (`how`) and the number of weeks of data behind it.
+- **Pattern strength**, from the weeks of data in the window's slots: under 3 weeks is "early pattern", 3–5 is "pattern", 6 or more is "established". It feeds the window's confidence. With no pattern, the item has no windows and the plan uses posting now.
+- **Where windows are used.** The Week plan's peak slot is the best slot inside the top window, and the post is placed 8 h before it (§3.4C). Windows are also shown on the tooltip ("Best time to sell"), on the item detail (heat map plus windows) and in Inventory.
+- **Forecast.** The expected price in a window next week = `med30 × how × (1 + trend7/100 × days ahead)` (§3.4C). The chance to sell there is the simulation over that window (§3.3.2), using `sales_how` for demand. Both get more confident as the pattern strengthens.
+
+#### 3.3.5 Confidence percentage
+
+`conf` says how much the data behind a result can be trusted. It is the weighted mean of the components that apply to the result:
+
+| Component | Score (0–1) | Weight |
+|---|---|---|
+| Price history | `min(1, n ÷ 60)`, hourly closes in the last 30 days | 0.25 |
+| Volume source | the share of the 7 days by source: AHF real 1.0 · order-book estimate 0.7 · mail only 0.6 · quantity drop 0.4 · none 0 | 0.30 |
+| Order book freshness | ≤ 2 h old 1.0 · ≤ 24 h old 0.5 · older or none 0.3 | 0.15 |
+| Weekly pattern | `min(1, weeks of data ÷ 6)` for the window used. **Only for planned posts**; posting now leaves it out | 0.15 |
+| Tier history | `min(1, n_tier ÷ 30)` | 0.15 |
+
+- `conf = Σ (score × weight) ÷ Σ (weights of the components that apply)`, shown as a whole percent (rounded half up).
+- Calibration (§8.8) also reports predicted versus actual sell rate by confidence band, so a too-optimistic confidence shows up.
+
+### 3.4 Recommendation engine
+
+All money is net of fees. Estimates come with a confidence level.
+
+- **Fees** (`engine/fees`): the AH cut is 5% at the faction AH. The deposit is `floor(vendor_sell × q × rate(duration))`, and it is refunded on sale (§3.3.2). The rates and durations are seeded in `fees.py` and must be verified in game (§6). The neutral AH (15% cut) is not planned in v1.
+- **Post price** `p` = `min(curOthers − 1, med7)` in copper. If one of them is nil, it uses the other. If both are nil, the item has no price: it is skipped and flagged "no price". `curOthers` leaves out your own auctions, so you never undercut yourself.
+- **Sell value** per unit, for things you don't hold yet (DE results, a craft's mats you'd buy) = `E_post(q, p) / q`, using the posting-now window (the next 8 hours).
+  - `q` is the item's **reference stack**: the most common stack size in the newest book, with ties going to the smaller one. It is 1 when there is no book.
+  - It already includes `P`, so mats that don't sell are worth less.
+- **Hold value** per unit, for things you already hold = the sell plan's expected value for all the units you hold (§3.4C.1, best option per lot) ÷ units held.
+  - Posting now is one of the options the sell plan compares, so the hold value is never below the sell value.
+  - It is higher when waiting for a peak pays more. That is the real opportunity cost of using the item.
+  - The sell plan is computed first, treating all owned stock as for sale. Crafts then price owned mats at their hold value, and the allocation (§3.4C.4) decides which units are crafted and which are sold.
+- **Reagent cost** for `q` units = the cheaper of vendor buy × `q` and buying from the AH. AH cost walks the newest local book from the cheapest listing up. Without a book, it is `cur × q`, flagged "depth unknown" when `q > curQty`. Mats you already own are priced at their **hold value**, because that's the opportunity cost. Otherwise a craft would look profitable even when selling the mats raw, now or at their peak, pays more.
+- **Liquidity.** Your units planned for one sell window are capped at `max(1 stack, floor(S × W ÷ 24 × max_market_share))`, where `S` is sold/day, `W` is the window in hours and `max_market_share` is config (0.5). With `S` unknown, the cap is 1 stack. A result that needs more units is capped, not hidden; its `P` already reflects what's left.
+- **Money on every action** is shown as both **each** (per unit) and **total** (each × quantity):
+
+  | Action | Each | Total |
+  |---|---|---|
+  | buy, DE (buy to disenchant) | AH price per unit | what you pay |
+  | post | listing price per unit | listing value |
+  | craft | **gold to buy the mats you're missing**, per craft, at the latest AH prices (or vendor, if cheaper) | × number of crafts |
+  | vendor | vendor price per unit | what the vendor pays |
+
+  A craft shows "—" only when you already own every mat it needs. When owned mats are used, the row adds a note, e.g. "uses 6 owned Copper Bar (hold value 57 s)". Profit still counts their hold value, as above.
+- **Expected net** on an action is what doing it is expected to gain. **A chain's profit is counted once**, so day, week, category and character totals never count the same gold twice (VW1). A chain is a buy or craft, its linked follow-ups (`parent_id`), and any mat buys, intermediate crafts and mail steps that feed it.
+
+  | Action | Expected net |
+  |---|---|
+  | buy to flip | `E_post` of its planned sale − buy cost |
+  | DE buy | DE EV − buy cost |
+  | craft (to sell or to DE) | `E_post` of the product (or its DE EV) − sourced mat cost, with owned mats at hold value |
+  | mat buy, intermediate craft, mail | none ("for Bolt of Silk Cloth 20:30"); its cost is part of the final craft |
+  | post, DE or vendor of stock you hold | `E_post` (or DE EV, or vendor price × qty) − what you paid (`cost_basis`; 0 for found items) |
+  | hold | none |
+
+  - **Which action carries it:** the chain's earliest action that the view shows, whether done or pending. The follow-up then shows "profit counted on the Fri 14:10 buy" and adds 0 to the totals.
+  - **When the earliest action leaves the view** (the rolling week has moved past its day), the follow-up becomes a sale of stock you hold and carries its own net, as in the last table row.
+- **Risk %** = gold the action spends ÷ the total gold across all your characters (sum of `characters.gold`) × 100, shown to one decimal place.
+  - The gold spent is the total for a buy or DE buy, the mat gold for a craft, and the deposit for a post (the only gold a post can lose). It is 0 for a vendor sale.
+  - Rows above `high_risk_pct` (25%) show their risk in amber.
+
+**A. Disenchant.** For each disenchantable item on the AH (AHF snapshot or own scans), where at least one of your characters has the Enchanting skill to do it:
+
+`EV = Σ P(mat)·E[qty]·sellValue(mat)` and `profit = EV − buy`. Here `P(mat)` is the drop chance from the DE table.
+
+**B. Craft now.** For each recipe in `known_recipes` for any of your characters:
+
+`profit = E_post(product, q = avgYield) − Σ reagentCost`
+
+**Mat sourcing.** Every known recipe is evaluated, not only the ones your bags already cover. Each reagent unit comes from its cheapest source:
+- **owned** (bags, bank or mail on any character), valued at its hold value;
+- **AH**, walking the newest book from the cheapest listing up;
+- **vendor**, for vendor-sold reagents;
+- **crafted by you**: when one of your characters knows a recipe that makes this reagent. Its cost is that recipe's own sourced mat cost, worked out with these same four sources.
+
+Owned mats are used first when they cost the same. If the AH price is below an owned mat's hold value (for example, it is worth more at its Saturday peak than the AH asks today), the plan buys from the AH and leaves your stock to the sell plan.
+
+The result is shown as the row's **Source**. The base tells where the raw mats come from, and **+ crafted** is added when any reagent is made by you along the way:
+
+| Source | Meaning | Example |
+|---|---|---|
+| Owned | every mat comes from your stock; no gold needed | Copper Rod from 6 Copper Bar in your bags |
+| AH | every mat is bought (AH or vendor); you craft entirely from the market | Bolt of Silk Cloth from Silk Cloth bought on the AH |
+| Mixed | your stock plus a top-up from the AH or vendor | Linen Belt: your Linen + bought Coarse Thread |
+| … + crafted | one or more reagents are made by your characters first | Runed Copper Rod: Brugan crafts the Copper Rod from AH Copper Bar, mails it to Amaya, Amaya adds bought Strange Dust |
+
+**Crafting chains** (the "crafted by you" source):
+- **Profit is counted once.** An intermediate is valued at the cost of its own mats, so its profit lands on the final product. Leftovers from a random yield go to the sell plan.
+- **Limits.** Chains are followed up to `max_craft_depth` (3) steps, and a recipe never feeds itself, so transmute loops are ignored. Every step checks that character's skill and cooldowns.
+- **Which character.** Each step is made by a character who knows it. When the next step's crafter is someone else, the plan adds a **mail** action ("mail 1 Copper Rod Brugan → Amaya"). Mail between your own characters must be verified on Forever (§6).
+- **The row note shows the chain**, e.g. "Copper Rod: crafted by Brugan from 2 Copper Bar (AH) → mailed to Amaya".
+
+- **How many crafts.** Crafts are added one at a time. Each extra craft must still make a profit: AH mats get pricier as the book is walked, and the product's chance to sell drops as more is posted. Crafts stop at the first one that would lose money, or at the budget, the AH depth, or the cooldown.
+- **Missing mats.** A recipe with a mat that has no AH listing, no vendor and no stock is not craftable now. It is listed only if it is one craft short, as "missing: 2 Iron Bar".
+- This includes craft → disenchant.
+- It shows how many crafts the mats you already own can cover, and which character crafts each one (only characters who know the recipe).
+- Recipes with a cooldown (transmutes, Mooncloth) are limited to one craft per cooldown per character.
+
+**Today list.** The actions to do now are sorted by **expected net, highest first**. Ties go to the higher `P'`, then the item name A–Z, then the character name A–Z, so the order is always the same (§8.6). Rows with `P'` below `min_sell_prob` (config 0.5) are hidden, and the footer says how many. You can change the threshold from a dropdown on the dashboard and in the addon. Items flagged "not selling" go in a separate **Needs a decision** section under the list.
+
+**C. Weekly plan** (a rolling 7 days, hour resolution). It always starts at the current hour today and covers the next 7 × 24 hours, so the first column is always today. Earlier hours of today show what was done or missed.
+
+1. **Sell plan for what you own** (all characters: bags, bank and mail; bound items are left out, and items already on the AH are shown as "listed" rather than planned again). For each item, it compares `E_post` for:
+   - post now at `p`
+   - post for the best slot in the next 7 days, at price `med30 × how[slot] × (1 + trend7/100 × days ahead)`. `trend7` is clamped to ±5% per day. The auction duration is chosen so the listing covers the peak.
+   - **Every post action is scheduled `post_lead_hours` (8) before the best hour of its target selling window**, not at it. That is the same 8 hours used for posting now. Its chance to sell is computed from the post through the end of the window (§3.3.2), and a window that ends with no post is a missed peak (§3.4.0). The row says which peak it is for, e.g. "Sat 10:00 · post · for the 18:00 peak". If that time has already passed, the post is planned for now.
+   - disenchant (if a character can)
+   - vendor
+   - hold beyond 7 days (only flagged, never planned)
+
+   It picks the option with the highest expected value. Large stacks are split across slots so that what you post for each window stays within the liquidity cap (§3.4), and what you post each day stays at or below `floor(sold/day × max_market_share)`, with a minimum of 1 stack.
+2. **Buy to flip**: items whose expected profit (`E_post` at an upcoming peak slot − buy cost) is at least `min_flip_margin` (20%) × buy cost. Typical sources are a weekday or hour pattern, or a dip below `p10_30`. They are ranked by expected profit × `conf` (as a fraction).
+3. **Craft to sell later**: buy mats on cheap slots, craft, and post at the product's peak slot. It uses all three sourcing paths (B).
+   - **Mats to buy appear as their own buy actions, scheduled before the craft** and linked to it by `parent_id`, e.g. "20:15 buy 8 Silk Cloth → for Bolt of Silk Cloth". A mat buy can be on an earlier, cheaper slot.
+   - **A crafting chain is a linked sequence**: buy raw mats → craft the intermediate → mail it (if the next crafter is another character) → craft the product → post.
+   - If any step is missed or only partly done, the steps after it are re-planned for what you actually hold. An intermediate you already made counts as owned stock.
+   - **Every planned craft has a follow-up for its product within 7 days after the craft**, linked by `parent_id`. It is a post, or a disenchant for craft → DE.
+   - The follow-up also has to fall inside the plan window. A craft whose product has no worthwhile slot in time is not planned.
+   - This applies to crafts listed for right now (B) as well. When the craft is done, the follow-up stays planned (§3.4.1).
+4. **Capital and time limits**: a budget per character (default: the character's gold, overridable in config `[budgets]`) and an optional maximum number of actions per day (`max_actions_per_day`, 0 = no limit). The allocation also spends each owned unit only once, either on a craft or in the sell plan (§3.4 hold value).
+
+Output is a calendar of **actions**: `when · character · action (buy/craft/post/DE/vendor) · item · qty · each · total · expected net · P' · risk % · confidence`. Totals are shown per day, per category and per character.
+
+#### 3.4.0 Missed peaks: move, or hold for next week
+
+An item usually has several peaks a week, for example raid nights on Tue, Wed and Thu. These are its best selling windows (§3.3.4). A planned post targets one of them, its **original peak**. Its expected net there, `E_orig`, is the **anchor**.
+
+- **Late but not missed.** The post time (8 h before) has passed, but the window hasn't ended. The plan says "post now (late)", and the chance is computed over the rest of the window.
+- **Missed.** The window ended with no matching post. The action becomes `missed` and is labelled with what was lost, e.g. "Missed Tue 20:00–23:00 (+12%)". Then the plan looks at the item's next windows **in the same plan week**, in time order, and takes the first one that passes all three checks:
+  1. **Close to the original:** `E_candidate ≥ (1 − peak_tolerance) × E_orig` (`peak_tolerance` = 10%). It is always compared with the **original** anchor, never with an earlier replacement, so it can't slide down one window at a time.
+  2. **Likely to sell:** `P'_candidate ≥ min_sell_prob`.
+  3. **Still worth it:** `E_candidate` is above the item's best alternative (vendor, disenchant, or holding).
+- **The result is shown either way:**
+  - If a window passes, the post moves there and is labelled "Missed Tue peak → Wed 20:00–23:00 instead (−5% vs original, 88% chance)".
+  - If none passes, the action becomes **hold**: "Missed Tue and Wed; Thu is 18% below → hold until next week's Tue 20:00 peak". No post is planned for the rest of this week.
+- **A new week is a new slate.** The plan week runs from `week_start` (Mon 00:00 local). When a new week starts, held and missed items are planned from scratch: the anchor becomes that week's best window and earlier misses are forgotten. History keeps them.
+
+#### 3.4.1 Tracking what you did
+
+Captured events (§2.2) are matched to plan actions automatically:
+
+- **Matching.** An event matches the earliest `pending`, `late` or `partial` action with the same character, kind and item that is still open for matching:
+  - a buy, craft or mail: its slot is within 24 h of the event;
+  - a post: the event falls between 24 h before its post time and the end of its selling window.
+
+  Further rules per kind:
+  - A buy matches only at or below the planned price.
+  - A post matches at any price, and records the price you used.
+  - A craft matches by recipe.
+- **Status.** Matching the full quantity sets `done`, and part of it sets `partial`. You can also mark an action `skipped`. Events that match nothing are still recorded, and they still update inventory and cost. **What "late" and "missed" mean depends on the kind**, and the hourly status pass (§3.1.1) applies them:
+
+  | Kind | `late` | `missed` |
+  |---|---|---|
+  | buy, craft, mail, DE, vendor | — | still unmatched 24 h after its slot |
+  | post | its post time has passed but its selling window hasn't ended ("post now (late)", §3.4.0) | its selling window ended with no matching post; the missed-peak re-plan runs (§3.4.0) |
+- **Follow-up.** A done buy or craft for a flip or craft-to-sell keeps its sell action (via `parent_id`). Each engine run re-plans that sell action from fresh prices, and it appears in Today and Week as a reminder ("You bought 20 Linen Cloth on Tue for 40 c each; sell Sat 18:00"). The sell plan shows "below what you paid" when the best option no longer covers the cost. It still recommends that option, because what you paid is already spent.
+- **Post outcomes.**
+  - A sold invoice resolves the oldest pending post with the same character, item, stack and price.
+  - An expired or cancelled mail has no price, so it resolves the oldest pending post with the same character, item and stack.
+  - Each outcome updates your sell record (§3.3.3).
+- **Re-planning.** Each engine run replaces `pending` and `late` actions. `done`, `partial`, `missed` and `skipped` actions are kept as history.
+
+#### 3.4.2 Item rules (blacklist)
+
+- `no_buy`: never recommend buying it (flip, disenchant buys) or crafting it. Stock you already own still gets a sell plan.
+- `ignore`: leave it out of every recommendation, including the sell plan. Tooltip prices are still shown.
+- `keep` (the **Keep** button on a "not selling" prompt): clears the flag and starts the item's sell record fresh from that moment, so `P'`, the quantity cut and the price cut all reset (§3.3.3). If it then expires again while cheapest (`keep_retry_streak`, default 1), the prompt comes back. Choosing Keep again resets it again.
+
+You set or clear a rule from any dashboard row, from the **Rules** page, or by right-clicking a row in the addon. Rules set in the addon reach AHSync through SavedVariables, and rules set on the dashboard reach the addon through `Data.lua`. When both sides changed the same item, the newer `set_at` wins. **Clearing is a change too:** it is recorded as rule `none` with its own `set_at` (§3.2), so a clear on one side beats an older rule on the other instead of being undone by it.
+
+### 3.5 Outputs
+
+1. **Dashboard** (out of game), at `http://localhost:8765`, served by Python's standard library and bound to `127.0.0.1` only. The look of every page is defined by the mockup [docs/mockups/dashboard.html](mockups/dashboard.html). It uses an always-dark WoW theme: stone panels, gold trim and serif gold headings, Blizzard-style red buttons and item-quality colours. Data tables stay in a plain sans-serif font for readability. Open it in a browser and click through the pages, or use a direct link such as `dashboard.html#Week`.
+   - **Today**: summary tiles (expected today and this week, budget left, inventory worth), alerts (low coverage, stale data), the actions for right now sorted by expected net with the minimum-chance filter, and a Needs a decision section. Each row has a Skip button
+   - **Week**: the rolling calendar from §3.4C (today first), one column per day with a day total, plus totals per category and per character. Posts show at their post time (8 h before the peak) with "for the HH:00 peak"
+   - **On the AH**: every auction you have up right now, on all characters. Each row shows:
+     - quantity, listed price each and total;
+     - **what it cost you** each and total (what you paid, or what the mats cost you for a craft; 0 for items you found);
+     - deposit, profit if it sells (total × (1 − cut) − cost);
+     - time left, your position (cheapest, or undercut by whom and how much), and the chance it sells.
+     
+     Tiles at the top total the listed value, the cost, the expected profit and the deposits at stake.
+   - **Disenchant** / **Craft** / **Flip** tables, sortable and filterable, with each, total and risk %. Craft adds a Source column (Owned / AH / Mixed) and filter, and a per-row breakdown of owned versus bought mats
+   - **Inventory**: what you own, what you paid, what it's worth, and its plan. Selecting a row shows *why*: the 30-day price line and the hour-of-week heat map behind its sell slot
+   - **History**: your posts and their outcomes, purchases, crafts, plan actions (done, missed, skipped), and deposits lost
+   - **Rules**: blacklisted items, and items flagged "not selling" waiting for a decision
+   - **Characters**: professions, skill and gold
+   - **Status**: sync state, data age, missed-hours warnings, the API tier (with the contributor expiry date and a warning 2 days before), and **sell-probability calibration** (predicted against actual sell rate per bucket, plus the Brier score; §8.8)
+
+   Item names link to auctionhouse.fyi.
+
+   **Security.** Binding to `127.0.0.1` keeps other machines out, but not other web pages. Any site open in your browser can send requests to `localhost:8765`, and a DNS-rebinding site can even read the replies. So `web/server.py`:
+   - **Checks `Host`.** It rejects any request whose `Host` header is not `127.0.0.1:<port>` or `localhost:<port>` (DNS rebinding).
+   - **Never changes state on GET.** Skip, rules, Keep and Refresh now are `POST` only.
+   - **Checks every write** in two ways, and rejects it with `403` and a log line (without the token) if either fails:
+     - the `Origin` header is the dashboard's own origin;
+     - an `X-AHSync-Token` header matches a random token generated at each start and embedded in the served page.
+   - **Sends no CORS headers,** so other origins can't read responses.
+   - **Leaves secrets out of its responses:** the API key and file paths outside `data/` never appear.
+
+   **Chance to sell is shown wherever something gets sold**, always for that context's window (§3.3.2):
+   - **Today** and **Week:** every post, and every craft or flip (the chance its product sells in its planned window). Mat buys show none.
+   - **On the AH:** the chance your live auction sells in the rest of its window.
+   - **Disenchant:** the chance the mats sell.
+   - **Craft:** the chance the product sells.
+   - **Flip:** the chance the resale sells in its peak window.
+   - **Inventory:** the chance the item's planned option sells.
+   - **Addon:** the tooltip, and the AH panel's post list.
+
+   **Every table that shows a chance shows the same two columns, with these names: Chance · Volume.** This holds on every dashboard page and every addon tab (§4.3). Chance and confidence are different things, and both are shown:
+   - **Chance** is how likely the item is to sell (`P'`, §3.3.2), e.g. "92% ●".
+     - The **dot inside the cell is the confidence**: how much the data behind that chance can be trusted (§3.3.5). Green is ≥ 75%, amber ≥ 45%, grey below that.
+     - Hovering the cell shows the exact confidence percentage, and the item detail breaks it down by component.
+     - So "75% ○" reads as "probably sells, but it's a guess from thin data".
+   - **Volume** is units sold per day. On the dashboard it also carries its source and the units on the AH, e.g. "48/day AHF · 93 on AH" or "31/day est.".
+   - For Disenchant, the pair describes the **mats**, since that's what you sell.
+   - `views.py` builds the pair in one place, and a convention test checks that every table using it has both columns in that order.
+
+   Hovering a Chance cell, or opening the item detail, shows the breakdown: market sell-through, days of supply, units ahead of you and when they expire, expected undercuts, queue result, tier history and your record.
+2. **`Interface/AddOns/AHProfit_Data/Data.lua`**, written atomically (temp file + rename):
+   - compact prices per item, stored as strings so the file stays under Lua's constant limits
+   - the same action list the dashboard shows, with action ids so the addon can mark them done
+   - your sell record per item (`s`, `x`, `streak`) and the item rules
+   - `ingestedUntil` for the pruning handshake (§2.2), written only after the database commit
+   - a header with `formatVersion`, `generatedAt`, `basedOnUntil` (the newest event it includes) and a checksum of the body. The addon refuses a file whose version or checksum doesn't match and shows why (§5.2)
+
+   The addon reads it at login or `/reload`.
+
+   **WoW only sees addon files that existed when the client started.** A `Data.lua` created later is ignored until the client restarts, even after `/reload`. So:
+   - `tools/deploy.py` installs `AHProfit_Data.toc` and a placeholder `Data.lua`, and never overwrites an existing generated `Data.lua`.
+   - AHSync only ever replaces the file; it never deletes it.
+
+### 3.6 Config (`config.toml`)
+
+```
+api_key = ""                                  # optional, discouraged: prefer env AUCTIONHOUSE_APIKEY or %USERPROFILE%\.ahsync\api_key
+                                              # lookup order: env var, then key file, then this value
+markets = ["forever.pvp.horde.us"]
+wow_path = "C:/Program Files (x86)/World of Warcraft/_classic_beta_"
+retention_days = 90
+dashboard_port = 8765
+live_refresh_minutes = 15
+min_flip_margin = 0.20
+default_sell_prob = 0.25                      # P when there is no volume data (§3.3.2)
+default_undercut_share = 0.5                  # u(p) when there is no book history (§3.3.2)
+own_record_days = 30                          # window for your sell record (§3.3.3)
+own_record_weight = 4                         # how many posts of evidence the model counts as
+struggle_streak = 3                           # expired posts in a row before "not selling"
+reprice_step = 0.05                           # price cut per expiry in a row while cheapest (§3.3.3)
+keep_retry_streak = 1                         # after Keep, expiries before asking again (§3.4.2)
+min_sell_prob = 0.5                           # Today hides rows with P' below this (also a UI dropdown)
+high_risk_pct = 25                            # risk % shown in amber above this (§3.4)
+daily_refresh_time = "06:00"                  # full refresh once a day after this local time (§3.1.1)
+post_lead_hours = 8                           # posts are planned this long before their peak slot (§3.4C)
+sell_window_hours = 8                         # sell-probability window when posting now (§3.3.2)
+pattern_half_life_weeks = 4                   # recency weighting of weekly patterns (§3.3.4)
+window_threshold = 0.90                       # a slot joins a best-selling window at ≥ 90% of the best slot's score
+peak_tolerance = 0.10                         # after a missed peak, a later window must be within 10% of the original (§3.4.0)
+week_start = "Mon"                            # plan weeks start Mon 00:00 local; a new week is a fresh slate
+max_craft_depth = 3                           # longest crafting chain followed when sourcing mats (§3.4B)
+max_market_share = 0.5                        # your units per window and per day ≤ this share of sold/day (§3.4 liquidity)
+max_actions_per_day = 0                       # 0 = no limit (§3.4C.4)
+launch_wow_after_catchup = false
+
+[realms]                                      # realm -> ruleset, maps characters to markets (§2.1)
+"RealmName" = "pvp"
+
+[budgets]                                     # optional per-character budget in copper; default is the character's gold
+# "Amaya-RealmName" = 150000
+```
+
+## 4. AHProfit (addon)
+
+### 4.0 Split of work: app and addon (hybrid)
+
+| Lives in AHSync (heavy, rarely) | Lives in the addon (light, as state changes) |
+|---|---|
+| all history reads, statistics, weekly patterns, the queue simulation, the plan (§3.1.1) | current listings from in-game scans and searches, your bags and gold right now |
+| precomputed **options** per item: sell and hold values, DE EV, crafting options, flip candidates, sell-probability curves | **choosing between precomputed options** when state changes (a price moves, you buy, you post) |
+| the dashboard | the AH window panel, tooltip, one-click searches |
+
+**The addon never reads history, never simulates and never plans.** It is a state tracker with a lookup table:
+- AHSync exports **decision data** in `Data.lua`: per-item baselines, the sell-probability curve (§3.1.1), the precomputed options with their values, recipes, the disenchant table, and the plan with its follow-ups and alternatives.
+- **When state changes in game**, the addon does only O(1) work per changed item:
+  1. a new price → re-read `P` from the curve row for the current hour (§3.1.1);
+  2. recompute that item's options with the small ported formulas (fees, `E_post`, DE EV, craft cost);
+  3. re-pick the best option;
+  4. re-sort only the visible list.
+
+  That's how it "recommends new paths" live: for example, an item gets bought out → its flip row drops; a cheaper mat appears → the craft's cost and rank update.
+- The addon runs the **same small formulas in Lua** against live prices. They are ported from the `ahsync/engine/` modules listed under `Engine/` in §5, follow the numeric rules in §3.3, and must give the same numbers as Python on the shared scenarios in `tests/scenarios/`.
+- Engine errors in game are caught with `pcall` at the UI boundary and shown as a status line, not as a Lua error popup.
+
+When you're at the AH:
+
+- Opening the AH runs a quick targeted search for every item on the current lists (the addon can also run a full scan). If Forever throttles searches or requires a hardware click for each one (§6), this becomes a "next search" button that steps through the list.
+- Each result updates that item's price at once, re-ranks the lists, and drops targets that are gone or no longer profitable.
+- Buying an item removes it, spends from the budget, and adds the item to inventory, which feeds the sell plan.
+- Buying or posting marks the matching plan action done right away (§3.4.1). This in-game mark is provisional; AHSync's matching in `engine/tracking` is the record, so the matcher is not ported to Lua. An expiry or sale seen in the mailbox updates your sell record for the rest of the session.
+- AHSync stays the second trigger. After a `/reload`, the addon picks up fresh baselines and everything your session recorded.
+
+### 4.1 Capture
+
+Everything in §2.2. Recipe definitions are keyed by profession, so they are stored once per account. Which character knows which recipe is stored per character. A future option is a static recipe database for every profession (from wago.tools), so the app can suggest recipes worth learning.
+
+### 4.2 Scan
+
+A button on the AH frame runs a full scan (`ReplicateItems`, if Forever supports it) or a scan of the current page or search. Its results feed AHSync as source `local`. They also immediately update prices in the addon for this session, which matters for disenchant and flip targets.
+
+### 4.3 Show
+
+The look is defined by the mockup [docs/mockups/addon.html](mockups/addon.html) and the wireframes below. Open the mockup in a browser and click the tabs, or use a direct link such as `addon.html#Craft`. The visual tests (§8.4) check the real addon against it.
+
+The window's tabs, each shown in the mockup:
+
+| Tab | Shows |
+|---|---|
+| Today | actions for now, sorted by expected net (highest first), with the "Min chance" filter and a Needs a decision section (wireframe below) |
+| Week | the rolling 7-day plan from today, grouped by day with day totals; done actions ticked; each craft preceded by its mat buys (and any intermediate crafts and mail steps) and followed by its post; posts timed 8 h before their peak |
+| Disenchant | item, ilvl, buy, expected mats, EV, profit, Chance · Volume (of the mats), risk %, live search state (✓ / ✗ / …) |
+| Craft | product, who knows it, **source** (Owned / AH / Mixed, plus "+ crafted" for chains; filterable), crafts, mat gold each and total ("—" when you own every mat), profit, Chance · Volume, risk, cooldown; a note lists which mats are owned and which are bought |
+| Flip | item, quantity, buy each and total, expected sell price, sell slot, profit, Chance · Volume, risk % |
+| Inventory | item, character, where (bags, bank, mail, AH), quantity, paid (0 if found), worth, Chance · Volume, plan |
+
+Right-clicking a row opens a menu: Search the AH, Mark as skipped, Blacklist: don't buy or craft, Blacklist: ignore completely, and Keep (start fresh) on a "not selling" item.
+
+**Main window** (`/ahp`), default 640 × 440 px, minimum 560 × 360:
+
+```
+┌ AHProfit ── Grommash · Horde PvP ───────────────────────── data 2 h old ── [x] ┐
+│ [Today] [Week] [Disenchant] [Craft] [Flip] [Inventory]      Min chance [50%▾] │
+│───────────────────────────────────────────────────────────────────────────────│
+│       Item            Qty  Each    Total   Net      Chance   Volume Risk  Who │
+│ BUY   Mithril Spurs   ×1   3g      3g      +73s 42c  85% ◐    3/day 9.6%  Bru │
+│ POST  Copper Rod      ×5   41s     2g 5s   +63s 6c   58% ◐    6/day 0.0%  Bru │
+│       Your record: 2 of 5 sold · P 80% → 58% · price −10% · qty ¼            │
+│ BUY   Silk Cloth      ×40  70c     28s     +7s 30c   88% ●   64/day 0.9%  Ama │
+│ DE    Scouting Glov…  ×1   8s      8s      +6s 25c  100% ●  210/day 0.3%  Ama │
+│ ...                                                                    ▲▼     │
+│ Needs a decision                                                              │
+│ POST  Heavy Leather   ×5   47c     2s 35c  NOT SELLING    [Blacklist ▾] [Keep] │
+│───────────────────────────────────────────────────────────────────────────────│
+│ 7 actions · expected +1g 54s 15c · 1 hidden (chance < 50%) · budget 31g 40s   │
+└───────────────────────────────────────────────────────────────────────────────┘
+```
+
+The dot after each chance is its confidence. Hovering "85% ◐" shows "Confidence 63%".
+
+- Each row shows: action, item (in its quality colour), quantity, **each** and **total** (§3.4), expected net (green when positive, red when negative), then the standard pair **Chance · Volume**, then **risk %** and the character.
+- **The pair is identical on every tab and in the dashboard.**
+  - **Chance** is `P'` (§3.3.2) with the **confidence dot** inside the cell (● ≥ 75%, ◐ ≥ 45%, ○ below; §3.3.5). Hover shows the exact confidence %.
+  - **Volume** is units sold per day. The dashboard also shows the source and the units on the AH.
+  - Rows with nothing to sell (mat buys, mail, holds, vendor) show "—" in both.
+- Your sell record (§3.3.3) appears as a second line under the row, but only when it changed the recommendation.
+- Long item names are cut off with "…". The list scrolls, and the window never grows past its size.
+- Money uses gold, silver and copper coin icons.
+- The window is movable and resizable, remembers its position, and closes with Escape.
+- **Empty states:**
+  - With no `Data.lua` yet: "Run AHSync, then /reload".
+  - With nothing to do: "No actions right now".
+  - Data more than 24 h old: the age badge turns amber.
+- Disenchant and Craft numbers are re-checked live against the fresh in-game scan.
+
+**AH side panel**, docked to the right of the auction house window, 260 px wide:
+
+```
+┌ AHProfit at the AH ──────────────┐
+│ Shopping                 3 of 5  │
+│ ✓ Linen Cloth   38c ≤ 45c   ×20  │
+│ ✓ Scouting Gl.  8s ≤ 9s     ×1   │
+│ ✗ Copper Bar    gone             │
+│ … Iron Ore      checking         │
+│ Post                             │
+│ ○ Copper Rod    41s  ×5          │
+│ [Next search]        [Full scan] │
+│ 2 found · budget left 31g 40s    │
+└──────────────────────────────────┘
+```
+
+Clicking a row searches for that item.
+
+**Tooltip**: a short block under the item's own lines. It uses label/value pairs (`AddDoubleLine`), one fact per line, and every price is per unit:
+
+```
+AHProfit
+Current AH price        8s (2h ago)
+Historical price        11s (30d, +38%)
+Disenchant value        14s 25c (+78%)
+Best time to sell       Sat 17:00–21:00
+Price at best time      12s 30c (+54%)
+Chance to sell          46%
+```
+
+| Line | Meaning | Source |
+|---|---|---|
+| Current AH price | the cheapest listing on the AH right now (`cur`), with how long ago it was seen (`curAge`) | §3.3 |
+| Historical price | the median price over the last 30 days (`med30`), with its delta from the current AH price. It falls back to daily closes when hourly data is sparse | §3.3 |
+| Disenchant value | expected mats × their sell value, with its delta from the current AH price. The line is left out when none of your characters can disenchant the item | §3.4A |
+| Best time to sell | the top best-selling window, e.g. "Sat 17:00–21:00", and the pattern strength when it's not yet established | §3.3.4 |
+| Price at best time | the expected price in that window (`med30 × how × trend`), with its delta from the current AH price | §3.4C |
+| Chance to sell | `P'` for posting one reference stack (§3.4) now (next 8 hours), including your own record | §3.3.2–3 |
+
+**Delta** on the Historical price, Disenchant value and Price at best time lines = `(value − cur) ÷ cur × 100`, rounded half up to a whole percent and shown with a sign. Positive is green and negative is red. It is left out when there is no current price. A positive delta means the item is worth more than it costs right now: a higher historical price or price at best time means it's cheap now, and a higher disenchant value means buying to disenchant pays.
+
+A line with no data shows "—", except Disenchant value, which is left out as described above.
+
+**Structure.** `UI/ViewModel.lua` turns `Data.lua` and the live state into plain tables of rows, labels, colours and formatted money. The frame code (`Window`, `AHPanel`, `Tooltip`) only draws those tables. So most UI behaviour is testable as plain Lua, without frames.
+
+`/ahp demo` loads a fixture plan into the real window, so the UI can be checked in game before any real data exists.
+
+Other commands:
+- `/ahp perf` shows the addon's memory and timing against its budgets (§5.1).
+- `/ahp refresh` asks AHSync for a full refresh at the next `/reload` or logout.
+
+### 4.4 Act
+
+Clicking a row runs an AH search for it, and the shopping and post lists show alongside. You still click to buy or post.
+
+### 4.5 Static data
+
+`Data/Disenchant.lua` holds quality × ilvl band × armor/weapon → material probabilities, plus the Enchanting skill per ilvl. It is seeded from Classic Era values and must be verified for Forever.
+
+## 5. Tech
+
+- **AHSync**: Python 3.12 (installed), standard library only (`urllib`, `gzip`, `json`, `sqlite3`, `tomllib`, `http.server`). The dashboard is one static HTML/JS page served with JSON endpoints. Started from `start.bat`, with an `.exe` via PyInstaller later.
+- **AHProfit**: Lua 5.1 and WoW FrameXML, with no libraries in v1.
+
+Layout. **`tests/` mirrors the source tree one-to-one**: every source module has a test file at the same relative path.
+
+```
+ahsync/
+  config.py
+  api/        client.py (HTTP, retry, 429), ahf.py (endpoints)
+  store/      db.py, schema.sql, prune.py
+  sync/       catchup.py, scheduler.py (timers, daily refresh, file-change watch), refresh.py (full refresh + incremental updates, §3.1.1)
+  ingest/     savedvars.py (Lua SavedVariables parser), scans.py, books.py
+  engine/     fees.py, prices.py, profile.py (hour-of-week), volume.py, sellprob.py (incl. the P' blend),
+              record.py (own sell record + calibration), tracking.py (event → action matching), rules.py,
+              patterns.py (weekly patterns, best selling windows), confidence.py (conf %), disenchant.py, craft.py, plan.py, views.py (tab totals, sorting, filters, tooltip deltas)
+  export/     lua_data.py
+  web/        server.py, static/
+addon/AHProfit/
+  Core/       Adapter.lua (every game API call), Events.lua
+  Capture/    Characters.lua, Professions.lua, Inventory.lua, Mail.lua, Posts.lua, Purchases.lua, Crafts.lua
+  Scan/       Search.lua, Replicate.lua
+  Engine/     Fees.lua, SellProb.lua, Disenchant.lua, Craft.lua   (ports of ahsync/engine)
+  UI/         ViewModel.lua, Window.lua, Tooltip.lua, AHPanel.lua, Demo.lua
+  Data/       Disenchant.lua
+addon/AHProfit_Data/   AHProfit_Data.toc, Data.lua (placeholder; AHSync generates the real one)
+tests/
+  ahsync/...           test_<module>.py, same tree as ahsync/
+  addon/...            <Module>_spec.lua, same tree as addon/AHProfit/
+  fixtures/ahf/        trimmed recordings of real AHF responses (the templates)
+  fixtures/worlds/     w1.json + w1.expected.json: the whole-plan snapshot (§8.6)
+  properties/          generated invariant cases shared by Python and Lua (§8.7)
+  scenarios/           named JSON scenarios shared by the Python and Lua tests
+  support/             builders.py, fake_clock.py, fake_transport.py, gen.py (seeded case generator), lua/runner.lua, lua/wow_stubs.lua,
+                       lua/layout.lua (anchor solver + layout checks)
+  visual/              scenarios/*.lua (UI1…), golden/*.txt (frame-tree snapshots), golden/*.png (renders)
+tools/                 record_fixtures.py, gen_lua_fixtures.py, deploy.py, visual.py, bench.py (performance budgets, §3.1.2)
+docs/SPEC.md, docs/SCENARIOS.md, docs/mockups/addon.html (in game), docs/mockups/dashboard.html (desktop)
+CLAUDE.md
+```
+
+`tools/deploy.py` copies `addon/*` into the WoW AddOns folder.
+
+### 5.1 Addon performance (WoW best practices)
+
+The addon must never be noticeable in game: **no work while idle, a few milliseconds at most when something happens, nothing in combat.**
+
+| Rule | How |
+|---|---|
+| **No `OnUpdate` polling** | Everything is event-driven. Delays use one-shot `C_Timer.After`, never a per-frame handler. |
+| **Coalesce bursty events** | `BAG_UPDATE` and similar fire many times at once. Mark the state dirty, then handle it once on `BAG_UPDATE_DELAYED` or after a 0.5 s debounce timer. |
+| **Register events only when needed** | AH events are registered on `AUCTION_HOUSE_SHOW` and unregistered on close; mail events likewise for the mailbox. |
+| **Pause in combat** | On `PLAYER_REGEN_DISABLED`, queue all non-essential work (scans, re-ranks, UI refreshes) and run it on `PLAYER_REGEN_ENABLED`. Never touch frames in combat. |
+| **Lazy UI** | Frames are created on the first `/ahp` or AH open, not at login. A hidden window does no updates. |
+| **Pooled, virtual lists** | Only the visible rows exist (about 15 frames per list), reused while scrolling. Rows are never created per item. |
+| **Lazy data decode** | `Data.lua` keeps items as compact strings keyed by item id. A row is decoded only when needed (tooltip, list) and kept in a small cache of about 500 entries. Login never builds 9k tables. |
+| **Cheap tooltip** | One cache lookup plus a few `AddDoubleLine` calls. No string building beyond formatting the numbers. |
+| **Chunked full scans** | A full scan (`ReplicateItems`) is processed in a coroutine with a **4 ms budget per frame**, so it never stalls the game. It runs only on a click, never automatically, and never in combat. |
+| **No per-frame allocations** | Reuse tables, cache globals in locals, and avoid string concatenation in loops (already in CLAUDE.md). |
+| **Small SavedVariables** | Order books are stored as compact strings. At most 4 un-ingested full scans are kept (the oldest is dropped first, with a status warning), and the pruning handshake (§2.2) removes ingested data. Target: ≤ 5 MB on disk. |
+| **Respect AH throttles** | Searches go through one queue that obeys `CanSendAuctionQuery` or its Forever equivalent (§6). |
+
+**Budgets**, measured in game with `/ahp perf`: memory from `GetAddOnMemoryUsage` and time from `debugprofilestop`.
+
+| What | Budget |
+|---|---|
+| CPU while idle (no AH, no window) | 0 ms per frame (no handlers running) |
+| Memory after login | ≤ 3 MB, plus `Data.lua` strings (≤ 2 MB) |
+| Memory with the window and AH open | ≤ 10 MB |
+| One state change (price, buy, post) | ≤ 2 ms total |
+| Tooltip | ≤ 0.2 ms |
+| Full scan processing | ≤ 4 ms per frame |
+| Login / `/reload` added time | ≤ 100 ms |
+
+### 5.2 Failure modes and recovery
+
+Data moves through many hand-offs: AHF → AHSync → SQLite → `Data.lua` → WoW → SavedVariables → AHSync. Any of them can fail halfway. Six rules make every failure recoverable:
+
+1. **Commit points, then resume.** Every step commits in small units (one hour file, one SavedVariables ingest, one refresh). A crash resumes from the last commit point; nothing restarts from zero.
+2. **Idempotent writes.** Every write is an upsert on a natural key, so repeating a step is harmless. Every captured event has a unique id, `charId:timeMs:seq`, so reading the same SavedVariables twice never double-counts.
+3. **Never publish half a result.**
+   - A full refresh writes into staging tables (`item_stats_new`, `plan_new`, …) and swaps them in with one transaction.
+   - `Data.lua` is written to a temp file, checked, then renamed.
+   - On any failure, the previous complete version stays in place.
+4. **Last good state survives.** When a step fails, the dashboard and the addon keep the last good numbers, show their age and say what failed: "Refresh failed at 06:02 (disk full) · showing yesterday's numbers".
+5. **Never lose your events.**
+   - The addon deletes an event from SavedVariables only after AHSync confirms it was **committed** (`ingestedUntil`, §2.2), and AHSync writes `ingestedUntil` only after the database commit.
+   - Unconfirmed events are simply sent again next time.
+6. **Validate at every boundary, and degrade instead of crashing.**
+   - Each file has a format version and a check: AHF responses, SavedVariables and `Data.lua`.
+   - One bad item is set aside with its error, and everything else carries on.
+   - Errors go to `data/ahsync.log` (rotated, never containing the API key) and to the Status page.
+
+**AHSync failures:**
+
+| Failure | What happens | Recovery |
+|---|---|---|
+| Network timeout, 5xx, 429 | retry with backoff (1, 2, 4 … 60 s, honouring `Retry-After`); after 5 tries, skip this run | the next run resumes at `sync_state` |
+| AHF file truncated or bad gzip/JSON | not committed; logged | re-fetched next run; 3 failures in a row → that hour is marked "bad file" on Status |
+| AHF response with an unexpected shape (API change) | that endpoint is disabled for the run; the last good data is kept | Status: "AHF format changed: snapshot"; record a new fixture and fix the parser |
+| Suspect price (below 10% of `p10_30` or above 10× `p90_30`) | stored but flagged; never used as `cur` for a buy recommendation | is ordinary again once confirmed by a second observation |
+| Crash or power loss mid catch-up | SQLite rolls back the open transaction | resumes at the next missing hour (S2) |
+| Crash mid full refresh | staging tables are dropped on start | the previous `item_stats` and plan stay live; the refresh re-runs |
+| One item fails in the refresh (bad data, engine error) | that item is excluded and listed on Status with its error | the rest of the refresh completes |
+| Disk full | writes stop; nothing is half-written | Status error; it resumes when space is free |
+| Database corrupted | `PRAGMA quick_check` fails on start | restore from the newest of 3 daily backups (SQLite backup API, `data/backups/`); history since then is re-fetched where AHF still has it |
+| SavedVariables half-written or unparsable | not ingested; the file has to be unchanged for 2 s first (§2.2) | falls back to WoW's `AHProfit.lua.bak`; if that fails too, it waits for the next write. Nothing is pruned, because `ingestedUntil` doesn't move |
+| SavedVariables from a newer addon version | ignored, with a message | "Update AHSync" on Status |
+| `Data.lua` write blocked (file locked, antivirus) | retried 3 times over 10 s | the old `Data.lua` stays; Status warns |
+| AHSync started twice | the second instance finds `data/ahsync.lock` held and exits with a message | — |
+| Bad `config.toml` | refuses to start with the line and the reason | — |
+
+**Addon failures (in game):**
+
+| Failure | What happens | Recovery |
+|---|---|---|
+| `Data.lua` missing | empty state "Run AHSync, then /reload" | — |
+| `Data.lua` from another format version, or its check fails | treated as missing, plus "AHSync and AHProfit versions differ" | update either side |
+| Plan older than your last session (`Data.lua.basedOnUntil` < your newest event) | the plan is shown as **provisional**: actions already matched by your newer events are marked done locally | the next AHSync run replaces it |
+| Lua error in the engine or UI | caught with `pcall` at the UI boundary; shown as a status line | that list shows its last good state |
+| Full scan interrupted (AH closed, disconnect, combat, reload) | saved as `partial` with its coverage %. Partial books are **never** used for volume diffs, which need complete books | the next full scan starts fresh |
+| Search queue interrupted (AH closed) | the queue is dropped | rebuilt on the next AH open |
+| A buy or post hook fires but the action fails (outbid, sold out, not enough gold, error) | recorded as an **attempt**. It counts only when confirmed: by the "won" message or mail for a buy, by the own-auctions list for a post. Unconfirmed attempts expire after 1 h | not matched, no cost basis change |
+| WoW crashes before SavedVariables is written | that session's events are lost | at the next login, the inventory snapshot shows the true state; differences are recorded as "untracked changes" (cost 0, flagged), so nothing is invented |
+| SavedVariables grows past its cap | the oldest un-ingested full scans are dropped first, never events | status warning: "Run AHSync to sync" |
+| Addon upgraded with a new SavedVariables layout | migrated forward on load by version, step by step; the original is kept until the migration is saved | a failed migration leaves the old data untouched and shows an error |
+
+**Tests:**
+- Every row in the two tables above has a scenario (FM1–FM24, plus UI4 for a missing `Data.lua` and the addon error-boundary scenario; see [SCENARIOS.md](SCENARIOS.md)), run against `FakeTransport`, a fake filesystem and `wow_stubs.lua`. Fault injection is deterministic: a fake fails "on the 3rd write" or "after 40% of the file", never at random.
+- An invariant (FI1, §8.7) checks that a crash at any commit point, followed by a restart, gives the same final database and `Data.lua` as an uninterrupted run.
+
+**Addon performance tests:**
+- Lua tests count work, not time, so they are deterministic:
+  - a price change must touch only its own item's row;
+  - a hidden window must not redraw;
+  - tooltips must hit the decode cache after the first lookup;
+  - no `OnUpdate` script may be set (checked by `wow_stubs.lua`).
+- `/ahp perf` reports the real numbers in game against the budgets.
+
+## 6. To verify
+
+1. ~~**API key tier**~~: done 2026-10-16 (§2.1). The key has Premium features through the contributor role, which expires unless scans are uploaded. Still to check: the exact shape of the `depth`, `books` and `volume` responses (record them with `tools/record_fixtures.py`).
+2. **Forever game APIs** (in-game `/dump`): the trade skill API (`GetTradeSkill*` / `GetCraft*`, or `C_TradeSkillUI`), the AH API (`C_AuctionHouse.ReplicateItems`?), the bank and mail APIs, and the tooltip hook.
+3. **Disenchant tables and skill brackets** on Forever.
+4. **AH fees and auction durations**: deposit rate per duration, 5% / 15% cut, and the available durations.
+5. **Time-left bands**: the bounds of short / medium / long / very long (§3.3.1).
+6. **AH search limits**: whether searches are throttled, and whether each one needs a hardware click (§4.0).
+7. **Recipe cooldown API** for transmutes and similar recipes.
+8. **Tracking hooks**: the post and buy functions to hook, the sold / expired / won system messages, the mail invoice API, and the send-mail hook. Also check whether mail between your own characters arrives instantly or after a delay (it changes how mail steps are spaced in a chain).
+9. **wow-ui-sim spike** (§8.4, layer 3): can it load a Classic-style addon (`## Interface: 16001`) and render AHProfit's frames headless through Docker on Windows? It targets the retail client, and Classic support is not documented.
+10. **Folder name after launch.**
+
+## 7. Milestones
+
+| # | Deliverable | Done when |
+|---|---|---|
+| M1 | AHSync sync: catch-up, SQLite, 90-day prune, works without a key | Kill it mid-sync, restart, and it resumes; data accumulates |
+| M2 | Addon capture (characters, professions, recipes, inventory) + SavedVariables reader | The app lists your characters and recipes |
+| M3 | Engine A+B + dashboard (Disenchant, Craft) | Ranked tables at localhost |
+| M4 | Engine C: weekly plan + inventory sell plan | Calendar with expected earnings |
+| M5 | `Data.lua` export + in-game window, tooltip, AH search + Lua port of the engine (§4.0) + visual tests (§8.4) | Same numbers in game as on the dashboard; lists re-rank live at the AH; UI1–UI11 pass layers 1–2 and match the mockup |
+| M6 | In-game AH scanning (targeted + full, order books) as a `local` source + own-sales mail capture | Own scans feed prices and sales-volume estimates |
+| M6b | Tracking: post, purchase and craft capture, action matching, cost basis, own sell record, blacklist (§3.3.3, §3.4.1–2) | A buy marks its action done with no typing; 3 expiries lower `P`, cut the quantity and offer Blacklist |
+| M7 | Polish: `.exe`, auto-launch WoW | |
+
+## 8. Testing
+
+### 8.1 Principles
+
+- **Every core rule has a named scenario.** Each scenario reads Given / When / Then in plain numbers a person can check by hand. The scenario name is the test name, and it starts with the scenario's ID (for example `P12`).
+- **One list of scenarios: [SCENARIOS.md](SCENARIOS.md).** `tests/test_conventions.py` keeps it and the tests in step. It fails on a listed ID with no test, a test ID that isn't listed, or a duplicate ID.
+- **Real data as the template, mocked scenarios on top.** `tools/record_fixtures.py` records real AHF responses (`/me`, `/files`, snapshot, h1, d1, `/items`) and trims them to a small set of real items into `tests/fixtures/ahf/`. Builders load that template and apply the changes a scenario needs ("Copper Bar sells 40/day", "no run for 10 days", "AH listing undercut to 45s").
+- **No network, no real clock, no WoW in tests.** HTTP goes through an injected transport (`FakeTransport` serves fixture files and can return 429/404/503). Time comes from an injected `Clock` (`FakeClock`). Lua tests run outside the game against `wow_stubs.lua`.
+- **One source of truth for the formulas.** Engine scenarios live in `tests/scenarios/*.json`. Python reads them directly. `tools/gen_lua_fixtures.py` converts them to Lua so the Lua engine port is checked against **the same expected numbers**.
+- **Deterministic and fully covered.** Every number on every tab is produced by a tested pure function (§8.5). The engine is deterministic (§8.6), its formulas pass invariant tests (§8.7), and the sell probability is checked against real outcomes (§8.8).
+- **Runners**: `pytest` and `coverage.py` (dev-only dependencies; the app itself stays standard-library only) and a small Lua 5.1 runner (`tests/support/lua/runner.lua`, run with a standalone `lua5.1`). `tools/test.ps1` runs both.
+
+### 8.2 Scenario format
+
+```json
+{
+  "name": "volume: undercut repost counts as one sale plus one new listing",
+  "template": "pvp_horde_small",
+  "given": { "books": [ {"at": "T0", "entries": [["Linen Cloth", "50c", 20, "long", 1]]},
+                        {"at": "T0+2h", "entries": [["Linen Cloth", "45c", 20, "long", 1]]} ] },
+  "when":  "estimate_volume",
+  "then":  { "Linen Cloth": {"sold": 20, "expired": 0, "listed": 20} },
+  "why":   "Known limitation: price changed, so the 50c auction looks gone and the 45c one looks new."
+}
+```
+
+Builders accept item names, `"1g 20s 5c"` prices and `T0+2h` times, and convert them to keys, copper and ms. A failed test prints the scenario's `why`.
+
+### 8.3 Required scenarios (minimum set)
+
+The minimum set lives in **[SCENARIOS.md](SCENARIOS.md)**, grouped by module, with IDs V*, S*, FM*, SEC*, P*, W*, R*, O*, D*, C*, M*, IU*, CF*, T* and UI*, TT*, K*.
+Spec sections refer to scenarios by ID. A convention test keeps that file and the tests in step (§8.1).
+
+### 8.4 Visual tests (addon UI)
+
+No tool renders a Classic-era addon exactly like the game outside it, so there are four layers. Each one catches what the layer before it can't.
+
+1. **View-model tests** (plain Lua, always run). These check what each tab shows: which rows, in what order, with which labels, colours and formatted money. Most UI bugs are caught here.
+2. **Layout snapshots** (our Lua runner, always run).
+   - `wow_stubs.lua` frames record their size, anchors, text, font and visibility. `layout.lua` resolves the anchors into rectangles on a 1920 × 1080 screen at UI scale 1. Text width is estimated from the character count × the font's average glyph width.
+   - Each scenario writes a **frame-tree snapshot** (indented text: name, rectangle, text, shown). It is compared with `tests/visual/golden/<scenario>.txt`.
+   - **Automatic checks:** every shown frame lies inside its parent; text never overflows its box unless it is set to truncate; sibling rows don't overlap; buttons are at least 20 px tall.
+   - `python tools/visual.py --update` rewrites the golden files. Review the diff like code.
+   - `python tools/visual.py --html` draws the snapshot rectangles and text to `tests/visual/out/<scenario>.html`, for a quick look next to the mockup.
+3. **Rendered screenshots** (optional, through wow-ui-sim in Docker). The same scenarios are rendered to PNG and compared with `tests/visual/golden/*.png` within a pixel tolerance. Pillow is a dev-only dependency for the comparison. This depends on the §6 spike. If wow-ui-sim can't load a Classic-style addon, this layer is dropped, and layer 2's HTML view and layer 4 cover it.
+4. **In game** (manual, once per milestone): `/ahp demo`, then screenshot each tab and compare with the mockup.
+
+Scenarios UI1–UI11: [SCENARIOS.md §2](SCENARIOS.md#2-visual-tests-ui1ui11).
+
+### 8.5 Every number on every tab is tested
+
+Each number a tab shows comes from a pure function in `ahsync/engine/`. The dashboard's `web/` and the addon's frame code only display it, and do no arithmetic of their own. Tab totals, sorting, filters and tooltip deltas live in `engine/views.py`, with the Lua twin in `UI/ViewModel.lua`.
+
+| Tab / view | Engine function(s) | Scenarios |
+|---|---|---|
+| Today | `plan.today`, `views.today` (sort, filter, footer totals) | D1–D5, R8, O1–O5, D16, D19–D22 |
+| Week | `plan.week`, `plan.replan_missed`, `plan.status_pass`, `views.week` (day, category and character totals) | R6, R9, R14, D9–D14, C7–C8, C14, D17, D19–D22, M1–M7, T14–T15 |
+| On the AH | `tracking.cost_basis`, `views.on_ah` (tiles) | T9–T13, D18 |
+| Disenchant | `disenchant.targets` | R1, R2 |
+| Craft | `craft.options` (sourcing, chains, crafts count, hold value) | R3–R5, C1–C16, D6–D8 |
+| Flip | `plan.flips` | R8, R13, D3, D5 |
+| Inventory | `tracking.cost_basis`, `plan.sell_plan` | R7, R10, T7, T12 |
+| History | `tracking.match` | T1–T8, T14–T16 |
+| Rules | `record.sell_record`, `rules.apply` | O1–O18 |
+| Tooltip | `views.tooltip` | TT1–TT5 |
+| Status | `sync.*`, `record.calibration` | S1–S10, K1–K3 |
+| Weekly patterns, best windows | `patterns.sell_windows`, `patterns.weighted_median` | W1–W7 |
+| Confidence % | `confidence.score` | CF1–CF4 |
+| Refresh and incremental updates | `refresh.refresh_all`, `refresh.update_items`, `plan.status_pass`, `sellprob.from_curve` | IU1–IU10 |
+| Failure handling | `sync.*`, `ingest.*`, `export.*`, `refresh.*`, addon `Core/*` | FM1–FM24, FI1–FI2 |
+| Dashboard security (not engine; `web/server`) | request checks | SEC1–SEC7 |
+| Sell probability, expected value | `sellprob.simulate`, `sellprob.blend`, `sellprob.expected` | P5–P9, P12–P24, PI1–PI17, K1–K3 |
+| Volume | `volume.*` (incl. the per-day source choice and calibration) | V1–V18, S11, the invariants below |
+
+`tests/test_conventions.py` fails if a view field has no scenario that checks it. Branch coverage of `ahsync/engine/` must be 100% (`coverage.py`, dev-only).
+
+The view and tooltip scenarios (D16–D18, TT1–TT5) are in [SCENARIOS.md §3](SCENARIOS.md#3-views-and-tooltip-d16d22-tt1tt5).
+
+### 8.6 Determinism
+
+The engine must give **the same output for the same input, every time and on every machine**, in both languages.
+
+- **No hidden inputs.** The current time is passed in as `now_ms`. There is no randomness. Config values are arguments.
+- **Explicit order.** Every sort has a full tie-break that ends in a unique key, such as an item key or a character id. Nothing depends on dict, set or Lua `pairs` order. Lua code walks sorted key lists.
+- **Exact numbers.** The numeric rules in §3.3 apply: integer copper, floats only for expected values, `floor(x + 0.5)` at output, and the defined median and percentile. Tests compare rounded output exactly, not "close enough".
+- **Whole-plan snapshot.** A fixture world, `tests/fixtures/worlds/w1.json`, holds characters, inventory, recipes, prices, order books, history and `now_ms`. It is built from the mockups' example data. The test runs the whole engine on it and compares every tab's view model with `tests/fixtures/worlds/w1.expected.json`. Running it twice must give byte-identical output. Where the mockups and the engine disagree, the engine's tested numbers win and the mockup is updated.
+
+### 8.7 Invariants: is the logic sound?
+
+Single scenarios check one example. Invariants check that a formula behaves sensibly across many inputs.
+
+- **How cases are made.** `tests/support/gen.py` makes cases from a fixed seed with `random.Random(seed)`. A failure prints the seed and the inputs, so it can be reproduced. The generated cases are saved to `tests/properties/*.json`, so the Lua port is checked against exactly the same cases.
+- **Scale.** At least 1,000 cases per invariant.
+
+**Sell probability and expected value** (`sellprob`):
+
+| # | Invariant |
+|---|---|
+| PI1 | `0 ≤ P ≤ 1`, and `0 ≤ P' ≤ 1` |
+| PI2 | More sales per day, or a longer window, never lowers `P` |
+| PI3 | More competing units at or below your price, or posting more units, never raises `P` |
+| PI4 | Lowering your price never lowers `P` (fewer listings are ahead of you) |
+| PI5 | With no own record, `P' = P`. With a record, `P'` lies between `P` and your own sell rate `s ÷ (s + x)`, and moves toward your rate as you post more |
+| PI6 | With `P = 1`: `E_post = q × p × (1 − cut)`, so the deposit is never lost |
+| PI7 | With `P = 0`: `E_post = q × fallback − deposit` |
+| PI8 | When the sale is worth more than the fallback minus the lost deposit, a higher `P` never lowers `E_post` |
+| PI9 | Expected profit never exceeds the profit if everything sells |
+| PI10 | With a flat sales profile, no competitor expiring and `u = 0`, the simulation equals the old formula `clamp((S·W/24 − ahead) ÷ q, 0, 1)` |
+| PI11 | More undercut arrivals (higher `L` or `u`) never raise `P_queue` |
+| PI12 | A competitor that expires sooner (shorter band) never lowers `P_queue` |
+| PI13 | A longer window (adding hours at the end) never lowers `P_queue` |
+| PI14 | `P` lies between `P_queue` and `ST_tier`, and equals `P_queue` when there is no tier history |
+| PI15 | Units sold in the simulation: yours plus competitors' never exceeds the total demand `S × h ÷ 24` |
+| PI16 | Raising `sales_how` in any hour of the window never lowers `P_queue` |
+| PI17 | Every `P` is computed over the window its context defines (posting now: the next 8 h; planned post: from the post time through the end of its selling window, §3.3.2); no calculation uses another window |
+
+**Other formulas:**
+
+| # | Invariant |
+|---|---|
+| VI1 | Volume: `sold + expired = gone`, all ≥ 0, and `expired ≤ expiring` |
+| CI1 | Craft: the chosen source for a reagent costs no more than any other available source |
+| CI2 | Craft: each added craft has a positive marginal profit; the next one would not |
+| CI3 | Chains: profit is counted once, so the chain's total equals the final product's profit |
+| PL1 | Plan: buys never exceed the budget; no action is before `now_ms`; every craft has a follow-up within 7 days; every post is at peak − `post_lead_hours` (or now) |
+| PL2 | Plan: a planned post quantity is never below 1 stack and never above what you hold |
+| PL3 | Missed peaks: a replacement's `E` is always ≥ 90% of its original anchor (never of an earlier replacement), its P' ≥ `min_sell_prob`, and it lies in the same plan week. Otherwise the action is a hold |
+| VW1 | Views: every total equals the sum of its rows; filters only hide rows, never change their numbers; each chain's profit appears in exactly one row of any view (§3.4 expected net) |
+| LP1 | Python and Lua give identical rounded results on every generated case for the ported modules |
+| FI1 | A crash injected at any commit point of catch-up, ingest or refresh, followed by a restart, gives the same final database rows and `Data.lua` bytes as an uninterrupted run |
+| FI2 | Ingesting any SavedVariables file twice, or in any order with earlier files, gives the same database as ingesting each once in order |
+
+### 8.8 Calibration: does the chance to sell match reality?
+
+The invariants prove the formula is sensible. Only your real sales can show whether it is *right*. Every post therefore records the `P'` it was planned with (`posts.p_at_post`). `record.calibration` compares that with what actually happened:
+
+- It groups resolved posts into buckets by predicted chance: `[0, 0.2)`, `[0.2, 0.4)`, `[0.4, 0.6)`, `[0.6, 0.8)` and `[0.8, 1]`. Each bucket includes its lower edge, and the last one also includes 1. It shows each bucket's predicted versus actual sell rate.
+- It reports the **Brier score**, the mean of `(P' − outcome)²` where outcome is 1 for sold and 0 for expired. Lower is better. Always guessing 50% scores 0.25.
+- The **Status** page shows both. A bucket that is off by more than 15 points, with at least 20 posts in it, raises a warning, e.g. "40–60% predictions actually sold 28%". That suggests `default_sell_prob`, `own_record_weight` or the volume source needs adjusting.
+
+Scenarios K1–K3: [SCENARIOS.md §4](SCENARIOS.md#4-calibration-k1k3).
+
+### 8.9 Definition of done for any feature
+
+The scenarios for that feature are written first, they are listed in [SCENARIOS.md](SCENARIOS.md), and they pass in both languages where the feature exists in both.
+
+## 9. Out of scope (v1)
+
+Automated buying or posting (not allowed by Blizzard), cross-market arbitrage, planning for the neutral AH (AHF has no market for it), and uploading scans to AHF (the AHF addon already does that).

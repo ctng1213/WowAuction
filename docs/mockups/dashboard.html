@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AHSync Dashboard Mockup</title>
+<!--
+  Requirements mockup for the AHSync desktop dashboard (SPEC §3.5), served at http://localhost:8765.
+  Names, realms and numbers are placeholders. The in-game addon has its own mockup: addon.html.
+-->
+<style>
+  /* WoW-themed dark palette: stone panels, gold trim, Blizzard item-quality colours. Always dark. */
+  :root {
+    color-scheme: dark;
+    --bg: #0e0d0b; --surface: #181612; --surface-2: #221f19; --border: #3d3424; --border-hi: #8a6d2f;
+    --text: #ece3cc; --muted: #9b917b; --accent: #ffd100; --accent-bg: #2b2210;
+    --pos: #3ddc4f; --neg: #ff4a3d; --amber: #ffb02e; --info: #69ccf0;
+    --q0: #9d9d9d; --q1: #ffffff; --q2: #1eff00; --q3: #2f8cff; --q4: #b55cff; --q5: #ff8000;
+    --buy: #69ccf0; --post: #ffd100; --de: #b55cff; --craft: #ff8000; --vendor: #9d9d9d;
+    --serif: "Friz Quadrata TT", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+         background: radial-gradient(ellipse at 50% -10%, #2a2214 0%, var(--bg) 55%) fixed, var(--bg); }
+  a { color: inherit; text-decoration: underline; text-decoration-color: #4a3f2a; text-underline-offset: 2px; }
+  a:hover { text-decoration-color: currentColor; }
+
+  .top { display: flex; align-items: center; gap: 16px; padding: 10px 20px; flex-wrap: wrap;
+         background: linear-gradient(#211c13, #15120d); border-bottom: 2px solid var(--border-hi); box-shadow: 0 2px 10px rgba(0,0,0,.6); }
+  .brand { font: 700 19px var(--serif); color: var(--text); letter-spacing: .5px; text-shadow: 0 1px 2px #000; }
+  .brand span { color: var(--accent); }
+  .select { padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; background: #0b0a08; font-size: 13px; }
+  .top .grow { flex: 1; }
+  .pill { padding: 2px 10px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: #0b0a08; white-space: nowrap; }
+  .pill.ok { color: var(--pos); border-color: #2c6b32; } .pill.warn { color: var(--amber); border-color: #7a5a1b; } .pill.gold { color: var(--accent); border-color: var(--border-hi); }
+
+  .layout { display: grid; grid-template-columns: 190px 1fr; min-height: calc(100vh - 54px); }
+  nav { background: linear-gradient(90deg, #15120d, #110f0b); border-right: 1px solid var(--border); padding: 12px 8px; }
+  nav button { display: flex; justify-content: space-between; width: 100%; text-align: left; padding: 7px 12px; margin: 2px 0; border: 1px solid transparent; border-radius: 4px;
+               background: none; color: var(--text); font: 15px var(--serif); cursor: pointer; }
+  nav button:hover { background: var(--surface-2); border-color: var(--border); }
+  nav button[aria-selected="true"] { background: linear-gradient(90deg, #3a2c10, #1d170c); color: var(--accent); border-color: var(--border-hi);
+                                     box-shadow: inset 3px 0 0 var(--accent); }
+  nav .count { color: var(--muted); font: 12px system-ui, sans-serif; }
+  main { padding: 20px 24px 48px; min-width: 0; }
+  h1 { font: 24px var(--serif); color: var(--accent); margin: 0 0 4px; text-shadow: 0 1px 3px #000; }
+  .lede { color: var(--muted); margin: 0 0 16px; max-width: 760px; }
+  h3 { font: 16px var(--serif); color: var(--accent); margin: 22px 0 8px; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .tile { background: linear-gradient(#1f1b14, #14120e); border: 1px solid var(--border); border-top: 2px solid var(--border-hi); border-radius: 6px; padding: 12px 14px;
+          box-shadow: inset 0 0 0 1px #000, 0 3px 10px rgba(0,0,0,.45); }
+  .tile .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
+  .tile .v { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .tile .d { color: var(--muted); font-size: 12px; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; box-shadow: inset 0 0 0 1px #000, 0 3px 12px rgba(0,0,0,.5); }
+  .card + .card { margin-top: 14px; }
+  .card-h { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; background: linear-gradient(#241f16, #1a1711); }
+  .card-h b { flex: 1; font: 15px var(--serif); color: var(--accent); font-weight: normal; }
+  .filters { display: flex; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .filters .search { min-width: 180px; flex: 1; max-width: 260px; }
+  .scrollx { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; }
+  th { text-align: left; font-size: 12px; font-weight: 600; color: #d9b54a; padding: 8px 12px; border-bottom: 1px solid var(--border-hi); white-space: nowrap; background: #120f0b; letter-spacing: .3px; }
+  th.sort::after { content: " ↕"; opacity: .5; } th.sorted::after { content: " ↓"; opacity: 1; }
+  td { padding: 7px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  tbody tr:nth-child(even) td { background: rgba(255,255,255,.015); }
+  tbody tr:hover td { background: #2a2416; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .pos { color: var(--pos); } .neg { color: var(--neg); } .muted { color: var(--muted); } .amber { color: var(--amber); }
+  .sub { display: block; color: var(--muted); font-size: 12px; white-space: normal; max-width: 520px; }
+  .q0 { color: var(--q0); } .q1 { color: var(--q1); } .q2 { color: var(--q2); } .q3 { color: var(--q3); } .q4 { color: var(--q4); }
+  .act { display: inline-block; min-width: 52px; text-align: center; font-size: 11px; font-weight: 700; letter-spacing: .4px; padding: 1px 6px; border-radius: 4px; border: 1px solid currentColor; }
+  .act.buy { color: var(--buy); } .act.post { color: var(--post); } .act.de { color: var(--de); } .act.craft { color: var(--craft); } .act.vendor { color: var(--vendor); } .act.mail { color: var(--info); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+  .dot.h { background: var(--pos); } .dot.m { background: var(--amber); } .dot.l { background: var(--muted); }
+  .flag { color: var(--neg); font-weight: 700; font-size: 12px; }
+  /* Blizzard-style red panel button with gold text */
+  .btn { display: inline-block; padding: 3px 12px; border: 1px solid #000; border-radius: 3px; font-size: 12px; cursor: pointer; color: var(--accent);
+         background: linear-gradient(#8a1a14, #4d0c09); box-shadow: inset 0 0 0 1px #b2392f, 0 1px 2px #000; text-shadow: 0 1px 1px #000; }
+  .btn:hover { background: linear-gradient(#a3221a, #5e0f0b); }
+  .btn.primary { background: linear-gradient(#6b5420, #3a2c10); box-shadow: inset 0 0 0 1px #c9a64a, 0 1px 2px #000; }
+  .status-done { color: var(--pos); } .status-missed { color: var(--neg); text-decoration: line-through; } .status-partial { color: var(--amber); }
+
+  .alert { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); margin-bottom: 10px; }
+  .alert.warn { border-left: 4px solid var(--amber); } .alert.bad { border-left: 4px solid var(--neg); } .alert.info { border-left: 4px solid var(--info); }
+  .alert .grow { flex: 1; }
+
+  .week { display: grid; grid-template-columns: repeat(7, minmax(150px, 1fr)); gap: 10px; overflow-x: auto; }
+  .day { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px; min-height: 220px; box-shadow: inset 0 0 0 1px #000; }
+  .day.today { border-color: var(--accent); box-shadow: inset 0 0 0 1px #000, 0 0 12px rgba(255,209,0,.15); }
+  .day h4 { margin: 0; font: 15px var(--serif); color: var(--accent); display: flex; justify-content: space-between; }
+  .day h4 .muted { font: 12px system-ui, sans-serif; }
+  .day .tot { font-size: 12px; margin-bottom: 8px; }
+  .chip { border: 1px solid var(--border); border-left: 3px solid; border-radius: 4px; padding: 5px 7px; margin-bottom: 6px; font-size: 12px; background: #0f0d0a; }
+  .chip.vendor { border-left-color: var(--vendor); }
+  .chip.buy { border-left-color: var(--buy); } .chip.post { border-left-color: var(--post); } .chip.de { border-left-color: var(--de); } .chip.craft { border-left-color: var(--craft); } .chip.mail { border-left-color: var(--info); }
+  .chip .t { color: var(--muted); } .chip.done { opacity: .6; } .chip.done .t::before { content: "✓ "; color: var(--pos); }
+  .chip.missed { border-left-color: var(--neg); opacity: .8; } .chip.missed .t::before { content: "✗ missed "; color: var(--neg); }
+  .chip.hold { border-left-color: var(--amber); border-style: dashed; border-left-style: solid; }
+  .act.hold { color: var(--amber); }
+
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; padding: 12px 14px; }
+  .kv dt { color: var(--muted); } .kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+  .bar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; margin-top: 3px; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  .prof { padding: 6px 14px; }
+
+  .detail { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 14px; }
+  .heat { display: grid; grid-template-columns: 28px repeat(24, 1fr); gap: 1px; font-size: 10px; }
+  .heat div { height: 13px; }
+  .heat .lbl { color: var(--muted); height: auto; }
+  .legend { font-size: 11px; color: var(--muted); margin-top: 6px; }
+  svg.spark { width: 100%; height: 110px; }
+  .window { display: flex; gap: 10px; align-items: baseline; padding: 6px 10px; margin-bottom: 4px; border: 1px solid var(--border); border-radius: 4px; background: #0f0d0a; }
+  .window .rank { font: 16px var(--serif); color: var(--accent); width: 14px; }
+  .window b { font-weight: 600; min-width: 130px; }
+  .breakdown div { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; border-bottom: 1px dashed var(--border); font-size: 13px; }
+  .breakdown span { color: var(--muted); } .breakdown b { font-weight: 600; text-align: right; }
+  .chance { color: var(--text); }
+
+  @media (max-width: 760px) {
+    .layout { grid-template-columns: 1fr; }
+    nav { display: flex; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 6px; }
+    nav button { width: auto; white-space: nowrap; }
+    nav .count { display: none; }
+    main { padding: 16px; }
+    .detail { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand">AH<span>Sync</span></div>
+  <span class="select">Market: forever.pvp.horde.us ▾</span>
+  <span class="grow"></span>
+  <span class="pill" title="Numbers are recomputed at start, once a day after 06:00, or when you press Refresh now. Your in-game changes update the affected items immediately.">numbers from 06:00 · <span class="amber">prices newer</span></span>
+  <span class="btn primary" title="Full refresh: recompute every statistic, chance and the plan (about a minute)">⟳ Refresh now</span>
+  <span class="pill ok">● synced 14:06 · hour data 2 h old</span>
+  <span class="pill gold">Premium via contributor · until 23 Oct</span>
+  <span class="pill">SavedVariables read 13:52</span>
+</div>
+
+<div class="layout">
+  <nav id="nav" role="tablist"></nav>
+  <main id="main"></main>
+</div>
+
+<script>
+// ---------- helpers ----------
+function money(c, signed) {
+  if (c === null || c === undefined) return '<span class="muted">—</span>';
+  const sign = c < 0 ? '−' : (signed ? '+' : '');
+  const a = Math.abs(c), g = Math.floor(a / 10000), s = Math.floor(a % 10000 / 100), cp = a % 100;
+  const parts = [];
+  if (g) parts.push(`${g}<span style="color:#c9a227">g</span>`);
+  if (s) parts.push(`${s}<span style="color:#9aa0a6">s</span>`);
+  if (cp || !parts.length) parts.push(`${cp}<span style="color:#b8693a">c</span>`);
+  return sign + parts.join(' ');
+}
+const net = c => c === null ? money(null) : `<span class="${c < 0 ? 'neg' : 'pos'}">${money(c, true)}</span>`;
+const item = (n, q) => `<a class="q${q}" href="https://auctionhouse.fyi/" title="Open on auctionhouse.fyi">${n}</a>`;
+const act = a => `<span class="act ${a}">${a === 'de' ? 'DE' : a.toUpperCase()}</span>`;
+// Confidence % (SPEC §3.3.5); letters stand in for this mockup's example values. Dot: ≥ 75 high, ≥ 45 medium, else low.
+const conf = c => {
+  const p = typeof c === 'number' ? c : { h: 86, m: 63, l: 38 }[c];
+  return `<span class="dot ${p >= 75 ? 'h' : p >= 45 ? 'm' : 'l'}"></span>${p}%`;
+};
+// Volume per item: [sold per day, source, units on the AH now]. For disenchant targets it's the main mat's volume.
+const VOL = {
+  'Linen Cloth': [48, 'AHF', 93], 'Copper Rod': [6, 'AHF', 14], 'Mithril Spurs': [3, 'AHF', 4], 'Bolt of Silk Cloth': [22, 'AHF', 40],
+  'Heavy Grinding Stone': [18, 'est.', 35], 'Broken Fang': [0, 'est.', 0], 'Iron Ore': [31, 'AHF', 120], 'Silk Cloth': [64, 'AHF', 210],
+  'Elixir of Agility': [9, 'AHF', 12], 'Pattern: Tuxedo Shirt': [1, 'est.', 2], 'Transmute: Iron to Gold': [5, 'AHF', 6], 'Gold Bar': [5, 'AHF', 6],
+  'Runed Copper Rod': [4, 'est.', 3], 'Linen Belt': [2, 'est.', 8], 'Heavy Leather': [7, 'AHF', 60], 'Copper Bar': [40, 'AHF', 150],
+  'Scouting Gloves of the Monkey': [210, 'AHF', 400], 'Ridge Cleaver of the Bear': [35, 'AHF', 70], 'Bandit Cinch': [210, 'AHF', 400],
+  "Archer's Belt of the Owl": [210, 'AHF', 400], 'Glimmering Mail Bracers': [12, 'est.', 25], 'Bolt of Linen Cloth': [26, 'AHF', 45],
+  'Wool Cloth': [70, 'AHF', 140], 'Mageweave Cloth': [55, 'AHF', 120], 'Green items': [210, 'AHF', 400],
+  'Mithril Coif': [2, 'AHF', 3], 'Silver Rod': [4, 'est.', 6],
+};
+const vol = n => { const v = VOL[n]; return v ? `${v[0]}/day <span class="muted">${v[1]} · ${v[2]} on AH</span>` : '<span class="muted">—</span>'; };
+// Confidence % per item (SPEC §3.3.5): example values for this mockup.
+const CONF = {
+  'Linen Cloth': 86, 'Copper Rod': 63, 'Mithril Spurs': 63, 'Bolt of Silk Cloth': 86, 'Heavy Grinding Stone': 58, 'Broken Fang': 52,
+  'Scouting Gloves of the Monkey': 82, 'Silk Cloth': 88, 'Elixir of Agility': 66, 'Pattern: Tuxedo Shirt': 38, 'Transmute: Iron to Gold': 64,
+  'Gold Bar': 64, 'Runed Copper Rod': 47, 'Linen Belt': 41, 'Heavy Leather': 44, 'Copper Bar': 80, 'Ridge Cleaver of the Bear': 71,
+  'Bandit Cinch': 88, "Archer's Belt of the Owl": 79, 'Glimmering Mail Bracers': 38, 'Bolt of Linen Cloth': 77,
+  'Wool Cloth': 81, 'Mageweave Cloth': 74, 'Green items': 80, 'Mithril Coif': 60, 'Silver Rod': 52,
+};
+// Every table that shows a chance uses the same two columns (SPEC §3.5): Chance, with the confidence dot inside it
+// (exact confidence % on hover), then Volume.
+const PAIR = [['Chance', 1], ['Volume']];
+const confDot = c => `<span class="dot ${c >= 75 ? 'h' : c >= 45 ? 'm' : 'l'}"></span>`;
+const pair = (n, P) => P === null || P === undefined || !CONF[n]
+  ? `<td class="num">${pct(P ?? null)}</td><td>${vol(n)}</td>`
+  : `<td class="num" title="Confidence ${CONF[n]}%: how much the data behind this chance can be trusted">${P}% ${confDot(CONF[n])}</td><td>${vol(n)}</td>`;
+const pct = p => p === null ? '<span class="muted">—</span>' : p + '%';
+const TOTAL_GOLD = 314000; // copper across all characters; risk % is measured against this
+const risk = spend => { const r = spend / TOTAL_GOLD * 100; return `<span class="${r > 25 ? 'amber' : 'muted'}">${r.toFixed(1)}%</span>`; };
+const paid = c => c === 0 ? '0 <span class="muted">found</span>' : money(c);
+// Chance to sell shown on Week chips: each post's (or craft/flip product's) chance in its planned window (SPEC §3.3.2). Mat buys and mail show none.
+const WEEK_CHANCE = {
+  'Linen Cloth ×20': 92, 'Copper Rod ×5': 58, 'Heavy Grinding Stone ×4': 75, 'Bolt of Silk Cloth ×2': 85, 'Silk Cloth ×40': 88, 'Mithril Spurs': 85,
+  'Mageweave Cloth ×20': 78, 'Wool Cloth ×20': 81, 'Runed Copper Rod (Amaya)': 95, 'Runed Copper Rod': 95, 'Heavy Leather ×5': 25, 'Elixir of Agility ×5': 70,
+  'Transmute: Iron to Gold': 65, 'Gold Bar': 65, 'Green items ×3': 95, 'Scouting Gloves of the Monkey': 100, 'Copper Bar ×6': 90,
+};
+const table = (cols, rows, sorted) => `<div class="scrollx"><table><thead><tr>${cols.map(([t, n], i) =>
+  `<th class="${n ? 'num ' : ''}${t ? (i === sorted ? 'sort sorted' : 'sort') : ''}">${t}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+const filters = extra => `<div class="filters"><span class="select search">🔍 Search items…</span><span class="select">Character: All ▾</span>${extra || ''}</div>`;
+const tiles = list => `<div class="tiles">${list.map(([k, v, d]) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="d">${d || ''}</div></div>`).join('')}</div>`;
+
+// ---------- pages ----------
+const PAGES = {
+  Today: { count: 7, html: () => `
+    <h1>Today</h1><p class="lede">What to do right now, sorted by expected net (highest first). It is re-checked live in game when you open the AH. In every table, the <b>dot after a chance is its confidence</b>: how much the data behind it can be trusted (<span class="dot h"></span>≥ 75% · <span class="dot m"></span>≥ 45% · <span class="dot l"></span>below). Hover a chance for the exact %.</p>
+    ${tiles([['Expected today', `<span class="pos">${money(15415, true)}</span>`, `7 actions left · 1 done (${money(203, true)})`], ['This week', `<span class="pos">${money(26938, true)}</span>`, '32 actions'],
+             ['Gold (all characters)', money(TOTAL_GOLD), 'Amaya 21g · Brugan 10g 40s · risk % is measured against this'], ['Inventory worth', money(842000), 'paid 51g 20s']])}
+    <div class="alert warn"><b>Coverage</b><span class="grow">Only 1 AHF scan in the last 7 days. Scan in game for fresher prices.</span></div>
+    <div class="card"><div class="card-h"><b>Actions now</b><span class="muted">1 hidden below the filter</span><span class="select">Min chance to sell: 50% ▾</span></div>
+    ${table([['Action'], ['Item'], ['Qty', 1], ['Each', 1], ['Total', 1], ['Expected net', 1], ...PAIR, ['Risk', 1], ['Character'], ['']], [
+      tr('buy', 'Mithril Spurs', 3, 1, 30000, 7342, 85, 'm', 'Brugan', 30000, 'Flip: post Sat 10:00 at 4g 50s, for the 18:00 peak.'),
+      tr('post', 'Copper Rod', 1, 5, 4100, 6306, 58, 'm', 'Brugan', 100, 'Your record (30 d): 2 of 5 sold · expired 2× while cheapest · P 80% → 58% · price −10% · qty ¼'),
+      tr('buy', 'Silk Cloth', 1, 40, 70, 730, 88, 'h', 'Amaya', 2800, 'Flip: post Sat 11:00 at 1s 5c, for the 19:00 peak.'),
+      tr('de', 'Scouting Gloves of the Monkey', 2, 1, 800, 625, 100, 'm', 'Amaya', 800),
+      tr('craft', 'Bolt of Silk Cloth', 1, 2, 280, 194, 85, 'h', 'Amaya', 560, 'Mats to buy: 8 Silk Cloth. Then post Sun 11:00, for the 19:00 peak.'),
+      tr('craft', 'Heavy Grinding Stone', 1, 4, null, 134, 75, 'h', 'Brugan', 0, 'Uses 8 owned Heavy Stone (hold value 1s 60c). Then post Sat 11:00, for the 19:00 peak.'),
+      tr('vendor', 'Broken Fang', 0, 7, 12, 84, null, 'h', 'Amaya', 0),
+    ], 5)}</div>
+    <div class="card"><div class="card-h"><b>Needs a decision</b><span class="muted">expired 3× in a row while cheapest</span></div>
+    ${table([['Item'], ['Record'], ['Owned'], ['']], [
+      `<tr><td>${item('Heavy Leather', 1)}</td><td>0 of 3 sold · price −14% · qty ⅛</td><td>10 (Brugan, paid 80c each)</td><td><span class="btn">Don't buy or craft</span> <span class="btn">Ignore completely</span> <span class="btn" title="Start its record fresh; one more expiry while cheapest asks again">Keep</span></td></tr>`,
+    ], null)}</div>` },
+
+  Week: { count: 32, html: () => {
+    // [time, action, item, each, total, net, done, follow-up]. A chain's profit sits on its first action in view (SPEC §3.4 expected net).
+    const days = [
+      ['Fri 16', 15618, true, [['05:00', 'post', 'Wool Cloth ×20', 30, 600, null, 'missed', 'Fri 11:00–14:00 peak (+8%) ended → moved to Sun 19–22 (−4% vs original · 81% chance)'],
+        ['14:10', 'buy', 'Linen Cloth ×20', 38, 760, 203, 1, 'flip → post Sat 10:00'],
+        ['14:30', 'hold', 'Mageweave Cloth ×20', null, null, null, 'hold', 'missed the Tue and Wed raid-night peaks; Thu was 18% below the original → hold for next week\'s Tue 20:00 peak'],
+        ['14:30', 'buy', 'Mithril Spurs', 30000, 30000, 7342, 0, 'flip → post Sat 10:00'],
+        ['14:30', 'post', 'Copper Rod ×5', 4100, 20500, 6306, 0, 'now · for the 19:00 peak (11:00 passed)'],
+        ['14:30', 'de', 'Scouting Gloves of the Monkey', 800, 800, 625, 0, 'buy and disenchant (Amaya)'],
+        ['14:30', 'vendor', 'Broken Fang ×7', 12, 84, 84, 0],
+        ['20:00', 'craft', 'Heavy Grinding Stone ×4', null, null, 134, 0, 'mats owned · → post Sat 11:00'],
+        ['20:15', 'buy', 'Silk Cloth ×8', 70, 560, null, 0, 'mats for Bolt of Silk Cloth'], ['20:30', 'craft', 'Bolt of Silk Cloth ×2', 280, 560, 194, 0, 'mats bought 20:15 · → post Sun 11:00'],
+        ['21:00', 'buy', 'Silk Cloth ×40', 70, 2800, 730, 0, 'flip → post Sat 11:00']]],
+      ['Sat 17', 4787, false, [['10:00', 'post', 'Linen Cloth ×20', 55, 1100, null, 0, 'for the 18:00 peak · profit counted on the Fri 14:10 buy'], ['10:00', 'post', 'Mithril Spurs', 45000, 45000, null, 0, 'for the 18:00 peak · profit counted on the Fri 14:30 buy'],
+        ['11:00', 'post', 'Heavy Grinding Stone ×4', 100, 400, null, 0, 'for the 19:00 peak · profit counted on the Fri 20:00 craft'], ['11:00', 'post', 'Silk Cloth ×40', 105, 4200, null, 0, 'for the 19:00 peak · profit counted on the Fri 21:00 buy'],
+        ['11:00', 'post', 'Copper Bar ×6', 1200, 7200, 3157, 0, 'for the 19:00 peak · worth 10s 26c each there, more than the AH\'s 10s, so the chain below buys its bars'],
+        ['12:00', 'buy', 'Copper Bar ×2 (Brugan)', 1000, 2000, null, 0, 'mats for Copper Rod'], ['12:15', 'craft', 'Copper Rod (Brugan)', null, null, null, 0, 'chain step 1 → Runed Copper Rod'],
+        ['12:20', 'mail', 'Copper Rod → Amaya', null, null, null, 0, 'Brugan → Amaya'], ['12:25', 'buy', 'Strange Dust + Lesser Magic (Amaya)', 1700, 1700, null, 0, 'mats for Runed Copper Rod'],
+        ['12:30', 'craft', 'Runed Copper Rod (Amaya)', 3700, 3700, 1630, 0, 'AH + crafted · → post Sun 10:00']]],
+      ['Sun 18', 143, false, [['10:00', 'post', 'Runed Copper Rod', 5900, 5900, null, 0, 'for the 18:00 peak · profit counted on the Sat 12:30 craft'], ['11:00', 'post', 'Wool Cloth ×20', 30, 600, 472, 0, 'for the 19:00 peak · replaces the missed Fri post'], ['11:00', 'post', 'Bolt of Silk Cloth ×2', 450, 900, null, 0, 'for the 19:00 peak · profit counted on the Fri 20:30 craft'], ['12:00', 'post', 'Heavy Leather ×5', 47, 235, -329, 0, 'for the 20:00 peak · below what you paid (80c each)']]],
+      ['Mon 19', 1700, false, [['21:00', 'de', 'Green items ×3', 800, 2400, 1700]]],
+      ['Tue 20', 2835, false, [['12:00', 'post', 'Mageweave Cloth ×20', 120, 2400, 1877, 0, 'new week, fresh slate · for the Tue 20:00 raid-night peak'], ['19:00', 'buy', 'Elixir of Agility ×5', 700, 3500, 958, 0, 'flip → post Wed 12:00']]],
+      ['Wed 21', 0, false, [['12:00', 'post', 'Elixir of Agility ×5', 1300, 6500, null, 0, 'for the 20:00 peak · profit counted on the Tue 19:00 buy']]],
+      ['Thu 22', 1855, false, [['09:30', 'buy', 'Iron Bar', 4200, 4200, null, 0, 'mats for Transmute'], ['10:00', 'craft', 'Transmute: Iron to Gold', 4200, 4200, 1855, 0, 'mats bought 09:30 · → post Thu 11:00'], ['11:00', 'post', 'Gold Bar', 9500, 9500, null, 0, 'for the 19:00 peak · profit counted on the Thu 10:00 craft']]],
+    ];
+    return `<h1>Week</h1><p class="lede">A rolling 7 days at hour resolution that <b>always starts today</b> and looks forward (SPEC §3.4C): today is Fri 16, so it runs to Thu 22. Done actions are ticked. <b>Every craft comes after its mat buys and has a post for its product within 7 days</b> (shown under each craft). <b>Posts are timed 8 hours before the peak</b> they're for, and their chance to sell is worked out from the post to the end of its selling window. <b>A chain's profit is counted once</b>, on its first action in view: a post that sells stock from a buy or craft shown here says "profit counted on …" and adds nothing to the totals. <b>Missed a peak?</b> The post moves to the next window this week only if it's within 10% of the original peak's expected profit and still likely to sell (<span class="neg">✗ missed</span> Wool Cloth → Sun). Otherwise it <span class="amber">holds</span> until next week, which starts fresh (Mageweave → Tue). Times are local.</p>
+    ${tiles([['Expected (7 days)', `<span class="pos">${money(26938, true)}</span>`, '32 actions'], ['Buy', money(47960), 'capital needed (pending buys)'], ['Posts', '13 planned', `${money(104435)} listing value`], ['Peak slot', 'Sat 18:00', '+12% vs median']])}
+    <div class="week">${days.map(([d, tot, today, chips]) => `<div class="day${today ? ' today' : ''}"><h4>${d}${today ? '<span class="muted">today</span>' : ''}</h4>
+      <div class="tot">${net(tot)}</div>${chips.map(([t, a, n, each, total, e, done, follow]) => { const P = WEEK_CHANCE[n]; const state = done === 'missed' ? ' missed' : done === 'hold' ? ' hold' : done ? ' done' : ''; return `<div class="chip ${a}${state}"><span class="t">${t}</span> ${act(a)}<br>${n}<br><span class="muted">${money(each)} each · ${money(total)}</span><br>${net(e)}${P && done !== 'hold' && done !== 'missed' ? (() => { const b = n.replace(/ ×\d+| \(.*?\)/g, ''); return `<br><span class="chance" title="Confidence ${CONF[b]}%">${P}% chance ${CONF[b] ? confDot(CONF[b]) : ''}</span><span class="muted">${VOL[b] ? ' · ' + VOL[b][0] + '/day' : ''}</span>`; })() : ''}${follow ? `<br><span class="muted">${follow}</span>` : ''}</div>`; }).join('')}</div>`).join('')}</div>
+    <h3>Totals</h3>
+    <div class="grid2">
+      <div class="card"><div class="card-h"><b>Per category</b></div><dl class="kv"><dt>Flips</dt><dd class="pos">${money(9233, true)}</dd><dt>Crafts</dt><dd class="pos">${money(3813, true)}</dd><dt>Disenchant</dt><dd class="pos">${money(2325, true)}</dd><dt>Sell owned</dt><dd class="pos">${money(11567, true)}</dd></dl></div>
+      <div class="card"><div class="card-h"><b>Per character</b></div><dl class="kv"><dt>Amaya</dt><dd class="pos">${money(7515, true)}</dd><dt>Brugan</dt><dd class="pos">${money(19423, true)}</dd></dl></div>
+    </div>`; } },
+
+  Disenchant: { count: 5, html: () => `
+    <h1>Disenchant</h1><p class="lede">AH items worth buying to disenchant (SPEC §3.4A). Only shown when one of your characters has the skill (here Amaya, Enchanting 142). Chance (with its confidence dot) and Volume describe the <b>mats</b>, since they're what you sell.</p>
+    <div class="card">${filters('<span class="select">Min profit: 2s ▾</span><span class="select">Quality: Uncommon+ ▾</span>')}
+    ${table([['Item'], ['ilvl', 1], ['Buy', 1], ['Expected mats'], ['EV', 1], ['Profit', 1], ...PAIR, ['Risk', 1], ['Price age', 1]], [
+      deRow('Ridge Cleaver of the Bear', 29, 1500, '1.2 Lesser Astral Essence · 0.6 Soul Dust', 2310, 810, 'm', '2 h', 88),
+      deRow('Scouting Gloves of the Monkey', 25, 800, '2.5 Strange Dust (75%) · Lesser Magic (20%)', 1425, 625, 'm', '2 h', 100),
+      deRow('Bandit Cinch', 18, 300, '1.6 Strange Dust', 912, 612, 'h', '20 min', 100),
+      deRow("Archer's Belt of the Owl", 27, 1100, '2.5 Strange Dust', 1425, 325, 'm', '2 h', 100),
+      deRow('Glimmering Mail Bracers', 32, 2900, '1.1 Greater Magic Essence', 3200, 300, 'l', '6 d', 70),
+    ], 5)}</div>` },
+
+  Craft: { count: 6, html: () => `
+    <h1>Craft</h1><p class="lede">Every recipe your characters know, priced now (SPEC §3.4B), whether or not you have the mats. <b>Source</b>: <span class="pos">Owned</span> = all mats from your stock; <span class="amber">AH</span> = all mats bought, crafting straight from the market; Mixed = your stock topped up from the AH; <b>+ crafted</b> = one of your characters makes a reagent first (a chain, with a mail step if another character crafts the next step). Crafts stop at the first one that would lose money as AH mats get pricier. <b>Mats each / total</b> is the gold to buy the mats you're missing, at the latest AH prices (or vendor, if cheaper), per craft and for all crafts. It's "—" only when you already own every mat. Profit still counts owned mats at their <b>hold value</b>, what they'd fetch under their own best sell plan (now or at their peak), so a craft never beats selling the mats raw by accident. Every craft gets a post in the Week plan.</p>
+    <div class="card">${filters('<span class="select">Profession: All ▾</span><span class="select">Source: All · Owned · AH · Mixed ▾</span>')}
+    ${table([['Product'], ['Recipe known by'], ['Source'], ['Crafts', 1], ['Mats each', 1], ['Mats total', 1], ['Value each', 1], ['Expected profit', 1], ...PAIR, ['Risk', 1], ['Cooldown']], [
+      crRow('Transmute: Iron to Gold', 2, 'Brugan (Alchemy 225)', 'AH', 1, 4200, 9500, 1855, 65, '<span class="pos">ready</span>', 'Buys 1 Iron Bar on the AH'),
+      crRow('Runed Copper Rod', 2, 'Amaya (Enchanting 142)', 'AH + crafted', 1, 3700, 5900, 1630, 95, '', 'Chain: buy 2 Copper Bar (20s) → Brugan crafts Copper Rod (vs 41s on the AH) → mail to Amaya · Amaya buys 1 Strange Dust, 1 Lesser Magic Essence'),
+      crRow('Copper Rod', 1, 'Brugan (Blacksmithing 112)', 'AH', 3, 2000, 4100, 783, 58, '', 'Buys 6 Copper Bar on the AH (10s): your own 6 bars are worth 10s 26c each at their Sat peak (hold value), so they stay in the sell plan'),
+      crRow('Bolt of Silk Cloth', 1, 'Amaya (Tailoring 160)', 'AH', 2, 280, 450, 194, 85, '', 'Buys 8 Silk Cloth on the AH (3rd craft would lose money: Silk gets pricier)'),
+      crRow('Heavy Grinding Stone', 1, 'Brugan (Blacksmithing 112)', 'Owned', 4, null, 100, 134, 75, '', 'Uses 8 owned Heavy Stone (hold value 1s 60c)'),
+      crRow('Linen Belt', 1, 'Amaya (Tailoring 160)', 'Mixed', 2, 75, 300, 110, 80, '', 'Uses owned Linen · buys 1 Coarse Thread each'),
+    ], 7)}</div>` },
+
+  'On the AH': { count: 5, html: () => `
+    <h1>On the AH</h1><p class="lede">Everything you have listed right now, on every character. It shows <b>what it cost you</b>: what you paid, or what the mats cost you for a craft. Items you found cost 0. It also shows what you make if each auction sells.</p>
+    ${tiles([['Listed value', money(81600), '5 auctions · 2 characters'], ['Cost to you', money(40200), 'bought + crafted; found items 0'],
+             ['Profit if all sell', `<span class="pos">${money(37320, true)}</span>`, 'after the 5% cut'], ['Deposits at stake', money(540), 'lost only if they expire']])}
+    <div class="card">${filters('<span class="select">Position: All ▾</span>')}
+    ${table([['Item'], ['Character'], ['Qty', 1], ['Listed each', 1], ['Listed total', 1], ['Cost each', 1], ['Cost total', 1], ['Deposit', 1], ['Profit if sold', 1], ['Time left'], ['Position'], ...PAIR], [
+      ahRow('Mithril Coif', 2, 'Brugan', 1, 45000, 30000, 'bought', 300, '22 h', '<span class="neg">undercut: 4g 49s 99c</span>', 40),
+      ahRow('Silver Rod', 1, 'Brugan', 2, 10000, 3000, 'crafted', 100, '6 h', '<span class="pos">cheapest</span>', 55),
+      ahRow('Bolt of Linen Cloth', 1, 'Amaya', 10, 1150, 0, 'crafted from found Linen', 80, '2 h', '<span class="pos">cheapest</span>', 70),
+      ahRow('Gold Bar', 2, 'Brugan', 1, 4200, 4200, 'crafted', 40, '18 h', '<span class="pos">cheapest</span>', 65),
+      ahRow('Linen Cloth', 1, 'Amaya', 20, 45, 0, 'found', 20, '11 h', '<span class="pos">cheapest</span>', 88),
+    ], 8)}</div>` },
+
+  Flip: { count: 3, html: () => `
+    <h1>Flip</h1><p class="lede">Buy now and sell at a later peak (SPEC §3.4C.2). Only flips with at least a 20% expected margin are shown, ranked by expected profit × confidence. Items flagged "not selling" or blacklisted are left out.</p>
+    <div class="card">${filters('<span class="select">Min margin: 20% ▾</span><span class="select">Max capital: 50g ▾</span>')}
+    ${table([['Item'], ['Qty', 1], ['Buy each', 1], ['Buy total', 1], ['Sell each', 1], ['Sell slot'], ['Why'], ['Margin', 1], ['Expected profit', 1], ...PAIR, ['Risk', 1]], [
+      flRow('Mithril Spurs', 3, 1, 30000, 45000, 'Sat 18:00', 'Saturday peak +12%', 24, 7342, 85, 'm'),
+      flRow('Silk Cloth', 1, 40, 70, 105, 'Sat 19:00', 'Dip below 10th percentile', 26, 730, 88, 'h'),
+      flRow('Elixir of Agility', 1, 5, 700, 1300, 'Wed 20:00', 'Wednesday raid night +9%', 27, 958, 70, 'm'),
+    ], 8)}</div>` },
+
+  Inventory: { count: 46, html: () => `
+    <h1>Inventory</h1><p class="lede">What you own on every character: bags, bank and mail (auctions are on <b>On the AH</b>). It shows what you paid (0 for items you found), what it's worth and its plan. Select a row to see why.</p>
+    ${tiles([['Worth', money(842000)], ['Paid', money(512000), 'found items count as 0'], ['Listed on the AH', '5 auctions', money(81600) + ' listed'], ['Not planned', '5 items', 'bound or ignored']])}
+    <div class="card">${filters('<span class="select">Where: All ▾</span><span class="select">Plan: All ▾</span>')}
+    ${table([['Item'], ['Character'], ['Where'], ['Qty', 1], ['Paid each', 1], ['Paid total', 1], ['Worth', 1], ['Best selling windows'], ...PAIR, ['Plan']], [
+      invRow('Linen Cloth', 1, 'Amaya', 'bags', 20, 38, 963, 'Post Sat 10:00 at 55c (18:00 peak)', 92, 'Sat 17–21 · Sun 19–22', true),
+      invRow('Copper Rod', 1, 'Brugan', 'bags', 5, 1000, 11306, 'Post now at 41s (19:00 peak)', 58, 'Fri 18–21'),
+      invRow('Copper Bar', 1, 'Brugan', 'bags', 6, 500, 6157, 'Post Sat 11:00 at 12s (19:00 peak)', 90, 'Sat 18–21'),
+      invRow('Wool Cloth', 1, 'Amaya', 'mail', 20, 0, 472, 'Post Sun 11:00 (19:00 peak) · missed Fri', 81, 'Sun 19–22 · Fri 11–14'),
+      invRow('Heavy Leather', 1, 'Brugan', 'bank', 10, 80, 470, '<span class="neg">Post 5 at 47c · below what you paid</span>', 25, 'Sun 18–21 <span class="muted">(early pattern)</span>'),
+      invRow('Broken Fang', 0, 'Amaya', 'bags', 7, 0, 84, 'Vendor', null, '—'),
+      invRow('Hearthstone Band', 2, 'Brugan', 'bags', 1, 0, null, '<span class="muted">Bound · not planned</span>', null, '—'),
+    ], 6)}
+    <div class="card-h" style="border-top:1px solid var(--border)"><b>Linen Cloth: when it sells best</b><span class="muted">med30 49c · trend +0.4%/day · 7 weeks of data</span></div>
+    <div class="detail">
+      <div>
+        <div class="muted" style="font-size:12px;margin-bottom:6px">Best selling windows (forecast for the coming week)</div>
+        ${windowRow(1, 'Sat 17:00–21:00', 12, 'established · 7 weeks')}
+        ${windowRow(2, 'Sun 19:00–22:00', 9, 'established · 7 weeks')}
+        ${windowRow(3, 'Wed 20:00–22:00', 6, 'pattern · 4 weeks')}
+        <div class="muted" style="font-size:12px;margin:12px 0 4px">Chance to sell for the planned post (Sat 10:00–20:59 window)</div>
+        <div class="breakdown">
+          <div><span>Market sells</span><b>72% of auctions</b></div>
+          <div><span>On the AH now</span><b>93 units · 3.1 days of supply</b></div>
+          <div><span>Ahead of you</span><b>6 units · all expire by 15:00</b></div>
+          <div><span>Expected undercuts</span><b>~4 units in the window</b></div>
+          <div><span>Buyers in the window</span><b>1.4× an average hour (Sat afternoon)</b></div>
+          <div><span>Queue simulation</span><b>95%</b></div>
+          <div><span>Tier history (cheapest, 30 auctions)</span><b>80% → blended 88%</b></div>
+          <div><span>Your record (2 of 2 sold)</span><b class="pos">→ 92%</b></div>
+        </div>
+        <div style="margin-top:12px">${spark()}<div class="legend">30-day hourly closes; dashed line = median.</div></div>
+      </div>
+      <div><div class="muted" style="font-size:12px">Sell score by hour of the week (price × buyers), local time</div>${heat()}<div class="legend">Brighter = better time to sell. Outlined cells are the best selling windows. Each week of history adds to every slot; recent weeks count more (half-life 4 weeks).</div></div>
+    </div></div>` },
+
+  History: { count: null, html: () => `
+    <h1>History</h1><p class="lede">Everything the addon recorded and how it matched your plan (SPEC §3.4.1). You never type any of this in.</p>
+    ${tiles([['Sold (30 d)', '23 posts', `<span class="pos">${money(286000)}</span> after cut`], ['Expired (30 d)', '6 posts', '4 while cheapest · 2 undercut'], ['Deposits lost', `<span class="neg">${money(1840)}</span>`, '30 days'], ['Plan actions', '41 done', '3 missed · 2 skipped']])}
+    <div class="card">${filters('<span class="select">Event: All ▾</span><span class="select">Last 7 days ▾</span>')}
+    ${table([['When'], ['Character'], ['Event'], ['Item'], ['Qty', 1], ['Price', 1], ['Plan action'], ['Detail']], [
+      hRow('Fri 14:10', 'Amaya', 'Bought', 'Linen Cloth', 1, 20, 38, '<span class="status-done">✓ done</span>', 'matched "buy ≤ 45c"'),
+      hRow('Fri 09:30', 'Brugan', 'Expired', 'Heavy Leather', 1, 10, 47, '—', 'while cheapest · streak 3'),
+      hRow('Fri 09:20', 'Brugan', 'Bought (vendor)', 'Coarse Thread', 1, 4, 10, '—', 'cost basis +40c'),
+      hRow('Thu 22:05', 'Brugan', 'Sold', 'Mithril Spurs', 3, 1, 44000, '<span class="status-done">✓ done</span>', 'post Thu 18:00 resolved'),
+      hRow('Thu 18:02', 'Brugan', 'Posted', 'Mithril Spurs', 3, 1, 44000, '<span class="status-done">✓ done</span>', '24 h · deposit 1s 20c'),
+      hRow('Thu 12:40', 'Brugan', 'Expired', 'Copper Rod', 1, 5, 4500, '—', 'undercut (scan showed 42s)'),
+      hRow('Wed 20:00', 'Amaya', '—', 'Silk Cloth', 1, 40, 2800, '<span class="status-missed">missed</span>', 'buy slot passed, no purchase'),
+      hRow('Wed 19:15', 'Brugan', 'Bought', 'Iron Ore', 1, 6, 52, '<span class="status-partial">partial 6/10</span>', 'only 6 listed under target'),
+      hRow('Wed 18:30', 'Brugan', 'Crafted', 'Copper Rod', 1, 5, null, '<span class="status-done">✓ done</span>', 'cost 50s (mats)'),
+    ], null)}</div>` },
+
+  Rules: { count: 4, html: () => `
+    <h1>Rules</h1><p class="lede">Items that keep failing to sell, and items you've blacklisted (SPEC §3.3.3, §3.4.2). Rules sync both ways with the addon; the newer change wins.</p>
+    <div class="card"><div class="card-h"><b>Waiting for a decision</b><span class="muted">expired 3× or more in a row while cheapest</span></div>
+    ${table([['Item'], ['Record (30 d)'], ['Last expired'], ['Owned'], ['']], [
+      `<tr><td>${item('Heavy Leather', 1)}</td><td>0 of 3 sold · price −14% · qty ⅛</td><td>Fri 09:30</td><td>10 (Brugan)</td><td><span class="btn">Don't buy or craft</span> <span class="btn">Ignore completely</span> <span class="btn">Keep</span></td></tr>`,
+    ], null)}</div>
+    <div class="card"><div class="card-h"><b>Kept: on a fresh start</b><span class="muted">record reset when you chose Keep; one more expiry while cheapest asks again</span></div>
+    ${table([['Item'], ['Kept'], ['Since then'], ['Status'], ['']], [
+      `<tr><td>${item('Bolt of Linen Cloth', 1)}</td><td>14 Oct 20:15</td><td>1 posted · 1 sold</td><td class="pos">selling again</td><td><span class="btn">Undo</span></td></tr>`,
+      `<tr><td>${item('Medium Leather', 1)}</td><td>15 Oct 18:40</td><td>1 posted · pending</td><td class="amber">watching: next expiry asks again</td><td><span class="btn">Undo</span></td></tr>`,
+    ], null)}</div>
+    <div class="card"><div class="card-h"><b>Blacklist</b><span class="btn primary">+ Add item</span></div>
+    ${table([['Item'], ['Rule'], ['Effect'], ['Set'], ['From'], ['']], [
+      ruleRow('Coarse Stone', 1, "Don't buy or craft", 'owned stock still sold', '12 Oct 21:40', 'addon'),
+      ruleRow('Light Leather', 1, 'Ignore completely', 'no recommendations at all', '10 Oct 19:02', 'dashboard'),
+      ruleRow('Worn Dagger', 0, 'Ignore completely', 'no recommendations at all', '9 Oct 23:15', 'dashboard'),
+    ], null)}</div>` },
+
+  Characters: { count: 2, html: () => `
+    <h1>Characters</h1><p class="lede">Captured by the addon at login and when profession windows open. Each character's gold is its default budget.</p>
+    <div class="grid2">${charCard('Amaya', 'Mage · 38', 'Horde · Grommash (pvp)', 210000, [['Tailoring', 160, 225], ['Enchanting', 142, 225]], 37, 'Fri 13:52')}
+    ${charCard('Brugan', 'Warrior · 34', 'Horde · Grommash (pvp)', 104000, [['Blacksmithing', 112, 150], ['Alchemy', 225, 225]], 24, 'Thu 23:10')}</div>` },
+
+  Status: { count: null, html: () => `
+    <h1>Status</h1><p class="lede">Sync state, data age and anything that needs attention.</p>
+    <div class="alert warn"><b>Gap warning</b><span class="grow">4–6 Oct have day candles only, no hours: AHSync didn't run for 16 days, past Premium's 14 days of hour files (SPEC §2.1). Without Premium, anything older than 7 days would be lost.</span></div>
+    <div class="alert info"><b>Tip</b><span class="grow">Run AHSync at least every 6 days to keep the full hourly history.</span></div>
+    <div class="grid2">
+      <div class="card"><div class="card-h"><b>forever.pvp.horde.us</b><span class="pill ok">up to date</span></div><dl class="kv">
+        <dt>Last hour synced</dt><dd>Fri 14:00</dd><dt>Next check</dt><dd>15:06</dd><dt>History in DB</dt><dd>38 days</dd>
+        <dt>AHF scans (7 d)</dt><dd class="amber">1 · low coverage</dd><dt>Your scans (7 d)</dt><dd>6</dd><dt>Items with prices</dt><dd>8,929</dd></dl></div>
+      <div class="card"><div class="card-h"><b>API</b><span class="pill gold">Premium via contributor</span></div><dl class="kv">
+        <dt>Premium until</dt><dd class="amber">23 Oct · upload scans to extend</dd><dt>History window</dt><dd>90 days</dd><dt>Rate limit</dt><dd>600/min · 3 used</dd>
+        <dt>Live prices</dt><dd class="pos">on · every 15 min</dd><dt>Sales volume</dt><dd class="pos">AHF (real) · estimates kept as fallback</dd><dt>Last 429</dt><dd>never</dd></dl></div>
+      <div class="card"><div class="card-h"><b>Addon link</b></div><dl class="kv">
+        <dt>SavedVariables read</dt><dd>Fri 13:52</dd><dt>Events ingested</dt><dd>until 13:51</dd><dt>Data.lua written</dt><dd>Fri 14:06</dd>
+        <dt>Data.lua size</dt><dd>1.4 MB · 9,104 items</dd><dt>In game</dt><dd class="muted">/reload to load it</dd></dl></div>
+      <div class="card"><div class="card-h"><b>Storage</b></div><dl class="kv">
+        <dt>Database</dt><dd>data/ahsync.db · 46 MB</dd><dt>Retention</dt><dd>90 days</dd><dt>Last prune</dt><dd>Fri 00:10</dd><dt>Last VACUUM</dt><dd>Mon 00:12</dd></dl></div>
+    </div>
+    <h3>Recent problems</h3>
+    <div class="card"><div class="card-h"><b>Last 7 days</b><span class="muted">nothing was lost; each step resumes from its last commit</span></div>
+    ${table([['When'], ['Step'], ['What happened'], ['Result']], [
+      `<tr><td class="muted">Fri 06:02</td><td>Full refresh</td><td>1 item failed: Glimmering Mail Bracers (no price history)</td><td class="amber">item excluded · 9,103 others refreshed</td></tr>`,
+      `<tr><td class="muted">Thu 21:06</td><td>Hourly sync</td><td>AHF returned 503 five times</td><td class="pos">resumed at the next run · no hours lost</td></tr>`,
+      `<tr><td class="muted">Wed 23:40</td><td>SavedVariables</td><td>file unreadable (WoW was writing it)</td><td class="pos">read from AHProfit.lua.bak · all 214 events ingested</td></tr>`,
+      `<tr><td class="muted">Tue 20:15</td><td>In-game scan</td><td>AH closed at 40%</td><td class="muted">kept as partial · not used for sales volume</td></tr>`,
+    ], null)}</div>
+    <h3>Sell-probability calibration</h3>
+    <div class="alert warn"><b>Off target</b><span class="grow">Posts predicted 40–60% actually sold 28% (25 posts). Chances in that range are too optimistic.</span></div>
+    <div class="card"><div class="card-h"><b>Predicted vs actual (last 90 days, 106 resolved posts)</b><span class="muted">Brier score 0.17 · always guessing 50% would score 0.25</span></div>
+    ${table([['Predicted chance'], ['Posts', 1], ['Predicted', 1], ['Actually sold', 1], ['Off by', 1], ['']], [
+      calRow('0–20%', 10, 12, 10), calRow('20–40%', 15, 31, 33), calRow('40–60%', 25, 50, 28),
+      calRow('60–80%', 22, 71, 68), calRow('80–100%', 34, 89, 91),
+    ], null)}</div>` },
+};
+
+function tr(a, n, q, qty, each, e, P, c, ch, spend, note) {
+  return `<tr><td>${act(a)}</td><td>${item(n, q)}${note ? `<span class="sub">${note}</span>` : ''}</td><td class="num">${qty}</td><td class="num">${money(each)}</td><td class="num">${each === null ? money(null) : money(each * qty)}</td><td class="num">${net(e)}</td>${pair(n, P)}<td class="num">${risk(spend)}</td><td>${ch}</td><td><span class="btn">Skip</span></td></tr>`;
+}
+function ahRow(n, q, who, qty, each, costEach, how, deposit, left, position, P) {
+  const profit = Math.round(each * qty * 0.95) - costEach * qty;
+  return `<tr><td>${item(n, q)}</td><td>${who}</td><td class="num">${qty}</td><td class="num">${money(each)}</td><td class="num">${money(each * qty)}</td><td class="num">${paid(costEach)}</td><td class="num">${money(costEach * qty)}<span class="sub">${how}</span></td><td class="num">${money(deposit)}</td><td class="num">${net(profit)}</td><td>${left}</td><td>${position}</td>${pair(n, P)}</tr>`;
+}
+function deRow(n, ilvl, buy, mats, ev, profit, c, age, P) {
+  return `<tr><td>${item(n, 2)}</td><td class="num">${ilvl}</td><td class="num">${money(buy)}</td><td class="muted">${mats}</td><td class="num">${money(ev)}</td><td class="num">${net(profit)}</td>${pair(n, P)}<td class="num">${risk(buy)}</td><td class="num ${age.includes('d') ? 'amber' : ''}">${age}</td></tr>`;
+}
+function crRow(n, q, who, src, crafts, matsEach, value, profit, P, cd, note) {
+  const matsTotal = matsEach === null ? null : matsEach * crafts;
+  const srcColor = src.startsWith('Owned') ? 'pos' : src.startsWith('AH') ? 'amber' : '';
+  return `<tr><td>${item(n, q)}<span class="sub">${note}</span></td><td>${who}</td><td class="${srcColor}">${src}</td><td class="num">${crafts}</td><td class="num">${money(matsEach)}</td><td class="num">${money(matsTotal)}</td><td class="num">${money(value)}</td><td class="num">${net(profit)}</td>${pair(n, P)}<td class="num">${risk(matsTotal || 0)}</td><td>${cd}</td></tr>`;
+}
+function flRow(n, q, qty, buy, sell, slot, why, m, profit, P, c) {
+  return `<tr><td>${item(n, q)}</td><td class="num">${qty}</td><td class="num">${money(buy)}</td><td class="num">${money(buy * qty)}</td><td class="num">${money(sell)}</td><td>${slot}</td><td class="muted">${why}</td><td class="num">${m}%</td><td class="num">${net(profit)}</td>${pair(n, P)}<td class="num">${risk(buy * qty)}</td></tr>`;
+}
+function invRow(n, q, who, where, qty, paidEach, worth, plan, P, windows, sel) {
+  return `<tr${sel ? ' style="outline:2px solid var(--accent);outline-offset:-2px"' : ''}><td>${item(n, q)}</td><td>${who}</td><td class="muted">${where}</td><td class="num">${qty}</td><td class="num">${paid(paidEach)}</td><td class="num">${money(paidEach * qty)}</td><td class="num">${money(worth)}</td><td>${windows}</td>${pair(n, P)}<td>${plan}</td></tr>`;
+}
+function windowRow(rank, when, uplift, strength) {
+  return `<div class="window"><span class="rank">${rank}</span><b>${when}</b><span class="pos">+${uplift}% price</span><span class="muted">${strength}</span></div>`;
+}
+function hRow(when, who, ev, n, q, qty, price, action, detail) {
+  const cls = { Sold: 'pos', Expired: 'neg', Bought: '', Posted: '', Crafted: '' }[ev] || 'muted';
+  return `<tr><td class="muted">${when}</td><td>${who}</td><td class="${cls}">${ev}</td><td>${item(n, q)}</td><td class="num">${qty}</td><td class="num">${money(price)}</td><td>${action}</td><td class="muted">${detail}</td></tr>`;
+}
+function calRow(bucket, n, predicted, actual) {
+  const off = actual - predicted, bad = Math.abs(off) > 15 && n >= 20;
+  const bar = (v, c) => `<div class="bar" style="width:160px"><i style="width:${v}%;background:${c}"></i></div>`;
+  return `<tr><td>${bucket}</td><td class="num">${n}</td><td class="num">${predicted}%</td><td class="num ${bad ? 'neg' : ''}">${actual}%</td><td class="num ${bad ? 'neg' : 'muted'}">${off > 0 ? '+' : ''}${off} pts</td>
+    <td>${bar(predicted, 'var(--muted)')}${bar(actual, bad ? 'var(--neg)' : 'var(--pos)')}</td></tr>`;
+}
+function ruleRow(n, q, rule, effect, set, from) {
+  return `<tr><td>${item(n, q)}</td><td>${rule}</td><td class="muted">${effect}</td><td>${set}</td><td class="muted">${from}</td><td><span class="btn">Clear</span></td></tr>`;
+}
+function charCard(name, cls, where, gold, profs, recipes, seen) {
+  return `<div class="card"><div class="card-h"><b>${name}</b><span class="muted">${cls}</span></div>
+    <dl class="kv"><dt>Realm</dt><dd>${where}</dd><dt>Gold (budget)</dt><dd>${money(gold)}</dd><dt>Known recipes</dt><dd>${recipes}</dd><dt>Last seen</dt><dd>${seen}</dd></dl>
+    ${profs.map(([p, s, m]) => `<div class="prof"><div style="display:flex;justify-content:space-between"><span>${p}</span><span class="muted">${s} / ${m}</span></div><div class="bar"><i style="width:${s / m * 100}%"></i></div></div>`).join('')}
+    <div style="height:10px"></div></div>`;
+}
+function spark() {
+  const pts = Array.from({ length: 60 }, (_, i) => 49 + 6 * Math.sin(i / 4.3) + (i % 14 > 10 ? 5 : 0) + Math.sin(i * 1.7));
+  const lo = 38, hi = 64, W = 300, H = 100;
+  const xy = pts.map((v, i) => `${(i / 59 * W).toFixed(1)},${(H - (v - lo) / (hi - lo) * H).toFixed(1)}`).join(' ');
+  const med = (H - (49 - lo) / (hi - lo) * H).toFixed(1);
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="30-day price">
+    <line x1="0" x2="${W}" y1="${med}" y2="${med}" stroke="var(--muted)" stroke-dasharray="4 3" stroke-width="1"/>
+    <polyline points="${xy}" fill="none" stroke="var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
+}
+function heat() {
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  let out = '<div class="heat"><div class="lbl"></div>' + Array.from({ length: 24 }, (_, h) => `<div class="lbl">${h % 6 ? '' : h}</div>`).join('');
+  days.forEach((d, di) => {
+    out += `<div class="lbl">${d}</div>`;
+    for (let h = 0; h < 24; h++) {
+      const inWindow = (di === 5 && h >= 17 && h <= 20) || (di === 6 && h >= 19 && h <= 21) || (di === 2 && h >= 20 && h <= 21);
+      let r = 1 + 0.04 * Math.sin((h - 14) / 3.8) + (h >= 17 && h <= 21 ? 0.04 : 0) + (di >= 5 ? 0.03 : 0) + (inWindow ? 0.05 : 0);
+      const a = Math.max(0.06, Math.min(1, (r - 0.94) / 0.2));
+      out += `<div style="background:color-mix(in srgb, var(--accent) ${Math.round(a * 100)}%, transparent)${inWindow ? ';outline:1px solid #fff6;outline-offset:-1px' : ''}" title="${d} ${h}:00 score ×${r.toFixed(2)}"></div>`;
+    }
+  });
+  return out + '</div>';
+}
+
+// ---------- tab switching ----------
+const nav = document.getElementById('nav');
+const ORDER = ['Today', 'Week', 'On the AH', 'Disenchant', 'Craft', 'Flip', 'Inventory', 'History', 'Rules', 'Characters', 'Status'];
+ORDER.map(name => [name, PAGES[name]]).forEach(([name, p]) => {
+  const b = document.createElement('button');
+  b.setAttribute('role', 'tab'); b.dataset.page = name;
+  b.innerHTML = `<span>${name}</span>${p.count !== null ? `<span class="count">${p.count}</span>` : ''}`;
+  b.onclick = () => show(name);
+  nav.appendChild(b);
+});
+function show(name) {
+  if (!PAGES[name]) name = 'Today';
+  document.getElementById('main').innerHTML = PAGES[name].html();
+  nav.querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', b.dataset.page === name));
+  try { localStorage.setItem('ahsync-mock-page', name); } catch (e) {}
+}
+let start = 'Today';
+try { start = localStorage.getItem('ahsync-mock-page') || 'Today'; } catch (e) {}
+// dashboard.html#Week opens that page directly.
+show(decodeURIComponent(location.hash.slice(1)) || start);
+</script>
+</body>
+</html>

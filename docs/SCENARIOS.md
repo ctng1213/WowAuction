@@ -1,0 +1,346 @@
+# WowAuction — Scenarios
+
+The named Given / When / Then scenarios for [SPEC.md](SPEC.md) §8. Each one reads in plain numbers a person can check by hand, and its ID is part of its test name.
+
+**This file and the tests must agree** (SPEC §8.1). `tests/test_conventions.py` fails when:
+- an ID listed here has no test;
+- a test names an ID that isn't listed here;
+- an ID appears twice.
+
+Shared engine scenarios live in `tests/scenarios/*.json` (with an `id` field) and are the executable form. When a scenario's numbers change, change the JSON and this table in the same change.
+
+Rules a scenario checks are defined in SPEC.md. When a scenario and the spec disagree, fix one of them. Never leave both.
+
+## Contents
+
+1. [Core scenarios](#1-core-scenarios): volume, sync, failure modes, dashboard security, pricing, sell probability, patterns, recommendations, own record, display, craft sourcing, chains, missed peaks, refresh, confidence, tracking, addon
+2. [Visual tests](#2-visual-tests-ui1ui11) (SPEC §8.4)
+3. [Views and tooltip](#3-views-and-tooltip-d16d22-tt1tt5) (SPEC §8.5)
+4. [Calibration](#4-calibration-k1k3) (SPEC §8.8)
+
+## 1. Core scenarios
+
+**Sales volume** (`engine/volume`), book entries written as `[item, unit price, stack, band, count]`. Books are 2 h apart unless stated otherwise:
+
+| # | Given (prev book → next book) | Then | Shows |
+|---|---|---|---|
+| V1 | Linen 50c ×20 long ×5 → ×3 | sold 40, expired 0 | plain sales: 2 auctions × 20 |
+| V2 | Linen 50c ×20 **short** ×4 → ×0 | sold 0, expired 80 | gone auctions that were about to expire count as expired |
+| V3 | 50c ×20: long ×3 + short ×1 → ×1 | gone 3, expired 1, sold 2 → 40 sold, 20 expired | expired is capped at the short count |
+| V4 | 50c ×20 ×2 → ×5 | sold 0, listed 60 | new listings are not sales |
+| V5 | 50c ×20 ×1 → 45c ×20 ×1 | sold 20, listed 20 | documented error: an undercut repost looks like a sale |
+| V6 | 50c ×20 long ×2 → 50c ×20 medium ×2 | sold 0 | time left ticking down is not a sale (band is not in the group key) |
+| V7 | two stack sizes, 50c ×20 ×2 → ×1 and 50c ×5 ×4 → ×2 | sold 20 + 10 = 30 | units = auctions × stack, summed per item |
+| V8 | books 7h apart | no estimate | gap must be ≤ 6h |
+| V9 | mail: 3 "sold", 1 "expired" for an item estimated 5 sold | calibration factor 0.6 recorded | ground truth from own sales |
+| V10 | AHF quantity 120 → 80 within 2h, no books | upper bound 40, `low confidence` | weakest source is labeled |
+| V11 | Premium volume present + own estimate | Premium used, source = `ahf` | source priority |
+| V12 | 50c ×20 **medium** ×2 → ×0, 2 h apart | expired 40, sold 0 | medium (30 min–2 h) auctions have all run out after 2 h |
+| V13 | 50c ×20 long ×3 → ×0, **5 h** apart | expiring 3 × (5−2)/(8−2) = 1.5 → expired 30, sold 30 | long auctions expire in proportion to the gap |
+| V14 | no key: book estimates only, 40 sold/day for 7 days | sold/day 40, source "estimated" | free path works on its own |
+| V15 | AHF volume 50/day on days 1–20, Premium lapses, estimates 40/day on days 21–30 | 30-day sold/day = (20 × 50 + 10 × 40) ÷ 30 ≈ 46.7; source "20 days AHF, 10 days estimated" | per-day best source |
+| V16 | days with both: AHF 50, estimate 40 (×10 days); then estimate-only days at 40 | factor 1.25; those estimate days count as 50 | AHF calibrates the estimates |
+| V17 | AHF and estimate both present on a day | AHF used for that day; the estimate is still stored | estimates never stop |
+| V18 | item has an AHF factor 1.25 and a mail factor 0.6 | estimate days use 1.25 only | one calibration, AHF preferred |
+
+**Sync and storage** (`sync/catchup`, `store/prune`):
+
+| # | Scenario | Then |
+|---|---|---|
+| S1 | first run, no key | fetches the public d1 file + every h1 hour ≤ `sealed.h1` within 7 days, nothing beyond `sealed.h1` |
+| S2 | crash after hour 37 of 112, restart | resumes at hour 38; no duplicate rows |
+| S3 | last run 10 days ago, no key | hours 8–10 days old are reported lost (no public day candles cover them either); no request for them; status warning |
+| S4 | same gap with Premium | days 8–10 come from `h1c` using `caps.h1[day]` |
+| S5 | 429 with `Retry-After: 60` | waits 60 s on the fake clock, retries, succeeds |
+| S6 | rows 89d23h and 90d01h old | prune keeps the first and deletes the second |
+| S7 | AHF row and local scan for the same item | `cur` uses the newer one and keeps its `src` |
+| S8 | API key in config | key never appears in logs, URLs or exceptions |
+| S9 | an AHF close of 50c and a local close of 48c for the same item and hour | statistics see one close for that hour: 48c |
+| S10 | SavedVariables being rewritten (modification time changed 1 s ago) | not parsed until it has been unchanged for 2 s |
+| S11 | `/me` lost `depth`, `prices.live` and `historyDays 90` since the last run | no requests for Premium files; the snapshot replaces the live table; Status shows "Premium ended 23 Oct"; the run completes normally |
+
+**Failure modes** (§5.2). Faults are injected deterministically by the fakes:
+
+| # | Scenario | Then |
+|---|---|---|
+| FM1 | 503 on hour 40, five times in a row | backoff 1, 2, 4, 8, 16 s on the fake clock; run ends; `sync_state` = hour 39; the next run starts at 40 |
+| FM2 | hour 41's file cut off at 60% | not committed; logged; refetched next run |
+| FM3 | the same hour bad 3 runs in a row | Status "bad file: hour 41"; later hours still sync |
+| FM4 | the snapshot has a renamed field | snapshot disabled this run; last good `current` kept; Status "AHF format changed: snapshot" |
+| FM5 | Linen `cur` 1 c while `p10_30` is 30 c | flagged suspect; no buy recommendation from it; a second observation at 1 c clears the flag |
+| FM6 | crash after committing hour 37 of 112 | restart resumes at 38; no duplicates (as S2) |
+| FM7 | crash halfway through a full refresh | on restart, the staging tables are dropped; the old `item_stats` and plan are still served; the refresh re-runs |
+| FM8 | one item's stats raise an error | that item is excluded and listed on Status; all others refreshed |
+| FM9 | disk full on the 3rd write of a refresh | no partial tables; Status error; old numbers served |
+| FM10 | `quick_check` fails on start | restored from the newest backup; hours after it are re-fetched where available; Status says what was restored |
+| FM11 | SavedVariables ends mid-table | not ingested; `.bak` parsed instead; `ingestedUntil` unchanged |
+| FM12 | the same SavedVariables ingested twice | event ids dedupe; counts unchanged |
+| FM13 | SavedVariables format version newer than AHSync | not ingested; "Update AHSync" |
+| FM14 | `Data.lua` rename fails 3 times | old `Data.lua` kept; Status warning |
+| FM15 | second AHSync start | exits: "AHSync is already running" |
+| FM16 | `config.toml` has `retention_days = "ninety"` | refuses to start: "config.toml line 4: retention_days must be a number" |
+| FM17 | `Data.lua` format version differs from the addon's | empty state plus "versions differ"; no Lua error |
+| FM18 | `basedOnUntil` is older than your last buy | that buy's action shows done locally; plan labelled provisional |
+| FM19 | AH closed at 40% of a full scan | saved as partial (coverage 40%); excluded from volume diffs |
+| FM20 | buy hook fires, then "not enough gold" | an attempt only; it expires after 1 h; no cost basis change |
+| FM21 | crash before logout; at the next login 20 Linen are missing from bags | recorded as an untracked change; no invented sale or cost |
+| FM22 | SavedVariables at its cap with 5 un-ingested full scans | the oldest scan is dropped; all events kept; warning shown |
+| FM23 | migration from SavedVariables v1 to v2 fails halfway | v1 data untouched; error shown; nothing deleted |
+| FM24 | AH closed with 6 of 10 searches still queued | queue dropped; the 6 unsearched targets keep their last price and show "…", not "✗ gone"; the queue is rebuilt on the next AH open |
+
+**Dashboard security** (`web/server`, §3.5):
+
+| # | Scenario | Then |
+|---|---|---|
+| SEC1 | `POST /api/skip` with the right token and `Origin: http://127.0.0.1:8765` | accepted; the action is skipped |
+| SEC2 | the same request with `Origin: https://evil.example` | `403`; nothing changed; logged without the token |
+| SEC3 | the same request with no `X-AHSync-Token` | `403`; nothing changed |
+| SEC4 | any request with `Host: evil.example:8765` (DNS rebinding) | `403`; no data in the response |
+| SEC5 | `GET /api/skip?id=…` | `405`; nothing changed |
+| SEC6 | every response in the suite | no `Access-Control-Allow-Origin` header; the API key never appears |
+| SEC7 | AHSync restarts | a new token; a page loaded before the restart gets `403` on its next write and asks you to reload |
+
+**Pricing and probability** (`engine/prices`, `profile`, `sellprob`, `fees`):
+
+| # | Scenario | Then |
+|---|---|---|
+| P1 | hourly closes 1,2,3,…,9 g | `med7` = 5 g |
+| P2 | only 2 hourly closes but 7 daily closes | median falls back to daily (fewer than 24 hourly closes) |
+| P3 | Saturday 18:00 UTC prices consistently 20% above `med30` for 4 weeks | `how[Sat][18]` ≈ 1.2, confidence high |
+| P4 | the same pattern but only 1 week of data | weekday-only fallback, confidence low |
+| P5 | sell 20 at faction AH for 1 g each, `P` = 1 | E = 20 g × 0.95 = 19 g; the deposit is refunded |
+| P6 | sells 120/day (flat profile), post 20 now (8 h window), 10 units ahead (very long band), no new listings, no tier history | demand 40; the ahead units take 10; you get 30 → P = 1 |
+| P7 | sells 2/week, you post 1 now, flat profile, nothing ahead | demand 2/7 ÷ 3 ≈ 0.095 → P ≈ 0.10 |
+| P8 | no volume data | `P` = 0.25 (`default_sell_prob`), flagged `volume unknown` |
+| P9 | as P5 but `P` = 0.5, vendor sell 5 s, deposit 15 s, no DE | E = 0.5 × 19 g + 0.5 × (20 × 5 s − 15 s) = 9 g 92 s 50 c |
+| P10 | hourly closes 1, 2, 3, 4 g; then 1 c, 2 c | median 2 g 50 s; median 1 c (floor of 1.5) |
+| P11 | time 345600000 ms (1970-01-05 00:00 UTC) | weekday 0 (Monday), hour 0 |
+
+**Sell probability with full (Premium) data** (`sellprob.simulate`, `sellprob.blend`). Common inputs: `S` = 24/day with a flat profile (1 unit per hour), post now (8-hour window), no tier history unless stated:
+
+| # | Scenario | Then |
+|---|---|---|
+| P12 | post 5; 6 units ahead in the **long** band (midpoint 5 h); no new listings | hours 0–4: buyers take 5 of the 6, and the last one expires; hours 5–7 give you 3 → P = 3/5 = 0.60. The old formula gave (8 − 6)/5 = 0.40, because it ignored that competitor expiring |
+| P13 | the same 6 units in the **very long** band | hours 0–5 go to them; hours 6–7 give you 2 → P = 0.40, the same as the old formula |
+| P14 | P12, plus `L × u` = 12/day (0.5 undercut units each hour) | hours 0–4: 0.5 to the undercutters and 0.5 to the old six each hour (3.5 then expire); hours 5–7: 0.5 to the undercutters and 0.5 to you → 1.5/5 → P = 0.30 |
+| P15 | P12's queue (0.60) plus tier T1 history: 24 of 30 sold (0.80) | e = 0.5 → P = 0.5 × 0.60 + 0.5 × 0.80 = 0.70 |
+| P16 | the same with only 15 auctions of history | e = 0.25 → P = 0.75 × 0.60 + 0.25 × 0.80 = 0.65 |
+| P17 | S = 30/day, X = 10/day, 93 units on the AH | market sell-through 75%; 3.1 days of supply |
+| P18 | no book; `cur` 50 c, `curQty` 8; you post at 49 c | nothing ahead (you are below `cur`) |
+| P19 | no book; you post at 50 c | 8 units ahead, available all window |
+| P20 | new listings in the last 7 days: 40% priced at or below the then-lowest price; you post at the lowest | `u = 0.4` |
+| P21 | S = 24/day; profile: 06:00–09:00 at 1.0, 10:00–13:00 at 0.5, 14:00–17:00 at 2.0; post 10 at **06:00**, nothing ahead | demand 4 × 1.0 + 4 × 0.5 = 6 → P = 0.60 |
+| P22 | the same item posted at **10:00** | demand 4 × 0.5 + 4 × 2.0 = 10 → P = 1.00. The same post is worth more at 10:00, because its window catches the 14:00 rush |
+| P23 | Week plan: target window Sat 17:00–21:00, best hour 18:00 | post Sat 10:00; chance window Sat 10:00–20:59 (11 h); the auction is 12 h, the shortest covering it |
+| P24 | a flip bought now, to sell in the Sat 17:00–21:00 window | its sale uses the Sat 10:00–20:59 window, not the next 8 hours |
+
+**Weekly patterns** (`patterns`):
+
+| # | Scenario | Then |
+|---|---|---|
+| W1 | flat demand; `how` = 1.15 on Tue 18–20, 1.12 on Wed 19–21, 1.00 elsewhere | threshold 0.9 × 1.15 = 1.035 → windows "Tue 18:00–21:00" (sum 3.45), then "Wed 19:00–22:00" (sum 3.36) |
+| W2 | as W1, but Tue 18–20 `sales_how` = 0.4 while Wed 19–21 is the busiest (1.0) | Tue scores 1.15 × 0.4 = 0.46 and is dropped; the top window is Wed 19:00–22:00 (high price with no buyers loses) |
+| W3 | Sun 23:00–Mon 01:00 all qualify | one window "Sun 23:00–Mon 02:00" (crosses midnight) |
+| W4 | a slot has values 1.0 (this week), 1.0 (1 week ago), 1.2 (4 weeks ago); half-life 4 | weights 1, 0.84, 0.5; the weighted median is 1.0 |
+| W5 | the top window has 2 weeks of data | labelled "early pattern"; confidence low |
+| W6 | 7 weeks of data | "established"; confidence high |
+| W7 | no slot data at all | no windows; "Best time to sell: —"; the plan posts now |
+
+**Recommendations** (`engine/disenchant`, `craft`, `plan`):
+
+| # | Scenario | Then |
+|---|---|---|
+| R1 | green ilvl 25 armor at 8 s; DE table gives 2.5 Strange Dust avg; dust posts at 6 s and sells 200/day (`P` = 1) | EV = 2.5 × 6 s × 0.95 = 14 s 25 c; profit = 6 s 25 c; listed |
+| R2 | the same item, but no character has the Enchanting skill | not listed |
+| R3 | recipe: 2 Copper Bar (AH 10 s) → Copper Rod (posts at 40 s, `P` = 1) | profit = 40 s × 0.95 − 20 s = 18 s |
+| R4 | the same recipe with Copper Bars in your bags | owned mats priced at their hold value (opportunity cost), not free |
+| R5 | a vendor sells the reagent cheaper than the AH | the vendor price is used |
+| R6 | you own 200 Linen; it sells 40/day; Saturday is the peak | plan spreads posts over days, ≤ the daily cap, Saturday preferred |
+| R7 | the DE value of an owned green beats its AH sale | plan says disenchant, with the character who can |
+| R8 | a flip candidate has a 25% margin but `P(sell)` is 0.1 | ranked below a 10% margin with `P` 0.9 |
+| R9 | budget 50 g | plan buys stay ≤ 50 g |
+| R10 | a soulbound item in your bags | not in the sell plan |
+| R11 | Main and Alt are both Blacksmiths; only Alt knows the recipe | the craft row names Alt; Main is never suggested |
+| R12 | the lowest listing (50 c) is your own; the next is 55 c; `med7` 60 c | post price 54 c: you don't undercut yourself |
+| R13 | a flip at 10 s with `P` = 0.5, posting at 30 s, vendor sell 1 s, deposit 1 s | E = 0.5 × 28 s 50 c + 0.5 × (1 s − 1 s) = 14 s 25 c; profit 4 s 25 c; still listed only if ≥ 20% margin (it is: 42.5%) |
+| R14 | you own 200 Linen in stacks of 20; it sells 40/day; 8 h window; `max_market_share` 0.5 | window cap = max(1 stack = 20, floor(40 × 8 ÷ 24 × 0.5) = 6) = 20 units; daily cap floor(40 × 0.5) = 20; the rest is spread over later windows |
+
+**Own sell record and rules** (`engine/record`, `sellprob`, `rules`), with `k` = 4 and `struggle_streak` = 3:
+
+| # | Scenario | Then |
+|---|---|---|
+| O1 | model `P` = 0.8; your record: 0 sold, 3 expired | P' = (4 × 0.8 + 0) / (4 + 0 + 3) = 3.2 / 7 ≈ 0.457; the row shows "P 80% → 46%" |
+| O2 | no posts of the item in 30 days | P' = P; no record line shown |
+| O3 | streak 2; the plan would post 8 stacks | 8 × 0.5² = 2 stacks |
+| O4 | streak 1; the plan would post 1 stack | still 1 stack (minimum) |
+| O5 | streak 3 | flagged "not selling": not in flips or craft-to-sell; owned stock still planned; Blacklist offered |
+| O6 | expired, expired, then sold | streak 0; quantity back to normal |
+| O7 | 3 expiries, all 31 days ago | ignored: s = x = 0, streak 0 |
+| O8 | rule `no_buy` on an item you also own | no buy, craft or DE-buy rows; owned stock still in the sell plan |
+| O9 | rule `ignore` | in no recommendation; tooltip prices still shown |
+| O10 | addon sets `no_buy` at T+2h; dashboard cleared it at T+1h | `no_buy` wins (newer) |
+| O11 | your post at 50 c expired; a scan during its lifetime showed 47 c by someone else | cause `undercut`; streak unchanged; next post capped at `curOthers − 1` |
+| O12 | 2 expiries in a row while cheapest; planned price 50 c | price 50 × 0.95² = 45.125 → 45 c; quantity × 0.5² = ¼ |
+| O13 | as O12, but vendor sell 44 c and no DE | floor = ceil(44 / 0.95) = 47 c, so the price is 47 c, not 45 c |
+| O14 | an expiry with no observations during the post | cause `unknown`; counted like `lowest` |
+| O15 | streak 3, you choose Keep | s = x = streak = 0 from that moment; P' = P; quantity and price back to normal; no flag |
+| O16 | after Keep, the next post expires while cheapest | flagged "not selling" again (`keep_retry_streak` = 1); Blacklist / Keep offered |
+| O17 | after Keep, the next post is undercut and expires | not flagged (undercut doesn't count); next post capped at `curOthers − 1` |
+| O18 | the addon set `no_buy` at T; the dashboard clears it at T+2h | stored as `none` at T+2h, which beats `no_buy`; `Data.lua` carries the `none`, and the addon drops its rule |
+
+**Display, ordering and risk** (`engine/plan`, `rules`):
+
+| # | Scenario | Then |
+|---|---|---|
+| D1 | Today rows with expected net 5 s (P' 0.9), 20 s (P' 0.3), 10 s (P' 0.6); `min_sell_prob` 0.5 | shown: 10 s, then 5 s; footer "1 hidden" |
+| D2 | the same rows with the filter set to 0 | order 20 s, 10 s, 5 s |
+| D3 | buy 20 at 25 s; your characters hold 50 g in total | each 25 s, total 5 g, risk 10.0% |
+| D4 | post 10 with a 15 s deposit; 50 g in total | risk 0.3% |
+| D5 | buy with risk 30% | risk shown amber (> 25%) |
+| D6 | craft 3 × Copper Rod (2 Copper Bar each); you own 0 bars; AH 10 s each | craft each 20 s, total 60 s |
+| D7 | the same, but you own 6 bars | craft each "—", note "uses 6 owned Copper Bar"; profit still counts their hold value |
+| D8 | the same, but you own 4 bars | total 20 s (2 bars to buy); each shown as 6 s 67 c (20 s ÷ 3) |
+| D9 | now Fri 14:00; a craft planned Thu 18:00 (day 7) | its post falls before the window ends (next Fri 14:00), or the craft is not planned |
+| D10 | a craft for right now (B) | a linked post appears in Week within 7 days |
+| D11 | it is Fri 14:30 | the Week starts Fri (today) and ends Thu; the 14:10 buy shows done |
+| D12 | Linen's best slot is Sat 18:00 | the post action is Sat 10:00, labelled "for the 18:00 peak"; the duration covers 18:00 |
+| D13 | it is Fri 14:30; the best window is Fri 18:00–21:00 with its best hour 19:00 | the post is planned for now (14:30), since 11:00 has passed; chance window Fri 14:00–20:59 (the current hour counts in full; it runs to the end of the selling window) |
+| D14 | a craft whose product peaks Thu 19:00 | the post is Thu 11:00, so the craft is planned before 11:00 |
+| D19 | Fri 14:10: buy 20 Linen at 38 c (net +2 s 10 c); its follow-up post is Sat 10:00 | the post shows "profit counted on the Fri 14:10 buy" and adds 0; the week total counts 2 s 10 c once |
+| D20 | the same chain on Sat, when Fri has left the rolling week; post `E_post` 8 s 55 c (20 × 45 c × 0.95, `P` = 1); paid 7 s 60 c | the post carries its own net: +95 c |
+| D21 | post 5 Linen you looted, at 45 c, `P` = 1 | net = 5 × 45 c × 0.95 − 0 = 213.75 c, shown +2 s 14 c |
+| D22 | a craft with 2 mat buys and 1 mail step feeding it | the mat buys and the mail show no net ("for …"); the craft carries the chain's profit |
+
+**Craft sourcing** (`engine/craft`, `plan`). Recipe: 2 Copper Bar → Copper Rod, which posts at 40 s with `P` = 1:
+
+| # | Scenario | Then |
+|---|---|---|
+| C1 | you own 6 bars (hold value 9 s 50 c each: posting now is their best option); AH bars 10 s | Source Owned; 3 crafts; mat gold "—"; profit per craft 38 s − 19 s = 19 s |
+| C2 | you own no bars; AH has 6 at 10 s | Source AH; 3 crafts; mat gold 20 s each, 60 s total; profit per craft 38 s − 20 s = 18 s |
+| C3 | you own 4 bars; AH has 2 at 10 s | Source Mixed; 3 crafts; mat gold 20 s total; note "4 owned · 2 bought" |
+| C4 | you own 4 bars whose hold value is 12 s (their Sat peak); AH bars 10 s | the AH is cheaper than your stock's hold value, so it buys 6 from the AH (Source AH) and your 4 bars stay in the sell plan for Sat |
+| C5 | AH book: 2 bars at 10 s, 2 at 15 s, 2 at 25 s | craft 1 profit 18 s, craft 2: 38 − 30 = 8 s, craft 3: 38 − 50 = −12 s → 2 crafts |
+| C6 | a mat has no AH listing, no vendor and none owned | not craftable; listed as "missing: 2 Copper Bar" only if one craft short |
+| C7 | the Week plans an AH-sourced craft at Fri 20:30 | a linked "buy 8 Silk Cloth" action at or before 20:30; then the craft; then the post |
+| C8 | the mat buy from C7 bought only 4 of 8 | the craft is re-planned for 1 craft instead of 2 |
+| C16 | you own 6 bars; posting now is worth 9 s 50 c each, their Sat peak 11 s each; the AH has no bars | hold value 11 s (the sell plan's best option); profit per craft 38 s − 22 s = 16 s, not 19 s; Source Owned |
+
+**Crafting chains.** Runed Copper Rod (Enchanting, Amaya) needs 1 Copper Rod + 1 Strange Dust + 1 Lesser Magic Essence. Copper Rod (Blacksmithing, Brugan) needs 2 Copper Bar:
+
+| # | Scenario | Then |
+|---|---|---|
+| C9 | AH: Copper Rod 41 s, Copper Bar 10 s; you own none | Copper Rod costs 20 s crafted vs 41 s bought → crafted; Source "AH + crafted"; chain: buy 2 bars → Brugan crafts → mail to Amaya → Amaya crafts |
+| C10 | same, but an AH Copper Rod costs 15 s | buy the rod (15 s < 20 s); no chain; no mail |
+| C11 | Amaya also knew Blacksmithing | no mail step; Amaya does both crafts |
+| C12 | a chain 4 steps deep; `max_craft_depth` 3 | the 4th level is not crafted; that reagent comes from owned / AH / vendor or the recipe is not craftable |
+| C13 | recipe A uses B and recipe B uses A | the loop is not followed; each is sourced without the other |
+| C14 | Brugan crafted the Copper Rod but the mail step was missed | the rod is owned stock on Brugan; the next run re-plans "mail to Amaya" and the final craft |
+| C15 | the Copper Rod cost 20 s to craft; the Runed Copper Rod sells for 59 s, with 7 s Strange Dust and 10 s Essence | profit is counted once on the final product: 59 × 0.95 − (20 + 7 + 10) = 19 s 5 c |
+
+**Missed peaks** (`plan.replan_missed`). Item windows: Tue, Wed and Thu 20:00–23:00. Original peak Tue with `E_orig` = 10 s. `min_sell_prob` 0.5, tolerance 10%, week starts Mon:
+
+| # | Scenario | Then |
+|---|---|---|
+| M1 | Tue window ended, no post; Wed E = 9 s 50 c (95% of 10 s), P' 0.88 | moved to Wed: "Missed Tue peak → Wed 20:00–23:00 (−5%, 88% chance)"; post Wed 12:00 |
+| M2 | Wed missed too; Thu E = 8 s (80% of the original) | hold: "Missed Tue and Wed; Thu is 20% below → hold until next week's best peak" |
+| M3 | Tue 10 s, Wed 9 s 20 c (92%) missed, Thu 8 s 60 c (86% of Tue, though 93% of Wed) | hold: always compared with the original Tue, never with Wed |
+| M4 | Wed is 96% of the original but P' 0.40 | Wed fails "likely to sell"; Thu is checked next |
+| M5 | Wed passes on price and chance, but `E` is below the vendor value | fails "still worth it"; next window, or hold |
+| M6 | Mon 00:00 of the next week, item on hold | fresh slate: the anchor is the new week's best window; the misses stay in History only |
+| M7 | Tue 18:00, the post time (12:00) passed, but the window (20:00–23:00) hasn't started | "post now (late)"; not missed; chance over 18:00–22:59 |
+
+**Refresh model** (`refresh.refresh_all`, `refresh.update_items`, `sellprob.from_curve`):
+
+| # | Scenario | Then |
+|---|---|---|
+| IU1 | you buy 20 Linen Cloth (SavedVariables changes) | only Linen is dirty; its options and plan rows are recomputed; other items' rows are untouched; history reads = 0 (counted by a fake `db`) |
+| IU2 | a new hourly AHF file arrives | stored; `item_stats`, plan and `Data.lua` unchanged; "prices newer than numbers" flag set |
+| IU3 | `daily_refresh_time` 06:00 passes while AHSync runs | one full refresh on the next timer tick; none again until the next day |
+| IU4 | "Refresh now" pressed twice within a second | one full refresh (the second request is merged in) |
+| IU5 | the curve row for the current hour has P(2 ahead) = 0.90 and P(5 ahead) = 0.78; 3 units are now ahead | P = 0.90 − 0.12 × (1 ÷ 3) = 0.86, in both Python and Lua |
+| IU6 | an in-game scan changes Silk Cloth's price | only Silk Cloth and the crafts that use it are recomputed |
+| IU7 | idle for 10 minutes, no file change | no engine call; one SavedVariables stat every 5 s |
+| IU8 | refresh at 06:00; it is now 20:00; the 06:00 row gives P(0 ahead) = 0.40 and the 20:00 row 0.85 (evening buyers) | P = 0.85: the current hour's row, in both Python and Lua |
+| IU9 | refresh at 06:00 Fri; it is 08:00 Sat with no refresh since | the 08:00 row from Fri is reused; the age badge is amber (over 24 h) |
+| IU10 | a pending buy's slot passes 24 h while AHSync idles with no file change | the :00 status pass marks it missed; history reads = 0; no simulation; `Data.lua` rewritten |
+
+**Confidence percentage** (`confidence.score`):
+
+| # | Scenario | Then |
+|---|---|---|
+| CF1 | n = 60, 7 days of AHF volume, book 1 h old, pattern 7 weeks, tier n = 30 (planned post) | every component 1.0 → 100% |
+| CF2 | n = 15, estimated volume, book 12 h old, pattern 0 weeks, no tier history (planned post) | 0.25×0.25 + 0.30×0.7 + 0.15×0.5 + 0 + 0 = 0.3475 ÷ 1.00 → 35% (low) |
+| CF3 | the CF2 inputs when posting now (no pattern component) | 0.3475 ÷ 0.85 = 0.409 → 41% (low) |
+| CF4 | 4 days of AHF volume + 3 days estimated, other components 1.0, posting now | volume (4 × 1.0 + 3 × 0.7) ÷ 7 = 0.871; conf = (0.25 + 0.30 × 0.871 + 0.15 + 0.15) ÷ 0.85 = 0.955 → 95% (high) |
+
+**Tracking** (`engine/tracking`):
+
+| # | Scenario | Then |
+|---|---|---|
+| T1 | pending action: buy 20 Linen at ≤ 45 c; you buy 20 at 40 c | action done; cost basis 20 × 40 c = 8 s; its sell action stays planned |
+| T2 | the same action; you buy 10 | partial, done_qty 10 |
+| T3 | the same action; you buy 20 at 50 c | no match (above the planned price); purchase recorded, cost basis updated |
+| T4 | two pending posts of 20 Linen (Mon, Tue); one "expired" mail for 20 Linen | Monday's post resolves as expired; streak +1 |
+| T5 | a sold invoice for 20 Linen at 48 c | the oldest pending post at 48 c ×20 resolves as sold; streak 0 |
+| T6 | a buy action 25 h past its slot with no match | missed |
+| T7 | you hold 20 Linen bought at 40 c; best option now is posting at 35 c | the plan says post at 35 c, flagged "below what you paid" |
+| T8 | you bought through the default AH UI, not AHProfit | still captured by the hook and matched like any other buy |
+| T9 | 10 Copper Bar found (cost 0) + 10 bought at 10 s | cost basis 100 s ÷ 20 = 5 s each |
+| T10 | craft 1 Copper Rod from 2 of those bars, then post it at 41 s | craft cost 10 s; On the AH shows cost 10 s, profit if sold 41 × 0.95 − 10 = 28 s 95 c |
+| T11 | post 5 Linen you looted | On the AH shows cost 0 |
+| T12 | an item held before tracking started | cost 0, labelled "before tracking" |
+| T13 | mail 10 bought Linen from Amaya to Brugan | cost basis unchanged (account-wide) |
+| T14 | a post action for the Tue 20:00–23:00 window (post time 12:00); it is Tue 18:00 and nothing is posted | `late`: "post now (late)" |
+| T15 | the same action at Wed 00:00, still not posted | `missed`; the missed-peak re-plan runs (M1) |
+| T16 | the same action; you post at Tue 21:30 | matches the late action → `done` |
+
+**Addon** (Lua, `tests/addon/...`): every scenario for a ported module (`fees`, `sellprob`, `disenchant`, `craft`; see §5) must pass on the Lua port with identical numbers. Volume (V*) and tracking (T*) scenarios run in Python only. Plus:
+
+- the SavedVariables round-trip (`ingest/savedvars` parses what `Capture/*` writes)
+- live re-rank: a search result that changes a price re-orders the list and drops targets that are gone
+- `Data.lua` loads in Lua 5.1 without hitting the constant limit for 20k items
+- `Data.lua` with `ingestedUntil` = T removes scans and mail at or before T from SavedVariables, and keeps later ones
+- an engine error raised during a re-rank is caught at the UI boundary and shown as a status line
+
+## 2. Visual tests (UI1–UI11)
+
+Layers and tooling: SPEC §8.4.
+
+| # | Scenario (fixture `Data.lua`) | Then |
+|---|---|---|
+| UI1 | Today tab, 12 mixed actions | 12 rows sorted by expected net; each and total both shown; net values coloured; footer totals correct |
+| UI2 | 40 actions | 12 visible, scroll bar shown, nothing drawn outside the list |
+| UI3 | item "Scouting Gloves of the Monkey" in a narrow column | truncated with "…"; no overflow |
+| UI4 | no `Data.lua` | empty state "Run AHSync, then /reload"; no rows |
+| UI5 | data 30 h old | age badge amber |
+| UI6 | an item flagged "not selling" | NOT SELLING label, record line, Blacklist and Keep buttons inside the row |
+| UI7 | AH panel: 5 targets, 2 found, 1 gone, 2 checking | ✓ / ✗ / … states; "3 of 5"; panel docked to the AH frame's right edge |
+| UI8 | tooltip for a disenchantable item | header + 6 label/value lines in the spec order; deltas vs current 8s: historical 11s → +38%, disenchant 14s 25c → +78%, best 12s 30c → +54%, none wider than 320 px; without an enchanter, the Disenchant value line is left out |
+| UI9 | window at its minimum size, 560 × 360 | layout checks pass; no overlaps |
+| UI10 | Today with 1 row below the "Min chance" filter and 1 "not selling" item | sorted by net; footer "1 hidden"; Needs a decision section at the bottom |
+| UI11 | Craft tab with one recipe fully covered by owned mats | its each and total show "—" |
+
+## 3. Views and tooltip (D16–D22, TT1–TT5)
+
+D19–D22 are listed with the display scenarios in section 1.
+
+| # | Scenario | Then |
+|---|---|---|
+| D16 | Today rows with net 10 s, 5 s, 5 s (P' 0.8 and 0.9) | order 10 s, then the 5 s with P' 0.9, then the other 5 s; footer total 20 s |
+| D17 | a Week day with actions +8 s 30 c, +1 g 10 s and −20 c | day total +1 g 18 s 10 c; the category and character totals add up to the week total |
+| D18 | On the AH rows from T9–T11 | the listed, cost, profit and deposit tiles equal the sums of their columns |
+| TT1 | current 8 s, med30 11 s, DE 14 s 25 c, best 12 s 30 c | deltas +38%, +78%, +54% |
+| TT2 | current 10 s, historical 9 s | −10%, shown red |
+| TT3 | no current price | values shown, no deltas |
+| TT4 | no character can disenchant it | no Disenchant value line |
+| TT5 | delta exactly +12.5% | +13% (half up) |
+
+## 4. Calibration (K1–K3)
+
+Rules: SPEC §8.8.
+
+| # | Scenario | Then |
+|---|---|---|
+| K1 | 10 posts predicted 0.8, 8 sold | bucket 80–100%: predicted 80%, actual 80%; Brier = (8 × 0.04 + 2 × 0.64) ÷ 10 = 0.16 |
+| K2 | 25 posts predicted 0.5, 7 sold | bucket 40–60% actual 28%; warning raised (off by 22 points, ≥ 20 posts) |
+| K3 | 5 posts predicted 0.5, 0 sold | no warning (fewer than 20 posts) |
