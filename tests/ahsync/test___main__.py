@@ -321,3 +321,15 @@ def test_refresh_requests_merge_until_taken():
     requests.request_refresh()
     requests.request_refresh()                         # pressed twice: one refresh (IU4)
     assert requests.take() is True and requests.take() is False
+
+
+def test_refresh_requests_merge_and_a_take_consumes_exactly_one():
+    import threading as _threading
+    requests = RefreshRequests()
+    assert requests.take() is False
+    workers = [_threading.Thread(target=requests.request_refresh) for _ in range(20)]
+    for w in workers:
+        w.start()
+    for w in workers:
+        w.join()
+    assert requests.take() is True and requests.take() is False

@@ -378,3 +378,53 @@ def test_live_server_reads_what_the_main_connection_published(live, tmp_path):
 def test_new_tokens_are_long_and_different():
     tokens = {new_token() for _ in range(5)}
     assert len(tokens) == 5 and all(len(t) >= 40 for t in tokens)
+
+
+# ---------------------------------------------------------------- robustness (security review)
+
+def test_FM28_a_stalled_client_blocks_neither_other_requests_nor_stopping(tmp_path, refreshes):
+    import socket
+    import time
+    Database.open(tmp_path / "ahsync.db", FakeClock().now_ms(), None).close()
+    server_db = open_server_db(tmp_path / "ahsync.db")
+    app = DashboardApp(server_db, Config(markets=(M,)), FakeClock(), refreshes, token=new_token(), port=0)
+    server = start_dashboard(app, 0)
+    stalled = socket.create_connection(("127.0.0.1", app.port))
+    stalled.sendall(b"GET / HTTP/1.1\r\n")                # half a request, then silence
+    started = time.monotonic()
+    reply = send(app, "GET", "/api/markets", {"Host": f"127.0.0.1:{app.port}"})
+    assert reply.status == 200 and time.monotonic() - started < 2
+    started = time.monotonic()
+    stop_dashboard(server)
+    assert time.monotonic() - started < 2
+    stalled.close()
+    server_db.close()
+
+
+def test_FM29_a_corrupt_stored_page_is_a_503_not_a_dropped_connection(app, db):
+    with db.transaction():
+        db.conn.execute("INSERT INTO views(page, market, body, built) VALUES ('craft', ?, '{not json', 1)", (M,))
+    reply = app.handle("GET", "/api/views/craft", GOOD, b"")
+    assert reply.status == 503 and json.loads(reply.body) == {"error": "bad_view"}
+
+
+def test_preflight_and_head_get_no_cors_and_keep_the_safety_headers(live):
+    import http.client
+    for method in ("OPTIONS", "HEAD"):
+        conn = http.client.HTTPConnection("127.0.0.1", live.port, timeout=5)
+        conn.request(method, "/api/skip", headers={"Host": f"127.0.0.1:{live.port}",
+                                                     "Origin": "https://evil.example",
+                                                     "Access-Control-Request-Method": "POST"})
+        reply = conn.getresponse()
+        reply.read()
+        headers = {k.lower(): v for k, v in reply.getheaders()}
+        conn.close()
+        assert reply.status in (405, 501)
+        assert not any(k.startswith("access-control-") for k in headers)
+        assert headers.get("x-content-type-options") == "nosniff" and headers.get("cache-control") == "no-store"
+        assert headers.get("server") == "AHSync"
+
+
+def test_an_oversized_body_is_refused(live):
+    reply = live_write(live, "/api/skip", {"action_id": "x" * 5000})
+    assert reply.status == 413

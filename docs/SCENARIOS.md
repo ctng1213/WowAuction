@@ -91,6 +91,8 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | FM25 | the key is expired: `/files` returns 401 with the key and 200 without it | the run continues on the free path; Status "API key rejected"; no traceback, no key in the log |
 | FM26 | a 10-day gap with Premium; h1c returns 403 from the first h1c hour | h1c disabled after that request; no further h1c requests; those hours reported lost (or day-only where d1c covers them); public h1 hours still sync |
 | FM27 | AHF renames a field in the hour candle files | "AHF format changed: h1" on Status; the hour loop stops; `last_hour` unchanged; no "bad file" rows; after the parser is fixed, the next run fetches those hours |
+| FM28 | a client opens a dashboard connection and sends only half a request line | other requests are still answered at once; the stalled connection is dropped after 10 s; stopping AHSync doesn't wait for it |
+| FM29 | the stored Craft page is corrupt (not valid JSON) | `GET /api/views/craft` answers `503 {"error": "bad_view"}` and logs it; the connection is not dropped; the next full refresh replaces it |
 
 **Dashboard security** (`web/server`, §3.5):
 

@@ -227,20 +227,22 @@ class RefreshRequests:
 
     def __init__(self) -> None:
         """Start with nothing requested."""
-        self._event = threading.Event()
+        self._lock = threading.Lock()
+        self._pending = False
 
     def request_refresh(self) -> None:
         """Ask for a full refresh; called on the dashboard's thread."""
-        self._event.set()
+        with self._lock:
+            self._pending = True
 
     def take(self) -> bool:
-        """Consume the pending request, if any.
+        """Consume the pending request, if any, atomically (a press can't be lost between check and clear).
 
         Returns:
             True when a refresh was requested since the last take().
         """
-        requested = self._event.is_set()
-        self._event.clear()
+        with self._lock:
+            requested, self._pending = self._pending, False
         return requested
 
 

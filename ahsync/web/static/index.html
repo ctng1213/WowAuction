@@ -194,7 +194,7 @@ ORDER.forEach(([name, id]) => {
   nav.appendChild(b);
 });
 const titleOf = id => ORDER.find(([, i]) => i === id)[0];
-const idOfHash = () => { const n = decodeURIComponent(location.hash.slice(1)); const hit = ORDER.find(([name, id]) => name === n || id === n); return hit ? hit[1] : null; };
+const idOfHash = () => { let n = ''; try { n = decodeURIComponent(location.hash.slice(1)); } catch (e) { n = ''; } const hit = ORDER.find(([name, id]) => name === n || id === n); return hit ? hit[1] : null; };
 
 function show(id) {
   state.page = id;

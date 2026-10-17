@@ -24,7 +24,7 @@ import sqlite3
 import threading
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
@@ -38,6 +38,7 @@ BIND_ADDRESS = "127.0.0.1"
 TOKEN_HEADER = "X-AHSync-Token"
 TOKEN_PLACEHOLDER = "__AHSYNC_TOKEN__"
 INDEX_HTML = Path(__file__).parent / "static" / "index.html"
+REQUEST_TIMEOUT_S = 10            # seconds a connection may stay silent (FM28)
 MAX_BODY_BYTES = 4096
 BUSY_TIMEOUT_MS = 5000
 
@@ -229,7 +230,8 @@ class DashboardApp:
         Returns:
             200 {"built": ms, "data": payload}; 404 {"error": "no_refresh_yet"} before the
             first refresh; 404 {"error": "unknown_market"} for a market not in the config;
-            503 {"error": "database_busy"} when the database can't be read right now.
+            503 {"error": "database_busy"} when the database can't be read right now;
+            503 {"error": "bad_view"} when the stored payload can't be decoded.
         """
         market = market or self.config.markets[0]
         if market not in self.config.markets:
@@ -240,6 +242,9 @@ class DashboardApp:
         except sqlite3.Error as error:
             log.warning("reading the %s view failed: %s", page, error)
             return json_response(503, {"error": "database_busy"})
+        except ValueError as error:                 # a corrupt stored payload (FM29)
+            log.warning("the stored %s view can't be decoded: %s", page, error)
+            return json_response(503, {"error": "bad_view"})
         if stored is None:
             return json_response(404, {"error": "no_refresh_yet"})
         payload, built_ms = stored
@@ -293,6 +298,35 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     server_version = "AHSync"
     sys_version = ""
+    timeout = REQUEST_TIMEOUT_S      # a stalled connection is dropped instead of holding a thread (FM28)
+
+    def version_string(self) -> str:
+        """The Server header.
+
+        Returns:
+            "AHSync", without http.server's trailing Python version.
+        """
+        return self.server_version
+
+    def send_error(self, code: int, message: str | None = None, explain: str | None = None) -> None:
+        """Answer malformed or unsupported requests as JSON with the same safety headers (SPEC §3.5).
+
+        Args:
+            code: HTTP status from http.server (400, 414, 501, ...).
+            message: Short reason (not echoed: it can quote the request).
+            explain: Long reason (not echoed).
+        """
+        body = json.dumps({"error": "bad_request"}).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        if self.command != "HEAD" and code >= 200 and code not in (204, 304):
+            self.wfile.write(body)
 
     def _respond(self) -> None:
         """Read the request, ask the app, and write its response with the safety headers."""
@@ -356,8 +390,25 @@ class DashboardHandler(BaseHTTPRequestHandler):
         log.debug(format, *args)
 
 
-class DashboardServer(HTTPServer):
-    """A one-thread HTTP server that carries the app for its handler."""
+class DashboardServer(ThreadingHTTPServer):
+    """An HTTP server (one thread per request) that carries the app for its handler.
+
+    Threads are daemons and closing doesn't wait for them, so a client that stalls
+    can neither block other requests nor AHSync's exit (FM28). Database access is
+    serialised by the app's lock.
+    """
+
+    daemon_threads = True
+    block_on_close = False
+
+    def handle_error(self, request: object, client_address: tuple) -> None:
+        """Log a connection that failed mid-request (timeout, reset) instead of printing a traceback to stderr.
+
+        Args:
+            request: The socket.
+            client_address: (host, port) of the client.
+        """
+        log.debug("dashboard connection from %s ended with an error", client_address[0], exc_info=True)
 
     def __init__(self, app: DashboardApp, port: int) -> None:
         """Bind to 127.0.0.1 only (SPEC §3.5).

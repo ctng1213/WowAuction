@@ -779,7 +779,9 @@ You set or clear a rule from any dashboard row, from the **Rules** page, or by r
    - `GET /api/markets` returns `{"markets": [...], "default": "<id>"}` from the config.
    - `GET /api/views/<page>?market=<id>` returns `{"built": <ms>, "data": <payload>}`, or `404 {"error": "no_refresh_yet"}` before the first refresh. `<page>` is `disenchant`, `craft` (M3), and later `today`, `week`, `on_ah`, `flip`, `inventory`, `history`, `rules`, `characters`, `status`.
    - Payload of `disenchant` and `craft`: `{"rows": [...], "hidden": <n>}`. Each row is built by `views.disenchant_row` / `views.craft_row`: every cell is already formatted text (money, percents, the Chance · Volume pair with its `dot`, risk with `risk_amber`), plus a `sort` object with one number per sortable column. The page sorts by `sort` values and filters by row fields (quality, profession, source, profit); it never parses or computes numbers.
-   - `POST /api/refresh` asks for a full refresh (merged with one already queued; IU4) and returns `202`. `POST /api/skip {"action_id": ...}` marks a plan action skipped (§3.4.1). Writes follow the Security rules above.
+   - `POST /api/refresh` asks for a full refresh (merged with one already queued; IU4) and returns `202`. `POST /api/skip {"action_id": ...}` marks a plan action skipped (§3.4.1) and returns `200 {"skipped": true|false}` (false when the action isn't open) or `400` for a bad body. Writes follow the Security rules above.
+   - A market not in the config is `404 unknown_market`; no `market` means the first configured one. A busy database is `503 database_busy`.
+   - **Accepted risk:** another process or Windows user on the same machine can send the right `Host`, read the token from `GET /` and write. That is inherent to a loopback tool; the checks protect against web pages, not local processes.
 2. **`Interface/AddOns/AHProfit_Data/Data.lua`**, written atomically (temp file + rename):
    - compact prices per item, stored as strings so the file stays under Lua's constant limits, with the sell-probability curve encoded one character per point (§3.1.1)
    - the same action list the dashboard shows, with action ids so the addon can mark them done
@@ -1104,6 +1106,8 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `Data.lua` → 
 | SavedVariables from a newer addon version | ignored, with a message | "Update AHSync" on Status |
 | `Data.lua` write blocked (file locked, antivirus) | retried 3 times over 10 s | the old `Data.lua` stays; Status warns |
 | AHSync started twice | the second instance finds `data/ahsync.lock` held and exits with a message | — |
+| A dashboard client stalls mid-request | requests run on their own daemon threads with a 10 s timeout, so others are answered and exit never waits for it | — (FM28) |
+| A stored dashboard page can't be decoded | that request answers `503 bad_view` and is logged | the next full refresh replaces it (FM29) |
 | Bad `config.toml` | refuses to start with the line and the reason | — |
 
 **Addon failures (in game):**
