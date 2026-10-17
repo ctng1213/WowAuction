@@ -1,0 +1,5 @@
+{
+ "apiBase": "https://auctionhouse.fyi",
+ "cdnBase": "https://cdn.auctionhouse.fyi/",
+ "env": "production"
+}

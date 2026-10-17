@@ -76,6 +76,21 @@ Verified 2026-10-16, without a key: `/me`, `/files`, the snapshot, public h1 and
 - **The Status page shows the expiry**: "Premium via contributor until 23 Oct · upload scans to keep it". It warns 2 days before.
 - **Minute candles (`m1`, `candles.minute`)** are available but not used in v1.
 
+**Response formats** (recorded 2026-10-16 into `tests/fixtures/ahf/`; AHF publishes no API docs, so the URL patterns come from its site's `cdnrules` script):
+
+| File | URL (relative to the CDN) | Rows |
+|---|---|---|
+| Hour candles | `candles/v1/h1/<m>/<hour>.json.gz`; Premium: `candles/v1/h1c/<m>/<caps.h1[day]>/<hour>.json.gz` (token per day, file per hour) | `items: [[key, [[t, open, high, low, close, qty], …]], …]` |
+| Day candles | `candles/v1/d1/<m>/<day>.json.gz` (7 days); Premium: `caps.d1`, the `d1c` file (90 days) | same as hour candles, with day `t` |
+| Snapshot | `snap/v1/<m>/latest.json` → `{hour, at, path}`; then `path` | `rows: [[key, price, qty, scanAt], …]` |
+| Order book | `files.books[].url` (`books/v1/<m>/<at>-<token>.json.gz`), with `complete` | `entries: [[key, price, stack, band, count], …]`, with band 1–4 as in WoW; `bidEntries` has 8 fields |
+| Volume | `caps.volume` | `items` (empty for this market so far, so the row format is still unknown) |
+| Items | `GET /items` | `items: {id: {n, q, il, c, sc, sell, buy, st, …}}`, `variants: {key: {n, q, …}}` for suffix keys, plus `suffixes`, `bonusLists`, `bonusTrees` |
+
+- A missing hour file is a 404, which is why only listed files are requested (§2.1 rules).
+- Capability tokens are secrets: the recorder replaces them with `cap-…` placeholders.
+- `/me` contains the account's id and email; the recorder replaces those too.
+
 **The app works fully without Premium.** Each Premium feature only improves something that already has a free fallback:
 
 | Premium feature | Used for | Without it |
@@ -128,7 +143,7 @@ Field rules:
 - Money is integer copper; prices are per unit.
 - Times are UTC Unix ms. WoW's clock (`GetServerTime()`, through the Adapter) counts whole seconds, so every time is seconds × 1000.
 - `charId` is `Name-Realm`. The market comes from the character's faction and the config's `[realms]` table (§2.1), so it isn't stored.
-- `key` is the AHF item key (§2.1). `Adapter.lua` computes it from the item link's item id and suffix id. That AHF's `v` equals the link's suffix id is unverified (§6).
+- `key` is the AHF item key (§2.1). `Adapter.lua` computes it from the item link. How the link maps to AHF's suffix value `v` is still unknown (§6 item 11).
 - `band` is WoW's time-left code: 1 short, 2 medium, 3 long, 4 very long.
 - **Bulk rows are compact strings:** rows are separated by `;` and fields by `,`, in the order listed. Everything else is a plain table.
 - **Event ids** are `charId:timeMs:seq`. `seq` restarts at 0 each second for each character. Only one character is logged in at a time, so ids are unique.
@@ -1088,7 +1103,7 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `Data.lua` → 
 
 ## 6. To verify
 
-1. ~~**API key tier**~~: done 2026-10-16 (§2.1). The key has Premium features through the contributor role, which expires unless scans are uploaded. Still to check: the exact shape of the `depth`, `books` and `volume` responses (record them with `tools/record_fixtures.py`).
+1. ~~**API key tier**~~: done 2026-10-16 (§2.1). The key has Premium features through the contributor role, which expires unless scans are uploaded. The `books`, candle, snapshot and items formats were recorded on 2026-10-16 (§2.1 Response formats). Still to check: the `volume` row format, because the file was empty for our market. Re-run `tools/record_fixtures.py` once it has data.
 2. **Forever game APIs** (in-game `/dump`): the trade skill API (`GetTradeSkill*` / `GetCraft*`, or `C_TradeSkillUI`), the AH API (`C_AuctionHouse.ReplicateItems`?), the bank and mail APIs, and the tooltip hook.
 3. **Disenchant tables and skill brackets** on Forever.
 4. **AH fees and auction durations**: deposit rate per duration, 5% / 15% cut, and the available durations.
@@ -1098,7 +1113,7 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `Data.lua` → 
 8. **Tracking hooks**: the post and buy functions to hook, the sold / expired / won system messages, the mail invoice API, and the send-mail hook. Also check whether mail between your own characters arrives instantly or after a delay (it changes how mail steps are spaced in a chain).
 9. **wow-ui-sim spike** (§8.4, layer 3): can it load a Classic-style addon (`## Interface: 16001`) and render AHProfit's frames headless through Docker on Windows? It targets the retail client, and Classic support is not documented.
 10. **Folder name after launch.**
-11. **Item key from a link**: that AHF's suffix value `v` (§2.1) is the item link's suffix id, so `Adapter.lua` can compute keys that match AHF (§2.2.1).
+11. **Item key from a link**: how to get AHF's suffix value `v` (§2.1) from an item link, so `Adapter.lua` can compute keys that match AHF (§2.2.1). It is **not** the classic suffix id: a recorded key has `v` = 28592, while `/items` suffix ids are around 14,300. `/items` also lists `bonusLists` and `bonusTrees`, so Forever probably encodes suffixes as bonus ids. Compare a few in-game links with `/items.variants`.
 
 ## 7. Milestones
 

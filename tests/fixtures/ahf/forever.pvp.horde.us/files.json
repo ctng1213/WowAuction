@@ -1,0 +1,48 @@
+{
+ "books": [
+  {
+   "at": 1791580476000,
+   "complete": true,
+   "url": "https://cdn.auctionhouse.fyi/books/v1/forever.pvp.horde.us/1791580476000-cap-book-1791580476000.json.gz"
+  }
+ ],
+ "caps": {
+  "d1": "https://cdn.auctionhouse.fyi/candles/v1/d1c/forever.pvp.horde.us/cap-d1/20742.json.gz",
+  "h1": {
+   "20735": "cap-h1-20735",
+   "20736": "cap-h1-20736",
+   "20737": "cap-h1-20737",
+   "20738": "cap-h1-20738",
+   "20739": "cap-h1-20739",
+   "20740": "cap-h1-20740",
+   "20741": "cap-h1-20741",
+   "20742": "cap-h1-20742",
+   "20743": "cap-h1-20743"
+  },
+  "m1": {
+   "20741": "cap-m1-20741",
+   "20742": "cap-m1-20742",
+   "20743": "cap-m1-20743"
+  },
+  "volume": "https://cdn.auctionhouse.fyi/volume/v1/forever.pvp.horde.us/cap-volume/20742.json.gz"
+ },
+ "cdnBase": "https://cdn.auctionhouse.fyi/",
+ "d1": "https://cdn.auctionhouse.fyi/candles/v1/d1/forever.pvp.horde.us/20742.json.gz",
+ "live": {
+  "at": 1791580476000,
+  "changes": [],
+  "checkpoint": {
+   "seq": 1,
+   "url": "https://cdn.auctionhouse.fyi/live/v1/forever.pvp.horde.us/c1-cap-live.json.gz"
+  },
+  "seq": 1
+ },
+ "market": "forever.pvp.horde.us",
+ "now": 1792202272241,
+ "sealed": {
+  "d1": 20742,
+  "h1": 497832,
+  "m1": 2987002
+ },
+ "snapshot": "https://cdn.auctionhouse.fyi/snap/v1/forever.pvp.horde.us/latest.json"
+}

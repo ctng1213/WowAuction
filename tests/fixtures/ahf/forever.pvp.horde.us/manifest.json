@@ -1,0 +1,59 @@
+{
+ "fixtures": {
+  "book": {
+   "file": "book.json",
+   "source_path": "books/v1/forever.pvp.horde.us/1791580476000-cap-book-1791580476000.json.gz"
+  },
+  "config": {
+   "file": "config.json",
+   "source_path": "api/v1/config"
+  },
+  "d1": {
+   "file": "d1.json",
+   "source_path": "candles/v1/d1/forever.pvp.horde.us/20742.json.gz"
+  },
+  "d1c": {
+   "file": "d1c.json",
+   "source_path": "candles/v1/d1c/forever.pvp.horde.us/cap-d1/20742.json.gz"
+  },
+  "files": {
+   "file": "files.json",
+   "source_path": "api/v1/ah/forever.pvp.horde.us/files"
+  },
+  "h1_data": {
+   "file": "h1_data.json",
+   "source_path": "candles/v1/h1/forever.pvp.horde.us/497661.json.gz"
+  },
+  "h1_sealed": {
+   "file": "h1_sealed.json",
+   "source_path": "candles/v1/h1/forever.pvp.horde.us/497832.json.gz"
+  },
+  "h1c_data": {
+   "file": "h1c_data.json",
+   "source_path": "candles/v1/h1c/forever.pvp.horde.us/cap-h1-20735/497661.json.gz"
+  },
+  "items": {
+   "file": "items.json",
+   "source_path": "api/v1/items"
+  },
+  "me": {
+   "file": "me.json",
+   "source_path": "api/v1/me"
+  },
+  "snapshot": {
+   "file": "snapshot.json",
+   "source_path": "snap/v1/forever.pvp.horde.us/497833.json.gz"
+  },
+  "snapshot_pointer": {
+   "file": "snapshot_pointer.json",
+   "source_path": "snap/v1/forever.pvp.horde.us/latest.json"
+  },
+  "volume": {
+   "file": "volume.json",
+   "source_path": "volume/v1/forever.pvp.horde.us/cap-volume/20742.json.gz"
+  }
+ },
+ "market": "forever.pvp.horde.us",
+ "recorded_at_ms": 1792202275459,
+ "with_key": true
+}

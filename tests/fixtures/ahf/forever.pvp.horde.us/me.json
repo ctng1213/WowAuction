@@ -1,0 +1,42 @@
+{
+ "contributor": {
+  "scans7d": 7,
+  "until": 1792798058214
+ },
+ "features": [
+  "prices.snapshot",
+  "prices.live",
+  "candles.daily",
+  "candles.hourly",
+  "candles.minute",
+  "books",
+  "depth",
+  "signals",
+  "watchlist",
+  "alerts",
+  "boards",
+  "live",
+  "upload.device",
+  "api.read",
+  "api.upload",
+  "api.keys",
+  "app.live"
+ ],
+ "limits": {
+  "alerts": 100,
+  "apiPerMinute": 600,
+  "boards": 20,
+  "feedMinutes": 1,
+  "historyDays": 90,
+  "watchlist": 200
+ },
+ "now": 1792202271232,
+ "roles": [
+  "free",
+  "contributor"
+ ],
+ "user": {
+  "email": "fixture@example.invalid",
+  "id": "user_FIXTURE"
+ }
+}
