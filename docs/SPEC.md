@@ -978,7 +978,7 @@ ahsync/
   api/        client.py (HTTP, retry, 429), ahf.py (endpoints)
   store/      db.py, schema.sql, prune.py
   sync/       catchup.py, scheduler.py (timers, daily refresh, file-change watch), refresh.py (full refresh + incremental updates, §3.1.1)
-  ingest/     savedvars.py (Lua SavedVariables parser), scans.py, books.py
+  ingest/     luadata.py (WoW SavedVariables Lua parser), savedvars.py (AHProfitDB → records, §2.2.1), scans.py, books.py
   engine/     fees.py, prices.py, profile.py (hour-of-week), volume.py, sellprob.py (incl. the P' blend),
               record.py (own sell record + calibration), tracking.py (event → action matching), rules.py,
               patterns.py (weekly patterns, best selling windows), confidence.py (conf %), disenchant.py, craft.py, plan.py, views.py (tab totals, sorting, filters, tooltip deltas)
