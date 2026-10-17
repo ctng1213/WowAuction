@@ -184,14 +184,12 @@ CREATE TABLE IF NOT EXISTS sync_state(
     last_run INTEGER
 );
 
--- Placeholders until M3 (§3.2): each row holds its fields as one JSON object; a migration can split them later.
-CREATE TABLE IF NOT EXISTS item_stats(
-    market TEXT NOT NULL, key INTEGER NOT NULL, stats TEXT NOT NULL, updated INTEGER NOT NULL,
-    PRIMARY KEY(market, key)
+-- Market intelligence (§5.0): one versioned JSON document per market, swapped in by a full refresh.
+CREATE TABLE IF NOT EXISTS intel(
+    market TEXT PRIMARY KEY, schema_version INTEGER NOT NULL, body TEXT NOT NULL, built INTEGER NOT NULL
 );
-CREATE TABLE IF NOT EXISTS item_stats_new(
-    market TEXT NOT NULL, key INTEGER NOT NULL, stats TEXT NOT NULL, updated INTEGER NOT NULL,
-    PRIMARY KEY(market, key)
+CREATE TABLE IF NOT EXISTS intel_new(
+    market TEXT PRIMARY KEY, schema_version INTEGER NOT NULL, body TEXT NOT NULL, built INTEGER NOT NULL
 );
 
 -- Precomputed dashboard pages (SPEC §3.5): one JSON payload per page and market, swapped in by a full refresh.

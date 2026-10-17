@@ -445,3 +445,51 @@ def chance(queue: QueueInputs | None, tier_sell_through: float | None, tier_n: i
         return with_record(default_sell_prob, sold, expired, record_weight), True
     p = blend(simulate(queue), tier_sell_through, tier_n)
     return with_record(p, sold, expired, record_weight), False
+
+
+# ---------------------------------------------------------------- posting now, from market data (SPEC §3.3.2)
+
+@dataclass(frozen=True)
+class MarketSettings:
+    """The config values the market-wide probability needs, passed in (no config file in the engine)."""
+
+    default_sell_prob: float = 0.25
+    own_record_weight: float = 4
+    default_undercut_share: float = 0.5
+    sell_window_hours: int = 8
+
+
+@dataclass(frozen=True)
+class Supply:
+    """What a post competes with: market volume and the competing listings."""
+
+    sold_per_day: float | None                           # S; None when unknown
+    listed_per_day: float | None                         # L
+    book: tuple[tuple[int, int, int, int], ...] | None   # (price, stack, band, count); None without a book
+    cur_price: int | None                                # lowest buyout, used without a book
+    cur_qty: int | None
+
+
+def posting_chance(supply: Supply, price: int | None, qty: int, now_ms: int,
+                   settings: MarketSettings) -> tuple[float, bool]:
+    """P for posting qty units now at price, from market data only (no own record, SPEC §3.3.2).
+
+    Args:
+        supply: Volume and competition.
+        price: Post price in copper, or None.
+        qty: Units posted.
+        now_ms: Now, UTC ms.
+        settings: Defaults and the posting-now window.
+
+    Returns:
+        (P, volume_unknown); the default chance when sales or the price are unknown.
+    """
+    if supply.sold_per_day is None or price is None:
+        return chance(None, None, 0, 0, 0, settings.default_sell_prob, settings.own_record_weight)
+    competitors = None if supply.book is None else [(p, float(stack * count), band)
+                                                    for p, stack, band, count in supply.book]
+    ahead = ahead_of(competitors, price, supply.cur_price, supply.cur_qty)
+    demand = demand_for(posting_now_window(now_ms, settings.sell_window_hours), [1.0] * 168)
+    queue = QueueInputs(supply.sold_per_day, supply.listed_per_day or 0.0, settings.default_undercut_share,
+                        demand, qty, ahead)
+    return chance(queue, None, 0, 0, 0, settings.default_sell_prob, settings.own_record_weight)

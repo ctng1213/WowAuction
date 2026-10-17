@@ -14,6 +14,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ahsync.engine.sellprob import MarketSettings
+
 API_KEY_ENV = "AUCTIONHOUSE_APIKEY"
 MARKET_PATTERN = re.compile(r"^forever\.(normal|pvp|rp)\.(alliance|horde)\.us$")
 RULESETS = ("normal", "pvp", "rp")
@@ -245,3 +247,17 @@ def load_config(path: Path, env: Mapping[str, str], home: Path) -> Config:
     except UnicodeDecodeError:
         raise ConfigError("config.toml: the file must be saved as UTF-8") from None
     return parse_config(text, env, home)
+
+
+def market_settings(config: Config) -> MarketSettings:
+    """The settings market-wide analysis needs, taken from the config (analysis never reads config itself, AR4).
+
+    Args:
+        config: Settings.
+
+    Returns:
+        The engine's MarketSettings.
+    """
+    return MarketSettings(config.default_sell_prob, config.own_record_weight, config.default_undercut_share,
+                          config.sell_window_hours)
+

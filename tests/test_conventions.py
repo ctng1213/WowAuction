@@ -280,6 +280,27 @@ def test_functions_within_size_limit():
 
 # ---------------------------------------------------------------- mirroring
 
+ANALYSIS_MAY_IMPORT = ("ahsync.engine", "ahsync.history.reads", "ahsync.intel.contract")
+
+
+def test_AR4_analysis_imports_only_the_engine_and_the_two_contracts():
+    import sys
+    problems = []
+    for path in sorted((PY_SRC / "analysis").rglob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            names = []
+            if isinstance(node, ast.Import):
+                names = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                names = [node.module]
+            for name in names:
+                stdlib = name.split(".")[0] in sys.stdlib_module_names or name == "__future__"
+                allowed = any(name == m or name.startswith(m + ".") for m in ANALYSIS_MAY_IMPORT)
+                if not (stdlib or allowed):
+                    problems.append(f"{rel(path)}:{node.lineno} imports {name} (SPEC §5.0 invariant 1)")
+    assert not problems, "\n".join(problems)
+
+
 def test_python_sources_and_tests_mirror():
     problems = []
     for path in python_sources():

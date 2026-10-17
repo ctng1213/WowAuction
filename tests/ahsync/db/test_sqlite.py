@@ -129,10 +129,10 @@ def test_migrations_run_step_by_step(tmp_path, db, monkeypatch):
 
 
 def test_staging_tables_are_emptied_on_open(tmp_path, db):
-    db.conn.execute("INSERT INTO item_stats_new(market, key, stats, updated) VALUES('m', 1, '{}', 0)")
+    db.conn.execute("INSERT INTO intel_new(market, schema_version, body, built) VALUES('m', 1, '{}', 0)")
     db.close()
     reopened = Database.open(tmp_path / "ahsync.db", T0, None)
-    assert reopened.count("item_stats_new") == 0
+    assert reopened.count("intel_new") == 0
     reopened.close()
 
 

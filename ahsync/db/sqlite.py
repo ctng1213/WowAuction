@@ -30,7 +30,7 @@ SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 MIGRATIONS: dict[int, str] = {}
 BACKUP_KEEP = 3
 BACKUP_PREFIX = "ahsync-"
-STAGING_TABLES = ("item_stats_new", "plan_new", "views_new")
+STAGING_TABLES = ("intel_new", "plan_new", "views_new")
 CANDLE_TABLES = ("candles_h1", "candles_d1")
 # Tables and time columns prune may delete from (SPEC §3.2 retention). Guards the SQL built in delete_before.
 PRUNABLE = {
@@ -644,14 +644,14 @@ class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, IntelStore
         return self.conn.execute(sql, params).fetchone()[0]
 
     def publish_refresh(self, markets: list[str]) -> None:
-        """Swap the staged statistics and views in for these markets, in one transaction (SPEC §5.2 rule 3).
+        """Swap the staged intelligence and pages in for these markets, in one transaction (SPEC §5.2 rule 3).
 
         Args:
             markets: The markets this refresh rebuilt.
         """
         with self.transaction():
             for market in markets:
-                for live, staged, cols in (("item_stats", "item_stats_new", "market, key, stats, updated"),
+                for live, staged, cols in (("intel", "intel_new", "market, schema_version, body, built"),
                                            ("views", "views_new", "page, market, body, built")):
                     self.conn.execute(f"DELETE FROM {live} WHERE market = ?", (market,))
                     self.conn.execute(f"INSERT INTO {live}({cols}) SELECT {cols} FROM {staged} WHERE market = ?",

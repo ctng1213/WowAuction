@@ -1,0 +1,63 @@
+"""Tests for ahsync/recommend/pages.py: pages from intelligence plus state only (AR3)."""
+from __future__ import annotations
+
+import pytest
+
+from ahsync.config import Config
+from ahsync.db.sqlite import Database
+from ahsync.history.reads import ItemInfo
+from ahsync.intel.contract import ItemIntel
+from ahsync.recommend.pages import craft_page, disenchant_page
+from tests.support.fake_clock import FakeClock
+
+M = "forever.pvp.horde.us"
+NOW = 20_000 * 86_400_000
+BAR, ROD, DUST, GLOVES = 2840, 6217, 10940, 4239
+ITEMS = {BAR: ItemInfo(BAR, "Copper Bar", 1, 10, 7, None, 10, 20), ROD: ItemInfo(ROD, "Copper Rod", 1, 15, 7, None, 50, 20),
+         DUST: ItemInfo(DUST, "Strange Dust", 1, 20, 7, None, 20, 20),
+         GLOVES: ItemInfo(GLOVES, "Embossed Leather Gloves", 2, 25, 4, None, 100, 1)}
+
+
+def intel(key: int, cur: int, qty: int, sold: float | None, sell_value: float | None) -> ItemIntel:
+    """A minimal item intelligence record."""
+    return ItemIntel(key, cur, qty, 3_600_000, cur, cur, cur, cur, 0.0, sold, 0.0 if sold else None, sold,
+                     "ahf" if sold else None, {"ahf": 7} if sold else {}, cur, 1, 1.0 if sold else 0.25,
+                     sold is None, sell_value, 80, qty, None, ())
+
+
+STATS = {BAR: intel(BAR, 1000, 6, 500.0, 950.0), ROD: intel(ROD, 4001, 3, 60.0, 3800.0),
+         DUST: intel(DUST, 601, 200, 2000.0, 570.0), GLOVES: intel(GLOVES, 800, 1, None, None)}
+
+
+@pytest.fixture
+def state(tmp_path):
+    """Character state: Brugan knows Copper Rod; Amaya has Enchanting 142."""
+    db = Database.open(tmp_path / "s.db", FakeClock().now_ms(), None)
+    with db.transaction():
+        db.conn.executemany("INSERT INTO characters(id, market, gold) VALUES (?, ?, ?)",
+                            [("Brugan-G", M, 400_000), ("Amaya-G", M, 100_000)])
+        db.conn.executemany("INSERT INTO professions(char_id, profession, skill, max_skill) VALUES (?, ?, ?, ?)",
+                            [("Brugan-G", "Blacksmithing", 112, 150), ("Amaya-G", "Enchanting", 142, 150)])
+        db.conn.execute("INSERT INTO recipes(profession, spell_id, product_key, yield_min, yield_max) "
+                        "VALUES ('Blacksmithing', 2663, ?, 1, 1)", (ROD,))
+        db.conn.execute("INSERT INTO reagents(profession, spell_id, key, count) VALUES ('Blacksmithing', 2663, ?, 2)", (BAR,))
+        db.conn.execute("INSERT INTO known_recipes(char_id, spell_id) VALUES ('Brugan-G', 2663)")
+    yield db
+    db.close()
+
+
+def test_AR3_pages_use_the_published_intelligence_not_history(state):
+    before = craft_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 500_000, NOW, Config(markets=(M,)))
+    with state.transaction():                           # history moves on: bars get dear
+        state.conn.execute("INSERT INTO current(market, key, price, qty, at, src) VALUES (?, ?, 99999, 99, ?, 'ahf')",
+                           (M, BAR, NOW))
+    after = craft_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 500_000, NOW, Config(markets=(M,)))
+    assert after == before
+    [rod] = before["rows"]
+    assert (rod["product"], rod["source"], rod["mats_each"]) == ("Copper Rod", "AH", "20s")
+
+
+def test_disenchant_page_from_intelligence(state):
+    page = disenchant_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 500_000)
+    [gloves] = page["rows"]
+    assert (gloves["item"], gloves["buy"]) == ("Embossed Leather Gloves", "8s")

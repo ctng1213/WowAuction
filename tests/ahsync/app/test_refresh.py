@@ -63,11 +63,11 @@ def seed(db: Database) -> None:
     rows(db, "INSERT INTO known_recipes(char_id, spell_id) VALUES (?, ?)", (BRUGAN, 2663), (AMAYA, 7418))
 
 
-def test_a_full_refresh_publishes_item_stats_and_both_pages(db):
+def test_a_full_refresh_publishes_intelligence_and_both_pages(db):
     result = refresh.refresh_all(db, NOW, CFG)
     assert (result.error, result.failed, result.items) == (None, {}, 5)
-    stats = db.conn.execute("SELECT COUNT(*) FROM item_stats WHERE market = ?", (M,)).fetchone()[0]
-    assert stats == 5
+    intel = db.read_intel(M)
+    assert (len(intel.items), intel.built_ms, intel.schema_version) == (5, NOW, 1)
     craft, built = db.view("craft", M)
     assert built == NOW
     [rod] = craft["rows"]                                   # the enchant makes no item: not on the Craft tab
@@ -81,7 +81,7 @@ def test_a_full_refresh_publishes_item_stats_and_both_pages(db):
 
 def test_stats_use_the_engine_rules(db):
     refresh.refresh_all(db, NOW, CFG)
-    s = refresh.compute_item(db, M, ROD, db.items()[ROD], NOW, CFG)
+    s = db.read_intel(M).items[ROD]
     assert (s.med7, s.post_price, s.ref_stack, s.volume_source) == (4000, 4000, 1, "ahf")
     assert s.sold_per_day == 60 and s.days_by_source == {"ahf": 7} and not s.volume_unknown
     assert 0 < s.chance <= 1 and s.sell_value is not None
@@ -100,21 +100,22 @@ def test_FM7_a_crash_mid_refresh_leaves_the_old_numbers_and_the_refresh_reruns(d
     monkeypatch.undo()
     db.close()
     reopened = Database.open(tmp_path / "ahsync.db", NOW, None)      # start-up drops the staging tables
-    assert reopened.view("craft", M) == before and reopened.count("item_stats_new") == 0
+    assert reopened.view("craft", M) == before and reopened.count("intel_new") == 0
     assert refresh.refresh_all(reopened, NOW + HOUR, CFG).error is None
     assert reopened.view("craft", M)[1] == NOW + HOUR
     reopened.close()
 
 
 def test_FM8_one_failing_item_is_listed_and_the_rest_refresh(db, monkeypatch):
-    original = refresh.compute_item
+    from ahsync.analysis import market as analysis
+    original = analysis.analyze_item
 
-    def flaky(database, market, key, info, now_ms, cfg):
+    def flaky(history, market, key, info, now_ms, settings):
         """Fail for the gloves only."""
         if key == GLOVES:
             raise ValueError("bad candle")
-        return original(database, market, key, info, now_ms, cfg)
-    monkeypatch.setattr(refresh, "compute_item", flaky)
+        return original(history, market, key, info, now_ms, settings)
+    monkeypatch.setattr(analysis, "analyze_item", flaky)
     result = refresh.refresh_all(db, NOW, CFG)
     assert result.failed == {f"{M}:{GLOVES}": "ValueError: bad candle"} and result.items == 4
     assert db.status("refresh_items").data == {"count": 1, "items": [f"{M}:{GLOVES}"]}
@@ -128,18 +129,21 @@ def test_FM9_disk_full_on_the_third_write_publishes_nothing(db, monkeypatch):
     refresh.refresh_all(db, NOW, CFG)
     before = db.view("craft", M)
     writes = {"n": 0}
-    original = db.stage_item_stats
 
-    def full_disk(*args, **kwargs):
-        """Fail on the third staged write."""
-        writes["n"] += 1
-        if writes["n"] == 3:
-            raise sqlite3.OperationalError("database or disk is full")
-        return original(*args, **kwargs)
-    monkeypatch.setattr(db, "stage_item_stats", full_disk)
+    def counted(original):
+        """Wrap a staging write so the third one overall fails."""
+        def write(*args, **kwargs):
+            """Count, and fail on the third."""
+            writes["n"] += 1
+            if writes["n"] == 3:
+                raise sqlite3.OperationalError("database or disk is full")
+            return original(*args, **kwargs)
+        return write
+    monkeypatch.setattr(db, "stage_intel", counted(db.stage_intel))
+    monkeypatch.setattr(db, "stage_view", counted(db.stage_view))
     result = refresh.refresh_all(db, NOW + HOUR, CFG)
     assert result.error == "OperationalError: database or disk is full"
-    assert db.view("craft", M) == before and db.count("item_stats_new") == 0
+    assert db.view("craft", M) == before and db.count("intel_new") == 0
     assert db.status("refresh").kind == "refresh_failed"
     monkeypatch.undo()
     refresh.refresh_all(db, NOW + 2 * HOUR, CFG)

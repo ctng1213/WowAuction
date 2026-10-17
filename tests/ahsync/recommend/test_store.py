@@ -27,7 +27,6 @@ def sql(db: Database, statement: str, *rows: tuple) -> None:
 def test_publish_swaps_staged_rows_in_one_step_per_market(db):
     with db.transaction():
         db.stage_view("craft", M, {"rows": [1]}, 10)
-        db.stage_item_stats(M, 1, {"med7": 5}, 10)
     assert db.view("craft", M) is None                 # staged, not live
     db.publish_refresh([M])
     assert db.view("craft", M) == ({"rows": [1]}, 10)
@@ -35,7 +34,7 @@ def test_publish_swaps_staged_rows_in_one_step_per_market(db):
         db.stage_view("craft", OTHER, {"rows": [9]}, 11)
     db.publish_refresh([M])                            # nothing staged for M: M's page is emptied
     assert db.view("craft", M) is None and db.view("craft", OTHER) is None
-    assert db.count("item_stats") == 0 and db.count("views_new") == 1
+    assert db.count("views_new") == 1
 
 
 def test_an_interrupted_refresh_leaves_the_live_views(db):

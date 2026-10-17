@@ -27,8 +27,10 @@ def sql(db: Database, statement: str, *rows: tuple) -> None:
 
 
 def test_staged_intelligence_is_not_live_until_published(db):
+    from ahsync.intel.contract import MarketIntelligence
+    intel = MarketIntelligence(M, 10, 5, 1, {})
     with db.transaction():
-        db.stage_item_stats(M, 1, {"med7": 5}, 10)
-    assert db.count("item_stats") == 0 and db.count("item_stats_new") == 1
+        db.stage_intel(intel)
+    assert db.read_intel(M) is None and db.count("intel_new") == 1
     db.publish_refresh([M])
-    assert db.count("item_stats") == 1 and db.count("item_stats_new") == 0
+    assert db.read_intel(M) == intel and db.count("intel_new") == 0

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
+from typing import Protocol
 
 @dataclass(frozen=True)
 class RecipeRow:
@@ -16,6 +17,69 @@ class RecipeRow:
     cooldown_s: int | None
     reagents: tuple[tuple[int, int], ...]
     crafters: tuple[str, ...]
+
+
+class StateReader(Protocol):
+    """What recommendations may read about your characters (SPEC §5.0 contracts)."""
+
+    def characters_in(self, market: str) -> list[tuple[str, int]]:
+        """Your characters on a market and their gold.
+
+        Args:
+            market: Market id.
+
+        Returns:
+            (character id, gold copper), sorted by id.
+        """
+
+    def best_skill(self, char_ids: list[str], profession: str) -> int | None:
+        """The highest skill any of the characters has in a profession.
+
+        Args:
+            char_ids: Character ids.
+            profession: enUS profession name.
+
+        Returns:
+            The skill, or None.
+        """
+
+    def skill_of(self, char_id: str, profession: str) -> int | None:
+        """A character's skill in a profession.
+
+        Args:
+            char_id: Character id.
+            profession: enUS profession name.
+
+        Returns:
+            The skill, or None.
+        """
+
+    def known_recipes(self, char_ids: list[str]) -> list[RecipeRow]:
+        """Recipes the characters know.
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            Recipes with reagents and crafters.
+        """
+
+    def owned_units(self, char_ids: list[str]) -> dict[int, int]:
+        """Unbound units owned across the characters.
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            Item key -> units.
+        """
+
+    def vendor_reagent_keys(self) -> set[int]:
+        """Items a merchant was seen selling in unlimited supply.
+
+        Returns:
+            Item keys.
+        """
 
 
 class StateReads:

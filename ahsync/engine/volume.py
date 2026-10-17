@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 
 HOUR_MS = 3_600_000
 MAX_GAP_MS = 6 * HOUR_MS
+VOLUME_METHOD_VERSION = 1     # bump when the estimation changes; stored data is then recomputed (SPEC §3.3.6)
 SOURCES = ("ahf", "books", "mail")     # sales sources in trust order (SPEC §3.3.1); "qty_drop" is not one
 # Time-left bands [lo, hi) in hours, by WoW band code (SPEC §3.3.1). UNVERIFIED for Forever (§6 item 5).
 # Very long ends at the longest auction duration (fees.DURATIONS_H; 24 h on Classic Era).
