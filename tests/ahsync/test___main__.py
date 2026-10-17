@@ -1,0 +1,130 @@
+"""Start-up (SPEC §3.1, §5.2): scenarios S8 and FM15, plus the start sequence."""
+from __future__ import annotations
+
+import io
+import logging
+
+import pytest
+
+from ahsync.__main__ import ALREADY_RUNNING, InstanceLock, main, run
+from ahsync.clock import HOUR_MS
+from tests.support.builders import AhfWorld, h1_path
+from tests.support.fake_clock import FakeClock
+from tests.support.fake_transport import DEFAULT_MARKET
+
+KEY = "ak_live_SECRET_9f8e7d6c5b4a"
+
+
+def start(tmp_path, world: AhfWorld, config_text: str = "", stop_after_ticks: int = 0, env=None) -> tuple[int, str]:
+    """Run AHSync against a fake world until it has ticked a few times; return (exit code, printed text)."""
+    config = tmp_path / "config.toml"
+    config.write_text(config_text, encoding="utf-8")
+    calls = {"n": 0}
+
+    def should_stop() -> bool:
+        calls["n"] += 1
+        return calls["n"] > stop_after_ticks
+
+    out = io.StringIO()
+    code = run(tmp_path / "data", config, env or {}, tmp_path, world.transport, world.clock, should_stop, out)
+    return code, out.getvalue()
+
+
+def test_S8_api_key_in_config_never_appears_in_logs_urls_or_exceptions(tmp_path, caplog):
+    clock = FakeClock()
+    world = AhfWorld(clock, premium=True)
+    t = world.transport
+    t.fail(f"api/v1/ah/{DEFAULT_MARKET}", 403, body=('{"feature": "%s"}' % KEY).encode())   # error echoing the key
+    t.truncate(h1_path(DEFAULT_MARKET, world.sealed_h1 - 3), 0.6)
+    t.fail(h1_path(DEFAULT_MARKET, world.sealed_h1 - 2), 503, times=2)
+    t.network_error(h1_path(DEFAULT_MARKET, world.sealed_h1 - 1), times=1)
+
+    with caplog.at_level(logging.DEBUG, logger="ahsync"):
+        code, printed = start(tmp_path, world, f'api_key = "{KEY}"\n', stop_after_ticks=2)
+
+    assert code == 0
+    log_text = (tmp_path / "data" / "ahsync.log").read_text(encoding="utf-8")
+    assert "hour" in log_text and "403" in log_text                   # errors were logged…
+    assert KEY not in log_text and "cap-h1-" not in log_text           # …without the key or capability tokens
+    assert KEY not in caplog.text and KEY not in printed
+    assert all(KEY not in r.url for r in t.requests)
+    assert any(r.headers.get("Authorization") == "Bearer " + KEY for r in t.requests)   # the header is the only place
+    for exc_text in (r.exc_text or "" for r in caplog.records):
+        assert KEY not in exc_text
+
+
+def test_FM15_second_start_exits_with_already_running(tmp_path):
+    first = InstanceLock(tmp_path / "data" / "ahsync.lock")
+    assert first.acquire()
+    try:
+        code, printed = start(tmp_path, AhfWorld(FakeClock()))
+    finally:
+        first.release()
+    assert code == 1 and printed.strip() == ALREADY_RUNNING == "AHSync is already running"
+    assert not (tmp_path / "data" / "ahsync.db").exists()
+
+    again = InstanceLock(tmp_path / "data" / "ahsync.lock")             # released: free to take
+    assert again.acquire()
+    again.release()
+    again.release()
+
+
+def test_bad_config_refuses_to_start(tmp_path):
+    code, printed = start(tmp_path, AhfWorld(FakeClock()), 'retention_days = "ninety"\n')
+    assert code == 2 and "config.toml line 1: retention_days must be a number" in printed
+
+
+def test_start_runs_catchup_backup_and_the_hourly_store(tmp_path):
+    clock = FakeClock()
+    world = AhfWorld(clock)
+    code, _ = start(tmp_path, world, stop_after_ticks=1)
+    assert code == 0
+    data = tmp_path / "data"
+    assert (data / "ahsync.db").exists() and list((data / "backups").glob("ahsync-*.db"))
+    sealed_before = world.sealed_h1
+
+    world.advance(HOUR_MS)          # an hour later the app restarts, then its :06 store picks up the next hour
+    world.transport.requests.clear()
+    code, _ = start(tmp_path, world, stop_after_ticks=40)
+    assert code == 0
+    assert h1_path(DEFAULT_MARKET, sealed_before + 1) in world.transport.paths()
+    assert h1_path(DEFAULT_MARKET, sealed_before + 2) not in world.transport.paths()   # not sealed yet
+
+
+def test_damaged_database_without_backup_folder_access_is_reported(tmp_path, monkeypatch):
+    from ahsync import __main__ as app
+    from ahsync.store.db import DatabaseError
+
+    def refuse(*_args, **_kwargs):
+        raise DatabaseError("database schema 9 is newer than this AHSync (1); update AHSync")
+
+    monkeypatch.setattr(app.Database, "open", refuse)
+    code, printed = start(tmp_path, AhfWorld(FakeClock()))
+    assert code == 2 and "update AHSync" in printed
+
+
+def test_main_parses_arguments(tmp_path, monkeypatch):
+    seen = {}
+
+    def fake_run(data_dir, config_path, *_rest):
+        seen["args"] = (data_dir, config_path)
+        return 0
+
+    monkeypatch.setattr("ahsync.__main__.run", fake_run)
+    assert main(["--data", str(tmp_path / "d"), "--config", str(tmp_path / "c.toml")]) == 0
+    assert seen["args"] == (tmp_path / "d", tmp_path / "c.toml")
+
+    def interrupted(*_args):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("ahsync.__main__.run", interrupted)
+    assert main([]) == 0
+
+
+@pytest.mark.parametrize("premium", [True])
+def test_premium_start_wires_live_refresh(tmp_path, premium):
+    clock = FakeClock()
+    world = AhfWorld(clock, premium=premium)
+    code, _ = start(tmp_path, world, 'api_key = "ak_x"\n', stop_after_ticks=400)   # > 15 min of 5 s ticks
+    assert code == 0
+    assert world.transport.count(f"api/v1/ah/{DEFAULT_MARKET}") >= 2
