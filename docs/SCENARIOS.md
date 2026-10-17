@@ -13,10 +13,11 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 
 ## Contents
 
-1. [Core scenarios](#1-core-scenarios): volume, sync, failure modes, dashboard security, pricing, sell probability, patterns, recommendations, own record, display, craft sourcing, chains, missed peaks, refresh, confidence, tracking, addon
+1. [Core scenarios](#1-core-scenarios): volume, sync, failure modes, dashboard security, pricing, sell probability, patterns, recommendations, own record, display, craft sourcing, chains, missed peaks, refresh, confidence, tracking, addon (A1–A5)
 2. [Visual tests](#2-visual-tests-ui1ui11) (SPEC §8.4)
 3. [Views and tooltip](#3-views-and-tooltip-d16d22-tt1tt5) (SPEC §8.5)
 4. [Calibration](#4-calibration-k1k3) (SPEC §8.8)
+5. [Invariants](#5-invariants-spec-87) (SPEC §8.7)
 
 ## 1. Core scenarios
 
@@ -106,7 +107,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 |---|---|---|
 | P1 | hourly closes 1,2,3,…,9 g | `med7` = 5 g |
 | P2 | only 2 hourly closes but 7 daily closes | median falls back to daily (fewer than 24 hourly closes) |
-| P3 | Saturday 18:00 UTC prices consistently 20% above `med30` for 4 weeks | `how[Sat][18]` ≈ 1.2, confidence high |
+| P3 | Saturday 16:00–20:00 UTC prices consistently 20% above `med30` for 4 weeks (the slot and the 2 on each side, so smoothing keeps the full rise) | `how[Sat][18]` = 1.2, confidence high |
 | P4 | the same pattern but only 1 week of data | weekday-only fallback, confidence low |
 | P5 | sell 20 at faction AH for 1 g each, `P` = 1 | E = 20 g × 0.95 = 19 g; the deposit is refunded |
 | P6 | sells 120/day (flat profile), post 20 now (8 h window), 10 units ahead (very long band), no new listings, no tier history | demand 40; the ahead units take 10; you get 30 → P = 1 |
@@ -131,7 +132,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | P20 | new listings in the last 7 days: 40% priced at or below the then-lowest price; you post at the lowest | `u = 0.4` |
 | P21 | S = 24/day; profile: 06:00–09:00 at 1.0, 10:00–13:00 at 0.5, 14:00–17:00 at 2.0; post 10 at **06:00**, nothing ahead | demand 4 × 1.0 + 4 × 0.5 = 6 → P = 0.60 |
 | P22 | the same item posted at **10:00** | demand 4 × 0.5 + 4 × 2.0 = 10 → P = 1.00. The same post is worth more at 10:00, because its window catches the 14:00 rush |
-| P23 | Week plan: target window Sat 17:00–21:00, best hour 18:00 | post Sat 10:00; chance window Sat 10:00–20:59 (11 h); the auction is 12 h, the shortest covering it |
+| P23 | Week plan: target window Sat 17:00–21:00, best hour 18:00 | post Sat 10:00; chance window Sat 10:00–20:59 (11 h); the auction is 24 h, the shortest seeded duration (2, 8, 24 h) covering it |
 | P24 | a flip bought now, to sell in the Sat 17:00–21:00 window | its sale uses the Sat 10:00–20:59 window, not the next 8 hours |
 
 **Weekly patterns** (`patterns`):
@@ -139,7 +140,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | # | Scenario | Then |
 |---|---|---|
 | W1 | flat demand; `how` = 1.15 on Tue 18–20, 1.12 on Wed 19–21, 1.00 elsewhere | threshold 0.9 × 1.15 = 1.035 → windows "Tue 18:00–21:00" (sum 3.45), then "Wed 19:00–22:00" (sum 3.36) |
-| W2 | as W1, but Tue 18–20 `sales_how` = 0.4 while Wed 19–21 is the busiest (1.0) | Tue scores 1.15 × 0.4 = 0.46 and is dropped; the top window is Wed 19:00–22:00 (high price with no buyers loses) |
+| W2 | as W1, but `sales_how` is 0.8 on Tue 18–20 and 2.0 on Wed 19–21 (the busiest), about 1.0 elsewhere so the mean stays 1.0 | Tue scores 1.15 × 0.8 ÷ 2.0 = 0.46 and is dropped; the top window is Wed 19:00–22:00 (score 1.12): a high price with few buyers loses |
 | W3 | Sun 23:00–Mon 01:00 all qualify | one window "Sun 23:00–Mon 02:00" (crosses midnight) |
 | W4 | a slot has values 1.0 (this week), 1.0 (1 week ago), 1.2 (4 weeks ago); half-life 4 | weights 1, 0.84, 0.5; the weighted median is 1.0 |
 | W5 | the top window has 2 weeks of data | labelled "early pattern"; confidence low |
@@ -260,7 +261,8 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | IU5 | the curve row for the current hour has P(2 ahead) = 0.90 and P(5 ahead) = 0.78; 3 units are now ahead | P = 0.90 − 0.12 × (1 ÷ 3) = 0.86, in both Python and Lua |
 | IU6 | an in-game scan changes Silk Cloth's price | only Silk Cloth and the crafts that use it are recomputed |
 | IU7 | idle for 10 minutes, no file change | no engine call; one SavedVariables stat every 5 s |
-| IU8 | refresh at 06:00; it is now 20:00; the 06:00 row gives P(0 ahead) = 0.40 and the 20:00 row 0.85 (evening buyers) | P = 0.85: the current hour's row, in both Python and Lua |
+| IU8 | refresh at 06:00; it is now 20:00; the 06:00 row gives P(0 ahead) = 0.40 and the 20:00 row 0.84 (evening buyers) | P = 0.84: the current hour's row, in both Python and Lua |
+| IU11 | the simulation gives P = 0.853 for a curve point | exported as 0.86 (2% steps: floor(0.853 × 50 + 0.5) = 43 → 43 ÷ 50), stored as the character `string.char(35 + 43)` = "N"; Python and Lua both read 0.86 |
 | IU9 | refresh at 06:00 Fri; it is 08:00 Sat with no refresh since | the 08:00 row from Fri is reused; the age badge is amber (over 24 h) |
 | IU10 | a pending buy's slot passes 24 h while AHSync idles with no file change | the :00 status pass marks it missed; history reads = 0; no simulation; `Data.lua` rewritten |
 
@@ -294,13 +296,15 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | T15 | the same action at Wed 00:00, still not posted | `missed`; the missed-peak re-plan runs (M1) |
 | T16 | the same action; you post at Tue 21:30 | matches the late action → `done` |
 
-**Addon** (Lua, `tests/addon/...`): every scenario for a ported module (`fees`, `sellprob`, `disenchant`, `craft`; see §5) must pass on the Lua port with identical numbers. Volume (V*) and tracking (T*) scenarios run in Python only. Plus:
+**Addon** (Lua, `tests/addon/...`): every scenario for a ported module (`fees`, `sellprob`, `disenchant`, `craft`; see SPEC §5) must pass on the Lua port with identical numbers. Volume (V*) and tracking (T*) scenarios run in Python only. Plus:
 
-- the SavedVariables round-trip (`ingest/savedvars` parses what `Capture/*` writes)
-- live re-rank: a search result that changes a price re-orders the list and drops targets that are gone
-- `Data.lua` loads in Lua 5.1 without hitting the constant limit for 20k items
-- `Data.lua` with `ingestedUntil` = T removes scans and mail at or before T from SavedVariables, and keeps later ones
-- an engine error raised during a re-rank is caught at the UI boundary and shown as a status line
+| # | Scenario | Then |
+|---|---|---|
+| A1 | `Capture/*` writes a SavedVariables file with characters, recipes, inventory and events | `ingest/savedvars` parses it back to the same records (round-trip) |
+| A2 | at the AH, a search result raises a flip target's price above its profit line; another target is gone | the list re-orders; both targets are dropped |
+| A3 | a `Data.lua` with 20k items | loads in Lua 5.1 without hitting the constant limit |
+| A4 | `Data.lua` with `ingestedUntil` = T | scans, posts, purchases, crafts and mail at or before T are removed from SavedVariables; later ones are kept |
+| A5 | an engine error is raised during a re-rank | caught at the UI boundary and shown as a status line; no Lua error popup; the list keeps its last good state |
 
 ## 2. Visual tests (UI1–UI11)
 
@@ -344,3 +348,45 @@ Rules: SPEC §8.8.
 | K1 | 10 posts predicted 0.8, 8 sold | bucket 80–100%: predicted 80%, actual 80%; Brier = (8 × 0.04 + 2 × 0.64) ÷ 10 = 0.16 |
 | K2 | 25 posts predicted 0.5, 7 sold | bucket 40–60% actual 28%; warning raised (off by 22 points, ≥ 20 posts) |
 | K3 | 5 posts predicted 0.5, 0 sold | no warning (fewer than 20 posts) |
+
+## 5. Invariants (SPEC §8.7)
+
+How cases are generated, and how many: SPEC §8.7.
+
+**Sell probability and expected value** (`sellprob`):
+
+| # | Invariant |
+|---|---|
+| PI1 | `0 ≤ P ≤ 1`, and `0 ≤ P' ≤ 1` |
+| PI2 | More sales per day, or a longer window, never lowers `P` |
+| PI3 | More competing units at or below your price, or posting more units, never raises `P` |
+| PI4 | Lowering your price never lowers `P` (fewer listings are ahead of you) |
+| PI5 | With no own record, `P' = P`. With a record, `P'` lies between `P` and your own sell rate `s ÷ (s + x)`, and moves toward your rate as you post more |
+| PI6 | With `P = 1`: `E_post = q × p × (1 − cut)`, so the deposit is never lost |
+| PI7 | With `P = 0`: `E_post = q × fallback − deposit` |
+| PI8 | When the sale is worth more than the fallback minus the lost deposit, a higher `P` never lowers `E_post` |
+| PI9 | Expected profit never exceeds the profit if everything sells |
+| PI10 | With a flat sales profile, no competitor expiring and `u = 0`, the simulation equals the old formula `clamp((S·W/24 − ahead) ÷ q, 0, 1)` |
+| PI11 | More undercut arrivals (higher `L` or `u`) never raise `P_queue` |
+| PI12 | A competitor that expires sooner (shorter band) never lowers `P_queue` |
+| PI13 | A longer window (adding hours at the end) never lowers `P_queue` |
+| PI14 | `P` lies between `P_queue` and `ST_tier`, and equals `P_queue` when there is no tier history |
+| PI15 | Units sold in the simulation: yours plus competitors' never exceeds the total demand `S × h ÷ 24` |
+| PI16 | Raising `sales_how` in any hour of the window never lowers `P_queue` |
+| PI17 | Every `P` is computed over the window its context defines (posting now: the next 8 h; planned post: from the post time through the end of its selling window, §3.3.2); no calculation uses another window |
+
+**Other formulas:**
+
+| # | Invariant |
+|---|---|
+| VI1 | Volume: `sold + expired = gone`, all ≥ 0, and `expired ≤ expiring` |
+| CI1 | Craft: the chosen source for a reagent costs no more than any other available source |
+| CI2 | Craft: each added craft has a positive marginal profit; the next one would not |
+| CI3 | Chains: profit is counted once, so the chain's total equals the final product's profit |
+| PL1 | Plan: buys never exceed the budget; no action is before `now_ms`; every craft has a follow-up within 7 days; every post is at peak − `post_lead_hours` (or now) |
+| PL2 | Plan: a planned post quantity is never below 1 stack and never above what you hold |
+| PL3 | Missed peaks: a replacement's `E` is always ≥ 90% of its original anchor (never of an earlier replacement), its P' ≥ `min_sell_prob`, and it lies in the same plan week. Otherwise the action is a hold |
+| VW1 | Views: every total equals the sum of its rows; filters only hide rows, never change their numbers; each chain's profit appears in exactly one row of any view (§3.4 expected net) |
+| LP1 | Python and Lua give identical rounded results on every generated case for the ported modules |
+| FI1 | A crash injected at any commit point of catch-up, ingest or refresh, followed by a restart, gives the same final database rows and `Data.lua` bytes as an uninterrupted run |
+| FI2 | Ingesting any SavedVariables file twice, or in any order with earlier files, gives the same database as ingesting each once in order |

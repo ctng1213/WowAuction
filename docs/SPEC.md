@@ -180,6 +180,7 @@ All the heavy lifting happens in AHSync, and only in a **full refresh**. Everyth
 - **Columns:** 8 points of units ahead: 0, 1, 2, 5, 10, 20, 50, 100.
 - It is computed at the current price tier, and it carries the inputs needed to blend it.
 - Items on any list get the full 24 × 8 grid. Other items, which only need the tooltip, get 24 × 3 (0, 5 and 20 ahead), to stay within the `Data.lua` budget.
+- **Encoding: one character per point.** Each `P` is quantized to 2% steps, `n = floor(P × 50 + 0.5)` (0–50), and written as `string.char(35 + n)`, row by row, in the item's string. Codes 35–85 contain no `"` and no `\`, so no escaping is needed. A 9k-item market then needs about 650 KB of curves, which leaves room in the 2 MB budget for everything else. **AHSync uses the quantized curve too**, not the raw simulation result, so Python and Lua read identical values (IU11).
 
 When a price or the competition changes, AHSync and the addon both pick the row for the current hour and interpolate linearly between the units-ahead points, in O(1) time. More than 24 h after the refresh, they reuse the row for the same clock hour, and the age badge already warns that the data is old. The full simulation is never run live.
 
@@ -474,7 +475,7 @@ The week's 168 hours are treated as **repeating slots**: every Tuesday 19:00 is 
 
 All money is net of fees. Estimates come with a confidence level.
 
-- **Fees** (`engine/fees`): the AH cut is 5% at the faction AH. The deposit is `floor(vendor_sell × q × rate(duration))`, and it is refunded on sale (§3.3.2). The rates and durations are seeded in `fees.py` and must be verified in game (§6). The neutral AH (15% cut) is not planned in v1.
+- **Fees** (`engine/fees`): the AH cut is 5% at the faction AH. The deposit is `floor(vendor_sell × q × rate(duration))`, and it is refunded on sale (§3.3.2). The rates and durations are seeded in `fees.py` with Classic Era values (durations 2, 8 and 24 h) and must be verified in game (§6). The neutral AH (15% cut) is not planned in v1.
 - **Post price** `p` = `min(curOthers − 1, med7)` in copper. If one of them is nil, it uses the other. If both are nil, the item has no price: it is skipped and flagged "no price". `curOthers` leaves out your own auctions, so you never undercut yourself.
 - **Sell value** per unit, for things you don't hold yet (DE results, a craft's mats you'd buy) = `E_post(q, p) / q`, using the posting-now window (the next 8 hours).
   - `q` is the item's **reference stack**: the most common stack size in the newest book, with ties going to the smaller one. It is 1 when there is no book.
@@ -671,7 +672,7 @@ You set or clear a rule from any dashboard row, from the **Rules** page, or by r
 
    Hovering a Chance cell, or opening the item detail, shows the breakdown: market sell-through, days of supply, units ahead of you and when they expire, expected undercuts, queue result, tier history and your record.
 2. **`Interface/AddOns/AHProfit_Data/Data.lua`**, written atomically (temp file + rename):
-   - compact prices per item, stored as strings so the file stays under Lua's constant limits
+   - compact prices per item, stored as strings so the file stays under Lua's constant limits, with the sell-probability curve encoded one character per point (§3.1.1)
    - the same action list the dashboard shows, with action ids so the addon can mark them done
    - your sell record per item (`s`, `x`, `streak`) and the item rules
    - `ingestedUntil` for the pruning handshake (§2.2), written only after the database commit
@@ -1002,7 +1003,7 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `Data.lua` → 
 | Addon upgraded with a new SavedVariables layout | migrated forward on load by version, step by step; the original is kept until the migration is saved | a failed migration leaves the old data untouched and shows an error |
 
 **Tests:**
-- Every row in the two tables above has a scenario (FM1–FM24, plus UI4 for a missing `Data.lua` and the addon error-boundary scenario; see [SCENARIOS.md](SCENARIOS.md)), run against `FakeTransport`, a fake filesystem and `wow_stubs.lua`. Fault injection is deterministic: a fake fails "on the 3rd write" or "after 40% of the file", never at random.
+- Every row in the two tables above has a scenario (FM1–FM24, plus UI4 for a missing `Data.lua` and A5 for the Lua error boundary; see [SCENARIOS.md](SCENARIOS.md)), run against `FakeTransport`, a fake filesystem and `wow_stubs.lua`. Fault injection is deterministic: a fake fails "on the 3rd write" or "after 40% of the file", never at random.
 - An invariant (FI1, §8.7) checks that a crash at any commit point, followed by a restart, gives the same final database and `Data.lua` as an uninterrupted run.
 
 **Addon performance tests:**
@@ -1069,7 +1070,7 @@ Builders accept item names, `"1g 20s 5c"` prices and `T0+2h` times, and convert 
 
 ### 8.3 Required scenarios (minimum set)
 
-The minimum set lives in **[SCENARIOS.md](SCENARIOS.md)**, grouped by module, with IDs V*, S*, FM*, SEC*, P*, W*, R*, O*, D*, C*, M*, IU*, CF*, T* and UI*, TT*, K*.
+The minimum set lives in **[SCENARIOS.md](SCENARIOS.md)**, grouped by module, with IDs V*, S*, FM*, SEC*, P*, W*, R*, O*, D*, C*, M*, IU*, CF*, T*, A* and UI*, TT*, K*, plus the invariants PI*, VI*, CI*, PL*, VW*, LP* and FI* (§8.7).
 Spec sections refer to scenarios by ID. A convention test keeps that file and the tests in step (§8.1).
 
 ### 8.4 Visual tests (addon UI)
@@ -1107,7 +1108,7 @@ Each number a tab shows comes from a pure function in `ahsync/engine/`. The dash
 | Status | `sync.*`, `record.calibration` | S1–S10, K1–K3 |
 | Weekly patterns, best windows | `patterns.sell_windows`, `patterns.weighted_median` | W1–W7 |
 | Confidence % | `confidence.score` | CF1–CF4 |
-| Refresh and incremental updates | `refresh.refresh_all`, `refresh.update_items`, `plan.status_pass`, `sellprob.from_curve` | IU1–IU10 |
+| Refresh and incremental updates | `refresh.refresh_all`, `refresh.update_items`, `plan.status_pass`, `sellprob.from_curve` | IU1–IU11 |
 | Failure handling | `sync.*`, `ingest.*`, `export.*`, `refresh.*`, addon `Core/*` | FM1–FM24, FI1–FI2 |
 | Dashboard security (not engine; `web/server`) | request checks | SEC1–SEC7 |
 | Sell probability, expected value | `sellprob.simulate`, `sellprob.blend`, `sellprob.expected` | P5–P9, P12–P24, PI1–PI17, K1–K3 |
@@ -1133,43 +1134,7 @@ Single scenarios check one example. Invariants check that a formula behaves sens
 - **How cases are made.** `tests/support/gen.py` makes cases from a fixed seed with `random.Random(seed)`. A failure prints the seed and the inputs, so it can be reproduced. The generated cases are saved to `tests/properties/*.json`, so the Lua port is checked against exactly the same cases.
 - **Scale.** At least 1,000 cases per invariant.
 
-**Sell probability and expected value** (`sellprob`):
-
-| # | Invariant |
-|---|---|
-| PI1 | `0 ≤ P ≤ 1`, and `0 ≤ P' ≤ 1` |
-| PI2 | More sales per day, or a longer window, never lowers `P` |
-| PI3 | More competing units at or below your price, or posting more units, never raises `P` |
-| PI4 | Lowering your price never lowers `P` (fewer listings are ahead of you) |
-| PI5 | With no own record, `P' = P`. With a record, `P'` lies between `P` and your own sell rate `s ÷ (s + x)`, and moves toward your rate as you post more |
-| PI6 | With `P = 1`: `E_post = q × p × (1 − cut)`, so the deposit is never lost |
-| PI7 | With `P = 0`: `E_post = q × fallback − deposit` |
-| PI8 | When the sale is worth more than the fallback minus the lost deposit, a higher `P` never lowers `E_post` |
-| PI9 | Expected profit never exceeds the profit if everything sells |
-| PI10 | With a flat sales profile, no competitor expiring and `u = 0`, the simulation equals the old formula `clamp((S·W/24 − ahead) ÷ q, 0, 1)` |
-| PI11 | More undercut arrivals (higher `L` or `u`) never raise `P_queue` |
-| PI12 | A competitor that expires sooner (shorter band) never lowers `P_queue` |
-| PI13 | A longer window (adding hours at the end) never lowers `P_queue` |
-| PI14 | `P` lies between `P_queue` and `ST_tier`, and equals `P_queue` when there is no tier history |
-| PI15 | Units sold in the simulation: yours plus competitors' never exceeds the total demand `S × h ÷ 24` |
-| PI16 | Raising `sales_how` in any hour of the window never lowers `P_queue` |
-| PI17 | Every `P` is computed over the window its context defines (posting now: the next 8 h; planned post: from the post time through the end of its selling window, §3.3.2); no calculation uses another window |
-
-**Other formulas:**
-
-| # | Invariant |
-|---|---|
-| VI1 | Volume: `sold + expired = gone`, all ≥ 0, and `expired ≤ expiring` |
-| CI1 | Craft: the chosen source for a reagent costs no more than any other available source |
-| CI2 | Craft: each added craft has a positive marginal profit; the next one would not |
-| CI3 | Chains: profit is counted once, so the chain's total equals the final product's profit |
-| PL1 | Plan: buys never exceed the budget; no action is before `now_ms`; every craft has a follow-up within 7 days; every post is at peak − `post_lead_hours` (or now) |
-| PL2 | Plan: a planned post quantity is never below 1 stack and never above what you hold |
-| PL3 | Missed peaks: a replacement's `E` is always ≥ 90% of its original anchor (never of an earlier replacement), its P' ≥ `min_sell_prob`, and it lies in the same plan week. Otherwise the action is a hold |
-| VW1 | Views: every total equals the sum of its rows; filters only hide rows, never change their numbers; each chain's profit appears in exactly one row of any view (§3.4 expected net) |
-| LP1 | Python and Lua give identical rounded results on every generated case for the ported modules |
-| FI1 | A crash injected at any commit point of catch-up, ingest or refresh, followed by a restart, gives the same final database rows and `Data.lua` bytes as an uninterrupted run |
-| FI2 | Ingesting any SavedVariables file twice, or in any order with earlier files, gives the same database as ingesting each once in order |
+The invariants (PI1–PI17, VI1, CI1–CI3, PL1–PL3, VW1, LP1, FI1–FI2) are listed in [SCENARIOS.md §5](SCENARIOS.md#5-invariants-spec-87), with the other test IDs, so the convention test (§8.1) sees one list.
 
 ### 8.8 Calibration: does the chance to sell match reality?
 
