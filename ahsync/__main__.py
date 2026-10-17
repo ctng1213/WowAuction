@@ -28,6 +28,7 @@ from ahsync.ingest.apply import ingest_file
 from ahsync.store.db import Database, DatabaseError
 from ahsync.store.prune import prune
 from ahsync.sync.catchup import SyncContext, check_capabilities, run_catchup, sync_markets
+from ahsync.sync.refresh import refresh_all
 from ahsync.sync.scheduler import SavedVarsWatcher, Scheduler, SchedulerHooks, file_mtime_ms, find_savedvars
 from ahsync.web.server import DashboardApp, DashboardServer, new_token, open_server_db, start_dashboard, stop_dashboard
 
@@ -135,18 +136,33 @@ def safe_backup(db: Database, backup_dir: Path, now_ms: int) -> None:
         logging.getLogger("ahsync").warning("daily backup failed: %s", error)
 
 
-def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path) -> SchedulerHooks:
-    """Wire the steady-state jobs that exist in M1.
+def full_refresh(db: Database, clock: Clock, config: Config) -> None:
+    """Run the full refresh and log what it did (SPEC §3.1.1); failures are already kept on Status.
+
+    Args:
+        db: The database.
+        clock: Time source.
+        config: Settings.
+    """
+    result = refresh_all(db, clock.now_ms(), config)
+    logging.getLogger("ahsync").info("full refresh: %d items, %d failed%s", result.items, len(result.failed),
+                                     f"; NOT published: {result.error}" if result.error else "")
+
+
+def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path,
+                refresh_requested: Callable[[], bool] = lambda: False) -> SchedulerHooks:
+    """Wire the steady-state jobs.
 
     Args:
         ctx: The run's API, database, clock and capabilities; the hourly store
             re-checks /me and updates ctx.caps, so Premium ending mid-session degrades.
         config: Settings.
         backup_dir: data/backups.
+        refresh_requested: Consumes a pending "Refresh now" from the dashboard.
 
     Returns:
-        Hooks with store_hour, daily, weekly and savedvars_changed set. The live table
-        stays off until its format is recorded (SPEC §5.2).
+        Hooks with store_hour, full_refresh, refresh_requested, daily, weekly and
+        savedvars_changed set. The live table stays off until its format is recorded (SPEC §5.2).
     """
     def store_hour() -> None:
         """Hourly :06 store: /me, new hours, snapshot, books; no recompute (SPEC §3.1)."""
@@ -170,7 +186,9 @@ def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path) -> Scheduler
         ingest_file(path, ctx.db, ctx.clock, config.realms)
 
     return SchedulerHooks(store_hour=store_hour, daily=daily, weekly=ctx.db.vacuum,
-                          savedvars_changed=savedvars_changed)
+                          savedvars_changed=savedvars_changed,
+                          full_refresh=lambda: full_refresh(ctx.db, ctx.clock, config),
+                          refresh_requested=refresh_requested)
 
 
 def read_savedvars_at_start(db: Database, clock: Clock, config: Config, watcher: SavedVarsWatcher) -> None:
@@ -203,9 +221,8 @@ def read_savedvars_at_start(db: Database, clock: Clock, config: Config, watcher:
 class RefreshRequests:
     """"Refresh now" requests from the dashboard (SPEC §3.5 POST /api/refresh), safe across threads.
 
-    Requests made before the refresh runs merge into one (IU4). The scheduler has no
-    refresh-now hook yet: the full refresh (sync/refresh.py) should call take() and run
-    when it returns True.
+    Requests made before the refresh runs merge into one (IU4): the scheduler's
+    refresh_requested hook is take(), checked at each tick (at least every 5 s).
     """
 
     def __init__(self) -> None:
@@ -313,12 +330,13 @@ def _run_configured(data_dir: Path, config: Config, runtime: Runtime) -> int:
         api = AhfApi(ApiClient(runtime.transport, clock, config.api_key, redactor=redactor))
         result = run_catchup(api, db, clock, config.markets, config.retention_days)
         prune(db, clock.now_ms(), config.retention_days)
-        refresh_requests = RefreshRequests()     # read by the full refresh once it is wired (sync/refresh.py)
+        full_refresh(db, clock, config)          # SPEC §3.1: FULL REFRESH, then serve the dashboard
+        refresh_requests = RefreshRequests()
         if runtime.serve_dashboard:
             dashboard = serve_dashboard(data_dir, config, clock, refresh_requests, runtime.out)
         ctx = SyncContext(api, db, clock, result.caps, config.retention_days)
-        scheduler = Scheduler(clock, build_hooks(ctx, config, backup_dir), watcher, config.daily_refresh_time,
-                              config.live_refresh_minutes)
+        scheduler = Scheduler(clock, build_hooks(ctx, config, backup_dir, refresh_requests.take), watcher,
+                              config.daily_refresh_time, config.live_refresh_minutes)
         scheduler.run(runtime.should_stop)
         log.info("stopped")
         return 0

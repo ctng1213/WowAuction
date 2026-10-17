@@ -35,6 +35,15 @@ def _nothing() -> None:
     """Default hook: do nothing (for jobs not wired yet)."""
 
 
+def _never() -> bool:
+    """Default refresh-request check: nothing requested.
+
+    Returns:
+        False.
+    """
+    return False
+
+
 def _nothing_for(_path: Path) -> None:
     """Default SavedVariables hook: do nothing.
 
@@ -49,7 +58,8 @@ class SchedulerHooks:
 
     store_hour: Callable[[], None] = _nothing         # :06 hourly store (sync.catchup.sync_markets)
     status_pass: Callable[[], None] = _nothing        # :00 plan status pass (wired in M4)
-    full_refresh: Callable[[], None] = _nothing       # daily full refresh (wired in M3)
+    full_refresh: Callable[[], None] = _nothing       # full refresh: daily, and on "Refresh now"
+    refresh_requested: Callable[[], bool] = _never    # consumes a pending "Refresh now" (IU4: repeats merge)
     daily: Callable[[], None] = _nothing              # prune + backup
     weekly: Callable[[], None] = _nothing             # VACUUM
     live_refresh: Callable[[], None] | None = None    # Premium live table; None disables it
@@ -238,8 +248,11 @@ class Scheduler:
             self._run("live_refresh", self.hooks.live_refresh, ran)
         if now >= self.next_daily:
             self.next_daily = self._next_daily(now)
+            self.hooks.refresh_requested()               # a pending press is covered by this refresh
             self._run("full_refresh", self.hooks.full_refresh, ran)
             self._run("daily", self.hooks.daily, ran)
+        elif self.hooks.refresh_requested():
+            self._run("full_refresh", self.hooks.full_refresh, ran)
         if now >= self.next_weekly:
             self.next_weekly = now + WEEK_MS
             self._run("weekly", self.hooks.weekly, ran)

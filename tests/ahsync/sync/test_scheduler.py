@@ -142,3 +142,46 @@ def test_helpers(tmp_path):
     sv.write_text("AHProfitDB = {}", encoding="utf-8")
     assert find_savedvars(tmp_path) == [sv]
     assert isinstance(file_mtime_ms(sv), int) and file_mtime_ms(tmp_path / "missing") is None
+
+
+def test_IU3_the_daily_refresh_runs_once_after_its_time_and_not_again_that_day():
+    clock = FakeClock()
+    refreshes: list[int] = []
+    scheduler = Scheduler(clock, SchedulerHooks(full_refresh=lambda: refreshes.append(clock.now_ms())), None,
+                          daily_refresh_time="06:00")
+    clock.set(scheduler.next_daily + 60_000)
+    scheduler.tick()
+    for _ in range(12):
+        clock.advance(HOUR_MS)
+        scheduler.tick()
+    assert len(refreshes) == 1
+
+
+def test_IU4_refresh_now_pressed_twice_runs_one_refresh():
+    from ahsync.__main__ import RefreshRequests
+    clock = FakeClock()
+    requests = RefreshRequests()
+    refreshes: list[int] = []
+    hooks = SchedulerHooks(full_refresh=lambda: refreshes.append(clock.now_ms()), refresh_requested=requests.take)
+    scheduler = Scheduler(clock, hooks, None, daily_refresh_time="06:00")
+    requests.request_refresh()
+    requests.request_refresh()                     # a second press within a second merges
+    scheduler.tick()
+    clock.advance(5_000)
+    scheduler.tick()
+    assert len(refreshes) == 1
+
+
+def test_a_pending_press_is_covered_by_the_daily_refresh():
+    from ahsync.__main__ import RefreshRequests
+    clock = FakeClock()
+    requests = RefreshRequests()
+    refreshes: list[int] = []
+    hooks = SchedulerHooks(full_refresh=lambda: refreshes.append(clock.now_ms()), refresh_requested=requests.take)
+    scheduler = Scheduler(clock, hooks, None, daily_refresh_time="06:00")
+    clock.set(scheduler.next_daily)
+    requests.request_refresh()
+    scheduler.tick()
+    clock.advance(5_000)
+    scheduler.tick()
+    assert len(refreshes) == 1
