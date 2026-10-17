@@ -88,6 +88,9 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | FM22 | SavedVariables at its cap with 5 un-ingested full scans | the oldest scan is dropped; all events kept; warning shown |
 | FM23 | migration from SavedVariables v1 to v2 fails halfway | v1 data untouched; error shown; nothing deleted |
 | FM24 | AH closed with 6 of 10 searches still queued | queue dropped; the 6 unsearched targets keep their last price and show "…", not "✗ gone"; the queue is rebuilt on the next AH open |
+| FM25 | the key is expired: `/files` returns 401 with the key and 200 without it | the run continues on the free path; Status "API key rejected"; no traceback, no key in the log |
+| FM26 | a 10-day gap with Premium; h1c returns 403 from the first h1c hour | h1c disabled after that request; no further h1c requests; those hours reported lost (or day-only where d1c covers them); public h1 hours still sync |
+| FM27 | AHF renames a field in the hour candle files | "AHF format changed: h1" on Status; the hour loop stops; `last_hour` unchanged; no "bad file" rows; after the parser is fixed, the next run fetches those hours |
 
 **Dashboard security** (`web/server`, §3.5):
 

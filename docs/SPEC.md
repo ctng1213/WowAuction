@@ -83,7 +83,7 @@ Verified 2026-10-16, without a key: `/me`, `/files`, the snapshot, public h1 and
 | Hour candles | `candles/v1/h1/<m>/<hour>.json.gz`; Premium: `candles/v1/h1c/<m>/<caps.h1[day]>/<hour>.json.gz` (token per day, file per hour) | `items: [[key, [[t, open, high, low, close, qty], …]], …]` |
 | Day candles | `candles/v1/d1/<m>/<day>.json.gz` (7 days); Premium: `caps.d1`, the `d1c` file (90 days) | same as hour candles, with day `t` |
 | Snapshot | `snap/v1/<m>/latest.json` → `{hour, at, path}`; then `path` | `rows: [[key, price, qty, scanAt], …]` |
-| Order book | `files.books[].url` (`books/v1/<m>/<at>-<token>.json.gz`), with `complete` | `entries: [[key, price, stack, band, count], …]`, with band 1–4 as in WoW; `bidEntries` has 8 fields |
+| Order book | `files.books[].url` (`books/v1/<m>/<at>-<token>.json.gz`), with `complete` | `entries: [[key, price, stack, band, count], …]`, with band 1–4 as in WoW, plus 0 seen in real books (meaning unknown; treated as very long, the conservative choice for §3.3.2); `bidEntries` has 8 fields |
 | Volume | `caps.volume` | `items` (empty for this market so far, so the row format is still unknown) |
 | Items | `GET /items` | `items: {id: {n, q, il, c, sc, sell, buy, st, …}}`, `variants: {key: {n, q, …}}` for suffix keys, plus `suffixes`, `bonusLists`, `bonusTrees` |
 
@@ -143,7 +143,9 @@ Field rules:
 - Money is integer copper; prices are per unit.
 - Times are UTC Unix ms. WoW's clock (`GetServerTime()`, through the Adapter) counts whole seconds, so every time is seconds × 1000.
 - `charId` is `Name-Realm`. The market comes from the character's faction and the config's `[realms]` table (§2.1), so it isn't stored.
-- `key` is the AHF item key (§2.1). `Adapter.lua` computes it from the item link. How the link maps to AHF's suffix value `v` is still unknown (§6 item 11).
+- `key` is the AHF item key (§2.1). `Adapter.lua` computes it from the item link. How the link maps to AHF's suffix value `v` is still unknown (§6 item 11). Until it is known, a random-suffix item is written as **`key = −itemId`**: some suffix variant of that item, with `v` unknown. AHSync stores such rows but leaves them out of every valuation and recommendation, so a suffixed green is never priced at its base item's price.
+- **Unknown is left out, never 0.** A field the client can't tell us (a recipe's `skill` or `cooldown` on Classic APIs) is omitted, and AHSync reads it as unknown (None). `cooldown = 0` means "no cooldown".
+- **A snapshot is written only when it is complete.** Bags, bank, mail and professions each replace the previous value, so a partial read would look like lost items. A location is skipped, and the old value kept, when an occupied slot has no item link yet (not cached), when the mailbox has loaded fewer mails than it holds, or when a collapsed Skills header hides profession lines.
 - `band` is WoW's time-left code: 1 short, 2 medium, 3 long, 4 very long.
 - **Bulk rows are compact strings:** rows are separated by `;` and fields by `,`, in the order listed. Everything else is a plain table.
 - **Event ids** are `charId:timeMs:seq`. `seq` restarts at 0 each second for each character. Only one character is logged in at a time, so ids are unique.
@@ -164,15 +166,15 @@ AHProfitDB = {
   recipes = {                                  -- account-wide; profession -> spell id -> definition
     Blacksmithing = {
       [2663] = { product = 2857, yieldMin = 1, yieldMax = 1, skill = 1, cooldown = 0,  -- cooldown in s
-                 reagents = "2840,2" },        -- "key,count;key,count"
+                 reagents = "2840,2" },        -- "key,count;key,count"; skill/cooldown omitted when unknown
     },
   },
   vendorReagents = "2320;2321",                -- keys a merchant was seen selling (§3.4B)
   knownRecipes = { ["Brugan-Grommash"] = "2662;2663" },        -- spell ids, ascending
-  inventory = {                                -- latest snapshot per character, replaced whole
-    ["Amaya-Grommash"] = { at = 1760000000000,
-                           bags = "2840,20,0;6948,1,1",        -- "key,qty,bound(0/1)"
-                           bank = nil, mail = nil },           -- nil until first visited
+  inventory = {                                -- per character; each location replaced whole, with its own time
+    ["Amaya-Grommash"] = { bags = "2840,20,0;6948,1,1", bagsAt = 1760000000000,  -- "key,qty,bound(0/1)"
+                           bank = nil, bankAt = nil,           -- nil until first visited; "" = visited, empty
+                           mail = nil, mailAt = nil },
   },
   ownAuctions = {                              -- latest snapshot per character, replaced whole
     ["Amaya-Grommash"] = { at = 1760000000000, rows = "2857,4100,5,3,1" },  -- "key,price,stack,band,count"
@@ -331,6 +333,9 @@ inventory(char_id, location, key, qty, bound,                PK(char_id,location
 own_auctions(char_id, key, price, stack, band, count, seen,  PK(char_id,key,price,stack))
 sync_state(market PK, last_hour, last_d1, last_volume, live_since, last_run)
 meta(name PK, value)                                         -- e.g. savedvars_ingested_until
+mail_sent(event_id PK, char_id, to_char, key, qty, at, action_id)
+status(topic PK, level, kind, data, at)                      -- Status page lines; data = JSON fields, rendered by views (§8.5)
+fetch_failures(market, hour, failures, last_error, last_at,  PK(market,hour))   -- hour files to retry (§5.2)
 ```
 
 - Candle and `current` `src` is `ahf` or `local`.
@@ -351,6 +356,8 @@ meta(name PK, value)                                         -- e.g. savedvars_i
   - **Scan coverage.** `scans` has `coverage` (0–1); only `kind = full` with coverage 1 feeds volume diffs.
   - **Materialized stats.** `item_stats` (§3.1.1) is the per-item stats table that refresh writes. It has `item_stats_new` and `plan_new` as staging twins.
   - **Format version.** `meta` stores `schema_version`, and migrations run on start.
+  - **Status lines.** `status` stores a topic, a level and **structured fields** (ms ranges, counts, hour numbers) as JSON, never pre-formatted text, so the dashboard can show them in local time (§3.3) through `views` (§8.5). A line is deleted when its condition clears (Premium back, the hour recovered, the endpoint working again). Log lines may carry English text; they never carry secrets.
+  - **Placeholders until M3.** `item_stats` and `item_stats_new` hold `(market, key, stats JSON, updated)` until the engine defines their columns.
 
 **Retention: 90 days**, matching AHF's longest window, for candles, volume, posts, purchases, crafts, mail and actions. `cost_basis` and `item_rules` are kept until they no longer apply. Order books (`scans`, `book_entries`, both sources) are kept **30 days**, which is what the undercut share and the price-tier sell-through need (§3.3.2). Hourly AHF books for about 9k items are the largest table; the size estimate below assumes them.
 
@@ -967,6 +974,7 @@ Layout. **`tests/` mirrors the source tree one-to-one**: every source module has
 ```
 ahsync/
   config.py
+  clock.py    Clock protocol + SystemClock (injected everywhere; tests use FakeClock)
   api/        client.py (HTTP, retry, 429), ahf.py (endpoints)
   store/      db.py, schema.sql, prune.py
   sync/       catchup.py, scheduler.py (timers, daily refresh, file-change watch), refresh.py (full refresh + incremental updates, §3.1.1)
@@ -1059,8 +1067,13 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `Data.lua` → 
 
 | Failure | What happens | Recovery |
 |---|---|---|
-| Network timeout, 5xx, 429 | retry with backoff (1, 2, 4 … 60 s, honouring `Retry-After`); after 5 tries, skip this run | the next run resumes at `sync_state` |
-| AHF file truncated or bad gzip/JSON | not committed; logged | re-fetched next run; 3 failures in a row → that hour is marked "bad file" on Status |
+| Network timeout, 5xx, 429 | retry with backoff (1, 2, 4, 8, 16 s: the first try plus 5 retries), honouring `Retry-After` up to 300 s; a longer `Retry-After` skips the run | the next run resumes at `sync_state` |
+| 401 (key rejected or expired) | that request is retried once without the key; if the public request works, the run continues on the free path; Status "API key rejected" | fix the key; nothing crashes (FM25) |
+| Any other HTTP error on `/files` or `/me` | that market is skipped for this run; Status line | the next run retries |
+| AHF file truncated or bad gzip/JSON | not committed; logged; the hour gets a `fetch_failures` row and `last_hour` moves on, so later hours still sync | each later run retries the `fetch_failures` hours first; 3 failures in a row → "bad file" on Status; an hour that ages out of every source while still failing is added to the "lost" report, never dropped silently |
+| Premium file refused (`403`) mid-run | that endpoint is disabled for the run; its remaining hours are not requested and are reported as lost (or day-only if day candles cover them) | Status line; re-checked at the next `/me` (FM26) |
+| Hour file with an unexpected shape | treated as an API change, not a bad file: the endpoint is disabled, the hour loop stops, and `last_hour` does not advance | Status "AHF format changed: h1"; nothing is lost while the parser is fixed (FM27) |
+| Live table (`GET /ah/:market?since=`) | not recorded yet, so unsupported: skipped quietly (one log line, no Status error) | add a fixture and a parser when its format is known |
 | AHF response with an unexpected shape (API change) | that endpoint is disabled for the run; the last good data is kept | Status: "AHF format changed: snapshot"; record a new fixture and fix the parser |
 | Suspect price (below 10% of `p10_30` or above 10× `p90_30`) | stored but flagged; never used as `cur` for a buy recommendation | is ordinary again once confirmed by a second observation |
 | Crash or power loss mid catch-up | SQLite rolls back the open transaction | resumes at the next missing hour (S2) |
