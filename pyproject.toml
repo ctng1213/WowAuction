@@ -1,0 +1,15 @@
+# Test tooling only. AHSync itself is standard library only (SPEC §5); see requirements-dev.txt.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+# Test files mirror source names (test_db.py may exist in several folders), so no tests/__init__.py packages.
+addopts = "--import-mode=importlib"
+
+[tool.coverage.run]
+branch = true
+source = ["ahsync/engine"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true

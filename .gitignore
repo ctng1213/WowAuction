@@ -6,6 +6,7 @@ config.toml
 
 # Generated test output (golden files under tests/visual/golden/ ARE committed)
 tests/visual/out/
+tests/addon/generated/
 .coverage
 htmlcov/
 

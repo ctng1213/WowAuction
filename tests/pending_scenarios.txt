@@ -1,0 +1,34 @@
+# Scenario IDs listed in docs/SCENARIOS.md that have no test yet (SPEC §8.1).
+# Remove an ID when its test lands; test_conventions.py fails if a pending ID has a test.
+# Tokens: an ID (P12) or a same-prefix range (V1-V18). '#' starts a comment.
+
+# M1 sync and storage
+S1-S11
+SEC1-SEC7
+FM1-FM24
+FI1-FI2
+
+# M3-M4 engine
+V1-V18
+P1-P24
+W1-W7
+R1-R14
+O1-O18
+D1-D14 D16-D22
+C1-C16
+M1-M7
+IU1-IU11
+CF1-CF4
+T1-T16
+TT1-TT5
+K1-K3
+PI1-PI17
+VI1
+CI1-CI3
+PL1-PL3
+VW1
+LP1
+
+# M2/M5 addon
+A1-A5
+UI1-UI11

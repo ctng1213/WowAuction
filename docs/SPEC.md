@@ -118,7 +118,75 @@ Reading rules:
 
 - AHSync re-reads the file only after its modification time has been unchanged for 2 seconds, so it never parses a half-written file.
 - The file carries `formatVersion`, and every event carries a unique `event_id`, so ingest is idempotent. A file that won't parse is retried from WoW's `AHProfit.lua.bak` (§5.2).
-- **Pruning handshake.** Order books, events and mail would make SavedVariables grow without limit, which slows login and logout. AHSync writes `ingestedUntil` (the newest event time it has stored, in ms) into `Data.lua` (§3.5). On load, the addon deletes scans, posts, purchases, crafts and mail rows at or before that time.
+- **Pruning handshake.** Order books, events and mail would make SavedVariables grow without limit, which slows login and logout. AHSync writes `ingestedUntil` (the newest event time it has stored, in ms) into `Data.lua` (§3.5). On load, the addon deletes scans, posts, purchases, crafts and mail rows at or before that time. It keeps unconfirmed attempts younger than 1 h (§5.2), so a confirmation that arrives later still reaches AHSync, which upserts the event by its id.
+
+#### 2.2.1 SavedVariables layout (format version 1)
+
+The addon has one account-wide global, `AHProfitDB` (`## SavedVariables: AHProfitDB`). This layout is the contract between `Capture/*`, which writes it, and `ingest/savedvars.py`, which reads it. A1 round-trips it. A change to it bumps `formatVersion` and adds a migration on both sides (FM13, FM23).
+
+Field rules:
+- Money is integer copper; prices are per unit.
+- Times are UTC Unix ms. WoW's clock (`GetServerTime()`, through the Adapter) counts whole seconds, so every time is seconds × 1000.
+- `charId` is `Name-Realm`. The market comes from the character's faction and the config's `[realms]` table (§2.1), so it isn't stored.
+- `key` is the AHF item key (§2.1). `Adapter.lua` computes it from the item link's item id and suffix id. That AHF's `v` equals the link's suffix id is unverified (§6).
+- `band` is WoW's time-left code: 1 short, 2 medium, 3 long, 4 very long.
+- **Bulk rows are compact strings:** rows are separated by `;` and fields by `,`, in the order listed. Everything else is a plain table.
+- **Event ids** are `charId:timeMs:seq`. `seq` restarts at 0 each second for each character. Only one character is logged in at a time, so ids are unique.
+- Profession names are the client's English names; only enUS clients are supported in v1.
+
+```lua
+AHProfitDB = {
+  formatVersion = 1,
+  addonVersion = "0.1.0",
+  refreshRequestedAt = nil,                    -- ms; set by /ahp refresh (§3.1.1)
+  characters = {
+    ["Amaya-Grommash"] = { name = "Amaya", realm = "Grommash", faction = "Horde",
+                           class = "MAGE", level = 60, gold = 1234567, updated = 1760000000000 },
+  },
+  professions = {                              -- per character
+    ["Amaya-Grommash"] = { Enchanting = { skill = 225, max = 300 } },
+  },
+  recipes = {                                  -- account-wide; profession -> spell id -> definition
+    Blacksmithing = {
+      [2663] = { product = 2857, yieldMin = 1, yieldMax = 1, skill = 1, cooldown = 0,  -- cooldown in s
+                 reagents = "2840,2" },        -- "key,count;key,count"
+    },
+  },
+  vendorReagents = "2320;2321",                -- keys a merchant was seen selling (§3.4B)
+  knownRecipes = { ["Brugan-Grommash"] = "2662;2663" },        -- spell ids, ascending
+  inventory = {                                -- latest snapshot per character, replaced whole
+    ["Amaya-Grommash"] = { at = 1760000000000,
+                           bags = "2840,20,0;6948,1,1",        -- "key,qty,bound(0/1)"
+                           bank = nil, mail = nil },           -- nil until first visited
+  },
+  ownAuctions = {                              -- latest snapshot per character, replaced whole
+    ["Amaya-Grommash"] = { at = 1760000000000, rows = "2857,4100,5,3,1" },  -- "key,price,stack,band,count"
+  },
+  scans = {                                    -- oldest first; at most 4 un-ingested full scans (§5.1)
+    { id = "Amaya-Grommash:1760000000000:0", char = "Amaya-Grommash", at = 1760000000000,
+      kind = "full", coverage = 1.0,           -- kind "full" | "partial"; coverage 0..1
+      rows = "2589,38,20,3,4;2589,45,20,4,1" },  -- "key,price,stack,band,count"
+  },
+  events = {                                   -- oldest first; fields per type below
+    { id = "Amaya-Grommash:1760000000000:1", type = "post", char = "Amaya-Grommash",
+      at = 1760000000000, key = 2857, stack = 5, price = 4100, durationH = 24, deposit = 60,
+      confirmed = true },
+  },
+  rules = { [2589] = { rule = "no_buy", setAt = 1760000000000 } },   -- set in game; "none" = cleared (§3.4.2)
+}
+```
+
+| Event `type` | Fields besides `id`, `char`, `at` | Captured by |
+|---|---|---|
+| `post` | `key`, `stack`, `price`, `durationH`, `deposit`, `confirmed` | `Capture/Posts` |
+| `purchase` | `key`, `qty`, `price`, `source` (`ah` / `vendor`), `confirmed` | `Capture/Purchases` |
+| `craft` | `spell`, `count` | `Capture/Crafts` |
+| `mail_sent` | `to` (charId), `key`, `qty` | `Capture/Mail` |
+| `auction_mail` | `outcome` (`sold` / `expired` / `cancelled` / `won`), `key`, `qty`, `price` (sold and won only) | `Capture/Mail` |
+| `skip` | `action` (action id from `Data.lua`) | the row menu's "Mark as skipped" |
+
+- `confirmed` starts `false` when the hook fires and turns `true` when the action is confirmed (§5.2). The same row is updated in place.
+- Untracked changes (FM21) are not events. AHSync derives them by comparing consecutive inventory snapshots with the events between them.
 
 ## 3. AHSync (companion app)
 
@@ -907,10 +975,14 @@ tests/
   fixtures/ahf/        trimmed recordings of real AHF responses (the templates)
   fixtures/worlds/     w1.json + w1.expected.json: the whole-plan snapshot (§8.6)
   properties/          generated invariant cases shared by Python and Lua (§8.7)
-  scenarios/           named JSON scenarios shared by the Python and Lua tests
+  scenarios/           named JSON scenarios shared by the Python and Lua tests (their Lua form goes to addon/generated/, not committed)
   support/             builders.py, fake_clock.py, fake_transport.py, gen.py (seeded case generator), lua/runner.lua, lua/wow_stubs.lua,
                        lua/layout.lua (anchor solver + layout checks)
   visual/              scenarios/*.lua (UI1…), golden/*.txt (frame-tree snapshots), golden/*.png (renders)
+  test_conventions.py  docstrings, size limits, mirroring, scenario IDs (§8.1)
+  pending_scenarios.txt  listed IDs not built yet (§8.1)
+pyproject.toml         pytest and coverage settings only (no runtime dependencies)
+requirements-dev.txt   pytest, coverage
 tools/                 record_fixtures.py, gen_lua_fixtures.py, deploy.py, visual.py, bench.py (performance budgets, §3.1.2)
 docs/SPEC.md, docs/SCENARIOS.md, docs/mockups/addon.html (in game), docs/mockups/dashboard.html (desktop)
 CLAUDE.md
@@ -1026,6 +1098,7 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `Data.lua` → 
 8. **Tracking hooks**: the post and buy functions to hook, the sold / expired / won system messages, the mail invoice API, and the send-mail hook. Also check whether mail between your own characters arrives instantly or after a delay (it changes how mail steps are spaced in a chain).
 9. **wow-ui-sim spike** (§8.4, layer 3): can it load a Classic-style addon (`## Interface: 16001`) and render AHProfit's frames headless through Docker on Windows? It targets the retail client, and Classic support is not documented.
 10. **Folder name after launch.**
+11. **Item key from a link**: that AHF's suffix value `v` (§2.1) is the item link's suffix id, so `Adapter.lua` can compute keys that match AHF (§2.2.1).
 
 ## 7. Milestones
 
@@ -1046,6 +1119,8 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `Data.lua` → 
 
 - **Every core rule has a named scenario.** Each scenario reads Given / When / Then in plain numbers a person can check by hand. The scenario name is the test name, and it starts with the scenario's ID (for example `P12`).
 - **One list of scenarios: [SCENARIOS.md](SCENARIOS.md).** `tests/test_conventions.py` keeps it and the tests in step. It fails on a listed ID with no test, a test ID that isn't listed, or a duplicate ID.
+  - **Not built yet:** IDs whose feature isn't built yet go in `tests/pending_scenarios.txt`, so the suite stays green while the project grows. The test also fails when a pending ID already has a test, so the list only shrinks, and when it names an ID that isn't listed.
+  - **What counts as a test:** a Python test named `test_<ID>_…`, a Lua `it("<ID> …", …)` in a `*_spec.lua`, or an `id` in `tests/scenarios/*.json`.
 - **Real data as the template, mocked scenarios on top.** `tools/record_fixtures.py` records real AHF responses (`/me`, `/files`, snapshot, h1, d1, `/items`) and trims them to a small set of real items into `tests/fixtures/ahf/`. Builders load that template and apply the changes a scenario needs ("Copper Bar sells 40/day", "no run for 10 days", "AH listing undercut to 45s").
 - **No network, no real clock, no WoW in tests.** HTTP goes through an injected transport (`FakeTransport` serves fixture files and can return 429/404/503). Time comes from an injected `Clock` (`FakeClock`). Lua tests run outside the game against `wow_stubs.lua`.
 - **One source of truth for the formulas.** Engine scenarios live in `tests/scenarios/*.json`. Python reads them directly. `tools/gen_lua_fixtures.py` converts them to Lua so the Lua engine port is checked against **the same expected numbers**.

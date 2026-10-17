@@ -5,7 +5,8 @@ WowAuction: **AHSync** (Python companion app: sync + engine + dashboard) and **A
 ## Commands
 
 ```
-tools/test.ps1                 # all tests: regenerates Lua scenario fixtures, then pytest + Lua runner
+python -m pip install -r requirements-dev.txt     # once: pytest + coverage (dev-only)
+tools/test.ps1                 # all tests: regenerates Lua scenario fixtures, then pytest + Lua runner (-NoLua skips Lua)
 python -m pytest tests/ahsync  # Python tests only
 python tools/gen_lua_fixtures.py                  # tests/scenarios/*.json -> Lua (run before the Lua runner alone)
 lua5.1 tests/support/lua/runner.lua tests/addon   # Lua tests only
@@ -99,7 +100,7 @@ local function SellProbability(soldPerDay, windowDays, ahead, qty, defaultP) ...
 
 ## Testing rules
 
-- **Scenario first.** Add the Given / When / Then scenario to [docs/SCENARIOS.md](docs/SCENARIOS.md) before the code. The test name is the scenario's ID plus its name in plain English (`test_P12_long_band_competitor_expires`). `tests/test_conventions.py` fails when the file and the tests disagree.
+- **Scenario first.** Add the Given / When / Then scenario to [docs/SCENARIOS.md](docs/SCENARIOS.md) before the code. The test name is the scenario's ID plus its name in plain English (`test_P12_long_band_competitor_expires`). `tests/test_conventions.py` fails when the file and the tests disagree. IDs not built yet are listed in `tests/pending_scenarios.txt`: remove an ID there in the same change that adds its test. In Lua, name the test `it("P12 long band competitor expires", ...)`.
 - Shared engine scenarios live in `tests/scenarios/*.json` and run in **both** Python and Lua with the same expected numbers.
 - Use **real data as the template** (`tests/fixtures/ahf/`, recorded by `tools/record_fixtures.py`), then shape it with the builders in `tests/support/builders.py`. Don't hand-write large fixture blobs.
 - No network, real clock or real WoW in tests: use `FakeTransport`, `FakeClock`, `wow_stubs.lua`.
