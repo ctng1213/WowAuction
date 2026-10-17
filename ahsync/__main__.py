@@ -2,8 +2,9 @@
 
 Order: single-instance lock (FM15) → config (FM16) → log → database (check,
 restore, migrate) → daily backup → read SavedVariables → CATCH-UP → prune →
-steady-state loop, which re-reads SavedVariables when WoW rewrites them. The full
-refresh and status pass are scheduler hooks to be wired by later milestones.
+dashboard (http://localhost:<dashboard_port>, on its own thread) → steady-state loop,
+which re-reads SavedVariables when WoW rewrites them. The full refresh and status
+pass are scheduler hooks to be wired by later milestones.
 """
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ import logging.handlers
 import os
 import sqlite3
 import sys
+import threading
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,6 +29,7 @@ from ahsync.store.db import Database, DatabaseError
 from ahsync.store.prune import prune
 from ahsync.sync.catchup import SyncContext, check_capabilities, run_catchup, sync_markets
 from ahsync.sync.scheduler import SavedVarsWatcher, Scheduler, SchedulerHooks, file_mtime_ms, find_savedvars
+from ahsync.web.server import DashboardApp, DashboardServer, new_token, open_server_db, start_dashboard, stop_dashboard
 
 LOG_BYTES = 1_000_000
 LOG_BACKUPS = 3
@@ -115,6 +118,7 @@ class Runtime:
     clock: Clock
     should_stop: Callable[[], bool]     # polled by the steady-state loop
     out: IO[str]                        # user-facing start-up messages (stderr in the app)
+    serve_dashboard: bool = True        # False in tests that don't exercise the dashboard
 
 
 def safe_backup(db: Database, backup_dir: Path, now_ms: int) -> None:
@@ -196,6 +200,61 @@ def read_savedvars_at_start(db: Database, clock: Clock, config: Config, watcher:
             watcher.mark_handled(path, result.mtime_ms)
 
 
+class RefreshRequests:
+    """"Refresh now" requests from the dashboard (SPEC §3.5 POST /api/refresh), safe across threads.
+
+    Requests made before the refresh runs merge into one (IU4). The scheduler has no
+    refresh-now hook yet: the full refresh (sync/refresh.py) should call take() and run
+    when it returns True.
+    """
+
+    def __init__(self) -> None:
+        """Start with nothing requested."""
+        self._event = threading.Event()
+
+    def request_refresh(self) -> None:
+        """Ask for a full refresh; called on the dashboard's thread."""
+        self._event.set()
+
+    def take(self) -> bool:
+        """Consume the pending request, if any.
+
+        Returns:
+            True when a refresh was requested since the last take().
+        """
+        requested = self._event.is_set()
+        self._event.clear()
+        return requested
+
+
+def serve_dashboard(data_dir: Path, config: Config, clock: Clock, refresh: RefreshRequests,
+                    out: IO[str]) -> tuple[DashboardServer, Database] | None:
+    """Start the dashboard on its own thread (SPEC §3.1 "serve dashboard"); a failure is logged, never fatal.
+
+    Args:
+        data_dir: data/ (the server reads data/ahsync.db over its own connection).
+        config: Settings (dashboard_port, markets).
+        clock: Time source, for skip times.
+        refresh: Receives "Refresh now" requests.
+        out: Where the dashboard's address is printed for the user.
+
+    Returns:
+        (server, its database connection) to stop and close at exit, or None when the
+        port can't be bound (for example, already in use).
+    """
+    server_db = open_server_db(data_dir / "ahsync.db")
+    app = DashboardApp(server_db, config, clock, refresh.request_refresh, new_token(), config.dashboard_port)
+    try:
+        server = start_dashboard(app, config.dashboard_port)
+    except OSError as error:
+        server_db.close()
+        logging.getLogger("ahsync").warning("dashboard not started on port %d: %s", config.dashboard_port, error)
+        print(f"Dashboard not started: port {config.dashboard_port} is not available", file=out)
+        return None
+    print(f"Dashboard: http://localhost:{app.port}", file=out)
+    return server, server_db
+
+
 def run(data_dir: Path, config_path: Path, runtime: Runtime) -> int:
     """Start AHSync and run until runtime.should_stop() is True.
 
@@ -239,6 +298,7 @@ def _run_configured(data_dir: Path, config: Config, runtime: Runtime) -> int:
     log = logging.getLogger("ahsync")
     clock = runtime.clock
     db = None
+    dashboard = None
     try:
         log.info("starting; markets %s; %s", ", ".join(config.markets), "with key" if config.api_key else "no key")
         backup_dir = data_dir / "backups"
@@ -253,6 +313,9 @@ def _run_configured(data_dir: Path, config: Config, runtime: Runtime) -> int:
         api = AhfApi(ApiClient(runtime.transport, clock, config.api_key, redactor=redactor))
         result = run_catchup(api, db, clock, config.markets, config.retention_days)
         prune(db, clock.now_ms(), config.retention_days)
+        refresh_requests = RefreshRequests()     # read by the full refresh once it is wired (sync/refresh.py)
+        if runtime.serve_dashboard:
+            dashboard = serve_dashboard(data_dir, config, clock, refresh_requests, runtime.out)
         ctx = SyncContext(api, db, clock, result.caps, config.retention_days)
         scheduler = Scheduler(clock, build_hooks(ctx, config, backup_dir), watcher, config.daily_refresh_time,
                               config.live_refresh_minutes)
@@ -260,6 +323,9 @@ def _run_configured(data_dir: Path, config: Config, runtime: Runtime) -> int:
         log.info("stopped")
         return 0
     finally:
+        if dashboard is not None:
+            stop_dashboard(dashboard[0])
+            dashboard[1].close()
         if db is not None:
             db.close()
         log.removeHandler(handler)

@@ -1,17 +1,20 @@
 """Start-up (SPEC §3.1, §5.2): scenarios S8 and FM15, plus the start sequence."""
 from __future__ import annotations
 
+import http.client
 import io
+import json
 import logging
 import os
 import shutil
+import socket
 import sqlite3
 from pathlib import Path
 
 import pytest
 
-from ahsync.__main__ import (ALREADY_RUNNING, InstanceLock, Runtime, build_hooks, main, read_savedvars_at_start, run,
-                             safe_backup)
+from ahsync.__main__ import (ALREADY_RUNNING, InstanceLock, RefreshRequests, Runtime, build_hooks, main,
+                             read_savedvars_at_start, run, safe_backup, serve_dashboard)
 from ahsync.api.ahf import AhfApi
 from ahsync.api.client import ApiClient
 from ahsync.clock import HOUR_MS
@@ -28,7 +31,8 @@ KEY = "ak_live_SECRET_9f8e7d6c5b4a"
 A1_GOLDEN = Path(__file__).resolve().parents[1] / "fixtures" / "savedvars" / "a1.lua"
 
 
-def start(tmp_path, world: AhfWorld, config_text: str = "", stop_after_ticks: int = 0, env=None) -> tuple[int, str]:
+def start(tmp_path, world: AhfWorld, config_text: str = "", stop_after_ticks: int = 0, env=None,
+          should_stop=None, dashboard: bool = False) -> tuple[int, str]:
     """Run AHSync against a fake world until it has ticked a few times; return (exit code, printed text).
 
     wow_path points into tmp_path (line 1 of config.toml), so no test ever reads a real WoW folder.
@@ -37,12 +41,13 @@ def start(tmp_path, world: AhfWorld, config_text: str = "", stop_after_ticks: in
     config.write_text(f'wow_path = "{(tmp_path / "wow").as_posix()}"\n' + config_text, encoding="utf-8")
     calls = {"n": 0}
 
-    def should_stop() -> bool:
+    def stop_after() -> bool:
         calls["n"] += 1
         return calls["n"] > stop_after_ticks
 
     out = io.StringIO()
-    code = run(tmp_path / "data", config, Runtime(env or {}, tmp_path, world.transport, world.clock, should_stop, out))
+    code = run(tmp_path / "data", config, Runtime(env or {}, tmp_path, world.transport, world.clock,
+                                                  should_stop or stop_after, out, serve_dashboard=dashboard))
     return code, out.getvalue()
 
 
@@ -262,3 +267,56 @@ def test_savedvars_hook_ingests_the_changed_file(tmp_path):
     build_hooks(ctx, Config(realms={"Grommash": "pvp"}), tmp_path / "backups").savedvars_changed(path)
     assert db.count("characters") == 2 and db.count("posts") == 1
     db.close()
+
+
+def free_port() -> int:
+    """A loopback port that was free a moment ago."""
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def test_start_serves_the_dashboard_during_the_steady_state_and_stops_it(tmp_path):
+    port = free_port()
+    seen = {}
+
+    def query_then_stop() -> bool:
+        """Runs on the main thread inside the steady state; the dashboard answers from its own thread."""
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        conn.request("GET", "/api/markets", headers={"Host": f"localhost:{port}"})
+        reply = conn.getresponse()
+        seen["markets"] = (reply.status, json.loads(reply.read()))
+        conn.request("GET", "/api/views/craft", headers={"Host": f"localhost:{port}"})
+        reply = conn.getresponse()
+        seen["craft"] = (reply.status, json.loads(reply.read()))
+        conn.close()
+        return True
+
+    code, printed = start(tmp_path, AhfWorld(FakeClock()), f"dashboard_port = {port}\n", should_stop=query_then_stop,
+                          dashboard=True)
+    assert code == 0 and f"Dashboard: http://localhost:{port}" in printed
+    assert seen["markets"] == (200, {"markets": [DEFAULT_MARKET], "default": DEFAULT_MARKET})
+    assert seen["craft"] == (404, {"error": "no_refresh_yet"})
+    with socket.socket() as sock:                      # stopped: the port is free again
+        sock.bind(("127.0.0.1", port))
+
+
+def test_a_dashboard_port_in_use_is_logged_not_fatal(tmp_path, caplog):
+    Database.open(tmp_path / "ahsync.db", FakeClock().now_ms(), None).close()
+    with socket.socket() as busy:
+        busy.bind(("127.0.0.1", 0))
+        busy.listen()
+        port = busy.getsockname()[1]
+        out = io.StringIO()
+        with caplog.at_level(logging.WARNING, logger="ahsync"):
+            result = serve_dashboard(tmp_path, Config(dashboard_port=port), FakeClock(), RefreshRequests(), out)
+    assert result is None
+    assert f"port {port} is not available" in out.getvalue() and "dashboard not started" in caplog.text
+
+
+def test_refresh_requests_merge_until_taken():
+    requests = RefreshRequests()
+    assert requests.take() is False
+    requests.request_refresh()
+    requests.request_refresh()                         # pressed twice: one refresh (IU4)
+    assert requests.take() is True and requests.take() is False

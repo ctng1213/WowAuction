@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="ahsync-token" content="__AHSYNC_TOKEN__">
+<meta name="referrer" content="no-referrer">
+<title>AHSync Dashboard</title>
+<!--
+  The AHSync dashboard (SPEC §3.5), served by ahsync/web/server.py at http://localhost:8765.
+  The look follows docs/mockups/dashboard.html. Every number comes formatted from the full
+  refresh (engine/views.py); this page only displays, sorts by each row's `sort` values and
+  hides rows by their fields. It never parses or computes numbers (SPEC §8.5).
+-->
+<style>
+  /* WoW-themed dark palette: stone panels, gold trim, Blizzard item-quality colours. Always dark. */
+  :root {
+    color-scheme: dark;
+    --bg: #0e0d0b; --surface: #181612; --surface-2: #221f19; --border: #3d3424; --border-hi: #8a6d2f;
+    --text: #ece3cc; --muted: #9b917b; --accent: #ffd100; --accent-bg: #2b2210;
+    --pos: #3ddc4f; --neg: #ff4a3d; --amber: #ffb02e; --info: #69ccf0;
+    --q0: #9d9d9d; --q1: #ffffff; --q2: #1eff00; --q3: #2f8cff; --q4: #b55cff; --q5: #ff8000;
+    --serif: "Friz Quadrata TT", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+         background: radial-gradient(ellipse at 50% -10%, #2a2214 0%, var(--bg) 55%) fixed, var(--bg); }
+  a { color: inherit; text-decoration: underline; text-decoration-color: #4a3f2a; text-underline-offset: 2px; }
+  a:hover { text-decoration-color: currentColor; }
+
+  .top { display: flex; align-items: center; gap: 16px; padding: 10px 20px; flex-wrap: wrap;
+         background: linear-gradient(#211c13, #15120d); border-bottom: 2px solid var(--border-hi); box-shadow: 0 2px 10px rgba(0,0,0,.6); }
+  .brand { font: 700 19px var(--serif); color: var(--text); letter-spacing: .5px; text-shadow: 0 1px 2px #000; }
+  .brand span { color: var(--accent); }
+  .select { padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; background: #0b0a08; font-size: 13px; color: var(--text); }
+  select.select, input.select { font-family: inherit; }
+  .top .grow { flex: 1; }
+  .pill { padding: 2px 10px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: #0b0a08; white-space: nowrap; }
+  .pill.ok { color: var(--pos); border-color: #2c6b32; } .pill.warn { color: var(--amber); border-color: #7a5a1b; } .pill.gold { color: var(--accent); border-color: var(--border-hi); }
+
+  .layout { display: grid; grid-template-columns: 190px 1fr; min-height: calc(100vh - 54px); }
+  nav { background: linear-gradient(90deg, #15120d, #110f0b); border-right: 1px solid var(--border); padding: 12px 8px; }
+  nav button { display: flex; justify-content: space-between; width: 100%; text-align: left; padding: 7px 12px; margin: 2px 0; border: 1px solid transparent; border-radius: 4px;
+               background: none; color: var(--text); font: 15px var(--serif); cursor: pointer; }
+  nav button:hover { background: var(--surface-2); border-color: var(--border); }
+  nav button[aria-selected="true"] { background: linear-gradient(90deg, #3a2c10, #1d170c); color: var(--accent); border-color: var(--border-hi);
+                                     box-shadow: inset 3px 0 0 var(--accent); }
+  nav .soon { color: var(--muted); font: 11px system-ui, sans-serif; }
+  main { padding: 20px 24px 48px; min-width: 0; }
+  h1 { font: 24px var(--serif); color: var(--accent); margin: 0 0 4px; text-shadow: 0 1px 3px #000; }
+  .lede { color: var(--muted); margin: 0 0 16px; max-width: 760px; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; box-shadow: inset 0 0 0 1px #000, 0 3px 12px rgba(0,0,0,.5); }
+  .card-h { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; background: linear-gradient(#241f16, #1a1711); }
+  .card-h b { flex: 1; font: 15px var(--serif); color: var(--accent); font-weight: normal; }
+  .filters { display: flex; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; align-items: center; }
+  .filters .search { min-width: 180px; flex: 1; max-width: 260px; }
+  .filters label { color: var(--muted); font-size: 12px; display: flex; gap: 6px; align-items: center; }
+  .scrollx { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; }
+  th { text-align: left; font-size: 12px; font-weight: 600; color: #d9b54a; padding: 8px 12px; border-bottom: 1px solid var(--border-hi); white-space: nowrap; background: #120f0b; letter-spacing: .3px; }
+  th.sort { cursor: pointer; user-select: none; }
+  th.sort::after { content: " ↕"; opacity: .5; } th.sorted::after { content: " ↓"; opacity: 1; } th.sorted.asc::after { content: " ↑"; }
+  td { padding: 7px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  tbody tr:nth-child(even) td { background: rgba(255,255,255,.015); }
+  tbody tr:hover td { background: #2a2416; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .pos { color: var(--pos); } .neg { color: var(--neg); } .muted { color: var(--muted); } .amber { color: var(--amber); }
+  .sub { display: block; color: var(--muted); font-size: 12px; white-space: normal; max-width: 520px; }
+  .q0 { color: var(--q0); } .q1 { color: var(--q1); } .q2 { color: var(--q2); } .q3 { color: var(--q3); } .q4 { color: var(--q4); } .q5 { color: var(--q5); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+  .dot.h { background: var(--pos); } .dot.m { background: var(--amber); } .dot.l { background: var(--muted); }
+  /* Blizzard-style red panel button with gold text */
+  .btn { display: inline-block; padding: 3px 12px; border: 1px solid #000; border-radius: 3px; font-size: 12px; cursor: pointer; color: var(--accent);
+         background: linear-gradient(#8a1a14, #4d0c09); box-shadow: inset 0 0 0 1px #b2392f, 0 1px 2px #000; text-shadow: 0 1px 1px #000; font-family: inherit; }
+  .btn:hover { background: linear-gradient(#a3221a, #5e0f0b); }
+  .btn.primary { background: linear-gradient(#6b5420, #3a2c10); box-shadow: inset 0 0 0 1px #c9a64a, 0 1px 2px #000; }
+  .btn:disabled { opacity: .6; cursor: default; }
+
+  .alert { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); margin-bottom: 10px; }
+  .alert.warn { border-left: 4px solid var(--amber); } .alert.bad { border-left: 4px solid var(--neg); } .alert.info { border-left: 4px solid var(--info); }
+  .alert .grow { flex: 1; }
+  .empty { padding: 28px 14px; text-align: center; color: var(--muted); }
+  [hidden] { display: none !important; }
+
+  @media (max-width: 760px) {
+    .layout { grid-template-columns: 1fr; }
+    nav { display: flex; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 6px; }
+    nav button { width: auto; white-space: nowrap; }
+    nav .soon { display: none; }
+    main { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand">AH<span>Sync</span></div>
+  <label>Market: <select class="select" id="market" aria-label="Market"></select></label>
+  <span class="grow"></span>
+  <span class="pill" id="built" title="Numbers are recomputed at start, once a day after daily_refresh_time, or when you press Refresh now." hidden></span>
+  <button class="btn primary" id="refresh" type="button" title="Full refresh: recompute every statistic, chance and the plan (about a minute)">⟳ Refresh now</button>
+  <span class="pill" id="notice" hidden></span>
+</div>
+
+<div class="layout">
+  <nav id="nav" role="tablist"></nav>
+  <main id="main"></main>
+</div>
+
+<script>
+'use strict';
+// Per-run write token, embedded by the server (SPEC §3.5 Security). A page loaded before a restart
+// holds an old token: its next write gets 403 and we ask for a reload (SEC7).
+const TOKEN = document.querySelector('meta[name="ahsync-token"]').content;
+
+// ---------- helpers (display only: no arithmetic on numbers, SPEC §8.5) ----------
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const QUALITIES = [0, 1, 2, 3, 4, 5];
+const qualityClass = q => QUALITIES.includes(q) ? `q${q}` : 'q1';
+// SPEC GAP: §3.5 says item names link to auctionhouse.fyi but gives no per-item URL; like the mockup, link to the site.
+const item = (name, quality) => `<a class="${qualityClass(quality)}" href="https://auctionhouse.fyi/" target="_blank" rel="noopener noreferrer" title="Open on auctionhouse.fyi">${esc(name)}</a>`;
+const DOTS = { high: 'h', medium: 'm', low: 'l' };
+// The Chance · Volume pair (SPEC §3.5): the dot inside the Chance cell is the confidence; hover shows the exact %.
+const pairCells = r => {
+  const dot = DOTS[r.dot];
+  const title = dot && r.confidence !== null && r.confidence !== undefined
+    ? ` title="Confidence ${esc(r.confidence)}%: how much the data behind this chance can be trusted"` : '';
+  const chance = r.chance === '—' ? '<span class="muted">—</span>' : esc(r.chance);
+  return `<td class="num"${title}>${chance}${dot ? ` <span class="dot ${dot}"></span>` : ''}</td>` +
+         `<td>${r.volume === '—' ? '<span class="muted">—</span>' : esc(r.volume)}</td>`;
+};
+const profitCell = r => `<td class="num"><span class="${r.profit_class === 'pos' ? 'pos' : 'neg'}">${esc(r.profit)}</span></td>`;
+const riskCell = r => `<td class="num"><span class="${r.risk_amber ? 'amber' : 'muted'}">${esc(r.risk)}</span></td>`;
+const dash = v => v === '—' ? '<span class="muted">—</span>' : esc(v);
+const sourceClass = s => String(s).startsWith('Owned') ? 'pos' : String(s).startsWith('AH') ? 'amber' : '';
+
+// ---------- live pages (SPEC §3.5 dashboard data) ----------
+// Each column: [header, numeric?, sort key in row.sort (or null)].
+const LIVE = {
+  disenchant: {
+    lede: 'AH items worth buying to disenchant (SPEC §3.4A). Only shown when one of your characters has the skill. Chance (with its confidence dot) and Volume describe the <b>mats</b>, since they\'re what you sell. In every table, the <b>dot after a chance is its confidence</b> (<span class="dot h"></span>≥ 75% · <span class="dot m"></span>≥ 45% · <span class="dot l"></span>below); hover a chance for the exact %.',
+    cols: [['Item', 0, null], ['ilvl', 1, 'ilvl'], ['Buy', 1, 'buy'], ['Expected mats', 0, null], ['EV', 1, 'ev'], ['Profit', 1, 'profit'],
+           ['Chance', 1, null], ['Volume', 0, null], ['Risk', 1, null], ['Price age', 1, 'price_age']],
+    row: r => `<tr><td>${item(r.item, r.quality)}</td><td class="num">${esc(r.ilvl)}</td><td class="num">${dash(r.buy)}</td>` +
+              `<td class="muted">${esc(r.mats)}</td><td class="num">${dash(r.ev)}</td>${profitCell(r)}${pairCells(r)}${riskCell(r)}` +
+              `<td class="num">${dash(r.price_age)}</td></tr>`,
+    filters: [
+      { id: 'search', label: null, kind: 'search', placeholder: 'Search items…', test: (r, v) => !v || String(r.item).toLowerCase().includes(v.toLowerCase()) },
+      // Thresholds are copper constants compared with the row's engine-made sort.profit (no arithmetic).
+      { id: 'minProfit', label: 'Min profit', options: [['', 'Any'], ['1', 'Profitable'], ['100', '1s'], ['200', '2s'], ['1000', '10s'], ['10000', '1g']],
+        test: (r, v) => v === '' || r.sort.profit >= Number(v) },
+      { id: 'quality', label: 'Quality', options: [['', 'All'], ['2', 'Uncommon+'], ['3', 'Rare+'], ['4', 'Epic+']],
+        test: (r, v) => v === '' || r.quality >= Number(v) },
+    ],
+  },
+  craft: {
+    lede: 'Every recipe your characters know, priced now (SPEC §3.4B), whether or not you have the mats. <b>Source</b>: <span class="pos">Owned</span> = all mats from your stock; <span class="amber">AH</span> = all mats bought; Mixed = your stock topped up from the AH; <b>+ crafted</b> = one of your characters makes a reagent first. <b>Mats each / total</b> is the gold to buy the mats you\'re missing, per craft and for all crafts ("—" when you already own every mat). Profit counts owned mats at their <b>hold value</b>.',
+    cols: [['Product', 0, null], ['Recipe known by', 0, null], ['Source', 0, null], ['Crafts', 1, 'crafts'], ['Mats each', 1, null],
+           ['Mats total', 1, 'mats_total'], ['Value each', 1, 'value_each'], ['Expected profit', 1, 'profit'], ['Chance', 1, null],
+           ['Volume', 0, null], ['Risk', 1, null], ['Cooldown', 0, null]],
+    row: r => `<tr><td>${item(r.product, r.quality)}${r.note ? `<span class="sub">${esc(r.note)}</span>` : ''}</td><td>${esc(r.crafter)}</td>` +
+              `<td class="${sourceClass(r.source)}">${esc(r.source)}</td><td class="num">${esc(r.crafts)}</td><td class="num">${dash(r.mats_each)}</td>` +
+              `<td class="num">${dash(r.mats_total)}</td><td class="num">${dash(r.value_each)}</td>${profitCell(r)}${pairCells(r)}${riskCell(r)}` +
+              `<td class="${r.cooldown === 'ready' ? 'pos' : ''}">${esc(r.cooldown)}</td></tr>`,
+    filters: [
+      { id: 'search', label: null, kind: 'search', placeholder: 'Search products…', test: (r, v) => !v || String(r.product).toLowerCase().includes(v.toLowerCase()) },
+      // SPEC GAP: views.craft_row has no profession field yet; the filter uses row.profession and stays hidden until rows carry it.
+      { id: 'profession', label: 'Profession', fromRows: 'profession', test: (r, v) => v === '' || r.profession === v },
+      { id: 'source', label: 'Source', options: [['', 'All'], ['Owned', 'Owned'], ['AH', 'AH'], ['Mixed', 'Mixed']],
+        test: (r, v) => v === '' || r.source === v || String(r.source).startsWith(v + ' ') },
+    ],
+  },
+};
+
+// ---------- state ----------
+const state = { page: 'disenchant', market: '', sort: {}, filters: {}, data: {} };
+const storage = {
+  get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} },
+};
+
+// ---------- page chrome: every page, in the mockup's order ----------
+const ORDER = [['Today', 'today'], ['Week', 'week'], ['On the AH', 'on_ah'], ['Disenchant', 'disenchant'], ['Craft', 'craft'], ['Flip', 'flip'],
+               ['Inventory', 'inventory'], ['History', 'history'], ['Rules', 'rules'], ['Characters', 'characters'], ['Status', 'status']];
+const nav = document.getElementById('nav');
+const main = document.getElementById('main');
+ORDER.forEach(([name, id]) => {
+  const b = document.createElement('button');
+  b.setAttribute('role', 'tab'); b.type = 'button'; b.dataset.page = id;
+  b.innerHTML = `<span>${esc(name)}</span>${LIVE[id] ? '' : '<span class="soon">later</span>'}`;
+  b.onclick = () => { location.hash = name; };
+  nav.appendChild(b);
+});
+const titleOf = id => ORDER.find(([, i]) => i === id)[0];
+const idOfHash = () => { const n = decodeURIComponent(location.hash.slice(1)); const hit = ORDER.find(([name, id]) => name === n || id === n); return hit ? hit[1] : null; };
+
+function show(id) {
+  state.page = id;
+  storage.set('ahsync-page', id);
+  nav.querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.page === id)));
+  if (!LIVE[id]) {
+    main.innerHTML = `<h1>${esc(titleOf(id))}</h1><p class="lede">Coming in a later milestone.</p>`;
+    setBuilt(null);
+    return;
+  }
+  main.innerHTML = `<h1>${esc(titleOf(id))}</h1><p class="lede">${LIVE[id].lede}</p><div class="card" id="card"><div class="empty">Loading…</div></div>`;
+  load(id);
+}
+
+// ---------- data ----------
+async function load(id) {
+  const market = state.market;
+  let res, body;
+  try {
+    res = await fetch(`/api/views/${encodeURIComponent(id)}?market=${encodeURIComponent(market)}`, { cache: 'no-store' });
+    body = await res.json();
+  } catch (e) {
+    return renderMessage(id, 'AHSync isn\'t answering. Is it still running?');
+  }
+  if (state.page !== id || state.market !== market) return;     // the user moved on meanwhile
+  if (res.status === 404 && body.error === 'no_refresh_yet') {
+    setBuilt(null);
+    return renderMessage(id, 'No numbers yet: the first full refresh hasn\'t finished. They appear here when it does, or press Refresh now.');
+  }
+  if (!res.ok) return renderMessage(id, `Couldn't load this page (${esc(body.error || res.status)}).`);
+  state.data[id] = body.data;
+  setBuilt(body.built);
+  render(id);
+}
+
+function renderMessage(id, text) {
+  if (state.page !== id) return;
+  const card = document.getElementById('card');
+  if (card) card.innerHTML = `<div class="empty">${text}</div>`;
+}
+
+function setBuilt(builtMs) {
+  const pill = document.getElementById('built');
+  pill.hidden = builtMs === null || builtMs === undefined;
+  if (!pill.hidden) pill.textContent = 'numbers from ' + new Date(builtMs).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+// ---------- table ----------
+function render(id) {
+  const spec = LIVE[id], data = state.data[id] || { rows: [], hidden: 0 };
+  const rows = Array.isArray(data.rows) ? data.rows : [];
+  const card = document.getElementById('card');
+  if (!card) return;
+  const values = state.filters[id] || (state.filters[id] = {});
+  const shown = sortRows(id, rows.filter(r => spec.filters.every(f => f.test(r, values[f.id] ?? ''))));
+  const sort = state.sort[id] || {};
+  const head = spec.cols.map(([t, num, key]) => `<th class="${num ? 'num ' : ''}${key ? 'sort' : ''}${key && sort.key === key ? ' sorted' + (sort.asc ? ' asc' : '') : ''}"${key ? ` data-key="${key}"` : ''}>${esc(t)}</th>`).join('');
+  // SPEC GAP: §3.5 does not say what "hidden" counts for these pages; shown as the engine gives it, like the Today footer.
+  const hidden = data.hidden ? `<div class="card-h"><b>${esc(titleOf(id))}</b><span class="muted">${esc(data.hidden)} hidden</span></div>` : '';
+  const body = rows.length === 0
+    ? `<div class="empty">Nothing to show for this market.</div>`
+    : shown.length === 0 ? `<div class="empty">No rows match the filters.</div>`
+    : `<div class="scrollx"><table><thead><tr>${head}</tr></thead><tbody>${shown.map(spec.row).join('')}</tbody></table></div>`;
+  card.innerHTML = hidden + filterBar(id, rows) + body;
+  card.querySelectorAll('th[data-key]').forEach(th => { th.onclick = () => toggleSort(id, th.dataset.key); });
+  card.querySelectorAll('[data-filter]').forEach(el => {
+    el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', () => { values[el.dataset.filter] = el.value; render(id); refocus(el.dataset.filter); });
+  });
+}
+
+function refocus(filterId) {
+  const el = document.querySelector(`input[data-filter="${filterId}"]`);
+  if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+}
+
+function filterBar(id, rows) {
+  const values = state.filters[id];
+  const parts = LIVE[id].filters.map(f => {
+    const v = values[f.id] ?? '';
+    if (f.kind === 'search') return `<input class="select search" type="search" data-filter="${f.id}" placeholder="${esc(f.placeholder)}" value="${esc(v)}">`;
+    const options = f.options || optionsFromRows(rows, f.fromRows);
+    if (!options) return '';
+    return `<label>${esc(f.label)} <select class="select" data-filter="${f.id}">${options.map(([val, text]) =>
+      `<option value="${esc(val)}"${val === v ? ' selected' : ''}>${esc(text)}</option>`).join('')}</select></label>`;
+  });
+  return `<div class="filters">${parts.join('')}</div>`;
+}
+
+function optionsFromRows(rows, field) {
+  const seen = [...new Set(rows.map(r => r[field]).filter(v => typeof v === 'string' && v))].sort();
+  return seen.length ? [['', 'All'], ...seen.map(v => [v, v])] : null;
+}
+
+// Sort by the engine's numeric sort keys only; equal keys keep the served (engine) order.
+function sortRows(id, rows) {
+  const sort = state.sort[id];
+  if (!sort) return rows;
+  const indexed = rows.map((r, i) => [r, i]);
+  indexed.sort(([a, i], [b, j]) => {
+    const x = a.sort ? a.sort[sort.key] : undefined, y = b.sort ? b.sort[sort.key] : undefined;
+    if (x !== y) {
+      if (x === undefined || x === null) return 1;
+      if (y === undefined || y === null) return -1;
+      return (x < y) === sort.asc ? -1 : 1;
+    }
+    return i < j ? -1 : 1;
+  });
+  return indexed.map(([r]) => r);
+}
+
+function toggleSort(id, key) {
+  const cur = state.sort[id];
+  state.sort[id] = cur && cur.key === key ? { key, asc: !cur.asc } : { key, asc: false };
+  render(id);
+}
+
+// ---------- writes (POST + token; SPEC §3.5 Security) ----------
+async function post(path, payload) {
+  const res = await fetch(path, { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json', 'X-AHSync-Token': TOKEN }, body: JSON.stringify(payload || {}) });
+  let body = {};
+  try { body = await res.json(); } catch (e) {}
+  if (res.status === 403 && body.reload) {
+    notice('AHSync was restarted: reload this page.', 'warn', true);
+    return null;
+  }
+  return { status: res.status, body };
+}
+
+function notice(text, kind, reload) {
+  const el = document.getElementById('notice');
+  el.hidden = false;
+  el.className = 'pill ' + (kind || '');
+  el.innerHTML = esc(text) + (reload ? ' <a href="" id="reload">Reload</a>' : '');
+}
+
+document.getElementById('refresh').onclick = async () => {
+  const btn = document.getElementById('refresh');
+  btn.disabled = true;
+  try {
+    const r = await post('/api/refresh');
+    if (r && r.status === 202) notice('Full refresh queued: the numbers update when it finishes.', 'ok');
+    else if (r) notice(`Refresh refused (${r.body.error || r.status}).`, 'warn');
+  } catch (e) {
+    notice('AHSync isn\'t answering. Is it still running?', 'warn');
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+// ---------- markets ----------
+async function loadMarkets() {
+  const select = document.getElementById('market');
+  try {
+    const res = await fetch('/api/markets', { cache: 'no-store' });
+    const body = await res.json();
+    const saved = storage.get('ahsync-market');
+    state.market = body.markets.includes(saved) ? saved : body.default;
+    select.innerHTML = body.markets.map(m => `<option value="${esc(m)}"${m === state.market ? ' selected' : ''}>${esc(m)}</option>`).join('');
+  } catch (e) {
+    notice('AHSync isn\'t answering. Is it still running?', 'warn');
+  }
+  select.onchange = () => { state.market = select.value; storage.set('ahsync-market', select.value); state.data = {}; show(state.page); };
+}
+
+window.addEventListener('hashchange', () => show(idOfHash() || state.page));
+loadMarkets().then(() => {
+  const saved = storage.get('ahsync-page');
+  show(idOfHash() || (ORDER.some(([, id]) => id === saved) ? saved : 'disenchant'));
+});
+</script>
+</body>
+</html>

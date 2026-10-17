@@ -1,0 +1,404 @@
+"""The dashboard's HTTP server, bound to 127.0.0.1 only (SPEC §3.5).
+
+It serves the static page and the page payloads the full refresh stored in
+`views`, exactly as stored: no arithmetic here (SPEC §8.5). Every request
+passes the Security rules of SPEC §3.5 (SEC1-SEC7):
+
+- `Host` must be `127.0.0.1:<port>` or `localhost:<port>` (DNS rebinding), else 403;
+- GET never changes state; a write endpoint answers GET with 405;
+- every write needs `Origin` = the dashboard's own origin and `X-AHSync-Token` =
+  the per-run token embedded in the served page, else 403 and a log line
+  without the token;
+- no CORS headers, and no secrets or file paths in any response.
+
+`DashboardApp.handle` is plain request-in, response-out, so tests can call it
+directly; `start_dashboard` wraps it in a stdlib HTTP server on a thread.
+"""
+from __future__ import annotations
+
+import hmac
+import json
+import logging
+import secrets
+import sqlite3
+import threading
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
+
+from ahsync.clock import Clock
+from ahsync.config import Config
+from ahsync.store.db import Database
+
+log = logging.getLogger("ahsync.web")
+
+BIND_ADDRESS = "127.0.0.1"
+TOKEN_HEADER = "X-AHSync-Token"
+TOKEN_PLACEHOLDER = "__AHSYNC_TOKEN__"
+INDEX_HTML = Path(__file__).parent / "static" / "index.html"
+MAX_BODY_BYTES = 4096
+BUSY_TIMEOUT_MS = 5000
+
+# SPEC §3.5 dashboard data: disenchant and craft are M3; the rest come later.
+PAGES = ("today", "week", "on_ah", "disenchant", "craft", "flip", "inventory", "history", "rules",
+         "characters", "status")
+GET_PATHS = ("/", "/api/markets")
+POST_PATHS = ("/api/refresh", "/api/skip")
+VIEWS_PREFIX = "/api/views/"
+
+
+@dataclass(frozen=True)
+class Response:
+    """One HTTP response, built by DashboardApp.handle and written by the handler."""
+
+    status: int
+    body: bytes
+    content_type: str = "application/json; charset=utf-8"
+    headers: tuple[tuple[str, str], ...] = ()
+
+
+def new_token() -> str:
+    """Make the per-run write token (SPEC §3.5 Security), random at each start.
+
+    Returns:
+        43 URL-safe characters (256 random bits), safe to embed in HTML as is.
+    """
+    return secrets.token_urlsafe(32)
+
+
+def json_response(status: int, payload: object, headers: tuple[tuple[str, str], ...] = ()) -> Response:
+    """Build a JSON response.
+
+    Args:
+        status: HTTP status code.
+        payload: JSON-serializable body.
+        headers: Extra headers, e.g. (("Allow", "POST"),).
+
+    Returns:
+        The response with a compact UTF-8 JSON body.
+    """
+    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return Response(status, body, headers=headers)
+
+
+def open_server_db(path: Path) -> Database:
+    """Open a second connection to data/ahsync.db for the server's thread.
+
+    The main thread's connection can't be shared across threads; WAL mode (set by
+    Database.open) lets this one read while the main thread writes. It runs no
+    migration or staging cleanup: the main connection already did that.
+
+    Args:
+        path: data/ahsync.db, already opened (and migrated) by Database.open.
+
+    Returns:
+        A Database usable from the server thread; writes wait up to 5 s for a lock.
+    """
+    conn = sqlite3.connect(path, isolation_level=None, check_same_thread=False)
+    conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
+    return Database(conn, path)
+
+
+@dataclass
+class DashboardApp:
+    """The dashboard's request handling, with every outside dependency injected."""
+
+    db: Database
+    config: Config
+    clock: Clock
+    request_refresh: Callable[[], None]   # queues a full refresh (merged with one already queued; IU4)
+    token: str                            # this run's write token (new_token())
+    port: int                             # the port clients must name in Host; set by start_dashboard
+    page_html: str = ""                   # index.html with the token placeholder; read from disk when empty
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    def __post_init__(self) -> None:
+        """Load the static page once, so serving it touches no files."""
+        if not self.page_html:
+            self.page_html = INDEX_HTML.read_text(encoding="utf-8")
+
+    # ------------------------------------------------------------ entry point
+
+    def handle(self, method: str, target: str, headers: Mapping[str, str], body: bytes = b"") -> Response:
+        """Answer one request (SPEC §3.5 endpoints and Security).
+
+        Args:
+            method: HTTP method, e.g. "GET".
+            target: Request target: path and optional query, e.g. "/api/views/craft?market=x".
+            headers: Request headers; names are matched case-insensitively.
+            body: Request body bytes (POST only).
+
+        Returns:
+            The response: 403 for a bad Host (SEC4) or a failed write check (SEC2, SEC3,
+            SEC7), 404 for unknown paths, 405 for the wrong method (SEC5), else the endpoint's.
+        """
+        lowered = {k.lower(): v for k, v in headers.items()}
+        host = lowered.get("host", "")
+        if host not in self.allowed_hosts():
+            log.warning("rejected %s request: Host %r is not this dashboard", method, host[:100])
+            return json_response(403, {"error": "bad_host"})
+        parts = urlsplit(target)
+        path, query = parts.path, parse_qs(parts.query)
+        allowed = self.allowed_method(path)
+        if allowed is None:
+            return json_response(404, {"error": "not_found"})
+        if method != allowed:
+            return json_response(405, {"error": "method_not_allowed"}, (("Allow", allowed),))
+        if method == "POST":
+            refused = self.check_write(path, host, lowered)
+            return refused or self.do_post(path, body)
+        return self.do_get(path, query)
+
+    # ------------------------------------------------------------ security
+
+    def allowed_hosts(self) -> tuple[str, str]:
+        """The Host values this dashboard answers to (SPEC §3.5 Security).
+
+        Returns:
+            ("127.0.0.1:<port>", "localhost:<port>").
+        """
+        return f"127.0.0.1:{self.port}", f"localhost:{self.port}"
+
+    @staticmethod
+    def allowed_method(path: str) -> str | None:
+        """The one method a path accepts.
+
+        Args:
+            path: Request path without the query.
+
+        Returns:
+            "GET" or "POST", or None for an unknown path.
+        """
+        if path in GET_PATHS or (path.startswith(VIEWS_PREFIX) and path[len(VIEWS_PREFIX):] in PAGES):
+            return "GET"
+        return "POST" if path in POST_PATHS else None
+
+    def check_write(self, path: str, host: str, headers: Mapping[str, str]) -> Response | None:
+        """Check a write's Origin and token (SPEC §3.5 Security; SEC1-SEC3, SEC7).
+
+        Args:
+            path: The write endpoint.
+            host: The request's Host, already known to be one of allowed_hosts().
+            headers: Request headers with lower-case names.
+
+        Returns:
+            None when both checks pass; otherwise a 403 response, after logging the
+            reason (never the token's value). A bad token says to reload the page,
+            since a page from before a restart holds the old token (SEC7).
+        """
+        origin = headers.get("origin", "")
+        if origin != f"http://{host}":
+            log.warning("rejected POST %s: Origin %r is not this dashboard", path, origin[:100])
+            return json_response(403, {"error": "bad_origin"})
+        token = headers.get(TOKEN_HEADER.lower(), "")
+        if not token or not hmac.compare_digest(token.encode("utf-8"), self.token.encode("utf-8")):
+            log.warning("rejected POST %s: %s token", path, "wrong" if token else "missing")
+            return json_response(403, {"error": "bad_token", "reload": True,
+                                       "message": "AHSync was restarted: reload this page."})
+        return None
+
+    # ------------------------------------------------------------ GET
+
+    def do_get(self, path: str, query: dict[str, list[str]]) -> Response:
+        """Serve a GET endpoint.
+
+        Args:
+            path: "/", "/api/markets" or "/api/views/<page>".
+            query: Parsed query string.
+
+        Returns:
+            The page, the markets, or a stored view payload.
+        """
+        if path == "/":
+            html = self.page_html.replace(TOKEN_PLACEHOLDER, self.token).encode("utf-8")
+            return Response(200, html, "text/html; charset=utf-8")
+        if path == "/api/markets":
+            markets = list(self.config.markets)
+            return json_response(200, {"markets": markets, "default": markets[0]})
+        return self.get_view(path[len(VIEWS_PREFIX):], query.get("market", [""])[0])
+
+    def get_view(self, page: str, market: str) -> Response:
+        """Serve one page's stored payload (SPEC §3.5 dashboard data).
+
+        Args:
+            page: A name from PAGES.
+            market: Market id; "" means the first configured market.
+
+        Returns:
+            200 {"built": ms, "data": payload}; 404 {"error": "no_refresh_yet"} before the
+            first refresh; 404 {"error": "unknown_market"} for a market not in the config;
+            503 {"error": "database_busy"} when the database can't be read right now.
+        """
+        market = market or self.config.markets[0]
+        if market not in self.config.markets:
+            return json_response(404, {"error": "unknown_market"})
+        try:
+            with self._lock:
+                stored = self.db.view(page, market)
+        except sqlite3.Error as error:
+            log.warning("reading the %s view failed: %s", page, error)
+            return json_response(503, {"error": "database_busy"})
+        if stored is None:
+            return json_response(404, {"error": "no_refresh_yet"})
+        payload, built_ms = stored
+        return json_response(200, {"built": built_ms, "data": payload})
+
+    # ------------------------------------------------------------ POST
+
+    def do_post(self, path: str, body: bytes) -> Response:
+        """Serve a write endpoint whose checks passed.
+
+        Args:
+            path: "/api/refresh" or "/api/skip".
+            body: The request body.
+
+        Returns:
+            202 for a queued refresh, or skip_action's response.
+        """
+        if path == "/api/refresh":
+            self.request_refresh()
+            log.info("full refresh requested from the dashboard")
+            return json_response(202, {"queued": True})
+        return self.skip(body)
+
+    def skip(self, body: bytes) -> Response:
+        """Mark a plan action skipped (SPEC §3.4.1, §3.5).
+
+        Args:
+            body: JSON {"action_id": "<id>"}.
+
+        Returns:
+            200 {"skipped": true|false} (false when the action isn't open); 400 for a bad
+            body; 503 when the database is busy.
+        """
+        try:
+            action_id = json.loads(body.decode("utf-8")).get("action_id")
+        except (ValueError, AttributeError):
+            action_id = None
+        if not isinstance(action_id, str) or not action_id:
+            return json_response(400, {"error": "bad_request"})
+        try:
+            with self._lock:
+                changed = self.db.skip_action(action_id, self.clock.now_ms())
+        except sqlite3.Error as error:
+            log.warning("skipping an action failed: %s", error)
+            return json_response(503, {"error": "database_busy"})
+        return json_response(200, {"skipped": changed})
+
+
+class DashboardHandler(BaseHTTPRequestHandler):
+    """Adapts http.server requests to DashboardApp.handle; `server.app` holds the app."""
+
+    server_version = "AHSync"
+    sys_version = ""
+
+    def _respond(self) -> None:
+        """Read the request, ask the app, and write its response with the safety headers."""
+        app: DashboardApp = self.server.app       # type: ignore[attr-defined]
+        length = self._content_length()
+        if length is None:
+            response = json_response(413, {"error": "body_too_large"})
+        else:
+            body = self.rfile.read(length) if length else b""
+            response = app.handle(self.command, self.path, dict(self.headers.items()), body)
+        self.send_response(response.status)
+        self.send_header("Content-Type", response.content_type)
+        self.send_header("Content-Length", str(len(response.body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        for name, value in response.headers:
+            self.send_header(name, value)
+        self.end_headers()
+        self.wfile.write(response.body)
+
+    def _content_length(self) -> int | None:
+        """The declared body size.
+
+        Returns:
+            Bytes to read (0 when absent or malformed); None when over MAX_BODY_BYTES.
+        """
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            return 0
+        return None if length > MAX_BODY_BYTES else max(length, 0)
+
+    def do_GET(self) -> None:
+        """Handle GET."""
+        self._respond()
+
+    def do_POST(self) -> None:
+        """Handle POST."""
+        self._respond()
+
+    def do_PUT(self) -> None:
+        """Handle PUT (always 405 or 404)."""
+        self._respond()
+
+    def do_DELETE(self) -> None:
+        """Handle DELETE (always 405 or 404)."""
+        self._respond()
+
+    def do_OPTIONS(self) -> None:
+        """Handle OPTIONS: no CORS preflight is ever granted (SEC6)."""
+        self._respond()
+
+    def log_message(self, format: str, *args: object) -> None:
+        """Send the access log to the "ahsync.web" logger at debug level instead of stderr.
+
+        Args:
+            format: printf-style format from http.server.
+            *args: Its values.
+        """
+        log.debug(format, *args)
+
+
+class DashboardServer(HTTPServer):
+    """A one-thread HTTP server that carries the app for its handler."""
+
+    def __init__(self, app: DashboardApp, port: int) -> None:
+        """Bind to 127.0.0.1 only (SPEC §3.5).
+
+        Args:
+            app: The request handling.
+            port: TCP port; 0 picks a free one (tests).
+
+        Raises:
+            OSError: The port is in use or can't be bound.
+        """
+        super().__init__((BIND_ADDRESS, port), DashboardHandler)
+        self.app = app
+
+
+def start_dashboard(app: DashboardApp, port: int) -> DashboardServer:
+    """Bind the dashboard and serve it on a daemon thread.
+
+    Args:
+        app: The request handling; its `port` is set to the bound port.
+        port: TCP port (config dashboard_port); 0 picks a free one.
+
+    Returns:
+        The running server; call `stop_dashboard` to stop it.
+
+    Raises:
+        OSError: The port can't be bound.
+    """
+    server = DashboardServer(app, port)
+    app.port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, name="ahsync-dashboard", daemon=True)
+    thread.start()
+    log.info("dashboard at http://localhost:%d", app.port)
+    return server
+
+
+def stop_dashboard(server: DashboardServer) -> None:
+    """Stop serving and release the port.
+
+    Args:
+        server: From start_dashboard.
+    """
+    server.shutdown()
+    server.server_close()
