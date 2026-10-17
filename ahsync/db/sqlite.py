@@ -18,7 +18,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ahsync.state.writes import IngestWrites
-from ahsync.db.refresh_store import RefreshStore
+from ahsync.history.reads import CurrentPrice, HistoryReads  # noqa: F401  (CurrentPrice re-exported)
+from ahsync.history.writes import HistoryWrites
+from ahsync.intel.store import IntelStore
+from ahsync.recommend.store import RecommendStore
+from ahsync.state.reads import StateReads
 
 SCHEMA_VERSION = 1
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
@@ -76,15 +80,6 @@ class BookScan:
     coverage: float = 1.0   # 0..1 share of the AH covered
 
 
-@dataclass(frozen=True)
-class CurrentPrice:
-    """The newest lowest buyout for an item, whichever source saw it last (SPEC §3.3 `cur`)."""
-
-    key: int
-    price: int | None   # copper; None = nothing listed
-    qty: int
-    at: int             # observation time, ms
-    src: str            # 'ahf' | 'local'
 
 
 def is_healthy(path: Path) -> bool:
@@ -171,7 +166,7 @@ def restore_newest_backup(path: Path, backup_dir: Path, now_ms: int) -> Path | N
     return None
 
 
-class Database(IngestWrites, RefreshStore):
+class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, IntelStore, RecommendStore):
     """A connection to data/ahsync.db with AHSync's queries and upserts."""
 
     def __init__(self, conn: sqlite3.Connection, path: Path) -> None:
@@ -531,42 +526,7 @@ class Database(IngestWrites, RefreshStore):
                 "at = excluded.at", data)
         return len(data)
 
-    def current_price(self, market: str, key: int) -> CurrentPrice | None:
-        """`cur` for an item: the newest observation across sources, keeping its src (S7).
 
-        Args:
-            market: AHF market id.
-            key: AHF item key.
-
-        Returns:
-            The newest row (ties go to 'local', the exact observation), or None when unseen.
-        """
-        row = self.conn.execute(
-            "SELECT key, price, qty, at, src FROM current WHERE market = ? AND key = ? "
-            "ORDER BY at DESC, CASE src WHEN 'local' THEN 0 ELSE 1 END, src LIMIT 1", (market, key)).fetchone()
-        return CurrentPrice(*row) if row else None
-
-    def hourly_closes(self, market: str, key: int, from_ms: int, to_ms: int) -> list[tuple[int, int]]:
-        """One close per item-hour for statistics; a local close beats AHF's (SPEC §2.2, S9).
-
-        Args:
-            market: AHF market id.
-            key: AHF item key.
-            from_ms: First hour start to include, ms.
-            to_ms: Last hour start to include, ms.
-
-        Returns:
-            (hour start ms, close copper), ascending; hours with no listed close are left out.
-        """
-        rows = self.conn.execute(
-            "SELECT t, close FROM candles_h1 WHERE market = ? AND key = ? AND t BETWEEN ? AND ? "
-            "AND close IS NOT NULL ORDER BY t, CASE src WHEN 'local' THEN 0 ELSE 1 END, src",
-            (market, key, from_ms, to_ms)).fetchall()
-        closes: list[tuple[int, int]] = []
-        for t, close in rows:
-            if not closes or closes[-1][0] != t:
-                closes.append((t, close))
-        return closes
 
     def upsert_items(self, rows: Iterable[tuple], updated_ms: int) -> int:
         """Upsert item metadata from /items.
@@ -682,3 +642,18 @@ class Database(IngestWrites, RefreshStore):
         """
         sql = f"SELECT COUNT(*) FROM {table}" + (f" WHERE {where}" if where else "")
         return self.conn.execute(sql, params).fetchone()[0]
+
+    def publish_refresh(self, markets: list[str]) -> None:
+        """Swap the staged statistics and views in for these markets, in one transaction (SPEC §5.2 rule 3).
+
+        Args:
+            markets: The markets this refresh rebuilt.
+        """
+        with self.transaction():
+            for market in markets:
+                for live, staged, cols in (("item_stats", "item_stats_new", "market, key, stats, updated"),
+                                           ("views", "views_new", "page, market, body, built")):
+                    self.conn.execute(f"DELETE FROM {live} WHERE market = ?", (market,))
+                    self.conn.execute(f"INSERT INTO {live}({cols}) SELECT {cols} FROM {staged} WHERE market = ?",
+                                      (market,))
+                    self.conn.execute(f"DELETE FROM {staged} WHERE market = ?", (market,))

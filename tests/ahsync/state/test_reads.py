@@ -1,0 +1,53 @@
+"""Tests for ahsync/state/reads.py: character state reads."""
+from __future__ import annotations
+
+import pytest
+
+from ahsync.db.sqlite import Database
+from tests.support.fake_clock import FakeClock
+
+M, OTHER = "forever.pvp.horde.us", "forever.pvp.alliance.us"
+DAY = 86_400_000
+
+
+@pytest.fixture
+def db(tmp_path):
+    """A fresh database."""
+    database = Database.open(tmp_path / "ahsync.db", FakeClock().now_ms(), None)
+    yield database
+    database.close()
+
+
+def sql(db: Database, statement: str, *rows: tuple) -> None:
+    """Insert rows with one statement."""
+    with db.transaction():
+        db.conn.executemany(statement, rows)
+
+
+def test_characters_skills_recipes_and_stock(db):
+    sql(db, "INSERT INTO characters(id, market, gold) VALUES (?, ?, ?)", ("B-R", M, 500), ("A-R", M, None),
+        ("C-R", OTHER, 1))
+    assert db.characters_in(M) == [("A-R", 0), ("B-R", 500)]
+    sql(db, "INSERT INTO professions(char_id, profession, skill, max_skill) VALUES (?, ?, ?, ?)",
+        ("A-R", "Enchanting", 142, 150), ("B-R", "Enchanting", 60, 75))
+    assert db.best_skill(["A-R", "B-R"], "Enchanting") == 142
+    assert db.best_skill(["A-R"], "Mining") is None and db.best_skill([], "Enchanting") is None
+    sql(db, "INSERT INTO recipes(profession, spell_id, product_key, yield_min, yield_max) VALUES (?, ?, ?, ?, ?)",
+        ("Blacksmithing", 2663, 6217, 1, None))
+    sql(db, "INSERT INTO reagents(profession, spell_id, key, count) VALUES (?, ?, ?, ?)",
+        ("Blacksmithing", 2663, 2840, 2))
+    sql(db, "INSERT INTO known_recipes(char_id, spell_id) VALUES (?, ?)", ("B-R", 2663), ("A-R", 2663))
+    [recipe] = db.known_recipes(["A-R", "B-R"])
+    assert (recipe.spell, recipe.yield_max, recipe.reagents, recipe.crafters) == (2663, 1, ((2840, 2),), ("A-R", "B-R"))
+    assert db.known_recipes([]) == []
+    sql(db, "INSERT INTO inventory(char_id, location, key, qty, bound) VALUES (?, ?, ?, ?, ?)",
+        ("A-R", "bags", 2840, 4, 0), ("B-R", "bank", 2840, 2, 0), ("A-R", "bags", 6948, 1, 1))
+    assert db.owned_units(["A-R", "B-R"]) == {2840: 6} and db.owned_units([]) == {}
+    sql(db, "INSERT INTO vendor_reagents(key) VALUES (?)", (2320,))
+    assert db.vendor_reagent_keys() == {2320}
+
+
+def test_skill_of_a_character(db):
+    sql(db, "INSERT INTO professions(char_id, profession, skill, max_skill) VALUES (?, ?, ?, ?)",
+        ("A-R", "Mining", 60, 75))
+    assert db.skill_of("A-R", "Mining") == 60 and db.skill_of("A-R", "Herbalism") is None
