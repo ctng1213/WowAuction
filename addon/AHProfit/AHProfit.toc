@@ -1,0 +1,12 @@
+## Interface: 16001
+## Title: AHProfit
+## Notes: Records characters, professions, recipes and inventory for AHSync; shows its recommendations.
+## Version: 0.1.0
+## SavedVariables: AHProfitDB
+
+Core\Adapter.lua
+Core\Events.lua
+Core\DB.lua
+Capture\Characters.lua
+Capture\Professions.lua
+Capture\Inventory.lua
