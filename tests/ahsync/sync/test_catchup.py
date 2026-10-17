@@ -1,6 +1,7 @@
 """Catch-up (SPEC §3.1, §2.1, §5.2): scenarios S1–S4, S11, FM1–FM4, FM6."""
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
 from pathlib import Path
@@ -12,9 +13,9 @@ from ahsync.api.client import ApiClient
 from ahsync.clock import DAY_MS, HOUR_MS
 from ahsync.store.db import Database
 from ahsync.sync import catchup
-from ahsync.sync.catchup import (D1C, H1, H1C, LOST, format_day, format_hour, hour_source, plan_hours,
-                                 run_catchup, sync_markets)
-from tests.support.builders import AhfWorld, h1_path, h1c_path, snapshot
+from ahsync.sync.catchup import (D1C, H1, H1C, LOST, SyncContext, format_day, format_hour, hour_source,
+                                 plan_hours, run_catchup, sync_markets)
+from tests.support.builders import AhfWorld, files_index, h1_path, h1c_path, hour_file, snapshot
 from tests.support.fake_clock import FakeClock
 from tests.support.fake_transport import DEFAULT_MARKET, SimulatedCrash
 
@@ -50,9 +51,10 @@ def candle_rows(db: Database) -> list[tuple]:
     return db.conn.execute("SELECT * FROM candles_h1 ORDER BY market, key, t, src").fetchall()
 
 
-def status_text(db: Database) -> str:
-    """All Status lines joined, for substring checks."""
-    return "\n".join(f"{s.topic}: {s.message}" for s in db.statuses())
+def status_of(db: Database, topic: str) -> tuple[str, dict] | None:
+    """A Status line's (kind, data), or None when there is none."""
+    line = db.status(topic)
+    return (line.kind, line.data) if line else None
 
 
 def start_with_gap(db: Database, world: AhfWorld, hours: int) -> int:
@@ -127,9 +129,11 @@ def test_S3_ten_day_gap_without_key_reports_lost_hours_and_never_requests_them(t
     assert result.reports[0].lost == [(last + 1, oldest_public - 1)]   # the hours 7–10 days old
     assert min(h1_hours(world)) == oldest_public                       # none of them requested
     assert h1c_hours(world) == []
-    text = status_text(db)
-    assert f"{oldest_public - last - 1} hours lost" in text
-    assert f"gap:{MARKET}: Last run 9 days ago" in text                # status warning
+    assert status_of(db, f"lost:{MARKET}") == ("lost", {
+        "market": MARKET, "hours": oldest_public - last - 1,
+        "ranges_ms": [[(last + 1) * HOUR_MS, oldest_public * HOUR_MS]]})
+    kind, data = status_of(db, f"gap:{MARKET}")                        # status warning
+    assert (kind, data["days"], data["last_run_ms"]) == ("long_gap", 9, (last + 1) * HOUR_MS)
     assert db.get_sync_state(MARKET).last_hour == world.sealed_h1
 
 
@@ -159,7 +163,7 @@ def test_S11_premium_lost_since_last_run_degrades_to_public_data(tmp_path):
     world = AhfWorld(clock, premium=True, until_ms=until)
     db = open_db(tmp_path, clock)
     run_catchup(api_for(world, KEY), db, clock, (MARKET,))
-    assert db.get_sync_state(MARKET).live_since is not None
+    assert status_of(db, "premium") == ("premium_until", {"until_ms": until})
 
     clock.advance(DAY_MS)
     world = AhfWorld(clock, premium=False)                   # /me lost depth, prices.live, historyDays 90
@@ -174,7 +178,7 @@ def test_S11_premium_lost_since_last_run_degrades_to_public_data(tmp_path):
     assert db.count("current", "src = 'ahf'") == ITEMS_PER_HOUR
     assert db.count("current", "src = 'ahf' AND at = ?", (clock.now_ms(),)) == 0   # live rows replaced
     assert snapshot(snap_at)["rows"][0][3] == db.current_price(MARKET, 774).at
-    assert "premium: Premium ended 23 Oct" in status_text(db)
+    assert status_of(db, "premium") == ("premium_ended", {"ended_ms": until})     # "Premium ended 23 Oct"
     assert result.aborted is None and db.get_sync_state(MARKET).last_hour == world.sealed_h1
 
 
@@ -193,13 +197,13 @@ def test_FM1_503_on_hour_40_five_times_backs_off_then_ends_the_run_at_hour_39(tm
     assert result.aborted is not None
     assert db.get_sync_state(MARKET).last_hour == hour_40 - 1
     assert not [p for p in world.transport.paths() if p.startswith("snap/")]   # the run ended there
-    assert "AHF unreachable" in status_text(db)
+    assert status_of(db, "network") == ("unreachable", {"reason": "retries_exhausted"})
 
     world.transport.clear_faults()
     world.transport.requests.clear()
     run_catchup(api_for(world), db, clock, (MARKET,))
     assert h1_hours(world)[0] == hour_40
-    assert "AHF unreachable" not in status_text(db)
+    assert db.status("network") is None
 
 
 def test_FM2_hour_41_cut_off_at_60_percent_is_not_committed_and_refetched_next_run(tmp_path, caplog):
@@ -237,11 +241,12 @@ def test_FM3_same_hour_bad_three_runs_in_a_row_shows_bad_file_and_later_hours_sy
     run_catchup(api_for(world), db, clock, (MARKET,))
     assert db.count("candles_h1", "t = ?", ((hour_41 + 1) * HOUR_MS,)) == ITEMS_PER_HOUR   # later hours sync
     for _ in range(2):
-        assert "bad file" not in status_text(db)
+        assert db.status(f"bad_file:{MARKET}:{hour_41}") is None
         world.advance(HOUR_MS)
         run_catchup(api_for(world), db, clock, (MARKET,))
 
-    assert f"bad file: hour {hour_41}" in status_text(db)
+    assert status_of(db, f"bad_file:{MARKET}:{hour_41}") == ("bad_file", {"market": MARKET, "hour": hour_41,
+                                                                         "failures": 3})
     assert db.fetch_failures(MARKET) == [(hour_41, 3)]
     assert db.get_sync_state(MARKET).last_hour == world.sealed_h1
 
@@ -261,7 +266,7 @@ def test_FM4_snapshot_with_renamed_field_is_disabled_and_last_good_current_is_ke
 
     assert result.reports[0].disabled == ["snapshot"]
     assert db.conn.execute("SELECT * FROM current ORDER BY key").fetchall() == before
-    assert "AHF format changed: snapshot" in status_text(db)
+    assert status_of(db, "format:snapshot") == ("format_changed", {"endpoint": "snapshot"})
     assert db.get_sync_state(MARKET).last_hour == world.sealed_h1     # the rest of the run completed
 
 
@@ -333,7 +338,7 @@ def test_formatting_uses_utc_day_and_hour():
     assert format_hour(497_820) == "16 Oct 12:00"
 
 
-def test_premium_run_stores_books_volume_and_live_once(tmp_path, caplog):
+def test_premium_run_stores_books_and_volume_once(tmp_path, caplog):
     clock = FakeClock()
     world = AhfWorld(clock, premium=True)
     db = open_db(tmp_path, clock)
@@ -345,11 +350,12 @@ def test_premium_run_stores_books_volume_and_live_once(tmp_path, caplog):
     assert db.count("scans", "src = 'ahf'") == 1 and db.count("book_entries") > 0
     assert "format is unknown" in caplog.text
     assert db.get_sync_state(MARKET).last_volume == world.sealed_d1
-    assert db.count("current", "at = ?", (clock.now_ms(),)) == 3            # live rows applied
-    assert "Premium via contributor until" in status_text(db)
+    assert f"api/v1/ah/{MARKET}" not in world.transport.paths()            # live table not used yet
+    assert db.get_sync_state(MARKET).live_since is None
+    assert status_of(db, "premium")[0] == "premium_until"
 
     world.transport.requests.clear()
-    sync_markets(api_for(world, KEY), db, clock, (MARKET,), PREMIUM)       # same hour again
+    sync_markets(SyncContext(api_for(world, KEY), db, clock, PREMIUM), (MARKET,))   # same hour again
     paths = world.transport.paths()
     assert not [p for p in paths if "books/" in p or "volume/" in p or "d1c/" in p]   # already stored today
 
@@ -363,14 +369,15 @@ def test_premium_features_refused_with_403_are_skipped(tmp_path):
     first_h1c = last + 1
     world.transport.fail(h1c_path(MARKET, first_h1c), 403, body=b'{"feature": "candles.hourly"}')
     world.transport.fail(f"candles/v1/d1c/{MARKET}/cap-d1/{world.sealed_d1}.json.gz", 403, body=b"{}")
-    world.transport.fail(f"api/v1/ah/{MARKET}", 403, body=b'{"feature": "prices.live"}')
     book_path = [p for p in world.transport.routes if p.startswith("books/")][0]
     world.transport.fail(book_path, 403, body=b'{"feature": "books"}')
 
     result = run_catchup(api_for(world, KEY), db, clock, (MARKET,))
 
     report = result.reports[0]
-    assert {"h1c", "d1c", "live", "books"} <= set(report.disabled)
+    assert {"h1c", "d1c", "books"} <= set(report.disabled)
+    assert status_of(db, f"feature:{MARKET}:books") == ("feature_refused", {
+        "market": MARKET, "endpoint": "books", "feature": "books"})
     assert db.count("candles_d1") == 7 * ITEMS_PER_HOUR                     # fell back to public d1
     assert db.get_sync_state(MARKET).last_hour == world.sealed_h1
     assert result.aborted is None
@@ -439,6 +446,175 @@ def test_bad_day_candles_and_snapshot_are_skipped_not_fatal(tmp_path):
     assert result.aborted is None
     assert db.count("candles_d1") == 0 and db.count("current") == 0
     assert db.get_sync_state(MARKET).last_d1 is None                   # retried next run
+
+
+def test_FM25_expired_key_401_on_files_continues_on_the_free_path(tmp_path, caplog):
+    clock = FakeClock()
+    world = AhfWorld(clock)
+    db = open_db(tmp_path, clock)
+    world.transport.fail_with_key(f"api/v1/ah/{MARKET}/files", 401)
+
+    with caplog.at_level(logging.DEBUG, logger="ahsync"):
+        result = run_catchup(api_for(world, KEY), db, clock, (MARKET,))
+
+    assert result.aborted is None and result.reports[0].aborted is None
+    assert db.get_sync_state(MARKET).last_hour == world.sealed_h1
+    assert status_of(db, "api_key") == ("key_rejected", {})
+    files_requests = [r for r in world.transport.requests if r.url.endswith("/files")]
+    assert ["Authorization" in r.headers for r in files_requests] == [True, False]
+    later = world.transport.requests[world.transport.requests.index(files_requests[-1]):]
+    assert all("Authorization" not in r.headers for r in later)
+    assert KEY not in caplog.text and "Traceback" not in caplog.text
+
+    world.transport.clear_faults()                    # key fixed: next run uses it and clears the line
+    run_catchup(api_for(world, KEY), db, clock, (MARKET,))
+    assert db.status("api_key") is None
+
+
+def test_FM26_h1c_403_from_the_first_hour_disables_h1c_and_reports_the_rest(tmp_path):
+    for with_d1c in (True, False):
+        clock = FakeClock()
+        world = AhfWorld(clock, premium=True)
+        db = open_db(tmp_path / str(with_d1c), clock)
+        last = world.now_hour - 10 * 24
+        db.update_sync_state(MARKET, last_hour=last)
+        if not with_d1c:                                   # no d1c listed: those hours are lost instead
+            index = json.loads(world.transport.routes[f"api/v1/ah/{MARKET}/files"])
+            del index["caps"]["d1"]
+            world.transport.serve(f"api/v1/ah/{MARKET}/files", index)
+        world.transport.fail(h1c_path(MARKET, last + 1), 403, body=b'{"feature": "candles.hourly"}')
+
+        result = run_catchup(api_for(world, KEY), db, clock, (MARKET,))
+
+        oldest_public = world.now_hour - 7 * 24 + 1
+        report = result.reports[0]
+        assert h1c_hours(world) == [last + 1]                       # no further h1c requests
+        gap = [(last + 1, oldest_public - 1)]
+        assert (report.day_only, report.lost) == ((gap, []) if with_d1c else ([], gap))
+        assert h1_hours(world) == world.public_hours()              # public hours still sync
+        assert status_of(db, f"feature:{MARKET}:h1c")[1]["feature"] == "candles.hourly"
+        assert db.get_sync_state(MARKET).last_hour == world.sealed_h1
+        db.close()
+
+
+def test_FM27_hour_file_with_renamed_field_stops_the_loop_without_losing_hours(tmp_path):
+    clock = FakeClock()
+    world = AhfWorld(clock)
+    db = open_db(tmp_path, clock)
+    first = start_with_gap(db, world, 112)
+    for hour in range(first, world.sealed_h1 + 1):
+        changed = hour_file(hour)
+        changed["candles"] = changed.pop("items")
+        world.transport.serve(h1_path(MARKET, hour), changed)
+
+    result = run_catchup(api_for(world), db, clock, (MARKET,))
+
+    assert status_of(db, "format:h1") == ("format_changed", {"endpoint": "h1"})
+    assert h1_hours(world) == [first]                              # the hour loop stopped
+    assert db.get_sync_state(MARKET).last_hour == first - 1         # unchanged
+    assert db.fetch_failures(MARKET) == [] and not [s for s in db.statuses() if s.kind == "bad_file"]
+    assert result.reports[0].disabled == ["h1"]
+    assert db.count("current") == ITEMS_PER_HOUR                     # the rest of the run went on
+
+    world.publish()                                                  # parser fixed (files readable again)
+    world.transport.requests.clear()
+    run_catchup(api_for(world), db, clock, (MARKET,))
+    assert h1_hours(world) == list(range(first, world.sealed_h1 + 1))
+    assert db.status("format:h1") is None
+
+
+def test_failed_hour_that_ages_out_joins_the_lost_report(tmp_path):
+    clock = FakeClock()
+    world = AhfWorld(clock)
+    db = open_db(tmp_path, clock)
+    db.update_sync_state(MARKET, last_hour=world.sealed_h1)
+    old_hour = world.now_hour - 8 * 24
+    for _ in range(3):
+        db.record_fetch_failure(MARKET, old_hour, "bad file", clock.now_ms())
+    db.set_status(f"bad_file:{MARKET}:{old_hour}", "warn", "bad_file", {"hour": old_hour}, clock.now_ms())
+
+    result = run_catchup(api_for(world), db, clock, (MARKET,))
+
+    assert result.reports[0].lost == [(old_hour, old_hour)]
+    assert status_of(db, f"lost:{MARKET}")[1]["ranges_ms"] == [[old_hour * HOUR_MS, (old_hour + 1) * HOUR_MS]]
+    assert db.status(f"bad_file:{MARKET}:{old_hour}") is None and db.fetch_failures(MARKET) == []
+
+
+def test_lost_ranges_accumulate_across_runs(tmp_path):
+    clock = FakeClock()
+    world = AhfWorld(clock)
+    db = open_db(tmp_path, clock)
+    db.set_status(f"lost:{MARKET}", "warn", "lost", {"market": MARKET, "hours": 1,
+                                                     "ranges_ms": [[0, HOUR_MS]]}, 0)
+    last = world.now_hour - 8 * 24
+    db.update_sync_state(MARKET, last_hour=last)
+    run_catchup(api_for(world), db, clock, (MARKET,))
+    data = db.status(f"lost:{MARKET}").data
+    assert data["ranges_ms"][0] == [0, HOUR_MS] and data["hours"] == 1 + 24
+
+
+@pytest.mark.parametrize("status", [401, 410, 400])
+def test_other_http_errors_on_an_hour_file_count_as_bad_files(tmp_path, status):
+    clock = FakeClock()
+    world = AhfWorld(clock)
+    db = open_db(tmp_path, clock)
+    first = start_with_gap(db, world, 5)
+    world.transport.fail(h1_path(MARKET, first + 1), status)
+    result = run_catchup(api_for(world), db, clock, (MARKET,))
+    assert result.aborted is None and result.reports[0].bad_hours == [first + 1]
+    assert db.get_sync_state(MARKET).last_hour == world.sealed_h1
+
+
+def test_files_error_skips_that_market_only(tmp_path):
+    clock = FakeClock()
+    other = "forever.pvp.alliance.us"
+    world = AhfWorld(clock)
+    AhfWorld(clock, market=other, transport=world.transport)
+    db = open_db(tmp_path, clock)
+    world.transport.fail(f"api/v1/ah/{MARKET}/files", 400)
+
+    result = run_catchup(api_for(world), db, clock, (MARKET, other))
+
+    assert result.aborted is None
+    assert status_of(db, f"market:{MARKET}") == ("market_skipped", {"market": MARKET, "error": "ApiError"})
+    assert db.get_sync_state(other).last_hour == world.sealed_h1
+    world.transport.clear_faults()
+    run_catchup(api_for(world), db, clock, (MARKET, other))
+    assert db.status(f"market:{MARKET}") is None
+
+
+def test_missing_d1_url_without_premium_is_skipped(tmp_path):
+    clock = FakeClock()
+    world = AhfWorld(clock)
+    db = open_db(tmp_path, clock)
+    index = files_index(MARKET, world.sealed_h1, world.sealed_d1)
+    del index["d1"]
+    world.transport.serve(f"api/v1/ah/{MARKET}/files", index)
+    result = run_catchup(api_for(world), db, clock, (MARKET,))
+    assert result.aborted is None and db.count("candles_d1") == 0
+    assert db.get_sync_state(MARKET).last_hour == world.sealed_h1
+
+
+def test_empty_snapshot_keeps_the_previous_prices(tmp_path):
+    clock = FakeClock()
+    world = AhfWorld(clock)
+    db = open_db(tmp_path, clock)
+    run_catchup(api_for(world), db, clock, (MARKET,))
+    world.advance(HOUR_MS)
+    empty = snapshot(world.now_hour * HOUR_MS)
+    empty["rows"] = []
+    world.transport.serve(f"snap/v1/{MARKET}/{world.now_hour}.json.gz", empty)
+    run_catchup(api_for(world), db, clock, (MARKET,))
+    assert db.count("current") == ITEMS_PER_HOUR
+
+
+def test_rate_limited_run_says_so(tmp_path):
+    clock = FakeClock()
+    world = AhfWorld(clock)
+    db = open_db(tmp_path, clock)
+    world.transport.fail(f"api/v1/ah/{MARKET}/files", 429, times=1, headers={"retry-after": "3600"})
+    result = run_catchup(api_for(world), db, clock, (MARKET,))
+    assert result.aborted and status_of(db, "network") == ("unreachable", {"reason": "rate_limited"})
 
 
 def test_database_is_plain_sqlite(tmp_path):

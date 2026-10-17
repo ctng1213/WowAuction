@@ -5,12 +5,14 @@ import gzip
 import io
 import logging
 import urllib.error
+import urllib.request
 
 import pytest
 
 from ahsync.api.client import (ApiClient, ApiError, BadFile, FeatureUnavailable, HttpRequest, NotFound,
-                               RedactingFilter, Redactor, RetriesExhausted, TransportError, UrllibTransport,
-                               backoff_seconds, decode_body, retry_after_seconds)
+                               RateLimited, RedactingFilter, Redactor, RetriesExhausted, TransportError,
+                               Unauthorized, UrllibTransport, backoff_seconds, build_request, decode_body,
+                               retry_after_seconds)
 from tests.support.fake_clock import FakeClock
 from tests.support.fake_transport import FakeTransport
 
@@ -161,3 +163,47 @@ def test_urllib_transport_maps_responses_and_errors():
 
     with pytest.raises(TransportError):
         UrllibTransport(down)(HttpRequest("https://x/a"))
+
+
+def test_401_with_key_retries_once_without_it_and_drops_the_key():
+    clock, transport = FakeClock(), FakeTransport()
+    transport.serve("api/v1/me", {"ok": 1})
+    transport.fail("api/v1/me", 401, times=1)
+    client = client_with(transport, clock, KEY)
+
+    assert client.get_json(f"{API}/me") == {"ok": 1}
+    assert client.key_rejected and not client.has_key and not client.key_used
+    assert [("Authorization" in r.headers) for r in transport.requests] == [True, False]
+    client.get_json(f"{API}/me")
+    assert "Authorization" not in transport.requests[-1].headers      # rest of the run is keyless
+
+
+def test_401_without_a_key_or_twice_is_unauthorized():
+    clock, transport = FakeClock(), FakeTransport()
+    transport.fail("a", 401)
+    with pytest.raises(Unauthorized):
+        client_with(transport, clock).get_json("https://x/a")
+    with pytest.raises(Unauthorized):
+        client_with(transport, clock, KEY).get_json("https://x/a")
+
+
+def test_retry_after_over_300_seconds_skips_the_run():
+    clock, transport = FakeClock(), FakeTransport()
+    transport.serve("api/v1/me", {})
+    transport.fail("api/v1/me", 429, times=1, headers={"retry-after": "300"})
+    client_with(transport, clock).get_json(f"{API}/me")
+    assert clock.sleeps == [300]
+    transport.fail("api/v1/me", 429, times=1, headers={"retry-after": "301"})
+    with pytest.raises(RateLimited):
+        client_with(transport, clock).get_json(f"{API}/me")
+    assert clock.sleeps == [300]
+
+
+def test_authorization_is_not_forwarded_on_redirect():
+    req = build_request(HttpRequest("https://auctionhouse.fyi/api/v1/me",
+                                    {"Authorization": "Bearer " + KEY, "User-Agent": "AHSync"}))
+    assert req.get_header("Authorization") == "Bearer " + KEY          # sent on the first request
+    redirected = urllib.request.HTTPRedirectHandler().redirect_request(
+        req, io.BytesIO(), 302, "Found", {}, "https://elsewhere.example/me")
+    assert redirected.get_header("Authorization") is None
+    assert redirected.get_header("User-agent") == "AHSync"

@@ -7,7 +7,7 @@ from ahsync.api.ahf import AhfApi
 from ahsync.api.client import ApiClient
 from ahsync.clock import DAY_MS, HOUR_MS
 from ahsync.store import db as db_module
-from ahsync.store.db import Database, DatabaseError, backup_files, is_healthy
+from ahsync.store.db import BookScan, Database, DatabaseError, backup_files, is_healthy
 from ahsync.sync.catchup import run_catchup
 from tests.support.builders import AhfWorld, copper, item_key, ms
 from tests.support.fake_clock import FakeClock
@@ -73,8 +73,8 @@ def test_FM10_quick_check_fails_on_start_restores_newest_backup_and_refetches_la
 
     db = Database.open(path, clock.now_ms(), backups)
     assert db.get_sync_state(MARKET).last_hour == backed_up_hour
-    restore = [s for s in db.statuses() if s.topic == "restore"][0]
-    assert "restored from backup ahsync-2026-10-16.db" in restore.message
+    restore = db.status("restore")
+    assert (restore.kind, restore.data) == ("restored", {"backup": "ahsync-2026-10-16.db"})
     assert list(tmp_path.glob("ahsync.db.corrupt-*"))
     world.transport.requests.clear()
     run_catchup(AhfApi(ApiClient(world.transport, clock)), db, clock, (MARKET,))
@@ -90,8 +90,16 @@ def test_damaged_database_without_backups_starts_fresh_or_refuses(tmp_path):
     with pytest.raises(DatabaseError):
         Database.open(path, T0, None)
     db = Database.open(path, T0, tmp_path / "backups")
-    assert "no backup was found" in db.statuses()[0].message
+    assert db.status("restore").data == {"backup": None}
     db.close()
+
+
+def test_backup_replaces_a_leftover_temp_file(tmp_path, db):
+    backups = tmp_path / "backups"
+    backups.mkdir()
+    (backups / "ahsync-2026-10-16.db.tmp").write_bytes(b"half a backup")
+    target = db.daily_backup(backups, T0)
+    assert is_healthy(target) and not list(backups.glob("*.tmp"))
 
 
 def test_backups_keep_the_newest_three_one_per_day(tmp_path, db):
@@ -142,7 +150,7 @@ def test_upserts_are_idempotent(db):
     rows = [candle(1, 0, 10), candle(2, 0, 20)]
     for _ in range(2):
         db.upsert_candles("candles_d1", MARKET, rows, "ahf")
-        db.store_book("s1", MARKET, "local", "A-B", 5, "partial", 0.4, [(1, 10, 1, 3, 2)])
+        db.store_book(BookScan("s1", MARKET, "local", "A-B", 5, "partial", 0.4), [(1, 10, 1, 3, 2)])
         db.upsert_items([(1, 1, "X", 1, 1, 1, 1, 1, 1, 1)], 5)
     assert db.count("candles_d1") == 2 and db.count("book_entries") == 1 and db.count("items") == 1
     assert db.has_scan("s1") and not db.has_scan("s2")
@@ -161,12 +169,13 @@ def test_sync_state_status_and_failures(db):
     assert (state.last_hour, state.last_run) == (5, 9)
     with pytest.raises(ValueError):
         db.update_sync_state(MARKET, bogus=1)
-    db.set_status("b", "info", "two", 1)
-    db.set_status("a", "warn", "one", 1)
-    db.set_status("a", "error", "one again", 2)
-    assert [(s.topic, s.level, s.message) for s in db.statuses()] == [("a", "error", "one again"), ("b", "info", "two")]
+    db.set_status("b", "info", "two", {"n": 2}, 1)
+    db.set_status("a", "warn", "one", {}, 1)
+    db.set_status("a", "error", "one_again", {"hour": 5, "ranges_ms": [[0, 3_600_000]]}, 2)
+    assert [(s.topic, s.level, s.kind, s.data) for s in db.statuses()] == [
+        ("a", "error", "one_again", {"hour": 5, "ranges_ms": [[0, 3_600_000]]}), ("b", "info", "two", {"n": 2})]
     db.clear_status("a")
-    assert [s.topic for s in db.statuses()] == ["b"]
+    assert [s.topic for s in db.statuses()] == ["b"] and db.status("a") is None
     assert db.record_fetch_failure(MARKET, 7, "bad", 1) == 1
     assert db.record_fetch_failure(MARKET, 7, "bad", 2) == 2
     db.clear_fetch_failure(MARKET, 7)

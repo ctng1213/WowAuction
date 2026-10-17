@@ -23,6 +23,7 @@ log = logging.getLogger("ahsync.api")
 
 MAX_RETRIES = 5          # SPEC §5.2: retry 5 times, then skip this run
 MAX_BACKOFF_S = 60.0     # backoff 1, 2, 4 … capped at 60 s
+MAX_RETRY_AFTER_S = 300.0   # a longer Retry-After skips the run (SPEC §5.2)
 TIMEOUT_S = 60
 USER_AGENT = "AHSync/0.1"
 
@@ -75,6 +76,14 @@ class FeatureUnavailable(ApiError):
 
 class RetriesExhausted(ApiError):
     """5xx, 429 or network errors on every try: skip this run (SPEC §5.2, FM1)."""
+
+
+class RateLimited(RetriesExhausted):
+    """429 with a Retry-After longer than 300 s: skip this run instead of waiting (SPEC §5.2)."""
+
+
+class Unauthorized(ApiError):
+    """401 even without the key (or with no key to drop)."""
 
 
 class BadFile(ApiError):
@@ -183,7 +192,8 @@ def retry_after_seconds(headers: dict[str, str], attempt: int) -> float:
         attempt: 0 for the first retry, used when Retry-After is missing.
 
     Returns:
-        Retry-After in seconds when it is a number (honoured as given), else the backoff.
+        Retry-After in seconds when it is a number (the caller refuses more than
+        300 s), else the backoff.
     """
     value = headers.get("retry-after", "").strip()
     try:
@@ -219,7 +229,17 @@ class ApiClient:
         self.redactor = redactor or Redactor()
         self.redactor.add(api_key)
         self._api_times: list[int] = []
-        self.has_key = bool(api_key)
+        self.key_rejected = False    # set when a 401 made us drop the key for the rest of the run (FM25)
+        self.key_used = False        # set when a keyed request succeeded
+
+    @property
+    def has_key(self) -> bool:
+        """Whether requests still carry the key.
+
+        Returns:
+            True when a key is configured and hasn't been rejected this run.
+        """
+        return bool(self._api_key) and not self.key_rejected
 
     def _throttle(self, url: str) -> None:
         """Wait so API requests stay within `per_minute` over any 60 s.
@@ -248,7 +268,7 @@ class ApiClient:
             The response, or None on a network error.
         """
         headers = {"User-Agent": USER_AGENT, "Accept-Encoding": "gzip"}
-        if auth and self._api_key:
+        if auth and self.has_key:
             headers["Authorization"] = "Bearer " + self._api_key
         self._throttle(url)
         try:
@@ -260,6 +280,9 @@ class ApiClient:
     def get_json(self, url: str, auth: bool = True) -> object:
         """GET and decode one JSON document, retrying transient failures.
 
+        A 401 with the key is retried once without it. If that works, the key is
+        dropped for the rest of the run and `key_rejected` is set (SPEC §5.2, FM25).
+
         Args:
             url: Absolute URL.
             auth: Attach the key, when there is one (CDN public files don't need it).
@@ -270,32 +293,95 @@ class ApiClient:
         Raises:
             NotFound: 404.
             FeatureUnavailable: 403; the body's `feature` names what's missing.
+            Unauthorized: 401 without a key to drop, or again without the key.
+            RateLimited: 429 asking for more than 300 s.
             RetriesExhausted: 5xx, 429 or network errors on the first try and all 5 retries.
             BadFile: truncated or invalid body (not retried within the run).
             ApiError: any other status.
         """
+        keyed = auth and self.has_key
+        try:
+            data = self._get_with_retries(url, auth)
+        except Unauthorized:
+            if not keyed:
+                raise
+            data = self._get_with_retries(url, False)
+            self.key_rejected = True
+            log.warning("API key rejected (401); continuing without it on the free path")
+            return data
+        if keyed:
+            self.key_used = True
+        return data
+
+    def _get_with_retries(self, url: str, auth: bool) -> object:
+        """One GET with the retry rules, without the 401 fallback.
+
+        Args:
+            url: Absolute URL.
+            auth: Attach the key, when there is one.
+
+        Returns:
+            The decoded JSON.
+
+        Raises:
+            As get_json.
+        """
         shown = self.redactor.scrub(url)
         for attempt in range(MAX_RETRIES + 1):
             response = self._send(url, auth)
-            if response is not None and response.status == 200:
-                return decode_body(response.body)
-            if response is not None and response.status == 404:
-                raise NotFound(f"404 for {shown}")
-            if response is not None and response.status == 403:
-                feature = self._feature_of(response.body)
-                raise FeatureUnavailable(feature, f"403 for {shown}: tier lacks {feature}")
-            if response is not None and response.status != 429 and response.status < 500:
-                raise ApiError(f"HTTP {response.status} for {shown}")
+            if response is not None:
+                self._raise_for_final_status(response, shown)
+                if response.status == 200:
+                    return decode_body(response.body)
             if attempt == MAX_RETRIES:
                 break
-            if response is not None and response.status == 429:
-                wait = retry_after_seconds(response.headers, attempt)
-            else:
-                wait = backoff_seconds(attempt)
-            status = response.status if response is not None else "network error"
-            log.info("%s for %s; retry %d in %g s", status, shown, attempt + 1, wait)
+            wait = self._wait_before_retry(response, attempt, shown)
+            log.info("%s for %s; retry %d in %g s",
+                     response.status if response is not None else "network error", shown, attempt + 1, wait)
             self._clock.sleep(wait)
         raise RetriesExhausted(f"gave up on {shown} after {MAX_RETRIES} retries")
+
+    def _raise_for_final_status(self, response: HttpResponse, shown: str) -> None:
+        """Raise for statuses that retrying won't fix.
+
+        Args:
+            response: The response.
+            shown: The URL with secrets scrubbed, for messages.
+
+        Raises:
+            NotFound, FeatureUnavailable, Unauthorized, ApiError: As get_json.
+        """
+        status = response.status
+        if status == 404:
+            raise NotFound(f"404 for {shown}")
+        if status == 403:
+            feature = self._feature_of(response.body)
+            raise FeatureUnavailable(feature, f"403 for {shown}: tier lacks {feature}")
+        if status == 401:
+            raise Unauthorized(f"401 for {shown}")
+        if status not in (200, 429) and status < 500:
+            raise ApiError(f"HTTP {status} for {shown}")
+
+    def _wait_before_retry(self, response: HttpResponse | None, attempt: int, shown: str) -> float:
+        """Seconds to wait before the next try.
+
+        Args:
+            response: The failed response, or None after a network error.
+            attempt: 0 for the first retry.
+            shown: The URL with secrets scrubbed, for messages.
+
+        Returns:
+            Retry-After for a 429, else the backoff.
+
+        Raises:
+            RateLimited: Retry-After above 300 s.
+        """
+        if response is None or response.status != 429:
+            return backoff_seconds(attempt)
+        wait = retry_after_seconds(response.headers, attempt)
+        if wait > MAX_RETRY_AFTER_S:
+            raise RateLimited(f"429 for {shown} asks for {wait:g} s; skipping this run")
+        return wait
 
     def _feature_of(self, body: bytes) -> str:
         """Read the feature name from a 403 body like {"feature": "books"}.
@@ -312,6 +398,26 @@ class ApiClient:
             return "unknown"
         feature = data.get("feature") if isinstance(data, dict) else None
         return self.redactor.scrub(str(feature)) if feature else "unknown"
+
+
+def build_request(request: HttpRequest) -> urllib.request.Request:
+    """Turn an HttpRequest into a urllib Request that keeps the key off redirects.
+
+    Authorization is added as an unredirected header, so urllib doesn't copy it
+    onto a redirected request, which could go to another host.
+
+    Args:
+        request: URL and headers.
+
+    Returns:
+        The urllib request.
+    """
+    headers = {k: v for k, v in request.headers.items() if k.lower() != "authorization"}
+    req = urllib.request.Request(request.url, headers=headers, method="GET")
+    for name, value in request.headers.items():
+        if name.lower() == "authorization":
+            req.add_unredirected_header("Authorization", value)
+    return req
 
 
 class UrllibTransport:
@@ -339,7 +445,7 @@ class UrllibTransport:
         Raises:
             TransportError: Timeout or connection failure. The message holds no headers.
         """
-        req = urllib.request.Request(request.url, headers=request.headers, method="GET")
+        req = build_request(request)
         try:
             with self._opener(req, timeout=self._timeout_s) as response:
                 return HttpResponse(response.status, {k.lower(): v for k, v in response.headers.items()},

@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 import time
 from collections.abc import Iterable, Iterator
@@ -49,12 +50,26 @@ class SyncState:
 
 @dataclass(frozen=True)
 class StatusMessage:
-    """One line on the Status page."""
+    """One line on the Status page, as structured fields; `views` renders it (SPEC §3.2)."""
 
     topic: str
     level: str       # 'info' | 'warn' | 'error'
-    message: str
+    kind: str        # what happened, e.g. 'lost', 'bad_file', 'format_changed'
+    data: dict       # its fields: ms times, counts, hour numbers, market and endpoint ids
     at: int          # ms
+
+
+@dataclass(frozen=True)
+class BookScan:
+    """The scans row of one order book (SPEC §3.2)."""
+
+    scan_id: str            # "ahf:<market>:<at>" for AHF books, the event id for own scans
+    market: str
+    src: str                # 'ahf' | 'local'
+    char_id: str | None     # scanning character; None for AHF
+    at: int                 # scan time, ms
+    kind: str = "full"      # 'full' | 'partial'
+    coverage: float = 1.0   # 0..1 share of the AH covered
 
 
 @dataclass(frozen=True)
@@ -202,22 +217,8 @@ class Database:
             conn.close()
             raise
         if damaged:
-            db._report_restore(restored, now_ms)
+            db.set_status("restore", "warn", "restored", {"backup": restored.name if restored else None}, now_ms)
         return db
-
-    def _report_restore(self, restored: Path | None, now_ms: int) -> None:
-        """Leave a Status message saying what was restored (FM10).
-
-        Args:
-            restored: The backup used, or None when none was available.
-            now_ms: Message time.
-        """
-        if restored is None:
-            text = "Database was damaged and no backup was found; started a new one. History is re-fetched where AHF still has it"
-        else:
-            text = (f"Database was damaged; restored from backup {restored.name}. "
-                    "Hours since then are re-fetched where AHF still has them")
-        self.set_status("restore", "warn", text, now_ms)
 
     def close(self) -> None:
         """Close the connection."""
@@ -304,6 +305,7 @@ class Database:
         if target.exists():
             return None
         partial = target.with_suffix(".db.tmp")
+        partial.unlink(missing_ok=True)       # left by an interrupted backup
         dst = sqlite3.connect(partial)
         try:
             self.conn.backup(dst)
@@ -343,19 +345,21 @@ class Database:
             self.conn.execute("INSERT INTO meta(name, value) VALUES(?, ?) "
                               "ON CONFLICT(name) DO UPDATE SET value = excluded.value", (name, value))
 
-    def set_status(self, topic: str, level: str, message: str, at: int) -> None:
+    def set_status(self, topic: str, level: str, kind: str, data: dict, at: int) -> None:
         """Set the Status line for a topic, replacing any earlier one.
 
         Args:
             topic: Stable id, e.g. "format:snapshot".
             level: 'info', 'warn' or 'error'.
-            message: Text for the Status page. Must not contain secrets.
+            kind: Message kind, e.g. "lost".
+            data: Structured fields (JSON-serializable, no secrets, no pre-formatted times).
             at: Time, ms.
         """
+        payload = json.dumps(data, sort_keys=True)
         with self.transaction():
-            self.conn.execute("INSERT INTO status(topic, level, message, at) VALUES(?, ?, ?, ?) "
-                              "ON CONFLICT(topic) DO UPDATE SET level = excluded.level, "
-                              "message = excluded.message, at = excluded.at", (topic, level, message, at))
+            self.conn.execute("INSERT INTO status(topic, level, kind, data, at) VALUES(?, ?, ?, ?, ?) "
+                              "ON CONFLICT(topic) DO UPDATE SET level = excluded.level, kind = excluded.kind, "
+                              "data = excluded.data, at = excluded.at", (topic, level, kind, payload, at))
 
     def clear_status(self, topic: str) -> None:
         """Remove a topic's Status line, if any.
@@ -372,8 +376,19 @@ class Database:
         Returns:
             Messages sorted by topic.
         """
-        rows = self.conn.execute("SELECT topic, level, message, at FROM status ORDER BY topic").fetchall()
-        return [StatusMessage(*row) for row in rows]
+        rows = self.conn.execute("SELECT topic, level, kind, data, at FROM status ORDER BY topic").fetchall()
+        return [StatusMessage(topic, level, kind, json.loads(data), at) for topic, level, kind, data, at in rows]
+
+    def status(self, topic: str) -> StatusMessage | None:
+        """One topic's Status line.
+
+        Args:
+            topic: The topic.
+
+        Returns:
+            The line, or None when there is none.
+        """
+        return next((s for s in self.statuses() if s.topic == topic), None)
 
     def get_sync_state(self, market: str) -> SyncState:
         """Read a market's sync state.
@@ -570,30 +585,24 @@ class Database:
                 "stack = excluded.stack, updated = excluded.updated", data)
         return len(data)
 
-    def store_book(self, scan_id: str, market: str, src: str, char_id: str | None, at: int, kind: str,
-                   coverage: float, entries: Iterable[tuple[int, int, int, int, int]]) -> int:
+    def store_book(self, scan: BookScan, entries: Iterable[tuple[int, int, int, int, int]]) -> int:
         """Store an order book: its scan row and entries, replacing any earlier copy of the same scan.
 
         Args:
-            scan_id: Unique id ("ahf:<market>:<at>" for AHF books, the event id for own scans).
-            market: AHF market id.
-            src: 'ahf' or 'local'.
-            char_id: Scanning character; None for AHF.
-            at: Scan time, ms.
-            kind: 'full' or 'partial'.
-            coverage: 0..1 share of the AH covered.
+            scan: The scans row.
             entries: (key, unit price copper, stack, band, count).
 
         Returns:
             Number of entries written.
         """
-        data = [(scan_id, *entry) for entry in entries]
+        data = [(scan.scan_id, *entry) for entry in entries]
         with self.transaction():
             self.conn.execute("INSERT INTO scans(scan_id, market, src, char_id, at, kind, coverage) "
                               "VALUES(?, ?, ?, ?, ?, ?, ?) ON CONFLICT(scan_id) DO UPDATE SET market = excluded.market, "
                               "src = excluded.src, char_id = excluded.char_id, at = excluded.at, kind = excluded.kind, "
-                              "coverage = excluded.coverage", (scan_id, market, src, char_id, at, kind, coverage))
-            self.conn.execute("DELETE FROM book_entries WHERE scan_id = ?", (scan_id,))
+                              "coverage = excluded.coverage",
+                              (scan.scan_id, scan.market, scan.src, scan.char_id, scan.at, scan.kind, scan.coverage))
+            self.conn.execute("DELETE FROM book_entries WHERE scan_id = ?", (scan.scan_id,))
             self.conn.executemany("INSERT INTO book_entries(scan_id, key, price, stack, band, count) "
                                   "VALUES(?, ?, ?, ?, ?, ?)", data)
         return len(data)

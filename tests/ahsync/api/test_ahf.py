@@ -58,7 +58,8 @@ def test_recorded_files_parse():
     snap = api.snapshot(files.snapshot_url)
     assert snap.at_ms == 1_792_198_800_000 and len(snap.rows) == 27
     at, complete, entries = api.book(files.books[0].url)
-    assert complete and len(entries) == 2147
+    assert complete and len(entries) == 2014            # 2147 rows; band-0 rows merge into band 4
+    assert {e[3] for e in entries} == {2, 3, 4}
     assert api.volume(files.caps_volume_url) == []
     items = {row[0]: row for row in api.items()}
     assert items[item_key("Linen Cloth")][2] == "Linen Cloth"
@@ -91,6 +92,11 @@ def test_book_sums_repeated_groups_and_checks_shape():
         parse_book({"at": 1, "entries": [[5, 10, 1, 4]]})
 
 
+def test_book_band_0_is_treated_as_very_long():
+    _at, _complete, entries = parse_book({"at": 1, "entries": [[5, 10, 1, 0, 2], [5, 10, 1, 4, 3], [5, 10, 1, 1, 1]]})
+    assert entries == [(5, 10, 1, 1, 1), (5, 10, 1, 4, 5)]
+
+
 def test_items_include_variants_with_base_values():
     rows = parse_items({"items": {"10": {"n": "Base", "q": 2, "st": 1}},
                         "variants": {str(10 + 2_147_483_648 * 3): {"n": "Base of the Bear"}}})
@@ -99,12 +105,18 @@ def test_items_include_variants_with_base_values():
         parse_items({"variants": {}})
 
 
-def test_live_and_volume_shape_errors_name_their_endpoint():
+def test_m1_and_live_checkpoint_tokens_are_secrets():
     api, transport = recorded_api()
-    transport.serve(f"api/v1/ah/{MARKET}", {"changes": []})
-    with pytest.raises(FormatChanged) as error:
-        api.live(MARKET, 0)
-    assert error.value.endpoint == "live"
+    files = template("files")
+    files["caps"]["m1"] = {"20741": "m1tokenAAAA"}
+    files["live"]["checkpoint"]["url"] = "https://cdn.auctionhouse.fyi/live/v1/m/c1-livetokenBBBB.json.gz"
+    transport.serve(f"api/v1/ah/{MARKET}/files", files)
+    api.files(MARKET)
+    assert api.client.redactor.scrub("m1tokenAAAA livetokenBBBB") == "*** ***"
+
+
+def test_volume_shape_error_names_its_endpoint():
+    api, transport = recorded_api()
     transport.serve("v.json", {"rows": []})
     with pytest.raises(FormatChanged, match="volume"):
         api.volume("https://cdn.auctionhouse.fyi/v.json")

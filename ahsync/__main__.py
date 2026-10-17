@@ -11,18 +11,20 @@ import argparse
 import logging
 import logging.handlers
 import os
+import sqlite3
 import sys
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import IO
 
-from ahsync.api.ahf import FEATURE_LIVE, AhfApi
+from ahsync.api.ahf import AhfApi
 from ahsync.api.client import ApiClient, RedactingFilter, Redactor, Transport, UrllibTransport
 from ahsync.clock import Clock, SystemClock
 from ahsync.config import Config, ConfigError, load_config
 from ahsync.store.db import Database, DatabaseError
 from ahsync.store.prune import prune
-from ahsync.sync.catchup import MarketSync, run_catchup, sync_markets
+from ahsync.sync.catchup import SyncContext, check_capabilities, run_catchup, sync_markets
 from ahsync.sync.scheduler import SavedVarsWatcher, Scheduler, SchedulerHooks, file_mtime_ms, find_savedvars
 
 LOG_BYTES = 1_000_000
@@ -102,104 +104,128 @@ def setup_logging(data_dir: Path, redactor: Redactor) -> logging.Handler:
     return handler
 
 
-def build_hooks(api: AhfApi, db: Database, clock: Clock, config: Config, caps_live: bool,
-                backup_dir: Path) -> SchedulerHooks:
+@dataclass(frozen=True)
+class Runtime:
+    """What run() gets from the outside world, so tests can replace all of it."""
+
+    env: Mapping[str, str]              # environment variables (for the API key)
+    home: Path                          # the user's home folder (for the key file)
+    transport: Transport                # UrllibTransport in the app, FakeTransport in tests
+    clock: Clock
+    should_stop: Callable[[], bool]     # polled by the steady-state loop
+    out: IO[str]                        # user-facing start-up messages (stderr in the app)
+
+
+def safe_backup(db: Database, backup_dir: Path, now_ms: int) -> None:
+    """Make the daily backup; a failure is logged, never fatal (SPEC §5.2: degrade).
+
+    Args:
+        db: The database.
+        backup_dir: data/backups.
+        now_ms: Current time.
+    """
+    try:
+        db.daily_backup(backup_dir, now_ms)
+    except (OSError, sqlite3.Error) as error:
+        logging.getLogger("ahsync").warning("daily backup failed: %s", error)
+
+
+def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path) -> SchedulerHooks:
     """Wire the steady-state jobs that exist in M1.
 
     Args:
-        api: AHF endpoints.
-        db: The database.
-        clock: Time source.
+        ctx: The run's API, database, clock and capabilities; the hourly store
+            re-checks /me and updates ctx.caps, so Premium ending mid-session degrades.
         config: Settings.
-        caps_live: Whether this run has Premium live prices.
         backup_dir: data/backups.
 
     Returns:
-        Hooks with store_hour, daily, weekly and (with Premium) live_refresh set.
+        Hooks with store_hour, daily and weekly set. The live table stays off until
+        its format is recorded (SPEC §5.2).
     """
-    caps_holder = {"caps": None}
-
     def store_hour() -> None:
-        """Hourly :06 store: new hours, snapshot, books; no recompute (SPEC §3.1)."""
-        caps = caps_holder["caps"] or api.me()
-        caps_holder["caps"] = caps
-        sync_markets(api, db, clock, config.markets, caps, config.retention_days)
-
-    def live_refresh() -> None:
-        """Premium 15-minute live table for each market."""
-        caps = caps_holder["caps"] or api.me()
-        caps_holder["caps"] = caps
-        for market in config.markets:
-            since = db.get_sync_state(market).live_since or clock.now_ms() - config.live_refresh_minutes * 60_000
-            MarketSync(api, db, clock, market, caps, config.retention_days).store_live(since)
+        """Hourly :06 store: /me, new hours, snapshot, books; no recompute (SPEC §3.1)."""
+        caps = check_capabilities(ctx.api, ctx.db, ctx.clock.now_ms())
+        if caps is None:
+            return
+        ctx.caps = caps
+        sync_markets(ctx, config.markets)
 
     def daily() -> None:
-        """Daily prune and backup (SPEC §3.1); /me is re-checked at the next store."""
-        caps_holder["caps"] = None
-        prune(db, clock.now_ms(), config.retention_days)
-        db.daily_backup(backup_dir, clock.now_ms())
+        """Daily prune and backup (SPEC §3.1)."""
+        prune(ctx.db, ctx.clock.now_ms(), config.retention_days)
+        safe_backup(ctx.db, backup_dir, ctx.clock.now_ms())
 
-    return SchedulerHooks(store_hour=store_hour, daily=daily, weekly=db.vacuum,
-                          live_refresh=live_refresh if caps_live else None)
+    return SchedulerHooks(store_hour=store_hour, daily=daily, weekly=ctx.db.vacuum)
 
 
-def run(data_dir: Path, config_path: Path, env: Mapping[str, str], home: Path, transport: Transport,
-        clock: Clock, should_stop: Callable[[], bool], out: IO[str]) -> int:
-    """Start AHSync and run until should_stop() is True.
+def run(data_dir: Path, config_path: Path, runtime: Runtime) -> int:
+    """Start AHSync and run until runtime.should_stop() is True.
 
     Args:
         data_dir: data/ (database, backups, log, lock).
         config_path: config.toml.
-        env: Environment variables (for the API key).
-        home: The user's home folder (for the key file).
-        transport: HTTP transport (UrllibTransport in the app, FakeTransport in tests).
-        clock: Time source.
-        should_stop: Polled by the steady-state loop.
-        out: Where user-facing start-up messages go (stderr in the app).
+        runtime: Environment, transport, clock, stop check and message stream.
 
     Returns:
         Exit code: 0 after a normal stop, 1 when already running, 2 for a bad config or database.
     """
     lock = InstanceLock(data_dir / "ahsync.lock")
     if not lock.acquire():
-        print(ALREADY_RUNNING, file=out)
+        print(ALREADY_RUNNING, file=runtime.out)
         return 1
-    handler = None
-    db = None
     try:
         try:
-            config = load_config(config_path, env, home)
+            config = load_config(config_path, runtime.env, runtime.home)
         except ConfigError as error:
-            print(f"AHSync can't start: {error}", file=out)
+            print(f"AHSync can't start: {error}", file=runtime.out)
             return 2
-        redactor = Redactor()
-        redactor.add(config.api_key)
-        handler = setup_logging(data_dir, redactor)
-        log = logging.getLogger("ahsync")
+        return _run_configured(data_dir, config, runtime)
+    finally:
+        lock.release()
+
+
+def _run_configured(data_dir: Path, config: Config, runtime: Runtime) -> int:
+    """Everything after the lock and config: log, database, catch-up, steady state.
+
+    Args:
+        data_dir: data/.
+        config: Validated settings.
+        runtime: As run().
+
+    Returns:
+        0 after a normal stop, 2 when the database can't be used.
+    """
+    redactor = Redactor()
+    redactor.add(config.api_key)
+    handler = setup_logging(data_dir, redactor)
+    log = logging.getLogger("ahsync")
+    clock = runtime.clock
+    db = None
+    try:
         log.info("starting; markets %s; %s", ", ".join(config.markets), "with key" if config.api_key else "no key")
         backup_dir = data_dir / "backups"
         try:
             db = Database.open(data_dir / "ahsync.db", clock.now_ms(), backup_dir)
         except DatabaseError as error:
-            print(f"AHSync can't start: {error}", file=out)
+            print(f"AHSync can't start: {error}", file=runtime.out)
             return 2
-        db.daily_backup(backup_dir, clock.now_ms())
-        api = AhfApi(ApiClient(transport, clock, config.api_key, redactor=redactor))
+        safe_backup(db, backup_dir, clock.now_ms())
+        api = AhfApi(ApiClient(runtime.transport, clock, config.api_key, redactor=redactor))
         result = run_catchup(api, db, clock, config.markets, config.retention_days)
         prune(db, clock.now_ms(), config.retention_days)
-        hooks = build_hooks(api, db, clock, config, FEATURE_LIVE in result.caps.features, backup_dir)
+        ctx = SyncContext(api, db, clock, result.caps, config.retention_days)
         watcher = SavedVarsWatcher(lambda: find_savedvars(Path(config.wow_path)), file_mtime_ms)
-        scheduler = Scheduler(clock, hooks, watcher, config.daily_refresh_time, config.live_refresh_minutes)
-        scheduler.run(should_stop)
+        scheduler = Scheduler(clock, build_hooks(ctx, config, backup_dir), watcher, config.daily_refresh_time,
+                              config.live_refresh_minutes)
+        scheduler.run(runtime.should_stop)
         log.info("stopped")
         return 0
     finally:
         if db is not None:
             db.close()
-        if handler is not None:
-            logging.getLogger("ahsync").removeHandler(handler)
-            handler.close()
-        lock.release()
+        log.removeHandler(handler)
+        handler.close()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -216,8 +242,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", type=Path, default=Path("config.toml"), help="config file (default: ./config.toml)")
     args = parser.parse_args(argv)
     try:
-        return run(args.data, args.config, os.environ, Path.home(), UrllibTransport(), SystemClock(),
-                   lambda: False, sys.stderr)
+        return run(args.data, args.config, Runtime(os.environ, Path.home(), UrllibTransport(), SystemClock(),
+                                                   lambda: False, sys.stderr))
     except KeyboardInterrupt:
         return 0
 

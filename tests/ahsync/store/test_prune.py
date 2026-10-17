@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from ahsync.clock import DAY_MS
-from ahsync.store.db import Database
+from ahsync.store.db import BookScan, Database
 from ahsync.store.prune import prune
 from tests.support.builders import duration_ms, item_key
 from tests.support.fake_clock import FakeClock
@@ -32,8 +32,8 @@ def test_S6_rows_89d23h_and_90d01h_old_keep_the_first_and_delete_the_second(tmp_
 
 def test_books_keep_30_days_and_rule_tombstones_90(tmp_path):
     db = open_db(tmp_path)
-    db.store_book("old", MARKET, "ahf", None, NOW - 31 * DAY_MS, "full", 1.0, [(1, 10, 1, 4, 1)])
-    db.store_book("new", MARKET, "ahf", None, NOW - 29 * DAY_MS, "full", 1.0, [(1, 10, 1, 4, 1)])
+    db.store_book(BookScan("old", MARKET, "ahf", None, NOW - 31 * DAY_MS), [(1, 10, 1, 4, 1)])
+    db.store_book(BookScan("new", MARKET, "ahf", None, NOW - 29 * DAY_MS), [(1, 10, 1, 4, 1)])
     db.conn.executemany("INSERT INTO item_rules(key, rule, set_at, source) VALUES(?, ?, ?, 'addon')",
                         [(1, "none", NOW - 91 * DAY_MS), (2, "no_buy", NOW - 91 * DAY_MS), (3, "none", NOW - DAY_MS)])
     db.conn.execute("INSERT INTO volume_d1(market, key, day, src) VALUES(?, 1, ?, 'books')",

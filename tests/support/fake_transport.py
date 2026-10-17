@@ -56,7 +56,7 @@ def encode(path: str, data: object) -> bytes:
 class Fault:
     """One injected fault. `remaining` None means every matching request."""
 
-    matches: Callable[[int, str], bool]   # (1-based request number, path) -> applies?
+    matches: Callable[[int, str, HttpRequest], bool]   # (1-based request number, path, request) -> applies?
     kind: str                             # "status" | "truncate" | "network" | "crash"
     status: int = 200
     headers: dict[str, str] | None = None
@@ -142,7 +142,16 @@ class FakeTransport:
             headers: Response headers, lower-case names (e.g. {"retry-after": "60"}).
             body: Response body.
         """
-        self.faults.append(Fault(lambda _n, p: p == path, "status", status, headers or {}, body, remaining=times))
+        self.faults.append(Fault(lambda _n, p, _r: p == path, "status", status, headers or {}, body, remaining=times))
+
+    def fail_with_key(self, path: str, status: int) -> None:
+        """Fail requests for a path that carry an Authorization header (an expired key).
+
+        Args:
+            path: Route path.
+            status: HTTP status to return, e.g. 401.
+        """
+        self.faults.append(Fault(lambda _n, p, r: p == path and "Authorization" in r.headers, "status", status, {}))
 
     def fail_nth(self, number: int, status: int, headers: dict[str, str] | None = None) -> None:
         """Fail exactly the Nth request (1-based), whatever it is.
@@ -152,7 +161,7 @@ class FakeTransport:
             status: HTTP status to return.
             headers: Response headers, lower-case names.
         """
-        self.faults.append(Fault(lambda n, _p: n == number, "status", status, headers or {}, remaining=1))
+        self.faults.append(Fault(lambda n, _p, _r: n == number, "status", status, headers or {}, remaining=1))
 
     def truncate(self, path: str, fraction: float, times: int | None = None) -> None:
         """Serve only the first part of a path's body.
@@ -162,7 +171,7 @@ class FakeTransport:
             fraction: Share of the body kept, e.g. 0.6.
             times: How many requests are cut; None = all.
         """
-        self.faults.append(Fault(lambda _n, p: p == path, "truncate", fraction=fraction, remaining=times))
+        self.faults.append(Fault(lambda _n, p, _r: p == path, "truncate", fraction=fraction, remaining=times))
 
     def network_error(self, path: str, times: int | None = None) -> None:
         """Raise TransportError (a timeout) for a path.
@@ -171,7 +180,7 @@ class FakeTransport:
             path: Route path.
             times: How many requests fail; None = all.
         """
-        self.faults.append(Fault(lambda _n, p: p == path, "network", remaining=times))
+        self.faults.append(Fault(lambda _n, p, _r: p == path, "network", remaining=times))
 
     def crash_on(self, path: str) -> None:
         """Raise SimulatedCrash when a path is requested (once).
@@ -179,7 +188,7 @@ class FakeTransport:
         Args:
             path: Route path.
         """
-        self.faults.append(Fault(lambda _n, p: p == path, "crash", remaining=1))
+        self.faults.append(Fault(lambda _n, p, _r: p == path, "crash", remaining=1))
 
     def clear_faults(self) -> None:
         """Remove every fault (a restart with the network back)."""
@@ -208,18 +217,19 @@ class FakeTransport:
 
     # ------------------------------------------------------------ the transport
 
-    def _active_fault(self, number: int, path: str) -> Fault | None:
+    def _active_fault(self, number: int, path: str, request: HttpRequest) -> Fault | None:
         """Find and consume the first fault matching a request.
 
         Args:
             number: 1-based request number.
             path: Route path.
+            request: The request (for header-based faults).
 
         Returns:
             The fault, or None.
         """
         for fault in self.faults:
-            if fault.remaining != 0 and fault.matches(number, path):
+            if fault.remaining != 0 and fault.matches(number, path, request):
                 if fault.remaining is not None:
                     fault.remaining -= 1
                 return fault
@@ -240,7 +250,7 @@ class FakeTransport:
         """
         self.requests.append(request)
         path = path_of(request.url)
-        fault = self._active_fault(len(self.requests), path)
+        fault = self._active_fault(len(self.requests), path, request)
         if fault is not None and fault.kind == "crash":
             raise SimulatedCrash(path)
         if fault is not None and fault.kind == "network":

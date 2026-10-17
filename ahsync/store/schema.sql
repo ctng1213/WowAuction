@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS crafts(
     PRIMARY KEY(char_id, spell_id, at)
 );
 
--- SPEC GAP: §3.2 lists "mail sent" among the event tables but gives no columns; these follow §2.2.1.
+-- Columns per §3.2 (mail_sent), following §2.2.1.
 CREATE TABLE IF NOT EXISTS mail_sent(
     event_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, to_char TEXT NOT NULL, key INTEGER NOT NULL,
     qty INTEGER, at INTEGER NOT NULL, action_id TEXT
@@ -159,8 +159,7 @@ CREATE TABLE IF NOT EXISTS sync_state(
     last_run INTEGER
 );
 
--- SPEC GAP: §3.1.1 defines item_stats' contents (§3.3) but not its columns. Until the engine
--- (M3) lands, each row holds its fields as one JSON object; a migration can split them later.
+-- Placeholders until M3 (§3.2): each row holds its fields as one JSON object; a migration can split them later.
 CREATE TABLE IF NOT EXISTS item_stats(
     market TEXT NOT NULL, key INTEGER NOT NULL, stats TEXT NOT NULL, updated INTEGER NOT NULL,
     PRIMARY KEY(market, key)
@@ -170,10 +169,10 @@ CREATE TABLE IF NOT EXISTS item_stats_new(
     PRIMARY KEY(market, key)
 );
 
--- SPEC GAP: §5.2 needs Status messages and per-hour "bad file" counts but §3.2 has no table for them.
--- status: one current message per topic (e.g. 'lost:<market>', 'format:snapshot'); level 'info' | 'warn' | 'error'.
+-- Status page lines (§3.2): one per topic (e.g. 'lost:<market>', 'format:snapshot'); level 'info' | 'warn' | 'error'.
+-- kind names the message; data holds its structured fields as JSON (ms ranges, counts, hours), rendered by views.
 CREATE TABLE IF NOT EXISTS status(
-    topic TEXT PRIMARY KEY, level TEXT NOT NULL, message TEXT NOT NULL, at INTEGER NOT NULL
+    topic TEXT PRIMARY KEY, level TEXT NOT NULL, kind TEXT NOT NULL, data TEXT NOT NULL, at INTEGER NOT NULL
 );
 
 -- An hour whose file failed (truncated, bad JSON, 404). Retried on later runs; 3 in a row → Status "bad file".

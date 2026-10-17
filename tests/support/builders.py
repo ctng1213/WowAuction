@@ -352,9 +352,6 @@ class AhfWorld:
             book = template("book")
             book["at"] = at
             t.serve(f"books/v1/{m}/{at}-cap-book-{at}.json.gz", book)
-            now = self.clock.now_ms()
-            live_rows = [[row[0], row[1], row[2], now] for row in snapshot(now, m)["rows"][:3]]
-            t.serve(f"{API}/ah/{m}", {"at": now, "rows": live_rows})   # assumed live shape (SPEC GAP in ahf.live)
 
     def advance(self, ms_: int) -> None:
         """Move the clock forward and republish (AHF keeps sealing new hours).

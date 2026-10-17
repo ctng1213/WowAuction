@@ -6,8 +6,13 @@ import logging
 
 import pytest
 
-from ahsync.__main__ import ALREADY_RUNNING, InstanceLock, main, run
+from ahsync.__main__ import ALREADY_RUNNING, InstanceLock, Runtime, build_hooks, main, run, safe_backup
+from ahsync.api.ahf import AhfApi
+from ahsync.api.client import ApiClient
 from ahsync.clock import HOUR_MS
+from ahsync.config import Config
+from ahsync.store.db import Database
+from ahsync.sync.catchup import SyncContext, run_catchup
 from tests.support.builders import AhfWorld, h1_path
 from tests.support.fake_clock import FakeClock
 from tests.support.fake_transport import DEFAULT_MARKET
@@ -26,7 +31,7 @@ def start(tmp_path, world: AhfWorld, config_text: str = "", stop_after_ticks: in
         return calls["n"] > stop_after_ticks
 
     out = io.StringIO()
-    code = run(tmp_path / "data", config, env or {}, tmp_path, world.transport, world.clock, should_stop, out)
+    code = run(tmp_path / "data", config, Runtime(env or {}, tmp_path, world.transport, world.clock, should_stop, out))
     return code, out.getvalue()
 
 
@@ -34,7 +39,8 @@ def test_S8_api_key_in_config_never_appears_in_logs_urls_or_exceptions(tmp_path,
     clock = FakeClock()
     world = AhfWorld(clock, premium=True)
     t = world.transport
-    t.fail(f"api/v1/ah/{DEFAULT_MARKET}", 403, body=('{"feature": "%s"}' % KEY).encode())   # error echoing the key
+    book_path = [p for p in t.routes if p.startswith("books/")][0]
+    t.fail(book_path, 403, body=('{"feature": "%s"}' % KEY).encode())   # an error echoing the key
     t.truncate(h1_path(DEFAULT_MARKET, world.sealed_h1 - 3), 0.6)
     t.fail(h1_path(DEFAULT_MARKET, world.sealed_h1 - 2), 503, times=2)
     t.network_error(h1_path(DEFAULT_MARKET, world.sealed_h1 - 1), times=1)
@@ -106,7 +112,7 @@ def test_damaged_database_without_backup_folder_access_is_reported(tmp_path, mon
 def test_main_parses_arguments(tmp_path, monkeypatch):
     seen = {}
 
-    def fake_run(data_dir, config_path, *_rest):
+    def fake_run(data_dir, config_path, _runtime):
         seen["args"] = (data_dir, config_path)
         return 0
 
@@ -121,10 +127,38 @@ def test_main_parses_arguments(tmp_path, monkeypatch):
     assert main([]) == 0
 
 
-@pytest.mark.parametrize("premium", [True])
-def test_premium_start_wires_live_refresh(tmp_path, premium):
+def test_hourly_store_rechecks_me_and_degrades_when_premium_ends(tmp_path):
     clock = FakeClock()
-    world = AhfWorld(clock, premium=premium)
-    code, _ = start(tmp_path, world, 'api_key = "ak_x"\n', stop_after_ticks=400)   # > 15 min of 5 s ticks
-    assert code == 0
-    assert world.transport.count(f"api/v1/ah/{DEFAULT_MARKET}") >= 2
+    world = AhfWorld(clock, premium=True, until_ms=clock.now_ms() + HOUR_MS)
+    db = Database.open(tmp_path / "ahsync.db", clock.now_ms(), None)
+    api = AhfApi(ApiClient(world.transport, clock, "ak_x"))
+    result = run_catchup(api, db, clock, (DEFAULT_MARKET,))
+    ctx = SyncContext(api, db, clock, result.caps)
+    hooks = build_hooks(ctx, Config(), tmp_path / "backups")
+    assert hooks.live_refresh is None                                   # live table unsupported for now
+
+    world = AhfWorld(clock, premium=False, transport=world.transport)    # contributor expired mid-session
+    world.advance(HOUR_MS)
+    world.transport.remove_matching(f"candles/v1/h1c/")
+    world.transport.requests.clear()
+    hooks.store_hour()
+
+    assert not ctx.caps.premium and api.client.per_minute == 60
+    assert db.status("premium").kind == "premium_ended"
+    assert not [p for p in world.transport.paths() if "h1c/" in p or "d1c/" in p or "books/" in p]
+    assert db.get_sync_state(DEFAULT_MARKET).last_hour == world.sealed_h1
+
+    world.transport.fail("api/v1/me", 503)                              # unreachable: skipped, nothing raised
+    hooks.store_hour()
+    hooks.daily()
+    db.close()
+
+
+def test_backup_failure_is_logged_not_fatal(tmp_path, caplog):
+    db = Database.open(tmp_path / "ahsync.db", FakeClock().now_ms(), None)
+    blocker = tmp_path / "backups"
+    blocker.write_text("a file where the folder should be", encoding="utf-8")
+    with caplog.at_level(logging.WARNING, logger="ahsync"):
+        safe_backup(db, blocker, FakeClock().now_ms())
+    assert "daily backup failed" in caplog.text
+    db.close()

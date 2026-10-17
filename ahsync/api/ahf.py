@@ -20,6 +20,8 @@ FEATURE_LIVE = "prices.live"
 FEATURE_BOOKS = "books"
 FEATURE_DEPTH = "depth"
 PUBLIC_HISTORY_DAYS = 7
+BAND_UNKNOWN = 0       # seen in real books; meaning unknown (SPEC §2.1)
+BAND_VERY_LONG = 4     # band 0 is treated as very long, the conservative choice for §3.3.2
 
 
 class FormatChanged(ApiError):
@@ -178,8 +180,9 @@ def parse_book(data: object) -> tuple[int, bool, list[tuple[int, int, int, int, 
         data: Decoded JSON.
 
     Returns:
-        (at ms, complete, entries). Rows repeating the same (key, price, stack, band)
-        are summed, so the store's primary key holds.
+        (at ms, complete, entries). Band 0 becomes 4 (very long, SPEC §2.1). Rows
+        repeating the same (key, price, stack, band) are then summed, so the
+        store's primary key holds.
 
     Raises:
         FormatChanged: Wrong shape.
@@ -190,7 +193,8 @@ def parse_book(data: object) -> tuple[int, bool, list[tuple[int, int, int, int, 
     for row in data["entries"]:
         _require(isinstance(row, list) and len(row) == 5 and all(_is_int(v) for v in row), "books",
                  "entry is not [key, price, stack, band, count]")
-        group = (row[0], row[1], row[2], row[3])
+        band = BAND_VERY_LONG if row[3] == BAND_UNKNOWN else row[3]
+        group = (row[0], row[1], row[2], band)
         counts[group] = counts.get(group, 0) + row[4]
     entries = [(*group, count) for group, count in sorted(counts.items())]
     return data["at"], bool(data.get("complete", False)), entries
@@ -278,8 +282,9 @@ class AhfApi:
             self.cdn_base = data["cdnBase"] if data["cdnBase"].endswith("/") else data["cdnBase"] + "/"
         caps = data.get("caps") if isinstance(data.get("caps"), dict) else {}
         caps_h1 = {int(day): token for day, token in (caps.get("h1") or {}).items() if isinstance(token, str)}
-        for token in caps_h1.values():
+        for token in list(caps_h1.values()) + [t for t in (caps.get("m1") or {}).values() if isinstance(t, str)]:
             self.client.redactor.add(token)
+        self._register_live_token(data.get("live"))
         books = []
         for book in data.get("books") or []:
             if isinstance(book, dict) and _is_int(book.get("at")) and isinstance(book.get("url"), str):
@@ -296,6 +301,17 @@ class AhfApi:
                          snapshot_url=data.get("snapshot") if isinstance(data.get("snapshot"), str) else None,
                          caps_h1=caps_h1, caps_d1_url=caps_d1, caps_volume_url=caps_volume,
                          books=tuple(sorted(books, key=lambda b: (b.at_ms, b.url))))
+
+    def _register_live_token(self, live: object) -> None:
+        """Register the live checkpoint URL's token (`c<seq>-<token>.json.gz`) as a secret.
+
+        Args:
+            live: `/files` `live` object, or None.
+        """
+        checkpoint = live.get("checkpoint") if isinstance(live, dict) else None
+        if isinstance(checkpoint, dict) and isinstance(checkpoint.get("url"), str):
+            name = checkpoint["url"].rsplit("/", 1)[-1].removesuffix(".json.gz")
+            self.client.redactor.add(name.removeprefix(f"c{checkpoint.get('seq')}-"))
 
     def hour_url(self, market: str, hour: int, token: str | None = None) -> str:
         """URL of one hour's candles (SPEC §2.1 Response formats).
@@ -360,31 +376,6 @@ class AhfApi:
         pointer = self.client.get_json(pointer_url, auth=False)
         _require(isinstance(pointer, dict) and isinstance(pointer.get("path"), str), "snapshot", "pointer has no path")
         return parse_snapshot(self.client.get_json(self.cdn_base + pointer["path"].lstrip("/"), auth=False))
-
-    def live(self, market: str, since_ms: int) -> Snapshot:
-        """Fetch live price changes since a time (Premium `prices.live`).
-
-        The response shape is assumed to match the snapshot's (see SPEC GAP below).
-
-        Args:
-            market: AHF market id.
-            since_ms: Only changes after this time, UTC ms.
-
-        Returns:
-            The changed rows as a Snapshot.
-
-        Raises:
-            FormatChanged: As above (endpoint "live").
-            FeatureUnavailable, BadFile, RetriesExhausted.
-        """
-        # SPEC GAP: §2.1 names `GET /ah/:market?since=` but its response wasn't recorded.
-        # We assume the snapshot's shape (`at`, `rows: [[key, price, qty, scanAt]]`); any
-        # other shape raises FormatChanged("live") and the caller keeps the snapshot.
-        data = self.client.get_json(f"{self.client.api_base}/ah/{market}?since={since_ms}")
-        try:
-            return parse_snapshot(data)
-        except FormatChanged as error:
-            raise FormatChanged("live", str(error)) from None
 
     def book(self, url: str) -> tuple[int, bool, list[tuple[int, int, int, int, int]]]:
         """Fetch one AHF order book (Premium `books`).
