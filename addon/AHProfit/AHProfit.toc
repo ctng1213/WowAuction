@@ -6,9 +6,14 @@
 
 Core\Adapter.lua
 Data\BonusSuffixes.lua
+Data\Disenchant.lua
 Core\Events.lua
 Core\DB.lua
 Capture\Characters.lua
 Capture\Professions.lua
 Capture\Inventory.lua
 Core\Diagnostics.lua
+Engine\Fees.lua
+Engine\SellProb.lua
+Engine\Disenchant.lua
+Engine\Craft.lua

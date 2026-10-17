@@ -133,7 +133,9 @@ Reading rules:
 
 - AHSync re-reads the file only after its modification time has been unchanged for 2 seconds, so it never parses a half-written file.
 - The file carries `formatVersion`, and every event carries a unique `event_id`, so ingest is idempotent. A file that won't parse is retried from WoW's `AHProfit.lua.bak` (§5.2).
-- **Pruning handshake.** Order books, events and mail would make SavedVariables grow without limit, which slows login and logout. AHSync writes `ingestedUntil` (the newest event time it has stored, in ms) into `Data.lua` (§3.5). On load, the addon deletes scans, posts, purchases, crafts and mail rows at or before that time. It keeps unconfirmed attempts younger than 1 h (§5.2), so a confirmation that arrives later still reaches AHSync, which upserts the event by its id.
+- **Pruning handshake.** Order books, events and mail would make SavedVariables grow without limit, which slows login and logout. AHSync writes `ingestedUntil` into `Data.lua` (§3.5) as a **map from character id to time** (ms): for each character, the newest event or scan time stored for that character. On load, the addon deletes each character's scans, posts, purchases, crafts and mail rows at or before that character's value.
+  - **Per character, because `Data.lua` is shared by every account** on the machine: one global time could pass events of another account whose file couldn't be read.
+  - **Never past a row that was set aside.** When any of a character's rows (a scan or an event) was not stored, for example a scan from a realm missing in `[realms]` or a row the parser rejected, that character's value stops 1 s before the oldest such row. The addon then keeps it, and it is ingested once the problem is fixed. It keeps unconfirmed attempts younger than 1 h (§5.2), so a confirmation that arrives later still reaches AHSync, which upserts the event by its id.
 
 #### 2.2.1 SavedVariables layout (format version 1)
 
@@ -203,6 +205,7 @@ AHProfitDB = {
 | `skip` | `action` (action id from `Data.lua`) | the row menu's "Mark as skipped" |
 
 - **`diagnostics`** (written by `Core/Diagnostics.lua` at `PLAYER_LOGOUT`, which also fires on `/reload`): `{ at, client, apis, errors, skillLines, merchant, tradeSkill, namespaces, professions, setupError }`. It holds the client build, which of the APIs the addon depends on exist (`"name=type;…"`), the handler errors caught this session (at most 10), the raw Skills-tab rows, the last merchant's raw items, the last trade skill window's raw state, the function names inside the modern API namespaces (`"C_X=FnA FnB;…"`), the raw `GetProfessions` slots, and any database setup error. It exists so `tools/savedvars_report.py` can explain a missing capture without Lua error popups (§6). AHSync never ingests it, and each session replaces it.
+- **Professions and known recipes follow the file.** The addon writes a character's professions whole and only ever adds known recipes. AHSync replaces that character's professions and known recipes with the file's when the file's `characters[id].updated` is at least the stored one; an older file changes nothing. So an unlearned profession disappears, and a relearned one starts again at its new skill.
 - `confirmed` starts `false` when the hook fires and turns `true` when the action is confirmed (§5.2). The same row is updated in place.
 - Untracked changes (FM21) are not events. AHSync derives them by comparing consecutive inventory snapshots with the events between them.
 
@@ -268,6 +271,8 @@ All the heavy lifting happens in AHSync, and only in a **full refresh**. Everyth
 - Items on any list get the full 24 × 8 grid. Other items, which only need the tooltip, get 24 × 3 (0, 5 and 20 ahead), to stay within the `Data.lua` budget.
 - **Encoding: one character per point.** Each `P` is quantized to 2% steps, `n = floor(P × 50 + 0.5)` (0–50), and written as `string.char(35 + n)`, row by row, in the item's string. Codes 35–85 contain no `"` and no `\`, so no escaping is needed. A 9k-item market then needs about 650 KB of curves, which leaves room in the 2 MB budget for everything else. **AHSync uses the quantized curve too**, not the raw simulation result, so Python and Lua read identical values (IU11).
 
+In each column the units ahead are modelled as one block that stays the whole window, which is conservative: the curve can't know which future competitors expire when. Each value is stored in 2% steps (below).
+
 When a price or the competition changes, AHSync and the addon both pick the row for the current hour and interpolate linearly between the units-ahead points, in O(1) time. More than 24 h after the refresh, they reuse the row for the same clock hour, and the age badge already warns that the data is old. The full simulation is never run live.
 
 **Idle means idle.**
@@ -306,7 +311,7 @@ Storage rules:
 - backup = copy the file
 - handles tens of millions of rows
 
-All DB access lives in `db.py`. Moving to Postgres would only mean replacing that module, if this ever becomes multi-user or hosted.
+All DB access lives in `store/` (`db.py`, plus modules split off it by responsibility, such as the SavedVariables ingest writes). Moving to Postgres would only mean replacing that package, if this ever becomes multi-user or hosted.
 
 ```
 items(key PK, item_id, name, quality, ilvl, class, subclass, vendor_buy, vendor_sell, stack, updated)
@@ -317,10 +322,10 @@ calibration(market, key, source, factor, samples, updated,   PK(market,key,sourc
 current(market, key, price, qty, at, src,                    PK(market,key,src))
 scans(scan_id PK, market, src, char_id, at, kind)            -- src: local (your scan) | ahf (Premium books); char_id null for ahf
 book_entries(scan_id, key, price, stack, band, count,        PK(scan_id,key,price,stack,band))
-auction_mail(char_id, key, qty, price, outcome, at,          PK(char_id,key,at,outcome))
+auction_mail(event_id PK, char_id, key, qty, price, outcome, at)   -- index (char_id,key,at,outcome)
 posts(post_id PK, char_id, market, key, stack, price, cost_each, p_at_post, duration_h, deposit, at, outcome, resolved_at, action_id)
-purchases(char_id, key, qty, price, source, at, action_id,   PK(char_id,key,at))
-crafts(char_id, spell_id, count, cost_each, at, action_id,   PK(char_id,spell_id,at))
+purchases(event_id PK, char_id, key, qty, price, source, at, action_id, confirmed)   -- index (char_id,key,at)
+crafts(event_id PK, char_id, spell_id, count, cost_each, at, action_id)   -- index (char_id,spell_id,at)
 cost_basis(key PK, qty, total_cost, untracked_qty)
 actions(action_id PK, run_at, slot_ms, char_id, kind, key, qty, price, expected_net, conf, status, done_qty, done_at, parent_id,
         window_start_ms, window_end_ms, anchor_net, anchor_window_ms, replaces_id, week_start_ms)
@@ -331,7 +336,10 @@ recipes(profession, spell_id, product_key, yield_min, yield_max, skill_req, cool
 reagents(profession, spell_id, key, count,                   PK(profession,spell_id,key))
 known_recipes(char_id, spell_id,                             PK(char_id,spell_id))
 inventory(char_id, location, key, qty, bound,                PK(char_id,location,key,bound))
-own_auctions(char_id, key, price, stack, band, count, seen,  PK(char_id,key,price,stack))
+own_auctions(char_id, key, price, stack, band, count, seen,  PK(char_id,key,price,stack,band))
+snapshots(char_id, location, at,                             PK(char_id,location))   -- capture time of each place, incl. auctions
+skips(event_id PK, char_id, action_id, at)                   -- "Mark as skipped" from the addon; applied when the action exists
+vendor_reagents(key PK)                                      -- seen at a merchant (add-only)
 sync_state(market PK, last_hour, last_d1, last_volume, live_since, last_run)
 meta(name PK, value)                                         -- e.g. savedvars_ingested_until
 mail_sent(event_id PK, char_id, to_char, key, qty, at, action_id)
@@ -352,7 +360,9 @@ fetch_failures(market, hour, failures, last_error, last_at,  PK(market,hour))   
   - Items you already held when tracking started count as cost 0, and `untracked_qty` marks them, so the UI can say "before tracking".
 - `item_rules.rule` is `no_buy`, `ignore`, `keep` or `none` (§3.4.2). `source` is `dashboard` or `addon`. Clearing a rule writes `none` with a new `set_at` rather than deleting the row. That tombstone is what lets a clear beat an older rule from the other side. Tombstones older than 90 days are pruned.
 - **Failure handling (§5.2):**
-  - **Event ids.** Every event table (`posts`, `purchases`, `crafts`, `auction_mail`, mail sent) also carries `event_id` (`charId:timeMs:seq`, unique), and ingest upserts on it.
+  - **Event ids.** Every event table (`posts`, `purchases`, `crafts`, `auction_mail`, `mail_sent`, `skips`) is keyed by `event_id` (`charId:timeMs:seq`, unique), and ingest upserts on it. A natural key such as (character, item, time) would merge two identical buys in the same second.
+  - **Snapshots.** `snapshots` holds each place's capture time, so an older file never overwrites a newer snapshot, not even an empty one.
+  - **Skips** follow the 90-day retention. A skip whose action doesn't exist yet is applied when matching creates it (§3.4.1, M4).
   - **Attempts.** `purchases` and `posts` have `confirmed` (0/1); unconfirmed rows older than 1 h are ignored.
   - **Scan coverage.** `scans` has `coverage` (0–1); only `kind = full` with coverage 1 feeds volume diffs.
   - **Materialized stats.** `item_stats` (§3.1.1) is the per-item stats table that refresh writes. It has `item_stats_new` and `plan_new` as staging twins.
@@ -387,7 +397,7 @@ Scale linearly per extra market.
 |---|---|
 | `cur`, `curQty`, `curAge` | newest lowest buyout (AHF or local, whichever is newer), quantity, age; nil when nothing is listed |
 | `curOthers` | lowest buyout that is not one of your own auctions (`own_auctions`). It uses the next price in the newest local book if you hold the lowest one; nil if unknown |
-| `med7`, `med30` | median of hourly closes in the window (one per item and hour, §2.2). With fewer than 24 hourly closes, it uses the median of daily closes instead; nil when there are neither |
+| `med7`, `med30` | median of hourly closes in the window (one per item and hour, §2.2). With fewer than 24 hourly closes, it uses the median of daily closes instead, or the few hourly closes when there are no daily ones; nil when there are neither |
 | `p10_30`, `p90_30` | nearest-rank 10th and 90th percentiles of hourly closes over 30 days |
 | `trend7` | least-squares slope of the daily medians over the last 7 days ÷ `med7` × 100, in % per day. It needs at least 4 days of data, otherwise it is 0 |
 | `sold/day`, `sellThru` | **sales volume**; see §3.3.1 for its sources |
@@ -458,7 +468,7 @@ Both use the same formulas with or without Premium. Premium only supplies better
 - **Days of supply** = `N ÷ S`, e.g. "3.1 days of supply".
 
 **1. Queue simulation** (`sellprob.simulate`). It runs over the window's clock hours `k = 0 … W−1` (slot `t_k`) and is deterministic:
-- **Demand.** In hour `k`, buyers take `S ÷ 24 × sales_how[t_k]` units from the cheapest listings available, oldest-cheapest first. `sales_how` is the hourly sales profile (§3.3), so a window that covers the evening rush sees more buyers than one overnight.
+- **Demand.** In hour `k`, buyers take `S ÷ 24 × sales_how[t_k]` units from the cheapest listings available, oldest-cheapest first. At an equal price the book's order stands in for "oldest"; the order never depends on the time-left band, so a competitor expiring sooner can't reorder the queue (PI12). `sales_how` is the hourly sales profile (§3.3), so a window that covers the evening rush sees more buyers than one overnight.
 - **Who is ahead of you.** Competing auctions priced at or below `p` are ahead. At an equal price they are also ahead of you, which is the conservative choice.
 - **Competitors expire.** An auction with band midpoint `m` is available during hour `k` only while `k < m`. The midpoints are: short 0.25 h, medium 1.25 h, long 5 h, very long `(8 + longest duration) ÷ 2`. When an auction expires, its unsold units leave the queue and stop absorbing demand. The band bounds are the same as §3.3.1 and still need verifying (§6).
 - **New undercutters.** At the start of each hour, `L × u(p) ÷ 24` new units appear priced below you. They are the cheapest listings from then on and stay up for the rest of the window.
@@ -543,7 +553,8 @@ The week's 168 hours are treated as **repeating slots**: every Tuesday 19:00 is 
   2. Join adjacent qualifying slots into windows; a window can cross midnight.
   3. Rank the windows by the sum of their scores, and keep the top 3.
   4. Each window carries its average price ratio (`how`) and the number of weeks of data behind it.
-- **Pattern strength**, from the weeks of data in the window's slots: under 3 weeks is "early pattern", 3–5 is "pattern", 6 or more is "established". It feeds the window's confidence. With no pattern, the item has no windows and the plan uses posting now.
+- A week whose every slot qualifies (a flat score) has no best window: posting time doesn't matter, so the plan posts now.
+- **Pattern strength**, from the weeks of data in the window's slots (the fewest weeks of any slot in the window): under 3 weeks is "early pattern", 3–5 is "pattern", 6 or more is "established". It feeds the window's confidence. With no pattern, the item has no windows and the plan uses posting now.
 - **Where windows are used.** The Week plan's peak slot is the best slot inside the top window, and the post is placed 8 h before it (§3.4C). Windows are also shown on the tooltip ("Best time to sell"), on the item detail (heat map plus windows) and in Inventory.
 - **Forecast.** The expected price in a window next week = `med30 × how × (1 + trend7/100 × days ahead)` (§3.4C). The chance to sell there is the simulation over that window (§3.3.2), using `sales_how` for demand. Both get more confident as the pattern strengthens.
 
@@ -766,7 +777,7 @@ You set or clear a rule from any dashboard row, from the **Rules** page, or by r
    - compact prices per item, stored as strings so the file stays under Lua's constant limits, with the sell-probability curve encoded one character per point (§3.1.1)
    - the same action list the dashboard shows, with action ids so the addon can mark them done
    - your sell record per item (`s`, `x`, `streak`) and the item rules
-   - `ingestedUntil` for the pruning handshake (§2.2), written only after the database commit
+   - `ingestedUntil` for the pruning handshake (§2.2): character id → time, written only after the database commit
    - a header with `formatVersion`, `generatedAt`, `basedOnUntil` (the newest event it includes) and a checksum of the body. The addon refuses a file whose version or checksum doesn't match and shows why (§5.2)
 
    The addon reads it at login or `/reload`.
@@ -980,7 +991,7 @@ ahsync/
   store/      db.py, schema.sql, prune.py
   sync/       catchup.py, scheduler.py (timers, daily refresh, file-change watch), refresh.py (full refresh + incremental updates, §3.1.1)
   ingest/     luadata.py (WoW SavedVariables Lua parser), savedvars.py (AHProfitDB → records, §2.2.1), scans.py, books.py
-  engine/     fees.py, prices.py, profile.py (hour-of-week), volume.py, sellprob.py (incl. the P' blend),
+  engine/     fees.py, prices.py, profile.py (hour-of-week), volume.py, sellprob.py (incl. the P' blend), de_table.py (disenchant table, §4.5),
               record.py (own sell record + calibration), tracking.py (event → action matching), rules.py,
               patterns.py (weekly patterns, best selling windows), confidence.py (conf %), disenchant.py, craft.py, plan.py, views.py (tab totals, sorting, filters, tooltip deltas)
   export/     lua_data.py
@@ -991,7 +1002,7 @@ addon/AHProfit/
   Scan/       Search.lua, Replicate.lua
   Engine/     Fees.lua, SellProb.lua, Disenchant.lua, Craft.lua   (ports of ahsync/engine)
   UI/         ViewModel.lua, Window.lua, Tooltip.lua, AHPanel.lua, Demo.lua
-  Data/       Disenchant.lua, BonusSuffixes.lua (generated: bonus ID → suffix id, §6 item 11)
+  Data/       Disenchant.lua (generated from engine/de_table.py), BonusSuffixes.lua (generated: bonus ID → suffix id, §6 item 11)
 addon/AHProfit_Data/   AHProfit_Data.toc, Data.lua (placeholder; AHSync generates the real one)
 tests/
   ahsync/...           test_<module>.py, same tree as ahsync/
@@ -1007,7 +1018,7 @@ tests/
   pending_scenarios.txt  listed IDs not built yet (§8.1)
 pyproject.toml         pytest and coverage settings only (no runtime dependencies)
 requirements-dev.txt   pytest, coverage
-tools/                 record_fixtures.py, gen_lua_fixtures.py, gen_bonus_suffixes.py, deploy.py, savedvars_report.py (what the addon captured; §6 checks), visual.py, bench.py (performance budgets, §3.1.2)
+tools/                 record_fixtures.py, gen_lua_fixtures.py, gen_properties.py (LP1 cases, §8.7), gen_bonus_suffixes.py, gen_disenchant_data.py, deploy.py, savedvars_report.py (what the addon captured; §6 checks), visual.py, bench.py (performance budgets, §3.1.2)
 docs/SPEC.md, docs/SCENARIOS.md, docs/mockups/addon.html (in game), docs/mockups/dashboard.html (desktop)
 CLAUDE.md
 ```

@@ -1,5 +1,5 @@
 # AHSync local state: database, backups, logs, lock (SPEC §3.2, §5.2)
-data/
+/data/
 # Local config may hold an API key (SPEC §3.6); keep it out of the repo
 config.toml
 *.key

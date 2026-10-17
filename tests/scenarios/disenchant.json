@@ -1,0 +1,8 @@
+[
+ {"id": "R1", "name": "buy a green and disenchant it for dust", "call": "expected_value",
+  "args": {"outcomes": [[10940, 1.0, 2, 3]], "sell_values": [570]}, "expect": 1425,
+  "why": "2.5 Strange Dust on average x 6s x 0.95 (P = 1) = 14s 25c; bought at 8s, profit 6s 25c"},
+ {"id": "R2", "name": "nobody can disenchant it without Enchanting", "call": "can_disenchant",
+  "args": {"skill_required": 25, "best_skill": null}, "expect": false,
+  "why": "no character has the Enchanting skill, so the item is not listed"}
+]
