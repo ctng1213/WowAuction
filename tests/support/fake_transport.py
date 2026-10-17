@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from ahsync.api.client import HttpRequest, HttpResponse, TransportError
+from ahsync.collect.client import HttpRequest, HttpResponse, TransportError
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "ahf"
 DEFAULT_MARKET = "forever.pvp.horde.us"

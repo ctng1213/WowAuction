@@ -21,8 +21,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from ahsync.config import Config  # noqa: E402
-from ahsync.store.db import Database  # noqa: E402
-from ahsync.sync.refresh import refresh_all  # noqa: E402
+from ahsync.db.sqlite import Database  # noqa: E402
+from ahsync.app.refresh import refresh_all  # noqa: E402
 
 M = "forever.pvp.horde.us"
 HOUR, DAY = 3_600_000, 86_400_000

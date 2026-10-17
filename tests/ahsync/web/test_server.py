@@ -11,7 +11,7 @@ import pytest
 from ahsync.config import Config
 from ahsync.engine.views import (CraftInput, DisenchantInput, chance_volume, craft_money, craft_row,
                                  disenchant_row)
-from ahsync.store.db import Database
+from ahsync.db.sqlite import Database
 from ahsync.web.server import (INDEX_HTML, MAX_BODY_BYTES, PAGES, TOKEN_HEADER, TOKEN_PLACEHOLDER, DashboardApp,
                                new_token, open_server_db, start_dashboard, stop_dashboard)
 from tests.support.fake_clock import FakeClock

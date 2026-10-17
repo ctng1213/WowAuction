@@ -30,7 +30,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from ahsync.clock import Clock
 from ahsync.config import Config
-from ahsync.store.db import Database
+from ahsync.db.sqlite import Database
 
 log = logging.getLogger("ahsync.web")
 

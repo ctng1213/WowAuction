@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tools"))
-from ahsync.ingest.savedvars import AHProfitData, SavedVarsError, is_unknown_suffix, read_ahprofit_file  # noqa: E402
+from ahsync.state.savedvars import AHProfitData, SavedVarsError, is_unknown_suffix, read_ahprofit_file  # noqa: E402
 from deploy import wow_path_from_config  # noqa: E402
 
 LOCATIONS = ("bags", "bank", "mail")

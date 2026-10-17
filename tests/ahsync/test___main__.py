@@ -15,14 +15,14 @@ import pytest
 
 from ahsync.__main__ import (ALREADY_RUNNING, InstanceLock, RefreshRequests, Runtime, build_hooks, main,
                              read_savedvars_at_start, run, safe_backup, serve_dashboard)
-from ahsync.api.ahf import AhfApi
-from ahsync.api.client import ApiClient
+from ahsync.collect.ahf import AhfApi
+from ahsync.collect.client import ApiClient
 from ahsync.clock import HOUR_MS
 from ahsync.config import Config
-from ahsync.ingest.apply import ingest_file
-from ahsync.store.db import Database
-from ahsync.sync.catchup import SyncContext, run_catchup
-from ahsync.sync.scheduler import SavedVarsWatcher
+from ahsync.state.importer import ingest_file
+from ahsync.db.sqlite import Database
+from ahsync.collect.catchup import SyncContext, run_catchup
+from ahsync.app.scheduler import SavedVarsWatcher
 from tests.support.builders import AhfWorld, h1_path
 from tests.support.fake_clock import FakeClock
 from tests.support.fake_transport import DEFAULT_MARKET
@@ -115,7 +115,7 @@ def test_start_runs_catchup_backup_and_the_hourly_store(tmp_path):
 
 def test_damaged_database_without_backup_folder_access_is_reported(tmp_path, monkeypatch):
     from ahsync import __main__ as app
-    from ahsync.store.db import DatabaseError
+    from ahsync.db.sqlite import DatabaseError
 
     def refuse(*_args, **_kwargs):
         raise DatabaseError("database schema 9 is newer than this AHSync (1); update AHSync")
