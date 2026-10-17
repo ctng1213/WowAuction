@@ -143,7 +143,9 @@ Field rules:
 - Money is integer copper; prices are per unit.
 - Times are UTC Unix ms. WoW's clock (`GetServerTime()`, through the Adapter) counts whole seconds, so every time is seconds × 1000.
 - `charId` is `Name-Realm`. The market comes from the character's faction and the config's `[realms]` table (§2.1), so it isn't stored.
-- `key` is the AHF item key (§2.1). `Adapter.lua` computes it from the item link. How the link maps to AHF's suffix value `v` is still unknown (§6 item 11).
+- `key` is the AHF item key (§2.1). `Adapter.lua` computes it from the item link. How the link maps to AHF's suffix value `v` is still unknown (§6 item 11). Until it is known, a random-suffix item is written as **`key = −itemId`**: some suffix variant of that item, with `v` unknown. AHSync stores such rows but leaves them out of every valuation and recommendation, so a suffixed green is never priced at its base item's price.
+- **Unknown is left out, never 0.** A field the client can't tell us (a recipe's `skill` or `cooldown` on Classic APIs) is omitted, and AHSync reads it as unknown (None). `cooldown = 0` means "no cooldown".
+- **A snapshot is written only when it is complete.** Bags, bank, mail and professions each replace the previous value, so a partial read would look like lost items. A location is skipped, and the old value kept, when an occupied slot has no item link yet (not cached), when the mailbox has loaded fewer mails than it holds, or when a collapsed Skills header hides profession lines.
 - `band` is WoW's time-left code: 1 short, 2 medium, 3 long, 4 very long.
 - **Bulk rows are compact strings:** rows are separated by `;` and fields by `,`, in the order listed. Everything else is a plain table.
 - **Event ids** are `charId:timeMs:seq`. `seq` restarts at 0 each second for each character. Only one character is logged in at a time, so ids are unique.
@@ -164,15 +166,15 @@ AHProfitDB = {
   recipes = {                                  -- account-wide; profession -> spell id -> definition
     Blacksmithing = {
       [2663] = { product = 2857, yieldMin = 1, yieldMax = 1, skill = 1, cooldown = 0,  -- cooldown in s
-                 reagents = "2840,2" },        -- "key,count;key,count"
+                 reagents = "2840,2" },        -- "key,count;key,count"; skill/cooldown omitted when unknown
     },
   },
   vendorReagents = "2320;2321",                -- keys a merchant was seen selling (§3.4B)
   knownRecipes = { ["Brugan-Grommash"] = "2662;2663" },        -- spell ids, ascending
-  inventory = {                                -- latest snapshot per character, replaced whole
-    ["Amaya-Grommash"] = { at = 1760000000000,
-                           bags = "2840,20,0;6948,1,1",        -- "key,qty,bound(0/1)"
-                           bank = nil, mail = nil },           -- nil until first visited
+  inventory = {                                -- per character; each location replaced whole, with its own time
+    ["Amaya-Grommash"] = { bags = "2840,20,0;6948,1,1", bagsAt = 1760000000000,  -- "key,qty,bound(0/1)"
+                           bank = nil, bankAt = nil,           -- nil until first visited; "" = visited, empty
+                           mail = nil, mailAt = nil },
   },
   ownAuctions = {                              -- latest snapshot per character, replaced whole
     ["Amaya-Grommash"] = { at = 1760000000000, rows = "2857,4100,5,3,1" },  -- "key,price,stack,band,count"
