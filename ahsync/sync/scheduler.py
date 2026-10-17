@@ -52,7 +52,7 @@ class SchedulerHooks:
     daily: Callable[[], None] = _nothing              # prune + backup
     weekly: Callable[[], None] = _nothing             # VACUUM
     live_refresh: Callable[[], None] | None = None    # Premium live table; None disables it
-    savedvars_changed: Callable[[Path], None] = _nothing_for   # SavedVariables re-read (wired with M2's ingest)
+    savedvars_changed: Callable[[Path], None] = _nothing_for   # SavedVariables re-read (ingest.apply.ingest_file)
 
 
 class SavedVarsWatcher:
@@ -78,6 +78,15 @@ class SavedVarsWatcher:
             mtime = self._stat(path)
             if mtime is not None:
                 self._handled[path] = mtime
+
+    def mark_handled(self, path: Path, mtime_ms: int) -> None:
+        """Record that one version of a file has been read (by the start-up read), so it isn't read again.
+
+        Args:
+            path: The file.
+            mtime_ms: Its modification time when it was read, UTC ms.
+        """
+        self._handled[path] = mtime_ms
 
     def poll(self, now_ms: int) -> list[Path]:
         """Check each file once.

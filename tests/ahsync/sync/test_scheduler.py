@@ -56,6 +56,16 @@ def test_prime_skips_files_already_read_and_missing_files_are_ignored():
     assert watcher.poll(clock.now_ms()) == [other]
 
 
+def test_mark_handled_skips_only_the_version_already_read():
+    clock = FakeClock()
+    mtimes = {SV: clock.now_ms() - 10_000}
+    watcher = watcher_for(mtimes)
+    watcher.mark_handled(SV, mtimes[SV])                # read at start-up
+    assert watcher.poll(clock.now_ms()) == []
+    mtimes[SV] = clock.now_ms() - 3_000                 # WoW saved again
+    assert watcher.poll(clock.now_ms()) == [SV]
+
+
 def test_hourly_jobs_run_at_00_and_06_and_daily_after_refresh_time():
     clock = FakeClock(now_ms=FakeClock().now_ms() + 30 * 60_000)     # 12:30 UTC
     hooks = SchedulerHooks()

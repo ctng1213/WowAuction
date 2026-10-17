@@ -1,9 +1,9 @@
 """Start AHSync: `python -m ahsync [--data DIR] [--config FILE]` (SPEC §3.1).
 
 Order: single-instance lock (FM15) → config (FM16) → log → database (check,
-restore, migrate) → daily backup → CATCH-UP → prune → steady-state loop.
-The full refresh, status pass and SavedVariables ingest are scheduler hooks to
-be wired by later milestones.
+restore, migrate) → daily backup → read SavedVariables → CATCH-UP → prune →
+steady-state loop, which re-reads SavedVariables when WoW rewrites them. The full
+refresh and status pass are scheduler hooks to be wired by later milestones.
 """
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ from ahsync.api.ahf import AhfApi
 from ahsync.api.client import ApiClient, RedactingFilter, Redactor, Transport, UrllibTransport
 from ahsync.clock import Clock, SystemClock
 from ahsync.config import Config, ConfigError, load_config
+from ahsync.ingest.apply import ingest_file
 from ahsync.store.db import Database, DatabaseError
 from ahsync.store.prune import prune
 from ahsync.sync.catchup import SyncContext, check_capabilities, run_catchup, sync_markets
@@ -140,8 +141,8 @@ def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path) -> Scheduler
         backup_dir: data/backups.
 
     Returns:
-        Hooks with store_hour, daily and weekly set. The live table stays off until
-        its format is recorded (SPEC §5.2).
+        Hooks with store_hour, daily, weekly and savedvars_changed set. The live table
+        stays off until its format is recorded (SPEC §5.2).
     """
     def store_hour() -> None:
         """Hourly :06 store: /me, new hours, snapshot, books; no recompute (SPEC §3.1)."""
@@ -156,7 +157,36 @@ def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path) -> Scheduler
         prune(ctx.db, ctx.clock.now_ms(), config.retention_days)
         safe_backup(ctx.db, backup_dir, ctx.clock.now_ms())
 
-    return SchedulerHooks(store_hour=store_hour, daily=daily, weekly=ctx.db.vacuum)
+    def savedvars_changed(path: Path) -> None:
+        """Re-read a rewritten SavedVariables file and update the items it changed (SPEC §3.1).
+
+        Args:
+            path: The file.
+        """
+        ingest_file(path, ctx.db, ctx.clock, config.realms)
+
+    return SchedulerHooks(store_hour=store_hour, daily=daily, weekly=ctx.db.vacuum,
+                          savedvars_changed=savedvars_changed)
+
+
+def read_savedvars_at_start(db: Database, clock: Clock, config: Config, watcher: SavedVarsWatcher) -> None:
+    """Read every account's SavedVariables once at start (SPEC §3.1); a failure is logged, never fatal.
+
+    Args:
+        db: The database.
+        clock: Time source.
+        config: Settings (wow_path, realms).
+        watcher: Told which file versions were read, so the steady state doesn't read them again. A file
+            still being written is left to the watcher.
+    """
+    for path in find_savedvars(Path(config.wow_path)):
+        try:
+            result = ingest_file(path, db, clock, config.realms)
+        except (OSError, sqlite3.Error) as error:
+            logging.getLogger("ahsync").warning("reading %s failed: %s", path.name, error)
+            continue
+        if result.mtime_ms is not None and result.reason != "unstable":
+            watcher.mark_handled(path, result.mtime_ms)
 
 
 def run(data_dir: Path, config_path: Path, runtime: Runtime) -> int:
@@ -211,11 +241,12 @@ def _run_configured(data_dir: Path, config: Config, runtime: Runtime) -> int:
             print(f"AHSync can't start: {error}", file=runtime.out)
             return 2
         safe_backup(db, backup_dir, clock.now_ms())
+        watcher = SavedVarsWatcher(lambda: find_savedvars(Path(config.wow_path)), file_mtime_ms)
+        read_savedvars_at_start(db, clock, config, watcher)
         api = AhfApi(ApiClient(runtime.transport, clock, config.api_key, redactor=redactor))
         result = run_catchup(api, db, clock, config.markets, config.retention_days)
         prune(db, clock.now_ms(), config.retention_days)
         ctx = SyncContext(api, db, clock, result.caps, config.retention_days)
-        watcher = SavedVarsWatcher(lambda: find_savedvars(Path(config.wow_path)), file_mtime_ms)
         scheduler = Scheduler(clock, build_hooks(ctx, config, backup_dir), watcher, config.daily_refresh_time,
                               config.live_refresh_minutes)
         scheduler.run(runtime.should_stop)
