@@ -14,6 +14,7 @@ local BAG_IDS = { 0, 1, 2, 3, 4 }      -- backpack + 4 bag slots
 local BANK_IDS = { -1, 5, 6, 7, 8, 9, 10 }  -- UNVERIFIED: Classic bank container -1 plus 6 bank bags
 local MAIL_ATTACHMENTS = 12            -- UNVERIFIED: ATTACHMENTS_MAX_RECEIVE in Classic
 local SUFFIX_FIELD = 7                 -- itemID:enchant:gem1:gem2:gem3:gem4:suffixID:...
+local BONUS_COUNT_FIELD = 13           -- modern links: ...:linkLevel:spec:modifiersMask:context:numBonusIDs:bonusID...
 
 -- ------------------------------------------------------------------ basics
 
@@ -96,24 +97,44 @@ local function SplitFields(itemString)
   end
 end
 
+local bonusSuffix = nil   -- bonus ID -> suffix id, decoded on first use from Data/BonusSuffixes.lua
+
+--- The suffix id a bonus ID gives, from AHF's bonusLists table (Data/BonusSuffixes.lua).
+---@param bonusId number|nil  A bonus ID from an item link
+---@return number|nil         The suffix id; nil when the bonus ID is not a random suffix we know
+local function SuffixForBonus(bonusId)
+  if not bonusSuffix then
+    bonusSuffix = {}
+    local rows = AHProfit.Data and AHProfit.Data.BONUS_SUFFIXES or ""
+    for bonus, suffix in rows:gmatch("(%d+):(%d+)") do bonusSuffix[tonumber(bonus)] = tonumber(suffix) end
+  end
+  return bonusId and bonusSuffix[bonusId]
+end
+
 --- AHF's suffix value `v` for an item string (SPEC §2.1, §2.2.1, §6 item 11).
---- UNVERIFIED: the mapping from a link to AHF's `v` is unknown. It is not the
---- classic suffix id (a recorded key has v = 28592, suffix ids are ~14,300).
---- Until it is known, a suffixed item returns nil and is written as key = -itemId
---- (SPEC §2.2.1). Fix it here and only here.
+--- Verified 2026-10-16: Forever links carry a random suffix as a bonus ID, AHF's
+--- bonusLists maps it to a suffix id, and v = 2 x suffix id (all 523 AHF variants;
+--- e.g. bonus 12742 -> suffix 14322 "of Frost Protection" -> v 28644).
+--- An item with bonus IDs we can't map, or a Classic-style suffix field, returns nil
+--- (key = -itemId: left out of valuation rather than priced as its base item).
 ---@param fields string[]  Item string fields from SplitFields
 ---@return number|nil      v (0 for an item without a random suffix); nil when unknown
 local function SuffixValue(fields)
-  -- UNVERIFIED: field 7 holds the classic suffix id; Forever may use bonus ids instead.
-  local suffixId = tonumber(fields[SUFFIX_FIELD] or "")
-  if suffixId and suffixId ~= 0 then return nil end
+  local numBonus = tonumber(fields[BONUS_COUNT_FIELD] or "") or 0
+  for i = 1, numBonus do
+    local suffixId = SuffixForBonus(tonumber(fields[BONUS_COUNT_FIELD + i] or ""))
+    if suffixId then return 2 * suffixId end
+  end
+  if numBonus > 0 then return nil end
+  local classicSuffix = tonumber(fields[SUFFIX_FIELD] or "")
+  if classicSuffix and classicSuffix ~= 0 then return nil end
   return 0
 end
 
 --- AHF item key from an item link or item string (SPEC §2.1, §2.2.1).
 ---@param link string|nil  "|cff...|Hitem:2840:...|h[Copper Bar]|h|r" or "item:2840:..."
 ---@return number|nil      key = itemId + 2147483648 × v; -itemId for a random-suffix
----                        item (v unknown); nil when not an item link
+---                        item whose v can't be worked out; nil when not an item link
 function Adapter.ItemKey(link)
   if type(link) ~= "string" then return nil end
   local itemString = link:match("|Hitem:([^|]*)|h") or link:match("^item:([^|]*)$")

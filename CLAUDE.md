@@ -13,6 +13,7 @@ lua5.1 tests/support/lua/runner.lua tests/addon   # Lua tests only
 python -m ahsync               # run the app
 python tools/deploy.py         # copy addon/* into the WoW AddOns folder (never overwrites a generated Data.lua; --dry-run)
 python tools/savedvars_report.py  # after /reload in game: what the addon captured, and what is missing
+python tools/gen_bonus_suffixes.py  # refresh addon/AHProfit/Data/BonusSuffixes.lua from AHF /items (no key)
 python tools/visual.py         # UI layout snapshots vs golden (--update to accept, --html to view)
 ```
 

@@ -143,7 +143,7 @@ Field rules:
 - Money is integer copper; prices are per unit.
 - Times are UTC Unix ms. WoW's clock (`GetServerTime()`, through the Adapter) counts whole seconds, so every time is seconds × 1000.
 - `charId` is `Name-Realm`. The market comes from the character's faction and the config's `[realms]` table (§2.1), so it isn't stored.
-- `key` is the AHF item key (§2.1). `Adapter.lua` computes it from the item link. How the link maps to AHF's suffix value `v` is still unknown (§6 item 11). Until it is known, a random-suffix item is written as **`key = −itemId`**: some suffix variant of that item, with `v` unknown. AHSync stores such rows but leaves them out of every valuation and recommendation, so a suffixed green is never priced at its base item's price.
+- `key` is the AHF item key (§2.1). `Adapter.lua` computes it from the item link. A random suffix comes from the link's bonus ID: `v = 2 × suffix id`, with the suffix id looked up in AHF's bonus table (`Data/BonusSuffixes.lua`, §6 item 11). An item whose suffix can't be worked out (a bonus ID not in the table, or a Classic-style suffix field) is written as **`key = −itemId`**: some suffix variant of that item, with `v` unknown. AHSync stores such rows but leaves them out of every valuation and recommendation, so a suffixed green is never priced at its base item's price.
 - **Unknown is left out, never 0.** A field the client can't tell us (a recipe's `skill` or `cooldown` on Classic APIs) is omitted, and AHSync reads it as unknown (None). `cooldown = 0` means "no cooldown".
 - **A snapshot is written only when it is complete.** Bags, bank, mail and professions each replace the previous value, so a partial read would look like lost items. A location is skipped, and the old value kept, when an occupied slot has no item link yet (not cached), when the mailbox has loaded fewer mails than it holds, or when a collapsed Skills header hides profession lines.
 - `band` is WoW's time-left code: 1 short, 2 medium, 3 long, 4 very long.
@@ -991,7 +991,7 @@ addon/AHProfit/
   Scan/       Search.lua, Replicate.lua
   Engine/     Fees.lua, SellProb.lua, Disenchant.lua, Craft.lua   (ports of ahsync/engine)
   UI/         ViewModel.lua, Window.lua, Tooltip.lua, AHPanel.lua, Demo.lua
-  Data/       Disenchant.lua
+  Data/       Disenchant.lua, BonusSuffixes.lua (generated: bonus ID → suffix id, §6 item 11)
 addon/AHProfit_Data/   AHProfit_Data.toc, Data.lua (placeholder; AHSync generates the real one)
 tests/
   ahsync/...           test_<module>.py, same tree as ahsync/
@@ -1007,7 +1007,7 @@ tests/
   pending_scenarios.txt  listed IDs not built yet (§8.1)
 pyproject.toml         pytest and coverage settings only (no runtime dependencies)
 requirements-dev.txt   pytest, coverage
-tools/                 record_fixtures.py, gen_lua_fixtures.py, deploy.py, savedvars_report.py (what the addon captured; §6 checks), visual.py, bench.py (performance budgets, §3.1.2)
+tools/                 record_fixtures.py, gen_lua_fixtures.py, gen_bonus_suffixes.py, deploy.py, savedvars_report.py (what the addon captured; §6 checks), visual.py, bench.py (performance budgets, §3.1.2)
 docs/SPEC.md, docs/SCENARIOS.md, docs/mockups/addon.html (in game), docs/mockups/dashboard.html (desktop)
 CLAUDE.md
 ```
@@ -1133,10 +1133,11 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `Data.lua` → 
 8. **Tracking hooks**: the post and buy functions to hook, the sold / expired / won system messages, the mail invoice API, and the send-mail hook. Also check whether mail between your own characters arrives instantly or after a delay (it changes how mail steps are spaced in a chain).
 9. **wow-ui-sim spike** (§8.4, layer 3): can it load a Classic-style addon (`## Interface: 16001`) and render AHProfit's frames headless through Docker on Windows? It targets the retail client, and Classic support is not documented.
 10. **Folder name after launch.**
-11. **Item key from a link** (half verified 2026-10-16).
-   - **AHF's side is known:** for all 523 suffix variants in `/items`, `v = 2 × suffix id` (e.g. "of the Owl" is suffix 14299, so v = 28598). `/items.bonusLists` maps a bonus ID to `[suffix id, stats]`, and `/items.bonusTrees` lists the bonus IDs an item can roll.
-   - **Forever's links use the modern format:** `item:id:enchant:gem1:gem2:gem3:gem4:suffixID:unique:level:spec:modifiersMask:context:numBonusIDs:bonusID…:…:crafterGUID`. A crafted green (Embossed Leather Gloves) had an empty suffix field and no bonus IDs.
-   - **Hypothesis to confirm with one real "… of the X" link:** the link carries one bonus ID from `bonusLists`, and `v = 2 × bonusLists[bonusID][1]`. The addon then needs the bonus → suffix table (345 entries), which AHSync can ship in `Data.lua` (§3.5). Until confirmed, suffixed items stay `key = −itemId` (§2.2.1).
+11. ~~**Item key from a link**~~: done 2026-10-16.
+   - Forever's links use the modern format: `item:id:enchant:gem1:gem2:gem3:gem4:suffixID:unique:level:spec:modifiersMask:context:numBonusIDs:bonusID…`. A random suffix is a **bonus ID**; the classic suffix field is empty.
+   - AHF's `/items.bonusLists` maps a bonus ID to `[suffix id, stats]`, and AHF's key uses **`v = 2 × suffix id`** (true for all 523 variants in `/items`).
+   - Checked on a real link: Aboriginal Gloves of Frost Protection carries bonus 12742 → suffix 14322 → v = 28644 → key 61512521627429, which is AHF's variant of that name.
+   - The addon computes it in `Adapter.ItemKey` from `Data/BonusSuffixes.lua`, generated by `tools/gen_bonus_suffixes.py` (re-run it when AHF adds suffixes).
 
 ## 7. Milestones
 

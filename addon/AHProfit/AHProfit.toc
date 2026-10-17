@@ -5,6 +5,7 @@
 ## SavedVariables: AHProfitDB
 
 Core\Adapter.lua
+Data\BonusSuffixes.lua
 Core\Events.lua
 Core\DB.lua
 Capture\Characters.lua

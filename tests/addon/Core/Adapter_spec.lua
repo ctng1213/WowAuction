@@ -13,7 +13,7 @@ end
 describe("Adapter", function()
   it("the .toc lists the Core and Capture files in load order", function()
     Stubs.Reset()
-    assert_eq(Stubs.TocFiles(), { "Core/Adapter.lua", "Core/Events.lua", "Core/DB.lua",
+    assert_eq(Stubs.TocFiles(), { "Core/Adapter.lua", "Data/BonusSuffixes.lua", "Core/Events.lua", "Core/DB.lua",
       "Capture/Characters.lua", "Capture/Professions.lua", "Capture/Inventory.lua", "Core/Diagnostics.lua" })
   end)
 
@@ -23,7 +23,27 @@ describe("Adapter", function()
     assert_eq(Adapter.ItemKey("item:2589:0:0:0:0:0:0:0:60"), 2589)
   end)
 
-  it("a random-suffix item's key is minus its item id until §6 item 11 is verified", function()
+  it("a Forever random-suffix link's bonus ID gives AHF's key: item + 2^31 x 2 x suffix id", function()
+    local Adapter = Boot()
+    AHProfit.Data = { BONUS_SUFFIXES = "12688:14296;12742:14322" }
+    -- The real link from the beta (SPEC §6 item 11): Aboriginal Gloves of Frost Protection.
+    local link = "|cnIQ2:|Hitem:14117::::::::14:1489:::1:12742::::::|h[Aboriginal Gloves of Frost Protection]|h|r"
+    assert_eq(Adapter.ItemKey(link), 14117 + 2147483648 * 28644)   -- 61512521627429
+  end)
+
+  it("a crafted item with no bonus IDs keeps its plain key", function()
+    local Adapter = Boot()
+    local link = "|cnIQ2:|Hitem:4239::::::::14:1489::::::::Player-4619-01486581:|h[Embossed Leather Gloves]|h|r"
+    assert_eq(Adapter.ItemKey(link), 4239)
+  end)
+
+  it("bonus IDs that aren't a known suffix give minus the item id, never the base item's key", function()
+    local Adapter = Boot()
+    AHProfit.Data = { BONUS_SUFFIXES = "12742:14322" }
+    assert_eq(Adapter.ItemKey("item:14117::::::::14:1489:::1:99999::::::"), -14117)
+  end)
+
+  it("a Classic-style suffix field gives minus the item id (no mapping for it)", function()
     local Adapter = Boot()
     assert_eq(Adapter.ItemKey(Stubs.ItemLink(6585, 1017)), -6585)
     assert_eq(Adapter.ItemKey("item:6585:0:0:0:0:0:0:0:60"), 6585)
