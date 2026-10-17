@@ -11,7 +11,8 @@ python -m pytest tests/ahsync  # Python tests only
 python tools/gen_lua_fixtures.py                  # tests/scenarios/*.json -> Lua (run before the Lua runner alone)
 lua5.1 tests/support/lua/runner.lua tests/addon   # Lua tests only
 python -m ahsync               # run the app
-python tools/deploy.py         # copy addon/* into the WoW AddOns folder (never overwrites a generated Data.lua)
+python tools/deploy.py         # copy addon/* into the WoW AddOns folder (never overwrites a generated Data.lua; --dry-run)
+python tools/savedvars_report.py  # after /reload in game: what the addon captured, and what is missing
 python tools/visual.py         # UI layout snapshots vs golden (--update to accept, --html to view)
 ```
 

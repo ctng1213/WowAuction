@@ -1,0 +1,3 @@
+-- Placeholder. AHSync replaces this file with the generated Data.lua (SPEC §3.5).
+-- It must exist when the WoW client starts, or WoW ignores a Data.lua written later.
+-- tools/deploy.py installs it once and never overwrites an existing Data.lua.
