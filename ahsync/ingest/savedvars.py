@@ -204,6 +204,17 @@ class Diagnostics:
 
 
 @dataclass(frozen=True, slots=True)
+class RejectedRow:
+    """A scan or event set aside by the parser, as far as it can be identified (SPEC §2.2 pruning handshake).
+
+    AHSync keeps that character's ingestedUntil below it, so the addon keeps the row.
+    """
+
+    char_id: str | None   # None when the row has no readable "char"
+    at_ms: int | None     # None when the row has no readable integral "at"
+
+
+@dataclass(frozen=True, slots=True)
 class AHProfitData:
     """Everything in one AHProfitDB, in a deterministic order.
 
@@ -227,6 +238,7 @@ class AHProfitData:
     rules: tuple[ItemRule, ...]
     problems: tuple[str, ...]
     diagnostics: Diagnostics | None = None
+    rejected: tuple[RejectedRow, ...] = ()   # scans and events set aside, oldest first per section
 
 
 # ---------------------------------------------------------------- item keys
@@ -795,6 +807,51 @@ def _diagnostics(value: object) -> Diagnostics | None:
     )
 
 
+def _rejected_row(row: object) -> RejectedRow:
+    """Identify a scan or event row that failed to convert.
+
+    Args:
+        row: Its raw Lua value.
+
+    Returns:
+        Its character and time, each None when not readable.
+    """
+    if not isinstance(row, dict):
+        return RejectedRow(None, None)
+    char, at = row.get("char"), row.get("at")
+    readable_at = isinstance(at, (int, float)) and not isinstance(at, bool) and float(at).is_integer()
+    return RejectedRow(char if isinstance(char, str) else None, int(at) if readable_at else None)
+
+
+def _tracking(convert: Callable[[object, object], list],
+              rejected: list[RejectedRow]) -> Callable[[object, object], list]:
+    """Wrap a scan or event converter so the rows it rejects are also recorded as RejectedRow.
+
+    Args:
+        convert: (index, row) -> records; raises _RowError when the row doesn't fit.
+        rejected: Rejected rows, appended to.
+
+    Returns:
+        The wrapped converter.
+    """
+    def run(index: object, row: object) -> list:
+        """Convert one row, recording it when it is rejected.
+
+        Args:
+            index: Its array index.
+            row: The raw row.
+
+        Returns:
+            Its records.
+        """
+        try:
+            return convert(index, row)
+        except _RowError:
+            rejected.append(_rejected_row(row))
+            raise
+    return run
+
+
 # ---------------------------------------------------------------- entry points
 
 def _header(db: object, problems: list[str]) -> tuple[int, str | None, int | None]:
@@ -865,6 +922,7 @@ def read_ahprofit(text: str) -> AHProfitData:
     """
     db = parse_lua(text).get(GLOBAL_NAME)
     problems: list[str] = []
+    rejected: list[RejectedRow] = []
     version, addon_version, refresh_ms = _header(db, problems)
     return AHProfitData(
         format_version=version,
@@ -879,11 +937,12 @@ def read_ahprofit(text: str) -> AHProfitData:
         inventories=tuple(_each(db.get("inventory"), "inventory", problems,
                                      lambda k, v: _inventory(k, v, problems))),
         own_auctions=tuple(_each(db.get("ownAuctions"), "ownAuctions", problems, _own_auctions)),
-        scans=tuple(_each(db.get("scans"), "scans", problems, _scan)),
-        events=tuple(_each(db.get("events"), "events", problems, _event)),
+        scans=tuple(_each(db.get("scans"), "scans", problems, _tracking(_scan, rejected))),
+        events=tuple(_each(db.get("events"), "events", problems, _tracking(_event, rejected))),
         rules=tuple(_each(db.get("rules"), "rules", problems, _rule)),
         problems=tuple(problems),
         diagnostics=_diagnostics(db.get("diagnostics")),
+        rejected=tuple(rejected),
     )
 
 

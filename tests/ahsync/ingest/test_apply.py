@@ -9,7 +9,7 @@ import pytest
 
 from ahsync.ingest import apply as apply_module
 from ahsync.ingest.apply import (
-    INGESTED_UNTIL, ApplyResult, apply_data, ingest_file, ingested_until, market_for, read_and_apply,
+    INGESTED_UNTIL_PREFIX, ApplyResult, apply_data, ingest_file, ingested_until, market_for, read_and_apply,
 )
 from ahsync.ingest.savedvars import read_ahprofit
 from ahsync.store.db import Database
@@ -18,7 +18,7 @@ from tests.support.savedvars_builder import REALMS, generate_sessions, savedvars
 
 ROOT = Path(__file__).resolve().parents[3]
 A1_TEXT = (ROOT / "tests" / "fixtures" / "savedvars" / "a1.lua").read_text(encoding="utf-8")
-A1_NEWEST_EVENT_MS = 1760003660000          # the one post in a1.lua
+A1_UNTIL = {"Brugan-Grommash": 1760003660000}   # the one post in a1.lua; Amaya has no events or scans
 AMAYA, BRUGAN = "Amaya-Grommash", "Brugan-Grommash"
 T = 1_760_000_000_000
 HOUR = 3_600_000
@@ -105,7 +105,7 @@ def test_a1_golden_file_is_stored_in_every_table(db):
         ("bags", 1760003600000), ("bank", 1760003610000)]
     assert rows(db, "SELECT post_id, market, key, stack, price, confirmed FROM posts") == [
         (f"{BRUGAN}:1760003660000:0", PVP_HORDE, 6217, 5, 4100, 1)]
-    assert ingested_until(db) == A1_NEWEST_EVENT_MS
+    assert ingested_until(db) == A1_UNTIL
     assert 6217 in result.dirty_keys and 2589 in result.dirty_keys
     assert -6585 not in result.dirty_keys       # unknown-suffix keys are never valued (SPEC §2.2.1)
 
@@ -123,14 +123,14 @@ def test_FM11_savedvariables_ends_mid_table(tmp_path, db, clock):
     result = read_and_apply(path, db, clock, REALMS)
 
     assert result.ingested and result.read_from == path.with_name("AHProfit.lua.bak")
-    assert result.ingested_until_ms == A1_NEWEST_EVENT_MS == ingested_until(db)
+    assert result.ingested_until == A1_UNTIL == ingested_until(db)
     assert db.status("savedvars:ACC").kind == "savedvars_backup_used"
     assert {t: r for t, r in dump(db).items() if t != "status"} == {t: r for t, r in before.items() if t != "status"}
 
     path.with_name("AHProfit.lua.bak").write_text("AHProfitDB = {", encoding="utf-8")   # the .bak fails too
     result = read_and_apply(path, db, clock, REALMS)
     assert not result.ingested and result.reason == "unparsable"
-    assert ingested_until(db) == A1_NEWEST_EVENT_MS                      # nothing pruned in game
+    assert ingested_until(db) == A1_UNTIL                                # nothing pruned in game
     assert db.status("savedvars:ACC").level == "error"
 
 
@@ -143,7 +143,7 @@ def test_FM12_the_same_savedvariables_ingested_twice(db):
     assert {t: len(r) for t, r in dump(db).items()} == counts
     assert db.count("posts") == 1
     assert first.dirty_keys and second.dirty_keys == frozenset()          # nothing changed, nothing to update
-    assert ingested_until(db) == A1_NEWEST_EVENT_MS
+    assert ingested_until(db) == A1_UNTIL
 
 
 def test_FM13_savedvariables_format_version_newer_than_ahsync(tmp_path, db, clock):
@@ -153,7 +153,7 @@ def test_FM13_savedvariables_format_version_newer_than_ahsync(tmp_path, db, cloc
     result = read_and_apply(path, db, clock, REALMS)
 
     assert not result.ingested and result.reason == "newer_format"
-    assert db.count("characters") == 0 and ingested_until(db) is None
+    assert db.count("characters") == 0 and ingested_until(db) == {}
     status = db.status("savedvars:ACC")
     assert (status.level, status.kind, status.data) == ("error", "update_ahsync", {"account": "ACC"})
 
@@ -351,7 +351,7 @@ def test_each_event_type_is_stored_in_its_table(db):
     assert rows(db, "SELECT key, qty, price, outcome FROM auction_mail ORDER BY event_id") == [
         (6217, 5, 4100, "sold"), (6217, 5, 4100, "sold"), (-6585, 1, None, "expired")]
     assert result.dirty_keys == {2589, 6217, 2840, 2592}
-    assert result.newest_event_ms == T + 4000 == ingested_until(db)
+    assert result.ingested_until == {AMAYA: T + 4000} == ingested_until(db)
 
 
 def test_an_unconfirmed_attempt_is_upgraded_by_a_later_confirmed_copy_and_never_downgraded(db):
@@ -384,7 +384,55 @@ def test_ingested_until_only_moves_forward(db):
     apply_db(db, {"events": [event(f"{AMAYA}:{T + HOUR}:0", "craft", T + HOUR, spell=1, count=1)]})
     apply_db(db, {"events": [event(f"{AMAYA}:{T}:0", "craft", T, spell=1, count=1)]})
     apply_db(db, {"rules": {}})
-    assert db.get_meta(INGESTED_UNTIL) == str(T + HOUR)
+    assert db.get_meta(INGESTED_UNTIL_PREFIX + AMAYA) == str(T + HOUR)
+
+
+def test_a_characters_ingested_until_stops_1s_before_its_set_aside_scan(db):
+    # Cira's realm isn't in [realms], so her scan at T can't be stored; her craft at T+5 s is.
+    cira = {"Cira-Elsewhere": CHAR[AMAYA] | {"name": "Cira", "realm": "Elsewhere"}}
+    result = apply_db(db, {"characters": cira | CHAR, "scans": [
+        {"id": "Cira-Elsewhere:1:0", "char": "Cira-Elsewhere", "at": T, "kind": "full", "coverage": 1,
+         "rows": "2589,38,20,3,4"}], "events": [
+        event(f"Cira-Elsewhere:{T + 5000}:0", "craft", T + 5000, char="Cira-Elsewhere", spell=2663, count=1),
+        event(f"{AMAYA}:{T + 9000}:0", "craft", T + 9000, spell=2663, count=1)]})
+
+    assert db.count("crafts") == 2 and db.count("scans") == 0
+    assert result.ingested_until == {"Cira-Elsewhere": T - 1000, AMAYA: T + 9000} == ingested_until(db)
+
+
+def test_a_parser_rejected_event_holds_back_only_its_character(db):
+    events = [event(f"{AMAYA}:{T + 1000}:0", "post", T + 1000, key=6217),           # no stack, price, ...
+              event(f"{AMAYA}:{T + 2000}:0", "craft", T + 2000, spell=2663, count=1),
+              event(f"{BRUGAN}:{T + 3000}:0", "craft", T + 3000, char=BRUGAN, spell=2663, count=1)]
+    apply_db(db, {"events": events})
+    assert ingested_until(db) == {AMAYA: T, BRUGAN: T + 3000}
+
+    # A later file without the bad row (fixed, or pruned in game) can't move it backwards, only forwards.
+    apply_db(db, {"events": [event(f"{AMAYA}:{T + 4000}:0", "craft", T + 4000, spell=2663, count=1)]})
+    assert ingested_until(db) == {AMAYA: T + 4000, BRUGAN: T + 3000}
+
+
+def test_a_rejected_row_without_a_readable_time_or_character_holds_characters_back(db):
+    good = event(f"{AMAYA}:{T}:0", "craft", T, spell=2663, count=1)
+    apply_db(db, {"events": [good, {"id": "x", "type": "craft", "char": AMAYA, "at": "soon"}]})
+    assert ingested_until(db) == {}                                   # no readable time: Amaya stays where she is
+    apply_db(db, {"events": [good, event(f"{BRUGAN}:{T}:0", "craft", T, char=BRUGAN, spell=2663, count=1),
+                             {"id": "y", "type": "craft", "at": T - 5000}]})
+    assert ingested_until(db) == {AMAYA: T - 6000, BRUGAN: T - 6000}   # no readable character: everyone capped
+
+
+def test_an_unreadable_account_never_advances_its_characters(tmp_path, db, clock):
+    good = write_savedvars(tmp_path, savedvars_text(
+        {"events": [event(f"{AMAYA}:{T}:0", "craft", T, spell=2663, count=1)]}), clock, account="ONE")
+    bad = write_savedvars(tmp_path, savedvars_text(
+        {"events": [event(f"{BRUGAN}:{T}:0", "craft", T, char=BRUGAN, spell=2663, count=1)]})[:40], clock,
+        account="TWO")
+
+    assert read_and_apply(good, db, clock, REALMS).ingested
+    result = read_and_apply(bad, db, clock, REALMS)
+
+    assert not result.ingested and result.ingested_until == {AMAYA: T} == ingested_until(db)
+    assert db.status("savedvars:TWO").level == "error" and db.status("savedvars:ONE") is None
 
 
 def test_ingested_until_is_written_only_after_the_commit(db, monkeypatch):
@@ -395,7 +443,7 @@ def test_ingested_until_is_written_only_after_the_commit(db, monkeypatch):
     with pytest.raises(OSError):
         apply_db(db, {"events": [event(f"{AMAYA}:{T}:0", "craft", T, spell=1, count=1)],
                       "rules": {2589: {"rule": "no_buy", "setAt": T}}})
-    assert ingested_until(db) is None and db.count("crafts") == 0           # rolled back, nothing pruned in game
+    assert ingested_until(db) == {} and db.count("crafts") == 0           # rolled back, nothing pruned in game
 
 
 # ---------------------------------------------------------------- reading files

@@ -8,8 +8,8 @@
   incremental update (SPEC §3.1.1).
 * ``read_and_apply`` reads one file from disk: only once it has been unchanged
   for 2 s, falling back to WoW's ``AHProfit.lua.bak`` when it won't parse (FM11),
-  refusing a newer format (FM13), and writing ``meta.savedvars_ingested_until``
-  only after the commit (§5.2 rule 5).
+  refusing a newer format (FM13), and writing each character's ingestedUntil
+  (``meta.savedvars_ingested_until:<charId>``) only after the commit (§2.2, §5.2 rule 5).
 
 Not here: cost basis, matching events to actions (engine/tracking), untracked
 changes (FM21), and the incremental update itself (``incremental_update`` is
@@ -30,7 +30,8 @@ from ahsync.sync.scheduler import STABLE_MS, file_mtime_ms
 
 log = logging.getLogger("ahsync.ingest")
 
-INGESTED_UNTIL = "savedvars_ingested_until"   # meta name; exported to Data.lua as ingestedUntil (M5)
+INGESTED_UNTIL_PREFIX = "savedvars_ingested_until:"   # + charId; meta values exported as ingestedUntil (M5)
+SET_ASIDE_MARGIN_MS = 1000                     # ingestedUntil stops 1 s before a set-aside row (SPEC §2.2)
 BACKUP_SUFFIX = ".bak"                         # WoW keeps the previous file as AHProfit.lua.bak
 MAX_STATUS_PROBLEMS = 10                       # row problems listed on Status; the log has them all
 FACTIONS = ("Horde", "Alliance")
@@ -42,7 +43,7 @@ class ApplyResult:
 
     dirty_keys: frozenset[int]        # item keys whose data changed (unknown-suffix keys left out)
     problems: tuple[str, ...]         # rows set aside, from parsing and from storing
-    newest_event_ms: int | None       # newest event time stored from this file
+    ingested_until: dict[str, int]    # characters whose ingestedUntil this file moved -> new value, ms
 
 
 @dataclass(frozen=True)
@@ -56,7 +57,7 @@ class IngestResult:
     mtime_ms: int | None = None       # path's modification time when read, UTC ms
     dirty_keys: frozenset[int] = frozenset()
     problems: tuple[str, ...] = ()
-    ingested_until_ms: int | None = None              # meta.savedvars_ingested_until after this read
+    ingested_until: dict[str, int] | None = None      # every character's ingestedUntil after this read, ms
     refresh_requested_at_ms: int | None = None        # /ahp refresh request in the file (SPEC §3.1.1)
 
 
@@ -80,6 +81,54 @@ def market_for(faction: str, realm: str, realms: Mapping[str, str]) -> str | Non
     return f"forever.{ruleset}.{faction.lower()}.us"
 
 
+# ---------------------------------------------------------------- pruning handshake
+
+class _Pruning:
+    """Per character: the newest scan or event time stored, and the oldest row set aside (SPEC §2.2)."""
+
+    def __init__(self) -> None:
+        """Start with nothing seen."""
+        self.newest: dict[str, int] = {}
+        # charId (None = unreadable) -> oldest set-aside time, ms (None = unreadable time)
+        self.caps: dict[str | None, int | None] = {}
+
+    def stored(self, char_id: str, at_ms: int) -> None:
+        """Note a stored (or already stored) scan or event.
+
+        Args:
+            char_id: Its character.
+            at_ms: Its time.
+        """
+        self.newest[char_id] = max(at_ms, self.newest.get(char_id, at_ms))
+
+    def set_aside(self, char_id: str | None, at_ms: int | None) -> None:
+        """Note a scan or event that was not stored.
+
+        Args:
+            char_id: Its character; None when unreadable, which holds back every character in the file.
+            at_ms: Its time; None when unreadable, which holds that character where it is.
+        """
+        if char_id in self.caps and (self.caps[char_id] is None or at_ms is None):
+            self.caps[char_id] = None
+        else:
+            self.caps[char_id] = at_ms if char_id not in self.caps else min(at_ms, self.caps[char_id])
+
+    def candidates(self) -> dict[str, int]:
+        """The ingestedUntil each character may move to, before the never-backwards rule.
+
+        Returns:
+            charId -> the newest stored time, capped 1 s before that character's oldest set-aside row;
+            characters held back by a row of unknown time are left out.
+        """
+        result = {}
+        for char_id, newest in sorted(self.newest.items()):
+            caps = [self.caps[k] for k in (char_id, None) if k in self.caps]
+            if None in caps:
+                continue
+            result[char_id] = min([newest] + [cap - SET_ASIDE_MARGIN_MS for cap in caps])
+        return result
+
+
 # ---------------------------------------------------------------- sections
 
 class _Apply:
@@ -96,7 +145,7 @@ class _Apply:
         self.db, self.realms, self.now_ms = db, realms, now_ms
         self.dirty: set[int] = set()
         self.problems: list[str] = []
-        self.newest_event_ms: int | None = None
+        self.pruning = _Pruning()
 
     def guarded(self, what: str, write: Callable[[], None]) -> bool:
         """Run one row's writes; a failure undoes only that row and is recorded (SPEC §5.2 rule 6).
@@ -208,7 +257,10 @@ class _Apply:
             scans: From the file, oldest first.
         """
         for scan in scans:
-            self.guarded(f"scans[{scan.scan_id!r}]", lambda s=scan: self._scan(s))
+            if self.guarded(f"scans[{scan.scan_id!r}]", lambda s=scan: self._scan(s)):
+                self.pruning.stored(scan.char_id, scan.at_ms)
+            else:
+                self.pruning.set_aside(scan.char_id, scan.at_ms)
 
     def _scan(self, scan: sv.Scan) -> None:
         """Store one scan in the scanning character's market.
@@ -231,15 +283,16 @@ class _Apply:
         self.mark(k[0] for k in groups)
 
     def events(self, events: Iterable[sv.Event]) -> None:
-        """Store events by id; track the newest event time stored (SPEC §5.2 rule 5).
+        """Store events by id, noting each one for the pruning handshake (SPEC §2.2).
 
         Args:
             events: From the file, oldest first.
         """
         for e in events:
-            stored = self.guarded(f"events[{e.event_id!r}]", lambda e=e: self._event(e))
-            if stored and (self.newest_event_ms is None or e.at_ms > self.newest_event_ms):
-                self.newest_event_ms = e.at_ms
+            if self.guarded(f"events[{e.event_id!r}]", lambda e=e: self._event(e)):
+                self.pruning.stored(e.char_id, e.at_ms)
+            else:
+                self.pruning.set_aside(e.char_id, e.at_ms)
 
     def _event(self, e: sv.Event) -> None:
         """Store one event in its table; a change dirties its items.
@@ -319,13 +372,16 @@ def apply_data(db: Database, data: sv.AHProfitData, realms: Mapping[str, str], n
 
     Returns:
         The dirty item keys, the problems (the parser's and any row that failed to
-        store) and the newest event time stored.
+        store) and the characters whose ingestedUntil moved.
 
     Side effects:
-        meta.savedvars_ingested_until moves to the newest event time stored, and only
-        after the commit (SPEC §5.2 rule 5); it never moves back.
+        Each character's ingestedUntil moves to the newest scan or event time stored for
+        it, but stops 1 s before its oldest row set aside (by the parser or on storing),
+        only after the commit, and never backwards (SPEC §2.2, §5.2 rule 5).
     """
     work = _Apply(db, realms, now_ms)
+    for row in data.rejected:
+        work.pruning.set_aside(row.char_id, row.at_ms)
     with db.transaction():
         work.characters(data.characters)       # first: scans and posts look up the market
         work.recipes(data)
@@ -333,33 +389,39 @@ def apply_data(db: Database, data: sv.AHProfitData, realms: Mapping[str, str], n
         work.scans(data.scans)
         work.events(data.events)
         work.rules(data.rules)
-    _advance_ingested_until(db, work.newest_event_ms)
-    return ApplyResult(frozenset(work.dirty), data.problems + tuple(work.problems), work.newest_event_ms)
+    advanced = _advance_ingested_until(db, work.pruning.candidates())
+    return ApplyResult(frozenset(work.dirty), data.problems + tuple(work.problems), advanced)
 
 
-def ingested_until(db: Database) -> int | None:
-    """The newest event time AHSync has committed from SavedVariables (SPEC §2.2 pruning handshake).
+def ingested_until(db: Database) -> dict[str, int]:
+    """Each character's ingestedUntil for the pruning handshake (SPEC §2.2); M5 exports it to Data.lua.
 
     Args:
         db: The database.
 
     Returns:
-        UTC ms, or None before the first event is stored.
+        charId -> UTC ms: the addon may delete that character's scans and events at or before it.
+        Characters with nothing committed yet are absent.
     """
-    value = db.get_meta(INGESTED_UNTIL)
-    return int(value) if value is not None else None
+    return {char_id: int(value) for char_id, value in db.meta_with_prefix(INGESTED_UNTIL_PREFIX).items()}
 
 
-def _advance_ingested_until(db: Database, newest_ms: int | None) -> None:
-    """Move ingested-until forward to a newly committed event time.
+def _advance_ingested_until(db: Database, candidates: Mapping[str, int]) -> dict[str, int]:
+    """Move characters' ingestedUntil forward, never back, in one commit.
 
     Args:
-        db: The database.
-        newest_ms: Newest event time just committed, or None when the file had none.
+        db: The database (after the file's commit).
+        candidates: charId -> the value this file allows.
+
+    Returns:
+        charId -> new value, for the characters that moved.
     """
     current = ingested_until(db)
-    if newest_ms is not None and (current is None or newest_ms > current):
-        db.set_meta(INGESTED_UNTIL, str(newest_ms))
+    moved = {c: ms for c, ms in candidates.items() if c not in current or ms > current[c]}
+    with db.transaction():
+        for char_id, at_ms in sorted(moved.items()):
+            db.set_meta(INGESTED_UNTIL_PREFIX + char_id, str(at_ms))
+    return moved
 
 
 def _status_topic(path: Path, what: str) -> str:
@@ -444,7 +506,7 @@ def read_and_apply(path: Path, db: Database, clock: Clock, realms: Mapping[str, 
         is not ingested ('unstable'); the caller reads it again later.
 
     Side effects:
-        Writes the file's records, meta.savedvars_ingested_until and Status lines.
+        Writes the file's records, the characters' ingestedUntil and Status lines.
     """
     now = clock.now_ms()
     mtime = stat_mtime_ms(path)
@@ -456,7 +518,7 @@ def read_and_apply(path: Path, db: Database, clock: Clock, realms: Mapping[str, 
     if stat_mtime_ms(path) != mtime:
         return IngestResult(path, False, "unstable", mtime_ms=mtime)
     if data is None:
-        result = IngestResult(path, False, reason, mtime_ms=mtime, ingested_until_ms=ingested_until(db))
+        result = IngestResult(path, False, reason, mtime_ms=mtime, ingested_until=ingested_until(db))
     else:
         applied = apply_data(db, data, realms, now)
         result = IngestResult(path, True, None, read_from, mtime, applied.dirty_keys, applied.problems,

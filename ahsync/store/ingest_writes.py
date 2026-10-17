@@ -260,3 +260,16 @@ class IngestWrites:
         rows = self.conn.execute("SELECT product_key FROM recipes WHERE spell_id = ? AND product_key IS NOT NULL "
                                  "UNION SELECT key FROM reagents WHERE spell_id = ?", (spell_id, spell_id))
         return {r[0] for r in rows}
+
+    def meta_with_prefix(self, prefix: str) -> dict[str, str]:
+        """Every meta value whose name starts with a prefix.
+
+        Args:
+            prefix: Name prefix, e.g. "savedvars_ingested_until:" (no SQL wildcards needed).
+
+        Returns:
+            Name without the prefix -> value.
+        """
+        rows = self.conn.execute("SELECT name, value FROM meta WHERE substr(name, 1, ?) = ? ORDER BY name",
+                                 (len(prefix), prefix))
+        return {name[len(prefix):]: value for name, value in rows}
