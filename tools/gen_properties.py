@@ -15,10 +15,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from ahsync.engine import sellprob  # noqa: E402
+from ahsync.engine import disenchant, sellprob  # noqa: E402
+from ahsync.engine.de_table import DE_TABLE  # noqa: E402
 from tests.support.gen import save  # noqa: E402
 
-SEEDS = {"sellprob": 7_402_026}
+SEEDS = {"sellprob": 7_402_026, "disenchant": 3_302_026}
 PER_CALL = 200
 
 
@@ -55,13 +56,47 @@ def sellprob_cases(seed: int) -> list[dict]:
     return out
 
 
+def disenchant_cases(seed: int) -> list[dict]:
+    """Seeded cases for the ported disenchant functions, with Python's result.
+
+    `outcomes_for` runs against the real DE_TABLE; the Lua side reads the same rows
+    from the generated Data/Disenchant.lua.
+
+    Args:
+        seed: The seed.
+
+    Returns:
+        [{"call", "args", "result"}, ...].
+    """
+    rng = random.Random(seed)
+    out = []
+    for _ in range(PER_CALL * 2):
+        outcomes = [[rng.randint(10_000, 20_000), rng.random(), q, q + rng.randint(0, 3)]
+                    for q in (rng.randint(1, 3) for _ in range(rng.randint(1, 3)))]
+        values = [rng.random() * 50_000 for _ in outcomes]
+        out.append({"call": "expected_value", "args": {"outcomes": outcomes, "sell_values": values},
+                    "result": disenchant.expected_value(outcomes, values)})
+        quality, ilvl, kind = rng.choice([1, 2, 3, 4]), rng.randint(1, 70), rng.choice(["armor", "weapon"])
+        row = disenchant.outcomes_for(DE_TABLE, quality, ilvl, kind)
+        out.append({"call": "outcomes_for", "args": {"quality": quality, "ilvl": ilvl, "kind": kind},
+                    "result": None if row is None else [row[0], [list(o) for o in row[1]]]})
+        skill = rng.randint(1, 300)
+        best = rng.choice([None, rng.randint(1, 300)])
+        out.append({"call": "can_disenchant", "args": {"skill_required": skill, "best_skill": best},
+                    "result": disenchant.can_disenchant(skill, best)})
+    return out
+
+
 def build() -> dict[str, tuple[int, list[dict]]]:
     """All property files' contents.
 
     Returns:
         Module name -> (seed, cases).
     """
-    return {"sellprob": (SEEDS["sellprob"], sellprob_cases(SEEDS["sellprob"]))}
+    return {
+        "sellprob": (SEEDS["sellprob"], sellprob_cases(SEEDS["sellprob"])),
+        "disenchant": (SEEDS["disenchant"], disenchant_cases(SEEDS["disenchant"])),
+    }
 
 
 def main() -> int:

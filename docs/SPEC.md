@@ -983,7 +983,7 @@ ahsync/
   store/      db.py, schema.sql, prune.py
   sync/       catchup.py, scheduler.py (timers, daily refresh, file-change watch), refresh.py (full refresh + incremental updates, §3.1.1)
   ingest/     luadata.py (WoW SavedVariables Lua parser), savedvars.py (AHProfitDB → records, §2.2.1), scans.py, books.py
-  engine/     fees.py, prices.py, profile.py (hour-of-week), volume.py, sellprob.py (incl. the P' blend),
+  engine/     fees.py, prices.py, profile.py (hour-of-week), volume.py, sellprob.py (incl. the P' blend), de_table.py (disenchant table, §4.5),
               record.py (own sell record + calibration), tracking.py (event → action matching), rules.py,
               patterns.py (weekly patterns, best selling windows), confidence.py (conf %), disenchant.py, craft.py, plan.py, views.py (tab totals, sorting, filters, tooltip deltas)
   export/     lua_data.py
@@ -994,7 +994,7 @@ addon/AHProfit/
   Scan/       Search.lua, Replicate.lua
   Engine/     Fees.lua, SellProb.lua, Disenchant.lua, Craft.lua   (ports of ahsync/engine)
   UI/         ViewModel.lua, Window.lua, Tooltip.lua, AHPanel.lua, Demo.lua
-  Data/       Disenchant.lua, BonusSuffixes.lua (generated: bonus ID → suffix id, §6 item 11)
+  Data/       Disenchant.lua (generated from engine/de_table.py), BonusSuffixes.lua (generated: bonus ID → suffix id, §6 item 11)
 addon/AHProfit_Data/   AHProfit_Data.toc, Data.lua (placeholder; AHSync generates the real one)
 tests/
   ahsync/...           test_<module>.py, same tree as ahsync/
@@ -1010,7 +1010,7 @@ tests/
   pending_scenarios.txt  listed IDs not built yet (§8.1)
 pyproject.toml         pytest and coverage settings only (no runtime dependencies)
 requirements-dev.txt   pytest, coverage
-tools/                 record_fixtures.py, gen_lua_fixtures.py, gen_properties.py (LP1 cases, §8.7), gen_bonus_suffixes.py, deploy.py, savedvars_report.py (what the addon captured; §6 checks), visual.py, bench.py (performance budgets, §3.1.2)
+tools/                 record_fixtures.py, gen_lua_fixtures.py, gen_properties.py (LP1 cases, §8.7), gen_bonus_suffixes.py, gen_disenchant_data.py, deploy.py, savedvars_report.py (what the addon captured; §6 checks), visual.py, bench.py (performance budgets, §3.1.2)
 docs/SPEC.md, docs/SCENARIOS.md, docs/mockups/addon.html (in game), docs/mockups/dashboard.html (desktop)
 CLAUDE.md
 ```

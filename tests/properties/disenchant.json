@@ -1,0 +1,19125 @@
+{
+"cases": [
+{
+"args": {
+"outcomes": [
+[
+11828,
+0.9558964849234765,
+3,
+6
+],
+[
+19251,
+0.01198127807501137,
+1,
+4
+],
+[
+14373,
+0.2552823268169546,
+1,
+4
+]
+],
+"sell_values": [
+22893.111827259694,
+18668.105234107952,
+31793.770368825906
+]
+},
+"call": "expected_value",
+"result": 119325.64165582233
+},
+{
+"args": {
+"ilvl": 41,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 297
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14019,
+0.661598769111888,
+3,
+3
+]
+],
+"sell_values": [
+1321.0031982185676
+]
+},
+"call": "expected_value",
+"result": 2621.9222698028148
+},
+{
+"args": {
+"ilvl": 45,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+125,
+[
+[
+11137,
+0.75,
+2,
+5
+],
+[
+11174,
+0.2,
+1,
+2
+],
+[
+11177,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 82,
+"skill_required": 171
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12102,
+0.40871631493229743,
+2,
+4
+],
+[
+13491,
+0.9827041715662137,
+2,
+4
+]
+],
+"sell_values": [
+18996.96998746851,
+46042.97296878626
+]
+},
+"call": "expected_value",
+"result": 159032.97952768274
+},
+{
+"args": {
+"ilvl": 27,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+50,
+[
+[
+11084,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 52,
+"skill_required": 169
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18429,
+0.4478180053225229,
+3,
+3
+]
+],
+"sell_values": [
+8845.748146628584
+]
+},
+"call": "expected_value",
+"result": 11883.85587182585
+},
+{
+"args": {
+"ilvl": 60,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 46
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11198,
+0.03013523999630252,
+3,
+5
+]
+],
+"sell_values": [
+31226.429585657545
+]
+},
+"call": "expected_value",
+"result": 3764.0637991657263
+},
+{
+"args": {
+"ilvl": 29,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+50,
+[
+[
+11084,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 243,
+"skill_required": 161
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+13468,
+0.16470878553869994,
+2,
+3
+],
+[
+12585,
+0.48454832584188523,
+1,
+2
+]
+],
+"sell_values": [
+29102.9468075688,
+6543.642156167706
+]
+},
+"call": "expected_value",
+"result": 16739.843838199275
+},
+{
+"args": {
+"ilvl": 57,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+225,
+[
+[
+14344,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 161,
+"skill_required": 273
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15993,
+0.27798226832253403,
+3,
+4
+]
+],
+"sell_values": [
+5541.206043859176
+]
+},
+"call": "expected_value",
+"result": 5391.24958860078
+},
+{
+"args": {
+"ilvl": 7,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 286,
+"skill_required": 226
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+19689,
+0.8505163839559975,
+3,
+3
+]
+],
+"sell_values": [
+2160.2356794538923
+]
+},
+"call": "expected_value",
+"result": 5511.947515745555
+},
+{
+"args": {
+"ilvl": 10,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 78
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13937,
+0.8031993343949795,
+2,
+2
+]
+],
+"sell_values": [
+41803.238946741054
+]
+},
+"call": "expected_value",
+"result": 67152.66739515339
+},
+{
+"args": {
+"ilvl": 51,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+175,
+[
+[
+16202,
+0.75,
+1,
+2
+],
+[
+11176,
+0.2,
+2,
+5
+],
+[
+14343,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 80
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19705,
+0.07117662095768551,
+3,
+6
+],
+[
+14620,
+0.803932117568509,
+1,
+2
+]
+],
+"sell_values": [
+48059.2676928751,
+19577.767325474055
+]
+},
+"call": "expected_value",
+"result": 39001.92717520658
+},
+{
+"args": {
+"ilvl": 4,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 288
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12414,
+0.7909792691931173,
+1,
+3
+],
+[
+15701,
+0.004013799801453999,
+1,
+1
+]
+],
+"sell_values": [
+25599.02916234752,
+37460.32754344044
+]
+},
+"call": "expected_value",
+"result": 40646.961013030144
+},
+{
+"args": {
+"ilvl": 1,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 50
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14590,
+0.4357499793354599,
+3,
+5
+]
+],
+"sell_values": [
+35501.87181528517
+]
+},
+"call": "expected_value",
+"result": 61879.75963952264
+},
+{
+"args": {
+"ilvl": 55,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 140,
+"skill_required": 51
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+11030,
+0.6864074190378566,
+3,
+6
+]
+],
+"sell_values": [
+43675.51794259103
+]
+},
+"call": "expected_value",
+"result": 134906.3979575198
+},
+{
+"args": {
+"ilvl": 1,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 143,
+"skill_required": 262
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13841,
+0.9918663860702541,
+2,
+4
+],
+[
+11004,
+0.8519652475013055,
+2,
+5
+]
+],
+"sell_values": [
+14961.744745891892,
+6654.9274977892255
+]
+},
+"call": "expected_value",
+"result": 64364.33940589056
+},
+{
+"args": {
+"ilvl": 41,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+125,
+[
+[
+11137,
+0.75,
+2,
+5
+],
+[
+11174,
+0.2,
+1,
+2
+],
+[
+11177,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 158,
+"skill_required": 175
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12110,
+0.5214125214780715,
+3,
+4
+],
+[
+14067,
+0.6615908361347597,
+3,
+4
+]
+],
+"sell_values": [
+19356.43245282658,
+16222.931195827217
+]
+},
+"call": "expected_value",
+"result": 72889.70103258299
+},
+{
+"args": {
+"ilvl": 41,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 291,
+"skill_required": 45
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+18428,
+0.11717154571628474,
+1,
+2
+]
+],
+"sell_values": [
+42410.75005841833
+]
+},
+"call": "expected_value",
+"result": 7453.999708997833
+},
+{
+"args": {
+"ilvl": 1,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 103
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18767,
+0.9768325792706914,
+3,
+5
+]
+],
+"sell_values": [
+38615.25841650937
+]
+},
+"call": "expected_value",
+"result": 150882.5699128125
+},
+{
+"args": {
+"ilvl": 29,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+50,
+[
+[
+11084,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 82,
+"skill_required": 28
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+16818,
+0.15576002772295394,
+2,
+2
+],
+[
+12472,
+0.015896749422220746,
+2,
+4
+],
+[
+11042,
+0.4075037033333816,
+1,
+1
+]
+],
+"sell_values": [
+3671.016661103588,
+30994.81223756269,
+27760.639243872985
+]
+},
+"call": "expected_value",
+"result": 13934.308903178035
+},
+{
+"args": {
+"ilvl": 5,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 5
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15924,
+0.8938621838253259,
+3,
+6
+],
+[
+13322,
+0.04526829706074831,
+1,
+4
+]
+],
+"sell_values": [
+32098.87620502692,
+9894.61234270651
+]
+},
+"call": "expected_value",
+"result": 130233.65275041515
+},
+{
+"args": {
+"ilvl": 18,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 173,
+"skill_required": 142
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+12675,
+0.024049556693594876,
+3,
+4
+],
+[
+18500,
+0.4335967901824599,
+2,
+2
+]
+],
+"sell_values": [
+44123.157788360855,
+10930.020085848153
+]
+},
+"call": "expected_value",
+"result": 13192.441598267806
+},
+{
+"args": {
+"ilvl": 17,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 7,
+"skill_required": 76
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19601,
+0.17696229115326934,
+2,
+2
+],
+[
+10798,
+0.21125644993353576,
+3,
+5
+],
+[
+12359,
+0.6899728909110694,
+1,
+1
+]
+],
+"sell_values": [
+47410.29690890075,
+8745.792590454937,
+44930.765374103896
+]
+},
+"call": "expected_value",
+"result": 55171.09998458725
+},
+{
+"args": {
+"ilvl": 10,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 250
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15864,
+0.7048673548992584,
+2,
+3
+],
+[
+12198,
+0.08008282601637573,
+1,
+3
+]
+],
+"sell_values": [
+13032.31125872421,
+31713.53976914755
+]
+},
+"call": "expected_value",
+"result": 28044.54668829401
+},
+{
+"args": {
+"ilvl": 55,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+175,
+[
+[
+14343,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 73
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11524,
+0.3146612444373712,
+1,
+1
+],
+[
+12229,
+0.34919594916872354,
+1,
+3
+]
+],
+"sell_values": [
+30168.37752220303,
+6144.123258848538
+]
+},
+"call": "expected_value",
+"result": 13783.825120159316
+},
+{
+"args": {
+"ilvl": 1,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 88
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19850,
+0.4810960673640845,
+2,
+3
+],
+[
+15734,
+0.04512307650179037,
+3,
+4
+]
+],
+"sell_values": [
+12635.641549299564,
+13863.55302417885
+]
+},
+"call": "expected_value",
+"result": 17386.875217913894
+},
+{
+"args": {
+"ilvl": 45,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+125,
+[
+[
+11137,
+0.75,
+2,
+5
+],
+[
+11174,
+0.2,
+1,
+2
+],
+[
+11177,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 260,
+"skill_required": 207
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+14688,
+0.05944250838013687,
+2,
+3
+],
+[
+14689,
+0.04806421321371401,
+1,
+3
+]
+],
+"sell_values": [
+638.5402927484906,
+2610.1140200344207
+]
+},
+"call": "expected_value",
+"result": 345.7972452989702
+},
+{
+"args": {
+"ilvl": 65,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+225,
+[
+[
+16203,
+0.75,
+2,
+3
+],
+[
+16204,
+0.2,
+2,
+5
+],
+[
+14344,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 163,
+"skill_required": 224
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11467,
+0.05839408260820356,
+1,
+1
+],
+[
+14061,
+0.10718495529258965,
+1,
+1
+],
+[
+11034,
+0.5180804320893283,
+2,
+5
+]
+],
+"sell_values": [
+19731.306779513936,
+10505.061497673561,
+24613.29427044911
+]
+},
+"call": "expected_value",
+"result": 46909.00756274101
+},
+{
+"args": {
+"ilvl": 63,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 190
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10088,
+0.7971855768725054,
+1,
+2
+],
+[
+13801,
+0.5552016965669538,
+1,
+4
+],
+[
+17443,
+0.22794840841426478,
+1,
+1
+]
+],
+"sell_values": [
+13957.582850840394,
+32570.255614676113,
+49896.68161521997
+]
+},
+"call": "expected_value",
+"result": 73271.697701601
+},
+{
+"args": {
+"ilvl": 69,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 172,
+"skill_required": 35
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+11639,
+0.13390669635326413,
+2,
+4
+],
+[
+15372,
+0.6529704053966723,
+1,
+1
+],
+[
+10461,
+0.6430936032434493,
+3,
+5
+]
+],
+"sell_values": [
+5975.2541893758225,
+21074.542271222886,
+24162.02053800474
+]
+},
+"call": "expected_value",
+"result": 78315.19545321145
+},
+{
+"args": {
+"ilvl": 46,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 84
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11457,
+0.6258189948485405,
+3,
+5
+],
+[
+12284,
+0.0894392149658052,
+3,
+5
+],
+[
+16360,
+0.18556097588225184,
+3,
+4
+]
+],
+"sell_values": [
+4902.644155292224,
+48908.4461165698,
+36030.75188316163
+]
+},
+"call": "expected_value",
+"result": 53170.6586371514
+},
+{
+"args": {
+"ilvl": 44,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 108,
+"skill_required": 161
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15776,
+0.5728171785415421,
+3,
+6
+]
+],
+"sell_values": [
+40847.281636959386
+]
+},
+"call": "expected_value",
+"result": 105291.1107826867
+},
+{
+"args": {
+"ilvl": 53,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+175,
+[
+[
+14343,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 208,
+"skill_required": 94
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+17891,
+0.7004586683124185,
+2,
+5
+],
+[
+11022,
+0.7947359872381466,
+2,
+3
+]
+],
+"sell_values": [
+10170.340053405997,
+2157.164086904073
+]
+},
+"call": "expected_value",
+"result": 29219.59980092722
+},
+{
+"args": {
+"ilvl": 7,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 81,
+"skill_required": 35
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+19731,
+0.24040592614162826,
+3,
+4
+]
+],
+"sell_values": [
+18554.38752481327
+]
+},
+"call": "expected_value",
+"result": 15612.046509126929
+},
+{
+"args": {
+"ilvl": 15,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 127
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11001,
+0.23371622814624604,
+1,
+1
+],
+[
+17492,
+0.7496218287679036,
+3,
+4
+]
+],
+"sell_values": [
+18792.059217740163,
+31897.24534938138
+]
+},
+"call": "expected_value",
+"result": 88080.05906958735
+},
+{
+"args": {
+"ilvl": 43,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 263
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15916,
+0.9713995251868259,
+3,
+5
+],
+[
+11244,
+0.32900054853604666,
+2,
+3
+],
+[
+17909,
+0.642305016882889,
+2,
+4
+]
+],
+"sell_values": [
+38619.7431540834,
+40438.935360452175,
+23868.720644009074
+]
+},
+"call": "expected_value",
+"result": 229314.877489031
+},
+{
+"args": {
+"ilvl": 63,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 78
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12393,
+0.10109432846510391,
+1,
+2
+],
+[
+15004,
+0.6694647716977552,
+2,
+2
+],
+[
+12028,
+0.08147746937263523,
+3,
+5
+]
+],
+"sell_values": [
+45266.418717773246,
+31675.762528962703,
+33514.497229428875
+]
+},
+"call": "expected_value",
+"result": 60198.58724924913
+},
+{
+"args": {
+"ilvl": 16,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 131,
+"skill_required": 227
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11621,
+0.3110023598658994,
+2,
+2
+],
+[
+12650,
+0.49186209001954284,
+1,
+1
+],
+[
+16525,
+0.014672308129589084,
+3,
+3
+]
+],
+"sell_values": [
+44313.58023640945,
+48279.892413793306,
+3889.4326764620846
+]
+},
+"call": "expected_value",
+"result": 51481.50570786252
+},
+{
+"args": {
+"ilvl": 13,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 220,
+"skill_required": 105
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+11235,
+0.01821610708946475,
+2,
+3
+]
+],
+"sell_values": [
+20547.4874319257
+]
+},
+"call": "expected_value",
+"result": 935.7380786984739
+},
+{
+"args": {
+"ilvl": 23,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 247,
+"skill_required": 114
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+12186,
+0.503716750218183,
+1,
+4
+]
+],
+"sell_values": [
+35214.46554396241
+]
+},
+"call": "expected_value",
+"result": 44345.29036118731
+},
+{
+"args": {
+"ilvl": 30,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 185,
+"skill_required": 36
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+19759,
+0.5875516170758918,
+2,
+3
+],
+[
+11330,
+0.6411338868905408,
+3,
+6
+],
+[
+14366,
+0.9224408694407983,
+2,
+3
+]
+],
+"sell_values": [
+5416.04827493335,
+29030.46394701559,
+16189.263997398262
+]
+},
+"call": "expected_value",
+"result": 129045.4805472983
+},
+{
+"args": {
+"ilvl": 51,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+175,
+[
+[
+11176,
+0.75,
+2,
+5
+],
+[
+16202,
+0.2,
+1,
+2
+],
+[
+14343,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 82
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19377,
+0.5048292979078233,
+1,
+2
+],
+[
+14171,
+0.6136718317842265,
+1,
+3
+],
+[
+19244,
+0.31911248441135354,
+3,
+3
+]
+],
+"sell_values": [
+46153.44689992547,
+47766.529258715454,
+20098.593941732885
+]
+},
+"call": "expected_value",
+"result": 112816.50204587867
+},
+{
+"args": {
+"ilvl": 16,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 190,
+"skill_required": 181
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+15129,
+0.18241338381817362,
+3,
+4
+]
+],
+"sell_values": [
+1442.7992466842677
+]
+},
+"call": "expected_value",
+"result": 921.1506246529618
+},
+{
+"args": {
+"ilvl": 23,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+25,
+[
+[
+10998,
+0.75,
+1,
+2
+],
+[
+10940,
+0.2,
+4,
+6
+],
+[
+10978,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 105,
+"skill_required": 130
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14568,
+0.117790857747325,
+3,
+6
+],
+[
+14982,
+0.5410631171581376,
+1,
+3
+]
+],
+"sell_values": [
+31130.949326636564,
+18383.157716614125
+]
+},
+"call": "expected_value",
+"result": 36394.13274125046
+},
+{
+"args": {
+"ilvl": 47,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 29
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12910,
+0.46154781507794895,
+3,
+6
+]
+],
+"sell_values": [
+16117.982532469221
+]
+},
+"call": "expected_value",
+"result": 33476.48829596572
+},
+{
+"args": {
+"ilvl": 47,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+150,
+[
+[
+11178,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 90,
+"skill_required": 255
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15492,
+0.6441360713074492,
+3,
+6
+]
+],
+"sell_values": [
+4165.410439392414
+]
+},
+"call": "expected_value",
+"result": 12073.910021159696
+},
+{
+"args": {
+"ilvl": 15,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10940,
+0.8,
+1,
+2
+],
+[
+10938,
+0.2,
+1,
+2
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 36,
+"skill_required": 138
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19651,
+0.7066502098977052,
+1,
+4
+]
+],
+"sell_values": [
+23745.372876956157
+]
+},
+"call": "expected_value",
+"result": 41949.18181900086
+},
+{
+"args": {
+"ilvl": 63,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+225,
+[
+[
+14344,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 93,
+"skill_required": 145
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10452,
+0.8610668160571587,
+3,
+3
+]
+],
+"sell_values": [
+21322.113196627244
+]
+},
+"call": "expected_value",
+"result": 55079.292365490444
+},
+{
+"args": {
+"ilvl": 70,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 144,
+"skill_required": 133
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+16148,
+0.1820120634179776,
+3,
+5
+]
+],
+"sell_values": [
+43398.58746820207
+]
+},
+"call": "expected_value",
+"result": 31596.265818052176
+},
+{
+"args": {
+"ilvl": 5,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 27
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17802,
+0.21150804261344824,
+1,
+4
+],
+[
+15562,
+0.5676636870860521,
+3,
+3
+]
+],
+"sell_values": [
+40759.82093811282,
+8538.294618440123
+]
+},
+"call": "expected_value",
+"result": 36093.21427332936
+},
+{
+"args": {
+"ilvl": 31,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+75,
+[
+[
+11134,
+0.75,
+1,
+2
+],
+[
+11083,
+0.2,
+2,
+5
+],
+[
+11138,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 209,
+"skill_required": 287
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13995,
+0.9543589156136104,
+1,
+1
+]
+],
+"sell_values": [
+13500.647331848104
+]
+},
+"call": "expected_value",
+"result": 12884.463147704339
+},
+{
+"args": {
+"ilvl": 25,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 199
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17375,
+0.446886183467591,
+2,
+5
+],
+[
+14495,
+0.06917547714023353,
+1,
+3
+]
+],
+"sell_values": [
+43580.263038691766,
+23764.685449028228
+]
+},
+"call": "expected_value",
+"result": 71451.82789360957
+},
+{
+"args": {
+"ilvl": 44,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+125,
+[
+[
+11174,
+0.75,
+1,
+2
+],
+[
+11137,
+0.2,
+2,
+5
+],
+[
+11177,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 9,
+"skill_required": 197
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18166,
+0.617469624465626,
+1,
+3
+],
+[
+13360,
+0.853734803223214,
+2,
+5
+],
+[
+16781,
+0.8990528694332632,
+2,
+2
+]
+],
+"sell_values": [
+6908.166938572241,
+49894.11963818511,
+37117.89645989466
+]
+},
+"call": "expected_value",
+"result": 224360.28156935735
+},
+{
+"args": {
+"ilvl": 68,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 219,
+"skill_required": 233
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14244,
+0.6758339665106153,
+1,
+4
+],
+[
+12117,
+0.3986155537964229,
+3,
+4
+],
+[
+15437,
+0.2229494672379324,
+1,
+4
+]
+],
+"sell_values": [
+3639.213744456293,
+37411.932615275815,
+35697.51072239811
+]
+},
+"call": "expected_value",
+"result": 78241.03697605139
+},
+{
+"args": {
+"ilvl": 52,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+175,
+[
+[
+16202,
+0.75,
+1,
+2
+],
+[
+11176,
+0.2,
+2,
+5
+],
+[
+14343,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 40
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18451,
+0.22412685572939028,
+1,
+2
+],
+[
+17795,
+0.058428286961704434,
+3,
+6
+]
+],
+"sell_values": [
+14322.905550420679,
+17902.46062485795
+]
+},
+"call": "expected_value",
+"result": 9522.267159081395
+},
+{
+"args": {
+"ilvl": 39,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+100,
+[
+[
+11137,
+0.75,
+1,
+2
+],
+[
+11135,
+0.2,
+1,
+2
+],
+[
+11139,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 160,
+"skill_required": 105
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+15815,
+0.6664978958489733,
+2,
+2
+],
+[
+12220,
+0.9848495863167148,
+3,
+6
+]
+],
+"sell_values": [
+8918.832459138332,
+46544.61967848791
+]
+},
+"call": "expected_value",
+"result": 218166.2885952148
+},
+{
+"args": {
+"ilvl": 56,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 76,
+"skill_required": 251
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19129,
+0.9854299884992169,
+1,
+1
+],
+[
+10051,
+0.8201430102182962,
+1,
+1
+]
+],
+"sell_values": [
+6005.832886724133,
+35081.292162706115
+]
+},
+"call": "expected_value",
+"result": 34690.004389162095
+},
+{
+"args": {
+"ilvl": 68,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 19
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15943,
+0.6869769646305454,
+2,
+3
+],
+[
+17103,
+0.7790970891353374,
+2,
+3
+]
+],
+"sell_values": [
+2945.1945983599903,
+25361.848344394788
+]
+},
+"call": "expected_value",
+"result": 54456.5576640937
+},
+{
+"args": {
+"ilvl": 41,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 207,
+"skill_required": 180
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+18858,
+0.21362147371003215,
+1,
+2
+],
+[
+16391,
+0.695965954553425,
+2,
+5
+],
+[
+15670,
+0.09781785068341409,
+2,
+3
+]
+],
+"sell_values": [
+40964.734360563656,
+39610.900278962115,
+7278.33743073798
+]
+},
+"call": "expected_value",
+"result": 111393.73177821336
+},
+{
+"args": {
+"ilvl": 34,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+75,
+[
+[
+11138,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 43
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13036,
+0.6879757542294884,
+2,
+2
+],
+[
+18423,
+0.48207618728513346,
+1,
+3
+]
+],
+"sell_values": [
+38681.38450204799,
+14636.174811460061
+]
+},
+"call": "expected_value",
+"result": 67335.21205396937
+},
+{
+"args": {
+"ilvl": 41,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+125,
+[
+[
+11174,
+0.75,
+1,
+2
+],
+[
+11137,
+0.2,
+2,
+5
+],
+[
+11177,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 163,
+"skill_required": 80
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+11845,
+0.44526161162437394,
+2,
+2
+]
+],
+"sell_values": [
+17232.766677178544
+]
+},
+"call": "expected_value",
+"result": 15346.178926854653
+},
+{
+"args": {
+"ilvl": 38,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 4
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15901,
+0.9581295604603401,
+3,
+4
+],
+[
+15448,
+0.28117003058947276,
+2,
+2
+],
+[
+19929,
+0.34761859374712445,
+1,
+4
+]
+],
+"sell_values": [
+44603.05536908347,
+17373.320640298785,
+45536.25663716155
+]
+},
+"call": "expected_value",
+"result": 198917.10835943127
+},
+{
+"args": {
+"ilvl": 45,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+125,
+[
+[
+11177,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 117
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19962,
+0.8698675235105015,
+3,
+3
+],
+[
+10787,
+0.5111276353494704,
+2,
+2
+]
+],
+"sell_values": [
+5995.463854796507,
+39536.66525325938
+]
+},
+"call": "expected_value",
+"result": 56062.342328009756
+},
+{
+"args": {
+"ilvl": 8,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 244
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17577,
+0.7536773866624198,
+2,
+3
+]
+],
+"sell_values": [
+23226.794843165222
+]
+},
+"call": "expected_value",
+"result": 43763.77509485234
+},
+{
+"args": {
+"ilvl": 47,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 89,
+"skill_required": 159
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13764,
+0.16993240800493503,
+2,
+3
+],
+[
+10188,
+0.5975483775457174,
+3,
+6
+]
+],
+"sell_values": [
+9892.49055896499,
+44229.9988325293
+]
+},
+"call": "expected_value",
+"result": 123135.67504014839
+},
+{
+"args": {
+"ilvl": 69,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 30,
+"skill_required": 3
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+19425,
+0.5159864379317296,
+1,
+3
+]
+],
+"sell_values": [
+36604.19432022611
+]
+},
+"call": "expected_value",
+"result": 37774.53568130864
+},
+{
+"args": {
+"ilvl": 68,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 213,
+"skill_required": 12
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+11234,
+0.40004742655833614,
+3,
+3
+],
+[
+16235,
+0.40768182708306966,
+2,
+3
+]
+],
+"sell_values": [
+22507.864049521624,
+38470.01483801008
+]
+},
+"call": "expected_value",
+"result": 66221.45411368992
+},
+{
+"args": {
+"ilvl": 10,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 31,
+"skill_required": 196
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14095,
+0.3373840842214346,
+3,
+4
+],
+[
+11667,
+0.6689601919776099,
+1,
+2
+]
+],
+"sell_values": [
+3928.0477425434947,
+33393.104251692785
+]
+},
+"call": "expected_value",
+"result": 38146.39891279751
+},
+{
+"args": {
+"ilvl": 13,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 53
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12249,
+0.0859899084889354,
+2,
+2
+]
+],
+"sell_values": [
+39880.10584836095
+]
+},
+"call": "expected_value",
+"result": 6858.573304859231
+},
+{
+"args": {
+"ilvl": 1,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 293
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17227,
+0.353757850052026,
+2,
+4
+]
+],
+"sell_values": [
+33992.1942019957
+]
+},
+"call": "expected_value",
+"result": 36075.016618346825
+},
+{
+"args": {
+"ilvl": 26,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 227,
+"skill_required": 99
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+10146,
+0.31724548546112574,
+1,
+3
+],
+[
+12906,
+0.46444860180540126,
+3,
+5
+],
+[
+12003,
+0.19701136996606783,
+2,
+5
+]
+],
+"sell_values": [
+28919.101921937934,
+9942.914835055904,
+15997.486449129905
+]
+},
+"call": "expected_value",
+"result": 47851.70415344594
+},
+{
+"args": {
+"ilvl": 13,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10938,
+0.8,
+1,
+2
+],
+[
+10940,
+0.2,
+1,
+2
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 81,
+"skill_required": 92
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18563,
+0.31202543496479407,
+3,
+6
+]
+],
+"sell_values": [
+3090.2623563403563
+]
+},
+"call": "expected_value",
+"result": 4339.082051515931
+},
+{
+"args": {
+"ilvl": 32,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+75,
+[
+[
+11138,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 251
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18856,
+0.8272221621875834,
+3,
+3
+],
+[
+10284,
+0.9691490575496308,
+2,
+2
+]
+],
+"sell_values": [
+49001.435042373356,
+4100.559721732011
+]
+},
+"call": "expected_value",
+"result": 129553.32631762463
+},
+{
+"args": {
+"ilvl": 15,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 252,
+"skill_required": 183
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+17068,
+0.08207216915970572,
+2,
+2
+]
+],
+"sell_values": [
+16411.782856916634
+]
+},
+"call": "expected_value",
+"result": 2693.9012376904407
+},
+{
+"args": {
+"ilvl": 18,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 207,
+"skill_required": 22
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+10228,
+0.17700088453854013,
+3,
+3
+]
+],
+"sell_values": [
+27069.534823196554
+]
+},
+"call": "expected_value",
+"result": 14373.994823257814
+},
+{
+"args": {
+"ilvl": 12,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 235,
+"skill_required": 131
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+19581,
+0.34981289222088374,
+3,
+5
+]
+],
+"sell_values": [
+23099.126873876496
+]
+},
+"call": "expected_value",
+"result": 32321.48951811151
+},
+{
+"args": {
+"ilvl": 38,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+100,
+[
+[
+11139,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 174
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19365,
+0.7187911214304368,
+3,
+6
+],
+[
+19981,
+0.32190214146470797,
+1,
+1
+]
+],
+"sell_values": [
+20076.129824124895,
+38.597581048627205
+]
+},
+"call": "expected_value",
+"result": 64949.87206019088
+},
+{
+"args": {
+"ilvl": 12,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 222
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17027,
+0.16582964947949652,
+2,
+5
+]
+],
+"sell_values": [
+7593.312324740309
+]
+},
+"call": "expected_value",
+"result": 4407.1871242000925
+},
+{
+"args": {
+"ilvl": 66,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 186
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10491,
+0.8757065248501986,
+3,
+5
+],
+[
+12624,
+0.22350538855636104,
+1,
+1
+]
+],
+"sell_values": [
+31638.069041419432,
+36930.39096607232
+]
+},
+"call": "expected_value",
+"result": 119076.79535533859
+},
+{
+"args": {
+"ilvl": 70,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 285,
+"skill_required": 238
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+19539,
+0.8277350301619834,
+1,
+4
+]
+],
+"sell_values": [
+46097.840229768844
+]
+},
+"call": "expected_value",
+"result": 95391.99293247501
+},
+{
+"args": {
+"ilvl": 69,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 293
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12496,
+0.25218545264370495,
+2,
+4
+],
+[
+12454,
+0.23952624054100036,
+2,
+3
+]
+],
+"sell_values": [
+48660.43824863417,
+40280.00079113608
+]
+},
+"call": "expected_value",
+"result": 60934.656832941946
+},
+{
+"args": {
+"ilvl": 57,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+200,
+[
+[
+16204,
+0.75,
+1,
+2
+],
+[
+16203,
+0.2,
+1,
+2
+],
+[
+14344,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 282,
+"skill_required": 122
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+11244,
+0.6055487943405011,
+1,
+3
+]
+],
+"sell_values": [
+13684.767598584718
+]
+},
+"call": "expected_value",
+"result": 16573.589040305862
+},
+{
+"args": {
+"ilvl": 47,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+150,
+[
+[
+11175,
+0.75,
+1,
+2
+],
+[
+11176,
+0.2,
+1,
+2
+],
+[
+11178,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 246
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10617,
+0.6396720873389362,
+3,
+6
+],
+[
+17931,
+0.45001115164069905,
+1,
+4
+]
+],
+"sell_values": [
+26619.528570162463,
+24866.454891064855
+]
+},
+"call": "expected_value",
+"result": 104600.41732691819
+},
+{
+"args": {
+"ilvl": 8,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 66,
+"skill_required": 266
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15133,
+0.1779655146932836,
+2,
+3
+]
+],
+"sell_values": [
+24565.0452018764
+]
+},
+"call": "expected_value",
+"result": 10929.327282039276
+},
+{
+"args": {
+"ilvl": 49,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+150,
+[
+[
+11178,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 176
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18483,
+0.24660175042856025,
+2,
+4
+],
+[
+16630,
+0.9144202750737539,
+3,
+3
+]
+],
+"sell_values": [
+40485.12500768538,
+46185.52995086265
+]
+},
+"call": "expected_value",
+"result": 156650.06308592766
+},
+{
+"args": {
+"ilvl": 18,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 251,
+"skill_required": 94
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+10982,
+0.7805069037557036,
+3,
+6
+],
+[
+18827,
+0.21723549940224862,
+2,
+5
+]
+],
+"sell_values": [
+17942.474369609292,
+2743.9761181121294
+]
+},
+"call": "expected_value",
+"result": 65105.32460000995
+},
+{
+"args": {
+"ilvl": 1,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 194,
+"skill_required": 52
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+15329,
+0.3297716473742828,
+2,
+3
+],
+[
+15695,
+0.5326768852028564,
+3,
+6
+],
+[
+19859,
+0.7119534432483786,
+2,
+3
+]
+],
+"sell_values": [
+17591.184543908326,
+20398.443098885054,
+34699.98630069982
+]
+},
+"call": "expected_value",
+"result": 125160.62768246926
+},
+{
+"args": {
+"ilvl": 60,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 87,
+"skill_required": 212
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13837,
+0.8710345507310572,
+1,
+3
+]
+],
+"sell_values": [
+44739.428828496246
+]
+},
+"call": "expected_value",
+"result": 77939.17657918666
+},
+{
+"args": {
+"ilvl": 63,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+225,
+[
+[
+14344,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 43,
+"skill_required": 125
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15517,
+0.45933178772759364,
+3,
+6
+]
+],
+"sell_values": [
+28181.80513022567
+]
+},
+"call": "expected_value",
+"result": 58251.59519335753
+},
+{
+"args": {
+"ilvl": 13,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 13
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17789,
+0.5564811990304389,
+3,
+3
+]
+],
+"sell_values": [
+19723.40946172492
+]
+},
+"call": "expected_value",
+"result": 32927.11963868696
+},
+{
+"args": {
+"ilvl": 69,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 288
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15581,
+0.19592435915316964,
+3,
+4
+],
+[
+13726,
+0.49258637462907784,
+1,
+2
+]
+],
+"sell_values": [
+37111.23922545762,
+13070.91997040305
+]
+},
+"call": "expected_value",
+"result": 35106.32079112862
+},
+{
+"args": {
+"ilvl": 46,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+150,
+[
+[
+11175,
+0.75,
+1,
+2
+],
+[
+11176,
+0.2,
+1,
+2
+],
+[
+11178,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 125,
+"skill_required": 25
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+19986,
+0.21765560656172744,
+2,
+5
+],
+[
+10439,
+0.4703309885708903,
+2,
+2
+],
+[
+13597,
+0.6843165061329067,
+1,
+4
+]
+],
+"sell_values": [
+25177.94394183111,
+39397.95679114321,
+22514.188650779925
+]
+},
+"call": "expected_value",
+"result": 94757.65953252783
+},
+{
+"args": {
+"ilvl": 36,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+100,
+[
+[
+11135,
+0.75,
+1,
+2
+],
+[
+11137,
+0.2,
+1,
+2
+],
+[
+11139,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 97,
+"skill_required": 218
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10608,
+0.8822591883861458,
+2,
+4
+],
+[
+10507,
+0.07334717464394636,
+3,
+4
+]
+],
+"sell_values": [
+23769.704195407594,
+5877.093212941525
+]
+},
+"call": "expected_value",
+"result": 64421.85843286652
+},
+{
+"args": {
+"ilvl": 1,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 120,
+"skill_required": 178
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15038,
+0.37639525693440046,
+1,
+3
+]
+],
+"sell_values": [
+22407.031297985675
+]
+},
+"call": "expected_value",
+"result": 16867.80060508494
+},
+{
+"args": {
+"ilvl": 69,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 208
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18056,
+0.8084267562724299,
+1,
+2
+],
+[
+14922,
+0.27425496959207807,
+2,
+5
+],
+[
+10179,
+0.6497478132160899,
+2,
+5
+]
+],
+"sell_values": [
+48653.38464644894,
+35599.44829037453,
+4564.728502568838
+]
+},
+"call": "expected_value",
+"result": 103551.41479504772
+},
+{
+"args": {
+"ilvl": 11,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 95
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17918,
+0.8536209082626323,
+3,
+5
+]
+],
+"sell_values": [
+17295.68234914012
+]
+},
+"call": "expected_value",
+"result": 59055.824303579866
+},
+{
+"args": {
+"ilvl": 10,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10938,
+0.8,
+1,
+2
+],
+[
+10940,
+0.2,
+1,
+2
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 275
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18446,
+0.5724505474357393,
+2,
+2
+]
+],
+"sell_values": [
+44979.4190175599
+]
+},
+"call": "expected_value",
+"result": 51496.986079887334
+},
+{
+"args": {
+"ilvl": 52,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 246
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19201,
+0.9081879081302529,
+1,
+2
+],
+[
+12512,
+0.29352630335436736,
+2,
+5
+]
+],
+"sell_values": [
+29232.681177201113,
+17605.41025069722
+]
+},
+"call": "expected_value",
+"result": 57909.929815776195
+},
+{
+"args": {
+"ilvl": 29,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 269
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18696,
+0.1897693685351306,
+3,
+4
+],
+[
+14623,
+0.09722164954474477,
+2,
+3
+]
+],
+"sell_values": [
+11719.569620933456,
+43790.86953081751
+]
+},
+"call": "expected_value",
+"result": 18427.605069600104
+},
+{
+"args": {
+"ilvl": 64,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 129
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18769,
+0.9435005631005371,
+3,
+4
+],
+[
+14635,
+0.7902621441909179,
+2,
+4
+],
+[
+17557,
+0.6887378561723645,
+3,
+4
+]
+],
+"sell_values": [
+26423.71458653421,
+5608.255504067433,
+18706.65058374585
+]
+},
+"call": "expected_value",
+"result": 145647.66409730588
+},
+{
+"args": {
+"ilvl": 25,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 174
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13486,
+0.08647574816580406,
+3,
+6
+]
+],
+"sell_values": [
+20152.945342721352
+]
+},
+"call": "expected_value",
+"result": 7842.3346181537345
+},
+{
+"args": {
+"ilvl": 44,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 285,
+"skill_required": 54
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+11544,
+0.7087769931124085,
+3,
+4
+],
+[
+17881,
+0.6527474123879138,
+3,
+3
+],
+[
+17051,
+0.6087859706329856,
+3,
+4
+]
+],
+"sell_values": [
+16248.908154306435,
+32300.958630003763,
+30842.65994974007
+]
+},
+"call": "expected_value",
+"result": 169280.1097709632
+},
+{
+"args": {
+"ilvl": 63,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+225,
+[
+[
+14344,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 266
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11732,
+0.9499162294386743,
+1,
+1
+],
+[
+19675,
+0.22897158722784305,
+2,
+2
+],
+[
+10383,
+0.4497608628431028,
+3,
+3
+]
+],
+"sell_values": [
+24171.492710920465,
+7206.463050237366,
+20205.83432743216
+]
+},
+"call": "expected_value",
+"result": 53524.4242263973
+},
+{
+"args": {
+"ilvl": 59,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 50,
+"skill_required": 264
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17555,
+0.0032103156242223596,
+2,
+4
+],
+[
+16806,
+0.19344511533039732,
+1,
+1
+],
+[
+19889,
+0.8637843116212467,
+2,
+2
+]
+],
+"sell_values": [
+39453.70311503634,
+7226.833286849449,
+39320.19248517381
+]
+},
+"call": "expected_value",
+"result": 69706.3029145206
+},
+{
+"args": {
+"ilvl": 6,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 186
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18973,
+0.38319293348691863,
+2,
+4
+],
+[
+14619,
+0.7712346821669356,
+3,
+4
+]
+],
+"sell_values": [
+38234.86234326022,
+38045.466854074395
+]
+},
+"call": "expected_value",
+"result": 146650.92956817884
+},
+{
+"args": {
+"ilvl": 54,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+175,
+[
+[
+14343,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 156
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11364,
+0.37139924380371414,
+1,
+2
+]
+],
+"sell_values": [
+33596.26737938272
+]
+},
+"call": "expected_value",
+"result": 18716.442448995196
+},
+{
+"args": {
+"ilvl": 29,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+50,
+[
+[
+11084,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 3
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11125,
+0.32635501784974985,
+2,
+3
+],
+[
+10568,
+0.5666046184324743,
+1,
+2
+],
+[
+16490,
+0.5837771723650413,
+2,
+3
+]
+],
+"sell_values": [
+23365.35403003812,
+18795.649152695478,
+48427.2378067771
+]
+},
+"call": "expected_value",
+"result": 105714.84363410197
+},
+{
+"args": {
+"ilvl": 42,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+125,
+[
+[
+11177,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 21
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13219,
+0.2294337216913649,
+3,
+5
+],
+[
+16994,
+0.407580484372573,
+1,
+4
+],
+[
+12821,
+0.06005149871730342,
+1,
+3
+]
+],
+"sell_values": [
+42312.730145029425,
+26540.67691842479,
+48972.20323098331
+]
+},
+"call": "expected_value",
+"result": 71757.23189237273
+},
+{
+"args": {
+"ilvl": 12,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 284,
+"skill_required": 202
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+12095,
+0.17163738206647117,
+2,
+4
+]
+],
+"sell_values": [
+41240.61110553545
+]
+},
+"call": "expected_value",
+"result": 21235.291574926625
+},
+{
+"args": {
+"ilvl": 18,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 249
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13538,
+0.5818204406133088,
+3,
+6
+],
+[
+19485,
+0.9216064877311216,
+2,
+4
+]
+],
+"sell_values": [
+8494.823954928039,
+48452.933089460385
+]
+},
+"call": "expected_value",
+"result": 156204.69242829515
+},
+{
+"args": {
+"ilvl": 23,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 173,
+"skill_required": 2
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+10593,
+0.5378432989041639,
+2,
+2
+],
+[
+19386,
+0.5012274182237544,
+3,
+3
+],
+[
+15486,
+0.34626679552279727,
+3,
+5
+]
+],
+"sell_values": [
+28849.945701254488,
+38839.226015225795,
+46340.730905134405
+]
+},
+"call": "expected_value",
+"result": 153620.38045341952
+},
+{
+"args": {
+"ilvl": 6,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 162
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19609,
+0.740689569529408,
+1,
+2
+]
+],
+"sell_values": [
+27905.916256952827
+]
+},
+"call": "expected_value",
+"result": 31004.431649529146
+},
+{
+"args": {
+"ilvl": 35,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+75,
+[
+[
+11138,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 204
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14201,
+0.6288534751201312,
+3,
+6
+],
+[
+12029,
+0.33678722683563433,
+3,
+6
+]
+],
+"sell_values": [
+14683.64044837398,
+2641.1004562338026
+]
+},
+"call": "expected_value",
+"result": 45555.062498207146
+},
+{
+"args": {
+"ilvl": 15,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 166,
+"skill_required": 117
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+19979,
+0.3859137122305475,
+2,
+3
+],
+[
+19421,
+0.21971817000834726,
+3,
+6
+]
+],
+"sell_values": [
+7858.850644155169,
+47385.0629179875
+]
+},
+"call": "expected_value",
+"result": 54433.21246019612
+},
+{
+"args": {
+"ilvl": 16,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 220
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16523,
+0.15872910311551458,
+1,
+4
+],
+[
+14711,
+0.9370166405253126,
+1,
+1
+]
+],
+"sell_values": [
+41103.10236648502,
+44674.18226050145
+]
+},
+"call": "expected_value",
+"result": 58171.09861469397
+},
+{
+"args": {
+"ilvl": 14,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 183
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16173,
+0.5975530002570337,
+1,
+4
+]
+],
+"sell_values": [
+41984.218382806335
+]
+},
+"call": "expected_value",
+"result": 62719.48914523109
+},
+{
+"args": {
+"ilvl": 33,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+75,
+[
+[
+11083,
+0.75,
+2,
+5
+],
+[
+11134,
+0.2,
+1,
+2
+],
+[
+11138,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 167,
+"skill_required": 36
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+10407,
+0.4790304259092095,
+2,
+4
+]
+],
+"sell_values": [
+36260.359765349436
+]
+},
+"call": "expected_value",
+"result": 52109.446746049514
+},
+{
+"args": {
+"ilvl": 8,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 221
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13206,
+0.3794292751457796,
+1,
+2
+],
+[
+11202,
+0.34855451331362053,
+1,
+3
+],
+[
+12637,
+0.45930568734357247,
+3,
+3
+]
+],
+"sell_values": [
+45685.60045790823,
+44920.01639579491,
+47208.088066119206
+]
+},
+"call": "expected_value",
+"result": 122364.66031742239
+},
+{
+"args": {
+"ilvl": 32,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 92
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18089,
+0.13411694893969384,
+1,
+1
+],
+[
+14765,
+0.9118235294995528,
+1,
+4
+]
+],
+"sell_values": [
+49653.88774055905,
+22665.196783333773
+]
+},
+"call": "expected_value",
+"result": 58326.07724621113
+},
+{
+"args": {
+"ilvl": 46,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+150,
+[
+[
+11175,
+0.75,
+1,
+2
+],
+[
+11176,
+0.2,
+1,
+2
+],
+[
+11178,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 71
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19763,
+0.8329161221721868,
+1,
+3
+],
+[
+14500,
+0.537392841206408,
+1,
+1
+]
+],
+"sell_values": [
+19069.272875565995,
+29804.532004507706
+]
+},
+"call": "expected_value",
+"result": 47782.951767049104
+},
+{
+"args": {
+"ilvl": 53,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 215
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12511,
+0.6589647877603225,
+2,
+4
+]
+],
+"sell_values": [
+45475.45303355706
+]
+},
+"call": "expected_value",
+"result": 89900.16676968733
+},
+{
+"args": {
+"ilvl": 23,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+25,
+[
+[
+10940,
+0.75,
+4,
+6
+],
+[
+10998,
+0.2,
+1,
+2
+],
+[
+10978,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 7,
+"skill_required": 195
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13521,
+0.9651990077488026,
+2,
+5
+],
+[
+15510,
+0.12874076900567488,
+2,
+4
+],
+[
+18767,
+0.3389450005521881,
+2,
+2
+]
+],
+"sell_values": [
+15517.065398965768,
+6927.832394052791,
+7809.269407426689
+]
+},
+"call": "expected_value",
+"result": 60389.20549897582
+},
+{
+"args": {
+"ilvl": 37,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+100,
+[
+[
+11139,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 1,
+"skill_required": 175
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11687,
+0.717331224449815,
+2,
+4
+],
+[
+16777,
+0.6200210385083869,
+2,
+4
+],
+[
+14373,
+0.023642763686556045,
+1,
+3
+]
+],
+"sell_values": [
+6319.003377541121,
+19249.053218611778,
+2595.4204966792518
+]
+},
+"call": "expected_value",
+"result": 49525.63501800337
+},
+{
+"args": {
+"ilvl": 55,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 249,
+"skill_required": 289
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17532,
+0.45629438000776723,
+1,
+1
+],
+[
+17363,
+0.5441609227097177,
+2,
+4
+],
+[
+15325,
+0.6247807614955536,
+1,
+2
+]
+],
+"sell_values": [
+21905.810902282545,
+11980.470886074918,
+49636.50305303632
+]
+},
+"call": "expected_value",
+"result": 76071.30894299332
+},
+{
+"args": {
+"ilvl": 17,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10939,
+0.75,
+1,
+2
+],
+[
+10940,
+0.2,
+2,
+3
+],
+[
+10978,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 232
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16783,
+0.8101097308528309,
+2,
+2
+],
+[
+11237,
+0.9853074357586775,
+3,
+5
+]
+],
+"sell_values": [
+12013.099957839917,
+31775.02843650804
+]
+},
+"call": "expected_value",
+"result": 144696.5455068469
+},
+{
+"args": {
+"ilvl": 4,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 13
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15660,
+0.6662083814804408,
+3,
+6
+],
+[
+15425,
+0.5608570313300448,
+3,
+5
+]
+],
+"sell_values": [
+29477.531165903543,
+20607.466428612286
+]
+},
+"call": "expected_value",
+"result": 134603.17225388152
+},
+{
+"args": {
+"ilvl": 48,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 132,
+"skill_required": 139
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12811,
+0.33227811220174597,
+2,
+5
+]
+],
+"sell_values": [
+32054.581390733078
+]
+},
+"call": "expected_value",
+"result": 37278.62527175501
+},
+{
+"args": {
+"ilvl": 49,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+150,
+[
+[
+11178,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 135,
+"skill_required": 117
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+15519,
+0.7236909900331822,
+1,
+3
+]
+],
+"sell_values": [
+9200.34444846375
+]
+},
+"call": "expected_value",
+"result": 13316.412765110044
+},
+{
+"args": {
+"ilvl": 60,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+200,
+[
+[
+16204,
+0.75,
+1,
+2
+],
+[
+16203,
+0.2,
+1,
+2
+],
+[
+14344,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 62
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15202,
+0.630622119033558,
+1,
+1
+],
+[
+18259,
+0.40277613274137924,
+2,
+4
+]
+],
+"sell_values": [
+9655.11257807689,
+30659.603605391047
+]
+},
+"call": "expected_value",
+"result": 43135.59726818357
+},
+{
+"args": {
+"ilvl": 19,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 1
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15834,
+0.18975417459699495,
+3,
+4
+],
+[
+15055,
+0.3820708647164264,
+2,
+4
+]
+],
+"sell_values": [
+22877.66409854528,
+25710.133554086155
+]
+},
+"call": "expected_value",
+"result": 44663.24181399719
+},
+{
+"args": {
+"ilvl": 43,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+125,
+[
+[
+11174,
+0.75,
+1,
+2
+],
+[
+11137,
+0.2,
+2,
+5
+],
+[
+11177,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 136
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19392,
+0.4258341749815493,
+2,
+4
+]
+],
+"sell_values": [
+27717.22134754433
+]
+},
+"call": "expected_value",
+"result": 35408.82025593758
+},
+{
+"args": {
+"ilvl": 4,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 257,
+"skill_required": 223
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+10674,
+0.9361466160381893,
+2,
+5
+],
+[
+10846,
+0.5741730030154196,
+1,
+1
+],
+[
+14455,
+0.6810276631622233,
+2,
+3
+]
+],
+"sell_values": [
+17739.72605647548,
+30979.160501382143,
+712.0633768280094
+]
+},
+"call": "expected_value",
+"result": 77124.18057008577
+},
+{
+"args": {
+"ilvl": 38,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+100,
+[
+[
+11139,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 22
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10488,
+0.04058113062664237,
+1,
+2
+]
+],
+"sell_values": [
+19492.122976632876
+]
+},
+"call": "expected_value",
+"result": 1186.5185830579737
+},
+{
+"args": {
+"ilvl": 37,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 96,
+"skill_required": 36
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+14319,
+0.1460620173802596,
+3,
+3
+]
+],
+"sell_values": [
+17125.122863473018
+]
+},
+"call": "expected_value",
+"result": 7503.98997997103
+},
+{
+"args": {
+"ilvl": 27,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 33
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10412,
+0.5661492722551308,
+1,
+1
+]
+],
+"sell_values": [
+17720.525718123663
+]
+},
+"call": "expected_value",
+"result": 10032.46273929404
+},
+{
+"args": {
+"ilvl": 48,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+150,
+[
+[
+11176,
+0.75,
+1,
+2
+],
+[
+11175,
+0.2,
+1,
+2
+],
+[
+11178,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 199
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16942,
+0.9867082638123129,
+1,
+1
+],
+[
+12826,
+0.18861506964576324,
+3,
+4
+],
+[
+15776,
+0.3171358486499717,
+1,
+3
+]
+],
+"sell_values": [
+41278.9269891616,
+43057.665078013524,
+2605.1976254435895
+]
+},
+"call": "expected_value",
+"result": 70807.2972423599
+},
+{
+"args": {
+"ilvl": 15,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10938,
+0.8,
+1,
+2
+],
+[
+10940,
+0.2,
+1,
+2
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 189,
+"skill_required": 91
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+16618,
+0.9110918911591537,
+3,
+4
+],
+[
+13846,
+0.054761307845114904,
+1,
+4
+],
+[
+18818,
+0.04446928068587608,
+1,
+1
+]
+],
+"sell_values": [
+28508.78013672862,
+783.551921916209,
+8950.909676046615
+]
+},
+"call": "expected_value",
+"result": 91414.72576774383
+},
+{
+"args": {
+"ilvl": 27,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+50,
+[
+[
+11084,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 106,
+"skill_required": 150
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12603,
+0.7700064586316083,
+1,
+1
+]
+],
+"sell_values": [
+6243.784361984394
+]
+},
+"call": "expected_value",
+"result": 4807.754285031019
+},
+{
+"args": {
+"ilvl": 31,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+75,
+[
+[
+11138,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 287
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13407,
+0.3703342734164513,
+3,
+5
+],
+[
+10435,
+0.9436242758040762,
+1,
+4
+]
+],
+"sell_values": [
+19387.31430018632,
+33008.69684332695
+]
+},
+"call": "expected_value",
+"result": 106588.66695447522
+},
+{
+"args": {
+"ilvl": 38,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+100,
+[
+[
+11135,
+0.75,
+1,
+2
+],
+[
+11137,
+0.2,
+1,
+2
+],
+[
+11139,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 45
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15980,
+0.42365422889672566,
+3,
+3
+]
+],
+"sell_values": [
+34612.691680386044
+]
+},
+"call": "expected_value",
+"result": 43991.43961168219
+},
+{
+"args": {
+"ilvl": 11,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10938,
+0.8,
+1,
+2
+],
+[
+10940,
+0.2,
+1,
+2
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 188
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10450,
+0.9473179042691597,
+1,
+1
+],
+[
+14878,
+0.23553449564035533,
+3,
+4
+],
+[
+10233,
+0.7506841047961653,
+1,
+1
+]
+],
+"sell_values": [
+21801.549999386854,
+17727.85039883374,
+25548.9128343876
+]
+},
+"call": "expected_value",
+"result": 54446.48247350539
+},
+{
+"args": {
+"ilvl": 24,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+25,
+[
+[
+10998,
+0.75,
+1,
+2
+],
+[
+10940,
+0.2,
+4,
+6
+],
+[
+10978,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 76
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10072,
+0.8645905127497813,
+2,
+2
+]
+],
+"sell_values": [
+42822.4849533796
+]
+},
+"call": "expected_value",
+"result": 74047.82844612452
+},
+{
+"args": {
+"ilvl": 9,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10940,
+0.8,
+1,
+2
+],
+[
+10938,
+0.2,
+1,
+2
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 36,
+"skill_required": 115
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19273,
+0.7895535214343634,
+3,
+6
+],
+[
+14050,
+0.4800051779051401,
+2,
+2
+],
+[
+16861,
+0.5110172680847511,
+2,
+4
+]
+],
+"sell_values": [
+33203.80346129683,
+25663.811825678902,
+24850.61577560752
+]
+},
+"call": "expected_value",
+"result": 180707.6162393088
+},
+{
+"args": {
+"ilvl": 44,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 163,
+"skill_required": 137
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+19398,
+0.9528848212881892,
+2,
+3
+],
+[
+16713,
+0.3367826134068075,
+1,
+4
+],
+[
+15192,
+0.043853146229091644,
+1,
+3
+]
+],
+"sell_values": [
+45308.06754363464,
+21837.285120859982,
+22802.81954721283
+]
+},
+"call": "expected_value",
+"result": 128319.42025243482
+},
+{
+"args": {
+"ilvl": 29,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 85
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11329,
+0.8572311651100525,
+1,
+2
+],
+[
+12608,
+0.6803460396111954,
+1,
+3
+],
+[
+11157,
+0.033171706410897395,
+2,
+3
+]
+],
+"sell_values": [
+582.6885007375215,
+46663.91341051438,
+46115.814067318686
+]
+},
+"call": "expected_value",
+"result": 68068.81608963317
+},
+{
+"args": {
+"ilvl": 17,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 9,
+"skill_required": 67
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12838,
+0.4098309237871346,
+3,
+5
+],
+[
+16739,
+0.07482829457213602,
+2,
+2
+]
+],
+"sell_values": [
+38544.32225709699,
+43869.9610363091
+]
+},
+"call": "expected_value",
+"result": 69752.04952408643
+},
+{
+"args": {
+"ilvl": 4,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 4,
+"skill_required": 78
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13563,
+0.09463937357417285,
+2,
+4
+],
+[
+16030,
+0.7935595021275302,
+3,
+5
+],
+[
+10881,
+0.6786598393463413,
+3,
+4
+]
+],
+"sell_values": [
+10042.961459104616,
+2336.457339041964,
+41442.608115328134
+]
+},
+"call": "expected_value",
+"result": 108706.86861455398
+},
+{
+"args": {
+"ilvl": 8,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 186,
+"skill_required": 232
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10509,
+0.2968461645824829,
+1,
+1
+]
+],
+"sell_values": [
+31327.026329509998
+]
+},
+"call": "expected_value",
+"result": 9299.3076136895
+},
+{
+"args": {
+"ilvl": 28,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+50,
+[
+[
+11084,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 34,
+"skill_required": 242
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17398,
+0.048777781313623425,
+3,
+6
+]
+],
+"sell_values": [
+31455.118051109515
+]
+},
+"call": "expected_value",
+"result": 6904.398912710529
+},
+{
+"args": {
+"ilvl": 17,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 42
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10913,
+0.29443257249970256,
+1,
+4
+],
+[
+10806,
+0.8875255532710198,
+2,
+2
+],
+[
+11912,
+0.5030237713080008,
+3,
+6
+]
+],
+"sell_values": [
+16527.061898488115,
+42496.28132183206,
+44029.33091702322
+]
+},
+"call": "expected_value",
+"result": 187263.4349480444
+},
+{
+"args": {
+"ilvl": 56,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 275
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12421,
+0.7092808333468863,
+1,
+3
+],
+[
+14193,
+0.6939499820922962,
+1,
+1
+]
+],
+"sell_values": [
+41639.49689718747,
+9252.357873350109
+]
+},
+"call": "expected_value",
+"result": 65488.86769928725
+},
+{
+"args": {
+"ilvl": 45,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 259
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14536,
+0.894756095678852,
+1,
+3
+],
+[
+16106,
+0.9778241033953207,
+3,
+3
+],
+[
+15291,
+0.5646919430083668,
+2,
+2
+]
+],
+"sell_values": [
+32339.701347678423,
+36535.53865028508,
+45456.4047574122
+]
+},
+"call": "expected_value",
+"result": 216386.01184415372
+},
+{
+"args": {
+"ilvl": 64,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 41,
+"skill_required": 184
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18375,
+0.44308781219685955,
+1,
+2
+],
+[
+10230,
+0.6445963056680719,
+3,
+4
+],
+[
+15683,
+0.01694032056617578,
+1,
+3
+]
+],
+"sell_values": [
+19082.03471742778,
+24099.168286766053,
+27996.744063342376
+]
+},
+"call": "expected_value",
+"result": 68000.89512692773
+},
+{
+"args": {
+"ilvl": 1,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 42
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14311,
+0.38169776307468195,
+3,
+4
+]
+],
+"sell_values": [
+38410.224678242856
+]
+},
+"call": "expected_value",
+"result": 51313.83893608435
+},
+{
+"args": {
+"ilvl": 63,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+225,
+[
+[
+14344,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 16,
+"skill_required": 197
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12570,
+0.5571765227520237,
+3,
+6
+]
+],
+"sell_values": [
+22801.470511413456
+]
+},
+"call": "expected_value",
+"result": 57169.998239319706
+},
+{
+"args": {
+"ilvl": 11,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10938,
+0.8,
+1,
+2
+],
+[
+10940,
+0.2,
+1,
+2
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 128,
+"skill_required": 126
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+16422,
+0.3183803046004955,
+3,
+4
+],
+[
+18080,
+0.9516398686393729,
+1,
+1
+],
+[
+14916,
+0.1173821068808959,
+1,
+4
+]
+],
+"sell_values": [
+22287.195201146977,
+40812.37350157994,
+21463.830637708164
+]
+},
+"call": "expected_value",
+"result": 69972.66990178838
+},
+{
+"args": {
+"ilvl": 59,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+225,
+[
+[
+14344,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 9
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19366,
+0.47289091571875486,
+1,
+1
+],
+[
+19633,
+0.04435083421595443,
+1,
+3
+],
+[
+15817,
+0.34773848499506865,
+3,
+6
+]
+],
+"sell_values": [
+34061.23739752286,
+47037.900935051795,
+4894.683971882441
+]
+},
+"call": "expected_value",
+"result": 27938.90498600663
+},
+{
+"args": {
+"ilvl": 67,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 31
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18709,
+0.9742251358588854,
+1,
+2
+]
+],
+"sell_values": [
+47065.359348284954
+]
+},
+"call": "expected_value",
+"result": 68778.38415799524
+},
+{
+"args": {
+"ilvl": 28,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+50,
+[
+[
+11083,
+0.75,
+1,
+2
+],
+[
+11082,
+0.2,
+1,
+2
+],
+[
+11084,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 218,
+"skill_required": 50
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+12397,
+0.6381150737567531,
+2,
+2
+],
+[
+18769,
+0.8740842001815209,
+1,
+3
+],
+[
+14927,
+0.6221805188616664,
+3,
+5
+]
+],
+"sell_values": [
+44531.679282111385,
+45860.84884173898,
+18661.923408309904
+]
+},
+"call": "expected_value",
+"result": 183449.499134743
+},
+{
+"args": {
+"ilvl": 30,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+50,
+[
+[
+11083,
+0.75,
+1,
+2
+],
+[
+11082,
+0.2,
+1,
+2
+],
+[
+11084,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 12,
+"skill_required": 26
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13498,
+0.20469371500518485,
+3,
+5
+]
+],
+"sell_values": [
+45635.121966487255
+]
+},
+"call": "expected_value",
+"result": 37364.890600139974
+},
+{
+"args": {
+"ilvl": 23,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 133,
+"skill_required": 155
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12919,
+0.3185406613837394,
+3,
+6
+],
+[
+15587,
+0.9781483542686051,
+1,
+4
+]
+],
+"sell_values": [
+15006.570290714382,
+10132.213853682786
+]
+},
+"call": "expected_value",
+"result": 46287.933479969244
+},
+{
+"args": {
+"ilvl": 38,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+100,
+[
+[
+11137,
+0.75,
+1,
+2
+],
+[
+11135,
+0.2,
+1,
+2
+],
+[
+11139,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 228,
+"skill_required": 9
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+13899,
+0.8443461173013165,
+3,
+6
+],
+[
+17422,
+0.8553235222045493,
+1,
+2
+]
+],
+"sell_values": [
+12869.90033286704,
+8554.386829825728
+]
+},
+"call": "expected_value",
+"result": 59875.07910288056
+},
+{
+"args": {
+"ilvl": 1,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 123
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19957,
+0.1760622970698572,
+3,
+4
+],
+[
+15477,
+0.8540099962401028,
+1,
+3
+],
+[
+10818,
+0.492736205061036,
+1,
+3
+]
+],
+"sell_values": [
+14078.443906685656,
+26839.220091929845,
+25098.392392146707
+]
+},
+"call": "expected_value",
+"result": 79251.08884730162
+},
+{
+"args": {
+"ilvl": 14,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 47,
+"skill_required": 52
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12820,
+0.9580774941503156,
+3,
+5
+]
+],
+"sell_values": [
+35674.42306459513
+]
+},
+"call": "expected_value",
+"result": 136715.44741994212
+},
+{
+"args": {
+"ilvl": 35,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 275
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13133,
+0.1116637836287443,
+3,
+6
+],
+[
+12208,
+0.5688457513452287,
+3,
+3
+]
+],
+"sell_values": [
+46938.98323718544,
+21993.017869719417
+]
+},
+"call": "expected_value",
+"result": 61118.13442912524
+},
+{
+"args": {
+"ilvl": 13,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 147,
+"skill_required": 244
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17486,
+0.8128702018593447,
+2,
+5
+],
+[
+16005,
+0.4859489686148072,
+3,
+6
+]
+],
+"sell_values": [
+36779.61352056832,
+25810.626057341073
+]
+},
+"call": "expected_value",
+"result": 161081.5935371088
+},
+{
+"args": {
+"ilvl": 53,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+175,
+[
+[
+14343,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 211,
+"skill_required": 75
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+13744,
+0.8281496153656308,
+3,
+3
+],
+[
+15550,
+0.3781740229932038,
+3,
+3
+],
+[
+12157,
+0.8843139705655644,
+3,
+5
+]
+],
+"sell_values": [
+44228.95444994186,
+25844.404630803063,
+15941.310387116631
+]
+},
+"call": "expected_value",
+"result": 195594.11619831176
+},
+{
+"args": {
+"ilvl": 42,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+125,
+[
+[
+11174,
+0.75,
+1,
+2
+],
+[
+11137,
+0.2,
+2,
+5
+],
+[
+11177,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 291,
+"skill_required": 161
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+18318,
+0.5598214445689355,
+2,
+2
+]
+],
+"sell_values": [
+32000.179211221308
+]
+},
+"call": "expected_value",
+"result": 35828.77310498146
+},
+{
+"args": {
+"ilvl": 48,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 5,
+"skill_required": 2
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+13727,
+0.9660270648185996,
+2,
+4
+]
+],
+"sell_values": [
+43666.26994185464
+]
+},
+"call": "expected_value",
+"result": 126548.39575051943
+},
+{
+"args": {
+"ilvl": 63,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 255,
+"skill_required": 254
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+15802,
+0.33194821260487783,
+3,
+5
+],
+[
+17343,
+0.06433301380831713,
+3,
+4
+],
+[
+12176,
+0.8274434900413862,
+2,
+5
+]
+],
+"sell_values": [
+38558.40222640675,
+48100.33012603892,
+20052.56411098149
+]
+},
+"call": "expected_value",
+"result": 120101.38072040552
+},
+{
+"args": {
+"ilvl": 16,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 191,
+"skill_required": 173
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+13949,
+0.42302304522734335,
+2,
+3
+],
+[
+11774,
+0.9233751345302627,
+2,
+4
+],
+[
+19824,
+0.2689654546113467,
+2,
+4
+]
+],
+"sell_values": [
+47952.410838043674,
+42929.73348076181,
+47468.437455005296
+]
+},
+"call": "expected_value",
+"result": 207935.29201052233
+},
+{
+"args": {
+"ilvl": 30,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 252,
+"skill_required": 248
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+19444,
+0.8629346601830109,
+3,
+6
+],
+[
+11308,
+0.12156395209339821,
+2,
+3
+],
+[
+10088,
+0.47038300001651645,
+1,
+2
+]
+],
+"sell_values": [
+31782.108672135757,
+15887.589507703087,
+23507.709255951566
+]
+},
+"call": "expected_value",
+"result": 144831.30979048126
+},
+{
+"args": {
+"ilvl": 11,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10940,
+0.8,
+1,
+2
+],
+[
+10938,
+0.2,
+1,
+2
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 49
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16086,
+0.37909683616374634,
+2,
+3
+]
+],
+"sell_values": [
+41031.09398580853
+]
+},
+"call": "expected_value",
+"result": 38886.89478589334
+},
+{
+"args": {
+"ilvl": 41,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+125,
+[
+[
+11137,
+0.75,
+2,
+5
+],
+[
+11174,
+0.2,
+1,
+2
+],
+[
+11177,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 196
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19475,
+0.5629289380437946,
+1,
+1
+]
+],
+"sell_values": [
+49566.6129007358
+]
+},
+"call": "expected_value",
+"result": 27902.480762639058
+},
+{
+"args": {
+"ilvl": 6,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10940,
+0.8,
+1,
+2
+],
+[
+10938,
+0.2,
+1,
+2
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 268
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19373,
+0.3397814561852327,
+1,
+3
+],
+[
+13380,
+0.7237652120113575,
+3,
+3
+]
+],
+"sell_values": [
+852.0318053917175,
+35468.22839611617
+]
+},
+"call": "expected_value",
+"result": 77591.01874945106
+},
+{
+"args": {
+"ilvl": 23,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 151
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10036,
+0.8153268599043502,
+1,
+1
+]
+],
+"sell_values": [
+29298.002538181783
+]
+},
+"call": "expected_value",
+"result": 23887.448410925434
+},
+{
+"args": {
+"ilvl": 47,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+150,
+[
+[
+11178,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 90
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17288,
+0.10731311307909985,
+3,
+6
+]
+],
+"sell_values": [
+33916.16974575202
+]
+},
+"call": "expected_value",
+"result": 16378.423916111244
+},
+{
+"args": {
+"ilvl": 50,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 10
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17197,
+0.7260719894022035,
+3,
+6
+]
+],
+"sell_values": [
+11677.008104599228
+]
+},
+"call": "expected_value",
+"result": 38152.56827147407
+},
+{
+"args": {
+"ilvl": 56,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+225,
+[
+[
+14344,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 254
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10297,
+0.5347908821153871,
+2,
+2
+]
+],
+"sell_values": [
+31220.50257319015
+]
+},
+"call": "expected_value",
+"result": 33392.88022240414
+},
+{
+"args": {
+"ilvl": 34,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 125,
+"skill_required": 11
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+13848,
+0.5810432909118965,
+1,
+2
+]
+],
+"sell_values": [
+10376.421216299665
+]
+},
+"call": "expected_value",
+"result": 9043.724897110173
+},
+{
+"args": {
+"ilvl": 6,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 235,
+"skill_required": 191
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+16444,
+0.9554730727587079,
+3,
+6
+],
+[
+14276,
+0.6126808391691414,
+2,
+4
+],
+[
+14951,
+0.6734088758576947,
+2,
+4
+]
+],
+"sell_values": [
+36492.12661540907,
+13094.237262320774,
+30840.892330283874
+]
+},
+"call": "expected_value",
+"result": 243275.95629549085
+},
+{
+"args": {
+"ilvl": 54,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+175,
+[
+[
+14343,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 216
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18042,
+0.1342836098578526,
+1,
+3
+]
+],
+"sell_values": [
+16371.669010520496
+]
+},
+"call": "expected_value",
+"result": 4396.893628261259
+},
+{
+"args": {
+"ilvl": 49,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 165
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17869,
+0.8264179288132756,
+2,
+3
+],
+[
+10098,
+0.1410436621677248,
+1,
+3
+],
+[
+16757,
+0.9966882277234317,
+2,
+5
+]
+],
+"sell_values": [
+31883.15609450782,
+20078.312810448333,
+11199.463636088374
+]
+},
+"call": "expected_value",
+"result": 110604.17456717414
+},
+{
+"args": {
+"ilvl": 29,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+50,
+[
+[
+11084,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 230,
+"skill_required": 262
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14072,
+0.17094671110033344,
+3,
+3
+],
+[
+13439,
+0.3412887121602072,
+1,
+4
+]
+],
+"sell_values": [
+37577.50474732209,
+2702.7300014158095
+]
+},
+"call": "expected_value",
+"result": 21577.280647485524
+},
+{
+"args": {
+"ilvl": 28,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 259
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10730,
+0.7695352050011106,
+1,
+3
+],
+[
+19219,
+0.585691843259664,
+3,
+6
+],
+[
+11478,
+0.8627076838675326,
+2,
+4
+]
+],
+"sell_values": [
+26199.601970844848,
+43660.961812393194,
+1762.5804348409047
+]
+},
+"call": "expected_value",
+"result": 159958.2186116353
+},
+{
+"args": {
+"ilvl": 61,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+225,
+[
+[
+16203,
+0.75,
+2,
+3
+],
+[
+16204,
+0.2,
+2,
+5
+],
+[
+14344,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 256
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14871,
+0.33920165601720575,
+3,
+3
+],
+[
+15267,
+0.6744367597077962,
+2,
+4
+],
+[
+14197,
+0.6381062025756076,
+1,
+1
+]
+],
+"sell_values": [
+42375.76760869958,
+18545.86437680675,
+7247.345208743039
+]
+},
+"call": "expected_value",
+"result": 85270.40560234041
+},
+{
+"args": {
+"ilvl": 65,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 181,
+"skill_required": 250
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12580,
+0.27715151059039933,
+3,
+5
+]
+],
+"sell_values": [
+33188.41996301363
+]
+},
+"call": "expected_value",
+"result": 36792.882907431165
+},
+{
+"args": {
+"ilvl": 65,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 293
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14613,
+0.7029391180547582,
+1,
+2
+],
+[
+16149,
+0.4130773030215108,
+1,
+2
+]
+],
+"sell_values": [
+5290.061932325995,
+17100.512369571185
+]
+},
+"call": "expected_value",
+"result": 16173.6374986091
+},
+{
+"args": {
+"ilvl": 34,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 135,
+"skill_required": 52
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+11442,
+0.05749757496927521,
+2,
+4
+],
+[
+12947,
+0.3857700703576745,
+3,
+6
+],
+[
+14547,
+0.1361794313926512,
+1,
+1
+]
+],
+"sell_values": [
+6704.446165723005,
+19913.41824577334,
+1917.9598081933314
+]
+},
+"call": "expected_value",
+"result": 35986.658274039124
+},
+{
+"args": {
+"ilvl": 50,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+150,
+[
+[
+11178,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 214
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14800,
+0.3535105723103156,
+2,
+5
+],
+[
+12810,
+0.3685098667216491,
+3,
+4
+],
+[
+11620,
+0.9760040959516215,
+3,
+4
+]
+],
+"sell_values": [
+44590.045181946734,
+49042.949143791986,
+39963.39177682836
+]
+},
+"call": "expected_value",
+"result": 254941.03987286217
+},
+{
+"args": {
+"ilvl": 60,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 104
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16866,
+0.5179832209238449,
+3,
+4
+],
+[
+11964,
+0.258210217719657,
+3,
+6
+]
+],
+"sell_values": [
+20523.090376959528,
+7913.187239083297
+]
+},
+"call": "expected_value",
+"result": 46401.85369806081
+},
+{
+"args": {
+"ilvl": 59,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+200,
+[
+[
+16204,
+0.75,
+1,
+2
+],
+[
+16203,
+0.2,
+1,
+2
+],
+[
+14344,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 241,
+"skill_required": 219
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+11867,
+0.02435230967467572,
+1,
+2
+],
+[
+14305,
+0.6045035517433366,
+3,
+6
+]
+],
+"sell_values": [
+4717.287091920963,
+18290.653938390205
+]
+},
+"call": "expected_value",
+"result": 49927.75896672328
+},
+{
+"args": {
+"ilvl": 19,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 244
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10284,
+0.4744336592765942,
+1,
+3
+]
+],
+"sell_values": [
+35540.687453651415
+]
+},
+"call": "expected_value",
+"result": 33723.396803683165
+},
+{
+"args": {
+"ilvl": 6,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 81,
+"skill_required": 131
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14982,
+0.7811216189469199,
+2,
+5
+]
+],
+"sell_values": [
+22804.937846741384
+]
+},
+"call": "expected_value",
+"result": 62347.0048979068
+},
+{
+"args": {
+"ilvl": 66,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 199,
+"skill_required": 53
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+14500,
+0.5813417458642607,
+2,
+4
+]
+],
+"sell_values": [
+37621.36627938664
+]
+},
+"call": "expected_value",
+"result": 65612.61226397236
+},
+{
+"args": {
+"ilvl": 7,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 98
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11580,
+0.9231316788074407,
+3,
+3
+],
+[
+16475,
+0.6406287336251693,
+2,
+4
+]
+],
+"sell_values": [
+47777.732688886295,
+40098.34157060252
+]
+},
+"call": "expected_value",
+"result": 209379.86510264795
+},
+{
+"args": {
+"ilvl": 41,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+125,
+[
+[
+11177,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 205
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18181,
+0.14985660295167025,
+1,
+1
+]
+],
+"sell_values": [
+41325.99814723724
+]
+},
+"call": "expected_value",
+"result": 6192.973695931991
+},
+{
+"args": {
+"ilvl": 44,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 254
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14602,
+0.6507071968153925,
+1,
+2
+],
+[
+10389,
+0.7010217393305088,
+1,
+1
+],
+[
+13236,
+0.9346610365213707,
+2,
+3
+]
+],
+"sell_values": [
+22348.95884607106,
+25734.81090297067,
+24770.539929868017
+]
+},
+"call": "expected_value",
+"result": 97734.75075935753
+},
+{
+"args": {
+"ilvl": 11,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10940,
+0.8,
+1,
+2
+],
+[
+10938,
+0.2,
+1,
+2
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 218
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19431,
+0.06005083481388129,
+1,
+2
+],
+[
+11452,
+0.017337545190260317,
+3,
+5
+],
+[
+13415,
+0.8594112234428417,
+3,
+5
+]
+],
+"sell_values": [
+31565.42099458261,
+22235.939409961902,
+9055.697537547052
+]
+},
+"call": "expected_value",
+"result": 35515.633639923435
+},
+{
+"args": {
+"ilvl": 43,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+125,
+[
+[
+11174,
+0.75,
+1,
+2
+],
+[
+11137,
+0.2,
+2,
+5
+],
+[
+11177,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 122
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16939,
+0.7278194546449567,
+2,
+5
+],
+[
+16691,
+0.885358414870276,
+2,
+5
+]
+],
+"sell_values": [
+2715.457255493342,
+12624.737605150482
+]
+},
+"call": "expected_value",
+"result": 46038.23102568917
+},
+{
+"args": {
+"ilvl": 39,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 223
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14210,
+0.7655970105499503,
+3,
+6
+]
+],
+"sell_values": [
+22198.487293792692
+]
+},
+"call": "expected_value",
+"result": 76477.92979886434
+},
+{
+"args": {
+"ilvl": 52,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+175,
+[
+[
+14343,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 51,
+"skill_required": 228
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16666,
+0.9819715330532828,
+1,
+4
+],
+[
+18736,
+0.07243686264553884,
+1,
+3
+],
+[
+12823,
+0.031207754556230816,
+3,
+5
+]
+],
+"sell_values": [
+18804.39891053371,
+39389.33147777766,
+37028.05926721907
+]
+},
+"call": "expected_value",
+"result": 56492.19059493619
+},
+{
+"args": {
+"ilvl": 26,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 139
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12580,
+0.921839016337071,
+2,
+5
+],
+[
+13672,
+0.4679116137540108,
+1,
+3
+],
+[
+15721,
+0.17748522189168103,
+3,
+5
+]
+],
+"sell_values": [
+11653.433351839998,
+36658.27593499076,
+32158.943121952583
+]
+},
+"call": "expected_value",
+"result": 94735.6781066038
+},
+{
+"args": {
+"ilvl": 36,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 263
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19580,
+0.20570581636485907,
+2,
+5
+],
+[
+15222,
+0.9886743699887994,
+3,
+5
+]
+],
+"sell_values": [
+19212.754667174846,
+21961.35356986909
+]
+},
+"call": "expected_value",
+"result": 100683.12346116774
+},
+{
+"args": {
+"ilvl": 60,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+200,
+[
+[
+16204,
+0.75,
+1,
+2
+],
+[
+16203,
+0.2,
+1,
+2
+],
+[
+14344,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 172,
+"skill_required": 296
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18703,
+0.44434649171075036,
+3,
+4
+],
+[
+11295,
+0.7236891365360542,
+2,
+2
+]
+],
+"sell_values": [
+45013.95224364052,
+1562.3367684793832
+]
+},
+"call": "expected_value",
+"result": 72267.56344515797
+},
+{
+"args": {
+"ilvl": 21,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 83
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17340,
+0.33308203982004647,
+3,
+4
+],
+[
+15137,
+0.35516403128523466,
+1,
+2
+],
+[
+16622,
+0.6328008375313412,
+1,
+3
+]
+],
+"sell_values": [
+12980.220831737272,
+27732.235709730314,
+29427.006173381753
+]
+},
+"call": "expected_value",
+"result": 67149.28176376608
+},
+{
+"args": {
+"ilvl": 30,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+50,
+[
+[
+11084,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 216,
+"skill_required": 69
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+17961,
+0.12478401512088277,
+1,
+4
+]
+],
+"sell_values": [
+46225.19720101147
+]
+},
+"call": "expected_value",
+"result": 14420.414266242009
+},
+{
+"args": {
+"ilvl": 63,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+225,
+[
+[
+14344,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 222
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16165,
+0.717514018600716,
+2,
+4
+]
+],
+"sell_values": [
+14851.895082239953
+]
+},
+"call": "expected_value",
+"result": 31969.328772882596
+},
+{
+"args": {
+"ilvl": 14,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 36
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12423,
+0.11969416034915958,
+3,
+5
+]
+],
+"sell_values": [
+12063.34365334193
+]
+},
+"call": "expected_value",
+"result": 5775.6471583605025
+},
+{
+"args": {
+"ilvl": 27,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 253,
+"skill_required": 8
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+14379,
+0.13773234673745205,
+3,
+5
+]
+],
+"sell_values": [
+26104.74921750176
+]
+},
+"call": "expected_value",
+"result": 14381.87348287673
+},
+{
+"args": {
+"ilvl": 58,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+225,
+[
+[
+14344,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 155
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15714,
+0.29252275094308033,
+2,
+3
+]
+],
+"sell_values": [
+24244.7577627828
+]
+},
+"call": "expected_value",
+"result": 17730.358091794566
+},
+{
+"args": {
+"ilvl": 19,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 34
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14918,
+0.9744153017142695,
+2,
+4
+],
+[
+13127,
+0.0006202870422518103,
+3,
+3
+],
+[
+13106,
+0.44772286591584465,
+2,
+4
+]
+],
+"sell_values": [
+5679.894775659167,
+18229.425058854504,
+29162.254657828234
+]
+},
+"call": "expected_value",
+"result": 55807.47626895446
+},
+{
+"args": {
+"ilvl": 31,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+75,
+[
+[
+11138,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 153
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16299,
+0.8256604663959898,
+2,
+3
+]
+],
+"sell_values": [
+49032.56728816563
+]
+},
+"call": "expected_value",
+"result": 101210.63093934896
+},
+{
+"args": {
+"ilvl": 29,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+50,
+[
+[
+11082,
+0.75,
+1,
+2
+],
+[
+11083,
+0.2,
+1,
+2
+],
+[
+11084,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 98,
+"skill_required": 219
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14087,
+0.5748810880726862,
+3,
+5
+],
+[
+16122,
+0.06990345986516944,
+1,
+3
+],
+[
+13566,
+0.18324339649367272,
+1,
+2
+]
+],
+"sell_values": [
+48266.98584311933,
+17657.811834851334,
+33837.694794751835
+]
+},
+"call": "expected_value",
+"result": 122760.5948252939
+},
+{
+"args": {
+"ilvl": 44,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+125,
+[
+[
+11177,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 79
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18503,
+0.5167596116816114,
+1,
+4
+],
+[
+17338,
+0.8563770567591622,
+1,
+1
+],
+[
+17611,
+0.8692143066480967,
+1,
+3
+]
+],
+"sell_values": [
+36957.599115443314,
+32793.69183055649,
+2344.2816519544663
+]
+},
+"call": "expected_value",
+"result": 79904.61801045474
+},
+{
+"args": {
+"ilvl": 17,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10939,
+0.75,
+1,
+2
+],
+[
+10940,
+0.2,
+2,
+3
+],
+[
+10978,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 69
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18965,
+0.8080437302872182,
+1,
+1
+],
+[
+16416,
+0.5990051991525065,
+3,
+6
+],
+[
+16245,
+0.4986578187677011,
+2,
+5
+]
+],
+"sell_values": [
+1762.2141019194403,
+48705.72219325558,
+6175.055493925069
+]
+},
+"call": "expected_value",
+"result": 143488.69871834508
+},
+{
+"args": {
+"ilvl": 56,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+200,
+[
+[
+16204,
+0.75,
+1,
+2
+],
+[
+16203,
+0.2,
+1,
+2
+],
+[
+14344,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 80,
+"skill_required": 254
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10567,
+0.7912051057530459,
+3,
+6
+],
+[
+11333,
+0.7717932155283899,
+3,
+5
+]
+],
+"sell_values": [
+23982.352653129685,
+6497.074041175244
+]
+},
+"call": "expected_value",
+"result": 105444.9100651271
+},
+{
+"args": {
+"ilvl": 66,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 188,
+"skill_required": 84
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+10588,
+0.30792392730593876,
+1,
+2
+],
+[
+14922,
+0.06088667212463483,
+1,
+4
+]
+],
+"sell_values": [
+1494.7339294390683,
+41751.53155674344
+]
+},
+"call": "expected_value",
+"result": 7045.67604423743
+},
+{
+"args": {
+"ilvl": 35,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+75,
+[
+[
+11138,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 165
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11233,
+0.786449104035293,
+2,
+2
+],
+[
+18402,
+0.27649550683462376,
+1,
+2
+],
+[
+14309,
+0.7811063050422665,
+1,
+3
+]
+],
+"sell_values": [
+28944.312280299473,
+48162.71694261585,
+12577.096742051624
+]
+},
+"call": "expected_value",
+"result": 85149.71829557628
+},
+{
+"args": {
+"ilvl": 55,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 107,
+"skill_required": 10
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+19909,
+0.7686345711634014,
+3,
+5
+]
+],
+"sell_values": [
+43609.69219693342
+]
+},
+"call": "expected_value",
+"result": 134079.6682414314
+},
+{
+"args": {
+"ilvl": 35,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+75,
+[
+[
+11138,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 84,
+"skill_required": 162
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11590,
+0.2525236090371742,
+1,
+1
+],
+[
+14975,
+0.47998960609977226,
+3,
+5
+],
+[
+12253,
+0.7478311066980285,
+1,
+3
+]
+],
+"sell_values": [
+12593.38122873096,
+21210.851048715816,
+11215.73268231113
+]
+},
+"call": "expected_value",
+"result": 60679.02580600029
+},
+{
+"args": {
+"ilvl": 41,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+125,
+[
+[
+11137,
+0.75,
+2,
+5
+],
+[
+11174,
+0.2,
+1,
+2
+],
+[
+11177,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 120,
+"skill_required": 51
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+11801,
+0.1337453018785969,
+3,
+3
+]
+],
+"sell_values": [
+6052.564551050848
+]
+},
+"call": "expected_value",
+"result": 2428.50621905997
+},
+{
+"args": {
+"ilvl": 20,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 261,
+"skill_required": 260
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+18783,
+0.8754968572844428,
+2,
+4
+]
+],
+"sell_values": [
+32500.97948060951
+]
+},
+"call": "expected_value",
+"result": 85363.51618181937
+},
+{
+"args": {
+"ilvl": 45,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 250
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10901,
+0.13774670707538317,
+3,
+4
+]
+],
+"sell_values": [
+29424.578710298178
+]
+},
+"call": "expected_value",
+"result": 14185.985885483997
+},
+{
+"args": {
+"ilvl": 28,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 162
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12992,
+0.9703103596683968,
+3,
+5
+]
+],
+"sell_values": [
+4588.392568021993
+]
+},
+"call": "expected_value",
+"result": 17808.659371908874
+},
+{
+"args": {
+"ilvl": 13,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10940,
+0.8,
+1,
+2
+],
+[
+10938,
+0.2,
+1,
+2
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 138,
+"skill_required": 36
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+18630,
+0.835504423739435,
+3,
+5
+],
+[
+11908,
+0.3126356244158077,
+1,
+2
+]
+],
+"sell_values": [
+21829.836944905906,
+23556.161328144226
+]
+},
+"call": "expected_value",
+"result": 84002.44415641356
+},
+{
+"args": {
+"ilvl": 43,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+125,
+[
+[
+11174,
+0.75,
+1,
+2
+],
+[
+11137,
+0.2,
+2,
+5
+],
+[
+11177,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 191,
+"skill_required": 27
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+15865,
+0.48099303547580097,
+3,
+4
+]
+],
+"sell_values": [
+38530.06972452177
+]
+},
+"call": "expected_value",
+"result": 64864.43317862195
+},
+{
+"args": {
+"ilvl": 64,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 199
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11806,
+0.26021541376908175,
+1,
+4
+],
+[
+18056,
+0.6692640009974952,
+3,
+6
+],
+[
+19377,
+0.8910077084634265,
+2,
+2
+]
+],
+"sell_values": [
+31790.982743755747,
+22348.150117573274,
+22277.010098673472
+]
+},
+"call": "expected_value",
+"result": 127684.89039246047
+},
+{
+"args": {
+"ilvl": 34,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+75,
+[
+[
+11083,
+0.75,
+2,
+5
+],
+[
+11134,
+0.2,
+1,
+2
+],
+[
+11138,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 218
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17009,
+0.5975761083775215,
+1,
+1
+]
+],
+"sell_values": [
+30120.302189625185
+]
+},
+"call": "expected_value",
+"result": 17999.172965631158
+},
+{
+"args": {
+"ilvl": 44,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 4
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16239,
+0.8283213277698793,
+1,
+2
+]
+],
+"sell_values": [
+10883.798347989354
+]
+},
+"call": "expected_value",
+"result": 13522.92344817924
+},
+{
+"args": {
+"ilvl": 16,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 43,
+"skill_required": 167
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17241,
+0.32534302056344677,
+1,
+3
+],
+[
+19840,
+0.17118468008391274,
+1,
+2
+]
+],
+"sell_values": [
+10818.209677212442,
+20372.02024722061
+]
+},
+"call": "expected_value",
+"result": 12270.324679971192
+},
+{
+"args": {
+"ilvl": 37,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+100,
+[
+[
+11137,
+0.75,
+1,
+2
+],
+[
+11135,
+0.2,
+1,
+2
+],
+[
+11139,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 107,
+"skill_required": 199
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10740,
+0.7667029367558417,
+2,
+4
+]
+],
+"sell_values": [
+19027.2089743563
+]
+},
+"call": "expected_value",
+"result": 43764.65099671824
+},
+{
+"args": {
+"ilvl": 14,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 284
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12825,
+0.9183268006397639,
+3,
+6
+],
+[
+14254,
+0.49313382963536145,
+2,
+4
+]
+],
+"sell_values": [
+1951.3952043544002,
+10340.090341677427
+]
+},
+"call": "expected_value",
+"result": 23361.2283634945
+},
+{
+"args": {
+"ilvl": 44,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+125,
+[
+[
+11137,
+0.75,
+2,
+5
+],
+[
+11174,
+0.2,
+1,
+2
+],
+[
+11177,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 154
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18009,
+0.017959209187620284,
+3,
+6
+],
+[
+10303,
+0.10802657189555787,
+3,
+6
+],
+[
+15034,
+0.23795815335443704,
+1,
+3
+]
+],
+"sell_values": [
+21228.60765896988,
+13833.998791214552,
+42668.575262200364
+]
+},
+"call": "expected_value",
+"result": 28747.268869608037
+},
+{
+"args": {
+"ilvl": 35,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+75,
+[
+[
+11138,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 134
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11963,
+0.16218083669571737,
+2,
+4
+]
+],
+"sell_values": [
+48891.67045519543
+]
+},
+"call": "expected_value",
+"result": 23787.87606562464
+},
+{
+"args": {
+"ilvl": 41,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+125,
+[
+[
+11177,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 154,
+"skill_required": 272
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11124,
+0.5734571340044947,
+1,
+3
+],
+[
+14545,
+0.7037903817236967,
+1,
+3
+]
+],
+"sell_values": [
+32783.78104348243,
+16224.76722460333
+]
+},
+"call": "expected_value",
+"result": 60437.85647481603
+},
+{
+"args": {
+"ilvl": 57,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+200,
+[
+[
+16203,
+0.75,
+1,
+2
+],
+[
+16204,
+0.2,
+1,
+2
+],
+[
+14344,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 26
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18654,
+0.26451671055675696,
+2,
+3
+],
+[
+16319,
+0.5395923618051058,
+1,
+1
+],
+[
+11967,
+0.8368691551988047,
+1,
+2
+]
+],
+"sell_values": [
+8170.451998347511,
+3648.8563349929004,
+29538.042862942144
+]
+},
+"call": "expected_value",
+"result": 44451.16318900297
+},
+{
+"args": {
+"ilvl": 65,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+225,
+[
+[
+14344,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 132,
+"skill_required": 182
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19700,
+0.2281887138700578,
+2,
+3
+]
+],
+"sell_values": [
+42699.89066745232
+]
+},
+"call": "expected_value",
+"result": 24359.082834495068
+},
+{
+"args": {
+"ilvl": 23,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 262,
+"skill_required": 213
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+11655,
+0.41832459640967623,
+1,
+1
+]
+],
+"sell_values": [
+29332.494318329376
+]
+},
+"call": "expected_value",
+"result": 12270.503847404258
+},
+{
+"args": {
+"ilvl": 13,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 80,
+"skill_required": 58
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+10094,
+0.021441359052736586,
+1,
+4
+],
+[
+10489,
+0.4765364621417655,
+1,
+1
+]
+],
+"sell_values": [
+47807.661508996665,
+8747.289988667233
+]
+},
+"call": "expected_value",
+"result": 6731.055714242797
+},
+{
+"args": {
+"ilvl": 28,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+50,
+[
+[
+11084,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 269,
+"skill_required": 113
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+11161,
+0.8125179605540652,
+2,
+5
+],
+[
+11495,
+0.06802327592429547,
+2,
+4
+]
+],
+"sell_values": [
+13384.172988316712,
+41073.3639102485
+]
+},
+"call": "expected_value",
+"result": 46443.91758981216
+},
+{
+"args": {
+"ilvl": 20,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 212
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13935,
+0.585340343712192,
+3,
+6
+]
+],
+"sell_values": [
+2066.406665393428
+]
+},
+"call": "expected_value",
+"result": 5442.980344967491
+},
+{
+"args": {
+"ilvl": 34,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+75,
+[
+[
+11134,
+0.75,
+1,
+2
+],
+[
+11083,
+0.2,
+2,
+5
+],
+[
+11138,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 171,
+"skill_required": 179
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10705,
+0.47289952916874756,
+2,
+5
+]
+],
+"sell_values": [
+43641.5478773148
+]
+},
+"call": "expected_value",
+"result": 72233.23605182134
+},
+{
+"args": {
+"ilvl": 13,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10938,
+0.8,
+1,
+2
+],
+[
+10940,
+0.2,
+1,
+2
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 292,
+"skill_required": 193
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+19896,
+0.9985436730058368,
+2,
+4
+]
+],
+"sell_values": [
+20840.400382386437
+]
+},
+"call": "expected_value",
+"result": 62430.1498342212
+},
+{
+"args": {
+"ilvl": 4,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 141,
+"skill_required": 294
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15214,
+0.5642934154322252,
+2,
+5
+],
+[
+12919,
+0.2903465187831231,
+1,
+3
+]
+],
+"sell_values": [
+14299.437178093538,
+34951.388213842234
+]
+},
+"call": "expected_value",
+"result": 48537.80164300044
+},
+{
+"args": {
+"ilvl": 12,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 75,
+"skill_required": 263
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16217,
+0.15446812365797957,
+2,
+2
+],
+[
+16819,
+0.00568433367900556,
+1,
+1
+]
+],
+"sell_values": [
+41219.160808484616,
+48161.67710669919
+]
+},
+"call": "expected_value",
+"result": 13007.859900901294
+},
+{
+"args": {
+"ilvl": 40,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+100,
+[
+[
+11137,
+0.75,
+1,
+2
+],
+[
+11135,
+0.2,
+1,
+2
+],
+[
+11139,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 273
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16668,
+0.5168157212600603,
+2,
+5
+]
+],
+"sell_values": [
+32701.716846013773
+]
+},
+"call": "expected_value",
+"result": 59152.66482375205
+},
+{
+"args": {
+"ilvl": 59,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 80,
+"skill_required": 229
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14516,
+0.36382883883504746,
+3,
+6
+],
+[
+17756,
+0.3098429425658208,
+3,
+3
+]
+],
+"sell_values": [
+20841.376811885937,
+31030.066387714778
+]
+},
+"call": "expected_value",
+"result": 62965.4638961116
+},
+{
+"args": {
+"ilvl": 44,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 89
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17613,
+0.24436652271189074,
+3,
+5
+],
+[
+13575,
+0.7554335752714424,
+3,
+6
+],
+[
+10917,
+0.9613870752487859,
+1,
+2
+]
+],
+"sell_values": [
+42601.57959279264,
+22262.631453663827,
+31467.908366389052
+]
+},
+"call": "expected_value",
+"result": 162701.58678430048
+},
+{
+"args": {
+"ilvl": 41,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 189,
+"skill_required": 191
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13209,
+0.413067846836514,
+3,
+6
+],
+[
+10943,
+0.015138183935644811,
+3,
+6
+]
+],
+"sell_values": [
+1565.1889753893533,
+13540.112226448658
+]
+},
+"call": "expected_value",
+"result": 3831.7587720731217
+},
+{
+"args": {
+"ilvl": 39,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+100,
+[
+[
+11139,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 139,
+"skill_required": 235
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18104,
+0.7624197918704775,
+2,
+4
+],
+[
+16173,
+0.9691645037475913,
+3,
+5
+]
+],
+"sell_values": [
+31743.9171265747,
+28920.427137276365
+]
+},
+"call": "expected_value",
+"result": 184721.17772505758
+},
+{
+"args": {
+"ilvl": 32,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+75,
+[
+[
+11083,
+0.75,
+2,
+5
+],
+[
+11134,
+0.2,
+1,
+2
+],
+[
+11138,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 194
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18419,
+0.6017218507633572,
+3,
+5
+],
+[
+12004,
+0.968139316493482,
+3,
+3
+],
+[
+12320,
+0.8708760614872973,
+2,
+2
+]
+],
+"sell_values": [
+27498.2059886703,
+416.64869852423016,
+12715.0567230638
+]
+},
+"call": "expected_value",
+"result": 89541.6846004591
+},
+{
+"args": {
+"ilvl": 54,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 57
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16799,
+0.8405830929799918,
+3,
+3
+],
+[
+10328,
+0.6065762213989291,
+2,
+2
+]
+],
+"sell_values": [
+32506.546244195695,
+34198.9239975519
+]
+},
+"call": "expected_value",
+"result": 123461.86774081785
+},
+{
+"args": {
+"ilvl": 15,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10938,
+0.8,
+1,
+2
+],
+[
+10940,
+0.2,
+1,
+2
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 246
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14021,
+0.920534001028907,
+1,
+3
+],
+[
+14340,
+0.7056585960566736,
+1,
+1
+]
+],
+"sell_values": [
+9371.823003404128,
+1261.4238290478308
+]
+},
+"call": "expected_value",
+"result": 18144.298020755024
+},
+{
+"args": {
+"ilvl": 16,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 27
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15636,
+0.967957316195424,
+1,
+4
+],
+[
+17678,
+0.055634054490386164,
+3,
+4
+]
+],
+"sell_values": [
+24715.41699298126,
+20223.821381334095
+]
+},
+"call": "expected_value",
+"result": 63746.63788550771
+},
+{
+"args": {
+"ilvl": 46,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 190,
+"skill_required": 71
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+10537,
+0.027178980594535607,
+1,
+1
+]
+],
+"sell_values": [
+44948.61091681239
+]
+},
+"call": "expected_value",
+"result": 1221.6574238593753
+},
+{
+"args": {
+"ilvl": 15,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 218
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17079,
+0.6895809707990401,
+1,
+2
+]
+],
+"sell_values": [
+34466.24492034181
+]
+},
+"call": "expected_value",
+"result": 35650.89994795018
+},
+{
+"args": {
+"ilvl": 25,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 213,
+"skill_required": 113
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+17209,
+0.233161028040077,
+3,
+3
+],
+[
+16921,
+0.47675866841716563,
+2,
+4
+]
+],
+"sell_values": [
+46030.97843295027,
+1089.3031408055754
+]
+},
+"call": "expected_value",
+"result": 33755.8949040912
+},
+{
+"args": {
+"ilvl": 38,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 294,
+"skill_required": 9
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+19066,
+0.25123642531708823,
+1,
+2
+],
+[
+13028,
+0.00865860700219101,
+3,
+6
+],
+[
+16389,
+0.29466983882767195,
+3,
+5
+]
+],
+"sell_values": [
+24847.054453677854,
+10327.172799893664,
+48895.259954740155
+]
+},
+"call": "expected_value",
+"result": 67397.9463803342
+},
+{
+"args": {
+"ilvl": 40,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+100,
+[
+[
+11135,
+0.75,
+1,
+2
+],
+[
+11137,
+0.2,
+1,
+2
+],
+[
+11139,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 130,
+"skill_required": 204
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11224,
+0.4581548206787368,
+2,
+2
+],
+[
+16113,
+0.20559316110434878,
+3,
+3
+]
+],
+"sell_values": [
+6526.887191363378,
+43023.08173670221
+]
+},
+"call": "expected_value",
+"result": 32516.403785597013
+},
+{
+"args": {
+"ilvl": 52,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 2
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11277,
+0.9202881044863794,
+2,
+4
+],
+[
+14138,
+0.5796279936545253,
+3,
+5
+]
+],
+"sell_values": [
+19493.85431240846,
+23667.853873231626
+]
+},
+"call": "expected_value",
+"result": 108694.08932149899
+},
+{
+"args": {
+"ilvl": 43,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+125,
+[
+[
+11137,
+0.75,
+2,
+5
+],
+[
+11174,
+0.2,
+1,
+2
+],
+[
+11177,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 165
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13414,
+0.9081429182723578,
+2,
+4
+]
+],
+"sell_values": [
+26147.182816408214
+]
+},
+"call": "expected_value",
+"result": 71236.1367224814
+},
+{
+"args": {
+"ilvl": 10,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10940,
+0.8,
+1,
+2
+],
+[
+10938,
+0.2,
+1,
+2
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 55
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11726,
+0.36733327458730003,
+2,
+2
+],
+[
+16122,
+0.2731195103320907,
+2,
+3
+],
+[
+19728,
+0.9964303501847015,
+1,
+1
+]
+],
+"sell_values": [
+14699.062421226778,
+40201.96512297905,
+24001.420507090148
+]
+},
+"call": "expected_value",
+"result": 62164.50587785439
+},
+{
+"args": {
+"ilvl": 31,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 28,
+"skill_required": 198
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16411,
+0.3291970973844408,
+1,
+1
+]
+],
+"sell_values": [
+1229.862082158717
+]
+},
+"call": "expected_value",
+"result": 404.8670276298343
+},
+{
+"args": {
+"ilvl": 10,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 178
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14644,
+0.8232330355957576,
+3,
+4
+],
+[
+10785,
+0.24320747555776068,
+2,
+2
+],
+[
+19048,
+0.9569003766596392,
+2,
+3
+]
+],
+"sell_values": [
+8522.617615531486,
+381.3930074095695,
+13964.9826419454
+]
+},
+"call": "expected_value",
+"result": 58149.60943435764
+},
+{
+"args": {
+"ilvl": 68,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 259
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18272,
+0.15752700286308918,
+1,
+2
+],
+[
+13764,
+0.4776077646649707,
+1,
+1
+]
+],
+"sell_values": [
+3808.691449143725,
+11444.132912930156
+]
+},
+"call": "expected_value",
+"result": 6365.764362294221
+},
+{
+"args": {
+"ilvl": 9,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 173,
+"skill_required": 55
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+15546,
+0.7381023624081657,
+1,
+4
+],
+[
+17423,
+0.27499468808664707,
+1,
+2
+],
+[
+13543,
+0.1325023371305356,
+1,
+3
+]
+],
+"sell_values": [
+25599.031342237853,
+13077.654045399335,
+33805.84477435133
+]
+},
+"call": "expected_value",
+"result": 61589.898747892905
+},
+{
+"args": {
+"ilvl": 4,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 98,
+"skill_required": 191
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19894,
+0.07253074038066265,
+3,
+4
+]
+],
+"sell_values": [
+1501.9902734057955
+]
+},
+"call": "expected_value",
+"result": 381.2916330113669
+},
+{
+"args": {
+"ilvl": 70,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 178
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18355,
+0.30906522421602123,
+2,
+3
+]
+],
+"sell_values": [
+13591.963850221273
+]
+},
+"call": "expected_value",
+"result": 10502.008387261732
+},
+{
+"args": {
+"ilvl": 23,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+25,
+[
+[
+10940,
+0.75,
+4,
+6
+],
+[
+10998,
+0.2,
+1,
+2
+],
+[
+10978,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 84
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13910,
+0.2172763535472646,
+3,
+6
+],
+[
+16160,
+0.7755718417030885,
+1,
+3
+],
+[
+17041,
+0.6960496787803292,
+1,
+2
+]
+],
+"sell_values": [
+39812.04680294776,
+507.7193742778985,
+47249.7198621058
+]
+},
+"call": "expected_value",
+"result": 89045.74780376189
+},
+{
+"args": {
+"ilvl": 30,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 164,
+"skill_required": 110
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+12006,
+0.2704934700997965,
+2,
+4
+],
+[
+14544,
+0.04116151853733396,
+2,
+3
+]
+],
+"sell_values": [
+10423.93924382497,
+30082.879858631073
+]
+},
+"call": "expected_value",
+"result": 11554.46503690858
+},
+{
+"args": {
+"ilvl": 35,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 200
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11784,
+0.7859948748941283,
+1,
+2
+]
+],
+"sell_values": [
+20366.915343211196
+]
+},
+"call": "expected_value",
+"result": 24012.43661574988
+},
+{
+"args": {
+"ilvl": 46,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+150,
+[
+[
+11178,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 294
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10172,
+0.037823443542194246,
+3,
+6
+],
+[
+13192,
+0.1663711702787768,
+1,
+1
+]
+],
+"sell_values": [
+45262.70218515265,
+43067.30714773615
+]
+},
+"call": "expected_value",
+"result": 14869.118963927123
+},
+{
+"args": {
+"ilvl": 2,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 275
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15454,
+0.11811956361810172,
+2,
+2
+],
+[
+16701,
+0.2331992556205872,
+3,
+3
+]
+],
+"sell_values": [
+40012.806711302204,
+17451.536348056274
+]
+},
+"call": "expected_value",
+"result": 21661.646393155967
+},
+{
+"args": {
+"ilvl": 68,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 179,
+"skill_required": 275
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16848,
+0.35378682660190364,
+2,
+2
+],
+[
+12851,
+0.813964378577474,
+1,
+4
+]
+],
+"sell_values": [
+43398.1511412471,
+43311.213020081064
+]
+},
+"call": "expected_value",
+"result": 118841.84982362039
+},
+{
+"args": {
+"ilvl": 45,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 239
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17974,
+0.055572906759480345,
+3,
+3
+],
+[
+16539,
+0.573637737356688,
+3,
+3
+],
+[
+12325,
+0.10000110585494171,
+3,
+3
+]
+],
+"sell_values": [
+8293.968827294857,
+31984.000904770226,
+4733.9261562001075
+]
+},
+"call": "expected_value",
+"result": 57844.64315276279
+},
+{
+"args": {
+"ilvl": 15,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 100
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11007,
+0.9605732562493811,
+1,
+4
+],
+[
+18818,
+0.6743382703353884,
+1,
+2
+]
+],
+"sell_values": [
+24200.8317116133,
+43661.94406520569
+]
+},
+"call": "expected_value",
+"result": 102281.05906353609
+},
+{
+"args": {
+"ilvl": 63,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 285,
+"skill_required": 192
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+14453,
+0.18728374668907422,
+2,
+3
+]
+],
+"sell_values": [
+21733.799365321076
+]
+},
+"call": "expected_value",
+"result": 10175.968437314887
+},
+{
+"args": {
+"ilvl": 3,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 215
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15763,
+0.5490938516524686,
+2,
+2
+],
+[
+19241,
+0.5706044426682074,
+1,
+3
+]
+],
+"sell_values": [
+3096.806520974632,
+8430.444114101987
+]
+},
+"call": "expected_value",
+"result": 13021.772571194153
+},
+{
+"args": {
+"ilvl": 61,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+225,
+[
+[
+16204,
+0.75,
+2,
+5
+],
+[
+16203,
+0.2,
+2,
+3
+],
+[
+14344,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 161
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16304,
+0.6627767876502568,
+2,
+2
+],
+[
+14214,
+0.9305637765936816,
+1,
+3
+],
+[
+14555,
+0.14611556333830855,
+3,
+3
+]
+],
+"sell_values": [
+20725.52452551479,
+30227.005616999915,
+49953.45941766229
+]
+},
+"call": "expected_value",
+"result": 105626.03972944952
+},
+{
+"args": {
+"ilvl": 67,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 284,
+"skill_required": 223
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+10397,
+0.1776493470108671,
+2,
+2
+],
+[
+17848,
+0.6718937442529309,
+3,
+5
+],
+[
+19392,
+0.20245923350835116,
+1,
+4
+]
+],
+"sell_values": [
+27259.592167541625,
+36232.77973775375,
+43724.23603679069
+]
+},
+"call": "expected_value",
+"result": 129194.5479518242
+},
+{
+"args": {
+"ilvl": 51,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 97
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19373,
+0.18348791440027534,
+1,
+1
+],
+[
+18090,
+0.20413917915245827,
+2,
+4
+]
+],
+"sell_values": [
+38233.71884759601,
+47648.84559147322
+]
+},
+"call": "expected_value",
+"result": 36196.41401092861
+},
+{
+"args": {
+"ilvl": 59,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 121,
+"skill_required": 74
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+19808,
+0.9155215154376387,
+2,
+4
+],
+[
+19871,
+0.4269272404826058,
+1,
+1
+]
+],
+"sell_values": [
+31282.967554373103,
+20333.275488813724
+]
+},
+"call": "expected_value",
+"result": 94601.5187827103
+},
+{
+"args": {
+"ilvl": 10,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 20
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18183,
+0.2945492046736736,
+2,
+5
+],
+[
+13194,
+0.7390757566374954,
+1,
+4
+],
+[
+19950,
+0.19399881312844147,
+1,
+4
+]
+],
+"sell_values": [
+29719.372287453883,
+20251.733122825073,
+47763.10370500855
+]
+},
+"call": "expected_value",
+"result": 91222.23717503349
+},
+{
+"args": {
+"ilvl": 70,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 263,
+"skill_required": 110
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+12409,
+0.9709493598577286,
+3,
+4
+],
+[
+16571,
+0.8440350686870985,
+2,
+3
+],
+[
+19777,
+0.5882293522353004,
+1,
+3
+]
+],
+"sell_values": [
+46356.991612530386,
+25996.964161865595,
+21699.177570854416
+]
+},
+"call": "expected_value",
+"result": 237920.07957203322
+},
+{
+"args": {
+"ilvl": 51,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 239,
+"skill_required": 130
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+14251,
+0.9294661121752774,
+3,
+4
+],
+[
+12950,
+0.8272789235669191,
+3,
+4
+],
+[
+17074,
+0.957312345293391,
+1,
+4
+]
+],
+"sell_values": [
+4409.539333279749,
+23372.608492017218,
+31771.753340281288
+]
+},
+"call": "expected_value",
+"result": 158058.3724725204
+},
+{
+"args": {
+"ilvl": 19,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 165
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17037,
+0.6544703500690844,
+3,
+3
+]
+],
+"sell_values": [
+14124.183607128321
+]
+},
+"call": "expected_value",
+"result": 27731.578169391887
+},
+{
+"args": {
+"ilvl": 36,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 11,
+"skill_required": 161
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16018,
+0.5907981819178544,
+3,
+5
+]
+],
+"sell_values": [
+48739.92913652992
+]
+},
+"call": "expected_value",
+"result": 115181.84608266775
+},
+{
+"args": {
+"ilvl": 9,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10940,
+0.8,
+1,
+2
+],
+[
+10938,
+0.2,
+1,
+2
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 147
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15078,
+0.8827936375785865,
+3,
+5
+],
+[
+10682,
+0.5607905136514909,
+1,
+3
+]
+],
+"sell_values": [
+45378.489900897104,
+4397.282167264177
+]
+},
+"call": "expected_value",
+"result": 165171.27692024567
+},
+{
+"args": {
+"ilvl": 64,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+225,
+[
+[
+16204,
+0.75,
+2,
+5
+],
+[
+16203,
+0.2,
+2,
+3
+],
+[
+14344,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 270
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11245,
+0.5112224042297792,
+3,
+5
+],
+[
+13916,
+0.6114883027685472,
+1,
+3
+]
+],
+"sell_values": [
+13397.31514351789,
+29132.032392468333
+]
+},
+"call": "expected_value",
+"result": 63023.82471931058
+},
+{
+"args": {
+"ilvl": 38,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+100,
+[
+[
+11137,
+0.75,
+1,
+2
+],
+[
+11135,
+0.2,
+1,
+2
+],
+[
+11139,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 292
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13347,
+0.8030846189615991,
+3,
+4
+],
+[
+18340,
+0.28781768376529837,
+1,
+1
+]
+],
+"sell_values": [
+8760.825872972417,
+46274.17647023202
+]
+},
+"call": "expected_value",
+"result": 37943.422067756255
+},
+{
+"args": {
+"ilvl": 18,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 153
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13374,
+0.06636270113805098,
+3,
+5
+]
+],
+"sell_values": [
+11275.514040789758
+]
+},
+"call": "expected_value",
+"result": 2993.0942738673134
+},
+{
+"args": {
+"ilvl": 8,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 217,
+"skill_required": 274
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13890,
+0.45910528636908143,
+2,
+5
+],
+[
+19957,
+0.9785517303875085,
+2,
+3
+]
+],
+"sell_values": [
+14061.74233678769,
+18429.974311620394
+]
+},
+"call": "expected_value",
+"result": 67682.07898241069
+},
+{
+"args": {
+"ilvl": 64,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 108,
+"skill_required": 135
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13044,
+0.7735045926596092,
+3,
+6
+],
+[
+10503,
+0.5630514870667079,
+3,
+5
+],
+[
+14332,
+0.09087433642958231,
+2,
+5
+]
+],
+"sell_values": [
+41574.68650650831,
+32834.83320592257,
+27703.19572581444
+]
+},
+"call": "expected_value",
+"result": 227474.03928695037
+},
+{
+"args": {
+"ilvl": 38,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 6,
+"skill_required": 287
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12657,
+0.3491541168458344,
+3,
+5
+],
+[
+16119,
+0.21992401565524555,
+3,
+6
+]
+],
+"sell_values": [
+3910.04044617882,
+7994.015672764254
+]
+},
+"call": "expected_value",
+"result": 13372.169001112012
+},
+{
+"args": {
+"ilvl": 55,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+175,
+[
+[
+16202,
+0.75,
+1,
+2
+],
+[
+11176,
+0.2,
+2,
+5
+],
+[
+14343,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 227
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18495,
+0.427336951414513,
+1,
+1
+],
+[
+13598,
+0.6455422742310534,
+2,
+5
+],
+[
+11638,
+0.19603465768212558,
+2,
+3
+]
+],
+"sell_values": [
+20791.745265865575,
+45476.701952518735,
+28161.72540852798
+]
+},
+"call": "expected_value",
+"result": 125436.73414734767
+},
+{
+"args": {
+"ilvl": 20,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 55,
+"skill_required": 51
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+12917,
+0.12406187828117698,
+2,
+4
+],
+[
+19854,
+0.4496374128841284,
+1,
+3
+],
+[
+10923,
+0.8537614800520454,
+2,
+3
+]
+],
+"sell_values": [
+15223.737088547996,
+28866.73362629376,
+47334.560856052085
+]
+},
+"call": "expected_value",
+"result": 132656.24494046788
+},
+{
+"args": {
+"ilvl": 56,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+225,
+[
+[
+14344,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 195
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16952,
+0.3788289088010506,
+1,
+3
+]
+],
+"sell_values": [
+1140.4348404585596
+]
+},
+"call": "expected_value",
+"result": 864.0593723392327
+},
+{
+"args": {
+"ilvl": 67,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 270,
+"skill_required": 143
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+11138,
+0.7121629648405178,
+3,
+3
+],
+[
+19153,
+0.6738839815631117,
+2,
+2
+]
+],
+"sell_values": [
+38720.26735264815,
+48838.41691073687
+]
+},
+"call": "expected_value",
+"result": 148548.27487393137
+},
+{
+"args": {
+"ilvl": 56,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 83
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18859,
+0.5569892709256146,
+3,
+5
+],
+[
+11368,
+0.07449974366599121,
+1,
+2
+]
+],
+"sell_values": [
+42394.18373610114,
+12694.355260792388
+]
+},
+"call": "expected_value",
+"result": 95871.01128203118
+},
+{
+"args": {
+"ilvl": 3,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 86,
+"skill_required": 100
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19213,
+0.4378862198636526,
+2,
+3
+]
+],
+"sell_values": [
+21156.707233069315
+]
+},
+"call": "expected_value",
+"result": 23160.576387626796
+},
+{
+"args": {
+"ilvl": 41,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+125,
+[
+[
+11174,
+0.75,
+1,
+2
+],
+[
+11137,
+0.2,
+2,
+5
+],
+[
+11177,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 232,
+"skill_required": 94
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+16521,
+0.39113769327929293,
+1,
+3
+],
+[
+16913,
+0.9438382543438726,
+2,
+2
+],
+[
+10201,
+0.41084269725551703,
+2,
+3
+]
+],
+"sell_values": [
+42603.79688892531,
+33464.12959887334,
+26754.71125046146
+]
+},
+"call": "expected_value",
+"result": 123977.29734370326
+},
+{
+"args": {
+"ilvl": 35,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+75,
+[
+[
+11134,
+0.75,
+1,
+2
+],
+[
+11083,
+0.2,
+2,
+5
+],
+[
+11138,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 144
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11794,
+0.9698081310865007,
+2,
+5
+],
+[
+10874,
+0.06099767166145997,
+2,
+5
+]
+],
+"sell_values": [
+37777.49368519664,
+3008.7500258847153
+]
+},
+"call": "expected_value",
+"result": 128871.56552957036
+},
+{
+"args": {
+"ilvl": 66,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 52,
+"skill_required": 142
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12760,
+0.2234513487845552,
+1,
+2
+],
+[
+11130,
+0.9977038826308932,
+3,
+4
+],
+[
+13468,
+0.7080614821767743,
+2,
+2
+]
+],
+"sell_values": [
+44662.75136663459,
+45309.268231715345,
+18524.865243172968
+]
+},
+"call": "expected_value",
+"result": 199421.73005118215
+},
+{
+"args": {
+"ilvl": 16,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 136
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13863,
+0.2410683729200206,
+3,
+4
+],
+[
+13440,
+0.06124037141612804,
+3,
+5
+]
+],
+"sell_values": [
+20250.094907351297,
+23662.351191736157
+]
+},
+"call": "expected_value",
+"result": 22882.165710012232
+},
+{
+"args": {
+"ilvl": 43,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 128,
+"skill_required": 114
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+12511,
+0.47225814538621524,
+3,
+5
+],
+[
+16274,
+0.006674819694000633,
+3,
+3
+],
+[
+14761,
+0.6883433304009559,
+1,
+3
+]
+],
+"sell_values": [
+48520.40248334246,
+43467.498553503305,
+20016.81481214657
+]
+},
+"call": "expected_value",
+"result": 120083.91625051
+},
+{
+"args": {
+"ilvl": 5,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 207,
+"skill_required": 51
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+19214,
+0.2539850663967911,
+2,
+3
+]
+],
+"sell_values": [
+15636.23716338009
+]
+},
+"call": "expected_value",
+"result": 9928.426835342661
+},
+{
+"args": {
+"ilvl": 62,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+225,
+[
+[
+14344,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 83,
+"skill_required": 95
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15339,
+0.12405735597793233,
+3,
+5
+],
+[
+10646,
+0.34047481685012426,
+2,
+2
+]
+],
+"sell_values": [
+23144.24184594878,
+488.8094247220531
+]
+},
+"call": "expected_value",
+"result": 11817.708396802615
+},
+{
+"args": {
+"ilvl": 63,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+225,
+[
+[
+14344,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 271,
+"skill_required": 279
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15841,
+0.7117968881209781,
+2,
+4
+],
+[
+16587,
+0.013563847052149969,
+1,
+3
+]
+],
+"sell_values": [
+14228.656454211996,
+22823.19912104964
+]
+},
+"call": "expected_value",
+"result": 31002.88092298907
+},
+{
+"args": {
+"ilvl": 50,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+150,
+[
+[
+11178,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 232,
+"skill_required": 144
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+13931,
+0.8654477824150232,
+3,
+4
+]
+],
+"sell_values": [
+7754.474582194587
+]
+},
+"call": "expected_value",
+"result": 23488.82490833889
+},
+{
+"args": {
+"ilvl": 18,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 90,
+"skill_required": 283
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14727,
+0.4552202853032318,
+1,
+1
+],
+[
+13443,
+0.7670916796506245,
+2,
+4
+],
+[
+14920,
+0.2417717419724571,
+3,
+6
+]
+],
+"sell_values": [
+31235.724775364644,
+37409.57763027968,
+18546.97952343103
+]
+},
+"call": "expected_value",
+"result": 120487.4727268731
+},
+{
+"args": {
+"ilvl": 3,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 52
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12915,
+0.8276317656357018,
+1,
+4
+],
+[
+11606,
+0.2034014038415789,
+3,
+4
+]
+],
+"sell_values": [
+4195.6567176188955,
+45278.49714029438
+]
+},
+"call": "expected_value",
+"result": 40915.13153061533
+},
+{
+"args": {
+"ilvl": 24,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+25,
+[
+[
+10998,
+0.75,
+1,
+2
+],
+[
+10940,
+0.2,
+4,
+6
+],
+[
+10978,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 38
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17043,
+0.8661570094756543,
+2,
+4
+],
+[
+14967,
+0.23553328187130296,
+2,
+3
+]
+],
+"sell_values": [
+10527.859181460053,
+16731.443598650603
+]
+},
+"call": "expected_value",
+"result": 37208.366627469695
+},
+{
+"args": {
+"ilvl": 51,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 112
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18653,
+0.2736161389126419,
+1,
+1
+]
+],
+"sell_values": [
+46697.93340510443
+]
+},
+"call": "expected_value",
+"result": 12777.308233504355
+},
+{
+"args": {
+"ilvl": 66,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 112
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13660,
+0.3716320406620094,
+3,
+5
+],
+[
+11846,
+0.7744776555779797,
+3,
+6
+]
+],
+"sell_values": [
+19334.01596929097,
+13228.765823431082
+]
+},
+"call": "expected_value",
+"result": 74844.78517048244
+},
+{
+"args": {
+"ilvl": 26,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 23,
+"skill_required": 38
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19441,
+0.7705319462648914,
+1,
+1
+]
+],
+"sell_values": [
+8617.216178285142
+]
+},
+"call": "expected_value",
+"result": 6639.8403532393595
+},
+{
+"args": {
+"ilvl": 20,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 243,
+"skill_required": 276
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19561,
+0.4603535103157733,
+3,
+4
+],
+[
+12938,
+0.8543403336847869,
+1,
+3
+]
+],
+"sell_values": [
+44011.65917683832,
+9227.896047386852
+]
+},
+"call": "expected_value",
+"result": 86680.75386574231
+},
+{
+"args": {
+"ilvl": 33,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+75,
+[
+[
+11138,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 87,
+"skill_required": 90
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11036,
+0.8109741125784109,
+1,
+4
+]
+],
+"sell_values": [
+3978.5500165744224
+]
+},
+"call": "expected_value",
+"result": 8066.25267260066
+},
+{
+"args": {
+"ilvl": 47,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+150,
+[
+[
+11175,
+0.75,
+1,
+2
+],
+[
+11176,
+0.2,
+1,
+2
+],
+[
+11178,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 144,
+"skill_required": 24
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+15421,
+0.29066392334868274,
+1,
+3
+],
+[
+15324,
+0.6402643023268869,
+3,
+3
+]
+],
+"sell_values": [
+43938.911370706104,
+4958.448943997867
+]
+},
+"call": "expected_value",
+"result": 35067.06629461582
+},
+{
+"args": {
+"ilvl": 53,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 63,
+"skill_required": 59
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+13283,
+0.8915559852165034,
+3,
+3
+]
+],
+"sell_values": [
+1611.2025235947458
+]
+},
+"call": "expected_value",
+"result": 4309.431759920491
+},
+{
+"args": {
+"ilvl": 12,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 146
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12393,
+0.832787286172288,
+3,
+6
+],
+[
+11570,
+0.27306072755115707,
+1,
+4
+]
+],
+"sell_values": [
+40476.13639511771,
+18026.37876960529
+]
+},
+"call": "expected_value",
+"result": 163991.79327938546
+},
+{
+"args": {
+"ilvl": 17,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 197,
+"skill_required": 135
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+11974,
+0.47582524317796304,
+2,
+2
+],
+[
+14085,
+0.3949138820466165,
+3,
+6
+],
+[
+13907,
+0.07551148761333015,
+1,
+2
+]
+],
+"sell_values": [
+13664.99792913181,
+5146.447623780048,
+28754.434308692063
+]
+},
+"call": "expected_value",
+"result": 25407.05333485922
+},
+{
+"args": {
+"ilvl": 6,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 208
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18027,
+0.068993250982335,
+1,
+1
+],
+[
+18675,
+0.7728590769789946,
+3,
+4
+],
+[
+16093,
+0.03183536294816758,
+1,
+2
+]
+],
+"sell_values": [
+1304.8025777028627,
+36316.03260440442,
+42941.269778517235
+]
+},
+"call": "expected_value",
+"result": 100375.71296863403
+},
+{
+"args": {
+"ilvl": 70,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 132
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16505,
+0.7026754664906182,
+3,
+5
+],
+[
+17791,
+0.9072241868302761,
+2,
+3
+],
+[
+17815,
+0.5650010543665694,
+3,
+4
+]
+],
+"sell_values": [
+562.1708585152319,
+20944.190887191882,
+36683.95813427527
+]
+},
+"call": "expected_value",
+"result": 121625.44863186148
+},
+{
+"args": {
+"ilvl": 23,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 283
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14838,
+0.4837085966717526,
+1,
+2
+]
+],
+"sell_values": [
+36768.9844558407
+]
+},
+"call": "expected_value",
+"result": 26678.210808270283
+},
+{
+"args": {
+"ilvl": 56,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 270,
+"skill_required": 235
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+10733,
+0.5522942081684051,
+1,
+4
+],
+[
+10602,
+0.3848695266207651,
+1,
+2
+]
+],
+"sell_values": [
+24192.093322142322,
+22766.264775722055
+]
+},
+"call": "expected_value",
+"result": 46545.94488395461
+},
+{
+"args": {
+"ilvl": 38,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+100,
+[
+[
+11139,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 24
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12736,
+0.4952805798959181,
+3,
+5
+],
+[
+15486,
+0.9771344590951453,
+3,
+4
+]
+],
+"sell_values": [
+35677.2473458559,
+18296.019990900775
+]
+},
+"call": "expected_value",
+"result": 133252.84160909225
+},
+{
+"args": {
+"ilvl": 52,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 189,
+"skill_required": 15
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+14453,
+0.22833024121685952,
+2,
+2
+],
+[
+19116,
+0.18723649846686918,
+1,
+1
+]
+],
+"sell_values": [
+32054.850164676223,
+7758.713109313841
+]
+},
+"call": "expected_value",
+"result": 16090.89761573854
+},
+{
+"args": {
+"ilvl": 38,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+100,
+[
+[
+11135,
+0.75,
+1,
+2
+],
+[
+11137,
+0.2,
+1,
+2
+],
+[
+11139,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 176
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16379,
+0.4350108932780036,
+1,
+3
+],
+[
+11428,
+0.8435460028224133,
+2,
+2
+],
+[
+18502,
+0.615386760178044,
+2,
+2
+]
+],
+"sell_values": [
+49775.7142398887,
+28104.75117166648,
+40421.94433506789
+]
+},
+"call": "expected_value",
+"result": 140471.51558135418
+},
+{
+"args": {
+"ilvl": 45,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+125,
+[
+[
+11177,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 75,
+"skill_required": 273
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14177,
+0.5026591726181202,
+3,
+5
+],
+[
+13361,
+0.5878902377605443,
+2,
+5
+],
+[
+12698,
+0.9085223621622087,
+1,
+4
+]
+],
+"sell_values": [
+26036.42664281164,
+35041.07679664413,
+35653.14901111225
+]
+},
+"call": "expected_value",
+"result": 205430.07698485072
+},
+{
+"args": {
+"ilvl": 53,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 272,
+"skill_required": 14
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+16844,
+0.8478040278150971,
+2,
+5
+]
+],
+"sell_values": [
+27057.160928392714
+]
+},
+"call": "expected_value",
+"result": 80287.09505716416
+},
+{
+"args": {
+"ilvl": 8,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10938,
+0.8,
+1,
+2
+],
+[
+10940,
+0.2,
+1,
+2
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 55
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10641,
+0.8024739885926193,
+3,
+5
+],
+[
+11688,
+0.6501145918654174,
+1,
+4
+]
+],
+"sell_values": [
+48819.630119023284,
+9569.28179502512
+]
+},
+"call": "expected_value",
+"result": 172258.75753446075
+},
+{
+"args": {
+"ilvl": 62,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 171,
+"skill_required": 72
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+13881,
+0.7559387719082451,
+2,
+2
+]
+],
+"sell_values": [
+34087.69908863986
+]
+},
+"call": "expected_value",
+"result": 51536.42677248845
+},
+{
+"args": {
+"ilvl": 62,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 84
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11751,
+0.7608267933691643,
+3,
+6
+],
+[
+18935,
+0.09241965808980357,
+1,
+2
+],
+[
+11254,
+0.14749525781295214,
+1,
+2
+]
+],
+"sell_values": [
+8063.9815017029105,
+9429.705988876647,
+38753.61903039743
+]
+},
+"call": "expected_value",
+"result": 37490.017194959095
+},
+{
+"args": {
+"ilvl": 56,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+200,
+[
+[
+16204,
+0.75,
+1,
+2
+],
+[
+16203,
+0.2,
+1,
+2
+],
+[
+14344,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 150
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15179,
+0.04110851631152623,
+1,
+4
+],
+[
+13834,
+0.57449091234175,
+3,
+3
+]
+],
+"sell_values": [
+13712.815614330997,
+17385.511120824303
+]
+},
+"call": "expected_value",
+"result": 31372.738196886676
+},
+{
+"args": {
+"ilvl": 42,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 29,
+"skill_required": 129
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10831,
+0.9679977018536385,
+1,
+2
+],
+[
+10818,
+0.2406477499188393,
+3,
+4
+],
+[
+18097,
+0.9155471301655407,
+3,
+4
+]
+],
+"sell_values": [
+8705.095258697993,
+21871.36296705089,
+20605.332671492848
+]
+},
+"call": "expected_value",
+"result": 97089.33448435194
+},
+{
+"args": {
+"ilvl": 12,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 23
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18209,
+0.4967729069045089,
+1,
+3
+],
+[
+12541,
+0.1376784116213724,
+2,
+5
+]
+],
+"sell_values": [
+32814.72106232219,
+12041.841696898948
+]
+},
+"call": "expected_value",
+"result": 38405.58447516852
+},
+{
+"args": {
+"ilvl": 11,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 174
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17211,
+0.7465849431579623,
+2,
+5
+],
+[
+15795,
+0.3238562186001209,
+2,
+5
+],
+[
+13862,
+0.9957796714044963,
+2,
+2
+]
+],
+"sell_values": [
+2398.91667820043,
+38964.65978076549,
+10274.308830345819
+]
+},
+"call": "expected_value",
+"result": 70896.69430813874
+},
+{
+"args": {
+"ilvl": 7,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 117
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10116,
+0.8823242247004972,
+3,
+4
+],
+[
+10537,
+0.26882375027264604,
+2,
+2
+],
+[
+11925,
+0.8129260137267272,
+3,
+5
+]
+],
+"sell_values": [
+3663.0061600258337,
+40306.83678372419,
+18462.488612723177
+]
+},
+"call": "expected_value",
+"result": 93017.27588308373
+},
+{
+"args": {
+"ilvl": 29,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+50,
+[
+[
+11082,
+0.75,
+1,
+2
+],
+[
+11083,
+0.2,
+1,
+2
+],
+[
+11084,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 161,
+"skill_required": 274
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13159,
+0.3337571515831923,
+1,
+4
+],
+[
+15547,
+0.5347591952828891,
+1,
+4
+],
+[
+13888,
+0.8419068688064016,
+3,
+3
+]
+],
+"sell_values": [
+42811.37400665008,
+28674.826460381377,
+9119.34854626637
+]
+},
+"call": "expected_value",
+"result": 97089.74995705474
+},
+{
+"args": {
+"ilvl": 44,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 68,
+"skill_required": 48
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+13929,
+0.0407255198374149,
+2,
+3
+]
+],
+"sell_values": [
+10080.725050321798
+]
+},
+"call": "expected_value",
+"result": 1026.3569200310144
+},
+{
+"args": {
+"ilvl": 4,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 11
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15032,
+0.19796944394631089,
+3,
+4
+],
+[
+11204,
+0.737220966091481,
+1,
+4
+],
+[
+16751,
+0.6912077238817176,
+1,
+2
+]
+],
+"sell_values": [
+41870.25659092038,
+36665.087732895816,
+11793.637958740172
+]
+},
+"call": "expected_value",
+"result": 108815.06892848318
+},
+{
+"args": {
+"ilvl": 41,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 205
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13030,
+0.8822774457981538,
+2,
+2
+]
+],
+"sell_values": [
+11270.112323427522
+]
+},
+"call": "expected_value",
+"result": 19886.73182914386
+},
+{
+"args": {
+"ilvl": 69,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 178,
+"skill_required": 84
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+16617,
+0.11937258108469229,
+3,
+4
+],
+[
+10697,
+0.9352332078033012,
+2,
+2
+],
+[
+17309,
+0.5862981749423647,
+1,
+4
+]
+],
+"sell_values": [
+48373.29853260627,
+27441.250000201173,
+842.6008715970435
+]
+},
+"call": "expected_value",
+"result": 72773.53416565794
+},
+{
+"args": {
+"ilvl": 4,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 240
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+11993,
+0.3554349860837418,
+2,
+5
+]
+],
+"sell_values": [
+19712.658420939115
+]
+},
+"call": "expected_value",
+"result": 24522.989650320178
+},
+{
+"args": {
+"ilvl": 27,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 242,
+"skill_required": 27
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+15980,
+0.8015473729189926,
+3,
+6
+],
+[
+12663,
+0.14945799034785012,
+2,
+5
+]
+],
+"sell_values": [
+15957.16834583565,
+7920.887133161192
+]
+},
+"call": "expected_value",
+"result": 61700.35820516848
+},
+{
+"args": {
+"ilvl": 37,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+100,
+[
+[
+11139,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 94,
+"skill_required": 265
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15863,
+0.7893802426486984,
+2,
+2
+],
+[
+18491,
+0.965762166025994,
+2,
+2
+],
+[
+14372,
+0.3696108949122269,
+1,
+2
+]
+],
+"sell_values": [
+22622.45636999506,
+1182.511774322198,
+10326.162046086201
+]
+},
+"call": "expected_value",
+"result": 43724.48345464777
+},
+{
+"args": {
+"ilvl": 4,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 231
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18107,
+0.24647615354882002,
+1,
+1
+]
+],
+"sell_values": [
+24182.297222996298
+]
+},
+"call": "expected_value",
+"result": 5960.359603498439
+},
+{
+"args": {
+"ilvl": 16,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 88,
+"skill_required": 256
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18783,
+0.3229525777168665,
+2,
+5
+],
+[
+13872,
+0.45232839374367206,
+1,
+1
+],
+[
+15389,
+0.7382048738848607,
+1,
+4
+]
+],
+"sell_values": [
+29377.693192543946,
+34851.71575550472,
+13195.262987181593
+]
+},
+"call": "expected_value",
+"result": 73323.04533389895
+},
+{
+"args": {
+"ilvl": 37,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 297
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19782,
+0.3272724244630163,
+3,
+3
+]
+],
+"sell_values": [
+48117.748300099796
+]
+},
+"call": "expected_value",
+"result": 47242.83643762452
+},
+{
+"args": {
+"ilvl": 50,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 298,
+"skill_required": 103
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+16441,
+0.512105957357721,
+3,
+6
+]
+],
+"sell_values": [
+3018.7384743119937
+]
+},
+"call": "expected_value",
+"result": 6956.612803800584
+},
+{
+"args": {
+"ilvl": 12,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 82,
+"skill_required": 185
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13335,
+0.4197056067448328,
+3,
+3
+]
+],
+"sell_values": [
+28832.046696953003
+]
+},
+"call": "expected_value",
+"result": 36302.91495792004
+},
+{
+"args": {
+"ilvl": 22,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 293
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19638,
+0.8703181848576236,
+1,
+3
+],
+[
+13919,
+0.23445501325006035,
+1,
+2
+]
+],
+"sell_values": [
+3584.6311604966595,
+39831.974300545895
+]
+},
+"call": "expected_value",
+"result": 20247.748463590884
+},
+{
+"args": {
+"ilvl": 42,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 132,
+"skill_required": 160
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13873,
+0.7123270457551488,
+3,
+6
+],
+[
+14536,
+0.33766613241816557,
+2,
+4
+],
+[
+18437,
+0.4292223984930299,
+3,
+5
+]
+],
+"sell_values": [
+29680.90941836919,
+1171.7368202183663,
+14759.269245162066
+]
+},
+"call": "expected_value",
+"result": 121668.31864844571
+},
+{
+"args": {
+"ilvl": 6,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 58,
+"skill_required": 140
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16721,
+0.07908518216746685,
+1,
+3
+],
+[
+13406,
+0.1143940169078439,
+3,
+4
+]
+],
+"sell_values": [
+34209.408956742634,
+33883.763072907976
+]
+},
+"call": "expected_value",
+"result": 18977.263858893366
+},
+{
+"args": {
+"ilvl": 61,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 293
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19765,
+0.06452191658214568,
+2,
+5
+],
+[
+19453,
+0.1449704114665593,
+1,
+2
+],
+[
+11863,
+0.04093693431110179,
+3,
+5
+]
+],
+"sell_values": [
+22605.225448204634,
+14395.072062301351,
+6066.0626476157995
+]
+},
+"call": "expected_value",
+"result": 9228.456959887599
+},
+{
+"args": {
+"ilvl": 54,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 30,
+"skill_required": 170
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16096,
+0.0540255275711794,
+3,
+3
+]
+],
+"sell_values": [
+18265.009595662803
+]
+},
+"call": "expected_value",
+"result": 2960.3303384950113
+},
+{
+"args": {
+"ilvl": 26,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 2,
+"skill_required": 92
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12196,
+0.45138202145987105,
+1,
+1
+]
+],
+"sell_values": [
+8343.056663098896
+]
+},
+"call": "expected_value",
+"result": 3765.905781743826
+},
+{
+"args": {
+"ilvl": 14,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 51,
+"skill_required": 290
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12909,
+0.06674160077576274,
+1,
+2
+]
+],
+"sell_values": [
+4840.9843739976695
+]
+},
+"call": "expected_value",
+"result": 484.6425696765873
+},
+{
+"args": {
+"ilvl": 53,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+175,
+[
+[
+16202,
+0.75,
+1,
+2
+],
+[
+11176,
+0.2,
+2,
+5
+],
+[
+14343,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 7,
+"skill_required": 293
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17267,
+0.496077060822539,
+1,
+4
+],
+[
+17365,
+0.30591309366090724,
+1,
+1
+],
+[
+15398,
+0.10924016989785801,
+3,
+4
+]
+],
+"sell_values": [
+36666.88419126199,
+19299.208153539283,
+40444.93491335493
+]
+},
+"call": "expected_value",
+"result": 66841.62128430864
+},
+{
+"args": {
+"ilvl": 53,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+175,
+[
+[
+14343,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 207,
+"skill_required": 83
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+19848,
+0.9096710554370074,
+2,
+5
+],
+[
+18880,
+0.6051089905599754,
+1,
+1
+]
+],
+"sell_values": [
+6493.244696760603,
+22205.639421483385
+]
+},
+"call": "expected_value",
+"result": 34110.340702867994
+},
+{
+"args": {
+"ilvl": 60,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 26,
+"skill_required": 108
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15297,
+0.8500851478512284,
+2,
+5
+],
+[
+13780,
+0.38888349602430816,
+1,
+1
+]
+],
+"sell_values": [
+19167.426168218488,
+43479.54530470965
+]
+},
+"call": "expected_value",
+"result": 73937.2826621241
+},
+{
+"args": {
+"ilvl": 22,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 282,
+"skill_required": 275
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+16158,
+0.5544124653374003,
+1,
+3
+],
+[
+11143,
+0.3013260913833511,
+3,
+4
+]
+],
+"sell_values": [
+48766.909779658956,
+4347.150605886868
+]
+},
+"call": "expected_value",
+"result": 58658.650008197896
+},
+{
+"args": {
+"ilvl": 52,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+175,
+[
+[
+16202,
+0.75,
+1,
+2
+],
+[
+11176,
+0.2,
+2,
+5
+],
+[
+14343,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 162,
+"skill_required": 208
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+18605,
+0.5931198697183184,
+3,
+5
+],
+[
+15854,
+0.1252338251859635,
+1,
+4
+],
+[
+19335,
+0.8005244017535094,
+2,
+5
+]
+],
+"sell_values": [
+5708.536302705253,
+41522.44625873263,
+14427.552116852472
+]
+},
+"call": "expected_value",
+"result": 66967.0485176087
+},
+{
+"args": {
+"ilvl": 52,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+175,
+[
+[
+14343,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 189,
+"skill_required": 58
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+19981,
+0.845348476473252,
+2,
+5
+],
+[
+19170,
+0.8170851888348484,
+3,
+5
+]
+],
+"sell_values": [
+4130.278933347714,
+21505.81510215805
+]
+},
+"call": "expected_value",
+"result": 82508.66948817926
+},
+{
+"args": {
+"ilvl": 70,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 130,
+"skill_required": 141
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10572,
+0.6156809655993858,
+3,
+4
+],
+[
+19799,
+0.9386261336674951,
+2,
+4
+]
+],
+"sell_values": [
+18912.909791652004,
+16622.048208390155
+]
+},
+"call": "expected_value",
+"result": 87560.78150029224
+},
+{
+"args": {
+"ilvl": 22,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 24
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13410,
+0.48600833163084733,
+3,
+6
+],
+[
+10243,
+0.04010765901853375,
+1,
+2
+]
+],
+"sell_values": [
+12226.396134442297,
+6051.257410436472
+]
+},
+"call": "expected_value",
+"result": 27103.639395488382
+},
+{
+"args": {
+"ilvl": 34,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+75,
+[
+[
+11134,
+0.75,
+1,
+2
+],
+[
+11083,
+0.2,
+2,
+5
+],
+[
+11138,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 252,
+"skill_required": 151
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+15856,
+0.23787017928711995,
+1,
+2
+],
+[
+15415,
+0.7210327130623951,
+1,
+3
+]
+],
+"sell_values": [
+4671.752976211224,
+827.031769734371
+]
+},
+"call": "expected_value",
+"result": 2859.5399984954856
+},
+{
+"args": {
+"ilvl": 34,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+75,
+[
+[
+11083,
+0.75,
+2,
+5
+],
+[
+11134,
+0.2,
+1,
+2
+],
+[
+11138,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 188,
+"skill_required": 155
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+18188,
+0.5244161006520511,
+1,
+3
+],
+[
+18450,
+0.729221565523437,
+2,
+5
+]
+],
+"sell_values": [
+26981.629455902217,
+6464.263542250237
+]
+},
+"call": "expected_value",
+"result": 44797.78314783082
+},
+{
+"args": {
+"ilvl": 67,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 76,
+"skill_required": 53
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+15954,
+0.09268692661639533,
+1,
+4
+]
+],
+"sell_values": [
+46289.570649219044
+]
+},
+"call": "expected_value",
+"result": 10726.095094671531
+},
+{
+"args": {
+"ilvl": 41,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 80,
+"skill_required": 31
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+12052,
+0.3940861419465931,
+1,
+4
+],
+[
+11975,
+0.5091683471911942,
+3,
+4
+]
+],
+"sell_values": [
+19676.84193738509,
+27474.261069495693
+]
+},
+"call": "expected_value",
+"result": 68347.51115868326
+},
+{
+"args": {
+"ilvl": 31,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+75,
+[
+[
+11138,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 296
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15113,
+0.777877230940723,
+3,
+3
+]
+],
+"sell_values": [
+30526.31227916113
+]
+},
+"call": "expected_value",
+"result": 71237.16979963695
+},
+{
+"args": {
+"ilvl": 10,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10938,
+0.8,
+1,
+2
+],
+[
+10940,
+0.2,
+1,
+2
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 259
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13935,
+0.06254470791710687,
+1,
+3
+],
+[
+16008,
+0.34943394672274564,
+2,
+4
+],
+[
+14574,
+0.44776722461884344,
+3,
+3
+]
+],
+"sell_values": [
+47483.46183910273,
+45538.84426342303,
+46997.24720250707
+]
+},
+"call": "expected_value",
+"result": 116809.61357749754
+},
+{
+"args": {
+"ilvl": 35,
+"kind": "weapon",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 300,
+"skill_required": 284
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+13729,
+0.9573676756246925,
+1,
+4
+]
+],
+"sell_values": [
+24537.304146330778
+]
+},
+"call": "expected_value",
+"result": 58728.054591672066
+},
+{
+"args": {
+"ilvl": 14,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 62
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17643,
+0.8614957419529597,
+3,
+6
+],
+[
+10735,
+0.1392409681098995,
+2,
+2
+],
+[
+12022,
+0.7821551467054362,
+3,
+3
+]
+],
+"sell_values": [
+45662.46328122879,
+4771.313792996834,
+18545.71115098288
+]
+},
+"call": "expected_value",
+"result": 221866.67455892585
+},
+{
+"args": {
+"ilvl": 12,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 182,
+"skill_required": 234
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15386,
+0.1456362326055083,
+2,
+2
+],
+[
+17207,
+0.45183902306794665,
+3,
+5
+],
+[
+19324,
+0.4103835185436634,
+1,
+2
+]
+],
+"sell_values": [
+46350.933156695675,
+45785.951099061676,
+41991.406673880105
+]
+},
+"call": "expected_value",
+"result": 122101.1400538662
+},
+{
+"args": {
+"ilvl": 9,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10940,
+0.8,
+1,
+2
+],
+[
+10938,
+0.2,
+1,
+2
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 230,
+"skill_required": 50
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+12227,
+0.5940741295608204,
+3,
+3
+],
+[
+12904,
+0.9216757026249869,
+1,
+4
+]
+],
+"sell_values": [
+19885.654742288618,
+38781.113938366536
+]
+},
+"call": "expected_value",
+"result": 124799.68518962545
+},
+{
+"args": {
+"ilvl": 45,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+125,
+[
+[
+11174,
+0.75,
+1,
+2
+],
+[
+11137,
+0.2,
+2,
+5
+],
+[
+11177,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 182,
+"skill_required": 4
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+13995,
+0.4301545098687698,
+2,
+3
+],
+[
+18132,
+0.3747600044260193,
+1,
+3
+],
+[
+16546,
+0.7539613337488077,
+2,
+4
+]
+],
+"sell_values": [
+47925.97690370206,
+40031.06524548149,
+30986.585007352398
+]
+},
+"call": "expected_value",
+"result": 151631.08302102733
+},
+{
+"args": {
+"ilvl": 40,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 103,
+"skill_required": 1
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+11351,
+0.27764030386832217,
+1,
+1
+],
+[
+10687,
+0.8275137712119311,
+1,
+4
+]
+],
+"sell_values": [
+46024.87773879067,
+17189.90384854377
+]
+},
+"call": "expected_value",
+"result": 48340.56644209758
+},
+{
+"args": {
+"ilvl": 50,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+150,
+[
+[
+11175,
+0.75,
+1,
+2
+],
+[
+11176,
+0.2,
+1,
+2
+],
+[
+11178,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 136,
+"skill_required": 71
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+16587,
+0.8632308395563668,
+2,
+3
+],
+[
+17680,
+0.47996153967276156,
+2,
+4
+]
+],
+"sell_values": [
+48269.8576205286,
+41969.50346296044
+]
+},
+"call": "expected_value",
+"result": 164601.3168017394
+},
+{
+"args": {
+"ilvl": 31,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+75,
+[
+[
+11138,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 171
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16419,
+0.37415542597154827,
+1,
+4
+]
+],
+"sell_values": [
+41961.63474014324
+]
+},
+"call": "expected_value",
+"result": 39250.43330165203
+},
+{
+"args": {
+"ilvl": 48,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+150,
+[
+[
+11175,
+0.75,
+1,
+2
+],
+[
+11176,
+0.2,
+1,
+2
+],
+[
+11178,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 97,
+"skill_required": 178
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10264,
+0.5246303893418691,
+3,
+6
+],
+[
+19325,
+0.4487326402460249,
+2,
+3
+]
+],
+"sell_values": [
+5322.590279732059,
+7237.283871413391
+]
+},
+"call": "expected_value",
+"result": 20684.78049800711
+},
+{
+"args": {
+"ilvl": 13,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 286
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19415,
+0.015179537335647142,
+1,
+4
+]
+],
+"sell_values": [
+32194.146136876807
+]
+},
+"call": "expected_value",
+"result": 1221.7306081850043
+},
+{
+"args": {
+"ilvl": 51,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 178
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+12864,
+0.10278900914696776,
+3,
+4
+],
+[
+18860,
+0.5018167754955837,
+2,
+4
+],
+[
+19040,
+0.3500129393329766,
+3,
+3
+]
+],
+"sell_values": [
+48163.96877316408,
+258.6157245093867,
+9810.173493772345
+]
+},
+"call": "expected_value",
+"result": 28017.93930038902
+},
+{
+"args": {
+"ilvl": 24,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 259,
+"skill_required": 70
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+12357,
+0.39540108693309683,
+2,
+2
+]
+],
+"sell_values": [
+48583.86449253385
+]
+},
+"call": "expected_value",
+"result": 38420.22565551635
+},
+{
+"args": {
+"ilvl": 62,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 253,
+"skill_required": 197
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+10187,
+0.7407468297925539,
+2,
+5
+],
+[
+11832,
+0.4809754744776439,
+2,
+5
+]
+],
+"sell_values": [
+6018.102549842197,
+24415.092761427375
+]
+},
+"call": "expected_value",
+"result": 56703.32923676859
+},
+{
+"args": {
+"ilvl": 18,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10939,
+0.75,
+1,
+2
+],
+[
+10940,
+0.2,
+2,
+3
+],
+[
+10978,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 224
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13643,
+0.9485202029040142,
+1,
+4
+]
+],
+"sell_values": [
+22743.973690055886
+]
+},
+"call": "expected_value",
+"result": 53932.79634833842
+},
+{
+"args": {
+"ilvl": 20,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 116,
+"skill_required": 247
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+10286,
+0.218256172301874,
+1,
+1
+],
+[
+15708,
+0.06444827179964474,
+2,
+3
+],
+[
+17372,
+0.12079730510381581,
+3,
+5
+]
+],
+"sell_values": [
+3440.547170886338,
+15574.274886573241,
+33923.42996173297
+]
+},
+"call": "expected_value",
+"result": 19651.694085593863
+},
+{
+"args": {
+"ilvl": 4,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 143,
+"skill_required": 226
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+19445,
+0.015405638365036056,
+3,
+5
+]
+],
+"sell_values": [
+6049.309416144028
+]
+},
+"call": "expected_value",
+"result": 372.7738928932892
+},
+{
+"args": {
+"ilvl": 45,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 153,
+"skill_required": 23
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+11887,
+0.456720992697461,
+2,
+3
+],
+[
+19402,
+0.09304558210315261,
+3,
+6
+],
+[
+11867,
+0.8041934887917362,
+3,
+3
+]
+],
+"sell_values": [
+384.4990738541776,
+23132.729990623495,
+2503.57828939039
+]
+},
+"call": "expected_value",
+"result": 16164.898548035937
+},
+{
+"args": {
+"ilvl": 1,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 270
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16191,
+0.11452965241677115,
+3,
+5
+],
+[
+12676,
+0.5905712891713276,
+1,
+3
+],
+[
+13430,
+0.9013989805011244,
+2,
+5
+]
+],
+"sell_values": [
+28791.667659587638,
+26374.050910553826,
+28853.28975741536
+]
+},
+"call": "expected_value",
+"result": 135370.65415207116
+},
+{
+"args": {
+"ilvl": 20,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 184,
+"skill_required": 150
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+19554,
+0.2688391950172475,
+1,
+3
+]
+],
+"sell_values": [
+11762.601746176193
+]
+},
+"call": "expected_value",
+"result": 6324.496769500955
+},
+{
+"args": {
+"ilvl": 6,
+"kind": "armor",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10940,
+0.8,
+1,
+2
+],
+[
+10938,
+0.2,
+1,
+2
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 32
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14489,
+0.4871521157633434,
+2,
+5
+],
+[
+14465,
+0.9200481721122473,
+3,
+5
+]
+],
+"sell_values": [
+24632.267689211258,
+44915.4179757875
+]
+},
+"call": "expected_value",
+"result": 207296.20745609255
+},
+{
+"args": {
+"ilvl": 59,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+225,
+[
+[
+14344,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 181
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+16195,
+0.772176970528801,
+1,
+2
+],
+[
+15071,
+0.9153525378698207,
+3,
+6
+],
+[
+16065,
+0.055348428542241424,
+3,
+5
+]
+],
+"sell_values": [
+31638.647347025344,
+7205.331061931225,
+32017.812361972043
+]
+},
+"call": "expected_value",
+"result": 73413.87602025419
+},
+{
+"args": {
+"ilvl": 16,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 109,
+"skill_required": 74
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+18906,
+0.8602182515507217,
+1,
+1
+],
+[
+12913,
+0.7793809852686124,
+1,
+1
+],
+[
+19572,
+0.6248313010557388,
+3,
+3
+]
+],
+"sell_values": [
+31807.91263143416,
+31310.14834248908,
+29977.601267494065
+]
+},
+"call": "expected_value",
+"result": 107957.1120608614
+},
+{
+"args": {
+"ilvl": 25,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+25,
+[
+[
+10998,
+0.75,
+1,
+2
+],
+[
+10940,
+0.2,
+4,
+6
+],
+[
+10978,
+0.05,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 134,
+"skill_required": 242
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+14878,
+0.7583895727868374,
+1,
+3
+]
+],
+"sell_values": [
+35112.54608725099
+]
+},
+"call": "expected_value",
+"result": 53257.977653136826
+},
+{
+"args": {
+"ilvl": 46,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+150,
+[
+[
+11178,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 289
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+15420,
+0.049150837588546215,
+3,
+4
+]
+],
+"sell_values": [
+25624.00888275006
+]
+},
+"call": "expected_value",
+"result": 4408.045246372298
+},
+{
+"args": {
+"ilvl": 16,
+"kind": "armor",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10978,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 196
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+17796,
+0.05574002662822242,
+3,
+4
+],
+[
+18704,
+0.9336880218978237,
+2,
+4
+],
+[
+18437,
+0.3093330578171144,
+1,
+4
+]
+],
+"sell_values": [
+39085.348353616195,
+8840.55734483768,
+44759.89754382366
+]
+},
+"call": "expected_value",
+"result": 67002.42168937033
+},
+{
+"args": {
+"ilvl": 13,
+"kind": "weapon",
+"quality": 2
+},
+"call": "outcomes_for",
+"result": [
+1,
+[
+[
+10938,
+0.8,
+1,
+2
+],
+[
+10940,
+0.2,
+1,
+2
+]
+]
+]
+},
+{
+"args": {
+"best_skill": 35,
+"skill_required": 171
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13375,
+0.9643190853838256,
+2,
+5
+],
+[
+15922,
+0.5798589148301523,
+3,
+6
+]
+],
+"sell_values": [
+315.9935851862139,
+2343.023044421061
+]
+},
+"call": "expected_value",
+"result": 7180.317857508903
+},
+{
+"args": {
+"ilvl": 61,
+"kind": "armor",
+"quality": 1
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 169,
+"skill_required": 30
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+17631,
+0.11449852983682862,
+2,
+4
+],
+[
+11687,
+0.3522077319152791,
+2,
+3
+],
+[
+12969,
+0.9702698161487536,
+2,
+2
+]
+],
+"sell_values": [
+46331.81707299467,
+16779.85560706431,
+41894.37964284189
+]
+},
+"call": "expected_value",
+"result": 111987.46609910786
+},
+{
+"args": {
+"ilvl": 45,
+"kind": "armor",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": 204,
+"skill_required": 102
+},
+"call": "can_disenchant",
+"result": true
+},
+{
+"args": {
+"outcomes": [
+[
+18352,
+0.24839909902919932,
+1,
+2
+],
+[
+13269,
+0.6630101598466516,
+1,
+2
+],
+[
+13154,
+0.027361691522873932,
+3,
+5
+]
+],
+"sell_values": [
+42124.37808741782,
+12942.585461905643,
+2601.380710625206
+]
+},
+"call": "expected_value",
+"result": 28851.79753616114
+},
+{
+"args": {
+"ilvl": 60,
+"kind": "weapon",
+"quality": 4
+},
+"call": "outcomes_for",
+"result": null
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 145
+},
+"call": "can_disenchant",
+"result": false
+},
+{
+"args": {
+"outcomes": [
+[
+13391,
+0.3145036485295958,
+3,
+5
+]
+],
+"sell_values": [
+23971.925725530953
+]
+},
+"call": "expected_value",
+"result": 30157.03241183985
+},
+{
+"args": {
+"ilvl": 47,
+"kind": "weapon",
+"quality": 3
+},
+"call": "outcomes_for",
+"result": [
+150,
+[
+[
+11178,
+1.0,
+1,
+1
+]
+]
+]
+},
+{
+"args": {
+"best_skill": null,
+"skill_required": 255
+},
+"call": "can_disenchant",
+"result": false
+}
+],
+"seed": 3302026
+}
