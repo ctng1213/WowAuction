@@ -7,7 +7,7 @@ import pytest
 
 from ahsync.ingest.savedvars import (
     AuctionRow, Character, Event, InventoryLocation, InventoryRow, ItemRule, KnownRecipe,
-    OwnAuctionSnapshot, Profession, Reagent, Recipe, SavedVarsError, SavedVarsParseError, Scan,
+    OwnAuctionSnapshot, Profession, Reagent, Recipe, RejectedRow, SavedVarsError, SavedVarsParseError, Scan,
     UnsupportedFormatError, base_item_id, is_unknown_suffix, read_ahprofit, read_ahprofit_file,
 )
 
@@ -255,6 +255,18 @@ def test_bad_rows_are_set_aside_with_a_problem_and_the_rest_carries_on(body, pro
     assert len(data.problems) == 1
     assert problem in data.problems[0]
     assert data.rules == (ItemRule(1, "keep", 1),) or data.vendor_reagents == (2320,)
+
+
+def test_rejected_scans_and_events_are_identified_by_character_and_time():
+    body = ('events = { { id = "A:5000:0", type = "post", char = "A-R", at = 5000 },'
+            ' { id = "x", type = "craft", char = 7, at = "soon" }, "junk",'
+            ' { id = "A:6000:0", type = "craft", char = "A-R", at = 6000, spell = 1, count = 1 } },'
+            ' scans = { { id = "s", char = "B-R", at = 7000.0, kind = "full", coverage = 2, rows = "" } },')
+    data = read_ahprofit(db_text(body))
+    assert len(data.events) == 1 and len(data.problems) == 4
+    assert data.rejected == (RejectedRow("B-R", 7000), RejectedRow("A-R", 5000), RejectedRow(None, None),
+                             RejectedRow(None, None))
+    assert read_ahprofit(db_text("")).rejected == ()
 
 
 def test_reads_a_file_with_crlf_line_endings_and_utf8_bytes(tmp_path):

@@ -60,11 +60,14 @@ CREATE TABLE IF NOT EXISTS book_entries(
 ) WITHOUT ROWID;
 
 -- Event tables carry the addon's unique event_id (charId:timeMs:seq); ingest upserts on it (§5.2).
+-- SPEC GAP: §3.2 keys auction_mail, purchases and crafts on (char_id, key|spell_id, at[, outcome]), but times
+-- are whole seconds, so two sold mails or two buys of one item in the same second would collide. The event id
+-- is their primary key instead, with the §3.2 natural key kept as an index.
 CREATE TABLE IF NOT EXISTS auction_mail(
-    char_id TEXT NOT NULL, key INTEGER NOT NULL, qty INTEGER, price INTEGER, outcome TEXT NOT NULL,
-    at INTEGER NOT NULL, event_id TEXT UNIQUE,
-    PRIMARY KEY(char_id, key, at, outcome)
+    event_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, key INTEGER NOT NULL, qty INTEGER, price INTEGER,
+    outcome TEXT NOT NULL, at INTEGER NOT NULL
 );
+CREATE INDEX IF NOT EXISTS auction_mail_char_key_at ON auction_mail(char_id, key, at, outcome);
 
 CREATE TABLE IF NOT EXISTS posts(
     post_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, market TEXT, key INTEGER NOT NULL, stack INTEGER,
@@ -73,22 +76,29 @@ CREATE TABLE IF NOT EXISTS posts(
 );
 
 CREATE TABLE IF NOT EXISTS purchases(
-    char_id TEXT NOT NULL, key INTEGER NOT NULL, qty INTEGER, price INTEGER, source TEXT, at INTEGER NOT NULL,
-    action_id TEXT, event_id TEXT UNIQUE, confirmed INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY(char_id, key, at)
+    event_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, key INTEGER NOT NULL, qty INTEGER, price INTEGER, source TEXT,
+    at INTEGER NOT NULL, action_id TEXT, confirmed INTEGER NOT NULL DEFAULT 0
 );
+CREATE INDEX IF NOT EXISTS purchases_char_key_at ON purchases(char_id, key, at);
 
 CREATE TABLE IF NOT EXISTS crafts(
-    char_id TEXT NOT NULL, spell_id INTEGER NOT NULL, count INTEGER, cost_each REAL, at INTEGER NOT NULL,
-    action_id TEXT, event_id TEXT UNIQUE,
-    PRIMARY KEY(char_id, spell_id, at)
+    event_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, spell_id INTEGER NOT NULL, count INTEGER, cost_each REAL,
+    at INTEGER NOT NULL, action_id TEXT
 );
+CREATE INDEX IF NOT EXISTS crafts_char_spell_at ON crafts(char_id, spell_id, at);
 
 -- Columns per §3.2 (mail_sent), following §2.2.1.
 CREATE TABLE IF NOT EXISTS mail_sent(
     event_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, to_char TEXT NOT NULL, key INTEGER NOT NULL,
     qty INTEGER, at INTEGER NOT NULL, action_id TEXT
 );
+
+-- SPEC GAP: §3.2 has no table for skip events (§2.2.1). Each is kept here, so an action that doesn't exist yet
+-- (or is re-planned later) can still be marked skipped when it appears; ingest marks an existing one at once.
+CREATE TABLE IF NOT EXISTS skips(
+    event_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, action_id TEXT NOT NULL, at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS skips_action ON skips(action_id);
 
 CREATE TABLE IF NOT EXISTS cost_basis(
     key INTEGER PRIMARY KEY, qty INTEGER NOT NULL DEFAULT 0, total_cost INTEGER NOT NULL DEFAULT 0,
@@ -141,16 +151,31 @@ CREATE TABLE IF NOT EXISTS known_recipes(
     PRIMARY KEY(char_id, spell_id)
 );
 
+-- SPEC GAP: §3.2 has no table for SavedVariables' vendorReagents (keys a merchant was seen selling, §3.4B).
+CREATE TABLE IF NOT EXISTS vendor_reagents(
+    key INTEGER PRIMARY KEY
+);
+
 -- location: 'bags' | 'bank' | 'mail'.
 CREATE TABLE IF NOT EXISTS inventory(
     char_id TEXT NOT NULL, location TEXT NOT NULL, key INTEGER NOT NULL, qty INTEGER NOT NULL, bound INTEGER NOT NULL,
     PRIMARY KEY(char_id, location, key, bound)
 );
 
+-- SPEC GAP: §3.2 keys own_auctions on (char_id, key, price, stack); band is part of the key here, because the
+-- same stack at the same price can be posted twice with different time left.
 CREATE TABLE IF NOT EXISTS own_auctions(
-    char_id TEXT NOT NULL, key INTEGER NOT NULL, price INTEGER NOT NULL, stack INTEGER NOT NULL, band INTEGER,
+    char_id TEXT NOT NULL, key INTEGER NOT NULL, price INTEGER NOT NULL, stack INTEGER NOT NULL, band INTEGER NOT NULL,
     count INTEGER, seen INTEGER,
-    PRIMARY KEY(char_id, key, price, stack)
+    PRIMARY KEY(char_id, key, price, stack, band)
+);
+
+-- SPEC GAP: §3.2 doesn't say where each snapshot's capture time lives. One row per character and place
+-- ('bags' | 'bank' | 'mail' | 'auctions'), so an older SavedVariables file never overwrites a newer snapshot,
+-- even an empty one (§2.2.1).
+CREATE TABLE IF NOT EXISTS snapshots(
+    char_id TEXT NOT NULL, location TEXT NOT NULL, at INTEGER NOT NULL,
+    PRIMARY KEY(char_id, location)
 );
 
 -- last_hour = floor(ms/3600000) of the newest hour handled; last_d1/last_volume = day numbers.

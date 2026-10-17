@@ -17,6 +17,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from ahsync.store.ingest_writes import IngestWrites
+
 SCHEMA_VERSION = 1
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. Version 1 is schema.sql itself.
@@ -28,7 +30,8 @@ CANDLE_TABLES = ("candles_h1", "candles_d1")
 # Tables and time columns prune may delete from (SPEC §3.2 retention). Guards the SQL built in delete_before.
 PRUNABLE = {
     "candles_h1": "t", "candles_d1": "t", "volume_d1": "day", "posts": "at", "purchases": "at",
-    "crafts": "at", "auction_mail": "at", "mail_sent": "at", "actions": "run_at", "fetch_failures": "hour",
+    "crafts": "at", "auction_mail": "at", "mail_sent": "at", "skips": "at", "actions": "run_at",
+    "fetch_failures": "hour",
 }
 
 
@@ -167,7 +170,7 @@ def restore_newest_backup(path: Path, backup_dir: Path, now_ms: int) -> Path | N
     return None
 
 
-class Database:
+class Database(IngestWrites):
     """A connection to data/ahsync.db with AHSync's queries and upserts."""
 
     def __init__(self, conn: sqlite3.Connection, path: Path) -> None:

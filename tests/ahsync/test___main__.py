@@ -3,27 +3,38 @@ from __future__ import annotations
 
 import io
 import logging
+import os
+import shutil
+import sqlite3
+from pathlib import Path
 
 import pytest
 
-from ahsync.__main__ import ALREADY_RUNNING, InstanceLock, Runtime, build_hooks, main, run, safe_backup
+from ahsync.__main__ import (ALREADY_RUNNING, InstanceLock, Runtime, build_hooks, main, read_savedvars_at_start, run,
+                             safe_backup)
 from ahsync.api.ahf import AhfApi
 from ahsync.api.client import ApiClient
 from ahsync.clock import HOUR_MS
 from ahsync.config import Config
+from ahsync.ingest.apply import ingest_file
 from ahsync.store.db import Database
 from ahsync.sync.catchup import SyncContext, run_catchup
+from ahsync.sync.scheduler import SavedVarsWatcher
 from tests.support.builders import AhfWorld, h1_path
 from tests.support.fake_clock import FakeClock
 from tests.support.fake_transport import DEFAULT_MARKET
 
 KEY = "ak_live_SECRET_9f8e7d6c5b4a"
+A1_GOLDEN = Path(__file__).resolve().parents[1] / "fixtures" / "savedvars" / "a1.lua"
 
 
 def start(tmp_path, world: AhfWorld, config_text: str = "", stop_after_ticks: int = 0, env=None) -> tuple[int, str]:
-    """Run AHSync against a fake world until it has ticked a few times; return (exit code, printed text)."""
+    """Run AHSync against a fake world until it has ticked a few times; return (exit code, printed text).
+
+    wow_path points into tmp_path (line 1 of config.toml), so no test ever reads a real WoW folder.
+    """
     config = tmp_path / "config.toml"
-    config.write_text(config_text, encoding="utf-8")
+    config.write_text(f'wow_path = "{(tmp_path / "wow").as_posix()}"\n' + config_text, encoding="utf-8")
     calls = {"n": 0}
 
     def should_stop() -> bool:
@@ -77,7 +88,7 @@ def test_FM15_second_start_exits_with_already_running(tmp_path):
 
 def test_bad_config_refuses_to_start(tmp_path):
     code, printed = start(tmp_path, AhfWorld(FakeClock()), 'retention_days = "ninety"\n')
-    assert code == 2 and "config.toml line 1: retention_days must be a number" in printed
+    assert code == 2 and "config.toml line 2: retention_days must be a number" in printed   # line 1: wow_path
 
 
 def test_start_runs_catchup_backup_and_the_hourly_store(tmp_path):
@@ -161,4 +172,93 @@ def test_backup_failure_is_logged_not_fatal(tmp_path, caplog):
     with caplog.at_level(logging.WARNING, logger="ahsync"):
         safe_backup(db, blocker, FakeClock().now_ms())
     assert "daily backup failed" in caplog.text
+    db.close()
+
+
+def write_savedvars(tmp_path, clock: FakeClock, age_ms: int) -> Path:
+    """Copy the a1 golden SavedVariables into the test's WoW folder, modified age_ms before now."""
+    path = tmp_path / "wow" / "WTF" / "Account" / "ACC" / "SavedVariables" / "AHProfit.lua"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(A1_GOLDEN, path)
+    mtime_ns = (clock.now_ms() - age_ms) * 1_000_000
+    os.utime(path, ns=(mtime_ns, mtime_ns))
+    return path
+
+
+def stored_characters(tmp_path) -> list[tuple]:
+    """Characters in the app's database after it stopped."""
+    db = Database.open(tmp_path / "data" / "ahsync.db", FakeClock().now_ms(), None)
+    try:
+        return db.conn.execute("SELECT id, market FROM characters ORDER BY id").fetchall()
+    finally:
+        db.close()
+
+
+def test_start_reads_savedvariables_before_catchup(tmp_path):
+    world = AhfWorld(FakeClock())
+    write_savedvars(tmp_path, world.clock, age_ms=60_000)
+    code, _ = start(tmp_path, world, '[realms]\nGrommash = "pvp"\n')
+    assert code == 0
+    assert stored_characters(tmp_path) == [("Amaya-Grommash", "forever.pvp.horde.us"),
+                                           ("Brugan-Grommash", "forever.pvp.horde.us")]
+
+
+def test_a_savedvariables_file_still_being_written_at_start_is_read_by_the_watcher(tmp_path):
+    world = AhfWorld(FakeClock())
+    write_savedvars(tmp_path, world.clock, age_ms=500)
+    code, _ = start(tmp_path, world, stop_after_ticks=0)
+    assert code == 0 and stored_characters(tmp_path) == []           # too fresh to read at start
+
+    code, _ = start(tmp_path, world, stop_after_ticks=2)              # the first watch, 5 s later, reads it
+    assert code == 0 and len(stored_characters(tmp_path)) == 2
+
+
+def test_a_failed_start_up_read_is_logged_on_status_and_retried_by_the_watcher(tmp_path, monkeypatch, caplog):
+    world = AhfWorld(FakeClock())
+    write_savedvars(tmp_path, world.clock, age_ms=60_000)
+    calls = []
+
+    def parser_bug_once(*args):
+        calls.append(args[0])
+        if len(calls) == 1:
+            raise KeyError("a bug, not an expected error")
+        return ingest_file(*args)
+
+    monkeypatch.setattr("ahsync.__main__.ingest_file", parser_bug_once)
+    with caplog.at_level(logging.WARNING, logger="ahsync"):
+        code, _ = start(tmp_path, world)                                  # start-up only, no ticks
+    assert code == 0 and "reading AHProfit.lua failed" in caplog.text
+    db = Database.open(tmp_path / "data" / "ahsync.db", world.clock.now_ms(), None)
+    assert db.status("savedvars:ACC").kind == "savedvars_failed"
+    db.close()
+
+    code, _ = start(tmp_path, world, stop_after_ticks=2)                 # the next run's watcher reads it
+    assert code == 0 and len(stored_characters(tmp_path)) == 2
+
+
+def test_a_start_up_failure_that_cant_reach_status_is_still_only_logged(tmp_path, monkeypatch, caplog):
+    clock = FakeClock()
+    write_savedvars(tmp_path, clock, age_ms=60_000)
+
+    class BrokenDb:
+        def set_status(self, *_args):
+            raise sqlite3.OperationalError("database or disk is full")
+
+    def disk_full(*_args):
+        raise sqlite3.OperationalError("database or disk is full")
+
+    monkeypatch.setattr("ahsync.__main__.ingest_file", disk_full)
+    watcher = SavedVarsWatcher(lambda: [], lambda _p: None)
+    with caplog.at_level(logging.WARNING, logger="ahsync"):
+        read_savedvars_at_start(BrokenDb(), clock, Config(wow_path=str(tmp_path / "wow")), watcher)
+    assert "could not record the failure on Status" in caplog.text
+
+
+def test_savedvars_hook_ingests_the_changed_file(tmp_path):
+    clock = FakeClock()
+    path = write_savedvars(tmp_path, clock, age_ms=60_000)
+    db = Database.open(tmp_path / "ahsync.db", clock.now_ms(), None)
+    ctx = SyncContext(None, db, clock, None)
+    build_hooks(ctx, Config(realms={"Grommash": "pvp"}), tmp_path / "backups").savedvars_changed(path)
+    assert db.count("characters") == 2 and db.count("posts") == 1
     db.close()

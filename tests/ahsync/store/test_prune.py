@@ -48,3 +48,15 @@ def test_books_keep_30_days_and_rule_tombstones_90(tmp_path):
     assert db.count("volume_d1") == 0 and db.count("fetch_failures") == 0
     assert report.total == 4
     db.close()
+
+
+def test_skips_follow_the_90_day_retention(tmp_path):
+    db = open_db(tmp_path)
+    db.record_skip("A-R:1:0", "A-R", "old", NOW - duration_ms("90d1h"))
+    db.record_skip("A-R:2:0", "A-R", "kept", NOW - duration_ms("89d23h"))
+
+    report = prune(db, NOW)
+
+    assert [r[0] for r in db.conn.execute("SELECT action_id FROM skips")] == ["kept"]
+    assert report.deleted["skips"] == 1
+    db.close()
