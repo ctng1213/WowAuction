@@ -7,7 +7,7 @@ fallback is the vendor price only.
 from __future__ import annotations
 
 from ahsync.config import Config, market_settings
-from ahsync.engine import craft, disenchant, fees, sellprob, views
+from ahsync.engine import capacity, craft, disenchant, fees, sellprob, views
 from ahsync.engine.de_table import DE_TABLE
 from ahsync.engine.sellprob import Supply
 from ahsync.history.reads import ItemInfo
@@ -31,9 +31,31 @@ def _market(stats: ItemIntel | None) -> views.MarketActivity:
     return views.market_activity(stats.chance, stats.conf, stats.sold_per_day, stats.volume_source, stats.units_on_ah)
 
 
+def _mat_caps(mat_keys: set[int], stats: dict[int, ItemIntel], cfg: Config) -> dict[int, float]:
+    """Each mat's liquidity cap for the posting-now window (SPEC §3.4 Liquidity).
+
+    Args:
+        mat_keys: Mats the disenchant buys would yield.
+        stats: Item key -> intelligence (sales per day, reference stack).
+        cfg: Config (sell_window_hours, max_market_share).
+
+    Returns:
+        Mat key -> cap in units; one stack of 1 for a mat with no intelligence.
+    """
+    caps = {}
+    for key in sorted(mat_keys):
+        s = stats.get(key)
+        caps[key] = capacity.liquidity_cap(s.sold_per_day if s else None, cfg.sell_window_hours,
+                                           cfg.max_market_share, s.ref_stack if s else 1)
+    return caps
+
+
 def disenchant_page(state: StateReader, char_ids: list[str], stats: dict[int, ItemIntel], items: dict[int, ItemInfo],
-                    total_gold: int) -> dict:
+                    total_gold: int, cfg: Config) -> dict:
     """The Disenchant page payload (SPEC §3.4A, §3.5).
+
+    The mats of all the buys together stay within each mat's cap: buys are taken best
+    profit first until a mat's cap is reached (SPEC §3.4 market capacity, R15).
 
     Args:
         state: Character state (for the best Enchanting skill).
@@ -41,24 +63,33 @@ def disenchant_page(state: StateReader, char_ids: list[str], stats: dict[int, It
         stats: Item key -> stats.
         items: Item metadata.
         total_gold: All your characters' gold.
+        cfg: Config (the liquidity cap's window and market share).
 
     Returns:
-        {"rows": [...], "hidden": 0, "help": header -> tooltip}, profit highest first.
+        {"rows": [...], "hidden": buys left out for capacity, "help": header -> tooltip}, profit highest first.
     """
     listings = [(key, s.cur, items[key].quality, items[key].ilvl, DE_KIND[items[key].item_class])
                 for key, s in sorted(stats.items())
                 if s.cur and key in items and items[key].item_class in DE_KIND and items[key].ilvl]
     sell = {key: s.sell_value for key, s in stats.items() if s.sell_value is not None}
-    rows = []
+    found = []
     for t in disenchant.targets(listings, DE_TABLE, sell, state.best_skill(char_ids, "Enchanting")):
         info = items[t.key]
         _, outcomes = disenchant.outcomes_for(DE_TABLE, info.quality, info.ilvl, DE_KIND[info.item_class])
+        found.append((t, info, outcomes, {m: chance * (lo + hi) / 2 for m, chance, lo, hi in outcomes}))
+    caps = _mat_caps({m for *_, units in found for m in units}, stats, cfg)
+    taken, dropped = capacity.take_within_caps([capacity.Candidate(t.key, t.ev - t.buy_copper, units)
+                                                for t, _, _, units in found], caps)
+    rows = []
+    for t, info, outcomes, _ in found:
+        if t.key not in taken:
+            continue
         mats = tuple((items[m].name if m in items else str(m), chance * (lo + hi) / 2) for m, chance, lo, hi in outcomes)
         main_mat = max(outcomes, key=lambda o: (o[1] * (o[2] + o[3]), -o[0]))[0]
         rows.append(views.disenchant_row(views.DisenchantInput(
             t.key, info.name, info.quality or 0, info.ilvl, t.buy_copper, mats, t.ev, _market(stats.get(main_mat)),
             stats[t.key].cur_age_ms), total_gold))
-    return {"rows": rows, "hidden": 0, "help": views.COLUMN_HELP}
+    return {"rows": rows, "hidden": len(dropped), "help": views.COLUMN_HELP}
 
 
 def _craft_market(state: StateReader, char_ids: list[str], stats: dict[int, ItemIntel], items: dict[int, ItemInfo]

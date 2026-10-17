@@ -1160,7 +1160,8 @@ ahsync/
   db/         sqlite.py (the local Database: connection, migrations, backups, and every store's SQLite implementation), schema.sql
   engine/     fees.py, prices.py, profile.py (hour-of-week), volume.py, sellprob.py (incl. the P' blend), de_table.py (disenchant table, §4.5),
               record.py (own sell record + calibration), tracking.py (event → action matching), rules.py,
-              patterns.py (weekly patterns, best selling windows), confidence.py (conf %), disenchant.py, craft.py, plan.py, views.py (tab totals, sorting, filters, tooltip deltas)
+              patterns.py (weekly patterns, best selling windows), confidence.py (conf %), disenchant.py, craft.py,
+              capacity.py (liquidity caps, shared market capacity, §3.4), plan.py, views.py (tab totals, sorting, filters, tooltip deltas)
   export/     market_lua.py (MarketIntelligence.lua), plan_lua.py (PortfolioPlan.lua)
   web/        server.py, static/
 addon/AHProfit/
