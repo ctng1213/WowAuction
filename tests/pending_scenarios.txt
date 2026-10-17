@@ -30,5 +30,5 @@ VW1
 LP1
 
 # M2/M5 addon
-A1-A5
+A2-A5
 UI1-UI11
