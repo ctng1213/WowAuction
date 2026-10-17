@@ -7,7 +7,7 @@ from ahsync.analysis import market
 from ahsync.db.sqlite import Database
 from ahsync.engine.profile import unpack
 from ahsync.engine.sellprob import MarketSettings
-from ahsync.history.reads import CurrentPrice, ItemInfo
+from ahsync.history.reads import CurrentPrice, HistoryWindow, ItemHistory, ItemInfo
 from ahsync.intel.contract import from_json, to_json
 from tests.support.fake_clock import FakeClock
 
@@ -24,11 +24,32 @@ SALES = {6217: [(NOW - h * HOUR, 0.25 * (h % 4)) for h in range(40)]}
 
 
 class MemoryHistory:
-    """A HistoryReader on plain dicts: what a cloud store would look like to analysis."""
+    """A HistoryReader on plain dicts: what a cloud store would look like to analysis.
+
+    Subclasses shape the world through the per-item helpers; `market_history` is the one
+    bulk read analysis makes (AR7), and `calls` counts the reads analysis makes.
+    """
+
+    def __init__(self) -> None:
+        """No reads yet."""
+        self.calls = 0
 
     def items(self) -> dict[int, ItemInfo]:
         """Item metadata."""
+        self.calls += 1
         return dict(ITEMS)
+
+    def market_history(self, market_id: str, window: HistoryWindow):
+        """Every priced item's history, in key order, from the per-item helpers."""
+        self.calls += 1
+        for key in self.priced_keys(market_id, window.from_ms):
+            yield ItemHistory(
+                key, self.hourly_closes(market_id, key, window.from_ms, window.to_ms),
+                self.hourly_supply(market_id, key, window.from_ms, window.to_ms),
+                self.hourly_sales(market_id, key, window.from_ms, window.to_ms),
+                self.daily_closes(market_id, key, window.from_ms, window.to_ms), self.current_price(market_id, key),
+                self.volume_rows(market_id, key, window.volume_from_day),
+                self.newest_book(market_id, key, window.book_since_ms))
 
     def priced_keys(self, market_id: str, since_ms: int) -> list[int]:
         """Items with data."""
@@ -39,11 +60,11 @@ class MemoryHistory:
         return sorted((t, c) for t, c in CLOSES.get(key, []) if from_ms <= t <= to_ms)
 
     def hourly_supply(self, market_id: str, key: int, from_ms: int, to_ms: int) -> list[tuple[int, int]]:
-        """Units listed in the window, ascending."""
+        """Units listed per hour in the window, ascending."""
         return sorted((t, q) for t, q in SUPPLY.get(key, []) if from_ms <= t <= to_ms)
 
     def hourly_sales(self, market_id: str, key: int, from_ms: int, to_ms: int) -> list[tuple[int, float]]:
-        """Sales rates in the window, ascending."""
+        """Sales rates per hour in the window, ascending."""
         return sorted((t, r) for t, r in SALES.get(key, []) if from_ms <= t <= to_ms)
 
     def daily_closes(self, market_id: str, key: int, from_ms: int, to_ms: int) -> list[tuple[int, int]]:
@@ -63,7 +84,6 @@ class MemoryHistory:
         """The book, if recent enough."""
         book = BOOK.get(key)
         return (book[0], sorted(book[1])) if book and book[0] >= since_ms else None
-
 
 def sqlite_history(tmp_path) -> Database:
     """The same world in SQLite."""
@@ -168,14 +188,38 @@ def test_AR5_the_intelligence_holds_the_weekly_patterns_windows_and_curve():
     assert from_json(to_json(intel)) == intel
 
 
+def test_AR7_analysis_reads_history_per_market_not_per_item(monkeypatch):
+    class Many(MemoryHistory):
+        """n copies of the Copper Rod's history."""
+
+        def __init__(self, n: int) -> None:
+            """n items."""
+            super().__init__()
+            self.n = n
+
+        def priced_keys(self, market_id: str, since_ms: int) -> list[int]:
+            """n items."""
+            return list(range(1, self.n + 1))
+
+        def hourly_closes(self, market_id: str, key: int, from_ms: int, to_ms: int) -> list[tuple[int, int]]:
+            """Each item has the Copper Rod's closes."""
+            return super().hourly_closes(market_id, 6217, from_ms, to_ms)
+    counts = []
+    for n in (50, 500):
+        history = Many(n)
+        intel, _ = market.analyze_market(history, M, NOW, MarketSettings())
+        counts.append((len(intel.items), history.calls))
+    assert counts == [(50, 2), (500, 2)]          # items() and market_history(): the same for 50 and 500 items
+
+
 def test_one_failing_item_is_set_aside(monkeypatch):
     original = market.analyze_item
 
-    def flaky(history, market_id, key, info, now_ms, settings):
+    def flaky(item, info, now_ms, settings):
         """Fail for bars only."""
-        if key == 2840:
+        if item.key == 2840:
             raise ValueError("bad close")
-        return original(history, market_id, key, info, now_ms, settings)
+        return original(item, info, now_ms, settings)
     monkeypatch.setattr(market, "analyze_item", flaky)
     intel, failed = market.analyze_market(MemoryHistory(), M, NOW, MarketSettings())
     assert failed == {2840: "ValueError: bad close"} and set(intel.items) == {6217}

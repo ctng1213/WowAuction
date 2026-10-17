@@ -111,11 +111,11 @@ def test_FM8_one_failing_item_is_listed_and_the_rest_refresh(db, monkeypatch):
     from ahsync.analysis import market as analysis
     original = analysis.analyze_item
 
-    def flaky(history, market, key, info, now_ms, settings):
+    def flaky(item, info, now_ms, settings):
         """Fail for the gloves only."""
-        if key == GLOVES:
+        if item.key == GLOVES:
             raise ValueError("bad candle")
-        return original(history, market, key, info, now_ms, settings)
+        return original(item, info, now_ms, settings)
     monkeypatch.setattr(analysis, "analyze_item", flaky)
     result = refresh.refresh_all(db, NOW, CFG)
     assert result.failed == {f"{M}:{GLOVES}": "ValueError: bad candle"} and result.items == 4

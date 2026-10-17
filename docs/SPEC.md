@@ -1128,7 +1128,7 @@ The system is built as separate components that talk only through versioned cont
 
 Analysis computes these the same way for every item. It never chooses by your lists, stock or recipes; that trimming belongs to the export.
 
-**Bulk reads.** Analysis reads history **per market, not per item**: `HistoryReader` offers one read that streams every item's closes, books and volume rows for a market in key order. Against local SQLite this is one query per table. Against a remote store it keeps a market to a few round trips instead of several per item (about 40k for 9k items) (AR7).
+**Bulk reads.** Analysis reads history **per market, not per item**: `HistoryReader` offers one read that streams every item's closes, books and volume rows for a market in key order. Against local SQLite this is one query per table, each walking the table's primary key `(market, key, …)` so its rows arrive in key order without a sort (a whole-market sort of the hourly tables costs about 10 s per 2M rows), merged by key with one item in memory at a time. Against a remote store it keeps a market to a few round trips instead of several per item (about 40k for 9k items) (AR7).
 
 **Cloud boundary.** The Collector (remote providers), the Historical Store and the Analysis can run elsewhere, for example as a scheduled AWS Lambda, and publish `MarketIntelligence` as versioned JSON. The desktop then:
 - fetches the newest intelligence and checks its version (AR2) and age; when it is missing or too new, it keeps the last good one and shows its age (§5.2);

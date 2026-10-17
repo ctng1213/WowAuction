@@ -14,7 +14,7 @@ from ahsync.engine import confidence, fees, patterns, prices, profile, sellprob
 from ahsync.engine.profile import Profile
 from ahsync.engine.sellprob import MarketSettings, Supply
 from ahsync.engine.volume import VOLUME_METHOD_VERSION, DailyVolume, Volume, daily_volume
-from ahsync.history.reads import HistoryReader, ItemInfo
+from ahsync.history.reads import HistoryReader, HistoryWindow, ItemHistory, ItemInfo
 from ahsync.intel.contract import IntelWindow, ItemIntel, MarketIntelligence
 
 HOUR_MS = 3_600_000
@@ -23,20 +23,29 @@ HISTORY_DAYS = 90
 BOOK_MAX_AGE_MS = 24 * HOUR_MS          # SPEC §3.3.2: the newest scan, if under 24 h old
 
 
-def _volumes(history: HistoryReader, market: str, key: int, now_ms: int) -> dict[int, dict[str, Volume]]:
+def _volumes(item: ItemHistory) -> dict[int, dict[str, Volume]]:
     """Stored daily volume as engine Volumes.
 
     Args:
-        history: The history.
-        market: Market id.
-        key: Item key.
-        now_ms: Now.
+        item: The item's history.
 
     Returns:
         day -> source -> Volume over the history window.
     """
-    rows = history.volume_rows(market, key, (now_ms - HISTORY_DAYS * DAY_MS) // DAY_MS)
-    return {day: {src: Volume(*v) for src, v in sources.items()} for day, sources in rows.items()}
+    return {day: {src: Volume(*v) for src, v in sources.items()} for day, sources in item.volume.items()}
+
+
+def history_window(now_ms: int) -> HistoryWindow:
+    """What analysis reads for a refresh at now_ms (SPEC §3.3): 90 days, books under 24 h old.
+
+    Args:
+        now_ms: Now.
+
+    Returns:
+        The window.
+    """
+    start = now_ms - HISTORY_DAYS * DAY_MS
+    return HistoryWindow(start, now_ms, start // DAY_MS, now_ms - BOOK_MAX_AGE_MS)
 
 
 def ref_stack(book: list[tuple[int, int, int, int]]) -> int:
@@ -83,15 +92,12 @@ def _windows(windows: list[patterns.Window]) -> tuple[IntelWindow, ...]:
     return tuple(IntelWindow(w.start_slot, w.hours, w.best_slot, w.how_avg, w.weeks) for w in windows)
 
 
-def weekly_fields(history: HistoryReader, market: str, key: int, hourly: list[tuple[int, int]], med30: int | None,
-                  volume: DailyVolume, ref: int, now_ms: int, settings: MarketSettings) -> dict:
+def weekly_fields(item: ItemHistory, med30: int | None, volume: DailyVolume, ref: int, now_ms: int,
+                  settings: MarketSettings) -> dict:
     """An item's weekly patterns, windows, seasonality strength and curve (SPEC §3.3.4, §3.3.6, §3.1.1).
 
     Args:
-        history: The history.
-        market: Market id.
-        key: Item key.
-        hourly: Its hourly closes over the history window, (hour start ms, copper).
+        item: The item's history (hourly closes, sales and supply over the history window).
         med30: Its 30-day median, copper.
         volume: Its daily volume over the last 7 days.
         ref: Its reference stack, units.
@@ -101,14 +107,12 @@ def weekly_fields(history: HistoryReader, market: str, key: int, hourly: list[tu
     Returns:
         The ItemIntel pattern fields by name.
     """
-    start = now_ms - HISTORY_DAYS * DAY_MS
+    hourly = item.hourly_closes
     half_life = settings.pattern_half_life_weeks
     fields: dict = {}
     how = _packed("how", profile.price_profile(hourly, med30, now_ms, half_life), fields)
-    sales = _packed("sales", profile.sales_profile(history.hourly_sales(market, key, start, now_ms), now_ms,
-                                                   half_life), fields)
-    _packed("supply", profile.supply_profile(history.hourly_supply(market, key, start, now_ms), now_ms, half_life),
-            fields)
+    sales = _packed("sales", profile.sales_profile(item.hourly_sales, now_ms, half_life), fields)
+    _packed("supply", profile.supply_profile(item.hourly_supply, now_ms, half_life), fields)
     curve, curve_hour = "", None
     if volume.sold_per_day is not None:
         grid = sellprob.build_curve(volume.sold_per_day, volume.listed_per_day or 0.0, settings.default_undercut_share,
@@ -123,14 +127,11 @@ def weekly_fields(history: HistoryReader, market: str, key: int, hourly: list[tu
     }
 
 
-def analyze_item(history: HistoryReader, market: str, key: int, info: ItemInfo | None, now_ms: int,
-                 settings: MarketSettings) -> ItemIntel:
+def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings: MarketSettings) -> ItemIntel:
     """One item's intelligence from its stored history (SPEC §3.3).
 
     Args:
-        history: The history.
-        market: Market id.
-        key: Item key.
+        item: The item's history, from the market read.
         info: Item metadata, or None when unknown.
         now_ms: Now.
         settings: Market-wide defaults.
@@ -138,16 +139,13 @@ def analyze_item(history: HistoryReader, market: str, key: int, info: ItemInfo |
     Returns:
         The ItemIntel.
     """
-    start = now_ms - HISTORY_DAYS * DAY_MS
-    hourly = history.hourly_closes(market, key, start, now_ms)
-    daily = history.daily_closes(market, key, start, now_ms)
-    cur = history.current_price(market, key)
+    key, hourly, daily, cur = item.key, item.hourly_closes, item.daily_closes, item.current
     med7 = prices.window_median(hourly, daily, now_ms, 7)
     med30 = prices.window_median(hourly, daily, now_ms, 30)
     last30 = [c for t, c in hourly if t > now_ms - 30 * DAY_MS]
     week = range((now_ms - 7 * DAY_MS) // DAY_MS + 1, now_ms // DAY_MS + 1)
-    volume = daily_volume(_volumes(history, market, key, now_ms), week)
-    newest = history.newest_book(market, key, now_ms - BOOK_MAX_AGE_MS)
+    volume = daily_volume(_volumes(item), week)
+    newest = item.book
     book = newest[1] if newest else None
     ref = ref_stack(book or [])
     price = prices.post_price(cur.price if cur and cur.price is not None else None, med7)
@@ -170,7 +168,7 @@ def analyze_item(history: HistoryReader, market: str, key: int, info: ItemInfo |
         main_source, volume.days_by_source, price, ref, chance, unknown, sell_value, conf,
         sum(stack * count for _, stack, _, count in book) if book else (cur.qty if cur else None),
         book_age, tuple(book or ()),
-        **weekly_fields(history, market, key, hourly, med30, volume, ref, now_ms, settings))
+        **weekly_fields(item, med30, volume, ref, now_ms, settings))
 
 
 def analyze_market(history: HistoryReader, market: str, now_ms: int,
@@ -189,10 +187,10 @@ def analyze_market(history: HistoryReader, market: str, now_ms: int,
     items = history.items()
     out: dict[int, ItemIntel] = {}
     failed: dict[int, str] = {}
-    for key in history.priced_keys(market, now_ms - HISTORY_DAYS * DAY_MS):
+    for item in history.market_history(market, history_window(now_ms)):   # one bulk read per market (AR7)
         try:
-            out[key] = analyze_item(history, market, key, items.get(key), now_ms, settings)
+            out[item.key] = analyze_item(item, items.get(item.key), now_ms, settings)
         except Exception as error:                 # noqa: BLE001  one bad item never stops the analysis (FM8)
-            failed[key] = f"{type(error).__name__}: {error}"
+            failed[item.key] = f"{type(error).__name__}: {error}"
     seen = [now_ms - i.cur_age_ms for i in out.values() if i.cur_age_ms is not None]
     return MarketIntelligence(market, now_ms, max(seen) if seen else None, VOLUME_METHOD_VERSION, out), failed

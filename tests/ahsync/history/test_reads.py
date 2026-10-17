@@ -4,6 +4,7 @@ from __future__ import annotations
 import pytest
 
 from ahsync.db.sqlite import Database
+from ahsync.history.reads import HistoryWindow, ItemHistory
 from tests.support.fake_clock import FakeClock
 
 M, OTHER = "forever.pvp.horde.us", "forever.pvp.alliance.us"
@@ -73,3 +74,31 @@ def test_hourly_sales_and_complete_scans_of_either_source(db):
     sql(db, "INSERT INTO scans(scan_id, market, src, at, kind, coverage) VALUES (?, ?, ?, ?, ?, ?)",
         ("a", M, "ahf", 5, "full", 1.0), ("l", M, "local", 3, "full", 1.0), ("p", M, "local", 4, "partial", 0.6))
     assert db.complete_scans(M, 0, 10) == [("l", 3), ("a", 5)]
+
+
+def test_market_history_streams_the_same_values_as_the_per_item_reads(db):
+    """AR7: one bulk read per market gives, item by item, exactly what the per-item reads give."""
+    sql(db, "INSERT INTO candles_h1(market, key, t, close, qty, src) VALUES (?, ?, ?, ?, ?, ?)",
+        (M, 1, 0, 50, 10, "ahf"), (M, 1, 0, None, 12, "local"), (M, 1, HOUR, 48, 9, "local"), (M, 1, HOUR, 51, 7, "ahf"),
+        (M, 3, HOUR, 70, 1, "ahf"), (OTHER, 1, 0, 1, 1, "ahf"))
+    sql(db, "INSERT INTO candles_d1(market, key, t, close, src) VALUES (?, ?, ?, ?, ?)",
+        (M, 1, 0, 100, "ahf"), (M, 1, 0, 90, "local"), (M, 2, DAY, 30, "ahf"))
+    sql(db, "INSERT INTO sales_h1(market, key, t, sold_per_hour) VALUES (?, ?, ?, ?)", (M, 1, 0, 2.5), (M, 3, HOUR, 1.0))
+    sql(db, "INSERT INTO current(market, key, price, qty, at, src) VALUES (?, ?, ?, ?, ?, ?)",
+        (M, 1, 49, 3, HOUR, "ahf"), (M, 1, 48, 4, HOUR, "local"), (M, 2, 30, 1, DAY, "ahf"))
+    sql(db, "INSERT INTO volume_d1(market, key, day, listed, sold, expired, src) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (M, 1, 0, 5, 4, None, "books"), (M, 3, 0, 1, 1, 0, "ahf"))
+    sql(db, "INSERT INTO scans(scan_id, market, src, at, kind, coverage) VALUES (?, ?, ?, ?, ?, ?)",
+        ("b", M, "local", HOUR, "full", 1.0), ("a", M, "ahf", HOUR, "full", 1.0), ("old", M, "local", 0, "full", 1.0))
+    sql(db, "INSERT INTO book_entries(scan_id, key, price, stack, band, count) VALUES (?, ?, ?, ?, ?, ?)",
+        ("a", 1, 47, 1, 2, 1), ("b", 1, 46, 1, 2, 1), ("old", 1, 40, 1, 1, 1), ("old", 3, 70, 1, 4, 1))
+    window = HistoryWindow(0, 2 * DAY, 0, 0)
+    bulk = list(db.market_history(M, window))
+    assert [h.key for h in bulk] == db.priced_keys(M, 0) == [1, 2, 3]
+    for h in bulk:
+        assert h == ItemHistory(h.key, db.hourly_closes(M, h.key, 0, 2 * DAY), db.hourly_supply(M, h.key, 0, 2 * DAY),
+                                db.hourly_sales(M, h.key, 0, 2 * DAY), db.daily_closes(M, h.key, 0, 2 * DAY),
+                                db.current_price(M, h.key), db.volume_rows(M, h.key, 0), db.newest_book(M, h.key, 0))
+    one = bulk[0]
+    assert (one.hourly_closes, one.hourly_supply) == ([(0, 50), (HOUR, 48)], [(0, 12), (HOUR, 9)])   # local first;
+    assert one.book == (HOUR, [(47, 1, 2, 1)])     # a local hour without a close falls back to AHF's; ties: scan id

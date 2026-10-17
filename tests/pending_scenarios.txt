@@ -39,4 +39,4 @@ V23-V24 W9 R16 K4 PL4
 T17-T18 D24 A9
 
 # Cloud-ready intelligence amendment (SPEC §5.0 contents, bulk reads, cloud boundary)
-AR6-AR7
+AR6
