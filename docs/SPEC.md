@@ -348,7 +348,7 @@ fetch_failures(market, hour, failures, last_error, last_at,  PK(market,hour))   
 ```
 
 - Candle and `current` `src` is `ahf` or `local`.
-- Volume `src` is `ahf` (Premium depth), `books` (own order-book diffs), `mail` or `qty_drop`, ranked in that order of trust (§3.3.1). `conf` is `high`, `medium` or `low`.
+- Volume `src` is `ahf` (Premium depth), `books` (own order-book diffs) or `mail`, ranked in that order of trust; `qty_drop` rows hold listing turnover, never sales (§3.3.1). `conf` is `high`, `medium` or `low`.
 - Scan `kind` is `full` or `partial`. Mail `outcome` is `sold`, `expired`, `cancelled` or `won`. Post `outcome` is null while pending, then `sold`, `expired` or `cancelled`.
 - `location` is `bags`, `bank` or `mail`. Items on the AH live in `own_auctions`.
 - Action `kind` is `buy`, `craft`, `mail`, `post`, `hold`, `de` or `vendor`. `status` is `pending`, `late`, `partial`, `done`, `missed` or `skipped`. A replacement post points to the missed one with `replaces_id` and carries the original `anchor_net` and `anchor_window_ms` (§3.4.0). `parent_id` links a sell action to the buy or craft that created the stock.
@@ -422,11 +422,13 @@ The free API gives only the **quantity listed**, not sales. Sales volume is the 
    - Known errors: a cancelled auction counts as sold, and a repost at a new price counts as sold plus new.
    - Scanning at the start and end of a play session gives one sample.
 3. **Your own sales**: "auction successful" and "auction expired" mail is real ground truth for your own items. It also calibrates source 2: `factor = mail-confirmed sold ÷ book-estimated sold` for your auctions of that item, stored in `calibration` and multiplied into book-based `sold/day`.
-4. **Quantity-drop heuristic** (weakest): `max(0, qty_prev − qty_next)` between consecutive AHF observations is an upper bound on sold + expired + cancelled. It is useful only when observations are a few hours apart, and is flagged `low confidence`.
+4. **Listing turnover, not sales.** `max(0, qty_prev − qty_next)` between consecutive AHF quantity observations a few hours apart counts units that left the AH: sold, expired or cancelled, which totals alone can't tell apart. It is stored as `observed_listing_turnover` (§3.3.6) and shown for information, but it is **never used as sales**. An item whose only data is quantities has sales volume **unavailable**, and its chance uses `default_sell_prob`, marked "volume unknown" (§3.3.2).
+
+Order-book diffs (source 2) are an explicit estimate, not confirmed sales: without auction ids a cancellation can't be told from a sale, so they are labelled "est.", carry a lower confidence (§3.3.5), and are corrected by AHF and mail calibration (below).
 
 **Choosing the source, per item and per day:**
-- **All available sources are always computed and stored** in `volume_d1`, one row per source. The estimates (2–4) keep running even while Premium is active, so there is no gap when it lapses.
-- `sold/day` uses, for each day, the best source that has a row for that day, in the order 1 → 4. A 30-day `sold/day` can therefore mix days of real AHF volume with days of estimates, for example when Premium lapsed halfway through the month.
+- **All available sources are always computed and stored** in `volume_d1`, one row per source. The estimates (2–3) keep running even while Premium is active, so there is no gap when it lapses.
+- `sold/day` uses, for each day, the best source that has a row for that day, in the order 1 → 3. A 30-day `sold/day` can therefore mix days of real AHF volume with days of estimates, for example when Premium lapsed halfway through the month.
 - AHF volume already stored is history and stays valid after Premium lapses.
 - **AHF volume calibrates the estimates.** On days where both AHF volume and an order-book estimate exist for an item, `factor = AHF sold ÷ estimated sold` is stored in `calibration`, the same table the mail calibration uses. It is applied to that item's estimates on days without AHF data. The more weeks of Premium you have had, the better the estimates are afterwards. With no overlap, the factor is 1. When an item has both an AHF factor and a mail factor, only the AHF one is applied: it covers the whole market, not just your own auctions. The two are never multiplied together.
 - Every `sold/day` shows its source mix on the item detail and in the Status page, e.g. "sold/day 38 · 22 days AHF, 8 days estimated".
@@ -558,6 +560,40 @@ The week's 168 hours are treated as **repeating slots**: every Tuesday 19:00 is 
 - **Where windows are used.** The Week plan's peak slot is the best slot inside the top window, and the post is placed 8 h before it (§3.4C). Windows are also shown on the tooltip ("Best time to sell"), on the item detail (heat map plus windows) and in Inventory.
 - **Forecast.** The expected price in a window next week = `med30 × how × (1 + trend7/100 × days ahead)` (§3.4C). The chance to sell there is the simulation over that window (§3.3.2), using `sales_how` for demand. Both get more confident as the pattern strengthens.
 
+#### 3.3.6 Market activity metrics
+
+Numbers, not labels: the engine never classifies an item as "high" or "low" liquidity. For every priced item and market, the full refresh computes the fields below and stores them in `item_stats`. Each states its unit and window. A value the data can't support is **unavailable** (None, shown "—"), never a guess and never 0.
+
+| Field | Meaning (unit, window) | Unavailable when |
+|---|---|---|
+| `estimated_sales_per_day` | `sold/day` (§3.3.1): units per day, averaged over the days of the last 7 that have a sales source | no day has AHF, book or mail volume |
+| `estimated_sales_per_hour_of_week` | 168 values: `estimated_sales_per_day ÷ 24 × sales_how[slot]` (units per hour) | sales per day unavailable |
+| `current_listed_supply` | units on the AH in the newest valid observation (local scan or AHF) | never seen |
+| `median_daily_supply` | median of each day's listed units over the last 30 days | no observation in 30 days |
+| `supply_to_volume_ratio` | `current_listed_supply ÷ estimated_sales_per_day`, in days of supply (§3.3.2 market facts). Not a time-to-sell guarantee | either input unavailable, or sales per day is 0 |
+| `volume_confidence` | 0–1: the confidence component for volume (§3.3.5 "Volume source") | — (0 without a source) |
+| `volume_observation_coverage` | 0–1: share of the last 7 days that have a sales source | — |
+| `observed_listing_turnover` | units per day that left the AH between consecutive AHF quantity observations (§3.3.1 item 4). Informational only: never used as sales | fewer than two observations a few hours apart |
+| `estimated_time_to_sell(q)` | optional: hours until the queue simulation (§3.3.2) has sold q units, posting now | sales per day unavailable, or q not sold within 48 h |
+
+**Weekly distribution.** Each of the 168 hour-of-week slots (§3.3.4) carries, over the rolling 90 days and recency-weighted like `how`:
+
+| Per slot | Meaning | Unavailable when |
+|---|---|---|
+| `how` | median normalized price (§3.3) | (flat 1.0, as §3.3) |
+| `supply_how` | median listed units in that slot ÷ the overall median listed units | fewer than 3 weeks of observations (weekday fallback, as `how`) |
+| `sales_how` | estimated sales relative to the average hour (§3.3) | (flat 1.0, as §3.3) |
+| `price_spread` | (nearest-rank p90 − p10) ÷ median of the slot's closes | fewer than 3 closes |
+| `weeks` | weeks of data behind the slot (its observation coverage) | — |
+
+Missing observation periods never count as zero sales or zero supply; they are left out of medians and averages.
+
+**Seasonality strength** (0–100): how much a best selling window is worth over an average hour, and how sure we are of it: `min(100, floor((how_avg − 1) × 200 + 0.5)) × min(1, weeks ÷ 6)`, rounded half up, using the top window (§3.3.4); 0 without windows or when `how_avg ≤ 1`. A 25% premium seen over 6+ weeks scores 50.
+
+**Three selling answers, kept apart** (item detail and Inventory): the hour with the **highest expected price** (max `how`), the hour with the **highest estimated activity** (max `sales_how`), and the **best risk-adjusted** window (max `sell_score`, §3.3.4), which is the one the plan uses.
+
+**Method version.** `VOLUME_METHOD_VERSION` (an integer in `engine/volume.py`) is stored with every `volume_d1` row and every `item_stats` row. When it changes, the next full refresh recomputes `books` volume from the stored order books (kept 30 days, §3.2) and marks older rows as from an earlier method on the Status page; AHF and mail rows are kept as they are.
+
 #### 3.3.5 Confidence percentage
 
 `conf` says how much the data behind a result can be trusted. It is the weighted mean of the components that apply to the result:
@@ -565,7 +601,7 @@ The week's 168 hours are treated as **repeating slots**: every Tuesday 19:00 is 
 | Component | Score (0–1) | Weight |
 |---|---|---|
 | Price history | `min(1, n ÷ 60)`, hourly closes in the last 30 days | 0.25 |
-| Volume source | the share of the 7 days by source: AHF real 1.0 · order-book estimate 0.7 · mail only 0.6 · quantity drop 0.4 · none 0 | 0.30 |
+| Volume source | the share of the 7 days by source: AHF real 1.0 · order-book estimate 0.7 · mail only 0.6 · listing turnover only 0 (not sales) · none 0 | 0.30 |
 | Order book freshness | ≤ 2 h old 1.0 · ≤ 24 h old 0.5 · older or none 0.3 | 0.15 |
 | Weekly pattern | `min(1, weeks of data ÷ 6)` for the window used. **Only for planned posts**; posting now leaves it out | 0.15 |
 | Tier history | `min(1, n_tier ÷ 30)` | 0.15 |
@@ -574,6 +610,13 @@ The week's 168 hours are treated as **repeating slots**: every Tuesday 19:00 is 
 - Calibration (§8.8) also reports predicted versus actual sell rate by confidence band, so a too-optimistic confidence shows up.
 
 ### 3.4 Recommendation engine
+
+**Market capacity is shared and counted once** (§3.3.6). Every quantity a recommendation proposes stays within what the market can absorb, across all your characters together:
+- **Flips:** units bought ≤ the liquidity cap of the windows they'll sell in, minus units you already hold or have planned for that item.
+- **Crafts:** the craft count already stops when an extra craft stops paying (the product's chance falls as more is posted); the planned output also counts against the product's cap.
+- **Disenchant:** the **mats** from all disenchant buys together stay within each mat's cap for its sell windows; buys are taken best profit first until a mat's cap is reached.
+- **Portfolio (§3.4C.4):** the allocation spends one shared capacity per item and window across characters, so two characters never plan to fill the same demand, and no more than `max_item_capital_share` (config, 0.25) of total gold goes into items whose supply/volume ratio is above `slow_market_days` (config, 7).
+- Volume estimates are uncertain inputs: caps use the estimate as given, and a low `volume_confidence` lowers the result's confidence (§3.3.5), never inflates it.
 
 All money is net of fees. Estimates come with a confidence level.
 
@@ -763,14 +806,15 @@ You set or clear a rule from any dashboard row, from the **Rules** page, or by r
    - **Inventory:** the chance the item's planned option sells.
    - **Addon:** the tooltip, and the AH panel's post list.
 
-   **Every table that shows a chance shows the same two columns, with these names: Chance · Volume.** This holds on every dashboard page and every addon tab (§4.3). Chance and confidence are different things, and both are shown:
+   **Market activity columns.** On the dashboard, every table that shows a chance shows these columns, with these names and in this order: **Chance · Est. Sales/Day · Current Supply · Supply/Volume** (§3.3.6), each sortable and filterable. Flip adds **Seasonality Strength** and **Expected ROI** before them. The addon window is too narrow for four columns, so its tabs keep the compact pair **Chance · Volume** (§4.3), with supply and days of supply in the Volume cell's hover. Chance and confidence are different things, and both are shown:
    - **Chance** is how likely the item is to sell (`P'`, §3.3.2), e.g. "92% ●".
      - The **dot inside the cell is the confidence**: how much the data behind that chance can be trusted (§3.3.5). Green is ≥ 75%, amber ≥ 45%, grey below that.
      - Hovering the cell shows the exact confidence percentage, and the item detail breaks it down by component.
      - So "75% ○" reads as "probably sells, but it's a guess from thin data".
-   - **Volume** is units sold per day. On the dashboard it also carries its source and the units on the AH, e.g. "48/day AHF · 93 on AH" or "31/day est.".
-   - For Disenchant, the pair describes the **mats**, since that's what you sell.
-   - `views.py` builds the pair in one place, and a convention test checks that every table using it has both columns in that order.
+   - **Est. Sales/Day** is `estimated_sales_per_day` with its source, e.g. "48 AHF" or "31 est."; "—" when unavailable. **Current Supply** is units on the AH now. **Supply/Volume** is days of supply, e.g. "1.9 days"; "—" when unavailable. (The addon's Volume cell is "48/day".)
+   - For Disenchant, these columns describe the **mats**, since that's what you sell.
+   - `views.py` builds these cells in one place, and a convention test checks that every table using them has all of them in that order.
+   - **Item detail** adds 7 × 24 heatmaps of price (`how`), estimated sales (`sales_how`) and listed supply (`supply_how`), the three selling answers (§3.3.6), daily sales and supply over 30 days, and volume confidence and coverage.
 
    Hovering a Chance cell, or opening the item detail, shows the breakdown: market sell-through, days of supply, units ahead of you and when they expire, expected undercuts, queue result, tier history and your record.
 
@@ -825,6 +869,8 @@ week_start = "Mon"                            # plan weeks start Mon 00:00 local
 max_craft_depth = 3                           # longest crafting chain followed when sourcing mats (§3.4B)
 max_market_share = 0.5                        # your units per window and per day ≤ this share of sold/day (§3.4 liquidity)
 max_actions_per_day = 0                       # 0 = no limit (§3.4C.4)
+max_item_capital_share = 0.25                 # most of your gold in slow markets (§3.4 market capacity)
+slow_market_days = 7                          # supply/volume above this many days is a slow market (§3.3.6)
 launch_wow_after_catchup = false
 
 [realms]                                      # realm -> ruleset, maps characters to markets (§2.1)
@@ -919,7 +965,7 @@ Right-clicking a row opens a menu: Search the AH, Mark as skipped, Blacklist: do
 The dot after each chance is its confidence. Hovering "85% ◐" shows "Confidence 63%".
 
 - Each row shows: action, item (in its quality colour), quantity, **each** and **total** (§3.4), expected net (green when positive, red when negative), then the standard pair **Chance · Volume**, then **risk %** and the character.
-- **The pair is identical on every tab and in the dashboard.**
+- **The pair is identical on every addon tab.** (The dashboard shows the fuller market activity columns, §3.5.)
   - **Chance** is `P'` (§3.3.2) with the **confidence dot** inside the cell (● ≥ 75%, ◐ ≥ 45%, ○ below; §3.3.5). Hover shows the exact confidence %.
   - **Volume** is units sold per day. The dashboard also shows the source and the units on the AH.
   - Rows with nothing to sell (mat buys, mail, holds, vendor) show "—" in both.
@@ -1282,13 +1328,15 @@ The invariants (PI1–PI17, VI1, CI1–CI3, PL1–PL3, VW1, LP1, FI1–FI2) are 
 
 ### 8.8 Calibration: does the chance to sell match reality?
 
+**Volume backtest.** Where both exist for the same item and day, book-estimated sales are compared with AHF volume and with your mail-confirmed sales: the Status page reports the median ratio and the share of days within ±25%, per source, over the last 30 days (K4). A ratio far from 1 shows up before it misleads the plan.
+
 The invariants prove the formula is sensible. Only your real sales can show whether it is *right*. Every post therefore records the `P'` it was planned with (`posts.p_at_post`). `record.calibration` compares that with what actually happened:
 
 - It groups resolved posts into buckets by predicted chance: `[0, 0.2)`, `[0.2, 0.4)`, `[0.4, 0.6)`, `[0.6, 0.8)` and `[0.8, 1]`. Each bucket includes its lower edge, and the last one also includes 1. It shows each bucket's predicted versus actual sell rate.
 - It reports the **Brier score**, the mean of `(P' − outcome)²` where outcome is 1 for sold and 0 for expired. Lower is better. Always guessing 50% scores 0.25.
 - The **Status** page shows both. A bucket that is off by more than 15 points, with at least 20 posts in it, raises a warning, e.g. "40–60% predictions actually sold 28%". That suggests `default_sell_prob`, `own_record_weight` or the volume source needs adjusting.
 
-Scenarios K1–K3: [SCENARIOS.md §4](SCENARIOS.md#4-calibration-k1k3).
+Scenarios K1–K4: [SCENARIOS.md §4](SCENARIOS.md#4-calibration-k1k3).
 
 ### 8.9 Definition of done for any feature
 

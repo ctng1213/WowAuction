@@ -5,7 +5,7 @@ import math
 from collections.abc import Mapping
 
 HOUR_MS = 3_600_000
-VOLUME_SCORE = {"ahf": 1.0, "books": 0.7, "mail": 0.6, "qty_drop": 0.4}   # no source scores 0
+VOLUME_SCORE = {"ahf": 1.0, "books": 0.7, "mail": 0.6}   # anything else (none, listing turnover) scores 0
 WEIGHTS = {"price": 0.25, "volume": 0.30, "book": 0.15, "pattern": 0.15, "tier": 0.15}
 HIGH, MEDIUM = 75, 45          # level thresholds in percent, only for the dot colour
 

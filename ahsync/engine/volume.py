@@ -1,7 +1,8 @@
 """Sales volume: units sold, expired and listed per day, from the best source per day (SPEC §3.3.1).
 
 Sources, best first: AHF Premium volume ("ahf"), own order-book diffs ("books"),
-own auction mail ("mail"), and the AHF quantity-drop heuristic ("qty_drop").
+and own auction mail ("mail"). AHF quantity drops ("qty_drop") are listing turnover,
+never sales (SPEC §3.3.1 item 4, §3.3.6): `daily_volume` ignores them.
 All are computed and stored; `daily_volume` picks the best one per day.
 """
 from __future__ import annotations
@@ -11,7 +12,7 @@ from dataclasses import dataclass, field
 
 HOUR_MS = 3_600_000
 MAX_GAP_MS = 6 * HOUR_MS
-SOURCES = ("ahf", "books", "mail", "qty_drop")     # trust order (SPEC §3.3.1)
+SOURCES = ("ahf", "books", "mail")     # sales sources in trust order (SPEC §3.3.1); "qty_drop" is not one
 # Time-left bands [lo, hi) in hours, by WoW band code (SPEC §3.3.1). UNVERIFIED for Forever (§6 item 5).
 # Very long ends at the longest auction duration (fees.DURATIONS_H; 24 h on Classic Era).
 BAND_HOURS = {1: (0.0, 0.5), 2: (0.5, 2.0), 3: (2.0, 8.0), 4: (8.0, 24.0)}
@@ -109,8 +110,11 @@ def estimate_volume(prev: Book, next_: Book, max_gap_ms: int = MAX_GAP_MS) -> di
     return {key: Volume(sold, expired, listed) for key, (sold, expired, listed) in sorted(totals.items())}
 
 
-def quantity_drop(prev_qty: int, next_qty: int, gap_ms: int, max_gap_ms: int = MAX_GAP_MS) -> int | None:
-    """Upper bound on sold + expired + cancelled from two AHF quantities (SPEC §3.3.1 source 4).
+def listing_turnover(prev_qty: int, next_qty: int, gap_ms: int, max_gap_ms: int = MAX_GAP_MS) -> int | None:
+    """Units that left the AH between two AHF quantity observations (SPEC §3.3.1 item 4, §3.3.6).
+
+    Sold, expired and cancelled can't be told apart from totals, so this is informational
+    `observed_listing_turnover`, never sales volume.
 
     Args:
         prev_qty: Units listed at the earlier observation.

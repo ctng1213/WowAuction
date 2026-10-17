@@ -33,3 +33,6 @@ UI1-UI11
 
 # Full scans shared with AuctionHouseFYI (SPEC 4.2)
 A6-A8
+
+# Market activity amendment (SPEC §3.3.6, §3.4 capacity, §8.8 volume backtest)
+V22-V24 W8-W9 R15-R16 D23 K4 PL4

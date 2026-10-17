@@ -34,7 +34,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | V7 | two stack sizes, 50c ×20 ×2 → ×1 and 50c ×5 ×4 → ×2 | sold 20 + 10 = 30 | units = auctions × stack, summed per item |
 | V8 | books 7h apart | no estimate | gap must be ≤ 6h |
 | V9 | mail: 3 "sold", 1 "expired" for an item estimated 5 sold | calibration factor 0.6 recorded | ground truth from own sales |
-| V10 | AHF quantity 120 → 80 within 2h, no books | upper bound 40, `low confidence` | weakest source is labeled |
+| V10 | AHF quantity 120 → 80 within 2h, no books | listing turnover 40 recorded; sales per day **unavailable**; chance = default 25%, "volume unknown" | totals alone never become sales |
 | V11 | Premium volume present + own estimate | Premium used, source = `ahf` | source priority |
 | V12 | 50c ×20 **medium** ×2 → ×0, 2 h apart | expired 40, sold 0 | medium (30 min–2 h) auctions have all run out after 2 h |
 | V13 | 50c ×20 long ×3 → ×0, **5 h** apart | expiring 3 × (5−2)/(8−2) = 1.5 → expired 30, sold 30 | long auctions expire in proportion to the gap |
@@ -45,6 +45,9 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | V18 | item has an AHF factor 1.25 and a mail factor 0.6 | estimate days use 1.25 only | one calibration, AHF preferred |
 | V19 | two complete local scans 2 h apart on the same day: Linen 50c ×20 long ×5 → ×3 (long auctions cannot have run out in 2 h) | `books` volume for that day: sold 40; reading the same files again leaves it at 40 | scans feed volume, idempotently |
 | V20 | a complete scan at 10:00 and a partial scan (coverage 0.6) at 12:00 | no `books` volume from that pair | partial books never feed volume |
+| V22 | sales 50/day, 93 units listed now; another item with sales unavailable; a third with sales 0 | supply/volume 1.86 days; "—"; "—" | the ratio is never made up |
+| V23 | median daily supply over 30 days of observations 80, 100, 120 units, and 10 days without any observation | median 100; the empty days are left out, not counted as 0 | missing data is not zero |
+| V24 | `VOLUME_METHOD_VERSION` goes from 1 to 2 with 20 days of stored books | the next full refresh recomputes those days' `books` volume, stamps them version 2, and leaves AHF and mail rows unchanged | estimates can be recomputed |
 | V21 | a local scan at 14:20 lists Linen at 45c (×20, ×2) and 50c (×20, ×1) | `current` local: 45c, qty 40; `candles_h1` local for 14:00: close 45c, qty 60 | a scan becomes local prices |
 
 **Sync and storage** (`sync/catchup`, `store/prune`):
@@ -154,6 +157,8 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | W5 | the top window has 2 weeks of data | labelled "early pattern"; confidence low |
 | W6 | 7 weeks of data | "established"; confidence high |
 | W7 | no slot data at all | no windows; "Best time to sell: —"; the plan posts now |
+| W8 | top window `how_avg` 1.25 with 6 weeks of data; another item 1.25 with 3 weeks; a third with no windows | seasonality strength 50; 25 (50 × 3/6); 0 |
+| W9 | `how` peaks Sat 20:00, `sales_how` peaks Tue 19:00, `sell_score` peaks Wed 19:00 | item detail shows all three: highest price Sat 20:00, most activity Tue 19:00, best risk-adjusted Wed 19:00 (the plan's) |
 
 **Recommendations** (`engine/disenchant`, `craft`, `plan`):
 
@@ -173,6 +178,8 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | R12 | the lowest listing (50 c) is your own; the next is 55 c; `med7` 60 c | post price 54 c: you don't undercut yourself |
 | R13 | a flip at 10 s with `P` = 0.5, posting at 30 s, vendor sell 1 s, deposit 1 s | E = 0.5 × 28 s 50 c + 0.5 × (1 s − 1 s) = 14 s 25 c; profit 4 s 25 c; still listed only if ≥ 20% margin (it is: 42.5%) |
 | R14 | you own 200 Linen in stacks of 20; it sells 40/day; 8 h window; `max_market_share` 0.5 | window cap = max(1 stack = 20, floor(40 × 8 ÷ 24 × 0.5) = 6) = 20 units; daily cap floor(40 × 0.5) = 20; the rest is spread over later windows |
+| R15 | three disenchantable greens each yield 2.5 Strange Dust; dust sells 6/day, so its 8 h cap is 1 stack of 1 → max(1, floor(6 × 8 ÷ 24 × 0.5) = 1); the buys are profitable | only the best-profit green is recommended (its 2.5 dust already exceeds the cap; the others would add more unsellable dust) |
+| R16 | Main and Alt could each flip 20 Linen, cap 20 per window | the plan buys 20 in total, for one character; never 20 each |
 
 **Own sell record and rules** (`engine/record`, `sellprob`, `rules`), with `k` = 4 and `struggle_streak` = 3:
 
@@ -219,6 +226,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | D20 | the same chain on Sat, when Fri has left the rolling week; post `E_post` 8 s 55 c (20 × 45 c × 0.95, `P` = 1); paid 7 s 60 c | the post carries its own net: +95 c |
 | D21 | post 5 Linen you looted, at 45 c, `P` = 1 | net = 5 × 45 c × 0.95 − 0 = 213.75 c, shown +2 s 14 c |
 | D22 | a craft with 2 mat buys and 1 mail step feeding it | the mat buys and the mail show no net ("for …"); the craft carries the chain's profit |
+| D23 | a Craft row whose product sells 48/day (AHF) with 93 listed | columns Chance, Est. Sales/Day "48 AHF", Current Supply "93", Supply/Volume "1.9 days", in that order; each has a sort key |
 
 **Craft sourcing** (`engine/craft`, `plan`). Recipe: 2 Copper Bar → Copper Rod, which posts at 40 s with `P` = 1:
 
@@ -359,6 +367,7 @@ Rules: SPEC §8.8.
 | K1 | 10 posts predicted 0.8, 8 sold | bucket 80–100%: predicted 80%, actual 80%; Brier = (8 × 0.04 + 2 × 0.64) ÷ 10 = 0.16 |
 | K2 | 25 posts predicted 0.5, 7 sold | bucket 40–60% actual 28%; warning raised (off by 22 points, ≥ 20 posts) |
 | K3 | 5 posts predicted 0.5, 0 sold | no warning (fewer than 20 posts) |
+| K4 | 10 days with both AHF and book volume: book ÷ AHF ratios 0.8 ×4, 1.0 ×4, 1.5 ×2 | Status: median ratio 1.0; 8 of 10 days (80%) within ±25% |
 
 ## 5. Invariants (SPEC §8.7)
 
@@ -397,6 +406,7 @@ How cases are generated, and how many: SPEC §8.7.
 | PL1 | Plan: buys never exceed the budget; no action is before `now_ms`; every craft has a follow-up within 7 days; every post is at peak − `post_lead_hours` (or now) |
 | PL2 | Plan: a planned post quantity is never below 1 stack and never above what you hold |
 | PL3 | Missed peaks: a replacement's `E` is always ≥ 90% of its original anchor (never of an earlier replacement), its P' ≥ `min_sell_prob`, and it lies in the same plan week. Otherwise the action is a hold |
+| PL4 | Plan: for every item and sell window, the units planned across all characters (holds, flips, crafts' output, disenchant mats) never exceed that window's liquidity cap, and no character's plan claims capacity another already used |
 | VW1 | Views: every total equals the sum of its rows; filters only hide rows, never change their numbers; each chain's profit appears in exactly one row of any view (§3.4 expected net) |
 | LP1 | Python and Lua give identical rounded results on every generated case for the ported modules |
 | FI1 | A crash injected at any commit point of catch-up, ingest or refresh, followed by a restart, gives the same final database rows and `Data.lua` bytes as an uninterrupted run |

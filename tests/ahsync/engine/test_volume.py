@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 
 from ahsync.engine.volume import (
-    Book, BookEntry, Volume, calibration_factor, daily_volume, estimate_volume, expiring_fraction, quantity_drop,
+    Book, BookEntry, Volume, calibration_factor, daily_volume, estimate_volume, expiring_fraction, listing_turnover,
 )
 from tests.support.gen import cases
 
@@ -82,10 +82,12 @@ def test_V9_own_sold_mail_calibrates_the_book_estimate():
     assert calibration_factor(confirmed_sold=3, estimated_sold=5) == 0.6
 
 
-def test_V10_quantity_drop_is_an_upper_bound_within_a_few_hours():
-    assert quantity_drop(120, 80, 2 * HOUR_MS) == 40
-    assert quantity_drop(80, 120, 2 * HOUR_MS) == 0
-    assert quantity_drop(120, 80, 7 * HOUR_MS) is None
+def test_V10_a_quantity_drop_is_listing_turnover_and_never_sales():
+    assert listing_turnover(120, 80, 2 * HOUR_MS) == 40
+    assert listing_turnover(80, 120, 2 * HOUR_MS) == 0
+    assert listing_turnover(120, 80, 7 * HOUR_MS) is None
+    only_turnover = daily_volume({d: {"qty_drop": Volume(40, 0, 0)} for d in range(7)}, range(7))
+    assert only_turnover.sold_per_day is None and only_turnover.days_by_source == {}
 
 
 def test_V11_premium_volume_is_preferred_over_an_estimate():
@@ -142,8 +144,8 @@ def test_V18_one_calibration_with_ahf_preferred_over_mail():
 def test_mail_factor_applies_without_ahf_overlap_and_lesser_sources_follow():
     rows = {0: {"books": Volume(40, 0, 0)}, 1: {"mail": Volume(3, 1, 0)}, 2: {"qty_drop": Volume(9, 0, 0)}}
     result = daily_volume(rows, [0, 1, 2, 3], mail_factor=0.5)
-    assert result.sold_per_day == pytest.approx((20 + 3 + 9) / 3)
-    assert result.days_by_source == {"books": 1, "mail": 1, "qty_drop": 1}
+    assert result.sold_per_day == pytest.approx((20 + 3) / 2)          # the turnover day is not a sales day
+    assert result.days_by_source == {"books": 1, "mail": 1}
 
 
 def test_no_data_in_the_window_is_unknown_volume():

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from ahsync.engine.confidence import level
 
 HIGH_RISK_PCT = 25.0        # config high_risk_pct (SPEC §3.4)
-VOLUME_SOURCE_LABEL = {"ahf": "AHF", "books": "est.", "mail": "est.", "qty_drop": "est."}
+VOLUME_SOURCE_LABEL = {"ahf": "AHF", "books": "est.", "mail": "est."}
 
 
 def round_half_up(x: float) -> int:
