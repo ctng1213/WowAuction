@@ -48,3 +48,13 @@ def test_outcomes_from_the_real_table():
     assert skill == 25
     assert outcomes[0][1] == 0.75           # weapons are mostly essence
     assert de.outcomes_for(DE_TABLE, 1, 25, ARMOR) is None
+
+
+def test_LP1_committed_property_cases_match_python():
+    import json
+    from pathlib import Path
+
+    import tools.gen_properties as gen
+    path = Path(__file__).resolve().parents[3] / "tests" / "properties" / "disenchant.json"
+    seed, fresh = gen.build()["disenchant"]
+    assert json.loads(path.read_text(encoding="utf-8")) == json.loads(json.dumps({"seed": seed, "cases": fresh})),         "tests/properties/disenchant.json is stale: run python tools/gen_properties.py"

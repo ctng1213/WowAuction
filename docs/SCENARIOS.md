@@ -219,10 +219,10 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 
 | # | Scenario | Then |
 |---|---|---|
-| C1 | you own 6 bars (hold value 9 s 50 c each: posting now is their best option); AH bars 10 s | Source Owned; 3 crafts; mat gold "—"; profit per craft 38 s − 19 s = 19 s |
+| C1 | you own 6 bars (hold value 9 s 50 c each: posting now is their best option); the AH has no bars (they last sold at 10 s) | Source Owned; 3 crafts; mat gold "—"; profit per craft 38 s − 19 s = 19 s |
 | C2 | you own no bars; AH has 6 at 10 s | Source AH; 3 crafts; mat gold 20 s each, 60 s total; profit per craft 38 s − 20 s = 18 s |
 | C3 | you own 4 bars; AH has 2 at 10 s | Source Mixed; 3 crafts; mat gold 20 s total; note "4 owned · 2 bought" |
-| C4 | you own 4 bars whose hold value is 12 s (their Sat peak); AH bars 10 s | the AH is cheaper than your stock's hold value, so it buys 6 from the AH (Source AH) and your 4 bars stay in the sell plan for Sat |
+| C4 | you own 4 bars whose hold value is 12 s (their Sat peak); the AH has 6 bars at 10 s | the AH is cheaper than your stock's hold value, so the first 3 crafts use the 6 AH bars; your bars are used only for further crafts that still pay (38 s > 2 × 12 s, so 2 more): 5 crafts, Source Mixed. At a hold value of 20 s (40 s for two, above the rod's 38 s) the bars stay in the sell plan: 3 crafts, Source AH |
 | C5 | AH book: 2 bars at 10 s, 2 at 15 s, 2 at 25 s | craft 1 profit 18 s, craft 2: 38 − 30 = 8 s, craft 3: 38 − 50 = −12 s → 2 crafts |
 | C6 | a mat has no AH listing, no vendor and none owned | not craftable; listed as "missing: 2 Copper Bar" only if one craft short |
 | C7 | the Week plans an AH-sourced craft at Fri 20:30 | a linked "buy 8 Silk Cloth" action at or before 20:30; then the craft; then the post |

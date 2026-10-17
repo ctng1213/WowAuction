@@ -14,7 +14,7 @@ describe("Adapter", function()
   it("the .toc lists the Core and Capture files in load order", function()
     Stubs.Reset()
     assert_eq(Stubs.TocFiles(), { "Core/Adapter.lua", "Data/BonusSuffixes.lua", "Data/Disenchant.lua", "Core/Events.lua", "Core/DB.lua",
-      "Capture/Characters.lua", "Capture/Professions.lua", "Capture/Inventory.lua", "Core/Diagnostics.lua", "Engine/Fees.lua", "Engine/SellProb.lua", "Engine/Disenchant.lua" })
+      "Capture/Characters.lua", "Capture/Professions.lua", "Capture/Inventory.lua", "Core/Diagnostics.lua", "Engine/Fees.lua", "Engine/SellProb.lua", "Engine/Disenchant.lua", "Engine/Craft.lua" })
   end)
 
   it("item key of a plain item link is its item id", function()

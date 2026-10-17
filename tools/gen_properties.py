@@ -15,11 +15,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from ahsync.engine import disenchant, sellprob  # noqa: E402
+from ahsync.engine import craft, disenchant, sellprob  # noqa: E402
 from ahsync.engine.de_table import DE_TABLE  # noqa: E402
 from tests.support.gen import save  # noqa: E402
 
-SEEDS = {"sellprob": 7_402_026, "disenchant": 3_302_026}
+SEEDS = {"sellprob": 7_402_026, "disenchant": 3_302_026, "craft": 1_102_026}
 PER_CALL = 200
 
 
@@ -87,6 +87,30 @@ def disenchant_cases(seed: int) -> list[dict]:
     return out
 
 
+def craft_cases(seed: int) -> list[dict]:
+    """Seeded cases for the ported craft functions (walk_book, fill), with Python's result.
+
+    Args:
+        seed: The seed.
+
+    Returns:
+        [{"call", "args", "result"}, ...]; fill results as plain dicts.
+    """
+    rng = random.Random(seed)
+    out = []
+    for _ in range(PER_CALL * 3):
+        book = [[rng.randint(1, 5000), rng.randint(0, 20)] for _ in range(rng.randint(0, 5))]
+        qty = rng.randint(0, 40)
+        out.append({"call": "walk_book", "args": {"book": book, "qty": qty}, "result": craft.walk_book(book, qty)})
+        args = {"need": rng.randint(1, 40), "owned": rng.randint(0, 20), "hold_value": rng.random() * 3000,
+                "vendor_price": rng.choice([None, rng.randint(1, 3000)]), "book": book,
+                "crafted_cost": rng.choice([None, rng.random() * 3000]), "crafted_gold": rng.random() * 2000}
+        f = craft.fill(**args)
+        out.append({"call": "fill", "args": args, "result": {
+            "cost": f.cost, "gold": f.gold, "used": f.used, "book_taken": list(f.book_taken), "short": f.short}})
+    return out
+
+
 def build() -> dict[str, tuple[int, list[dict]]]:
     """All property files' contents.
 
@@ -96,6 +120,7 @@ def build() -> dict[str, tuple[int, list[dict]]]:
     return {
         "sellprob": (SEEDS["sellprob"], sellprob_cases(SEEDS["sellprob"])),
         "disenchant": (SEEDS["disenchant"], disenchant_cases(SEEDS["disenchant"])),
+        "craft": (SEEDS["craft"], craft_cases(SEEDS["craft"])),
     }
 
 
