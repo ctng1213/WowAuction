@@ -74,6 +74,16 @@ class StateReader(Protocol):
             Item key -> units.
         """
 
+    def owned_lots(self, char_ids: list[str]) -> list[tuple[str, int, int]]:
+        """Unbound units per character and item.
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            (character id, item key, units), sorted by character then key.
+        """
+
     def vendor_reagent_keys(self) -> set[int]:
         """Items a merchant was seen selling in unlimited supply.
 
@@ -179,3 +189,21 @@ class StateReads:
             Item keys.
         """
         return {r[0] for r in self.conn.execute("SELECT key FROM vendor_reagents")}
+
+    def owned_lots(self, char_ids: list[str]) -> list[tuple[str, int, int]]:
+        """Unbound units per character and item, bags, bank and mail together (SPEC §3.4C.1, R10).
+
+        Bound items are never lots: they can't be sold or mailed.
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            (character id, item key, units), sorted by character then key.
+        """
+        if not char_ids:
+            return []
+        marks = ",".join("?" * len(char_ids))
+        return [tuple(r) for r in self.conn.execute(
+            f"SELECT char_id, key, SUM(qty) FROM inventory WHERE bound = 0 AND char_id IN ({marks}) "
+            f"GROUP BY char_id, key ORDER BY char_id, key", tuple(char_ids))]

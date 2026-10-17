@@ -7,7 +7,7 @@ fallback is the vendor price only.
 from __future__ import annotations
 
 from ahsync.config import Config, market_settings
-from ahsync.engine import capacity, craft, disenchant, fees, sellprob, views
+from ahsync.engine import capacity, craft, disenchant, fees, profile, sellprob, views
 from ahsync.engine.de_table import DE_TABLE
 from ahsync.engine.sellprob import Supply
 from ahsync.history.reads import ItemInfo
@@ -15,6 +15,7 @@ from ahsync.intel.contract import ItemIntel
 from ahsync.state.reads import RecipeRow, StateReader
 
 DE_KIND = {2: "weapon", 4: "armor"}     # WoW item class -> DE table kind
+HOUR_MS = 3_600_000
 
 
 def _market(stats: ItemIntel | None) -> views.MarketActivity:
@@ -31,27 +32,33 @@ def _market(stats: ItemIntel | None) -> views.MarketActivity:
     return views.market_activity(stats.chance, stats.conf, stats.sold_per_day, stats.volume_source, stats.units_on_ah)
 
 
-def _mat_caps(mat_keys: set[int], stats: dict[int, ItemIntel], cfg: Config) -> dict[int, float]:
-    """Each mat's liquidity cap for the posting-now window (SPEC §3.4 Liquidity).
+def _mat_caps(mat_keys: set[int], stats: dict[int, ItemIntel], now_ms: int, cfg: Config) -> dict[int, float]:
+    """Each mat's liquidity cap for the posting-now window: a share of others' listings (SPEC §3.4 Liquidity).
 
     Args:
         mat_keys: Mats the disenchant buys would yield.
-        stats: Item key -> intelligence (sales per day, reference stack).
-        cfg: Config (sell_window_hours, max_market_share).
+        stats: Item key -> intelligence (listed supply and its pattern, reference stack).
+        now_ms: Now; the window is the next sell_window_hours.
+        cfg: Config (sell_window_hours, max_supply_share).
 
     Returns:
         Mat key -> cap in units; one stack of 1 for a mat with no intelligence.
     """
+    hours = sellprob.posting_now_window(now_ms, cfg.sell_window_hours)
     caps = {}
     for key in sorted(mat_keys):
         s = stats.get(key)
-        caps[key] = capacity.liquidity_cap(s.sold_per_day if s else None, cfg.sell_window_hours,
-                                           cfg.max_market_share, s.ref_stack if s else 1)
+        if s is None:
+            caps[key] = 1
+            continue
+        pattern = profile.unpack(s.supply_how, s.supply_weeks).values if s.supply_how else ()
+        listed = capacity.window_supply(s.units_on_ah, pattern, now_ms // HOUR_MS, hours)
+        caps[key] = capacity.liquidity_cap(listed, cfg.max_supply_share, s.ref_stack)
     return caps
 
 
 def disenchant_page(state: StateReader, char_ids: list[str], stats: dict[int, ItemIntel], items: dict[int, ItemInfo],
-                    total_gold: int, cfg: Config) -> dict:
+                    total_gold: int, now_ms: int, cfg: Config) -> dict:
     """The Disenchant page payload (SPEC §3.4A, §3.5).
 
     The mats of all the buys together stay within each mat's cap: buys are taken best
@@ -63,7 +70,8 @@ def disenchant_page(state: StateReader, char_ids: list[str], stats: dict[int, It
         stats: Item key -> stats.
         items: Item metadata.
         total_gold: All your characters' gold.
-        cfg: Config (the liquidity cap's window and market share).
+        now_ms: Now (the mats' posting-now window).
+        cfg: Config (the liquidity cap's window and supply share).
 
     Returns:
         {"rows": [...], "hidden": buys left out for capacity, "help": header -> tooltip}, profit highest first.
@@ -77,7 +85,7 @@ def disenchant_page(state: StateReader, char_ids: list[str], stats: dict[int, It
         info = items[t.key]
         _, outcomes = disenchant.outcomes_for(DE_TABLE, info.quality, info.ilvl, DE_KIND[info.item_class])
         found.append((t, info, outcomes, {m: chance * (lo + hi) / 2 for m, chance, lo, hi in outcomes}))
-    caps = _mat_caps({m for *_, units in found for m in units}, stats, cfg)
+    caps = _mat_caps({m for *_, units in found for m in units}, stats, now_ms, cfg)
     taken, dropped = capacity.take_within_caps([capacity.Candidate(t.key, t.ev - t.buy_copper, units)
                                                 for t, _, _, units in found], caps)
     rows = []

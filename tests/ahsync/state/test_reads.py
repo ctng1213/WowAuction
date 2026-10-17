@@ -43,6 +43,7 @@ def test_characters_skills_recipes_and_stock(db):
     sql(db, "INSERT INTO inventory(char_id, location, key, qty, bound) VALUES (?, ?, ?, ?, ?)",
         ("A-R", "bags", 2840, 4, 0), ("B-R", "bank", 2840, 2, 0), ("A-R", "bags", 6948, 1, 1))
     assert db.owned_units(["A-R", "B-R"]) == {2840: 6} and db.owned_units([]) == {}
+
     sql(db, "INSERT INTO vendor_reagents(key) VALUES (?)", (2320,))
     assert db.vendor_reagent_keys() == {2320}
 
@@ -51,3 +52,10 @@ def test_skill_of_a_character(db):
     sql(db, "INSERT INTO professions(char_id, profession, skill, max_skill) VALUES (?, ?, ?, ?)",
         ("A-R", "Mining", 60, 75))
     assert db.skill_of("A-R", "Mining") == 60 and db.skill_of("A-R", "Herbalism") is None
+
+
+def test_R10_a_bound_item_is_never_a_lot_for_the_sell_plan(db):
+    sql(db, "INSERT INTO inventory(char_id, location, key, qty, bound) VALUES (?, ?, ?, ?, ?)",
+        ("A-R", "bags", 2840, 4, 0), ("A-R", "mail", 2840, 3, 0), ("B-R", "bank", 2840, 2, 0), ("A-R", "bags", 6948, 1, 1))
+    # The bound Hearthstone (6948) is no lot; bags and mail of one character add up.
+    assert db.owned_lots(["A-R", "B-R"]) == [("A-R", 2840, 7), ("B-R", 2840, 2)] and db.owned_lots([]) == []

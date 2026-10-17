@@ -6,24 +6,57 @@ it sells in, across all your recommendations together. Pure: data in, numbers ou
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 
-def liquidity_cap(sold_per_day: float | None, window_hours: float, max_market_share: float, stack: int) -> int:
-    """Units you may plan for one sell window (SPEC §3.4 Liquidity).
+def slot_of(hour: int) -> int:
+    """Hour of the week of a clock hour (UTC, 0 = Mon 00:00; the epoch was a Thursday).
 
     Args:
-        sold_per_day: Estimated market sales in units per day, or None when unknown.
-        window_hours: The sell window, in hours (sell_window_hours for posting now).
-        max_market_share: Config max_market_share, 0-1.
-        stack: The item's reference stack, in units.
+        hour: floor(ms / 3600000).
 
     Returns:
-        max(1 stack, floor(S × W ÷ 24 × share)) units; one stack when sales are unknown.
+        0-167.
     """
-    if sold_per_day is None:
+    return (hour // 24 + 3) % 7 * 24 + hour % 24
+
+
+def window_supply(current: int | None, supply_how: Sequence[float], now_hour: int, hours: Sequence[int]) -> float | None:
+    """Others' listed units expected over a window (SPEC §3.4 Liquidity, R17).
+
+    Args:
+        current: Units listed now, or None when never seen.
+        supply_how: 168 listed-supply ratios (SPEC §3.3.6), or empty when there is no pattern.
+        now_hour: The current clock hour.
+        hours: The window's clock hours.
+
+    Returns:
+        current × mean(supply_how over the hours) ÷ supply_how now; current without a
+        pattern (or a zero ratio now); None when supply is unknown.
+    """
+    if current is None:
+        return None
+    base = supply_how[slot_of(now_hour)] if supply_how else 0.0
+    if base <= 0 or not hours:
+        return float(current)
+    return current * sum(supply_how[slot_of(h)] for h in hours) / len(hours) / base
+
+
+def liquidity_cap(listed_units: float | None, max_supply_share: float, stack: int) -> int:
+    """Units you may plan for one sell window: a share of what others list (SPEC §3.4 Liquidity).
+
+    Args:
+        listed_units: Others' listed units in the window (window_supply), or None when unknown.
+        max_supply_share: Config max_supply_share, 0-1 (0.5: at most about a third of the listings).
+        stack: The fewest units a window always allows: the reference stack (gear: min_gear_units).
+
+    Returns:
+        max(stack, floor(share × listed units)); stack when supply is unknown.
+    """
+    if listed_units is None:
         return stack
-    return max(stack, math.floor(sold_per_day * window_hours / 24 * max_market_share))
+    return max(stack, math.floor(max_supply_share * listed_units))
 
 
 @dataclass(frozen=True)

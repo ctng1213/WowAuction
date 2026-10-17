@@ -177,7 +177,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | R3 | recipe: 2 Copper Bar (AH 10 s) → Copper Rod (posts at 40 s, `P` = 1) | profit = 40 s × 0.95 − 20 s = 18 s |
 | R4 | the same recipe with Copper Bars in your bags | owned mats priced at their hold value (opportunity cost), not free |
 | R5 | a vendor sells the reagent cheaper than the AH | the vendor price is used |
-| R6 | you own 200 Linen; it sells 40/day; Saturday is the peak | plan spreads posts over days, ≤ the daily cap, Saturday preferred |
+| R6 | you own 200 Linen; others list 93; Saturday is the peak | plan spreads posts over windows, each within its supply cap, Saturday preferred |
 | R7 | the DE value of an owned green beats its AH sale | plan says disenchant, with the character who can |
 | R8 | a flip candidate has a 25% margin but `P(sell)` is 0.1 | ranked below a 10% margin with `P` 0.9 |
 | R9 | budget 50 g | plan buys stay ≤ 50 g |
@@ -185,8 +185,10 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | R11 | Main and Alt are both Blacksmiths; only Alt knows the recipe | the craft row names Alt; Main is never suggested |
 | R12 | the lowest listing (50 c) is your own; the next is 55 c; `med7` 60 c | post price 54 c: you don't undercut yourself |
 | R13 | a flip at 10 s with `P` = 0.5, posting at 30 s, vendor sell 1 s, deposit 1 s | E = 0.5 × 28 s 50 c + 0.5 × (1 s − 1 s) = 14 s 25 c; profit 4 s 25 c; still listed only if ≥ 20% margin (it is: 42.5%) |
-| R14 | you own 200 Linen in stacks of 20; it sells 40/day; 8 h window; `max_market_share` 0.5 | window cap = max(1 stack = 20, floor(40 × 8 ÷ 24 × 0.5) = 6) = 20 units; daily cap floor(40 × 0.5) = 20; the rest is spread over later windows |
-| R15 | three disenchantable greens each yield 2.5 Strange Dust; dust sells 6/day, so its 8 h cap is 1 stack of 1 → max(1, floor(6 × 8 ÷ 24 × 0.5) = 1); the buys are profitable | only the best-profit green is recommended (its 2.5 dust already exceeds the cap; the others would add more unsellable dust) |
+| R14 | you own 200 Linen in stacks of 20; others list 93 now, flat supply pattern; `max_supply_share` 0.5 | each window takes max(1 stack = 20, floor(0.5 × 93) = 46) = 46 units, so 2 stacks (40); the rest is spread over later windows, then held | you never become most of the market |
+| R17 | others list 93 Linen now, at an hour whose `supply_how` is 1.0; a window whose hours average `supply_how` 1.5 | that window's cap is floor(0.5 × 93 × 1.5) = 69 units: a fuller hour allows more |
+| R18 | a green (gear) you own 3 of; others list 0, then 3; `max_supply_share_gear` 1.0, `min_gear_units` 2 | a window takes 2 when nothing else is listed, and 3 when others list 3 (you may double the market); materials keep the 0.5 share | one or two pieces always go up, even on an empty market |
+| R15 | three disenchantable greens each yield 2.5 Strange Dust; others list 2 dust, so its cap is max(1 stack of 1, floor(0.5 × 2) = 1) = 1; the buys are profitable | only the best-profit green is recommended (its 2.5 dust already exceeds the cap; the others would add more unsellable dust) |
 | R16 | Main and Alt could each flip 20 Linen, cap 20 per window | the plan buys 20 in total, for one character; never 20 each |
 
 **Own sell record and rules** (`engine/record`, `sellprob`, `rules`), with `k` = 4 and `struggle_streak` = 3:
@@ -433,7 +435,7 @@ How cases are generated, and how many: SPEC §8.7.
 | CI2 | Craft: each added craft has a positive marginal profit; the next one would not |
 | CI3 | Chains: profit is counted once, so the chain's total equals the final product's profit |
 | PL1 | Plan: buys never exceed the budget; no action is before `now_ms`; every craft has a follow-up within 7 days; every post is at peak − `post_lead_hours` (or now) |
-| PL2 | Plan: a planned post quantity is never below 1 stack and never above what you hold |
+| PL2 | Plan: every unit you hold is planned exactly once; a planned post is never above what you hold, and below 1 stack only for a character's last remainder (a lot of 47 in stacks of 20 posts 20, 20 and 7) |
 | PL3 | Missed peaks: a replacement's `E` is always ≥ 90% of its original anchor (never of an earlier replacement), its P' ≥ `min_sell_prob`, and it lies in the same plan week. Otherwise the action is a hold |
 | PL4 | Plan: for every item and sell window, the units planned across all characters (holds, flips, crafts' output, disenchant mats) never exceed that window's liquidity cap, and no character's plan claims capacity another already used |
 | VW1 | Views: every total equals the sum of its rows; filters only hide rows, never change their numbers; each chain's profit appears in exactly one row of any view (§3.4 expected net) |

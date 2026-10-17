@@ -641,7 +641,7 @@ All money is net of fees. Estimates come with a confidence level.
   - It is higher when waiting for a peak pays more. That is the real opportunity cost of using the item.
   - The sell plan is computed first, treating all owned stock as for sale. Crafts then price owned mats at their hold value, and the allocation (§3.4C.4) decides which units are crafted and which are sold.
 - **Reagent cost** for `q` units = the cheaper of vendor buy × `q` and buying from the AH. AH cost walks the newest local book from the cheapest listing up. Without a book, it is `cur × q`, flagged "depth unknown" when `q > curQty`. Mats you already own are priced at their **hold value**, because that's the opportunity cost. Otherwise a craft would look profitable even when selling the mats raw, now or at their peak, pays more.
-- **Liquidity.** Your units planned for one sell window are capped at `max(1 stack, floor(S × W ÷ 24 × max_market_share))`, where `S` is sold/day, `W` is the window in hours and `max_market_share` is config (0.5). With `S` unknown, the cap is 1 stack. A result that needs more units is capped, not hidden; its `P` already reflects what's left.
+- **Liquidity.** Your units planned for one sell window are capped at `max(1 stack, floor(max_supply_share × others' listed units in that window))`, with `max_supply_share` config (0.5): you are at most about a third of the window's listings, so you never set the price or invite undercuts. Others' listed units in the window = current supply × the mean `supply_how` over the window's hours ÷ `supply_how` at the current hour (§3.3.6), so a window where the AH is usually fuller allows more (R17). With no supply pattern it is the current supply; with supply unknown the cap is 1 stack. **Gear** (weapons and armor, item class 2 and 4) is more lenient, since each piece is its own listing and an empty market is exactly when to list: its cap is `max(min_gear_units, floor(max_supply_share_gear × others' listed units))`, with config `max_supply_share_gear` 1.0 (you may double the market) and `min_gear_units` 2 (one or two pieces always go up, R18). There is no separate sales limit: the queue simulation already lowers `P` as you post more than buyers take. A result that needs more units is capped, not hidden; its `P` already reflects what's left.
 - **Money on every action** is shown as both **each** (per unit) and **total** (each × quantity):
 
   | Action | Each | Total |
@@ -718,7 +718,10 @@ The result is shown as the row's **Source**. The base tells where the raw mats c
    - vendor
    - hold beyond 7 days (only flagged, never planned)
 
-   It picks the option with the highest expected value. Large stacks are split across slots so that what you post for each window stays within the liquidity cap (§3.4), and what you post each day stays at or below `floor(sold/day × max_market_share)`, with a minimum of 1 stack.
+   It picks the option with the highest expected value. Large stacks are split across slots so that what you post for each window stays within the liquidity cap (§3.4).
+   - **How it allocates** (`engine/plan.py`): each character's lot, in character order, is split into reference stacks; a character's last remainder may be smaller (PL2). Each stack goes to the post option with the highest expected value that still has room in its window. When no post this week pays more per unit than disenchanting or vendoring (no window has room left, or one more stack would mostly not sell), it is a **hold** while the AH price after the cut still pays more than either, so stock waits for later weeks instead of being dumped; otherwise it is disenchanted or vendored.
+   - **A post's chance** is the queue simulation over its hours (§3.3.2), with `sales_how` as demand, today's book as the competition, and your own units already planned for the same window ahead of you. Your sell record is added once it is tracked (M6b, §3.3.3).
+   - **The duration** is the shortest one that keeps the listing up through the window's best hour.
 2. **Buy to flip**: items whose expected profit (`E_post` at an upcoming peak slot − buy cost) is at least `min_flip_margin` (20%) × buy cost. Typical sources are a weekday or hour pattern, or a dip below `p10_30`. They are ranked by expected profit × `conf` (as a fraction).
 3. **Craft to sell later**: buy mats on cheap slots, craft, and post at the product's peak slot. It uses all three sourcing paths (B).
    - **Mats to buy appear as their own buy actions, scheduled before the craft** and linked to it by `parent_id`, e.g. "20:15 buy 8 Silk Cloth → for Bolt of Silk Cloth". A mat buy can be on an earlier, cheaper slot.
@@ -882,7 +885,9 @@ window_threshold = 0.90                       # a slot joins a best-selling wind
 peak_tolerance = 0.10                         # after a missed peak, a later window must be within 10% of the original (§3.4.0)
 week_start = "Mon"                            # plan weeks start Mon 00:00 local; a new week is a fresh slate
 max_craft_depth = 3                           # longest crafting chain followed when sourcing mats (§3.4B)
-max_market_share = 0.5                        # your units per window and per day ≤ this share of sold/day (§3.4 liquidity)
+max_supply_share = 0.5                        # your units per window ≤ this share of others' listed units (§3.4 liquidity)
+max_supply_share_gear = 1.0                   # the same for weapons and armor: you may double the market (§3.4 liquidity)
+min_gear_units = 2                            # gear always gets this many pieces per window, even on an empty market
 max_actions_per_day = 0                       # 0 = no limit (§3.4C.4)
 max_item_capital_share = 0.25                 # most of your gold in slow markets (§3.4 market capacity)
 slow_market_days = 7                          # supply/volume above this many days is a slow market (§3.3.6)

@@ -52,7 +52,7 @@ def refresh_market(db: Database, market: str, now_ms: int, cfg: Config, result: 
     total_gold = sum(g for _, g in characters)
     with db.transaction():
         db.stage_intel(intel)
-        db.stage_view("disenchant", market, disenchant_page(db, char_ids, stats, items, total_gold, cfg), now_ms)
+        db.stage_view("disenchant", market, disenchant_page(db, char_ids, stats, items, total_gold, now_ms, cfg), now_ms)
         db.stage_view("craft", market, craft_page(db, char_ids, stats, items, total_gold, now_ms, cfg), now_ms)
     result.items += len(stats)
 

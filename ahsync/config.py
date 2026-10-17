@@ -53,7 +53,9 @@ class Config:
     peak_tolerance: float = 0.10
     week_start: str = "Mon"
     max_craft_depth: int = 3
-    max_market_share: float = 0.5
+    max_supply_share: float = 0.5
+    max_supply_share_gear: float = 1.0
+    min_gear_units: int = 2
     max_actions_per_day: int = 0
     launch_wow_after_catchup: bool = False
     realms: Mapping[str, str] = field(default_factory=dict)
@@ -76,11 +78,11 @@ _TYPES: dict[str, tuple[tuple[type, ...], str]] = {
 }
 for _name in ("retention_days", "dashboard_port", "live_refresh_minutes", "own_record_days",
               "struggle_streak", "keep_retry_streak", "post_lead_hours", "sell_window_hours",
-              "max_craft_depth", "max_actions_per_day"):
+              "max_craft_depth", "max_actions_per_day", "min_gear_units"):
     _TYPES[_name] = _INT
 for _name in ("min_flip_margin", "default_sell_prob", "default_undercut_share", "own_record_weight",
               "reprice_step", "min_sell_prob", "high_risk_pct", "pattern_half_life_weeks",
-              "window_threshold", "peak_tolerance", "max_market_share"):
+              "window_threshold", "peak_tolerance", "max_supply_share", "max_supply_share_gear"):
     _TYPES[_name] = _NUMBER
 
 

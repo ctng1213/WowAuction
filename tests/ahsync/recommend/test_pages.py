@@ -58,6 +58,6 @@ def test_AR3_pages_use_the_published_intelligence_not_history(state):
 
 
 def test_disenchant_page_from_intelligence(state):
-    page = disenchant_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 500_000, Config(markets=(M,)))
+    page = disenchant_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 500_000, NOW, Config(markets=(M,)))
     [gloves] = page["rows"]
     assert (gloves["item"], gloves["buy"]) == ("Embossed Leather Gloves", "8s")
