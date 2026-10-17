@@ -4,7 +4,8 @@ from __future__ import annotations
 import pytest
 
 from ahsync.engine.volume import (
-    Book, BookEntry, Volume, calibration_factor, daily_volume, estimate_volume, expiring_fraction, listing_turnover,
+    Book, BookEntry, Volume, calibration_factor, daily_volume, estimate_volume, expiring_fraction, hourly_sales,
+    listing_turnover,
 )
 from tests.support.gen import cases
 
@@ -187,3 +188,32 @@ def test_VI1_volume_splits_exactly_what_is_gone_into_sold_and_expired():
             assert v.sold >= 0 and v.expired >= 0 and v.listed >= 0, context
             assert v.expired <= expiring + 1e-9, context
             assert v.sold + v.expired - v.listed == pytest.approx(group_prev - group_next), context
+
+
+def linen_book(at_hours: float, auctions: int) -> Book:
+    """A book with Linen 50c ×20 long × auctions, at a time of day.
+
+    Args:
+        at_hours: Hours after midnight (day 0).
+        auctions: Number of auctions.
+
+    Returns:
+        The Book.
+    """
+    return Book(int(at_hours * HOUR_MS), (BookEntry(LINEN, 50, 20, 3, auctions),))
+
+
+def test_V25_hourly_sales_need_books_at_most_two_hours_apart():
+    rates = hourly_sales([linen_book(10, 5), linen_book(11, 3), linen_book(14, 2)])
+    assert rates == {LINEN: {10 * HOUR_MS: 40.0}}
+
+
+def test_V26_pairs_in_one_hour_pool_their_sold_units_and_gaps():
+    rates = hourly_sales([linen_book(10, 5), linen_book(10.5, 4), linen_book(11, 2)])
+    assert rates == {LINEN: {10 * HOUR_MS: 60.0}}
+
+
+def test_hourly_sales_of_nothing_sold_is_an_observed_zero():
+    assert hourly_sales([linen_book(10, 5), linen_book(11, 5)]) == {LINEN: {10 * HOUR_MS: 0.0}}
+    assert hourly_sales([linen_book(10, 5), linen_book(10, 4)]) == {}          # same time: no gap, no pair
+    assert hourly_sales([linen_book(10, 5)]) == {}

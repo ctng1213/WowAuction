@@ -34,6 +34,13 @@ CREATE TABLE IF NOT EXISTS volume_d1(
     PRIMARY KEY(market, key, day, src)
 );
 
+-- Book-pair sales rate per item and hour start t (SPEC §3.3 sales_how), recomputed whole per hour at ingest.
+CREATE TABLE IF NOT EXISTS sales_h1(
+    market TEXT NOT NULL, key INTEGER NOT NULL, t INTEGER NOT NULL, sold_per_hour REAL NOT NULL,
+    PRIMARY KEY(market, key, t)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS sales_h1_market_t ON sales_h1(market, t);
+
 CREATE TABLE IF NOT EXISTS calibration(
     market TEXT NOT NULL, key INTEGER NOT NULL, source TEXT NOT NULL,   -- source: 'ahf' | 'mail'
     factor REAL, samples INTEGER, updated INTEGER,

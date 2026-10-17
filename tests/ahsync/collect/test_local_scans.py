@@ -1,9 +1,9 @@
-"""Tests for ahsync/ingest/scans.py: own full scans as local prices, closes and book volume (V19-V21)."""
+"""Tests for ahsync/collect/local_scans.py: own full scans as local prices, closes, book volume (V19-V21) and hourly sales (V27)."""
 from __future__ import annotations
 
 import pytest
 
-from ahsync.collect.local_scans import derive_from_scans, prices_from_book, recompute_book_volume
+from ahsync.collect.local_scans import derive_from_scans, prices_from_book, recompute_book_volume, recompute_sales_hours
 from ahsync.db.sqlite import BookScan, Database
 from tests.support.fake_clock import FakeClock
 
@@ -105,3 +105,33 @@ def test_ingest_of_a_file_with_scans_writes_local_prices(tmp_path):
     assert (stored > 0) == (priced > 0)
     assert result.problems == () or all("scan" not in p for p in result.problems)
     database.close()
+
+
+def sales(db: Database) -> list[tuple]:
+    """Stored hourly sales rates."""
+    return db.conn.execute("SELECT key, t, sold_per_hour FROM sales_h1 WHERE market = ? ORDER BY key, t", (M,)).fetchall()
+
+
+def test_V27_ahf_and_local_books_pair_partial_ones_never_and_rereading_changes_nothing(db):
+    ten = D * DAY + 10 * HOUR
+    db.store_book(BookScan("ahf:1", M, "ahf", None, ten, "full", 1.0), [(LINEN, 50, 20, LONG, 5)])
+    with db.transaction():
+        recompute_sales_hours(db, M, [ten])
+    new = [scan(db, "p", ten + HOUR // 3, [(LINEN, 50, 20, LONG, 1)], coverage=0.6),
+           scan(db, "s", ten + HOUR, [(LINEN, 50, 20, LONG, 3)])]
+    with db.transaction():
+        derive_from_scans(db, new)
+    assert sales(db) == [(LINEN, ten, 40.0)]
+    with db.transaction():
+        derive_from_scans(db, new)
+        recompute_sales_hours(db, M, [ten])
+    assert sales(db) == [(LINEN, ten, 40.0)]
+
+
+def test_sales_hours_of_books_far_apart_are_recomputed_separately(db):
+    ten = D * DAY + 10 * HOUR
+    for i, at in enumerate((ten, ten + HOUR, ten + 9 * HOUR, ten + 10 * HOUR)):
+        db.store_book(BookScan(f"a{i}", M, "ahf", None, at, "full", 1.0), [(LINEN, 50, 20, LONG, 5 - i)])
+    with db.transaction():
+        recompute_sales_hours(db, M, [ten + 10 * HOUR, ten, ten + HOUR, ten + 9 * HOUR])
+    assert sales(db) == [(LINEN, ten, 20.0), (LINEN, ten + 9 * HOUR, 20.0)]

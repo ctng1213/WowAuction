@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import pytest
 
-from ahsync.engine.profile import price_profile, sales_profile
+from ahsync.engine.prices import weekday_hour
+from ahsync.engine.profile import Profile, _slot, pack, price_profile, unpack, sales_profile, seasonality_strength, strength, supply_profile
 
 HOUR_MS = 3_600_000
 WEEK_MS = 7 * 24 * HOUR_MS
@@ -72,3 +73,68 @@ def test_sales_slots_without_any_weekday_data_take_the_average_hour():
     mondays_only = [(t, v) for t, v in history(4, lambda s: 2.0) if (t - MONDAY) % WEEK_MS < 24 * HOUR_MS]
     profile = sales_profile(mondays_only, now_ms=NOW)
     assert profile.values[3 * 24 + 12] == pytest.approx(1.0)      # a Thursday: no data at all
+
+
+TUE = 24
+
+
+def test_W8_seasonality_strength_scales_with_weeks_of_data():
+    assert strength(20, 50, 6) == 60            # 100 × (1 − 20/50) × 1
+    assert strength(20, 50, 3) == 30            # × 3/6
+    assert strength(60, 50, 6) == 0             # worse than flat is 0, never negative
+    assert strength(20, 0, 6) is None           # nothing to beat
+    two_weeks = history(2, lambda s: 150 if s < 84 else 50)
+    assert seasonality_strength(two_weeks, 100, NOW) is None
+
+
+def test_W8_a_repeating_pattern_is_predictable():
+    pattern = history(6, lambda s: 150 if s % 24 < 12 else 50)
+    # Smoothing blurs each of the 2 daily edges: the 4 hours around one miss by 20, 40, 40, 20c,
+    # so the profile's mean error is 240c / 24 h = 10c against the flat 50c → 100 × (1 − 10/50) = 80.
+    assert seasonality_strength(pattern, 100, NOW) == 80
+
+
+def test_W11_a_premium_seen_once_is_not_predictable():
+    def noisy(week: int):
+        """A close that wobbles differently each week, plus a premium in one training week."""
+        return lambda s: 140 if (week == 2 and s == SAT + 18) else 100 + 10 * ((s + week) % 3 - 1)
+    closes = sorted(c for w in range(4) for c in history(4, noisy(w)) if (NOW - c[0]) // WEEK_MS == 3 - w)
+    assert seasonality_strength(closes, 100, NOW) <= 10
+
+
+def test_seasonality_needs_a_full_held_out_day_and_a_median():
+    sparse = [c for c in history(4, lambda s: 100 + s % 2) if c[0] <= NOW - WEEK_MS or c[0] > NOW - 10 * HOUR_MS]
+    assert seasonality_strength(sparse, 100, NOW) is None          # 10 held-out closes < 24
+    assert seasonality_strength(history(4, lambda s: 100), None, NOW) is None
+
+
+def test_W12_supply_profile():
+    busy_tuesday = supply_profile(history(4, lambda s: 200 if TUE + 16 <= s <= TUE + 20 else 100), NOW)
+    assert busy_tuesday.values[TUE + 18] == pytest.approx(2.0)
+    assert busy_tuesday.values[TUE + 15] == pytest.approx(1.4)
+    assert busy_tuesday.confident[TUE + 18]
+    two_weeks = supply_profile(history(2, lambda s: 200 if TUE <= s < TUE + 24 else 100), NOW)
+    assert (two_weeks.values[TUE + 12], two_weeks.values[12]) == (pytest.approx(2.0), pytest.approx(1.0))
+    assert not two_weeks.confident[TUE + 12]
+    assert supply_profile([], NOW).values == tuple([1.0] * 168)
+    assert supply_profile(history(4, lambda s: 0), NOW).values == tuple([1.0] * 168)
+
+
+def test_slots_follow_the_weekday_rule():
+    for t in range(0, 3 * WEEK_MS, 7 * HOUR_MS + 123_457):
+        weekday, hour = weekday_hour(t)
+        assert _slot(t) == weekday * 24 + hour, t
+
+
+def test_W13_profiles_pack_in_thousandths_half_up():
+    values = (1.2346, 0.0625, 0.8) + (1.0,) * 165
+    prof = Profile(values, (7,) * 168, (True,) * 168)
+    text, weeks = pack(prof)
+    assert text.startswith("1235,63,800,1000,") and weeks == ",".join(["7"] * 168)
+    back = unpack(text, weeks)
+    assert back.values[:3] == (1.235, 0.063, 0.8) and back.confident[0]
+    assert pack(back) == (text, weeks)
+    assert pack(Profile(values, (0,) * 168, (False,) * 168)) == ("", "")
+    assert unpack("", "") == Profile((1.0,) * 168, (0,) * 168, (False,) * 168)
+    with pytest.raises(ValueError, match="168 slots"):
+        unpack("1000,1000", "7,7")

@@ -4,10 +4,10 @@ from __future__ import annotations
 import pytest
 
 from ahsync.engine.patterns import (
-    SellWindow, recency_weight, sell_scores, sell_windows, slot_label, weighted_median, window_label,
+    Window, buy_windows, recency_weight, sell_scores, sell_windows, slot_label, weighted_median, window_label,
 )
 
-TUE, WED, SUN, MON = 1 * 24, 2 * 24, 6 * 24, 0
+TUE, WED, THU, SUN, MON = 1 * 24, 2 * 24, 3 * 24, 6 * 24, 0
 
 
 def ratios(base: float, overrides: dict[int, float]) -> list[float]:
@@ -96,4 +96,18 @@ def test_best_slot_is_the_highest_score_in_the_window():
 def test_weighted_median_of_nothing_is_none_and_labels():
     assert weighted_median([]) is None
     assert slot_label(TUE + 9) == "Tue 09:00"
-    assert window_label(SellWindow(TUE + 21, 3, 3.0, 1.0, 6, TUE + 21)) == "Tue 21:00–Wed 00:00"
+    assert window_label(Window(TUE + 21, 3, 3.0, 1.0, 6, TUE + 21)) == "Tue 21:00–Wed 00:00"
+
+
+def test_W10_buying_windows_are_the_cheapest_hours():
+    how = ratios(1.0, {**{MON + h: 0.85 for h in (3, 4, 5)}, THU + 4: 0.93})
+    windows = buy_windows(how, SIX_WEEKS)
+    assert [window_label(w) for w in windows] == ["Mon 03:00–06:00", "Thu 04:00–05:00"]
+    assert (windows[0].best_slot, windows[0].how_avg) == (MON + 3, pytest.approx(0.85))
+
+
+def test_buying_windows_need_data_and_a_cheaper_hour_and_keep_the_top_three():
+    assert buy_windows(W1_HOW, [0] * 168) == []
+    assert buy_windows(FLAT, SIX_WEEKS) == []
+    how = ratios(1.0, {10: 0.9, 30: 0.8, 50: 0.8, 70: 0.85})
+    assert [w.start_slot for w in buy_windows(how, SIX_WEEKS)] == [30, 50, 70]     # 10 is above 0.8 ÷ 0.9

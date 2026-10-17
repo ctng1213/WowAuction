@@ -2,7 +2,8 @@
 
 This is the boundary between analysis (which could run in the cloud) and everything
 that uses it (recommendations, export). It holds no character state and no raw
-history: only per-item statistics and the latest observed market depth. JSON is
+history: only per-item statistics, weekly patterns, windows, the sell-probability
+curve and the latest observed market depth (SPEC §5.0 contents). JSON is
 deterministic (sorted keys), so the same intelligence always serializes to the same
 bytes (AR1). A document from a newer schema is refused (AR2).
 """
@@ -11,11 +12,22 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 
-INTEL_SCHEMA_VERSION = 1
+INTEL_SCHEMA_VERSION = 3       # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13)
 
 
 class IntelVersionError(ValueError):
     """Intelligence written by a newer AHSync than this one."""
+
+
+@dataclass(frozen=True)
+class IntelWindow:
+    """One selling or buying window (SPEC §3.3.4, §3.3.6). Slots are hours of the week, 0 = Mon 00:00 UTC."""
+
+    start_slot: int
+    hours: int                            # length in slots
+    best_slot: int                        # selling: the peak hour; buying: the cheapest hour
+    how_avg: float                        # average price ratio over the window
+    weeks: int                            # weeks of data behind it (the fewest of its slots)
 
 
 @dataclass(frozen=True)
@@ -45,6 +57,20 @@ class ItemIntel:
     units_on_ah: int | None               # current listed supply
     book_age_ms: int | None
     book: tuple[tuple[int, int, int, int], ...] = field(default=())   # latest depth: (price, stack, band, count)
+    # Weekly patterns (SPEC §3.3.4, §3.3.6), packed (SPEC §5.0 contents, W13): 168 comma-separated
+    # ratios in thousandths and 168 week counts; "" means no data (flat 1.0, 0 weeks).
+    # engine.profile.unpack reads them.
+    how: str = ""
+    how_weeks: str = ""
+    sales_how: str = ""
+    sales_weeks: str = ""
+    supply_how: str = ""
+    supply_weeks: str = ""
+    seasonality: int | None = None        # strength 0-100; None = insufficient evidence
+    sell_windows: tuple[IntelWindow, ...] = ()     # up to 3, best first
+    buy_windows: tuple[IntelWindow, ...] = ()      # up to 3, cheapest first
+    curve: str = ""                       # 24 × 8 encoded P grid (SPEC §3.1.1); "" when sales are unknown
+    curve_hour: int | None = None         # hour number floor(ms / 3600000) of the curve's first row
 
 
 @dataclass(frozen=True)
@@ -93,6 +119,12 @@ def from_json(text: str) -> MarketIntelligence:
     items = {}
     for key, item in body["items"].items():
         item["book"] = tuple(tuple(row) for row in item["book"])
+        if body["schema_version"] < 3:         # version 2's unpacked profiles are dropped: the next refresh rebuilds them
+            for name in ("how", "how_weeks", "sales_how", "sales_weeks", "supply_how", "supply_weeks"):
+                item.pop(name, None)
+        for name in ("sell_windows", "buy_windows"):
+            if name in item:
+                item[name] = tuple(IntelWindow(**w) for w in item[name])
         items[int(key)] = ItemIntel(**item)
     return MarketIntelligence(body["market"], body["built_ms"], body["observations_until_ms"],
                               body["volume_method_version"], items, body["schema_version"])

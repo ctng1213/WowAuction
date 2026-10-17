@@ -1,4 +1,4 @@
-"""Weekly patterns: weighted medians, sell scores and best selling windows (SPEC §3.3.4).
+"""Weekly patterns: weighted medians, sell scores, best selling and buying windows (SPEC §3.3.4, §3.3.6).
 
 The week's 168 hours are repeating slots, slot = weekday × 24 + hour with
 0 = Monday 00:00 UTC (SPEC §3.3 weekday rule). Windows may cross midnight and
@@ -15,15 +15,15 @@ TOP_WINDOWS = 3
 
 
 @dataclass(frozen=True)
-class SellWindow:
-    """One best selling window (SPEC §3.3.4)."""
+class Window:
+    """One best selling or buying window (SPEC §3.3.4, §3.3.6 buying windows)."""
 
     start_slot: int          # first slot, 0 = Mon 00:00 UTC
     hours: int               # length in slots
-    score_sum: float         # sum of sell_score over its slots (the ranking key)
-    how_avg: float           # average price ratio (how) over its slots
+    score_sum: float         # selling: sum of sell_score over its slots (the ranking key); buying: sum of how
+    how_avg: float           # average price ratio (how) over its slots; buying ranks by it, lowest first
     weeks: int               # weeks of data behind it: the fewest of any of its slots
-    best_slot: int           # its slot with the highest sell_score (ties: earliest in the window)
+    best_slot: int           # selling: highest sell_score; buying: lowest how (ties: earliest in the window)
 
     @property
     def strength(self) -> str:
@@ -110,7 +110,7 @@ def _runs(qualifying: list[bool]) -> list[list[int]]:
 
 
 def sell_windows(how: Sequence[float], sales_how: Sequence[float], weeks: Sequence[int],
-                 threshold: float = 0.90) -> list[SellWindow]:
+                 threshold: float = 0.90) -> list[Window]:
     """The item's best selling windows (SPEC §3.3.4).
 
     Args:
@@ -135,11 +135,39 @@ def sell_windows(how: Sequence[float], sales_how: Sequence[float], weeks: Sequen
     windows = []
     for run in _runs(qualifying):
         best = max(run, key=lambda s: (scores[s], -run.index(s)))
-        windows.append(SellWindow(
+        windows.append(Window(
             start_slot=run[0], hours=len(run), score_sum=sum(scores[s] for s in run),
             how_avg=sum(how[s] for s in run) / len(run), weeks=min(weeks[s] for s in run), best_slot=best,
         ))
     windows.sort(key=lambda w: (-w.score_sum, w.start_slot))
+    return windows[:TOP_WINDOWS]
+
+
+def buy_windows(how: Sequence[float], weeks: Sequence[int], threshold: float = 0.90) -> list[Window]:
+    """The item's best buying windows: the mirror of selling windows (SPEC §3.3.6 buying windows).
+
+    Args:
+        how: 168 price ratios.
+        weeks: 168 counts of weeks of data per slot.
+        threshold: window_threshold: a slot qualifies at a price ratio ≤ min(how) ÷ threshold.
+
+    Returns:
+        Up to 3 windows ranked by lowest average how (ties: earlier start slot). Empty
+        when there is no data at all, or when every slot qualifies (a buy is then planned for now).
+    """
+    if not any(weeks):
+        return []
+    cutoff = min(how) / threshold
+    qualifying = [ratio <= cutoff for ratio in how]
+    if all(qualifying):
+        return []
+    windows = []
+    for run in _runs(qualifying):
+        best = min(run, key=lambda s: (how[s], run.index(s)))
+        total = sum(how[s] for s in run)
+        windows.append(Window(start_slot=run[0], hours=len(run), score_sum=total, how_avg=total / len(run),
+                              weeks=min(weeks[s] for s in run), best_slot=best))
+    windows.sort(key=lambda w: (w.how_avg, w.start_slot))
     return windows[:TOP_WINDOWS]
 
 
@@ -155,11 +183,11 @@ def slot_label(slot: int) -> str:
     return f"{WEEKDAYS[slot // 24 % 7]} {slot % 24:02d}:00"
 
 
-def window_label(window: SellWindow) -> str:
+def window_label(window: Window) -> str:
     """Display a window as start–end, e.g. "Tue 18:00–21:00" or "Sun 23:00–Mon 02:00".
 
     Args:
-        window: A SellWindow.
+        window: A Window.
 
     Returns:
         The label; the end weekday is shown only when it differs from the start's.

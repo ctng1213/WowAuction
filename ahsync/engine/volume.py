@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 
 HOUR_MS = 3_600_000
 MAX_GAP_MS = 6 * HOUR_MS
+SALES_PAIR_MAX_GAP_MS = 2 * HOUR_MS     # hourly sales rates need books this close (SPEC §3.3 sales_how)
 VOLUME_METHOD_VERSION = 1     # bump when the estimation changes; stored data is then recomputed (SPEC §3.3.6)
 SOURCES = ("ahf", "books", "mail")     # sales sources in trust order (SPEC §3.3.1); "qty_drop" is not one
 # Time-left bands [lo, hi) in hours, by WoW band code (SPEC §3.3.1). UNVERIFIED for Forever (§6 item 5).
@@ -109,6 +110,34 @@ def estimate_volume(prev: Book, next_: Book, max_gap_ms: int = MAX_GAP_MS) -> di
         total[1] += expired * stack
         total[2] += new * stack
     return {key: Volume(sold, expired, listed) for key, (sold, expired, listed) in sorted(totals.items())}
+
+
+def hourly_sales(books: Sequence[Book], max_gap_ms: int = SALES_PAIR_MAX_GAP_MS) -> dict[int, dict[int, float]]:
+    """Sales rate per clock hour from consecutive complete books (SPEC §3.3 sales_how, V25-V26).
+
+    Args:
+        books: Complete books of one market, oldest first.
+        max_gap_ms: Largest gap between a pair's books, in ms.
+
+    Returns:
+        Item key -> hour start ms -> units sold per hour. Each pair counts for the hour
+        of its earlier book; an hour pools the sold units and gaps of all its pairs. An
+        item that appears in an hour's books but sold nothing has rate 0 (observed, not missing).
+    """
+    sold: dict[int, dict[int, float]] = {}
+    gap_by_hour: dict[int, int] = {}
+    for prev, next_ in zip(books, books[1:]):
+        gap_ms = next_.at_ms - prev.at_ms
+        volume = estimate_volume(prev, next_, max_gap_ms) if gap_ms > 0 else None
+        if volume is None:
+            continue
+        hour_ms = prev.at_ms // HOUR_MS * HOUR_MS
+        gap_by_hour[hour_ms] = gap_by_hour.get(hour_ms, 0) + gap_ms
+        for key, v in volume.items():
+            by_hour = sold.setdefault(key, {})
+            by_hour[hour_ms] = by_hour.get(hour_ms, 0.0) + v.sold
+    return {key: {hour: units * HOUR_MS / gap_by_hour[hour] for hour, units in sorted(by_hour.items())}
+            for key, by_hour in sorted(sold.items())}
 
 
 def listing_turnover(prev_qty: int, next_qty: int, gap_ms: int, max_gap_ms: int = MAX_GAP_MS) -> int | None:

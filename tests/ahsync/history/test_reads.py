@@ -54,3 +54,22 @@ def test_newest_complete_book_listing_the_item(db):
         ("old", 1, 50, 20, 3, 1), ("new", 1, 55, 20, 4, 2), ("new", 1, 45, 5, 3, 1), ("part", 1, 40, 1, 3, 1))
     assert db.newest_book(M, 1, 0) == (2 * DAY, [(45, 5, 3, 1), (55, 20, 4, 2)])
     assert db.newest_book(M, 2, 0) is None
+
+
+HOUR = 3_600_000
+
+
+def test_hourly_supply_prefers_local_and_counts_nothing_listed_as_zero(db):
+    sql(db, "INSERT INTO candles_h1(market, key, t, close, qty, src) VALUES (?, ?, ?, ?, ?, ?)",
+        (M, 1, 0, 50, 10, "ahf"), (M, 1, 0, 48, 12, "local"), (M, 1, HOUR, None, None, "ahf"),
+        (M, 1, 2 * HOUR, 50, 9, "ahf"), (OTHER, 1, HOUR, 50, 99, "ahf"))
+    assert db.hourly_supply(M, 1, 0, HOUR) == [(0, 12), (HOUR, 0)]
+
+
+def test_hourly_sales_and_complete_scans_of_either_source(db):
+    sql(db, "INSERT INTO sales_h1(market, key, t, sold_per_hour) VALUES (?, ?, ?, ?)",
+        (M, 1, HOUR, 4.0), (M, 1, 0, 2.5), (M, 2, 0, 9.0))
+    assert db.hourly_sales(M, 1, 0, HOUR) == [(0, 2.5), (HOUR, 4.0)]
+    sql(db, "INSERT INTO scans(scan_id, market, src, at, kind, coverage) VALUES (?, ?, ?, ?, ?, ?)",
+        ("a", M, "ahf", 5, "full", 1.0), ("l", M, "local", 3, "full", 1.0), ("p", M, "local", 4, "partial", 0.6))
+    assert db.complete_scans(M, 0, 10) == [("l", 3), ("a", 5)]

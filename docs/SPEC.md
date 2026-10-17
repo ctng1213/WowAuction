@@ -270,7 +270,7 @@ All the heavy lifting happens in AHSync, and only in a **full refresh**. Everyth
 - **Rows:** one for each of the 24 clock hours, starting at the refresh hour. Each row is `P` for a post made at the start of that hour over the posting-now window.
 - **Columns:** 8 points of units ahead: 0, 1, 2, 5, 10, 20, 50, 100.
 - It is computed at the current price tier, and it carries the inputs needed to blend it.
-- Items on any list get the full 24 × 8 grid. Other items, which only need the tooltip, get 24 × 3 (0, 5 and 20 ahead), to stay within the `MarketIntelligence.lua` budget.
+- Analysis computes the full 24 × 8 grid for **every** item and stores it in the intelligence (§5.0), because it is market-wide and doesn't know your lists. The export then trims it: items on the shortlist keep 24 × 8, and other items, which only need the tooltip, get the 24 × 3 subset (the 0, 5 and 20 ahead columns, unchanged), to stay within the `MarketIntelligence.lua` budget.
 - **Encoding: one character per point.** Each `P` is quantized to 2% steps, `n = floor(P × 50 + 0.5)` (0–50), and written as `string.char(35 + n)`, row by row, in the item's string. Codes 35–85 contain no `"` and no `\`, so no escaping is needed. A 9k-item market then needs about 650 KB of curves, which leaves room in the 2 MB budget for everything else. **AHSync uses the quantized curve too**, not the raw simulation result, so Python and Lua read identical values (IU11).
 
 In each column the units ahead are modelled as one block that stays the whole window, which is conservative: the curve can't know which future competitors expire when. Each value is stored in 2% steps (below).
@@ -290,7 +290,7 @@ A full refresh builds into staging tables and swaps them in with one transaction
 | CPU when idle | ≈ 0% (timers and one file stat every 5 s) |
 | Memory when idle | ≤ 150 MB |
 | Memory during a full refresh | ≤ 400 MB peak (streaming, item by item) |
-| Full refresh time | ≤ 60 s for one market of about 9k items |
+| Full refresh time | ≤ 120 s for one market of about 9k items with 90 days of hourly history (it runs once a day in the background; weekly patterns and the 24 × 8 curve for every item, §5.0) |
 | Incremental update | ≤ 1 s for up to 50 dirty items |
 | Dashboard request | ≤ 50 ms (precomputed JSON, paged at 100 rows) |
 | `MarketIntelligence.lua` size | ≤ 2 MB (`PortfolioPlan.lua` ≤ 200 KB) |
@@ -302,7 +302,7 @@ Storage rules:
 - AHF files are streamed and decompressed one hour at a time, never all at once.
 - `item_stats` is replaced atomically, so the dashboard never sees half a refresh.
 
-`tools/bench.py` runs a full refresh and an incremental update on a generated 9k-item world and reports time and peak memory against these budgets.
+`tools/bench.py` runs a full refresh on a generated 9k-item world with 90 days of hourly closes, listed units and sales rates for every item (the worst case), in a fresh process without memory tracing, and reports its time and the process peak memory against these budgets. The incremental update is not benchmarked yet.
 
 ### 3.2 Storage: SQLite
 
@@ -320,6 +320,7 @@ items(key PK, item_id, name, quality, ilvl, class, subclass, vendor_buy, vendor_
 candles_h1(market, key, t, open, high, low, close, qty, src,   PK(market,key,t,src))   WITHOUT ROWID
 candles_d1(market, key, t, open, high, low, close, qty, src,   PK(market,key,t,src))   WITHOUT ROWID
 volume_d1(market, key, day, listed, sold, expired, src, conf, PK(market,key,day,src))
+sales_h1(market, key, t, sold_per_hour,                      PK(market,key,t))        -- book-pair sales rate per hour start t (§3.3 sales_how)
 calibration(market, key, source, factor, samples, updated,   PK(market,key,source))   -- source: ahf | mail
 current(market, key, price, qty, at, src,                    PK(market,key,src))
 scans(scan_id PK, market, src, char_id, at, kind)            -- src: local (your scan) | ahf (Premium books); char_id null for ahf
@@ -404,7 +405,7 @@ Scale linearly per extra market.
 | `trend7` | least-squares slope of the daily medians over the last 7 days ÷ `med7` × 100, in % per day. It needs at least 4 days of data, otherwise it is 0 |
 | `sold/day`, `sellThru` | **sales volume**; see §3.3.1 for its sources |
 | `how[7×24]` | **hour-of-week profile**: median close per (weekday, hour) ÷ `med30`, smoothed as the mean of the slot and the 2 slots on each side. A slot with data from at least 3 different weeks is used with confidence high. With 1–2 weeks it falls back to the weekday-only ratio (median of that weekday ÷ `med30`), confidence low. With no data it is flat (1.0) |
-| `sales_how[7×24]` | **hourly sales profile**: units sold in each hour-of-week slot ÷ the average hour. Its mean over the 168 slots is 1.0. It is measured from consecutive hourly order books (AHF `books` with Premium, or your scans), smoothed like `how`. It needs data from at least 3 weeks per slot (else the weekday-only value, else flat 1.0). It drives demand in the sell-probability simulation (§3.3.2) |
+| `sales_how[7×24]` | **hourly sales profile**: units sold in each hour-of-week slot ÷ the average hour. Its mean over the 168 slots is 1.0. It is measured from consecutive hourly order books (AHF `books` with Premium, or your scans), smoothed like `how`. **Hourly rate:** each pair of consecutive complete books of a market (either source) at most 2 h apart (`volume.SALES_PAIR_MAX_GAP_MS`; longer gaps blur the hour) gives `sold ÷ gap in hours` (§3.3.1 source 2), counted for the clock hour of the earlier book. An hour with several pairs takes their total sold ÷ their total gap. Rates are computed at ingest and stored per hour in `sales_h1`, so analysis never diffs books. It needs data from at least 3 weeks per slot (else the weekday-only value, else flat 1.0). It drives demand in the sell-probability simulation (§3.3.2) |
 | `sell_score[7×24]` | **how good each hour of the week is for selling**: `how[slot] × sales_how[slot] ÷ max(sales_how)`, i.e. the price you get there × how busy buyers are relative to the busiest hour. A high price with no buyers scores low |
 | `sell_windows` | the item's **best selling windows**, derived from `sell_score` (§3.3.4), e.g. "Tue 18:00–21:00, Wed 19:00–22:00" |
 | `n`, `conf` | `n` = hourly closes in the last 30 days. `conf` = a **confidence percentage** (0–100%) for each result, defined in §3.3.5. Its level (high ≥ 75%, medium ≥ 45%, low below that) is only for the dot colour; rankings use the percentage itself |
@@ -838,9 +839,10 @@ You set or clear a rule from any dashboard row, from the **Rules** page, or by r
    - A market not in the config is `404 unknown_market`; no `market` means the first configured one. A busy database is `503 database_busy`.
    - **Accepted risk:** another process or Windows user on the same machine can send the right `Host`, read the token from `GET /` and write. That is inherent to a loopback tool; the checks protect against web pages, not local processes.
 2. **Two addon files** in `Interface/AddOns/AHProfit_Data/`, each written atomically (temp file + check + rename), each with a header holding its `schemaVersion`, `generatedAt` and a checksum of the body. The addon refuses a file whose version or checksum doesn't match and shows why (§5.2).
-   - **`MarketIntelligence.lua`** (market-wide; could be built in the cloud, §5.0): per item, compact strings (Lua constant limits) in two tiers.
+   - **`MarketIntelligence.lua`** (market data, built on the desktop by `export/` from the intelligence plus the shortlist, which comes from character state; the intelligence itself may be built in the cloud, §5.0): per item, compact strings (Lua constant limits) in two tiers.
      - **Tier 1, every eligible item:** current price and its age, med7/med30/p10/p90, seasonality strength, estimated sales per day, current supply, supply/volume, the top buying and selling windows, the sell-probability curve (§3.1.1), confidence and freshness, and `observationsUntil`.
-     - **Tier 2, the shortlist only** (items on any desktop list, in your stock or recipes, or recently scanned): the full 168-slot `how`, `sales_how` and `supply_how` with per-slot weeks.
+     - **Tier 2, the shortlist only** (items on any desktop list, in your stock or recipes, or recently scanned): the full 24 × 8 sell-probability curve in place of the 24 × 3 one (§3.1.1). Each window keeps the price ratio and weeks of data it carries (§3.3.4).
+     - **The hour-of-week profiles are never exported.** The 168-slot `how`, `sales_how` and `supply_how` stay in AHSync: the addon shows no week heatmap (heatmaps are dashboard-only), and its live decisions use only the windows and the curve, so it never reads or scans a 168-slot array.
      - Also the disenchant table and the bonus-suffix table (static data).
    - **`PortfolioPlan.lua`** (account-specific): the desktop's plan with action ids so the addon can mark them done, your sell record per item (`s`, `x`, `streak`), the item rules, `basedOnUntil` (the newest event it includes), and `ingestedUntil` per character for the pruning handshake (§2.2), written only after the database commit.
    - Raw history is never exported. Both files have a size budget: ≤ 2 MB and ≤ 200 KB.
@@ -906,7 +908,7 @@ launch_wow_after_catchup = false
 - AHSync exports **market intelligence** in `MarketIntelligence.lua` (per-item baselines, curves, windows, volume and supply, the disenchant table) and, optionally, its cross-character plan in `PortfolioPlan.lua` (§3.5).
 - **The addon's own recommendations** (`Recommend/Options.lua`): Disenchant, Craft, Flip and Sell options for the **shortlist** in the intelligence (tier 2 items plus what you hold and your recipes), from the intelligence plus live state (bags, gold, recipes, prices it just saw), using the ported formulas. They follow the same economic rules as the desktop's: shared scenarios check that identical inputs give identical profit numbers (LP1). With no `PortfolioPlan.lua`, or an old one, the addon still recommends; the plan only adds cross-character advice (transfers, which character acts).
 - **When state changes in game**, the addon does only O(1) work per changed item:
-  1. a new price → re-read `P` from the curve row for the current hour (§3.1.1);
+  1. a new price → re-read `P` from the curve row for the current hour (§3.1.1); posting-time advice comes from the precomputed top windows, never from per-slot profiles;
   2. recompute that item's options with the small ported formulas (fees, `E_post`, DE EV, craft cost);
   3. re-pick the best option;
   4. re-sort only the visible list.
@@ -1080,7 +1082,7 @@ The system is built as separate components that talk only through versioned cont
 | Historical Store | `history/` | raw observations (candles, current, books, volume rows), retention | business logic |
 | Historical Analysis | `analysis/` | market-wide statistics, weekly patterns, seasonality strength, volume estimates, supply, buy/sell windows (§3.3) | anything character-specific |
 | Market Intelligence | `intel/` | the versioned analysis results and their store | live character state |
-| Export | `export/` | `MarketIntelligence.lua` and `PortfolioPlan.lua` (§3.5) | analysis, recommendations |
+| Export | `export/` | `MarketIntelligence.lua` (the intelligence, trimmed to the shortlist) and `PortfolioPlan.lua` (§3.5) | analysis, recommendations |
 | State Importer | `state/` | reading SavedVariables, idempotent import, character snapshots and the transaction journal, freshness per character | recommendations |
 | Desktop Recommendations | `recommend/` | per-character Disenchant, Craft, Flip, Sell options from intelligence + state | collection, history |
 | Portfolio Optimizer | `portfolio/` | the cross-character plan: capital, shared market capacity, transfers (§3.4C) | raw collection |
@@ -1094,13 +1096,14 @@ The system is built as separate components that talk only through versioned cont
 | Producer → consumer | Contract |
 |---|---|
 | Collector → Historical Store | normalized observations (`collect/provider.py`: `Observation`, `BookObservation`), with source, observation time and completeness |
-| Historical Store → Analysis | `history.reads.HistoryReader` (a protocol: closes, current, books, volume, items) |
-| Analysis → Intelligence | `intel.contract.MarketIntelligence` (`INTEL_SCHEMA_VERSION`, method versions, `built_ms`, `observations_until_ms`, one `ItemIntel` per item), JSON-serializable |
+| Historical Store → Analysis | `history.reads.HistoryReader` (a protocol: closes, current, books, volume, items), read **in bulk per market** (below) |
+| Analysis → Intelligence | `intel.contract.MarketIntelligence` (`INTEL_SCHEMA_VERSION`, method versions, `built_ms`, `observations_until_ms`, one `ItemIntel` per item; contents below), JSON-serializable |
 | Intelligence → Export / Recommendations | `intel.store.IntelReader` |
 | Addon → State Importer | SavedVariables (§2.2.1) |
 | State Importer → Recommendations, Portfolio | `state.reads.StateReader` (characters with freshness, skills, recipes, stock, journal) |
 | Recommendations → Portfolio → Dashboard | option and plan records; dashboard pages as in §3.5 |
 | Export → Addon | `MarketIntelligence.lua`, `PortfolioPlan.lua` (§3.5) |
+| State → Export | the shortlist: item keys on any desktop list, in stock or recipes, or recently scanned (`state.reads.StateReader`) |
 
 **Architectural invariants** (checked by AR1–AR4 and the convention test):
 1. Collection is independent of analysis; analysis is independent of character state: `analysis/` imports only `engine/`, `history.reads` and `intel.contract`.
@@ -1110,9 +1113,26 @@ The system is built as separate components that talk only through versioned cont
 5. Listing changes never become confirmed sales; seasonality strength, expected profit and sales volume stay separate numbers.
 6. Every component is testable on its own with fakes.
 
-**Cloud boundary.** The Collector (remote providers), the Historical Store and the Analysis can run elsewhere and publish `MarketIntelligence` (and `MarketIntelligence.lua`). Some local process still has to place files in the WoW AddOns folder and read SavedVariables, and own in-game scans would have to be uploaded to feed cloud analysis. Those stay on the desktop.
+**Contents of the intelligence.** Per item (`ItemIntel`), everything market-wide that §3.3 computes from history:
+- prices and their ages: `cur`, med7/med30, p10/p90, trend, the latest book;
+- volume and supply (§3.3.1, §3.3.6): sales, expiries and listings per day with their sources, current supply, supply/volume, the confidence components;
+- weekly patterns (§3.3.4, §3.3.6): `how`, `sales_how` and `supply_how` (168 slots each) with `weeks` per slot, and seasonality strength. **Each profile is stored packed**: 168 comma-separated integers in thousandths, `floor(ratio × 1000 + 0.5)` (§3.3 rounding), and its weeks as 168 comma-separated counts; an empty string means no data (flat 1.0, 0 weeks). Analysis computes the windows and the curve from the packed values, so anyone decoding them gets the same windows (as IU11 does for the curve). Packing keeps a 9k-item market's intelligence within the memory budget (§3.1.2);
+- the top 3 selling windows and top 3 buying windows, each with its start slot, length, best slot, average `how` and weeks of data;
+- the sell-probability curve: the full 24 × 8 grid, already quantized (§3.1.1), with the hour its first row starts at.
+
+Analysis computes these the same way for every item. It never chooses by your lists, stock or recipes; that trimming belongs to the export.
+
+**Bulk reads.** Analysis reads history **per market, not per item**: `HistoryReader` offers one read that streams every item's closes, books and volume rows for a market in key order. Against local SQLite this is one query per table. Against a remote store it keeps a market to a few round trips instead of several per item (about 40k for 9k items) (AR7).
+
+**Cloud boundary.** The Collector (remote providers), the Historical Store and the Analysis can run elsewhere, for example as a scheduled AWS Lambda, and publish `MarketIntelligence` as versioned JSON. The desktop then:
+- fetches the newest intelligence and checks its version (AR2) and age; when it is missing or too new, it keeps the last good one and shows its age (§5.2);
+- runs recommendations, the portfolio and the dashboard from it, with no history store;
+- builds `MarketIntelligence.lua` itself, because the trimming needs the shortlist (character state) and the file must land in the local AddOns folder.
+
+Reading SavedVariables and writing the addon files stay on the desktop. Own in-game scans would have to be uploaded to feed cloud analysis.
 
 ### 5.0.1 Tech
+7. **The intelligence is complete.** Every number derived from history that any consumer needs is in `MarketIntelligence`, so a consumer never needs a `HistoryReader` (AR5).
 
 - **AHSync**: Python 3.12 (installed), standard library only (`urllib`, `gzip`, `json`, `sqlite3`, `tomllib`, `http.server`). The dashboard is one static HTML/JS page served with JSON endpoints. Started from `start.bat`, with an `.exe` via PyInstaller later.
 - **AHProfit**: Lua 5.1 and WoW FrameXML, with no libraries in v1.

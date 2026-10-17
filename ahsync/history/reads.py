@@ -68,6 +68,32 @@ class HistoryReader(Protocol):
             (hour start ms, close copper), ascending.
         """
 
+    def hourly_supply(self, market: str, key: int, from_ms: int, to_ms: int) -> list[tuple[int, int]]:
+        """Units listed per item-hour, local preferred.
+
+        Args:
+            market: Market id.
+            key: Item key.
+            from_ms: Window start.
+            to_ms: Window end.
+
+        Returns:
+            (hour start ms, units listed), ascending; hours never observed are left out.
+        """
+
+    def hourly_sales(self, market: str, key: int, from_ms: int, to_ms: int) -> list[tuple[int, float]]:
+        """Book-pair sales rate per item-hour (SPEC §3.3 sales_how).
+
+        Args:
+            market: Market id.
+            key: Item key.
+            from_ms: Window start.
+            to_ms: Window end.
+
+        Returns:
+            (hour start ms, units sold per hour), ascending; hours without a pair are left out.
+        """
+
     def daily_closes(self, market: str, key: int, from_ms: int, to_ms: int) -> list[tuple[int, int]]:
         """One close per item-day, local preferred.
 
@@ -170,6 +196,43 @@ class HistoryReads:
                 closes.append((t, close))
         return closes
 
+    def hourly_supply(self, market: str, key: int, from_ms: int, to_ms: int) -> list[tuple[int, int]]:
+        """Units listed per item-hour for `supply_how`; a local row beats AHF's (SPEC §3.3.6).
+
+        Args:
+            market: Market id.
+            key: Item key.
+            from_ms: First hour start to include, ms.
+            to_ms: Last hour start to include, ms.
+
+        Returns:
+            (hour start ms, units listed), ascending; an hour with nothing listed is 0, an unobserved one absent.
+        """
+        rows = self.conn.execute(
+            "SELECT t, COALESCE(qty, 0) FROM candles_h1 WHERE market = ? AND key = ? AND t BETWEEN ? AND ? "
+            "ORDER BY t, CASE src WHEN 'local' THEN 0 ELSE 1 END, src", (market, key, from_ms, to_ms)).fetchall()
+        supply: list[tuple[int, int]] = []
+        for t, qty in rows:
+            if not supply or supply[-1][0] != t:
+                supply.append((t, qty))
+        return supply
+
+    def hourly_sales(self, market: str, key: int, from_ms: int, to_ms: int) -> list[tuple[int, float]]:
+        """Stored book-pair sales rates (SPEC §3.3 sales_h1).
+
+        Args:
+            market: Market id.
+            key: Item key.
+            from_ms: First hour start to include, ms.
+            to_ms: Last hour start to include, ms.
+
+        Returns:
+            (hour start ms, units sold per hour), ascending.
+        """
+        return [tuple(r) for r in self.conn.execute(
+            "SELECT t, sold_per_hour FROM sales_h1 WHERE market = ? AND key = ? AND t BETWEEN ? AND ? ORDER BY t",
+            (market, key, from_ms, to_ms))]
+
     def daily_closes(self, market: str, key: int, from_ms: int, to_ms: int) -> list[tuple[int, int]]:
         """Daily closes, one per day, local preferred over AHF (SPEC §2.2).
 
@@ -258,6 +321,21 @@ class HistoryReads:
         """
         return [tuple(r) for r in self.conn.execute(
             "SELECT scan_id, at FROM scans WHERE market = ? AND src = 'local' AND kind = 'full' AND coverage >= 1 "
+            "AND at BETWEEN ? AND ? ORDER BY at, scan_id", (market, from_ms, to_ms))]
+
+    def complete_scans(self, market: str, from_ms: int, to_ms: int) -> list[tuple[str, int]]:
+        """Complete books of a market from either source (local scans and AHF books) in a time range.
+
+        Args:
+            market: Market id.
+            from_ms: Start, inclusive.
+            to_ms: End, inclusive.
+
+        Returns:
+            (scan id, time ms), oldest first (ties: scan id).
+        """
+        return [tuple(r) for r in self.conn.execute(
+            "SELECT scan_id, at FROM scans WHERE market = ? AND kind = 'full' AND coverage >= 1 "
             "AND at BETWEEN ? AND ? ORDER BY at, scan_id", (market, from_ms, to_ms))]
 
     def scan_entries(self, scan_id: str) -> list[tuple[int, int, int, int, int]]:

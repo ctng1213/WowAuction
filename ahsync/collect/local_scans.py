@@ -1,12 +1,13 @@
-"""Own full scans as local data: prices, hourly closes and book volume (SPEC §4.2, §2.2, §3.3.1).
+"""Own full scans as local data: prices, hourly closes, book volume and hourly sales (SPEC §4.2, §2.2, §3.3.1).
 
-Called inside the SavedVariables ingest transaction for each newly stored local scan.
-Every write is idempotent: `current` only moves forward in time, candles are upserts,
-and a day's `books` volume is recomputed whole from that day's scan pairs.
+Called inside the SavedVariables ingest transaction for each newly stored local scan
+(and, for hourly sales, after AHF books are stored). Every write is idempotent:
+`current` only moves forward in time, candles are upserts, and a day's `books` volume
+and an hour's sales rate are recomputed whole from the stored books.
 """
 from __future__ import annotations
 
-from ahsync.engine.volume import MAX_GAP_MS, Book, BookEntry, estimate_volume
+from ahsync.engine.volume import MAX_GAP_MS, SALES_PAIR_MAX_GAP_MS, Book, BookEntry, estimate_volume, hourly_sales
 from ahsync.db.sqlite import Database
 
 HOUR_MS = 3_600_000
@@ -97,6 +98,45 @@ def recompute_book_volume(db: Database, market: str, day: int) -> dict[int, tupl
     return rows
 
 
+def _hour_ranges(times_ms: list[int]) -> list[tuple[int, int]]:
+    """The hours whose sales rate a new book can change, merged into ranges.
+
+    A book at T is the later book of pairs starting up to 2 h before it, and the earlier
+    book of the pair starting in its own hour.
+
+    Args:
+        times_ms: Times of newly stored complete books.
+
+    Returns:
+        (first hour start, last hour start) ranges in ms, ascending, not overlapping.
+    """
+    ranges: list[list[int]] = []
+    for at_ms in sorted(times_ms):
+        first = (at_ms - SALES_PAIR_MAX_GAP_MS) // HOUR_MS * HOUR_MS
+        last = at_ms // HOUR_MS * HOUR_MS
+        if ranges and first <= ranges[-1][1] + HOUR_MS:
+            ranges[-1][1] = max(ranges[-1][1], last)
+        else:
+            ranges.append([first, last])
+    return [(first, last) for first, last in ranges]
+
+
+def recompute_sales_hours(db: Database, market: str, times_ms: list[int]) -> None:
+    """Recompute `sales_h1` for the hours newly stored complete books touch (V25-V27).
+
+    Books of either source pair, partial books never do. Each affected hour is rewritten whole.
+
+    Args:
+        db: Database, inside the caller's transaction.
+        market: Market id.
+        times_ms: Times of the newly stored complete books.
+    """
+    for first, last in _hour_ranges(times_ms):
+        scans = db.complete_scans(market, first, last + HOUR_MS - 1 + SALES_PAIR_MAX_GAP_MS)
+        rates = hourly_sales([_book(db, scan_id, at) for scan_id, at in scans])
+        db.replace_sales_hours(market, first, last, rates)
+
+
 def derive_from_scans(db: Database, new_scans: list[tuple[str, str, int, bool]]) -> set[int]:
     """Prices and volume for newly stored local scans (SPEC §4.2).
 
@@ -109,13 +149,17 @@ def derive_from_scans(db: Database, new_scans: list[tuple[str, str, int, bool]])
     """
     dirty: set[int] = set()
     days: set[tuple[str, int]] = set()
+    complete_times: dict[str, list[int]] = {}
     for market, scan_id, at_ms, complete in new_scans:
         dirty |= store_scan_prices(db, market, scan_id, at_ms)
         if complete:
+            complete_times.setdefault(market, []).append(at_ms)
             days.add((market, at_ms // DAY_MS))
             later = db.local_full_scans(market, at_ms + 1, at_ms + MAX_GAP_MS)
             if later:
                 days.add((market, later[0][1] // DAY_MS))     # an older file read late pairs with the next scan
     for market, day in sorted(days):
         dirty |= set(recompute_book_volume(db, market, day))
+    for market, times in sorted(complete_times.items()):
+        recompute_sales_hours(db, market, times)
     return dirty

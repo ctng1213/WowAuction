@@ -48,6 +48,9 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | V22 | sales 50/day, 93 units listed now; another item with sales unavailable; a third with sales 0 | supply/volume 1.86 days; "—"; "—" | the ratio is never made up |
 | V23 | median daily supply over 30 days of observations 80, 100, 120 units, and 10 days without any observation | median 100; the empty days are left out, not counted as 0 | missing data is not zero |
 | V24 | `VOLUME_METHOD_VERSION` goes from 1 to 2 with 20 days of stored books | the next full refresh recomputes those days' `books` volume, stamps them version 2, and leaves AHF and mail rows unchanged | estimates can be recomputed |
+| V25 | Linen 50c ×20 long ×5 at 10:00 → ×3 at 11:00 → ×2 at 14:00 | `sales_h1` 10:00: 40 per hour (40 sold ÷ 1 h); no row from the 11:00 → 14:00 pair (3 h apart) | hourly rates need books at most 2 h apart |
+| V26 | Linen ×20 long ×5 at 10:00 → ×4 at 10:30 → ×2 at 11:00 | both pairs start in the 10:00 hour: (20 + 40) sold ÷ (0.5 + 0.5) h = 60 per hour | several pairs in one hour pool their sold and gap |
+| V27 | an AHF Premium book at 10:00, a partial local scan (coverage 0.6) at 10:20, a complete local scan at 11:00; the same files are read again | one pair, AHF 10:00 → local 11:00; the partial scan is skipped; reading again leaves `sales_h1` unchanged | either source pairs; partial books never do; idempotent |
 | V21 | a local scan at 14:20 lists Linen at 45c (×20, ×2) and 50c (×20, ×1) | `current` local: 45c, qty 40; `candles_h1` local for 14:00: close 45c, qty 60 | a scan becomes local prices |
 
 **Sync and storage** (`sync/catchup`, `store/prune`):
@@ -161,6 +164,8 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | W9 | `how` peaks Sat 20:00, `sales_how` peaks Tue 19:00, `sell_score` peaks Wed 19:00 | item detail shows all three: highest price Sat 20:00, most activity Tue 19:00, best risk-adjusted Wed 19:00 (the plan's) |
 | W10 | `how` is 0.85 on Mon 03-05 (the cheapest), 0.93 on Thu 04, 1.0 elsewhere; threshold 0.9 | buy window "Mon 03:00–06:00" (≤ 0.85 ÷ 0.9 = 0.944); Thu 04:00 qualifies too (0.93) as a second window |
 | W11 | a big premium (how 1.4 on Sat 18:00) seen in only one of 4 weeks, so the held-out week misses it | strength near 0 even though the premium is large: predictability, not profit |
+| W12 | 4 weeks of hourly listed units: 100 everywhere except 200 on Tue 16:00–20:00; a second item with 2 weeks; a third with none | `supply_how` Tue 18:00 = 2.0 (overall median 100; the 5-slot smoothing sees only 200s), Tue 15:00 = (1 + 1 + 1 + 2 + 2) ÷ 5 = 1.4; the second item uses its weekday ratio; the third is flat 1.0 |
+| W13 | a profile with ratios 1.2346, 0.0625 and 0.8 in its first three slots, 1.0 elsewhere; the same with 0 weeks everywhere | packed "1235,63,800,1000,…" (0.0625 × 1000 = 62.5 rounds half up to 63) and decoded back to 1.235, 0.063, 0.8; packing again gives the same text; with no weeks the profile is stored as "" and decodes to flat 1.0 |
 
 **Recommendations** (`engine/disenchant`, `craft`, `plan`):
 
@@ -284,6 +289,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | IU11 | the simulation gives P = 0.853 for a curve point | exported as 0.86 (2% steps: floor(0.853 × 50 + 0.5) = 43 → 43 ÷ 50), stored as the character `string.char(35 + 43)` = "N"; Python and Lua both read 0.86 |
 | IU9 | refresh at 06:00 Fri; it is 08:00 Sat with no refresh since | the 08:00 row from Fri is reused; the age badge is amber (over 24 h) |
 | IU10 | a pending buy's slot passes 24 h while AHSync idles with no file change | the :00 status pass marks it missed; history reads = 0; no simulation; `Data.lua` rewritten |
+| IU12 | a refresh exports a shortlist item (7 weeks of hour-of-week data, top 3 sell and buy windows) and a non-shortlist item | both carry their top windows; the shortlist item has the 24 × 8 curve and the other the 24 × 3; neither string holds a 168-slot `how`, `sales_how` or `supply_how` (SPEC §3.5: the addon shows no week heatmap) |
 
 **Confidence percentage** (`confidence.score`):
 
@@ -325,6 +331,9 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | AR2 | `MarketIntelligence` with `schema_version` = current; one with a newer version | the first round-trips through JSON unchanged; the second is refused with "intelligence from a newer AHSync" |
 | AR3 | history changes after intelligence was built, with no new analysis | recommendations still use the published intelligence (they never read history) |
 | AR4 | every module under `analysis/` | imports only `engine/`, `history.reads`, `intel.contract` and the standard library (convention test) |
+| AR5 | analysis of an item with 7 weeks of hourly data: 100c except 50c on Mon 04:00–05:00, 80 units listed every hour, 2 sales per hour except 8 on Tue 18:00–20:00, 48 sales a day | its `ItemIntel` holds `how`, `sales_how`, `supply_how` packed (W13; 168 each, `weeks` = 7 per slot, `supply_how` flat "1000,…", Mon 04:00 `how` 800); one sell window Tue 18:00, 3 h (smoothed sales 5.6 there, 4.4 beside it, under 0.9 × 5.6); one buy window Mon 03:00, 4 h at average `how` 0.8 (0.9 beside it, above 0.8 ÷ 0.9); seasonality 0 (smoothing spreads the dip, so the profile misses by 120c where flat misses by 100c); a 24 × 8 curve starting at the analysis hour; it round-trips through JSON unchanged |
+| AR6 | the same intelligence (items A and B, both with 24 × 8 curves) exported with a shortlist of {A} | A's string has its 24 × 8 curve; B's has 24 × 3 equal to its intelligence's 0, 5 and 20 ahead columns; the intelligence itself is unchanged, and analysis output is the same with any shortlist |
+| AR7 | analysis of a market with 50 items, then 500 items, against a `HistoryReader` that counts calls | the same number of reader calls both times (bulk per market, never per item) |
 
 **Addon** (Lua, `tests/addon/...`): every scenario for a ported module (`fees`, `sellprob`, `disenchant`, `craft`; see SPEC §5) must pass on the Lua port with identical numbers. Volume (V*) and tracking (T*) scenarios run in Python only. Plus:
 

@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 
 from ahsync.collect.ahf import FEATURE_BOOKS, FEATURE_DEPTH, FEATURE_LIVE, AhfApi, Capabilities, FileIndex, FormatChanged
 from ahsync.collect.client import ApiError, FeatureUnavailable, RateLimited, RetriesExhausted
+from ahsync.collect.local_scans import recompute_sales_hours
 from ahsync.clock import DAY_MS, HOUR_MS, Clock
 from ahsync.db.sqlite import BookScan, Database, SyncState
 
@@ -507,6 +508,36 @@ class MarketSync:
         if FEATURE_BOOKS not in self.caps.features:
             return
         now = self.clock.now_ms()
+        stored: list[int] = []
+        try:
+            self._fetch_books(now, stored)
+        except Exception:
+            self._recompute_sales(stored)       # what was stored still feeds hourly sales when a later book fails
+            raise
+        self._recompute_sales(stored)
+
+    def _recompute_sales(self, stored: list[int]) -> None:
+        """Recompute hourly sales rates around newly stored AHF books (SPEC §3.3 sales_h1).
+
+        A crash before this runs only leaves those hours unobserved, never wrong (missing is not zero).
+
+        Args:
+            stored: Times of the complete books just stored.
+        """
+        if stored:
+            with self.db.transaction():
+                recompute_sales_hours(self.db, self.market, stored)
+
+    def _fetch_books(self, now: int, stored: list[int]) -> None:
+        """Fetch and store the missing complete AHF books.
+
+        Args:
+            now: Now, UTC ms.
+            stored: Collects the time of each complete book stored.
+
+        Raises:
+            RetriesExhausted: Passed on; the books stored before it are kept.
+        """
         for ref in self.files.books:
             scan_id = f"ahf:{self.market}:{ref.at_ms}"
             if not ref.complete or now - ref.at_ms > BOOK_MAX_AGE_MS or self.db.has_scan(scan_id):
@@ -526,6 +557,8 @@ class MarketSync:
                 continue
             self.db.store_book(BookScan(scan_id, self.market, "ahf", None, at, "full", 1.0 if complete else 0.0),
                                entries)
+            if complete:
+                stored.append(at)
             self.db.clear_status(f"feature:{self.market}:books")
 
     def _store_volume(self, state: SyncState) -> None:

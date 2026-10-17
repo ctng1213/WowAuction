@@ -20,6 +20,21 @@ class HistoryWrites:
             "ON CONFLICT(market, key, src) DO UPDATE SET price = excluded.price, qty = excluded.qty, "
             "at = excluded.at WHERE excluded.at >= current.at", [(market, *row) for row in rows])
 
+    def replace_sales_hours(self, market: str, from_ms: int, to_ms: int, rates: dict[int, dict[int, float]]) -> None:
+        """Write a range of hours' sales rates whole (idempotent: recomputed, never added to; SPEC §3.3 sales_h1).
+
+        Args:
+            market: Market id.
+            from_ms: First hour start replaced, inclusive.
+            to_ms: Last hour start replaced, inclusive.
+            rates: key -> hour start ms -> units sold per hour; hours outside the range are ignored.
+        """
+        self.conn.execute("DELETE FROM sales_h1 WHERE market = ? AND t BETWEEN ? AND ?", (market, from_ms, to_ms))
+        self.conn.executemany(
+            "INSERT INTO sales_h1(market, key, t, sold_per_hour) VALUES (?, ?, ?, ?)",
+            [(market, key, t, rate) for key, by_hour in sorted(rates.items())
+             for t, rate in sorted(by_hour.items()) if from_ms <= t <= to_ms])
+
     def replace_volume_day(self, market: str, day: int, src: str, rows: dict[int, tuple[float, float, float]]) -> None:
         """Write one day's volume for one source whole (idempotent: recomputed, never added to).
 

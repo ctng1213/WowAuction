@@ -259,5 +259,5 @@ def market_settings(config: Config) -> MarketSettings:
         The engine's MarketSettings.
     """
     return MarketSettings(config.default_sell_prob, config.own_record_weight, config.default_undercut_share,
-                          config.sell_window_hours)
+                          config.sell_window_hours, config.pattern_half_life_weeks, config.window_threshold)
 

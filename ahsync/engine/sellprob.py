@@ -327,14 +327,56 @@ def build_curve(sold_per_day: float, listed_per_day: float, undercut: float, sal
         know which of tomorrow's competitors expire when.
     """
     first_hour = refresh_ms // HOUR_MS
+    rows_by_demand: dict[tuple[float, ...], list[float]] = {}     # equal demand → equal row (flat profiles)
     grid = []
     for row in range(CURVE_ROWS):
-        window = list(range(first_hour + row, first_hour + row + hours))
-        demand = demand_for(window, sales_how)
-        grid.append([simulate(QueueInputs(sold_per_day, listed_per_day, undercut, demand, qty,
-                                          (Competitor(0, float(a), 0),) if a else ()))
-                     for a in ahead_points])
+        demand = demand_for(range(first_hour + row, first_hour + row + hours), sales_how)
+        if demand not in rows_by_demand:
+            rows_by_demand[demand] = _block_row(sold_per_day, listed_per_day, undercut, demand, qty, ahead_points)
+        grid.append(list(rows_by_demand[demand]))
     return grid
+
+
+def _block_row(sold_per_day: float, listed_per_day: float, undercut: float, demand: Sequence[float], qty: int,
+               ahead_points: Sequence[int]) -> list[float]:
+    """One curve row: `simulate` for each units-ahead point, in a single pass over the window's hours.
+
+    Each point is one block of competitors that never expires (band 0), as in
+    build_curve. The arithmetic is simulate_detail's, step for step, so every value is
+    bit-identical to simulate(QueueInputs(...)) (checked by an invariant test); it only
+    avoids building inputs and results per point, which dominated the full refresh.
+
+    Args:
+        sold_per_day: S.
+        listed_per_day: L.
+        undercut: u(p).
+        demand: sales_how for each window hour.
+        qty: Your units.
+        ahead_points: Units ahead for each point.
+
+    Returns:
+        P_queue per point; 0 for every point when qty is 0.
+    """
+    if qty <= 0:
+        return [0.0] * len(ahead_points)
+    arrivals = listed_per_day * undercut / 24
+    left = [float(a) for a in ahead_points]
+    yours_left = [float(qty)] * len(ahead_points)
+    undercut_left = 0.0
+    for weight in demand:
+        undercut_left += arrivals
+        hour_demand = sold_per_day / 24 * weight
+        taken = min(hour_demand, undercut_left)
+        undercut_left -= taken
+        hour_demand -= taken
+        for j in range(len(left)):
+            rest = hour_demand
+            if left[j] and rest > 0:          # a point with 0 ahead has no competitor at all
+                taken = min(rest, left[j])
+                left[j] -= taken
+                rest -= taken
+            yours_left[j] -= min(rest, yours_left[j])
+    return [(qty - y) / qty for y in yours_left]
 
 
 def curve_row(refresh_ms: int, now_ms: int) -> int:
@@ -451,12 +493,14 @@ def chance(queue: QueueInputs | None, tier_sell_through: float | None, tier_n: i
 
 @dataclass(frozen=True)
 class MarketSettings:
-    """The config values the market-wide probability needs, passed in (no config file in the engine)."""
+    """The config values market-wide analysis needs (probability, patterns), passed in (no config file in the engine)."""
 
     default_sell_prob: float = 0.25
     own_record_weight: float = 4
     default_undercut_share: float = 0.5
     sell_window_hours: int = 8
+    pattern_half_life_weeks: float = 4      # recency half-life of the weekly patterns (SPEC §3.3.4)
+    window_threshold: float = 0.90          # share of the best slot a window slot needs (SPEC §3.3.4)
 
 
 @dataclass(frozen=True)

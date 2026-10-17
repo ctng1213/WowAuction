@@ -10,11 +10,12 @@ from __future__ import annotations
 
 from collections import Counter
 
-from ahsync.engine import confidence, fees, prices, sellprob
+from ahsync.engine import confidence, fees, patterns, prices, profile, sellprob
+from ahsync.engine.profile import Profile
 from ahsync.engine.sellprob import MarketSettings, Supply
-from ahsync.engine.volume import VOLUME_METHOD_VERSION, Volume, daily_volume
+from ahsync.engine.volume import VOLUME_METHOD_VERSION, DailyVolume, Volume, daily_volume
 from ahsync.history.reads import HistoryReader, ItemInfo
-from ahsync.intel.contract import ItemIntel, MarketIntelligence
+from ahsync.intel.contract import IntelWindow, ItemIntel, MarketIntelligence
 
 HOUR_MS = 3_600_000
 DAY_MS = 86_400_000
@@ -51,6 +52,75 @@ def ref_stack(book: list[tuple[int, int, int, int]]) -> int:
     for _, stack, _, count in book:
         counts[stack] += count
     return min(counts, key=lambda s: (-counts[s], s)) if counts else 1
+
+
+def _packed(name: str, prof: Profile, fields: dict) -> Profile:
+    """Pack a profile into contract fields and return it as stored (SPEC §5.0 contents, W13).
+
+    Args:
+        name: Contract field prefix: "how", "sales" or "supply".
+        prof: The profile.
+        fields: Receives the value and weeks fields (side effect).
+
+    Returns:
+        The profile as consumers will decode it, so windows and the curve use the stored values.
+    """
+    values, weeks = profile.pack(prof)
+    fields["how" if name == "how" else f"{name}_how"] = values
+    fields[f"{name}_weeks"] = weeks
+    return profile.unpack(values, weeks)
+
+
+def _windows(windows: list[patterns.Window]) -> tuple[IntelWindow, ...]:
+    """Engine windows as contract windows.
+
+    Args:
+        windows: From patterns.sell_windows or patterns.buy_windows.
+
+    Returns:
+        The same windows, in order.
+    """
+    return tuple(IntelWindow(w.start_slot, w.hours, w.best_slot, w.how_avg, w.weeks) for w in windows)
+
+
+def weekly_fields(history: HistoryReader, market: str, key: int, hourly: list[tuple[int, int]], med30: int | None,
+                  volume: DailyVolume, ref: int, now_ms: int, settings: MarketSettings) -> dict:
+    """An item's weekly patterns, windows, seasonality strength and curve (SPEC §3.3.4, §3.3.6, §3.1.1).
+
+    Args:
+        history: The history.
+        market: Market id.
+        key: Item key.
+        hourly: Its hourly closes over the history window, (hour start ms, copper).
+        med30: Its 30-day median, copper.
+        volume: Its daily volume over the last 7 days.
+        ref: Its reference stack, units.
+        now_ms: Now; the curve's first row is this hour.
+        settings: Pattern half-life, window threshold and the posting-now window.
+
+    Returns:
+        The ItemIntel pattern fields by name.
+    """
+    start = now_ms - HISTORY_DAYS * DAY_MS
+    half_life = settings.pattern_half_life_weeks
+    fields: dict = {}
+    how = _packed("how", profile.price_profile(hourly, med30, now_ms, half_life), fields)
+    sales = _packed("sales", profile.sales_profile(history.hourly_sales(market, key, start, now_ms), now_ms,
+                                                   half_life), fields)
+    _packed("supply", profile.supply_profile(history.hourly_supply(market, key, start, now_ms), now_ms, half_life),
+            fields)
+    curve, curve_hour = "", None
+    if volume.sold_per_day is not None:
+        grid = sellprob.build_curve(volume.sold_per_day, volume.listed_per_day or 0.0, settings.default_undercut_share,
+                                    sales.values, now_ms, ref, hours=settings.sell_window_hours)
+        curve, curve_hour = sellprob.encode_curve(grid), now_ms // HOUR_MS
+    return {
+        **fields,
+        "seasonality": profile.seasonality_strength(hourly, med30, now_ms, half_life),
+        "sell_windows": _windows(patterns.sell_windows(how.values, sales.values, how.weeks, settings.window_threshold)),
+        "buy_windows": _windows(patterns.buy_windows(how.values, how.weeks, settings.window_threshold)),
+        "curve": curve, "curve_hour": curve_hour,
+    }
 
 
 def analyze_item(history: HistoryReader, market: str, key: int, info: ItemInfo | None, now_ms: int,
@@ -99,7 +169,8 @@ def analyze_item(history: HistoryReader, market: str, key: int, info: ItemInfo |
         prices.trend7(hourly, now_ms, med7), volume.sold_per_day, volume.expired_per_day, volume.listed_per_day,
         main_source, volume.days_by_source, price, ref, chance, unknown, sell_value, conf,
         sum(stack * count for _, stack, _, count in book) if book else (cur.qty if cur else None),
-        book_age, tuple(book or ()))
+        book_age, tuple(book or ()),
+        **weekly_fields(history, market, key, hourly, med30, volume, ref, now_ms, settings))
 
 
 def analyze_market(history: HistoryReader, market: str, now_ms: int,

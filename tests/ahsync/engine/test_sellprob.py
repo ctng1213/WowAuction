@@ -126,6 +126,29 @@ def test_curve_build_encode_decode_round_trip():
     assert set(sp.encode_curve(grid)) <= {chr(c) for c in range(35, 86)}
 
 
+def test_curve_points_are_bit_identical_to_the_simulation():
+    def make(rng):
+        """S, L, u, an 8-hour demand profile and the posted units."""
+        return (rng.uniform(0, 200), rng.uniform(0, 200), rng.random(),
+                tuple(rng.uniform(0, 3) for _ in range(8)), rng.randint(0, 40))
+    for i, (s, l, u, demand, qty) in enumerate(cases(CURVE_SEED, make)):
+        row = sp._block_row(s, l, u, demand, qty, sp.CURVE_AHEAD)
+        expected = [sp.simulate(sp.QueueInputs(s, l, u, demand, qty, (sp.Competitor(0, float(a), 0),) if a else ()))
+                    for a in sp.CURVE_AHEAD]
+        assert row == expected, f"seed {CURVE_SEED} case {i}"
+
+
+def test_curve_rows_follow_the_demand_of_each_posting_hour():
+    busy = [3.0 if s == 24 + 18 else 0.5 for s in range(168)]         # Tue 18:00 is busy
+    tuesday_10 = (5 * 24 + 10) * HOUR_MS                              # day 5 (1970-01-06) is a Tuesday
+    grid = sp.build_curve(24, 0, 0.5, busy, refresh_ms=tuesday_10, qty=5)
+    # Rows 1-8 (posting 11:00-18:00) catch the 18:00 hour: 7 × 0.5 + 3 = 6.5 buyers, so all 5 units sell.
+    # Rows 0 and 9 miss it: 8 × 0.5 = 4 buyers, 4 of 5 units → 0.8.
+    assert (grid[0][0], grid[1][0], grid[8][0], grid[9][0]) == (0.8, 1.0, 1.0, 0.8)
+    flat = sp.build_curve(24, 0, 0.5, [1.0] * 168, refresh_ms=tuesday_10, qty=5)
+    assert all(row == flat[0] for row in flat) and flat[0] is not flat[1]   # reused values, separate lists
+
+
 def test_zero_units_and_edge_inputs():
     assert sp.simulate(queue(qty=0)) == 0.0
     assert sp.tier_of(100, None) == 1 and sp.tier_of(104, 100) == 2 and sp.tier_of(110, 100) == 3
@@ -141,6 +164,7 @@ def test_zero_units_and_edge_inputs():
 # ---------------------------------------------------------------- invariants (SPEC §8.7)
 
 SEED = 9_102_026
+CURVE_SEED = 17_102_026
 
 
 def random_queue(rng) -> QueueInputs:

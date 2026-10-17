@@ -8,6 +8,7 @@ import pytest
 from ahsync.config import Config
 from ahsync.db.sqlite import Database
 from ahsync.app import refresh
+from ahsync.intel.contract import INTEL_SCHEMA_VERSION
 from tests.support.fake_clock import FakeClock
 
 M = "forever.pvp.horde.us"
@@ -67,7 +68,7 @@ def test_a_full_refresh_publishes_intelligence_and_both_pages(db):
     result = refresh.refresh_all(db, NOW, CFG)
     assert (result.error, result.failed, result.items) == (None, {}, 5)
     intel = db.read_intel(M)
-    assert (len(intel.items), intel.built_ms, intel.schema_version) == (5, NOW, 1)
+    assert (len(intel.items), intel.built_ms, intel.schema_version) == (5, NOW, INTEL_SCHEMA_VERSION)
     craft, built = db.view("craft", M)
     assert built == NOW
     [rod] = craft["rows"]                                   # the enchant makes no item: not on the Craft tab
