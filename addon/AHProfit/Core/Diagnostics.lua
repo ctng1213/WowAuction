@@ -21,6 +21,9 @@ Diagnostics.APIS = {
   "C_Container.GetContainerNumSlots", "C_Container.GetContainerItemInfo", "GetContainerItemInfo",
   "GetInboxNumItems", "GetInboxItem", "GetInboxItemLink",
   "C_AuctionHouse", "QueryAuctionItems", "CanSendAuctionQuery", "GetAuctionItemInfo",
+  "C_AuctionHouse.ReplicateItems", "C_AuctionHouse.GetNumReplicateItems", "C_AuctionHouse.GetReplicateItemInfo",
+  "C_AuctionHouse.GetReplicateItemLink", "C_AuctionHouse.GetReplicateItemTimeLeft",
+  "C_AuctionHouse.GetReplicateItemBattlePetInfo", "debugprofilestop", "issecretvalue",
 }
 
 -- Namespaces whose function lists we need to write the modern readers (SPEC §6).
@@ -30,7 +33,7 @@ local lastMerchant = nil   -- DescribeMerchant() text from the last merchant thi
 local lastTradeSkill = nil -- DescribeTradeSkill() text from the last trade skill window this session
 
 --- Build the diagnostics table from the current session.
----@return table  { at, client, apis, errors, skillLines, merchant, tradeSkill, namespaces, professions, setupError } (SPEC §2.2.1)
+---@return table  { at, client, apis, errors, skillLines, merchant, tradeSkill, namespaces, professions, setupError, scan } (SPEC §2.2.1)
 function Diagnostics.Build()
   local errors = {}
   for i, message in ipairs(Events.Errors()) do errors[i] = message end
@@ -45,6 +48,7 @@ function Diagnostics.Build()
     namespaces = Adapter.DescribeNamespaces(Diagnostics.NAMESPACES),
     professions = Adapter.DescribeProfessions(),
     setupError = DB.SetupError(),
+    scan = AHProfit.Scan.Replicate.Describe(),
   }
 end
 

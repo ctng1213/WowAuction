@@ -201,6 +201,7 @@ class Diagnostics:
     namespaces: tuple[tuple[str, tuple[str, ...] | None], ...] = ()   # (namespace, its function names; None = missing)
     professions: str | None = None         # raw GetProfessions slots "slot|index|name|rank|max;..."
     trade_skill: str | None = None         # raw last trade skill window "name=..|ids=..|learned=..|first=.."
+    scan: str | None = None                # last full-scan read "calls=..|n=..|skipped=..|steps=..|maxStepMs=..|kind=..|rows=..|dropped=.."
 
 
 @dataclass(frozen=True, slots=True)
@@ -803,7 +804,7 @@ def _diagnostics(value: object) -> Diagnostics | None:
         at_ms=at if isinstance(at, int) and not isinstance(at, bool) else None,
         client=text("client"), apis=tuple(apis), errors=errors,
         skill_lines=text("skillLines"), merchant=text("merchant"), setup_error=text("setupError"),
-        namespaces=tuple(namespaces), professions=text("professions"), trade_skill=text("tradeSkill"),
+        namespaces=tuple(namespaces), professions=text("professions"), trade_skill=text("tradeSkill"), scan=text("scan"),
     )
 
 

@@ -12,6 +12,7 @@ Core\DB.lua
 Capture\Characters.lua
 Capture\Professions.lua
 Capture\Inventory.lua
+Scan\Replicate.lua
 Core\Diagnostics.lua
 Engine\Fees.lua
 Engine\SellProb.lua

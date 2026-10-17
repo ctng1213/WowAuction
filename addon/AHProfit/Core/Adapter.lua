@@ -479,6 +479,86 @@ function Adapter.ReadInbox()
   return items
 end
 
+-- ------------------------------------------------------------------ full AH scan (ReplicateItems)
+-- Forever has C_AuctionHouse.ReplicateItems (verified 2026-10-16, SPEC §4.2). The reader
+-- follows AuctionHouseFYI's: rows are 0-based, owner and bidder fields are never read.
+
+--- Fine-grained clock for the 4 ms work budget (SPEC §5.1).
+---@return number  Milliseconds since an arbitrary start
+function Adapter.ProfileMs()
+  return debugprofilestop()
+end
+
+--- A value the client marks secret can't be read; treat it as missing.
+---@param value any  A value returned by a WoW API
+---@return any       The value; nil when it is secret
+local function Plain(value)
+  if issecretvalue and issecretvalue(value) then return nil end
+  return value
+end
+
+--- Whether this client can replicate the whole auction house.
+---@return boolean  true when C_AuctionHouse has ReplicateItems and its readers
+function Adapter.HasReplicate()
+  local AH = C_AuctionHouse
+  return type(AH) == "table" and type(AH.ReplicateItems) == "function"
+    and type(AH.GetNumReplicateItems) == "function" and type(AH.GetReplicateItemInfo) == "function"
+end
+
+--- Ask the server for the whole auction house; the answer is REPLICATE_ITEM_LIST_UPDATE.
+---@return boolean  true when the call went out without an error
+function Adapter.RequestReplicate()
+  return (pcall(C_AuctionHouse.ReplicateItems))
+end
+
+--- Number of auctions in the last replicate answer.
+---@return number  0 when there is no answer yet (or it can't be read)
+function Adapter.NumReplicateItems()
+  local n = Plain(C_AuctionHouse.GetNumReplicateItems())
+  return type(n) == "number" and math.floor(n) or 0
+end
+
+--- The numeric market fields of GetReplicateItemInfo, by position.
+--- UNVERIFIED (Forever 1.60.1): name, texture, count, quality, usable, level, levelType,
+--- minBid, minIncrement, buyoutPrice, bidAmount, highBidder, bidderFull, owner, ownerFull,
+--- saleStatus, itemId (AuctionHouseFYI reads the same positions).
+---@return number|nil count, number|nil buyout (whole stack, 0 = none)
+local function PickInfo(_, _, count, _, _, _, _, _, _, buyout)
+  return Plain(count), Plain(buyout)
+end
+
+--- One auction of the replicate answer, as an order-book entry (SPEC §4.2 Store).
+--- Left out, with the reason: "pet" (battle pet), "count" (no readable stack size),
+--- "buyout" (bid only), "band" (unknown time left; volume needs it, §3.3.1) and
+--- "link" (no item link, or not an item link). Secret values read as missing.
+---@param i number         0-based auction index
+---@param keyCache table   link -> item key (false = not an item) for this scan; links repeat a lot,
+---                        so this saves parsing the same link thousands of times
+---@return number|nil key, number|string unitPrice (copper, floor(buyout / count)) or the reason it was
+---        left out, number|nil stack, number|nil band (1-4)
+function Adapter.ReadReplicateItem(i, keyCache)
+  local AH = C_AuctionHouse
+  if AH.GetReplicateItemBattlePetInfo then
+    local creature = AH.GetReplicateItemBattlePetInfo(i)
+    if (issecretvalue and issecretvalue(creature)) or (creature ~= nil and creature ~= 0) then return nil, "pet" end
+  end
+  local count, buyout = PickInfo(AH.GetReplicateItemInfo(i))
+  if type(count) ~= "number" or count < 1 then return nil, "count" end
+  if type(buyout) ~= "number" or buyout < 1 then return nil, "buyout" end
+  -- UNVERIFIED: GetReplicateItemTimeLeft returns 0..3 (short..very long), as AuctionHouseFYI reads it.
+  local left = AH.GetReplicateItemTimeLeft and Plain(AH.GetReplicateItemTimeLeft(i))
+  if left ~= 0 and left ~= 1 and left ~= 2 and left ~= 3 then return nil, "band" end
+  local link = Plain(AH.GetReplicateItemLink(i))
+  if type(link) ~= "string" then return nil, "link" end
+  local key = keyCache[link]
+  if key == nil then
+    key = Adapter.ItemKey(link) or false
+    keyCache[link] = key
+  end
+  if not key then return nil, "link" end
+  return key, math.floor(buyout / count), count, left + 1
+end
+
 -- ------------------------------------------------------------------ diagnostics
 -- For tools/savedvars_report.py (SPEC §2.2.1 diagnostics, §6). These never raise:
 -- a failure becomes part of the returned text, because they exist to explain failures.

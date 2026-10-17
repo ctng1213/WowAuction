@@ -292,6 +292,7 @@ def test_diagnostics_block_is_read_for_the_report():
 \t\t["namespaces"] = "C_MerchantFrame=GetBuybackItemInfo GetItemInfo;C_Missing=nil",
 \t\t["professions"] = "1|3|Herbalism|15|75;2|nil|nil|nil|nil",
 \t\t["tradeSkill"] = "name=Cooking|ids=2|learned=1",
+\t\t["scan"] = "calls=0|n=3|skipped=0|steps=1|maxStepMs=0.03|kind=full|rows=2|dropped=0",
 \t},'''))
     d = data.diagnostics
     assert (d.at_ms, d.client, d.merchant, d.setup_error) == (1792205711000, "1.60.1 70009", None, None)
@@ -301,6 +302,7 @@ def test_diagnostics_block_is_read_for_the_report():
     assert d.namespaces == (("C_MerchantFrame", ("GetBuybackItemInfo", "GetItemInfo")), ("C_Missing", None))
     assert d.professions == "1|3|Herbalism|15|75;2|nil|nil|nil|nil"
     assert d.trade_skill == "name=Cooking|ids=2|learned=1"
+    assert d.scan == "calls=0|n=3|skipped=0|steps=1|maxStepMs=0.03|kind=full|rows=2|dropped=0"
     assert data.problems == ()
 
 

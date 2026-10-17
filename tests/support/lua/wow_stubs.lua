@@ -25,6 +25,7 @@ local frames = {}      -- every frame created, in creation order
 local timers = {}      -- pending C_Timer.After callbacks { due, seq, fn }
 local timerSeq = 0
 local clock = 0        -- seconds since Reset, for timers
+local profileMs = 0    -- debugprofilestop(): moves only when the fake AH is read, so budgets are counted deterministically
 
 --- A fresh fake game state: a level 60 Horde mage with nothing, out of combat.
 ---@return table  The world; see the field comments
@@ -157,6 +158,17 @@ function Stubs.Advance(seconds)
   clock = target
 end
 
+--- Run the timers that are due now once, like one rendered frame; timers they start wait.
+function Stubs.RunDueTimers()
+  local due, later = {}, {}
+  for _, timer in ipairs(timers) do
+    if timer.due <= clock then due[#due + 1] = timer else later[#later + 1] = timer end
+  end
+  timers = later
+  table.sort(due, function(a, b) return a.seq < b.seq end)
+  for _, timer in ipairs(due) do timer.fn() end
+end
+
 --- Enter combat: sets the lockdown flag and fires PLAYER_REGEN_DISABLED.
 function Stubs.EnterCombat()
   Stubs.world.inCombat = true
@@ -220,6 +232,48 @@ function Stubs.ModernTradeSkill(window)
              reagentSlotSchematics = slots }
   end
   return api
+end
+
+--- A fake C_AuctionHouse with the replicate API (SPEC §4.2). Define it with
+--- Stubs.Define("C_AuctionHouse", Stubs.ReplicateHouse(house)) before Stubs.Login().
+--- Each GetReplicateItemInfo call costs house.costMs on the profile clock (default 0.01).
+---@param house table  { auctions = { { id, count, buyout (stack, 0 = none), left (0-3), pet = bool,
+---                      noLink = bool } }, answers = bool (default true: a call fires the update),
+---                      calls = 0 (counted here) }
+---@return table       The fake namespace
+function Stubs.ReplicateHouse(house)
+  house.calls = house.calls or 0
+  local function auction(i) return house.auctions[i + 1] end   -- the API is 0-based
+  local api = {}
+  function api.ReplicateItems()
+    house.calls = house.calls + 1
+    if house.answers ~= false then Stubs.FireEvent("REPLICATE_ITEM_LIST_UPDATE") end
+  end
+  function api.GetNumReplicateItems() return #house.auctions end
+  function api.GetReplicateItemInfo(i)
+    profileMs = profileMs + (house.costMs or 0.01)
+    local a = auction(i)
+    if not a then return nil end
+    return Stubs.ITEM_NAMES[a.id], "icon", a.count, 1, true, 1, 0, a.buyout, 1, a.buyout, 0,
+      false, nil, "Seller", "Seller-Grommash", 0, a.id
+  end
+  function api.GetReplicateItemLink(i)
+    local a = auction(i)
+    if a and not a.noLink then return Stubs.ItemLink(a.id) end
+  end
+  function api.GetReplicateItemTimeLeft(i) local a = auction(i); return a and a.left end
+  function api.GetReplicateItemBattlePetInfo(i) local a = auction(i); return a and a.pet and 42 or 0 end
+  return api
+end
+
+--- An auction of the fake replicate answer.
+---@param id number      Item id
+---@param price number   Unit price, copper
+---@param count number   Stack size
+---@param left number    Time left 0-3 (short..very long)
+---@return table         { id, count, buyout, left }
+function Stubs.Auction(id, price, count, left)
+  return { id = id, count = count, buyout = price * count, left = left }
 end
 
 --- The recipe at an index of a fake recipe window.
@@ -368,6 +422,7 @@ local function InstallCore()
   Define("GetMoney", function() return Stubs.world.money end)
   Define("GetServerTime", function() return math.floor(Stubs.world.serverTime) end)
   Define("InCombatLockdown", function() return Stubs.world.inCombat end)
+  Define("debugprofilestop", function() return profileMs end)
   Define("C_Timer", { After = function(seconds, fn)
     timerSeq = timerSeq + 1
     timers[#timers + 1] = { due = clock + seconds, seq = timerSeq, fn = fn }
@@ -392,7 +447,7 @@ end
 ---@param options table|nil  { keepSaved = true } keeps AHProfitDB, as across a logout and login
 function Stubs.Reset(options)
   for _, name in ipairs(installed) do _G[name] = nil end
-  installed, frames, timers, timerSeq, clock = {}, {}, {}, 0, 0
+  installed, frames, timers, timerSeq, clock, profileMs = {}, {}, {}, 0, 0, 0
   _G.AHProfit = nil
   if not (options and options.keepSaved) then _G.AHProfitDB = nil end
   Stubs.world = Stubs.NewWorld()

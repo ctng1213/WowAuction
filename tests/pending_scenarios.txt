@@ -3,7 +3,7 @@
 # Tokens: an ID (P12) or a same-prefix range (V1-V18). '#' starts a comment.
 
 # M1 sync and storage
-FM5 FM14 FM17-FM24
+FM5 FM14 FM17-FM18 FM20-FM21 FM23-FM24
 FI1
 
 # M3-M4 engine
@@ -31,8 +31,6 @@ VW1
 A2-A5
 UI1-UI11
 
-# Full scans shared with AuctionHouseFYI (SPEC 4.2)
-A6-A8
 
 # Market activity amendment (SPEC §3.3.6, §3.4 capacity, §8.8 volume backtest)
 V22-V24 W9 R15-R16 D23 K4 PL4

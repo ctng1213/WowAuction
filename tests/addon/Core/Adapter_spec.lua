@@ -14,7 +14,28 @@ describe("Adapter", function()
   it("the .toc lists the Core and Capture files in load order", function()
     Stubs.Reset()
     assert_eq(Stubs.TocFiles(), { "Core/Adapter.lua", "Data/BonusSuffixes.lua", "Data/Disenchant.lua", "Core/Events.lua", "Core/DB.lua",
-      "Capture/Characters.lua", "Capture/Professions.lua", "Capture/Inventory.lua", "Core/Diagnostics.lua", "Engine/Fees.lua", "Engine/SellProb.lua", "Engine/Disenchant.lua", "Engine/Craft.lua" })
+      "Capture/Characters.lua", "Capture/Professions.lua", "Capture/Inventory.lua", "Scan/Replicate.lua", "Core/Diagnostics.lua",
+      "Engine/Fees.lua", "Engine/SellProb.lua", "Engine/Disenchant.lua", "Engine/Craft.lua" })
+  end)
+
+  it("reads a replicate auction 0-based as key, unit price, stack and band, caching keys by link", function()
+    local Adapter = Boot()
+    local house = { auctions = { Stubs.Auction(2840, 100, 5, 0), { id = 2589, count = 3, buyout = 100, left = 3 } } }
+    Stubs.Define("C_AuctionHouse", Stubs.ReplicateHouse(house))
+    local cache = {}
+    assert_eq({ Adapter.ReadReplicateItem(0, cache) }, { 2840, 100, 5, 1 })
+    assert_eq({ Adapter.ReadReplicateItem(1, cache) }, { 2589, 33, 3, 4 }, "100c for 3: floor(33.3) per unit")
+    assert_eq(cache[Stubs.ItemLink(2840)], 2840)
+    assert_eq(Adapter.HasReplicate(), true)
+    assert_eq(Adapter.NumReplicateItems(), 2)
+  end)
+
+  it("a secret replicate value reads as missing, and no C_AuctionHouse means no replicate", function()
+    local Adapter = Boot()
+    assert_eq(Adapter.HasReplicate(), false)
+    Stubs.Define("C_AuctionHouse", Stubs.ReplicateHouse({ auctions = { Stubs.Auction(2840, 100, 5, 0) } }))
+    Stubs.Define("issecretvalue", function(v) return v == 5 end)   -- the stack count is secret
+    assert_eq({ Adapter.ReadReplicateItem(0, {}) }, { nil, "count" }, "left out, with the reason")
   end)
 
   it("item key of a plain item link is its item id", function()

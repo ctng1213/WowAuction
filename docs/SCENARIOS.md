@@ -347,6 +347,8 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | A6 | the AH opens and another addon's `ReplicateItems` answers with 3 auctions (Linen 45c ×20 long, Linen 45c ×20 long, Copper Bar 1s ×5 short) | one `full` scan, coverage 1, rows `2589,45,20,3,2;2840,100,5,1,1`; AHProfit made no ReplicateItems call |
 | A7 | the AH opens and no scan result arrives within 30 s | AHProfit calls `ReplicateItems` once; opening the AH again 5 min later doesn't call it again (20-min rule) |
 | A8 | a 10,000-auction result | read over several frames, no step over the 4 ms budget (counted by the stub clock); entering combat pauses it and leaving combat finishes it |
+| A10 | AHProfit's own `ReplicateItems` call gets no answer; the AH is opened again 20 min and then 40 min after that call | no call at 20 min (an unanswered call doubles the wait to 40 min); one call at 40 min |
+| A11 | a replicate answer with a battle pet, an auction without a buyout, one without a link and one with an unknown time left, next to one Linen 45c ×20 | the scan holds only the Linen row; the four are counted as skipped in the diagnostics |
 | A9 | no `PortfolioPlan.lua`; the intelligence lists Copper Rod (sell value 38 s) and Copper Bar on the shortlist; your bags hold 6 bars; the AH shows bars at 10 s | the addon itself offers "Craft 3 Copper Rod from owned bars" with the same profit the desktop computes for the same inputs (19 s each, C1) |
 
 ## 2. Visual tests (UI1–UI11)

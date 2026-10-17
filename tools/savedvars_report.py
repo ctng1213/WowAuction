@@ -132,6 +132,7 @@ def report_diagnostics(data: AHProfitData, verbose: bool) -> None:
         elif verbose:
             print(f"  {namespace}: {len(functions)} functions: {' '.join(functions)}")
     print(f"  last trade skill window: {(d.trade_skill or 'none opened this session').replace('|', '  ')}")
+    print(f"  last full scan read: {(d.scan or 'no scan this session').replace('|', '  ')}")
     print("  last merchant (item key | available, -1 = unlimited | extended cost):")
     for row in (d.merchant or "no merchant opened this session").split(";"):
         print(f"    {row.replace('|', ' | ')}")
