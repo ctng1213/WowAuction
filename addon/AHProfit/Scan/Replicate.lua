@@ -127,22 +127,40 @@ local function EndReading(complete)
   run.phase = "sort"
 end
 
---- Read auctions until the frame budget is spent. Stops before a row would cross the
---- budget, using this step's average row cost so far.
+--- Whether one more unit of work would likely cross the frame budget. The next unit is
+--- assumed to cost twice this step's average so far: one slow row or item, a cache miss or
+--- a collector step, then still fits (measured 2026-10-17: 4.18 ms with 1× the average).
+---@param start number  Step start, ProfileMs
+---@param done number   Units of work done this step
+---@return boolean      true to stop this step now
+local function BudgetSpent(start, done)
+  if done == 0 then return false end
+  local elapsed = Adapter.ProfileMs() - start
+  return elapsed + 2 * elapsed / done > Replicate.BUDGET_MS
+end
+
+--- Count one auction's raw time left for the diagnostics histogram (A11, A12).
+---@param value string|number  The band (1-4) or the raw value that wasn't one, as text
+local function CountTimeLeft(value)
+  local slot = tostring(value)
+  stats.left[slot] = (stats.left[slot] or 0) + 1
+end
+
+--- Read auctions until the frame budget is spent (see BudgetSpent).
 ---@param start number  Step start, ProfileMs
 local function ReadPhase(start)
   local rows = 0
   while run.i < run.n do
-    if rows > 0 then
-      local elapsed = Adapter.ProfileMs() - start
-      if elapsed + elapsed / rows > Replicate.BUDGET_MS then return end
-    end
-    local key, price, stack, band = Adapter.ReadReplicateItem(run.i, run.keyCache)
+    if BudgetSpent(start, rows) then return end
+    local key, price, stack, band, byId = Adapter.ReadReplicateItem(run.i, run.keyCache)
     if key then
       AddToBook(run.book, key, price, stack, band)
+      CountTimeLeft(band)
+      if byId then stats.byId = stats.byId + 1 end
     else
       stats.skipped = stats.skipped + 1
       stats.skip[price] = (stats.skip[price] or 0) + 1   -- price holds the reason
+      if price == "band" then CountTimeLeft(stack) end  -- stack holds the raw time left
     end
     run.i, rows = run.i + 1, rows + 1
   end
@@ -156,15 +174,15 @@ local function SortPhase()
   run.phase = "encode"
 end
 
---- Encode items until the frame budget is spent, then join this step's rows into one chunk.
+--- Encode items until the frame budget is spent (see BudgetSpent), then join this step's rows into one chunk.
 ---@param start number|nil  Step start, ProfileMs; nil = no budget (logout)
 local function EncodePhase(start)
-  local parts = {}
+  local parts, items = {}, 0
   while run.next <= #run.items do
-    if start and #parts > 0 and Adapter.ProfileMs() - start >= Replicate.BUDGET_MS then break end
+    if start and BudgetSpent(start, items) then break end
     local key = run.items[run.next]
     EncodeItem(parts, key, run.book[key])
-    run.next = run.next + 1
+    run.next, items = run.next + 1, items + 1
   end
   if #parts > 0 then run.chunks[#run.chunks + 1] = table.concat(parts, ";") end
   run.rows = run.rows + #parts
@@ -204,7 +222,7 @@ local function OnReplicateUpdate()
   answeredOpenId, callUnanswered, callGapS = openId, false, Replicate.MIN_CALL_GAP_S
   lastRunStartMs = now
   run = { n = n, i = 0, at = now, charId = Characters.CurrentId(), phase = "read", book = {}, keyCache = {} }
-  stats = { calls = stats.calls, n = n, skipped = 0, skip = {}, steps = 0, maxStepMs = 0, dropped = 0,
+  stats = { calls = stats.calls, n = n, skipped = 0, skip = {}, left = {}, byId = 0, steps = 0, maxStepMs = 0, dropped = 0,
             phaseMs = { read = 0, sort = 0, encode = 0, save = 0 } }
   Events.RunWhenSafe("scan.replicate", Step)
 end
@@ -244,16 +262,30 @@ local function OnLogout()
   while run do PHASES[run.phase](nil) end
 end
 
+--- Keys of a table with string keys, sorted.
+---@param t table  string -> any
+---@return string[] Ascending
+local function SortedTextKeys(t)
+  local keys = {}
+  for k in pairs(t) do keys[#keys + 1] = k end
+  table.sort(keys)
+  return keys
+end
+
 -- Skip reasons in diagnostics order (Adapter.ReadReplicateItem).
 local SKIP_REASONS = { "pet", "count", "buyout", "band", "link" }
 
 --- The last scan's numbers for diagnostics (SPEC §2.2.1).
----@return string  "calls=..|n=..|skipped=..|pet=..|count=..|buyout=..|band=..|link=..|steps=..|maxStepMs=..
+---@return string  "calls=..|n=..|skipped=..|pet=..|count=..|buyout=..|band=..|link=..|byId=..|left=1:..,2:..|steps=..|maxStepMs=..
 ---                |readMs=..|sortMs=..|encodeMs=..|saveMs=..|kind=..|rows=..|dropped=.."; ms are the slowest step per phase
 function Replicate.Describe()
   local s = stats
   local parts = { "calls=" .. s.calls, "n=" .. tostring(s.n), "skipped=" .. tostring(s.skipped) }
   for _, reason in ipairs(SKIP_REASONS) do parts[#parts + 1] = reason .. "=" .. ((s.skip or {})[reason] or 0) end
+  parts[#parts + 1] = "byId=" .. tostring(s.byId or 0)
+  local left = {}
+  for _, value in ipairs(SortedTextKeys(s.left or {})) do left[#left + 1] = value .. ":" .. s.left[value] end
+  parts[#parts + 1] = "left=" .. table.concat(left, ",")
   parts[#parts + 1] = "steps=" .. tostring(s.steps)
   parts[#parts + 1] = "maxStepMs=" .. string.format("%.2f", s.maxStepMs or 0)
   for _, phase in ipairs({ "read", "sort", "encode", "save" }) do

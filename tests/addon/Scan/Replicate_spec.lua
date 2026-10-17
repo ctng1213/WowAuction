@@ -19,7 +19,7 @@ end
 ---@return table[]  Stubs.Auction rows
 local function ManyAuctions(n)
   local ids, rows = { LINEN, COPPER_BAR, SILK, WOOL }, {}
-  for i = 1, n do rows[i] = Stubs.Auction(ids[i % 4 + 1], 10 + i % 50, 1 + i % 20, i % 4) end
+  for i = 1, n do rows[i] = Stubs.Auction(ids[i % 4 + 1], 10 + i % 50, 1 + i % 20, 1 + i % 4) end
   return rows
 end
 
@@ -35,19 +35,19 @@ end
 describe("Replicate", function()
   it("A6 another addon's ReplicateItems answer is saved as one full scan", function()
     local house = Boot({ auctions = {
-      Stubs.Auction(LINEN, 45, 20, 2), Stubs.Auction(LINEN, 45, 20, 2), Stubs.Auction(COPPER_BAR, 100, 5, 0) } })
+      Stubs.Auction(LINEN, 45, 20, 3), Stubs.Auction(LINEN, 45, 20, 3), Stubs.Auction(COPPER_BAR, 100, 5, 1) } })
     Stubs.FireEvent("AUCTION_HOUSE_SHOW")
     Stubs.FireEvent("REPLICATE_ITEM_LIST_UPDATE")      -- AuctionHouseFYI asked; we only listen
     Stubs.Advance(60)
     local scan = AHProfitDB.scans[1]
     assert_eq({ #AHProfitDB.scans, scan.kind, scan.coverage, scan.rows },
-      { 1, "full", 1, "2589,45,20,3,2;2840,100,5,1,1" }, "two identical Linen auctions group into count 2; left 2 = band 3")
+      { 1, "full", 1, "2589,45,20,3,2;2840,100,5,1,1" }, "two identical Linen auctions group into count 2; time left 3 = band 3 (long)")
     assert_eq({ scan.id, scan.char, scan.at }, { "Amaya-Grommash:1760000000000:0", "Amaya-Grommash", 1760000000000 })
     assert_eq(house.calls, 0, "an answer arrived, so the 30 s fallback never calls")
   end)
 
   it("A7 with no answer within 30 s AHProfit calls ReplicateItems once, then not again for 20 min", function()
-    local house = Boot({ auctions = { Stubs.Auction(LINEN, 45, 20, 2) } })
+    local house = Boot({ auctions = { Stubs.Auction(LINEN, 45, 20, 3) } })
     Stubs.FireEvent("AUCTION_HOUSE_SHOW")
     Stubs.Advance(29)
     assert_eq(house.calls, 0)
@@ -75,7 +75,7 @@ describe("Replicate", function()
     Stubs.Advance(5)
     local stats, scan = Replicate.Stats(), AHProfitDB.scans[1]
     assert_eq(stats.maxStepMs <= Replicate.BUDGET_MS, true, "no step over 4 ms (" .. stats.maxStepMs .. ")")
-    assert_eq(stats.steps >= 10000 * 0.25 / 4, true, "16 auctions per 4 ms step: at least 625 steps")
+    assert_eq(stats.steps >= 10000 * 0.25 / 4, true, "15 auctions per 4 ms step (the 16th would cross at twice the average): at least 625 steps")
     local units = 0
     for _, a in ipairs(ManyAuctions(10000)) do units = units + a.count end
     assert_eq({ scan.kind, Units(scan.rows) }, { "full", units }, "every auction's units are in the book")
@@ -98,34 +98,54 @@ describe("Replicate", function()
     assert_eq(house.calls, 2, "40 min after it: call again")
   end)
 
-  it("A11 pets, no-buyout, unlinked and unknown-band auctions are left out and counted", function()
+  it("A11 pets, no-buyout and unknown-time-left auctions are left out and counted", function()
     Boot({ auctions = {
-      { id = LINEN, count = 1, buyout = 100, left = 2, pet = true }, { id = LINEN, count = 5, buyout = 0, left = 2 },
-      { id = LINEN, count = 5, buyout = 500, left = 2, noLink = true }, { id = LINEN, count = 5, buyout = 500, left = 9 },
-      Stubs.Auction(LINEN, 45, 20, 2) } })
+      { id = LINEN, count = 1, buyout = 100, left = 3, pet = true }, { id = LINEN, count = 5, buyout = 0, left = 3 },
+      { id = LINEN, count = 5, buyout = 500, left = 0 }, { id = LINEN, count = 5, buyout = 500 },
+      Stubs.Auction(LINEN, 45, 20, 3) } })
     Stubs.FireEvent("AUCTION_HOUSE_SHOW")
     Stubs.FireEvent("REPLICATE_ITEM_LIST_UPDATE")
     Stubs.Advance(1)
     assert_eq(AHProfitDB.scans[1].rows, "2589,45,20,3,1")
     Stubs.FireEvent("PLAYER_LOGOUT")
-    assert_eq(AHProfitDB.diagnostics.scan, "calls=0|n=5|skipped=4|pet=1|count=0|buyout=1|band=1|link=1|steps=4"
-      .. "|maxStepMs=0.04|readMs=0.04|sortMs=0.00|encodeMs=0.00|saveMs=0.00|kind=full|rows=1|dropped=0",
-      "one skip per reason; read, sort, encode and save each take their own frame")
+    assert_eq(AHProfitDB.diagnostics.scan, "calls=0|n=5|skipped=4|pet=1|count=0|buyout=1|band=2|link=0|byId=0"
+      .. "|left=0:1,3:1,nil:1|steps=4|maxStepMs=0.04|readMs=0.04|sortMs=0.00|encodeMs=0.00|saveMs=0.00|kind=full|rows=1|dropped=0",
+      "one skip per reason; the histogram shows every raw time left; read, sort, encode and save each take a frame")
+  end)
+
+  it("A12 Forever's time left 4 is very long", function()
+    Boot({ auctions = { Stubs.Auction(LINEN, 45, 20, 4) } })
+    Stubs.FireEvent("AUCTION_HOUSE_SHOW")
+    Stubs.FireEvent("REPLICATE_ITEM_LIST_UPDATE")
+    Stubs.Advance(1)
+    assert_eq(AHProfitDB.scans[1].rows, "2589,45,20,4,1", "1 short .. 4 very long, as written")
+  end)
+
+  it("A13 an auction without a link is keyed by item id, or -itemId when it could carry a suffix", function()
+    Boot({ auctions = {
+      { id = LINEN, count = 20, buyout = 900, left = 3, noLink = true },
+      { id = 6585, count = 1, buyout = 800, left = 4, noLink = true } } })
+    Stubs.FireEvent("AUCTION_HOUSE_SHOW")
+    Stubs.FireEvent("REPLICATE_ITEM_LIST_UPDATE")
+    Stubs.Advance(1)
+    assert_eq(AHProfitDB.scans[1].rows, "-6585,800,1,4,1;2589,45,20,3,1",
+      "trade goods can't roll a suffix; armor might, so it stays out of valuation (-itemId)")
+    assert_eq(AHProfit.Scan.Replicate.Stats().byId, 2)
   end)
 
   it("FM19 the AH closed at 40% of a full scan is saved as partial", function()
-    Boot({ auctions = ManyAuctions(80), costMs = 0.25 })
+    Boot({ auctions = ManyAuctions(75), costMs = 0.25 })
     Stubs.FireEvent("AUCTION_HOUSE_SHOW")
-    Stubs.FireEvent("REPLICATE_ITEM_LIST_UPDATE")    -- reads 16
-    Stubs.RunDueTimers()                             -- reads 16 more: 32 of 80
+    Stubs.FireEvent("REPLICATE_ITEM_LIST_UPDATE")    -- reads 15
+    Stubs.RunDueTimers()                             -- reads 15 more: 32 of 80
     Stubs.FireEvent("AUCTION_HOUSE_CLOSED")
     Stubs.Advance(1)
     local scan = AHProfitDB.scans[1]
-    assert_eq({ scan.kind, scan.coverage }, { "partial", 0.4 }, "32 of 80 auctions read")
+    assert_eq({ scan.kind, scan.coverage }, { "partial", 0.4 }, "30 of 75 auctions read")
   end)
 
   it("a /reload mid-read saves what was read as partial", function()
-    Boot({ auctions = ManyAuctions(80), costMs = 0.25 })
+    Boot({ auctions = ManyAuctions(75), costMs = 0.25 })
     Stubs.FireEvent("AUCTION_HOUSE_SHOW")
     Stubs.FireEvent("REPLICATE_ITEM_LIST_UPDATE")
     Stubs.FireEvent("PLAYER_LOGOUT")
@@ -141,7 +161,7 @@ describe("Replicate", function()
     AHProfitDB = { formatVersion = 1, scans = old, events = {
       { id = "Amaya-Grommash:1759990000000:1", type = "post", char = "Amaya-Grommash", at = 1759990000000,
         key = 2589, stack = 20, price = 40, durationH = 24, deposit = 6, confirmed = true } } }
-    Boot({ auctions = { Stubs.Auction(LINEN, 45, 20, 2) }, keepSaved = true })
+    Boot({ auctions = { Stubs.Auction(LINEN, 45, 20, 3) }, keepSaved = true })
     Stubs.FireEvent("AUCTION_HOUSE_SHOW")
     Stubs.FireEvent("REPLICATE_ITEM_LIST_UPDATE")
     Stubs.Advance(1)
@@ -153,7 +173,7 @@ describe("Replicate", function()
   end)
 
   it("partial scans don't count toward the cap, and a repeated update starts no second scan", function()
-    Boot({ auctions = { Stubs.Auction(LINEN, 45, 20, 2) } })
+    Boot({ auctions = { Stubs.Auction(LINEN, 45, 20, 3) } })
     local db = AHProfitDB
     for i = 1, 5 do db.scans[i] = { kind = i == 5 and "full" or "partial", at = i } end
     assert_eq(AHProfit.Scan.Replicate.CapFullScans(db), 0)

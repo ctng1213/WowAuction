@@ -22,6 +22,11 @@ FEATURE_DEPTH = "depth"
 PUBLIC_HISTORY_DAYS = 7
 BAND_UNKNOWN = 0       # seen in real books; meaning unknown (SPEC §2.1)
 BAND_VERY_LONG = 4     # band 0 is treated as very long, the conservative choice for §3.3.2
+# Verified 2026-10-17 (V28): AuctionHouseFYI's addon reads Forever's time left as retail's 0..3 and
+# uploads raw + 1, but Forever returns 1 short .. 4 very long. So its books carry short as 2,
+# medium as 3, long as 4 and very long as 0, and never band 1 (real book: 0 18.1%, 2 2.5%, 3 14.6%,
+# 4 64.7%). A book without band 1 is read with this map; one with band 1 is read as WoW's codes.
+SHIFTED_BANDS = {0: 4, 2: 1, 3: 2, 4: 3}
 
 
 class FormatChanged(ApiError):
@@ -180,20 +185,26 @@ def parse_book(data: object) -> tuple[int, bool, list[tuple[int, int, int, int, 
         data: Decoded JSON.
 
     Returns:
-        (at ms, complete, entries). Band 0 becomes 4 (very long, SPEC §2.1). Rows
-        repeating the same (key, price, stack, band) are then summed, so the
-        store's primary key holds.
+        (at ms, complete, entries) with WoW's bands 1-4. A book without band 1 is
+        AuctionHouseFYI's shifted encoding and is mapped back (SHIFTED_BANDS, V28);
+        otherwise band 0 becomes 4 (very long, SPEC §2.1). Rows repeating the same
+        (key, price, stack, band) are then summed, so the store's primary key holds.
 
     Raises:
         FormatChanged: Wrong shape.
     """
     _require(isinstance(data, dict) and _is_int(data.get("at")) and isinstance(data.get("entries"), list),
              "books", "no at/entries")
-    counts: dict[tuple[int, int, int, int], int] = {}
     for row in data["entries"]:
         _require(isinstance(row, list) and len(row) == 5 and all(_is_int(v) for v in row), "books",
                  "entry is not [key, price, stack, band, count]")
-        band = BAND_VERY_LONG if row[3] == BAND_UNKNOWN else row[3]
+    shifted = all(row[3] != 1 for row in data["entries"])
+    counts: dict[tuple[int, int, int, int], int] = {}
+    for row in data["entries"]:
+        if shifted:
+            band = SHIFTED_BANDS.get(row[3], row[3])
+        else:
+            band = BAND_VERY_LONG if row[3] == BAND_UNKNOWN else row[3]
         group = (row[0], row[1], row[2], band)
         counts[group] = counts.get(group, 0) + row[4]
     entries = [(*group, count) for group, count in sorted(counts.items())]

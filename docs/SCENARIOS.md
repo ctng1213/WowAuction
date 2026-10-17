@@ -50,6 +50,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | V24 | `VOLUME_METHOD_VERSION` goes from 1 to 2 with 20 days of stored books | the next full refresh recomputes those days' `books` volume, stamps them version 2, and leaves AHF and mail rows unchanged | estimates can be recomputed |
 | V25 | Linen 50c ×20 long ×5 at 10:00 → ×3 at 11:00 → ×2 at 14:00 | `sales_h1` 10:00: 40 per hour (40 sold ÷ 1 h); no row from the 11:00 → 14:00 pair (3 h apart) | hourly rates need books at most 2 h apart |
 | V26 | Linen ×20 long ×5 at 10:00 → ×4 at 10:30 → ×2 at 11:00 | both pairs start in the 10:00 hour: (20 + 40) sold ÷ (0.5 + 0.5) h = 60 per hour | several pairs in one hour pool their sold and gap |
+| V28 | an AHF book with bands 0 ×7, 2 ×1, 3 ×2, 4 ×3 and no band 1 (AuctionHouseFYI's addon uploads Forever's 1–4 time left + 1, and very long as 0) | read as very long ×7, short ×1, medium ×2, long ×3; a book that has band 1 is read as WoW's codes, with 0 as very long | volume needs the true bands |
 | V27 | an AHF Premium book at 10:00, a partial local scan (coverage 0.6) at 10:20, a complete local scan at 11:00; the same files are read again | one pair, AHF 10:00 → local 11:00; the partial scan is skipped; reading again leaves `sales_h1` unchanged | either source pairs; partial books never do; idempotent |
 | V21 | a local scan at 14:20 lists Linen at 45c (×20, ×2) and 50c (×20, ×1) | `current` local: 45c, qty 40; `candles_h1` local for 14:00: close 45c, qty 60 | a scan becomes local prices |
 
@@ -348,7 +349,9 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | A7 | the AH opens and no scan result arrives within 30 s | AHProfit calls `ReplicateItems` once; opening the AH again 5 min later doesn't call it again (20-min rule) |
 | A8 | a 10,000-auction result | read over several frames, no step over the 4 ms budget (counted by the stub clock); entering combat pauses it and leaving combat finishes it |
 | A10 | AHProfit's own `ReplicateItems` call gets no answer; the AH is opened again 20 min and then 40 min after that call | no call at 20 min (an unanswered call doubles the wait to 40 min); one call at 40 min |
-| A11 | a replicate answer with a battle pet, an auction without a buyout, one without a link and one with an unknown time left, next to one Linen 45c ×20 | the scan holds only the Linen row; the four are counted as skipped in the diagnostics |
+| A11 | a replicate answer with a battle pet, an auction without a buyout, one with time left 0 (not a Forever value) and one with none, next to one Linen 45c ×20 | the scan holds only the Linen row; the four are counted as skipped in the diagnostics, and the time-left histogram shows `0:1,3:1,nil:1` |
+| A12 | Forever's time left is 1 short … 4 very long (verified 2026-10-17: no 0 in 41,062 auctions, and 19.5% read 4); an auction of Linen with time left 4 | band 4 (very long), as written |
+| A13 | two auctions without an item link: Linen Cloth (trade goods) and Scouting Gloves (armor, could roll a suffix) | Linen is keyed 2589 by its item id; the gloves are keyed −6585 (some suffix variant, left out of valuation, §2.2.1) |
 | A9 | no `PortfolioPlan.lua`; the intelligence lists Copper Rod (sell value 38 s) and Copper Bar on the shortlist; your bags hold 6 bars; the AH shows bars at 10 s | the addon itself offers "Craft 3 Copper Rod from owned bars" with the same profit the desktop computes for the same inputs (19 s each, C1) |
 
 ## 2. Visual tests (UI1–UI11)

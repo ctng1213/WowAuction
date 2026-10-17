@@ -58,8 +58,8 @@ def test_recorded_files_parse():
     snap = api.snapshot(files.snapshot_url)
     assert snap.at_ms == 1_792_198_800_000 and len(snap.rows) == 27
     at, complete, entries = api.book(files.books[0].url)
-    assert complete and len(entries) == 2014            # 2147 rows; band-0 rows merge into band 4
-    assert {e[3] for e in entries} == {2, 3, 4}
+    assert complete and len(entries) == 2147            # no band 1: shifted bands map one to one (V28)
+    assert {e[3] for e in entries} == {1, 2, 3, 4}       # 2, 3, 4, 0 → short, medium, long, very long
     assert api.volume(files.caps_volume_url) == []
     items = {row[0]: row for row in api.items()}
     assert items[item_key("Linen Cloth")][2] == "Linen Cloth"
@@ -87,9 +87,16 @@ def test_snapshot_shape_checks():
 
 def test_book_sums_repeated_groups_and_checks_shape():
     at, complete, entries = parse_book({"at": 1, "entries": [[5, 10, 1, 4, 2], [5, 10, 1, 4, 3]]})
-    assert (at, complete, entries) == (1, False, [(5, 10, 1, 4, 5)])
+    assert (at, complete, entries) == (1, False, [(5, 10, 1, 3, 5)])     # no band 1: AHF's shifted bands (V28)
     with pytest.raises(FormatChanged):
         parse_book({"at": 1, "entries": [[5, 10, 1, 4]]})
+
+
+def test_V28_auctionhousefyi_books_are_shifted_back_to_wows_bands():
+    # AHF's addon uploads Forever's time left + 1 (short 2, medium 3, long 4) and very long as 0.
+    _at, _complete, entries = parse_book({"at": 1, "entries": [[5, 10, 1, 0, 7], [5, 10, 1, 2, 1], [5, 10, 1, 3, 2],
+                                                               [5, 10, 1, 4, 3]]})
+    assert entries == [(5, 10, 1, 1, 1), (5, 10, 1, 2, 2), (5, 10, 1, 3, 3), (5, 10, 1, 4, 7)]
 
 
 def test_book_band_0_is_treated_as_very_long():

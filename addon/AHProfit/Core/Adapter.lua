@@ -522,41 +522,73 @@ end
 --- UNVERIFIED (Forever 1.60.1): name, texture, count, quality, usable, level, levelType,
 --- minBid, minIncrement, buyoutPrice, bidAmount, highBidder, bidderFull, owner, ownerFull,
 --- saleStatus, itemId (AuctionHouseFYI reads the same positions).
----@return number|nil count, number|nil buyout (whole stack, 0 = none)
-local function PickInfo(_, _, count, _, _, _, _, _, _, buyout)
-  return Plain(count), Plain(buyout)
+---@return number|nil count, number|nil buyout (whole stack, 0 = none), number|nil itemId
+local function PickInfo(_, _, count, _, _, _, _, _, _, buyout, _, _, _, _, _, _, itemId)
+  return Plain(count), Plain(buyout), Plain(itemId)
+end
+
+local WEAPON_CLASS, ARMOR_CLASS = 2, 4   -- item class ids; only these can roll a random suffix
+
+--- Item key for an auction whose link isn't available yet (the item isn't cached): its item id,
+--- or -itemId for a weapon or armor (or an item whose class is unknown), which could carry a
+--- random suffix we can't see (SPEC §2.2.1, §4.2, A13).
+--- UNVERIFIED: GetItemInfoInstant (or C_Item.GetItemInfoInstant) answers without the item cache;
+--- its 6th return is the class id.
+---@param itemId number  The auction's item id
+---@return number        key
+local function KeyWithoutLink(itemId)
+  local instant = GetItemInfoInstant or (C_Item and C_Item.GetItemInfoInstant)
+  local classId = instant and select(6, instant(itemId))
+  -- Unknown class (no API, or no answer) counts as possibly suffixed: never priced as its base item.
+  if type(classId) == "number" and classId ~= WEAPON_CLASS and classId ~= ARMOR_CLASS then return itemId end
+  return -itemId
+end
+
+--- The item key of an auction: from its link (cached per scan), else from its item id.
+---@param link string|nil   GetReplicateItemLink result
+---@param itemId number|nil The auction's item id
+---@param keyCache table    link -> key (false = not an item link)
+---@return number|nil       key; nil when neither gives one
+---@return boolean          true when keyed by item id because the link was missing
+local function AuctionKey(link, itemId, keyCache)
+  if type(link) == "string" then
+    local key = keyCache[link]
+    if key == nil then
+      key = Adapter.ItemKey(link) or false
+      keyCache[link] = key
+    end
+    return key or nil, false
+  end
+  if type(itemId) == "number" and itemId >= 1 then return KeyWithoutLink(itemId), true end
+  return nil, false
 end
 
 --- One auction of the replicate answer, as an order-book entry (SPEC §4.2 Store).
 --- Left out, with the reason: "pet" (battle pet), "count" (no readable stack size),
---- "buyout" (bid only), "band" (unknown time left; volume needs it, §3.3.1) and
---- "link" (no item link, or not an item link). Secret values read as missing.
+--- "buyout" (bid only), "band" (time left not 1-4; volume needs it, §3.3.1) and
+--- "link" (neither a usable link nor an item id). Secret values read as missing.
 ---@param i number         0-based auction index
 ---@param keyCache table   link -> item key (false = not an item) for this scan; links repeat a lot,
 ---                        so this saves parsing the same link thousands of times
 ---@return number|nil key, number|string unitPrice (copper, floor(buyout / count)) or the reason it was
----        left out, number|nil stack, number|nil band (1-4)
+---        left out, number|string|nil stack or the raw time left (as text, for "band"), number|nil band (1-4),
+---        boolean|nil true when keyed by item id because the link was missing
 function Adapter.ReadReplicateItem(i, keyCache)
   local AH = C_AuctionHouse
   if AH.GetReplicateItemBattlePetInfo then
     local creature = AH.GetReplicateItemBattlePetInfo(i)
     if (issecretvalue and issecretvalue(creature)) or (creature ~= nil and creature ~= 0) then return nil, "pet" end
   end
-  local count, buyout = PickInfo(AH.GetReplicateItemInfo(i))
+  local count, buyout, itemId = PickInfo(AH.GetReplicateItemInfo(i))
   if type(count) ~= "number" or count < 1 then return nil, "count" end
   if type(buyout) ~= "number" or buyout < 1 then return nil, "buyout" end
-  -- UNVERIFIED: GetReplicateItemTimeLeft returns 0..3 (short..very long), as AuctionHouseFYI reads it.
+  -- Verified 2026-10-17 (A12): Forever returns 1 short .. 4 very long, as Classic's
+  -- GetAuctionItemTimeLeft did; not retail's 0..3 (no 0 in 41,062 auctions).
   local left = AH.GetReplicateItemTimeLeft and Plain(AH.GetReplicateItemTimeLeft(i))
-  if left ~= 0 and left ~= 1 and left ~= 2 and left ~= 3 then return nil, "band" end
-  local link = Plain(AH.GetReplicateItemLink(i))
-  if type(link) ~= "string" then return nil, "link" end
-  local key = keyCache[link]
-  if key == nil then
-    key = Adapter.ItemKey(link) or false
-    keyCache[link] = key
-  end
+  if left ~= 1 and left ~= 2 and left ~= 3 and left ~= 4 then return nil, "band", tostring(left) end
+  local key, byId = AuctionKey(Plain(AH.GetReplicateItemLink(i)), itemId, keyCache)
   if not key then return nil, "link" end
-  return key, math.floor(buyout / count), count, left + 1
+  return key, math.floor(buyout / count), count, left, byId
 end
 
 -- ------------------------------------------------------------------ diagnostics

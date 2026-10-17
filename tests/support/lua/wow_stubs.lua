@@ -11,6 +11,9 @@ local Stubs = {}
 local ADDON_DIR = "addon/AHProfit/"
 local TOC = ADDON_DIR .. "AHProfit.toc"
 
+-- Item class ids for GetItemInfoInstant (2 weapon, 4 armor, 7 trade goods); default 7.
+Stubs.ITEM_CLASSES = { [6585] = 4, [2852] = 4 }
+
 -- Item names for links; cosmetic, only so links look real.
 Stubs.ITEM_NAMES = {
   [2320] = "Coarse Thread", [2321] = "Fine Thread", [2589] = "Linen Cloth", [2592] = "Wool Cloth",
@@ -237,7 +240,7 @@ end
 --- A fake C_AuctionHouse with the replicate API (SPEC §4.2). Define it with
 --- Stubs.Define("C_AuctionHouse", Stubs.ReplicateHouse(house)) before Stubs.Login().
 --- Each GetReplicateItemInfo call costs house.costMs on the profile clock (default 0.01).
----@param house table  { auctions = { { id, count, buyout (stack, 0 = none), left (0-3), pet = bool,
+---@param house table  { auctions = { { id, count, buyout (stack, 0 = none), left (1-4, as Forever), pet = bool,
 ---                      noLink = bool } }, answers = bool (default true: a call fires the update),
 ---                      calls = 0 (counted here) }
 ---@return table       The fake namespace
@@ -270,7 +273,7 @@ end
 ---@param id number      Item id
 ---@param price number   Unit price, copper
 ---@param count number   Stack size
----@param left number    Time left 0-3 (short..very long)
+---@param left number    Time left 1-4 (short..very long, as Forever returns it)
 ---@return table         { id, count, buyout, left }
 function Stubs.Auction(id, price, count, left)
   return { id = id, count = count, buyout = price * count, left = left }
@@ -398,6 +401,9 @@ local function InstallItems()
     local mail = Stubs.world.inbox[i]
     local item = mail and mail[a]
     if item and not item.noLink then return Stubs.ItemLink(item[1]) end
+  end)
+  Define("GetItemInfoInstant", function(id)
+    return id, "Type", "Subtype", "", "icon", Stubs.ITEM_CLASSES[id] or 7, 0
   end)
   Define("GetMerchantNumItems", function() return #Stubs.world.merchant end)
   Define("GetMerchantItemInfo", function(i)
