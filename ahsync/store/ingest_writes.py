@@ -184,8 +184,11 @@ class IngestWrites:
                             ("char_id", "location"), {"at": "excluded.at"}, "excluded.at > snapshots.at"):
             return None
         if location == "auctions":
-            return self._replace_rows("own_auctions", {"char_id": char_id},
-                                      ("key", "price", "stack", "band", "count"), rows, {"seen": at_ms})
+            changed = self._replace_rows("own_auctions", {"char_id": char_id},
+                                         ("key", "price", "stack", "band", "count"), rows, {"seen": at_ms})
+            # An unchanged newer snapshot still proves the auctions are up: refresh when they were last seen.
+            self.conn.execute("UPDATE own_auctions SET seen = ? WHERE char_id = ?", (at_ms, char_id))
+            return changed
         return self._replace_rows("inventory", {"char_id": char_id, "location": location},
                                   ("key", "bound", "qty"), rows)
 

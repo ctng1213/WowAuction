@@ -52,6 +52,10 @@ def test_replace_snapshot_applies_only_newer_snapshots_and_reports_changed_keys(
     assert db.replace_snapshot("A-R", "auctions", 5, {(2857, 4100, 5, 3): 2}) == {2857}
     assert db.conn.execute("SELECT key, qty FROM inventory").fetchall() == [(2589, 19), (6948, 1)]
     assert db.conn.execute("SELECT count, seen FROM own_auctions").fetchall() == [(2, 5)]
+    assert db.replace_snapshot("A-R", "auctions", 9, {(2857, 4100, 5, 3): 2}) == set()   # same auctions, seen later
+    assert db.conn.execute("SELECT count, seen FROM own_auctions").fetchall() == [(2, 9)]
+    assert db.replace_snapshot("A-R", "auctions", 7, {(2857, 4100, 5, 3): 2}) is None    # older: seen stays
+    assert db.conn.execute("SELECT seen FROM own_auctions").fetchall() == [(9,)]
 
 
 def test_upsert_event_rejects_other_tables_and_never_changes_unconfirmable_events(db):
