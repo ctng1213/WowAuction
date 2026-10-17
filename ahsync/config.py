@@ -56,6 +56,7 @@ class Config:
     max_supply_share: float = 0.5
     max_supply_share_gear: float = 1.0
     min_gear_units: int = 2
+    max_risk_pct: float = 25
     max_actions_per_day: int = 0
     launch_wow_after_catchup: bool = False
     realms: Mapping[str, str] = field(default_factory=dict)
@@ -82,7 +83,7 @@ for _name in ("retention_days", "dashboard_port", "live_refresh_minutes", "own_r
     _TYPES[_name] = _INT
 for _name in ("min_flip_margin", "default_sell_prob", "default_undercut_share", "own_record_weight",
               "reprice_step", "min_sell_prob", "high_risk_pct", "pattern_half_life_weeks",
-              "window_threshold", "peak_tolerance", "max_supply_share", "max_supply_share_gear"):
+              "window_threshold", "peak_tolerance", "max_supply_share", "max_supply_share_gear", "max_risk_pct"):
     _TYPES[_name] = _NUMBER
 
 

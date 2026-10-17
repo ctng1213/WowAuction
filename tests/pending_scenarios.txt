@@ -10,7 +10,7 @@ FI1
 
 
 
-R8-R9 R13
+
 O2-O9 O11-O17
 D1-D2 D9-D11 D14 D16-D22
 C7-C8 C14
@@ -33,7 +33,7 @@ UI1-UI11
 
 
 # Market activity amendment (SPEC §3.3.6, §3.4 capacity, §8.8 volume backtest)
-V23-V24 W9 R16 K4 PL4
+V23-V24 W9 K4
 
 # Architecture amendment (SPEC §5.0)
 T17-T18 D24 A9

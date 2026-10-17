@@ -78,6 +78,7 @@ class SellFacts:
     supply_now: int | None = None                  # others' listed units now; None when never seen
     supply_how: tuple[float, ...] = ()             # 168 listed-supply ratios; () when there is no pattern
     gear: bool = False                             # a weapon or armor: the lenient gear cap (SPEC §3.4 Liquidity)
+    conf: int = 0                                  # confidence % of the item's numbers (SPEC §3.3.5)
 
 
 @dataclass(frozen=True)
@@ -97,6 +98,7 @@ class PlanAction:
     expected: float               # expected value of the action, float copper
     net: float                    # expected − what you paid
     duration_h: int | None = None # posts: auction duration
+    chain: str | None = None      # links a buy to its follow-up post, e.g. "flip:2589" (SPEC §3.4 expected net)
 
 
 @dataclass(frozen=True)
@@ -228,7 +230,7 @@ def post_chance(f: SellFacts, price: int, qty: int, hours: Sequence[int], own_ah
     return sellprob.simulate(queue)
 
 
-def _alternative(f: SellFacts) -> tuple[str, float]:
+def alternative(f: SellFacts) -> tuple[str, float]:
     """The best way to get value without posting: disenchant or vendor (SPEC §3.4C.1).
 
     Args:
@@ -264,13 +266,26 @@ def _best_post(f: SellFacts, opts: list[PostOption], used: list[float], qty: int
             continue
         p = post_chance(f, o.price, qty, o.hours, used[i], s)
         deposit = fees.deposit_copper(f.vendor_sell, qty, o.duration_h)
-        e = sellprob.expected_post(p, qty, o.price, max(_alternative(f)[1], 0.0), deposit)
+        e = sellprob.expected_post(p, qty, o.price, max(alternative(f)[1], 0.0), deposit)
         if best is None or e > best[1]:
             best = (i, e, p)
     return best
 
 
-def plan_item(lots: Sequence[Lot], f: SellFacts, now_ms: int, s: PlanSettings) -> list[PlanAction]:
+def window_id(opt: PostOption) -> int | None:
+    """The key an option's units are counted under in the capacity ledger.
+
+    Args:
+        opt: A post option.
+
+    Returns:
+        Its window's start ms; None for posting now.
+    """
+    return opt.window[0] if opt.window else None
+
+
+def plan_item(lots: Sequence[Lot], f: SellFacts, now_ms: int, s: PlanSettings,
+              ledger: dict[tuple[int, int | None], float] | None = None) -> list[PlanAction]:
     """The sell plan for one item across your characters (SPEC §3.4C.1, R6, R7, R14).
 
     Lots are taken in character order and split into reference stacks. Each stack goes to
@@ -283,14 +298,17 @@ def plan_item(lots: Sequence[Lot], f: SellFacts, now_ms: int, s: PlanSettings) -
         f: The item.
         now_ms: Now.
         s: Settings.
+        ledger: (item key, window id) -> units already planned there by anyone (SPEC §3.4 market
+            capacity, PL4); updated with this item's posts. None for a private one.
 
     Returns:
         Actions, one per (kind, character, option), in time order (ties: character, kind).
     """
     opts = post_options(f, now_ms, s)
-    used = [0.0] * len(opts)
+    ledger = {} if ledger is None else ledger
+    used = [ledger.get((f.key, window_id(o)), 0.0) for o in opts]
     merged: dict[tuple, list] = {}            # (kind, char, option) -> [qty, expected, expected sold units]
-    alt_kind, alt_value = _alternative(f)
+    alt_kind, alt_value = alternative(f)
     for lot in sorted(lots, key=lambda lot: lot.char_id):
         left = lot.qty
         while left > 0:
@@ -308,6 +326,8 @@ def plan_item(lots: Sequence[Lot], f: SellFacts, now_ms: int, s: PlanSettings) -
                 slot = merged.setdefault((kind, lot.char_id, -1), [0, 0.0, 0.0])
                 slot[0], slot[1] = slot[0] + qty, slot[1] + (0.0 if kind == "hold" else alt_value * qty)
             left -= qty
+    for i, o in enumerate(opts):
+        ledger[(f.key, window_id(o))] = used[i]
     return sorted((_action(kind, char, opts[i] if i >= 0 else None, totals, f, now_ms)
                    for (kind, char, i), totals in merged.items()),
                   key=lambda a: (a.at_ms, a.char_id, a.kind))
@@ -339,7 +359,8 @@ def _action(kind: str, char_id: str, opt: PostOption | None, totals: list, f: Se
                       opt.duration_h)
 
 
-def sell_plan(lots: Sequence[Lot], facts: dict[int, SellFacts], now_ms: int, s: PlanSettings) -> list[PlanAction]:
+def sell_plan(lots: Sequence[Lot], facts: dict[int, SellFacts], now_ms: int, s: PlanSettings,
+              ledger: dict[tuple[int, int | None], float] | None = None) -> list[PlanAction]:
     """The sell plan for everything you own (SPEC §3.4C.1).
 
     Args:
@@ -347,6 +368,7 @@ def sell_plan(lots: Sequence[Lot], facts: dict[int, SellFacts], now_ms: int, s: 
         facts: Item key -> what the plan knows; items without facts are left out.
         now_ms: Now.
         s: Settings.
+        ledger: The shared capacity ledger (see plan_item), filled with these posts.
 
     Returns:
         Actions in time order (ties: character, item, kind).
@@ -355,5 +377,5 @@ def sell_plan(lots: Sequence[Lot], facts: dict[int, SellFacts], now_ms: int, s: 
     for lot in lots:
         if lot.key in facts and lot.qty > 0:
             by_key.setdefault(lot.key, []).append(lot)
-    actions = [a for key in sorted(by_key) for a in plan_item(by_key[key], facts[key], now_ms, s)]
+    actions = [a for key in sorted(by_key) for a in plan_item(by_key[key], facts[key], now_ms, s, ledger)]
     return sorted(actions, key=lambda a: (a.at_ms, a.char_id, a.key, a.kind))

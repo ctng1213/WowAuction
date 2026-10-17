@@ -61,3 +61,8 @@ def test_disenchant_page_from_intelligence(state):
     page = disenchant_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 500_000, NOW, Config(markets=(M,)))
     [gloves] = page["rows"]
     assert (gloves["item"], gloves["buy"]) == ("Embossed Leather Gloves", "8s")
+
+
+def test_a_disenchant_buy_that_risks_too_much_of_your_gold_is_left_out(state):
+    page = disenchant_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 2_000, NOW, Config(markets=(M,)))
+    assert (page["rows"], page["hidden"]) == ([], 1)     # the 8s gloves are over 25% of 20s

@@ -179,7 +179,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | R5 | a vendor sells the reagent cheaper than the AH | the vendor price is used |
 | R6 | you own 200 Linen; others list 93; Saturday is the peak | plan spreads posts over windows, each within its supply cap, Saturday preferred |
 | R7 | the DE value of an owned green beats its AH sale | plan says disenchant, with the character who can |
-| R8 | a flip candidate has a 25% margin but `P(sell)` is 0.1 | ranked below a 10% margin with `P` 0.9 |
+| R8 | buy at 1 s: A resells at 3 s but `P` 0.4; B resells at 1 s 50 c with `P` 0.95 (no deposit, nothing back if unsold) | A: 0.4 × 3 s × 0.95 − 1 s = 14 c (14%): left out; B: 0.95 × 1 s 50 c × 0.95 − 1 s = 35 c (35%): listed. The chance to sell counts, not the price spread |
 | R9 | budget 50 g | plan buys stay ≤ 50 g |
 | R10 | a soulbound item in your bags | not in the sell plan |
 | R11 | Main and Alt are both Blacksmiths; only Alt knows the recipe | the craft row names Alt; Main is never suggested |
@@ -188,6 +188,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | R14 | you own 200 Linen in stacks of 20; others list 93 now, flat supply pattern; `max_supply_share` 0.5 | each window takes max(1 stack = 20, floor(0.5 × 93) = 46) = 46 units, so 2 stacks (40); the rest is spread over later windows, then held | you never become most of the market |
 | R17 | others list 93 Linen now, at an hour whose `supply_how` is 1.0; a window whose hours average `supply_how` 1.5 | that window's cap is floor(0.5 × 93 × 1.5) = 69 units: a fuller hour allows more |
 | R18 | a green (gear) you own 3 of; others list 0, then 3; `max_supply_share_gear` 1.0, `min_gear_units` 2 | a window takes 2 when nothing else is listed, and 3 when others list 3 (you may double the market); materials keep the 0.5 share | one or two pieces always go up, even on an empty market |
+| R19 | all your gold is 30 g, so `max_risk_pct` 25 allows 7 g 50 s per buy; Silk (stack 20) is listed as 10 at 40 s and 20 at 41 s; the flip would take both | it buys only the 10 at 40 s (4 g): adding the 20 would make 12 g 20 s. One stack is the default, but a partial stack is fine | a buy never puts too much of your gold at risk |
 | R15 | three disenchantable greens each yield 2.5 Strange Dust; others list 2 dust, so its cap is max(1 stack of 1, floor(0.5 × 2) = 1) = 1; the buys are profitable | only the best-profit green is recommended (its 2.5 dust already exceeds the cap; the others would add more unsellable dust) |
 | R16 | Main and Alt could each flip 20 Linen, cap 20 per window | the plan buys 20 in total, for one character; never 20 each |
 

@@ -668,6 +668,7 @@ All money is net of fees. Estimates come with a confidence level.
 - **Risk %** = gold the action spends ÷ the total gold across all your characters (sum of `characters.gold`) × 100, shown to one decimal place.
   - The gold spent is the total for a buy or DE buy, the mat gold for a craft, and the deposit for a post (the only gold a post can lose). It is 0 for a vendor sale.
   - Rows above `high_risk_pct` (25%) show their risk in amber.
+  - **No buy risks more than `max_risk_pct` (config, 25%) of all your gold.** A flip, mat buy or buy-to-disenchant takes the cheapest auctions first and stops before the next one would cross it, so one stack is the default size but a partial stack is fine (R19). Posting stock you already own risks only its deposit.
 
 **A. Disenchant.** For each disenchantable item on the AH (AHF snapshot or own scans), where at least one of your characters has the Enchanting skill to do it:
 
@@ -723,6 +724,9 @@ The result is shown as the row's **Source**. The base tells where the raw mats c
    - **A post's chance** is the queue simulation over its hours (§3.3.2), with `sales_how` as demand, today's book as the competition, and your own units already planned for the same window ahead of you. Your sell record is added once it is tracked (M6b, §3.3.3).
    - **The duration** is the shortest one that keeps the listing up through the window's best hour.
 2. **Buy to flip**: items whose expected profit (`E_post` at an upcoming peak slot − buy cost) is at least `min_flip_margin` (20%) × buy cost. Typical sources are a weekday or hour pattern, or a dip below `p10_30`. They are ranked by expected profit × `conf` (as a fraction).
+   - **How a flip is built** (`engine/flips.py`): it buys other sellers' auctions now, cheapest first, and posts each one for the selling window (not "now") where it is worth most, with the auctions it bought taken out of the competition. An auction is added only while it fits the spend limit, a window with room, and its own expected profit is at least `min_flip_margin` × its cost; prices only rise along the book, so the first one that fails ends the flip. An item without a selling window gets no flip.
+   - **Who buys**: each item gets at most one flip, bought by the character with the most budget left (ties: character id), so two characters never fill the same demand (R16). The spend limit is that character's budget and `max_risk_pct` of all your gold (R9, R19). The flips' posts share the windows' capacity with your own stock (PL4).
+   - The buy carries the chain's expected profit; each post also records its own net against what its units cost, for when the buy has left the view (§3.4 expected net).
 3. **Craft to sell later**: buy mats on cheap slots, craft, and post at the product's peak slot. It uses all three sourcing paths (B).
    - **Mats to buy appear as their own buy actions, scheduled before the craft** and linked to it by `parent_id`, e.g. "20:15 buy 8 Silk Cloth → for Bolt of Silk Cloth". A mat buy can be on an earlier, cheaper slot.
    - **A crafting chain is a linked sequence**: buy raw mats → craft the intermediate → mail it (if the next crafter is another character) → craft the product → post.
@@ -888,6 +892,7 @@ max_craft_depth = 3                           # longest crafting chain followed 
 max_supply_share = 0.5                        # your units per window ≤ this share of others' listed units (§3.4 liquidity)
 max_supply_share_gear = 1.0                   # the same for weapons and armor: you may double the market (§3.4 liquidity)
 min_gear_units = 2                            # gear always gets this many pieces per window, even on an empty market
+max_risk_pct = 25                             # no single buy spends more than this % of all your gold (§3.4 Risk)
 max_actions_per_day = 0                       # 0 = no limit (§3.4C.4)
 max_item_capital_share = 0.25                 # most of your gold in slow markets (§3.4 market capacity)
 slow_market_days = 7                          # supply/volume above this many days is a slow market (§3.3.6)
