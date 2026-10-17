@@ -88,6 +88,38 @@ def report_character(data: AHProfitData, char_id: str, gaps: list[str]) -> None:
               f"{suffixed} random-suffix  (at {local_time(snapshot.at_ms)})")
 
 
+def report_diagnostics(data: AHProfitData) -> None:
+    """Print what the addon saw last session: client, missing APIs, errors, raw skill and merchant rows.
+
+    Args:
+        data: The parsed file; data.diagnostics is None for files from before diagnostics existed.
+    """
+    d = data.diagnostics
+    if d is None:
+        print("\ndiagnostics: none saved (redeploy the addon, restart WoW, /reload)")
+        return
+    when = local_time(d.at_ms) if d.at_ms else "?"
+    print(f"\ndiagnostics (saved {when}, client {d.client}):")
+    if d.setup_error:
+        print(f"  DATABASE SETUP FAILED: {d.setup_error}")
+    missing = [name for name, kind in d.apis if kind == "nil"]
+    present = [name for name, kind in d.apis if kind != "nil"]
+    print(f"  APIs present: {', '.join(present) or 'none'}")
+    print(f"  APIs MISSING: {', '.join(missing) or 'none'}")
+    print(f"  errors caught: {len(d.errors)}")
+    for error in d.errors:
+        print(f"    - {error}")
+    print("  Skills tab (name | header | expanded | rank | max):")
+    rows = (d.skill_lines or "").split(";") if d.skill_lines and not d.skill_lines.startswith("error") else []
+    if not rows:
+        print(f"    {d.skill_lines or 'nothing read'}")
+    for row in rows:
+        print(f"    {row.replace('|', ' | ')}")
+    print("  last merchant (item key | available, -1 = unlimited | extended cost):")
+    for row in (d.merchant or "no merchant opened this session").split(";"):
+        print(f"    {row.replace('|', ' | ')}")
+
+
 def report(path: Path) -> int:
     """Print the report for one SavedVariables file.
 
@@ -118,6 +150,7 @@ def report(path: Path) -> int:
         gaps.append("vendor")
     events = Counter(e.type for e in data.events)
     print("events: " + (", ".join(f"{t} {n}" for t, n in sorted(events.items())) or "none"))
+    report_diagnostics(data)
     if data.problems:
         print(f"\nPROBLEMS ({len(data.problems)} rows set aside):")
         for problem in data.problems[:20]:

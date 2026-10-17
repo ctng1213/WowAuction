@@ -202,6 +202,7 @@ AHProfitDB = {
 | `auction_mail` | `outcome` (`sold` / `expired` / `cancelled` / `won`), `key`, `qty`, `price` (sold and won only) | `Capture/Mail` |
 | `skip` | `action` (action id from `Data.lua`) | the row menu's "Mark as skipped" |
 
+- **`diagnostics`** (written by `Core/Diagnostics.lua` at `PLAYER_LOGOUT`, which also fires on `/reload`): `{ at, client, apis, errors, skillLines, merchant, setupError }`. It holds the client build, which of the APIs the addon depends on exist (`"name=type;…"`), the handler errors caught this session (at most 10), the raw Skills-tab rows, the last merchant's raw items, and any database setup error. It exists so `tools/savedvars_report.py` can explain a missing capture without Lua error popups (§6). AHSync never ingests it, and each session replaces it.
 - `confirmed` starts `false` when the hook fires and turns `true` when the action is confirmed (§5.2). The same row is updated in place.
 - Untracked changes (FM21) are not events. AHSync derives them by comparing consecutive inventory snapshots with the events between them.
 
@@ -985,7 +986,7 @@ ahsync/
   export/     lua_data.py
   web/        server.py, static/
 addon/AHProfit/
-  Core/       Adapter.lua (every game API call), Events.lua, DB.lua (AHProfitDB setup, migrations, pruning; §2.2.1)
+  Core/       Adapter.lua (every game API call), Events.lua, DB.lua (AHProfitDB setup, migrations, pruning; §2.2.1), Diagnostics.lua (§2.2.1)
   Capture/    Characters.lua, Professions.lua, Inventory.lua, Mail.lua, Posts.lua, Purchases.lua, Crafts.lua
   Scan/       Search.lua, Replicate.lua
   Engine/     Fees.lua, SellProb.lua, Disenchant.lua, Craft.lua   (ports of ahsync/engine)

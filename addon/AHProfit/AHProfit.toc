@@ -10,3 +10,4 @@ Core\DB.lua
 Capture\Characters.lua
 Capture\Professions.lua
 Capture\Inventory.lua
+Core\Diagnostics.lua

@@ -185,6 +185,22 @@ class ItemRule:
 
 
 @dataclass(frozen=True, slots=True)
+class Diagnostics:
+    """What the addon saw last session, to explain missing captures (SPEC §2.2.1, §6).
+
+    Not ingested into the database; read by tools/savedvars_report.py.
+    """
+
+    at_ms: int | None
+    client: str | None                     # e.g. "1.60.1 70009"
+    apis: tuple[tuple[str, str], ...]      # (API name, Lua type: "function", "table", "nil", ...)
+    errors: tuple[str, ...]                # handler errors caught this session, oldest first
+    skill_lines: str | None                # raw Skills-tab rows "name|isHeader|isExpanded|rank|max;..."
+    merchant: str | None                   # raw last-merchant rows "itemKey|numAvailable|extendedCost;..."
+    setup_error: str | None                # why AHProfitDB setup failed, if it did
+
+
+@dataclass(frozen=True, slots=True)
 class AHProfitData:
     """Everything in one AHProfitDB, in a deterministic order.
 
@@ -207,6 +223,7 @@ class AHProfitData:
     events: tuple[Event, ...]
     rules: tuple[ItemRule, ...]
     problems: tuple[str, ...]
+    diagnostics: Diagnostics | None = None
 
 
 # ---------------------------------------------------------------- item keys
@@ -728,6 +745,47 @@ def _rule(key: object, row: object) -> list[ItemRule]:
     return [ItemRule(_int(key, "item key"), _str(row.get("rule"), "rule", RULES), _int(row.get("setAt"), "setAt"))]
 
 
+def _diagnostics(value: object) -> Diagnostics | None:
+    """Read the addon's diagnostics block leniently: it exists to explain failures.
+
+    Args:
+        value: AHProfitDB.diagnostics, or None when the addon hasn't saved one.
+
+    Returns:
+        The diagnostics, with any malformed part read as None or empty; None when absent.
+    """
+    if not isinstance(value, dict):
+        return None
+
+    def text(name: str) -> str | None:
+        """Read one string field of the diagnostics block.
+
+        Args:
+            name: Field name in AHProfitDB.diagnostics.
+
+        Returns:
+            The value when it is a string, else None.
+        """
+        item = value.get(name)
+        return item if isinstance(item, str) else None
+
+    apis = []
+    for pair in (text("apis") or "").split(";"):
+        name, sep, kind = pair.partition("=")
+        if sep:
+            apis.append((name, kind))
+    raw_errors = value.get("errors")
+    if isinstance(raw_errors, dict):
+        raw_errors = [raw_errors[k] for k in sorted(k for k in raw_errors if isinstance(k, int))]
+    errors = tuple(e for e in raw_errors if isinstance(e, str)) if isinstance(raw_errors, list) else ()
+    at = value.get("at")
+    return Diagnostics(
+        at_ms=at if isinstance(at, int) and not isinstance(at, bool) else None,
+        client=text("client"), apis=tuple(apis), errors=errors,
+        skill_lines=text("skillLines"), merchant=text("merchant"), setup_error=text("setupError"),
+    )
+
+
 # ---------------------------------------------------------------- entry points
 
 def _header(db: object, problems: list[str]) -> tuple[int, str | None, int | None]:
@@ -816,6 +874,7 @@ def read_ahprofit(text: str) -> AHProfitData:
         events=tuple(_each(db.get("events"), "events", problems, _event)),
         rules=tuple(_each(db.get("rules"), "rules", problems, _rule)),
         problems=tuple(problems),
+        diagnostics=_diagnostics(db.get("diagnostics")),
     )
 
 

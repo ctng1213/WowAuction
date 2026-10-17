@@ -264,3 +264,29 @@ def test_reads_a_file_with_crlf_line_endings_and_utf8_bytes(tmp_path):
                      .replace("\n", "\r\n").encode("utf-8"))
     data = read_ahprofit_file(path)
     assert data.characters[0].name == "Brügan"
+
+
+# ---------------------------------------------------------------- diagnostics
+
+def test_diagnostics_block_is_read_for_the_report():
+    data = read_ahprofit(db_text('''\t["diagnostics"] = {
+\t\t["at"] = 1792205711000,
+\t\t["client"] = "1.60.1 70009",
+\t\t["apis"] = "GetNumSkillLines=nil;GetMerchantItemInfo=function",
+\t\t["errors"] = {
+\t\t\t"Interface/AddOns/AHProfit/Core/Adapter.lua:146: attempt to call global 'GetNumSkillLines' (a nil value)", -- [1]
+\t\t},
+\t\t["skillLines"] = "error: attempt to call global 'GetNumSkillLines' (a nil value)",
+\t},'''))
+    d = data.diagnostics
+    assert (d.at_ms, d.client, d.merchant, d.setup_error) == (1792205711000, "1.60.1 70009", None, None)
+    assert d.apis == (("GetNumSkillLines", "nil"), ("GetMerchantItemInfo", "function"))
+    assert len(d.errors) == 1 and "GetNumSkillLines" in d.errors[0]
+    assert d.skill_lines.startswith("error: ")
+    assert data.problems == ()
+
+
+def test_missing_or_malformed_diagnostics_never_break_the_read():
+    assert read_ahprofit(db_text("")).diagnostics is None
+    d = read_ahprofit(db_text('\t["diagnostics"] = { ["at"] = "soon", ["apis"] = 5, ["errors"] = "x" },')).diagnostics
+    assert (d.at_ms, d.apis, d.errors, d.client) == (None, (), (), None)

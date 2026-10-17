@@ -333,3 +333,79 @@ function Adapter.ReadInbox()
   end
   return items
 end
+
+-- ------------------------------------------------------------------ diagnostics
+-- For tools/savedvars_report.py (SPEC §2.2.1 diagnostics, §6). These never raise:
+-- a failure becomes part of the returned text, because they exist to explain failures.
+
+--- The client's version and build.
+---@return string  e.g. "1.60.1 70009"; "unknown" when GetBuildInfo is missing
+function Adapter.ClientBuild()
+  local ok, version, build = pcall(CallIfExists, "GetBuildInfo")
+  if not ok or not version then return "unknown" end
+  return tostring(version) .. " " .. tostring(build)
+end
+
+--- Look up a global by a dotted name, such as "C_Container.GetContainerItemInfo".
+---@param name string  Global name, optionally with one or more ".field" parts
+---@return any         The value; nil when any part is missing
+local function LookupGlobal(name)
+  local value = _G
+  for part in name:gmatch("[^.]+") do
+    if type(value) ~= "table" then return nil end
+    value = value[part]
+  end
+  return value
+end
+
+--- Which of the given APIs exist in this client.
+---@param names string[]  Global names, dotted for namespaced ones
+---@return string         "name=type;name=type" in the given order (type is "function", "table", "nil", ...)
+function Adapter.ProbeApis(names)
+  local parts = {}
+  for i = 1, #names do parts[i] = names[i] .. "=" .. type(LookupGlobal(names[i])) end
+  return table.concat(parts, ";")
+end
+
+--- Make one diagnostic field safe for the compact text format.
+---@param value any  A value returned by a WoW API
+---@return string    tostring(value) with "," ";" "|" replaced by spaces
+local function Field(value)
+  return (tostring(value):gsub("[,;|]", " "))
+end
+
+--- Run a describer, turning an error into text.
+---@param fn function  Returns a string
+---@return string      Its result, or "error: <message>"
+local function Describe(fn)
+  local ok, result = pcall(fn)
+  if ok then return result end
+  return "error: " .. Field(result)
+end
+
+--- The raw Skills-tab lines, to see why professions were or weren't captured.
+---@return string  "name|isHeader|isExpanded|rank|max;..." in game order, or "error: ..."
+function Adapter.DescribeSkillLines()
+  return Describe(function()
+    local rows = {}
+    for i = 1, GetNumSkillLines() do
+      local name, isHeader, isExpanded, rank, _, _, maxRank = GetSkillLineInfo(i)
+      rows[i] = table.concat({ Field(name), Field(isHeader), Field(isExpanded), Field(rank), Field(maxRank) }, "|")
+    end
+    return table.concat(rows, ";")
+  end)
+end
+
+--- The open merchant's items as the API returns them, to check the vendor-reagent rule.
+---@return string  "itemKey|numAvailable|extendedCost;..." in merchant order, or "error: ..."
+function Adapter.DescribeMerchant()
+  return Describe(function()
+    local rows = {}
+    for i = 1, GetMerchantNumItems() do
+      local _, _, _, _, numAvailable, _, _, extendedCost = GetMerchantItemInfo(i)
+      local key = Adapter.ItemKey(GetMerchantItemLink(i))
+      rows[i] = table.concat({ Field(key), Field(numAvailable), Field(extendedCost) }, "|")
+    end
+    return table.concat(rows, ";")
+  end)
+end
