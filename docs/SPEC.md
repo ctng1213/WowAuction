@@ -1124,7 +1124,8 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `Data.lua` → 
    - Bags and bank capture work through `C_Container`. Professions and the merchant now use the modern calls (`Adapter.lua` picks them when present).
    - `C_TradeSkillUI` is the Dragonflight-era shape (`GetAllRecipeIDs`, `GetRecipeInfo`, `GetRecipeSchematic`, `GetBaseProfessionInfo`, `IsTradeSkillLinked`, …). Recipe ids are spell ids. The window lists unlearned recipes too, so only `learned` ones are marked known; linked, guild and NPC windows are not recorded. There is no Classic craft window (`CRAFT_SHOW` is unknown); Enchanting uses the trade skill UI.
    - `C_AuctionHouse` is the modern API, including `ReplicateItems`, `GetReplicateItemInfo`, `GetReplicateItemTimeLeft` and `GetTimeLeftBandInfo`, so the full scan of §4.2 is possible. M6 is written against it.
-   - Still to check: the recipe reader's field names against a real window (the `tradeSkill` diagnostic shows them), and the tooltip hook.
+   - The recipe reader was checked in game on 2026-10-16: Cooking 132 and First Aid 32 recipes defined, the 6 learned ones marked known, a Herbalism window (3 Forever recipes, none learned) defined only, no errors.
+   - Still to check: the tooltip hook (M5), and the AH scan and the post, buy and mail hooks (M6, M6b).
 3. **Disenchant tables and skill brackets** on Forever.
 4. **AH fees and auction durations**: deposit rate per duration, 5% / 15% cut, and the available durations.
 5. **Time-left bands**: the bounds of short / medium / long / very long (§3.3.1).

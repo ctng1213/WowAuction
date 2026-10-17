@@ -92,11 +92,12 @@ def report_character(data: AHProfitData, char_id: str, gaps: list[str]) -> None:
             print(f"         suffix item {key % SUFFIX_BASE} v={key // SUFFIX_BASE} key={key}")
 
 
-def report_diagnostics(data: AHProfitData) -> None:
+def report_diagnostics(data: AHProfitData, verbose: bool) -> None:
     """Print what the addon saw last session: client, missing APIs, errors, raw skill and merchant rows.
 
     Args:
         data: The parsed file; data.diagnostics is None for files from before diagnostics existed.
+        verbose: Also print the API lists, namespace function lists and the Classic Skills-tab dump.
     """
     d = data.diagnostics
     if d is None:
@@ -106,36 +107,42 @@ def report_diagnostics(data: AHProfitData) -> None:
     print(f"\ndiagnostics (saved {when}, client {d.client}):")
     if d.setup_error:
         print(f"  DATABASE SETUP FAILED: {d.setup_error}")
-    missing = [name for name, kind in d.apis if kind == "nil"]
-    present = [name for name, kind in d.apis if kind != "nil"]
-    print(f"  APIs present: {', '.join(present) or 'none'}")
-    print(f"  APIs MISSING: {', '.join(missing) or 'none'}")
+    if verbose:
+        missing = [name for name, kind in d.apis if kind == "nil"]
+        present = [name for name, kind in d.apis if kind != "nil"]
+        print(f"  APIs present: {', '.join(present) or 'none'}")
+        print(f"  APIs MISSING: {', '.join(missing) or 'none'}")
     print(f"  errors caught: {len(d.errors)}")
     for error in d.errors:
         print(f"    - {error}")
-    print("  Skills tab (name | header | expanded | rank | max):")
-    rows = (d.skill_lines or "").split(";") if d.skill_lines and not d.skill_lines.startswith("error") else []
-    if not rows:
-        print(f"    {d.skill_lines or 'nothing read'}")
-    for row in rows:
-        print(f"    {row.replace('|', ' | ')}")
+    classic_skills = d.skill_lines and not d.skill_lines.startswith("error")
+    if verbose or classic_skills:   # Forever has no Classic Skills tab; its dump is only an error there
+        print("  Skills tab (name | header | expanded | rank | max):")
+        rows = d.skill_lines.split(";") if classic_skills else []
+        if not rows:
+            print(f"    {d.skill_lines or 'nothing read'}")
+        for row in rows:
+            print(f"    {row.replace('|', ' | ')}")
     print("  professions, modern API (slot | spellbook index | name | rank | max):")
     for row in (d.professions or "nothing read").split(";"):
         print(f"    {row.replace('|', ' | ')}")
     for namespace, functions in d.namespaces:
-        listed = "MISSING" if functions is None else f"{len(functions)} functions: {' '.join(functions)}"
-        print(f"  {namespace}: {listed}")
+        if functions is None:
+            print(f"  {namespace}: MISSING")
+        elif verbose:
+            print(f"  {namespace}: {len(functions)} functions: {' '.join(functions)}")
     print(f"  last trade skill window: {(d.trade_skill or 'none opened this session').replace('|', '  ')}")
     print("  last merchant (item key | available, -1 = unlimited | extended cost):")
     for row in (d.merchant or "no merchant opened this session").split(";"):
         print(f"    {row.replace('|', ' | ')}")
 
 
-def report(path: Path) -> int:
+def report(path: Path, verbose: bool = False) -> int:
     """Print the report for one SavedVariables file.
 
     Args:
         path: An AHProfit.lua SavedVariables file.
+        verbose: Include the full API and namespace dumps.
 
     Returns:
         0 when it parsed, 1 when it couldn't be read.
@@ -161,7 +168,7 @@ def report(path: Path) -> int:
         gaps.append("vendor")
     events = Counter(e.type for e in data.events)
     print("events: " + (", ".join(f"{t} {n}" for t, n in sorted(events.items())) or "none"))
-    report_diagnostics(data)
+    report_diagnostics(data, verbose)
     if data.problems:
         print(f"\nPROBLEMS ({len(data.problems)} rows set aside):")
         for problem in data.problems[:20]:
@@ -182,6 +189,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--wow-path", help="WoW client folder (default: config.toml or the SPEC §3.6 default)")
     parser.add_argument("--file", help="a specific AHProfit.lua to read instead")
+    parser.add_argument("--verbose", action="store_true", help="include the API and namespace function dumps")
     args = parser.parse_args()
     if args.file:
         paths = [Path(args.file)]
@@ -192,7 +200,7 @@ def main() -> int:
             print(f"No AHProfit.lua under {wow / 'WTF' / 'Account'}. Log in with the addon enabled, "
                   "then /reload or log out so WoW writes it.")
             return 1
-    return max(report(p) for p in paths)
+    return max(report(p, args.verbose) for p in paths)
 
 
 if __name__ == "__main__":
