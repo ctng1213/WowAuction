@@ -36,3 +36,6 @@ A6-A8
 
 # Market activity amendment (SPEC §3.3.6, §3.4 capacity, §8.8 volume backtest)
 V22-V24 W8-W9 R15-R16 D23 K4 PL4
+
+# Architecture amendment (SPEC §5.0)
+AR1-AR4 W10-W11 T17-T18 D24 A9

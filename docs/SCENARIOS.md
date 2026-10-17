@@ -83,10 +83,10 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | FM11 | SavedVariables ends mid-table | not ingested; `.bak` parsed instead; `ingestedUntil` moves no further than what was stored |
 | FM12 | the same SavedVariables ingested twice | event ids dedupe; counts unchanged |
 | FM13 | SavedVariables format version newer than AHSync | not ingested; "Update AHSync" |
-| FM14 | `Data.lua` rename fails 3 times | old `Data.lua` kept; Status warning |
+| FM14 | `MarketIntelligence.lua` rename fails 3 times | the old file kept; Status warning |
 | FM15 | second AHSync start | exits: "AHSync is already running" |
 | FM16 | `config.toml` has `retention_days = "ninety"` | refuses to start: "config.toml line 4: retention_days must be a number" |
-| FM17 | `Data.lua` format version differs from the addon's | empty state plus "versions differ"; no Lua error |
+| FM17 | `MarketIntelligence.lua` schema version differs from the addon's | empty state plus "versions differ"; no Lua error |
 | FM18 | `basedOnUntil` is older than your last buy | that buy's action shows done locally; plan labelled provisional |
 | FM19 | AH closed at 40% of a full scan | saved as partial (coverage 40%); excluded from volume diffs |
 | FM20 | buy hook fires, then "not enough gold" | an attempt only; it expires after 1 h; no cost basis change |
@@ -157,8 +157,10 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | W5 | the top window has 2 weeks of data | labelled "early pattern"; confidence low |
 | W6 | 7 weeks of data | "established"; confidence high |
 | W7 | no slot data at all | no windows; "Best time to sell: —"; the plan posts now |
-| W8 | top window `how_avg` 1.25 with 6 weeks of data; another item 1.25 with 3 weeks; a third with no windows | seasonality strength 50; 25 (50 × 3/6); 0 |
+| W8 | 6 weeks of data; on the held-out latest week the weekly profile's mean absolute error is 20c and a flat price's is 50c; the same item with 3 weeks; with 2 weeks | strength 60 (100 × (1 − 20/50) × 1); 30 (× 3/6); insufficient evidence |
 | W9 | `how` peaks Sat 20:00, `sales_how` peaks Tue 19:00, `sell_score` peaks Wed 19:00 | item detail shows all three: highest price Sat 20:00, most activity Tue 19:00, best risk-adjusted Wed 19:00 (the plan's) |
+| W10 | `how` is 0.85 on Mon 03-05 (the cheapest), 0.93 on Thu 04, 1.0 elsewhere; threshold 0.9 | buy window "Mon 03:00–06:00" (≤ 0.85 ÷ 0.9 = 0.944); Thu 04:00 qualifies too (0.93) as a second window |
+| W11 | a big premium (how 1.4 on Sat 18:00) seen in only one of 4 weeks, so the held-out week misses it | strength near 0 even though the premium is large: predictability, not profit |
 
 **Recommendations** (`engine/disenchant`, `craft`, `plan`):
 
@@ -202,7 +204,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | O15 | streak 3, you choose Keep | s = x = streak = 0 from that moment; P' = P; quantity and price back to normal; no flag |
 | O16 | after Keep, the next post expires while cheapest | flagged "not selling" again (`keep_retry_streak` = 1); Blacklist / Keep offered |
 | O17 | after Keep, the next post is undercut and expires | not flagged (undercut doesn't count); next post capped at `curOthers − 1` |
-| O18 | the addon set `no_buy` at T; the dashboard clears it at T+2h | stored as `none` at T+2h, which beats `no_buy`; `Data.lua` carries the `none`, and the addon drops its rule |
+| O18 | the addon set `no_buy` at T; the dashboard clears it at T+2h | stored as `none` at T+2h, which beats `no_buy`; `PortfolioPlan.lua` carries the `none`, and the addon drops its rule |
 
 **Display, ordering and risk** (`engine/plan`, `rules`):
 
@@ -227,6 +229,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | D21 | post 5 Linen you looted, at 45 c, `P` = 1 | net = 5 × 45 c × 0.95 − 0 = 213.75 c, shown +2 s 14 c |
 | D22 | a craft with 2 mat buys and 1 mail step feeding it | the mat buys and the mail show no net ("for …"); the craft carries the chain's profit |
 | D23 | a Craft row whose product sells 48/day (AHF) with 93 listed | columns Chance, Est. Sales/Day "48 AHF", Current Supply "93", Supply/Volume "1.9 days", in that order; each has a sort key |
+| D24 | a Craft row uses Amaya's bags captured 3 days ago | the row says "based on Amaya's bags from 3 d ago"; a row on today's snapshot says nothing |
 
 **Craft sourcing** (`engine/craft`, `plan`). Recipe: 2 Copper Bar → Copper Rod, which posts at 40 s with `P` = 1:
 
@@ -271,7 +274,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | # | Scenario | Then |
 |---|---|---|
 | IU1 | you buy 20 Linen Cloth (SavedVariables changes) | only Linen is dirty; its options and plan rows are recomputed; other items' rows are untouched; history reads = 0 (counted by a fake `db`) |
-| IU2 | a new hourly AHF file arrives | stored; `item_stats`, plan and `Data.lua` unchanged; "prices newer than numbers" flag set |
+| IU2 | a new hourly AHF file arrives | stored; market intelligence, plan and the addon files unchanged; "prices newer than numbers" flag set |
 | IU3 | `daily_refresh_time` 06:00 passes while AHSync runs | one full refresh on the next timer tick; none again until the next day |
 | IU4 | "Refresh now" pressed twice within a second | one full refresh (the second request is merged in) |
 | IU5 | the curve row for the current hour has P(2 ahead) = 0.90 and P(5 ahead) = 0.78; 3 units are now ahead | P = 0.90 − 0.12 × (1 ÷ 3) = 0.86, in both Python and Lua |
@@ -311,6 +314,17 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | T14 | a post action for the Tue 20:00–23:00 window (post time 12:00); it is Tue 18:00 and nothing is posted | `late`: "post now (late)" |
 | T15 | the same action at Wed 00:00, still not posted | `missed`; the missed-peak re-plan runs (M1) |
 | T16 | the same action; you post at Tue 21:30 | matches the late action → `done` |
+| T17 | a sold mail arrives (sold event), then you take the 9 s 50 c from the mailbox (payout event) | posted, sold and paid out are three journal events; realized profit counts once, at the payout |
+| T18 | you disenchant a green into 3 Strange Dust | a `disenchant` event with the item and its results; the dust's cost basis is the green's |
+
+**Architecture** (SPEC §5.0):
+
+| # | Scenario | Then |
+|---|---|---|
+| AR1 | the same history in SQLite and in an in-memory `HistoryReader` | analysis gives byte-identical `MarketIntelligence` JSON; it never touches SQLite or character state |
+| AR2 | `MarketIntelligence` with `schema_version` = current; one with a newer version | the first round-trips through JSON unchanged; the second is refused with "intelligence from a newer AHSync" |
+| AR3 | history changes after intelligence was built, with no new analysis | recommendations still use the published intelligence (they never read history) |
+| AR4 | every module under `analysis/` | imports only `engine/`, `history.reads`, `intel.contract` and the standard library (convention test) |
 
 **Addon** (Lua, `tests/addon/...`): every scenario for a ported module (`fees`, `sellprob`, `disenchant`, `craft`; see SPEC §5) must pass on the Lua port with identical numbers. Volume (V*) and tracking (T*) scenarios run in Python only. Plus:
 
@@ -318,23 +332,24 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 |---|---|---|
 | A1 | `Capture/*` writes a SavedVariables file with characters, recipes, inventory and events | `ingest/savedvars` parses it back to the same records (round-trip) |
 | A2 | at the AH, a search result raises a flip target's price above its profit line; another target is gone | the list re-orders; both targets are dropped |
-| A3 | a `Data.lua` with 20k items | loads in Lua 5.1 without hitting the constant limit |
-| A4 | `Data.lua` with `ingestedUntil` = T | scans, posts, purchases, crafts and mail at or before T are removed from SavedVariables; later ones are kept |
+| A3 | a `MarketIntelligence.lua` with 20k items | loads in Lua 5.1 without hitting the constant limit |
+| A4 | `PortfolioPlan.lua` with `ingestedUntil` = T for a character | scans, posts, purchases, crafts and mail at or before T are removed from SavedVariables; later ones are kept |
 | A5 | an engine error is raised during a re-rank | caught at the UI boundary and shown as a status line; no Lua error popup; the list keeps its last good state |
 | A6 | the AH opens and another addon's `ReplicateItems` answers with 3 auctions (Linen 45c ×20 long, Linen 45c ×20 long, Copper Bar 1s ×5 short) | one `full` scan, coverage 1, rows `2589,45,20,3,2;2840,100,5,1,1`; AHProfit made no ReplicateItems call |
 | A7 | the AH opens and no scan result arrives within 30 s | AHProfit calls `ReplicateItems` once; opening the AH again 5 min later doesn't call it again (20-min rule) |
 | A8 | a 10,000-auction result | read over several frames, no step over the 4 ms budget (counted by the stub clock); entering combat pauses it and leaving combat finishes it |
+| A9 | no `PortfolioPlan.lua`; the intelligence lists Copper Rod (sell value 38 s) and Copper Bar on the shortlist; your bags hold 6 bars; the AH shows bars at 10 s | the addon itself offers "Craft 3 Copper Rod from owned bars" with the same profit the desktop computes for the same inputs (19 s each, C1) |
 
 ## 2. Visual tests (UI1–UI11)
 
 Layers and tooling: SPEC §8.4.
 
-| # | Scenario (fixture `Data.lua`) | Then |
+| # | Scenario (fixture addon files) | Then |
 |---|---|---|
 | UI1 | Today tab, 12 mixed actions | 12 rows sorted by expected net; each and total both shown; net values coloured; footer totals correct |
 | UI2 | 40 actions | 12 visible, scroll bar shown, nothing drawn outside the list |
 | UI3 | item "Scouting Gloves of the Monkey" in a narrow column | truncated with "…"; no overflow |
-| UI4 | no `Data.lua` | empty state "Run AHSync, then /reload"; no rows |
+| UI4 | no `MarketIntelligence.lua` | empty state "Run AHSync, then /reload"; no rows |
 | UI5 | data 30 h old | age badge amber |
 | UI6 | an item flagged "not selling" | NOT SELLING label, record line, Blacklist and Keep buttons inside the row |
 | UI7 | AH panel: 5 targets, 2 found, 1 gone, 2 checking | ✓ / ✗ / … states; "3 of 5"; panel docked to the AH frame's right edge |
@@ -409,5 +424,5 @@ How cases are generated, and how many: SPEC §8.7.
 | PL4 | Plan: for every item and sell window, the units planned across all characters (holds, flips, crafts' output, disenchant mats) never exceed that window's liquidity cap, and no character's plan claims capacity another already used |
 | VW1 | Views: every total equals the sum of its rows; filters only hide rows, never change their numbers; each chain's profit appears in exactly one row of any view (§3.4 expected net) |
 | LP1 | Python and Lua give identical rounded results on every generated case for the ported modules |
-| FI1 | A crash injected at any commit point of catch-up, ingest or refresh, followed by a restart, gives the same final database rows and `Data.lua` bytes as an uninterrupted run |
+| FI1 | A crash injected at any commit point of catch-up, ingest or refresh, followed by a restart, gives the same final database rows and addon file bytes as an uninterrupted run |
 | FI2 | Ingesting any SavedVariables file twice, or in any order with earlier files, gives the same database as ingesting each once in order |

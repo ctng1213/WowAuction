@@ -12,7 +12,7 @@ python tools/gen_lua_fixtures.py                  # tests/scenarios/*.json + tes
 python tools/gen_properties.py                    # regenerate LP1 property cases after changing a ported formula
 lua5.1 tests/support/lua/runner.lua tests/addon   # Lua tests only
 python -m ahsync               # run the app
-python tools/deploy.py         # copy addon/* into the WoW AddOns folder (never overwrites a generated Data.lua; --dry-run)
+python tools/deploy.py         # copy addon/* into the WoW AddOns folder (never overwrites generated addon data files; --dry-run)
 python tools/savedvars_report.py  # after /reload in game: what the addon captured, and what is missing
 python tools/gen_bonus_suffixes.py  # refresh addon/AHProfit/Data/BonusSuffixes.lua from AHF /items (no key)
 python tools/visual.py         # UI layout snapshots vs golden (--update to accept, --html to view)
@@ -43,7 +43,7 @@ Enforced by `tests/test_conventions.py`, which fails on a missing docstring, a f
 Exempt from the convention checks:
 
 - **Mirroring**: `__init__.py`, `__main__.py`, `store/schema.sql`, `web/static/*`, `UI/Demo.lua`, and `tests/visual/` (scenario-based, like `tests/scenarios/`).
-- **Mirroring and size**: data files `addon/AHProfit/Data/*` and the generated `addon/AHProfit_Data/Data.lua`.
+- **Mirroring and size**: data files `addon/AHProfit/Data/*` and the generated `addon/AHProfit_Data/*.lua` (`MarketIntelligence.lua`, `PortfolioPlan.lua`).
 - **Docstrings**: anonymous Lua functions passed inline (`frame:SetScript("OnEvent", function(...) ... end)`). Keep them a few lines long and have them call a named, documented function.
 
 Every non-test function, method and class has a docstring stating its purpose, **inputs** (with units) and **output**. Mention side effects and raised errors when there are any. Test functions are exempt; their scenario name is their documentation.

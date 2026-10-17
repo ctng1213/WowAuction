@@ -25,7 +25,7 @@ Names are placeholders.
 
 | Fact | Consequence |
 |---|---|
-| A WoW addon runs in a Lua sandbox with **no network access**. It reads files only at login or `/reload`, and it writes its SavedVariables to disk only at logout, `/reload` or disconnect. | AHSync does all the HTTP work and the calculations. The two talk through files: the addon's SavedVariables go to AHSync, and a generated `Data.lua` comes back to the addon. |
+| A WoW addon runs in a Lua sandbox with **no network access**. It reads files only at login or `/reload`, and it writes its SavedVariables to disk only at logout, `/reload` or disconnect. | AHSync does all the HTTP work and the calculations. The two talk through files: the addon's SavedVariables go to AHSync, and generated `MarketIntelligence.lua` and `PortfolioPlan.lua` come back to the addon. |
 | WoW: Forever has **no official Blizzard AH API**. auctionhouse.fyi (AHF) prices come from players scanning in game. | Data is only as fresh as someone's last scan. Every price keeps its observation time, and results show their age and a confidence level. |
 | AHF CDN retention: public **hour candles 7 days**, public **day candles 7 days**. Premium adds 14 days of hours and 90 days of days. | We build our own 90-day hourly history. See §2.1. |
 | Addons **cannot buy or post automatically**. Each action needs a hardware click. | We recommend and pre-fill searches. You click. |
@@ -133,8 +133,8 @@ Reading rules:
 
 - AHSync re-reads the file only after its modification time has been unchanged for 2 seconds, so it never parses a half-written file.
 - The file carries `formatVersion`, and every event carries a unique `event_id`, so ingest is idempotent. A file that won't parse is retried from WoW's `AHProfit.lua.bak` (§5.2).
-- **Pruning handshake.** Order books, events and mail would make SavedVariables grow without limit, which slows login and logout. AHSync writes `ingestedUntil` into `Data.lua` (§3.5) as a **map from character id to time** (ms): for each character, the newest event or scan time stored for that character. On load, the addon deletes each character's scans, posts, purchases, crafts and mail rows at or before that character's value.
-  - **Per character, because `Data.lua` is shared by every account** on the machine: one global time could pass events of another account whose file couldn't be read.
+- **Pruning handshake.** Order books, events and mail would make SavedVariables grow without limit, which slows login and logout. AHSync writes `ingestedUntil` into `PortfolioPlan.lua` (§3.5) as a **map from character id to time** (ms): for each character, the newest event or scan time stored for that character. On load, the addon deletes each character's scans, posts, purchases, crafts and mail rows at or before that character's value.
+  - **Per character, because `PortfolioPlan.lua` is shared by every account** on the machine: one global time could pass events of another account whose file couldn't be read.
   - **Never past a row that was set aside.** When any of a character's rows (a scan or an event) was not stored, for example a scan from a realm missing in `[realms]` or a row the parser rejected, that character's value stops 1 s before the oldest such row. The addon then keeps it, and it is ingested once the problem is fixed. It keeps unconfirmed attempts younger than 1 h (§5.2), so a confirmation that arrives later still reaches AHSync, which upserts the event by its id.
 
 #### 2.2.1 SavedVariables layout (format version 1)
@@ -202,7 +202,9 @@ AHProfitDB = {
 | `craft` | `spell`, `count` | `Capture/Crafts` |
 | `mail_sent` | `to` (charId), `key`, `qty` | `Capture/Mail` |
 | `auction_mail` | `outcome` (`sold` / `expired` / `cancelled` / `won`), `key`, `qty`, `price` (sold and won only) | `Capture/Mail` |
-| `skip` | `action` (action id from `Data.lua`) | the row menu's "Mark as skipped" |
+| `skip` | `action` (action id from `PortfolioPlan.lua`) | the row menu's "Mark as skipped" |
+| `payout` | `key`, `qty`, `money` (copper taken from the mail) | `Capture/Mail`: an auction's gold collected from the mailbox, so *posted*, *sold* and *paid out* are three separate events |
+| `disenchant` | `key` (the item), `results` (`"key,qty;..."`) | `Capture/Crafts`: a disenchant and what it gave |
 
 - **`diagnostics`** (written by `Core/Diagnostics.lua` at `PLAYER_LOGOUT`, which also fires on `/reload`): `{ at, client, apis, errors, skillLines, merchant, tradeSkill, namespaces, professions, setupError }`. It holds the client build, which of the APIs the addon depends on exist (`"name=type;…"`), the handler errors caught this session (at most 10), the raw Skills-tab rows, the last merchant's raw items, the last trade skill window's raw state, the function names inside the modern API namespaces (`"C_X=FnA FnB;…"`), the raw `GetProfessions` slots, and any database setup error. It exists so `tools/savedvars_report.py` can explain a missing capture without Lua error popups (§6). AHSync never ingests it, and each session replaces it.
 - **Professions and known recipes follow the file.** The addon writes a character's professions whole and only ever adds known recipes. AHSync replaces that character's professions and known recipes with the file's when the file's `characters[id].updated` is at least the stored one; an older file changes nothing. So an unlearned profession disappears, and a relearned one starts again at its new skill.
@@ -231,7 +233,7 @@ start
  │    volume: once a day if Premium
  │    commit and advance sync_state after each hour, so a crash resumes there
  ├─ prune > 90 days
- ├─ FULL REFRESH (§3.1.1) → item_stats, plan, dashboard data, addon Data.lua
+ ├─ FULL REFRESH (§3.1.1) → market intelligence, recommendations, plan, dashboard data, the addon files
  ├─ serve dashboard at http://localhost:8765
  └─ STEADY STATE (mostly idle; see §3.1.1)
       every hour at :06 → store the new h1 hour + snapshot (+ AHF order book if Premium `books`); no recompute
@@ -251,7 +253,7 @@ All the heavy lifting happens in AHSync, and only in a **full refresh**. Everyth
 **Full refresh** (`engine.refresh_all`). It runs at start, at the first run after `daily_refresh_time` (default 06:00 local), on the dashboard's **Refresh now** button, or when the addon sets a refresh request (`/ahp refresh`, picked up on the next `/reload` or logout). This is the only time AHSync reads through history:
 1. **Builds `item_stats`**, one materialized row per item and market with everything §3.3 defines: medians, percentiles, trend, `how`, `sales_how`, `sell_score`, best windows, volume per source, tier sell-through, undercut share, calibration and confidence components. It works item by item and streams the candle and book tables in key order, so memory stays flat.
 2. **Precomputes each item's options:** sell values and hold values (§3.4), disenchant EV, the crafting options with their sourcing, flip candidates, and the sell-probability curve (below).
-3. **Builds the plan, views and `Data.lua`.**
+3. **Builds the recommendations, the plan, the views and the addon files** (`MarketIntelligence.lua`, `PortfolioPlan.lua`).
 
 **Incremental update** (`engine.update_items`). It runs when SavedVariables changes: inventory, posts, purchases, crafts, mail, rules or a new scan.
 - The changed events mark items **dirty**. Only those items' options, plan actions and view rows are recomputed, from their precomputed `item_stats` row, with no history reads.
@@ -262,13 +264,13 @@ All the heavy lifting happens in AHSync, and only in a **full refresh**. Everyth
 **Status pass** (`plan.status_pass`, run by `sync/scheduler`). Time passing changes the plan even when no data does, so AHSync runs this once an hour at :00. It runs on precomputed options only, with no history reads and no simulation:
 - It moves `pending` actions to `late` or `missed` by the rules in §3.4.1.
 - For each post that just became `missed`, it runs the missed-peak re-plan (§3.4.0), which only compares the item's precomputed windows.
-- It re-runs the cheap budget allocation and rewrites the views and `Data.lua` if anything changed.
+- It re-runs the cheap budget allocation and rewrites the views and `PortfolioPlan.lua` if anything changed.
 
 **Sell-probability curve.** The queue simulation (§3.3.2) runs **only in AHSync**, during a full refresh. The chance of a post made now depends on the hour you post it, because the window catches different buyers (P21, P22). So the curve is a grid:
 - **Rows:** one for each of the 24 clock hours, starting at the refresh hour. Each row is `P` for a post made at the start of that hour over the posting-now window.
 - **Columns:** 8 points of units ahead: 0, 1, 2, 5, 10, 20, 50, 100.
 - It is computed at the current price tier, and it carries the inputs needed to blend it.
-- Items on any list get the full 24 × 8 grid. Other items, which only need the tooltip, get 24 × 3 (0, 5 and 20 ahead), to stay within the `Data.lua` budget.
+- Items on any list get the full 24 × 8 grid. Other items, which only need the tooltip, get 24 × 3 (0, 5 and 20 ahead), to stay within the `MarketIntelligence.lua` budget.
 - **Encoding: one character per point.** Each `P` is quantized to 2% steps, `n = floor(P × 50 + 0.5)` (0–50), and written as `string.char(35 + n)`, row by row, in the item's string. Codes 35–85 contain no `"` and no `\`, so no escaping is needed. A 9k-item market then needs about 650 KB of curves, which leaves room in the 2 MB budget for everything else. **AHSync uses the quantized curve too**, not the raw simulation result, so Python and Lua read identical values (IU11).
 
 In each column the units ahead are modelled as one block that stays the whole window, which is conservative: the curve can't know which future competitors expire when. Each value is stored in 2% steps (below).
@@ -291,7 +293,7 @@ A full refresh builds into staging tables and swaps them in with one transaction
 | Full refresh time | ≤ 60 s for one market of about 9k items |
 | Incremental update | ≤ 1 s for up to 50 dirty items |
 | Dashboard request | ≤ 50 ms (precomputed JSON, paged at 100 rows) |
-| `Data.lua` size | ≤ 2 MB |
+| `MarketIntelligence.lua` size | ≤ 2 MB (`PortfolioPlan.lua` ≤ 200 KB) |
 
 Storage rules:
 - SQLite runs in WAL mode.
@@ -588,7 +590,15 @@ Numbers, not labels: the engine never classifies an item as "high" or "low" liqu
 
 Missing observation periods never count as zero sales or zero supply; they are left out of medians and averages.
 
-**Seasonality strength** (0–100): how much a best selling window is worth over an average hour, and how sure we are of it: `min(100, floor((how_avg − 1) × 200 + 0.5)) × min(1, weeks ÷ 6)`, rounded half up, using the top window (§3.3.4); 0 without windows or when `how_avg ≤ 1`. A 25% premium seen over 6+ weeks scores 50.
+**Seasonality strength** (0–100): how *predictable* the weekly price pattern is, kept separate from how *profitable* it is.
+- **Out-of-sample test.** Build `how` from all weeks but the most recent one, then predict that held-out week's hourly closes two ways: with the weekly profile (`med30 × how[slot]`) and with a flat price (`med30`).
+- `strength = floor(100 × max(0, 1 − error_profile ÷ error_flat) × min(1, weeks ÷ 6) + 0.5)`, where error is the mean absolute error over the held-out hours with a close.
+- **Insufficient evidence** (strength None, shown "—" with "insufficient evidence"): fewer than 3 weeks of data, fewer than 24 held-out closes, or a flat error of 0.
+- Consistent patterns score high even when the premium is small; a big premium that doesn't repeat scores low.
+
+**Buying windows.** The mirror of selling windows (§3.3.4): the slots whose price ratio is at most `min(how) ÷ window_threshold` (within about 11% of the cheapest slot), joined into windows that may cross midnight, ranked by lowest average `how`, top 3. Flips buy in them (§3.4C.2). With no pattern there are none, and a buy is planned for now.
+
+**Price volatility and long windows.** `volatility_30` = standard deviation ÷ mean of the daily medians over 30 days; 7-, 30- and 90-day medians and nearest-rank percentiles. A close outside 10 × p90 or below 10% of p10 is a suspect price (§5.2), excluded from all statistics until a second observation confirms it.
 
 **Three selling answers, kept apart** (item detail and Inventory): the hour with the **highest expected price** (max `how`), the hour with the **highest estimated activity** (max `sales_how`), and the **best risk-adjusted** window (max `sell_score`, §3.3.4), which is the one the plan uses.
 
@@ -757,6 +767,7 @@ Captured events (§2.2) are matched to plan actions automatically:
   - A sold invoice resolves the oldest pending post with the same character, item, stack and price.
   - An expired or cancelled mail has no price, so it resolves the oldest pending post with the same character, item and stack.
   - Each outcome updates your sell record (§3.3.3).
+- **Stale state.** Every recommendation records the age of the character snapshot it used (§2.2.1 per-location times). One built on a snapshot older than 24 h says so, e.g. "based on Amaya's bags from 3 d ago" (D24). The addon uses its live state instead.
 - **Re-planning.** Each engine run replaces `pending` and `late` actions. `done`, `partial`, `missed` and `skipped` actions are kept as history.
 
 #### 3.4.2 Item rules (blacklist)
@@ -765,7 +776,7 @@ Captured events (§2.2) are matched to plan actions automatically:
 - `ignore`: leave it out of every recommendation, including the sell plan. Tooltip prices are still shown.
 - `keep` (the **Keep** button on a "not selling" prompt): clears the flag and starts the item's sell record fresh from that moment, so `P'`, the quantity cut and the price cut all reset (§3.3.3). If it then expires again while cheapest (`keep_retry_streak`, default 1), the prompt comes back. Choosing Keep again resets it again.
 
-You set or clear a rule from any dashboard row, from the **Rules** page, or by right-clicking a row in the addon. Rules set in the addon reach AHSync through SavedVariables, and rules set on the dashboard reach the addon through `Data.lua`. When both sides changed the same item, the newer `set_at` wins. **Clearing is a change too:** it is recorded as rule `none` with its own `set_at` (§3.2), so a clear on one side beats an older rule on the other instead of being undone by it.
+You set or clear a rule from any dashboard row, from the **Rules** page, or by right-clicking a row in the addon. Rules set in the addon reach AHSync through SavedVariables, and rules set on the dashboard reach the addon through `PortfolioPlan.lua`. When both sides changed the same item, the newer `set_at` wins. **Clearing is a change too:** it is recorded as rule `none` with its own `set_at` (§3.2), so a clear on one side beats an older rule on the other instead of being undone by it.
 
 ### 3.5 Outputs
 
@@ -826,18 +837,19 @@ You set or clear a rule from any dashboard row, from the **Rules** page, or by r
    - `POST /api/refresh` asks for a full refresh (merged with one already queued; IU4) and returns `202`. `POST /api/skip {"action_id": ...}` marks a plan action skipped (§3.4.1) and returns `200 {"skipped": true|false}` (false when the action isn't open) or `400` for a bad body. Writes follow the Security rules above.
    - A market not in the config is `404 unknown_market`; no `market` means the first configured one. A busy database is `503 database_busy`.
    - **Accepted risk:** another process or Windows user on the same machine can send the right `Host`, read the token from `GET /` and write. That is inherent to a loopback tool; the checks protect against web pages, not local processes.
-2. **`Interface/AddOns/AHProfit_Data/Data.lua`**, written atomically (temp file + rename):
-   - compact prices per item, stored as strings so the file stays under Lua's constant limits, with the sell-probability curve encoded one character per point (§3.1.1)
-   - the same action list the dashboard shows, with action ids so the addon can mark them done
-   - your sell record per item (`s`, `x`, `streak`) and the item rules
-   - `ingestedUntil` for the pruning handshake (§2.2): character id → time, written only after the database commit
-   - a header with `formatVersion`, `generatedAt`, `basedOnUntil` (the newest event it includes) and a checksum of the body. The addon refuses a file whose version or checksum doesn't match and shows why (§5.2)
+2. **Two addon files** in `Interface/AddOns/AHProfit_Data/`, each written atomically (temp file + check + rename), each with a header holding its `schemaVersion`, `generatedAt` and a checksum of the body. The addon refuses a file whose version or checksum doesn't match and shows why (§5.2).
+   - **`MarketIntelligence.lua`** (market-wide; could be built in the cloud, §5.0): per item, compact strings (Lua constant limits) in two tiers.
+     - **Tier 1, every eligible item:** current price and its age, med7/med30/p10/p90, seasonality strength, estimated sales per day, current supply, supply/volume, the top buying and selling windows, the sell-probability curve (§3.1.1), confidence and freshness, and `observationsUntil`.
+     - **Tier 2, the shortlist only** (items on any desktop list, in your stock or recipes, or recently scanned): the full 168-slot `how`, `sales_how` and `supply_how` with per-slot weeks.
+     - Also the disenchant table and the bonus-suffix table (static data).
+   - **`PortfolioPlan.lua`** (account-specific): the desktop's plan with action ids so the addon can mark them done, your sell record per item (`s`, `x`, `streak`), the item rules, `basedOnUntil` (the newest event it includes), and `ingestedUntil` per character for the pruning handshake (§2.2), written only after the database commit.
+   - Raw history is never exported. Both files have a size budget: ≤ 2 MB and ≤ 200 KB.
 
-   The addon reads it at login or `/reload`.
+   The addon reads them at login or `/reload`.
 
-   **WoW only sees addon files that existed when the client started.** A `Data.lua` created later is ignored until the client restarts, even after `/reload`. So:
-   - `tools/deploy.py` installs `AHProfit_Data.toc` and a placeholder `Data.lua`, and never overwrites an existing generated `Data.lua`.
-   - AHSync only ever replaces the file; it never deletes it.
+   **WoW only sees addon files that existed when the client started.** A file created later is ignored until the client restarts, even after `/reload`. So:
+   - `tools/deploy.py` installs `AHProfit_Data.toc` and placeholder `MarketIntelligence.lua` and `PortfolioPlan.lua`, and never overwrites existing generated ones.
+   - AHSync only ever replaces the files; it never deletes them.
 
 ### 3.6 Config (`config.toml`)
 
@@ -890,8 +902,9 @@ launch_wow_after_catchup = false
 | precomputed **options** per item: sell and hold values, DE EV, crafting options, flip candidates, sell-probability curves | **choosing between precomputed options** when state changes (a price moves, you buy, you post) |
 | the dashboard | the AH window panel, tooltip, one-click searches |
 
-**The addon never reads history, never simulates and never plans.** It is a state tracker with a lookup table:
-- AHSync exports **decision data** in `Data.lua`: per-item baselines, the sell-probability curve (§3.1.1), the precomputed options with their values, recipes, the disenchant table, and the plan with its follow-ups and alternatives.
+**The addon never reads history and never simulates.** It tracks state, reads the market intelligence, and builds its own recommendations (§5.0 invariant 4):
+- AHSync exports **market intelligence** in `MarketIntelligence.lua` (per-item baselines, curves, windows, volume and supply, the disenchant table) and, optionally, its cross-character plan in `PortfolioPlan.lua` (§3.5).
+- **The addon's own recommendations** (`Recommend/Options.lua`): Disenchant, Craft, Flip and Sell options for the **shortlist** in the intelligence (tier 2 items plus what you hold and your recipes), from the intelligence plus live state (bags, gold, recipes, prices it just saw), using the ported formulas. They follow the same economic rules as the desktop's: shared scenarios check that identical inputs give identical profit numbers (LP1). With no `PortfolioPlan.lua`, or an old one, the addon still recommends; the plan only adds cross-character advice (transfers, which character acts).
 - **When state changes in game**, the addon does only O(1) work per changed item:
   1. a new price → re-read `P` from the curve row for the current hour (§3.1.1);
   2. recompute that item's options with the small ported formulas (fees, `E_post`, DE EV, craft cost);
@@ -974,7 +987,7 @@ The dot after each chance is its confidence. Hovering "85% ◐" shows "Confidenc
 - Money uses gold, silver and copper coin icons.
 - The window is movable and resizable, remembers its position, and closes with Escape.
 - **Empty states:**
-  - With no `Data.lua` yet: "Run AHSync, then /reload".
+  - With no `MarketIntelligence.lua` yet: "Run AHSync, then /reload".
   - With nothing to do: "No actions right now".
   - Data more than 24 h old: the age badge turns amber.
 - Disenchant and Craft numbers are re-checked live against the fresh in-game scan.
@@ -1022,7 +1035,7 @@ Chance to sell          46%
 
 A line with no data shows "—", except Disenchant value, which is left out as described above.
 
-**Structure.** `UI/ViewModel.lua` turns `Data.lua` and the live state into plain tables of rows, labels, colours and formatted money. The frame code (`Window`, `AHPanel`, `Tooltip`) only draws those tables. So most UI behaviour is testable as plain Lua, without frames.
+**Structure.** `UI/ViewModel.lua` turns the addon files, the addon's own recommendations and the live state into plain tables of rows, labels, colours and formatted money. The frame code (`Window`, `AHPanel`, `Tooltip`) only draws those tables. So most UI behaviour is testable as plain Lua, without frames.
 
 `/ahp demo` loads a fixture plan into the real window, so the UI can be checked in game before any real data exists.
 
@@ -1038,7 +1051,68 @@ Clicking a row runs an AH search for it, and the shopping and post lists show al
 
 `Data/Disenchant.lua` holds quality × ilvl band × armor/weapon → material probabilities, plus the Enchanting skill per ilvl. It is seeded from Classic Era values and must be verified for Forever.
 
-## 5. Tech
+## 5. Architecture and tech
+
+### 5.0 Components and boundaries
+
+The system is built as separate components that talk only through versioned contracts, so that **collection and historical analysis can move to the cloud** (for example AWS Lambda, if a Blizzard API ever replaces thin community data) without changes to the addon or the recommendation side.
+
+```text
+ Providers (AuctionHouseFYI, own in-game scans, future Blizzard API)
+        │
+        ▼
+ COLLECTOR ──► HISTORICAL STORE ──► HISTORICAL ANALYSIS ──► MARKET INTELLIGENCE (versioned)
+ collect/        history/             analysis/                intel/
+                                                                   │
+                                   ┌───────────────────────────────┤
+                                   ▼                               ▼
+                       EXPORT (MarketIntelligence.lua)   DESKTOP RECOMMENDATIONS ◄── STATE IMPORTER ◄── SavedVariables
+                       export/                           recommend/                  state/                (addon)
+                                   │                               │
+                                   ▼                               ▼
+                       ADDON (state, own recommendations,  PORTFOLIO OPTIMIZER ──► DASHBOARD (web/)
+                       transaction journal)                 portfolio/            └► PortfolioPlan.lua (optional advice)
+```
+
+| Component | Folder | Owns | Does not own |
+|---|---|---|---|
+| Collector | `collect/` | acquiring, validating and normalizing observations from interchangeable provider adapters; catch-up checkpoints; own scans (§4.2) | statistics, recommendations |
+| Historical Store | `history/` | raw observations (candles, current, books, volume rows), retention | business logic |
+| Historical Analysis | `analysis/` | market-wide statistics, weekly patterns, seasonality strength, volume estimates, supply, buy/sell windows (§3.3) | anything character-specific |
+| Market Intelligence | `intel/` | the versioned analysis results and their store | live character state |
+| Export | `export/` | `MarketIntelligence.lua` and `PortfolioPlan.lua` (§3.5) | analysis, recommendations |
+| State Importer | `state/` | reading SavedVariables, idempotent import, character snapshots and the transaction journal, freshness per character | recommendations |
+| Desktop Recommendations | `recommend/` | per-character Disenchant, Craft, Flip, Sell options from intelligence + state | collection, history |
+| Portfolio Optimizer | `portfolio/` | the cross-character plan: capital, shared market capacity, transfers (§3.4C) | raw collection |
+| Dashboard | `web/` | showing results; writes only through its secured endpoints (§3.5) | any calculation |
+| Engine | `engine/` | the pure formulas every component above uses (§3.3, §3.4) | I/O of any kind |
+| Lifecycle | `app/` | the scheduler and the order of a refresh: analysis → recommendations → publish | formulas |
+| Storage | `db/` | the local SQLite implementation of every store (one file, `data/ahsync.db`) | business logic |
+
+**Contracts.** Every arrow above is a typed, versioned contract with a schema version, owner, timestamp meaning (observation time, never import time), unique ids, an explicit "unavailable" value, validation rules and failure behaviour.
+
+| Producer → consumer | Contract |
+|---|---|
+| Collector → Historical Store | normalized observations (`collect/provider.py`: `Observation`, `BookObservation`), with source, observation time and completeness |
+| Historical Store → Analysis | `history.reads.HistoryReader` (a protocol: closes, current, books, volume, items) |
+| Analysis → Intelligence | `intel.contract.MarketIntelligence` (`INTEL_SCHEMA_VERSION`, method versions, `built_ms`, `observations_until_ms`, one `ItemIntel` per item), JSON-serializable |
+| Intelligence → Export / Recommendations | `intel.store.IntelReader` |
+| Addon → State Importer | SavedVariables (§2.2.1) |
+| State Importer → Recommendations, Portfolio | `state.reads.StateReader` (characters with freshness, skills, recipes, stock, journal) |
+| Recommendations → Portfolio → Dashboard | option and plan records; dashboard pages as in §3.5 |
+| Export → Addon | `MarketIntelligence.lua`, `PortfolioPlan.lua` (§3.5) |
+
+**Architectural invariants** (checked by AR1–AR4 and the convention test):
+1. Collection is independent of analysis; analysis is independent of character state: `analysis/` imports only `engine/`, `history.reads` and `intel.contract`.
+2. Analysis runs on any `HistoryReader`, not only SQLite (AR1), and its output depends on nothing else.
+3. Export and recommendations never compute history statistics; they read intelligence.
+4. The addon builds its own recommendations from intelligence plus live state, and works without the desktop running; the desktop's plan is optional advice.
+5. Listing changes never become confirmed sales; seasonality strength, expected profit and sales volume stay separate numbers.
+6. Every component is testable on its own with fakes.
+
+**Cloud boundary.** The Collector (remote providers), the Historical Store and the Analysis can run elsewhere and publish `MarketIntelligence` (and `MarketIntelligence.lua`). Some local process still has to place files in the WoW AddOns folder and read SavedVariables, and own in-game scans would have to be uploaded to feed cloud analysis. Those stay on the desktop.
+
+### 5.0.1 Tech
 
 - **AHSync**: Python 3.12 (installed), standard library only (`urllib`, `gzip`, `json`, `sqlite3`, `tomllib`, `http.server`). The dashboard is one static HTML/JS page served with JSON endpoints. Started from `start.bat`, with an `.exe` via PyInstaller later.
 - **AHProfit**: Lua 5.1 and WoW FrameXML, with no libraries in v1.
@@ -1049,23 +1123,31 @@ Layout. **`tests/` mirrors the source tree one-to-one**: every source module has
 ahsync/
   config.py
   clock.py    Clock protocol + SystemClock (injected everywhere; tests use FakeClock)
-  api/        client.py (HTTP, retry, 429), ahf.py (endpoints)
-  store/      db.py, schema.sql, prune.py
-  sync/       catchup.py, scheduler.py (timers, daily refresh, file-change watch), refresh.py (full refresh + incremental updates, §3.1.1)
-  ingest/     luadata.py (WoW SavedVariables Lua parser), savedvars.py (AHProfitDB → records, §2.2.1), scans.py, books.py
+  app/        scheduler.py (timers, daily refresh, file-change watch), refresh.py (analysis → recommendations → publish, §3.1.1)
+  collect/    provider.py (provider adapter protocol, normalized observations), client.py (HTTP, retry, 429), ahf.py (AHF adapter),
+              catchup.py, local_scans.py (own scans → local observations, §4.2)
+  history/    reads.py (HistoryReader protocol + SQLite reads), writes.py, prune.py
+  analysis/   market.py (history → MarketIntelligence, §3.3)
+  intel/      contract.py (MarketIntelligence, ItemIntel, INTEL_SCHEMA_VERSION), store.py (IntelReader/IntelWriter + SQLite)
+  state/      luadata.py (WoW SavedVariables Lua parser), savedvars.py (AHProfitDB → records, §2.2.1), importer.py (records → store),
+              writes.py, reads.py (StateReader + SQLite)
+  recommend/  pages.py (Disenchant and Craft options and pages), later flips and sells
+  portfolio/  plan.py (cross-character plan, §3.4C; M4)
+  db/         sqlite.py (the local Database: connection, migrations, backups, and every store's SQLite implementation), schema.sql
   engine/     fees.py, prices.py, profile.py (hour-of-week), volume.py, sellprob.py (incl. the P' blend), de_table.py (disenchant table, §4.5),
               record.py (own sell record + calibration), tracking.py (event → action matching), rules.py,
               patterns.py (weekly patterns, best selling windows), confidence.py (conf %), disenchant.py, craft.py, plan.py, views.py (tab totals, sorting, filters, tooltip deltas)
-  export/     lua_data.py
+  export/     market_lua.py (MarketIntelligence.lua), plan_lua.py (PortfolioPlan.lua)
   web/        server.py, static/
 addon/AHProfit/
   Core/       Adapter.lua (every game API call), Events.lua, DB.lua (AHProfitDB setup, migrations, pruning; §2.2.1), Diagnostics.lua (§2.2.1)
   Capture/    Characters.lua, Professions.lua, Inventory.lua, Mail.lua, Posts.lua, Purchases.lua, Crafts.lua
   Scan/       Search.lua, Replicate.lua
   Engine/     Fees.lua, SellProb.lua, Disenchant.lua, Craft.lua   (ports of ahsync/engine)
+  Recommend/  Options.lua (the addon's own Disenchant / Craft / Flip / Sell options for the shortlist, §4.0)
   UI/         ViewModel.lua, Window.lua, Tooltip.lua, AHPanel.lua, Demo.lua
   Data/       Disenchant.lua (generated from engine/de_table.py), BonusSuffixes.lua (generated: bonus ID → suffix id, §6 item 11)
-addon/AHProfit_Data/   AHProfit_Data.toc, Data.lua (placeholder; AHSync generates the real one)
+addon/AHProfit_Data/   AHProfit_Data.toc, MarketIntelligence.lua, PortfolioPlan.lua (placeholders; AHSync generates the real ones)
 tests/
   ahsync/...           test_<module>.py, same tree as ahsync/
   addon/...            <Module>_spec.lua, same tree as addon/AHProfit/
@@ -1099,7 +1181,7 @@ The addon must never be noticeable in game: **no work while idle, a few millisec
 | **Pause in combat** | On `PLAYER_REGEN_DISABLED`, queue all non-essential work (scans, re-ranks, UI refreshes) and run it on `PLAYER_REGEN_ENABLED`. Never touch frames in combat. |
 | **Lazy UI** | Frames are created on the first `/ahp` or AH open, not at login. A hidden window does no updates. |
 | **Pooled, virtual lists** | Only the visible rows exist (about 15 frames per list), reused while scrolling. Rows are never created per item. |
-| **Lazy data decode** | `Data.lua` keeps items as compact strings keyed by item id. A row is decoded only when needed (tooltip, list) and kept in a small cache of about 500 entries. Login never builds 9k tables. |
+| **Lazy data decode** | `MarketIntelligence.lua` keeps items as compact strings keyed by item id. A row is decoded only when needed (tooltip, list) and kept in a small cache of about 500 entries. Login never builds 9k tables. |
 | **Cheap tooltip** | One cache lookup plus a few `AddDoubleLine` calls. No string building beyond formatting the numbers. |
 | **Chunked full scans** | A full scan's results (`ReplicateItems`, usually requested by AuctionHouseFYI, §4.2) are read in a coroutine with a **4 ms budget per frame**, stepped by one-shot timers, so it never stalls the game. Reading pauses in combat and resumes after it. AHProfit requests a scan itself only as the §4.2 fallback. |
 | **No per-frame allocations** | Reuse tables, cache globals in locals, and avoid string concatenation in loops (already in CLAUDE.md). |
@@ -1111,7 +1193,7 @@ The addon must never be noticeable in game: **no work while idle, a few millisec
 | What | Budget |
 |---|---|
 | CPU while idle (no AH, no window) | 0 ms per frame (no handlers running) |
-| Memory after login | ≤ 3 MB, plus `Data.lua` strings (≤ 2 MB) |
+| Memory after login | ≤ 3 MB, plus the intelligence strings (≤ 2 MB) |
 | Memory with the window and AH open | ≤ 10 MB |
 | One state change (price, buy, post) | ≤ 2 ms total |
 | Tooltip | ≤ 0.2 ms |
@@ -1120,20 +1202,20 @@ The addon must never be noticeable in game: **no work while idle, a few millisec
 
 ### 5.2 Failure modes and recovery
 
-Data moves through many hand-offs: AHF → AHSync → SQLite → `Data.lua` → WoW → SavedVariables → AHSync. Any of them can fail halfway. Six rules make every failure recoverable:
+Data moves through many hand-offs: AHF → AHSync → SQLite → `MarketIntelligence.lua` / `PortfolioPlan.lua` → WoW → SavedVariables → AHSync. Any of them can fail halfway. Six rules make every failure recoverable:
 
 1. **Commit points, then resume.** Every step commits in small units (one hour file, one SavedVariables ingest, one refresh). A crash resumes from the last commit point; nothing restarts from zero.
 2. **Idempotent writes.** Every write is an upsert on a natural key, so repeating a step is harmless. Every captured event has a unique id, `charId:timeMs:seq`, so reading the same SavedVariables twice never double-counts.
 3. **Never publish half a result.**
    - A full refresh writes into staging tables (`item_stats_new`, `plan_new`, …) and swaps them in with one transaction.
-   - `Data.lua` is written to a temp file, checked, then renamed.
+   - The addon files are each written to a temp file, checked, then renamed.
    - On any failure, the previous complete version stays in place.
 4. **Last good state survives.** When a step fails, the dashboard and the addon keep the last good numbers, show their age and say what failed: "Refresh failed at 06:02 (disk full) · showing yesterday's numbers".
 5. **Never lose your events.**
    - The addon deletes an event from SavedVariables only after AHSync confirms it was **committed** (`ingestedUntil`, §2.2), and AHSync writes `ingestedUntil` only after the database commit.
    - Unconfirmed events are simply sent again next time.
 6. **Validate at every boundary, and degrade instead of crashing.**
-   - Each file has a format version and a check: AHF responses, SavedVariables and `Data.lua`.
+   - Each file has a format version and a check: AHF responses, SavedVariables, the market intelligence and the addon files.
    - One bad item is set aside with its error, and everything else carries on.
    - Errors go to `data/ahsync.log` (rotated, never containing the API key) and to the Status page.
 
@@ -1157,7 +1239,7 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `Data.lua` → 
 | Database corrupted | `PRAGMA quick_check` fails on start | restore from the newest of 3 daily backups (SQLite backup API, `data/backups/`); history since then is re-fetched where AHF still has it |
 | SavedVariables half-written or unparsable | not ingested; the file has to be unchanged for 2 s first (§2.2) | falls back to WoW's `AHProfit.lua.bak`; if that fails too, it waits for the next write. Nothing is pruned, because `ingestedUntil` doesn't move |
 | SavedVariables from a newer addon version | ignored, with a message | "Update AHSync" on Status |
-| `Data.lua` write blocked (file locked, antivirus) | retried 3 times over 10 s | the old `Data.lua` stays; Status warns |
+| An addon file write blocked (file locked, antivirus) | retried 3 times over 10 s | the old file stays; Status warns |
 | AHSync started twice | the second instance finds `data/ahsync.lock` held and exits with a message | — |
 | A dashboard client stalls mid-request | requests run on their own daemon threads with a 10 s timeout, so others are answered and exit never waits for it | — (FM28) |
 | A stored dashboard page can't be decoded | that request answers `503 bad_view` and is logged | the next full refresh replaces it (FM29) |
@@ -1167,9 +1249,10 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `Data.lua` → 
 
 | Failure | What happens | Recovery |
 |---|---|---|
-| `Data.lua` missing | empty state "Run AHSync, then /reload" | — |
-| `Data.lua` from another format version, or its check fails | treated as missing, plus "AHSync and AHProfit versions differ" | update either side |
-| Plan older than your last session (`Data.lua.basedOnUntil` < your newest event) | the plan is shown as **provisional**: actions already matched by your newer events are marked done locally | the next AHSync run replaces it |
+| `MarketIntelligence.lua` missing | empty state "Run AHSync, then /reload" | — |
+| `PortfolioPlan.lua` missing or old | the addon's own recommendations still work; plan rows and cross-character advice are hidden | the next AHSync run writes it |
+| An addon file from another schema version, or its check fails | treated as missing, plus "AHSync and AHProfit versions differ" | update either side |
+| Plan older than your last session (`PortfolioPlan.lua` `basedOnUntil` < your newest event) | the plan is shown as **provisional**: actions already matched by your newer events are marked done locally | the next AHSync run replaces it |
 | Lua error in the engine or UI | caught with `pcall` at the UI boundary; shown as a status line | that list shows its last good state |
 | Full scan interrupted (AH closed, disconnect, combat, reload) | saved as `partial` with its coverage %. Partial books are **never** used for volume diffs, which need complete books | the next full scan starts fresh |
 | Search queue interrupted (AH closed) | the queue is dropped | rebuilt on the next AH open |
@@ -1179,8 +1262,8 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `Data.lua` → 
 | Addon upgraded with a new SavedVariables layout | migrated forward on load by version, step by step; the original is kept until the migration is saved | a failed migration leaves the old data untouched and shows an error |
 
 **Tests:**
-- Every row in the two tables above has a scenario (FM1–FM24, plus UI4 for a missing `Data.lua` and A5 for the Lua error boundary; see [SCENARIOS.md](SCENARIOS.md)), run against `FakeTransport`, a fake filesystem and `wow_stubs.lua`. Fault injection is deterministic: a fake fails "on the 3rd write" or "after 40% of the file", never at random.
-- An invariant (FI1, §8.7) checks that a crash at any commit point, followed by a restart, gives the same final database and `Data.lua` as an uninterrupted run.
+- Every row in the two tables above has a scenario (FM1–FM24, plus UI4 for a missing `MarketIntelligence.lua` and A5 for the Lua error boundary; see [SCENARIOS.md](SCENARIOS.md)), run against `FakeTransport`, a fake filesystem and `wow_stubs.lua`. Fault injection is deterministic: a fake fails "on the 3rd write" or "after 40% of the file", never at random.
+- An invariant (FI1, §8.7) checks that a crash at any commit point, followed by a restart, gives the same final database and addon files as an uninterrupted run.
 
 **Addon performance tests:**
 - Lua tests count work, not time, so they are deterministic:
@@ -1223,7 +1306,7 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `Data.lua` → 
 | M2 | Addon capture (characters, professions, recipes, inventory) + SavedVariables reader | The app lists your characters and recipes |
 | M3 | Engine A+B + dashboard (Disenchant, Craft) | Ranked tables at localhost |
 | M4 | Engine C: weekly plan + inventory sell plan | Calendar with expected earnings |
-| M5 | `Data.lua` export + in-game window, tooltip, AH search + Lua port of the engine (§4.0) + visual tests (§8.4) | Same numbers in game as on the dashboard; lists re-rank live at the AH; UI1–UI11 pass layers 1–2 and match the mockup |
+| M5 | `MarketIntelligence.lua` + `PortfolioPlan.lua` export, the addon's own recommendations (§4.0) + in-game window, tooltip, AH search + Lua port of the engine (§4.0) + visual tests (§8.4) | Same numbers in game as on the dashboard; lists re-rank live at the AH; UI1–UI11 pass layers 1–2 and match the mockup |
 | M6 | In-game AH scanning (targeted + full, order books) as a `local` source + own-sales mail capture | Own scans feed prices and sales-volume estimates |
 | M6b | Tracking: post, purchase and craft capture, action matching, cost basis, own sell record, blacklist (§3.3.3, §3.4.1–2) | A buy marks its action done with no typing; 3 expiries lower `P`, cut the quantity and offer Blacklist |
 | M7 | Polish: `.exe`, auto-launch WoW | |
