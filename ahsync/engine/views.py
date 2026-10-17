@@ -66,6 +66,7 @@ class ChanceVolume:
     confidence: int | None # exact confidence %, shown on hover
     dot: str | None        # "high" / "medium" / "low": the dot's colour
     volume: str            # "48/day AHF · 93 on AH", "31/day est." or "—"
+    percent: int | None = None   # the chance as a whole percent, for sorting; None when nothing is sold
 
 
 def chance_volume(p: float | None, confidence_percent: int | None, sold_per_day: float | None,
@@ -92,7 +93,8 @@ def chance_volume(p: float | None, confidence_percent: int | None, sold_per_day:
         if units_on_ah is not None:
             volume += f" · {units_on_ah} on AH"
     dot = level(confidence_percent) if confidence_percent is not None else None
-    return ChanceVolume(f"{round_half_up(p * 100)}%", confidence_percent, dot, volume)
+    percent = round_half_up(p * 100)
+    return ChanceVolume(f"{percent}%", confidence_percent, dot, volume, percent)
 
 
 def risk(spend_copper: float, total_gold_copper: int, high_risk_pct: float = HIGH_RISK_PCT) -> tuple[str, bool]:
@@ -160,6 +162,19 @@ def age_text(age_ms: int | None) -> str:
     return f"{minutes // 60} h" if minutes < 24 * 60 else f"{minutes // (24 * 60)} d"
 
 
+def risk_tenths(spend_copper: float, total_gold_copper: int) -> int:
+    """Risk in tenths of a percent, for sorting (the same rounding as `risk`).
+
+    Args:
+        spend_copper: Gold at stake.
+        total_gold_copper: All your gold.
+
+    Returns:
+        round_half_up(spend ÷ total × 1000); -1 when you have no gold recorded.
+    """
+    return round_half_up(spend_copper / total_gold_copper * 1000) if total_gold_copper > 0 else -1
+
+
 def _pair_cells(pair: ChanceVolume) -> dict:
     """The Chance · Volume pair as row cells.
 
@@ -205,7 +220,9 @@ def disenchant_row(d: DisenchantInput, total_gold: int) -> dict:
         "profit": signed_money(profit), "profit_class": "pos" if profit > 0 else "neg",
         **_pair_cells(d.pair), "risk": risk_text, "risk_amber": amber, "price_age": age_text(d.price_age_ms),
         "sort": {"ilvl": d.ilvl, "buy": d.buy, "ev": round_half_up(d.ev), "profit": round_half_up(profit),
-                 "price_age": d.price_age_ms if d.price_age_ms is not None else -1},
+                 "price_age": d.price_age_ms if d.price_age_ms is not None else -1,
+                 "chance": d.pair.percent if d.pair.percent is not None else -1,
+                 "risk": risk_tenths(d.buy, total_gold)},
     }
 
 
@@ -216,6 +233,7 @@ class CraftInput:
     spell: int
     product: str
     quality: int
+    profession: str             # for the Profession filter
     crafter: str                # "Brugan (Blacksmithing 112)"
     source: str                 # "Owned" / "AH" / "Mixed" (+ " + crafted")
     crafts: int
@@ -240,14 +258,17 @@ def craft_row(c: CraftInput, total_gold: int) -> dict:
     """
     risk_text, amber = risk(c.mat_gold, total_gold)
     return {
-        "spell": c.spell, "product": c.product, "quality": c.quality, "crafter": c.crafter, "source": c.source,
+        "spell": c.spell, "product": c.product, "quality": c.quality, "profession": c.profession,
+        "crafter": c.crafter, "source": c.source,
         "crafts": c.crafts, "mats_each": c.cells.each, "mats_total": c.cells.total,
         "value_each": money(c.value_each), "profit": signed_money(c.profit),
         "profit_class": "pos" if c.profit > 0 else "neg", **_pair_cells(c.pair),
         "risk": risk_text, "risk_amber": amber, "cooldown": c.cooldown,
         "note": "; ".join(part for part in (c.cells.note, c.note) if part),
         "sort": {"crafts": c.crafts, "mats_total": round_half_up(c.mat_gold), "profit": round_half_up(c.profit),
-                 "value_each": round_half_up(c.value_each) if c.value_each is not None else -1},
+                 "value_each": round_half_up(c.value_each) if c.value_each is not None else -1,
+                 "chance": c.pair.percent if c.pair.percent is not None else -1,
+                 "risk": risk_tenths(c.mat_gold, total_gold)},
     }
 
 

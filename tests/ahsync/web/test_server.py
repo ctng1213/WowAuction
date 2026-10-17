@@ -56,7 +56,7 @@ def craft_row_example() -> dict:
     """One Craft row, built by the engine."""
     pair = chance_volume(0.65, 64, 5, "ahf", 6)
     cells = craft_money(1, 4200, {}, {})
-    return craft_row(CraftInput(11479, "Transmute: Iron to Gold", 2, "Brugan (Alchemy 225)", "AH", 1, cells, 4200,
+    return craft_row(CraftInput(11479, "Transmute: Iron to Gold", 2, "Alchemy", "Brugan (Alchemy 225)", "AH", 1, cells, 4200,
                                 9500.0, 1855.0, pair, "ready", "Buys 1 Iron Bar on the AH"), 314_000)
 
 

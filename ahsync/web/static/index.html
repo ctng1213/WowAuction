@@ -142,7 +142,7 @@ const LIVE = {
   disenchant: {
     lede: 'AH items worth buying to disenchant (SPEC §3.4A). Only shown when one of your characters has the skill. Chance (with its confidence dot) and Volume describe the <b>mats</b>, since they\'re what you sell. In every table, the <b>dot after a chance is its confidence</b> (<span class="dot h"></span>≥ 75% · <span class="dot m"></span>≥ 45% · <span class="dot l"></span>below); hover a chance for the exact %.',
     cols: [['Item', 0, null], ['ilvl', 1, 'ilvl'], ['Buy', 1, 'buy'], ['Expected mats', 0, null], ['EV', 1, 'ev'], ['Profit', 1, 'profit'],
-           ['Chance', 1, null], ['Volume', 0, null], ['Risk', 1, null], ['Price age', 1, 'price_age']],
+           ['Chance', 1, 'chance'], ['Volume', 0, null], ['Risk', 1, 'risk'], ['Price age', 1, 'price_age']],
     row: r => `<tr><td>${item(r.item, r.quality)}</td><td class="num">${esc(r.ilvl)}</td><td class="num">${dash(r.buy)}</td>` +
               `<td class="muted">${esc(r.mats)}</td><td class="num">${dash(r.ev)}</td>${profitCell(r)}${pairCells(r)}${riskCell(r)}` +
               `<td class="num">${dash(r.price_age)}</td></tr>`,
@@ -158,15 +158,14 @@ const LIVE = {
   craft: {
     lede: 'Every recipe your characters know, priced now (SPEC §3.4B), whether or not you have the mats. <b>Source</b>: <span class="pos">Owned</span> = all mats from your stock; <span class="amber">AH</span> = all mats bought; Mixed = your stock topped up from the AH; <b>+ crafted</b> = one of your characters makes a reagent first. <b>Mats each / total</b> is the gold to buy the mats you\'re missing, per craft and for all crafts ("—" when you already own every mat). Profit counts owned mats at their <b>hold value</b>.',
     cols: [['Product', 0, null], ['Recipe known by', 0, null], ['Source', 0, null], ['Crafts', 1, 'crafts'], ['Mats each', 1, null],
-           ['Mats total', 1, 'mats_total'], ['Value each', 1, 'value_each'], ['Expected profit', 1, 'profit'], ['Chance', 1, null],
-           ['Volume', 0, null], ['Risk', 1, null], ['Cooldown', 0, null]],
+           ['Mats total', 1, 'mats_total'], ['Value each', 1, 'value_each'], ['Expected profit', 1, 'profit'], ['Chance', 1, 'chance'],
+           ['Volume', 0, null], ['Risk', 1, 'risk'], ['Cooldown', 0, null]],
     row: r => `<tr><td>${item(r.product, r.quality)}${r.note ? `<span class="sub">${esc(r.note)}</span>` : ''}</td><td>${esc(r.crafter)}</td>` +
               `<td class="${sourceClass(r.source)}">${esc(r.source)}</td><td class="num">${esc(r.crafts)}</td><td class="num">${dash(r.mats_each)}</td>` +
               `<td class="num">${dash(r.mats_total)}</td><td class="num">${dash(r.value_each)}</td>${profitCell(r)}${pairCells(r)}${riskCell(r)}` +
               `<td class="${r.cooldown === 'ready' ? 'pos' : ''}">${esc(r.cooldown)}</td></tr>`,
     filters: [
       { id: 'search', label: null, kind: 'search', placeholder: 'Search products…', test: (r, v) => !v || String(r.product).toLowerCase().includes(v.toLowerCase()) },
-      // SPEC GAP: views.craft_row has no profession field yet; the filter uses row.profession and stays hidden until rows carry it.
       { id: 'profession', label: 'Profession', fromRows: 'profession', test: (r, v) => v === '' || r.profession === v },
       { id: 'source', label: 'Source', options: [['', 'All'], ['Owned', 'Owned'], ['AH', 'AH'], ['Mixed', 'Mixed']],
         test: (r, v) => v === '' || r.source === v || String(r.source).startsWith(v + ' ') },

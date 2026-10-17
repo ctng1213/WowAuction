@@ -331,6 +331,7 @@ def craft_page(db: Database, char_ids: list[str], stats: dict[int, ItemStats], i
         missing = ", ".join(f"{views.round_half_up(u)} {names.get(k, k)}" for k, u in option.missing)
         rows.append((option.profit, r.spell, views.craft_row(views.CraftInput(
             r.spell, product.name if product else str(r.product), (product.quality or 1) if product else 1,
+            r.profession,
             f"{crafter.split('-')[0]} ({r.profession} {skill})" if skill is not None else crafter.split("-")[0],
             option.source if option.crafts else "—", option.crafts,
             views.craft_money(option.crafts, option.mat_gold, option.owned_used, names), option.mat_gold,
