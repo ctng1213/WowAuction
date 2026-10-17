@@ -10,6 +10,7 @@ import math
 from dataclasses import dataclass
 
 from ahsync.engine.confidence import level
+from ahsync.engine.volume import supply_to_volume
 
 HIGH_RISK_PCT = 25.0        # config high_risk_pct (SPEC §3.4)
 VOLUME_SOURCE_LABEL = {"ahf": "AHF", "books": "est.", "mail": "est."}
@@ -58,43 +59,88 @@ def signed_money(copper: float) -> str:
     return "+" + text if round_half_up(copper) > 0 else text
 
 
+# The market activity columns, in their required order (SPEC §3.5): header -> row cell name.
+MARKET_COLUMNS = (("Chance", "chance"), ("Est. Sales/Day", "sales"), ("Current Supply", "supply"),
+                  ("Supply/Volume", "days"))
+
+# Header tooltips (SPEC §3.5): one text per column name, so a column reads the same on every page.
+COLUMN_HELP = {
+    "Item": "The item, in its quality colour. Click to open it on auctionhouse.fyi",
+    "Product": "What the recipe makes",
+    "ilvl": "Item level: sets the disenchant results",
+    "Buy": "Cheapest buyout on the AH now",
+    "Expected mats": "Average disenchant results for this quality and item level",
+    "EV": "Expected value of the mats: average results × their sell value",
+    "Profit": "EV − buy price, after fees",
+    "Price age": "How long ago the buy price was seen. Older prices are less likely to still be there",
+    "Recipe known by": "The character who knows it, and their skill",
+    "Source": "Where the mats come from: Owned, AH, Mixed, + crafted (another character makes a reagent first)",
+    "Crafts": "How many to make: stops where one more would lose money",
+    "Mats each": 'Gold for mats you must buy, per craft. "—" = you own them all',
+    "Mats total": "Mats each × crafts",
+    "Value each": "What one product is expected to sell for",
+    "Expected profit": "Average profit after fees and the chance it sells; owned mats count at their hold value",
+    "Cooldown": "When the recipe can be used again",
+    "Chance": "Chance it sells in its planned window. The dot is the confidence in that chance: green ≥ 75%, "
+              "amber ≥ 45%, grey below. Hover a cell for the exact %",
+    "Est. Sales/Day": "Units the market sells per day (last 7 days), with its source: AHF, or est. from order books "
+                      'in your scans. "—" = no sales data',
+    "Current Supply": "Units on the AH now, in the newest scan",
+    "Supply/Volume": "Days of supply: current supply ÷ sales per day. Not a time-to-sell guarantee",
+    "Risk": "Gold this action spends ÷ all your gold. Amber above 25%",
+}
+
+
 @dataclass(frozen=True)
-class ChanceVolume:
-    """The standard pair shown wherever something gets sold (SPEC §3.5, §4.3)."""
+class MarketActivity:
+    """The market activity cells shown wherever something gets sold (SPEC §3.5, §3.3.6)."""
 
-    chance: str            # "92%"; "—" when nothing is sold
-    confidence: int | None # exact confidence %, shown on hover
-    dot: str | None        # "high" / "medium" / "low": the dot's colour
-    volume: str            # "48/day AHF · 93 on AH", "31/day est." or "—"
-    percent: int | None = None   # the chance as a whole percent, for sorting; None when nothing is sold
+    chance: str              # "92%"; "—" when nothing is sold
+    confidence: int | None   # exact confidence %, shown on hover
+    dot: str | None          # "high" / "medium" / "low": the dot's colour
+    sales: str               # "48 AHF", "31 est." or "—"
+    supply: str              # "93" or "—"
+    days: str                # "1.9 days" or "—"
+    percent: int | None = None    # sort keys: the chance as a whole percent, None when nothing is sold;
+    sales_tenths: int = -1        # sales per day in tenths; -1 when unavailable
+    supply_units: int = -1        # units listed; -1 when never seen
+    days_tenths: int = -1         # days of supply in tenths; -1 when unavailable
+    chance_note: str = ""         # "volume unknown" when the chance is the default (SPEC §3.3.2)
 
 
-def chance_volume(p: float | None, confidence_percent: int | None, sold_per_day: float | None,
-                  volume_source: str | None, units_on_ah: int | None) -> ChanceVolume:
-    """Build the Chance · Volume pair in one place (SPEC §3.5).
+def market_activity(p: float | None, confidence_percent: int | None, sold_per_day: float | None,
+                    volume_source: str | None, units_on_ah: int | None) -> MarketActivity:
+    """Build the market activity cells in one place (SPEC §3.5, D23).
 
     Args:
         p: P' for the row's own window, or None for rows with nothing to sell.
         confidence_percent: Confidence 0-100.
-        sold_per_day: Units sold per day, or None when unknown.
-        volume_source: The main volume source ("ahf", "books", ...), or None.
-        units_on_ah: Units listed now, or None.
+        sold_per_day: Estimated units sold per day, or None when unavailable.
+        volume_source: The main volume source ("ahf", "books", "mail"), or None.
+        units_on_ah: Units listed now, or None when never seen.
 
     Returns:
-        The pair; "—" in both cells when p is None.
+        The cells; "—" for anything the data can't support, never 0 (SPEC §3.3.6).
     """
-    if p is None:
-        return ChanceVolume("—", None, None, "—")
-    volume = "—"
+    sales, sales_tenths = "—", -1
     if sold_per_day is not None:
-        volume = f"{round_half_up(sold_per_day)}/day"
-        if volume_source:
-            volume += " " + VOLUME_SOURCE_LABEL.get(volume_source, "est.")
-        if units_on_ah is not None:
-            volume += f" · {units_on_ah} on AH"
+        label = VOLUME_SOURCE_LABEL.get(volume_source, "est.") if volume_source else ""
+        sales = f"{round_half_up(sold_per_day)} {label}".rstrip()
+        sales_tenths = round_half_up(sold_per_day * 10)
+    days, days_tenths = "—", -1
+    ratio = supply_to_volume(units_on_ah, sold_per_day)
+    if ratio is not None:
+        days_tenths = round_half_up(ratio * 10)
+        days = f"{days_tenths // 10}.{days_tenths % 10} days"
+    supply = str(units_on_ah) if units_on_ah is not None else "—"
+    supply_units = units_on_ah if units_on_ah is not None else -1
+    if p is None:
+        return MarketActivity("—", None, None, sales, supply, days, None, sales_tenths, supply_units, days_tenths)
     dot = level(confidence_percent) if confidence_percent is not None else None
     percent = round_half_up(p * 100)
-    return ChanceVolume(f"{percent}%", confidence_percent, dot, volume, percent)
+    note = "volume unknown" if sold_per_day is None else ""
+    return MarketActivity(f"{percent}%", confidence_percent, dot, sales, supply, days, percent, sales_tenths,
+                          supply_units, days_tenths, note)
 
 
 def risk(spend_copper: float, total_gold_copper: int, high_risk_pct: float = HIGH_RISK_PCT) -> tuple[str, bool]:
@@ -175,16 +221,30 @@ def risk_tenths(spend_copper: float, total_gold_copper: int) -> int:
     return round_half_up(spend_copper / total_gold_copper * 1000) if total_gold_copper > 0 else -1
 
 
-def _pair_cells(pair: ChanceVolume) -> dict:
-    """The Chance · Volume pair as row cells.
+def _market_cells(m: MarketActivity) -> dict:
+    """The market activity columns as row cells (SPEC §3.5).
 
     Args:
-        pair: From chance_volume.
+        m: From market_activity.
 
     Returns:
-        {"chance", "confidence", "dot", "volume"}.
+        {"chance", "chance_note", "confidence", "dot", "sales", "supply", "days"}.
     """
-    return {"chance": pair.chance, "confidence": pair.confidence, "dot": pair.dot, "volume": pair.volume}
+    return {"chance": m.chance, "chance_note": m.chance_note, "confidence": m.confidence, "dot": m.dot,
+            "sales": m.sales, "supply": m.supply, "days": m.days}
+
+
+def _market_sort(m: MarketActivity) -> dict:
+    """Sort keys of the market activity columns; -1 sorts an unavailable value last.
+
+    Args:
+        m: From market_activity.
+
+    Returns:
+        {"chance", "sales", "supply", "days"}.
+    """
+    return {"chance": m.percent if m.percent is not None else -1, "sales": m.sales_tenths,
+            "supply": m.supply_units, "days": m.days_tenths}
 
 
 @dataclass(frozen=True)
@@ -198,7 +258,7 @@ class DisenchantInput:
     buy: int                              # buyout, copper
     mats: tuple[tuple[str, float], ...]   # (material name, expected units per disenchant)
     ev: float                             # expected value of the mats, float copper
-    pair: ChanceVolume                    # Chance and Volume of the mats
+    market: MarketActivity                # market activity of the mats (what you sell)
     price_age_ms: int | None
 
 
@@ -218,11 +278,10 @@ def disenchant_row(d: DisenchantInput, total_gold: int) -> dict:
         "key": d.key, "item": d.name, "quality": d.quality, "ilvl": d.ilvl, "buy": money(d.buy),
         "mats": " · ".join(f"{units:.1f} {mat}" for mat, units in d.mats), "ev": money(d.ev),
         "profit": signed_money(profit), "profit_class": "pos" if profit > 0 else "neg",
-        **_pair_cells(d.pair), "risk": risk_text, "risk_amber": amber, "price_age": age_text(d.price_age_ms),
+        **_market_cells(d.market), "risk": risk_text, "risk_amber": amber, "price_age": age_text(d.price_age_ms),
         "sort": {"ilvl": d.ilvl, "buy": d.buy, "ev": round_half_up(d.ev), "profit": round_half_up(profit),
                  "price_age": d.price_age_ms if d.price_age_ms is not None else -1,
-                 "chance": d.pair.percent if d.pair.percent is not None else -1,
-                 "risk": risk_tenths(d.buy, total_gold)},
+                 **_market_sort(d.market), "risk": risk_tenths(d.buy, total_gold)},
     }
 
 
@@ -241,7 +300,7 @@ class CraftInput:
     mat_gold: float             # copper to buy the mats for all crafts
     value_each: float | None    # expected value of one craft's product, float copper
     profit: float               # expected profit of all crafts, float copper
-    pair: ChanceVolume          # Chance and Volume of the product
+    market: MarketActivity      # market activity of the product
     cooldown: str               # "ready", a time left, or ""
     note: str                   # chain, bought mats, why crafts stop
 
@@ -262,13 +321,12 @@ def craft_row(c: CraftInput, total_gold: int) -> dict:
         "crafter": c.crafter, "source": c.source,
         "crafts": c.crafts, "mats_each": c.cells.each, "mats_total": c.cells.total,
         "value_each": money(c.value_each), "profit": signed_money(c.profit),
-        "profit_class": "pos" if c.profit > 0 else "neg", **_pair_cells(c.pair),
+        "profit_class": "pos" if c.profit > 0 else "neg", **_market_cells(c.market),
         "risk": risk_text, "risk_amber": amber, "cooldown": c.cooldown,
         "note": "; ".join(part for part in (c.cells.note, c.note) if part),
         "sort": {"crafts": c.crafts, "mats_total": round_half_up(c.mat_gold), "profit": round_half_up(c.profit),
                  "value_each": round_half_up(c.value_each) if c.value_each is not None else -1,
-                 "chance": c.pair.percent if c.pair.percent is not None else -1,
-                 "risk": risk_tenths(c.mat_gold, total_gold)},
+                 **_market_sort(c.market), "risk": risk_tenths(c.mat_gold, total_gold)},
     }
 
 

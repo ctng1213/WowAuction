@@ -160,6 +160,24 @@ def listing_turnover(prev_qty: int, next_qty: int, gap_ms: int, max_gap_ms: int 
     return max(0, prev_qty - next_qty)
 
 
+def supply_to_volume(current_supply: int | None, sales_per_day: float | None) -> float | None:
+    """Days of supply: units listed now ÷ estimated sales per day (SPEC §3.3.6, V22).
+
+    Not a time-to-sell guarantee, and never made up: an unknown input or zero sales
+    gives None ("—"), not 0 or infinity.
+
+    Args:
+        current_supply: Units on the AH in the newest observation, or None when never seen.
+        sales_per_day: Estimated units sold per day, or None when unavailable.
+
+    Returns:
+        The ratio in days; None when either input is unknown or sales are 0.
+    """
+    if current_supply is None or not sales_per_day:
+        return None
+    return current_supply / sales_per_day
+
+
 def calibration_factor(confirmed_sold: float, estimated_sold: float) -> float | None:
     """Correction factor for book estimates (SPEC §3.3.1 sources 2-3).
 

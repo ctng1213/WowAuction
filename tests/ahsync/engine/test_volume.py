@@ -6,6 +6,7 @@ import pytest
 from ahsync.engine.volume import (
     Book, BookEntry, Volume, calibration_factor, daily_volume, estimate_volume, expiring_fraction, hourly_sales,
     listing_turnover,
+    supply_to_volume,
 )
 from tests.support.gen import cases
 
@@ -188,6 +189,13 @@ def test_VI1_volume_splits_exactly_what_is_gone_into_sold_and_expired():
             assert v.sold >= 0 and v.expired >= 0 and v.listed >= 0, context
             assert v.expired <= expiring + 1e-9, context
             assert v.sold + v.expired - v.listed == pytest.approx(group_prev - group_next), context
+
+
+def test_V22_supply_to_volume_is_never_made_up():
+    assert supply_to_volume(93, 50) == pytest.approx(1.86)     # 93 listed ÷ 50 sold a day
+    assert supply_to_volume(93, None) is None                  # sales unavailable: "—"
+    assert supply_to_volume(93, 0) is None                     # nothing sells: "—", not infinity
+    assert supply_to_volume(None, 50) is None                  # never seen listed
 
 
 def linen_book(at_hours: float, auctions: int) -> Book:

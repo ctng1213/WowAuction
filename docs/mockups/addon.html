@@ -50,6 +50,7 @@
   table { border-collapse: collapse; width: 100%; font-size: 12px; }
   th { text-align: left; font-weight: normal; color: var(--title); font-size: 11px; padding: 4px 4px 2px; white-space: nowrap; }
   th.num { text-align: right; }
+  th[title] { cursor: help; }
   td { padding: 3px 4px; white-space: nowrap; }
   tr.row td { border-top: 1px solid #222; }
   tr.row:hover td { background: #1f1c12; }
@@ -178,7 +179,7 @@
 </table>
 
 <h2>4. States</h2>
-<p class="note">Left: no <code>Data.lua</code> yet (UI4). Right: data more than 24 h old, so the badge turns amber (UI5).</p>
+<p class="note">Left: no <code>MarketIntelligence.lua</code> yet (UI4). Middle: data more than 24 h old, so the badge turns amber (UI5). Right: no <code>PortfolioPlan.lua</code> (or one from another version). The addon's own options still work, and only the desktop's cross-character advice is hidden (SPEC §5.2).</p>
 <div class="stage">
   <div class="frame" style="width:300px">
     <div class="titlebar"><span class="name">AHProfit</span><span class="sub"></span><span class="close">✕</span></div>
@@ -187,6 +188,14 @@
   <div class="frame" style="width:300px">
     <div class="titlebar"><span class="name">AHProfit</span><span class="sub">Grommash · Horde PvP</span><span class="badge stale">data 30 h old</span></div>
     <div class="empty"><b>Prices may be out of date</b>Start AHSync to catch up, then /reload</div>
+  </div>
+  <div class="frame" style="width:300px">
+    <div class="titlebar"><span class="name">AHProfit</span><span class="sub">Grommash · Horde PvP</span><span class="badge fresh">data 2 h old</span></div>
+    <table>
+      <tr class="row"><td><span class="act de">DE</span></td><td><span class="item q2" style="max-width:120px">Bandit Cinch</span></td><td class="num pos">+6s 12c</td><td class="num">100% <span class="pos">●</span></td></tr>
+      <tr class="row"><td><span class="act buy">BUY</span></td><td><span class="item q1" style="max-width:120px">Silk Cloth</span></td><td class="num pos">+7s 30c</td><td class="num">88% <span class="pos">●</span></td></tr>
+    </table>
+    <div class="footer"><span>Own options only · no desktop plan</span><span class="amber">run AHSync for transfers</span></div>
   </div>
 </div>
 
@@ -210,14 +219,48 @@ const act = a => `<span class="act ${a}">${a === 'de' ? 'DE' : a.toUpperCase()}<
 const dot = c => ({ h: '<span class="pos">●</span>', m: '<span class="amber">◐</span>', l: '<span class="muted">○</span>' })[c] || '';
 const chance = (p, c) => p === null ? '<span class="muted">—</span>' : `${p}% ${dot(c)}`;
 const risk = spend => { const r = spend / TOTAL_GOLD * 100; return `<span class="${r > 25 ? 'amber' : 'muted'}">${r.toFixed(1)}%</span>`; };
-const head = cols => '<tr>' + cols.map(([t, n]) => `<th${n ? ' class="num"' : ''}>${t}</th>`).join('') + '</tr>';
+// Header tooltips (SPEC §4.3), shown with GameTooltip in game; the same texts as the dashboard where the column is the same.
+const HELP = {
+  '': 'What to do: BUY, POST, DE (disenchant), CRAFT, VENDOR, MAIL or HOLD',
+  'Item': 'The item, in its quality colour. Click to search the AH; right-click for rules',
+  'Qty': 'Units (or crafts) this row is about',
+  'Each': 'Per unit: the price you pay, or post at',
+  'Total': 'Each × quantity',
+  'Net': 'What this action adds on average, after fees, deposits and the chance it sells',
+  'Chance': 'Chance it sells in its planned window. The dot is the confidence: ● ≥ 75%, ◐ ≥ 45%, ○ below. Hover a cell for the exact %',
+  'Volume': 'Units the market sells per day. Hover a cell for units on the AH and days of supply. — = no sales data',
+  'Risk': 'Gold this action spends ÷ all your gold. Amber above 25%',
+  'Who': 'Which of your characters does it',
+  'When': 'Local time. ✓ done · ✗ missed',
+  'ilvl': 'Item level: sets the disenchant results',
+  'Buy': 'Cheapest buyout on the AH',
+  'Mats': 'Average disenchant results',
+  'EV': 'Expected value of the mats',
+  'Profit': 'Expected profit after fees and the chance it sells',
+  'Live': 'In-game search: ✓ still listed · ✗ gone · … not searched yet',
+  'Product': 'What the recipe makes',
+  'Source': 'Where the mats come from: Owned, AH, Mixed, + crafted',
+  '×': 'How many to craft: stops where one more would lose money',
+  'Mats each': 'Gold for mats you must buy, per craft. — = you own them all',
+  'Mats total': 'Mats each × crafts',
+  'CD': 'Recipe cooldown',
+  'Buy each': 'Price to pay now, per unit',
+  'Buy total': 'Buy each × quantity',
+  'Sell each': 'Expected sell price per unit in the slot',
+  'Slot': 'When to sell: the peak window the flip is for',
+  'Paid': 'What you paid in total; 0 for items you found',
+  'Worth': 'What it is worth under its best plan',
+  'Plan': 'What the plan does with it',
+  'Where': 'Bags, bank, mail or AH',
+};
+const head = cols => '<tr>' + cols.map(([t, n]) => `<th${n ? ' class="num"' : ''} title="${String(HELP[t]).replace(/"/g, '&quot;')}">${t}</th>`).join('') + '</tr>';
 
 // Chance to sell for each item in its own window (SPEC §3.3.2): [percent, confidence]. For a craft, it's the product's chance.
 const CH = {
   'Linen Cloth': [92, 'h'], 'Copper Rod': [58, 'm'], 'Heavy Grinding Stone': [75, 'h'], 'Bolt of Silk Cloth': [85, 'h'], 'Silk Cloth': [88, 'h'],
   'Mithril Spurs': [85, 'm'], 'Runed Copper Rod': [95, 'm'], 'Heavy Leather': [25, 'l'], 'Elixir of Agility': [70, 'm'], 'Gold Bar': [65, 'm'],
   'Transmute: Iron to Gold': [65, 'm'], 'Green items': [95, 'm'], 'Scouting Gloves of the Monkey': [100, 'm'], 'Copper Bar': [90, 'h'], 'Silver Rod': [55, 'm'],
-  'Linen Belt': [80, 'l'], 'Mageweave Cloth': [78, 'h'], 'Wool Cloth': [81, 'h'], 'Ridge Cleaver of the Bear': [88, 'm'], 'Bandit Cinch': [100, 'h'], "Archer's Belt of the Owl": [100, 'm'], 'Glimmering Mail Bracers': [70, 'l'],
+  'Linen Belt': [25, 'l'], 'Mageweave Cloth': [78, 'h'], 'Wool Cloth': [81, 'h'], 'Ridge Cleaver of the Bear': [88, 'm'], 'Bandit Cinch': [100, 'h'], "Archer's Belt of the Owl": [100, 'm'], 'Glimmering Mail Bracers': [70, 'l'],
 };
 const pc = n => CH[n] ? chance(CH[n][0], CH[n][1]) : chance(null);
 // Confidence % and volume (units sold per day) per item: example values, the same as the dashboard mockup.
@@ -229,19 +272,31 @@ const CONF_PCT = {
 };
 const VOL_DAY = {
   'Linen Cloth': 48, 'Copper Rod': 6, 'Mithril Spurs': 3, 'Bolt of Silk Cloth': 22, 'Heavy Grinding Stone': 18, 'Broken Fang': 0, 'Silk Cloth': 64,
-  'Elixir of Agility': 9, 'Transmute: Iron to Gold': 5, 'Gold Bar': 5, 'Runed Copper Rod': 4, 'Linen Belt': 2, 'Silver Rod': 4,
+  'Elixir of Agility': 9, 'Transmute: Iron to Gold': 5, 'Gold Bar': 5, 'Runed Copper Rod': 4, 'Linen Belt': null, 'Silver Rod': 4,
   'Heavy Leather': 7, 'Copper Bar': 40, 'Scouting Gloves of the Monkey': 210, 'Ridge Cleaver of the Bear': 35, 'Bandit Cinch': 210,
   "Archer's Belt of the Owl": 210, 'Glimmering Mail Bracers': 12, 'Green items': 210, 'Mageweave Cloth': 55, 'Wool Cloth': 70,
 };
+// Units on the AH now (Current Supply on the dashboard), shown in the Volume cell's hover with days of supply.
+const SUPPLY = {
+  'Linen Cloth': 93, 'Copper Rod': 14, 'Mithril Spurs': 4, 'Bolt of Silk Cloth': 40, 'Heavy Grinding Stone': 35, 'Silk Cloth': 210,
+  'Elixir of Agility': 12, 'Transmute: Iron to Gold': 6, 'Gold Bar': 6, 'Runed Copper Rod': 3, 'Linen Belt': 8, 'Silver Rod': 6,
+  'Heavy Leather': 60, 'Copper Bar': 150, 'Scouting Gloves of the Monkey': 400, 'Ridge Cleaver of the Bear': 70, 'Bandit Cinch': 400,
+  "Archer's Belt of the Owl": 400, 'Glimmering Mail Bracers': 25, 'Green items': 400, 'Mageweave Cloth': 120, 'Wool Cloth': 140,
+};
 // Every table that shows a chance uses the same two columns (SPEC §4.3): Chance, with the confidence dot inside it
-// (exact confidence % on hover), then Volume.
+// (exact confidence % on hover), then Volume, with supply and days of supply on hover. The dashboard shows them as columns.
 const PAIR = [['Chance', 1], ['Volume', 1]];
 const DASHES = '<td class="num muted">—</td>'.repeat(2);
+function volume(n) {
+  const sold = VOL_DAY[n], supply = SUPPLY[n];
+  if (sold === null) return `<td class="num muted" title="Volume unknown · ${supply} on the AH">—</td>`;
+  return `<td class="num" title="${supply} on the AH · ${(supply / sold).toFixed(1)} days of supply">${sold}/day</td>`;
+}
 function pair(n, P) {
   if (P === undefined) P = CH[n] ? CH[n][0] : null;
   if (P === null) return DASHES;
   const c = CONF_PCT[n];
-  return `<td class="num" title="Confidence ${c}%">${P}% ${dot(c >= 75 ? 'h' : c >= 45 ? 'm' : 'l')}</td><td class="num">${VOL_DAY[n]}/day</td>`;
+  return `<td class="num" title="Confidence ${c}%${VOL_DAY[n] === null ? ' · volume unknown: default chance' : ''}">${P}% ${dot(c >= 75 ? 'h' : c >= 45 ? 'm' : 'l')}</td>${volume(n)}`;
 }
 
 // Today rows: [action, item, quality, qty, each, net, P, conf, who, spend (copper the action spends), note]
@@ -262,6 +317,9 @@ const VIEWS = {
     note: `<b>Today</b>: what to do now, <b>sorted by expected net, highest first</b>. Covers UI1, UI3, UI6 and UI10.
       <ul><li><b>Each</b> is per unit and <b>Total</b> is each × quantity. For a craft, it's the gold for mats you still need to buy; "—" means you own them all.</li>
       <li><b>Chance</b> is the chance to sell (P') with a confidence dot. Rows below the <b>Min chance</b> filter are hidden (here, Iron Ore at 30%), and the footer counts them.</li>
+      <li><b>Every column header has a tooltip</b> on hover saying what it means (the dashboard uses the same texts).</li>
+      <li><b>Volume</b> is units sold per day. Hover it for the units on the AH now and the days of supply. "—" means volume unknown: the chance is then the 25% default.</li>
+      <li>Rows come from the desktop plan (<code>PortfolioPlan.lua</code>: which character acts, mail between characters) merged with the addon's own options, which it re-ranks live as prices, bags and gold change.</li>
       <li><b>Risk</b> = gold this action spends ÷ all your gold. For a post, that's the deposit. It turns amber above 25%.</li>
       <li>"Not selling" items wait in <b>Needs a decision</b>. Keep starts the item's record fresh, and one more expiry while cheapest asks again.</li></ul>`,
     html: () => `<table>${head([[''], ['Item'], ['Qty', 1], ['Each', 1], ['Total', 1], ['Net', 1], ...PAIR, ['Risk', 1], ['Who']])}
@@ -317,7 +375,7 @@ const VIEWS = {
   Disenchant: {
     ctl: 'Min chance: 50% ▾',
     footer: `<span>6 targets · 4 confirmed by live search</span><span>Enchanter: Amaya (skill 142)</span>`,
-    note: `<b>Disenchant</b>: AH items worth buying to disenchant (SPEC §3.4A). <b>Live</b> shows the in-game search result: ✓ still listed at that price, ✗ gone, … not searched yet.`,
+    note: `<b>Disenchant</b>: AH items worth buying to disenchant (SPEC §3.4A). The addon builds this list itself (SPEC §4.0), for the <b>shortlist</b> in <code>MarketIntelligence.lua</code>, from that intelligence plus what it sees live, so it still works without a desktop plan. <b>Live</b> shows the in-game search result: ✓ still listed at that price, ✗ gone, … not searched yet.`,
     html: () => `<table>${head([['Item'], ['ilvl', 1], ['Buy', 1], ['Mats'], ['EV', 1], ['Profit', 1], ...PAIR, ['Risk', 1], ['Live']])}
       ${de('Ridge Cleaver of the Bear', 29, 1500, '1.2 Lesser Astral', 2310, 810, '✓')}
       ${de('Scouting Gloves of the Monkey', 25, 800, '2.5 Strange Dust', 1425, 625, '✓')}
@@ -335,6 +393,7 @@ const VIEWS = {
       <li><b>AH</b>: all bought on the AH (or from a vendor). You craft straight from the market.</li>
       <li><b>Mixed</b>: your stock topped up with bought mats.</li>
       <li><b>+ crafted</b>: one of your characters makes a reagent first (a chain), mailing it to the crafter if needed. Example: Brugan makes the Copper Rod that Amaya's Runed Copper Rod needs.</li></ul>
+      Built in game from your recipes, your bags and the intelligence, like Disenchant and Flip; a mat price seen at the AH updates the row at once. Linen Belt shows "—" volume: no sales data yet, so its chance is the default.
       <b>Mats each / total</b> = gold for the mats you need to buy, at the latest AH prices. Profit counts owned mats at their <b>hold value</b>: what they'd fetch under their own best sell plan (now or at their peak). The number of crafts stops where one more would lose money as AH mats get pricier. In Week, each craft comes after its mat buys and before its post.`,
     html: () => `<table>${head([['Product'], ['Who'], ['Source'], ['×', 1], ['Mats each', 1], ['Mats total', 1], ['Profit', 1], ...PAIR, ['Risk', 1], ['CD']])}
       ${cr('Transmute: Iron to Gold', 2, 'Brugan', 'AH', 1, 4200, 1855, '<span class="pos">ready</span>', 'buys 1 Iron Bar')}
@@ -342,13 +401,13 @@ const VIEWS = {
       ${cr('Copper Rod', 1, 'Brugan', 'AH', 3, 2000, 783, '', 'buys 6 Copper Bar: your own bars are worth more at their Sat peak (hold value), so they stay in the sell plan')}
       ${cr('Bolt of Silk Cloth', 1, 'Amaya', 'AH', 2, 280, 194, '', 'buys 8 Silk Cloth')}
       ${cr('Heavy Grinding Stone', 1, 'Brugan', 'Owned', 4, null, 134, '', 'uses 8 owned Heavy Stone')}
-      ${cr('Linen Belt', 1, 'Amaya', 'Mixed', 2, 75, 110, '', 'uses owned Linen · buys 2 Coarse Thread')}
+      ${cr('Linen Belt', 1, 'Amaya', 'Mixed', 2, 75, 28, '', 'uses owned Linen · buys 2 Coarse Thread')}
     </table>`
   },
   Flip: {
     ctl: 'Min chance: 50% ▾',
     footer: `<span>3 flips ≥ 20% margin · ranked by profit × confidence</span><span>Capital needed ${money(36300)}</span>`,
-    note: `<b>Flip</b>: buy now, sell at a later peak (SPEC §3.4C.2). Margin = expected profit ÷ cost after fees and chance to sell. Risk above 25% of your gold is amber.`,
+    note: `<b>Flip</b>: buy now, sell at a later peak (SPEC §3.4C.2). Shown when expected profit ÷ buy cost (after fees and chance to sell) is at least 20%. Quantities stay within what the market sells in the window. Risk above 25% of your gold is amber. Built in game, like Disenchant; the dashboard adds Seasonality Strength and Expected ROI columns.`,
     html: () => `<table>${head([['Item'], ['Qty', 1], ['Buy each', 1], ['Buy total', 1], ['Sell each', 1], ['Slot'], ['Profit', 1], ...PAIR, ['Risk', 1]])}
       ${fl('Mithril Spurs', 3, 1, 30000, 45000, 'Sat 18:00', 7342)}
       ${fl('Silk Cloth', 1, 40, 70, 105, 'Sat 19:00', 730)}

@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from ahsync.engine.views import (
-    ChanceVolume, CraftInput, DisenchantInput, TooltipLine, age_text, chance_volume, craft_money, craft_row,
-    delta_percent, disenchant_row, money, risk, round_half_up,
+    COLUMN_HELP, MARKET_COLUMNS, CraftInput, DisenchantInput, MarketActivity, TooltipLine, age_text, craft_money,
+    craft_row, delta_percent, disenchant_row, market_activity, money, risk, round_half_up,
     signed_money, tooltip,
 )
 
@@ -76,12 +76,23 @@ def test_money_formatting():
     assert round_half_up(2.5) == 3 and round_half_up(-2.5) == -2
 
 
-def test_chance_volume_pair():
-    assert chance_volume(0.92, 80, 48.2, "ahf", 93) == ChanceVolume("92%", 80, "high", "48/day AHF · 93 on AH", 92)
-    assert chance_volume(0.75, 30, 31, "books", None).volume == "31/day est."
-    assert chance_volume(0.5, None, None, None, None) == ChanceVolume("50%", None, None, "—", 50)
-    assert chance_volume(None, 80, 10, "ahf", 5) == ChanceVolume("—", None, None, "—")
-    assert chance_volume(0.5, 50, 3, None, 4).volume == "3/day · 4 on AH"
+def test_D23_market_activity_columns_in_order_with_sort_keys():
+    m = market_activity(0.92, 80, 48, "ahf", 93)
+    assert m == MarketActivity("92%", 80, "high", "48 AHF", "93", "1.9 days", 92, 480, 93, 19)   # 93 ÷ 48 = 1.94
+    assert [header for header, _ in MARKET_COLUMNS] == ["Chance", "Est. Sales/Day", "Current Supply", "Supply/Volume"]
+    row = craft_row(CraftInput(2663, "Copper Rod", 1, "Blacksmithing", "Brugan", "AH", 1, craft_money(1, 2000, {}, NAMES),
+                               2000, 3800.0, 1000.0, m, "", ""), 50 * G)
+    assert [row[cell] for _, cell in MARKET_COLUMNS] == ["92%", "48 AHF", "93", "1.9 days"]
+    assert {cell: row["sort"][cell] for _, cell in MARKET_COLUMNS} == {"chance": 92, "sales": 480, "supply": 93, "days": 19}
+    assert all(header in COLUMN_HELP for header, _ in MARKET_COLUMNS)
+
+
+def test_market_activity_never_makes_up_a_value():
+    assert market_activity(0.75, 30, 31.4, "books", None) == MarketActivity("75%", 30, "low", "31 est.", "—", "—", 75, 314)
+    assert market_activity(0.25, None, None, None, 8) == MarketActivity("25%", None, None, "—", "8", "—", 25, -1, 8, -1,
+                                                                    "volume unknown")   # the default chance
+    assert market_activity(None, 80, 0, "ahf", 5) == MarketActivity("—", None, None, "0 AHF", "5", "—", None, 0, 5)
+    assert market_activity(0.5, 50, 3, None, 4).sales == "3"
 
 
 def test_risk_without_recorded_gold_and_zero_delta():
@@ -96,24 +107,24 @@ def test_age_text():
 
 
 def test_disenchant_row_cells():
-    pair = chance_volume(1.0, 100, 210, "ahf", 400)
+    pair = market_activity(1.0, 100, 210, "ahf", 400)
     row = disenchant_row(DisenchantInput(4239, "Scouting Gloves of the Monkey", 2, 25, 800,
                                          (("Strange Dust", 2.5),), 1425, pair, 2 * 3_600_000), 50 * G)
     assert (row["buy"], row["mats"], row["ev"], row["profit"], row["profit_class"]) == \
         ("8s", "2.5 Strange Dust", "14s 25c", "+6s 25c", "pos")
-    assert (row["chance"], row["volume"], row["risk"], row["price_age"]) == ("100%", "210/day AHF · 400 on AH",
+    assert (row["chance"], row["sales"], row["days"], row["risk"], row["price_age"]) == ("100%", "210 AHF", "1.9 days",
                                                                             "0.2%", "2 h")
     assert row["sort"] == {"ilvl": 25, "buy": 800, "ev": 1425, "profit": 625, "price_age": 7_200_000,
-                           "chance": 100, "risk": 2}
+                           "chance": 100, "sales": 2100, "supply": 400, "days": 19, "risk": 2}
     unknown_age = disenchant_row(DisenchantInput(1, "x", 2, 5, 900, (), 0.0, pair, None), 0)
     assert (unknown_age["profit_class"], unknown_age["sort"]["price_age"], unknown_age["sort"]["risk"]) ==         ("neg", -1, -1)
-    no_chance = disenchant_row(DisenchantInput(1, "x", 2, 5, 900, (), 0.0, chance_volume(None, None, None, None,
+    no_chance = disenchant_row(DisenchantInput(1, "x", 2, 5, 900, (), 0.0, market_activity(None, None, None, None,
                                                                                          None), None), 0)
     assert no_chance["sort"]["chance"] == -1
 
 
 def test_craft_row_cells():
-    pair = chance_volume(0.58, 60, 6, "books", 20)
+    pair = market_activity(0.58, 60, 6, "books", 20)
     cells = craft_money(3, 6000, {}, NAMES)
     row = craft_row(CraftInput(2663, "Copper Rod", 1, "Blacksmithing", "Brugan (Blacksmithing 112)", "AH", 3, cells, 6000,
                                3800.0, 5400.0, pair, "", "Buys 6 Copper Bar on the AH"), 50 * G)
@@ -121,7 +132,7 @@ def test_craft_row_cells():
         ("20s", "60s", "38s", "+54s", "1.2%")
     assert row["note"] == "Buys 6 Copper Bar on the AH"
     assert row["sort"] == {"crafts": 3, "mats_total": 6000, "profit": 5400, "value_each": 3800, "chance": 58,
-                           "risk": 12}
+                           "sales": 60, "supply": 20, "days": 33, "risk": 12}
     assert row["profession"] == "Blacksmithing"
     owned = craft_row(CraftInput(1, "x", 1, "Cooking", "A", "Owned", 1, craft_money(1, 0, {BAR: 2}, NAMES), 0, None,
                                  -1.0, pair, "ready", ""), 50 * G)

@@ -60,6 +60,7 @@
   table { border-collapse: collapse; width: 100%; }
   th { text-align: left; font-size: 12px; font-weight: 600; color: #d9b54a; padding: 8px 12px; border-bottom: 1px solid var(--border-hi); white-space: nowrap; background: #120f0b; letter-spacing: .3px; }
   th.sort { cursor: pointer; user-select: none; }
+  th[title] { text-decoration: underline dotted #6b5a32; text-underline-offset: 3px; }
   th.sort::after { content: " ↕"; opacity: .5; } th.sorted::after { content: " ↓"; opacity: 1; } th.sorted.asc::after { content: " ↑"; }
   td { padding: 7px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; vertical-align: top; }
   tr:last-child td { border-bottom: 0; }
@@ -122,15 +123,19 @@ const qualityClass = q => QUALITIES.includes(q) ? `q${q}` : 'q1';
 // SPEC GAP: §3.5 says item names link to auctionhouse.fyi but gives no per-item URL; like the mockup, link to the site.
 const item = (name, quality) => `<a class="${qualityClass(quality)}" href="https://auctionhouse.fyi/" target="_blank" rel="noopener noreferrer" title="Open on auctionhouse.fyi">${esc(name)}</a>`;
 const DOTS = { high: 'h', medium: 'm', low: 'l' };
-// The Chance · Volume pair (SPEC §3.5): the dot inside the Chance cell is the confidence; hover shows the exact %.
-const pairCells = r => {
+// The market activity columns (SPEC §3.5): Chance (the dot inside it is the confidence; hover shows the exact %),
+// Est. Sales/Day, Current Supply, Supply/Volume. Every cell comes formatted from engine/views.py.
+const MARKET_COLS = [['Chance', 1, 'chance'], ['Est. Sales/Day', 1, 'sales'], ['Current Supply', 1, 'supply'], ['Supply/Volume', 1, 'days']];
+const marketCells = r => {
   const dot = DOTS[r.dot];
   const title = dot && r.confidence !== null && r.confidence !== undefined
     ? ` title="Confidence ${esc(r.confidence)}%: how much the data behind this chance can be trusted"` : '';
-  const chance = r.chance === '—' ? '<span class="muted">—</span>' : esc(r.chance);
-  return `<td class="num"${title}>${chance}${dot ? ` <span class="dot ${dot}"></span>` : ''}</td>` +
-         `<td>${r.volume === '—' ? '<span class="muted">—</span>' : esc(r.volume)}</td>`;
+  return `<td class="num"${title}>${dash(r.chance)}${dot ? ` <span class="dot ${dot}"></span>` : ''}${r.chance_note ? `<span class="sub">${esc(r.chance_note)}</span>` : ''}</td>` +
+         `<td class="num">${dash(r.sales)}</td><td class="num">${dash(r.supply)}</td><td class="num">${dash(r.days)}</td>`;
 };
+// Days of supply, compared with the engine's sort key (tenths of a day): option values are already in tenths.
+const daysFilter = { id: 'maxDays', label: 'Max days of supply', options: [['', 'Any'], ['10', '1 day'], ['30', '3 days'], ['70', '7 days']],
+  test: (r, v) => v === '' || (r.sort.days >= 0 && r.sort.days <= Number(v)) };
 const profitCell = r => `<td class="num"><span class="${r.profit_class === 'pos' ? 'pos' : 'neg'}">${esc(r.profit)}</span></td>`;
 const riskCell = r => `<td class="num"><span class="${r.risk_amber ? 'amber' : 'muted'}">${esc(r.risk)}</span></td>`;
 const dash = v => v === '—' ? '<span class="muted">—</span>' : esc(v);
@@ -140,11 +145,11 @@ const sourceClass = s => String(s).startsWith('Owned') ? 'pos' : String(s).start
 // Each column: [header, numeric?, sort key in row.sort (or null)].
 const LIVE = {
   disenchant: {
-    lede: 'AH items worth buying to disenchant (SPEC §3.4A). Only shown when one of your characters has the skill. Chance (with its confidence dot) and Volume describe the <b>mats</b>, since they\'re what you sell. In every table, the <b>dot after a chance is its confidence</b> (<span class="dot h"></span>≥ 75% · <span class="dot m"></span>≥ 45% · <span class="dot l"></span>below); hover a chance for the exact %.',
+    lede: 'AH items worth buying to disenchant (SPEC §3.4A). Only shown when one of your characters has the skill. Chance (with its confidence dot) and the market activity columns describe the <b>mats</b>, since they\'re what you sell. A "—" means the data can\'t support a number; it is never a guess and never 0. In every table, the <b>dot after a chance is its confidence</b> (<span class="dot h"></span>≥ 75% · <span class="dot m"></span>≥ 45% · <span class="dot l"></span>below); hover a chance for the exact %.',
     cols: [['Item', 0, null], ['ilvl', 1, 'ilvl'], ['Buy', 1, 'buy'], ['Expected mats', 0, null], ['EV', 1, 'ev'], ['Profit', 1, 'profit'],
-           ['Chance', 1, 'chance'], ['Volume', 0, null], ['Risk', 1, 'risk'], ['Price age', 1, 'price_age']],
+           ...MARKET_COLS, ['Risk', 1, 'risk'], ['Price age', 1, 'price_age']],
     row: r => `<tr><td>${item(r.item, r.quality)}</td><td class="num">${esc(r.ilvl)}</td><td class="num">${dash(r.buy)}</td>` +
-              `<td class="muted">${esc(r.mats)}</td><td class="num">${dash(r.ev)}</td>${profitCell(r)}${pairCells(r)}${riskCell(r)}` +
+              `<td class="muted">${esc(r.mats)}</td><td class="num">${dash(r.ev)}</td>${profitCell(r)}${marketCells(r)}${riskCell(r)}` +
               `<td class="num">${dash(r.price_age)}</td></tr>`,
     filters: [
       { id: 'search', label: null, kind: 'search', placeholder: 'Search items…', test: (r, v) => !v || String(r.item).toLowerCase().includes(v.toLowerCase()) },
@@ -153,22 +158,24 @@ const LIVE = {
         test: (r, v) => v === '' || r.sort.profit >= Number(v) },
       { id: 'quality', label: 'Quality', options: [['', 'All'], ['2', 'Uncommon+'], ['3', 'Rare+'], ['4', 'Epic+']],
         test: (r, v) => v === '' || r.quality >= Number(v) },
+      daysFilter,
     ],
   },
   craft: {
     lede: 'Every recipe your characters know, priced now (SPEC §3.4B), whether or not you have the mats. <b>Source</b>: <span class="pos">Owned</span> = all mats from your stock; <span class="amber">AH</span> = all mats bought; Mixed = your stock topped up from the AH; <b>+ crafted</b> = one of your characters makes a reagent first. <b>Mats each / total</b> is the gold to buy the mats you\'re missing, per craft and for all crafts ("—" when you already own every mat). Profit counts owned mats at their <b>hold value</b>.',
     cols: [['Product', 0, null], ['Recipe known by', 0, null], ['Source', 0, null], ['Crafts', 1, 'crafts'], ['Mats each', 1, null],
-           ['Mats total', 1, 'mats_total'], ['Value each', 1, 'value_each'], ['Expected profit', 1, 'profit'], ['Chance', 1, 'chance'],
-           ['Volume', 0, null], ['Risk', 1, 'risk'], ['Cooldown', 0, null]],
+           ['Mats total', 1, 'mats_total'], ['Value each', 1, 'value_each'], ['Expected profit', 1, 'profit'], ...MARKET_COLS,
+           ['Risk', 1, 'risk'], ['Cooldown', 0, null]],
     row: r => `<tr><td>${item(r.product, r.quality)}${r.note ? `<span class="sub">${esc(r.note)}</span>` : ''}</td><td>${esc(r.crafter)}</td>` +
               `<td class="${sourceClass(r.source)}">${esc(r.source)}</td><td class="num">${esc(r.crafts)}</td><td class="num">${dash(r.mats_each)}</td>` +
-              `<td class="num">${dash(r.mats_total)}</td><td class="num">${dash(r.value_each)}</td>${profitCell(r)}${pairCells(r)}${riskCell(r)}` +
+              `<td class="num">${dash(r.mats_total)}</td><td class="num">${dash(r.value_each)}</td>${profitCell(r)}${marketCells(r)}${riskCell(r)}` +
               `<td class="${r.cooldown === 'ready' ? 'pos' : ''}">${esc(r.cooldown)}</td></tr>`,
     filters: [
       { id: 'search', label: null, kind: 'search', placeholder: 'Search products…', test: (r, v) => !v || String(r.product).toLowerCase().includes(v.toLowerCase()) },
       { id: 'profession', label: 'Profession', fromRows: 'profession', test: (r, v) => v === '' || r.profession === v },
       { id: 'source', label: 'Source', options: [['', 'All'], ['Owned', 'Owned'], ['AH', 'AH'], ['Mixed', 'Mixed']],
         test: (r, v) => v === '' || r.source === v || String(r.source).startsWith(v + ' ') },
+      daysFilter,
     ],
   },
 };
@@ -250,7 +257,9 @@ function render(id) {
   const values = state.filters[id] || (state.filters[id] = {});
   const shown = sortRows(id, rows.filter(r => spec.filters.every(f => f.test(r, values[f.id] ?? ''))));
   const sort = state.sort[id] || {};
-  const head = spec.cols.map(([t, num, key]) => `<th class="${num ? 'num ' : ''}${key ? 'sort' : ''}${key && sort.key === key ? ' sorted' + (sort.asc ? ' asc' : '') : ''}"${key ? ` data-key="${key}"` : ''}>${esc(t)}</th>`).join('');
+  // Header tooltips come with the data, from engine/views.py (SPEC §3.5): one text per column name.
+  const help = data.help || {};
+  const head = spec.cols.map(([t, num, key]) => `<th class="${num ? 'num ' : ''}${key ? 'sort' : ''}${key && sort.key === key ? ' sorted' + (sort.asc ? ' asc' : '') : ''}"${key ? ` data-key="${key}"` : ''}${help[t] ? ` title="${esc(help[t])}"` : ''}>${esc(t)}</th>`).join('');
   // SPEC GAP: §3.5 does not say what "hidden" counts for these pages; shown as the engine gives it, like the Today footer.
   const hidden = data.hidden ? `<div class="card-h"><b>${esc(titleOf(id))}</b><span class="muted">${esc(data.hidden)} hidden</span></div>` : '';
   const body = rows.length === 0

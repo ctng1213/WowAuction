@@ -17,18 +17,18 @@ from ahsync.state.reads import RecipeRow, StateReader
 DE_KIND = {2: "weapon", 4: "armor"}     # WoW item class -> DE table kind
 
 
-def _pair(stats: ItemIntel | None) -> views.ChanceVolume:
-    """The Chance · Volume pair for an item's posting-now stats.
+def _market(stats: ItemIntel | None) -> views.MarketActivity:
+    """The market activity cells for an item's posting-now intelligence (SPEC §3.5).
 
     Args:
-        stats: The item's stats, or None.
+        stats: The item's intelligence, or None.
 
     Returns:
-        The pair; "—" cells when there are no stats.
+        The cells; "—" everywhere when there is no intelligence.
     """
     if stats is None:
-        return views.chance_volume(None, None, None, None, None)
-    return views.chance_volume(stats.chance, stats.conf, stats.sold_per_day, stats.volume_source, stats.units_on_ah)
+        return views.market_activity(None, None, None, None, None)
+    return views.market_activity(stats.chance, stats.conf, stats.sold_per_day, stats.volume_source, stats.units_on_ah)
 
 
 def disenchant_page(state: StateReader, char_ids: list[str], stats: dict[int, ItemIntel], items: dict[int, ItemInfo],
@@ -43,7 +43,7 @@ def disenchant_page(state: StateReader, char_ids: list[str], stats: dict[int, It
         total_gold: All your characters' gold.
 
     Returns:
-        {"rows": [...], "hidden": 0}, profit highest first.
+        {"rows": [...], "hidden": 0, "help": header -> tooltip}, profit highest first.
     """
     listings = [(key, s.cur, items[key].quality, items[key].ilvl, DE_KIND[items[key].item_class])
                 for key, s in sorted(stats.items())
@@ -56,9 +56,9 @@ def disenchant_page(state: StateReader, char_ids: list[str], stats: dict[int, It
         mats = tuple((items[m].name if m in items else str(m), chance * (lo + hi) / 2) for m, chance, lo, hi in outcomes)
         main_mat = max(outcomes, key=lambda o: (o[1] * (o[2] + o[3]), -o[0]))[0]
         rows.append(views.disenchant_row(views.DisenchantInput(
-            t.key, info.name, info.quality or 0, info.ilvl, t.buy_copper, mats, t.ev, _pair(stats.get(main_mat)),
+            t.key, info.name, info.quality or 0, info.ilvl, t.buy_copper, mats, t.ev, _market(stats.get(main_mat)),
             stats[t.key].cur_age_ms), total_gold))
-    return {"rows": rows, "hidden": 0}
+    return {"rows": rows, "hidden": 0, "help": views.COLUMN_HELP}
 
 
 def _craft_market(state: StateReader, char_ids: list[str], stats: dict[int, ItemIntel], items: dict[int, ItemInfo]
@@ -141,7 +141,7 @@ def craft_page(state: StateReader, char_ids: list[str], stats: dict[int, ItemInt
         cfg: Config.
 
     Returns:
-        {"rows": [...], "hidden": 0}, profit highest first (ties: spell id).
+        {"rows": [...], "hidden": 0, "help": header -> tooltip}, profit highest first (ties: spell id).
     """
     recipes = [r for r in state.known_recipes(char_ids) if r.product is not None]
     engine_recipes = {r.spell: craft.Recipe(r.spell, r.product, r.yield_min, r.yield_max, r.reagents, r.crafters,
@@ -167,7 +167,7 @@ def craft_page(state: StateReader, char_ids: list[str], stats: dict[int, ItemInt
             f"{crafter.split('-')[0]} ({r.profession} {skill})" if skill is not None else crafter.split("-")[0],
             option.source if option.crafts else "—", option.crafts,
             views.craft_money(option.crafts, option.mat_gold, option.owned_used, names), option.mat_gold,
-            value_each, option.profit, _pair(stats.get(r.product)), "",
+            value_each, option.profit, _market(stats.get(r.product)), "",
             f"missing: {missing}" if missing else ""), total_gold)))
     rows.sort(key=lambda row: (-row[0], row[1]))
-    return {"rows": [row for _, _, row in rows], "hidden": 0}
+    return {"rows": [row for _, _, row in rows], "hidden": 0, "help": views.COLUMN_HELP}

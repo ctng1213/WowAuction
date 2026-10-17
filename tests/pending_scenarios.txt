@@ -33,7 +33,7 @@ UI1-UI11
 
 
 # Market activity amendment (SPEC §3.3.6, §3.4 capacity, §8.8 volume backtest)
-V22-V24 W9 R15-R16 D23 K4 PL4
+V23-V24 W9 R15-R16 K4 PL4
 
 # Architecture amendment (SPEC §5.0)
 T17-T18 D24 A9

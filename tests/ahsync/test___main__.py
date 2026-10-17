@@ -297,7 +297,7 @@ def test_start_serves_the_dashboard_during_the_steady_state_and_stops_it(tmp_pat
     assert code == 0 and f"Dashboard: http://localhost:{port}" in printed
     assert seen["markets"] == (200, {"markets": [DEFAULT_MARKET], "default": DEFAULT_MARKET})
     status, body = seen["craft"]                      # the start-up full refresh published it (SPEC §3.1)
-    assert status == 200 and body["data"] == {"rows": [], "hidden": 0} and body["built"] > 0
+    assert status == 200 and body["data"]["rows"] == [] and body["data"]["hidden"] == 0 and body["built"] > 0
     with socket.socket() as sock:                      # stopped: the port is free again
         sock.bind(("127.0.0.1", port))
 

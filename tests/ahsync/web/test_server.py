@@ -4,13 +4,14 @@ from __future__ import annotations
 import http.client
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 
 import pytest
 
 from ahsync.config import Config
-from ahsync.engine.views import (CraftInput, DisenchantInput, chance_volume, craft_money, craft_row,
-                                 disenchant_row)
+from ahsync.engine.views import (COLUMN_HELP, MARKET_COLUMNS, CraftInput, DisenchantInput, craft_money, craft_row,
+                                 disenchant_row, market_activity)
 from ahsync.db.sqlite import Database
 from ahsync.web.server import (INDEX_HTML, MAX_BODY_BYTES, PAGES, TOKEN_HEADER, TOKEN_PLACEHOLDER, DashboardApp,
                                new_token, open_server_db, start_dashboard, stop_dashboard)
@@ -47,14 +48,14 @@ class Reply:
 
 def de_row() -> dict:
     """One Disenchant row, built by the engine exactly as the full refresh will."""
-    pair = chance_volume(0.92, 86, 48, "ahf", 93)
+    pair = market_activity(0.92, 86, 48, "ahf", 93)
     return disenchant_row(DisenchantInput(4567, "Bandit Cinch", 2, 18, 300, (("Strange Dust", 1.6),), 912.0,
                                           pair, 20 * 60_000), 314_000)
 
 
 def craft_row_example() -> dict:
     """One Craft row, built by the engine."""
-    pair = chance_volume(0.65, 64, 5, "ahf", 6)
+    pair = market_activity(0.65, 64, 5, "ahf", 6)
     cells = craft_money(1, 4200, {}, {})
     return craft_row(CraftInput(11479, "Transmute: Iron to Gold", 2, "Alchemy", "Brugan (Alchemy 225)", "AH", 1, cells, 4200,
                                 9500.0, 1855.0, pair, "ready", "Buys 1 Iron Bar on the AH"), 314_000)
@@ -277,7 +278,18 @@ def test_index_has_every_page_in_the_mockup_order_and_loads_nothing_external(app
     positions = [html.index(f"['{name}', ") for name in names]
     assert positions == sorted(positions)
     assert "<script src" not in html and "<link" not in html and "@import" not in html
-    assert "Chance" in html and "Volume" in html and "Coming in a later milestone" in html
+    assert "Coming in a later milestone" in html
+
+
+def test_every_live_table_has_the_market_columns_in_order_and_every_header_a_tooltip(app):
+    html = app.handle("GET", "/", GOOD).body.decode()
+    market = re.search(r"const MARKET_COLS = (\[.*?\]);\n", html).group(1)
+    assert re.findall(r"\['([^']+)', 1, '(\w+)'\]", market) == [(h, c) for h, c in MARKET_COLUMNS]
+    live = html[html.index("const LIVE = {"):html.index("// ---------- state")]
+    tables = re.findall(r"cols: (\[.*?\]),\n\s*row:", live, re.S)
+    assert len(tables) == 2 and all("...MARKET_COLS" in cols for cols in tables)
+    headers = set(re.findall(r"\['([^']+)', [01], ", live + market))
+    assert headers - set(COLUMN_HELP) == set()        # SPEC §3.5: every column header has a tooltip
 
 
 def test_markets_come_from_the_config(app):

@@ -826,6 +826,7 @@ You set or clear a rule from any dashboard row, from the **Rules** page, or by r
    - **Est. Sales/Day** is `estimated_sales_per_day` with its source, e.g. "48 AHF" or "31 est."; "—" when unavailable. **Current Supply** is units on the AH now. **Supply/Volume** is days of supply, e.g. "1.9 days"; "—" when unavailable. (The addon's Volume cell is "48/day".)
    - For Disenchant, these columns describe the **mats**, since that's what you sell.
    - `views.py` builds these cells in one place, and a convention test checks that every table using them has all of them in that order.
+   - **Every column header has a hover tooltip** saying what the column means and its unit (for example "Supply/Volume: days of supply at the current sales rate; not a time-to-sell guarantee"). The texts live with the column definitions in `views.py`, one per column name, so the same column reads the same on every page.
    - **Item detail** adds 7 × 24 heatmaps of price (`how`), estimated sales (`sales_how`) and listed supply (`supply_how`), the three selling answers (§3.3.6), daily sales and supply over 30 days, and volume confidence and coverage.
 
    Hovering a Chance cell, or opening the item detail, shows the breakdown: market sell-through, days of supply, units ahead of you and when they expire, expected undercuts, queue result, tier history and your record.
@@ -834,7 +835,7 @@ You set or clear a rule from any dashboard row, from the **Rules** page, or by r
    - `GET /` serves the page (`web/static/index.html`) with the per-run token embedded.
    - `GET /api/markets` returns `{"markets": [...], "default": "<id>"}` from the config.
    - `GET /api/views/<page>?market=<id>` returns `{"built": <ms>, "data": <payload>}`, or `404 {"error": "no_refresh_yet"}` before the first refresh. `<page>` is `disenchant`, `craft` (M3), and later `today`, `week`, `on_ah`, `flip`, `inventory`, `history`, `rules`, `characters`, `status`.
-   - Payload of `disenchant` and `craft`: `{"rows": [...], "hidden": <n>}`. Each row is built by `views.disenchant_row` / `views.craft_row`: every cell is already formatted text (money, percents, the Chance · Volume pair with its `dot`, risk with `risk_amber`), plus a `sort` object with one number per sortable column. The page sorts by `sort` values and filters by row fields (quality, profession, source, profit); it never parses or computes numbers.
+   - Payload of `disenchant` and `craft`: `{"rows": [...], "hidden": <n>, "help": {header: tooltip}}`. Each row is built by `views.disenchant_row` / `views.craft_row`: every cell is already formatted text (money, percents, the market activity cells `chance` with its `dot`, `sales`, `supply` and `days`, risk with `risk_amber`), plus a `sort` object with one number per sortable column (−1 for an unavailable value). `help` is `views.COLUMN_HELP`, the header tooltips. The page sorts by `sort` values and filters by row fields (quality, profession, source, profit); it never parses or computes numbers.
    - `POST /api/refresh` asks for a full refresh (merged with one already queued; IU4) and returns `202`. `POST /api/skip {"action_id": ...}` marks a plan action skipped (§3.4.1) and returns `200 {"skipped": true|false}` (false when the action isn't open) or `400` for a bad body. Writes follow the Security rules above.
    - A market not in the config is `404 unknown_market`; no `market` means the first configured one. A busy database is `503 database_busy`.
    - **Accepted risk:** another process or Windows user on the same machine can send the right `Host`, read the token from `GET /` and write. That is inherent to a loopback tool; the checks protect against web pages, not local processes.
@@ -986,6 +987,7 @@ The dot after each chance is its confidence. Hovering "85% ◐" shows "Confidenc
   - **Chance** is `P'` (§3.3.2) with the **confidence dot** inside the cell (● ≥ 75%, ◐ ≥ 45%, ○ below; §3.3.5). Hover shows the exact confidence %.
   - **Volume** is units sold per day. The dashboard also shows the source and the units on the AH.
   - Rows with nothing to sell (mat buys, mail, holds, vendor) show "—" in both.
+- **Every column header shows a tooltip on hover** (`GameTooltip`) saying what the column means, with the same texts as the dashboard where the column is the same (§3.5). The texts live in `UI/ViewModel.lua`.
 - Your sell record (§3.3.3) appears as a second line under the row, but only when it changed the recommendation.
 - Long item names are cut off with "…". The list scrolls, and the window never grows past its size.
 - Money uses gold, silver and copper coin icons.
@@ -1101,11 +1103,11 @@ The system is built as separate components that talk only through versioned cont
 | Historical Store → Analysis | `history.reads.HistoryReader` (a protocol: closes, current, books, volume, items), read **in bulk per market** (below) |
 | Analysis → Intelligence | `intel.contract.MarketIntelligence` (`INTEL_SCHEMA_VERSION`, method versions, `built_ms`, `observations_until_ms`, one `ItemIntel` per item; contents below), JSON-serializable |
 | Intelligence → Export / Recommendations | `intel.store.IntelReader` |
+| State → Export | the shortlist: item keys on any desktop list, in stock or recipes, or recently scanned (`state.reads.StateReader`) |
 | Addon → State Importer | SavedVariables (§2.2.1) |
 | State Importer → Recommendations, Portfolio | `state.reads.StateReader` (characters with freshness, skills, recipes, stock, journal) |
 | Recommendations → Portfolio → Dashboard | option and plan records; dashboard pages as in §3.5 |
 | Export → Addon | `MarketIntelligence.lua`, `PortfolioPlan.lua` (§3.5) |
-| State → Export | the shortlist: item keys on any desktop list, in stock or recipes, or recently scanned (`state.reads.StateReader`) |
 
 **Architectural invariants** (checked by AR1–AR4 and the convention test):
 1. Collection is independent of analysis; analysis is independent of character state: `analysis/` imports only `engine/`, `history.reads` and `intel.contract`.
@@ -1114,6 +1116,7 @@ The system is built as separate components that talk only through versioned cont
 4. The addon builds its own recommendations from intelligence plus live state, and works without the desktop running; the desktop's plan is optional advice.
 5. Listing changes never become confirmed sales; seasonality strength, expected profit and sales volume stay separate numbers.
 6. Every component is testable on its own with fakes.
+7. **The intelligence is complete.** Every number derived from history that any consumer needs is in `MarketIntelligence`, so a consumer never needs a `HistoryReader` (AR5).
 
 **Contents of the intelligence.** Per item (`ItemIntel`), everything market-wide that §3.3 computes from history:
 - prices and their ages: `cur`, med7/med30, p10/p90, trend, the latest book;
@@ -1134,7 +1137,6 @@ Analysis computes these the same way for every item. It never chooses by your li
 Reading SavedVariables and writing the addon files stay on the desktop. Own in-game scans would have to be uploaded to feed cloud analysis.
 
 ### 5.0.1 Tech
-7. **The intelligence is complete.** Every number derived from history that any consumer needs is in `MarketIntelligence`, so a consumer never needs a `HistoryReader` (AR5).
 
 - **AHSync**: Python 3.12 (installed), standard library only (`urllib`, `gzip`, `json`, `sqlite3`, `tomllib`, `http.server`). The dashboard is one static HTML/JS page served with JSON endpoints. Started from `start.bat`, with an `.exe` via PyInstaller later.
 - **AHProfit**: Lua 5.1 and WoW FrameXML, with no libraries in v1.
@@ -1279,7 +1281,7 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `MarketIntellig
 | Full scan interrupted (AH closed, disconnect, combat, reload) | saved as `partial` with its coverage %. Partial books are **never** used for volume diffs, which need complete books | the next full scan starts fresh |
 | Search queue interrupted (AH closed) | the queue is dropped | rebuilt on the next AH open |
 | A buy or post hook fires but the action fails (outbid, sold out, not enough gold, error) | recorded as an **attempt**. It counts only when confirmed: by the "won" message or mail for a buy, by the own-auctions list for a post. Unconfirmed attempts expire after 1 h | not matched, no cost basis change |
-| WoW crashes before SavedVariables is written | that session's events are lost | at the next login, the inventory snapshot shows the true state; differences are recorded as "untracked changes" (cost 0, flagged), so nothing is invented |
+| WoW crashes before SavedVariables is written | that session's events are lost | at the next login, the inventory snapshot shows the true state; differences are recorded as "untracked changes" (cost 0, flagged), so nothing is invented. **Nothing asks you to act**: no prompt and no forced `/reload`. Recommendations carry on from the snapshot, with untracked items valued at their opportunity cost like found items (§2.2), so the next deal is found as usual |
 | SavedVariables grows past its cap | the oldest un-ingested full scans are dropped first, never events | status warning: "Run AHSync to sync" |
 | Addon upgraded with a new SavedVariables layout | migrated forward on load by version, step by step; the original is kept until the migration is saved | a failed migration leaves the old data untouched and shows an error |
 
