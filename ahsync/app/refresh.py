@@ -17,6 +17,7 @@ from ahsync.analysis.market import analyze_market
 from ahsync.config import Config, market_settings
 from ahsync.db.sqlite import Database
 from ahsync.recommend.pages import craft_page, disenchant_page
+from ahsync.recommend.plan import plan_market, plan_rows
 
 log = logging.getLogger(__name__)
 
@@ -54,6 +55,7 @@ def refresh_market(db: Database, market: str, now_ms: int, cfg: Config, result: 
         db.stage_intel(intel)
         db.stage_view("disenchant", market, disenchant_page(db, char_ids, stats, items, total_gold, now_ms, cfg), now_ms)
         db.stage_view("craft", market, craft_page(db, char_ids, stats, items, total_gold, now_ms, cfg), now_ms)
+        db.stage_plan(plan_rows(plan_market(db, characters, stats, items, now_ms, cfg), market, now_ms))
     result.items += len(stats)
 
 

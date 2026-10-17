@@ -740,6 +740,8 @@ The result is shown as the row's **Source**. The base tells where the raw mats c
 
 Output is a calendar of **actions**: `when · character · action (buy/craft/post/DE/vendor) · item · qty · each · total · expected net · P' · risk % · confidence`. Totals are shown per day, per category and per character.
 
+**Building and storing the plan** (`engine/week.py`, `recommend/plan.py`). Each full refresh plans each market's characters together, in this order, with one capacity ledger and one set of budgets: a first sell plan of everything you own gives each item's hold value; crafts use owned mats at that value; the sell plan covers the stock that is left; flips buy from the auctions the crafts left. Facts are built only for items the plan can use: your stock, your recipes' products and mats, and **flip candidates**, items whose best peak hour (med30 × its price ratio × the most a week of trend can add, after the cut) could beat the cheapest auction by `min_flip_margin`. Rule `ignore` also takes the item out of every craft as a mat. The plan is staged in `plan_new` and published with the intelligence and pages in one transaction; it replaces the market's characters' `pending` and `late` actions, while `done`, `partial`, `missed` and `skipped` ones stay as history (§3.4.1). A chain's later steps name its first action as their parent.
+
 #### 3.4.0 Missed peaks: move, or hold for next week
 
 An item usually has several peaks a week, for example raid nights on Tue, Wed and Thu. These are its best selling windows (§3.3.4). A planned post targets one of them, its **original peak**. Its expected net there, `E_orig`, is the **anchor**.

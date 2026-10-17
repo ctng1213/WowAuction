@@ -21,6 +21,17 @@ class RecommendStore:
         self.conn.execute("INSERT OR REPLACE INTO views_new(page, market, body, built) VALUES (?, ?, ?, ?)",
                           (page, market, json.dumps(body, sort_keys=True), built_ms))
 
+    def stage_plan(self, rows: list[tuple]) -> None:
+        """Write a market's new plan actions into the staging table (published by publish_refresh).
+
+        Args:
+            rows: From recommend.plan.plan_rows.
+        """
+        self.conn.executemany(
+            "INSERT OR REPLACE INTO plan_new(action_id, run_at, slot_ms, char_id, kind, key, qty, price, expected_net, "
+            "conf, status, done_qty, done_at, parent_id, window_start_ms, window_end_ms, anchor_net, anchor_window_ms, "
+            "replaces_id, week_start_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+
     def view(self, page: str, market: str) -> tuple[dict, int] | None:
         """A published page payload, as the dashboard serves it.
 

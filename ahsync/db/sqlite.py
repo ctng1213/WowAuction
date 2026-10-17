@@ -644,13 +644,21 @@ class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, IntelStore
         return self.conn.execute(sql, params).fetchone()[0]
 
     def publish_refresh(self, markets: list[str]) -> None:
-        """Swap the staged intelligence and pages in for these markets, in one transaction (SPEC §5.2 rule 3).
+        """Swap the staged intelligence, pages and plan in for these markets, in one transaction (SPEC §5.2 rule 3).
+
+        The plan replaces the market's characters' pending and late actions; done, partial,
+        missed and skipped ones stay as history (SPEC §3.4.1 re-planning).
 
         Args:
             markets: The markets this refresh rebuilt.
         """
         with self.transaction():
             for market in markets:
+                chars = "SELECT id FROM characters WHERE market = ?"
+                self.conn.execute(f"DELETE FROM actions WHERE status IN ('pending', 'late') AND char_id IN ({chars})",
+                                  (market,))
+                self.conn.execute(f"INSERT INTO actions SELECT * FROM plan_new WHERE char_id IN ({chars})", (market,))
+                self.conn.execute(f"DELETE FROM plan_new WHERE char_id IN ({chars})", (market,))
                 for live, staged, cols in (("intel", "intel_new", "market, schema_version, body, built"),
                                            ("views", "views_new", "page, market, body, built")):
                     self.conn.execute(f"DELETE FROM {live} WHERE market = ?", (market,))

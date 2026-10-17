@@ -105,7 +105,7 @@ def disenchant_page(state: StateReader, char_ids: list[str], stats: dict[int, It
     return {"rows": rows, "hidden": len(dropped) + too_risky, "help": views.COLUMN_HELP}
 
 
-def _craft_market(state: StateReader, char_ids: list[str], stats: dict[int, ItemIntel], items: dict[int, ItemInfo]
+def craft_market(state: StateReader, char_ids: list[str], stats: dict[int, ItemIntel], items: dict[int, ItemInfo]
                   ) -> craft.Market:
     """Where reagents can come from: books, vendors, your stock at its hold value (SPEC §3.4B).
 
@@ -193,7 +193,7 @@ def craft_page(state: StateReader, char_ids: list[str], stats: dict[int, ItemInt
     by_product: dict[int, list[craft.Recipe]] = {}
     for r in engine_recipes.values():
         by_product.setdefault(r.product, []).append(r)
-    market = _craft_market(state, char_ids, stats, items)
+    market = craft_market(state, char_ids, stats, items)
     names = {k: i.name for k, i in items.items()}
     rows = []
     for r in recipes:

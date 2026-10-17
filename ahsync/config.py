@@ -14,6 +14,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ahsync.engine.flips import FlipSettings
+from ahsync.engine.plan import PlanSettings
 from ahsync.engine.sellprob import MarketSettings
 
 API_KEY_ENV = "AUCTIONHOUSE_APIKEY"
@@ -264,3 +266,29 @@ def market_settings(config: Config) -> MarketSettings:
     return MarketSettings(config.default_sell_prob, config.own_record_weight, config.default_undercut_share,
                           config.sell_window_hours, config.pattern_half_life_weeks, config.window_threshold)
 
+
+
+def plan_settings(config: Config) -> PlanSettings:
+    """The settings the weekly plan needs (SPEC §3.4C), from the config.
+
+    Args:
+        config: Settings.
+
+    Returns:
+        The engine's PlanSettings.
+    """
+    return PlanSettings(config.post_lead_hours, config.max_supply_share, config.max_supply_share_gear,
+                        config.min_gear_units, config.sell_window_hours, 7, config.default_undercut_share,
+                        config.default_sell_prob)
+
+
+def flip_settings(config: Config) -> FlipSettings:
+    """The settings flips and buys need (SPEC §3.4C.2, §3.4 Risk), from the config.
+
+    Args:
+        config: Settings.
+
+    Returns:
+        The engine's FlipSettings.
+    """
+    return FlipSettings(config.min_flip_margin, config.max_risk_pct)

@@ -84,6 +84,13 @@ class StateReader(Protocol):
             (character id, item key, units), sorted by character then key.
         """
 
+    def item_rules(self) -> dict[int, str]:
+        """Your live item rules.
+
+        Returns:
+            Item key -> "no_buy" | "ignore" | "keep".
+        """
+
     def vendor_reagent_keys(self) -> set[int]:
         """Items a merchant was seen selling in unlimited supply.
 
@@ -189,6 +196,14 @@ class StateReads:
             Item keys.
         """
         return {r[0] for r in self.conn.execute("SELECT key FROM vendor_reagents")}
+
+    def item_rules(self) -> dict[int, str]:
+        """Your live item rules, set on the dashboard or in game; cleared rules ("none") are left out (SPEC §3.4.2).
+
+        Returns:
+            Item key -> "no_buy" | "ignore" | "keep".
+        """
+        return dict(self.conn.execute("SELECT key, rule FROM item_rules WHERE rule != 'none' ORDER BY key").fetchall())
 
     def owned_lots(self, char_ids: list[str]) -> list[tuple[str, int, int]]:
         """Unbound units per character and item, bags, bank and mail together (SPEC §3.4C.1, R10).
