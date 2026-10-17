@@ -40,6 +40,7 @@ function Stubs.NewWorld()
     inbox = {},               -- one array of { id, count, noLink = bool } attachments per mail
     inboxTotal = nil,         -- mails on the server; default #inbox (all loaded)
     merchant = {},            -- { id, numAvailable (-1 = unlimited), extendedCost = bool }
+    unknownEvents = {},       -- [event] = true: RegisterEvent raises, as the real client does
     tradeSkill = nil,         -- { name, rank, max, recipes = { { header = "Name" } | recipe } }
     craft = nil,              -- same shape as tradeSkill
     -- recipe: { name, spell, product (item id|nil), min, max, reagents = { { id, count } } }
@@ -72,7 +73,13 @@ local FrameMethods = {}
 
 --- Frame:RegisterEvent.
 ---@param event string  WoW event name
-function FrameMethods:RegisterEvent(event) self.events[event] = true end
+function FrameMethods:RegisterEvent(event)
+  -- Like the real client: an event it doesn't know raises (Forever lacks some Classic events).
+  if Stubs.world.unknownEvents[event] then
+    error('Frame:RegisterEvent(): Attempt to register unknown event "' .. event .. '"', 2)
+  end
+  self.events[event] = true
+end
 
 --- Frame:UnregisterEvent.
 ---@param event string  WoW event name
@@ -170,6 +177,13 @@ end
 local function Define(name, value)
   installed[#installed + 1] = name
   _G[name] = value
+end
+
+--- Define a global for one test (e.g. a modern API); Stubs.Reset removes it again.
+---@param name string  Global name
+---@param value any    Its value
+function Stubs.Define(name, value)
+  Define(name, value)
 end
 
 --- The recipe at an index of a fake recipe window.

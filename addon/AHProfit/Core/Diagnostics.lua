@@ -23,10 +23,13 @@ Diagnostics.APIS = {
   "C_AuctionHouse", "QueryAuctionItems", "CanSendAuctionQuery", "GetAuctionItemInfo",
 }
 
+-- Namespaces whose function lists we need to write the modern readers (SPEC §6).
+Diagnostics.NAMESPACES = { "C_TradeSkillUI", "C_MerchantFrame", "C_AuctionHouse", "C_Container", "C_Item" }
+
 local lastMerchant = nil   -- DescribeMerchant() text from the last merchant this session
 
 --- Build the diagnostics table from the current session.
----@return table  { at, client, apis, errors, skillLines, merchant } as in SPEC §2.2.1
+---@return table  { at, client, apis, errors, skillLines, merchant, namespaces, professions, setupError } (SPEC §2.2.1)
 function Diagnostics.Build()
   local errors = {}
   for i, message in ipairs(Events.Errors()) do errors[i] = message end
@@ -37,6 +40,8 @@ function Diagnostics.Build()
     errors = errors,
     skillLines = Adapter.DescribeSkillLines(),
     merchant = lastMerchant,
+    namespaces = Adapter.DescribeNamespaces(Diagnostics.NAMESPACES),
+    professions = Adapter.DescribeProfessions(),
     setupError = DB.SetupError(),
   }
 end

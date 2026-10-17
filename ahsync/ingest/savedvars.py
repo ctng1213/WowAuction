@@ -198,6 +198,8 @@ class Diagnostics:
     skill_lines: str | None                # raw Skills-tab rows "name|isHeader|isExpanded|rank|max;..."
     merchant: str | None                   # raw last-merchant rows "itemKey|numAvailable|extendedCost;..."
     setup_error: str | None                # why AHProfitDB setup failed, if it did
+    namespaces: tuple[tuple[str, tuple[str, ...] | None], ...] = ()   # (namespace, its function names; None = missing)
+    professions: str | None = None         # raw GetProfessions slots "slot|index|name|rank|max;..."
 
 
 @dataclass(frozen=True, slots=True)
@@ -778,11 +780,17 @@ def _diagnostics(value: object) -> Diagnostics | None:
     if isinstance(raw_errors, dict):
         raw_errors = [raw_errors[k] for k in sorted(k for k in raw_errors if isinstance(k, int))]
     errors = tuple(e for e in raw_errors if isinstance(e, str)) if isinstance(raw_errors, list) else ()
+    namespaces = []
+    for pair in (text("namespaces") or "").split(";"):
+        name, sep, functions = pair.partition("=")
+        if sep:
+            namespaces.append((name, None if functions == "nil" else tuple(functions.split())))
     at = value.get("at")
     return Diagnostics(
         at_ms=at if isinstance(at, int) and not isinstance(at, bool) else None,
         client=text("client"), apis=tuple(apis), errors=errors,
         skill_lines=text("skillLines"), merchant=text("merchant"), setup_error=text("setupError"),
+        namespaces=tuple(namespaces), professions=text("professions"),
     )
 
 

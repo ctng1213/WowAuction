@@ -126,4 +126,14 @@ describe("Events", function()
     Stubs.Login()
     assert_eq(AHProfit.Events.Errors(), {})
   end)
+
+  it("an event the client doesn't know is recorded as an error instead of raising", function()
+    Stubs.Reset()
+    Stubs.world.unknownEvents = { TRADE_SKILL_UPDATE = true }
+    Stubs.LoadAddon({ "Core/Adapter.lua", "Core/Events.lua" })
+    local Events = AHProfit.Events
+    Events.Register("TRADE_SKILL_UPDATE", function() end)
+    assert_eq(#Events.Errors(), 1)
+    assert_eq(Events.Errors()[1]:find("unknown event", 1, true) ~= nil, true)
+  end)
 end)

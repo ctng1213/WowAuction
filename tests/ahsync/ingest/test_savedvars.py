@@ -277,12 +277,16 @@ def test_diagnostics_block_is_read_for_the_report():
 \t\t\t"Interface/AddOns/AHProfit/Core/Adapter.lua:146: attempt to call global 'GetNumSkillLines' (a nil value)", -- [1]
 \t\t},
 \t\t["skillLines"] = "error: attempt to call global 'GetNumSkillLines' (a nil value)",
+\t\t["namespaces"] = "C_MerchantFrame=GetBuybackItemInfo GetItemInfo;C_Missing=nil",
+\t\t["professions"] = "1|3|Herbalism|15|75;2|nil|nil|nil|nil",
 \t},'''))
     d = data.diagnostics
     assert (d.at_ms, d.client, d.merchant, d.setup_error) == (1792205711000, "1.60.1 70009", None, None)
     assert d.apis == (("GetNumSkillLines", "nil"), ("GetMerchantItemInfo", "function"))
     assert len(d.errors) == 1 and "GetNumSkillLines" in d.errors[0]
     assert d.skill_lines.startswith("error: ")
+    assert d.namespaces == (("C_MerchantFrame", ("GetBuybackItemInfo", "GetItemInfo")), ("C_Missing", None))
+    assert d.professions == "1|3|Herbalism|15|75;2|nil|nil|nil|nil"
     assert data.problems == ()
 
 

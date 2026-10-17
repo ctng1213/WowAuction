@@ -120,4 +120,42 @@ describe("Professions", function()
     Stubs.Advance(0.5)
     assert_eq(AHProfitDB.vendorReagents, "2320;2321")
   end)
+
+  -- Forever's client has the modern APIs, not the Classic ones (verified 2026-10-16, SPEC §6).
+
+  it("login writes professions from the modern API when GetProfessions exists", function()
+    Stubs.Reset()
+    local info = { [3] = { "Herbalism", 15, 75 }, [5] = { "Fishing", 12, 75 }, [4] = { "Cooking", 1, 75 } }
+    Stubs.Define("GetProfessions", function() return 3, nil, nil, 5, 4 end)
+    Stubs.Define("GetProfessionInfo", function(i) local p = info[i]; return p[1], "icon", p[2], p[3] end)
+    Stubs.Login()
+    assert_eq(AHProfitDB.professions["Amaya-Grommash"], {
+      Herbalism = { skill = 15, max = 75 }, Fishing = { skill = 12, max = 75 }, Cooking = { skill = 1, max = 75 },
+    })
+  end)
+
+  it("merchant visits read stock from C_MerchantFrame.GetItemInfo when it exists", function()
+    Stubs.Reset()
+    Stubs.world.merchant = { { id = 2320 }, { id = 2321 }, { id = 6270 } }
+    local stock = { { numAvailable = -1 }, { numAvailable = -1, hasExtendedCost = true }, { numAvailable = 3 } }
+    Stubs.Define("GetMerchantItemInfo", nil)
+    Stubs.Define("C_MerchantFrame", { GetItemInfo = function(i) return stock[i] end })
+    Stubs.Login()
+    Stubs.FireEvent("MERCHANT_SHOW")
+    Stubs.Advance(0.5)
+    assert_eq(AHProfitDB.vendorReagents, "2320")
+    assert_eq(AHProfit.Events.Errors(), {})
+  end)
+
+  it("with C_TradeSkillUI the recipe window listens to TRADE_SKILL_LIST_UPDATE, not the unknown Classic event", function()
+    Stubs.Reset()
+    Stubs.world.unknownEvents = { TRADE_SKILL_UPDATE = true }
+    Stubs.Define("C_TradeSkillUI", {})
+    Stubs.Login()
+    Stubs.FireEvent("TRADE_SKILL_SHOW")
+    assert_eq(Stubs.IsRegistered("TRADE_SKILL_LIST_UPDATE"), true)
+    Stubs.FireEvent("TRADE_SKILL_CLOSE")
+    assert_eq(Stubs.IsRegistered("TRADE_SKILL_LIST_UPDATE"), false)
+    assert_eq(AHProfit.Events.Errors(), {})
+  end)
 end)

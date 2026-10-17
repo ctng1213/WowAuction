@@ -115,6 +115,12 @@ def report_diagnostics(data: AHProfitData) -> None:
         print(f"    {d.skill_lines or 'nothing read'}")
     for row in rows:
         print(f"    {row.replace('|', ' | ')}")
+    print("  professions, modern API (slot | spellbook index | name | rank | max):")
+    for row in (d.professions or "nothing read").split(";"):
+        print(f"    {row.replace('|', ' | ')}")
+    for namespace, functions in d.namespaces:
+        listed = "MISSING" if functions is None else f"{len(functions)} functions: {' '.join(functions)}"
+        print(f"  {namespace}: {listed}")
     print("  last merchant (item key | available, -1 = unlimited | extended cost):")
     for row in (d.merchant or "no merchant opened this session").split(";"):
         print(f"    {row.replace('|', ' | ')}")

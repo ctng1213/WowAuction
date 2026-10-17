@@ -202,7 +202,7 @@ AHProfitDB = {
 | `auction_mail` | `outcome` (`sold` / `expired` / `cancelled` / `won`), `key`, `qty`, `price` (sold and won only) | `Capture/Mail` |
 | `skip` | `action` (action id from `Data.lua`) | the row menu's "Mark as skipped" |
 
-- **`diagnostics`** (written by `Core/Diagnostics.lua` at `PLAYER_LOGOUT`, which also fires on `/reload`): `{ at, client, apis, errors, skillLines, merchant, setupError }`. It holds the client build, which of the APIs the addon depends on exist (`"name=type;…"`), the handler errors caught this session (at most 10), the raw Skills-tab rows, the last merchant's raw items, and any database setup error. It exists so `tools/savedvars_report.py` can explain a missing capture without Lua error popups (§6). AHSync never ingests it, and each session replaces it.
+- **`diagnostics`** (written by `Core/Diagnostics.lua` at `PLAYER_LOGOUT`, which also fires on `/reload`): `{ at, client, apis, errors, skillLines, merchant, namespaces, professions, setupError }`. It holds the client build, which of the APIs the addon depends on exist (`"name=type;…"`), the handler errors caught this session (at most 10), the raw Skills-tab rows, the last merchant's raw items, the function names inside the modern API namespaces (`"C_X=FnA FnB;…"`), the raw `GetProfessions` slots, and any database setup error. It exists so `tools/savedvars_report.py` can explain a missing capture without Lua error popups (§6). AHSync never ingests it, and each session replaces it.
 - `confirmed` starts `false` when the hook fires and turns `true` when the action is confirmed (§5.2). The same row is updated in place.
 - Untracked changes (FM21) are not events. AHSync derives them by comparing consecutive inventory snapshots with the events between them.
 
@@ -1118,7 +1118,11 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `Data.lua` → 
 ## 6. To verify
 
 1. ~~**API key tier**~~: done 2026-10-16 (§2.1). The key has Premium features through the contributor role, which expires unless scans are uploaded. The `books`, candle, snapshot and items formats were recorded on 2026-10-16 (§2.1 Response formats). Still to check: the `volume` row format, because the file was empty for our market. Re-run `tools/record_fixtures.py` once it has data.
-2. **Forever game APIs** (in-game `/dump`): the trade skill API (`GetTradeSkill*` / `GetCraft*`, or `C_TradeSkillUI`), the AH API (`C_AuctionHouse.ReplicateItems`?), the bank and mail APIs, and the tooltip hook.
+2. **Forever game APIs.** Verified 2026-10-16 on client 1.60.1 70425 through the addon's diagnostics: **Forever uses the modern (retail-style) API, not Classic's.**
+   - Present: `GetProfessions`/`GetProfessionInfo`, `C_TradeSkillUI`, `C_MerchantFrame`, `C_Container`, the `GetInbox*` mail functions, `C_AuctionHouse`.
+   - Missing: `GetNumSkillLines`/`GetSkillLineInfo` (there is no Classic Skills tab), `GetTradeSkill*`, `GetCraft*`, `GetMerchantItemInfo`, the legacy `GetContainerItemInfo`, `QueryAuctionItems`/`CanSendAuctionQuery`/`GetAuctionItemInfo`. The event `TRADE_SKILL_UPDATE` is unknown.
+   - Bags and bank capture work through `C_Container`. Professions and the merchant now use the modern calls (`Adapter.lua` picks them when present).
+   - Still to check: which functions `C_TradeSkillUI` and `C_AuctionHouse` contain (the diagnostics list them), to write the recipe reader and the M6 scanner against them; and the tooltip hook.
 3. **Disenchant tables and skill brackets** on Forever.
 4. **AH fees and auction durations**: deposit rate per duration, 5% / 15% cut, and the available durations.
 5. **Time-left bands**: the bounds of short / medium / long / very long (§3.3.1).

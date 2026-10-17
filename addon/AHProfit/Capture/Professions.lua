@@ -18,6 +18,7 @@ Professions.NAMES = {
   Cooking = true, ["First Aid"] = true, Fishing = true,
 }
 
+local TRADE_UPDATE = Adapter.TradeUpdateEvent()   -- modern or Classic event name
 local windowOpen = { trade = false, craft = false }
 local merchantOpen = false
 
@@ -121,7 +122,7 @@ local function OnSkillsChanged()
   Events.Debounce("professions.skills", CaptureSkillsLive)
 end
 
---- TRADE_SKILL_UPDATE while the window is open: debounced recipe capture.
+--- TRADE_SKILL_LIST_UPDATE (modern) / TRADE_SKILL_UPDATE (Classic) while open: debounced capture.
 local function OnTradeUpdate()
   Events.Debounce("professions.trade", CaptureTradeLive)
 end
@@ -141,10 +142,10 @@ end
 local function OnTradeWindow(event)
   windowOpen.trade = event == "TRADE_SKILL_SHOW"
   if windowOpen.trade then
-    Events.Register("TRADE_SKILL_UPDATE", OnTradeUpdate)
+    Events.Register(TRADE_UPDATE, OnTradeUpdate)
     OnTradeUpdate()
   else
-    Events.Unregister("TRADE_SKILL_UPDATE", OnTradeUpdate)
+    Events.Unregister(TRADE_UPDATE, OnTradeUpdate)
   end
 end
 

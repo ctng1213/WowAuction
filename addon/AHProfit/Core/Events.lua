@@ -70,7 +70,9 @@ function Events.Register(event, handler)
   end
   list[#list + 1] = handler
   handlers[event] = list
-  frame:RegisterEvent(event)
+  -- An event this client doesn't know raises; keep the error instead (Forever lacks some
+  -- Classic events, e.g. TRADE_SKILL_UPDATE), so one bad name can't break the addon.
+  SafeCall(frame.RegisterEvent, frame, event)
 end
 
 --- Remove a handler; the frame unregisters the event when none is left (SPEC §5.1).
@@ -88,7 +90,7 @@ function Events.Unregister(event, handler)
   else
     handlers[event] = nil
     if event ~= "PLAYER_REGEN_DISABLED" and event ~= "PLAYER_REGEN_ENABLED" then
-      frame:UnregisterEvent(event)
+      SafeCall(frame.UnregisterEvent, frame, event)
     end
   end
 end

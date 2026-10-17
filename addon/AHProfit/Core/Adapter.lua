@@ -137,11 +137,36 @@ end
 
 -- ------------------------------------------------------------------ skills
 
---- The character's skill lines (professions, weapon skills, languages, ...).
---- UNVERIFIED: Classic GetNumSkillLines/GetSkillLineInfo; collapsed headers hide their lines.
----@return table[]|nil  { name, rank, max } per non-header line, in game order; nil when a
----                     collapsed header hides lines (SPEC §2.2.1: complete snapshots only)
+--- Pack a call's results, keeping trailing and embedded nils countable.
+---@return table  { n = number of results, ... }
+local function Pack(...)
+  return { n = select("#", ...), ... }
+end
+
+--- The character's professions through the modern API (Forever has it; SPEC §6, verified 2026-10-16).
+--- UNVERIFIED: GetProfessions() returns spellbook indices prof1, prof2, archaeology, fishing,
+--- cooking[, firstAid], any of them nil; GetProfessionInfo(i) returns name, icon, rank, max, ...
+---@return table[]  { name, rank, max } per profession, in GetProfessions order
+local function ReadProfessionLines()
+  local lines = {}
+  local indices = Pack(GetProfessions())
+  for slot = 1, indices.n do
+    local index = indices[slot]
+    if index then
+      local name, _, rank, maxRank = GetProfessionInfo(index)
+      if name then lines[#lines + 1] = { name = name, rank = rank, max = maxRank } end
+    end
+  end
+  return lines
+end
+
+--- The character's skill lines: professions through the modern API when present (Forever),
+--- else the Classic Skills tab (professions, weapon skills, languages, ...).
+--- UNVERIFIED (Classic path): GetNumSkillLines/GetSkillLineInfo; collapsed headers hide their lines.
+---@return table[]|nil  { name, rank, max } per line, in game order; nil when a collapsed
+---                     Classic header hides lines (SPEC §2.2.1: complete snapshots only)
 function Adapter.ReadSkillLines()
+  if type(GetProfessions) == "function" then return ReadProfessionLines() end
   local lines = {}
   for i = 1, GetNumSkillLines() do
     local name, isHeader, isExpanded, rank, _, _, maxRank = GetSkillLineInfo(i)
@@ -237,7 +262,31 @@ function Adapter.ReadRecipeWindow(kind)
   return { profession = profession, rank = rank, max = maxRank, recipes = recipes }
 end
 
+--- The event that says the open trade skill window's list changed.
+--- Forever has C_TradeSkillUI and rejects TRADE_SKILL_UPDATE as unknown (verified 2026-10-16).
+---@return string  "TRADE_SKILL_LIST_UPDATE" with the modern API, else "TRADE_SKILL_UPDATE"
+function Adapter.TradeUpdateEvent()
+  if type(C_TradeSkillUI) == "table" then return "TRADE_SKILL_LIST_UPDATE" end
+  return "TRADE_SKILL_UPDATE"
+end
+
 -- ------------------------------------------------------------------ merchant
+
+--- Stock and cost type of one merchant item, through the modern API when present.
+--- Forever has C_MerchantFrame and no GetMerchantItemInfo (verified 2026-10-16).
+--- UNVERIFIED: C_MerchantFrame.GetItemInfo(i) returns a table with numAvailable and hasExtendedCost.
+---@param i number  1-based merchant slot
+---@return number|nil numAvailable  -1 when unlimited
+---@return boolean|nil extendedCost true when it costs more than gold (tokens, items)
+local function MerchantItem(i)
+  if C_MerchantFrame and C_MerchantFrame.GetItemInfo then
+    local info = C_MerchantFrame.GetItemInfo(i)
+    if not info then return nil, nil end
+    return info.numAvailable, info.hasExtendedCost
+  end
+  local _, _, _, _, numAvailable, _, _, extendedCost = GetMerchantItemInfo(i)
+  return numAvailable, extendedCost
+end
 
 --- Items the open merchant sells in unlimited supply for gold (SPEC §3.4B vendor reagents).
 --- UNVERIFIED: Classic GetMerchantNumItems/GetMerchantItemInfo/GetMerchantItemLink.
@@ -245,7 +294,7 @@ end
 function Adapter.ReadMerchantKeys()
   local keys = {}
   for i = 1, GetMerchantNumItems() do
-    local _, _, _, _, numAvailable, _, _, extendedCost = GetMerchantItemInfo(i)
+    local numAvailable, extendedCost = MerchantItem(i)
     local key = Adapter.ItemKey(GetMerchantItemLink(i))
     if key and numAvailable == -1 and not extendedCost then keys[#keys + 1] = key end
   end
@@ -402,9 +451,47 @@ function Adapter.DescribeMerchant()
   return Describe(function()
     local rows = {}
     for i = 1, GetMerchantNumItems() do
-      local _, _, _, _, numAvailable, _, _, extendedCost = GetMerchantItemInfo(i)
+      local numAvailable, extendedCost = MerchantItem(i)
       local key = Adapter.ItemKey(GetMerchantItemLink(i))
       rows[i] = table.concat({ Field(key), Field(numAvailable), Field(extendedCost) }, "|")
+    end
+    return table.concat(rows, ";")
+  end)
+end
+
+--- The function names inside API namespaces, to write readers against what the client has.
+---@param names string[]  Namespace globals, e.g. { "C_TradeSkillUI" }
+---@return string         "C_X=FnA FnB;C_Y=nil" with function names sorted
+function Adapter.DescribeNamespaces(names)
+  local parts = {}
+  for i = 1, #names do
+    local namespace = LookupGlobal(names[i])
+    local functions = {}
+    if type(namespace) == "table" then
+      for key, value in pairs(namespace) do
+        if type(key) == "string" and type(value) == "function" then functions[#functions + 1] = key end
+      end
+      table.sort(functions)
+    end
+    parts[i] = names[i] .. "=" .. (type(namespace) == "table" and table.concat(functions, " ") or "nil")
+  end
+  return table.concat(parts, ";")
+end
+
+--- The raw professions as the modern API returns them.
+---@return string  "slot|index|name|rank|max;..." for each GetProfessions slot, or "error: ..."
+function Adapter.DescribeProfessions()
+  return Describe(function()
+    local rows = {}
+    local indices = Pack(GetProfessions())
+    for slot = 1, indices.n do
+      local index = indices[slot]
+      local name, rank, maxRank
+      if index then
+        local _
+        name, _, rank, maxRank = GetProfessionInfo(index)
+      end
+      rows[slot] = table.concat({ slot, Field(index), Field(name), Field(rank), Field(maxRank) }, "|")
     end
     return table.concat(rows, ";")
   end)
