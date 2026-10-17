@@ -22,6 +22,7 @@ from ahsync.ingest.savedvars import AHProfitData, SavedVarsError, is_unknown_suf
 from deploy import wow_path_from_config  # noqa: E402
 
 LOCATIONS = ("bags", "bank", "mail")
+SUFFIX_BASE = 2_147_483_648   # AHF key = item + 2^31 x v (SPEC §2.1)
 HINTS = {
     "professions": "open the Skills tab with every header expanded (Adapter: GetSkillLineInfo)",
     "recipes": "open each profession window (Adapter: ReadModernWindow, C_TradeSkillUI)",
@@ -83,9 +84,12 @@ def report_character(data: AHProfitData, char_id: str, gaps: list[str]) -> None:
             continue
         units = sum(r.qty for r in snapshot.rows)
         bound = sum(1 for r in snapshot.rows if r.bound)
-        suffixed = sum(1 for r in snapshot.rows if is_unknown_suffix(r.key))
+        suffixed = [r.key for r in snapshot.rows if r.key >= SUFFIX_BASE]
+        unknown = sum(1 for r in snapshot.rows if is_unknown_suffix(r.key))
         print(f"  {location:5}: {len(snapshot.rows)} stacks, {units} items, {bound} bound, "
-              f"{suffixed} random-suffix  (at {local_time(snapshot.at_ms)})")
+              f"{len(suffixed)} random-suffix (keyed), {unknown} unknown-suffix  (at {local_time(snapshot.at_ms)})")
+        for key in suffixed:
+            print(f"         suffix item {key % SUFFIX_BASE} v={key // SUFFIX_BASE} key={key}")
 
 
 def report_diagnostics(data: AHProfitData) -> None:
