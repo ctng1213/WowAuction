@@ -2,8 +2,8 @@
 
 * ``apply_data`` writes one parsed file (``savedvars.AHProfitData``) in one
   transaction. Every write is an idempotent upsert on a natural key, and the
-  merge rules (newest snapshot, newest rule, confirmed beats attempt, skills and
-  known recipes only grow) make the result independent of the order files are
+  merge rules (newest snapshot, newest rule, confirmed beats attempt, the newest
+  character's professions and known recipes) make the result independent of the order files are
   read in (FM12, FI2). It returns the item keys that changed, for the
   incremental update (SPEC §3.1.1).
 * ``read_and_apply`` reads one file from disk: only once it has been unchanged
@@ -146,6 +146,7 @@ class _Apply:
         self.dirty: set[int] = set()
         self.problems: list[str] = []
         self.pruning = _Pruning()
+        self.follows: set[str] = set()     # characters whose professions and known recipes follow this file
 
     def guarded(self, what: str, write: Callable[[], None]) -> bool:
         """Run one row's writes; a failure undoes only that row and is recorded (SPEC §5.2 rule 6).
@@ -180,6 +181,9 @@ class _Apply:
             characters: From the file.
         """
         for c in characters:
+            stored_updated = self.db.character_updated(c.char_id)
+            if stored_updated is None or c.updated_ms >= stored_updated:     # SPEC §2.2.1 "follow the file"
+                self.follows.add(c.char_id)
             market = market_for(c.faction, c.realm, self.realms)
             row = {"id": c.char_id, "name": c.name, "realm": c.realm, "faction": c.faction, "market": market,
                    "class": c.class_token, "level": c.level, "gold": c.gold_copper, "updated": c.updated_ms}
@@ -191,18 +195,27 @@ class _Apply:
                 self.db.clear_status(f"realm:{c.realm}")
 
     def recipes(self, data: sv.AHProfitData) -> None:
-        """Store professions, recipe definitions, known recipes and vendor reagents.
+        """Store recipe definitions, professions, known recipes and vendor reagents.
+
+        A character's professions and known recipes are replaced with the file's when the
+        file's character is at least as new as the stored one (SPEC §2.2.1). Only characters
+        with entries in that section are replaced: an empty entry reads the same as a missing one.
 
         Args:
             data: The parsed file.
         """
-        for p in data.professions:
-            self.guarded(f"professions[{p.char_id!r}][{p.profession!r}]",
-                         lambda p=p: self.db.upsert_profession(p.char_id, p.profession, p.skill, p.max_skill))
         for r in data.recipes:
             self.guarded(f"recipes[{r.profession!r}][{r.spell_id}]", lambda r=r: self._recipe(r))
+        skills: dict[str, dict[str, tuple[int, int]]] = {}
+        for p in data.professions:
+            skills.setdefault(p.char_id, {})[p.profession] = (p.skill, p.max_skill)
+        known: dict[str, set[int]] = {}
         for k in data.known_recipes:
-            self.guarded(f"knownRecipes[{k.char_id!r}][{k.spell_id}]", lambda k=k: self._known(k))
+            known.setdefault(k.char_id, set()).add(k.spell_id)
+        for char_id in sorted(self.follows & skills.keys()):
+            self.guarded(f"professions[{char_id!r}]", lambda c=char_id: self.db.replace_professions(c, skills[c]))
+        for char_id in sorted(self.follows & known.keys()):
+            self.guarded(f"knownRecipes[{char_id!r}]", lambda c=char_id: self._known(c, known[c]))
         for key in data.vendor_reagents:
             if self.db.add_vendor_reagent(key):
                 self.mark([key])
@@ -222,14 +235,15 @@ class _Apply:
         if self.db.upsert_recipe(row, reagents):
             self.mark([r.product_key, *(k for (k,) in reagents)])
 
-    def _known(self, k: sv.KnownRecipe) -> None:
-        """Store one known recipe; a new one dirties the recipe's items.
+    def _known(self, char_id: str, spell_ids: set[int]) -> None:
+        """Replace a character's known recipes; each recipe gained or lost dirties its items.
 
         Args:
-            k: The known recipe.
+            char_id: "Name-Realm".
+            spell_ids: The file's known recipes for that character.
         """
-        if self.db.add_known_recipe(k.char_id, k.spell_id):
-            self.mark(self.db.recipe_item_keys(k.spell_id))
+        for spell_id in sorted(self.db.replace_known_recipes(char_id, spell_ids)):
+            self.mark(self.db.recipe_item_keys(spell_id))
 
     def snapshots(self, data: sv.AHProfitData) -> None:
         """Replace inventory places and own auctions with newer snapshots (SPEC §2.2.1).

@@ -234,13 +234,30 @@ def test_an_older_file_never_reverts_a_character_and_level_only_rises(db):
 
 # ---------------------------------------------------------------- recipes and professions
 
-def test_skills_only_rise_and_known_recipes_are_add_only(db):
-    prof = {AMAYA: {"Enchanting": {"skill": 142, "max": 150}}}
-    apply_db(db, {"professions": prof, "knownRecipes": {AMAYA: "7418;7421"}})
-    apply_db(db, {"professions": {AMAYA: {"Enchanting": {"skill": 100, "max": 150}}},
-                  "knownRecipes": {AMAYA: "7418"}})
-    assert rows(db, "SELECT skill, max_skill FROM professions") == [(142, 150)]
-    assert rows(db, "SELECT spell_id FROM known_recipes ORDER BY spell_id") == [(7418,), (7421,)]
+def test_professions_and_known_recipes_follow_the_newest_file(db):
+    def save(updated: int, skills: dict, known: str) -> ApplyResult:
+        """Apply a file with Amaya at this updated time."""
+        return apply_db(db, {"characters": {AMAYA: CHAR[AMAYA] | {"updated": updated}}, "professions": {AMAYA: skills},
+                             "knownRecipes": {AMAYA: known}})
+
+    save(T, {"Enchanting": {"skill": 142, "max": 150}, "Mining": {"skill": 60, "max": 75}}, "7418;7421")
+    # She unlearned Mining and relearned Enchanting: the newer file is copied, losses included.
+    save(T + HOUR, {"Enchanting": {"skill": 1, "max": 75}}, "7418")
+    assert rows(db, "SELECT profession, skill, max_skill FROM professions") == [("Enchanting", 1, 75)]
+    assert rows(db, "SELECT spell_id FROM known_recipes") == [(7418,)]
+
+    older = save(T, {"Enchanting": {"skill": 142, "max": 150}}, "7418;7421")     # an older file changes nothing
+    assert older.dirty_keys == frozenset()
+    assert rows(db, "SELECT profession, skill FROM professions") == [("Enchanting", 1)]
+    assert rows(db, "SELECT spell_id FROM known_recipes") == [(7418,)]
+
+    save(T + HOUR, {"Enchanting": {"skill": 5, "max": 75}}, "7418;7421")         # equally new: it follows
+    assert rows(db, "SELECT skill FROM professions") == [(5,)] and db.count("known_recipes") == 2
+
+
+def test_professions_without_their_character_in_the_file_change_nothing(db):
+    apply_db(db, {"professions": {AMAYA: {"Mining": {"skill": 1, "max": 75}}}, "knownRecipes": {AMAYA: "1"}})
+    assert db.count("professions") == 0 and db.count("known_recipes") == 0
 
 
 def test_a_known_skill_or_cooldown_is_never_replaced_by_unknown_and_reagent_changes_dirty(db):
@@ -258,7 +275,8 @@ def test_a_known_skill_or_cooldown_is_never_replaced_by_unknown_and_reagent_chan
 def test_a_newly_known_recipe_and_a_new_vendor_reagent_dirty_their_items(db):
     apply_db(db, {"recipes": {"Blacksmithing": {2663: {"product": 6217, "yieldMin": 1, "yieldMax": 1,
                                                       "reagents": "2840,2"}}}})
-    result = apply_db(db, {"knownRecipes": {BRUGAN: "2663"}, "vendorReagents": "2320"})
+    brugan = {BRUGAN: CHAR[AMAYA] | {"name": "Brugan"}}
+    result = apply_db(db, {"characters": brugan, "knownRecipes": {BRUGAN: "2663"}, "vendorReagents": "2320"})
     assert result.dirty_keys == {6217, 2840, 2320}
 
 

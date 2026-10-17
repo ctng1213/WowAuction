@@ -122,6 +122,10 @@ class _Session:
                          level=character["level"] + rng.randint(0, 1))
         skills = self.db["professions"].setdefault(char_id, {"Blacksmithing": {"skill": 1, "max": 75}})
         skills["Blacksmithing"]["skill"] = min(75, skills["Blacksmithing"]["skill"] + rng.randint(0, 5))
+        if "Mining" in skills and rng.random() < 0.3:
+            del skills["Mining"]                                   # unlearned: gone from the file
+        elif rng.random() < 0.4:
+            skills["Mining"] = {"skill": rng.randint(1, 75), "max": 75}   # (re)learned at some skill
         for spell, (profession, definition, first) in RECIPES.items():
             if index >= first:
                 known = index > first or "skill" not in definition   # first seen without skill/cooldown
@@ -129,6 +133,8 @@ class _Session:
                     k: v for k, v in definition.items() if known or k not in ("skill", "cooldown")}
         known = {int(s) for s in self.db["knownRecipes"].get(char_id, "").split(";") if s}
         known.add(rng.choice(sorted(RECIPES)))
+        if len(known) > 1 and rng.random() < 0.2:
+            known.discard(rng.choice(sorted(known)))               # a recipe lost with an unlearned profession
         self.db["knownRecipes"][char_id] = ";".join(str(s) for s in sorted(known))
         vendor = {int(k) for k in self.db["vendorReagents"].split(";") if k} | {rng.choice((2320, 2321, 2324))}
         self.db["vendorReagents"] = ";".join(str(k) for k in sorted(vendor))

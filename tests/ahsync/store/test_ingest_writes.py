@@ -30,8 +30,18 @@ def test_savepoint_undoes_only_the_failing_rows_writes(db):
 
 
 def test_add_only_writes_report_whether_the_row_was_new(db):
-    assert db.add_known_recipe("A-R", 2663) and not db.add_known_recipe("A-R", 2663)
     assert db.add_vendor_reagent(2320) and not db.add_vendor_reagent(2320)
+
+
+def test_professions_and_known_recipes_are_replaced_whole_reporting_changes(db):
+    assert db.replace_professions("A-R", {"Mining": (60, 75), "Cooking": (1, 75)})
+    assert not db.replace_professions("A-R", {"Mining": (60, 75), "Cooking": (1, 75)})
+    assert db.replace_professions("A-R", {"Mining": (61, 75)})
+    assert db.conn.execute("SELECT profession, skill, max_skill FROM professions").fetchall() == [("Mining", 61, 75)]
+    assert db.replace_known_recipes("A-R", {1, 2}) == {1, 2}
+    assert db.replace_known_recipes("A-R", {2, 3}) == {1, 3}
+    assert db.replace_known_recipes("A-R", {2, 3}) == set()
+    assert db.character_updated("A-R") is None
 
 
 def test_replace_snapshot_applies_only_newer_snapshots_and_reports_changed_keys(db):

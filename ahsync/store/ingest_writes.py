@@ -69,22 +69,31 @@ class IngestWrites:
         when = f"{newer} OR excluded.level > characters.level OR excluded.market IS NOT characters.market"
         return self._upsert("characters", row, ("id",), merge, when)
 
-    def upsert_profession(self, char_id: str, profession: str, skill: int, max_skill: int) -> bool:
-        """Store a profession's skill; skill and maximum only rise, so file order doesn't matter (FI2).
+    def character_updated(self, char_id: str) -> int | None:
+        """A stored character's `updated` time.
 
         Args:
             char_id: "Name-Realm".
-            profession: enUS profession name.
-            skill: Current skill.
-            max_skill: Current maximum.
 
         Returns:
-            True when the row was inserted or changed.
+            UTC ms, or None when the character isn't stored.
         """
-        row = {"char_id": char_id, "profession": profession, "skill": skill, "max_skill": max_skill}
-        merge = {"skill": "MAX(skill, excluded.skill)", "max_skill": "MAX(max_skill, excluded.max_skill)"}
-        return self._upsert("professions", row, ("char_id", "profession"), merge,
-                            "excluded.skill > professions.skill OR excluded.max_skill > professions.max_skill")
+        row = self.conn.execute("SELECT updated FROM characters WHERE id = ?", (char_id,)).fetchone()
+        return row[0] if row else None
+
+    def replace_professions(self, char_id: str, skills: dict[str, tuple[int, int]]) -> bool:
+        """Replace a character's professions with a file's (SPEC §2.2.1 "follow the file").
+
+        Args:
+            char_id: "Name-Realm".
+            skills: Profession name -> (skill, max skill).
+
+        Returns:
+            True when any profession was added, removed or changed.
+        """
+        rows = {(name, skill): max_skill for name, (skill, max_skill) in skills.items()}
+        return bool(self._replace_rows("professions", {"char_id": char_id}, ("profession", "skill", "max_skill"),
+                                       rows))
 
     def upsert_recipe(self, row: dict[str, object], reagents: dict[int, int]) -> bool:
         """Store a recipe definition and its reagents; a known skill or cooldown is never replaced by unknown.
@@ -104,17 +113,22 @@ class IngestWrites:
         recipe = {"profession": row["profession"], "spell_id": row["spell_id"]}
         return bool(self._replace_rows("reagents", recipe, ("key", "count"), reagents)) or changed
 
-    def add_known_recipe(self, char_id: str, spell_id: int) -> bool:
-        """Record that a character knows a recipe; add-only, like the addon.
+    def replace_known_recipes(self, char_id: str, spell_ids: set[int]) -> set[int]:
+        """Replace a character's known recipes with a file's (SPEC §2.2.1 "follow the file").
 
         Args:
             char_id: "Name-Realm".
-            spell_id: The recipe's spell id.
+            spell_ids: The recipes' spell ids.
 
         Returns:
-            True when it was new.
+            Spell ids added or removed.
         """
-        return self._upsert("known_recipes", {"char_id": char_id, "spell_id": spell_id}, ("char_id", "spell_id"), {})
+        old = {r[0] for r in self.conn.execute("SELECT spell_id FROM known_recipes WHERE char_id = ?", (char_id,))}
+        for spell_id in sorted(old - spell_ids):
+            self.conn.execute("DELETE FROM known_recipes WHERE char_id = ? AND spell_id = ?", (char_id, spell_id))
+        self.conn.executemany("INSERT INTO known_recipes(char_id, spell_id) VALUES(?, ?)",
+                              [(char_id, spell_id) for spell_id in sorted(spell_ids - old)])
+        return old ^ spell_ids
 
     def add_vendor_reagent(self, key: int) -> bool:
         """Record an item a merchant was seen selling; add-only.
