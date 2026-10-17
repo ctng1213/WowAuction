@@ -1,0 +1,50 @@
+"""Retention (SPEC §3.2): scenario S6 and the other windows."""
+from __future__ import annotations
+
+from ahsync.clock import DAY_MS
+from ahsync.store.db import BookScan, Database
+from ahsync.store.prune import prune
+from tests.support.builders import duration_ms, item_key
+from tests.support.fake_clock import FakeClock
+from tests.support.fake_transport import DEFAULT_MARKET
+
+MARKET = DEFAULT_MARKET
+NOW = FakeClock().now_ms()
+
+
+def open_db(tmp_path) -> Database:
+    """A fresh database."""
+    return Database.open(tmp_path / "ahsync.db", NOW, None)
+
+
+def test_S6_rows_89d23h_and_90d01h_old_keep_the_first_and_delete_the_second(tmp_path):
+    db = open_db(tmp_path)
+    linen = item_key("Linen Cloth")
+    kept, dropped = NOW - duration_ms("89d23h"), NOW - duration_ms("90d1h")
+    db.upsert_candles("candles_h1", MARKET, [(linen, t, 50, 50, 50, 50, 1) for t in (kept, dropped)], "ahf")
+
+    report = prune(db, NOW)
+
+    assert db.conn.execute("SELECT t FROM candles_h1").fetchall() == [(kept,)]
+    assert report.deleted["candles_h1"] == 1
+    db.close()
+
+
+def test_books_keep_30_days_and_rule_tombstones_90(tmp_path):
+    db = open_db(tmp_path)
+    db.store_book(BookScan("old", MARKET, "ahf", None, NOW - 31 * DAY_MS), [(1, 10, 1, 4, 1)])
+    db.store_book(BookScan("new", MARKET, "ahf", None, NOW - 29 * DAY_MS), [(1, 10, 1, 4, 1)])
+    db.conn.executemany("INSERT INTO item_rules(key, rule, set_at, source) VALUES(?, ?, ?, 'addon')",
+                        [(1, "none", NOW - 91 * DAY_MS), (2, "no_buy", NOW - 91 * DAY_MS), (3, "none", NOW - DAY_MS)])
+    db.conn.execute("INSERT INTO volume_d1(market, key, day, src) VALUES(?, 1, ?, 'books')",
+                    (MARKET, NOW // DAY_MS - 91))
+    db.record_fetch_failure(MARKET, NOW // 3_600_000 - 91 * 24, "bad", NOW)
+
+    report = prune(db, NOW)
+
+    assert [r[0] for r in db.conn.execute("SELECT scan_id FROM scans")] == ["new"]
+    assert db.count("book_entries") == 1
+    assert sorted(r[0] for r in db.conn.execute("SELECT key FROM item_rules")) == [2, 3]
+    assert db.count("volume_d1") == 0 and db.count("fetch_failures") == 0
+    assert report.total == 4
+    db.close()

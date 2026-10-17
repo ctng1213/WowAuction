@@ -3,9 +3,8 @@
 # Tokens: an ID (P12) or a same-prefix range (V1-V18). '#' starts a comment.
 
 # M1 sync and storage
-S1-S11
 SEC1-SEC7
-FM1-FM24
+FM5 FM7-FM9 FM11-FM14 FM17-FM24
 FI1-FI2
 
 # M3-M4 engine
@@ -32,6 +31,3 @@ LP1
 # M2/M5 addon
 A1-A5
 UI1-UI11
-
-# Added after the M1 review (M1 fixes)
-FM25-FM27
