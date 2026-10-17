@@ -10,13 +10,16 @@ from pathlib import Path
 
 import pytest
 
-from ahsync.__main__ import ALREADY_RUNNING, InstanceLock, Runtime, build_hooks, main, run, safe_backup
+from ahsync.__main__ import (ALREADY_RUNNING, InstanceLock, Runtime, build_hooks, main, read_savedvars_at_start, run,
+                             safe_backup)
 from ahsync.api.ahf import AhfApi
 from ahsync.api.client import ApiClient
 from ahsync.clock import HOUR_MS
 from ahsync.config import Config
+from ahsync.ingest.apply import ingest_file
 from ahsync.store.db import Database
 from ahsync.sync.catchup import SyncContext, run_catchup
+from ahsync.sync.scheduler import SavedVarsWatcher
 from tests.support.builders import AhfWorld, h1_path
 from tests.support.fake_clock import FakeClock
 from tests.support.fake_transport import DEFAULT_MARKET
@@ -210,17 +213,45 @@ def test_a_savedvariables_file_still_being_written_at_start_is_read_by_the_watch
     assert code == 0 and len(stored_characters(tmp_path)) == 2
 
 
-def test_a_failed_start_up_read_is_logged_not_fatal(tmp_path, monkeypatch, caplog):
+def test_a_failed_start_up_read_is_logged_on_status_and_retried_by_the_watcher(tmp_path, monkeypatch, caplog):
     world = AhfWorld(FakeClock())
     write_savedvars(tmp_path, world.clock, age_ms=60_000)
+    calls = []
+
+    def parser_bug_once(*args):
+        calls.append(args[0])
+        if len(calls) == 1:
+            raise KeyError("a bug, not an expected error")
+        return ingest_file(*args)
+
+    monkeypatch.setattr("ahsync.__main__.ingest_file", parser_bug_once)
+    with caplog.at_level(logging.WARNING, logger="ahsync"):
+        code, _ = start(tmp_path, world)                                  # start-up only, no ticks
+    assert code == 0 and "reading AHProfit.lua failed" in caplog.text
+    db = Database.open(tmp_path / "data" / "ahsync.db", world.clock.now_ms(), None)
+    assert db.status("savedvars:ACC").kind == "savedvars_failed"
+    db.close()
+
+    code, _ = start(tmp_path, world, stop_after_ticks=2)                 # the next run's watcher reads it
+    assert code == 0 and len(stored_characters(tmp_path)) == 2
+
+
+def test_a_start_up_failure_that_cant_reach_status_is_still_only_logged(tmp_path, monkeypatch, caplog):
+    clock = FakeClock()
+    write_savedvars(tmp_path, clock, age_ms=60_000)
+
+    class BrokenDb:
+        def set_status(self, *_args):
+            raise sqlite3.OperationalError("database or disk is full")
 
     def disk_full(*_args):
         raise sqlite3.OperationalError("database or disk is full")
 
     monkeypatch.setattr("ahsync.__main__.ingest_file", disk_full)
+    watcher = SavedVarsWatcher(lambda: [], lambda _p: None)
     with caplog.at_level(logging.WARNING, logger="ahsync"):
-        code, _ = start(tmp_path, world)
-    assert code == 0 and "reading AHProfit.lua failed" in caplog.text
+        read_savedvars_at_start(BrokenDb(), clock, Config(wow_path=str(tmp_path / "wow")), watcher)
+    assert "could not record the failure on Status" in caplog.text
 
 
 def test_savedvars_hook_ingests_the_changed_file(tmp_path):

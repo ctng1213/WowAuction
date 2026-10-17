@@ -177,13 +177,20 @@ def read_savedvars_at_start(db: Database, clock: Clock, config: Config, watcher:
         clock: Time source.
         config: Settings (wow_path, realms).
         watcher: Told which file versions were read, so the steady state doesn't read them again. A file
-            still being written is left to the watcher.
+            still being written, or whose read failed, is left to the watcher, which tries it again.
     """
+    log = logging.getLogger("ahsync")
     for path in find_savedvars(Path(config.wow_path)):
         try:
             result = ingest_file(path, db, clock, config.realms)
-        except (OSError, sqlite3.Error) as error:
-            logging.getLogger("ahsync").warning("reading %s failed: %s", path.name, error)
+        except Exception:                         # like Scheduler._run: one file can't stop the start-up
+            log.exception("reading %s failed; will try again", path.name)
+            account = path.parent.parent.name
+            try:
+                db.set_status(f"savedvars:{account}", "error", "savedvars_failed", {"account": account},
+                              clock.now_ms())
+            except sqlite3.Error:
+                log.warning("could not record the failure on Status")
             continue
         if result.mtime_ms is not None and result.reason != "unstable":
             watcher.mark_handled(path, result.mtime_ms)

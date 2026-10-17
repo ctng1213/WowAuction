@@ -10,7 +10,8 @@ be wired later without touching the timing rules here:
 - first tick after `daily_refresh_time` local each day → `full_refresh`, then `daily`
   (d1/volume refresh, prune, backup); once a week → `weekly` (VACUUM)
 - every 5 s → stat the SavedVariables files; a file whose modification time changed
-  and has then been unchanged for 2 s → `savedvars_changed(path)` (SPEC §2.2, S10).
+  and has then been unchanged for 2 s → `savedvars_changed(path)` (SPEC §2.2, S10);
+  a hook that raises leaves that version unread, so the next watch tries again.
   Watching only: parsing is the ingest's job.
 """
 from __future__ import annotations
@@ -87,6 +88,14 @@ class SavedVarsWatcher:
             mtime_ms: Its modification time when it was read, UTC ms.
         """
         self._handled[path] = mtime_ms
+
+    def forget(self, path: Path) -> None:
+        """Un-mark a file whose read failed, so the next poll returns it again.
+
+        Args:
+            path: The file.
+        """
+        self._handled.pop(path, None)
 
     def poll(self, now_ms: int) -> list[Path]:
         """Check each file once.
@@ -216,7 +225,8 @@ class Scheduler:
         if self.watcher is not None and now >= self.next_watch:
             self.next_watch = now + WATCH_INTERVAL_MS
             for path in self.watcher.poll(now):
-                self._run("savedvars_changed", lambda p=path: self.hooks.savedvars_changed(p), ran)
+                if not self._run("savedvars_changed", lambda p=path: self.hooks.savedvars_changed(p), ran):
+                    self.watcher.forget(path)          # read it again at the next watch
         if now >= self.next_status:
             self.next_status = self._next_at_minute(now, 0)
             self._run("status_pass", self.hooks.status_pass, ran)
@@ -235,19 +245,24 @@ class Scheduler:
             self._run("weekly", self.hooks.weekly, ran)
         return ran
 
-    def _run(self, name: str, job: Callable[[], None], ran: list[str]) -> None:
+    def _run(self, name: str, job: Callable[[], None], ran: list[str]) -> bool:
         """Run one job, logging instead of raising on failure (SPEC §5.2: degrade, don't crash).
 
         Args:
             name: Job name.
             job: The callable.
             ran: Names of jobs run so far; this one is appended.
+
+        Returns:
+            True when the job finished without raising.
         """
         ran.append(name)
         try:
             job()
         except Exception:
             log.exception("%s failed; will try again at its next time", name)
+            return False
+        return True
 
     def next_wake_ms(self) -> int:
         """When the next job is due.

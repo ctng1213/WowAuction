@@ -66,6 +66,24 @@ def test_mark_handled_skips_only_the_version_already_read():
     assert watcher.poll(clock.now_ms()) == [SV]
 
 
+def test_a_savedvars_hook_that_fails_leaves_the_version_unread_for_the_next_watch(caplog):
+    clock = FakeClock()
+    mtimes = {SV: clock.now_ms() - 10_000}
+    calls: list[Path] = []
+
+    def flaky(path: Path) -> None:
+        calls.append(path)
+        if len(calls) == 1:
+            raise RuntimeError("database is locked")
+
+    scheduler = Scheduler(clock, SchedulerHooks(savedvars_changed=flaky), watcher_for(mtimes))
+    for _ in range(3):
+        clock.advance(5_000)
+        scheduler.tick()
+    assert calls == [SV, SV]                       # failed, retried 5 s later, then handled once
+    assert "savedvars_changed failed" in caplog.text
+
+
 def test_hourly_jobs_run_at_00_and_06_and_daily_after_refresh_time():
     clock = FakeClock(now_ms=FakeClock().now_ms() + 30 * 60_000)     # 12:30 UTC
     hooks = SchedulerHooks()
