@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ahsync.store.ingest_writes import IngestWrites
+from ahsync.store.refresh_store import RefreshStore
 
 SCHEMA_VERSION = 1
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
@@ -25,7 +26,7 @@ SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 MIGRATIONS: dict[int, str] = {}
 BACKUP_KEEP = 3
 BACKUP_PREFIX = "ahsync-"
-STAGING_TABLES = ("item_stats_new", "plan_new")
+STAGING_TABLES = ("item_stats_new", "plan_new", "views_new")
 CANDLE_TABLES = ("candles_h1", "candles_d1")
 # Tables and time columns prune may delete from (SPEC §3.2 retention). Guards the SQL built in delete_before.
 PRUNABLE = {
@@ -170,7 +171,7 @@ def restore_newest_backup(path: Path, backup_dir: Path, now_ms: int) -> Path | N
     return None
 
 
-class Database(IngestWrites):
+class Database(IngestWrites, RefreshStore):
     """A connection to data/ahsync.db with AHSync's queries and upserts."""
 
     def __init__(self, conn: sqlite3.Connection, path: Path) -> None:

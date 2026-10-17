@@ -773,6 +773,13 @@ You set or clear a rule from any dashboard row, from the **Rules** page, or by r
    - `views.py` builds the pair in one place, and a convention test checks that every table using it has both columns in that order.
 
    Hovering a Chance cell, or opening the item detail, shows the breakdown: market sell-through, days of supply, units ahead of you and when they expire, expected undercuts, queue result, tier history and your record.
+
+   **Dashboard data (the contract between the full refresh and `web/`).** A full refresh writes one JSON payload per page and market into `views` (§3.2), swapped in atomically (§5.2). The server serves them as stored and computes nothing (§8.5).
+   - `GET /` serves the page (`web/static/index.html`) with the per-run token embedded.
+   - `GET /api/markets` returns `{"markets": [...], "default": "<id>"}` from the config.
+   - `GET /api/views/<page>?market=<id>` returns `{"built": <ms>, "data": <payload>}`, or `404 {"error": "no_refresh_yet"}` before the first refresh. `<page>` is `disenchant`, `craft` (M3), and later `today`, `week`, `on_ah`, `flip`, `inventory`, `history`, `rules`, `characters`, `status`.
+   - Payload of `disenchant` and `craft`: `{"rows": [...], "hidden": <n>}`. Each row is built by `views.disenchant_row` / `views.craft_row`: every cell is already formatted text (money, percents, the Chance · Volume pair with its `dot`, risk with `risk_amber`), plus a `sort` object with one number per sortable column. The page sorts by `sort` values and filters by row fields (quality, profession, source, profit); it never parses or computes numbers.
+   - `POST /api/refresh` asks for a full refresh (merged with one already queued; IU4) and returns `202`. `POST /api/skip {"action_id": ...}` marks a plan action skipped (§3.4.1). Writes follow the Security rules above.
 2. **`Interface/AddOns/AHProfit_Data/Data.lua`**, written atomically (temp file + rename):
    - compact prices per item, stored as strings so the file stays under Lua's constant limits, with the sell-probability curve encoded one character per point (§3.1.1)
    - the same action list the dashboard shows, with action ids so the addon can mark them done

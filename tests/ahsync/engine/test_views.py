@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from ahsync.engine.views import (
-    ChanceVolume, TooltipLine, chance_volume, craft_money, delta_percent, money, risk, round_half_up,
+    ChanceVolume, CraftInput, DisenchantInput, TooltipLine, age_text, chance_volume, craft_money, craft_row,
+    delta_percent, disenchant_row, money, risk, round_half_up,
     signed_money, tooltip,
 )
 
@@ -87,3 +88,36 @@ def test_risk_without_recorded_gold_and_zero_delta():
     assert risk(100, 0) == ("—", False)
     assert delta_percent(None, 100) is None and delta_percent(100, None) is None
     assert tooltip(1000, "now", 1000, None, False, None, None, None)[1].value == "10s (30d, 0%)"
+
+
+def test_age_text():
+    assert [age_text(v) for v in (None, 30_000, 20 * 60_000, 2 * 3_600_000, 6 * 86_400_000)] == \
+        ["—", "now", "20 min", "2 h", "6 d"]
+
+
+def test_disenchant_row_cells():
+    pair = chance_volume(1.0, 100, 210, "ahf", 400)
+    row = disenchant_row(DisenchantInput(4239, "Scouting Gloves of the Monkey", 2, 25, 800,
+                                         (("Strange Dust", 2.5),), 1425, pair, 2 * 3_600_000), 50 * G)
+    assert (row["buy"], row["mats"], row["ev"], row["profit"], row["profit_class"]) == \
+        ("8s", "2.5 Strange Dust", "14s 25c", "+6s 25c", "pos")
+    assert (row["chance"], row["volume"], row["risk"], row["price_age"]) == ("100%", "210/day AHF · 400 on AH",
+                                                                            "0.2%", "2 h")
+    assert row["sort"] == {"ilvl": 25, "buy": 800, "ev": 1425, "profit": 625, "price_age": 7_200_000}
+    unknown_age = disenchant_row(DisenchantInput(1, "x", 2, 5, 900, (), 0.0, pair, None), 0)
+    assert (unknown_age["profit_class"], unknown_age["sort"]["price_age"]) == ("neg", -1)
+
+
+def test_craft_row_cells():
+    pair = chance_volume(0.58, 60, 6, "books", 20)
+    cells = craft_money(3, 6000, {}, NAMES)
+    row = craft_row(CraftInput(2663, "Copper Rod", 1, "Brugan (Blacksmithing 112)", "AH", 3, cells, 6000,
+                               3800.0, 5400.0, pair, "", "Buys 6 Copper Bar on the AH"), 50 * G)
+    assert (row["mats_each"], row["mats_total"], row["value_each"], row["profit"], row["risk"]) == \
+        ("20s", "60s", "38s", "+54s", "1.2%")
+    assert row["note"] == "Buys 6 Copper Bar on the AH"
+    assert row["sort"] == {"crafts": 3, "mats_total": 6000, "profit": 5400, "value_each": 3800}
+    owned = craft_row(CraftInput(1, "x", 1, "A", "Owned", 1, craft_money(1, 0, {BAR: 2}, NAMES), 0, None,
+                                 -1.0, pair, "ready", ""), 50 * G)
+    assert (owned["note"], owned["value_each"], owned["sort"]["value_each"], owned["profit_class"]) == \
+        ("uses 2 owned Copper Bar", "—", -1, "neg")

@@ -194,6 +194,16 @@ CREATE TABLE IF NOT EXISTS item_stats_new(
     PRIMARY KEY(market, key)
 );
 
+-- Precomputed dashboard pages (SPEC §3.5): one JSON payload per page and market, swapped in by a full refresh.
+CREATE TABLE IF NOT EXISTS views(
+    page TEXT NOT NULL, market TEXT NOT NULL, body TEXT NOT NULL, built INTEGER NOT NULL,
+    PRIMARY KEY(page, market)
+);
+CREATE TABLE IF NOT EXISTS views_new(
+    page TEXT NOT NULL, market TEXT NOT NULL, body TEXT NOT NULL, built INTEGER NOT NULL,
+    PRIMARY KEY(page, market)
+);
+
 -- Status page lines (§3.2): one per topic (e.g. 'lost:<market>', 'format:snapshot'); level 'info' | 'warn' | 'error'.
 -- kind names the message; data holds its structured fields as JSON (ms ranges, counts, hours), rendered by views.
 CREATE TABLE IF NOT EXISTS status(
