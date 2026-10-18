@@ -30,11 +30,11 @@ def intel(*items: ItemIntel) -> MarketIntelligence:
 def test_EX2_the_file_holds_compact_item_strings_curves_and_a_checked_header():
     text = market_lua.market_lua([intel(LINEN_INTEL, EMPTY, replace(EMPTY, key=OTHER))], {M: {SHORT}},
                                  {"Amaya-Grommash": M}, BUILT)
-    assert f'I[{LINEN}]="45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0;138:4:139:1120:7;"' in text
-    assert f'I[{SHORT}]=",,,,,,,0,,,,6,,,1,,1;;"' in text and f"I[{OTHER}]" not in text
+    assert f'I[{LINEN}]="45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900;138:4:139:1120:7;"' in text
+    assert f'I[{SHORT}]=",,,,,,,0,,,,6,,,1,,1,250;;"' in text and f"I[{OTHER}]" not in text
     linen_curve = market_lua.trim_curve(CURVE, False)
     assert f'C[{LINEN}]="{linen_curve}"' in text and f"C[{SHORT}]" not in text
-    strings = len("45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0;138:4:139:1120:7;") + 72 + len(",,,,,,,0,,,,6,,,1,,1;;")
+    strings = len("45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900;138:4:139:1120:7;") + 72 + len(",,,,,,,0,,,,6,,,1,,1,250;;")
     assert f'checksum = "3:{strings}"' in text and "schemaVersion = 1," in text and f"generatedAt = {BUILT}," in text
     assert f'charMarkets = {{ ["Amaya-Grommash"] = "{M}" }}' in text
     assert f'["{M}"] = {{ observationsUntil = {BUILT - HOUR}, curveHour = {BUILT // HOUR}, I = I1, C = C1 }},' in text

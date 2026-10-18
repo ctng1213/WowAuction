@@ -275,7 +275,8 @@ function ViewModel.Today(actions, nowMs, offsetMs, minChance, lookOf, totalGold)
       hidden = hidden + 1
     else
       local counted = nets[a.id]
-      local row = Row(a, { net = counted.net, note = ViewModel.NoteOf(a, counted.note, posts, offsetMs) }, chance,
+      local note = a.ownNote or ViewModel.NoteOf(a, counted.note, posts, offsetMs)
+      local row = Row(a, { net = counted.net, note = note }, chance,
                       lookOf(a.key), totalGold, offsetMs)
       row.sortChance, row.sortChar = chance or -1, a.char
       rows[#rows + 1] = row

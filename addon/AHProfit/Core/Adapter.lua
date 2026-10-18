@@ -68,14 +68,15 @@ function Adapter.CreateFrame(kind, name, parent, template)
   return CreateFrame(kind, name, parent or UIParent, template)
 end
 
---- An item's name and quality from the client's item cache.
---- UNVERIFIED: Forever's GetItemInfo returns name first and quality third, as Classic's does.
+--- An item's name, quality and merchant price from the client's item cache.
+--- UNVERIFIED: Forever's GetItemInfo returns name 1st, quality 3rd and sell price 11th, as Classic's does.
 ---@param itemId number  Base item id
 ---@return string|nil    Name; nil while the item isn't cached yet
 ---@return number|nil    Quality 0-7
+---@return number|nil    What a merchant pays for one, copper (0 = can't be sold to one)
 function Adapter.ItemInfo(itemId)
-  local name, _, quality = GetItemInfo(itemId)
-  return name, quality
+  local name, _, quality, _, _, _, _, _, _, _, sellPrice = GetItemInfo(itemId)
+  return name, quality, sellPrice
 end
 
 --- Show a header or cell tooltip next to a frame (GameTooltip).

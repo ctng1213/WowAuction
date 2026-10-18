@@ -17,15 +17,18 @@ function UIWorld.Market(items, generatedAt)
                         markets = { [UIWorld.MARKET] = { observationsUntil = generatedAt, curveHour = 0, I = items, C = {} } } }
 end
 
---- An item string with a price, confidence and sales per day.
----@param cur number      Copper
----@param conf number     Confidence %
----@param sold number     Units sold per day
+--- An item string with a price, confidence and sales per day, and optionally its sell options.
+---@param cur number          Copper
+---@param conf number         Confidence %
+---@param sold number         Units sold per day
+---@param sell table|nil      { postPrice, sellValue, chance (0-1), refStack }
 ---@return string
-function UIWorld.Item(cur, conf, sold)
+function UIWorld.Item(cur, conf, sold, sell)
+  sell = sell or {}
   -- cur, curQty, curAgeMin, med7, med30, p10, p90, trend10, sold10, listed10, supply, conf, seasonality,
-  -- postPrice, refStack, sellValue, volumeUnknown
-  local fields = { cur, 20, 30, "", "", "", "", 0, sold * 10, "", 90, conf, "", "", 20, "", 0 }
+  -- postPrice, refStack, sellValue, volumeUnknown, chance1000
+  local fields = { cur, 20, 30, "", "", "", "", 0, sold * 10, "", 90, conf, "", sell.postPrice or "", sell.refStack or 20,
+                   sell.sellValue or "", 0, sell.chance and math.floor(sell.chance * 1000 + 0.5) or "" }
   return table.concat(fields, ",") .. ";;"
 end
 

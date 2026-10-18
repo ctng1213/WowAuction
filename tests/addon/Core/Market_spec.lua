@@ -27,8 +27,8 @@ describe("Market", function()
     local linen = Market.Item(2589)
     assert_eq({ linen.cur, linen.curQty, linen.curAgeMin, linen.med30, linen.p10, linen.p90, linen.trend },
               { 45, 20, 60, 49, 40, 60, 0.4 })
-    assert_eq({ linen.soldPerDay, linen.supply, linen.conf, linen.seasonality, linen.sellValue, linen.volumeUnknown },
-              { 48, 93, 86, 72, 42, false })
+    assert_eq({ linen.soldPerDay, linen.supply, linen.conf, linen.seasonality, linen.sellValue, linen.volumeUnknown,
+                linen.chance }, { 48, 93, 86, 72, 42, false, 0.9 })
     assert_eq(linen.sellWindows, { { start = 138, hours = 4, best = 139, how = 1.12, weeks = 7 } })
     assert_eq(linen.buyWindows, {})
     local curve = Market.Curve(2589)

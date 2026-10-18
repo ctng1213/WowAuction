@@ -104,6 +104,18 @@ describe("MainWindow", function()
     assert_eq({ FirstRow("today").qty, ui.rows[2]:IsShown(), ui.headerCells.today.who }, { "×1", false, nil })
   end)
 
+  it("A15 with no plan at all, Today shows the addon's own row for what you carry", function()
+    Stubs.Reset()
+    _G.AHProfitPlan = nil
+    Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 2589, count = 20 } } } }
+    UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48, { postPrice = 45, sellValue = 42, chance = 0.9 }) }, NOW)
+    Stubs.Login()
+    Stubs.Slash("/ahp")
+    local row, ui = FirstRow("today"), AHProfit.MainWindow.Frames()
+    assert_eq({ row.action, row.qty, row.net, row.chance:match("^%d+%%") }, { "POST", "×20", AHProfit.ViewModel.WithCoins("+8s 40c"), "90%" })
+    assert_eq(ui.rows[2].note:GetText(), "post now · AHSync has no plan for it")
+  end)
+
   it("scrolling moves through a long list and stops at its ends", function()
     Stubs.Reset()
     UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48) }, NOW)

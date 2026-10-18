@@ -16,6 +16,9 @@ local TOC = ADDON_DIR .. "AHProfit.toc"
 Stubs.ITEM_CLASSES = { [6585] = 4, [2852] = 4 }
 
 -- Item names for links; cosmetic, only so links look real.
+-- What a merchant pays for some items, copper (GetItemInfo's 11th return); others 0.
+Stubs.ITEM_SELL = { [2589] = 3, [3300] = 12 }
+
 -- Link colours (quality) of some items; others print white (common).
 Stubs.ITEM_COLORS = { [6948] = "ffffff", [3300] = "9d9d9d", [2851] = "1eff00" }
 
@@ -368,7 +371,7 @@ local function InstallItems()
     local name = Stubs.ITEM_NAMES[id]
     if not name or Stubs.world.uncached[id] then return nil end
     local quality = ({ ["9d9d9d"] = 0, ffffff = 1, ["1eff00"] = 2 })[Stubs.ITEM_COLORS[id] or "ffffff"]
-    return name, Stubs.ItemLink(id), quality
+    return name, Stubs.ItemLink(id), quality, 1, 1, "Type", "Subtype", 20, "", "icon", Stubs.ITEM_SELL[id] or 0
   end)
   Define("GetItemInfoInstant", function(id)
     return id, "Type", "Subtype", "", "icon", Stubs.ITEM_CLASSES[id] or 7, 0

@@ -20,5 +20,6 @@ Engine\Disenchant.lua
 Engine\Craft.lua
 Core\Market.lua
 Core\Plan.lua
+Recommend\Options.lua
 UI\ViewModel.lua
 UI\MainWindow.lua

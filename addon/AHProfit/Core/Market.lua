@@ -12,7 +12,8 @@ AHProfit.Market = Market
 Market.SCHEMA_VERSION = 1          -- must equal ahsync/export/market_lua.py MARKET_SCHEMA_VERSION (FM17)
 Market.CACHE_LIMIT = 500           -- decoded items kept before the cache starts again
 Market.FIELDS = { "cur", "curQty", "curAgeMin", "med7", "med30", "p10", "p90", "trend10", "sold10", "listed10",
-                  "supply", "conf", "seasonality", "postPrice", "refStack", "sellValue", "volumeUnknown" }
+                  "supply", "conf", "seasonality", "postPrice", "refStack", "sellValue", "volumeUnknown",
+                  "chance1000" }
 
 local state = nil                  -- { status, market = { I, C, observationsUntil, curveHour }, file } once checked
 local cache, cached = {}, 0
@@ -107,6 +108,7 @@ function Market.Decode(text)
   item.soldPerDay = item.sold10 and item.sold10 / 10
   item.listedPerDay = item.listed10 and item.listed10 / 10
   item.volumeUnknown = item.volumeUnknown == 1
+  item.chance = item.chance1000 and item.chance1000 / 1000      -- nil in a file from before this field
   item.sellWindows, item.buyWindows = DecodeWindows(sell), DecodeWindows(buy)
   return item
 end

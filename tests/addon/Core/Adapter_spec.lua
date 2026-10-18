@@ -15,7 +15,7 @@ describe("Adapter", function()
     Stubs.Reset()
     assert_eq(Stubs.TocFiles(), { "Core/Adapter.lua", "Data/BonusSuffixes.lua", "Data/Disenchant.lua", "Core/Events.lua", "Core/DB.lua",
       "Capture/Characters.lua", "Capture/Professions.lua", "Capture/Inventory.lua", "Scan/Replicate.lua", "Core/Diagnostics.lua",
-      "Engine/Fees.lua", "Engine/SellProb.lua", "Engine/Disenchant.lua", "Engine/Craft.lua", "Core/Market.lua", "Core/Plan.lua", "UI/ViewModel.lua", "UI/MainWindow.lua" })
+      "Engine/Fees.lua", "Engine/SellProb.lua", "Engine/Disenchant.lua", "Engine/Craft.lua", "Core/Market.lua", "Core/Plan.lua", "Recommend/Options.lua", "UI/ViewModel.lua", "UI/MainWindow.lua" })
   end)
 
   it("reads a replicate auction 0-based as key, unit price, stack and band, caching keys by link", function()

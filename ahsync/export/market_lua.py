@@ -4,12 +4,13 @@ One compact string per item (Lua constant limits), decoded by the addon only whe
 needs an item (SPEC §5.1 lazy decode):
 
     I[key] = "cur,curQty,curAgeMin,med7,med30,p10,p90,trend10,sold10,listed10,supply,conf,
-              seasonality,postPrice,refStack,sellValue,volumeUnknown;sellWindows;buyWindows"
+              seasonality,postPrice,refStack,sellValue,volumeUnknown,chance1000;sellWindows;buyWindows"
     C[key] = the sell-probability curve, one character per point (SPEC §3.1.1)
 
 - Numbers are integers; an empty field is unavailable, never 0. Money is copper,
   ages are minutes before generatedAt, trend is tenths of a % per day, sales and
-  listings per day are in tenths.
+  listings per day are in tenths, and chance1000 is the chance a reference stack posted now
+  sells, in thousandths (the addon's own sell options use it, A15).
 - A window is "start:hours:best:how1000:weeks" (UTC slots, how_avg in thousandths),
   windows joined by "/", best first.
 - Shortlist items keep the full 24 × 8 curve; the rest get the 24 × 3 tooltip subset
@@ -96,7 +97,8 @@ def item_text(s: ItemIntel) -> str:
     fields = [_num(s.cur), _num(s.cur_qty), _num(age), _num(s.med7), _num(s.med30), _num(s.p10_30), _num(s.p90_30),
               _tenths(s.trend7), _tenths(s.sold_per_day), _tenths(s.listed_per_day), _num(s.units_on_ah), _num(s.conf),
               _num(s.seasonality), _num(s.post_price), _num(s.ref_stack),
-              "" if s.sell_value is None else str(round_half_up(s.sell_value)), "1" if s.volume_unknown else "0"]
+              "" if s.sell_value is None else str(round_half_up(s.sell_value)), "1" if s.volume_unknown else "0",
+              str(round_half_up(s.chance * 1000))]
     return f"{','.join(fields)};{windows_text(s.sell_windows)};{windows_text(s.buy_windows)}"
 
 

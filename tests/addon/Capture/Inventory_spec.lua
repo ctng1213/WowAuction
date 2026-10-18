@@ -30,6 +30,15 @@ describe("Inventory", function()
               { "Aboriginal Gloves of Frost Protection", 2 })
   end)
 
+  it("decodes an encoded place back into rows", function()
+    Stubs.Reset()
+    Stubs.Login()
+    local Inventory = AHProfit.Capture.Inventory
+    assert_eq(Inventory.Decode("2589,20,0;-6585,1,0;6948,1,1"), { { key = 2589, qty = 20, bound = false },
+      { key = -6585, qty = 1, bound = false }, { key = 6948, qty = 1, bound = true } })
+    assert_eq({ Inventory.Decode(""), Inventory.Decode(nil) }, { {}, {} })
+  end)
+
   it("login snapshots the bags; bank and mail stay nil until visited", function()
     Stubs.Reset()
     Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 2840, count = 6 } } } }

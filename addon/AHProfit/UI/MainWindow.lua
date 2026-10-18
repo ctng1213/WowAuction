@@ -11,6 +11,8 @@ local DB = AHProfit.DB
 local Market = AHProfit.Market
 local Plan = AHProfit.Plan
 local VM = AHProfit.ViewModel
+local Options = AHProfit.Options
+local Inventory = AHProfit.Capture.Inventory
 
 local MainWindow = {}
 AHProfit.MainWindow = MainWindow
@@ -414,7 +416,20 @@ end
 local function Lines(nowMs, gold)
   local offset = Adapter.LocalOffsetMs(nowMs)
   local info = Adapter.PlayerInfo()
-  local actions = Plan.CharacterActions(info.name .. "-" .. info.realm)
+  local charId = info.name .. "-" .. info.realm
+  local actions = Plan.CharacterActions(charId)
+  if view.tab == "today" then
+    -- The addon's own options for what you carry fill in where AHSync's plan is silent (SPEC §4.0).
+    local planned, inventory = {}, ((DB.Get() or {}).inventory or {})[charId] or {}
+    for _, a in ipairs(actions) do planned[a.key] = true end
+    --- What a merchant pays for one of an item, from the item cache.
+    ---@param key number
+    ---@return number|nil
+    local function VendorOf(key) return select(3, Adapter.ItemInfo(VM.BaseItemId(key))) end
+    for _, a in ipairs(Options.Sell(Inventory.Decode(inventory.bags), planned, Market.Item, VendorOf, nowMs, charId)) do
+      actions[#actions + 1] = a
+    end
+  end
   if view.tab == "today" then
     local today = VM.Today(actions, nowMs, offset, view.minChance, LookOf, gold)
     return VM.WithNotes(today.rows), VM.TodayFooter(today, view.minChance), "Nothing to do in the next hour."

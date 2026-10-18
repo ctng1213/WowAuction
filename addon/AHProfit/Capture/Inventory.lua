@@ -50,6 +50,17 @@ function Inventory.RememberNames(db, items)
   end
 end
 
+--- Read an encoded location back (the addon's own options use the bags, SPEC §4.0).
+---@param text string|nil  "key,qty,bound;..." from Encode; nil for a place never visited
+---@return table[]         { key, qty, bound } each, in the string's order
+function Inventory.Decode(text)
+  local rows = {}
+  for key, qty, bound in (text or ""):gmatch("(%-?%d+),(%d+),([01])") do
+    rows[#rows + 1] = { key = tonumber(key), qty = tonumber(qty), bound = bound == "1" }
+  end
+  return rows
+end
+
 -- Time field of each location (SPEC §2.2.1: each location has its own time).
 local TIME_FIELD = { bags = "bagsAt", bank = "bankAt", mail = "mailAt" }
 
