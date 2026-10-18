@@ -673,3 +673,36 @@ function ViewModel.DisenchantFooter(rows, bestSkill)
   local who = bestSkill and ("best Enchanting " .. bestSkill) or "no enchanter yet: what one could disenchant"
   return #rows .. (#rows == 1 and " target" or " targets") .. " · " .. who
 end
+
+-- ------------------------------------------------------------------ AH side panel (SPEC §4.3, UI7, A24)
+
+--- The panel's shopping and post lists (UI7).
+---@param targets table[]  { key, qty, price (the most to pay each) } in list order
+---@param posts table[]    Today rows of posts { item, quality, qty, each, chance, dot }
+---@param levelsOf function key -> live levels, or nil when not checked yet
+---@param lookOf function  key -> look
+---@param gold number      All your gold, copper
+---@return table           { shopping = rows, checked = "3 of 5", posts = rows, footer }
+function ViewModel.AHPanel(targets, posts, levelsOf, lookOf, gold)
+  local shopping, checked, found, spend = {}, 0, 0, 0
+  for _, t in ipairs(targets) do
+    local look, levels = lookOf(t.key), levelsOf(t.key)
+    local row = { key = t.key, item = look.name, quality = look.quality, qty = "×" .. t.qty }
+    if not levels then
+      row.state, row.text = "checking", "checking"
+    else
+      checked = checked + 1
+      local units = 0
+      for _, level in ipairs(levels) do if level.price <= t.price then units = units + level.units end end
+      if units >= t.qty then
+        found, spend = found + 1, spend + levels[1].price * t.qty
+        row.state, row.text = "found", ViewModel.Money(levels[1].price) .. " ≤ " .. ViewModel.Money(t.price)
+      else
+        row.state, row.text = "gone", "gone"
+      end
+    end
+    shopping[#shopping + 1] = row
+  end
+  return { shopping = shopping, checked = checked .. " of " .. #targets, posts = posts,
+           footer = found .. " found · budget left " .. ViewModel.Money(math.max(0, gold - spend)) }
+end

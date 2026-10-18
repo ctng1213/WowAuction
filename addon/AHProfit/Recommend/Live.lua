@@ -8,6 +8,8 @@ local Replicate = AHProfit.Scan.Replicate
 local Live = {}
 AHProfit.Live = Live
 
+local searched = {}            -- item id -> { price, units, at } from AH search results this session (A24)
+
 --- The units listed per unit price for an item, cheapest first, from a book.
 ---@param prices table|nil  unit price -> stack * 5 + band -> count
 ---@return table[]          { price, units } ascending; empty when the item isn't listed
@@ -36,9 +38,27 @@ end
 ---@param observationsUntil number|nil
 ---@return table[]|nil  As Live.Levels; nil means "use the market file"
 function Live.Item(key, observationsUntil)
-  local last = Live.Book(observationsUntil)
+  local last, found = Live.Book(observationsUntil), searched[key]
+  if found and (not observationsUntil or found.at > observationsUntil) and (not last or found.at > last.at) then
+    return { { price = found.price, units = found.units } }      -- a search newer than any scan (A24)
+  end
   if not last then return nil end
   return Live.Levels(last.book[key])
+end
+
+--- Remember an AH search result: an item's cheapest price and units listed, seen now (A24).
+--- Only keys without a random suffix match a search result's item id.
+---@param itemId number
+---@param price number  Cheapest unit price, copper
+---@param units number
+---@param atMs number
+function Live.NoteSearch(itemId, price, units, atMs)
+  searched[itemId] = { price = price, units = units, at = atMs }
+end
+
+--- Forget search results (tests).
+function Live.Reset()
+  searched = {}
 end
 
 --- Units listed at or below a price.

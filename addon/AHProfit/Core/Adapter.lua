@@ -163,6 +163,45 @@ function Adapter.Print(text)
   DEFAULT_CHAT_FRAME:AddMessage("|cffffd100AHProfit:|r " .. text)
 end
 
+-- ------------------------------------------------------------------ auction house panel (SPEC §4.3)
+
+--- The auction house window, to dock the AHProfit panel to.
+--- UNVERIFIED: Forever has the modern AuctionHouseFrame (no QueryAuctionItems, verified 2026-10-18).
+---@return table|nil
+function Adapter.AuctionFrame()
+  return _G.AuctionHouseFrame or _G.AuctionFrame
+end
+
+--- Search the AH for an item name, as typing it in the AH's search box and pressing Search does.
+--- Called from a click, so it runs on a hardware event.
+--- UNVERIFIED: Forever's AuctionHouseFrame.SearchBar mixin (SetSearchText, StartSearch), as on retail.
+---@param name string
+---@return boolean  true when a search was started
+function Adapter.SearchAH(name)
+  local frame = _G.AuctionHouseFrame
+  local bar = frame and frame.SearchBar
+  if bar and bar.SetSearchText and bar.StartSearch then
+    bar:SetSearchText(name)
+    bar:StartSearch()
+    return true
+  end
+  return false
+end
+
+--- The browse results of the last AH search: each item's cheapest unit price and units listed.
+--- UNVERIFIED: C_AuctionHouse.GetBrowseResults rows { itemKey = { itemID }, minPrice, totalQuantity }.
+---@return table[]  { itemId, minPrice, units }; empty when the call is missing
+function Adapter.ReadBrowseResults()
+  local out = {}
+  if not (C_AuctionHouse and C_AuctionHouse.GetBrowseResults) then return out end
+  for _, r in ipairs(C_AuctionHouse.GetBrowseResults() or {}) do
+    if r.itemKey and r.itemKey.itemID and r.minPrice then
+      out[#out + 1] = { itemId = r.itemKey.itemID, minPrice = r.minPrice, units = r.totalQuantity or 0 }
+    end
+  end
+  return out
+end
+
 --- Whether the player is in combat right now.
 ---@return boolean  true while in combat lockdown
 function Adapter.InCombat()

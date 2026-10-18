@@ -264,6 +264,27 @@ function Replicate.FallbackCheck(id)
   if not Adapter.RequestReplicate() then callUnanswered = false end
 end
 
+--- The panel's Full scan button: ask for a ReplicateItems scan now, within the same 20-minute
+--- gap as the fallback (SPEC §4.2, A24).
+---@return boolean, number|nil  true when asked; else the minutes to wait (nil: the AH isn't open or a scan runs)
+function Replicate.RequestScan()
+  if not ahOpen or run or not Adapter.HasReplicate() then return false, nil end
+  local now = Adapter.NowMs()
+  if lastCallMs and now - lastCallMs < callGapS * 1000 then
+    return false, math.ceil((callGapS * 1000 - (now - lastCallMs)) / 60000)
+  end
+  lastCallMs, callUnanswered = now, true
+  stats.calls = stats.calls + 1
+  if not Adapter.RequestReplicate() then callUnanswered = false end
+  return true, nil
+end
+
+--- Whether the AH window is open right now.
+---@return boolean
+function Replicate.AHOpen()
+  return ahOpen
+end
+
 --- AUCTION_HOUSE_SHOW: listen for answers; check for one after the fallback wait.
 local function OnShow()
   ahOpen, openId = true, openId + 1

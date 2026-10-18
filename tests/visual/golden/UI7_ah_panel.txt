@@ -1,0 +1,49 @@
+Frame AHProfitPanel 902,100 260x444
+  FontString - 912,110 119x12 "AHProfit at the AH"
+  FontString - 912,134 53x12 "Shopping"
+  FontString - 1119,134 33x10 "3 of 5"
+  Button AHProfitPanelRow1 910,154 244x20
+    Texture - 910,157 14x14
+    FontString - 928,159 96x10 "Linen Cloth"
+    FontString - 1028,159 90x10 "38   ≤ 45  "
+    FontString - 1124,159 30x10 "×20"
+  Button AHProfitPanelRow2 910,174 244x20
+    Texture - 910,177 14x14
+    FontString - 928,179 96x10 "Scouting Gloves …"
+    FontString - 1028,179 90x10 "8   ≤ 9  "
+    FontString - 1124,179 30x10 "×1"
+  Button AHProfitPanelRow3 910,194 244x20
+    Texture - 910,197 14x14
+    FontString - 928,199 96x10 "Copper Bar"
+    FontString - 1028,199 90x10 "gone"
+    FontString - 1124,199 30x10 "×6"
+  Button AHProfitPanelRow4 910,214 244x20
+    Texture - 910,217 14x14
+    FontString - 928,219 96x10 "Silk Cloth"
+    FontString - 1028,219 90x10 "checking"
+    FontString - 1124,219 30x10 "×5"
+  Button AHProfitPanelRow5 910,234 244x20
+    Texture - 910,237 14x14
+    FontString - 928,239 96x10 "Wool Cloth"
+    FontString - 1028,239 90x10 "checking"
+    FontString - 1124,239 30x10 "×5"
+  Button AHProfitPanelRow6 910,254 244x20 (hidden)
+  Button AHProfitPanelRow7 910,274 244x20 (hidden)
+  Button AHProfitPanelRow8 910,294 244x20 (hidden)
+  Button AHProfitPanelRow9 910,314 244x20 (hidden)
+  Button AHProfitPanelRow10 910,334 244x20 (hidden)
+  FontString - 912,360 26x12 "Post"
+  FontString - 1147,360 6x10 "1"
+  Button AHProfitPanelRow11 910,380 244x20
+    Texture - 910,383 14x14
+    FontString - 928,385 96x10 "Copper Rod"
+    FontString - 1028,385 90x10 "41    58%"
+    FontString - 1124,385 30x10 "×5"
+  Button AHProfitPanelRow12 910,400 244x20 (hidden)
+  Button AHProfitPanelRow13 910,420 244x20 (hidden)
+  Button AHProfitPanelRow14 910,440 244x20 (hidden)
+  Button AHProfitPanelRow15 910,460 244x20 (hidden)
+  Button AHProfitPanelNext 912,488 110x22 "Next search"
+  Button AHProfitPanelScan 1042,488 110x22 "Full scan"
+  FontString - 912,522 198x10 "2 found · budget left 31   24   40  "
+  FontString - 1152,522 0x10

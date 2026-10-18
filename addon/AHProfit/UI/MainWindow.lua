@@ -493,6 +493,15 @@ local function CharacterActions(charId, nowMs)
   return actions, gone
 end
 
+--- This character's Today rows, for the AH panel's post list.
+---@param charId string
+---@return table[]  ViewModel.Today rows (no chance filter)
+function MainWindow.TodayRows(charId)
+  local nowMs = Adapter.NowMs()
+  local gold = VM.TotalGold((DB.Get() or {}).characters)
+  return VM.Today(CharacterActions(charId, nowMs), nowMs, Adapter.LocalOffsetMs(nowMs), 0, LookOf, gold).rows
+end
+
 --- Everything this character holds, place by place (bags, bank, mail).
 ---@param charId string
 ---@return table[]  { where, key, qty, bound }

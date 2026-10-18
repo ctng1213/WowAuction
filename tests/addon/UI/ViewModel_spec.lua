@@ -210,6 +210,18 @@ describe("ViewModel", function()
     LOOKS[6585], LOOKS[10940], LOOKS[10939], LOOKS[10978] = nil, nil, nil, nil
   end)
 
+  it("UI7 the AH panel's states: found at or below the target, gone, or still checking; 3 of 5 checked", function()
+    local VM = Boot()
+    local levels = { [1] = { { price = 38, units = 20 } }, [2] = { { price = 800, units = 1 } }, [3] = { { price = 60, units = 2 } } }
+    local targets = { { key = 1, qty = 20, price = 45 }, { key = 2, qty = 1, price = 900 }, { key = 3, qty = 6, price = 70 },
+                      { key = 4, qty = 1, price = 10 }, { key = 5, qty = 2, price = 10 } }
+    local panel = VM.AHPanel(targets, {}, function(k) return levels[k] end, function(k) return { name = "I" .. k, quality = 1 } end, 314000)
+    local states = {}
+    for i, r in ipairs(panel.shopping) do states[i] = r.state .. " " .. r.text end
+    assert_eq(states, { "found 38c ≤ 45c", "found 8s ≤ 9s", "gone gone", "checking checking", "checking checking" })
+    assert_eq({ panel.checked, panel.footer }, { "3 of 5", "2 found · budget left 31g 24s 40c" })    -- 31g 40s - 7s 60c - 8s
+  end)
+
   it("labels a window in local time, with its strength when it isn't established", function()
     local VM = Boot()
     assert_eq(VM.WindowLabel({ start = 138, hours = 4, weeks = 7 }, 0), "Sat 18:00–22:00")
