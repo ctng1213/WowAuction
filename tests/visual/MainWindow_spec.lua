@@ -55,7 +55,7 @@ describe("MainWindow layout", function()
     ui.frame:SetSize(560, 360)
     local snapshot = Layout.Golden("UI3_truncate", ui.frame)
     assert_eq(snapshot:find("Scouting Gloves of the Monkey", 1, true), nil)
-    assert_eq(snapshot:find('"Scouting Glo[^"]*…"') ~= nil, true)
+    assert_eq(snapshot:find('"Scou[^"]*…"') ~= nil, true)
   end)
 
   it("UI4 without MarketIntelligence.lua: no rows, and how to fix it", function()

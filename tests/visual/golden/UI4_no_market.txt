@@ -9,18 +9,28 @@ Frame AHProfitWindow 640,320 640x440
   Button AHProfitWindowTabToday 650,356 72x22 "Today"
   Button AHProfitWindowTabWeek 724,356 72x22 "Week"
   Texture - 642,378 636x1
-  Button AHProfitWindowMinChance 1140,356 130x20 "Min chance: 50% ▾"
+  Button AHProfitWindowMinChance 1140,356 130x20 "Min chance: 50%   "
   Frame AHProfitWindowHeadertoday 650,380 606x20
-    Button - 654,380 44x20
-    Button - 1212,380 40x20 "Who"
-    Button - 1175,380 34x20 "Risk"
-    Button - 1130,380 42x20 "Volume"
-    Button - 1081,380 46x20 "Chance"
-    Button - 1008,380 70x20 "Net"
-    Button - 949,380 56x20 "Total"
-    Button - 894,380 52x20 "Each"
-    Button - 863,380 28x20 "Qty"
-    Button - 701,380 159x20 "Item"
+    FontString - 654,380 52x20
+    Button - 654,380 52x20
+    FontString - 1192,380 60x20 "Who"
+    Button - 1192,380 60x20
+    FontString - 1155,380 34x20 "Risk"
+    Button - 1155,380 34x20
+    FontString - 1110,380 42x20 "Volume"
+    Button - 1110,380 42x20
+    FontString - 1061,380 46x20 "Chance"
+    Button - 1061,380 46x20
+    FontString - 988,380 70x20 "Net"
+    Button - 988,380 70x20
+    FontString - 929,380 56x20 "Total"
+    Button - 929,380 56x20
+    FontString - 874,380 52x20 "Each"
+    Button - 874,380 52x20
+    FontString - 843,380 28x20 "Qty"
+    Button - 843,380 28x20
+    FontString - 709,380 131x20 "Item"
+    Button - 709,380 131x20
   Frame AHProfitWindowHeaderweek 650,380 606x20 (hidden)
   Frame AHProfitWindowList 650,402 620x240
     Frame AHProfitWindowRow1 650,402 606x20 (hidden)

@@ -23,13 +23,13 @@ MainWindow.MONEY_FIELDS = { each = true, total = true, net = true }
 
 -- { header, row field, width (nil = fills), justify }; columns after the filling one anchor from the right.
 MainWindow.COLUMNS = {
-  today = { { "", "action", 44, "LEFT" }, { "Item", "item", nil, "LEFT" }, { "Qty", "qty", 28, "RIGHT" },
+  today = { { "", "action", 52, "LEFT" }, { "Item", "item", nil, "LEFT" }, { "Qty", "qty", 28, "RIGHT" },
             { "Each", "each", 52, "RIGHT" }, { "Total", "total", 56, "RIGHT" }, { "Net", "net", 70, "RIGHT" },
             { "Chance", "chance", 46, "RIGHT" }, { "Volume", "volume", 42, "RIGHT" }, { "Risk", "risk", 34, "RIGHT" },
-            { "Who", "who", 40, "LEFT" } },
-  week = { { "Time", "time", 34, "LEFT" }, { "", "action", 44, "LEFT" }, { "Item", "item", nil, "LEFT" },
+            { "Who", "who", 60, "LEFT" } },
+  week = { { "Time", "time", 34, "LEFT" }, { "", "action", 52, "LEFT" }, { "Item", "item", nil, "LEFT" },
            { "Qty", "qty", 28, "RIGHT" }, { "Total", "total", 56, "RIGHT" }, { "Net", "net", 70, "RIGHT" },
-           { "Chance", "chance", 46, "RIGHT" }, { "Who", "who", 40, "LEFT" } },
+           { "Chance", "chance", 46, "RIGHT" }, { "Who", "who", 60, "LEFT" } },
 }
 
 -- The mockup's palette (docs/mockups/addon.html :root), as 0-1 RGB.
@@ -44,6 +44,8 @@ local BADGES = { buy = { 0.37, 0.71, 1 }, post = { 1, 0.82, 0 }, de = { 0.7, 0.4
                  vendor = { 0.67, 0.67, 0.67 }, mail = { 0.56, 0.83, 1 }, hold = { 1, 0.69, 0.18 } }
 local DOTS = { high = COLORS.pos, medium = COLORS.amber, low = COLORS.muted }
 local FLAT = "Interface\\Buttons\\WHITE8X8"
+-- The Min chance box's arrow: the chat frame's scroll-down icon, which every client has.
+local ARROW = "|TInterface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up:14:14|t"
 
 local ui = nil                     -- the frames, once built
 local view = { tab = "today", offset = 0, minChance = 50 }
@@ -89,23 +91,22 @@ local function Rule(parent, y, rgb)
   return rule
 end
 
---- One cell: a font string in a row, or a button in a header (headers take hover for tooltips).
+--- One cell: a font string justified like its column. A header cell is a gold label with an
+--- invisible button over it, so it aligns like its column and still takes hover for its tooltip.
 ---@param parent table  The row or header
 ---@param c table       Its column { header, field, width, justify }
 ---@param kind string   "FontString" | "Button"
----@return table
+---@return table        The font string (a header's has .hit, its button)
 local function MakeCell(parent, c, kind)
-  local cell
-  if kind == "Button" then
-    cell = Adapter.CreateFrame("Button", nil, parent)
-    cell:SetNormalFontObject("GameFontNormalSmall")
-    cell:SetText(c[1])
-  else
-    cell = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    cell:SetWordWrap(false)
-    cell:SetJustifyH(c[4])
-  end
+  local cell = parent:CreateFontString(nil, "OVERLAY", kind == "Button" and "GameFontNormalSmall" or "GameFontHighlightSmall")
+  cell:SetWordWrap(false)
+  cell:SetJustifyH(c[4])
   cell:SetHeight(MainWindow.ROW_HEIGHT)
+  if kind == "Button" then
+    cell:SetText(c[1])
+    cell.hit = Adapter.CreateFrame("Button", nil, parent)
+    cell.hit:SetAllPoints(cell)
+  end
   return cell
 end
 
@@ -151,9 +152,9 @@ local function HookHeaders(cells, columns)
   for _, c in ipairs(columns) do
     local help = VM.COLUMN_HELP[c[1]]
     if help then
-      local cell = cells[c[2]]
-      cell:SetScript("OnEnter", function(self) Adapter.ShowTooltip(self, c[1], help) end)
-      cell:SetScript("OnLeave", function() Adapter.HideTooltip() end)
+      local hit = cells[c[2]].hit
+      hit:SetScript("OnEnter", function(self) Adapter.ShowTooltip(self, c[1], help) end)
+      hit:SetScript("OnLeave", function() Adapter.HideTooltip() end)
     end
   end
 end
@@ -165,10 +166,10 @@ local function BuildBadges(row)
   for _, t in ipairs(MainWindow.TABS) do
     local cell = row.cells[t[1]].action
     local badge = row:CreateTexture(nil, "ARTWORK")
-    badge:SetSize(40, 12)
+    badge:SetSize(48, 12)
     badge:SetPoint("LEFT", cell, "LEFT", 0, 0)
     cell:SetJustifyH("CENTER")
-    cell:SetWidth(40)
+    cell:SetWidth(48)
     row.badges[t[1]] = badge
   end
 end
@@ -192,10 +193,8 @@ local function BuildRow(list, i)
   row.cells = {}
   for _, tab in ipairs(MainWindow.TABS) do row.cells[tab[1]] = BuildCells(row, MainWindow.COLUMNS[tab[1]], "FontString") end
   BuildBadges(row)
-  row.dot = row:CreateTexture(nil, "OVERLAY")
-  row.dot:SetSize(6, 6)
   row.note = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  row.note:SetPoint("TOPLEFT", row, "TOPLEFT", 51, 0)
+  row.note:SetPoint("TOPLEFT", row, "TOPLEFT", 59, 0)
   row.note:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -4, 0)
   row.note:SetWordWrap(false)
   row.note:SetJustifyH("LEFT")
@@ -359,7 +358,14 @@ local function ShowParts(row, kind)
   row.dayRule:SetShown(kind == "day")
   row.rule:SetShown(kind == "row")
   row.isRow = kind == "row"
-  if kind ~= "row" then row.dot:Hide() end
+end
+
+--- The confidence dot as an inline texture after the chance text, in its level's colour.
+---@param level string  "high" | "medium" | "low"
+---@return string       A |T...|t escape, 7 px square
+local function Dot(level)
+  local rgb = DOTS[level]
+  return string.format(" |T%s:7:7:0:0:8:8:0:8:0:8:%d:%d:%d|t", FLAT, rgb[1] * 255, rgb[2] * 255, rgb[3] * 255)
 end
 
 --- Fill an action line's cells, badge and dot.
@@ -377,12 +383,7 @@ local function FillRow(row, line)
   Tint(cells.item, QUALITY[line.quality] or QUALITY[1])
   Tint(cells.net, COLORS[line.netColor])
   if cells.risk then Tint(cells.risk, line.riskAmber and COLORS.amber or COLORS.muted) end
-  row.dot:SetShown(line.dot ~= nil)
-  if line.dot then
-    row.dot:ClearAllPoints()
-    row.dot:SetPoint("RIGHT", cells.chance, "RIGHT", 0, 0)
-    row.dot:SetColorTexture(DOTS[line.dot][1], DOTS[line.dot][2], DOTS[line.dot][3])
-  end
+  if line.dot then cells.chance:SetText(line.chance .. Dot(line.dot)) end
 end
 
 --- Fill one pooled line from the list: an action row, its note, or a Week day header.
@@ -435,7 +436,7 @@ local function RenderChrome(nowMs)
     Flat(ui.tabs[t[1]], on and COLORS.tabOn or COLORS.tabOff, COLORS.border)
     ui.headers[t[1]]:SetShown(on)
   end
-  ui.chance:SetText("Min chance: " .. view.minChance .. "% ▾")
+  ui.chance:SetText("Min chance: " .. view.minChance .. "% " .. ARROW)
   ui.chance:SetShown(view.tab == "today")
 end
 

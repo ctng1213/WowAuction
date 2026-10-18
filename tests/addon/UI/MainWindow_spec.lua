@@ -45,7 +45,8 @@ describe("MainWindow", function()
     Stubs.Slash("/ahp")
     local row, coins = FirstRow("today"), AHProfit.ViewModel.WithCoins
     assert_eq({ row.action, row.item, row.qty, row.each, row.total, row.net, row.chance, row.volume, row.who },
-              { "POST", "Linen Cloth", "×20", coins("55c"), coins("11s"), coins("+10s 46c"), "92%", "48/day", "Amaya" })
+              { "POST", "Linen Cloth", "×20", coins("55c"), coins("11s"), coins("+10s 46c"), row.chance, "48/day", "Amaya" })
+    assert_eq(row.chance:match("^92%% |T.-:7:7:0:0:8:8:0:8:0:8:(%d+:%d+:%d+)|t$"), "61:219:79")   -- the high (green) dot
     local ui = MainWindow.Frames()
     assert_eq({ ui.age:GetText(), ui.sub:GetText(), ui.footer:GetText(), ui.budget:GetText() },
               { "data 1 h old", "Grommash · Horde", coins("1 action · expected +10s 46c"), "Budget " .. coins("12g 34s 56c") })
@@ -69,24 +70,25 @@ describe("MainWindow", function()
     local MainWindow = Boot()
     Stubs.Slash("/ahp")
     local ui = MainWindow.Frames()
-    assert_eq(ui.chance:GetText(), "Min chance: 50% ▾")
+    assert_eq(ui.chance:GetText():match("^Min chance: (%d+)%% |T.*ScrollDown"), "50")
     ui.chance:Click()
     ui.chance:Click()
-    assert_eq(ui.chance:GetText(), "Min chance: 0% ▾")
+    assert_eq(ui.chance:GetText():match("^Min chance: (%d+)%%"), "0")
     MainWindow.NextMinChance()
     MainWindow.NextMinChance()
     MainWindow.NextMinChance()
-    assert_eq({ ui.chance:GetText(), ui.footer:GetText() },
-              { "Min chance: 75% ▾", AHProfit.ViewModel.WithCoins("1 action · expected +10s 46c") })
+    assert_eq({ ui.chance:GetText():match("^Min chance: (%d+)%%"), ui.footer:GetText() },
+              { "75", AHProfit.ViewModel.WithCoins("1 action · expected +10s 46c") })
   end)
 
   it("hovering a column header shows what it means", function()
     local MainWindow = Boot()
     Stubs.Slash("/ahp")
     local header = MainWindow.Frames().headerCells.today.chance
-    header:GetScript("OnEnter")(header)
+    assert_eq(header:GetText(), "Chance")
+    header.hit:GetScript("OnEnter")(header.hit)
     assert_eq({ Stubs.tooltip.shown, Stubs.tooltip.lines[1] }, { true, "Chance" })
-    header:GetScript("OnLeave")(header)
+    header.hit:GetScript("OnLeave")(header.hit)
     assert_eq(Stubs.tooltip.shown, false)
   end)
 
