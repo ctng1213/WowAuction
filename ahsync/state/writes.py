@@ -8,7 +8,7 @@ are read in (FI2). Writes don't open transactions: ingest/apply.py wraps one fil
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 
 
@@ -234,6 +234,27 @@ class IngestWrites:
             return None
         self.conn.execute("UPDATE actions SET status = 'skipped' WHERE action_id = ?", (action_id,))
         return row[0]
+
+    def add_item_names(self, rows: Iterable[tuple[int, int, str, int]]) -> int:
+        """Name items AHF's item list doesn't have, e.g. soulbound ones (SPEC §2.2.1 itemNames, S13).
+
+        An addon-named row has no `updated` time: AHF's /items rows always replace it, and it
+        never replaces theirs.
+
+        Args:
+            rows: (item key, base item id, name, quality).
+
+        Returns:
+            Rows inserted or renamed.
+        """
+        count = 0
+        for key, item_id, name, quality in rows:
+            count += self.conn.execute(
+                "INSERT INTO items(key, item_id, name, quality) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET "
+                "name = excluded.name, quality = excluded.quality WHERE items.updated IS NULL "
+                "AND (items.name IS NOT excluded.name OR items.quality IS NOT excluded.quality)",
+                (key, item_id, name, quality)).rowcount
+        return count
 
     def upsert_item_rule(self, key: int, rule: str, set_at_ms: int, source: str) -> bool:
         """Store an item rule if it is newer than the stored one; 'none' is a clear (SPEC §3.4.2, O10, O18).

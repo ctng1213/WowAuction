@@ -52,6 +52,18 @@ AHProfitDB = {
 			["bankAt"] = 1760003610000,
 		},
 	},
+	["itemNames"] = {
+		[-6585] = "1,Scouting Gloves",
+		[2589] = "1,Linen Cloth",
+		[2592] = "1,Wool Cloth",
+		[2835] = "1,Rough Stone",
+		[2840] = "1,Copper Bar",
+		[4306] = "1,Silk Cloth",
+		[6217] = "1,Copper Rod",
+		[6948] = "1,Hearthstone",
+		[10938] = "1,Lesser Magic Essence",
+		[10940] = "1,Strange Dust",
+	},
 	["knownRecipes"] = {
 		["Amaya-Grommash"] = "7418;7421",
 		["Brugan-Grommash"] = "2660;2662;2663",

@@ -38,6 +38,8 @@ def test_A1_capture_writes_savedvariables_that_ingest_parses_back_to_the_same_re
 
     assert data.problems == ()
     assert (data.format_version, data.addon_version, data.refresh_requested_at_ms) == (1, "0.1.0", None)
+    names = {n.key: (n.name, n.quality) for n in data.item_names}           # every item seen in an inventory
+    assert len(names) == 10 and names[6948] == ("Hearthstone", 1) and names[-6585] == ("Scouting Gloves", 1)
     assert data.characters == (
         Character(AMAYA, "Amaya", "Grommash", "Horde", "MAGE", 60, 1234567, 1760000000000),
         Character(BRUGAN, "Brugan", "Grommash", "Horde", "WARRIOR", 40, 456789, 1760003600000),

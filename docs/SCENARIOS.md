@@ -70,6 +70,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | S10 | SavedVariables being rewritten (modification time changed 1 s ago) | not parsed until it has been unchanged for 2 s |
 | S11 | `/me` lost `depth`, `prices.live` and `historyDays 90` since the last run | no requests for Premium files; the snapshot replaces the live table; Status shows "Premium ended 23 Oct"; the run completes normally |
 | S12 | a Horde character on "Classic Beta PvP", a realm not in `[realms]`; the config syncs only forever.pvp.horde.us; then a second Horde market forever.normal.horde.us is added | the character maps to forever.pvp.horde.us, the only Horde market you sync, and its scans are stored; with two Horde markets it has no market and Status asks for `[realms]`; `[realms]` "Classic Beta PvP" = "normal" always wins |
+| S13 | SavedVariables name the bound Hearthstone (6948) and Linen Cloth (2589); AHF's item list has Linen but not the Hearthstone; later AHF lists the Hearthstone too | the Hearthstone is stored as "Hearthstone", quality 1, so Inventory shows its name instead of 6948; Linen keeps AHF's row; once AHF lists the Hearthstone, AHF's row replaces the addon's |
 
 **Failure modes** (§5.2). Faults are injected deterministically by the fakes:
 
@@ -368,6 +369,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | A11 | a replicate answer with a battle pet, an auction without a buyout, one with time left 0 (not a Forever value) and one with none, next to one Linen 45c ×20 | the scan holds only the Linen row; the four are counted as skipped in the diagnostics, and the time-left histogram shows `0:1,3:1,nil:1` |
 | A12 | Forever's time left is 1 short … 4 very long (verified 2026-10-17: no 0 in 41,062 auctions, and 19.5% read 4); an auction of Linen with time left 4 | band 4 (very long), as written |
 | A13 | two auctions without an item link: Linen Cloth (trade goods) and Scouting Gloves (armor, could roll a suffix) | Linen is keyed 2589 by its item id; the gloves are keyed −6585 (some suffix variant, left out of valuation, §2.2.1) |
+| A14 | your bags hold a soulbound Hearthstone (white link), 7 Broken Fang (grey link) and a Copper Bar whose link has no name | `itemNames` gets `[6948] = "1,Hearthstone"` and `[3300] = "0,Broken Fang"`, read from the links with no item-cache lookup; the bar gets no name |
 | A9 | no `PortfolioPlan.lua`; the intelligence lists Copper Rod (sell value 38 s) and Copper Bar on the shortlist; your bags hold 6 bars; the AH shows bars at 10 s | the addon itself offers "Craft 3 Copper Rod from owned bars" with the same profit the desktop computes for the same inputs (19 s each, C1) |
 
 ## 2. Visual tests (UI1–UI11)

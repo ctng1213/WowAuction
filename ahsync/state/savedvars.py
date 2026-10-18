@@ -176,6 +176,15 @@ class Event:
 
 
 @dataclass(frozen=True, slots=True)
+class ItemName:
+    """An item's name and quality as the addon read them from its link (SPEC §2.2.1 itemNames)."""
+
+    key: int
+    name: str
+    quality: int          # 0 poor ... 7
+
+
+@dataclass(frozen=True, slots=True)
 class ItemRule:
     """An item rule set in game (SPEC §3.4.2); "none" is a cleared rule."""
 
@@ -240,6 +249,7 @@ class AHProfitData:
     problems: tuple[str, ...]
     diagnostics: Diagnostics | None = None
     rejected: tuple[RejectedRow, ...] = ()   # scans and events set aside, oldest first per section
+    item_names: tuple[ItemName, ...] = ()    # names of items the addon has seen in your inventory
 
 
 # ---------------------------------------------------------------- item keys
@@ -761,6 +771,25 @@ def _rule(key: object, row: object) -> list[ItemRule]:
     return [ItemRule(_int(key, "item key"), _str(row.get("rule"), "rule", RULES), _int(row.get("setAt"), "setAt"))]
 
 
+def _item_name(key: object, value: object) -> list[ItemName]:
+    """Convert one itemNames entry.
+
+    Args:
+        key: Its key, the item key.
+        value: "quality,name"; the name may itself contain commas.
+
+    Returns:
+        One ItemName.
+
+    Raises:
+        _RowError: When the quality isn't 0-7 or the name is empty.
+    """
+    quality, _, name = _str(value, "item name").partition(",")
+    if not quality.isdigit() or not 0 <= int(quality) <= 7 or not name:
+        raise _RowError(f"item name {value!r} is not \"quality,name\"")
+    return [ItemName(_int(key, "item key"), name, int(quality))]
+
+
 def _diagnostics(value: object) -> Diagnostics | None:
     """Read the addon's diagnostics block leniently: it exists to explain failures.
 
@@ -925,6 +954,7 @@ def read_ahprofit(text: str) -> AHProfitData:
     problems: list[str] = []
     rejected: list[RejectedRow] = []
     version, addon_version, refresh_ms = _header(db, problems)
+    item_names = tuple(_each(db.get("itemNames"), "itemNames", problems, _item_name))
     return AHProfitData(
         format_version=version,
         addon_version=addon_version,
@@ -944,6 +974,7 @@ def read_ahprofit(text: str) -> AHProfitData:
         problems=tuple(problems),
         diagnostics=_diagnostics(db.get("diagnostics")),
         rejected=tuple(rejected),
+        item_names=item_names,
     )
 
 

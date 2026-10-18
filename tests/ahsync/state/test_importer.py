@@ -239,6 +239,21 @@ def test_S12_a_realm_not_in_realms_maps_to_the_only_market_you_sync_for_its_fact
     assert rows(db, "SELECT DISTINCT market FROM characters") == [(PVP_HORDE,)] and db.status("realm:Grommash") is None
 
 
+def test_S13_the_addon_names_items_ahfs_list_leaves_out_and_ahf_always_wins(db):
+    db.upsert_items([(2589, 2589, "Linen Cloth", 1, 5, 7, 0, 10, 2, 20)], T)
+    apply_text(db, A1_TEXT)
+    named = dict(((k, (n, q, u)) for k, n, q, u in rows(db, "SELECT key, name, quality, updated FROM items")))
+    assert named[6948] == ("Hearthstone", 1, None) and named[2589] == ("Linen Cloth", 1, T)
+    db.upsert_items([(6948, 6948, "Hearthstone (AHF)", 1, 1, 15, 0, 0, 0, 1)], T + HOUR)
+    apply_text(db, A1_TEXT)                                         # the addon never overwrites AHF's row
+    assert rows(db, "SELECT name, updated FROM items WHERE key = 6948") == [("Hearthstone (AHF)", T + HOUR)]
+
+
+def test_a_malformed_item_name_is_set_aside_alone(db):
+    data = read_ahprofit(savedvars_text({"itemNames": {6948: "1,Hearthstone", 2589: "x,Linen", 2592: "3,"}}))
+    assert [n.key for n in data.item_names] == [6948] and len(data.problems) == 2
+
+
 def test_an_older_file_never_reverts_a_character_and_level_only_rises(db):
     apply_db(db, {"characters": {AMAYA: CHAR[AMAYA] | {"gold": 500, "updated": T + HOUR}}})
     apply_db(db, {"characters": {AMAYA: CHAR[AMAYA] | {"gold": 100, "level": 61}}})   # older save, higher level?

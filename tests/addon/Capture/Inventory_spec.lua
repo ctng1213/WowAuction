@@ -14,6 +14,19 @@ describe("Inventory", function()
     assert_eq(AHProfit.Capture.Inventory.Encode({}), "")
   end)
 
+  it("A14 item names and qualities come from the links", function()
+    Stubs.Reset()
+    Stubs.world.containers = { [0] = { size = 3, slots = {
+      [1] = { id = 6948, count = 1, bound = true }, [2] = { id = 3300, count = 7 } } } }
+    Stubs.ITEM_NAMES[3300] = "Broken Fang"
+    Stubs.Login()
+    Stubs.ITEM_NAMES[3300] = nil
+    assert_eq(AHProfitDB.itemNames, { [6948] = "1,Hearthstone", [3300] = "0,Broken Fang" })
+    assert_eq({ AHProfit.Adapter.ItemNameFromLink("|cffffffff|Hitem:2840::::::::60::::|h[]|h|r") }, {})
+    assert_eq({ AHProfit.Adapter.ItemNameFromLink("|cff123456|Hitem:2840|h[Copper Bar]|h|r") }, { "Copper Bar" })
+    assert_eq({ AHProfit.Adapter.ItemNameFromLink(nil) }, {})
+  end)
+
   it("login snapshots the bags; bank and mail stay nil until visited", function()
     Stubs.Reset()
     Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 2840, count = 6 } } } }

@@ -178,6 +178,8 @@ AHProfitDB = {
                            bank = nil, bankAt = nil,           -- nil until first visited; "" = visited, empty
                            mail = nil, mailAt = nil },
   },
+  itemNames = { [6948] = "1,Hearthstone" },    -- key -> "quality,name" of every item seen in an inventory, read
+                                               -- from its link; names items AHF's list leaves out, e.g. soulbound (S13)
   ownAuctions = {                              -- latest snapshot per character, replaced whole
     ["Amaya-Grommash"] = { at = 1760000000000, rows = "2857,4100,5,3,1" },  -- "key,price,stack,band,count"
   },

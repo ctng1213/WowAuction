@@ -36,6 +36,20 @@ function Inventory.Encode(items)
   return DB.EncodeRows(rows)
 end
 
+--- Remember the names of the items in a snapshot (SPEC §2.2.1 itemNames). AHF's item list
+--- leaves out items that can't be sold, such as soulbound ones, so AHSync names them from these.
+---@param db table       The database; db.itemNames[key] = "quality,name" changes
+---@param items table[]  { key, name, quality } as read by the Adapter
+function Inventory.RememberNames(db, items)
+  local names = db.itemNames or {}
+  db.itemNames = names
+  for _, item in ipairs(items) do
+    if item.name then
+      names[item.key] = (item.quality or 1) .. "," .. item.name
+    end
+  end
+end
+
 -- Time field of each location (SPEC §2.2.1: each location has its own time).
 local TIME_FIELD = { bags = "bagsAt", bank = "bankAt", mail = "mailAt" }
 
@@ -45,7 +59,7 @@ local TIME_FIELD = { bags = "bagsAt", bank = "bankAt", mail = "mailAt" }
 ---@param db table          The database; db.inventory[charId] changes
 ---@param charId string     "Name-Realm"
 ---@param location string   "bags", "bank" or "mail"
----@param items table[]|nil { key, qty, bound } as read by the Adapter; nil when incomplete
+---@param items table[]|nil { key, qty, bound, name, quality } as read by the Adapter; nil when incomplete
 ---@return boolean          true when written
 function Inventory.CaptureLocation(db, charId, location, items)
   if not items then return false end
@@ -53,6 +67,7 @@ function Inventory.CaptureLocation(db, charId, location, items)
   db.inventory[charId] = entry
   entry[location] = Inventory.Encode(items)
   entry[TIME_FIELD[location]] = Adapter.NowMs()
+  Inventory.RememberNames(db, items)
   return true
 end
 

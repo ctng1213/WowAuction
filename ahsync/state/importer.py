@@ -417,6 +417,7 @@ def apply_data(db: Database, data: sv.AHProfitData, realms: Mapping[str, str], n
         work.mark(derive_from_scans(db, work.new_scans))     # local prices and book volume (SPEC §4.2)
         work.events(data.events)
         work.rules(data.rules)
+        db.add_item_names((n.key, sv.base_item_id(n.key), n.name, n.quality) for n in data.item_names)
     advanced = _advance_ingested_until(db, work.pruning.candidates())
     return ApplyResult(frozenset(work.dirty), data.problems + tuple(work.problems), advanced)
 

@@ -147,6 +147,22 @@ function Adapter.ItemKey(link)
   return itemId + KEY_SUFFIX_FACTOR * v
 end
 
+-- Item quality by the colour an item link is printed in (Blizzard's ITEM_QUALITY_COLORS).
+local QUALITY_BY_COLOR = { ["9d9d9d"] = 0, ffffff = 1, ["1eff00"] = 2, ["0070dd"] = 3, a335ee = 4, ff8000 = 5,
+                           e6cc80 = 6, ["00ccff"] = 7 }
+
+--- An item's name and quality from its link, with no item-cache lookup.
+---@param link string|nil  "|cff9d9d9d|Hitem:...|h[Broken Fang]|h|r"
+---@return string|nil      The name; nil when the link has none
+---@return number|nil      Quality 0-7 from the link's colour; nil when the colour is unknown
+function Adapter.ItemNameFromLink(link)
+  if type(link) ~= "string" then return nil, nil end
+  local name = link:match("|h%[(.-)%]|h")
+  if not name or name == "" then return nil, nil end
+  local color = link:match("^|c%x%x(%x%x%x%x%x%x)")
+  return name, color and QUALITY_BY_COLOR[color:lower()]
+end
+
 --- Spell id from a recipe link ("|Henchant:2663|h" or "|Hspell:2663|h").
 ---@param link string|nil  A recipe or enchant link
 ---@return number|nil      The spell id; nil when the link is not a spell link
@@ -436,7 +452,8 @@ local function ReadContainers(bagIds)
       if count then
         local key = Adapter.ItemKey(link)
         if not key then return nil end
-        items[#items + 1] = { key = key, qty = count, bound = bound }
+        local name, quality = Adapter.ItemNameFromLink(link)
+        items[#items + 1] = { key = key, qty = count, bound = bound, name = name, quality = quality }
       end
     end
   end
@@ -444,13 +461,13 @@ local function ReadContainers(bagIds)
 end
 
 --- Items in the character's bags.
----@return table[]|nil  { key, qty, bound } per occupied slot; nil when not fully loaded
+---@return table[]|nil  { key, qty, bound, name, quality } per occupied slot; nil when not fully loaded
 function Adapter.ReadBags()
   return ReadContainers(BAG_IDS)
 end
 
 --- Items in the bank; only readable while the bank is open.
----@return table[]|nil  { key, qty, bound } per occupied slot; nil when not fully loaded
+---@return table[]|nil  { key, qty, bound, name, quality } per occupied slot; nil when not fully loaded
 function Adapter.ReadBank()
   return ReadContainers(BANK_IDS)
 end
@@ -458,7 +475,7 @@ end
 --- Items attached to mail in the inbox; only readable while the mailbox is open.
 --- UNVERIFIED: Classic GetInboxNumItems/GetInboxItem/GetInboxItemLink. Soulbound
 --- items can't be mailed, so every mail item is written as not bound.
----@return table[]|nil  { key, qty, bound = false } per attachment; nil when the inbox is not
+---@return table[]|nil  { key, qty, bound = false, name, quality } per attachment; nil when the inbox is not
 ---                     fully loaded (SPEC §2.2.1: complete snapshots only)
 function Adapter.ReadInbox()
   local shown, total = GetInboxNumItems()
@@ -470,9 +487,11 @@ function Adapter.ReadInbox()
     for a = 1, MAIL_ATTACHMENTS do
       local _, _, _, count = GetInboxItem(i, a)
       if count then
-        local key = Adapter.ItemKey(GetInboxItemLink(i, a))
+        local link = GetInboxItemLink(i, a)
+        local key = Adapter.ItemKey(link)
         if not key then return nil end
-        items[#items + 1] = { key = key, qty = count, bound = false }
+        local name, quality = Adapter.ItemNameFromLink(link)
+        items[#items + 1] = { key = key, qty = count, bound = false, name = name, quality = quality }
       end
     end
   end

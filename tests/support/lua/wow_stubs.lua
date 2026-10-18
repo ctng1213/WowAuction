@@ -15,6 +15,9 @@ local TOC = ADDON_DIR .. "AHProfit.toc"
 Stubs.ITEM_CLASSES = { [6585] = 4, [2852] = 4 }
 
 -- Item names for links; cosmetic, only so links look real.
+-- Link colours (quality) of some items; others print white (common).
+Stubs.ITEM_COLORS = { [6948] = "ffffff", [3300] = "9d9d9d", [2851] = "1eff00" }
+
 Stubs.ITEM_NAMES = {
   [2320] = "Coarse Thread", [2321] = "Fine Thread", [2589] = "Linen Cloth", [2592] = "Wool Cloth",
   [2835] = "Rough Stone", [2840] = "Copper Bar", [2852] = "Copper Chain Pants",
@@ -60,7 +63,7 @@ end
 function Stubs.ItemLink(id, suffix)
   local fields = { id, "", "", "", "", "", suffix or "", "", 60, "", "", "", "" }
   local name = Stubs.ITEM_NAMES[id] or ("Item " .. id)
-  return "|cffffffff|Hitem:" .. table.concat(fields, ":") .. "|h[" .. name .. "]|h|r"
+  return "|cff" .. (Stubs.ITEM_COLORS[id] or "ffffff") .. "|Hitem:" .. table.concat(fields, ":") .. "|h[" .. name .. "]|h|r"
 end
 
 --- A recipe (enchant) link as the trade skill and craft windows print it.

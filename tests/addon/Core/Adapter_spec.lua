@@ -180,23 +180,27 @@ describe("Adapter", function()
       [-1] = { size = 2, slots = { [1] = { id = 4306, count = 10 } } },
     }
     assert_eq(Adapter.ReadBags(), {
-      { key = 6948, qty = 1, bound = true }, { key = 2589, qty = 15, bound = false }, { key = 2589, qty = 5, bound = false },
+      { key = 6948, qty = 1, bound = true, name = "Hearthstone", quality = 1 },
+      { key = 2589, qty = 15, bound = false, name = "Linen Cloth", quality = 1 },
+      { key = 2589, qty = 5, bound = false, name = "Linen Cloth", quality = 1 },
     })
-    assert_eq(Adapter.ReadBank(), { { key = 4306, qty = 10, bound = false } })
+    assert_eq(Adapter.ReadBank(), { { key = 4306, qty = 10, bound = false, name = "Silk Cloth", quality = 1 } })
   end)
 
   it("falls back to the legacy container API without C_Container", function()
     local Adapter = Boot()
     C_Container = nil
     Stubs.world.containers = { [0] = { size = 1, slots = { [1] = { id = 6948, count = 1, bound = true } } } }
-    assert_eq(Adapter.ReadBags(), { { key = 6948, qty = 1, bound = false } })
+    assert_eq(Adapter.ReadBags(), { { key = 6948, qty = 1, bound = false, name = "Hearthstone", quality = 1 } })
   end)
 
   it("reads every mail attachment as not bound", function()
     local Adapter = Boot()
     Stubs.world.inbox = { { { 2592, 20 } }, {}, { { 10940, 2 }, { 10940, 1 } } }
     assert_eq(Adapter.ReadInbox(), {
-      { key = 2592, qty = 20, bound = false }, { key = 10940, qty = 2, bound = false }, { key = 10940, qty = 1, bound = false },
+      { key = 2592, qty = 20, bound = false, name = "Wool Cloth", quality = 1 },
+      { key = 10940, qty = 2, bound = false, name = "Strange Dust", quality = 1 },
+      { key = 10940, qty = 1, bound = false, name = "Strange Dust", quality = 1 },
     })
   end)
 
