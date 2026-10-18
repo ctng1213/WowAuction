@@ -47,23 +47,23 @@ Frame AHProfitPanel 902,100 300x500
   Button AHProfitPanelRow10 910,354 284x20 (hidden)
   FontString - 912,380 26x12 "Post"
   FontString - 1187,380 6x10 "1"
-  FontString - 910,398 88x20 "Item"
-  Button - 910,398 88x20
-  FontString - 1000,398 58x20 "List price"
-  Button - 1000,398 58x20
-  FontString - 1060,398 28x20 "Qty"
-  Button - 1060,398 28x20
-  FontString - 1090,398 66x20 "Est. profit"
-  Button - 1090,398 66x20
-  FontString - 1158,398 36x20 "Chance"
-  Button - 1158,398 36x20
+  FontString - 910,398 82x20 "Item"
+  Button - 910,398 82x20
+  FontString - 994,398 58x20 "List price"
+  Button - 994,398 58x20
+  FontString - 1054,398 26x20 "Qty"
+  Button - 1054,398 26x20
+  FontString - 1082,398 64x20 "Est. profit"
+  Button - 1082,398 64x20
+  FontString - 1148,398 46x20 "Chance"
+  Button - 1148,398 46x20
   Button AHProfitPanelRow11 910,420 284x20
     Texture - 910,423 14x14
-    FontString - 910,425 88x10 "Copper Rod"
-    FontString - 1000,425 58x10 "41  "
-    FontString - 1060,425 28x10 "×5"
-    FontString - 1090,425 66x10 "+63   6  "
-    FontString - 1158,425 36x10 "58%"
+    FontString - 910,425 82x10 "Copper Rod"
+    FontString - 994,425 58x10 "41  "
+    FontString - 1054,425 26x10 "×5"
+    FontString - 1082,425 64x10 "+63   6  "
+    FontString - 1148,425 46x10 "58%"
   Button AHProfitPanelRow12 910,440 284x20 (hidden)
   Button AHProfitPanelRow13 910,460 284x20 (hidden)
   Button AHProfitPanelRow14 910,480 284x20 (hidden)

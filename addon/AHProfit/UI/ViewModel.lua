@@ -16,6 +16,9 @@ ViewModel.STALE_MS = 24 * HOUR_MS               -- data older than this: the age
 ViewModel.ACTION_LABELS = { buy = "BUY", post = "POST", de = "DE", craft = "CRAFT", vendor = "VENDOR", mail = "MAIL",
                             hold = "HOLD" }
 
+-- The ready-check tick as an inline texture: WoW's fonts have no ✓ glyph (A36).
+ViewModel.CHECK = "|TInterface\\RaidFrame\\ReadyCheck-Ready:12:12|t"
+
 -- Column header tooltips (SPEC §4.3): the dashboard's texts where the column is the same.
 ViewModel.COLUMN_HELP = {
   Item = "The item, in its quality colour",
@@ -726,6 +729,35 @@ local function MatLines(o, lookOf)
   return lines
 end
 
+--- A recipe whose product you already hold up to its cap: a green check and "made" (A36).
+---@param o table     { key, made = units held }
+---@param look table  The product's look
+---@return table      Row of text
+local function MadeRow(o, look)
+  return { key = o.key, item = look.name, quality = look.quality, kind = "craft", made = true,
+           source = ViewModel.CHECK .. " made", crafts = "×" .. o.made, mats = "—", profit = "—", netColor = "muted",
+           chance = "—", volume = look.soldPerDay and (ViewModel.RoundHalfUp(look.soldPerDay) .. "/day") or "—",
+           risk = "—", riskAmber = false, notes = { "×" .. o.made .. " in your bags · post it at the AH" } }
+end
+
+--- A recipe that pays now: its crafts, mats, profit and market cells (views.craft_row, D6-D8).
+---@param o table          From Options.CraftOptions
+---@param lookOf function  key -> look
+---@param totalGold number All your gold, copper, for risk
+---@return table           Row of text
+local function CraftRow(o, lookOf, totalGold)
+  local look = lookOf(o.key)
+  local risk, amber = ViewModel.Risk(o.matGold, totalGold)
+  local chance = o.p and ViewModel.RoundHalfUp(o.p * 100) or nil
+  return {
+    key = o.key, item = look.name, quality = look.quality, kind = "craft", source = o.source, crafts = "×" .. o.crafts,
+    mats = o.matGold > 0 and ViewModel.Money(o.matGold) or "—", profit = ViewModel.SignedMoney(o.profit),
+    netColor = "pos", chance = chance and (chance .. "%") or "—", dot = chance and ViewModel.Level(look.conf) or nil,
+    volume = look.soldPerDay and (ViewModel.RoundHalfUp(look.soldPerDay) .. "/day") or "—",
+    risk = risk, riskAmber = amber, notes = MatLines(o, lookOf),
+  }
+end
+
 --- The Craft tab's rows (views.craft_row for one character, D6-D8).
 ---@param options table[]  Options.CraftOptions
 ---@param lookOf function  key -> look
@@ -733,17 +765,8 @@ end
 ---@return table[]         Rows of text, in the options' order
 function ViewModel.CraftRows(options, lookOf, totalGold)
   local rows = {}
-  for _, o in ipairs(options) do
-    local look = lookOf(o.key)
-    local risk, amber = ViewModel.Risk(o.matGold, totalGold)
-    local chance = o.p and ViewModel.RoundHalfUp(o.p * 100) or nil
-    rows[#rows + 1] = {
-      key = o.key, item = look.name, quality = look.quality, kind = "craft", source = o.source, crafts = "×" .. o.crafts,
-      mats = o.matGold > 0 and ViewModel.Money(o.matGold) or "—", profit = ViewModel.SignedMoney(o.profit),
-      netColor = "pos", chance = chance and (chance .. "%") or "—", dot = chance and ViewModel.Level(look.conf) or nil,
-      volume = look.soldPerDay and (ViewModel.RoundHalfUp(look.soldPerDay) .. "/day") or "—",
-      risk = risk, riskAmber = amber, notes = MatLines(o, lookOf),
-    }
+  for i, o in ipairs(options) do
+    rows[i] = o.made and MadeRow(o, lookOf(o.key)) or CraftRow(o, lookOf, totalGold)
   end
   return rows
 end
@@ -751,9 +774,12 @@ end
 --- The footer under Craft.
 ---@param rows table[]  From ViewModel.CraftRows
 ---@param known number  Recipes the character knows that make an item
----@return string       e.g. "1 of 2 known recipes pay now"
+---@return string       e.g. "1 of 2 known recipes pay now", plus " · 1 made" (A36)
 function ViewModel.CraftFooter(rows, known)
-  return #rows .. " of " .. known .. (known == 1 and " known recipe" or " known recipes") .. " pay now"
+  local made = 0
+  for _, r in ipairs(rows) do if r.made then made = made + 1 end end
+  local text = (#rows - made) .. " of " .. known .. (known == 1 and " known recipe" or " known recipes") .. " pay now"
+  return made > 0 and (text .. " · " .. made .. " made") or text
 end
 
 -- ------------------------------------------------------------------ Flip tab (A28, UI13)
@@ -892,21 +918,18 @@ function ViewModel.PostableRows(rows, held, limit)
 end
 
 --- The panel's shopping and post lists (UI7).
----@param targets table[]  { key, qty, price (the most to pay each), vendor (bought from a vendor) } in list order
+---@param targets table[]  { key, qty, price (the most to pay each) } in list order
 ---@param posts table[]    Today rows of posts { item, quality, qty, each, chance, dot }
 ---@param levelsOf function key -> live levels, or nil when not checked yet
 ---@param lookOf function  key -> look
 ---@param gold number      All your gold, copper
 ---@return table           { shopping = rows, checked = "3 of 5", posts = rows, footer }
 function ViewModel.AHPanel(targets, posts, levelsOf, lookOf, gold)
-  local shopping, checked, found, spend, onAH = {}, 0, 0, 0, 0
+  local shopping, checked, found, spend = {}, 0, 0, 0
   for _, t in ipairs(targets) do
     local look, levels = lookOf(t.key), levelsOf(t.key)
     local row = { key = t.key, item = look.name, quality = look.quality, qty = "×" .. t.qty, max = ViewModel.Money(t.price) }
-    if not t.vendor then onAH = onAH + 1 end
-    if t.vendor then                                           -- A32: not on the AH, never searched
-      row.state, row.text, row.price, row.vendor = "vendor", "vendor", "vendor", true
-    elseif not levels then
+    if not levels then
       row.state, row.text, row.price = "checking", "checking", "checking"
     else
       checked = checked + 1
@@ -922,6 +945,6 @@ function ViewModel.AHPanel(targets, posts, levelsOf, lookOf, gold)
     end
     shopping[#shopping + 1] = row
   end
-  return { shopping = shopping, checked = checked .. " of " .. onAH, posts = posts,
+  return { shopping = shopping, checked = checked .. " of " .. #targets, posts = posts,
            footer = found .. " found · budget left " .. ViewModel.Money(math.max(0, gold - spend)) }
 end

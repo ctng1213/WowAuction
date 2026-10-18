@@ -462,7 +462,7 @@ local function FillRow(row, line)
   end
   Tint(cells.item, line.muted and COLORS.muted or QUALITY[line.quality] or QUALITY[1])
   if cells.net then Tint(cells.net, COLORS[line.netColor]) end
-  if cells.profit then Tint(cells.profit, COLORS.pos) end
+  if cells.profit then Tint(cells.profit, COLORS[line.netColor] or COLORS.pos) end
   if cells.risk then Tint(cells.risk, line.riskAmber and COLORS.amber or COLORS.muted) end
   if line.dot then cells.chance:SetText(line.chance .. Dot(line.dot)) end
 end

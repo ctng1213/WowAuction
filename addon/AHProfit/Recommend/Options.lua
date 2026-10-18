@@ -150,12 +150,15 @@ end
 --- The most crafts worth making for the posting-now window: its output may fill at most
 --- max_supply_share of what others list, and always one reference stack (capacity.liquidity_cap,
 --- the posting-now window without a supply pattern; SPEC §3.4 Liquidity, A30).
+--- Units of the product you already hold count against it (A36).
 ---@param recipe table      { yieldMin, yieldMax }
 ---@param item table|nil    The product's market item (supply, refStack)
----@return number|nil       Crafts; nil (no cap) when the product's supply is unknown
-function Options.CraftCap(recipe, item)
+---@param held number|nil   Units of the product you hold
+---@return number|nil       Crafts, 0 when what you hold fills the cap; nil (no cap) when the product's supply is unknown
+function Options.CraftCap(recipe, item, held)
   if not (item and item.supply) then return nil end
-  local units = math.max(item.refStack or 1, math.floor(Options.MAX_SUPPLY_SHARE * item.supply))
+  local units = math.max(item.refStack or 1, math.floor(Options.MAX_SUPPLY_SHARE * item.supply)) - (held or 0)
+  if units <= 0 then return 0 end
   return math.max(1, math.floor(units / ((recipe.yieldMin + recipe.yieldMax) / 2)))
 end
 
@@ -208,7 +211,8 @@ function Options.Crafts(recipes, units, ctx)
     local best, bestAt
     for i, r in ipairs(left) do
       local net, p = Options.ProductNet(r, ctx.itemOf(r.product), ctx.vendorOf(r.product) or 0)
-      local option = Craft.Option(r, CraftMarket({ r }, owned, ctx), net, nil, Options.CraftCap(r, ctx.itemOf(r.product)))
+      local cap = Options.CraftCap(r, ctx.itemOf(r.product), units[r.product])
+      local option = Craft.Option(r, CraftMarket({ r }, owned, ctx), net, nil, cap)
       option.p = p
       if option.crafts > 0 and (not best or option.profit > best.profit) then best, bestAt = option, i end
     end
@@ -232,15 +236,20 @@ end
 ---@param units table      key -> units carried, less what you keep
 ---@param ctx table        { itemOf, levelsOf, vendorOf, vendorBuyOf }
 ---@return table[]         { key, spell, crafts, matGold, profit, p, source, ownedUsed, bought, fromVendor,
----                        vendorPrice (key -> copper), ahGold (key -> copper) }, best profit first
+---                        vendorPrice (key -> copper), ahGold (key -> copper) }, best profit first; a recipe whose
+---                        product you already hold up to its cap is { key, spell, made = units held, profit = 0 } (A36)
 function Options.CraftOptions(recipes, units, ctx)
   local out = {}
   for _, r in ipairs(recipes) do
     local vendorSold = ctx.vendorBuyOf and ctx.vendorBuyOf(r.product)     -- R23: no vendor-sold products
     local net, p = Options.ProductNet(r, ctx.itemOf(r.product), ctx.vendorOf(r.product) or 0)
     local market = CraftMarket({ r }, units, ctx)
-    local option = Craft.Option(r, market, net, nil, Options.CraftCap(r, ctx.itemOf(r.product)))
-    if option.crafts > 0 and not vendorSold then
+    local held = units[r.product] or 0
+    local cap = Options.CraftCap(r, ctx.itemOf(r.product), held)
+    local option = Craft.Option(r, market, net, nil, cap)
+    if cap == 0 and held > 0 and not vendorSold then
+      out[#out + 1] = { key = r.product, spell = r.spell, made = held, profit = 0 }
+    elseif option.crafts > 0 and not vendorSold then
       out[#out + 1] = { key = r.product, spell = r.spell, crafts = option.crafts, matGold = option.matGold,
                         profit = option.profit, p = p, source = Craft.Source(option), ownedUsed = option.ownedUsed,
                         bought = option.bought, fromVendor = option.fromVendor, vendorPrice = market.vendor,

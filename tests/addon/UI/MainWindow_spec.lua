@@ -292,6 +292,29 @@ describe("MainWindow", function()
     Stubs.ITEM_NAMES[4470], Stubs.ITEM_NAMES[4471], Stubs.ITEM_SELL[4470] = nil, nil, nil
   end)
 
+  it("A36 once you hold what a craft is worth making, its row shows a check and \"made\"", function()
+    Stubs.Reset()
+    _G.AHProfitPlan = nil
+    Stubs.ITEM_NAMES[4471], Stubs.ITEM_NAMES[4470] = "Basic Campfire Kit", "Simple Wood"
+    Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 4470, count = 1 } } } }
+    UIWorld.Market({ [4471] = UIWorld.Item(99, 80, 10, { postPrice = 99, chance = 1, refStack = 1, supply = 2 }) }, NOW)
+    AHProfitMarket.vendor = { [4470] = 38 }
+    Stubs.Login()
+    AHProfitDB.knownRecipes["Amaya-Grommash"] = "6413"
+    AHProfitDB.recipes.Survival = { [6413] = { product = 4471, yieldMin = 1, yieldMax = 1, reagents = "4470,1" } }
+    Stubs.Slash("/ahp")
+    AHProfit.MainWindow.ShowTab("craft")
+    local ui, VM = AHProfit.MainWindow.Frames(), AHProfit.ViewModel
+    assert_eq({ FirstRow("craft").crafts, ui.rows[2].note:GetText() }, { "×1", "use 1 owned Simple Wood" })
+    Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 4471, count = 1 } } } }   -- crafted
+    Stubs.FireEvent("BAG_UPDATE_DELAYED")
+    Stubs.Advance(2)
+    local row = FirstRow("craft")
+    assert_eq({ row.source, row.crafts, row.mats, row.profit, ui.rows[2].note:GetText(), ui.footer:GetText() },
+              { VM.CHECK .. " made", "×1", "—", "—", "×1 in your bags · post it at the AH", "0 of 1 known recipe pay now · 1 made" })
+    Stubs.ITEM_NAMES[4471], Stubs.ITEM_NAMES[4470] = nil, nil
+  end)
+
   it("A22 the Inventory tab lists what this character holds with its worth and plan", function()
     Stubs.Reset()
     _G.AHProfitPlan = nil

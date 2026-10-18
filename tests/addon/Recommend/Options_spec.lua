@@ -131,6 +131,9 @@ describe("Options", function()
                 Options.CraftCap({ yieldMin = 1, yieldMax = 1 }, { supply = 1, refStack = 20 }),   -- one stack
                 Options.CraftCap(two, { supply = 0 }), Options.CraftCap(two, {}), Options.CraftCap(two, nil) },
               { 7, 3, 20, 1, nil, nil })
+    -- A36: what you hold counts against it.
+    assert_eq({ Options.CraftCap({ yieldMin = 1, yieldMax = 1 }, { supply = 6, refStack = 1 }, 1),
+                Options.CraftCap({ yieldMin = 1, yieldMax = 1 }, { supply = 6, refStack = 1 }, 3) }, { 2, 0 })
   end)
 
   it("A20 a mat a craft uses is not also offered for sale", function()
