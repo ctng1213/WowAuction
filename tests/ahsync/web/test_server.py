@@ -330,10 +330,29 @@ def test_every_contract_page_is_routed_and_unknown_pages_are_404(app):
     assert set(PAGES) == {"disenchant", "craft", "today", "week", "on_ah", "flip", "inventory", "history", "rules",
                           "characters", "status"}
     for page in PAGES:
-        assert json.loads(app.handle("GET", f"/api/views/{page}", GOOD).body) == {"error": "no_refresh_yet"}
+        if page != "status":                      # built on request, never "no refresh yet"
+            assert json.loads(app.handle("GET", f"/api/views/{page}", GOOD).body) == {"error": "no_refresh_yet"}
     for target in ("/api/views/nope", "/api/views/", "/api/views", "/index.html", "/api", "/../data/ahsync.db"):
         reply = app.handle("GET", target, GOOD)
         assert reply.status == 404 and json.loads(reply.body) == {"error": "not_found"}, target
+
+
+def test_status_is_built_on_request_and_never_shows_the_key(app, db):
+    with db.transaction():
+        db.set_status("realm:X", "warn", "unknown_realm", {"realm": "X", "faction": "Horde"}, BUILT)
+    reply = app.handle("GET", "/api/views/status", GOOD)
+    body = json.loads(reply.body)
+    assert reply.status == 200 and body["built"] == FakeClock().now_ms()
+    assert [a["title"] for a in body["data"]["alerts"]] == ["No AHF prices yet", "No AHF prices yet",
+                                                            "Realm not mapped to a market"]
+    assert [c["title"] for c in body["data"]["cards"]] == [M, OTHER, "API", "Characters", "Storage"]
+    assert KEY not in reply.body.decode()
+
+
+def test_status_says_busy_when_the_database_cant_be_read(app, db):
+    db.conn.close()
+    reply = app.handle("GET", "/api/views/status", GOOD)
+    assert reply.status == 503 and json.loads(reply.body) == {"error": "database_busy"}
 
 
 def test_post_on_a_read_endpoint_is_405(app):

@@ -188,6 +188,18 @@ def test_sync_state_status_and_failures(db):
     assert db.fetch_failures(MARKET) == []
 
 
+def test_sync_facts_for_the_status_page(db):
+    assert db.sync_facts(MARKET, T0 - 7 * DAY_MS) == (None, 0, None, None, 0, 0)
+    db.upsert_current(MARKET, "ahf", [(1, 50, 20, T0 - HOUR_MS), (2, None, 0, T0 - 3 * HOUR_MS)])
+    db.upsert_current(MARKET, "local", [(3, 40, 5, T0)])
+    db.upsert_candles("candles_h1", MARKET, [candle(1, T0 - 5 * HOUR_MS, 50), candle(1, T0 - 2 * HOUR_MS, 51)], "ahf")
+    db.store_book(BookScan("s1", MARKET, "local", "A-R", T0 - DAY_MS), [])
+    db.store_book(BookScan("s0", MARKET, "local", "A-R", T0 - 8 * DAY_MS), [])
+    db.store_book(BookScan(f"ahf:{MARKET}:1", MARKET, "ahf", None, T0 - HOUR_MS), [])
+    # newest AHF price (the local one doesn't count), 2 items priced, the hourly span, 1 recent own scan, 1 AHF book
+    assert db.sync_facts(MARKET, T0 - 7 * DAY_MS) == (T0 - HOUR_MS, 2, T0 - 5 * HOUR_MS, T0 - 2 * HOUR_MS, 1, 1)
+
+
 def test_pruning_primitives_guard_their_tables(db):
     with pytest.raises(ValueError):
         db.delete_before("items", 0)

@@ -265,3 +265,12 @@ class StateReads:
         """
         return {key: (qty, total) for key, qty, total in self.conn.execute(
             "SELECT key, qty, total_cost FROM cost_basis WHERE qty > 0 ORDER BY key")}
+
+    def characters(self) -> list[tuple[str, str, str, str | None, int | None]]:
+        """Every character, on any market or none (SPEC §3.5 Status).
+
+        Returns:
+            (character id, realm, faction, market or None, updated ms or None), by id.
+        """
+        return [tuple(r) for r in self.conn.execute(
+            "SELECT id, realm, faction, market, updated FROM characters ORDER BY id")]

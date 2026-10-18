@@ -29,6 +29,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from ahsync.clock import Clock
+from ahsync.app.status_page import status_page
 from ahsync.config import Config
 from ahsync.db.sqlite import Database
 
@@ -42,7 +43,7 @@ REQUEST_TIMEOUT_S = 10            # seconds a connection may stay silent (FM28)
 MAX_BODY_BYTES = 4096
 BUSY_TIMEOUT_MS = 5000
 
-# SPEC §3.5 dashboard data: disenchant and craft are M3; the rest come later.
+# SPEC §3.5 dashboard data. Every page is staged by the full refresh except status, built on request.
 PAGES = ("today", "week", "on_ah", "disenchant", "craft", "flip", "inventory", "history", "rules",
          "characters", "status")
 GET_PATHS = ("/", "/api/markets")
@@ -236,6 +237,8 @@ class DashboardApp:
         market = market or self.config.markets[0]
         if market not in self.config.markets:
             return json_response(404, {"error": "unknown_market"})
+        if page == "status":
+            return self.get_status()
         try:
             with self._lock:
                 stored = self.db.view(page, market)
@@ -249,6 +252,22 @@ class DashboardApp:
             return json_response(404, {"error": "no_refresh_yet"})
         payload, built_ms = stored
         return json_response(200, {"built": built_ms, "data": payload})
+
+    def get_status(self) -> Response:
+        """Build and serve the Status page now (SPEC §3.5 Status): it changes between refreshes.
+
+        Returns:
+            200 {"built": now ms, "data": payload}; 503 {"error": "database_busy"} when the
+            database can't be read right now.
+        """
+        now = self.clock.now_ms()
+        try:
+            with self._lock:
+                payload = status_page(self.db, self.config, now, self.clock.local_offset_ms(now))
+        except sqlite3.Error as error:
+            log.warning("building the status page failed: %s", error)
+            return json_response(503, {"error": "database_busy"})
+        return json_response(200, {"built": now, "data": payload})
 
     # ------------------------------------------------------------ POST
 

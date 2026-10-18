@@ -206,6 +206,11 @@ const detailHtml = d => !d ? '<div class="empty" style="border-top:1px solid var
   `<div class="h">Estimated sales by hour (<code>sales_how</code>)</div>${heatHtml(d.heat.sales, 'sales')}` +
   `<div class="h">Listed supply by hour (<code>supply_how</code>)</div>${heatHtml(d.heat.supply, 'supply')}` +
   `<div class="h">Hover a cell for its ratio to the item's normal level and the weeks of data behind it. Striped = no data.</div></div></div>`;
+// Status: alerts and cards, every text from engine/status_view.py.
+const ALERT_CLASS = { error: 'bad', warn: 'warn', info: 'info' };
+const VALUE_CLASS = { amber: 'amber', muted: 'muted', pos: 'pos', neg: 'neg' };
+const statusCard = c => `<div class="card"><div class="card-h"><b>${esc(c.title)}</b>${c.badge ? `<span class="pill ${c.badge_class === 'ok' || c.badge_class === 'warn' || c.badge_class === 'gold' ? c.badge_class : ''}">${esc(c.badge)}</span>` : ''}</div>` +
+  `<dl class="kv">${c.lines.map(([k, v, cls]) => `<dt>${esc(k)}</dt><dd class="${VALUE_CLASS[cls] || ''}">${esc(v)}</dd>`).join('')}</dl></div>`;
 const totalsList = obj => Object.entries(obj || {}).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${signed(v)}</dd>`).join('');
 
 // ---------- live pages (SPEC §3.5 dashboard data) ----------
@@ -269,6 +274,14 @@ const LIVE = {
       { id: 'plan', label: 'Plan', options: [['', 'All'], ['post', 'Post'], ['de', 'Disenchant'], ['vendor', 'Vendor'], ['hold', 'Hold'], ['craft', 'Craft'], ['none', 'Not planned'], ['bound', 'Bound'], ['ignored', 'Ignored']],
         test: (r, v) => v === '' || r.plan_kind === v },
     ],
+  },
+  status: {
+    lede: 'Sync state, data age and anything that needs attention. This page is built when you open it, so it is always current; open it again to update it.',
+    render: d => `<div style="padding:12px">${(d.alerts || []).map(a => `<div class="alert ${ALERT_CLASS[a.level] || 'info'}"><b>${esc(a.title)}</b><span class="grow">${esc(a.text)}</span></div>`).join('') ||
+      '<div class="alert info"><b>All clear</b><span class="grow">Nothing needs attention.</span></div>'}</div>` +
+      `<div class="grid2">${(d.cards || []).map(statusCard).join('')}</div>` +
+      `<div class="empty">Sell-probability calibration appears here once your posts are tracked to their outcome.</div>`,
+    filters: [],
   },
   disenchant: {
     lede: 'AH items worth buying to disenchant (SPEC §3.4A). Only shown when one of your characters has the skill. Chance (with its confidence dot) and the market activity columns describe the <b>mats</b>, since they\'re what you sell. A "—" means the data can\'t support a number; it is never a guess and never 0. In every table, the <b>dot after a chance is its confidence</b> (<span class="dot h"></span>≥ 75% · <span class="dot m"></span>≥ 45% · <span class="dot l"></span>below); hover a chance for the exact %.',

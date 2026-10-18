@@ -71,6 +71,12 @@ def test_inventory_rows_include_bound_ones_and_cost_basis_skips_empty_rows(db):
     assert db.cost_basis() == {2589: (20, 760)}
 
 
+def test_every_character_with_or_without_a_market(db):
+    sql(db, "INSERT INTO characters(id, realm, faction, market, updated) VALUES (?, ?, ?, ?, ?)",
+        ("B-R", "R", "Horde", None, 5), ("A-R", "R", "Alliance", M, None))
+    assert db.characters() == [("A-R", "R", "Alliance", M, None), ("B-R", "R", "Horde", None, 5)]
+
+
 def test_live_item_rules_leave_out_cleared_ones(db):
     sql(db, "INSERT INTO item_rules(key, rule, set_at, source) VALUES (?, ?, ?, ?)",
         (2589, "no_buy", 1, "addon"), (2840, "none", 2, "dashboard"), (4306, "ignore", 3, "dashboard"))
