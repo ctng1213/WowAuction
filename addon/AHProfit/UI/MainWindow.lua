@@ -11,6 +11,7 @@ local DB = AHProfit.DB
 local Market = AHProfit.Market
 local Plan = AHProfit.Plan
 local VM = AHProfit.ViewModel
+local Events = AHProfit.Events
 local Options = AHProfit.Options
 local Inventory = AHProfit.Capture.Inventory
 
@@ -28,10 +29,10 @@ MainWindow.MONEY_FIELDS = { each = true, total = true, net = true }
 -- { header, row field, width (nil = fills), justify }; columns after the filling one anchor from the right.
 MainWindow.COLUMNS = {
   today = { { "", "action", 52, "LEFT" }, { "Item", "item", nil, "LEFT" }, { "Qty", "qty", 28, "RIGHT" },
-            { "Each", "each", 52, "RIGHT" }, { "Total", "total", 56, "RIGHT" }, { "Net", "net", 70, "RIGHT" },
-            { "Chance", "chance", 46, "RIGHT" }, { "Volume", "volume", 42, "RIGHT" }, { "Risk", "risk", 34, "RIGHT" } },
+            { "Each", "each", 52, "RIGHT" }, { "Total", "total", 56, "RIGHT" }, { "Net", "net", 88, "RIGHT" },
+            { "Chance", "chance", 46, "RIGHT" }, { "Volume", "volume", 52, "RIGHT" }, { "Risk", "risk", 34, "RIGHT" } },
   week = { { "Time", "time", 34, "LEFT" }, { "", "action", 52, "LEFT" }, { "Item", "item", nil, "LEFT" },
-           { "Qty", "qty", 28, "RIGHT" }, { "Total", "total", 56, "RIGHT" }, { "Net", "net", 70, "RIGHT" },
+           { "Qty", "qty", 28, "RIGHT" }, { "Total", "total", 56, "RIGHT" }, { "Net", "net", 88, "RIGHT" },
            { "Chance", "chance", 46, "RIGHT" } },
 }
 
@@ -51,6 +52,7 @@ local FLAT = "Interface\\Buttons\\WHITE8X8"
 local ARROW = "|TInterface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up:14:14|t"
 
 local ui = nil                     -- the frames, once built
+local waitingForNames = false      -- a shown row's name isn't in the client's item cache yet
 local view = { tab = "today", offset = 0, minChance = 50 }
 
 --- Colour a font string from an { r, g, b } triple.
@@ -342,8 +344,21 @@ end
 ---@return table
 local function LookOf(key)
   local saved = (DB.Get() or {}).itemNames
+  -- Asking for an uncached item makes the client fetch it; GET_ITEM_INFO_RECEIVED then redraws.
+  -- UNVERIFIED: Forever fires GET_ITEM_INFO_RECEIVED when a requested item arrives, as Classic does.
   local name, quality = Adapter.ItemInfo(VM.BaseItemId(key))
+  if not name and not (saved and saved[key]) then
+    waitingForNames = true
+    Events.Register("GET_ITEM_INFO_RECEIVED", MainWindow.OnItemInfo)   -- listen only while a name is missing
+  end
   return VM.Look(key, Market.Item(key), saved and saved[key], name, quality)
+end
+
+--- GET_ITEM_INFO_RECEIVED: an item the window asked for has arrived; redraw once, debounced,
+--- so the row shows its name instead of "Item <key>". The redraw stops listening when no
+--- shown name is missing any more.
+function MainWindow.OnItemInfo()
+  if ui and ui.frame:IsShown() then Events.Debounce("window.names", MainWindow.Render) end
 end
 
 --- Show only what a kind of line uses: action cells, a note, or a day header.
@@ -460,6 +475,7 @@ end
 --- Redraw the window from the view model.
 function MainWindow.Render()
   if not ui then return end
+  waitingForNames = false
   local nowMs = Adapter.NowMs()
   RenderChrome(nowMs)
   local gold = VM.TotalGold((DB.Get() or {}).characters)
@@ -469,6 +485,7 @@ function MainWindow.Render()
   local page = VM.Page(lines, view.offset, MainWindow.ROWS)
   view.offset = page.offset
   for i, row in ipairs(ui.rows) do Fill(row, page.lines[i]) end
+  if not waitingForNames then Events.Unregister("GET_ITEM_INFO_RECEIVED", MainWindow.OnItemInfo) end
   ui.empty:SetShown(#lines == 0)
   ui.empty:SetText(emptyText)
   ui.footer:SetText(Plan.Problem() or VM.WithCoins(footer))

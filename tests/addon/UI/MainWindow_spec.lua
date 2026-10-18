@@ -144,6 +144,11 @@ describe("MainWindow", function()
     local ui = MainWindow.Frames()
     assert_eq(ui.rows[2].cells.week.item:GetText(), "Linen Cloth of the Whale")
     assert_eq(ui.rows[4].cells.week.item:GetText(), "Item 2840")
+    Stubs.world.uncached[2840] = nil                       -- the client fetched it
+    Stubs.FireEvent("GET_ITEM_INFO_RECEIVED", 2840, true)
+    Stubs.Advance(1)
+    assert_eq(ui.rows[4].cells.week.item:GetText(), "Copper Bar")
+    assert_eq(Stubs.IsRegistered("GET_ITEM_INFO_RECEIVED"), false)   -- every name is known: stop listening
   end)
 
   it("an error while opening is printed to chat, not raised as a Lua error", function()

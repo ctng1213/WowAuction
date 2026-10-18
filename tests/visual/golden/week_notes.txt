@@ -18,14 +18,14 @@ Frame AHProfitWindow 640,320 640x440
     Button - 691,380 52x20
     FontString - 1206,380 46x20 "Chance"
     Button - 1206,380 46x20
-    FontString - 1133,380 70x20 "Net"
-    Button - 1133,380 70x20
-    FontString - 1074,380 56x20 "Total"
-    Button - 1074,380 56x20
-    FontString - 1043,380 28x20 "Qty"
-    Button - 1043,380 28x20
-    FontString - 746,380 294x20 "Item"
-    Button - 746,380 294x20
+    FontString - 1115,380 88x20 "Net"
+    Button - 1115,380 88x20
+    FontString - 1056,380 56x20 "Total"
+    Button - 1056,380 56x20
+    FontString - 1025,380 28x20 "Qty"
+    Button - 1025,380 28x20
+    FontString - 746,380 276x20 "Item"
+    Button - 746,380 276x20
   Frame AHProfitWindowList 650,402 620x240
     Frame AHProfitWindowRow1 650,402 606x20
       FontString - 654,406 86x12 "Thu 9 (today)"
@@ -36,10 +36,10 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 654,422 34x20 "08:53"
       FontString - 691,422 48x20 "BUY"
       FontString - 1206,422 46x20 "88%   "
-      FontString - 1133,422 70x20 "+2   10  "
-      FontString - 1074,422 56x20 "7   60  "
-      FontString - 1043,422 28x20 "×20"
-      FontString - 742,422 298x20 "Linen Cloth"
+      FontString - 1115,422 88x20 "+2   10  "
+      FontString - 1056,422 56x20 "7   60  "
+      FontString - 1025,422 28x20 "×20"
+      FontString - 742,422 280x20 "Linen Cloth"
       Texture - 691,426 48x12
     Frame AHProfitWindowRow3 650,442 606x20
       FontString - 709,442 543x20 "Flip: post Fri 08:53, for the 16:53 peak"
@@ -52,10 +52,10 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 654,482 34x20 "08:53"
       FontString - 691,482 48x20 "POST"
       FontString - 1206,482 46x20 "88%   "
-      FontString - 1133,482 70x20 "0  "
-      FontString - 1074,482 56x20 "11  "
-      FontString - 1043,482 28x20 "×20"
-      FontString - 742,482 298x20 "Linen Cloth"
+      FontString - 1115,482 88x20 "0  "
+      FontString - 1056,482 56x20 "11  "
+      FontString - 1025,482 28x20 "×20"
+      FontString - 742,482 280x20 "Linen Cloth"
       Texture - 691,486 48x12
     Frame AHProfitWindowRow6 650,502 606x20
       FontString - 709,502 543x20 "for the 16:53 peak · profit counted on the Thu 08:53 buy"
