@@ -415,3 +415,27 @@ function ViewModel.TotalGold(characters)
   for _, c in pairs(characters or {}) do total = total + (tonumber(c.gold) or 0) end
   return total
 end
+
+-- Coin icons for money text (SPEC §4.3: money uses gold, silver and copper coin icons).
+ViewModel.COINS = { g = "|TInterface\\MoneyFrame\\UI-GoldIcon:0:0:1:0|t",
+                    s = "|TInterface\\MoneyFrame\\UI-SilverIcon:0:0:1:0|t",
+                    c = "|TInterface\\MoneyFrame\\UI-CopperIcon:0:0:1:0|t" }
+
+--- Money text with coin icons in place of the g, s and c letters: "1g 18s" -> "1<gold> 18<silver>".
+---@param text string  From Money or SignedMoney; "—" and other text pass unchanged
+---@return string
+function ViewModel.WithCoins(text)
+  return (tostring(text):gsub("(%d+)([gsc])", function(n, unit) return n .. ViewModel.COINS[unit] end))
+end
+
+--- The list's lines: each row, followed by its note as a line of its own when it has one.
+---@param rows table[]  View rows (or Week lines)
+---@return table[]      Rows, day headers and { noteLine = true, text } lines
+function ViewModel.WithNotes(rows)
+  local lines = {}
+  for _, row in ipairs(rows) do
+    lines[#lines + 1] = row
+    if row.note and row.note ~= "" then lines[#lines + 1] = { noteLine = true, text = row.note } end
+  end
+  return lines
+end

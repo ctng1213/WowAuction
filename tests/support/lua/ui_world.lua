@@ -30,12 +30,12 @@ function UIWorld.Item(cur, conf, sold)
 end
 
 --- Install AHProfitPlan with these actions for Amaya (and any other characters named in them).
----@param actions table[]  { id, kind, key, qty, price, at, net, parent, chance, char }
+---@param actions table[]  { id, kind, key, qty, price, at, net, parent, chance, peak, char }
 function UIWorld.Plan(actions)
   local byChar, count, length = {}, 0, 0
   for _, a in ipairs(actions) do
     local text = table.concat({ a.id, a.kind, a.key, a.qty, a.price or "", a.at, a.net or "", a.parent or "", "",
-                                a.status or "pending", a.chance or "" }, ";")
+                                a.status or "pending", a.chance or "", a.peak or "" }, ";")
     local char = a.char or "Amaya-Grommash"
     byChar[char] = byChar[char] or {}
     table.insert(byChar[char], text)

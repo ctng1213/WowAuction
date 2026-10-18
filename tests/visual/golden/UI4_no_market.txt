@@ -1,35 +1,41 @@
 Frame AHProfitWindow 640,320 640x440
+  Texture - 642,322 636x28
+  Texture - 642,350 636x1
   FontString - 652,330 53x12 "AHProfit"
-  FontString - 713,331 88x10 "Grommash · Horde"
+  FontString - 715,331 88x10 "Grommash · Horde"
   Button AHProfitWindowClose 1252,324 24x24
-  FontString - 1208,331 39x10 "no data"
-  Button AHProfitWindowTabToday 650,352 72x22 "Today"
-  Button AHProfitWindowTabWeek 724,352 72x22 "Week"
-  Button AHProfitWindowMinChance 1150,352 120x22 "Min chance 50%"
-  Frame AHProfitWindowHeadertoday 650,378 606x20
-    Button - 654,378 44x20
-    Button - 1212,378 40x20 "Who"
-    Button - 1173,378 36x20 "Risk"
-    Button - 1126,378 44x20 "Volume"
-    Button - 1075,378 48x20 "Chance"
-    Button - 1010,378 62x20 "Net"
-    Button - 957,378 50x20 "Total"
-    Button - 908,378 46x20 "Each"
-    Button - 875,378 30x20 "Qty"
-    Button - 701,378 171x20 "Item"
-  Frame AHProfitWindowHeaderweek 650,378 606x20 (hidden)
-  Frame AHProfitWindowList 650,400 620x240
-    Frame AHProfitWindowRow1 650,400 606x20 (hidden)
-    Frame AHProfitWindowRow2 650,420 606x20 (hidden)
-    Frame AHProfitWindowRow3 650,440 606x20 (hidden)
-    Frame AHProfitWindowRow4 650,460 606x20 (hidden)
-    Frame AHProfitWindowRow5 650,480 606x20 (hidden)
-    Frame AHProfitWindowRow6 650,500 606x20 (hidden)
-    Frame AHProfitWindowRow7 650,520 606x20 (hidden)
-    Frame AHProfitWindowRow8 650,540 606x20 (hidden)
-    Frame AHProfitWindowRow9 650,560 606x20 (hidden)
-    Frame AHProfitWindowRow10 650,580 606x20 (hidden)
-    Frame AHProfitWindowRow11 650,600 606x20 (hidden)
-    Frame AHProfitWindowRow12 650,620 606x20 (hidden)
-    FontString - 812,514 297x12 "No market data yet. Run AHSync, then /reload."
+  Frame AHProfitWindowAge 1150,327 96x18
+    FontString - 1179,331 39x10 "no data"
+  Button AHProfitWindowTabToday 650,356 72x22 "Today"
+  Button AHProfitWindowTabWeek 724,356 72x22 "Week"
+  Texture - 642,378 636x1
+  Button AHProfitWindowMinChance 1140,356 130x20 "Min chance: 50% ▾"
+  Frame AHProfitWindowHeadertoday 650,380 606x20
+    Button - 654,380 44x20
+    Button - 1212,380 40x20 "Who"
+    Button - 1175,380 34x20 "Risk"
+    Button - 1130,380 42x20 "Volume"
+    Button - 1081,380 46x20 "Chance"
+    Button - 1008,380 70x20 "Net"
+    Button - 949,380 56x20 "Total"
+    Button - 894,380 52x20 "Each"
+    Button - 863,380 28x20 "Qty"
+    Button - 701,380 159x20 "Item"
+  Frame AHProfitWindowHeaderweek 650,380 606x20 (hidden)
+  Frame AHProfitWindowList 650,402 620x240
+    Frame AHProfitWindowRow1 650,402 606x20 (hidden)
+    Frame AHProfitWindowRow2 650,422 606x20 (hidden)
+    Frame AHProfitWindowRow3 650,442 606x20 (hidden)
+    Frame AHProfitWindowRow4 650,462 606x20 (hidden)
+    Frame AHProfitWindowRow5 650,482 606x20 (hidden)
+    Frame AHProfitWindowRow6 650,502 606x20 (hidden)
+    Frame AHProfitWindowRow7 650,522 606x20 (hidden)
+    Frame AHProfitWindowRow8 650,542 606x20 (hidden)
+    Frame AHProfitWindowRow9 650,562 606x20 (hidden)
+    Frame AHProfitWindowRow10 650,582 606x20 (hidden)
+    Frame AHProfitWindowRow11 650,602 606x20 (hidden)
+    Frame AHProfitWindowRow12 650,622 606x20 (hidden)
+    FontString - 812,516 297x12 "No market data yet. Run AHSync, then /reload."
+  Texture - 642,731 636x1
   FontString - 652,740 0x10
+  FontString - 1180,740 88x10 "Budget 10   40  "

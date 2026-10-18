@@ -130,6 +130,17 @@ describe("ViewModel", function()
     assert_eq(AHProfit.Adapter.LocalOffsetMs(NOW), 9 * HOUR + 30 * MINUTE)
   end)
 
+  it("money shows coin icons, and each note becomes a line under its row", function()
+    local VM = Boot()
+    local g, s, c = VM.COINS.g, VM.COINS.s, VM.COINS.c
+    assert_eq(VM.WithCoins("+1g 18s 10c"), "+1" .. g .. " 18" .. s .. " 10" .. c)
+    assert_eq(VM.WithCoins("3 actions · expected −20c"), "3 actions · expected −20" .. c)
+    assert_eq({ VM.WithCoins("—"), g:find("MoneyFrame", 1, true) ~= nil }, { "—", true })
+    local lines = VM.WithNotes({ { id = "a", note = "for the 18:00 peak" }, { id = "b", note = "" }, { header = true } })
+    assert_eq(lines, { { id = "a", note = "for the 18:00 peak" }, { noteLine = true, text = "for the 18:00 peak" },
+                       { id = "b", note = "" }, { header = true } })
+  end)
+
   it("UI5 the age badge turns amber once the data is more than 24 h old", function()
     local VM = Boot()
     assert_eq(VM.Age(NOW - 30 * HOUR, NOW), { text = "data 1 d old", amber = true })

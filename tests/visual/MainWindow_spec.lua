@@ -69,4 +69,18 @@ describe("MainWindow layout", function()
     ui.frame:SetSize(560, 360)
     Layout.Golden("UI9_minimum", ui.frame)
   end)
+
+  it("Week with a flip: day headers, notes under rows and coin money (D37, mockup Week tab)", function()
+    Stubs.Reset()
+    _G.AHProfitMarket = nil
+    UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48) }, NOW - UIWorld.HOUR)
+    UIWorld.Plan({ { id = "f", kind = "buy", key = 2589, qty = 20, price = 38, at = NOW, net = 210 },
+                   { id = "g", kind = "post", key = 2589, qty = 20, price = 55, at = NOW + 86400000, net = 95,
+                     parent = "f", chance = 88, peak = NOW + 86400000 + 8 * UIWorld.HOUR } })
+    Stubs.Login()
+    Stubs.Slash("/ahp week")
+    local ui = AHProfit.MainWindow.Frames()
+    Layout.Golden("week_notes", ui.frame)
+    assert_eq(ui.rows[3].note:GetText(), "Flip: post Fri 08:53, for the 16:53 peak")
+  end)
 end)
