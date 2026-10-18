@@ -37,9 +37,9 @@ def db(tmp_path, clock):
     database.close()
 
 
-def apply_text(db: Database, text: str, realms=None, now_ms: int = T) -> ApplyResult:
+def apply_text(db: Database, text: str, realms=None, now_ms: int = T, markets=()) -> ApplyResult:
     """Parse a SavedVariables text and apply it."""
-    return apply_data(db, read_ahprofit(text), REALMS if realms is None else realms, now_ms)
+    return apply_data(db, read_ahprofit(text), REALMS if realms is None else realms, now_ms, markets)
 
 
 def apply_db(db: Database, table: dict, realms=None) -> ApplyResult:
@@ -224,6 +224,19 @@ def test_unknown_realm_stores_a_null_market_and_a_status_line_until_configured(d
     apply_text(db, A1_TEXT)                                   # [realms] now has Grommash
     assert rows(db, "SELECT DISTINCT market FROM characters") == [(PVP_HORDE,)]
     assert db.status("realm:Grommash") is None
+
+
+def test_S12_a_realm_not_in_realms_maps_to_the_only_market_you_sync_for_its_faction(db):
+    one, two = (PVP_HORDE, "forever.pvp.alliance.us"), (PVP_HORDE, "forever.normal.horde.us")
+    assert market_for("Horde", "Classic Beta PvP", {}, one) == PVP_HORDE
+    assert market_for("Horde", "Classic Beta PvP", {}, two) is None                      # ambiguous: ask for [realms]
+    assert market_for("Horde", "Classic Beta PvP", {"Classic Beta PvP": "normal"}, one) == "forever.normal.horde.us"
+    assert market_for("Alliance", "Classic Beta PvP", {}, (PVP_HORDE,)) is None
+    assert market_for("Neutral", "Classic Beta PvP", {}, one) is None
+    apply_text(db, A1_TEXT, realms={}, markets=two)
+    assert rows(db, "SELECT DISTINCT market FROM characters") == [(None,)] and db.status("realm:Grommash") is not None
+    apply_text(db, A1_TEXT, realms={}, markets=one)
+    assert rows(db, "SELECT DISTINCT market FROM characters") == [(PVP_HORDE,)] and db.status("realm:Grommash") is None
 
 
 def test_an_older_file_never_reverts_a_character_and_level_only_rises(db):

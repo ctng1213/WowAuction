@@ -223,11 +223,11 @@ def test_a_failed_start_up_read_is_logged_on_status_and_retried_by_the_watcher(t
     write_savedvars(tmp_path, world.clock, age_ms=60_000)
     calls = []
 
-    def parser_bug_once(*args):
+    def parser_bug_once(*args, **kwargs):
         calls.append(args[0])
         if len(calls) == 1:
             raise KeyError("a bug, not an expected error")
-        return ingest_file(*args)
+        return ingest_file(*args, **kwargs)
 
     monkeypatch.setattr("ahsync.__main__.ingest_file", parser_bug_once)
     with caplog.at_level(logging.WARNING, logger="ahsync"):

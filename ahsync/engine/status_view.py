@@ -182,9 +182,10 @@ def message(row: StatusRow, offset_ms: int) -> tuple[str, str]:
     if kind == "unknown_realm":
         realm = d.get("realm", "?")
         return ("Realm not mapped to a market",
-                f'Characters on "{realm}" ({d.get("faction", "?")}) have no market, so nothing is planned for them and '
-                f'their scans wait in the addon. Add it to config.toml: [realms] "{realm}" = "pvp" (or "normal", "rp"), '
-                f"then restart AHSync.")
+                f'Characters on "{realm}" ({d.get("faction", "?")}) have no market: your config syncs no market, or '
+                f'several, for {d.get("faction", "?")}, so AHSync cannot tell which is theirs. Nothing is planned for them '
+                f'and their scans wait in the addon. Add it to config.toml: [realms] "{realm}" = "pvp" (or "normal", '
+                f'"rp"), then restart AHSync.')
     texts = {
         "refresh_failed": ("Refresh failed", f"The last full refresh failed ({d.get('error', '?')}). The numbers shown "
                                              f"are from the refresh before it."),

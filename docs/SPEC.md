@@ -57,7 +57,7 @@ Rules:
 - **Only request files we were told exist** (hours ≤ `sealed.h1`). A guessed future file caches a 404 at the edge.
 - **Building 90 days without Premium.** Public hour files cover 7 days, so running AHSync at least once every **6 days** misses nothing. Over time the local DB fills to the full 90 days. AHSync warns when the gap since the last run gets close to 7 days. Premium only speeds up the first fill and adds real volume data and live prices. Premium is also earned for free by uploading scans with the AHF addon (7 days per credited scan).
 - **A gap of more than 7 days without Premium loses those hours for good.** Public day candles are also kept only 7 days, so nothing covers them. AHSync reports the lost range on the Status page.
-- **Characters map to markets** as `forever.<ruleset>.<faction>.us`. The faction comes from the character, and the ruleset from the config `[realms]` table (§3.6). AHF has no neutral-AH market, so the neutral AH is not planned in v1 (§9).
+- **Characters map to markets** as `forever.<ruleset>.<faction>.us`. The faction comes from the character. WoW reports the realm's name but not its ruleset, so the ruleset comes from the config: the realm's `[realms]` entry (§3.6) when there is one, otherwise the only market in `markets` for that faction. Only when you sync several markets for one faction (or none) does a realm need a `[realms]` entry; until then its characters have no market and Status says how to fix it (S12, D34). AHF has no neutral-AH market, so the neutral AH is not planned in v1 (§9).
 
 Verified 2026-10-16, without a key: `/me`, `/files`, the snapshot, public h1 and d1 files, and `/items` all work.
 
@@ -908,7 +908,7 @@ max_item_capital_share = 0.25                 # most of your gold in slow market
 slow_market_days = 7                          # supply/volume above this many days is a slow market (§3.3.6)
 launch_wow_after_catchup = false
 
-[realms]                                      # realm -> ruleset, maps characters to markets (§2.1)
+[realms]                                      # realm -> ruleset; needed only when you sync several markets per faction (§2.1)
 "RealmName" = "pvp"
 
 [budgets]                                     # optional per-character budget in copper; default is the character's gold

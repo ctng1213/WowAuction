@@ -69,6 +69,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | S9 | an AHF close of 50c and a local close of 48c for the same item and hour | statistics see one close for that hour: 48c |
 | S10 | SavedVariables being rewritten (modification time changed 1 s ago) | not parsed until it has been unchanged for 2 s |
 | S11 | `/me` lost `depth`, `prices.live` and `historyDays 90` since the last run | no requests for Premium files; the snapshot replaces the live table; Status shows "Premium ended 23 Oct"; the run completes normally |
+| S12 | a Horde character on "Classic Beta PvP", a realm not in `[realms]`; the config syncs only forever.pvp.horde.us; then a second Horde market forever.normal.horde.us is added | the character maps to forever.pvp.horde.us, the only Horde market you sync, and its scans are stored; with two Horde markets it has no market and Status asks for `[realms]`; `[realms]` "Classic Beta PvP" = "normal" always wins |
 
 **Failure modes** (§5.2). Faults are injected deterministically by the fakes:
 
@@ -247,7 +248,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | D30 | item detail: `how` 1.2 on Sat 20:00 UTC and 1.0 elsewhere, 4 weeks per slot except Mon 00:00 with none; local time is UTC + 2 h | the price heatmap's brightest cell (level 4) is local Sat 22:00, titled "Sat 22:00 ×1.20 · 4 weeks"; the 1.0 cells are level 0; local Mon 02:00 has no level ("no data") |
 | D32 | Status: `bad_file` lines for hours 497640–497660 of forever.pvp.horde.us (Fri 9 Oct 00:00–20:00 UTC), each failed 4 times; local time is UTC | one alert "AHF files failing": "21 hours of forever.pvp.horde.us failed 4 times: Fri 9 Oct 00:00–21:00. …", not 21 alerts |
 | D33 | Status at Sat 17 Oct 23:00: the newest AHF price is from Fri 9 Oct 21:14; the same market with a price from 21:30 | the first market's badge says "data 8 d old" and a warning "AHF data is old" names Fri 9 Oct 21:14; the second is "up to date" with no warning (old means over 6 h) |
-| D34 | Status: an `unknown_realm` line for "Classic Beta PvP" (Horde); that character has no market | the alert says how to fix it: `[realms]` `"Classic Beta PvP" = "pvp"` in config.toml, then restart; the Characters card shows the character with "no market" |
+| D34 | Status: an `unknown_realm` line for "Classic Beta PvP" (Horde), which happens only when you sync several Horde markets (S12); that character has no market | the alert says how to fix it: `[realms]` `"Classic Beta PvP" = "pvp"` in config.toml, then restart; the Characters card shows the character with "no market" |
 | D35 | Status lines at levels info, error and warn | alerts are ordered error, warn, info (ties: title, then topic) |
 | D36 | Status: `premium_until` 23 Oct at warn level (under 2 days left); no key set | the API card's badge is "Premium until 23 Oct", with "upload scans to keep it"; the key line says "not set · public data only" |
 | D31 | selling windows Sat 18:00–22:00 UTC (7 weeks) and Sun 20:00–23:00 UTC (2 weeks); local time is UTC − 1 h | Inventory's Best selling windows "Sat 17–21 · Sun 19–22 (early pattern)"; item detail lists "Sat 17:00–21:00" established · 7 weeks and "Sun 19:00–22:00" early pattern · 2 weeks, each with its price uplift |

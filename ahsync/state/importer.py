@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -64,22 +64,29 @@ class IngestResult:
 
 # ---------------------------------------------------------------- markets
 
-def market_for(faction: str, realm: str, realms: Mapping[str, str]) -> str | None:
-    """A character's AHF market from its faction and the config's [realms] table (SPEC §2.1, §2.2.1).
+def market_for(faction: str, realm: str, realms: Mapping[str, str], markets: Sequence[str] = ()) -> str | None:
+    """A character's AHF market from its faction and realm (SPEC §2.1, §2.2.1, S12).
+
+    WoW reports a realm's name but not its ruleset, so the ruleset comes from the config:
+    the [realms] entry when there is one, else the only market you sync for that faction.
 
     Args:
         faction: "Horde" or "Alliance".
         realm: Realm name, e.g. "Grommash".
         realms: Config [realms]: realm name -> ruleset ('normal', 'pvp' or 'rp').
+        markets: Config markets, e.g. ("forever.pvp.horde.us",).
 
     Returns:
-        "forever.<ruleset>.<faction lower>.us", or None when the realm isn't in the
-        config or the faction isn't one of the two.
+        "forever.<ruleset>.<faction lower>.us"; None when the faction isn't one of the two,
+        or the realm isn't in [realms] and you sync no market, or several, for the faction.
     """
-    ruleset = realms.get(realm)
-    if ruleset is None or faction not in FACTIONS:
+    if faction not in FACTIONS:
         return None
-    return f"forever.{ruleset}.{faction.lower()}.us"
+    ruleset = realms.get(realm)
+    if ruleset is not None:
+        return f"forever.{ruleset}.{faction.lower()}.us"
+    mine = [m for m in markets if m.startswith("forever.") and m.endswith(f".{faction.lower()}.us")]
+    return mine[0] if len(mine) == 1 else None
 
 
 # ---------------------------------------------------------------- pruning handshake
@@ -135,15 +142,16 @@ class _Pruning:
 class _Apply:
     """Writes one file's records inside the caller's transaction, collecting dirty keys and problems."""
 
-    def __init__(self, db: Database, realms: Mapping[str, str], now_ms: int) -> None:
+    def __init__(self, db: Database, realms: Mapping[str, str], now_ms: int, markets: Sequence[str] = ()) -> None:
         """Start an apply.
 
         Args:
             db: The database, inside a transaction.
             realms: Config [realms].
             now_ms: Current time, for status rows.
+            markets: Config markets, for realms not in [realms] (S12).
         """
-        self.db, self.realms, self.now_ms = db, realms, now_ms
+        self.db, self.realms, self.now_ms, self.markets = db, realms, now_ms, markets
         self.dirty: set[int] = set()
         self.problems: list[str] = []
         self.pruning = _Pruning()
@@ -186,7 +194,7 @@ class _Apply:
             stored_updated = self.db.character_updated(c.char_id)
             if stored_updated is None or c.updated_ms >= stored_updated:     # SPEC §2.2.1 "follow the file"
                 self.follows.add(c.char_id)
-            market = market_for(c.faction, c.realm, self.realms)
+            market = market_for(c.faction, c.realm, self.realms, self.markets)
             row = {"id": c.char_id, "name": c.name, "realm": c.realm, "faction": c.faction, "market": market,
                    "class": c.class_token, "level": c.level, "gold": c.gold_copper, "updated": c.updated_ms}
             self.guarded(f"characters[{c.char_id!r}]", lambda row=row: self.db.upsert_character(row))
@@ -378,7 +386,8 @@ def _event_row(e: sv.Event, market: str | None) -> tuple[str, dict[str, object]]
 
 # ---------------------------------------------------------------- entry points
 
-def apply_data(db: Database, data: sv.AHProfitData, realms: Mapping[str, str], now_ms: int) -> ApplyResult:
+def apply_data(db: Database, data: sv.AHProfitData, realms: Mapping[str, str], now_ms: int,
+               markets: Sequence[str] = ()) -> ApplyResult:
     """Store one parsed SavedVariables file in one transaction, then advance ingested-until.
 
     Args:
@@ -386,6 +395,7 @@ def apply_data(db: Database, data: sv.AHProfitData, realms: Mapping[str, str], n
         data: The parsed file.
         realms: Config [realms]: realm name -> ruleset.
         now_ms: Current time, UTC ms, for status rows.
+        markets: Config markets, for characters on realms not in [realms] (S12).
 
     Returns:
         The dirty item keys, the problems (the parser's and any row that failed to
@@ -396,7 +406,7 @@ def apply_data(db: Database, data: sv.AHProfitData, realms: Mapping[str, str], n
         it, but stops 1 s before its oldest row set aside (by the parser or on storing),
         only after the commit, and never backwards (SPEC §2.2, §5.2 rule 5).
     """
-    work = _Apply(db, realms, now_ms)
+    work = _Apply(db, realms, now_ms, markets)
     for row in data.rejected:
         work.pruning.set_aside(row.char_id, row.at_ms)
     with db.transaction():
@@ -509,7 +519,8 @@ def _report(db: Database, path: Path, result: IngestResult, now_ms: int) -> None
 
 
 def read_and_apply(path: Path, db: Database, clock: Clock, realms: Mapping[str, str],
-                   stat_mtime_ms: Callable[[Path], int | None] = file_mtime_ms) -> IngestResult:
+                   stat_mtime_ms: Callable[[Path], int | None] = file_mtime_ms,
+                   markets: Sequence[str] = ()) -> IngestResult:
     """Read one AHProfit SavedVariables file and store it (SPEC §2.2 reading rules, §5.2).
 
     Args:
@@ -518,6 +529,7 @@ def read_and_apply(path: Path, db: Database, clock: Clock, realms: Mapping[str, 
         clock: Time source.
         realms: Config [realms]: realm name -> ruleset.
         stat_mtime_ms: Returns a file's modification time in UTC ms, or None when missing.
+        markets: Config markets, for characters on realms not in [realms] (S12).
 
     Returns:
         The outcome. A file changed less than 2 s ago, or changed while being read,
@@ -538,7 +550,7 @@ def read_and_apply(path: Path, db: Database, clock: Clock, realms: Mapping[str, 
     if data is None:
         result = IngestResult(path, False, reason, mtime_ms=mtime, ingested_until=ingested_until(db))
     else:
-        applied = apply_data(db, data, realms, now)
+        applied = apply_data(db, data, realms, now, markets)
         result = IngestResult(path, True, None, read_from, mtime, applied.dirty_keys, applied.problems,
                               ingested_until(db), data.refresh_requested_at_ms)
     _report(db, path, result, now)
@@ -558,7 +570,8 @@ def incremental_update(db: Database, dirty_keys: frozenset[int], now_ms: int) ->
 
 
 def ingest_file(path: Path, db: Database, clock: Clock, realms: Mapping[str, str],
-                stat_mtime_ms: Callable[[Path], int | None] = file_mtime_ms) -> IngestResult:
+                stat_mtime_ms: Callable[[Path], int | None] = file_mtime_ms,
+                markets: Sequence[str] = ()) -> IngestResult:
     """Read one SavedVariables file, store it, and run the incremental update on what changed.
 
     Args:
@@ -567,11 +580,12 @@ def ingest_file(path: Path, db: Database, clock: Clock, realms: Mapping[str, str
         clock: Time source.
         realms: Config [realms].
         stat_mtime_ms: As read_and_apply.
+        markets: Config markets, for characters on realms not in [realms] (S12).
 
     Returns:
         The outcome, as read_and_apply.
     """
-    result = read_and_apply(path, db, clock, realms, stat_mtime_ms)
+    result = read_and_apply(path, db, clock, realms, stat_mtime_ms, markets)
     if result.dirty_keys:
         incremental_update(db, result.dirty_keys, clock.now_ms())
     return result

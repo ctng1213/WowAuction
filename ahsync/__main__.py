@@ -185,7 +185,7 @@ def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path,
         Args:
             path: The file.
         """
-        ingest_file(path, ctx.db, ctx.clock, config.realms)
+        ingest_file(path, ctx.db, ctx.clock, config.realms, markets=config.markets)
 
     return SchedulerHooks(store_hour=store_hour, daily=daily, weekly=ctx.db.vacuum,
                           savedvars_changed=savedvars_changed,
@@ -207,7 +207,7 @@ def read_savedvars_at_start(db: Database, clock: Clock, config: Config, watcher:
     log = logging.getLogger("ahsync")
     for path in find_savedvars(Path(config.wow_path)):
         try:
-            result = ingest_file(path, db, clock, config.realms)
+            result = ingest_file(path, db, clock, config.realms, markets=config.markets)
         except Exception:                         # like Scheduler._run: one file can't stop the start-up
             log.exception("reading %s failed; will try again", path.name)
             account = path.parent.parent.name
