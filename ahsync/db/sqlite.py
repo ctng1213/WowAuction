@@ -24,10 +24,27 @@ from ahsync.intel.store import IntelStore
 from ahsync.recommend.store import RecommendStore
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
-# version -> SQL that upgrades version-1 to version. Version 1 is schema.sql itself.
-MIGRATIONS: dict[int, str] = {}
+# version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
+# latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
+# that a migrated database has exactly schema.sql's tables and indexes).
+MIGRATIONS: dict[int, str] = {
+    # 2: market intelligence replaces item_stats (AR2); hourly book-pair sales rates (V27). item_stats only
+    # held refresh output, which the next full refresh rebuilds as intelligence.
+    2: """
+        CREATE TABLE IF NOT EXISTS intel(
+            market TEXT PRIMARY KEY, schema_version INTEGER NOT NULL, body TEXT NOT NULL, built INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS intel_new(
+            market TEXT PRIMARY KEY, schema_version INTEGER NOT NULL, body TEXT NOT NULL, built INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS sales_h1(
+            market TEXT NOT NULL, key INTEGER NOT NULL, t INTEGER NOT NULL, sold_per_hour REAL NOT NULL,
+            PRIMARY KEY(market, key, t)) WITHOUT ROWID;
+        CREATE INDEX IF NOT EXISTS sales_h1_market_t ON sales_h1(market, t);
+        DROP TABLE IF EXISTS item_stats;
+        DROP TABLE IF EXISTS item_stats_new
+    """,
+}
 BACKUP_KEEP = 3
 BACKUP_PREFIX = "ahsync-"
 STAGING_TABLES = ("intel_new", "plan_new", "views_new")

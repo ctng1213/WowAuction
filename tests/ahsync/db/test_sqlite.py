@@ -1,6 +1,9 @@
 """Storage (SPEC §3.2, §5.2): scenarios S7, S9, FM10."""
 from __future__ import annotations
 
+import sqlite3
+from pathlib import Path
+
 import pytest
 
 from ahsync.collect.ahf import AhfApi
@@ -15,6 +18,7 @@ from tests.support.fake_transport import DEFAULT_MARKET
 
 MARKET = DEFAULT_MARKET
 T0 = FakeClock().now_ms()
+ROOT = Path(__file__).resolve().parents[3]
 
 
 @pytest.fixture
@@ -112,7 +116,7 @@ def test_backups_keep_the_newest_three_one_per_day(tmp_path, db):
 
 
 def test_schema_version_is_recorded_and_newer_files_are_refused(tmp_path, db):
-    assert db.get_meta("schema_version") == "1" and db.quick_check()
+    assert db.get_meta("schema_version") == str(db_module.SCHEMA_VERSION) and db.quick_check()
     db.set_meta("schema_version", "99")
     db.close()
     with pytest.raises(DatabaseError, match="newer"):
@@ -121,10 +125,12 @@ def test_schema_version_is_recorded_and_newer_files_are_refused(tmp_path, db):
 
 def test_migrations_run_step_by_step(tmp_path, db, monkeypatch):
     db.close()
-    monkeypatch.setattr(db_module, "SCHEMA_VERSION", 2)
-    monkeypatch.setattr(db_module, "MIGRATIONS", {2: "CREATE TABLE extra(x INTEGER); INSERT INTO extra VALUES(1)"})
+    step = db_module.SCHEMA_VERSION + 1
+    monkeypatch.setattr(db_module, "SCHEMA_VERSION", step)
+    monkeypatch.setattr(db_module, "MIGRATIONS", {**db_module.MIGRATIONS,
+                                                  step: "CREATE TABLE extra(x INTEGER); INSERT INTO extra VALUES(1)"})
     reopened = Database.open(tmp_path / "ahsync.db", T0, None)
-    assert reopened.get_meta("schema_version") == "2" and reopened.count("extra") == 1
+    assert reopened.get_meta("schema_version") == str(step) and reopened.count("extra") == 1
     reopened.close()
 
 
@@ -186,3 +192,30 @@ def test_pruning_primitives_guard_their_tables(db):
     with pytest.raises(ValueError):
         db.delete_before("items", 0)
     db.vacuum()
+
+
+def schema_objects(conn) -> dict[str, str]:
+    """Every table and index, by name, with its SQL in one normalised spacing."""
+    return {name: " ".join((sql or "").replace("IF NOT EXISTS ", "").split()) for name, sql in conn.execute(
+        "SELECT name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY name")}
+
+
+def test_a_version_1_database_migrates_to_exactly_the_current_schema_and_keeps_its_data(tmp_path):
+    # The schema a database was created with on 2026-10-16 (commit 3158183). Every later change to schema.sql
+    # needs a migration, or this test fails.
+    old = sqlite3.connect(tmp_path / "old.db")
+    old.executescript((ROOT / "tests" / "fixtures" / "schema_v1.sql").read_text(encoding="utf-8"))
+    old.execute("INSERT OR REPLACE INTO meta(name, value) VALUES ('schema_version', '1')")
+    old.execute("INSERT INTO candles_h1(market, key, t, close, src) VALUES ('m', 1, 0, 50, 'ahf')")
+    old.commit()
+    old.close()
+    migrated = Database.open(tmp_path / "old.db", T0, None)
+    fresh = Database.open(tmp_path / "fresh.db", T0, None)
+    assert schema_objects(migrated.conn).keys() == schema_objects(fresh.conn).keys()
+    for table in schema_objects(fresh.conn):                   # and every table has the same columns
+        columns = f"PRAGMA table_info({table})"
+        assert migrated.conn.execute(columns).fetchall() == fresh.conn.execute(columns).fetchall(), table
+    assert migrated.get_meta("schema_version") == str(db_module.SCHEMA_VERSION)
+    assert migrated.count("candles_h1") == 1
+    migrated.close()
+    fresh.close()
