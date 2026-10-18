@@ -108,6 +108,21 @@ describe("ViewModel", function()
                        w = "for the 20:00 peak" })
   end)
 
+  it("D39 a chain's mat buy says what it is for, and a hold shows no net", function()
+    local VM = Boot()
+    LOOKS[5000] = { name = "Basic Campfire Kit", quality = 1 }
+    local wood = Act("w", "buy", 0, NOW, nil, { key = 2840, qty = 7 })
+    local kit = Act("k", "craft", 732, NOW + MINUTE, nil, { key = 5000, qty = 7, price = nil, parent = "w" })
+    local eggs = Act("e", "hold", 0, NOW, nil, { qty = 2, price = nil })
+    local week = VM.Week({ wood, kit, eggs }, NOW, 0, Look, GOLD)
+    local rows = {}
+    for _, r in ipairs(week.days[1].rows) do rows[r.id] = r end
+    assert_eq({ rows.w.net, rows.w.note }, { "—", "for crafting Basic Campfire Kit" })
+    assert_eq({ rows.e.net, rows.e.note }, { "—", "hold for a later week" })
+    assert_eq(week.total, "+7s 32c")
+    LOOKS[5000] = nil
+  end)
+
   it("D17 Week: seven local days from today, each with its total, and the week total", function()
     local VM = Boot()
     local actions = { Act("a", "post", 830, NOW + HOUR), Act("b", "post", 11000, NOW + 2 * HOUR),

@@ -104,7 +104,7 @@ def counted(actions: Sequence[ViewAction], start_ms: int, end_ms: int, offset_ms
     out = {}
     for a in shown:
         r = role(a)
-        if r == "step":
+        if r == "step" or a.kind == "hold":       # nothing sold now: no net (D39)
             out[a.action_id] = (None, "")
         elif r == "follow" and chain_id(a) in carriers:
             day, hour = clock(carriers[chain_id(a)].at_ms, offset_ms)
@@ -228,7 +228,7 @@ def today_view(actions: Sequence[ViewAction], now_ms: int, offset_ms: int, min_s
     """
     due = [a for a in actions if a.status in ("pending", "late") and a.at_ms < now_ms + HOUR_MS]
     nets = counted(due, min(a.at_ms for a in due) if due else now_ms, now_ms + HOUR_MS, offset_ms)
-    chains, posts = chain_chances(actions), chain_posts(actions)
+    chains, posts, crafts = chain_chances(actions), chain_posts(actions), chain_crafts(actions, looks)
     rows, hidden = [], 0
     for a in due:
         p = chance_of(a, chains)
@@ -237,7 +237,7 @@ def today_view(actions: Sequence[ViewAction], now_ms: int, offset_ms: int, min_s
             continue
         net, note = nets[a.action_id]
         rows.append((-(net or 0.0), -(p if p is not None else -1.0), looks[a.key].name, a.char_id,
-                     _row(a, net, note_of(a, note, posts, offset_ms), p, looks[a.key], total_gold, offset_ms)))
+                     _row(a, net, note_of(a, note, posts, crafts, offset_ms), p, looks[a.key], total_gold, offset_ms)))
     rows.sort(key=lambda r: r[:4])
     total = sum(r[4]["sort"]["net"] for r in rows)
     return {"rows": [r[4] for r in rows], "hidden": hidden, "total": signed_money(total)}
@@ -290,13 +290,32 @@ def chain_posts(actions: Sequence[ViewAction]) -> dict[str, ViewAction]:
     return out
 
 
-def note_of(a: ViewAction, counted_note: str, posts: dict[str, ViewAction], offset_ms: int) -> str:
-    """A row's note: the peak a post is for, where a chain's profit step will post, and why it counts what it counts (D37, D38).
+def chain_crafts(actions: Sequence[ViewAction], looks: dict[int, "ItemLook"]) -> dict[str, str]:
+    """What each crafting chain makes: the name of its last craft's product (D39).
+
+    Args:
+        actions: Plan actions.
+        looks: Item key -> name.
+
+    Returns:
+        chain id -> product name.
+    """
+    out: dict[str, str] = {}
+    for a in sorted(actions, key=lambda a: (a.at_ms, a.action_id)):
+        if a.kind == "craft" and a.in_chain and a.key in looks:
+            out[chain_id(a)] = looks[a.key].name
+    return out
+
+
+def note_of(a: ViewAction, counted_note: str, posts: dict[str, ViewAction], crafts: dict[str, str],
+            offset_ms: int) -> str:
+    """A row's note: what it is for and why it counts what it counts (D37-D39).
 
     Args:
         a: The action.
         counted_note: From counted ("profit counted on …" or "").
         posts: From chain_posts.
+        crafts: From chain_crafts.
         offset_ms: Local time minus UTC.
 
     Returns:
@@ -304,6 +323,10 @@ def note_of(a: ViewAction, counted_note: str, posts: dict[str, ViewAction], offs
         "Flip: post Sat 10:00, for the 18:00 peak"; "" when there is nothing to say.
     """
     parts = [_post_note(a, offset_ms)]
+    if role(a) == "step" and a.kind != "craft" and chain_id(a) in crafts:
+        parts.append(f"for crafting {crafts[chain_id(a)]}")
+    if a.kind == "hold":
+        parts.append("hold for a later week")
     post = posts.get(chain_id(a)) if a.kind in ("buy", "craft") and role(a) == "profit" else None
     if post is not None:
         day, hour = clock(post.at_ms, offset_ms)
@@ -335,14 +358,14 @@ def week_view(actions: Sequence[ViewAction], now_ms: int, offset_ms: int, looks:
     chain_kinds: dict[str, set[str]] = {}
     for a in actions:
         chain_kinds.setdefault(chain_id(a), set()).add(a.kind)
-    chances, posts = chain_chances(actions), chain_posts(actions)
+    chances, posts, crafts = chain_chances(actions), chain_posts(actions), chain_crafts(actions, looks)
     days = [{"label": "", "today": d == 0, "total": 0, "rows": []} for d in range(7)]
     by_category: dict[str, int] = {}
     by_character: dict[str, int] = {}
     for a in shown:
         d = (a.at_ms - start) // DAY_MS
         net, note = nets[a.action_id]
-        row = _row(a, net, note_of(a, note, posts, offset_ms), chance_of(a, chances), looks[a.key], total_gold,
+        row = _row(a, net, note_of(a, note, posts, crafts, offset_ms), chance_of(a, chances), looks[a.key], total_gold,
                    offset_ms)
         days[d]["rows"].append(row)
         cents = row["sort"]["net"]

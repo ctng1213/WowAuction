@@ -148,7 +148,7 @@ function ViewModel.Counted(actions, startMs, endMs, offsetMs)
   local out = {}
   for _, a in ipairs(shown) do
     local role, carrier = Role(a), carriers[ChainId(a)]
-    if role == "step" then
+    if role == "step" or a.kind == "hold" then         -- nothing sold now: no net (D39)
       out[a.id] = { net = nil, note = "" }
     elseif role == "follow" and carrier then
       local day, hour = ViewModel.Clock(carrier.at, offsetMs)
@@ -196,19 +196,39 @@ local function ChainPosts(actions)
   return out
 end
 
---- A row's note (plan_views.note_of, D37, D38): the peak a post is for, where a chain's
---- profit step will post, and why it counts what it counts, joined by " · ".
+--- What each crafting chain makes: its last craft's product name (plan_views.chain_crafts, D39).
+---@param actions table[]  Marked actions
+---@param lookOf function  key -> look
+---@return table           chainId -> product name
+local function ChainCrafts(actions, lookOf)
+  local sorted, out = {}, {}
+  for i, a in ipairs(actions) do sorted[i] = a end
+  table.sort(sorted, ByTime)
+  for _, a in ipairs(sorted) do
+    if a.kind == "craft" and a.inChain then out[ChainId(a)] = lookOf(a.key).name end
+  end
+  return out
+end
+
+--- A row's note (plan_views.note_of, D37-D39): the peak a post is for, what a chain's mat buy
+--- is for, why a hold waits, where a chain's profit step will post, and why it counts what it
+--- counts, joined by " · ".
 ---@param a table           The action
 ---@param countedNote string From Counted
 ---@param posts table       From ChainPosts
+---@param crafts table      From ChainCrafts
 ---@param offsetMs number
 ---@return string
-function ViewModel.NoteOf(a, countedNote, posts, offsetMs)
+function ViewModel.NoteOf(a, countedNote, posts, crafts, offsetMs)
   local parts = {}
   if a.kind == "post" and a.peak then
     local _, peak = ViewModel.Clock(a.peak, offsetMs)
     parts[#parts + 1] = "for the " .. peak .. " peak"
   end
+  if Role(a) == "step" and a.kind ~= "craft" and crafts[ChainId(a)] then
+    parts[#parts + 1] = "for crafting " .. crafts[ChainId(a)]
+  end
+  if a.kind == "hold" then parts[#parts + 1] = "hold for a later week" end
   local post = (a.kind == "buy" or a.kind == "craft") and Role(a) == "profit" and posts[ChainId(a)] or nil
   if post then
     local day, hour = ViewModel.Clock(post.at, offsetMs)
@@ -267,7 +287,7 @@ function ViewModel.Today(actions, nowMs, offsetMs, minChance, lookOf, totalGold)
     end
   end
   local nets, chains = ViewModel.Counted(due, earliest, nowMs + HOUR_MS, offsetMs), ChainChances(actions)
-  local posts = ChainPosts(actions)
+  local posts, crafts = ChainPosts(actions), ChainCrafts(actions, lookOf)
   local rows, hidden, total = {}, 0, 0
   for _, a in ipairs(due) do
     local chance = ChanceOf(a, chains)
@@ -275,7 +295,7 @@ function ViewModel.Today(actions, nowMs, offsetMs, minChance, lookOf, totalGold)
       hidden = hidden + 1
     else
       local counted = nets[a.id]
-      local note = a.ownNote or ViewModel.NoteOf(a, counted.note, posts, offsetMs)
+      local note = a.ownNote or ViewModel.NoteOf(a, counted.note, posts, crafts, offsetMs)
       local row = Row(a, { net = counted.net, note = note }, chance,
                       lookOf(a.key), totalGold, offsetMs)
       row.sortChance, row.sortChar = chance or -1, a.char
@@ -309,7 +329,7 @@ function ViewModel.Week(actions, nowMs, offsetMs, lookOf, totalGold)
   end
   table.sort(shown, ByTime)
   local nets, chains = ViewModel.Counted(shown, start, finish, offsetMs), ChainChances(actions)
-  local posts = ChainPosts(actions)
+  local posts, crafts = ChainPosts(actions), ChainCrafts(actions, lookOf)
   local days, total = {}, 0
   for d = 0, 6 do
     local midnight = start + d * DAY_MS
@@ -320,7 +340,7 @@ function ViewModel.Week(actions, nowMs, offsetMs, lookOf, totalGold)
   for _, a in ipairs(shown) do
     local day = days[math.floor((a.at - start) / DAY_MS) + 1]
     local counted = nets[a.id]
-    local row = Row(a, { net = counted.net, note = ViewModel.NoteOf(a, counted.note, posts, offsetMs) },
+    local row = Row(a, { net = counted.net, note = ViewModel.NoteOf(a, counted.note, posts, crafts, offsetMs) },
                     ChanceOf(a, chains), lookOf(a.key), totalGold, offsetMs)
     day.rows[#day.rows + 1] = row
     day.cents = day.cents + row.netCopper

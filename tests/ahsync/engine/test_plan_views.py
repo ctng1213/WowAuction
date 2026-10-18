@@ -90,6 +90,18 @@ def test_D38_today_says_which_peak_each_post_is_for_and_when_a_chain_posts():
                      "w": "for the 20:00 peak"}
 
 
+def test_D39_a_chains_mat_buy_says_what_it_is_for_and_a_hold_shows_no_net():
+    looks = {**LOOKS, 5000: ItemLook("Basic Campfire Kit", 1)}
+    wood = act("w", "buy", 0, NOW, in_chain=True, key=BAR, qty=7, price=38)
+    kit = act("k", "craft", 732, NOW + MINUTE, parent_id="w", in_chain=True, key=5000, qty=7, price=None)
+    eggs = act("e", "hold", 0.0, NOW, qty=2, price=None)
+    week = plan_views.week_view([wood, kit, eggs], NOW, 0, looks, GOLD)
+    rows = {r["id"]: r for r in week["days"][0]["rows"]}
+    assert (rows["w"]["net"], rows["w"]["note"]) == ("—", "for crafting Basic Campfire Kit")
+    assert (rows["e"]["net"], rows["e"]["note"]) == ("—", "hold for a later week")
+    assert week["total"] == "+7s 32c"
+
+
 def test_D20_once_the_buy_has_left_the_week_the_post_carries_its_own_net():
     buy = act("f", "buy", 210, FRI + 14 * HOUR + 10 * MINUTE, in_chain=True, status="done")
     post = act("g", "post", 95, FRI + DAY + 10 * HOUR, 1.0, parent_id="f", in_chain=True, price=45)
