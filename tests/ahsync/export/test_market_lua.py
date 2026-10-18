@@ -70,3 +70,10 @@ def test_A23_disenchantable_exported_items_carry_their_skill_and_kind_and_count_
     assert f'D[{LINEN}]="1,2,18,a"' in text and f"D[{OTHER}]" not in text               # OTHER isn't exported
     strings = len("45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900;138:4:139:1120:7;") + 72 + len("1,2,18,a")
     assert f'checksum = "3:{strings}"' in text
+
+
+def test_EX5_prices_older_than_7_days_are_left_out_unless_shortlisted():
+    stale = replace(LINEN_INTEL, key=OTHER, cur_age_ms=8 * 24 * HOUR)
+    keys = [k for k, _, _ in market_lua.exported_items(intel(LINEN_INTEL, stale), set())]
+    assert keys == [LINEN]
+    assert [k for k, _, _ in market_lua.exported_items(intel(LINEN_INTEL, stale), {OTHER})] == [LINEN, OTHER]

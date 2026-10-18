@@ -33,6 +33,7 @@ from ahsync.intel.contract import IntelWindow, ItemIntel, MarketIntelligence
 MARKET_SCHEMA_VERSION = 1      # the addon refuses any other (FM17)
 HOUR_MS = 3_600_000
 MINUTE_MS = 60_000
+STALE_PRICE_MS = 7 * 86_400_000   # older prices are left out unless shortlisted (EX5: the 2 MB budget)
 CHUNK = 2000                   # items per generated function: each has its own constant table (A3)
 TOOLTIP_COLUMNS = tuple(CURVE_AHEAD.index(a) for a in CURVE_AHEAD_TOOLTIP)
 
@@ -122,17 +123,29 @@ def trim_curve(curve: str, full: bool) -> str:
 
 
 def exported_items(intel: MarketIntelligence, shortlist: set[int]) -> list[tuple[int, str, str]]:
-    """The items a market exports: everything with a price, plus the shortlist (EX2).
+    """The items a market exports: everything with a price seen in the last 7 days, plus the shortlist (EX2, EX5).
 
     Args:
         intel: The market's intelligence.
-        shortlist: Item keys that keep the full curve and are exported even without a price.
+        shortlist: Item keys that keep the full curve and are exported even without a (recent) price.
 
     Returns:
         (key, item string, curve string) by key.
     """
+    def wanted(key: int, s: ItemIntel) -> bool:
+        """Whether an item is exported.
+
+        Args:
+            key: Item key.
+            s: Its intelligence.
+
+        Returns:
+            True on the shortlist, or with a price at most 7 days old.
+        """
+        recent = s.cur is not None and (s.cur_age_ms is None or s.cur_age_ms <= STALE_PRICE_MS)
+        return recent or key in shortlist
     return [(key, item_text(s), trim_curve(s.curve, key in shortlist))
-            for key, s in sorted(intel.items.items()) if s.cur is not None or key in shortlist]
+            for key, s in sorted(intel.items.items()) if wanted(key, s)]
 
 
 def _market_block(name: str, items: list[tuple[int, str, str]], de: Mapping[int, str]) -> list[str]:
