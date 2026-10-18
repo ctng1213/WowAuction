@@ -103,6 +103,15 @@ COLUMN_HELP = {
     "Seasonality Strength": '0–100: how predictable the weekly price pattern is, tested on a held-out week. Not how '
                             'profitable it is. "—" = too little evidence',
     "Expected ROI": "Expected profit ÷ buy cost. Flips need at least 20%",
+    "Where": "Bags, bank or mail. Auctions you have up are on On the AH",
+    "Paid each": "What you paid per unit, averaged across all your characters; 0 for items you found or held "
+                 "before tracking started",
+    "Paid total": "Paid each × quantity",
+    "Worth": "What it is expected to bring under its plan: planned sales after fees and the chance they sell, other "
+             "units at their hold value",
+    "Best selling windows": "The hours of the week it sells best (price × buyers), local time. \"early pattern\" = "
+                            "under 3 weeks of data",
+    "Plan": "What this week's plan does with it",
 }
 
 

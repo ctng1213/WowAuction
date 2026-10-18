@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from ahsync.analysis.market import analyze_market
 from ahsync.config import Config, market_settings
 from ahsync.db.sqlite import Database
+from ahsync.recommend.inventory_page import inventory_page
 from ahsync.recommend.pages import craft_page, disenchant_page
 from ahsync.recommend.plan import plan_market, plan_rows
 from ahsync.recommend.plan_pages import plan_pages, view_actions
@@ -37,7 +38,7 @@ class RefreshResult:
 
 def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], intel_items: dict, items: dict,
                 now_ms: int, offset_ms: int, cfg: Config) -> None:
-    """Plan the market's characters and stage the plan and its Today, Week and Flip pages (SPEC §3.4C, §3.5).
+    """Plan the market's characters and stage the plan and its Today, Week, Flip and Inventory pages (SPEC §3.4C, §3.5).
 
     Args:
         db: Database (inside the refresh's transaction).
@@ -54,8 +55,10 @@ def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], in
     db.stage_plan(rows)
     week_start = (now_ms + offset_ms) // DAY_MS * DAY_MS - offset_ms
     history = db.history_actions([c for c, _ in characters], week_start, week_start + 7 * DAY_MS)
-    pages = plan_pages(view_actions(actions, rows, history), intel_items, items, sum(g for _, g in characters),
-                       now_ms, offset_ms)
+    shown = view_actions(actions, rows, history)
+    pages = plan_pages(shown, intel_items, items, sum(g for _, g in characters), now_ms, offset_ms)
+    pages["inventory"] = inventory_page(db, [c for c, _ in characters], [a for a in shown if a.status == "pending"],
+                                        intel_items, items, offset_ms)
     for page, body in pages.items():
         db.stage_view(page, market, body, now_ms)
 

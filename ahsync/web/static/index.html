@@ -97,10 +97,32 @@
   .alert.warn { border-left: 4px solid var(--amber); } .alert.bad { border-left: 4px solid var(--neg); } .alert.info { border-left: 4px solid var(--info); }
   .alert .grow { flex: 1; }
   .empty { padding: 28px 14px; text-align: center; color: var(--muted); }
+  /* Inventory: tiles, the selected row and the item detail (heatmaps, windows, breakdowns) */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .tile { background: linear-gradient(#1f1b14, #14120e); border: 1px solid var(--border); border-top: 2px solid var(--border-hi); border-radius: 6px; padding: 10px 12px; }
+  .tile .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
+  .tile .v { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .tile .d { color: var(--muted); font-size: 12px; }
+  tr[data-select] { cursor: pointer; }
+  tr.selected td { background: #2a2416; } tr.selected td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  .detail { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 14px; }
+  .detail .h { color: var(--muted); font-size: 12px; margin: 12px 0 4px; } .detail .h:first-child { margin-top: 0; }
+  .window { display: flex; gap: 10px; align-items: baseline; padding: 6px 10px; margin-bottom: 4px; border: 1px solid var(--border); border-radius: 4px; background: #0f0d0a; flex-wrap: wrap; }
+  .window .rank { font: 16px var(--serif); color: var(--accent); width: 14px; }
+  .window b { font-weight: 600; min-width: 130px; }
+  .breakdown div { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; border-bottom: 1px dashed var(--border); font-size: 13px; }
+  .breakdown span { color: var(--muted); } .breakdown b { font-weight: 600; text-align: right; }
+  .heat { display: grid; grid-template-columns: 30px repeat(24, 1fr); gap: 1px; font-size: 10px; }
+  .heat div { height: 13px; } .heat .lbl { color: var(--muted); height: auto; }
+  .heat.price { --c: var(--accent); } .heat.sales { --c: var(--pos); } .heat.supply { --c: var(--info); }
+  .heat .h0 { background: color-mix(in srgb, var(--c) 8%, transparent); } .heat .h1 { background: color-mix(in srgb, var(--c) 30%, transparent); }
+  .heat .h2 { background: color-mix(in srgb, var(--c) 52%, transparent); } .heat .h3 { background: color-mix(in srgb, var(--c) 76%, transparent); }
+  .heat .h4 { background: var(--c); } .heat .hn { background: repeating-linear-gradient(45deg, #2a2620 0 2px, transparent 2px 4px); }
   [hidden] { display: none !important; }
 
   @media (max-width: 760px) {
     .layout { grid-template-columns: 1fr; }
+    .detail { grid-template-columns: 1fr; }
     nav { display: flex; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 6px; }
     nav button { width: auto; white-space: nowrap; }
     nav .soon { display: none; }
@@ -166,11 +188,30 @@ const chip = r => `<div class="chip ${esc(r.action)}${STATUS_CLASS[r.status] || 
   `${item(r.item, r.quality)} <span class="muted">×${esc(r.qty)}</span><br><span class="muted">${dash(r.each)} each · ${dash(r.total)}</span><br>` +
   `${r.net === '—' ? '' : signed(r.net)}${r.chance !== '—' ? ` <span class="muted">· ${esc(r.chance)} chance</span>` : ''}` +
   `${r.note ? `<br><span class="muted">${esc(r.note)}</span>` : ''}</div>`;
+// Inventory: tiles and the item detail, all text from engine/inventory_view.py and engine/item_detail.py.
+const tilesHtml = tiles => `<div class="tiles">${(tiles || []).map(([k, v, d]) => `<div class="tile"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div><div class="d">${esc(d)}</div></div>`).join('')}</div>`;
+const HOUR_LABELS = ['0', '', '', '', '', '', '6', '', '', '', '', '', '12', '', '', '', '', '', '18', '', '', '', '', ''];
+const LEVEL_CLASS = { 0: 'h0', 1: 'h1', 2: 'h2', 3: 'h3', 4: 'h4' };
+const heatHtml = (rows, kind) => `<div class="heat ${kind}"><div class="lbl"></div>${HOUR_LABELS.map(h => `<div class="lbl">${h}</div>`).join('')}` +
+  (rows || []).map(r => `<div class="lbl">${esc(r.day)}</div>` + r.cells.map(c => `<div class="${LEVEL_CLASS[c.level] || 'hn'}" title="${esc(c.title)}"></div>`).join('')).join('') + '</div>';
+const breakdown = lines => `<div class="breakdown">${lines.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>`;
+const detailHtml = d => !d ? '<div class="empty" style="border-top:1px solid var(--border)">No market data for this item yet.</div>' :
+  `<div class="card-h" style="border-top:1px solid var(--border)"><b>${esc(d.name)}: when it sells best</b><span class="muted">${esc(d.summary)}</span></div><div class="detail"><div>` +
+  `<div class="h">Best selling windows (forecast for the coming week, local time)</div>` +
+  (d.windows.length ? d.windows.map((w, i) => `<div class="window"><span class="rank">${i + 1}</span><b>${esc(w.when)}</b><span class="${esc(w.uplift_class)}">${esc(w.uplift)}</span><span class="muted">${esc(w.strength)}</span></div>`).join('')
+    : '<div class="muted">No windows yet: too little weekly data. The plan posts now.</div>') +
+  `<div class="h">Three selling answers, kept apart</div>${breakdown([['Highest expected price', d.answers.price], ['Most estimated sales', d.answers.sales], ["Best risk-adjusted window (the plan's)", d.answers.best]])}` +
+  `<div class="h">Market activity</div>${breakdown(d.activity)}</div><div>` +
+  `<div class="h">Price by hour of the week (<code>how</code>), local time</div>${heatHtml(d.heat.price, 'price')}` +
+  `<div class="h">Estimated sales by hour (<code>sales_how</code>)</div>${heatHtml(d.heat.sales, 'sales')}` +
+  `<div class="h">Listed supply by hour (<code>supply_how</code>)</div>${heatHtml(d.heat.supply, 'supply')}` +
+  `<div class="h">Hover a cell for its ratio to the item's normal level and the weeks of data behind it. Striped = no data.</div></div></div>`;
 const totalsList = obj => Object.entries(obj || {}).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${signed(v)}</dd>`).join('');
 
 // ---------- live pages (SPEC §3.5 dashboard data) ----------
 // Each column: [header, numeric?, sort key in row.sort (or null)]. Optional hooks: `pick` chooses the staged view
-// the filters ask for (no computing), `render` draws a page that isn't a table, `footer` adds a summary line.
+// the filters ask for (no computing), `render` draws a page that isn't a table, `footer` adds a summary line,
+// `above`/`below` draw around the table, and `selectKey` makes rows clickable (the selection goes to `below`).
 const LIVE = {
   today: {
     lede: 'What to do right now, best expected net first (SPEC §3.4). A chain\'s profit shows once: mat buys show "—" and the craft or flip carries it. The <b>dot after a chance is its confidence</b> (<span class="dot h"></span>≥ 75% · <span class="dot m"></span>≥ 45% · <span class="dot l"></span>below).',
@@ -210,6 +251,25 @@ const LIVE = {
       daysFilter,
     ],
   },
+  inventory: {
+    lede: 'What you own on every character: bags, bank and mail (auctions you have up are on <b>On the AH</b>). <b>Paid</b> is what you paid (0 for items you found or held before tracking started); <b>Worth</b> is what the item is expected to bring under its plan. <b>Click a row</b> to see when it sells best and why.',
+    above: d => tilesHtml(d.tiles),
+    below: (d, values, selected) => selected ? detailHtml((d.details || {})[selected]) : '<div class="empty" style="border-top:1px solid var(--border)">Select a row to see when it sells best.</div>',
+    selectKey: r => r.key,
+    cols: [['Item', 0, null], ['Character', 0, null], ['Where', 0, null], ['Qty', 1, 'qty'], ['Paid each', 1, null], ['Paid total', 1, 'paid'],
+           ['Worth', 1, 'worth'], ['Best selling windows', 0, null], ...MARKET_COLS, ['Plan', 0, null]],
+    row: r => `<td>${item(r.item, r.quality)}</td><td>${esc(r.character)}</td><td class="muted">${esc(r.where)}</td><td class="num">${esc(r.qty)}</td>` +
+              `<td class="num">${esc(r.paid_each)}${r.paid_note ? `<span class="sub">${esc(r.paid_note)}</span>` : ''}</td><td class="num">${esc(r.paid_total)}</td>` +
+              `<td class="num">${dash(r.worth)}</td><td>${dash(r.windows)}</td>${marketCells(r)}` +
+              `<td class="${['bound', 'ignored', 'none'].includes(r.plan_kind) ? 'muted' : ''}">${esc(r.plan)}</td>`,
+    filters: [
+      { id: 'search', label: null, kind: 'search', placeholder: 'Search items…', test: (r, v) => !v || String(r.item).toLowerCase().includes(v.toLowerCase()) },
+      { id: 'character', label: 'Character', fromRows: 'character', test: (r, v) => v === '' || r.character === v },
+      { id: 'where', label: 'Where', options: [['', 'All'], ['bags', 'Bags'], ['bank', 'Bank'], ['mail', 'Mail']], test: (r, v) => v === '' || r.where === v },
+      { id: 'plan', label: 'Plan', options: [['', 'All'], ['post', 'Post'], ['de', 'Disenchant'], ['vendor', 'Vendor'], ['hold', 'Hold'], ['craft', 'Craft'], ['none', 'Not planned'], ['bound', 'Bound'], ['ignored', 'Ignored']],
+        test: (r, v) => v === '' || r.plan_kind === v },
+    ],
+  },
   disenchant: {
     lede: 'AH items worth buying to disenchant (SPEC §3.4A). Only shown when one of your characters has the skill. Chance (with its confidence dot) and the market activity columns describe the <b>mats</b>, since they\'re what you sell. A "—" means the data can\'t support a number; it is never a guess and never 0. In every table, the <b>dot after a chance is its confidence</b> (<span class="dot h"></span>≥ 75% · <span class="dot m"></span>≥ 45% · <span class="dot l"></span>below); hover a chance for the exact %.',
     cols: [['Item', 0, null], ['ilvl', 1, 'ilvl'], ['Buy', 1, 'buy'], ['Expected mats', 0, null], ['EV', 1, 'ev'], ['Profit', 1, 'profit'],
@@ -247,7 +307,7 @@ const LIVE = {
 };
 
 // ---------- state ----------
-const state = { page: 'disenchant', market: '', sort: {}, filters: {}, data: {} };
+const state = { page: 'disenchant', market: '', sort: {}, filters: {}, data: {}, selected: {} };
 const storage = {
   get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} },
@@ -326,6 +386,7 @@ function render(id) {
     return;
   }
   const rows = Array.isArray(data.rows) ? data.rows : [];
+  const selected = state.selected[id] || null;
   const shown = sortRows(id, rows.filter(r => spec.filters.every(f => f.test(r, values[f.id] ?? ''))));
   const sort = state.sort[id] || {};
   // Header tooltips come with the data, from engine/views.py (SPEC §3.5): one text per column name.
@@ -337,13 +398,21 @@ function render(id) {
   const body = rows.length === 0
     ? `<div class="empty">Nothing to show for this market.</div>`
     : shown.length === 0 ? `<div class="empty">No rows match the filters.</div>`
-    : `<div class="scrollx"><table><thead><tr>${head}</tr></thead><tbody>${shown.map(spec.row).join('')}</tbody></table></div>`;
-  card.innerHTML = hidden + filterBar(id, rows) + body;
+    : `<div class="scrollx"><table><thead><tr>${head}</tr></thead><tbody>${shown.map(r => rowHtml(spec, r, selected)).join('')}</tbody></table></div>`;
+  card.innerHTML = (spec.above ? spec.above(data) : '') + hidden + filterBar(id, rows) + body + (spec.below ? spec.below(data, values, selected) : '');
+  card.querySelectorAll('tr[data-select]').forEach(tr => { tr.onclick = () => { state.selected[id] = tr.dataset.select; render(id); }; });
   card.querySelectorAll('th[data-key]').forEach(th => { th.onclick = () => toggleSort(id, th.dataset.key); });
   card.querySelectorAll('[data-filter]').forEach(el => {
     el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', () => { values[el.dataset.filter] = el.value; render(id); refocus(el.dataset.filter); });
   });
   card.querySelectorAll('[data-skip]').forEach(btn => { btn.onclick = () => skip(btn.dataset.skip, btn); });
+}
+
+// A table row: pages with `selectKey` get a clickable row that selects it (Inventory's item detail).
+function rowHtml(spec, r, selected) {
+  if (!spec.selectKey) return spec.row(r);
+  const key = String(spec.selectKey(r));
+  return `<tr data-select="${esc(key)}"${key === selected ? ' class="selected"' : ''}>${spec.row(r)}</tr>`;
 }
 
 // Mark a plan action skipped (SPEC §3.4.1); the next refresh re-plans around it.
@@ -449,7 +518,7 @@ async function loadMarkets() {
   } catch (e) {
     notice('AHSync isn\'t answering. Is it still running?', 'warn');
   }
-  select.onchange = () => { state.market = select.value; storage.set('ahsync-market', select.value); state.data = {}; show(state.page); };
+  select.onchange = () => { state.market = select.value; storage.set('ahsync-market', select.value); state.data = {}; state.selected = {}; show(state.page); };
 }
 
 window.addEventListener('hashchange', () => show(idOfHash() || state.page));

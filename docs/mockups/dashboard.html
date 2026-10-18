@@ -405,7 +405,7 @@ const PAGES = {
 
   Inventory: { count: 46, html: () => `
     <h1>Inventory</h1><p class="lede">What you own on every character: bags, bank and mail (auctions are on <b>On the AH</b>). It shows what you paid (0 for items you found), what it's worth and its plan. Select a row to see why.</p>
-    ${tiles([['Worth', money(842000)], ['Paid', money(512000), 'found items count as 0'], ['Listed on the AH', '5 auctions', money(81600) + ' listed'], ['Not planned', '5 items', 'bound or ignored']])}
+    ${tiles([['Worth', money(842000), 'under each item's plan'], ['Paid', money(512000), 'found items and items from before tracking count as 0'], ['Not planned', '5 items', 'bound or ignored']])}
     <div class="card">${filters('<span class="select">Where: All ▾</span><span class="select">Plan: All ▾</span>')}
     ${table([['Item'], ['Character'], ['Where'], ['Qty', 1], ['Paid each', 1], ['Paid total', 1], ['Worth', 1], ['Best selling windows'], ...MARKET, ['Plan']], [
       invRow('Linen Cloth', 1, 'Amaya', 'bags', 20, 38, 963, 'Post Sat 10:00 at 55c (18:00 peak)', 92, 'Sat 17–21 · Sun 19–22', true),

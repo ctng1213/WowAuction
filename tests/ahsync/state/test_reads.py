@@ -60,6 +60,17 @@ def test_R10_a_bound_item_is_never_a_lot_for_the_sell_plan(db):
     # The bound Hearthstone (6948) is no lot; bags and mail of one character add up.
     assert db.owned_lots(["A-R", "B-R"]) == [("A-R", 2840, 7), ("B-R", 2840, 2)] and db.owned_lots([]) == []
 
+
+def test_inventory_rows_include_bound_ones_and_cost_basis_skips_empty_rows(db):
+    sql(db, "INSERT INTO inventory(char_id, location, key, qty, bound) VALUES (?, ?, ?, ?, ?)",
+        ("B-R", "bank", 2840, 2, 0), ("A-R", "mail", 2840, 3, 0), ("A-R", "bags", 6948, 1, 1), ("C-R", "bags", 1, 1, 0))
+    assert db.holdings(["A-R", "B-R"]) == [("A-R", "bags", 6948, 1, True), ("A-R", "mail", 2840, 3, False),
+                                           ("B-R", "bank", 2840, 2, False)]
+    assert db.holdings([]) == []
+    sql(db, "INSERT INTO cost_basis(key, qty, total_cost) VALUES (?, ?, ?)", (2589, 20, 760), (2840, 0, 0))
+    assert db.cost_basis() == {2589: (20, 760)}
+
+
 def test_live_item_rules_leave_out_cleared_ones(db):
     sql(db, "INSERT INTO item_rules(key, rule, set_at, source) VALUES (?, ?, ?, ?)",
         (2589, "no_buy", 1, "addon"), (2840, "none", 2, "dashboard"), (4306, "ignore", 3, "dashboard"))

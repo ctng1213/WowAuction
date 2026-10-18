@@ -239,6 +239,13 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | D22 | a craft with 2 mat buys and 1 mail step feeding it | the mat buys and the mail show no net ("for …"); the craft carries the chain's profit |
 | D23 | a Craft row whose product sells 48/day (AHF) with 93 listed | columns Chance, Est. Sales/Day "48 AHF", Current Supply "93", Supply/Volume "1.9 days", in that order; each has a sort key |
 | D24 | a Craft row uses Amaya's bags captured 3 days ago | the row says "based on Amaya's bags from 3 d ago"; a row on today's snapshot says nothing |
+| D25 | Inventory: Amaya holds 20 Linen in bags and 10 in the bank; the plan posts all 30 Sat 10:00 at 55 c for the 18:00 peak, expected 1,567.5 c (30 × 55 c × 0.95, `P` = 1) | both rows say "Post Sat 10:00 at 55c (18:00 peak)" with chance 100%; worth 10 s 45 c (20/30) and 5 s 23 c (10/30 = 522.5, half up); Worth tile 15 s 68 c |
+| D26 | Brugan holds 12 Copper Bar; the plan posts 6 now at 12 s (expected 6 × 12 s × 0.95 = 68 s 40 c) and a planned Copper Rod craft uses the other 6, whose hold value is 10 s each | plan "Post 6 now at 12s · 6 for crafting Copper Rod"; worth 68 s 40 c + 6 × 10 s = 1 g 28 s 40 c |
+| D27 | a soulbound ring in Brugan's bags; 4 Broken Fang that you set to ignore | "Bound · not planned" and "Ignored · not planned", worth "—"; the Not planned tile says "2 items" |
+| D28 | Amaya's Scouting Gloves; the plan has Brugan disenchant them, expected 6 s 25 c | Amaya's row says "Disenchant (Brugan)", worth 6 s 25 c, no chance |
+| D29 | 20 Linen with a cost basis of 38 c each; 7 Wool Cloth with none | Linen: paid each 38 c, paid total 7 s 60 c; Wool: paid 0 c, "before tracking"; Paid tile 7 s 60 c |
+| D30 | item detail: `how` 1.2 on Sat 20:00 UTC and 1.0 elsewhere, 4 weeks per slot except Mon 00:00 with none; local time is UTC + 2 h | the price heatmap's brightest cell (level 4) is local Sat 22:00, titled "Sat 22:00 ×1.20 · 4 weeks"; the 1.0 cells are level 0; local Mon 02:00 has no level ("no data") |
+| D31 | selling windows Sat 18:00–22:00 UTC (7 weeks) and Sun 20:00–23:00 UTC (2 weeks); local time is UTC − 1 h | Inventory's Best selling windows "Sat 17–21 · Sun 19–22 (early pattern)"; item detail lists "Sat 17:00–21:00" established · 7 weeks and "Sun 19:00–22:00" early pattern · 2 weeks, each with its price uplift |
 
 **Craft sourcing** (`engine/craft`, `plan`). Recipe: 2 Copper Bar → Copper Rod, which posts at 40 s with `P` = 1:
 

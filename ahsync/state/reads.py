@@ -84,6 +84,23 @@ class StateReader(Protocol):
             (character id, item key, units), sorted by character then key.
         """
 
+    def holdings(self, char_ids: list[str]) -> list[tuple[str, str, int, int, bool]]:
+        """Every inventory row of the characters.
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            (character id, place, item key, units, bound), sorted by character, place, key, bound.
+        """
+
+    def cost_basis(self) -> dict[int, tuple[int, int]]:
+        """What you paid for items, account-wide.
+
+        Returns:
+            Item key -> (units bought, total cost copper).
+        """
+
     def item_rules(self) -> dict[int, str]:
         """Your live item rules.
 
@@ -222,3 +239,29 @@ class StateReads:
         return [tuple(r) for r in self.conn.execute(
             f"SELECT char_id, key, SUM(qty) FROM inventory WHERE bound = 0 AND char_id IN ({marks}) "
             f"GROUP BY char_id, key ORDER BY char_id, key", tuple(char_ids))]
+
+    def holdings(self, char_ids: list[str]) -> list[tuple[str, str, int, int, bool]]:
+        """Every inventory row of the characters, bound ones too (SPEC §3.5 Inventory).
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            (character id, place "bags" | "bank" | "mail", item key, units, bound), sorted by
+            character, place, key, then bound.
+        """
+        if not char_ids:
+            return []
+        marks = ",".join("?" * len(char_ids))
+        return [(c, loc, key, qty, bool(bound)) for c, loc, key, qty, bound in self.conn.execute(
+            f"SELECT char_id, location, key, qty, bound FROM inventory WHERE char_id IN ({marks}) "
+            f"ORDER BY char_id, location, key, bound", tuple(char_ids))]
+
+    def cost_basis(self) -> dict[int, tuple[int, int]]:
+        """What you paid for items, account-wide (SPEC §3.2 cost_basis).
+
+        Returns:
+            Item key -> (units bought, total cost copper), for items with any units bought.
+        """
+        return {key: (qty, total) for key, qty, total in self.conn.execute(
+            "SELECT key, qty, total_cost FROM cost_basis WHERE qty > 0 ORDER BY key")}
