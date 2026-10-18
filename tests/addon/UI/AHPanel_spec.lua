@@ -23,6 +23,20 @@ local function OpenAH()
   return AHProfit.AHPanel.Frames(), ah
 end
 
+--- Log in with 3 Copper Rods in bag 0 slot 2 and 4 in bag 1, and a plan to post 5 at 41s now; open the AH.
+---@return table, table  The panel's frames, the AH window
+local function RodsAtAH()
+  Stubs.Reset()
+  Stubs.world.containers = { [0] = { size = 2, slots = { [2] = { id = 6217, count = 3 } } },
+                             [1] = { size = 1, slots = { [1] = { id = 6217, count = 4 } } } }
+  UIWorld.Market({ [6217] = UIWorld.Item(4200, 80, 6) }, NOW - 3600000)
+  UIWorld.Plan({ { id = "p", kind = "post", key = 6217, qty = 5, price = 4100, at = NOW, net = 6306, chance = 58 } })
+  Stubs.Login()
+  local ah = AHWorld.Install()
+  Stubs.FireEvent("AUCTION_HOUSE_SHOW")
+  return AHProfit.AHPanel.Frames(), ah
+end
+
 describe("AHPanel", function()
   it("A24 opens docked to the AH with every target still checking, and closes with it", function()
     local ui = OpenAH()
@@ -107,5 +121,37 @@ describe("AHPanel", function()
     local row = ui.post[1]
     assert_eq({ row.item:GetText(), row.price:GetText(), row.qty:GetText(), row.profit:GetText(), row.chance:GetText():match("^%d+%%") },
               { "Linen Cloth", AHProfit.ViewModel.WithCoins("55c"), "×20", AHProfit.ViewModel.WithCoins("+10s"), "92%" })
+  end)
+
+  it("A29 clicking a Post row fills the AH's Sell tab; you press Post", function()
+    local ui, ah = RodsAtAH()
+    local sell = AHWorld.InstallSell(ah, 7)
+    ui.post[1]:Click()
+    assert_eq({ ah.posted.bag, ah.posted.slot, sell.quantity, sell.price, #ah.searches }, { 0, 2, 5, 4100, 0 })
+    assert_eq(ui.status:GetText(), AHProfit.ViewModel.WithCoins("Sell tab: ×5 at 41s each · press Post"))
+    sell.price = 4199                                     -- the AH puts its own price in after its search
+    Stubs.FireEvent("COMMODITY_SEARCH_RESULTS_UPDATED")
+    assert_eq(sell.price, 4100)
+    sell.price = 4199
+    Stubs.FireEvent("COMMODITY_SEARCH_RESULTS_UPDATED")   -- only once
+    assert_eq(sell.price, 4199)
+    ui.post[1]:Click()
+    Stubs.Advance(11)                                     -- too late: the price you set by hand stays
+    sell.price = 4199
+    Stubs.FireEvent("ITEM_SEARCH_RESULTS_UPDATED")
+    assert_eq(sell.price, 4199)
+    Stubs.world.containers = {}
+    ui.post[1]:Click()
+    assert_eq(ui.status:GetText(), "no Copper Rod in your bags")
+  end)
+
+  it("FM30 without the Sell tab's API, or for an item the AH won't take, a click says so", function()
+    local ui, ah = RodsAtAH()
+    ui.post[1]:Click()
+    assert_eq(ui.status:GetText(), "Sell tab unavailable")
+    local sell = AHWorld.InstallSell(ah, 7)
+    C_AuctionHouse.IsSellItemValid = function() return false end
+    ui.post[1]:Click()
+    assert_eq({ ui.status:GetText(), sell.price }, { "Copper Rod can't be sold on the AH", nil })
   end)
 end)

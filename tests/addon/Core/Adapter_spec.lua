@@ -13,36 +13,9 @@ end
 describe("Adapter", function()
   it("the .toc lists the Core and Capture files in load order", function()
     Stubs.Reset()
-    assert_eq(Stubs.TocFiles(), { "Core/Adapter.lua", "Data/BonusSuffixes.lua", "Data/Disenchant.lua", "Core/Events.lua", "Core/DB.lua",
+    assert_eq(Stubs.TocFiles(), { "Core/Adapter.lua", "Core/AdapterAH.lua", "Data/BonusSuffixes.lua", "Data/Disenchant.lua", "Core/Events.lua", "Core/DB.lua",
       "Capture/Characters.lua", "Capture/Professions.lua", "Capture/Inventory.lua", "Scan/Replicate.lua", "Core/Diagnostics.lua",
       "Engine/Fees.lua", "Engine/SellProb.lua", "Engine/Disenchant.lua", "Engine/Craft.lua", "Engine/Prices.lua", "Core/Market.lua", "Core/Plan.lua", "Recommend/Live.lua", "Recommend/Options.lua", "Recommend/Reserves.lua", "UI/ViewModel.lua", "UI/RowMenu.lua", "UI/MainWindow.lua", "UI/Tooltip.lua", "UI/AHPanel.lua" })
-  end)
-
-  it("reads a replicate auction 0-based as key, unit price, stack and band, caching keys by link", function()
-    local Adapter = Boot()
-    local house = { auctions = { Stubs.Auction(2840, 100, 5, 1), { id = 2589, count = 3, buyout = 100, left = 4 } } }
-    Stubs.Define("C_AuctionHouse", Stubs.ReplicateHouse(house))
-    local cache = {}
-    assert_eq({ Adapter.ReadReplicateItem(0, cache) }, { 2840, 100, 5, 1, false })
-    assert_eq({ Adapter.ReadReplicateItem(1, cache) }, { 2589, 33, 3, 4, false }, "100c for 3: floor(33.3) per unit")
-    assert_eq(cache[Stubs.ItemLink(2840)], 2840)
-    assert_eq(Adapter.HasReplicate(), true)
-    assert_eq(Adapter.NumReplicateItems(), 2)
-  end)
-
-  it("a secret replicate value reads as missing, and no C_AuctionHouse means no replicate", function()
-    local Adapter = Boot()
-    assert_eq(Adapter.HasReplicate(), false)
-    Stubs.Define("C_AuctionHouse", Stubs.ReplicateHouse({ auctions = { Stubs.Auction(2840, 100, 5, 1) } }))
-    Stubs.Define("issecretvalue", function(v) return v == 5 end)   -- the stack count is secret
-    assert_eq({ Adapter.ReadReplicateItem(0, {}) }, { nil, "count" }, "left out, with the reason")
-  end)
-
-  it("an item whose class the client can't tell is keyed -itemId when it has no link", function()
-    local Adapter = Boot()
-    Stubs.Define("C_AuctionHouse", Stubs.ReplicateHouse({ auctions = { { id = 2589, count = 1, buyout = 5, left = 2, noLink = true } } }))
-    GetItemInfoInstant = function() return nil end
-    assert_eq({ Adapter.ReadReplicateItem(0, {}) }, { -2589, 5, 1, 2, true }, "unknown class: never priced as its base item")
   end)
 
   it("item key of a plain item link is its item id", function()

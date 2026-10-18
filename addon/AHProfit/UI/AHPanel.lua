@@ -36,6 +36,8 @@ local GOLD, MUTED, BORDER = { 1, 0.82, 0 }, { 0.56, 0.54, 0.49 }, { 0.42, 0.35, 
 local ui = nil
 local searchedThisVisit = {}      -- key -> true: searched since the AH opened (FM24: dropped on close)
 local current = nil               -- the panel's last view, for Next search
+local pendingSell = nil           -- { price, untilMs }: put the price back once after the AH's own (A29)
+AHPanel.REFILL_MS = 10000
 
 --- An item's look (name, quality, market activity), as the window builds it.
 ---@param key number
@@ -86,7 +88,16 @@ local function Posts(charId)
   return out
 end
 
---- One pooled panel row: a state icon, the item, a detail text and a quantity; a click searches it.
+--- Explain a button or row on hover.
+---@param button table
+---@param title string
+---@param text string
+local function Explain(button, title, text)
+  button:SetScript("OnEnter", function(self) Adapter.ShowTooltip(self, title, text) end)
+  button:SetScript("OnLeave", function() Adapter.HideTooltip() end)
+end
+
+--- One pooled panel row: a state icon, the item and its cells; a click searches it or, on Post, fills the Sell tab.
 ---@param parent table
 ---@param i number
 ---@param y number  Pixels down from the panel's top
@@ -115,11 +126,23 @@ local function BuildRow(parent, i, y, columns)
     row.item, row.colA, row.colB, row.qty = unpack(row.cells)
   end
   row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-  row:SetScript("OnClick", function(self, button)
-    if not self.itemName then return end
-    if button == "RightButton" then AHProfit.RowMenu.Open(self, self.key, self.itemName) else AHPanel.Search(self.key, self.itemName) end
-  end)
+  row.isPost = columns == AHPanel.COLUMNS.post
+  row:SetScript("OnClick", function(self, button) AHPanel.OnRowClick(self, button) end)
+  if row.isPost then
+    Explain(row, "Post", "Click: put it on the AH's Sell tab with this price and quantity, then press the AH's Post "
+                         .. "button. Right-click: keep it for yourself.")
+  end
   return row
+end
+
+--- A row click: right opens the keep menu; left fills the Sell tab (Post) or searches (Shopping).
+---@param row table
+---@param button string  "LeftButton" or "RightButton"
+function AHPanel.OnRowClick(row, button)
+  if not row.itemName then return end
+  if button == "RightButton" then return AHProfit.RowMenu.Open(row, row.key, row.itemName) end
+  if row.isPost then return AHPanel.Sell(row.key, row.itemName, row.sellUnits, row.sellPrice) end
+  AHPanel.Search(row.key, row.itemName)
 end
 
 --- A section heading with a count on the right.
@@ -156,15 +179,6 @@ local function ColumnHeaders(parent, y, columns)
     labels[i] = label
   end
   return labels
-end
-
---- Explain a button on hover.
----@param button table
----@param title string
----@param text string
-local function Explain(button, title, text)
-  button:SetScript("OnEnter", function(self) Adapter.ShowTooltip(self, title, text) end)
-  button:SetScript("OnLeave", function() Adapter.HideTooltip() end)
 end
 
 --- A red panel button.
@@ -252,7 +266,7 @@ end
 local function FillPost(row, line)
   row:SetShown(line ~= nil)
   if not line then return end
-  row.key, row.itemName = line.key, line.item
+  row.key, row.itemName, row.sellUnits, row.sellPrice = line.key, line.item, line.units, line.price
   row.icon:SetTexture(nil)
   for i, c in ipairs(AHPanel.COLUMNS.post) do
     local text = line[c[5]]
@@ -293,6 +307,31 @@ function AHPanel.Search(key, name)
   ui.status:SetText("searched " .. name .. " · " .. done .. " of " .. total)
 end
 
+--- Put a Post row's item on the AH's Sell tab, for you to post with the AH's own button (A29, FM30).
+---@param key number
+---@param name string
+---@param units number|nil  Units to post
+---@param price number|nil  Unit price, copper
+function AHPanel.Sell(key, name, units, price)
+  if not (ui and units and price) then return end
+  local bag, slot = Adapter.FindInBags(key)
+  if not bag then return ui.status:SetText("no " .. name .. " in your bags") end
+  local ok, placed, why = pcall(Adapter.FillSell, bag, slot, units, price)
+  if not ok or not placed then
+    return ui.status:SetText(why == "invalid" and (name .. " can't be sold on the AH") or "Sell tab unavailable")
+  end
+  pendingSell = { price = price, untilMs = Adapter.NowMs() + AHPanel.REFILL_MS }
+  ui.status:SetText(VM.WithCoins("Sell tab: ×" .. placed .. " at " .. VM.Money(price) .. " each · press Post"))
+end
+
+--- The AH's search results for the item on the Sell tab: it may have put its own price in, so put
+--- the suggested one back, once, within REFILL_MS of the fill (A29).
+--- UNVERIFIED: COMMODITY_SEARCH_RESULTS_UPDATED / ITEM_SEARCH_RESULTS_UPDATED fire after the Sell tab's own search.
+function AHPanel.OnSellSearch()
+  if pendingSell and Adapter.NowMs() <= pendingSell.untilMs then pcall(Adapter.RefillSellPrice, pendingSell.price) end
+  pendingSell = nil
+end
+
 --- Next search: the next Shopping row, top to bottom, not yet searched this AH visit.
 function AHPanel.NextSearch()
   for _, row in ipairs(current and current.shopping or {}) do
@@ -322,7 +361,7 @@ end
 
 --- AUCTION_HOUSE_CLOSED: hide the panel; the search queue is dropped (FM24).
 function AHPanel.OnClosed()
-  searchedThisVisit = {}
+  searchedThisVisit, pendingSell = {}, nil
   if ui then ui.frame:Hide() end
 end
 
@@ -343,5 +382,7 @@ end
 Events.Register("AUCTION_HOUSE_SHOW", AHPanel.OnShow)
 Events.Register("AUCTION_HOUSE_CLOSED", AHPanel.OnClosed)
 Events.Register("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED", AHPanel.OnBrowseResults)
+Events.Register("COMMODITY_SEARCH_RESULTS_UPDATED", AHPanel.OnSellSearch)
+Events.Register("ITEM_SEARCH_RESULTS_UPDATED", AHPanel.OnSellSearch)
 Replicate.OnBook(function() if ui and ui.frame:IsShown() then AHPanel.Render() end end)
 AHProfit.RowMenu.OnChange(function() if ui and ui.frame:IsShown() then AHPanel.Render() end end)

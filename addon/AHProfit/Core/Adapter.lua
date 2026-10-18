@@ -1,6 +1,7 @@
 -- Core/Adapter.lua: the only file that touches WoW globals (CLAUDE.md, SPEC §5).
 -- Forever's API is partly unverified (SPEC §6), so every guess is marked
--- "-- UNVERIFIED:" and fixes stay in this one file. Everything here is cold
+-- "-- UNVERIFIED:" and fixes stay in this one file (with Core/AdapterAH.lua, its auction house
+-- half, split off for size). Everything here is cold
 -- path (login, window opened, debounced bag change), so plain tables are fine.
 
 local AHProfit = AHProfit or {}
@@ -161,45 +162,6 @@ end
 ---@param text string
 function Adapter.Print(text)
   DEFAULT_CHAT_FRAME:AddMessage("|cffffd100AHProfit:|r " .. text)
-end
-
--- ------------------------------------------------------------------ auction house panel (SPEC §4.3)
-
---- The auction house window, to dock the AHProfit panel to.
---- UNVERIFIED: Forever has the modern AuctionHouseFrame (no QueryAuctionItems, verified 2026-10-18).
----@return table|nil
-function Adapter.AuctionFrame()
-  return _G.AuctionHouseFrame or _G.AuctionFrame
-end
-
---- Search the AH for an item name, as typing it in the AH's search box and pressing Search does.
---- Called from a click, so it runs on a hardware event.
---- UNVERIFIED: Forever's AuctionHouseFrame.SearchBar mixin (SetSearchText, StartSearch), as on retail.
----@param name string
----@return boolean  true when a search was started
-function Adapter.SearchAH(name)
-  local frame = _G.AuctionHouseFrame
-  local bar = frame and frame.SearchBar
-  if bar and bar.SetSearchText and bar.StartSearch then
-    bar:SetSearchText(name)
-    bar:StartSearch()
-    return true
-  end
-  return false
-end
-
---- The browse results of the last AH search: each item's cheapest unit price and units listed.
---- UNVERIFIED: C_AuctionHouse.GetBrowseResults rows { itemKey = { itemID }, minPrice, totalQuantity }.
----@return table[]  { itemId, minPrice, units }; empty when the call is missing
-function Adapter.ReadBrowseResults()
-  local out = {}
-  if not (C_AuctionHouse and C_AuctionHouse.GetBrowseResults) then return out end
-  for _, r in ipairs(C_AuctionHouse.GetBrowseResults() or {}) do
-    if r.itemKey and r.itemKey.itemID and r.minPrice then
-      out[#out + 1] = { itemId = r.itemKey.itemID, minPrice = r.minPrice, units = r.totalQuantity or 0 }
-    end
-  end
-  return out
 end
 
 --- Whether the player is in combat right now.
@@ -629,6 +591,19 @@ local function ReadContainers(bagIds)
   return items
 end
 
+--- The first unbound bag slot holding an item, to put on the AH's Sell tab (A29).
+---@param key number  Item key
+---@return number|nil bag, number|nil slot  nil when the bags hold none unbound
+function Adapter.FindInBags(key)
+  for _, bag in ipairs(BAG_IDS) do
+    for slot = 1, NumSlots(bag) do
+      local link, count, bound = ReadSlot(bag, slot)
+      if count and not bound and Adapter.ItemKey(link) == key then return bag, slot end
+    end
+  end
+  return nil
+end
+
 --- Items in the character's bags.
 ---@return table[]|nil  { key, qty, bound, name, quality } per occupied slot; nil when not fully loaded
 function Adapter.ReadBags()
@@ -675,108 +650,6 @@ end
 ---@return number  Milliseconds since an arbitrary start
 function Adapter.ProfileMs()
   return debugprofilestop()
-end
-
---- A value the client marks secret can't be read; treat it as missing.
----@param value any  A value returned by a WoW API
----@return any       The value; nil when it is secret
-local function Plain(value)
-  if issecretvalue and issecretvalue(value) then return nil end
-  return value
-end
-
---- Whether this client can replicate the whole auction house.
----@return boolean  true when C_AuctionHouse has ReplicateItems and its readers
-function Adapter.HasReplicate()
-  local AH = C_AuctionHouse
-  return type(AH) == "table" and type(AH.ReplicateItems) == "function"
-    and type(AH.GetNumReplicateItems) == "function" and type(AH.GetReplicateItemInfo) == "function"
-end
-
---- Ask the server for the whole auction house; the answer is REPLICATE_ITEM_LIST_UPDATE.
----@return boolean  true when the call went out without an error
-function Adapter.RequestReplicate()
-  return (pcall(C_AuctionHouse.ReplicateItems))
-end
-
---- Number of auctions in the last replicate answer.
----@return number  0 when there is no answer yet (or it can't be read)
-function Adapter.NumReplicateItems()
-  local n = Plain(C_AuctionHouse.GetNumReplicateItems())
-  return type(n) == "number" and math.floor(n) or 0
-end
-
---- The numeric market fields of GetReplicateItemInfo, by position.
---- UNVERIFIED (Forever 1.60.1): name, texture, count, quality, usable, level, levelType,
---- minBid, minIncrement, buyoutPrice, bidAmount, highBidder, bidderFull, owner, ownerFull,
---- saleStatus, itemId (AuctionHouseFYI reads the same positions).
----@return number|nil count, number|nil buyout (whole stack, 0 = none), number|nil itemId
-local function PickInfo(_, _, count, _, _, _, _, _, _, buyout, _, _, _, _, _, _, itemId)
-  return Plain(count), Plain(buyout), Plain(itemId)
-end
-
-local WEAPON_CLASS, ARMOR_CLASS = 2, 4   -- item class ids; only these can roll a random suffix
-
---- Item key for an auction whose link isn't available yet (the item isn't cached): its item id,
---- or -itemId for a weapon or armor (or an item whose class is unknown), which could carry a
---- random suffix we can't see (SPEC §2.2.1, §4.2, A13).
---- UNVERIFIED: GetItemInfoInstant (or C_Item.GetItemInfoInstant) answers without the item cache;
---- its 6th return is the class id.
----@param itemId number  The auction's item id
----@return number        key
-local function KeyWithoutLink(itemId)
-  local instant = GetItemInfoInstant or (C_Item and C_Item.GetItemInfoInstant)
-  local classId = instant and select(6, instant(itemId))
-  -- Unknown class (no API, or no answer) counts as possibly suffixed: never priced as its base item.
-  if type(classId) == "number" and classId ~= WEAPON_CLASS and classId ~= ARMOR_CLASS then return itemId end
-  return -itemId
-end
-
---- The item key of an auction: from its link (cached per scan), else from its item id.
----@param link string|nil   GetReplicateItemLink result
----@param itemId number|nil The auction's item id
----@param keyCache table    link -> key (false = not an item link)
----@return number|nil       key; nil when neither gives one
----@return boolean          true when keyed by item id because the link was missing
-local function AuctionKey(link, itemId, keyCache)
-  if type(link) == "string" then
-    local key = keyCache[link]
-    if key == nil then
-      key = Adapter.ItemKey(link) or false
-      keyCache[link] = key
-    end
-    return key or nil, false
-  end
-  if type(itemId) == "number" and itemId >= 1 then return KeyWithoutLink(itemId), true end
-  return nil, false
-end
-
---- One auction of the replicate answer, as an order-book entry (SPEC §4.2 Store).
---- Left out, with the reason: "pet" (battle pet), "count" (no readable stack size),
---- "buyout" (bid only), "band" (time left not 1-4; volume needs it, §3.3.1) and
---- "link" (neither a usable link nor an item id). Secret values read as missing.
----@param i number         0-based auction index
----@param keyCache table   link -> item key (false = not an item) for this scan; links repeat a lot,
----                        so this saves parsing the same link thousands of times
----@return number|nil key, number|string unitPrice (copper, floor(buyout / count)) or the reason it was
----        left out, number|string|nil stack or the raw time left (as text, for "band"), number|nil band (1-4),
----        boolean|nil true when keyed by item id because the link was missing
-function Adapter.ReadReplicateItem(i, keyCache)
-  local AH = C_AuctionHouse
-  if AH.GetReplicateItemBattlePetInfo then
-    local creature = AH.GetReplicateItemBattlePetInfo(i)
-    if (issecretvalue and issecretvalue(creature)) or (creature ~= nil and creature ~= 0) then return nil, "pet" end
-  end
-  local count, buyout, itemId = PickInfo(AH.GetReplicateItemInfo(i))
-  if type(count) ~= "number" or count < 1 then return nil, "count" end
-  if type(buyout) ~= "number" or buyout < 1 then return nil, "buyout" end
-  -- Verified 2026-10-17 (A12): Forever returns 1 short .. 4 very long, as Classic's
-  -- GetAuctionItemTimeLeft did; not retail's 0..3 (no 0 in 41,062 auctions).
-  local left = AH.GetReplicateItemTimeLeft and Plain(AH.GetReplicateItemTimeLeft(i))
-  if left ~= 1 and left ~= 2 and left ~= 3 and left ~= 4 then return nil, "band", tostring(left) end
-  local key, byId = AuctionKey(Plain(AH.GetReplicateItemLink(i)), itemId, keyCache)
-  if not key then return nil, "link" end
-  return key, math.floor(buyout / count), count, left, byId
 end
 
 -- ------------------------------------------------------------------ diagnostics

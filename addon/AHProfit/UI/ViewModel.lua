@@ -297,6 +297,7 @@ local function Row(a, counted, chance, look, totalGold, offsetMs)
     confidence = chance and look.conf or nil,
     volume = (chance and look.soldPerDay) and (ViewModel.RoundHalfUp(look.soldPerDay) .. "/day") or "—",
     risk = risk, riskAmber = amber, who = a.char:match("^([^-]+)") or a.char, day = day, time = hour,
+    price = a.price, units = a.qty,                -- numbers, for the AH panel's Sell tab fill (A29)
     status = a.status, note = counted.note, netCopper = ViewModel.RoundHalfUp(net or 0),
   }
 end

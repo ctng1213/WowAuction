@@ -28,7 +28,7 @@ The source layout is in SPEC §5. It is not repeated here, so it can't drift.
 - **`ahsync/engine/` is pure.** No I/O, no clock, no network: data in, numbers out.
 - **`addon/AHProfit/Engine/` ports a subset of it** (the modules listed in SPEC §5). Those must stay formula-for-formula identical, including the numeric rules in SPEC §3.3: rounding, even-count medians, percentiles and weekday. A change to a ported Python module changes its Lua twin in the same change.
 - **I/O lives at the edges**: `api/`, `store/`, `ingest/`, `export/`, `web/`. They take a `transport`, `clock`, or `db` argument so tests can inject fakes.
-- **Every WoW API call goes through `addon/AHProfit/Core/Adapter.lua`.** Forever's API is partly unverified, so this keeps fixes to one file. Mark guesses with `-- UNVERIFIED:`.
+- **Every WoW API call goes through `addon/AHProfit/Core/Adapter.lua`** (or `Core/AdapterAH.lua`, its auction house half, split off for size). Forever's API is partly unverified, so this keeps fixes in one place. Mark guesses with `-- UNVERIFIED:`.
 
 ## Size limits
 

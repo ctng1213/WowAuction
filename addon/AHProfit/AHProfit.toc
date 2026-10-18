@@ -5,6 +5,7 @@
 ## SavedVariables: AHProfitDB
 
 Core\Adapter.lua
+Core\AdapterAH.lua
 Data\BonusSuffixes.lua
 Data\Disenchant.lua
 Core\Events.lua

@@ -28,6 +28,13 @@ Diagnostics.APIS = {
   "AuctionHouseFrame", "AuctionHouseFrame.SearchBar", "AuctionHouseFrame.SearchBar.StartSearch",
   "AuctionHouseFrame.SearchBar.SetSearchText", "C_AuctionHouse.GetBrowseResults", "C_AuctionHouse.SendBrowseQuery",
   "TooltipDataProcessor.AddTooltipPostCall", "GameTooltip.HookScript",
+  -- filling the Sell tab from the panel (A29), still to verify on Forever
+  "AuctionHouseFrame.SetPostItem", "ItemLocation.CreateFromBagAndSlot", "C_AuctionHouse.GetItemCommodityStatus",
+  "C_AuctionHouse.GetAvailablePostCount", "C_AuctionHouse.IsSellItemValid",
+  "AuctionHouseFrame.CommoditiesSellFrame.SetPrice", "AuctionHouseFrame.CommoditiesSellFrame.SetQuantity",
+  "AuctionHouseFrame.CommoditiesSellFrame.PriceInput.SetAmount", "AuctionHouseFrame.CommoditiesSellFrame.QuantityInput.SetQuantity",
+  "AuctionHouseFrame.ItemSellFrame.SetPrice", "AuctionHouseFrame.ItemSellFrame.SetQuantity",
+  "AuctionHouseFrame.ItemSellFrame.PriceInput.SetAmount", "AuctionHouseFrame.ItemSellFrame.QuantityInput.SetQuantity",
 }
 
 -- Namespaces whose function lists we need to write the modern readers (SPEC §6).
