@@ -145,6 +145,15 @@ local function ColumnHeaders(parent, y, columns)
   return labels
 end
 
+--- Explain a button on hover.
+---@param button table
+---@param title string
+---@param text string
+local function Explain(button, title, text)
+  button:SetScript("OnEnter", function(self) Adapter.ShowTooltip(self, title, text) end)
+  button:SetScript("OnLeave", function() Adapter.HideTooltip() end)
+end
+
 --- A red panel button.
 ---@param parent table
 ---@param name string
@@ -191,8 +200,12 @@ local function Build(anchor)
   end
   ui.next = Button(frame, "AHProfitPanelNext", "Next search", function() AHPanel.NextSearch() end)
   ui.next:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 10, 34)
+  Explain(ui.next, "Next search", "Searches the next item on the Shopping list, one per click, top to bottom. "
+                                  .. "Each item is searched once per AH visit.")
   ui.scan = Button(frame, "AHProfitPanelScan", "Full scan", function() AHPanel.FullScan() end)
   ui.scan:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -10, 34)
+  Explain(ui.scan, "Full scan", "Reads the whole auction house at once, which updates every price here. "
+                                .. "Allowed every 20 minutes.")
   ui.footer = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   ui.footer:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 10, 12)
   -- The status line has a row of its own, above the buttons, so it never runs into the footer.
@@ -200,6 +213,8 @@ local function Build(anchor)
   ui.status:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 10, 62)
   ui.empty = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   ui.empty:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -(shopTop + 44))
+  ui.empty:SetSize(AHPanel.WIDTH - 24, 26)          -- wraps onto a second line inside the panel
+  ui.empty:SetJustifyH("LEFT")
 end
 
 --- Fill a shopping row.
@@ -246,7 +261,7 @@ function AHPanel.Render()
   for i, row in ipairs(ui.post) do FillPost(row, current.posts[i]) end
   ui.footer:SetText(VM.WithCoins(current.footer))
   ui.empty:SetShown(#current.shopping == 0)
-  ui.empty:SetText("Nothing to buy: no planned buys or disenchant targets")
+  ui.empty:SetText("Nothing to buy right now.")
 end
 
 --- Search the AH for one row's item (a click, so a hardware event).
@@ -254,15 +269,22 @@ end
 ---@param name string
 function AHPanel.Search(key, name)
   searchedThisVisit[key] = true
-  if not Adapter.SearchAH(name) and ui then ui.status:SetText("search unavailable") end
+  local started = Adapter.SearchAH(name)
+  if not ui then return end
+  if not started then ui.status:SetText("search unavailable") return end
+  local done, total = 0, #(current and current.shopping or {})
+  for _, row in ipairs(current and current.shopping or {}) do
+    if searchedThisVisit[row.key] then done = done + 1 end
+  end
+  ui.status:SetText("searched " .. name .. " · " .. done .. " of " .. total)
 end
 
---- Next search: the first shopping row still checking that hasn't been searched this visit.
+--- Next search: the next Shopping row, top to bottom, not yet searched this AH visit.
 function AHPanel.NextSearch()
   for _, row in ipairs(current and current.shopping or {}) do
-    if row.state == "checking" and not searchedThisVisit[row.key] then return AHPanel.Search(row.key, row.item) end
+    if not searchedThisVisit[row.key] then return AHPanel.Search(row.key, row.item) end
   end
-  if ui then ui.status:SetText("all searched") end
+  if ui then ui.status:SetText("all searched this visit") end
 end
 
 --- Full scan: ask for a whole-AH scan, at most every 20 minutes.

@@ -42,10 +42,14 @@ describe("AHPanel", function()
     Stubs.FireEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
     assert_eq({ ui.shop[1].colA:GetText(), ui.shop[1].colB:GetText(), ui.checked:GetText() },
               { AHProfit.ViewModel.WithCoins("38c"), AHProfit.ViewModel.WithCoins("45c"), "1 of 3" })
-    ui.next:Click()                                   -- Linen is found and Copper Bar was searched: Silk is next
-    assert_eq(ah.searches, { "Copper Bar", "Silk Cloth" })
+    ui.next:Click()                                   -- one per click, top to bottom, skipping what was searched
+    assert_eq({ ah.searches, ui.status:GetText() }, { { "Copper Bar", "Linen Cloth" }, "searched Linen Cloth · 2 of 3" })
     ui.next:Click()
-    assert_eq(ui.status:GetText(), "all searched")
+    assert_eq(ah.searches, { "Copper Bar", "Linen Cloth", "Silk Cloth" })
+    ui.next:Click()
+    assert_eq(ui.status:GetText(), "all searched this visit")
+    ui.next:GetScript("OnEnter")(ui.next)
+    assert_eq(Stubs.tooltip.lines[1], "Next search")
   end)
 
   it("FM24 closing the AH drops the search queue; unsearched targets stay checking", function()
@@ -84,7 +88,7 @@ describe("AHPanel", function()
     Stubs.FireEvent("AUCTION_HOUSE_SHOW")
     local ui = AHProfit.AHPanel.Frames()
     assert_eq({ ui.empty:IsShown(), ui.empty:GetText(), ui.postCount:GetText(), ui.post[1].qty:GetText() },
-              { true, "Nothing to buy: no planned buys or disenchant targets", "1", "×20" })   -- the 10% post is filtered
+              { true, "Nothing to buy right now.", "1", "×20" })   -- the 10% post is filtered
   end)
 
   it("UI7 each section has labelled columns, and every header explains itself on hover", function()
