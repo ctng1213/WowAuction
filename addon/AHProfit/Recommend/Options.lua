@@ -195,7 +195,8 @@ function Options.Crafts(recipes, units, ctx)
     end
     out[#out + 1] = { id = "own:craft:" .. r.spell, kind = "craft", key = r.product, qty = best.crafts, net = best.profit,
                       chance = best.p and math.floor(best.p * 100 + 0.5) or nil, at = ctx.nowMs, status = "pending",
-                      char = ctx.charId, own = true, ownSource = Craft.Source(best), matGold = best.matGold }
+                      char = ctx.charId, own = true, ownSource = Craft.Source(best), matGold = best.matGold,
+                      uses = best.ownedUsed }
   end
   return out, reserved
 end

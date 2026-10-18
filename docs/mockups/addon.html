@@ -418,7 +418,7 @@ const VIEWS = {
     ctl: 'Char: All ▾',
     footer: `<span>All characters · 46 items · worth ${money(842000)}</span><span>Paid ${money(512000)}</span>`,
     note: `<b>Inventory</b>: what you own across characters, <b>what you paid</b> (0 for items you found; crafted items cost what their mats cost you), what it's worth, and its plan. Bound items are listed but not planned.`,
-    html: () => `<table>${head([['Item'], ['Who'], ['Where'], ['Qty', 1], ['Paid', 1], ['Worth', 1], ...PAIR, ['Plan']])}
+    html: () => `<table>${head([['Item'], ['Where'], ['Qty', 1], ['Paid', 1], ['Worth', 1], ...PAIR, ['Plan']])}
       ${inv('Linen Cloth', 1, 'Amaya', 'bags', 20, 760, 963, 'Post Sat 10:00 (18:00 peak)')}
       ${inv('Copper Rod', 1, 'Brugan', 'bags', 5, 5000, 11306, 'Post now (19:00 peak)')}
       ${inv('Silver Rod', 1, 'Brugan', 'AH', 2, 6000, 10500, '<span class="muted">listed, 6 h left</span>')}
@@ -447,7 +447,7 @@ function fl(n, q, qty, buy, sell, slot, profit) {
   return `<tr class="row"><td>${item(n, q, 140)}</td><td class="num">×${qty}</td><td class="num">${money(buy)}</td><td class="num">${money(buy * qty)}</td><td class="num">${money(sell)}</td><td class="muted">${slot}</td><td class="num">${net(profit)}</td>${pair(n)}<td class="num">${risk(buy * qty)}</td></tr>`;
 }
 function inv(n, q, who, where, qty, paid, worth, plan) {
-  return `<tr class="row"><td>${item(n, q, 140)}</td><td class="muted">${who}</td><td class="muted">${where}</td><td class="num">${qty}</td><td class="num">${paid === 0 ? '0 <span class="muted">found</span>' : money(paid)}</td><td class="num">${money(worth)}</td>${plan.includes('bound') || plan === 'Vendor' ? DASHES : pair(n)}<td>${plan}</td></tr>`;
+  return `<tr class="row"><td>${item(n, q, 140)}</td><td class="muted">${where}</td><td class="num">${qty}</td><td class="num">${paid === 0 ? '0 <span class="muted">found</span>' : money(paid)}</td><td class="num">${money(worth)}</td>${plan.includes('bound') || plan === 'Vendor' ? DASHES : pair(n)}<td>${plan}</td></tr>`;
 }
 
 const tabs = document.getElementById('tabs');

@@ -141,6 +141,24 @@ describe("MainWindow", function()
     assert_eq({ ui.rows[2].note:GetText(), ui.rows[3]:IsShown() }, { "from your own mats · AHSync has no plan for it", false })
   end)
 
+  it("A22 the Inventory tab lists what this character holds with its worth and plan", function()
+    Stubs.Reset()
+    _G.AHProfitPlan = nil
+    Stubs.world.containers = { [0] = { size = 3, slots = { [1] = { id = 2589, count = 20 }, [2] = { id = 6948, count = 1, bound = true } } } }
+    UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48, { postPrice = 45, sellValue = 42, chance = 0.9 }) }, NOW)
+    Stubs.Login()
+    Stubs.Slash("/ahp")
+    AHProfit.MainWindow.ShowTab("inventory")
+    local ui = AHProfit.MainWindow.Frames()
+    local row = FirstRow("inventory")
+    assert_eq({ row.item, row.where, row.qty, row.worth, row.chance:match("^%d+%%") },
+              { "Linen Cloth", "bags", "×20", AHProfit.ViewModel.WithCoins("8s 40c"), "90%" })
+    assert_eq({ ui.rows[2].note:GetText(), ui.rows[3].cells.inventory.item:GetText(), ui.rows[4].note:GetText() },
+              { "Post now at 45c", "Hearthstone", "Bound · not planned" })
+    assert_eq({ ui.footer:GetText(), ui.chance:IsShown(), ui.headers.inventory:IsShown() },
+              { AHProfit.ViewModel.WithCoins("2 items · worth 8s 40c"), false, true })
+  end)
+
   it("scrolling moves through a long list and stops at its ends", function()
     Stubs.Reset()
     UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48) }, NOW)

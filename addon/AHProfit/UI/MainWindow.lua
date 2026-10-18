@@ -24,8 +24,8 @@ MainWindow.MIN_WIDTH, MainWindow.MIN_HEIGHT = 560, 360
 MainWindow.ROWS, MainWindow.ROW_HEIGHT = 12, 20
 MainWindow.GAP = 3
 MainWindow.CHANCE_STEPS = { 0, 25, 50, 75 }
-MainWindow.TABS = { { "today", "Today" }, { "week", "Week" } }
-MainWindow.MONEY_FIELDS = { each = true, total = true, net = true }
+MainWindow.TABS = { { "today", "Today" }, { "week", "Week" }, { "inventory", "Inventory" } }
+MainWindow.MONEY_FIELDS = { each = true, total = true, net = true, worth = true }
 
 -- { header, row field, width (nil = fills), justify }; columns after the filling one anchor from the right.
 MainWindow.COLUMNS = {
@@ -35,6 +35,8 @@ MainWindow.COLUMNS = {
   week = { { "Time", "time", 34, "LEFT" }, { "", "action", 52, "LEFT" }, { "Item", "item", nil, "LEFT" },
            { "Qty", "qty", 28, "RIGHT" }, { "Total", "total", 56, "RIGHT" }, { "Net", "net", 88, "RIGHT" },
            { "Chance", "chance", 46, "RIGHT" } },
+  inventory = { { "Item", "item", nil, "LEFT" }, { "Where", "where", 44, "LEFT" }, { "Qty", "qty", 28, "RIGHT" },
+                { "Worth", "worth", 88, "RIGHT" }, { "Chance", "chance", 46, "RIGHT" }, { "Volume", "volume", 52, "RIGHT" } },
 }
 
 -- The mockup's palette (docs/mockups/addon.html :root), as 0-1 RGB.
@@ -172,12 +174,14 @@ local function BuildBadges(row)
   row.badges = {}
   for _, t in ipairs(MainWindow.TABS) do
     local cell = row.cells[t[1]].action
+    if cell then
     local badge = row:CreateTexture(nil, "ARTWORK")
     badge:SetSize(48, 12)
     badge:SetPoint("LEFT", cell, "LEFT", 0, 0)
     cell:SetJustifyH("CENTER")
     cell:SetWidth(48)
     row.badges[t[1]] = badge
+    end
   end
 end
 
@@ -399,7 +403,7 @@ local function ShowParts(row, kind)
   for _, t in ipairs(MainWindow.TABS) do
     local active = t[1] == view.tab and kind == "row"
     for _, cell in pairs(row.cells[t[1]]) do cell:SetShown(active) end
-    row.badges[t[1]]:SetShown(active)
+    if row.badges[t[1]] then row.badges[t[1]]:SetShown(active) end
   end
   row.note:SetShown(kind == "note")
   row.dayLabel:SetShown(kind == "day")
@@ -426,11 +430,13 @@ local function FillRow(row, line)
     local text = line[c[2]]
     cells[c[2]]:SetText(MainWindow.MONEY_FIELDS[c[2]] and VM.WithCoins(text) or text)
   end
-  Tint(cells.action, COLORS.black)
-  local badge = BADGES[line.kind] or COLORS.muted
-  row.badges[view.tab]:SetColorTexture(badge[1], badge[2], badge[3])
+  if cells.action then
+    Tint(cells.action, COLORS.black)
+    local badge = BADGES[line.kind] or COLORS.muted
+    row.badges[view.tab]:SetColorTexture(badge[1], badge[2], badge[3])
+  end
   Tint(cells.item, QUALITY[line.quality] or QUALITY[1])
-  Tint(cells.net, COLORS[line.netColor])
+  if cells.net then Tint(cells.net, COLORS[line.netColor]) end
   if cells.risk then Tint(cells.risk, line.riskAmber and COLORS.amber or COLORS.muted) end
   if line.dot then cells.chance:SetText(line.chance .. Dot(line.dot)) end
 end
@@ -455,6 +461,46 @@ local function Fill(row, line)
   end
 end
 
+--- This character's actions: AHSync's plan, without buys a live scan shows gone (A2), plus the
+--- addon's own options where the plan is silent (SPEC §4.0): crafts first, then the rest of what
+--- you carry, so a mat is never both crafted and sold (A20).
+---@param charId string
+---@param nowMs number
+---@return table[], number  Actions, and the buys dropped as gone
+local function CharacterActions(charId, nowMs)
+  local actions, gone = Options.WithoutGoneBuys(Plan.CharacterActions(charId), LevelsOf)
+  local db = DB.Get() or {}
+  local planned, crafted, recipes = {}, {}, {}
+  for _, a in ipairs(actions) do
+    planned[a.key] = true
+    if a.kind == "craft" then crafted[a.key] = true end
+  end
+  for _, r in ipairs(Options.KnownRecipes(db, charId)) do
+    if not crafted[r.product] then recipes[#recipes + 1] = r end
+  end
+  local units = Options.Units(Inventory.Decode(((db.inventory or {})[charId] or {}).bags))
+  local ctx = { itemOf = LiveItem, levelsOf = LevelsOf, vendorOf = VendorOf, nowMs = nowMs, charId = charId,
+                planned = planned }
+  local crafts, reserved = Options.Crafts(recipes, units, ctx)
+  ctx.reserved = reserved
+  for _, a in ipairs(crafts) do actions[#actions + 1] = a end
+  for _, a in ipairs(Options.Sell(units, ctx)) do actions[#actions + 1] = a end
+  return actions, gone
+end
+
+--- Everything this character holds, place by place (bags, bank, mail).
+---@param charId string
+---@return table[]  { where, key, qty, bound }
+local function Holdings(charId)
+  local inventory, out = ((DB.Get() or {}).inventory or {})[charId] or {}, {}
+  for _, where in ipairs(VM.PLACES) do
+    for _, row in ipairs(Inventory.Decode(inventory[where])) do
+      out[#out + 1] = { where = where, key = row.key, qty = row.qty, bound = row.bound }
+    end
+  end
+  return out
+end
+
 --- The lines the current tab shows, its footer and its empty-state text.
 ---@param nowMs number
 ---@param gold number  All your gold, copper
@@ -463,29 +509,13 @@ local function Lines(nowMs, gold)
   local offset = Adapter.LocalOffsetMs(nowMs)
   local info = Adapter.PlayerInfo()
   local charId = info.name .. "-" .. info.realm
-  local actions = Plan.CharacterActions(charId)
-  local gone = 0
-  if view.tab == "today" then
-    actions, gone = Options.WithoutGoneBuys(actions, LevelsOf)
-    -- The addon's own options fill in where AHSync's plan is silent (SPEC §4.0): crafts first,
-    -- then the rest of what you carry, so a mat is never both crafted and sold (A20).
-    local db = DB.Get() or {}
-    local planned, crafted, recipes = {}, {}, {}
-    for _, a in ipairs(actions) do
-      planned[a.key] = true
-      if a.kind == "craft" then crafted[a.key] = true end
-    end
-    for _, r in ipairs(Options.KnownRecipes(db, charId)) do
-      if not crafted[r.product] then recipes[#recipes + 1] = r end
-    end
-    local units = Options.Units(Inventory.Decode(((db.inventory or {})[charId] or {}).bags))
-    local ctx = { itemOf = LiveItem, levelsOf = LevelsOf, vendorOf = VendorOf, nowMs = nowMs, charId = charId,
-                  planned = planned }
-    local crafts, reserved = Options.Crafts(recipes, units, ctx)
-    ctx.reserved = reserved
-    for _, a in ipairs(crafts) do actions[#actions + 1] = a end
-    for _, a in ipairs(Options.Sell(units, ctx)) do actions[#actions + 1] = a end
+  if view.tab == "inventory" then
+    local actions = CharacterActions(charId, nowMs)
+    local rows = VM.Inventory(Holdings(charId), actions, LookOf, LiveItem, offset)
+    return VM.WithNotes(rows), VM.InventoryFooter(rows), "Nothing in your bags, bank or mail yet."
   end
+  local actions, gone = Plan.CharacterActions(charId), 0
+  if view.tab == "today" then actions, gone = CharacterActions(charId, nowMs) end
   if view.tab == "today" then
     local today = VM.Today(actions, nowMs, offset, view.minChance, LookOf, gold)
     return VM.WithNotes(today.rows), VM.TodayFooter(today, view.minChance, gone), "Nothing to do in the next hour."

@@ -165,6 +165,31 @@ describe("ViewModel", function()
     assert_eq(VM.Age(nil, NOW), { text = "no data", amber = true })
   end)
 
+  it("A22 the Inventory tab: what you hold, its worth and its plan, best worth first", function()
+    local VM = Boot()
+    LOOKS[6948], LOOKS[2592], LOOKS[4306], LOOKS[6217] = { name = "Hearthstone", quality = 1 },
+      { name = "Wool Cloth", quality = 1 }, { name = "Silk Cloth", quality = 1 }, { name = "Copper Rod", quality = 1 }
+    local holdings = { { where = "bags", key = 2589, qty = 20, bound = false }, { where = "bags", key = 2840, qty = 6, bound = false },
+                       { where = "bags", key = 6948, qty = 1, bound = true }, { where = "bank", key = 2592, qty = 4, bound = false },
+                       { where = "mail", key = 4306, qty = 2, bound = false } }
+    local actions = { Act("own:2589", "post", 840, NOW, 90, { qty = 20, price = 45, own = true }),
+                      Act("own:craft:2663", "craft", 5700, NOW, 100, { key = 6217, qty = 3, own = true, uses = { [2840] = 6 } }),
+                      Act("w", "post", 114, NOW + DAY + 19 * HOUR + 30 * MINUTE, 80, { key = 2592, qty = 4, price = 30 }) }
+    local items = { [4306] = { sellValue = 60 } }
+    local rows = VM.Inventory(holdings, actions, Look, function(key) return items[key] end, 0)
+    local got = {}
+    for i, r in ipairs(rows) do got[i] = { r.item, r.where, r.worth, r.note } end
+    assert_eq(got, { { "Linen Cloth", "bags", "8s 40c", "Post now at 45c" }, { "Silk Cloth", "mail", "1s 20c", "Not planned" },
+                     { "Wool Cloth", "bank", "1s 14c", "Post Sat 10:00 at 30c (AHSync)" },
+                     { "Copper Bar", "bags", "—", "For crafting Copper Rod" }, { "Hearthstone", "bags", "—", "Bound · not planned" } })
+    assert_eq({ rows[1].chance, rows[1].volume, rows[5].volume }, { "90%", "48/day", "—" })
+    local others = VM.Inventory({ { where = "bags", key = 3300, qty = 1, bound = false } },
+      { Act("v", "vendor", 12, NOW, nil, { key = 3300, qty = 1, price = 12 }), Act("h", "hold", 0, NOW, nil, { key = 2592, qty = 1 }) },
+      function() return { name = "x", quality = 0 } end, function() return nil end, 0)
+    assert_eq(others[1].note, "Vendor at 12c each (AHSync)")
+    LOOKS[6948], LOOKS[2592], LOOKS[4306], LOOKS[6217] = nil, nil, nil, nil
+  end)
+
   it("labels a window in local time, with its strength when it isn't established", function()
     local VM = Boot()
     assert_eq(VM.WindowLabel({ start = 138, hours = 4, weeks = 7 }, 0), "Sat 18:00–22:00")

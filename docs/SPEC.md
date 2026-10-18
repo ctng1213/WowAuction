@@ -991,7 +991,7 @@ The window's tabs, each shown in the mockup:
 | Disenchant | item, ilvl, buy, expected mats, EV, profit, Chance · Volume (of the mats), risk %, live search state (✓ / ✗ / …) |
 | Craft | product, who knows it, **source** (Owned / AH / Mixed, plus "+ crafted" for chains; filterable), crafts, mat gold each and total ("—" when you own every mat), profit, Chance · Volume, risk, cooldown; a note lists which mats are owned and which are bought |
 | Flip | item, quantity, buy each and total, expected sell price, sell slot, profit, Chance · Volume, risk % |
-| Inventory | item, character, where (bags, bank, mail, AH), quantity, paid (0 if found), worth, Chance · Volume, plan |
+| Inventory | what the character you're playing holds: item, where (bags, bank, mail), quantity, worth, Chance · Volume, and its plan as a note under the row (AHSync's, marked "(AHSync)", or the addon's own: "Post now at 45c", "For crafting Copper Rod", "Bound · not planned"), best worth first (A22). Paid joins it with tracking (M6b), and listed auctions with On the AH |
 
 Right-clicking a row opens a menu: Search the AH, Mark as skipped, Blacklist: don't buy or craft, Blacklist: ignore completely, and Keep (start fresh) on a "not selling" item.
 
