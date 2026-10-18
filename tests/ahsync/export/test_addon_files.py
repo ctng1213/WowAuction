@@ -1,0 +1,108 @@
+"""Tests for ahsync/export/addon_files.py: atomic writes, the shortlist and the export (SPEC §3.5, FM14, EX1)."""
+from __future__ import annotations
+
+import pytest
+
+from ahsync.config import Config
+from ahsync.db.sqlite import BookScan, Database
+from ahsync.export import addon_files
+from ahsync.intel.contract import ItemIntel, MarketIntelligence
+from tests.support.fake_clock import FakeClock
+
+HOUR, DAY = 3_600_000, 86_400_000
+M = "forever.pvp.horde.us"
+BAR, ROD, LINEN, GLOVES, SILK, WOOL, ORE = 2840, 6217, 2589, 6585, 4306, 2592, 2771
+
+
+@pytest.fixture
+def db(tmp_path):
+    """A fresh database."""
+    database = Database.open(tmp_path / "ahsync.db", FakeClock().now_ms(), None)
+    yield database
+    database.close()
+
+
+def sql(db: Database, statement: str, *rows: tuple) -> None:
+    """Insert rows with one statement."""
+    with db.transaction():
+        db.conn.executemany(statement, rows)
+
+
+def item(key: int, cur: int | None = 45) -> ItemIntel:
+    """An item's intelligence with a price."""
+    return ItemIntel(key, cur, 20, HOUR, 49, 49, 40, 60, 0.0, 48.0, 0.0, 48.0, "ahf", {"ahf": 7}, 45, 20, 0.9, False,
+                     42.0, 86, 93, None, ())
+
+
+def publish(db: Database, now: int, *keys: int) -> None:
+    """Publish intelligence for these items, as a full refresh does."""
+    with db.transaction():
+        db.stage_intel(MarketIntelligence(M, now, now - HOUR, 1, {k: item(k) for k in keys}))
+        db.stage_view("disenchant", M, {"rows": [{"key": GLOVES, "item": "Scouting Gloves"}, {"item": "no key"}]}, now)
+    db.publish_refresh([M])
+
+
+def test_EX1_the_shortlist_is_holdings_recipes_plan_lists_and_recent_targeted_scans(db):
+    now = FakeClock().now_ms()
+    sql(db, "INSERT INTO characters(id, market, gold) VALUES (?, ?, ?)", ("Brugan-G", M, 100))
+    sql(db, "INSERT INTO inventory(char_id, location, key, qty, bound) VALUES (?, ?, ?, ?, ?)", ("Brugan-G", "bags", BAR, 12, 0))
+    sql(db, "INSERT INTO recipes(profession, spell_id, product_key, yield_min, yield_max) VALUES (?, ?, ?, ?, ?)",
+        ("Blacksmithing", 2663, ROD, 1, None), ("Enchanting", 7418, None, 1, None))
+    sql(db, "INSERT INTO reagents(profession, spell_id, key, count) VALUES (?, ?, ?, ?)", ("Blacksmithing", 2663, BAR, 2))
+    sql(db, "INSERT INTO known_recipes(char_id, spell_id) VALUES (?, ?)", ("Brugan-G", 2663), ("Brugan-G", 7418))
+    sql(db, "INSERT INTO actions(action_id, char_id, kind, key, qty, slot_ms, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("a1", "Brugan-G", "post", LINEN, 20, now, "pending"), ("a0", "Brugan-G", "post", WOOL, 5, now, "done"))
+    db.store_book(BookScan("p1", M, "local", "Brugan-G", now - 2 * DAY, "partial", 0.1), [(SILK, 70, 20, 3, 1)])
+    db.store_book(BookScan("f1", M, "local", "Brugan-G", now - DAY, "full"), [(WOOL, 30, 20, 3, 1)])
+    db.store_book(BookScan("p0", M, "local", "Brugan-G", now - 9 * DAY, "partial", 0.1), [(ORE, 50, 20, 3, 1)])
+    assert addon_files.shortlist(db, M, now) == {BAR, ROD, LINEN, SILK}      # no Disenchant page yet
+    publish(db, now, LINEN)                  # the refresh's plan replaces the open actions: Linen's post is gone
+    assert addon_files.shortlist(db, M, now) == {BAR, ROD, GLOVES, SILK}
+
+
+def test_FM14_a_rename_blocked_three_times_keeps_the_old_file_and_warns(db, tmp_path):
+    now = FakeClock().now_ms()
+    folder = tmp_path / "wow" / "Interface" / "AddOns" / "AHProfit_Data"
+    folder.mkdir(parents=True)
+    (folder / "MarketIntelligence.lua").write_text("-- old", encoding="utf-8")
+    publish(db, now, LINEN)
+    cfg, waits = Config(markets=(M,), wow_path=str(tmp_path / "wow")), []
+
+    def locked(src, dst):
+        """A rename that antivirus blocks."""
+        raise PermissionError("locked")
+
+    assert addon_files.export_market(db, cfg, now, waits.append, locked) is False
+    assert waits == [5, 5] and (folder / "MarketIntelligence.lua").read_text(encoding="utf-8") == "-- old"
+    assert not (folder / "MarketIntelligence.lua.tmp").exists()
+    assert db.status("addon_file:MarketIntelligence.lua").kind == "addon_file_blocked"
+
+    assert addon_files.export_market(db, cfg, now, waits.append) is True             # the next refresh succeeds
+    assert "AHProfitMarket = {" in (folder / "MarketIntelligence.lua").read_text(encoding="utf-8")
+    assert db.status("addon_file:MarketIntelligence.lua") is None and db.status("addon_file_size") is None
+
+
+def test_a_temp_file_that_reads_back_wrong_is_not_renamed(tmp_path, monkeypatch):
+    target = tmp_path / "x.lua"
+    target.write_text("old", encoding="utf-8")
+    monkeypatch.setattr(addon_files.Path, "read_bytes", lambda self: b"garbled")
+    assert addon_files.write_atomic(target, "new", lambda s: None) is False
+    monkeypatch.undo()
+    assert target.read_text(encoding="utf-8") == "old"
+
+
+def test_nothing_is_written_without_intelligence_or_an_addons_folder(db, tmp_path, caplog):
+    now = FakeClock().now_ms()
+    cfg = Config(markets=(M,), wow_path=str(tmp_path / "nowow"))
+    assert addon_files.export_market(db, cfg, now, lambda s: None) is False         # no refresh yet
+    publish(db, now, LINEN)
+    assert addon_files.export_market(db, cfg, now, lambda s: None) is False and "run tools/deploy.py" in caplog.text
+
+
+def test_a_file_over_its_budget_is_written_with_a_warning(db, tmp_path, monkeypatch):
+    now = FakeClock().now_ms()
+    (tmp_path / "Interface" / "AddOns" / "AHProfit_Data").mkdir(parents=True)
+    publish(db, now, LINEN)
+    monkeypatch.setattr(addon_files, "MAX_MARKET_BYTES", 10)
+    assert addon_files.export_market(db, Config(markets=(M,), wow_path=str(tmp_path)), now, lambda s: None) is True
+    assert db.status("addon_file_size").data["limit"] == 10

@@ -863,7 +863,11 @@ You set or clear a rule from any dashboard row, from the **Rules** page, or by r
      - **Tier 1, every eligible item:** current price and its age, med7/med30/p10/p90, seasonality strength, estimated sales per day, current supply, supply/volume, the top buying and selling windows, the sell-probability curve (§3.1.1), confidence and freshness, and `observationsUntil`.
      - **Tier 2, the shortlist only** (items on any desktop list, in your stock or recipes, or recently scanned): the full 24 × 8 sell-probability curve in place of the 24 × 3 one (§3.1.1). Each window keeps the price ratio and weeks of data it carries (§3.3.4).
      - **The hour-of-week profiles are never exported.** The 168-slot `how`, `sales_how` and `supply_how` stay in AHSync: the addon shows no week heatmap (heatmaps are dashboard-only), and its live decisions use only the windows and the curve, so it never reads or scans a 168-slot array.
-     - Also the disenchant table and the bonus-suffix table (static data).
+     - The disenchant table and the bonus-suffix table are static, so they ship with the addon (`Data/Disenchant.lua`, `Data/BonusSuffixes.lua`) instead of being exported.
+     - **Format** (`export/market_lua.py`, read by `Core/Market.lua`): `AHProfitMarket = { schemaVersion, generatedAt, checksum, charMarkets, markets = { [market] = { observationsUntil, curveHour, I, C } } }`. `I[key]` is one string per item, `"cur,curQty,curAgeMin,med7,med30,p10,p90,trend10,sold10,listed10,supply,conf,seasonality,postPrice,refStack,sellValue,volumeUnknown;sellWindows;buyWindows"`: integers, an empty field meaning unavailable, ages in minutes before `generatedAt`, trend and per-day rates in tenths, and each window `start:hours:best:how1000:weeks` joined by `/`. `C[key]` is the curve (§3.1.1). Items are filled 2,000 per generated function, so no function exceeds Lua 5.1's constant limits (A3). Every item with a price is exported, plus the shortlist (EX2). `charMarkets` maps each character to its market; a character it doesn't name uses the only market of its faction (S12).
+     - **The shortlist** (EX1): what you hold, your recipes' products and reagents, open plan actions, the rows of the desktop lists, and items in your *partial* (targeted) scans of the last 7 days. Full scans are left out because they cover the whole AH.
+     - **The checksum** is `"<strings>:<their total length>"` over every `I` and `C` string: cheap to check at login, and a truncated or mixed-up file fails it. A file whose `schemaVersion` differs, or whose checksum fails, is refused with a status line, never a Lua error (FM17).
+     - AHSync writes it after every published full refresh (`export/addon_files.py`); a write blocked 3 times leaves the old file and a Status warning (FM14), and a file over 2 MB is written with a warning.
    - **`PortfolioPlan.lua`** (account-specific): the desktop's plan with action ids so the addon can mark them done, your sell record per item (`s`, `x`, `streak`), the item rules, `basedOnUntil` (the newest event it includes), and `ingestedUntil` per character for the pruning handshake (§2.2), written only after the database commit.
    - Raw history is never exported. Both files have a size budget: ≤ 2 MB and ≤ 200 KB.
 
@@ -1185,10 +1189,10 @@ ahsync/
               record.py (own sell record + calibration), tracking.py (event → action matching), rules.py,
               patterns.py (weekly patterns, best selling windows), confidence.py (conf %), disenchant.py, craft.py,
               capacity.py (liquidity caps, shared market capacity, §3.4), plan.py, views.py (tab totals, sorting, filters, tooltip deltas)
-  export/     market_lua.py (MarketIntelligence.lua), plan_lua.py (PortfolioPlan.lua)
+  export/     market_lua.py (MarketIntelligence.lua), plan_lua.py (PortfolioPlan.lua), addon_files.py (atomic writes, the shortlist)
   web/        server.py, static/
 addon/AHProfit/
-  Core/       Adapter.lua (every game API call), Events.lua, DB.lua (AHProfitDB setup, migrations, pruning; §2.2.1), Diagnostics.lua (§2.2.1)
+  Core/       Adapter.lua (every game API call), Events.lua, DB.lua (AHProfitDB setup, migrations, pruning; §2.2.1), Diagnostics.lua (§2.2.1), Market.lua (reads MarketIntelligence.lua: checks, lazy decode)
   Capture/    Characters.lua, Professions.lua, Inventory.lua, Mail.lua, Posts.lua, Purchases.lua, Crafts.lua
   Scan/       Search.lua, Replicate.lua
   Engine/     Fees.lua, SellProb.lua, Disenchant.lua, Craft.lua   (ports of ahsync/engine)

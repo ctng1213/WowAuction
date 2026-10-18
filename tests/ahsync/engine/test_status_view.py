@@ -100,6 +100,9 @@ def test_D36_premium_shows_on_the_api_card_and_warns_near_its_end():
     ("savedvars_failed", {"account": "A#1"}, "SavedVariables failed", "tried again"),
     ("savedvars_rows_skipped", {"account": "A#1", "count": 4, "rows": ["a", "b", "c", "d"]}, "Rows set aside", "First: a; b; c"),
     ("premium_until", {}, "Premium", "Premium"),
+    ("addon_file_blocked", {"file": "MarketIntelligence.lua"}, "Addon file not written", "after 3 tries"),
+    ("addon_file_large", {"file": "MarketIntelligence.lua", "bytes": 2_500_000, "limit": 2_097_152},
+     "Addon file over budget", "2441 KB, over its 2048 KB"),
     ("something_new", {}, "something_new", ""),
 ])
 def test_every_stored_kind_reads_as_a_sentence(kind, data, title, phrase):

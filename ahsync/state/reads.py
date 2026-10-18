@@ -274,3 +274,19 @@ class StateReads:
         """
         return [tuple(r) for r in self.conn.execute(
             "SELECT id, realm, faction, market, updated FROM characters ORDER BY id")]
+
+    def partial_scan_keys(self, market: str, since_ms: int) -> set[int]:
+        """Items in your targeted (partial) AH scans since a time (SPEC §3.5 tier 2, EX1).
+
+        Full scans are left out: they cover the whole AH, so they would shortlist everything.
+
+        Args:
+            market: Market id.
+            since_ms: Oldest scan time, ms.
+
+        Returns:
+            Item keys.
+        """
+        return {key for (key,) in self.conn.execute(
+            "SELECT DISTINCT e.key FROM book_entries e JOIN scans s ON s.scan_id = e.scan_id "
+            "WHERE s.market = ? AND s.src = 'local' AND s.kind = 'partial' AND s.at >= ?", (market, since_ms))}

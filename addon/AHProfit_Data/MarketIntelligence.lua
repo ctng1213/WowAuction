@@ -1,0 +1,3 @@
+-- Placeholder. AHSync replaces this file with the generated MarketIntelligence.lua (SPEC §3.5).
+-- It must exist when the WoW client starts, or WoW ignores a file written later.
+-- tools/deploy.py installs it once and never overwrites an existing one.

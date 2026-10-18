@@ -3,7 +3,7 @@
 # Tokens: an ID (P12) or a same-prefix range (V1-V18). '#' starts a comment.
 
 # M1 sync and storage
-FM5 FM14 FM17-FM18 FM20-FM21 FM23-FM24
+FM5 FM18 FM20-FM21 FM23-FM24
 FI1
 
 # M3-M4 engine
@@ -14,7 +14,7 @@ FI1
 O2-O7 O11-O17
 D18
 C8 C14
-IU1-IU2 IU6-IU7 IU10 IU12
+IU1-IU2 IU6-IU7 IU10
 
 T1-T16
 
@@ -25,7 +25,7 @@ K1-K3
 
 
 # M2/M5 addon
-A2-A5
+A2 A4-A5
 UI1-UI11
 
 
@@ -35,5 +35,4 @@ V23-V24 K4
 # Architecture amendment (SPEC §5.0)
 T17-T18 D24 A9
 
-# Cloud-ready intelligence amendment (SPEC §5.0 contents, bulk reads, cloud boundary)
-AR6
+# Cloud-ready intelligence amendment (SPEC §5.0 contents, bulk reads, cloud boundary): done

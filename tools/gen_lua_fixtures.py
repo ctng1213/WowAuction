@@ -99,7 +99,47 @@ def generate(scenarios_dir: Path = SCENARIOS, out_dir: Path = OUT) -> list[Path]
     return written
 
 
+def generate_market(out_dir: Path = OUT / "market") -> list[Path]:
+    """Write real MarketIntelligence.lua files with the Python exporter, for the addon's loader specs.
+
+    - ex2.lua: the EX2 market (Linen with a window and a 24 × 3 curve, a shortlisted item without a price).
+    - big.lua: 20,000 priced items, every 10th on the shortlist (A3: Lua 5.1's constant limits).
+
+    Args:
+        out_dir: Folder for the files.
+
+    Returns:
+        Paths written.
+    """
+    sys.path.insert(0, str(ROOT))
+    from dataclasses import replace
+
+    from ahsync.engine.sellprob import encode_curve
+    from ahsync.export.market_lua import market_lua
+    from ahsync.intel.contract import IntelWindow, ItemIntel, MarketIntelligence
+
+    hour, market, built = 3_600_000, "forever.pvp.horde.us", 497_861 * 3_600_000
+    curve = encode_curve([[((r + c) % 50) / 50 for c in range(8)] for r in range(24)])
+    linen = ItemIntel(2589, 45, 20, hour, 49, 49, 40, 60, 0.4, 48.0, 0.0, 48.0, "ahf", {"ahf": 7}, 45, 20, 0.9, False,
+                      42.4, 86, 93, None, (), seasonality=72,
+                      sell_windows=(IntelWindow(5 * 24 + 18, 4, 5 * 24 + 19, 1.12, 7),), curve=curve,
+                      curve_hour=built // hour)
+    empty = ItemIntel(6948, None, None, None, None, None, None, None, 0.0, None, None, None, None, {}, None, 1, 0.25,
+                      True, None, 6, None, None, ())
+    small = MarketIntelligence(market, built, built - hour, 1, {2589: linen, 6948: empty})
+    big = MarketIntelligence(market, built, built - hour, 1,
+                             {k: replace(linen, key=k, cur=k % 997 + 1) for k in range(1, 20_001)})
+    out_dir.mkdir(parents=True, exist_ok=True)
+    files = {"ex2.lua": market_lua([small], {market: {6948}}, {"Amaya-Grommash": market}, built),
+             "big.lua": market_lua([big], {market: set(range(10, 20_001, 10))}, {}, built)}
+    written = []
+    for name, text in files.items():
+        (out_dir / name).write_text(text, encoding="utf-8", newline=chr(10))
+        written.append(out_dir / name)
+    return written
+
+
 if __name__ == "__main__":
-    paths = generate() + generate(PROPERTIES, OUT / "properties")
+    paths = generate() + generate(PROPERTIES, OUT / "properties") + generate_market()
     print(f"gen_lua_fixtures: {len(paths)} file(s) -> {OUT.relative_to(ROOT).as_posix()}")
     sys.exit(0)

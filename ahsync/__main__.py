@@ -29,6 +29,7 @@ from ahsync.db.sqlite import Database, DatabaseError
 from ahsync.history.prune import prune
 from ahsync.collect.catchup import SyncContext, check_capabilities, run_catchup, sync_markets
 from ahsync.app.refresh import refresh_all
+from ahsync.export.addon_files import export_market
 from ahsync.recommend.status_pass import status_pass
 from ahsync.app.scheduler import SavedVarsWatcher, Scheduler, SchedulerHooks, file_mtime_ms, find_savedvars
 from ahsync.web.server import DashboardApp, DashboardServer, new_token, open_server_db, start_dashboard, stop_dashboard
@@ -149,6 +150,8 @@ def full_refresh(db: Database, clock: Clock, config: Config) -> None:
     result = refresh_all(db, now, config, clock.local_offset_ms(now))
     logging.getLogger("ahsync").info("full refresh: %d items, %d failed%s", result.items, len(result.failed),
                                      f"; NOT published: {result.error}" if result.error else "")
+    if result.error is None:
+        export_market(db, config, now, clock.sleep)     # SPEC §3.1.1 step 3: the addon files
 
 
 def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path,

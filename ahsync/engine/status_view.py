@@ -210,6 +210,11 @@ def message(row: StatusRow, offset_ms: int) -> tuple[str, str]:
         "key_rejected": ("API key rejected", "AHF rejected the API key, so AHSync uses public data. Check the "
                                              "AUCTIONHOUSE_APIKEY environment variable."),
         "market_skipped": ("Market skipped", f"{market} was skipped this run ({d.get('error', '?')}); the next run retries."),
+        "addon_file_blocked": ("Addon file not written", f"{d.get('file', '?')} couldn't be replaced after 3 tries "
+                                                         f"(locked, or blocked by antivirus). The addon keeps the "
+                                                         f"previous one; the next refresh tries again."),
+        "addon_file_large": ("Addon file over budget", f"{d.get('file', '?')} is {d.get('bytes', 0) // 1024} KB, over "
+                                                       f"its {d.get('limit', 0) // 1024} KB budget; WoW may load slowly."),
         "restored": ("Database restored", f"The database was damaged and was restored from "
                                           f"{d.get('backup') or 'nothing (started empty)'}."),
     }

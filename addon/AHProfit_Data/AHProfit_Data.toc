@@ -1,7 +1,8 @@
 ## Interface: 16001
 ## Title: AHProfit Data
-## Notes: Prices and plans written by AHSync for AHProfit. Generated; do not edit.
+## Notes: Market data and plans written by AHSync for AHProfit. Generated; do not edit.
 ## Version: 0.1.0
 ## Dependencies: AHProfit
 
-Data.lua
+MarketIntelligence.lua
+PortfolioPlan.lua
