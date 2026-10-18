@@ -19,6 +19,8 @@ needs an item (SPEC §5.1 lazy decode):
 - D[key] = "skill,quality,ilvl,kind" for exported items one could disenchant (kind a armor,
   w weapon), so the addon's Disenchant tab can list targets for an enchanter you don't have
   yet (A23).
+- vendor = { [key] = copper }: what a merchant charges for items it sells in unlimited supply,
+  so the addon's crafts can buy mats from a vendor (EX6). Not in the checksum.
 - The checksum is "<item and D strings>:<their total length>": cheap for the addon to check
   at login, and a truncated or mixed-up file fails it.
 """
@@ -192,7 +194,7 @@ def checksum(markets: Iterable[list[tuple[int, str, str]]], des: Iterable[Mappin
 
 def market_lua(intels: Sequence[MarketIntelligence], shortlists: Mapping[str, set[int]],
                char_markets: Mapping[str, str], generated_ms: int,
-               disenchantable: Mapping[int, str] | None = None) -> str:
+               disenchantable: Mapping[int, str] | None = None, vendor: Mapping[int, int] | None = None) -> str:
     """The whole MarketIntelligence.lua (SPEC §3.5, EX2).
 
     Args:
@@ -201,6 +203,7 @@ def market_lua(intels: Sequence[MarketIntelligence], shortlists: Mapping[str, se
         char_markets: Character id -> market, so the addon knows which market is its own.
         generated_ms: Now, UTC ms; item ages count back from it.
         disenchantable: Item key -> "skill,quality,ilvl,kind" (A23); exported for exported items only.
+        vendor: Item key -> vendor buy price in copper, for vendor-sold items (EX6).
 
     Returns:
         Lua source defining the global AHProfitMarket.
@@ -215,7 +218,8 @@ def market_lua(intels: Sequence[MarketIntelligence], shortlists: Mapping[str, se
         entries.append(f"  [{lua_string(intel.market)}] = {{ observationsUntil = {until}, "
                        f"curveHour = {intel.built_ms // HOUR_MS}, I = I{n}, C = C{n}, D = D{n} }},")
     chars = ", ".join(f"[{lua_string(c)}] = {lua_string(m)}" for c, m in sorted(char_markets.items()))
+    vendors = ", ".join(f"[{key}] = {price}" for key, price in sorted((vendor or {}).items()))
     lines += ["AHProfitMarket = {", f"  schemaVersion = {MARKET_SCHEMA_VERSION},", f"  generatedAt = {generated_ms},",
-              f"  checksum = {lua_string(checksum(blocks, des))},", f"  charMarkets = {{ {chars} }},", "  markets = {",
+              f"  checksum = {lua_string(checksum(blocks, des))},", f"  charMarkets = {{ {chars} }},", f"  vendor = {{ {vendors} }},", "  markets = {",
               *entries, "  },", "}", ""]
     return "\n".join(lines)

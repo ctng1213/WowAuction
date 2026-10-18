@@ -269,6 +269,7 @@ def test_shared_craft_options_with_the_addon(s):
     a = s["args"]
     recipe = Recipe(2663, ROD, 1, 1, tuple(tuple(r) for r in a["reagents"]), (BRUGAN,))
     m = market(books={int(k): [tuple(level) for level in v] for k, v in a["books"].items()},
+               vendor={int(k): v for k, v in a.get("vendor", {}).items()},
                owned={int(k): float(v) for k, v in a["owned"].items()}, hold={int(k): float(v) for k, v in a["hold"].items()})
     option = craft_option(recipe, m, {}, lambda n: n * float(a["value_each"]))
     assert {"crafts": option.crafts, "mat_gold": option.mat_gold, "profit": option.profit, "source": option.source} == \

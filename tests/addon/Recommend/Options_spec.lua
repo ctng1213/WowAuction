@@ -123,6 +123,16 @@ describe("Options", function()
     assert_eq({ rows[1].spell, rows[2].spell }, { 2663, 2664 })       -- equal profit: by spell
   end)
 
+  it("A30 crafts stop at the product's liquidity cap; without supply data there is none", function()
+    local Options = Boot()
+    local two = { yieldMin = 1, yieldMax = 3 }
+    assert_eq({ Options.CraftCap({ yieldMin = 1, yieldMax = 1 }, { supply = 14, refStack = 1 }),
+                Options.CraftCap(two, { supply = 14, refStack = 1 }),         -- 7 units ÷ 2 a craft
+                Options.CraftCap({ yieldMin = 1, yieldMax = 1 }, { supply = 1, refStack = 20 }),   -- one stack
+                Options.CraftCap(two, { supply = 0 }), Options.CraftCap(two, {}), Options.CraftCap(two, nil) },
+              { 7, 3, 20, 1, nil, nil })
+  end)
+
   it("A20 a mat a craft uses is not also offered for sale", function()
     local Options = Boot()
     local rod = { spell = 2663, product = 6217, yieldMin = 1, yieldMax = 1, reagents = { { 2840, 2 } }, crafters = 1 }

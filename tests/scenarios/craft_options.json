@@ -92,5 +92,63 @@
    "source": "Mixed"
   },
   "why": "4 owned bars (19s a craft) then 2 bought (20s): 19s + 19s + 18s"
+ },
+ {
+  "id": "C17",
+  "name": "a vendor sells the wood: Source Vendor",
+  "call": "craft_option",
+  "args": {
+   "reagents": [
+    [
+     4470,
+     1
+    ]
+   ],
+   "value_each": 94,
+   "owned": {},
+   "hold": {},
+   "books": {},
+   "vendor": {
+    "4470": 38
+   }
+  },
+  "expect": {
+   "crafts": 100,
+   "mat_gold": 3800,
+   "profit": 5600,
+   "source": "Vendor"
+  },
+  "why": "100 crafts (the flat-value backstop) of 94c - 38c of vendor wood"
+ },
+ {
+  "id": "C18",
+  "name": "owned wood first, then the vendor: Source Mixed",
+  "call": "craft_option",
+  "args": {
+   "reagents": [
+    [
+     4470,
+     1
+    ]
+   ],
+   "value_each": 94,
+   "owned": {
+    "4470": 4
+   },
+   "hold": {
+    "4470": 30
+   },
+   "books": {},
+   "vendor": {
+    "4470": 38
+   }
+  },
+  "expect": {
+   "crafts": 100,
+   "mat_gold": 3648,
+   "profit": 5632,
+   "source": "Mixed"
+  },
+  "why": "4 owned at 30c, then 96 from the vendor at 38c: 9400 - 120 - 3648"
  }
 ]

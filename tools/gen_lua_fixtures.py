@@ -130,7 +130,8 @@ def generate_market(out_dir: Path = OUT / "market") -> list[Path]:
     big = MarketIntelligence(market, built, built - hour, 1,
                              {k: replace(linen, key=k, cur=k % 997 + 1) for k in range(1, 20_001)})
     out_dir.mkdir(parents=True, exist_ok=True)
-    files = {"ex2.lua": market_lua([small], {market: {6948}}, {"Amaya-Grommash": market}, built),
+    files = {"ex2.lua": market_lua([small], {market: {6948}}, {"Amaya-Grommash": market}, built,
+                                   vendor={4470: 38, 2320: 10}),                       # EX6
              "big.lua": market_lua([big], {market: set(range(10, 20_001, 10))}, {}, built)}
     written = []
     for name, text in files.items():

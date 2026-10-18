@@ -1,7 +1,7 @@
 -- Recommend/Options.lua: the addon's own recommendations (SPEC §4.0), so it works without AHSync.
 -- They choose between options AHSync precomputed in MarketIntelligence.lua, for the state the
 -- addon sees right now; no history, no simulation:
--- - crafts from what you carry and what the AH lists, for your known recipes (A9, A20);
+-- - crafts from what you carry, what the AH lists and what vendors sell, for your known recipes (A9, A20, A30);
 -- - the rest of what you carry: posting now (its sell value and chance) or a merchant (A15-A19);
 -- each unless AHSync's plan already covers it. A mat a craft uses is not also offered for sale.
 
@@ -14,6 +14,7 @@ local Craft = AHProfit.Engine.Craft
 
 local Options = {}
 Options.SELL_WINDOW_HOURS = 8      -- config sell_window_hours (SPEC §3.6): the posting-now window
+Options.MAX_SUPPLY_SHARE = 0.5     -- config max_supply_share (SPEC §3.4 Liquidity)
 AHProfit.Options = Options
 
 --- Total units per item of the unbound stacks in a list of bag rows.
@@ -143,10 +144,22 @@ function Options.ProductNet(recipe, item, vendorSell)
   end, p
 end
 
---- Where a craft's mats can come from now: what you carry at its hold value, and the AH.
+--- The most crafts worth making for the posting-now window: its output may fill at most
+--- max_supply_share of what others list, and always one reference stack (capacity.liquidity_cap,
+--- the posting-now window without a supply pattern; SPEC §3.4 Liquidity, A30).
+---@param recipe table      { yieldMin, yieldMax }
+---@param item table|nil    The product's market item (supply, refStack)
+---@return number|nil       Crafts; nil (no cap) when the product's supply is unknown
+function Options.CraftCap(recipe, item)
+  if not (item and item.supply) then return nil end
+  local units = math.max(item.refStack or 1, math.floor(Options.MAX_SUPPLY_SHARE * item.supply))
+  return math.max(1, math.floor(units / ((recipe.yieldMin + recipe.yieldMax) / 2)))
+end
+
+--- Where a craft's mats can come from now: what you carry at its hold value, the AH and vendors.
 ---@param recipes table[]  Recipes considered
 ---@param owned table      key -> units you carry, not yet used
----@param ctx table        { itemOf, levelsOf }
+---@param ctx table        { itemOf, levelsOf, vendorBuyOf (key -> vendor price or nil; optional) }
 ---@return table           A Craft.Option market
 local function CraftMarket(recipes, owned, ctx)
   local market = { owned = owned, hold = {}, vendor = {}, books = {} }
@@ -155,6 +168,7 @@ local function CraftMarket(recipes, owned, ctx)
       local key = reagent[1]
       local item, levels = ctx.itemOf(key), ctx.levelsOf(key)
       market.hold[key] = item and item.sellValue or 0.0
+      market.vendor[key] = ctx.vendorBuyOf and ctx.vendorBuyOf(key) or nil
       local book = {}
       if levels then
         for i, level in ipairs(levels) do book[i] = { level.price, level.units } end
@@ -183,7 +197,7 @@ function Options.Crafts(recipes, units, ctx)
     local best, bestAt
     for i, r in ipairs(left) do
       local net, p = Options.ProductNet(r, ctx.itemOf(r.product), ctx.vendorOf(r.product) or 0)
-      local option = Craft.Option(r, CraftMarket({ r }, owned, ctx), net)
+      local option = Craft.Option(r, CraftMarket({ r }, owned, ctx), net, nil, Options.CraftCap(r, ctx.itemOf(r.product)))
       option.p = p
       if option.crafts > 0 and (not best or option.profit > best.profit) then best, bestAt = option, i end
     end
@@ -205,17 +219,21 @@ end
 --- tab's view. Today's crafts (Options.Crafts) share the mats out instead, best first.
 ---@param recipes table[]  Options.KnownRecipes
 ---@param units table      key -> units carried, less what you keep
----@param ctx table        { itemOf, levelsOf, vendorOf }
----@return table[]         { key, spell, crafts, matGold, profit, p, source, ownedUsed, bought }, best profit first
+---@param ctx table        { itemOf, levelsOf, vendorOf, vendorBuyOf }
+---@return table[]         { key, spell, crafts, matGold, profit, p, source, ownedUsed, bought, fromVendor,
+---                        vendorGold }, best profit first
 function Options.CraftOptions(recipes, units, ctx)
   local out = {}
   for _, r in ipairs(recipes) do
     local net, p = Options.ProductNet(r, ctx.itemOf(r.product), ctx.vendorOf(r.product) or 0)
-    local option = Craft.Option(r, CraftMarket({ r }, units, ctx), net)
+    local market = CraftMarket({ r }, units, ctx)
+    local option = Craft.Option(r, market, net, nil, Options.CraftCap(r, ctx.itemOf(r.product)))
     if option.crafts > 0 then
+      local vendorGold = 0.0
+      for key, used in pairs(option.fromVendor) do vendorGold = vendorGold + used * market.vendor[key] end
       out[#out + 1] = { key = r.product, spell = r.spell, crafts = option.crafts, matGold = option.matGold,
                         profit = option.profit, p = p, source = Craft.Source(option), ownedUsed = option.ownedUsed,
-                        bought = option.bought }
+                        bought = option.bought, fromVendor = option.fromVendor, vendorGold = vendorGold }
     end
   end
   table.sort(out, function(a, b)

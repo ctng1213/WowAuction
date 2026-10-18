@@ -122,6 +122,7 @@ local function Record(option, fills)
     if f.used.ah > 0 or f.used.vendor > 0 then
       option.bought[kf.key] = (option.bought[kf.key] or 0.0) + f.used.ah + f.used.vendor
     end
+    if f.used.vendor > 0 then option.fromVendor[kf.key] = (option.fromVendor[kf.key] or 0.0) + f.used.vendor end
   end
 end
 
@@ -131,10 +132,11 @@ end
 ---@param market table      { owned, hold, vendor, books } (key -> units, value each, buy price, levels)
 ---@param productNet function  n -> expected net of n crafts' output, float copper
 ---@param budget number|nil Most copper to spend on mats
----@return table            { crafts, matGold, profit, profits, ownedUsed, bought, missing }
-function Craft.Option(recipe, market, productNet, budget)
-  local option = { crafts = 0, matGold = 0.0, profit = 0.0, profits = {}, ownedUsed = {}, bought = {} }
-  local limit = (recipe.cooldown and recipe.cooldown > 0) and (recipe.crafters or 1) or Craft.MAX_CRAFTS
+---@param maxCrafts number|nil Most crafts (craft_option's max_crafts); default MAX_CRAFTS
+---@return table            { crafts, matGold, profit, profits, ownedUsed, bought, fromVendor, missing }
+function Craft.Option(recipe, market, productNet, budget, maxCrafts)
+  local option = { crafts = 0, matGold = 0.0, profit = 0.0, profits = {}, ownedUsed = {}, bought = {}, fromVendor = {} }
+  local limit = (recipe.cooldown and recipe.cooldown > 0) and (recipe.crafters or 1) or (maxCrafts or Craft.MAX_CRAFTS)
   local left = { owned = {}, books = CopyBooks(market.books) }
   for key, units in pairs(market.owned) do left.owned[key] = units end
   while option.crafts < limit do
@@ -161,12 +163,18 @@ function Craft.Option(recipe, market, productNet, budget)
   return option
 end
 
---- The option's Source label (craft.CraftOption.source without crafted reagents).
+--- The option's Source label (craft.CraftOption.source without crafted reagents, C17, C18).
 ---@param option table  From Option
----@return string       "Owned", "AH" or "Mixed"
+---@return string       "Owned", "AH", "Vendor" or "Mixed" (more than one of them)
 function Craft.Source(option)
-  local owned, bought = next(option.ownedUsed) ~= nil, next(option.bought) ~= nil
-  if owned and bought then return "Mixed" end
+  local fromVendor = option.fromVendor or {}
+  local owned, vendor, ah = next(option.ownedUsed) ~= nil, next(fromVendor) ~= nil, false
+  for key, units in pairs(option.bought) do
+    if units > (fromVendor[key] or 0.0) then ah = true end
+  end
+  local kinds = (owned and 1 or 0) + (vendor and 1 or 0) + (ah and 1 or 0)
+  if kinds > 1 then return "Mixed" end
   if owned then return "Owned" end
+  if vendor then return "Vendor" end
   return "AH"
 end

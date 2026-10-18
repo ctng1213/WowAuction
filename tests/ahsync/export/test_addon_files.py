@@ -134,3 +134,15 @@ def test_A23_disenchantable_items_from_item_metadata(db):
                      (9000, 9000, "Odd Sword", 2, 18, 2, 0, 0, 100, 1), (9001, 9001, "No Level", 2, None, 4, 0, 0, 1, 1)],
                     FakeClock().now_ms())
     assert addon_files.disenchantable(db) == {6585: "1,2,18,a", 9000: "1,2,18,w"}
+
+
+def test_EX6_vendor_prices_of_vendor_sold_items_only(db):
+    # (key, item id, name, quality, ilvl, class, subclass, vendor buy, vendor sell, stack)
+    db.upsert_items([(4470, 4470, "Simple Wood", 1, 5, 7, 0, 38, 9, 20), (2320, 2320, "Coarse Thread", 1, 5, 7, 0, 10, 2, 20),
+                     (2589, 2589, "Linen Cloth", 1, 5, 7, 0, 0, 10, 20), (2880, 2880, "Weak Flux", 1, 5, 7, 0, None, 0, 20)],
+                    FakeClock().now_ms())
+    with db.transaction():
+        for key in (4470, 2320, 2880, 1):            # Weak Flux: no known price; 1: no item row
+            db.add_vendor_reagent(key)
+    assert addon_files.vendor_prices(db) == {2320: 10, 4470: 38}
+

@@ -170,7 +170,7 @@ describe("MainWindow", function()
     assert_eq({ row.item, row.source, row.crafts, row.mats, row.profit, row.chance:match("^%d+%%") },
               { "Copper Rod", "Mixed", "×3", AHProfit.ViewModel.WithCoins("20s"), AHProfit.ViewModel.WithCoins("+56s"), "100%" })
     assert_eq({ ui.rows[2].note:GetText(), ui.rows[3]:IsShown(), ui.footer:GetText() },
-              { "uses 4 owned Copper Bar · buys 2 Copper Bar", false, "1 of 2 known recipes pay now" })
+              { "uses 4 owned Copper Bar · AH: 2 Copper Bar (20s)", false, "1 of 2 known recipes pay now" })
   end)
 
   it("A28 the Flip tab lists the plan's flips, re-checked against the live AH", function()
@@ -200,6 +200,27 @@ describe("MainWindow", function()
     assert_eq({ ui.rows[2].note:GetText(), ui.rows[3]:IsShown() },
               { "post Sat 10:00, for the 18:00 peak · on the AH now from 38c", false })
     assert_eq(ui.footer:GetText(), VM.WithCoins("1 flip · capital needed 8s · 1 gone"))
+  end)
+
+  it("A30 the Craft tab buys mats from a vendor and says so, up to the product's liquidity cap", function()
+    Stubs.Reset()
+    _G.AHProfitPlan = nil
+    Stubs.ITEM_NAMES[4471] = "Basic Campfire Kit"
+    Stubs.ITEM_NAMES[4470] = "Simple Wood"
+    UIWorld.Market({ [4471] = UIWorld.Item(99, 80, 10, { postPrice = 99, chance = 1, refStack = 1, supply = 14 }) }, NOW)
+    AHProfitMarket.vendor = { [4470] = 38 }
+    Stubs.Login()
+    AHProfitDB.knownRecipes["Amaya-Grommash"] = "6413"
+    AHProfitDB.recipes.Survival = { [6413] = { product = 4471, yieldMin = 1, yieldMax = 1, reagents = "4470,1" } }
+    Stubs.Slash("/ahp")
+    AHProfit.MainWindow.ShowTab("craft")
+    local ui, VM = AHProfit.MainWindow.Frames(), AHProfit.ViewModel
+    local row = FirstRow("craft")
+    -- 7 crafts (14 listed × 0.5) of a 99c kit (94.05c after the cut) from 38c vendor wood.
+    assert_eq({ row.item, row.source, row.crafts, row.mats, row.profit },
+              { "Basic Campfire Kit", "Vendor", "×7", VM.WithCoins("2s 66c"), VM.WithCoins("+3s 92c") })
+    assert_eq(ui.rows[2].note:GetText(), "vendor: 7 Simple Wood (2s 66c)")
+    Stubs.ITEM_NAMES[4471], Stubs.ITEM_NAMES[4470] = nil, nil
   end)
 
   it("A22 the Inventory tab lists what this character holds with its worth and plan", function()

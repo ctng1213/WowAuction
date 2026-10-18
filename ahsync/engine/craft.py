@@ -147,6 +147,7 @@ class CraftOption:
     mat_gold: float = 0.0                                 # copper to buy the missing mats, all crafts
     owned_used: dict[int, float] = field(default_factory=dict)
     bought: dict[int, float] = field(default_factory=dict)
+    from_vendor: dict[int, float] = field(default_factory=dict)   # the part of `bought` from a vendor
     crafted: dict[int, Crafted] = field(default_factory=dict)
     profits: list[float] = field(default_factory=list)    # marginal profit of each craft
     missing: tuple[tuple[int, float], ...] = ()           # (key, units short) when not craftable
@@ -165,16 +166,19 @@ class CraftOption:
         """The row's Source label (SPEC §3.4B).
 
         Returns:
-            "Owned", "AH" or "Mixed", plus " + crafted" when a reagent is made by you.
+            "Owned", "AH", "Vendor" or "Mixed" (more than one of them), plus " + crafted" when a reagent
+            is made by you (C17, C18).
         """
         raw = set()
         if self.owned_used:
             raw.add("owned")
-        if self.bought:
+        if any(units > self.from_vendor.get(key, 0.0) for key, units in self.bought.items()):
             raw.add("ah")
+        if self.from_vendor:
+            raw.add("vendor")
         for item in self.crafted.values():
             raw |= {"owned" if k == "owned" else "ah" for k in item.raw}
-        base = "Mixed" if raw == {"owned", "ah"} else ("Owned" if raw == {"owned"} else "AH")
+        base = "Mixed" if len(raw) > 1 else {"owned": "Owned", "vendor": "Vendor"}.get(next(iter(raw), "ah"), "AH")
         return base + (" + crafted" if self.crafted else "")
 
 
@@ -295,6 +299,8 @@ def _record(option: CraftOption, pool: Pool, key: int, f: Fill) -> None:
         option.owned_used[key] = option.owned_used.get(key, 0.0) + f.used["owned"]
     if f.used["ah"] or f.used["vendor"]:
         option.bought[key] = option.bought.get(key, 0.0) + f.used["ah"] + f.used["vendor"]
+    if f.used["vendor"]:
+        option.from_vendor[key] = option.from_vendor.get(key, 0.0) + f.used["vendor"]
     if f.used["crafted"]:
         option.crafted[key] = pool.crafted(key)
 

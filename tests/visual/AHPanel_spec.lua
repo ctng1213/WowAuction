@@ -10,6 +10,7 @@ local NOW = 1760000000000
 describe("AHPanel layout", function()
   it("UI7 five targets: two found, one gone, two checking; docked to the AH frame's right edge", function()
     Stubs.Reset()
+    Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 6217, count = 5 } } } }   -- the rods to post
     Stubs.ITEM_NAMES[6586] = "Scouting Gloves of the Monkey"
     local items = { [2589] = UIWorld.Item(45, 86, 48), [6586] = UIWorld.Item(800, 50, 3), [2840] = UIWorld.Item(500, 80, 40),
                     [4306] = UIWorld.Item(70, 80, 60), [2592] = UIWorld.Item(30, 80, 60) }

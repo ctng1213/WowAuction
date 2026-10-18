@@ -70,7 +70,7 @@ describe("Craft.Option shared scenarios (tests/scenarios/craft_options.json)", f
       Stubs.LoadAddon({ "Core/Adapter.lua", "Engine/Craft.lua" })
       local Craft = AHProfit.Engine.Craft
       local a = s.args
-      local market = { owned = ByKey(a.owned), hold = ByKey(a.hold), vendor = {}, books = ByKey(a.books) }
+      local market = { owned = ByKey(a.owned), hold = ByKey(a.hold), vendor = ByKey(a.vendor or {}), books = ByKey(a.books) }
       local option = Craft.Option({ reagents = a.reagents }, market, function(n) return n * a.value_each end)
       assert_eq({ crafts = option.crafts, mat_gold = option.matGold, profit = option.profit, source = Craft.Source(option) },
                 s.expect, s.why)

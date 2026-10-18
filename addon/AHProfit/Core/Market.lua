@@ -158,6 +158,15 @@ function Market.Reset()
   state, cache, cached = nil, {}, 0
 end
 
+--- What a merchant charges for an item it sells in unlimited supply (EX6).
+---@param key number
+---@return number|nil  Copper; nil when no vendor is known to sell it, or without usable data
+function Market.VendorPrice(key)
+  local s = State()
+  if s.status ~= "ok" then return nil end
+  return (s.file.vendor or {})[key]
+end
+
 --- Items one could disenchant, with what that takes (A23).
 ---@return table  key -> { skill, quality, ilvl, kind = "armor" | "weapon" }; empty without usable data
 function Market.Disenchantable()

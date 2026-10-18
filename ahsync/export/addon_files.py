@@ -126,6 +126,20 @@ def disenchantable(db: Database) -> dict[int, str]:
     return out
 
 
+def vendor_prices(db: Database) -> dict[int, int]:
+    """What a merchant charges for the items seen sold in unlimited supply (EX6): for the addon's crafts.
+
+    Args:
+        db: Database (vendor reagents and item metadata).
+
+    Returns:
+        Item key -> vendor buy price in copper; items without a known price are left out.
+    """
+    items = db.items()
+    return {key: items[key].vendor_buy for key in sorted(db.vendor_reagent_keys())
+            if key in items and items[key].vendor_buy}
+
+
 def export_market(db: Database, cfg: Config, now_ms: int, sleep: Callable[[float], None],
                   replace: Callable[[Path, Path], None] = os.replace) -> bool:
     """Write MarketIntelligence.lua from the published intelligence (SPEC §3.5).
@@ -149,7 +163,7 @@ def export_market(db: Database, cfg: Config, now_ms: int, sleep: Callable[[float
         return False
     shortlists = {i.market: shortlist(db, i.market, now_ms) for i in intels}
     char_markets = {c: m for c, _, _, m, _ in db.characters() if m is not None}
-    text = market_lua(intels, shortlists, char_markets, now_ms, disenchantable(db))
+    text = market_lua(intels, shortlists, char_markets, now_ms, disenchantable(db), vendor_prices(db))
     return _write(db, folder / MARKET_FILE, text, MAX_MARKET_BYTES, now_ms, sleep, replace)
 
 

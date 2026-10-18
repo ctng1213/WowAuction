@@ -312,7 +312,7 @@ const LIVE = {
     filters: [
       { id: 'search', label: null, kind: 'search', placeholder: 'Search products…', test: (r, v) => !v || String(r.product).toLowerCase().includes(v.toLowerCase()) },
       { id: 'profession', label: 'Profession', fromRows: 'profession', test: (r, v) => v === '' || r.profession === v },
-      { id: 'source', label: 'Source', options: [['', 'All'], ['Owned', 'Owned'], ['AH', 'AH'], ['Mixed', 'Mixed']],
+      { id: 'source', label: 'Source', options: [['', 'All'], ['Owned', 'Owned'], ['AH', 'AH'], ['Vendor', 'Vendor'], ['Mixed', 'Mixed']],
         test: (r, v) => v === '' || r.source === v || String(r.source).startsWith(v + ' ') },
       daysFilter,
     ],

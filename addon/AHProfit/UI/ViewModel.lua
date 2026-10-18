@@ -44,7 +44,7 @@ ViewModel.COLUMN_HELP = {
   Keeping = "Units this character keeps for itself; \"All\" keeps every one. Click the row to change it",
   Held = "Units held in bags, bank and mail",
   Free = "Units above what you keep: the only ones suggested for selling or crafting",
-  Source = "Where the mats come from: Owned (your bags), AH (bought), or Mixed",
+  Source = "Where the mats come from: Owned (your bags), AH, Vendor, or Mixed (more than one)",
   ["×"] = "Crafts that each still pay, given the mats you have and what the AH lists",
   Mats = "Gold for the mats you need to buy, at the AH's current prices. \"—\": you own them all",
   Sell = "The price to post at, each, for the selling window",
@@ -225,6 +225,7 @@ function ViewModel.OwnCraftNote(a)
   local tail = " · AHSync has no plan for it"
   if a.ownSource == "Owned" then return "from your own mats" .. tail end
   if a.ownSource == "AH" then return "mats from the AH: " .. ViewModel.Money(a.matGold) .. tail end
+  if a.ownSource == "Vendor" then return "mats from a vendor: " .. ViewModel.Money(a.matGold) .. tail end
   return "your mats topped up from the AH: " .. ViewModel.Money(a.matGold) .. tail
 end
 
@@ -718,10 +719,16 @@ function ViewModel.CraftRows(options, lookOf, totalGold)
     local look = lookOf(o.key)
     local risk, amber = ViewModel.Risk(o.matGold, totalGold)
     local chance = o.p and ViewModel.RoundHalfUp(o.p * 100) or nil
-    local used, bought = MatList(o.ownedUsed, lookOf, "owned "), MatList(o.bought, lookOf, "")
+    local fromVendor, fromAH = o.fromVendor or {}, {}
+    for key, units in pairs(o.bought) do
+      if units > (fromVendor[key] or 0) then fromAH[key] = units - (fromVendor[key] or 0) end
+    end
+    local vendorGold = o.vendorGold or 0
+    local used, vendor, ah = MatList(o.ownedUsed, lookOf, "owned "), MatList(fromVendor, lookOf, ""), MatList(fromAH, lookOf, "")
     local note = {}
     if used ~= "" then note[#note + 1] = "uses " .. used end
-    if bought ~= "" then note[#note + 1] = "buys " .. bought end
+    if vendor ~= "" then note[#note + 1] = "vendor: " .. vendor .. " (" .. ViewModel.Money(vendorGold) .. ")" end
+    if ah ~= "" then note[#note + 1] = "AH: " .. ah .. " (" .. ViewModel.Money(o.matGold - vendorGold) .. ")" end
     rows[#rows + 1] = {
       key = o.key, item = look.name, quality = look.quality, kind = "craft", source = o.source, crafts = "×" .. o.crafts,
       mats = o.matGold > 0 and ViewModel.Money(o.matGold) or "—", profit = ViewModel.SignedMoney(o.profit),
@@ -842,6 +849,20 @@ function ViewModel.DisenchantFooter(rows, bestSkill)
 end
 
 -- ------------------------------------------------------------------ AH side panel (SPEC §4.3, UI7, A24)
+
+--- The Post list's rows: Today's posts for items you hold; a post for an item you don't hold yet is a
+--- later step of a chain and waits (A30).
+---@param rows table[]  Today rows
+---@param held table    key -> units in your bags
+---@param limit number  Most rows
+---@return table[]
+function ViewModel.PostableRows(rows, held, limit)
+  local out = {}
+  for _, row in ipairs(rows) do
+    if row.kind == "post" and (held[row.key] or 0) > 0 and #out < limit then out[#out + 1] = row end
+  end
+  return out
+end
 
 --- The panel's shopping and post lists (UI7).
 ---@param targets table[]  { key, qty, price (the most to pay each) } in list order

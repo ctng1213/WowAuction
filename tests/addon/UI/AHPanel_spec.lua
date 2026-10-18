@@ -6,10 +6,12 @@ local AHWorld = require("ah_world")
 
 local NOW = 1760000000000
 
---- Log in with three planned buys (Linen ≤ 45c, Copper Bar ≤ 5s, Silk ≤ 70c) and a post, then open the AH.
+--- Log in with three planned buys (Linen ≤ 45c, Copper Bar ≤ 5s, Silk ≤ 70c) and a post of the 20 Linen in the bags,
+--- then open the AH.
 ---@return table, table  The panel's frames, the AH window
 local function OpenAH()
   Stubs.Reset()
+  Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 2589, count = 20 } } } }   -- the Linen to post
   UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48), [2840] = UIWorld.Item(500, 80, 40), [4306] = UIWorld.Item(70, 80, 60) },
                  NOW - 3600000)
   UIWorld.Plan({ { id = "a", kind = "buy", key = 2589, qty = 20, price = 45, at = NOW, net = 200 },
@@ -93,6 +95,7 @@ describe("AHPanel", function()
 
   it("an empty shopping list says why; the post list keeps Today's Min chance filter", function()
     Stubs.Reset()
+    Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 2589, count = 20 } } } }   -- the Linen to post
     UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48) }, NOW - 3600000)
     UIWorld.Plan({ { id = "p", kind = "post", key = 2589, qty = 20, price = 55, at = NOW, net = 1000, chance = 92 },
                    { id = "q", kind = "post", key = 2589, qty = 2, price = 55, at = NOW, net = 1, chance = 10 } })
@@ -153,5 +156,22 @@ describe("AHPanel", function()
     C_AuctionHouse.IsSellItemValid = function() return false end
     ui.post[1]:Click()
     assert_eq({ ui.status:GetText(), sell.price }, { "Copper Rod can't be sold on the AH", nil })
+  end)
+
+  it("A30 the Post list shows only what is in your bags; a chain's later post waits", function()
+    Stubs.Reset()
+    Stubs.ITEM_NAMES[4471] = "Basic Campfire Kit"
+    Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 2589, count = 20 } } } }
+    UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48), [4471] = UIWorld.Item(99, 80, 10) }, NOW - 3600000)
+    UIWorld.Plan({ { id = "w", kind = "buy", key = 4470, qty = 7, price = 38, at = NOW, net = 0 },
+                   { id = "c", kind = "craft", key = 4471, qty = 7, at = NOW, net = 392, parent = "w" },
+                   { id = "k", kind = "post", key = 4471, qty = 7, price = 99, at = NOW, net = 392, parent = "w", chance = 100 },
+                   { id = "p", kind = "post", key = 2589, qty = 20, price = 55, at = NOW, net = 1000, chance = 92 } })
+    Stubs.Login()
+    AHWorld.Install()
+    Stubs.FireEvent("AUCTION_HOUSE_SHOW")
+    local ui = AHProfit.AHPanel.Frames()
+    assert_eq({ ui.postCount:GetText(), ui.post[1].item:GetText(), ui.post[2]:IsShown() }, { "1", "Linen Cloth", false })
+    Stubs.ITEM_NAMES[4471] = nil
   end)
 end)

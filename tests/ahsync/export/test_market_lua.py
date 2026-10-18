@@ -77,3 +77,11 @@ def test_EX5_prices_older_than_7_days_are_left_out_unless_shortlisted():
     keys = [k for k, _, _ in market_lua.exported_items(intel(LINEN_INTEL, stale), set())]
     assert keys == [LINEN]
     assert [k for k, _, _ in market_lua.exported_items(intel(LINEN_INTEL, stale), {OTHER})] == [LINEN, OTHER]
+
+
+def test_EX6_vendor_prices_are_exported_sorted_by_key_outside_the_checksum():
+    plain = market_lua.market_lua([intel(LINEN_INTEL)], {}, {}, BUILT)
+    text = market_lua.market_lua([intel(LINEN_INTEL)], {}, {}, BUILT, vendor={4470: 38, 2320: 10})
+    assert "  vendor = { [2320] = 10, [4470] = 38 }," in text and "  vendor = {  }," in plain
+    assert plain.split("checksum = ")[1].split(",")[0] == text.split("checksum = ")[1].split(",")[0]
+

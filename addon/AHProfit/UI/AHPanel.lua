@@ -77,15 +77,13 @@ local function Targets(charId)
   return out
 end
 
---- What to post now: this character's Today posts.
+--- What to post now: this character's Today posts for items in its bags (A30).
 ---@param charId string
 ---@return table[]  Today rows
 local function Posts(charId)
-  local out = {}
-  for _, row in ipairs(AHProfit.MainWindow.TodayRows(charId)) do
-    if row.kind == "post" and #out < AHPanel.POST_ROWS then out[#out + 1] = row end
-  end
-  return out
+  local bags = (((DB.Get() or {}).inventory or {})[charId] or {}).bags
+  local held = Options.Units(AHProfit.Capture.Inventory.Decode(bags))
+  return VM.PostableRows(AHProfit.MainWindow.TodayRows(charId), held, AHPanel.POST_ROWS)
 end
 
 --- Explain a button or row on hover.
