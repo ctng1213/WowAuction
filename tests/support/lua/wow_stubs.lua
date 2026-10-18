@@ -6,6 +6,7 @@
 --- script raises (SPEC §5.1). Stubs.Serialize writes a table the way WoW
 --- writes a SavedVariables file.
 
+local UI = require("ui_stubs")
 local Stubs = {}
 
 local ADDON_DIR = "addon/AHProfit/"
@@ -76,51 +77,7 @@ end
 
 -- ------------------------------------------------------------------ frames, events, timers
 
-local FrameMethods = {}
-
---- Frame:RegisterEvent.
----@param event string  WoW event name
-function FrameMethods:RegisterEvent(event)
-  -- Like the real client: an event it doesn't know raises (Forever lacks some Classic events).
-  if Stubs.world.unknownEvents[event] then
-    error('Frame:RegisterEvent(): Attempt to register unknown event "' .. event .. '"', 2)
-  end
-  self.events[event] = true
-end
-
---- Frame:UnregisterEvent.
----@param event string  WoW event name
-function FrameMethods:UnregisterEvent(event) self.events[event] = nil end
-
---- Frame:IsEventRegistered.
----@param event string  WoW event name
----@return boolean      true when registered
-function FrameMethods:IsEventRegistered(event) return self.events[event] == true end
-
---- Frame:SetScript; OnUpdate is forbidden (SPEC §5.1: no per-frame polling).
----@param name string       Script name, e.g. "OnEvent"
----@param fn function|nil   Handler
-function FrameMethods:SetScript(name, fn)
-  if name == "OnUpdate" and fn ~= nil then
-    error("OnUpdate scripts are forbidden (SPEC §5.1); use C_Timer.After", 2)
-  end
-  self.scripts[name] = fn
-end
-
---- Frame:GetScript.
----@param name string  Script name
----@return function|nil
-function FrameMethods:GetScript(name) return self.scripts[name] end
-
---- Frame:Show / Hide / IsShown.
-function FrameMethods:Show() self.shown = true end
---- Hide the frame.
-function FrameMethods:Hide() self.shown = false end
---- Whether the frame is shown.
----@return boolean
-function FrameMethods:IsShown() return self.shown end
-
-local FrameMeta = { __index = FrameMethods }
+-- Frames are ui_stubs regions: they record events and scripts as well as layout (SPEC §8.4).
 
 --- Fire a WoW event at every frame registered for it, in frame creation order.
 ---@param event string  WoW event name
@@ -436,11 +393,17 @@ local function InstallCore()
     timerSeq = timerSeq + 1
     timers[#timers + 1] = { due = clock + seconds, seq = timerSeq, fn = fn }
   end })
-  Define("CreateFrame", function(frameType)
-    local frame = setmetatable({ type = frameType, events = {}, scripts = {}, shown = true }, FrameMeta)
+  local root = UI.New("Frame", nil, nil)
+  root.name, root.width, root.height = "UIParent", 1920, 1080
+  Define("UIParent", root)
+  Define("CreateFrame", function(frameType, name, parent)
+    local frame = UI.New(frameType or "Frame", nil, parent or root)
+    frame.type = frameType
+    if name then frame.name = name; Define(name, frame) end
     frames[#frames + 1] = frame
     return frame
   end)
+  Define("SlashCmdList", {})
   Define("GetNumSkillLines", function() return #Stubs.world.skillLines end)
   Define("GetSkillLineInfo", function(i)
     local line = Stubs.world.skillLines[i]
@@ -456,10 +419,14 @@ end
 ---@param options table|nil  { keepSaved = true } keeps AHProfitDB, as across a logout and login
 function Stubs.Reset(options)
   for _, name in ipairs(installed) do _G[name] = nil end
+  for name in pairs(_G) do
+    if type(name) == "string" and name:match("^SLASH_") then _G[name] = nil end
+  end
   installed, frames, timers, timerSeq, clock, profileMs = {}, {}, {}, 0, 0, 0
   _G.AHProfit = nil
   if not (options and options.keepSaved) then _G.AHProfitDB = nil end
   Stubs.world = Stubs.NewWorld()
+  UI.world = Stubs.world
   InstallCore()
   InstallRecipeWindows()
   InstallItems()
@@ -485,6 +452,19 @@ function Stubs.LoadAddon(files)
     if not chunk then error(err, 2) end
     chunk("AHProfit", private)
   end
+end
+
+--- Type a slash command, as the chat box would run it (e.g. "/ahp demo").
+---@param line string  The whole command line
+function Stubs.Slash(line)
+  local command, rest = line:match("^(/%S+)%s*(.-)$")
+  for name, value in pairs(_G) do
+    if type(name) == "string" and value == command then
+      local key = name:match("^SLASH_(.-)%d+$")
+      if key and SlashCmdList[key] then return SlashCmdList[key](rest) end
+    end
+  end
+  error("no slash command " .. tostring(command), 2)
 end
 
 --- Load the addon and log in: fires ADDON_LOADED and PLAYER_LOGIN.

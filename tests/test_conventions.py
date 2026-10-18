@@ -16,6 +16,7 @@ PY_SRC = ROOT / "ahsync"
 PY_TESTS = ROOT / "tests" / "ahsync"
 LUA_SRC = ROOT / "addon" / "AHProfit"
 LUA_TESTS = ROOT / "tests" / "addon"
+VISUAL_TESTS = ROOT / "tests" / "visual"     # UI scenarios (SPEC §8.4); exempt from mirroring
 SCENARIOS_MD = ROOT / "docs" / "SCENARIOS.md"
 PENDING = ROOT / "tests" / "pending_scenarios.txt"
 
@@ -169,7 +170,8 @@ def find_tested_ids() -> dict[str, list[str]]:
                 match = PY_TEST_ID.match(node.name)
                 if match:
                     found.setdefault(match.group(1), []).append(f"{rel(path)}::{node.name}")
-    for path in sorted(LUA_TESTS.rglob("*_spec.lua")) if LUA_TESTS.exists() else []:
+    visual = sorted(VISUAL_TESTS.rglob("*_spec.lua")) if VISUAL_TESTS.exists() else []
+    for path in (sorted(LUA_TESTS.rglob("*_spec.lua")) if LUA_TESTS.exists() else []) + visual:
         for match in LUA_TEST_ID.finditer(path.read_text(encoding="utf-8")):
             found.setdefault(match.group(1), []).append(rel(path))
     for path in sorted((ROOT / "tests" / "scenarios").glob("*.json")):

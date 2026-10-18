@@ -1,0 +1,2 @@
+Frame TestPanel 10,20 200x100
+  FontString - 18,28 33x10 "Golden"

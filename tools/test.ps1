@@ -40,7 +40,7 @@ if ($NoLua) {
     Write-Error 'lua5.1 not found on PATH (CLAUDE.md). Install Lua 5.1, or pass -NoLua to skip.' -ErrorAction Continue
     $failed += 'lua5.1 missing'
 } else {
-    & lua5.1 tests/support/lua/runner.lua tests/addon
+    & lua5.1 tests/support/lua/runner.lua tests/addon tests/visual
     if ($LASTEXITCODE) { $failed += 'lua' }
 }
 
