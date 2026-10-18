@@ -19,13 +19,13 @@ RICH = 100_000_000
 ROD_RECIPE = craft.Recipe(2663, ROD, 1, 1, ((BAR, 2),), ("Brugan-G",))
 
 
-def facts(key: int, med30: int, **changes) -> SellFacts:
+def facts(key: int, level: int, **changes) -> SellFacts:
     """An item with a Saturday 18:00 peak (1.2×), 60 sold a day, 20 listed by others."""
     how = [1.0] * 168
     how[SAT * 24 + 18] = 1.2
-    base = SellFacts(key, med30=med30, trend7=0.0, post_price=med30, sold_per_day=60.0, listed_per_day=20.0,
+    base = SellFacts(key, level=level, trend7=0.0, post_price=level, sold_per_day=60.0, listed_per_day=20.0,
                      ref_stack=1, how=tuple(how), sales_how=tuple([1.0] * 168),
-                     windows=(PlanWindow(SAT * 24 + 17, 3, SAT * 24 + 18),), book=(), cur=med30, cur_qty=2,
+                     windows=(PlanWindow(SAT * 24 + 17, 3, SAT * 24 + 18),), book=(), cur=level, cur_qty=2,
                      vendor_sell=50, supply_now=20, conf=70)
     return replace(base, **changes)
 

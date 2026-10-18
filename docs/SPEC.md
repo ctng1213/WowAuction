@@ -566,7 +566,7 @@ The week's 168 hours are treated as **repeating slots**: every Tuesday 19:00 is 
 - A week whose every slot qualifies (a flat score) has no best window: posting time doesn't matter, so the plan posts now.
 - **Pattern strength**, from the weeks of data in the window's slots (the fewest weeks of any slot in the window): under 3 weeks is "early pattern", 3–5 is "pattern", 6 or more is "established". It feeds the window's confidence. With no pattern, the item has no windows and the plan uses posting now.
 - **Where windows are used.** The Week plan's peak slot is the best slot inside the top window, and the post is placed 8 h before it (§3.4C). Windows are also shown on the tooltip ("Best time to sell"), on the item detail (heat map plus windows) and in Inventory.
-- **Forecast.** The expected price in a window next week = `med30 × how × (1 + trend7/100 × days ahead)` (§3.4C). The chance to sell there is the simulation over that window (§3.3.2), using `sales_how` for demand. Both get more confident as the pattern strengthens.
+- **Forecast.** The expected price in a window next week = `level × how × (1 + trend7/100 × days ahead)` (§3.4C), where the **price level** is `med7`, or `med30` when there is no `med7`. A month-old level misleads when a market has moved: old listings that sat unsold keep `med30` high while the item now sells far lower (R21). The chance to sell there is the simulation over that window (§3.3.2), using `sales_how` for demand. Both get more confident as the pattern strengthens.
 
 #### 3.3.6 Market activity metrics
 
@@ -718,7 +718,7 @@ The result is shown as the row's **Source**. The base tells where the raw mats c
 
 1. **Sell plan for what you own** (all characters: bags, bank and mail; bound items are left out, and items already on the AH are shown as "listed" rather than planned again). For each item, it compares `E_post` for:
    - post now at `p`
-   - post for the best slot in the next 7 days, at price `med30 × how[slot] × (1 + trend7/100 × days ahead)`. `trend7` is clamped to ±5% per day. The auction duration is chosen so the listing covers the peak.
+   - post for the best slot in the next 7 days, at price `level × how[slot] × (1 + trend7/100 × days ahead)`, the level being `med7`, else `med30` (R21). `trend7` is clamped to ±5% per day. The auction duration is chosen so the listing covers the peak.
    - **Every post action is scheduled `post_lead_hours` (8) before the best hour of its target selling window**, not at it. That is the same 8 hours used for posting now. Its chance to sell is computed from the post through the end of the window (§3.3.2), and a window that ends with no post is a missed peak (§3.4.0). The row says which peak it is for, e.g. "Sat 10:00 · post · for the 18:00 peak". If that time has already passed, the post is planned for now.
    - disenchant (if a character can)
    - vendor
@@ -1087,14 +1087,14 @@ Chance to sell          46%
 | Historical price | the median price over the last 30 days (`med30`), with its delta from the current AH price. It falls back to daily closes when hourly data is sparse | §3.3 |
 | Disenchant value | expected mats × their sell value, with its delta from the current AH price. The line is left out when none of your characters can disenchant the item | §3.4A |
 | Best time to sell | the top best-selling window, e.g. "Sat 17:00–21:00", and the pattern strength when it's not yet established | §3.3.4 |
-| Price at best time | the expected price in that window (`med30 × how × trend`), with its delta from the current AH price | §3.4C |
+| Price at best time | the expected price in that window (`level × how × trend`, level `med7` else `med30`), with its delta from the current AH price | §3.4C |
 | Chance to sell | `P'` for posting one reference stack (§3.4) now (next 8 hours), including your own record | §3.3.2–3 |
 
 **Delta** on the Historical price, Disenchant value and Price at best time lines = `(value − cur) ÷ cur × 100`, rounded half up to a whole percent and shown with a sign. Positive is green and negative is red. It is left out when there is no current price. A positive delta means the item is worth more than it costs right now: a higher historical price or price at best time means it's cheap now, and a higher disenchant value means buying to disenchant pays.
 
 A line with no data shows "—", except Disenchant value, which is left out as described above.
 
-**In the addon** (`UI/Tooltip.lua`, lines from `ViewModel.Tooltip`, the Lua twin of `views.tooltip`; TT1–TT5 are shared scenarios run in both, A21, UI8): the block reads the market file, and a newer in-game scan's cheapest price replaces `cur` ("40c (now)"), with the deltas following it. Best time to sell is the top selling window in local time, tagged "(early)" under 3 weeks of data and "(pattern)" under 6, so the longest line fits 320 px (UI8). Price at best time is `med30 × how` of that window; SPEC GAP: the trend factor is not applied yet. The Disenchant line uses the ported disenchant table with the item's quality, level and class from the client and your best Enchanting skill. An item without market data adds nothing, and a failure never breaks the tooltip. The hook is `TooltipDataProcessor` where the client has it, else `GameTooltip`'s `OnTooltipSetItem` (UNVERIFIED on Forever).
+**In the addon** (`UI/Tooltip.lua`, lines from `ViewModel.Tooltip`, the Lua twin of `views.tooltip`; TT1–TT5 are shared scenarios run in both, A21, UI8): the block reads the market file, and a newer in-game scan's cheapest price replaces `cur` ("40c (now)"), with the deltas following it. Best time to sell is the top selling window in local time, tagged "(early)" under 3 weeks of data and "(pattern)" under 6, so the longest line fits 320 px (UI8). Price at best time is `level × how` of that window (`med7`, else `med30`); SPEC GAP: the trend factor is not applied yet. The Disenchant line uses the ported disenchant table with the item's quality, level and class from the client and your best Enchanting skill. An item without market data adds nothing, and a failure never breaks the tooltip. The hook is `TooltipDataProcessor` where the client has it, else `GameTooltip`'s `OnTooltipSetItem` (UNVERIFIED on Forever).
 
 **Structure.** `UI/ViewModel.lua` turns the addon files, the addon's own recommendations and the live state into plain tables of rows, labels, colours and formatted money. The frame code (`Window`, `AHPanel`, `Tooltip`) only draws those tables. So most UI behaviour is testable as plain Lua, without frames.
 

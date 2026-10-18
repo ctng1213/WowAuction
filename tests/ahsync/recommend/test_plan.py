@@ -95,3 +95,12 @@ def test_the_plan_for_a_market_with_and_without_characters(state):
     actions = plan.plan_market(state, CHARS, STATS, ITEMS, NOW, Config(markets=(M,)))
     assert actions and all(a.at_ms >= NOW for a in actions)
     assert plan.plan_market(state, [], STATS, ITEMS, NOW, Config(markets=(M,))) == []
+
+
+def test_R21_forecasts_start_from_the_7_day_median_not_a_month_old_level():
+    flat = (IntelWindow(2, 116, 2, 1.0, 0),)
+    venom = replace(intel(1475, 90, 85.0, flat), cur_qty=7, med7=103, med30=2094)
+    assert plan.sell_facts(venom, None, None).level == 103
+    assert not plan.flip_candidate(venom, 0.2)                    # 103 × 0.95 = 97.85 < 1.2 × 90
+    month_only = replace(venom, med7=None)
+    assert plan.sell_facts(month_only, None, None).level == 2094 and plan.flip_candidate(month_only, 0.2)

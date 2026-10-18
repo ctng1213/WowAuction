@@ -19,10 +19,10 @@ SEED_PL4 = 4044
 
 
 def silk(**changes) -> SellFacts:
-    """Silk Cloth: 1s on the AH now, med30 1s, a strong Saturday 18:00 peak (1.5×), busy market."""
+    """Silk Cloth: 1s on the AH now, level 1s, a strong Saturday 18:00 peak (1.5×), busy market."""
     how = [1.0] * 168
     how[SAT * 24 + 18] = 1.5
-    base = SellFacts(SILK, med30=100, trend7=0.0, post_price=100, sold_per_day=400.0, listed_per_day=100.0,
+    base = SellFacts(SILK, level=100, trend7=0.0, post_price=100, sold_per_day=400.0, listed_per_day=100.0,
                      ref_stack=20, how=tuple(how), sales_how=tuple([1.0] * 168),
                      windows=(PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18),),
                      book=((60, 20, 4, 3), (100, 20, 4, 2)), cur=60, cur_qty=20, vendor_sell=10,
@@ -65,7 +65,7 @@ def test_R16_two_characters_never_fill_the_same_demand():
 
 
 def test_R19_a_buy_never_risks_more_than_a_quarter_of_your_gold():
-    expensive = silk(book=((4000, 10, 4, 1), (4100, 20, 4, 1)), cur=4000, cur_qty=10, med30=10000, post_price=10000)
+    expensive = silk(book=((4000, 10, 4, 1), (4100, 20, 4, 1)), cur=4000, cur_qty=10, level=10000, post_price=10000)
     actions = flips.flip_plan({SILK: expensive}, {"Amaya-G": RICH}, 300_000, NOW, S, FS, {})   # 30 g
     [buy] = [a for a in actions if a.kind == "buy"]
     assert (buy.qty, buy.price) == (10, 4000)                # 4 g; the 20 would make 12 g 20 s, over 7 g 50 s
@@ -73,7 +73,7 @@ def test_R19_a_buy_never_risks_more_than_a_quarter_of_your_gold():
 
 def test_no_flip_without_a_selling_window_or_a_paying_auction():
     assert flips.flip_plan({SILK: silk(windows=())}, {"A": RICH}, RICH, NOW, S, FS, {}) == []
-    assert flips.flip_plan({SILK: silk(med30=50)}, {"A": RICH}, RICH, NOW, S, FS, {}) == []    # peak 75c < 60c × 1.2
+    assert flips.flip_plan({SILK: silk(level=50)}, {"A": RICH}, RICH, NOW, S, FS, {}) == []    # peak 75c < 60c × 1.2
     assert flips.flip_plan({SILK: silk()}, {}, RICH, NOW, S, FS, {}) == []
     assert flips.flip_plan({SILK: silk()}, {"A": RICH}, RICH, NOW, S, FS, {}, exclude={SILK}) == []
     no_book = flips.flip_plan({SILK: silk(book=None)}, {"A": RICH}, RICH, NOW, S, FS, {})

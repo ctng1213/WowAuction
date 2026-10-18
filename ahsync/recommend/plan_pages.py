@@ -11,7 +11,7 @@ from ahsync.engine.plan import PlanAction
 from ahsync.engine.plan_views import ItemLook, ViewAction, flip_view, today_view, week_view
 from ahsync.engine.views import COLUMN_HELP
 from ahsync.history.reads import ItemInfo
-from ahsync.intel.contract import ItemIntel
+from ahsync.intel.contract import ItemIntel, price_level
 
 MIN_CHANCE_STEPS = (0, 25, 50, 75)        # the Today page's "Min chance" dropdown, percent
 
@@ -53,7 +53,7 @@ def item_looks(keys: set[int], stats: dict[int, ItemIntel], items: dict[int, Ite
         name = info.name if info else str(key)
         quality = (info.quality or 1) if info else 1
         out[key] = ItemLook(name, quality, s.conf if s else None, s.sold_per_day if s else None,
-                            s.volume_source if s else None, s.units_on_ah if s else None, s.med30 if s else None,
+                            s.volume_source if s else None, s.units_on_ah if s else None, price_level(s) if s else None,
                             s.seasonality if s else None) if s else ItemLook(name, quality)
     return out
 

@@ -59,7 +59,7 @@ class SellFacts:
     """What the sell plan knows about one item: market intelligence plus your values for it."""
 
     key: int
-    med30: int | None
+    level: int | None                              # price level: med7, else med30 (SPEC §3.4C.1, R21)
     trend7: float                                  # % per day
     post_price: int | None                         # the posting-now price
     sold_per_day: float | None
@@ -138,11 +138,11 @@ def occurrences(windows: Sequence[PlanWindow], now_ms: int, horizon_days: int) -
     return sorted(found, key=lambda o: (o[0], o[2]))
 
 
-def slot_price(med30: int, how_best: float, trend7: float, days_ahead: float) -> int:
-    """Expected price at a window's best hour: med30 × how × (1 + trend7 ÷ 100 × days ahead) (SPEC §3.4C.1).
+def slot_price(level: int, how_best: float, trend7: float, days_ahead: float) -> int:
+    """Expected price at a window's best hour: level × how × (1 + trend7 ÷ 100 × days ahead) (SPEC §3.4C.1).
 
     Args:
-        med30: 30-day median, copper.
+        level: The price level (med7, else med30), copper.
         how_best: Price ratio of the best hour.
         trend7: % per day, clamped to ±5.
         days_ahead: Days from now to the best hour.
@@ -151,7 +151,7 @@ def slot_price(med30: int, how_best: float, trend7: float, days_ahead: float) ->
         Copper, rounded half up.
     """
     trend = max(-TREND_CLAMP_PCT, min(TREND_CLAMP_PCT, trend7))
-    return math.floor(med30 * how_best * (1 + trend / 100 * days_ahead) + 0.5)
+    return math.floor(level * how_best * (1 + trend / 100 * days_ahead) + 0.5)
 
 
 def post_options(f: SellFacts, now_ms: int, s: PlanSettings) -> list[PostOption]:
@@ -170,12 +170,12 @@ def post_options(f: SellFacts, now_ms: int, s: PlanSettings) -> list[PostOption]
         hours = tuple(sellprob.posting_now_window(now_ms, s.sell_window_hours))
         out.append(PostOption(now_ms, hours, f.post_price, None, _cap(f, hours, now_ms, s),
                            fees.shortest_duration_covering(s.sell_window_hours)))
-    if f.med30 is None:
+    if f.level is None:
         return out
     for start, end, best in occurrences(f.windows, now_ms, s.horizon_days):
         post = max(best - s.post_lead_hours * HOUR_MS, now_ms)
         hours = tuple(sellprob.planned_window(post, end, now_ms))    # never empty: occurrences haven't ended
-        price = slot_price(f.med30, f.how[slot_of(best // HOUR_MS)], f.trend7, (best - now_ms) / DAY_MS)
+        price = slot_price(f.level, f.how[slot_of(best // HOUR_MS)], f.trend7, (best - now_ms) / DAY_MS)
         covering = -(-(best + HOUR_MS - post) // HOUR_MS)      # the listing stays up through the best hour
         out.append(PostOption(post, hours, price, (start, end, best), _cap(f, hours, now_ms, s),
                            fees.shortest_duration_covering(covering)))

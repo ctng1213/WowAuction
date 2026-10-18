@@ -15,7 +15,7 @@ from ahsync.engine.de_table import DE_TABLE
 from ahsync.engine.plan import TREND_CLAMP_PCT, Lot, PlanAction, PlanWindow, SellFacts
 from ahsync.engine.week import WeekInputs, week_plan
 from ahsync.history.reads import ItemInfo
-from ahsync.intel.contract import ItemIntel
+from ahsync.intel.contract import ItemIntel, price_level
 from ahsync.recommend.pages import DE_KIND, craft_market
 from ahsync.state.reads import StateReader
 
@@ -72,7 +72,7 @@ def sell_facts(i: ItemIntel, info: ItemInfo | None, de: tuple[float, str] | None
         The SellFacts; cost basis 0 until tracking records it (M6b).
     """
     return SellFacts(
-        i.key, i.med30, i.trend7, i.post_price, i.sold_per_day, i.listed_per_day, i.ref_stack,
+        i.key, price_level(i), i.trend7, i.post_price, i.sold_per_day, i.listed_per_day, i.ref_stack,
         _pattern(i.how, i.how_weeks, FLAT), _pattern(i.sales_how, i.sales_weeks, FLAT),
         tuple(PlanWindow(w.start_slot, w.hours, w.best_slot) for w in i.sell_windows), i.book or None, i.cur,
         i.cur_qty, (info.vendor_sell if info else None) or 0, de[0] if de else None, de[1] if de else None, 0.0,
@@ -90,15 +90,16 @@ def flip_candidate(i: ItemIntel, min_flip_margin: float) -> bool:
         min_flip_margin: Config min_flip_margin.
 
     Returns:
-        True when med30 × the best peak hour's price ratio × the most a week of trend adds, after
-        the cut, ≥ (1 + margin) × cur.
+        True when the price level × the best peak hour's price ratio × the most a week of trend adds,
+        after the cut, ≥ (1 + margin) × cur (SPEC §3.4C.1, R21).
     """
-    if not (i.cur and i.med30 and i.sell_windows):
+    level = price_level(i)
+    if not (i.cur and level and i.sell_windows):
         return False
     how = _pattern(i.how, i.how_weeks, FLAT)
     best = max(how[w.best_slot] for w in i.sell_windows)
     trend = 1 + max(0.0, min(TREND_CLAMP_PCT, i.trend7)) / 100 * 7
-    return i.med30 * best * trend * (1 - fees.AH_CUT) >= (1 + min_flip_margin) * i.cur
+    return level * best * trend * (1 - fees.AH_CUT) >= (1 + min_flip_margin) * i.cur
 
 
 def week_inputs(state: StateReader, characters: list[tuple[str, int]], stats: dict[int, ItemIntel],

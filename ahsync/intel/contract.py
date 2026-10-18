@@ -85,6 +85,18 @@ class MarketIntelligence:
     schema_version: int = INTEL_SCHEMA_VERSION
 
 
+def price_level(i: ItemIntel) -> int | None:
+    """The price level forecasts start from: med7, else med30 (SPEC §3.4C.1, R21).
+
+    Args:
+        i: The item's intelligence.
+
+    Returns:
+        Copper; None when neither median is known.
+    """
+    return i.med7 if i.med7 is not None else i.med30
+
+
 def to_json(intel: MarketIntelligence) -> str:
     """Serialize intelligence deterministically.
 

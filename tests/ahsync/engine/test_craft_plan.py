@@ -18,14 +18,14 @@ RICH = 100_000_000
 SEED_PL1 = 4011
 
 
-def product(key: int, med30: int, peak_day: int = SAT, peak_hour: int = 18, **changes) -> SellFacts:
+def product(key: int, level: int, peak_day: int = SAT, peak_hour: int = 18, **changes) -> SellFacts:
     """A product that peaks once a week (1.2×), sells 60/day, and others list 20."""
     how = [1.0] * 168
     how[peak_day * 24 + peak_hour] = 1.2
-    base = SellFacts(key, med30=med30, trend7=0.0, post_price=med30, sold_per_day=60.0, listed_per_day=20.0,
+    base = SellFacts(key, level=level, trend7=0.0, post_price=level, sold_per_day=60.0, listed_per_day=20.0,
                      ref_stack=1, how=tuple(how), sales_how=tuple([1.0] * 168),
                      windows=(PlanWindow(peak_day * 24 + peak_hour - 1, 3, peak_day * 24 + peak_hour),), book=(),
-                     cur=med30, cur_qty=2, vendor_sell=50, supply_now=20, conf=70)
+                     cur=level, cur_qty=2, vendor_sell=50, supply_now=20, conf=70)
     return replace(base, **changes)
 
 

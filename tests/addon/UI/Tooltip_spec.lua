@@ -7,10 +7,11 @@ local HOUR = 3600000
 local NOW = 1760000000000
 
 --- Log in with Linen in the market file (written 2 h ago, its price seen 30 min before that).
+---@param med7 number|nil  Linen's 7-day median (default 49c, the same as med30)
 ---@return table  The tooltip stub
-local function Boot()
+local function Boot(med7)
   Stubs.Reset()
-  local linen = "45,20,30,49,49,40,60,0,480,,93,86,72,45,20,42,0,900;138:4:139:1120:7;"
+  local linen = "45,20,30," .. (med7 or 49) .. ",49,40,60,0,480,,93,86,72,45,20,42,0,900;138:4:139:1120:7;"
   _G.AHProfitMarket = { schemaVersion = 1, generatedAt = NOW - 2 * HOUR, checksum = "1:" .. #linen,
     charMarkets = { ["Amaya-Grommash"] = UIWorld.MARKET },
     markets = { [UIWorld.MARKET] = { observationsUntil = NOW - 2 * HOUR, curveHour = 0, I = { [2589] = linen }, C = {} } } }
@@ -35,6 +36,12 @@ describe("Tooltip", function()
     assert_eq(Pairs(tip), { { "Current AH price", "45c (2 h ago)" }, { "Historical price", "49c (30d, +9%)" },
       { "Best time to sell", "Sat 18:00–22:00" }, { "Price at best time", "55c (+22%)" }, { "Chance to sell", "90%" } })
     assert_eq({ tip.doubles[2][3], tip.doubles[2][4] }, { 0.24, 0.86 })           -- the green delta
+  end)
+
+  it("R21 the price at best time starts from the 7-day median", function()
+    local tip = Boot(60)
+    Stubs.HoverItem(2589)
+    assert_eq(tip.doubles[4][2], "67c (+49%)")                     -- 60c × 1.12 = 67.2c, (67.2 − 45) ÷ 45
   end)
 
   it("A21 a newer in-game scan's price replaces the file's, and the deltas follow it", function()

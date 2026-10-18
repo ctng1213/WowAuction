@@ -57,7 +57,8 @@ function Tooltip.Lines(key, nowMs)
   return VM.Tooltip({
     cur = cur, curAgeText = VM.SeenAgo(ageMs), med30 = item.med30, deValue = deValue, canDisenchant = canDE,
     bestWindow = window and VM.WindowLabel(window, Adapter.LocalOffsetMs(nowMs)),
-    bestPrice = window and item.med30 and item.med30 * window.how, chance = item.chance,
+    -- The price level is med7, else med30 (SPEC §3.4C.1, R21).
+    bestPrice = window and (item.med7 or item.med30) and (item.med7 or item.med30) * window.how, chance = item.chance,
   })
 end
 

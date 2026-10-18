@@ -27,10 +27,10 @@ def window(day: int, start: int, hours: int, best: int) -> PlanWindow:
 
 
 def linen(**changes) -> SellFacts:
-    """Linen Cloth: 45c now, med30 49c, sells 40/day in stacks of 20, a Saturday 17-21 peak at 18:00."""
+    """Linen Cloth: 45c now, level 49c, sells 40/day in stacks of 20, a Saturday 17-21 peak at 18:00."""
     how = [1.0] * 168
     how[SAT * 24 + 18] = 1.12
-    base = SellFacts(LINEN, med30=49, trend7=0.0, post_price=45, sold_per_day=40.0, listed_per_day=40.0, ref_stack=20,
+    base = SellFacts(LINEN, level=49, trend7=0.0, post_price=45, sold_per_day=40.0, listed_per_day=40.0, ref_stack=20,
                      how=tuple(how), sales_how=tuple([1.0] * 168), windows=(window(SAT, 17, 4, 18),), book=(),
                      cur=45, cur_qty=40, vendor_sell=10, supply_now=93)
     return replace(base, **changes)
@@ -60,7 +60,7 @@ def test_R6_owned_linen_is_spread_over_windows_within_their_caps_saturday_first(
 
 
 def test_R7_an_owned_green_worth_more_disenchanted_is_planned_for_the_character_who_can():
-    green = SellFacts(GLOVES, med30=800, trend7=0.0, post_price=800, sold_per_day=2.0, listed_per_day=3.0, ref_stack=1,
+    green = SellFacts(GLOVES, level=800, trend7=0.0, post_price=800, sold_per_day=2.0, listed_per_day=3.0, ref_stack=1,
                       how=tuple([1.0] * 168), sales_how=tuple([1.0] * 168), windows=(), book=(), cur=800, cur_qty=1,
                       vendor_sell=100, de_value=1425.0, de_char="Amaya-G")
     [action] = plan.sell_plan([Lot("Brugan-G", GLOVES, 1)], {GLOVES: green}, NOW, S)
@@ -92,13 +92,13 @@ def test_window_occurrences_and_prices():
 
 
 def test_without_sales_or_a_price_the_plan_falls_back():
-    unknown = linen(sold_per_day=None, med30=None)
+    unknown = linen(sold_per_day=None, level=None)
     assert plan.post_chance(unknown, 45, 20, [1, 2], 0, S) == S.default_sell_prob
-    [only] = plan.post_options(unknown, NOW, S)                       # no med30: posting now only
+    [only] = plan.post_options(unknown, NOW, S)                       # no level: posting now only
     assert only.window is None and only.cap == 46
-    nothing = linen(post_price=None, med30=None, vendor_sell=0)
+    nothing = linen(post_price=None, level=None, vendor_sell=0)
     assert [a.kind for a in plan.sell_plan([Lot("A", LINEN, 5)], {LINEN: nothing}, NOW, S)] == ["hold"]
-    vendor = linen(post_price=None, med30=None, vendor_sell=10)
+    vendor = linen(post_price=None, level=None, vendor_sell=10)
     [sale] = plan.sell_plan([Lot("A", LINEN, 5)], {LINEN: vendor}, NOW, S)
     assert (sale.kind, sale.price, sale.expected) == ("vendor", 10, 50.0)
     assert plan.sell_plan([Lot("A", 1, 5)], {LINEN: vendor}, NOW, S) == []   # no facts: left out
@@ -136,7 +136,7 @@ def test_PL2_posts_are_at_least_a_stack_and_never_more_than_you_hold():
 
 
 def test_R18_gear_may_double_the_market_and_always_gets_two_pieces():
-    green = SellFacts(GLOVES, med30=800, trend7=0.0, post_price=800, sold_per_day=2.0, listed_per_day=3.0, ref_stack=1,
+    green = SellFacts(GLOVES, level=800, trend7=0.0, post_price=800, sold_per_day=2.0, listed_per_day=3.0, ref_stack=1,
                       how=tuple([1.0] * 168), sales_how=tuple([1.0] * 168), windows=(), book=(), cur=800, cur_qty=1,
                       vendor_sell=100, supply_now=0, gear=True)
     assert [o.cap for o in plan.post_options(green, NOW, S)] == [2]          # nothing else listed: still 2 pieces

@@ -157,7 +157,7 @@ class ItemLook:
     sold_per_day: float | None = None
     source: str | None = None
     units_on_ah: int | None = None
-    med30: int | None = None
+    level: int | None = None                # price level: med7, else med30 (SPEC §3.4C.1)
     seasonality: int | None = None
 
 
@@ -392,7 +392,7 @@ def flip_view(actions: Sequence[ViewAction], offset_ms: int, looks: dict[int, It
     Args:
         actions: The plan.
         offset_ms: Local time minus UTC.
-        looks: Item key -> name, market activity, med30 and seasonality strength.
+        looks: Item key -> name, market activity, price level and seasonality strength.
         total_gold: All your gold.
 
     Returns:
@@ -428,12 +428,12 @@ def _flip_row(buy: ViewAction, posts: list[ViewAction], look: ItemLook, total_go
     m = _activity(look, sold)
     risk_text, amber = risk(cost, total_gold)
     roi = round_half_up(buy.net / cost * 100) if cost else 0
-    uplift = round_half_up((first.price / look.med30 - 1) * 100) if look.med30 and first.price else None
+    uplift = round_half_up((first.price / look.level - 1) * 100) if look.level and first.price else None
     day, hour = clock(first.peak_ms if first.peak_ms is not None else first.at_ms, offset_ms)
     return {
         "id": buy.action_id, "item": look.name, "quality": look.quality, "qty": buy.qty, "buy_each": money(buy.price),
         "buy_total": money(cost), "sell_each": money(first.price), "sell_slot": f"{day} {hour}",
-        "why": f"{day} peak {uplift:+d}% over the 30-day median" if uplift is not None else "",
+        "why": f"{day} peak {uplift:+d}% over its recent median" if uplift is not None else "",
         "profit": signed_money(buy.net), "seasonality": "—" if look.seasonality is None else str(look.seasonality),
         "roi": f"{roi}%", "chance": m.chance, "chance_note": m.chance_note, "confidence": m.confidence, "dot": m.dot,
         "sales": m.sales, "supply": m.supply, "days": m.days, "risk": risk_text, "risk_amber": amber,

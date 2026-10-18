@@ -134,7 +134,7 @@ def test_the_flip_tab_shows_cost_roi_and_the_peak():
     lone = act("h", "post", 100, NOW, 0.5)
     [row] = plan_views.flip_view([buy, post, lone], 0, LOOKS, GOLD)["rows"]
     assert (row["buy_total"], row["profit"], row["roi"], row["sell_slot"]) == ("28s", "+7s 30c", "26%", "Sat 19:00")
-    assert (row["seasonality"], row["why"], row["chance"]) == ("72", "Sat peak +22% over the 30-day median", "88%")
+    assert (row["seasonality"], row["why"], row["chance"]) == ("72", "Sat peak +22% over its recent median", "88%")
 
 
 def random_plan(rng):
