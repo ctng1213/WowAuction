@@ -24,7 +24,7 @@ from ahsync.intel.store import IntelStore
 from ahsync.recommend.store import RecommendStore
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
@@ -43,6 +43,11 @@ MIGRATIONS: dict[int, str] = {
         CREATE INDEX IF NOT EXISTS sales_h1_market_t ON sales_h1(market, t);
         DROP TABLE IF EXISTS item_stats;
         DROP TABLE IF EXISTS item_stats_new
+    """,
+    # 3: each post's peak hour, so the plan's notes and the addon can say "for the 18:00 peak" (D37, D38).
+    3: """
+        ALTER TABLE actions ADD COLUMN peak_ms INTEGER;
+        ALTER TABLE plan_new ADD COLUMN peak_ms INTEGER
     """,
 }
 BACKUP_KEEP = 3

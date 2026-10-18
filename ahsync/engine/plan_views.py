@@ -228,7 +228,7 @@ def today_view(actions: Sequence[ViewAction], now_ms: int, offset_ms: int, min_s
     """
     due = [a for a in actions if a.status in ("pending", "late") and a.at_ms < now_ms + HOUR_MS]
     nets = counted(due, min(a.at_ms for a in due) if due else now_ms, now_ms + HOUR_MS, offset_ms)
-    chains = chain_chances(actions)
+    chains, posts = chain_chances(actions), chain_posts(actions)
     rows, hidden = [], 0
     for a in due:
         p = chance_of(a, chains)
@@ -237,7 +237,7 @@ def today_view(actions: Sequence[ViewAction], now_ms: int, offset_ms: int, min_s
             continue
         net, note = nets[a.action_id]
         rows.append((-(net or 0.0), -(p if p is not None else -1.0), looks[a.key].name, a.char_id,
-                     _row(a, net, note, p, looks[a.key], total_gold, offset_ms)))
+                     _row(a, net, note_of(a, note, posts, offset_ms), p, looks[a.key], total_gold, offset_ms)))
     rows.sort(key=lambda r: r[:4])
     total = sum(r[4]["sort"]["net"] for r in rows)
     return {"rows": [r[4] for r in rows], "hidden": hidden, "total": signed_money(total)}
@@ -274,6 +274,45 @@ def _post_note(a: ViewAction, offset_ms: int) -> str:
     return f"for the {clock(a.peak_ms, offset_ms)[1]} peak" if a.kind == "post" and a.peak_ms is not None else ""
 
 
+def chain_posts(actions: Sequence[ViewAction]) -> dict[str, ViewAction]:
+    """Each chain's first post that is for a peak.
+
+    Args:
+        actions: Plan actions.
+
+    Returns:
+        chain id -> that post.
+    """
+    out: dict[str, ViewAction] = {}
+    for a in sorted(actions, key=lambda a: (a.at_ms, a.action_id)):
+        if a.kind == "post" and a.in_chain and a.peak_ms is not None:
+            out.setdefault(chain_id(a), a)
+    return out
+
+
+def note_of(a: ViewAction, counted_note: str, posts: dict[str, ViewAction], offset_ms: int) -> str:
+    """A row's note: the peak a post is for, where a chain's profit step will post, and why it counts what it counts (D37, D38).
+
+    Args:
+        a: The action.
+        counted_note: From counted ("profit counted on …" or "").
+        posts: From chain_posts.
+        offset_ms: Local time minus UTC.
+
+    Returns:
+        The parts joined by " · ", e.g. "for the 18:00 peak · profit counted on the Fri 14:10 buy" or
+        "Flip: post Sat 10:00, for the 18:00 peak"; "" when there is nothing to say.
+    """
+    parts = [_post_note(a, offset_ms)]
+    post = posts.get(chain_id(a)) if a.kind in ("buy", "craft") and role(a) == "profit" else None
+    if post is not None:
+        day, hour = clock(post.at_ms, offset_ms)
+        parts.append(f"{'Flip' if a.kind == 'buy' else 'Then'}: post {day} {hour}, for the "
+                     f"{clock(post.peak_ms, offset_ms)[1]} peak")
+    parts.append(counted_note)
+    return " · ".join(p for p in parts if p)
+
+
 def week_view(actions: Sequence[ViewAction], now_ms: int, offset_ms: int, looks: dict[int, ItemLook],
               total_gold: int) -> dict:
     """The Week tab: a rolling 7 days from today's local midnight, by day (SPEC §3.4C, D11, D17, D19-D21).
@@ -296,14 +335,14 @@ def week_view(actions: Sequence[ViewAction], now_ms: int, offset_ms: int, looks:
     chain_kinds: dict[str, set[str]] = {}
     for a in actions:
         chain_kinds.setdefault(chain_id(a), set()).add(a.kind)
-    chances = chain_chances(actions)
+    chances, posts = chain_chances(actions), chain_posts(actions)
     days = [{"label": "", "today": d == 0, "total": 0, "rows": []} for d in range(7)]
     by_category: dict[str, int] = {}
     by_character: dict[str, int] = {}
     for a in shown:
         d = (a.at_ms - start) // DAY_MS
         net, note = nets[a.action_id]
-        row = _row(a, net, note or _post_note(a, offset_ms), chance_of(a, chances), looks[a.key], total_gold,
+        row = _row(a, net, note_of(a, note, posts, offset_ms), chance_of(a, chances), looks[a.key], total_gold,
                    offset_ms)
         days[d]["rows"].append(row)
         cents = row["sort"]["net"]

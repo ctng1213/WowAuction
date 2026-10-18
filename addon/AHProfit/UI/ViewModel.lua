@@ -184,6 +184,43 @@ local function ChainChances(actions)
   return out
 end
 
+--- Each chain's first post that is for a peak (plan_views.chain_posts).
+---@param actions table[]  Marked actions
+---@return table           chainId -> that post
+local function ChainPosts(actions)
+  local sorted, out = {}, {}
+  for i, a in ipairs(actions) do sorted[i] = a end
+  table.sort(sorted, ByTime)
+  for _, a in ipairs(sorted) do
+    if a.kind == "post" and a.inChain and a.peak and out[ChainId(a)] == nil then out[ChainId(a)] = a end
+  end
+  return out
+end
+
+--- A row's note (plan_views.note_of, D37, D38): the peak a post is for, where a chain's
+--- profit step will post, and why it counts what it counts, joined by " · ".
+---@param a table           The action
+---@param countedNote string From Counted
+---@param posts table       From ChainPosts
+---@param offsetMs number
+---@return string
+function ViewModel.NoteOf(a, countedNote, posts, offsetMs)
+  local parts = {}
+  if a.kind == "post" and a.peak then
+    local _, peak = ViewModel.Clock(a.peak, offsetMs)
+    parts[#parts + 1] = "for the " .. peak .. " peak"
+  end
+  local post = (a.kind == "buy" or a.kind == "craft") and Role(a) == "profit" and posts[ChainId(a)] or nil
+  if post then
+    local day, hour = ViewModel.Clock(post.at, offsetMs)
+    local _, peak = ViewModel.Clock(post.peak, offsetMs)
+    parts[#parts + 1] = (a.kind == "buy" and "Flip" or "Then") .. ": post " .. day .. " " .. hour .. ", for the "
+                        .. peak .. " peak"
+  end
+  if countedNote ~= "" then parts[#parts + 1] = countedNote end
+  return table.concat(parts, " · ")
+end
+
 --- One row's display cells, shared by Today and Week.
 ---@param a table          The action
 ---@param counted table    { net, note } from Counted
@@ -231,13 +268,16 @@ function ViewModel.Today(actions, nowMs, offsetMs, minChance, lookOf, totalGold)
     end
   end
   local nets, chains = ViewModel.Counted(due, earliest, nowMs + HOUR_MS, offsetMs), ChainChances(actions)
+  local posts = ChainPosts(actions)
   local rows, hidden, total = {}, 0, 0
   for _, a in ipairs(due) do
     local chance = ChanceOf(a, chains)
     if chance ~= nil and chance < minChance then
       hidden = hidden + 1
     else
-      local row = Row(a, nets[a.id], chance, lookOf(a.key), totalGold, offsetMs)
+      local counted = nets[a.id]
+      local row = Row(a, { net = counted.net, note = ViewModel.NoteOf(a, counted.note, posts, offsetMs) }, chance,
+                      lookOf(a.key), totalGold, offsetMs)
       row.sortChance, row.sortChar = chance or -1, a.char
       rows[#rows + 1] = row
       total = total + row.netCopper
@@ -269,6 +309,7 @@ function ViewModel.Week(actions, nowMs, offsetMs, lookOf, totalGold)
   end
   table.sort(shown, ByTime)
   local nets, chains = ViewModel.Counted(shown, start, finish, offsetMs), ChainChances(actions)
+  local posts = ChainPosts(actions)
   local days, total = {}, 0
   for d = 0, 6 do
     local midnight = start + d * DAY_MS
@@ -279,7 +320,8 @@ function ViewModel.Week(actions, nowMs, offsetMs, lookOf, totalGold)
   for _, a in ipairs(shown) do
     local day = days[math.floor((a.at - start) / DAY_MS) + 1]
     local counted = nets[a.id]
-    local row = Row(a, counted, ChanceOf(a, chains), lookOf(a.key), totalGold, offsetMs)
+    local row = Row(a, { net = counted.net, note = ViewModel.NoteOf(a, counted.note, posts, offsetMs) },
+                    ChanceOf(a, chains), lookOf(a.key), totalGold, offsetMs)
     day.rows[#day.rows + 1] = row
     day.cents = day.cents + row.netCopper
     total = total + row.netCopper

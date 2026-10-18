@@ -3,13 +3,14 @@
     AHProfitPlan = {
       schemaVersion, generatedAt, checksum, basedOnUntil,
       ingestedUntil = { [charId] = ms },     -- the addon deletes that character's rows at or before it
-      actions = { [charId] = { "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status;chance", ... } },
+      actions = { [charId] = { "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status;chance;peakMs", ... } },
       rules = { [key] = "rule,setAtMs" },    -- "none" is a clear and travels too (SPEC §3.4.2)
     }
 
 Only open actions (pending, late) are exported, in time order; an empty field is
 unavailable. Net is the planned expected net in copper, rounded half up; chance is the
-planned chance to sell in whole percent (posts; empty otherwise). The checksum
+planned chance to sell in whole percent and peakMs the hour a post is for (posts;
+empty otherwise). The checksum
 is "<strings>:<their total length>" over every action and rule string, like
 MarketIntelligence.lua's. It is account-specific: every account on the machine shares
 it, which is why ingestedUntil is per character (SPEC §2.2).
@@ -42,16 +43,16 @@ def action_text(row: tuple) -> str:
 
     Args:
         row: (action_id, char_id, kind, key, qty, price, slot_ms, expected_net, parent_id, window_end_ms, status,
-            chance 0-1 or None).
+            chance 0-1 or None, peak_ms or None).
 
     Returns:
-        "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status;chance".
+        "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status;chance;peakMs".
     """
-    action_id, _, kind, key, qty, price, slot_ms, net, parent, window_end, status, chance = row
+    action_id, _, kind, key, qty, price, slot_ms, net, parent, window_end, status, chance, peak = row
     net_copper = None if net is None else round_half_up(net)
     percent = None if chance is None else round_half_up(chance * 100)
     return ";".join(_field(v) for v in (action_id, kind, key, qty, price, slot_ms, net_copper, parent, window_end, status,
-                                        percent))
+                                        percent, peak))
 
 
 def plan_lua(actions: Sequence[tuple], rules: Sequence[tuple[int, str, int]], ingested_until: Mapping[str, int],

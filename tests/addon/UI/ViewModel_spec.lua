@@ -84,6 +84,30 @@ describe("ViewModel", function()
     assert_eq(today.total, "+2s 90c")
   end)
 
+  it("D37 a chain's post names its peak and where its profit was counted", function()
+    local VM = Boot()
+    local buy = Act("f", "buy", 210, NOW - 20 * MINUTE)
+    local post = Act("g", "post", 95, NOW + 20 * HOUR - 30 * MINUTE, 100, { parent = "f", price = 45, peak = NOW + DAY + 3 * HOUR + 30 * MINUTE })
+    local week = VM.Week({ buy, post }, NOW, 0, Look, GOLD)
+    assert_eq(week.days[2].rows[1].note, "for the 18:00 peak · profit counted on the Thu 14:10 buy")
+  end)
+
+  it("D38 Today says which peak each post is for and when a chain will post", function()
+    local VM = Boot()
+    local buy = Act("f", "buy", 210, NOW)
+    local flipPost = Act("g", "post", 95, NOW + DAY - 4 * HOUR - 30 * MINUTE, 100,
+                         { parent = "f", peak = NOW + DAY + 3 * HOUR + 30 * MINUTE })
+    local craft = Act("k", "craft", 300, NOW, nil, { key = 2840, qty = 1, price = nil })
+    local craftPost = Act("q", "post", 300, NOW + DAY - 3 * HOUR - 30 * MINUTE, 80,
+                          { parent = "k", key = 2840, peak = NOW + DAY + 4 * HOUR + 30 * MINUTE })
+    local wool = Act("w", "post", 100, NOW, 90, { peak = NOW + 5 * HOUR + 30 * MINUTE })
+    local today = VM.Today({ buy, flipPost, craft, craftPost, wool }, NOW, 0, 0, Look, GOLD)
+    local notes = {}
+    for _, r in ipairs(today.rows) do notes[r.id] = r.note end
+    assert_eq(notes, { f = "Flip: post Fri 10:00, for the 18:00 peak", k = "Then: post Fri 11:00, for the 19:00 peak",
+                       w = "for the 20:00 peak" })
+  end)
+
   it("D17 Week: seven local days from today, each with its total, and the week total", function()
     local VM = Boot()
     local actions = { Act("a", "post", 830, NOW + HOUR), Act("b", "post", 11000, NOW + 2 * HOUR),

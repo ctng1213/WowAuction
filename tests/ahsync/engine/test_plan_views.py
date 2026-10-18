@@ -68,6 +68,28 @@ def test_D19_a_chains_profit_counts_once_on_its_buy():
     assert view["total"] == "+2s 10c"
 
 
+def test_D37_a_chains_post_names_its_peak_and_where_its_profit_was_counted():
+    buy = act("f", "buy", 210, FRI + 14 * HOUR + 10 * MINUTE, in_chain=True)
+    post = act("g", "post", 95, FRI + DAY + 10 * HOUR, 1.0, parent_id="f", in_chain=True, price=45,
+               peak_ms=FRI + DAY + 18 * HOUR)
+    [sat_post] = plan_views.week_view([buy, post], NOW, 0, LOOKS, GOLD)["days"][1]["rows"]
+    assert sat_post["note"] == "for the 18:00 peak · profit counted on the Fri 14:10 buy"
+
+
+def test_D38_today_says_which_peak_each_post_is_for_and_when_a_chain_posts():
+    at = FRI + 14 * HOUR + 10 * MINUTE
+    buy = act("f", "buy", 210, at, in_chain=True)
+    flip_post = act("g", "post", 95, FRI + DAY + 10 * HOUR, 1.0, parent_id="f", in_chain=True, peak_ms=FRI + DAY + 18 * HOUR)
+    craft = act("k", "craft", 300, at, in_chain=True, key=BAR, qty=1, price=None)
+    craft_post = act("q", "post", 300, FRI + DAY + 11 * HOUR, 0.8, parent_id="k", in_chain=True, key=BAR,
+                     peak_ms=FRI + DAY + 19 * HOUR)
+    wool = act("w", "post", 100, at, 0.9, peak_ms=FRI + 20 * HOUR)
+    rows = plan_views.today_view([buy, flip_post, craft, craft_post, wool], at, 0, 0.0, LOOKS, GOLD)["rows"]
+    notes = {r["id"]: r["note"] for r in rows}
+    assert notes == {"f": "Flip: post Sat 10:00, for the 18:00 peak", "k": "Then: post Sat 11:00, for the 19:00 peak",
+                     "w": "for the 20:00 peak"}
+
+
 def test_D20_once_the_buy_has_left_the_week_the_post_carries_its_own_net():
     buy = act("f", "buy", 210, FRI + 14 * HOUR + 10 * MINUTE, in_chain=True, status="done")
     post = act("g", "post", 95, FRI + DAY + 10 * HOUR, 1.0, parent_id="f", in_chain=True, price=45)
@@ -90,7 +112,7 @@ def test_steps_carry_no_net_and_crafts_show_their_products_chance():
     assert nets == {"buy": ("—", "—"), "craft": ("+18s", "80%")}
     week = plan_views.week_view([buy, craft, post], NOW, 0, LOOKS, GOLD)
     assert week["categories"] == {"Crafts": "+18s"}
-    assert week["days"][1]["rows"][0]["note"] == "profit counted on the Fri 14:31 craft"
+    assert week["days"][1]["rows"][0]["note"] == "for the 22:30 peak · profit counted on the Fri 14:31 craft"
 
 
 def test_the_flip_tab_shows_cost_roi_and_the_peak():
