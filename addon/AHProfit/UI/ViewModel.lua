@@ -41,6 +41,9 @@ ViewModel.COLUMN_HELP = {
   Keeping = "Units this character keeps for itself; \"All\" keeps every one. Click the row to change it",
   Held = "Units held in bags, bank and mail",
   Free = "Units above what you keep: the only ones suggested for selling or crafting",
+  Source = "Where the mats come from: Owned (your bags), AH (bought), or Mixed",
+  ["×"] = "Crafts that each still pay, given the mats you have and what the AH lists",
+  Mats = "Gold for the mats you need to buy, at the AH's current prices. \"—\": you own them all",
 }
 
 --- Round half up, as every display does (SPEC §3.3).
@@ -679,6 +682,55 @@ end
 ---@return string       e.g. "3 items kept · click a row to change it"
 function ViewModel.ReservationsFooter(rows)
   return #rows .. (#rows == 1 and " item" or " items") .. " kept · click a row to change it"
+end
+
+-- ------------------------------------------------------------------ Craft tab (A27, UI11)
+
+--- "6 owned Copper Bar"-style parts of a craft note, by item key.
+---@param units table     key -> units (float)
+---@param lookOf function key -> look
+---@param prefix string   "owned " or ""
+---@return string         e.g. "4 owned Copper Bar, 2 owned Coarse Thread"; "" for none
+local function MatList(units, lookOf, prefix)
+  local keys, parts = {}, {}
+  for key in pairs(units) do keys[#keys + 1] = key end
+  table.sort(keys)
+  for i, key in ipairs(keys) do parts[i] = ViewModel.RoundHalfUp(units[key]) .. " " .. prefix .. lookOf(key).name end
+  return table.concat(parts, ", ")
+end
+
+--- The Craft tab's rows (views.craft_row for one character, D6-D8).
+---@param options table[]  Options.CraftOptions
+---@param lookOf function  key -> look
+---@param totalGold number All your gold, copper, for risk
+---@return table[]         Rows of text, in the options' order
+function ViewModel.CraftRows(options, lookOf, totalGold)
+  local rows = {}
+  for _, o in ipairs(options) do
+    local look = lookOf(o.key)
+    local risk, amber = ViewModel.Risk(o.matGold, totalGold)
+    local chance = o.p and ViewModel.RoundHalfUp(o.p * 100) or nil
+    local used, bought = MatList(o.ownedUsed, lookOf, "owned "), MatList(o.bought, lookOf, "")
+    local note = {}
+    if used ~= "" then note[#note + 1] = "uses " .. used end
+    if bought ~= "" then note[#note + 1] = "buys " .. bought end
+    rows[#rows + 1] = {
+      key = o.key, item = look.name, quality = look.quality, kind = "craft", source = o.source, crafts = "×" .. o.crafts,
+      mats = o.matGold > 0 and ViewModel.Money(o.matGold) or "—", profit = ViewModel.SignedMoney(o.profit),
+      netColor = "pos", chance = chance and (chance .. "%") or "—", dot = chance and ViewModel.Level(look.conf) or nil,
+      volume = look.soldPerDay and (ViewModel.RoundHalfUp(look.soldPerDay) .. "/day") or "—",
+      risk = risk, riskAmber = amber, note = table.concat(note, " · "),
+    }
+  end
+  return rows
+end
+
+--- The footer under Craft.
+---@param rows table[]  From ViewModel.CraftRows
+---@param known number  Recipes the character knows that make an item
+---@return string       e.g. "1 of 2 known recipes pay now"
+function ViewModel.CraftFooter(rows, known)
+  return #rows .. " of " .. known .. (known == 1 and " known recipe" or " known recipes") .. " pay now"
 end
 
 -- ------------------------------------------------------------------ Disenchant tab (A23)

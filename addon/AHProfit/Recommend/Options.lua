@@ -201,6 +201,30 @@ function Options.Crafts(recipes, units, ctx)
   return out, reserved
 end
 
+--- Every known recipe that pays, each costed on its own against what you carry (A27): the Craft
+--- tab's view. Today's crafts (Options.Crafts) share the mats out instead, best first.
+---@param recipes table[]  Options.KnownRecipes
+---@param units table      key -> units carried, less what you keep
+---@param ctx table        { itemOf, levelsOf, vendorOf }
+---@return table[]         { key, spell, crafts, matGold, profit, p, source, ownedUsed, bought }, best profit first
+function Options.CraftOptions(recipes, units, ctx)
+  local out = {}
+  for _, r in ipairs(recipes) do
+    local net, p = Options.ProductNet(r, ctx.itemOf(r.product), ctx.vendorOf(r.product) or 0)
+    local option = Craft.Option(r, CraftMarket({ r }, units, ctx), net)
+    if option.crafts > 0 then
+      out[#out + 1] = { key = r.product, spell = r.spell, crafts = option.crafts, matGold = option.matGold,
+                        profit = option.profit, p = p, source = Craft.Source(option), ownedUsed = option.ownedUsed,
+                        bought = option.bought }
+    end
+  end
+  table.sort(out, function(a, b)
+    if a.profit ~= b.profit then return a.profit > b.profit end
+    return a.spell < b.spell
+  end)
+  return out
+end
+
 --- Drop planned buys whose price is no longer on the AH (A2): a live scan shows no units at or
 --- below the plan's price (the item is gone, or now costs more than the flip's profit line).
 ---@param actions table[]    Plan actions

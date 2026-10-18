@@ -1,4 +1,4 @@
--- Layout snapshots of the /ahp window (SPEC §8.4 layer 2, UI1-UI4, UI9, UI12). Each scenario draws the
+-- Layout snapshots of the /ahp window (SPEC §8.4 layer 2, UI1-UI4, UI9, UI11, UI12). Each scenario draws the
 -- window with the stub frames, runs the automatic layout checks and compares the frame tree with
 -- tests/visual/golden/<scenario>.txt. `python tools/visual.py --update` accepts a change, and
 -- `--html` draws it for comparison with docs/mockups/addon.html.
@@ -67,6 +67,24 @@ describe("MainWindow layout", function()
     local ui = Open(12)
     ui.frame:SetSize(560, 360)
     Layout.Golden("UI9_minimum", ui.frame)
+  end)
+
+  it("UI11 the Craft tab at the minimum size: a recipe covered by owned mats shows Mats \"—\"", function()
+    Stubs.Reset()
+    _G.AHProfitPlan = nil
+    Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 2840, count = 6 } } } }
+    UIWorld.Market({ [6217] = UIWorld.Item(4100, 86, 6, { postPrice = 4000, chance = 1, sellValue = 3800, refStack = 1 }),
+                     [2840] = UIWorld.Item(5000, 80, 40, { postPrice = 1000, sellValue = 950 }) }, NOW)
+    Stubs.Login()
+    AHProfitDB.knownRecipes["Amaya-Grommash"] = "2663"
+    AHProfitDB.recipes.Blacksmithing = { [2663] = { product = 6217, yieldMin = 1, yieldMax = 1, reagents = "2840,2" } }
+    Stubs.Slash("/ahp")
+    AHProfit.MainWindow.ShowTab("craft")
+    local ui = AHProfit.MainWindow.Frames()
+    ui.frame:SetSize(560, 360)
+    local snapshot = Layout.Golden("UI11_craft", ui.frame)
+    assert_eq({ ui.rows[1].cells.craft.mats:GetText(), ui.rows[2].note:GetText() }, { "—", "uses 6 owned Copper Bar" })
+    assert_eq(snapshot:find("AHProfitWindowTabReservations 9", 1, true) ~= nil, true)   -- ends before the box at x 1100
   end)
 
   it("UI12 the Reservations tab at the minimum size: five tabs fit beside the Min chance box", function()

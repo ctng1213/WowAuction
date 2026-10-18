@@ -385,22 +385,13 @@ const VIEWS = {
     </table>`
   },
   Craft: {
-    ctl: 'Source: All ▾',
-    footer: `<span>6 profitable recipes · 1 fully covered by your mats</span><span>Cooldowns ready: 1</span>`,
-    note: `<b>Craft</b>: every recipe your characters know (SPEC §3.4B), whether or not you have the mats. <b>Source</b> says where the mats come from:
-      <ul><li><b>Owned</b>: all from your bags, bank or mail. No gold needed.</li>
-      <li><b>AH</b>: all bought on the AH (or from a vendor). You craft straight from the market.</li>
-      <li><b>Mixed</b>: your stock topped up with bought mats.</li>
-      <li><b>+ crafted</b>: one of your characters makes a reagent first (a chain), mailing it to the crafter if needed. Example: Brugan makes the Copper Rod that Amaya's Runed Copper Rod needs.</li></ul>
-      Built in game from your recipes, your bags and the intelligence, like Disenchant and Flip; a mat price seen at the AH updates the row at once. Linen Belt shows "—" volume: no sales data yet, so its chance is the default.
-      <b>Mats each / total</b> = gold for the mats you need to buy, at the latest AH prices. Profit counts owned mats at their <b>hold value</b>: what they'd fetch under their own best sell plan (now or at their peak). The number of crafts stops where one more would lose money as AH mats get pricier. In Week, each craft comes after its mat buys and before its post.`,
-    html: () => `<table>${head([['Product'], ['Who'], ['Source'], ['×', 1], ['Mats each', 1], ['Mats total', 1], ['Profit', 1], ...PAIR, ['Risk', 1], ['CD']])}
-      ${cr('Transmute: Iron to Gold', 2, 'Brugan', 'AH', 1, 4200, 1855, '<span class="pos">ready</span>', 'buys 1 Iron Bar')}
-      ${cr('Runed Copper Rod', 2, 'Amaya', 'AH + crafted', 1, 3700, 1630, '', 'chain: Brugan crafts Copper Rod from 2 AH Copper Bar → mails it to Amaya · buys 1 Strange Dust, 1 Lesser Magic')}
-      ${cr('Copper Rod', 1, 'Brugan', 'AH', 3, 2000, 783, '', 'buys 6 Copper Bar: your own bars are worth more at their Sat peak (hold value), so they stay in the sell plan')}
-      ${cr('Bolt of Silk Cloth', 1, 'Amaya', 'AH', 2, 280, 194, '', 'buys 8 Silk Cloth')}
-      ${cr('Heavy Grinding Stone', 1, 'Brugan', 'Owned', 4, null, 134, '', 'uses 8 owned Heavy Stone')}
-      ${cr('Linen Belt', 1, 'Amaya', 'Mixed', 2, 75, 28, '', 'uses owned Linen · buys 2 Coarse Thread')}
+    ctl: '',
+    footer: `<span>3 of 5 known recipes pay now</span><span>Budget ${money(314000)}</span>`,
+    note: `<b>Craft</b>: the recipes the character you're playing knows that pay right now (SPEC §4.3, A27). Each is costed on its own against what you carry (less what you keep for yourself); Today shares the mats out, best craft first. <b>Source</b>: <b>Owned</b> (all from your bags), <b>AH</b> (all bought) or <b>Mixed</b>. <b>Mats</b> = gold for the mats to buy at the AH's current prices, "—" when you own them all. Profit counts owned mats at their hold value; crafts stop where one more would lose money. The dashboard's Craft page adds who knows it, crafted reagents (chains) and cooldowns across characters.`,
+    html: () => `<table>${head([['Product'], ['Source'], ['×', 1], ['Mats', 1], ['Profit', 1], ...PAIR, ['Risk', 1]])}
+      ${cr('Copper Rod', 1, 'Mixed', 3, 2000, 5600, 'uses 4 owned Copper Bar · buys 2 Copper Bar')}
+      ${cr('Heavy Grinding Stone', 1, 'Owned', 4, null, 134, 'uses 8 owned Heavy Stone')}
+      ${cr('Linen Belt', 1, 'Mixed', 2, 150, 28, 'uses 10 owned Linen Cloth · buys 2 Coarse Thread')}
     </table>`
   },
   Flip: {
@@ -447,10 +438,10 @@ function todayRow(a, n, q, qty, each, e, P, c, who, spend, note) {
 function de(n, ilvl, buy, mats, ev, profit, live) {
   return `<tr class="row"><td>${item(n, 2, 120)}</td><td class="num">${ilvl}</td><td class="num">${money(buy)}</td><td class="muted">${mats}</td><td class="num">${money(ev)}</td><td class="num">${net(profit)}</td>${pair(n)}<td class="num">${risk(buy)}</td><td class="${live === '✓' ? 'pos' : 'muted'}">${live}</td></tr>`;
 }
-function cr(n, q, who, src, crafts, matsEach, profit, cd, note) {
+function cr(n, q, src, crafts, mats, profit, note) {
   const srcColor = src.startsWith('Owned') ? 'pos' : src.startsWith('AH') ? 'amber' : '';
-  return `<tr class="row"><td>${item(n, q, 130)}</td><td class="muted">${who}</td><td class="${srcColor}">${src}</td><td class="num">${crafts}</td><td class="num">${money(matsEach)}</td><td class="num">${matsEach === null ? money(null) : money(matsEach * crafts)}</td><td class="num">${net(profit)}</td>${pair(n)}<td class="num">${risk((matsEach || 0) * crafts)}</td><td>${cd}</td></tr>`
-    + (note ? `<tr class="record"><td colspan="11">${note}</td></tr>` : '');
+  return `<tr class="row"><td>${item(n, q, 150)}</td><td class="${srcColor}">${src}</td><td class="num">×${crafts}</td><td class="num">${money(mats)}</td><td class="num">${net(profit)}</td>${pair(n)}<td class="num">${risk(mats || 0)}</td></tr>`
+    + (note ? `<tr class="record"><td colspan="8">${note}</td></tr>` : '');
 }
 function fl(n, q, qty, buy, sell, slot, profit) {
   return `<tr class="row"><td>${item(n, q, 140)}</td><td class="num">×${qty}</td><td class="num">${money(buy)}</td><td class="num">${money(buy * qty)}</td><td class="num">${money(sell)}</td><td class="muted">${slot}</td><td class="num">${net(profit)}</td>${pair(n)}<td class="num">${risk(buy * qty)}</td></tr>`;

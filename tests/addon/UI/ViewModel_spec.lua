@@ -210,6 +210,22 @@ describe("ViewModel", function()
     LOOKS[6585], LOOKS[10940], LOOKS[10939], LOOKS[10978] = nil, nil, nil, nil
   end)
 
+  it("craft rows: mats \"—\" when you own them all, risk from the mats bought, no chance without a price", function()
+    local VM = Boot()
+    local looks = { [6217] = { name = "Copper Rod", quality = 1, conf = 80, soldPerDay = 6.4 },
+                    [2840] = { name = "Copper Bar", quality = 1 }, [2880] = { name = "Weak Flux", quality = 1 } }
+    local lookOf = function(k) return looks[k] end
+    local rows = VM.CraftRows({ { key = 6217, crafts = 3, matGold = 0, profit = 5700, p = 1, source = "Owned",
+                                  ownedUsed = { [2840] = 6 }, bought = {} },
+                                { key = 6217, crafts = 2, matGold = 4000, profit = 300, source = "Mixed",
+                                  ownedUsed = { [2880] = 1 }, bought = { [2840] = 4 } } }, lookOf, 10000)
+    assert_eq({ rows[1].mats, rows[1].profit, rows[1].chance, rows[1].dot, rows[1].volume, rows[1].risk, rows[1].note },
+              { "—", "+57s", "100%", "high", "6/day", "0.0%", "uses 6 owned Copper Bar" })
+    assert_eq({ rows[2].mats, rows[2].chance, rows[2].risk, rows[2].riskAmber, rows[2].note },
+              { "40s", "—", "40.0%", true, "uses 1 owned Weak Flux · buys 4 Copper Bar" })
+    assert_eq({ VM.CraftFooter(rows, 5), VM.CraftFooter({}, 1) }, { "2 of 5 known recipes pay now", "0 of 1 known recipe pay now" })
+  end)
+
   it("counts held units across places, leaves bound ones out and ties on the key", function()
     local VM = Boot()
     local holdings = { { where = "bags", key = 7, qty = 4 }, { where = "bank", key = 7, qty = 3 },

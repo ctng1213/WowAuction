@@ -106,6 +106,23 @@ describe("Options", function()
               { 5600, "your mats topped up from the AH: 20s · AHSync has no plan for it" })
   end)
 
+  it("A27 each known recipe that pays is costed on its own against what you carry", function()
+    local Options = Boot()
+    local rod = { spell = 2663, product = 6217, yieldMin = 1, yieldMax = 1, reagents = { { 2840, 2 } }, crafters = 1 }
+    local belt = { spell = 3755, product = 4240, yieldMin = 1, yieldMax = 1, reagents = { { 2589, 6 } }, crafters = 1 }
+    local items = { [6217] = { postPrice = 4000, chance = 1 }, [2840] = { sellValue = 950, cur = 1000, curQty = 2 },
+                    [4240] = { postPrice = 100, chance = 1 }, [2589] = { sellValue = 42 } }
+    local units = { [2840] = 4, [2589] = 20 }
+    local rows = Options.CraftOptions({ belt, rod }, units, Ctx({}, items, {}))
+    assert_eq(#rows, 1)                                                -- the belt loses money: left out
+    assert_eq({ rows[1].key, rows[1].crafts, rows[1].matGold, rows[1].profit, rows[1].source, rows[1].ownedUsed[2840],
+                rows[1].bought[2840] }, { 6217, 3, 2000, 5600, "Mixed", 4, 2 })   -- C3
+    assert_eq(units[2840], 4)                                          -- what you carry is not used up
+    local twin = { spell = 2664, product = 6217, yieldMin = 1, yieldMax = 1, reagents = { { 2840, 2 } }, crafters = 1 }
+    rows = Options.CraftOptions({ twin, rod }, units, Ctx({}, items, {}))
+    assert_eq({ rows[1].spell, rows[2].spell }, { 2663, 2664 })       -- equal profit: by spell
+  end)
+
   it("A20 a mat a craft uses is not also offered for sale", function()
     local Options = Boot()
     local rod = { spell = 2663, product = 6217, yieldMin = 1, yieldMax = 1, reagents = { { 2840, 2 } }, crafters = 1 }

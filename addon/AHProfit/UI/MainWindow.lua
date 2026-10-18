@@ -26,10 +26,12 @@ MainWindow.ROWS, MainWindow.ROW_HEIGHT = 12, 20
 MainWindow.GAP = 3
 MainWindow.CHANCE_STEPS = { 0, 25, 50, 75 }
 -- The mockup's order. Disenchant is always there: an alt may be the enchanter (A23).
--- Reservations lists what you keep for yourself, to change or undo it (A26).
-MainWindow.TABS = { { "today", "Today" }, { "week", "Week" }, { "disenchant", "Disenchant" }, { "inventory", "Inventory" },
-                    { "reservations", "Reservations", 84 } }
-MainWindow.MONEY_FIELDS = { each = true, total = true, net = true, worth = true, buy = true, ev = true, profit = true }
+-- Reservations lists what you keep for yourself, to change or undo it (A26). Each tab is as wide as
+-- its label, so all of them fit beside the Min chance box at the minimum width.
+MainWindow.TABS = { { "today", "Today", 48 }, { "week", "Week", 46 }, { "disenchant", "Disenchant", 68 },
+                    { "craft", "Craft", 46 }, { "inventory", "Inventory", 62 }, { "reservations", "Reservations", 78 } }
+MainWindow.MONEY_FIELDS = { each = true, total = true, net = true, worth = true, buy = true, ev = true, profit = true,
+                            mats = true }
 
 -- { header, row field, width (nil = fills), justify }; columns after the filling one anchor from the right.
 MainWindow.COLUMNS = {
@@ -44,6 +46,9 @@ MainWindow.COLUMNS = {
                  { "Chance", "chance", 46, "RIGHT" }, { "Volume", "volume", 52, "RIGHT" } },
   inventory = { { "Item", "item", nil, "LEFT" }, { "Where", "where", 44, "LEFT" }, { "Qty", "qty", 28, "RIGHT" },
                 { "Worth", "worth", 88, "RIGHT" }, { "Chance", "chance", 46, "RIGHT" }, { "Volume", "volume", 52, "RIGHT" } },
+  craft = { { "Item", "item", nil, "LEFT" }, { "Source", "source", 46, "LEFT" }, { "×", "crafts", 28, "RIGHT" },
+            { "Mats", "mats", 56, "RIGHT" }, { "Profit", "profit", 70, "RIGHT" }, { "Chance", "chance", 46, "RIGHT" },
+            { "Volume", "volume", 52, "RIGHT" }, { "Risk", "risk", 34, "RIGHT" } },
   reservations = { { "Item", "item", nil, "LEFT" }, { "Keeping", "keeping", 52, "RIGHT" }, { "Held", "held", 44, "RIGHT" },
                    { "Free", "free", 44, "RIGHT" } },
 }
@@ -543,6 +548,17 @@ local function Lines(nowMs, gold)
     local targets = Options.Disenchant(Market.Disenchantable(), { itemOf = LiveItem, levelsOf = LevelsOf })
     local rows = VM.DisenchantRows(targets, LookOf, best)
     return VM.WithNotes(rows), VM.DisenchantFooter(rows, best), "Nothing on the AH pays to disenchant right now."
+  end
+  if view.tab == "craft" then
+    local db = DB.Get() or {}
+    local recipes = Options.KnownRecipes(db, charId)
+    local units = Reserves.Apply(Options.Units(Inventory.Decode(((db.inventory or {})[charId] or {}).bags)),
+                                 Reserves.Get(db, charId))
+    local rows = VM.CraftRows(Options.CraftOptions(recipes, units, { itemOf = LiveItem, levelsOf = LevelsOf,
+                                                                     vendorOf = VendorOf }), LookOf, gold)
+    local empty = #recipes == 0 and "No recipes seen on this character yet. Open each profession window once."
+      or "None of your recipes pays right now."
+    return VM.WithNotes(rows), VM.CraftFooter(rows, #recipes), empty
   end
   if view.tab == "reservations" then
     local rows = VM.Reservations(Reserves.Get(DB.Get() or {}, charId), Holdings(charId), LookOf)

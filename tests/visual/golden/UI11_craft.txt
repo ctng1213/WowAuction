@@ -1,0 +1,64 @@
+Frame AHProfitWindow 680,360 560x360
+  Texture - 682,362 556x28
+  Texture - 682,390 556x1
+  FontString - 692,370 53x12 "AHProfit"
+  FontString - 755,371 88x10 "Grommash · Horde"
+  Button AHProfitWindowClose 1212,364 24x24
+  Frame AHProfitWindowAge 1110,367 96x18
+    FontString - 1136,371 44x10 "data now"
+  Button AHProfitWindowTabToday 690,396 48x22 "Today"
+  Button AHProfitWindowTabWeek 740,396 46x22 "Week"
+  Button AHProfitWindowTabDisenchant 788,396 68x22 "Disenchant"
+  Button AHProfitWindowTabCraft 858,396 46x22 "Craft"
+  Button AHProfitWindowTabInventory 906,396 62x22 "Inventory"
+  Button AHProfitWindowTabReservations 970,396 78x22 "Reservations"
+  Texture - 682,418 556x1
+  Button AHProfitWindowMinChance 1100,396 130x20 "Min chance: 50%   " (hidden)
+  Frame AHProfitWindowHeadertoday 690,420 526x20 (hidden)
+  Frame AHProfitWindowHeaderweek 690,420 526x20 (hidden)
+  Frame AHProfitWindowHeaderdisenchant 690,420 526x20 (hidden)
+  Frame AHProfitWindowHeadercraft 690,420 526x20
+    FontString - 1178,420 34x20 "Risk"
+    Button - 1178,420 34x20
+    FontString - 1123,420 52x20 "Volume"
+    Button - 1123,420 52x20
+    FontString - 1074,420 46x20 "Chance"
+    Button - 1074,420 46x20
+    FontString - 1001,420 70x20 "Profit"
+    Button - 1001,420 70x20
+    FontString - 942,420 56x20 "Mats"
+    Button - 942,420 56x20
+    FontString - 911,420 28x20 "×"
+    Button - 911,420 28x20
+    FontString - 862,420 46x20 "Source"
+    Button - 862,420 46x20
+    FontString - 693,420 166x20 "Item"
+    Button - 693,420 166x20
+  Frame AHProfitWindowHeaderinventory 690,420 526x20 (hidden)
+  Frame AHProfitWindowHeaderreservations 690,420 526x20 (hidden)
+  Frame AHProfitWindowList 690,442 540x240
+    Frame AHProfitWindowRow1 690,442 526x20
+      Texture - 692,442 522x1
+      FontString - 1178,442 34x20 "—"
+      FontString - 1123,442 52x20 "6/day"
+      FontString - 1074,442 46x20 "100%   "
+      FontString - 1001,442 70x20 "+57  "
+      FontString - 942,442 56x20 "—"
+      FontString - 911,442 28x20 "×3"
+      FontString - 862,442 46x20 "Owned"
+      FontString - 693,442 166x20 "Copper Rod"
+    Frame AHProfitWindowRow2 690,462 526x20
+      FontString - 749,462 463x20 "uses 6 owned Copper Bar"
+    Frame AHProfitWindowRow3 690,482 526x20 (hidden)
+    Frame AHProfitWindowRow4 690,502 526x20 (hidden)
+    Frame AHProfitWindowRow5 690,522 526x20 (hidden)
+    Frame AHProfitWindowRow6 690,542 526x20 (hidden)
+    Frame AHProfitWindowRow7 690,562 526x20 (hidden)
+    Frame AHProfitWindowRow8 690,582 526x20 (hidden)
+    Frame AHProfitWindowRow9 690,602 526x20 (hidden)
+    Frame AHProfitWindowRow10 690,622 526x20 (hidden)
+    Frame AHProfitWindowRow11 690,642 526x20 (hidden)
+    Frame AHProfitWindowRow12 690,662 526x20 (hidden)
+  Texture - 682,691 556x1
+  FontString - 692,700 149x10 "1 of 1 known recipe pay now"
+  FontString - 1173,700 55x10 "Budget 0  "

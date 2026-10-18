@@ -150,6 +150,29 @@ describe("MainWindow", function()
     assert_eq({ ui.rows[2].note:GetText(), ui.rows[3]:IsShown() }, { "from your own mats · AHSync has no plan for it", false })
   end)
 
+  it("A27 the Craft tab lists each known recipe that pays, with its mats", function()
+    Stubs.Reset()
+    _G.AHProfitPlan = nil
+    Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 2840, count = 4 } } } }
+    UIWorld.Market({ [6217] = UIWorld.Item(4100, 86, 6, { postPrice = 4000, chance = 1, sellValue = 3800, refStack = 1 }),
+                     [2840] = UIWorld.Item(1000, 80, 40, { curQty = 2, postPrice = 1000, sellValue = 950 }),
+                     [4240] = UIWorld.Item(100, 80, 4, { postPrice = 100, chance = 1, sellValue = 90 }) }, NOW)
+    Stubs.Login()
+    Stubs.Slash("/ahp")
+    AHProfit.MainWindow.ShowTab("craft")
+    local ui = AHProfit.MainWindow.Frames()
+    assert_eq(ui.empty:GetText(), "No recipes seen on this character yet. Open each profession window once.")
+    AHProfitDB.knownRecipes["Amaya-Grommash"] = "2663;3755"
+    AHProfitDB.recipes.Blacksmithing = { [2663] = { product = 6217, yieldMin = 1, yieldMax = 1, reagents = "2840,2" } }
+    AHProfitDB.recipes.Tailoring = { [3755] = { product = 4240, yieldMin = 1, yieldMax = 1, reagents = "2589,6" } }
+    AHProfit.MainWindow.Refresh()
+    local row = FirstRow("craft")
+    assert_eq({ row.item, row.source, row.crafts, row.mats, row.profit, row.chance:match("^%d+%%") },
+              { "Copper Rod", "Mixed", "×3", AHProfit.ViewModel.WithCoins("20s"), AHProfit.ViewModel.WithCoins("+56s"), "100%" })
+    assert_eq({ ui.rows[2].note:GetText(), ui.rows[3]:IsShown(), ui.footer:GetText() },
+              { "uses 4 owned Copper Bar · buys 2 Copper Bar", false, "1 of 2 known recipes pay now" })
+  end)
+
   it("A22 the Inventory tab lists what this character holds with its worth and plan", function()
     Stubs.Reset()
     _G.AHProfitPlan = nil
