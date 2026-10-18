@@ -164,4 +164,42 @@ describe("ViewModel", function()
     assert_eq(VM.Age(NOW - 1000, NOW), { text = "data now", amber = false })
     assert_eq(VM.Age(nil, NOW), { text = "no data", amber = true })
   end)
+
+  it("labels a window in local time, with its strength when it isn't established", function()
+    local VM = Boot()
+    assert_eq(VM.WindowLabel({ start = 138, hours = 4, weeks = 7 }, 0), "Sat 18:00–22:00")
+    assert_eq(VM.WindowLabel({ start = 138, hours = 4, weeks = 4 }, -HOUR), "Sat 17:00–21:00 (pattern)")
+    assert_eq(VM.WindowLabel({ start = 167, hours = 3, weeks = 2 }, 0), "Sun 23:00–Mon 02:00 (early)")
+    assert_eq({ VM.SeenAgo(20000), VM.SeenAgo(25 * MINUTE), VM.SeenAgo(2 * HOUR), VM.SeenAgo(3 * DAY) },
+              { "now", "25 min ago", "2 h ago", "3 d ago" })
+  end)
+end)
+
+--- A JSON null from the generated fixtures as nil.
+---@param v any
+---@return any
+local function Value(v)
+  if v == JSON_NULL then return nil end
+  return v
+end
+
+describe("ViewModel tooltip shared scenarios (tests/scenarios/tooltip.json)", function()
+  for _, s in ipairs(dofile("tests/addon/generated/tooltip.lua")) do
+    it(s.id .. " " .. s.name, function()
+      local VM = Boot()
+      local a = s.args
+      if s.call == "delta_percent" then
+        assert_eq(VM.DeltaPercent(a.value, a.current), s.expect, s.why)
+        return
+      end
+      local lines = VM.Tooltip({ cur = Value(a.cur), curAgeText = a.cur_age_text, med30 = Value(a.med30), deValue = Value(a.de_value),
+                                 canDisenchant = a.can_disenchant, bestWindow = Value(a.best_window),
+                                 bestPrice = Value(a.best_price), chance = Value(a.chance) })
+      local got = {}
+      for i, line in ipairs(lines) do got[i] = { line.label, line.value, line.colour } end
+      local want = {}
+      for i, line in ipairs(s.expect) do want[i] = { line[1], line[2], Value(line[3]) } end
+      assert_eq(got, want, s.why)
+    end)
+  end
 end)

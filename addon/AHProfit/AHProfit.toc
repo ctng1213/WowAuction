@@ -25,3 +25,4 @@ Recommend\Live.lua
 Recommend\Options.lua
 UI\ViewModel.lua
 UI\MainWindow.lua
+UI\Tooltip.lua

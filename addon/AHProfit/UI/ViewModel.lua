@@ -472,3 +472,75 @@ function ViewModel.WithNotes(rows)
   end
   return lines
 end
+
+-- ------------------------------------------------------------------ item tooltip (SPEC §4.3)
+
+ViewModel.WEEKDAYS = { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" }
+
+--- Tooltip delta against the current AH price: (value − cur) ÷ cur × 100, half up (views.delta_percent).
+---@param value number|nil
+---@param current number|nil
+---@return number|nil  Whole percent; nil when either is missing
+function ViewModel.DeltaPercent(value, current)
+  if value == nil or not current or current == 0 then return nil end
+  return ViewModel.RoundHalfUp((value - current) / current * 100)
+end
+
+--- A value with its delta and the delta's colour (views._delta_text).
+---@param value number|nil
+---@param current number|nil
+---@return string, string|nil  e.g. "11s (+38%)", "green"
+local function DeltaText(value, current)
+  local delta = ViewModel.DeltaPercent(value, current)
+  if value == nil then return "—", nil end
+  if delta == nil then return ViewModel.Money(value), nil end
+  local sign = delta > 0 and "+" or (delta < 0 and "−" or "")
+  return ViewModel.Money(value) .. " (" .. sign .. math.abs(delta) .. "%)", delta > 0 and "green" or (delta < 0 and "red" or nil)
+end
+
+--- The tooltip block, one fact per line, prices per unit (views.tooltip, TT1-TT5).
+---@param t table  { cur, curAgeText, med30, deValue, canDisenchant, bestWindow, bestPrice, chance }
+---@return table[] { label, value, colour } in spec order; the Disenchant line is left out without an enchanter
+function ViewModel.Tooltip(t)
+  local lines = { { label = "Current AH price", value = t.cur and (ViewModel.Money(t.cur) .. " (" .. t.curAgeText .. ")") or "—" } }
+  local hist, colour = DeltaText(t.med30, t.cur)
+  if t.med30 and t.cur and t.cur ~= 0 then hist = hist:gsub(" %(", " (30d, ", 1) end
+  lines[#lines + 1] = { label = "Historical price", value = hist, colour = colour }
+  if t.canDisenchant then
+    local v, c = DeltaText(t.deValue, t.cur)
+    lines[#lines + 1] = { label = "Disenchant value", value = v, colour = c }
+  end
+  lines[#lines + 1] = { label = "Best time to sell", value = t.bestWindow or "—" }
+  local v, c = DeltaText(t.bestPrice, t.cur)
+  lines[#lines + 1] = { label = "Price at best time", value = v, colour = c }
+  lines[#lines + 1] = { label = "Chance to sell", value = t.chance and (ViewModel.RoundHalfUp(t.chance * 100) .. "%") or "—" }
+  return lines
+end
+
+--- A selling window in local time, e.g. "Sat 17:00–21:00", with its strength when not yet established
+--- (item_detail.window_long; SPEC §4.3 "Best time to sell").
+---@param w table          { start, hours, weeks } (UTC slots, Market.Decode)
+---@param offsetMs number  Local time minus UTC
+---@return string
+function ViewModel.WindowLabel(w, offsetMs)
+  local start = (w.start + math.floor(offsetMs / HOUR_MS)) % 168
+  local finish = (start + w.hours) % 168
+  local startDay, endDay = math.floor(start / 24), math.floor(finish / 24)
+  local text = string.format("%s %02d:00–", ViewModel.WEEKDAYS[startDay + 1], start % 24)
+  if endDay ~= startDay then text = text .. ViewModel.WEEKDAYS[endDay + 1] .. " " end
+  text = text .. string.format("%02d:00", finish % 24)
+  if w.weeks < 3 then return text .. " (early)" end         -- short: the line must fit 320 px (UI8)
+  if w.weeks < 6 then return text .. " (pattern)" end
+  return text
+end
+
+--- How long ago a price was seen, for the tooltip ("2 h ago", "now").
+---@param ageMs number|nil
+---@return string
+function ViewModel.SeenAgo(ageMs)
+  local minutes = math.floor(math.max(0, ageMs or 0) / 60000)
+  if minutes < 1 then return "now" end
+  if minutes < 60 then return minutes .. " min ago" end
+  if minutes < 1440 then return math.floor(minutes / 60) .. " h ago" end
+  return math.floor(minutes / 1440) .. " d ago"
+end

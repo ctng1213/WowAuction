@@ -90,6 +90,53 @@ function Adapter.ShowTooltip(owner, title, text)
   GameTooltip:Show()
 end
 
+--- Call a function whenever the game shows an item tooltip.
+--- UNVERIFIED: which hook Forever has. Modern clients have TooltipDataProcessor; Classic has
+--- GameTooltip's OnTooltipSetItem script. Whichever exists is used.
+---@param fn function  Called with (tooltip, item link)
+---@return boolean     true when a hook was installed
+function Adapter.HookItemTooltip(fn)
+  if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType then
+    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tooltip)
+      local _, link = tooltip:GetItem()
+      if link then fn(tooltip, link) end
+    end)
+    return true
+  end
+  if GameTooltip and GameTooltip.HookScript then
+    GameTooltip:HookScript("OnTooltipSetItem", function(tooltip)
+      local _, link = tooltip:GetItem()
+      if link then fn(tooltip, link) end
+    end)
+    return true
+  end
+  return false
+end
+
+--- Add the AHProfit block's lines to a tooltip.
+---@param tooltip table  The tooltip shown
+---@param title string   Gold header line
+---@param lines table[]  { label, value, colour = "green" | "red" | nil }
+function Adapter.AddTooltipLines(tooltip, title, lines)
+  local colours = { green = { 0.24, 0.86, 0.31 }, red = { 1, 0.29, 0.24 } }
+  tooltip:AddLine(title, 1, 0.82, 0)
+  for _, line in ipairs(lines) do
+    local c = colours[line.colour] or { 1, 1, 1 }
+    tooltip:AddDoubleLine(line.label, line.value, 0.56, 0.83, 1, c[1], c[2], c[3])
+  end
+  tooltip:Show()
+end
+
+--- An item's quality, item level and class from the client (for the disenchant line).
+--- UNVERIFIED: GetItemInfo's 3rd and 4th returns and GetItemInfoInstant's 6th, as on Classic.
+---@param itemId number
+---@return number|nil quality, number|nil ilvl, number|nil classId (2 weapon, 4 armor)
+function Adapter.ItemDetails(itemId)
+  local _, _, quality, ilvl = GetItemInfo(itemId)
+  local _, _, _, _, _, classId = GetItemInfoInstant(itemId)
+  return quality, ilvl, classId
+end
+
 --- Hide the tooltip.
 function Adapter.HideTooltip()
   GameTooltip:Hide()

@@ -16,6 +16,9 @@ local TOC = ADDON_DIR .. "AHProfit.toc"
 Stubs.ITEM_CLASSES = { [6585] = 4, [2852] = 4 }
 
 -- Item names for links; cosmetic, only so links look real.
+-- Item levels (GetItemInfo's 4th return); others 1.
+Stubs.ITEM_LEVELS = { [6585] = 18 }
+
 -- What a merchant pays for some items, copper (GetItemInfo's 11th return); others 0.
 Stubs.ITEM_SELL = { [2589] = 3, [3300] = 12 }
 
@@ -371,7 +374,8 @@ local function InstallItems()
     local name = Stubs.ITEM_NAMES[id]
     if not name or Stubs.world.uncached[id] then return nil end
     local quality = ({ ["9d9d9d"] = 0, ffffff = 1, ["1eff00"] = 2 })[Stubs.ITEM_COLORS[id] or "ffffff"]
-    return name, Stubs.ItemLink(id), quality, 1, 1, "Type", "Subtype", 20, "", "icon", Stubs.ITEM_SELL[id] or 0
+    return name, Stubs.ItemLink(id), quality, Stubs.ITEM_LEVELS[id] or 1, 1, "Type", "Subtype", 20, "", "icon",
+      Stubs.ITEM_SELL[id] or 0
   end)
   Define("GetItemInfoInstant", function(id)
     return id, "Type", "Subtype", "", "icon", Stubs.ITEM_CLASSES[id] or 7, 0
@@ -425,12 +429,18 @@ local function InstallCore()
   Stubs.chat = {}
   Define("DEFAULT_CHAT_FRAME", { AddMessage = function(_, text) Stubs.chat[#Stubs.chat + 1] = text end })
   Stubs.tooltip = { shown = false, lines = {} }
+  Stubs.tooltip.doubles, Stubs.tooltip.hooks = {}, {}
   Define("GameTooltip", {
-    SetOwner = function(_, owner) Stubs.tooltip.owner, Stubs.tooltip.lines = owner, {} end,
+    SetOwner = function(_, owner) Stubs.tooltip.owner, Stubs.tooltip.lines, Stubs.tooltip.doubles = owner, {}, {} end,
     SetText = function(_, text) Stubs.tooltip.lines[1] = text end,
     AddLine = function(_, text) Stubs.tooltip.lines[#Stubs.tooltip.lines + 1] = text end,
+    AddDoubleLine = function(_, left, right, _, _, _, r, g, b)
+      Stubs.tooltip.doubles[#Stubs.tooltip.doubles + 1] = { left, right, r, g, b }
+    end,
     Show = function() Stubs.tooltip.shown = true end,
     Hide = function() Stubs.tooltip.shown = false end,
+    GetItem = function() return Stubs.tooltip.itemName, Stubs.tooltip.itemLink end,
+    HookScript = function(self, name, fn) Stubs.tooltip.hooks[name] = fn end,
   })
   Define("GetNumSkillLines", function() return #Stubs.world.skillLines end)
   Define("GetSkillLineInfo", function(i)
@@ -619,4 +629,16 @@ function Stubs.WriteFile(path, text)
 end
 
 Stubs.Reset()
+
+--- Show an item tooltip, as hovering an item does: runs the hooked OnTooltipSetItem script.
+---@param id number  Item id
+---@return table     Stubs.tooltip, with the lines the addon added
+function Stubs.HoverItem(id)
+  Stubs.tooltip.lines, Stubs.tooltip.doubles = {}, {}
+  Stubs.tooltip.itemName, Stubs.tooltip.itemLink = Stubs.ITEM_NAMES[id], Stubs.ItemLink(id)
+  local hook = Stubs.tooltip.hooks.OnTooltipSetItem
+  if hook then hook(GameTooltip) end
+  return Stubs.tooltip
+end
+
 return Stubs

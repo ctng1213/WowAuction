@@ -26,7 +26,7 @@ K1-K3
 
 # M2/M5 addon
 A5
-UI6-UI8 UI10-UI11
+UI6-UI7 UI10-UI11
 
 
 # Market activity amendment (SPEC §3.3.6, §3.4 capacity, §8.8 volume backtest)

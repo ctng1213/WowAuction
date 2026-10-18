@@ -1,0 +1,195 @@
+[
+ {
+  "id": "TT1",
+  "name": "deltas against the current price",
+  "call": "tooltip",
+  "args": {
+   "cur": 800,
+   "cur_age_text": "2h ago",
+   "med30": 1100,
+   "de_value": 1425,
+   "can_disenchant": true,
+   "best_window": "Sat 17:00–21:00",
+   "best_price": 1230,
+   "chance": 0.46
+  },
+  "expect": [
+   [
+    "Current AH price",
+    "8s (2h ago)",
+    null
+   ],
+   [
+    "Historical price",
+    "11s (30d, +38%)",
+    "green"
+   ],
+   [
+    "Disenchant value",
+    "14s 25c (+78%)",
+    "green"
+   ],
+   [
+    "Best time to sell",
+    "Sat 17:00–21:00",
+    null
+   ],
+   [
+    "Price at best time",
+    "12s 30c (+54%)",
+    "green"
+   ],
+   [
+    "Chance to sell",
+    "46%",
+    null
+   ]
+  ],
+  "why": "11s is 38% above 8s; 14s 25c is 78% above; 12s 30c is 53.75% above, rounded half up"
+ },
+ {
+  "id": "TT2",
+  "name": "a lower historical price is a red negative delta",
+  "call": "tooltip",
+  "args": {
+   "cur": 1000,
+   "cur_age_text": "1h ago",
+   "med30": 900,
+   "de_value": null,
+   "can_disenchant": false,
+   "best_window": null,
+   "best_price": null,
+   "chance": null
+  },
+  "expect": [
+   [
+    "Current AH price",
+    "10s (1h ago)",
+    null
+   ],
+   [
+    "Historical price",
+    "9s (30d, −10%)",
+    "red"
+   ],
+   [
+    "Best time to sell",
+    "—",
+    null
+   ],
+   [
+    "Price at best time",
+    "—",
+    null
+   ],
+   [
+    "Chance to sell",
+    "—",
+    null
+   ]
+  ],
+  "why": "9s is 10% below 10s"
+ },
+ {
+  "id": "TT3",
+  "name": "no current price means values without deltas",
+  "call": "tooltip",
+  "args": {
+   "cur": null,
+   "cur_age_text": "",
+   "med30": 1100,
+   "de_value": 1425,
+   "can_disenchant": true,
+   "best_window": null,
+   "best_price": 1230,
+   "chance": null
+  },
+  "expect": [
+   [
+    "Current AH price",
+    "—",
+    null
+   ],
+   [
+    "Historical price",
+    "11s",
+    null
+   ],
+   [
+    "Disenchant value",
+    "14s 25c",
+    null
+   ],
+   [
+    "Best time to sell",
+    "—",
+    null
+   ],
+   [
+    "Price at best time",
+    "12s 30c",
+    null
+   ],
+   [
+    "Chance to sell",
+    "—",
+    null
+   ]
+  ],
+  "why": "a delta needs a current price"
+ },
+ {
+  "id": "TT4",
+  "name": "without an enchanter the disenchant line is left out",
+  "call": "tooltip",
+  "args": {
+   "cur": 800,
+   "cur_age_text": "2h ago",
+   "med30": 1100,
+   "de_value": 1425,
+   "can_disenchant": false,
+   "best_window": null,
+   "best_price": null,
+   "chance": null
+  },
+  "expect": [
+   [
+    "Current AH price",
+    "8s (2h ago)",
+    null
+   ],
+   [
+    "Historical price",
+    "11s (30d, +38%)",
+    "green"
+   ],
+   [
+    "Best time to sell",
+    "—",
+    null
+   ],
+   [
+    "Price at best time",
+    "—",
+    null
+   ],
+   [
+    "Chance to sell",
+    "—",
+    null
+   ]
+  ],
+  "why": "no character can disenchant it"
+ },
+ {
+  "id": "TT5",
+  "name": "a half-percent delta rounds up",
+  "call": "delta_percent",
+  "args": {
+   "value": 1125,
+   "current": 1000
+  },
+  "expect": 13,
+  "why": "12.5% rounds half up to 13%"
+ }
+]

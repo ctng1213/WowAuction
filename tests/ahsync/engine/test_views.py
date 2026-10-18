@@ -1,6 +1,11 @@
 """Tests for ahsync/engine/views.py: display scenarios D3-D8 and the tooltip TT1-TT5."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
+import pytest
+
 from ahsync.engine.views import (
     COLUMN_HELP, MARKET_COLUMNS, CraftInput, DisenchantInput, MarketActivity, TooltipLine, age_text, craft_money,
     craft_row, delta_percent, disenchant_row, market_activity, money, risk, round_half_up,
@@ -138,3 +143,18 @@ def test_craft_row_cells():
                                  -1.0, pair, "ready", ""), 50 * G)
     assert (owned["note"], owned["value_each"], owned["sort"]["value_each"], owned["profit_class"]) == \
         ("uses 2 owned Copper Bar", "—", -1, "neg")
+
+
+SHARED_TOOLTIP = json.loads((Path(__file__).resolve().parents[3] / "tests" / "scenarios" / "tooltip.json")
+                            .read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("s", SHARED_TOOLTIP, ids=[s["name"] for s in SHARED_TOOLTIP])
+def test_shared_tooltip_with_the_addon(s):
+    if s["call"] == "delta_percent":
+        assert delta_percent(s["args"]["value"], s["args"]["current"]) == s["expect"], s["why"]
+        return
+    a = s["args"]
+    lines = tooltip(a["cur"], a["cur_age_text"], a["med30"], a["de_value"], a["can_disenchant"], a["best_window"],
+                    a["best_price"], a["chance"])
+    assert [[line.label, line.value, line.colour] for line in lines] == s["expect"], s["why"]

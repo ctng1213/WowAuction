@@ -1077,6 +1077,8 @@ Chance to sell          46%
 
 A line with no data shows "—", except Disenchant value, which is left out as described above.
 
+**In the addon** (`UI/Tooltip.lua`, lines from `ViewModel.Tooltip`, the Lua twin of `views.tooltip`; TT1–TT5 are shared scenarios run in both, A21, UI8): the block reads the market file, and a newer in-game scan's cheapest price replaces `cur` ("40c (now)"), with the deltas following it. Best time to sell is the top selling window in local time, tagged "(early)" under 3 weeks of data and "(pattern)" under 6, so the longest line fits 320 px (UI8). Price at best time is `med30 × how` of that window; SPEC GAP: the trend factor is not applied yet. The Disenchant line uses the ported disenchant table with the item's quality, level and class from the client and your best Enchanting skill. An item without market data adds nothing, and a failure never breaks the tooltip. The hook is `TooltipDataProcessor` where the client has it, else `GameTooltip`'s `OnTooltipSetItem` (UNVERIFIED on Forever).
+
 **Structure.** `UI/ViewModel.lua` turns the addon files, the addon's own recommendations and the live state into plain tables of rows, labels, colours and formatted money. The frame code (`Window`, `AHPanel`, `Tooltip`) only draws those tables. So most UI behaviour is testable as plain Lua, without frames.
 
 `/ahp demo` loads a fixture plan into the real window, so the UI can be checked in game before any real data exists.
