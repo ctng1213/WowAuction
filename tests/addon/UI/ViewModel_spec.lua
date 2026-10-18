@@ -190,6 +190,26 @@ describe("ViewModel", function()
     LOOKS[6948], LOOKS[2592], LOOKS[4306], LOOKS[6217] = nil, nil, nil, nil
   end)
 
+  it("A23 Disenchant rows say what the mats are and whether an enchanter on the account can do it", function()
+    local VM = Boot()
+    LOOKS[6585], LOOKS[10940], LOOKS[10939], LOOKS[10978] = { name = "Scouting Gloves", quality = 2 },
+      { name = "Strange Dust", quality = 1, conf = 80, soldPerDay = 210 }, { name = "Greater Magic Essence", quality = 2 },
+      { name = "Small Glimmering Shard", quality = 3 }
+    local target = { key = 6585, ilvl = 18, skill = 1, buy = 800, ev = 1425, profit = 625, mainMat = 10940, matChance = 0.8,
+                     mats = { { key = 10940, units = 1.875 }, { key = 10939, units = 0.3 }, { key = 10978, units = 0.04 } } }
+    local row = VM.DisenchantRows({ target }, Look, nil)[1]
+    assert_eq({ row.ilvl, row.skill, row.buy, row.ev, row.profit, row.chance, row.dot, row.volume },
+              { "18", "1", "8s", "14s 25c", "+6s 25c", "80%", "high", "210/day" })
+    assert_eq(row.note, "1.9 Strange Dust · 0.3 Greater Magic Essence · no enchanter yet")
+    assert_eq(VM.DisenchantRows({ target }, Look, 150)[1].note, "1.9 Strange Dust · 0.3 Greater Magic Essence")
+    target.skill = 225
+    local high = VM.DisenchantRows({ target }, Look, 150)[1]
+    assert_eq({ high.muted, high.note:match("needs.*$") }, { true, "needs Enchanting 225 (best 150)" })
+    assert_eq({ VM.DisenchantFooter({ row }, nil), VM.DisenchantFooter({}, 150) },
+              { "1 target · no enchanter yet: what one could disenchant", "0 targets · best Enchanting 150" })
+    LOOKS[6585], LOOKS[10940], LOOKS[10939], LOOKS[10978] = nil, nil, nil, nil
+  end)
+
   it("labels a window in local time, with its strength when it isn't established", function()
     local VM = Boot()
     assert_eq(VM.WindowLabel({ start = 138, hours = 4, weeks = 7 }, 0), "Sat 18:00–22:00")

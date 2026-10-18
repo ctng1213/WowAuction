@@ -128,4 +128,21 @@ describe("Options", function()
     local net, p = Options.ProductNet({ yieldMin = 1, yieldMax = 3 }, nil, 25)
     assert_eq({ net(0), net(1), net(2), p }, { 0, 50, 100, nil })                  -- 2 units a craft at 25c
   end)
+
+  it("A23 disenchant targets for any enchanter: buy, expected mats, profit, the skill needed", function()
+    local Options = Boot()
+    local items = { [6585] = { cur = 800 }, [10940] = { sellValue = 600, chance = 0.8 }, [10939] = { sellValue = 1000 },
+                    [9000] = { cur = 5000 } }
+    local candidates = { [6585] = { skill = 1, quality = 2, ilvl = 18, kind = "armor" },
+                         [9000] = { skill = 1, quality = 2, ilvl = 18, kind = "weapon" },
+                         [9001] = { skill = 1, quality = 2, ilvl = 18, kind = "armor" } }       -- no price: skipped
+    local rows = Options.Disenchant(candidates, Ctx({}, items, {}))
+    assert_eq({ #rows, rows[1].key, rows[1].buy, rows[1].ev, rows[1].profit, rows[1].matChance }, { 1, 6585, 800, 1425, 625, 0.8 })
+    local live = Options.Disenchant(candidates, { itemOf = ItemsOf(items),
+                                                  levelsOf = function(key) return key == 6585 and { { price = 700, units = 1 } } or nil end })
+    assert_eq(live[1].profit, 725)                                                  -- the live scan's 7s
+    assert_eq(Options.BestSkill({ professions = { A = { Enchanting = { skill = 150 } }, B = { Enchanting = { skill = 90 } },
+                                                  C = { Mining = { skill = 300 } } } }, "Enchanting"), 150)
+    assert_eq(Options.BestSkill({}, "Enchanting"), nil)
+  end)
 end)

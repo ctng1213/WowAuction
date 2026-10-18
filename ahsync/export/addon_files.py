@@ -15,6 +15,8 @@ from pathlib import Path
 
 from ahsync.config import Config
 from ahsync.db.sqlite import Database
+from ahsync.engine import disenchant
+from ahsync.engine.de_table import DE_TABLE
 from ahsync.export.market_lua import market_lua
 from ahsync.export.plan_lua import plan_lua
 from ahsync.state.importer import ingested_until
@@ -101,6 +103,29 @@ def shortlist(db: Database, market: str, now_ms: int) -> set[int]:
     return keys
 
 
+DE_KINDS = {2: ("weapon", "w"), 4: ("armor", "a")}     # WoW item class -> DE table kind, export code
+
+
+def disenchantable(db: Database) -> dict[int, str]:
+    """Items one could disenchant, with the skill it needs (A23): for the addon's Disenchant tab.
+
+    Args:
+        db: Database (item metadata).
+
+    Returns:
+        Item key -> "skill,quality,ilvl,kind"; unknown-suffix keys are left out.
+    """
+    out = {}
+    for key, info in db.items().items():
+        kind = DE_KINDS.get(info.item_class)
+        if key < 0 or not kind or not info.quality or not info.ilvl:
+            continue
+        row = disenchant.outcomes_for(DE_TABLE, info.quality, info.ilvl, kind[0])
+        if row is not None:
+            out[key] = f"{row[0]},{info.quality},{info.ilvl},{kind[1]}"
+    return out
+
+
 def export_market(db: Database, cfg: Config, now_ms: int, sleep: Callable[[float], None],
                   replace: Callable[[Path, Path], None] = os.replace) -> bool:
     """Write MarketIntelligence.lua from the published intelligence (SPEC §3.5).
@@ -124,8 +149,8 @@ def export_market(db: Database, cfg: Config, now_ms: int, sleep: Callable[[float
         return False
     shortlists = {i.market: shortlist(db, i.market, now_ms) for i in intels}
     char_markets = {c: m for c, _, _, m, _ in db.characters() if m is not None}
-    return _write(db, folder / MARKET_FILE, market_lua(intels, shortlists, char_markets, now_ms), MAX_MARKET_BYTES,
-                  now_ms, sleep, replace)
+    text = market_lua(intels, shortlists, char_markets, now_ms, disenchantable(db))
+    return _write(db, folder / MARKET_FILE, text, MAX_MARKET_BYTES, now_ms, sleep, replace)
 
 
 def _write(db: Database, path: Path, text: str, limit: int, now_ms: int, sleep: Callable[[float], None],

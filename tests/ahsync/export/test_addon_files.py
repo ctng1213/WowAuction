@@ -127,3 +127,10 @@ def test_the_plan_file_holds_open_actions_rules_and_ingested_until(db, tmp_path)
     assert f'"a1;post;{LINEN};20;55;{now};1046;;;pending;80;"' in text and "a2;" not in text and "a3;" not in text
     assert f'[{LINEN}] = "none,{now}"' in text and f'["Brugan-G"] = {now - HOUR},' in text
     assert db.addon_actions([]) == []
+
+
+def test_A23_disenchantable_items_from_item_metadata(db):
+    db.upsert_items([(6585, 6585, "Scouting Gloves", 2, 18, 4, 0, 0, 100, 1), (2589, 2589, "Linen Cloth", 1, 5, 7, 0, 0, 10, 20),
+                     (9000, 9000, "Odd Sword", 2, 18, 2, 0, 0, 100, 1), (9001, 9001, "No Level", 2, None, 4, 0, 0, 1, 1)],
+                    FakeClock().now_ms())
+    assert addon_files.disenchantable(db) == {6585: "1,2,18,a", 9000: "1,2,18,w"}

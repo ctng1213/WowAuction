@@ -24,8 +24,9 @@ MainWindow.MIN_WIDTH, MainWindow.MIN_HEIGHT = 560, 360
 MainWindow.ROWS, MainWindow.ROW_HEIGHT = 12, 20
 MainWindow.GAP = 3
 MainWindow.CHANCE_STEPS = { 0, 25, 50, 75 }
-MainWindow.TABS = { { "today", "Today" }, { "week", "Week" }, { "inventory", "Inventory" } }
-MainWindow.MONEY_FIELDS = { each = true, total = true, net = true, worth = true }
+-- The mockup's order. Disenchant is always there: an alt may be the enchanter (A23).
+MainWindow.TABS = { { "today", "Today" }, { "week", "Week" }, { "disenchant", "Disenchant" }, { "inventory", "Inventory" } }
+MainWindow.MONEY_FIELDS = { each = true, total = true, net = true, worth = true, buy = true, ev = true, profit = true }
 
 -- { header, row field, width (nil = fills), justify }; columns after the filling one anchor from the right.
 MainWindow.COLUMNS = {
@@ -35,6 +36,9 @@ MainWindow.COLUMNS = {
   week = { { "Time", "time", 34, "LEFT" }, { "", "action", 52, "LEFT" }, { "Item", "item", nil, "LEFT" },
            { "Qty", "qty", 28, "RIGHT" }, { "Total", "total", 56, "RIGHT" }, { "Net", "net", 88, "RIGHT" },
            { "Chance", "chance", 46, "RIGHT" } },
+  disenchant = { { "Item", "item", nil, "LEFT" }, { "ilvl", "ilvl", 30, "RIGHT" }, { "Skill", "skill", 34, "RIGHT" },
+                 { "Buy", "buy", 52, "RIGHT" }, { "EV", "ev", 56, "RIGHT" }, { "Profit", "profit", 70, "RIGHT" },
+                 { "Chance", "chance", 46, "RIGHT" }, { "Volume", "volume", 52, "RIGHT" } },
   inventory = { { "Item", "item", nil, "LEFT" }, { "Where", "where", 44, "LEFT" }, { "Qty", "qty", 28, "RIGHT" },
                 { "Worth", "worth", 88, "RIGHT" }, { "Chance", "chance", 46, "RIGHT" }, { "Volume", "volume", 52, "RIGHT" } },
 }
@@ -435,8 +439,9 @@ local function FillRow(row, line)
     local badge = BADGES[line.kind] or COLORS.muted
     row.badges[view.tab]:SetColorTexture(badge[1], badge[2], badge[3])
   end
-  Tint(cells.item, QUALITY[line.quality] or QUALITY[1])
+  Tint(cells.item, line.muted and COLORS.muted or QUALITY[line.quality] or QUALITY[1])
   if cells.net then Tint(cells.net, COLORS[line.netColor]) end
+  if cells.profit then Tint(cells.profit, COLORS.pos) end
   if cells.risk then Tint(cells.risk, line.riskAmber and COLORS.amber or COLORS.muted) end
   if line.dot then cells.chance:SetText(line.chance .. Dot(line.dot)) end
 end
@@ -509,6 +514,12 @@ local function Lines(nowMs, gold)
   local offset = Adapter.LocalOffsetMs(nowMs)
   local info = Adapter.PlayerInfo()
   local charId = info.name .. "-" .. info.realm
+  if view.tab == "disenchant" then
+    local best = Options.BestSkill(DB.Get() or {}, "Enchanting")
+    local targets = Options.Disenchant(Market.Disenchantable(), { itemOf = LiveItem, levelsOf = LevelsOf })
+    local rows = VM.DisenchantRows(targets, LookOf, best)
+    return VM.WithNotes(rows), VM.DisenchantFooter(rows, best), "Nothing on the AH pays to disenchant right now."
+  end
   if view.tab == "inventory" then
     local actions = CharacterActions(charId, nowMs)
     local rows = VM.Inventory(Holdings(charId), actions, LookOf, LiveItem, offset)

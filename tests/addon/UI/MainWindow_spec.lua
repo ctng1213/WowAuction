@@ -81,6 +81,15 @@ describe("MainWindow", function()
               { "75", AHProfit.ViewModel.WithCoins("1 action · expected +10s 46c") })
   end)
 
+  it("every column header on every tab has a tooltip text", function()
+    Boot()
+    for tab, columns in pairs(AHProfit.MainWindow.COLUMNS) do
+      for _, c in ipairs(columns) do
+        if c[1] ~= "" then assert_eq(AHProfit.ViewModel.COLUMN_HELP[c[1]] ~= nil, true, tab .. ": " .. c[1]) end
+      end
+    end
+  end)
+
   it("hovering a column header shows what it means", function()
     local MainWindow = Boot()
     Stubs.Slash("/ahp")
@@ -157,6 +166,24 @@ describe("MainWindow", function()
               { "Post now at 45c", "Hearthstone", "Bound · not planned" })
     assert_eq({ ui.footer:GetText(), ui.chance:IsShown(), ui.headers.inventory:IsShown() },
               { AHProfit.ViewModel.WithCoins("2 items · worth 8s 40c"), false, true })
+  end)
+
+  it("A23 the Disenchant tab is always there, even with no enchanter on the account", function()
+    Stubs.Reset()
+    local gloves, dust = "800,1,30,1100,1100,,,0,,,1,50,,,1,,0,500;;", "600,20,30,600,600,,,0,2100,,90,80,,,20,600,0,800;;"
+    _G.AHProfitMarket = { schemaVersion = 1, generatedAt = NOW, charMarkets = {},
+      markets = { [UIWorld.MARKET] = { observationsUntil = NOW, curveHour = 0, I = { [6585] = gloves, [10940] = dust }, C = {},
+                                       D = { [6585] = "1,2,18,a" } } } }
+    AHProfitMarket.checksum = "3:" .. (#gloves + #dust + #"1,2,18,a")
+    Stubs.Login()
+    Stubs.Slash("/ahp")
+    local ui = AHProfit.MainWindow.Frames()
+    assert_eq(ui.tabs.disenchant:GetText(), "Disenchant")
+    AHProfit.MainWindow.ShowTab("disenchant")
+    local row = FirstRow("disenchant")
+    assert_eq({ row.item, row.skill, row.buy, row.chance:match("^%d+%%") },
+              { "Scouting Gloves", "1", AHProfit.ViewModel.WithCoins("8s"), "80%" })
+    assert_eq(ui.footer:GetText(), "1 target · no enchanter yet: what one could disenchant")
   end)
 
   it("scrolling moves through a long list and stops at its ends", function()

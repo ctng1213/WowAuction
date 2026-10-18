@@ -26,6 +26,7 @@ local function Checksum(markets)
   for _, m in pairs(markets) do
     for _, text in pairs(m.I or {}) do count, length = count + 1, length + #text end
     for _, text in pairs(m.C or {}) do count, length = count + 1, length + #text end
+    for _, text in pairs(m.D or {}) do count, length = count + 1, length + #text end
   end
   return count .. ":" .. length
 end
@@ -155,4 +156,20 @@ end
 --- Forget the checked file and the cache (tests, and a future reload of the data).
 function Market.Reset()
   state, cache, cached = nil, {}, 0
+end
+
+--- Items one could disenchant, with what that takes (A23).
+---@return table  key -> { skill, quality, ilvl, kind = "armor" | "weapon" }; empty without usable data
+function Market.Disenchantable()
+  local s = State()
+  if s.status ~= "ok" then return {} end
+  local out = {}
+  for key, text in pairs(s.market.D or {}) do
+    local skill, quality, ilvl, kind = text:match("^(%d+),(%d+),(%d+),([aw])$")
+    if skill then
+      out[key] = { skill = tonumber(skill), quality = tonumber(quality), ilvl = tonumber(ilvl),
+                   kind = kind == "w" and "weapon" or "armor" }
+    end
+  end
+  return out
 end

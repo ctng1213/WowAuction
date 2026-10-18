@@ -37,7 +37,7 @@ def test_EX2_the_file_holds_compact_item_strings_curves_and_a_checked_header():
     strings = len("45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900;138:4:139:1120:7;") + 72 + len(",,,,,,,0,,,,6,,,1,,1,250;;")
     assert f'checksum = "3:{strings}"' in text and "schemaVersion = 1," in text and f"generatedAt = {BUILT}," in text
     assert f'charMarkets = {{ ["Amaya-Grommash"] = "{M}" }}' in text
-    assert f'["{M}"] = {{ observationsUntil = {BUILT - HOUR}, curveHour = {BUILT // HOUR}, I = I1, C = C1 }},' in text
+    assert f'["{M}"] = {{ observationsUntil = {BUILT - HOUR}, curveHour = {BUILT // HOUR}, I = I1, C = C1, D = D1 }},' in text
 
 
 def test_AR6_the_shortlist_keeps_the_full_curve_and_others_get_the_0_5_20_columns_unchanged():
@@ -58,7 +58,15 @@ def test_lua_strings_are_escaped_and_items_are_chunked_into_functions():
     assert market_lua.lua_string('a"b\\c\nd\re') == '"a\\"b\\\\c\\nd\\re"'
     many = intel(*(replace(EMPTY, key=k, cur=10) for k in range(1, market_lua.CHUNK + 2)))
     text = market_lua.market_lua([many], {}, {}, BUILT)
-    assert text.count("do local fill = function(I, C)") == 2 and "observationsUntil" in text
+    assert text.count("do local fill = function(I, C, D)") == 2 and "observationsUntil" in text
     assert market_lua.trim_curve("", False) == ""
     none_until = replace(many, observations_until_ms=None, items={})
     assert "observationsUntil = nil" in market_lua.market_lua([none_until], {}, {}, BUILT)
+
+
+def test_A23_disenchantable_exported_items_carry_their_skill_and_kind_and_count_in_the_checksum():
+    text = market_lua.market_lua([intel(LINEN_INTEL, replace(EMPTY, key=OTHER))], {}, {}, BUILT,
+                                 {LINEN: "1,2,18,a", OTHER: "1,2,18,w"})
+    assert f'D[{LINEN}]="1,2,18,a"' in text and f"D[{OTHER}]" not in text               # OTHER isn't exported
+    strings = len("45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900;138:4:139:1120:7;") + 72 + len("1,2,18,a")
+    assert f'checksum = "3:{strings}"' in text

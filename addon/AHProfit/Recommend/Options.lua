@@ -219,3 +219,52 @@ function Options.WithoutGoneBuys(actions, levelsOf)
   end
   return kept, gone
 end
+
+--- Disenchant targets on the AH (A23), for any enchanter: the buy price (the live scan's cheapest,
+--- else the file's), the expected mats at their sell values, and the profit; unprofitable items
+--- are left out. Each target says the skill it needs, so the tab is useful without an enchanter.
+---@param candidates table  Market.Disenchantable()
+---@param ctx table         { itemOf (key -> market item), levelsOf (key -> live levels or nil) }
+---@return table[]          { key, ilvl, skill, buy, ev, profit, mats = { { key, units } }, mainMat, matChance },
+---                         best profit first
+function Options.Disenchant(candidates, ctx)
+  local Disenchant = AHProfit.Engine.Disenchant
+  local tbl, out = Disenchant.Table(), {}
+  for key, c in pairs(candidates) do
+    local item, levels = ctx.itemOf(key), ctx.levelsOf(key)
+    local buy = levels and levels[1] and levels[1].price or (not levels and item and item.cur) or nil
+    local _, outcomes = Disenchant.OutcomesFor(tbl, c.quality, c.ilvl, c.kind)
+    if buy and outcomes then
+      local values, mats = {}, {}
+      for i, o in ipairs(outcomes) do
+        local mat = ctx.itemOf(o[1])
+        values[i] = mat and mat.sellValue or 0
+        mats[i] = { key = o[1], units = o[2] * (o[3] + o[4]) / 2 }
+      end
+      local ev = Disenchant.ExpectedValue(outcomes, values)
+      if ev - buy > 0 then
+        local main = ctx.itemOf(outcomes[1][1])
+        out[#out + 1] = { key = key, ilvl = c.ilvl, skill = c.skill, buy = buy, ev = ev, profit = ev - buy, mats = mats,
+                          mainMat = outcomes[1][1], matChance = main and main.chance }
+      end
+    end
+  end
+  table.sort(out, function(a, b)
+    if a.profit ~= b.profit then return a.profit > b.profit end
+    return a.key < b.key
+  end)
+  return out
+end
+
+--- The best skill in a profession across every character AHProfit has seen on the account.
+---@param db table          AHProfitDB
+---@param profession string e.g. "Enchanting"
+---@return number|nil       nil when nobody has it
+function Options.BestSkill(db, profession)
+  local best
+  for _, skills in pairs(db.professions or {}) do
+    local p = skills[profession]
+    if p and (not best or p.skill > best) then best = p.skill end
+  end
+  return best
+end

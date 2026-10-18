@@ -8,7 +8,8 @@ Frame AHProfitWindow 680,360 560x360
     FontString - 1125,371 66x10 "data 2 h old"
   Button AHProfitWindowTabToday 690,396 72x22 "Today"
   Button AHProfitWindowTabWeek 764,396 72x22 "Week"
-  Button AHProfitWindowTabInventory 838,396 72x22 "Inventory"
+  Button AHProfitWindowTabDisenchant 838,396 72x22 "Disenchant"
+  Button AHProfitWindowTabInventory 912,396 72x22 "Inventory"
   Texture - 682,418 556x1
   Button AHProfitWindowMinChance 1100,396 130x20 "Min chance: 50%   "
   Frame AHProfitWindowHeadertoday 690,420 526x20
@@ -31,6 +32,7 @@ Frame AHProfitWindow 680,360 560x360
     FontString - 749,420 86x20 "Item"
     Button - 749,420 86x20
   Frame AHProfitWindowHeaderweek 690,420 526x20 (hidden)
+  Frame AHProfitWindowHeaderdisenchant 690,420 526x20 (hidden)
   Frame AHProfitWindowHeaderinventory 690,420 526x20 (hidden)
   Frame AHProfitWindowList 690,442 540x240
     Frame AHProfitWindowRow1 690,442 526x20

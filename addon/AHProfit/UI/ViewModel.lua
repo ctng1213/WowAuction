@@ -28,6 +28,14 @@ ViewModel.COLUMN_HELP = {
            .. "amber 45% or more, grey below",
   Volume = "Units the market sells per day (last 7 days)",
   Risk = "Gold this action spends ÷ all your gold. Amber above 25%",
+  ilvl = "Item level: sets the disenchant results",
+  Skill = "Enchanting skill needed to disenchant it",
+  Buy = "Cheapest buyout on the AH: your latest scan's, else AHSync's",
+  EV = "Expected value of the mats: average results × their sell value",
+  Profit = "EV − buy price",
+  Where = "Bags, bank or mail",
+  Worth = "What it is expected to bring under its plan, else its sell value",
+  Time = "When to do it, local time",
 }
 
 --- Round half up, as every display does (SPEC §3.3).
@@ -621,4 +629,47 @@ function ViewModel.InventoryFooter(rows)
   local total = 0
   for _, r in ipairs(rows) do if r.sortWorth > 0 then total = total + r.sortWorth end end
   return #rows .. (#rows == 1 and " item" or " items") .. " · worth " .. ViewModel.Money(total)
+end
+
+-- ------------------------------------------------------------------ Disenchant tab (A23)
+
+--- The Disenchant tab's rows: always shown, each with the skill it needs (A23).
+---@param targets table[]   Options.Disenchant
+---@param lookOf function   key -> look
+---@param bestSkill number|nil  Your best Enchanting skill; nil without an enchanter
+---@return table[]          Rows of text
+function ViewModel.DisenchantRows(targets, lookOf, bestSkill)
+  local rows = {}
+  for _, t in ipairs(targets) do
+    local look, mat = lookOf(t.key), lookOf(t.mainMat)
+    local parts = {}
+    for _, m in ipairs(t.mats) do
+      local tenths = ViewModel.RoundHalfUp(m.units * 10)
+      if tenths > 0 then parts[#parts + 1] = math.floor(tenths / 10) .. "." .. tenths % 10 .. " " .. lookOf(m.key).name end
+    end
+    if bestSkill == nil then
+      parts[#parts + 1] = "no enchanter yet"
+    elseif t.skill > bestSkill then
+      parts[#parts + 1] = "needs Enchanting " .. t.skill .. " (best " .. bestSkill .. ")"
+    end
+    rows[#rows + 1] = {
+      key = t.key, item = look.name, quality = look.quality, ilvl = tostring(t.ilvl), skill = tostring(t.skill),
+      buy = ViewModel.Money(t.buy), ev = ViewModel.Money(t.ev), profit = ViewModel.SignedMoney(t.profit),
+      netColor = "pos", kind = "de",
+      chance = t.matChance and (ViewModel.RoundHalfUp(t.matChance * 100) .. "%") or "—",   -- the mats sell (SPEC §3.5)
+      dot = t.matChance and ViewModel.Level(mat.conf) or nil,
+      volume = mat.soldPerDay and (ViewModel.RoundHalfUp(mat.soldPerDay) .. "/day") or "—",
+      note = table.concat(parts, " · "), muted = bestSkill ~= nil and t.skill > bestSkill,
+    }
+  end
+  return rows
+end
+
+--- The footer under Disenchant.
+---@param rows table[]
+---@param bestSkill number|nil
+---@return string
+function ViewModel.DisenchantFooter(rows, bestSkill)
+  local who = bestSkill and ("best Enchanting " .. bestSkill) or "no enchanter yet: what one could disenchant"
+  return #rows .. (#rows == 1 and " target" or " targets") .. " · " .. who
 end

@@ -19,12 +19,7 @@ local DE_KINDS = { [2] = "weapon", [4] = "armor" }
 --- Your best Enchanting skill across the characters AHProfit has seen.
 ---@return number|nil
 local function BestEnchanting()
-  local best
-  for _, skills in pairs((DB.Get() or {}).professions or {}) do
-    local e = skills.Enchanting
-    if e and (not best or e.skill > best) then best = e.skill end
-  end
-  return best
+  return AHProfit.Options.BestSkill(DB.Get() or {}, "Enchanting")
 end
 
 --- An item's disenchant value per item, when one of your characters can disenchant it.
