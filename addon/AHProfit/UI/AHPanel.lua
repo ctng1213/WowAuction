@@ -145,7 +145,7 @@ end
 local function Build(anchor)
   local frame = Adapter.CreateFrame("Frame", "AHProfitPanel", anchor, "BackdropTemplate")
   local shopTop, postTop = 34, 34 + 20 + AHPanel.SHOP_ROWS * AHPanel.ROW_HEIGHT + 6
-  local height = postTop + 20 + AHPanel.POST_ROWS * AHPanel.ROW_HEIGHT + 64
+  local height = postTop + 20 + AHPanel.POST_ROWS * AHPanel.ROW_HEIGHT + 80   -- buttons, status line, footer
   frame:SetSize(AHPanel.WIDTH, height)
   frame:SetPoint("TOPLEFT", anchor, "TOPRIGHT", 2, 0)
   frame:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 2 })
@@ -168,8 +168,11 @@ local function Build(anchor)
   ui.scan:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -10, 34)
   ui.footer = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   ui.footer:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 10, 12)
-  ui.status = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  ui.status:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -10, 12)
+  -- The status line has a row of its own, above the buttons, so it never runs into the footer.
+  ui.status = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  ui.status:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 10, 62)
+  ui.empty = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  ui.empty:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -(shopTop + 24))
 end
 
 --- Fill a shopping row.
@@ -213,6 +216,8 @@ function AHPanel.Render()
   for i, row in ipairs(ui.shop) do FillShop(row, current.shopping[i]) end
   for i, row in ipairs(ui.post) do FillPost(row, current.posts[i]) end
   ui.footer:SetText(VM.WithCoins(current.footer))
+  ui.empty:SetShown(#current.shopping == 0)
+  ui.empty:SetText("Nothing to buy: no planned buys or disenchant targets")
 end
 
 --- Search the AH for one row's item (a click, so a hardware event).

@@ -71,4 +71,18 @@ describe("AHPanel", function()
     ui.shop[1]:Click()
     assert_eq(ui.status:GetText(), "search unavailable")
   end)
+
+  it("an empty shopping list says why; the post list keeps Today's Min chance filter", function()
+    Stubs.Reset()
+    UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48) }, NOW - 3600000)
+    UIWorld.Plan({ { id = "p", kind = "post", key = 2589, qty = 20, price = 55, at = NOW, net = 1000, chance = 92 },
+                   { id = "q", kind = "post", key = 2589, qty = 2, price = 55, at = NOW, net = 1, chance = 10 } })
+    Stubs.Define("C_AuctionHouse", Stubs.ReplicateHouse({ auctions = {} }))
+    Stubs.Login()
+    AHWorld.Install()
+    Stubs.FireEvent("AUCTION_HOUSE_SHOW")
+    local ui = AHProfit.AHPanel.Frames()
+    assert_eq({ ui.empty:IsShown(), ui.empty:GetText(), ui.postCount:GetText(), ui.post[1].qty:GetText() },
+              { true, "Nothing to buy: no planned buys or disenchant targets", "1", "×20" })   -- the 10% post is filtered
+  end)
 end)

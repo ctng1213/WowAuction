@@ -1,4 +1,4 @@
-Frame AHProfitPanel 902,100 260x444
+Frame AHProfitPanel 902,100 260x460
   FontString - 912,110 119x12 "AHProfit at the AH"
   FontString - 912,134 53x12 "Shopping"
   FontString - 1119,134 33x10 "3 of 5"
@@ -43,7 +43,7 @@ Frame AHProfitPanel 902,100 260x444
   Button AHProfitPanelRow13 910,420 244x20 (hidden)
   Button AHProfitPanelRow14 910,440 244x20 (hidden)
   Button AHProfitPanelRow15 910,460 244x20 (hidden)
-  Button AHProfitPanelNext 912,488 110x22 "Next search"
-  Button AHProfitPanelScan 1042,488 110x22 "Full scan"
-  FontString - 912,522 198x10 "2 found · budget left 31   24   40  "
-  FontString - 1152,522 0x10
+  Button AHProfitPanelNext 912,504 110x22 "Next search"
+  Button AHProfitPanelScan 1042,504 110x22 "Full scan"
+  FontString - 912,538 198x10 "2 found · budget left 31   24   40  "
+  FontString - 912,488 50x10 "scanning…"
