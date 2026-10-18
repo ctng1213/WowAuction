@@ -122,7 +122,7 @@ describe("MainWindow", function()
     AHProfit.Scan.Replicate.LastBook = function() return { at = NOW + 60000, book = { [2840] = {} } } end
     UIWorld.Plan({ { id = "b", kind = "buy", key = 2840, qty = 6, price = 500, at = NOW, net = 300 } })
     AHProfit.Plan.Reset()
-    MainWindow.Render()
+    MainWindow.Refresh()
     assert_eq(MainWindow.Frames().footer:GetText(), AHProfit.ViewModel.WithCoins("0 actions · expected 0c · 1 gone"))
   end)
 
@@ -159,6 +159,27 @@ describe("MainWindow", function()
     assert_eq(FirstRow("today").qty, "×9")                -- stops when the last 12 show
     MainWindow.Scroll(-100)
     assert_eq(FirstRow("today").qty, "×1")
+    local computes, sell = 0, AHProfit.Options.Sell
+    AHProfit.Options.Sell = function(...) computes = computes + 1 return sell(...) end
+    MainWindow.Scroll(3)
+    MainWindow.Scroll(3)
+    assert_eq(computes, 0)                                 -- scrolling only re-pages what was computed
+    MainWindow.NextMinChance()
+    assert_eq(computes, 1)
+    AHProfit.Options.Sell = sell
+  end)
+
+  it("a change in the bags recomputes the open window's own rows", function()
+    Stubs.Reset()
+    _G.AHProfitPlan = nil
+    UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48, { postPrice = 45, sellValue = 42, chance = 0.9 }) }, NOW)
+    Stubs.Login()
+    Stubs.Slash("/ahp")
+    assert_eq(AHProfit.MainWindow.Frames().rows[1]:IsShown(), false)
+    Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 2589, count = 20 } } } }
+    Stubs.FireEvent("BAG_UPDATE_DELAYED")
+    Stubs.Advance(1)
+    assert_eq(FirstRow("today").qty, "×20")
   end)
 
   it("names come from the saved link first, then the client cache, then the key", function()

@@ -54,6 +54,7 @@ local ARROW = "|TInterface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up:14:14|t"
 
 local ui = nil                     -- the frames, once built
 local waitingForNames = false      -- a shown row's name isn't in the client's item cache yet
+local computed = nil               -- { lines, footer, empty }: what the tab shows, until something changes
 local view = { tab = "today", offset = 0, minChance = 50 }
 
 --- Colour a font string from an { r, g, b } triple.
@@ -359,7 +360,12 @@ end
 --- so the row shows its name instead of "Item <key>". The redraw stops listening when no
 --- shown name is missing any more.
 function MainWindow.OnItemInfo()
-  if ui and ui.frame:IsShown() then Events.Debounce("window.names", MainWindow.Render) end
+  if ui and ui.frame:IsShown() then Events.Debounce("window.names", MainWindow.Refresh) end
+end
+
+--- BAG_UPDATE_DELAYED: what you carry changed, so the addon's own options do too (debounced).
+function MainWindow.OnBags()
+  if ui and ui.frame:IsShown() then Events.Debounce("window.bags", MainWindow.Refresh) end
 end
 
 --- What a merchant pays for one of an item, from the item cache.
@@ -510,13 +516,17 @@ end
 --- Redraw the window from the view model.
 function MainWindow.Render()
   if not ui then return end
-  waitingForNames = false
   local nowMs = Adapter.NowMs()
   RenderChrome(nowMs)
   local gold = VM.TotalGold((DB.Get() or {}).characters)
-  local problem = Market.Problem()
-  local lines, footer, emptyText = {}, "", problem
-  if not problem then lines, footer, emptyText = Lines(nowMs, gold) end
+  if not computed then
+    -- Computing is the costly part (the addon's own options); scrolling only re-pages it.
+    waitingForNames = false
+    local problem = Market.Problem()
+    computed = { lines = {}, footer = "", empty = problem }
+    if not problem then computed.lines, computed.footer, computed.empty = Lines(nowMs, gold) end
+  end
+  local lines, footer, emptyText = computed.lines, computed.footer, computed.empty
   local page = VM.Page(lines, view.offset, MainWindow.ROWS)
   view.offset = page.offset
   for i, row in ipairs(ui.rows) do Fill(row, page.lines[i]) end
@@ -539,7 +549,7 @@ end
 ---@param tab string  "today" | "week"
 function MainWindow.ShowTab(tab)
   view.tab, view.offset = tab, 0
-  MainWindow.Render()
+  MainWindow.Refresh()
 end
 
 --- Step the Min chance filter: 0 → 25 → 50 → 75 → 0 (SPEC §4.3).
@@ -550,13 +560,19 @@ function MainWindow.NextMinChance()
       break
     end
   end
-  MainWindow.Render()
+  MainWindow.Refresh()
 end
 
 --- Scroll the list by some lines.
 ---@param lines number  Positive scrolls down
 function MainWindow.Scroll(lines)
   view.offset = view.offset + lines
+  MainWindow.Render()
+end
+
+--- Recompute what the tab shows, then redraw (something it depends on changed).
+function MainWindow.Refresh()
+  computed = nil
   MainWindow.Render()
 end
 
@@ -567,12 +583,12 @@ function MainWindow.Toggle(args)
   if args == "week" or args == "today" then
     view.tab, view.offset = args, 0
     ui.frame:Show()
-    MainWindow.Render()
+    MainWindow.Refresh()
   elseif ui.frame:IsShown() then
     ui.frame:Hide()
   else
     ui.frame:Show()
-    MainWindow.Render()
+    MainWindow.Refresh()
   end
 end
 
@@ -584,7 +600,7 @@ end
 
 --- Forget the view state (tests).
 function MainWindow.Reset()
-  ui, view = nil, { tab = "today", offset = 0, minChance = 50 }
+  ui, view, computed = nil, { tab = "today", offset = 0, minChance = 50 }, nil
 end
 
 --- /ahp: open the window; a failure becomes a chat line, never a Lua error popup (SPEC §4.3, A5).
@@ -596,4 +612,5 @@ end
 
 Adapter.RegisterSlash("AHPROFIT", { "/ahp", "/ahprofit" }, function(args) MainWindow.OnSlash(args) end)
 -- A finished AH scan re-prices and re-ranks the open window (SPEC §4.0, A2).
-AHProfit.Scan.Replicate.OnBook(function() if ui and ui.frame:IsShown() then MainWindow.Render() end end)
+AHProfit.Scan.Replicate.OnBook(function() if ui and ui.frame:IsShown() then MainWindow.Refresh() end end)
+Events.Register("BAG_UPDATE_DELAYED", MainWindow.OnBags)
