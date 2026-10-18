@@ -79,6 +79,20 @@
   .btn.primary { background: linear-gradient(#6b5420, #3a2c10); box-shadow: inset 0 0 0 1px #c9a64a, 0 1px 2px #000; }
   .btn:disabled { opacity: .6; cursor: default; }
 
+  .act { display: inline-block; min-width: 46px; text-align: center; font-size: 11px; font-weight: 700; letter-spacing: .4px; padding: 1px 6px; border-radius: 4px; border: 1px solid currentColor; }
+  .act.buy { color: #69ccf0; } .act.post { color: var(--accent); } .act.de { color: #b55cff; } .act.craft { color: #ff8000; } .act.vendor { color: #9d9d9d; } .act.mail { color: var(--info); } .act.hold { color: var(--amber); }
+  .week { display: grid; grid-template-columns: repeat(7, minmax(150px, 1fr)); gap: 10px; overflow-x: auto; padding: 12px; }
+  .day { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px; min-height: 160px; box-shadow: inset 0 0 0 1px #000; }
+  .day.today { border-color: var(--accent); box-shadow: inset 0 0 0 1px #000, 0 0 12px rgba(255,209,0,.15); }
+  .day h4 { margin: 0; font: 15px var(--serif); color: var(--accent); display: flex; justify-content: space-between; }
+  .day .tot { font-size: 12px; margin-bottom: 8px; }
+  .chip { border: 1px solid var(--border); border-left: 3px solid var(--border-hi); border-radius: 4px; padding: 5px 7px; margin-bottom: 6px; font-size: 12px; background: #0f0d0a; }
+  .chip.buy { border-left-color: #69ccf0; } .chip.post { border-left-color: var(--accent); } .chip.de { border-left-color: #b55cff; } .chip.craft { border-left-color: #ff8000; } .chip.mail { border-left-color: var(--info); } .chip.hold { border-left-color: var(--amber); border-style: dashed; border-left-style: solid; }
+  .chip .t { color: var(--muted); } .chip.done { opacity: .6; } .chip.done .t::before { content: "✓ "; color: var(--pos); }
+  .chip.missed { border-left-color: var(--neg); opacity: .8; } .chip.missed .t::before { content: "✗ missed "; color: var(--neg); }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; padding: 0 12px 12px; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; padding: 12px 14px; margin: 0; }
+  .kv dt { color: var(--muted); } .kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
   .alert { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); margin-bottom: 10px; }
   .alert.warn { border-left: 4px solid var(--amber); } .alert.bad { border-left: 4px solid var(--neg); } .alert.info { border-left: 4px solid var(--info); }
   .alert .grow { flex: 1; }
@@ -140,10 +154,62 @@ const profitCell = r => `<td class="num"><span class="${r.profit_class === 'pos'
 const riskCell = r => `<td class="num"><span class="${r.risk_amber ? 'amber' : 'muted'}">${esc(r.risk)}</span></td>`;
 const dash = v => v === '—' ? '<span class="muted">—</span>' : esc(v);
 const sourceClass = s => String(s).startsWith('Owned') ? 'pos' : String(s).startsWith('AH') ? 'amber' : '';
+const ACTIONS = ['buy', 'post', 'de', 'craft', 'vendor', 'mail', 'hold'];
+const act = a => ACTIONS.includes(a) ? `<span class="act ${a}">${a === 'de' ? 'DE' : a.toUpperCase()}</span>` : esc(a);
+// Money text from the engine starts with "+" or "−" when it has a sign; its colour follows that sign.
+const signed = text => `<span class="${String(text).startsWith('+') ? 'pos' : String(text).startsWith('−') ? 'neg' : 'muted'}">${esc(text)}</span>`;
+const netCell = r => `<td class="num">${r.net === '—' ? '<span class="muted">—</span>' : signed(r.net)}</td>`;
+const skipButton = r => r.status === 'pending' ? `<button class="btn" type="button" data-skip="${esc(r.id)}">Skip</button>` : '';
+const STATUS_CLASS = { done: ' done', missed: ' missed', skipped: ' done', partial: '' };
+// One action as a Week chip (SPEC §3.4C): time, action, item, money, net, chance and the engine's note.
+const chip = r => `<div class="chip ${esc(r.action)}${STATUS_CLASS[r.status] || ''}"><span class="t">${esc(r.time)}</span> ${act(r.action)}<br>` +
+  `${item(r.item, r.quality)} <span class="muted">×${esc(r.qty)}</span><br><span class="muted">${dash(r.each)} each · ${dash(r.total)}</span><br>` +
+  `${r.net === '—' ? '' : signed(r.net)}${r.chance !== '—' ? ` <span class="muted">· ${esc(r.chance)} chance</span>` : ''}` +
+  `${r.note ? `<br><span class="muted">${esc(r.note)}</span>` : ''}</div>`;
+const totalsList = obj => Object.entries(obj || {}).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${signed(v)}</dd>`).join('');
 
 // ---------- live pages (SPEC §3.5 dashboard data) ----------
-// Each column: [header, numeric?, sort key in row.sort (or null)].
+// Each column: [header, numeric?, sort key in row.sort (or null)]. Optional hooks: `pick` chooses the staged view
+// the filters ask for (no computing), `render` draws a page that isn't a table, `footer` adds a summary line.
 const LIVE = {
+  today: {
+    lede: 'What to do right now, best expected net first (SPEC §3.4). A chain\'s profit shows once: mat buys show "—" and the craft or flip carries it. The <b>dot after a chance is its confidence</b> (<span class="dot h"></span>≥ 75% · <span class="dot m"></span>≥ 45% · <span class="dot l"></span>below).',
+    defaults: { minChance: '50' },
+    pick: (raw, values) => ({ ...((raw.by_min || {})[values.minChance] || { rows: [], hidden: 0, total: '0c' }), help: raw.help }),
+    cols: [['Action', 0, null], ['Item', 0, null], ['Qty', 1, null], ['Each', 1, null], ['Total', 1, null], ['Expected net', 1, 'net'],
+           ...MARKET_COLS, ['Risk', 1, 'risk'], ['Character', 0, null], ['', 0, null]],
+    row: r => `<tr><td>${act(r.action)}</td><td>${item(r.item, r.quality)}${r.note ? `<span class="sub">${esc(r.note)}</span>` : ''}</td>` +
+              `<td class="num">${esc(r.qty)}</td><td class="num">${dash(r.each)}</td><td class="num">${dash(r.total)}</td>${netCell(r)}` +
+              `${marketCells(r)}${riskCell(r)}<td>${esc(r.character)}</td><td>${skipButton(r)}</td></tr>`,
+    footer: (d, values) => `${esc(d.rows.length)} actions · expected ${signed(d.total)} · ${esc(d.hidden)} hidden (chance below ${esc(values.minChance)}%)`,
+    filters: [
+      { id: 'search', label: null, kind: 'search', placeholder: 'Search items…', test: (r, v) => !v || String(r.item).toLowerCase().includes(v.toLowerCase()) },
+      // Each step is its own staged view (rows, hidden count and total), picked by `pick`; no row test here.
+      { id: 'minChance', label: 'Min chance to sell', options: [['0', '0%'], ['25', '25%'], ['50', '50%'], ['75', '75%']], test: () => true },
+      { id: 'character', label: 'Character', fromRows: 'character', test: (r, v) => v === '' || r.character === v },
+    ],
+  },
+  week: {
+    lede: 'A rolling 7 days that <b>always starts today</b> (SPEC §3.4C). Done actions are ticked. Posts are timed 8 hours before the peak they are for. <b>A chain\'s profit is counted once</b>, on its first action in view: a post that sells stock from a buy or craft shown here says "profit counted on …" and adds nothing to the totals. Times are local.',
+    render: d => `<div class="week">${(d.days || []).map(day => `<div class="day${day.today ? ' today' : ''}"><h4>${esc(day.label)}${day.today ? ' <span class="muted">today</span>' : ''}</h4>` +
+      `<div class="tot">${signed(day.total)}</div>${day.rows.map(chip).join('') || '<span class="muted">Nothing planned</span>'}</div>`).join('')}</div>` +
+      `<div class="grid2"><div class="card"><div class="card-h"><b>Per category</b><span>${signed(d.total)}</span></div><dl class="kv">${totalsList(d.categories)}</dl></div>` +
+      `<div class="card"><div class="card-h"><b>Per character</b></div><dl class="kv">${totalsList(d.characters)}</dl></div></div>`,
+    filters: [],
+  },
+  flip: {
+    lede: 'Buy now and sell at a later peak (SPEC §3.4C.2). <b>Expected ROI</b> is expected profit ÷ buy cost; only flips of at least 20% are planned, best expected profit × confidence first. <b>Seasonality Strength</b> (0–100) is how <i>predictable</i> the weekly pattern is, not how profitable. No single buy risks more than 25% of your gold, and every flip stays within what the market can absorb.',
+    cols: [['Item', 0, null], ['Qty', 1, 'qty'], ['Buy each', 1, null], ['Buy total', 1, 'buy_total'], ['Sell each', 1, null], ['Sell slot', 0, null],
+           ['Why', 0, null], ['Expected profit', 1, 'profit'], ['Seasonality Strength', 1, 'seasonality'], ['Expected ROI', 1, 'roi'],
+           ...MARKET_COLS, ['Risk', 1, 'risk']],
+    row: r => `<tr><td>${item(r.item, r.quality)}<span class="sub">${esc(r.character)}</span></td><td class="num">${esc(r.qty)}</td><td class="num">${dash(r.buy_each)}</td>` +
+              `<td class="num">${dash(r.buy_total)}</td><td class="num">${dash(r.sell_each)}</td><td>${esc(r.sell_slot)}</td><td class="muted">${esc(r.why)}</td>` +
+              `<td class="num">${signed(r.profit)}</td><td class="num">${dash(r.seasonality)}</td><td class="num">${esc(r.roi)}</td>${marketCells(r)}${riskCell(r)}</tr>`,
+    filters: [
+      { id: 'search', label: null, kind: 'search', placeholder: 'Search items…', test: (r, v) => !v || String(r.item).toLowerCase().includes(v.toLowerCase()) },
+      daysFilter,
+    ],
+  },
   disenchant: {
     lede: 'AH items worth buying to disenchant (SPEC §3.4A). Only shown when one of your characters has the skill. Chance (with its confidence dot) and the market activity columns describe the <b>mats</b>, since they\'re what you sell. A "—" means the data can\'t support a number; it is never a guess and never 0. In every table, the <b>dot after a chance is its confidence</b> (<span class="dot h"></span>≥ 75% · <span class="dot m"></span>≥ 45% · <span class="dot l"></span>below); hover a chance for the exact %.',
     cols: [['Item', 0, null], ['ilvl', 1, 'ilvl'], ['Buy', 1, 'buy'], ['Expected mats', 0, null], ['EV', 1, 'ev'], ['Profit', 1, 'profit'],
@@ -250,18 +316,24 @@ function setBuilt(builtMs) {
 
 // ---------- table ----------
 function render(id) {
-  const spec = LIVE[id], data = state.data[id] || { rows: [], hidden: 0 };
-  const rows = Array.isArray(data.rows) ? data.rows : [];
+  const spec = LIVE[id], raw = state.data[id] || { rows: [], hidden: 0 };
   const card = document.getElementById('card');
   if (!card) return;
-  const values = state.filters[id] || (state.filters[id] = {});
+  const values = state.filters[id] || (state.filters[id] = { ...(spec.defaults || {}) });
+  const data = spec.pick ? spec.pick(raw, values) : raw;
+  if (spec.render) {
+    card.innerHTML = spec.render(data);
+    return;
+  }
+  const rows = Array.isArray(data.rows) ? data.rows : [];
   const shown = sortRows(id, rows.filter(r => spec.filters.every(f => f.test(r, values[f.id] ?? ''))));
   const sort = state.sort[id] || {};
   // Header tooltips come with the data, from engine/views.py (SPEC §3.5): one text per column name.
   const help = data.help || {};
   const head = spec.cols.map(([t, num, key]) => `<th class="${num ? 'num ' : ''}${key ? 'sort' : ''}${key && sort.key === key ? ' sorted' + (sort.asc ? ' asc' : '') : ''}"${key ? ` data-key="${key}"` : ''}${help[t] ? ` title="${esc(help[t])}"` : ''}>${esc(t)}</th>`).join('');
   // SPEC GAP: §3.5 does not say what "hidden" counts for these pages; shown as the engine gives it, like the Today footer.
-  const hidden = data.hidden ? `<div class="card-h"><b>${esc(titleOf(id))}</b><span class="muted">${esc(data.hidden)} hidden</span></div>` : '';
+  const hidden = spec.footer ? `<div class="card-h"><b>${esc(titleOf(id))}</b><span class="muted">${spec.footer(data, values)}</span></div>`
+    : data.hidden ? `<div class="card-h"><b>${esc(titleOf(id))}</b><span class="muted">${esc(data.hidden)} hidden</span></div>` : '';
   const body = rows.length === 0
     ? `<div class="empty">Nothing to show for this market.</div>`
     : shown.length === 0 ? `<div class="empty">No rows match the filters.</div>`
@@ -271,6 +343,19 @@ function render(id) {
   card.querySelectorAll('[data-filter]').forEach(el => {
     el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', () => { values[el.dataset.filter] = el.value; render(id); refocus(el.dataset.filter); });
   });
+  card.querySelectorAll('[data-skip]').forEach(btn => { btn.onclick = () => skip(btn.dataset.skip, btn); });
+}
+
+// Mark a plan action skipped (SPEC §3.4.1); the next refresh re-plans around it.
+async function skip(actionId, btn) {
+  btn.disabled = true;
+  try {
+    const r = await post('/api/skip', { action_id: actionId });
+    if (r && r.status === 200) notice(r.body.skipped ? 'Skipped: the next refresh plans without it.' : 'That action is no longer open.', 'ok');
+    else if (r) notice(`Skip refused (${r.body.error || r.status}).`, 'warn');
+  } catch (e) {
+    notice('AHSync isn\'t answering. Is it still running?', 'warn');
+  }
 }
 
 function refocus(filterId) {

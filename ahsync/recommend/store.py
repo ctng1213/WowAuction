@@ -32,6 +32,25 @@ class RecommendStore:
             "conf, status, done_qty, done_at, parent_id, window_start_ms, window_end_ms, anchor_net, anchor_window_ms, "
             "replaces_id, week_start_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
 
+    def history_actions(self, char_ids: list[str], from_ms: int, to_ms: int) -> list[tuple]:
+        """Kept plan actions (done, partial, missed, skipped) of some characters in a time range (SPEC §3.4.1).
+
+        Args:
+            char_ids: Character ids.
+            from_ms: Start, inclusive.
+            to_ms: End, exclusive.
+
+        Returns:
+            (action_id, parent_id, kind, char_id, key, qty, price, slot_ms, expected_net, status), by time then id.
+        """
+        if not char_ids:
+            return []
+        marks = ",".join("?" * len(char_ids))
+        return [tuple(r) for r in self.conn.execute(
+            f"SELECT action_id, parent_id, kind, char_id, key, qty, price, slot_ms, expected_net, status FROM actions "
+            f"WHERE status NOT IN ('pending', 'late') AND char_id IN ({marks}) AND slot_ms >= ? AND slot_ms < ? "
+            f"ORDER BY slot_ms, action_id", (*char_ids, from_ms, to_ms))]
+
     def view(self, page: str, market: str) -> tuple[dict, int] | None:
         """A published page payload, as the dashboard serves it.
 

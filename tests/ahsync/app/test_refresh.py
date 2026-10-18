@@ -172,6 +172,7 @@ def test_a_refresh_publishes_the_plan_and_the_next_one_keeps_what_was_done(db):
     first = db.conn.execute("SELECT action_id, kind, status, char_id FROM actions ORDER BY action_id").fetchall()
     assert first and {r[2] for r in first} == {"pending"} and {r[3] for r in first} <= {BRUGAN, AMAYA}
     assert db.conn.execute("SELECT COUNT(*) FROM plan_new").fetchone()[0] == 0          # staging emptied
+    assert all(db.view(page, M) for page in ("today", "week", "flip"))                  # the plan's pages, published
     with db.transaction():
         db.conn.execute("UPDATE actions SET status = 'done' WHERE action_id = ?", (first[0][0],))
     refresh.refresh_all(db, NOW + HOUR, CFG)

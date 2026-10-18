@@ -144,7 +144,8 @@ def full_refresh(db: Database, clock: Clock, config: Config) -> None:
         clock: Time source.
         config: Settings.
     """
-    result = refresh_all(db, clock.now_ms(), config)
+    now = clock.now_ms()
+    result = refresh_all(db, now, config, clock.local_offset_ms(now))
     logging.getLogger("ahsync").info("full refresh: %d items, %d failed%s", result.items, len(result.failed),
                                      f"; NOT published: {result.error}" if result.error else "")
 

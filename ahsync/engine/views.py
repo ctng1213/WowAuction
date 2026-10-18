@@ -88,6 +88,21 @@ COLUMN_HELP = {
     "Current Supply": "Units on the AH now, in the newest scan",
     "Supply/Volume": "Days of supply: current supply ÷ sales per day. Not a time-to-sell guarantee",
     "Risk": "Gold this action spends ÷ all your gold. Amber above 25%",
+    "Action": "What to do: BUY, POST, DE (disenchant), CRAFT, VENDOR, MAIL or HOLD",
+    "Qty": "Units (or crafts) this row is about",
+    "Each": "Per unit: the price you pay, or post at",
+    "Total": "Each × quantity",
+    "Expected net": "What this action adds on average, after fees, deposits and the chance it sells. A chain counts it "
+                    "once, on its first action",
+    "Character": "Which of your characters does it",
+    "Buy each": "Price to pay now, per unit (buy at or below it)",
+    "Buy total": "What the whole buy costs",
+    "Sell each": "Expected sell price per unit at the sell slot",
+    "Sell slot": "When to sell: the peak hour the flip is for",
+    "Why": "How far the peak's price is above the 30-day median",
+    "Seasonality Strength": '0–100: how predictable the weekly price pattern is, tested on a held-out week. Not how '
+                            'profitable it is. "—" = too little evidence',
+    "Expected ROI": "Expected profit ÷ buy cost. Flips need at least 20%",
 }
 
 

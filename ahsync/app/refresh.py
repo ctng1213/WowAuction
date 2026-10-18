@@ -18,6 +18,9 @@ from ahsync.config import Config, market_settings
 from ahsync.db.sqlite import Database
 from ahsync.recommend.pages import craft_page, disenchant_page
 from ahsync.recommend.plan import plan_market, plan_rows
+from ahsync.recommend.plan_pages import plan_pages, view_actions
+
+DAY_MS = 86_400_000
 
 log = logging.getLogger(__name__)
 
@@ -32,8 +35,34 @@ class RefreshResult:
     error: str | None = None                                # why nothing was published, if so
 
 
-def refresh_market(db: Database, market: str, now_ms: int, cfg: Config, result: RefreshResult) -> None:
-    """Compute and stage one market's statistics and pages.
+def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], intel_items: dict, items: dict,
+                now_ms: int, offset_ms: int, cfg: Config) -> None:
+    """Plan the market's characters and stage the plan and its Today, Week and Flip pages (SPEC §3.4C, §3.5).
+
+    Args:
+        db: Database (inside the refresh's transaction).
+        market: Market id.
+        characters: (character id, gold) on the market.
+        intel_items: Item key -> intelligence.
+        items: Item metadata.
+        now_ms: Now.
+        offset_ms: Local time minus UTC, for the pages' days and times.
+        cfg: Config.
+    """
+    actions = plan_market(db, characters, intel_items, items, now_ms, cfg)
+    rows = plan_rows(actions, market, now_ms)
+    db.stage_plan(rows)
+    week_start = (now_ms + offset_ms) // DAY_MS * DAY_MS - offset_ms
+    history = db.history_actions([c for c, _ in characters], week_start, week_start + 7 * DAY_MS)
+    pages = plan_pages(view_actions(actions, rows, history), intel_items, items, sum(g for _, g in characters),
+                       now_ms, offset_ms)
+    for page, body in pages.items():
+        db.stage_view(page, market, body, now_ms)
+
+
+def refresh_market(db: Database, market: str, now_ms: int, cfg: Config, result: RefreshResult,
+                   offset_ms: int = 0) -> None:
+    """Compute and stage one market's statistics, plan and pages.
 
     Args:
         db: Database.
@@ -41,6 +70,7 @@ def refresh_market(db: Database, market: str, now_ms: int, cfg: Config, result: 
         now_ms: Now.
         cfg: Config.
         result: Collects the item count and failures.
+        offset_ms: Local time minus UTC (the clock's), for the plan pages.
     """
     intel, failed = analyze_market(db, market, now_ms, market_settings(cfg))
     for key, error in sorted(failed.items()):
@@ -55,17 +85,18 @@ def refresh_market(db: Database, market: str, now_ms: int, cfg: Config, result: 
         db.stage_intel(intel)
         db.stage_view("disenchant", market, disenchant_page(db, char_ids, stats, items, total_gold, now_ms, cfg), now_ms)
         db.stage_view("craft", market, craft_page(db, char_ids, stats, items, total_gold, now_ms, cfg), now_ms)
-        db.stage_plan(plan_rows(plan_market(db, characters, stats, items, now_ms, cfg), market, now_ms))
+        _stage_plan(db, market, characters, stats, items, now_ms, offset_ms, cfg)
     result.items += len(stats)
 
 
-def refresh_all(db: Database, now_ms: int, cfg: Config) -> RefreshResult:
+def refresh_all(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0) -> RefreshResult:
     """The full refresh for every configured market (SPEC §3.1.1), published atomically.
 
     Args:
         db: Database.
         now_ms: Now.
         cfg: Config.
+        offset_ms: Local time minus UTC (clock.local_offset_ms), for the plan pages; 0 shows UTC.
 
     Returns:
         What it did. Failed items are listed on the Status page. When writing fails
@@ -76,7 +107,7 @@ def refresh_all(db: Database, now_ms: int, cfg: Config) -> RefreshResult:
     try:
         db.drop_staging()
         for market in cfg.markets:
-            refresh_market(db, market, now_ms, cfg, result)
+            refresh_market(db, market, now_ms, cfg, result, offset_ms)
         db.publish_refresh(list(cfg.markets))
     except Exception as error:                         # noqa: BLE001  keep the last good numbers (SPEC §5.2 rule 4)
         result.error = f"{type(error).__name__}: {error}"
