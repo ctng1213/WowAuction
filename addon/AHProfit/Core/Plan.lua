@@ -87,6 +87,23 @@ function Plan.Actions(charId)
   return out
 end
 
+--- Every character's open plan actions, each with its character id.
+---@return table[]  As Plan.DecodeAction plus char; characters by id, actions in time order
+function Plan.AllActions()
+  local s = State()
+  if s.status ~= "ok" then return {} end
+  local chars, out = {}, {}
+  for charId in pairs(s.file.actions or {}) do chars[#chars + 1] = charId end
+  table.sort(chars)
+  for _, charId in ipairs(chars) do
+    for _, a in ipairs(Plan.Actions(charId)) do
+      a.char = charId
+      out[#out + 1] = a
+    end
+  end
+  return out
+end
+
 --- An item rule set on the dashboard (SPEC §3.4.2).
 ---@param key number    Item key
 ---@return string|nil   "no_buy" | "ignore" | "keep" | "none" (a clear)

@@ -1,0 +1,65 @@
+Frame AHProfitWindow 680,360 560x360
+  FontString - 692,370 53x12 "AHProfit"
+  FontString - 753,371 88x10 "Grommash · Horde"
+  Button AHProfitWindowClose 1212,364 24x24
+  FontString - 1140,371 66x10 "data 2 h old"
+  Button AHProfitWindowTabToday 690,392 72x22 "Today"
+  Button AHProfitWindowTabWeek 764,392 72x22 "Week"
+  Button AHProfitWindowMinChance 1110,392 120x22 "Min chance 50%"
+  Frame AHProfitWindowHeadertoday 690,418 526x20
+    Button - 694,418 44x20
+    Button - 1172,418 40x20 "Who"
+    Button - 1133,418 36x20 "Risk"
+    Button - 1086,418 44x20 "Volume"
+    Button - 1035,418 48x20 "Chance"
+    Button - 970,418 62x20 "Net"
+    Button - 917,418 50x20 "Total"
+    Button - 868,418 46x20 "Each"
+    Button - 835,418 30x20 "Qty"
+    Button - 741,418 91x20 "Item"
+  Frame AHProfitWindowHeaderweek 690,418 526x20 (hidden)
+  Frame AHProfitWindowList 690,440 540x240
+    Frame AHProfitWindowRow1 690,440 526x20
+      FontString - 694,440 44x20 "CRAFT"
+      FontString - 1172,440 40x20 "Amaya"
+      FontString - 1133,440 36x20 "0.0%"
+      FontString - 1086,440 44x20 "—"
+      FontString - 1035,440 48x20 "—"
+      FontString - 970,440 62x20 "+4s 50c"
+      FontString - 917,440 50x20 "3s 60c"
+      FontString - 868,440 46x20 "1s 20c"
+      FontString - 835,440 30x20 "×3"
+      FontString - 741,440 91x20 "Scouting Gloves…"
+    Frame AHProfitWindowRow2 690,460 526x20
+      FontString - 694,460 44x20 "POST"
+      FontString - 1172,460 40x20 "Brugan"
+      FontString - 1133,460 36x20 "0.0%"
+      FontString - 1086,460 44x20 "40/day"
+      FontString - 1035,460 48x20 "62%"
+      FontString - 970,460 62x20 "+3s"
+      FontString - 917,460 50x20 "1s 60c"
+      FontString - 868,460 46x20 "80c"
+      FontString - 835,460 30x20 "×2"
+      FontString - 741,460 91x20 "Copper Bar"
+      Texture - 1077,467 6x6
+    Frame AHProfitWindowRow3 690,480 526x20
+      FontString - 694,480 44x20 "BUY"
+      FontString - 1172,480 40x20 "Amaya"
+      FontString - 1133,480 36x20 "0.0%"
+      FontString - 1086,480 44x20 "—"
+      FontString - 1035,480 48x20 "—"
+      FontString - 970,480 62x20 "+1s 50c"
+      FontString - 917,480 50x20 "40c"
+      FontString - 868,480 46x20 "40c"
+      FontString - 835,480 30x20 "×1"
+      FontString - 741,480 91x20 "Linen Cloth"
+    Frame AHProfitWindowRow4 690,500 526x20 (hidden)
+    Frame AHProfitWindowRow5 690,520 526x20 (hidden)
+    Frame AHProfitWindowRow6 690,540 526x20 (hidden)
+    Frame AHProfitWindowRow7 690,560 526x20 (hidden)
+    Frame AHProfitWindowRow8 690,580 526x20 (hidden)
+    Frame AHProfitWindowRow9 690,600 526x20 (hidden)
+    Frame AHProfitWindowRow10 690,620 526x20 (hidden)
+    Frame AHProfitWindowRow11 690,640 526x20 (hidden)
+    Frame AHProfitWindowRow12 690,660 526x20 (hidden)
+  FontString - 692,700 132x10 "3 actions · expected +9s"

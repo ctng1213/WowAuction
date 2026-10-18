@@ -42,6 +42,22 @@ local function OwnSize(r)
   return r.width or 0, r.height or 0
 end
 
+--- One axis of a rectangle from its anchored edges, as WoW resolves them: two edges fix the
+--- size (start and end, or an edge and the centre); one edge places the region's own size.
+---@param edges table  [0] = start, [0.5] = centre, [1] = end coordinates that are anchored
+---@param size number  The region's own size on this axis
+---@return number, number  Start coordinate and size
+local function Span(edges, size)
+  local s, c, e = edges[0], edges[0.5], edges[1]
+  if s and e then return s, e - s end
+  if s and c then return s, 2 * (c - s) end
+  if c and e then return 2 * c - e, 2 * (e - c) end
+  if s then return s, size end
+  if e then return e - size, size end
+  if c then return c - size / 2, size end
+  return 0, size
+end
+
 --- Resolve every region's rectangle.
 ---@param root table  UIParent
 ---@return table      region -> { x, y, w, h }
@@ -50,17 +66,16 @@ function Layout.Resolve(root)
   local function Rect(r)
     if rects[r] then return rects[r] end
     local w, h = OwnSize(r)
-    local left, right, top, bottom
+    local x, y = {}, {}                -- edge constraints: [0] start, [0.5] centre, [1] end
     for _, p in ipairs(r.points) do
       local rel = Rect(p.rel)
       local f, rf = POINTS[p.point], POINTS[p.relPoint]
-      local ax, ay = rel.x + rel.w * rf[1] + p.x, rel.y + rel.h * rf[2] - p.y
-      if f[1] == 0 then left = ax elseif f[1] == 1 then right = ax else left = ax - w / 2 end
-      if f[2] == 0 then top = ay elseif f[2] == 1 then bottom = ay else top = ay - h / 2 end
+      x[f[1]] = rel.x + rel.w * rf[1] + p.x
+      y[f[2]] = rel.y + rel.h * rf[2] - p.y
     end
-    if left and right then w = right - left elseif right then left = right - w end
-    if top and bottom then h = bottom - top elseif bottom then top = bottom - h end
-    local rect = { x = left or 0, y = top or 0, w = w, h = h, unanchored = #r.points == 0 }
+    local left, width = Span(x, w)
+    local top, height = Span(y, h)
+    local rect = { x = left, y = top, w = width, h = height, unanchored = #r.points == 0 }
     rects[r] = rect
     return rect
   end
@@ -72,17 +87,20 @@ function Layout.Resolve(root)
   return rects
 end
 
---- A font string's text as shown: cut with "…" when a fixed-width, non-wrapping box is too narrow.
+--- A font string's text as shown: cut with "…" when a non-wrapping box is too narrow. The box
+--- is its set width, or the width its anchors give it (WoW truncates both).
 ---@param r table
+---@param width number|nil  The resolved width; default the set width
 ---@return string|nil
-function Layout.ShownText(r)
+function Layout.ShownText(r, width)
   if r.text == nil then return nil end
   local visible = Layout.Visible(r.text)
-  if r.kind ~= "FontString" or not r.width or r.wrap then return visible end
-  if Layout.TextWidth(visible, r.fontSize) <= r.width then return visible end
+  width = r.width or width
+  if r.kind ~= "FontString" or not width or r.wrap then return visible end
+  if Layout.TextWidth(visible, r.fontSize) <= width then return visible end
   local chars = {}
   for ch in visible:gmatch("[%z\1-\127\194-\244][\128-\191]*") do chars[#chars + 1] = ch end
-  while #chars > 0 and Layout.TextWidth(table.concat(chars) .. "…", r.fontSize) > r.width do chars[#chars] = nil end
+  while #chars > 0 and Layout.TextWidth(table.concat(chars) .. "…", r.fontSize) > width do chars[#chars] = nil end
   return table.concat(chars) .. "…"
 end
 
@@ -97,9 +115,13 @@ function Layout.Snapshot(root, rects)
     local line = string.format("%s%s %s %d,%d %dx%d", string.rep("  ", depth), r.kind, r.name or "-",
                                math.floor(rect.x + 0.5), math.floor(rect.y + 0.5), math.floor(rect.w + 0.5),
                                math.floor(rect.h + 0.5))
-    local text = Layout.ShownText(r)
+    local text = Layout.ShownText(r, rect.w)
     if text and text ~= "" then line = line .. ' "' .. text .. '"' end
-    if not r.shown then lines[#lines + 1] = line .. " (hidden)" return end
+    if not r.shown then
+      -- Hidden frames are listed; hidden text and textures are noise (a row holds every tab's cells).
+      if r.kind ~= "FontString" and r.kind ~= "Texture" then lines[#lines + 1] = line .. " (hidden)" end
+      return
+    end
     lines[#lines + 1] = line
     for _, child in ipairs(r.children) do Walk(child, depth + 1) end
   end

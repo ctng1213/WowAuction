@@ -56,6 +56,65 @@ function Adapter.CreateEventFrame()
   return CreateFrame("Frame")
 end
 
+-- ------------------------------------------------------------------ window (SPEC §4.3)
+
+--- Create a UI frame.
+---@param kind string           "Frame", "Button", ...
+---@param name string|nil       Global name
+---@param parent table|nil      Parent frame; default UIParent
+---@param template string|nil   e.g. "BackdropTemplate", "UIPanelCloseButton"
+---@return table
+function Adapter.CreateFrame(kind, name, parent, template)
+  return CreateFrame(kind, name, parent or UIParent, template)
+end
+
+--- An item's name and quality from the client's item cache.
+--- UNVERIFIED: Forever's GetItemInfo returns name first and quality third, as Classic's does.
+---@param itemId number  Base item id
+---@return string|nil    Name; nil while the item isn't cached yet
+---@return number|nil    Quality 0-7
+function Adapter.ItemInfo(itemId)
+  local name, _, quality = GetItemInfo(itemId)
+  return name, quality
+end
+
+--- Show a header or cell tooltip next to a frame (GameTooltip).
+---@param owner table   The frame hovered
+---@param title string  First line
+---@param text string|nil  Wrapped body text
+function Adapter.ShowTooltip(owner, title, text)
+  GameTooltip:SetOwner(owner, "ANCHOR_TOP")
+  GameTooltip:SetText(title)
+  if text then GameTooltip:AddLine(text, 1, 1, 1, true) end
+  GameTooltip:Show()
+end
+
+--- Hide the tooltip.
+function Adapter.HideTooltip()
+  GameTooltip:Hide()
+end
+
+--- Let Escape close a window, like Blizzard's panels.
+---@param name string  The frame's global name
+function Adapter.CloseWithEscape(name)
+  table.insert(UISpecialFrames, name)
+end
+
+--- Register a slash command.
+---@param key string        SlashCmdList key, e.g. "AHPROFIT"
+---@param commands string[] e.g. { "/ahp" }
+---@param handler function  Called with the rest of the line
+function Adapter.RegisterSlash(key, commands, handler)
+  for i, command in ipairs(commands) do _G["SLASH_" .. key .. i] = command end
+  SlashCmdList[key] = handler
+end
+
+--- Print a line to the chat frame.
+---@param text string
+function Adapter.Print(text)
+  DEFAULT_CHAT_FRAME:AddMessage("|cffffd100AHProfit:|r " .. text)
+end
+
 --- Whether the player is in combat right now.
 ---@return boolean  true while in combat lockdown
 function Adapter.InCombat()

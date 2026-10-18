@@ -44,6 +44,7 @@ function Stubs.NewWorld()
     serverTime = 1760000000,  -- seconds; GetServerTime floors it
     inCombat = false,
     localOffsetS = 0,         -- the machine's local time minus UTC, seconds (date() uses it)
+    uncached = {},            -- [itemId] = true: GetItemInfo returns nil, as before the client caches it
     skillLines = {},          -- { name, header = bool, collapsed = bool, rank, max }
     containers = {},          -- [bagId] = { size = n, slots = { [slot] = { id, count, bound, suffix, noLink } } }
     inbox = {},               -- one array of { id, count, noLink = bool } attachments per mail
@@ -363,6 +364,12 @@ local function InstallItems()
     local item = mail and mail[a]
     if item and not item.noLink then return Stubs.ItemLink(item[1]) end
   end)
+  Define("GetItemInfo", function(id)
+    local name = Stubs.ITEM_NAMES[id]
+    if not name or Stubs.world.uncached[id] then return nil end
+    local quality = ({ ["9d9d9d"] = 0, ffffff = 1, ["1eff00"] = 2 })[Stubs.ITEM_COLORS[id] or "ffffff"]
+    return name, Stubs.ItemLink(id), quality
+  end)
   Define("GetItemInfoInstant", function(id)
     return id, "Type", "Subtype", "", "icon", Stubs.ITEM_CLASSES[id] or 7, 0
   end)
@@ -411,6 +418,17 @@ local function InstallCore()
     return frame
   end)
   Define("SlashCmdList", {})
+  Define("UISpecialFrames", {})
+  Stubs.chat = {}
+  Define("DEFAULT_CHAT_FRAME", { AddMessage = function(_, text) Stubs.chat[#Stubs.chat + 1] = text end })
+  Stubs.tooltip = { shown = false, lines = {} }
+  Define("GameTooltip", {
+    SetOwner = function(_, owner) Stubs.tooltip.owner, Stubs.tooltip.lines = owner, {} end,
+    SetText = function(_, text) Stubs.tooltip.lines[1] = text end,
+    AddLine = function(_, text) Stubs.tooltip.lines[#Stubs.tooltip.lines + 1] = text end,
+    Show = function() Stubs.tooltip.shown = true end,
+    Hide = function() Stubs.tooltip.shown = false end,
+  })
   Define("GetNumSkillLines", function() return #Stubs.world.skillLines end)
   Define("GetSkillLineInfo", function(i)
     local line = Stubs.world.skillLines[i]

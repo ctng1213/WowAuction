@@ -312,3 +312,64 @@ function ViewModel.TodayFooter(today, minChance)
   if today.hidden > 0 then text = text .. " · " .. today.hidden .. " hidden (chance < " .. minChance .. "%)" end
   return text
 end
+
+--- What the window shows about an item besides the plan: its name, quality and market activity.
+--- The name the addon saved from a link wins (it carries a random suffix, "… of Frost"), then
+--- the client's item cache, then the key itself.
+---@param key number           Item key
+---@param item table|nil       Market.Item(key)
+---@param saved string|nil     AHProfitDB.itemNames[key], "quality,name"
+---@param cachedName string|nil   Adapter.ItemInfo name
+---@param cachedQuality number|nil Adapter.ItemInfo quality
+---@return table               { name, quality, conf, soldPerDay }
+function ViewModel.Look(key, item, saved, cachedName, cachedQuality)
+  local quality, name = (saved or ""):match("^(%d),(.+)$")
+  name = name or cachedName or ("Item " .. key)
+  quality = tonumber(quality) or cachedQuality or 1
+  return { name = name, quality = quality, conf = item and item.conf, soldPerDay = item and item.soldPerDay }
+end
+
+--- The lines a list shows from a scroll offset, and where its scroll bar's thumb sits (UI2).
+---@param lines table[]     Every line
+---@param offset number     Lines scrolled past (clamped)
+---@param visible number    Lines that fit
+---@return table            { lines, offset, scrollable, thumbTop, thumbSize } (thumb as shares of the track)
+function ViewModel.Page(lines, offset, visible)
+  local total = #lines
+  local maxOffset = math.max(0, total - visible)
+  offset = math.max(0, math.min(offset, maxOffset))
+  local page = {}
+  for i = 1, math.min(visible, total - offset) do page[i] = lines[offset + i] end
+  if total <= visible then return { lines = page, offset = offset, scrollable = false, thumbTop = 0, thumbSize = 1 } end
+  return { lines = page, offset = offset, scrollable = true, thumbTop = offset / total, thumbSize = visible / total }
+end
+
+--- The Week tab as one list: a header line per day with its total, then its rows.
+---@param week table  From ViewModel.Week
+---@return table[]    { header = true, label, total, today } or a row
+function ViewModel.WeekLines(week)
+  local lines = {}
+  for _, day in ipairs(week.days) do
+    lines[#lines + 1] = { header = true, label = day.label .. (day.today and " (today)" or ""), total = day.total,
+                          netColor = day.cents > 0 and "pos" or (day.cents < 0 and "neg" or "muted") }
+    for _, row in ipairs(day.rows) do lines[#lines + 1] = row end
+  end
+  return lines
+end
+
+--- The base item id of an item key (SPEC §2.1), for the client's item cache.
+---@param key number  Item key, or -itemId for an unknown random suffix
+---@return number
+function ViewModel.BaseItemId(key)
+  if key < 0 then return -key end
+  return key % 2147483648
+end
+
+--- All your characters' gold, for risk %.
+---@param characters table  AHProfitDB.characters: charId -> { gold }
+---@return number           Copper
+function ViewModel.TotalGold(characters)
+  local total = 0
+  for _, c in pairs(characters or {}) do total = total + (tonumber(c.gold) or 0) end
+  return total
+end

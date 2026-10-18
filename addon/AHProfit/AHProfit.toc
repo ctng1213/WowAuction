@@ -21,3 +21,4 @@ Engine\Craft.lua
 Core\Market.lua
 Core\Plan.lua
 UI\ViewModel.lua
+UI\MainWindow.lua
