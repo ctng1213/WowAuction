@@ -14,7 +14,6 @@ FI1
 O2-O7 O11-O17
 D18
 C8 C14
-M1-M7
 IU1-IU2 IU6-IU7 IU10 IU12
 
 T1-T16
@@ -23,7 +22,6 @@ K1-K3
 
 
 
-PL3
 
 
 # M2/M5 addon

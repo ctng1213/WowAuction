@@ -755,6 +755,7 @@ An item usually has several peaks a week, for example raid nights on Tue, Wed an
   - If a window passes, the post moves there and is labelled "Missed Tue peak → Wed 20:00–23:00 instead (−5% vs original, 88% chance)".
   - If none passes, the action becomes **hold**: "Missed Tue and Wed; Thu is 18% below → hold until next week's Tue 20:00 peak". No post is planned for the rest of this week.
 - **A new week is a new slate.** The plan week runs from `week_start` (Mon 00:00 local). When a new week starts, held and missed items are planned from scratch: the anchor becomes that week's best window and earlier misses are forgotten. History keeps them.
+- **Mechanics** (`engine/missed.py`, `recommend/status_pass.py`): the hourly status pass reads only stored actions, the published intelligence and character state, never history (IU10). A missed post gets one replacement action, a pending post or a hold, with `replaces_id` set to it and the same `anchor_net`, so a later miss is still compared with the first peak (M3). A post planned for "now" has no stored window: it is missed 24 h after its post time and not re-planned; the next full refresh plans its stock again.
 
 #### 3.4.1 Tracking what you did
 

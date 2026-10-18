@@ -32,6 +32,44 @@ class RecommendStore:
             "conf, status, done_qty, done_at, parent_id, window_start_ms, window_end_ms, anchor_net, anchor_window_ms, "
             "replaces_id, week_start_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
 
+    def open_actions(self, char_ids: list[str]) -> list[tuple]:
+        """The characters' pending and late actions, for the status pass (SPEC §3.4.1).
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            (action_id, kind, char_id, key, qty, slot_ms, window_end_ms, anchor_net, anchor_window_ms,
+            week_start_ms, status), by time then id.
+        """
+        if not char_ids:
+            return []
+        marks = ",".join("?" * len(char_ids))
+        return [tuple(r) for r in self.conn.execute(
+            f"SELECT action_id, kind, char_id, key, qty, slot_ms, window_end_ms, anchor_net, anchor_window_ms, "
+            f"week_start_ms, status FROM actions WHERE status IN ('pending', 'late') AND char_id IN ({marks}) "
+            f"ORDER BY slot_ms, action_id", tuple(char_ids))]
+
+    def set_action_status(self, action_id: str, status: str) -> None:
+        """Change one action's status (the status pass: late or missed).
+
+        Args:
+            action_id: The action.
+            status: Its new status.
+        """
+        self.conn.execute("UPDATE actions SET status = ? WHERE action_id = ?", (status, action_id))
+
+    def add_action(self, row: tuple) -> None:
+        """Add one action straight to the live plan (a missed post's replacement, SPEC §3.4.0).
+
+        Args:
+            row: An `actions` row, as recommend.plan.plan_rows makes them.
+        """
+        self.conn.execute(
+            "INSERT OR REPLACE INTO actions(action_id, run_at, slot_ms, char_id, kind, key, qty, price, expected_net, "
+            "conf, status, done_qty, done_at, parent_id, window_start_ms, window_end_ms, anchor_net, anchor_window_ms, "
+            "replaces_id, week_start_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", row)
+
     def history_actions(self, char_ids: list[str], from_ms: int, to_ms: int) -> list[tuple]:
         """Kept plan actions (done, partial, missed, skipped) of some characters in a time range (SPEC §3.4.1).
 

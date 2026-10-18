@@ -29,6 +29,7 @@ from ahsync.db.sqlite import Database, DatabaseError
 from ahsync.history.prune import prune
 from ahsync.collect.catchup import SyncContext, check_capabilities, run_catchup, sync_markets
 from ahsync.app.refresh import refresh_all
+from ahsync.recommend.status_pass import status_pass
 from ahsync.app.scheduler import SavedVarsWatcher, Scheduler, SchedulerHooks, file_mtime_ms, find_savedvars
 from ahsync.web.server import DashboardApp, DashboardServer, new_token, open_server_db, start_dashboard, stop_dashboard
 
@@ -189,6 +190,7 @@ def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path,
     return SchedulerHooks(store_hour=store_hour, daily=daily, weekly=ctx.db.vacuum,
                           savedvars_changed=savedvars_changed,
                           full_refresh=lambda: full_refresh(ctx.db, ctx.clock, config),
+                          status_pass=lambda: status_pass(ctx.db, config, ctx.clock.now_ms()),
                           refresh_requested=refresh_requested)
 
 
