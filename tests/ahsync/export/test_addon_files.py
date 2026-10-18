@@ -79,7 +79,7 @@ def test_FM14_a_rename_blocked_three_times_keeps_the_old_file_and_warns(db, tmp_
 
     assert addon_files.export_market(db, cfg, now, waits.append) is True             # the next refresh succeeds
     assert "AHProfitMarket = {" in (folder / "MarketIntelligence.lua").read_text(encoding="utf-8")
-    assert db.status("addon_file:MarketIntelligence.lua") is None and db.status("addon_file_size") is None
+    assert db.status("addon_file:MarketIntelligence.lua") is None and db.status("addon_file_size:MarketIntelligence.lua") is None
 
 
 def test_a_temp_file_that_reads_back_wrong_is_not_renamed(tmp_path, monkeypatch):
@@ -105,4 +105,25 @@ def test_a_file_over_its_budget_is_written_with_a_warning(db, tmp_path, monkeypa
     publish(db, now, LINEN)
     monkeypatch.setattr(addon_files, "MAX_MARKET_BYTES", 10)
     assert addon_files.export_market(db, Config(markets=(M,), wow_path=str(tmp_path)), now, lambda s: None) is True
-    assert db.status("addon_file_size").data["limit"] == 10
+    assert db.status("addon_file_size:MarketIntelligence.lua").data["limit"] == 10
+
+
+def test_the_plan_file_holds_open_actions_rules_and_ingested_until(db, tmp_path):
+    now = FakeClock().now_ms()
+    folder = tmp_path / "Interface" / "AddOns" / "AHProfit_Data"
+    cfg = Config(markets=(M,), wow_path=str(tmp_path))
+    assert addon_files.export_plan(db, cfg, now, lambda s: None) is False             # no AddOns folder yet
+    folder.mkdir(parents=True)
+    sql(db, "INSERT INTO characters(id, market, gold) VALUES (?, ?, ?)", ("Brugan-G", M, 100), ("Other-X", None, 1))
+    sql(db, "INSERT INTO actions(action_id, char_id, kind, key, qty, price, slot_ms, expected_net, status) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("a1", "Brugan-G", "post", LINEN, 20, 55, now, 1045.5, "pending"),
+        ("a2", "Brugan-G", "buy", SILK, 5, 70, now - DAY, 10.0, "missed"),
+        ("a3", "Other-X", "post", WOOL, 1, 1, now, 1.0, "pending"))
+    sql(db, "INSERT INTO item_rules(key, rule, set_at, source) VALUES (?, ?, ?, ?)", (LINEN, "none", now, "dashboard"))
+    db.set_meta("savedvars_ingested_until:Brugan-G", str(now - HOUR))
+    assert addon_files.export_plan(db, cfg, now, lambda s: None) is True
+    text = (folder / "PortfolioPlan.lua").read_text(encoding="utf-8")
+    assert f'"a1;post;{LINEN};20;55;{now};1046;;;pending"' in text and "a2;" not in text and "a3;" not in text
+    assert f'[{LINEN}] = "none,{now}"' in text and f'["Brugan-G"] = {now - HOUR},' in text
+    assert db.addon_actions([]) == []

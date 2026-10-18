@@ -25,7 +25,7 @@ K1-K3
 
 
 # M2/M5 addon
-A2 A4-A5
+A2 A5
 UI1-UI11
 
 

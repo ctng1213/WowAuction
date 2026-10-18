@@ -16,13 +16,17 @@ from pathlib import Path
 from ahsync.config import Config
 from ahsync.db.sqlite import Database
 from ahsync.export.market_lua import market_lua
+from ahsync.export.plan_lua import plan_lua
+from ahsync.state.importer import ingested_until
 
 DATA_FOLDER = ("Interface", "AddOns", "AHProfit_Data")
 MARKET_FILE = "MarketIntelligence.lua"
+PLAN_FILE = "PortfolioPlan.lua"
 ATTEMPTS = 3
 RETRY_WAIT_S = 5               # 3 attempts, 5 s apart: 10 s in all (SPEC §5.2)
 SCAN_DAYS_MS = 7 * 86_400_000  # targeted scans this recent put an item on the shortlist (EX1)
 MAX_MARKET_BYTES = 2 * 1024 * 1024
+MAX_PLAN_BYTES = 200 * 1024
 
 log = logging.getLogger(__name__)
 
@@ -120,16 +124,61 @@ def export_market(db: Database, cfg: Config, now_ms: int, sleep: Callable[[float
         return False
     shortlists = {i.market: shortlist(db, i.market, now_ms) for i in intels}
     char_markets = {c: m for c, _, _, m, _ in db.characters() if m is not None}
-    text = market_lua(intels, shortlists, char_markets, now_ms)
-    ok = write_atomic(folder / MARKET_FILE, text, sleep, replace)
+    return _write(db, folder / MARKET_FILE, market_lua(intels, shortlists, char_markets, now_ms), MAX_MARKET_BYTES,
+                  now_ms, sleep, replace)
+
+
+def _write(db: Database, path: Path, text: str, limit: int, now_ms: int, sleep: Callable[[float], None],
+           replace: Callable[[Path, Path], None]) -> bool:
+    """Write one addon file and keep its Status lines current (FM14, size budget).
+
+    Args:
+        db: Database (Status lines).
+        path: The file.
+        text: Its contents.
+        limit: Its size budget, bytes.
+        now_ms: Now.
+        sleep: Waits between write attempts.
+        replace: As write_atomic.
+
+    Returns:
+        True when written.
+    """
+    ok = write_atomic(path, text, sleep, replace)
+    size = len(text.encode("utf-8"))
     with db.transaction():
         if ok:
-            db.clear_status(f"addon_file:{MARKET_FILE}")
+            db.clear_status(f"addon_file:{path.name}")
         else:
-            db.set_status(f"addon_file:{MARKET_FILE}", "warn", "addon_file_blocked", {"file": MARKET_FILE}, now_ms)
-        if len(text.encode("utf-8")) > MAX_MARKET_BYTES:
-            db.set_status("addon_file_size", "warn", "addon_file_large",
-                          {"file": MARKET_FILE, "bytes": len(text.encode("utf-8")), "limit": MAX_MARKET_BYTES}, now_ms)
+            db.set_status(f"addon_file:{path.name}", "warn", "addon_file_blocked", {"file": path.name}, now_ms)
+        if size > limit:
+            db.set_status(f"addon_file_size:{path.name}", "warn", "addon_file_large",
+                          {"file": path.name, "bytes": size, "limit": limit}, now_ms)
         else:
-            db.clear_status("addon_file_size")
+            db.clear_status(f"addon_file_size:{path.name}")
     return ok
+
+
+def export_plan(db: Database, cfg: Config, now_ms: int, sleep: Callable[[float], None],
+                replace: Callable[[Path, Path], None] = os.replace) -> bool:
+    """Write PortfolioPlan.lua: open actions, item rules and ingestedUntil (SPEC §3.5, §2.2, EX3).
+
+    Called only after the database commit that changed them (a refresh, a SavedVariables
+    read, the status pass), so the addon never prunes a row AHSync hasn't stored.
+
+    Args:
+        db: Database.
+        cfg: Config: markets and wow_path.
+        now_ms: Now (generatedAt).
+        sleep: Waits between write attempts.
+        replace: As write_atomic.
+
+    Returns:
+        True when written; False when the AddOns folder is missing or the write failed.
+    """
+    folder = data_folder(cfg)
+    if not folder.is_dir():
+        return False
+    char_ids = sorted(c for m in cfg.markets for c, _ in db.characters_in(m))
+    text = plan_lua(db.addon_actions(char_ids), db.rule_rows(), ingested_until(db), now_ms)
+    return _write(db, folder / PLAN_FILE, text, MAX_PLAN_BYTES, now_ms, sleep, replace)

@@ -125,43 +125,47 @@ end)
 describe("DB.Prune", function()
   local T = 1760000000000
   local HOUR = 3600000
+  local A, B = "Amaya-Grommash", "Brugan-Grommash"
 
-  it("removes scans and events at or before ingestedUntil and keeps later ones", function()
+  it("removes a character's scans and events at or before its ingestedUntil; others keep theirs", function()
     local DB = Boot(nil)
     local db = DB.NewDB()
-    db.scans = { { id = "s1", at = T - 1 }, { id = "s2", at = T }, { id = "s3", at = T + 1 } }
-    db.events = { { id = "e1", type = "craft", at = T }, { id = "e2", type = "mail_sent", at = T + 1000 } }
-    local removed = DB.Prune(db, T, T + 2 * HOUR)
+    db.scans = { { id = "s1", char = A, at = T - 1 }, { id = "s2", char = A, at = T }, { id = "s3", char = A, at = T + 1 },
+                 { id = "b1", char = B, at = T - HOUR } }
+    db.events = { { id = "e1", char = A, type = "craft", at = T }, { id = "e2", char = A, type = "mail_sent", at = T + 1000 },
+                  { id = "b2", char = B, type = "purchase", at = T - HOUR }, { id = "x", type = "craft", at = 0 } }
+    local removed = DB.Prune(db, { [A] = T }, T + 2 * HOUR)
     assert_eq(removed, 3)
-    assert_eq(db.scans, { { id = "s3", at = T + 1 } })
-    assert_eq(db.events, { { id = "e2", type = "mail_sent", at = T + 1000 } })
+    assert_eq(db.scans, { { id = "s3", char = A, at = T + 1 }, { id = "b1", char = B, at = T - HOUR } })
+    assert_eq(db.events, { { id = "e2", char = A, type = "mail_sent", at = T + 1000 },
+                           { id = "b2", char = B, type = "purchase", at = T - HOUR }, { id = "x", type = "craft", at = 0 } })
   end)
 
   it("keeps unconfirmed attempts younger than 1 h even when ingested", function()
     local DB = Boot(nil)
     local db = DB.NewDB()
     db.events = {
-      { id = "young", type = "purchase", at = T, confirmed = false },
-      { id = "old", type = "purchase", at = T - HOUR, confirmed = false },
-      { id = "done", type = "post", at = T, confirmed = true },
+      { id = "young", char = A, type = "purchase", at = T, confirmed = false },
+      { id = "old", char = A, type = "purchase", at = T - HOUR, confirmed = false },
+      { id = "done", char = A, type = "post", at = T, confirmed = true },
     }
-    DB.Prune(db, T, T + HOUR - 1)
-    assert_eq(db.events, { { id = "young", type = "purchase", at = T, confirmed = false } })
+    DB.Prune(db, { [A] = T }, T + HOUR - 1)
+    assert_eq(db.events, { { id = "young", char = A, type = "purchase", at = T, confirmed = false } })
   end)
 
   it("drops junk rows that are not tables", function()
     local DB = Boot(nil)
     local db = DB.NewDB()
-    db.events = { "junk", { id = "e", type = "craft", at = T + 1 } }
-    DB.Prune(db, T, T)
-    assert_eq(db.events, { { id = "e", type = "craft", at = T + 1 } })
+    db.events = { "junk", { id = "e", char = A, type = "craft", at = T + 1 } }
+    DB.Prune(db, { [A] = T }, T)
+    assert_eq(db.events, { { id = "e", char = A, type = "craft", at = T + 1 } })
   end)
 
   it("drops an unconfirmed attempt exactly 1 h old", function()
     local DB = Boot(nil)
     local db = DB.NewDB()
-    db.events = { { id = "a", type = "post", at = T, confirmed = false } }
-    DB.Prune(db, T, T + HOUR)
+    db.events = { { id = "a", char = A, type = "post", at = T, confirmed = false } }
+    DB.Prune(db, { [A] = T }, T + HOUR)
     assert_eq(db.events, {})
   end)
 end)

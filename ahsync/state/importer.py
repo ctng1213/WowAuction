@@ -423,7 +423,7 @@ def apply_data(db: Database, data: sv.AHProfitData, realms: Mapping[str, str], n
 
 
 def ingested_until(db: Database) -> dict[str, int]:
-    """Each character's ingestedUntil for the pruning handshake (SPEC §2.2); M5 exports it to Data.lua.
+    """Each character's ingestedUntil for the pruning handshake (SPEC §2.2); exported in PortfolioPlan.lua.
 
     Args:
         db: The database.

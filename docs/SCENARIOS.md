@@ -306,7 +306,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | IU8 | refresh at 06:00; it is now 20:00; the 06:00 row gives P(0 ahead) = 0.40 and the 20:00 row 0.84 (evening buyers) | P = 0.84: the current hour's row, in both Python and Lua |
 | IU11 | the simulation gives P = 0.853 for a curve point | exported as 0.86 (2% steps: floor(0.853 × 50 + 0.5) = 43 → 43 ÷ 50), stored as the character `string.char(35 + 43)` = "N"; Python and Lua both read 0.86 |
 | IU9 | refresh at 06:00 Fri; it is 08:00 Sat with no refresh since | the 08:00 row from Fri is reused; the age badge is amber (over 24 h) |
-| IU10 | a pending buy's slot passes 24 h while AHSync idles with no file change | the :00 status pass marks it missed; history reads = 0; no simulation; `Data.lua` rewritten |
+| IU10 | a pending buy's slot passes 24 h while AHSync idles with no file change | the :00 status pass marks it missed; history reads = 0; no simulation; `PortfolioPlan.lua` rewritten |
 | IU12 | a refresh exports a shortlist item (7 weeks of hour-of-week data, top 3 sell and buy windows) and a non-shortlist item | both carry their top windows; the shortlist item has the 24 × 8 curve and the other the 24 × 3; neither string holds a 168-slot `how`, `sales_how` or `supply_how` (SPEC §3.5: the addon shows no week heatmap) |
 
 **Confidence percentage** (`confidence.score`):
@@ -354,6 +354,8 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | AR7 | analysis of a market with 50 items, then 500 items, against a `HistoryReader` that counts calls | the same number of reader calls both times (bulk per market, never per item) |
 | EX1 | the shortlist of a market with Brugan (12 Copper Bar in bags, knows Copper Rod: 2 bars each), a pending post of Linen, a Disenchant row for Scouting Gloves, Silk Cloth in a partial scan 2 days ago, Wool Cloth in a full scan, and Iron Ore in a partial scan 9 days ago | {Copper Bar, Copper Rod, Linen, Scouting Gloves, Silk Cloth}: what you hold, your recipes' products and reagents, open plan actions, desktop list rows and targeted (partial) scans of the last 7 days; full scans cover the whole AH and would shortlist everything |
 | EX2 | `MarketIntelligence.lua` for one market with Linen (45 c, 48 sold/day AHF, a Sat 18:00 window), an item with no price that is on the shortlist, and an item with no price that isn't | Linen's string is `45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0;138:4:139:1120:7;` with its curve in `C`; the shortlisted item is exported with empty fields; the other is left out; the header holds schemaVersion 1, generatedAt, the market's observationsUntil and curve hour, each character's market and checksum "3:<total length>" (two item strings and one curve) |
+| EX3 | `PortfolioPlan.lua` for Amaya: a pending post of 20 Linen at 55 c, expected net 1,045.5 c, and a missed buy; rules Linen `no_buy` set at T and Silk cleared (`none`) at T + 1 h; Amaya ingested until T + 2 h, Brugan never | Amaya's actions hold only the post, `"<id>;post;2589;20;55;<at>;1046;;<window end>;pending"`; rules `[2589] = "no_buy,T"` and `[4306] = "none,T+1h"` (a clear travels too); `ingestedUntil` names Amaya only; `basedOnUntil` = T + 2 h; checksum over every action and rule string |
+| EX4 | the addon loads a `PortfolioPlan.lua` whose schema version differs, then one whose checksum fails | nothing is pruned from SavedVariables and no plan row is shown; a status line says why; no Lua error |
 
 **Addon** (Lua, `tests/addon/...`): every scenario for a ported module (`fees`, `sellprob`, `disenchant`, `craft`; see SPEC §5) must pass on the Lua port with identical numbers. Volume (V*) and tracking (T*) scenarios run in Python only. Plus:
 
@@ -362,7 +364,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | A1 | `Capture/*` writes a SavedVariables file with characters, recipes, inventory and events | `ingest/savedvars` parses it back to the same records (round-trip) |
 | A2 | at the AH, a search result raises a flip target's price above its profit line; another target is gone | the list re-orders; both targets are dropped |
 | A3 | a `MarketIntelligence.lua` with 20k items | loads in Lua 5.1 without hitting the constant limit |
-| A4 | `PortfolioPlan.lua` with `ingestedUntil` = T for a character | scans, posts, purchases, crafts and mail at or before T are removed from SavedVariables; later ones are kept |
+| A4 | `PortfolioPlan.lua` with `ingestedUntil` = T for Amaya and nothing for Brugan, read at login | Amaya's scans, posts, purchases, crafts and mail at or before T are removed from SavedVariables, later ones kept (unconfirmed attempts younger than 1 h stay); Brugan's rows are all kept, since his file may not have been read |
 | A5 | an engine error is raised during a re-rank | caught at the UI boundary and shown as a status line; no Lua error popup; the list keeps its last good state |
 | A6 | the AH opens and another addon's `ReplicateItems` answers with 3 auctions (Linen 45c ×20 long, Linen 45c ×20 long, Copper Bar 1s ×5 short) | one `full` scan, coverage 1, rows `2589,45,20,3,2;2840,100,5,1,1`; AHProfit made no ReplicateItems call |
 | A7 | the AH opens and no scan result arrives within 30 s | AHProfit calls `ReplicateItems` once; opening the AH again 5 min later doesn't call it again (20-min rule) |

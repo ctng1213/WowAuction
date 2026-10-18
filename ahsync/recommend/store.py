@@ -50,6 +50,24 @@ class RecommendStore:
             f"week_start_ms, status FROM actions WHERE status IN ('pending', 'late') AND char_id IN ({marks}) "
             f"ORDER BY slot_ms, action_id", tuple(char_ids))]
 
+    def addon_actions(self, char_ids: list[str]) -> list[tuple]:
+        """The characters' open actions as PortfolioPlan.lua exports them (SPEC §3.5, EX3).
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            (action_id, char_id, kind, key, qty, price, slot_ms, expected_net, parent_id, window_end_ms, status),
+            pending and late only, by time then id.
+        """
+        if not char_ids:
+            return []
+        marks = ",".join("?" * len(char_ids))
+        return [tuple(r) for r in self.conn.execute(
+            f"SELECT action_id, char_id, kind, key, qty, price, slot_ms, expected_net, parent_id, window_end_ms, status "
+            f"FROM actions WHERE status IN ('pending', 'late') AND char_id IN ({marks}) ORDER BY slot_ms, action_id",
+            tuple(char_ids))]
+
     def set_action_status(self, action_id: str, status: str) -> None:
         """Change one action's status (the status pass: late or missed).
 

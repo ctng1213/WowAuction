@@ -477,7 +477,7 @@ def _one_of(allowed: tuple[str, ...]) -> Callable[[object, str], str]:
 
 
 def _action_id(value: object, what: str) -> str:
-    """Check an action id from Data.lua.
+    """Check an action id from PortfolioPlan.lua.
 
     Args:
         value: The Lua value, a string or an integer.
@@ -486,7 +486,7 @@ def _action_id(value: object, what: str) -> str:
     Returns:
         The id as text.
     """
-    # SPEC GAP: the type of a Data.lua action id is not defined yet; numbers are kept as text.
+    # Action ids are text ("<market>:<run ms>:<n>", ahsync/export/plan_lua.py); numbers are kept as text.
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         return str(_int(value, what))
     return _str(value, what)

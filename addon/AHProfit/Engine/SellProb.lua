@@ -108,7 +108,7 @@ function SellProb.Quantize(p)
   return math.floor(p * SellProb.CURVE_STEPS + 0.5)
 end
 
---- Decode a curve string from Data.lua into rows of 2%-step probabilities (SPEC §3.1.1).
+--- Decode a curve string from MarketIntelligence.lua into rows of 2%-step probabilities (SPEC §3.1.1).
 ---@param text string           One character per point, row by row
 ---@param pointsPerRow number   Units-ahead points per row (8 or 3)
 ---@return number[][]           Rows of n ÷ 50

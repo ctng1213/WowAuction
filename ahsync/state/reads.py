@@ -290,3 +290,11 @@ class StateReads:
         return {key for (key,) in self.conn.execute(
             "SELECT DISTINCT e.key FROM book_entries e JOIN scans s ON s.scan_id = e.scan_id "
             "WHERE s.market = ? AND s.src = 'local' AND s.kind = 'partial' AND s.at >= ?", (market, since_ms))}
+
+    def rule_rows(self) -> list[tuple[int, str, int]]:
+        """Every item rule with its time, cleared ones ("none") included, for PortfolioPlan.lua (SPEC §3.4.2).
+
+        Returns:
+            (item key, rule, set_at ms), by key.
+        """
+        return [tuple(r) for r in self.conn.execute("SELECT key, rule, set_at FROM item_rules ORDER BY key")]

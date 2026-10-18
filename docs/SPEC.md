@@ -869,6 +869,10 @@ You set or clear a rule from any dashboard row, from the **Rules** page, or by r
      - **The checksum** is `"<strings>:<their total length>"` over every `I` and `C` string: cheap to check at login, and a truncated or mixed-up file fails it. A file whose `schemaVersion` differs, or whose checksum fails, is refused with a status line, never a Lua error (FM17).
      - AHSync writes it after every published full refresh (`export/addon_files.py`); a write blocked 3 times leaves the old file and a Status warning (FM14), and a file over 2 MB is written with a warning.
    - **`PortfolioPlan.lua`** (account-specific): the desktop's plan with action ids so the addon can mark them done, your sell record per item (`s`, `x`, `streak`), the item rules, `basedOnUntil` (the newest event it includes), and `ingestedUntil` per character for the pruning handshake (§2.2), written only after the database commit.
+     - **Format** (`export/plan_lua.py`, read by `Core/Plan.lua`): `AHProfitPlan = { schemaVersion, generatedAt, checksum, basedOnUntil, ingestedUntil = { [charId] = ms }, actions = { [charId] = { "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status", ... } }, rules = { [key] = "rule,setAtMs" } }`. Only open actions (pending, late) travel, in time order; `net` is copper, rounded half up; cleared rules travel as `none` so a clear on the dashboard beats an older rule in game. `basedOnUntil` is the newest `ingestedUntil`. The checksum works like `MarketIntelligence.lua`'s, over every action and rule string (EX3).
+     - It is rewritten after each commit that changes it: a published full refresh, a SavedVariables read, and the hourly status pass.
+     - **At login**, once both addons have loaded, the addon checks it and prunes each character's committed rows (§2.2, A4). A plan of another schema version, or one that fails its checksum, prunes nothing and shows no plan rows, with a status line (EX4). No plan at all is normal: the addon's own recommendations still work.
+     - SPEC GAP: the sell record per item (`s`, `x`, `streak`) joins it with tracking (M6b).
    - Raw history is never exported. Both files have a size budget: ≤ 2 MB and ≤ 200 KB.
 
    The addon reads them at login or `/reload`.
@@ -1192,7 +1196,7 @@ ahsync/
   export/     market_lua.py (MarketIntelligence.lua), plan_lua.py (PortfolioPlan.lua), addon_files.py (atomic writes, the shortlist)
   web/        server.py, static/
 addon/AHProfit/
-  Core/       Adapter.lua (every game API call), Events.lua, DB.lua (AHProfitDB setup, migrations, pruning; §2.2.1), Diagnostics.lua (§2.2.1), Market.lua (reads MarketIntelligence.lua: checks, lazy decode)
+  Core/       Adapter.lua (every game API call), Events.lua, DB.lua (AHProfitDB setup, migrations, pruning; §2.2.1), Diagnostics.lua (§2.2.1), Market.lua (reads MarketIntelligence.lua: checks, lazy decode), Plan.lua (reads PortfolioPlan.lua; prunes at login)
   Capture/    Characters.lua, Professions.lua, Inventory.lua, Mail.lua, Posts.lua, Purchases.lua, Crafts.lua
   Scan/       Search.lua, Replicate.lua
   Engine/     Fees.lua, SellProb.lua, Disenchant.lua, Craft.lua   (ports of ahsync/engine)

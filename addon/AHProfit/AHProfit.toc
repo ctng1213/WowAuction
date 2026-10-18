@@ -19,3 +19,4 @@ Engine\SellProb.lua
 Engine\Disenchant.lua
 Engine\Craft.lua
 Core\Market.lua
+Core\Plan.lua

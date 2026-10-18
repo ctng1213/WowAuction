@@ -220,7 +220,7 @@ class IngestWrites:
         Args:
             event_id: The skip event's id.
             char_id: "Name-Realm".
-            action_id: The action skipped, from Data.lua.
+            action_id: The action skipped, from PortfolioPlan.lua.
             at_ms: When it was skipped.
 
         Returns:

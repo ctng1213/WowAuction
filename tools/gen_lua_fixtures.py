@@ -139,7 +139,32 @@ def generate_market(out_dir: Path = OUT / "market") -> list[Path]:
     return written
 
 
+def generate_plan(out_dir: Path = OUT / "plan") -> list[Path]:
+    """Write a real PortfolioPlan.lua with the Python exporter (EX3), for the addon's plan specs.
+
+    Amaya has a pending post of 20 Linen and a late hold; Linen is `no_buy` and Silk cleared;
+    Amaya is ingested until T + 2 h, Brugan never.
+
+    Args:
+        out_dir: Folder for the file.
+
+    Returns:
+        Paths written.
+    """
+    sys.path.insert(0, str(ROOT))
+    from ahsync.export.plan_lua import plan_lua
+
+    hour, t = 3_600_000, 1_760_000_000_000
+    amaya = "Amaya-Grommash"
+    actions = [("m:1:0", amaya, "post", 2589, 20, 55, t + 5 * hour, 1045.5, None, t + 10 * hour, "pending"),
+               ("m:1:1", amaya, "hold", 6948, 1, None, t + 6 * hour, None, "m:1:0", None, "late")]
+    text = plan_lua(actions, [(2589, "no_buy", t), (4306, "none", t + hour)], {amaya: t + 2 * hour}, t + 3 * hour)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "ex3.lua").write_text(text, encoding="utf-8", newline=chr(10))
+    return [out_dir / "ex3.lua"]
+
+
 if __name__ == "__main__":
-    paths = generate() + generate(PROPERTIES, OUT / "properties") + generate_market()
+    paths = generate() + generate(PROPERTIES, OUT / "properties") + generate_market() + generate_plan()
     print(f"gen_lua_fixtures: {len(paths)} file(s) -> {OUT.relative_to(ROOT).as_posix()}")
     sys.exit(0)

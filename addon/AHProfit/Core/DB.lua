@@ -225,28 +225,29 @@ end
 -- ------------------------------------------------------------------ pruning
 
 --- Whether a scan or event row survives pruning (SPEC §2.2 pruning handshake).
----@param row table            A scan or event with at (ms) and optional confirmed
----@param ingestedUntilMs number Newest event time AHSync has committed, ms
----@param nowMs number         Current time, ms
----@return boolean             true to keep the row; a non-table row is junk and dropped
-local function KeepRow(row, ingestedUntilMs, nowMs)
+---@param row table              A scan or event with char, at (ms) and optional confirmed
+---@param ingestedUntil table    charId -> newest time AHSync has committed for that character, ms
+---@param nowMs number           Current time, ms
+---@return boolean               true to keep the row; a non-table row is junk and dropped
+local function KeepRow(row, ingestedUntil, nowMs)
   if type(row) ~= "table" then return false end
-  if type(row.at) ~= "number" or row.at > ingestedUntilMs then return true end
+  local untilMs = ingestedUntil[row.char]
+  if type(untilMs) ~= "number" or type(row.at) ~= "number" or row.at > untilMs then return true end
   return row.confirmed == false and nowMs - row.at < DB.UNCONFIRMED_KEEP_MS
 end
 
 --- Keep only the rows of an array that pass KeepRow, preserving order.
 ---@param rows table[]               Array changed in place
----@param ingestedUntilMs number      Newest committed event time, ms
+---@param ingestedUntil table         charId -> newest committed time, ms
 ---@param nowMs number                Current time, ms
 ---@return number                     Rows removed
-local function PruneArray(rows, ingestedUntilMs, nowMs)
+local function PruneArray(rows, ingestedUntil, nowMs)
   local kept = 0
   local total = #rows
   for i = 1, total do
     local row = rows[i]
     rows[i] = nil
-    if KeepRow(row, ingestedUntilMs, nowMs) then
+    if KeepRow(row, ingestedUntil, nowMs) then
       kept = kept + 1
       rows[kept] = row
     end
@@ -254,15 +255,16 @@ local function PruneArray(rows, ingestedUntilMs, nowMs)
   return total - kept
 end
 
---- Delete scans and events AHSync has committed (SPEC §2.2, §5.2 rule 5).
---- Rows at or before ingestedUntilMs go, except unconfirmed attempts younger than 1 h.
+--- Delete scans and events AHSync has committed (SPEC §2.2, §5.2 rule 5, A4).
+--- A character's rows at or before its ingestedUntil go, except unconfirmed attempts younger
+--- than 1 h; a character AHSync hasn't committed anything for keeps every row.
 -- SPEC GAP: §2.2 lists posts, purchases, crafts and mail; `skip` events are pruned by the same rule.
 ---@param db table               The database; scans and events are changed in place
----@param ingestedUntilMs number `ingestedUntil` from Data.lua, ms
+---@param ingestedUntil table    `ingestedUntil` from PortfolioPlan.lua: charId -> ms
 ---@param nowMs number           Current time, ms
 ---@return number                Rows removed
-function DB.Prune(db, ingestedUntilMs, nowMs)
-  return PruneArray(db.scans, ingestedUntilMs, nowMs) + PruneArray(db.events, ingestedUntilMs, nowMs)
+function DB.Prune(db, ingestedUntil, nowMs)
+  return PruneArray(db.scans, ingestedUntil, nowMs) + PruneArray(db.events, ingestedUntil, nowMs)
 end
 
 Events.Register("ADDON_LOADED", DB.OnAddonLoaded)
