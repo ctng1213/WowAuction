@@ -1,9 +1,16 @@
 """Tests for ahsync/engine/prices.py."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
+import pytest
+
 from ahsync.engine.prices import (
     DAY_MS, HOUR_MS, cur_others, median, percentile, post_price, trend7, weekday_hour, window_median,
 )
+
+SHARED = json.loads((Path(__file__).resolve().parents[3] / "tests" / "scenarios" / "prices.json").read_text(encoding="utf-8"))
 
 G, S = 10_000, 100
 NOW = 100 * DAY_MS          # a fixed "now": day 100 at 00:00 UTC
@@ -98,3 +105,8 @@ def test_post_price_with_missing_inputs():
     assert post_price(None, 60) == 60
     assert post_price(55, None) == 54
     assert post_price(None, None) is None
+
+
+@pytest.mark.parametrize("s", SHARED, ids=[s["name"] for s in SHARED])
+def test_PP1_post_price_shared_with_the_addon(s):
+    assert post_price(s["args"]["cur_others"], s["args"]["med7"]) == s["expect"], s["why"]

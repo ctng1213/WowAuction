@@ -116,6 +116,16 @@ describe("MainWindow", function()
     assert_eq(ui.rows[2].note:GetText(), "post now · AHSync has no plan for it")
   end)
 
+  it("A2 a finished AH scan drops gone flips from the open window and says so", function()
+    local MainWindow = Boot()
+    Stubs.Slash("/ahp")
+    AHProfit.Scan.Replicate.LastBook = function() return { at = NOW + 60000, book = { [2840] = {} } } end
+    UIWorld.Plan({ { id = "b", kind = "buy", key = 2840, qty = 6, price = 500, at = NOW, net = 300 } })
+    AHProfit.Plan.Reset()
+    MainWindow.Render()
+    assert_eq(MainWindow.Frames().footer:GetText(), AHProfit.ViewModel.WithCoins("0 actions · expected 0c · 1 gone"))
+  end)
+
   it("scrolling moves through a long list and stops at its ends", function()
     Stubs.Reset()
     UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48) }, NOW)

@@ -365,7 +365,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | # | Scenario | Then |
 |---|---|---|
 | A1 | `Capture/*` writes a SavedVariables file with characters, recipes, inventory and events | `ingest/savedvars` parses it back to the same records (round-trip) |
-| A2 | at the AH, a search result raises a flip target's price above its profit line; another target is gone | the list re-orders; both targets are dropped |
+| A2 | at the AH, a full scan shows a planned flip's item cheapest at 45 c while the plan buys at or below 38 c; another flip's item is no longer listed | both buy rows are dropped from Today and the footer says "2 gone"; the rest re-sort |
 | A3 | a `MarketIntelligence.lua` with 20k items | loads in Lua 5.1 without hitting the constant limit |
 | A4 | `PortfolioPlan.lua` with `ingestedUntil` = T for Amaya and nothing for Brugan, read at login | Amaya's scans, posts, purchases, crafts and mail at or before T are removed from SavedVariables, later ones kept (unconfirmed attempts younger than 1 h stay); Brugan's rows are all kept, since his file may not have been read |
 | A5 | an engine error is raised during a re-rank | caught at the UI boundary and shown as a status line; no Lua error popup; the list keeps its last good state |
@@ -381,6 +381,8 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | A16 | the plan has a post of Linen for Amaya; her bags also hold 6 Copper Bar the plan doesn't mention | Linen shows only the plan's row; Copper Bar gets the addon's own row |
 | A17 | 7 Broken Fang: the merchant pays 12 c each, posting is worth 9 c each | the addon's row is VENDOR ×7 at 12 c, net +84 c, no chance |
 | A18 | a bound Hearthstone, and a Silk Cloth with no market data, in the bags | no row for either |
+| A19 | Amaya carries 20 Linen; the market file (refreshed 3 h ago) says post at 45 c, sell value 42 c; a full in-game scan now shows the cheapest Linen at 40 c, nothing below; med7 49 c; the curve says 80% at 0 ahead this hour | the addon's own row re-prices from the scan: post at 39 c (40 − 1, below med7), chance 80%, deposit 3 c (20 × 3 c vendor × 5% for the 8 h auction), net 0.8 × 20 × 39 × 0.95 + 0.2 × (20 × 3 − 3) = 604.2 c, shown +6 s 4 c; note "post now at the live price · AHSync has no plan for it" |
+| PP1 | post price from the cheapest other auction and the 7-day median: 55 c and 60 c; 70 c and 60 c; none and 60 c; 55 c and none; neither | 54 c (undercut by 1 c); 60 c (the median is lower); 60 c; 54 c; no price. The same in Python and Lua (shared scenario) |
 | A9 | no `PortfolioPlan.lua`; the intelligence lists Copper Rod (sell value 38 s) and Copper Bar on the shortlist; your bags hold 6 bars; the AH shows bars at 10 s | the addon itself offers "Craft 3 Copper Rod from owned bars" with the same profit the desktop computes for the same inputs (19 s each, C1) |
 
 ## 2. Visual tests (UI1–UI11)

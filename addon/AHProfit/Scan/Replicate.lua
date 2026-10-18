@@ -31,6 +31,8 @@ local lastRunStartMs = nil
 local run = nil                -- the scan being read or encoded
 local stats = { calls = 0 }    -- last run's numbers, for diagnostics and /ahp perf
 local warning = nil            -- status line text after dropping scans (FM22)
+local lastBook = nil           -- the last complete scan's book, kept for live prices (SPEC §4.0)
+local listeners = {}           -- called when a complete book arrives
 
 -- ------------------------------------------------------------------ order book
 
@@ -116,6 +118,22 @@ local function SavePhase()
     warning = "Dropped " .. dropped .. " old full scan(s): run AHSync to sync"
   end
   stats.kind, stats.rows = finished.complete and "full" or "partial", finished.rows
+  if finished.complete then
+    lastBook = { at = finished.at, book = finished.book }
+    for _, fn in ipairs(listeners) do fn() end
+  end
+end
+
+--- The last complete scan's order book this session (SPEC §4.0 live prices).
+---@return table|nil  { at = ms, book = key -> unit price -> stack * 5 + band -> count }; nil before one
+function Replicate.LastBook()
+  return lastBook
+end
+
+--- Call a function whenever a complete scan's book arrives (the window redraws).
+---@param fn function
+function Replicate.OnBook(fn)
+  listeners[#listeners + 1] = fn
 end
 
 -- ------------------------------------------------------------------ reading and encoding

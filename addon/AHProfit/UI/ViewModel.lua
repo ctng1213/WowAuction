@@ -365,13 +365,15 @@ function ViewModel.Age(generatedAt, nowMs)
   return { text = "data " .. text .. (minutes < 1 and "" or " old"), amber = nowMs - generatedAt > ViewModel.STALE_MS }
 end
 
---- The footer under Today (SPEC §4.3 wireframe).
+--- The footer under Today (SPEC §4.3 wireframe, A2).
 ---@param today table      From ViewModel.Today
 ---@param minChance number Percent
----@return string          e.g. "7 actions · expected +1g 54s 15c · 1 hidden (chance < 50%)"
-function ViewModel.TodayFooter(today, minChance)
+---@param gone number|nil  Planned buys a live scan showed are gone
+---@return string          e.g. "7 actions · expected +1g 54s 15c · 1 hidden (chance < 50%) · 2 gone"
+function ViewModel.TodayFooter(today, minChance, gone)
   local text = today.count .. (today.count == 1 and " action" or " actions") .. " · expected " .. today.total
   if today.hidden > 0 then text = text .. " · " .. today.hidden .. " hidden (chance < " .. minChance .. "%)" end
+  if gone and gone > 0 then text = text .. " · " .. gone .. " gone" end
   return text
 end
 

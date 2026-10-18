@@ -1,0 +1,57 @@
+[
+ {
+  "id": "PP1",
+  "name": "post price undercuts the cheapest other auction unless the median is lower",
+  "call": "post_price",
+  "args": {
+   "cur_others": 55,
+   "med7": 60
+  },
+  "expect": 54,
+  "why": "55c - 1c = 54c, below the 60c median"
+ },
+ {
+  "id": "PP1",
+  "name": "post price stops at the 7-day median",
+  "call": "post_price",
+  "args": {
+   "cur_others": 70,
+   "med7": 60
+  },
+  "expect": 60,
+  "why": "70c - 1c = 69c is above the 60c median"
+ },
+ {
+  "id": "PP1",
+  "name": "post price without competition is the median",
+  "call": "post_price",
+  "args": {
+   "cur_others": null,
+   "med7": 60
+  },
+  "expect": 60,
+  "why": "nothing else listed"
+ },
+ {
+  "id": "PP1",
+  "name": "post price without a median undercuts",
+  "call": "post_price",
+  "args": {
+   "cur_others": 55,
+   "med7": null
+  },
+  "expect": 54,
+  "why": "no history yet"
+ },
+ {
+  "id": "PP1",
+  "name": "no post price without either",
+  "call": "post_price",
+  "args": {
+   "cur_others": null,
+   "med7": null
+  },
+  "expect": null,
+  "why": "nothing to go by: flagged no price"
+ }
+]

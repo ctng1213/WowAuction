@@ -18,8 +18,10 @@ Engine\Fees.lua
 Engine\SellProb.lua
 Engine\Disenchant.lua
 Engine\Craft.lua
+Engine\Prices.lua
 Core\Market.lua
 Core\Plan.lua
+Recommend\Live.lua
 Recommend\Options.lua
 UI\ViewModel.lua
 UI\MainWindow.lua

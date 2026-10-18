@@ -5,8 +5,13 @@
 -- and chance) or a merchant, unless AHSync's plan already covers it (A15-A18).
 
 local AHProfit = AHProfit
+local Fees = AHProfit.Engine.Fees
+local Prices = AHProfit.Engine.Prices
+local SellProb = AHProfit.Engine.SellProb
+local Live = AHProfit.Live
 
 local Options = {}
+Options.SELL_WINDOW_HOURS = 8      -- config sell_window_hours (SPEC §3.6): the posting-now window
 AHProfit.Options = Options
 
 --- Total units per item of the unbound stacks in a list of bag rows.
@@ -18,6 +23,30 @@ local function Units(bags)
     if not row.bound then units[row.key] = (units[row.key] or 0) + row.qty end
   end
   return units
+end
+
+--- An item's sell option re-priced from live listings (A19), as analysis prices it (market.analyze_item):
+--- post at min(cheapest − 1, med7), P from the curve row for this hour at the units ahead, and
+--- E_post per unit with the vendor price as the fallback and the deposit for the window.
+---@param item table          Market.Item(key)
+---@param levels table[]      Live.Levels for the item
+---@param curve table|nil     Market.Curve(key)
+---@param vendorEach number   Merchant price, copper
+---@param nowMs number
+---@return table              A copy of item with postPrice, sellValue and chance from the live book
+function Options.Reprice(item, levels, curve, vendorEach, nowMs)
+  local live = {}
+  for k, v in pairs(item) do live[k] = v end
+  local price = Prices.PostPrice(levels[1] and levels[1].price, item.med7)
+  if not price then return live end
+  local ref = item.refStack or 1
+  local p = item.chance or 0
+  if curve then p = SellProb.Lookup(curve.rows, curve.refreshMs, nowMs, Live.Ahead(levels, price), curve.aheadPoints) end
+  local deposit = Fees.DepositCopper(vendorEach, ref, Fees.ShortestDurationCovering(Options.SELL_WINDOW_HOURS))
+  live.postPrice, live.chance = price, p
+  live.sellValue = SellProb.ExpectedPost(p, ref, price, vendorEach, deposit) / ref
+  live.live = true
+  return live
 end
 
 --- The best way to sell one item you carry, or nil when neither pays (A15, A17).
@@ -35,7 +64,8 @@ function Options.SellOne(key, qty, item, vendorEach, nowMs, charId)
   if postEach and item.postPrice and postEach >= vendor and postEach > 0 then
     action.kind, action.price, action.net = "post", item.postPrice, postEach * qty
     action.chance = item.chance and math.floor(item.chance * 100 + 0.5) or nil
-    action.ownNote = "post now · AHSync has no plan for it"
+    action.ownNote = item.live and "post now at the live price · AHSync has no plan for it"
+                     or "post now · AHSync has no plan for it"
     return action
   end
   if vendor > 0 then
@@ -46,10 +76,10 @@ function Options.SellOne(key, qty, item, vendorEach, nowMs, charId)
   return nil
 end
 
---- The addon's own sell actions for what a character carries (A15-A18).
+--- The addon's own sell actions for what a character carries (A15-A19).
 ---@param bags table[]       { key, qty, bound } rows of the character's bags
 ---@param planned table      key -> true for items AHSync's plan already has an action for
----@param itemOf function    key -> Market.Item(key) or nil
+---@param itemOf function    key -> market item, already re-priced from live listings when there are some
 ---@param vendorOf function  key -> merchant price each, or nil
 ---@param nowMs number
 ---@param charId string
@@ -65,4 +95,23 @@ function Options.Sell(bags, planned, itemOf, vendorOf, nowMs, charId)
     if action then out[#out + 1] = action end
   end
   return out
+end
+
+--- Drop planned buys whose price is no longer on the AH (A2): a live scan shows no units at or
+--- below the plan's price (the item is gone, or now costs more than the flip's profit line).
+---@param actions table[]    Plan actions
+---@param levelsOf function  key -> Live.Levels, or nil when there is no newer scan
+---@return table[]           The actions still possible
+---@return number            Buys dropped
+function Options.WithoutGoneBuys(actions, levelsOf)
+  local kept, gone = {}, 0
+  for _, a in ipairs(actions) do
+    local levels = a.kind == "buy" and a.price and levelsOf(a.key)
+    if levels and Live.Ahead(levels, a.price) < a.qty then
+      gone = gone + 1
+    else
+      kept[#kept + 1] = a
+    end
+  end
+  return kept, gone
 end

@@ -13,6 +13,7 @@ local Plan = AHProfit.Plan
 local VM = AHProfit.ViewModel
 local Events = AHProfit.Events
 local Options = AHProfit.Options
+local Live = AHProfit.Live
 local Inventory = AHProfit.Capture.Inventory
 
 local MainWindow = {}
@@ -361,6 +362,30 @@ function MainWindow.OnItemInfo()
   if ui and ui.frame:IsShown() then Events.Debounce("window.names", MainWindow.Render) end
 end
 
+--- What a merchant pays for one of an item, from the item cache.
+---@param key number
+---@return number|nil
+local function VendorOf(key)
+  return select(3, Adapter.ItemInfo(VM.BaseItemId(key)))
+end
+
+--- An item's live listings from a scan newer than the market data, or nil (SPEC §4.0).
+---@param key number
+---@return table[]|nil
+local function LevelsOf(key)
+  local _, newest = Market.Times()
+  return Live.Item(key, newest)
+end
+
+--- An item's market data, re-priced from live listings when a newer scan has them (A19).
+---@param key number
+---@return table|nil
+local function LiveItem(key)
+  local item, levels = Market.Item(key), LevelsOf(key)
+  if not item or not levels then return item end
+  return Options.Reprice(item, levels, Market.Curve(key), VendorOf(key) or 0, Adapter.NowMs())
+end
+
 --- Show only what a kind of line uses: action cells, a note, or a day header.
 ---@param row table
 ---@param kind string  "row" | "note" | "day"
@@ -433,21 +458,19 @@ local function Lines(nowMs, gold)
   local info = Adapter.PlayerInfo()
   local charId = info.name .. "-" .. info.realm
   local actions = Plan.CharacterActions(charId)
+  local gone = 0
   if view.tab == "today" then
+    actions, gone = Options.WithoutGoneBuys(actions, LevelsOf)
     -- The addon's own options for what you carry fill in where AHSync's plan is silent (SPEC §4.0).
     local planned, inventory = {}, ((DB.Get() or {}).inventory or {})[charId] or {}
     for _, a in ipairs(actions) do planned[a.key] = true end
-    --- What a merchant pays for one of an item, from the item cache.
-    ---@param key number
-    ---@return number|nil
-    local function VendorOf(key) return select(3, Adapter.ItemInfo(VM.BaseItemId(key))) end
-    for _, a in ipairs(Options.Sell(Inventory.Decode(inventory.bags), planned, Market.Item, VendorOf, nowMs, charId)) do
+    for _, a in ipairs(Options.Sell(Inventory.Decode(inventory.bags), planned, LiveItem, VendorOf, nowMs, charId)) do
       actions[#actions + 1] = a
     end
   end
   if view.tab == "today" then
     local today = VM.Today(actions, nowMs, offset, view.minChance, LookOf, gold)
-    return VM.WithNotes(today.rows), VM.TodayFooter(today, view.minChance), "Nothing to do in the next hour."
+    return VM.WithNotes(today.rows), VM.TodayFooter(today, view.minChance, gone), "Nothing to do in the next hour."
   end
   local week = VM.Week(actions, nowMs, offset, LookOf, gold)
   return VM.WithNotes(VM.WeekLines(week)), "Week total " .. week.total, "Nothing planned this week."
@@ -560,3 +583,5 @@ function MainWindow.OnSlash(args)
 end
 
 Adapter.RegisterSlash("AHPROFIT", { "/ahp", "/ahprofit" }, function(args) MainWindow.OnSlash(args) end)
+-- A finished AH scan re-prices and re-ranks the open window (SPEC §4.0, A2).
+AHProfit.Scan.Replicate.OnBook(function() if ui and ui.frame:IsShown() then MainWindow.Render() end end)
