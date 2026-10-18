@@ -126,6 +126,21 @@ describe("MainWindow", function()
     assert_eq(MainWindow.Frames().footer:GetText(), AHProfit.ViewModel.WithCoins("0 actions · expected 0c · 1 gone"))
   end)
 
+  it("A9 with no plan, a known recipe and its mats in the bags, Today offers the craft and not the mats", function()
+    Stubs.Reset()
+    _G.AHProfitPlan = nil
+    Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 2840, count = 6 } } } }
+    UIWorld.Market({ [6217] = UIWorld.Item(4100, 86, 6, { postPrice = 4000, chance = 1, sellValue = 3800, refStack = 1 }),
+                     [2840] = UIWorld.Item(5000, 80, 40, { postPrice = 1000, sellValue = 950 }) }, NOW)   -- AH bars too dear
+    Stubs.Login()
+    AHProfitDB.knownRecipes["Amaya-Grommash"] = "2663"
+    AHProfitDB.recipes.Blacksmithing = { [2663] = { product = 6217, yieldMin = 1, yieldMax = 1, reagents = "2840,2" } }
+    Stubs.Slash("/ahp")
+    local ui = AHProfit.MainWindow.Frames()
+    assert_eq({ FirstRow("today").action, FirstRow("today").item, FirstRow("today").qty }, { "CRAFT", "Copper Rod", "×3" })
+    assert_eq({ ui.rows[2].note:GetText(), ui.rows[3]:IsShown() }, { "from your own mats · AHSync has no plan for it", false })
+  end)
+
   it("scrolling moves through a long list and stops at its ends", function()
     Stubs.Reset()
     UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48) }, NOW)

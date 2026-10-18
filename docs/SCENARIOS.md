@@ -381,9 +381,10 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | A16 | the plan has a post of Linen for Amaya; her bags also hold 6 Copper Bar the plan doesn't mention | Linen shows only the plan's row; Copper Bar gets the addon's own row |
 | A17 | 7 Broken Fang: the merchant pays 12 c each, posting is worth 9 c each | the addon's row is VENDOR ×7 at 12 c, net +84 c, no chance |
 | A18 | a bound Hearthstone, and a Silk Cloth with no market data, in the bags | no row for either |
+| A20 | the same 6 bars feed the 3 Copper Rod crafts | the bars get no sell row of their own: a mat is used once |
 | A19 | Amaya carries 20 Linen; the market file (refreshed 3 h ago) says post at 45 c, sell value 42 c; a full in-game scan now shows the cheapest Linen at 40 c, nothing below; med7 49 c; the curve says 80% at 0 ahead this hour | the addon's own row re-prices from the scan: post at 39 c (40 − 1, below med7), chance 80%, deposit 3 c (20 × 3 c vendor × 5% for the 8 h auction), net 0.8 × 20 × 39 × 0.95 + 0.2 × (20 × 3 − 3) = 604.2 c, shown +6 s 4 c; note "post now at the live price · AHSync has no plan for it" |
 | PP1 | post price from the cheapest other auction and the 7-day median: 55 c and 60 c; 70 c and 60 c; none and 60 c; 55 c and none; neither | 54 c (undercut by 1 c); 60 c (the median is lower); 60 c; 54 c; no price. The same in Python and Lua (shared scenario) |
-| A9 | no `PortfolioPlan.lua`; the intelligence lists Copper Rod (sell value 38 s) and Copper Bar on the shortlist; your bags hold 6 bars; the AH shows bars at 10 s | the addon itself offers "Craft 3 Copper Rod from owned bars" with the same profit the desktop computes for the same inputs (19 s each, C1) |
+| A9 | no `PortfolioPlan.lua`; Brugan knows Copper Rod (2 Copper Bar each); the intelligence says Copper Rod posts at 40 s with `P` = 1 and Copper Bar is worth 9 s 50 c to hold; his bags hold 6 bars; the AH has no bars | the addon itself offers CRAFT ×3 Copper Rod, net +57 s (3 × (38 s − 19 s), the desktop's C1), chance 100%, note "from your own mats · AHSync has no plan for it"; with the bars bought on the AH at 10 s instead it says "mats from the AH: 60s" and nets +54 s (C2) |
 
 ## 2. Visual tests (UI1–UI11)
 

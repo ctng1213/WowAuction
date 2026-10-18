@@ -461,12 +461,24 @@ local function Lines(nowMs, gold)
   local gone = 0
   if view.tab == "today" then
     actions, gone = Options.WithoutGoneBuys(actions, LevelsOf)
-    -- The addon's own options for what you carry fill in where AHSync's plan is silent (SPEC §4.0).
-    local planned, inventory = {}, ((DB.Get() or {}).inventory or {})[charId] or {}
-    for _, a in ipairs(actions) do planned[a.key] = true end
-    for _, a in ipairs(Options.Sell(Inventory.Decode(inventory.bags), planned, LiveItem, VendorOf, nowMs, charId)) do
-      actions[#actions + 1] = a
+    -- The addon's own options fill in where AHSync's plan is silent (SPEC §4.0): crafts first,
+    -- then the rest of what you carry, so a mat is never both crafted and sold (A20).
+    local db = DB.Get() or {}
+    local planned, crafted, recipes = {}, {}, {}
+    for _, a in ipairs(actions) do
+      planned[a.key] = true
+      if a.kind == "craft" then crafted[a.key] = true end
     end
+    for _, r in ipairs(Options.KnownRecipes(db, charId)) do
+      if not crafted[r.product] then recipes[#recipes + 1] = r end
+    end
+    local units = Options.Units(Inventory.Decode(((db.inventory or {})[charId] or {}).bags))
+    local ctx = { itemOf = LiveItem, levelsOf = LevelsOf, vendorOf = VendorOf, nowMs = nowMs, charId = charId,
+                  planned = planned }
+    local crafts, reserved = Options.Crafts(recipes, units, ctx)
+    ctx.reserved = reserved
+    for _, a in ipairs(crafts) do actions[#actions + 1] = a end
+    for _, a in ipairs(Options.Sell(units, ctx)) do actions[#actions + 1] = a end
   end
   if view.tab == "today" then
     local today = VM.Today(actions, nowMs, offset, view.minChance, LookOf, gold)

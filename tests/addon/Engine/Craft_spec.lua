@@ -54,3 +54,39 @@ describe("Craft", function()
     assert_eq(f.cost, 4 * 950 + 2000)
   end)
 end)
+
+describe("Craft.Option shared scenarios (tests/scenarios/craft_options.json)", function()
+  --- A JSON object with string keys as a table keyed by number.
+  ---@param t table
+  ---@return table
+  local function ByKey(t)
+    local out = {}
+    for k, v in pairs(t) do out[tonumber(k)] = v end
+    return out
+  end
+  for _, s in ipairs(dofile("tests/addon/generated/craft_options.lua")) do
+    it(s.id .. " " .. s.name, function()
+      Stubs.Reset()
+      Stubs.LoadAddon({ "Core/Adapter.lua", "Engine/Craft.lua" })
+      local Craft = AHProfit.Engine.Craft
+      local a = s.args
+      local market = { owned = ByKey(a.owned), hold = ByKey(a.hold), vendor = {}, books = ByKey(a.books) }
+      local option = Craft.Option({ reagents = a.reagents }, market, function(n) return n * a.value_each end)
+      assert_eq({ crafts = option.crafts, mat_gold = option.matGold, profit = option.profit, source = Craft.Source(option) },
+                s.expect, s.why)
+    end)
+  end
+
+  it("stops at a budget, at one craft per character on a cooldown, and names what is missing", function()
+    Stubs.Reset()
+    Stubs.LoadAddon({ "Core/Adapter.lua", "Engine/Craft.lua" })
+    local Craft = AHProfit.Engine.Craft
+    local market = { owned = {}, hold = {}, vendor = {}, books = { [2840] = { { 1000, 10 } } } }
+    local net = function(n) return n * 3800 end
+    assert_eq(Craft.Option({ reagents = { { 2840, 2 } } }, market, net, 4000).crafts, 2)
+    assert_eq(Craft.Option({ reagents = { { 2840, 2 } }, cooldown = 86400, crafters = 1 }, market, net).crafts, 1)
+    local none = Craft.Option({ reagents = { { 2840, 2 }, { 2589, 1 } } }, market, net)
+    assert_eq({ none.crafts, none.missing }, { 0, { { 2589, 1 } } })
+    assert_eq(Craft.Option({ reagents = { { 2840, 2 } } }, market, function(n) return n * 1500 end).crafts, 0)
+  end)
+end)

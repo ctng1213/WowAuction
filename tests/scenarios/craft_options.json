@@ -1,0 +1,96 @@
+[
+ {
+  "id": "C1",
+  "name": "owned bars cover three crafts with no gold",
+  "call": "craft_option",
+  "args": {
+   "reagents": [
+    [
+     2840,
+     2
+    ]
+   ],
+   "value_each": 3800,
+   "owned": {
+    "2840": 6
+   },
+   "hold": {
+    "2840": 950
+   },
+   "books": {}
+  },
+  "expect": {
+   "crafts": 3,
+   "mat_gold": 0,
+   "profit": 5700,
+   "source": "Owned"
+  },
+  "why": "6 bars at their 9s 50c hold value: 3 crafts of 38s - 19s"
+ },
+ {
+  "id": "C2",
+  "name": "all bars bought on the AH",
+  "call": "craft_option",
+  "args": {
+   "reagents": [
+    [
+     2840,
+     2
+    ]
+   ],
+   "value_each": 3800,
+   "owned": {},
+   "hold": {},
+   "books": {
+    "2840": [
+     [
+      1000,
+      6
+     ]
+    ]
+   }
+  },
+  "expect": {
+   "crafts": 3,
+   "mat_gold": 6000,
+   "profit": 5400,
+   "source": "AH"
+  },
+  "why": "6 bars at 10s: 3 crafts of 38s - 20s"
+ },
+ {
+  "id": "C3",
+  "name": "owned bars topped up from the AH",
+  "call": "craft_option",
+  "args": {
+   "reagents": [
+    [
+     2840,
+     2
+    ]
+   ],
+   "value_each": 3800,
+   "owned": {
+    "2840": 4
+   },
+   "hold": {
+    "2840": 950
+   },
+   "books": {
+    "2840": [
+     [
+      1000,
+      2
+     ]
+    ]
+   }
+  },
+  "expect": {
+   "crafts": 3,
+   "mat_gold": 2000,
+   "profit": 5600,
+   "source": "Mixed"
+  },
+  "why": "4 owned bars (19s a craft) then 2 bought (20s): 19s + 19s + 18s"
+ }
+]

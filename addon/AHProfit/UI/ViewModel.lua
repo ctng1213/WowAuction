@@ -196,6 +196,17 @@ local function ChainPosts(actions)
   return out
 end
 
+--- The note under one of the addon's own craft rows (A9): where its mats come from.
+---@param a table  An action
+---@return string|nil  nil when it isn't one of the addon's own crafts
+function ViewModel.OwnCraftNote(a)
+  if not (a.own and a.kind == "craft") then return nil end
+  local tail = " · AHSync has no plan for it"
+  if a.ownSource == "Owned" then return "from your own mats" .. tail end
+  if a.ownSource == "AH" then return "mats from the AH: " .. ViewModel.Money(a.matGold) .. tail end
+  return "your mats topped up from the AH: " .. ViewModel.Money(a.matGold) .. tail
+end
+
 --- What each crafting chain makes: its last craft's product name (plan_views.chain_crafts, D39).
 ---@param actions table[]  Marked actions
 ---@param lookOf function  key -> look
@@ -295,7 +306,7 @@ function ViewModel.Today(actions, nowMs, offsetMs, minChance, lookOf, totalGold)
       hidden = hidden + 1
     else
       local counted = nets[a.id]
-      local note = a.ownNote or ViewModel.NoteOf(a, counted.note, posts, crafts, offsetMs)
+      local note = a.ownNote or ViewModel.OwnCraftNote(a) or ViewModel.NoteOf(a, counted.note, posts, crafts, offsetMs)
       local row = Row(a, { net = counted.net, note = note }, chance,
                       lookOf(a.key), totalGold, offsetMs)
       row.sortChance, row.sortChar = chance or -1, a.char

@@ -23,11 +23,21 @@ local function ItemsOf(items) return function(key) return items[key] end end
 ---@return function
 local function VendorOf(prices) return function(key) return prices[key] end end
 
+--- A Sell / Crafts context over fixed market data, no live book.
+---@param planned table  key -> true
+---@param items table    key -> market item
+---@param prices table   key -> merchant price
+---@return table
+local function Ctx(planned, items, prices)
+  return { planned = planned, itemOf = ItemsOf(items), vendorOf = VendorOf(prices), levelsOf = function() return nil end,
+           nowMs = NOW, charId = "Amaya-Grommash" }
+end
+
 describe("Options", function()
   it("A15 what you carry gets the addon's own row when AHSync has no plan for it", function()
     local Options = Boot()
-    local rows = Options.Sell({ { key = 2589, qty = 15, bound = false }, { key = 2589, qty = 5, bound = false } }, {},
-                              ItemsOf({ [2589] = LINEN }), VendorOf({ [2589] = 3 }), NOW, "Amaya-Grommash")
+    local units = Options.Units({ { key = 2589, qty = 15, bound = false }, { key = 2589, qty = 5, bound = false } })
+    local rows = Options.Sell(units, Ctx({}, { [2589] = LINEN }, { [2589] = 3 }))
     assert_eq(rows, { { id = "own:2589", kind = "post", key = 2589, qty = 20, price = 45, net = 840, chance = 90, at = NOW,
                         status = "pending", char = "Amaya-Grommash", own = true,
                         ownNote = "post now · AHSync has no plan for it" } })
@@ -35,24 +45,22 @@ describe("Options", function()
 
   it("A16 items the plan already covers get no own row", function()
     local Options = Boot()
-    local rows = Options.Sell({ { key = 2589, qty = 20, bound = false }, { key = 2840, qty = 6, bound = false } },
-                              { [2589] = true }, ItemsOf({ [2589] = LINEN, [2840] = { postPrice = 500, sellValue = 470 } }),
-                              VendorOf({}), NOW, "Amaya-Grommash")
+    local rows = Options.Sell({ [2589] = 20, [2840] = 6 },
+                              Ctx({ [2589] = true }, { [2589] = LINEN, [2840] = { postPrice = 500, sellValue = 470 } }, {}))
     assert_eq({ #rows, rows[1].key, rows[1].net, rows[1].chance }, { 1, 2840, 2820, nil })
   end)
 
   it("A17 a merchant that pays more than posting wins", function()
     local Options = Boot()
-    local rows = Options.Sell({ { key = 3300, qty = 7, bound = false } }, {}, ItemsOf({ [3300] = { postPrice = 10, sellValue = 9 } }),
-                              VendorOf({ [3300] = 12 }), NOW, "Amaya-Grommash")
+    local rows = Options.Sell({ [3300] = 7 }, Ctx({}, { [3300] = { postPrice = 10, sellValue = 9 } }, { [3300] = 12 }))
     assert_eq({ rows[1].kind, rows[1].price, rows[1].net, rows[1].chance }, { "vendor", 12, 84, nil })
   end)
 
   it("A18 bound items, items without market data and items nobody pays for get no row", function()
     local Options = Boot()
-    local rows = Options.Sell({ { key = 6948, qty = 1, bound = true }, { key = 4306, qty = 10, bound = false },
-                                { key = 1, qty = 1, bound = false } }, {},
-                              ItemsOf({ [6948] = LINEN, [1] = { postPrice = 5, sellValue = 0 } }), VendorOf({}), NOW, "A")
+    local units = Options.Units({ { key = 6948, qty = 1, bound = true }, { key = 4306, qty = 10, bound = false },
+                                  { key = 1, qty = 1, bound = false } })
+    local rows = Options.Sell(units, Ctx({}, { [6948] = LINEN, [1] = { postPrice = 5, sellValue = 0 } }, {}))
     assert_eq(rows, {})
   end)
 
@@ -78,5 +86,46 @@ describe("Options", function()
                       { kind = "buy", key = 2840, qty = 1, price = 500 }, { kind = "post", key = 2589, qty = 20, price = 55 } }
     local kept, gone = Options.WithoutGoneBuys(actions, function(key) return levels[key] end)
     assert_eq({ #kept, gone, kept[1].key, kept[2].kind }, { 2, 2, 2840, "post" })      -- 2840: no newer scan
+  end)
+
+  it("A9 the addon offers crafts from your own mats, or from the AH, with the desktop's profit", function()
+    local Options = Boot()
+    local rod = { spell = 2663, product = 6217, yieldMin = 1, yieldMax = 1, reagents = { { 2840, 2 } }, crafters = 1 }
+    local items = { [6217] = { postPrice = 4000, chance = 1 }, [2840] = { sellValue = 950 } }
+    local rows, reserved = Options.Crafts({ rod }, { [2840] = 6 }, Ctx({}, items, {}))
+    assert_eq({ rows[1].kind, rows[1].key, rows[1].qty, rows[1].net, rows[1].chance, rows[1].ownSource, reserved[2840] },
+              { "craft", 6217, 3, 5700, 100, "Owned", 6 })                         -- C1: 3 x (38s - 19s)
+    assert_eq(AHProfit.ViewModel.OwnCraftNote(rows[1]), "from your own mats · AHSync has no plan for it")
+    items[2840] = { sellValue = 950, cur = 1000, curQty = 6 }
+    rows = Options.Crafts({ rod }, {}, Ctx({}, items, {}))
+    assert_eq({ rows[1].net, rows[1].ownSource, AHProfit.ViewModel.OwnCraftNote(rows[1]) },
+              { 5400, "AH", "mats from the AH: 60s · AHSync has no plan for it" })   -- C2
+    items[2840].curQty = 2                                                         -- C3: 4 owned, 2 on the AH
+    rows = Options.Crafts({ rod }, { [2840] = 4 }, Ctx({}, items, {}))
+    assert_eq({ rows[1].net, AHProfit.ViewModel.OwnCraftNote(rows[1]) },
+              { 5600, "your mats topped up from the AH: 20s · AHSync has no plan for it" })
+  end)
+
+  it("A20 a mat a craft uses is not also offered for sale", function()
+    local Options = Boot()
+    local rod = { spell = 2663, product = 6217, yieldMin = 1, yieldMax = 1, reagents = { { 2840, 2 } }, crafters = 1 }
+    local ctx = Ctx({}, { [6217] = { postPrice = 4000, chance = 1 }, [2840] = { postPrice = 1000, sellValue = 950 } }, {})
+    local _, reserved = Options.Crafts({ rod }, { [2840] = 7 }, ctx)
+    ctx.reserved = reserved
+    local rows = Options.Sell({ [2840] = 7 }, ctx)
+    assert_eq({ #rows, rows[1].key, rows[1].qty }, { 1, 2840, 1 })                  -- 6 crafted, 1 left to sell
+  end)
+
+  it("reads the character's known recipes that make items, and values a product without a price at the merchant", function()
+    local Options = Boot()
+    local db = { knownRecipes = { ["Amaya-Grommash"] = "2663;7418" },
+                 recipes = { Blacksmithing = { [2663] = { product = 6217, yieldMin = 1, yieldMax = 1, reagents = "2840,2" },
+                                               [9999] = { product = 1, reagents = "" } },
+                             Enchanting = { [7418] = { reagents = "10940,1" } } } }
+    assert_eq(Options.KnownRecipes(db, "Amaya-Grommash"), { { spell = 2663, product = 6217, yieldMin = 1, yieldMax = 1,
+      reagents = { { 2840, 2 } }, crafters = 1 } })
+    assert_eq(Options.KnownRecipes({}, "Amaya-Grommash"), {})
+    local net, p = Options.ProductNet({ yieldMin = 1, yieldMax = 3 }, nil, 25)
+    assert_eq({ net(0), net(1), net(2), p }, { 0, 50, 100, nil })                  -- 2 units a craft at 25c
   end)
 end)

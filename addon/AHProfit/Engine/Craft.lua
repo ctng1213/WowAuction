@@ -1,7 +1,8 @@
 -- Engine/Craft.lua: live craft-cost checks (SPEC §3.4B mat sourcing, §4.3 "re-checked live").
--- Port of walk_book and fill in ahsync/engine/craft.py; keep them identical, including the
--- order of floating-point operations and the offer sort order (LP1). Chains and the
--- "how many crafts" loop run in AHSync only.
+-- Port of walk_book, fill and craft_option in ahsync/engine/craft.py; keep them identical,
+-- including the order of floating-point operations and the offer sort order (LP1, shared
+-- scenarios C1-C3). Crafted intermediates (chains) are planned by AHSync only: the addon's
+-- Option sources raw mats (owned, vendor, AH) and never crafts a reagent first.
 
 local AHProfit = AHProfit
 AHProfit.Engine = AHProfit.Engine or {}
@@ -75,4 +76,97 @@ function Craft.Fill(need, owned, holdValue, vendorPrice, book, craftedCost, craf
     end
   end
   return { cost = cost, gold = gold, used = used, book_taken = taken, short = math.max(0.0, left) }
+end
+
+Craft.MAX_CRAFTS = 100     -- craft.MAX_CRAFTS: a backstop for flat product values
+
+--- A copy of a book's levels that crafts can use up.
+---@param books table  key -> { { price, units }, ... }
+---@return table       A deep copy
+local function CopyBooks(books)
+  local out = {}
+  for key, levels in pairs(books) do
+    out[key] = {}
+    for i, level in ipairs(levels) do out[key][i] = { level[1], level[2] } end
+  end
+  return out
+end
+
+--- One craft's fills from what is left: each reagent is used up only when it can be met in full.
+---@param recipe table  { reagents = { { key, count } } }
+---@param market table  { owned, hold, vendor, books }
+---@param left table    { owned = key -> units, books = key -> levels }; used up in place
+---@return table[]      { key, fill } per reagent
+local function TakeAll(recipe, market, left)
+  local fills = {}
+  for i, reagent in ipairs(recipe.reagents) do
+    local key, count = reagent[1], reagent[2]
+    local book = left.books[key] or {}
+    local f = Craft.Fill(count, left.owned[key] or 0.0, market.hold[key] or 0.0, market.vendor[key], book, nil, 0.0)
+    if f.short <= 0 then
+      left.owned[key] = (left.owned[key] or 0.0) - f.used.owned
+      for j, level in ipairs(book) do level[2] = level[2] - f.book_taken[j] end
+    end
+    fills[i] = { key = key, fill = f }
+  end
+  return fills
+end
+
+--- Add a craft's fills to the option's tallies (craft._record without crafted reagents).
+---@param option table
+---@param fills table[]  From TakeAll
+local function Record(option, fills)
+  for _, kf in ipairs(fills) do
+    local f = kf.fill
+    if f.used.owned > 0 then option.ownedUsed[kf.key] = (option.ownedUsed[kf.key] or 0.0) + f.used.owned end
+    if f.used.ah > 0 or f.used.vendor > 0 then
+      option.bought[kf.key] = (option.bought[kf.key] or 0.0) + f.used.ah + f.used.vendor
+    end
+  end
+end
+
+--- How many crafts of a recipe pay, and what they need (craft.craft_option, SPEC §3.4B). Crafts are
+--- added one at a time while each still makes a profit.
+---@param recipe table      { reagents = { { key, count } }, crafters = n, cooldown = s or nil }
+---@param market table      { owned, hold, vendor, books } (key -> units, value each, buy price, levels)
+---@param productNet function  n -> expected net of n crafts' output, float copper
+---@param budget number|nil Most copper to spend on mats
+---@return table            { crafts, matGold, profit, profits, ownedUsed, bought, missing }
+function Craft.Option(recipe, market, productNet, budget)
+  local option = { crafts = 0, matGold = 0.0, profit = 0.0, profits = {}, ownedUsed = {}, bought = {} }
+  local limit = (recipe.cooldown and recipe.cooldown > 0) and (recipe.crafters or 1) or Craft.MAX_CRAFTS
+  local left = { owned = {}, books = CopyBooks(market.books) }
+  for key, units in pairs(market.owned) do left.owned[key] = units end
+  while option.crafts < limit do
+    local saved = { owned = {}, books = CopyBooks(left.books) }
+    for key, units in pairs(left.owned) do saved.owned[key] = units end
+    local fills = TakeAll(recipe, market, left)
+    local short, gold, cost = {}, 0.0, 0.0
+    for _, kf in ipairs(fills) do
+      if kf.fill.short > 0 then short[#short + 1] = { kf.key, kf.fill.short } end
+      gold, cost = gold + kf.fill.gold, cost + kf.fill.cost
+    end
+    local marginal = productNet(option.crafts + 1) - productNet(option.crafts) - cost
+    if #short > 0 or marginal <= 0 or (budget and option.matGold + gold > budget) then
+      left = saved
+      if #short > 0 and option.crafts == 0 then option.missing = short end
+      break
+    end
+    Record(option, fills)
+    option.matGold = option.matGold + gold
+    option.profits[#option.profits + 1] = marginal
+    option.profit = option.profit + marginal
+    option.crafts = option.crafts + 1
+  end
+  return option
+end
+
+--- The option's Source label (craft.CraftOption.source without crafted reagents).
+---@param option table  From Option
+---@return string       "Owned", "AH" or "Mixed"
+function Craft.Source(option)
+  local owned, bought = next(option.ownedUsed) ~= nil, next(option.bought) ~= nil
+  if owned and bought then return "Mixed" end
+  if owned then return "Owned" end
+  return "AH"
 end

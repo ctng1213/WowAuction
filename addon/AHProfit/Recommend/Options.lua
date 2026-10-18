@@ -1,14 +1,16 @@
 -- Recommend/Options.lua: the addon's own recommendations (SPEC §4.0), so it works without AHSync.
 -- They choose between options AHSync precomputed in MarketIntelligence.lua, for the state the
--- addon sees right now; no history, no simulation. This first part sells what you carry: each
--- unbound item in your bags with market data gets its best option, posting now (its sell value
--- and chance) or a merchant, unless AHSync's plan already covers it (A15-A18).
+-- addon sees right now; no history, no simulation:
+-- - crafts from what you carry and what the AH lists, for your known recipes (A9, A20);
+-- - the rest of what you carry: posting now (its sell value and chance) or a merchant (A15-A19);
+-- each unless AHSync's plan already covers it. A mat a craft uses is not also offered for sale.
 
 local AHProfit = AHProfit
 local Fees = AHProfit.Engine.Fees
 local Prices = AHProfit.Engine.Prices
 local SellProb = AHProfit.Engine.SellProb
 local Live = AHProfit.Live
+local Craft = AHProfit.Engine.Craft
 
 local Options = {}
 Options.SELL_WINDOW_HOURS = 8      -- config sell_window_hours (SPEC §3.6): the posting-now window
@@ -17,7 +19,7 @@ AHProfit.Options = Options
 --- Total units per item of the unbound stacks in a list of bag rows.
 ---@param bags table[]  { key, qty, bound } (Inventory.Decode)
 ---@return table        key -> units
-local function Units(bags)
+function Options.Units(bags)
   local units = {}
   for _, row in ipairs(bags) do
     if not row.bound then units[row.key] = (units[row.key] or 0) + row.qty end
@@ -76,25 +78,126 @@ function Options.SellOne(key, qty, item, vendorEach, nowMs, charId)
   return nil
 end
 
---- The addon's own sell actions for what a character carries (A15-A19).
----@param bags table[]       { key, qty, bound } rows of the character's bags
----@param planned table      key -> true for items AHSync's plan already has an action for
----@param itemOf function    key -> market item, already re-priced from live listings when there are some
----@param vendorOf function  key -> merchant price each, or nil
----@param nowMs number
----@param charId string
----@return table[]           Plan-shaped actions, by key
-function Options.Sell(bags, planned, itemOf, vendorOf, nowMs, charId)
-  local units, keys, out = Units(bags), {}, {}
-  for key in pairs(units) do
-    if not planned[key] then keys[#keys + 1] = key end
+--- The addon's own sell actions for what a character carries (A15-A20).
+---@param units table  key -> unbound units carried (Options.Units)
+---@param ctx table    { planned = key -> true (AHSync covers it), reserved = key -> units crafts use,
+---                    itemOf, vendorOf (key -> merchant price), nowMs, charId }
+---@return table[]     Plan-shaped actions, by key
+function Options.Sell(units, ctx)
+  local keys, out, reserved = {}, {}, ctx.reserved or {}
+  for key, qty in pairs(units) do
+    if not ctx.planned[key] and qty - (reserved[key] or 0) > 0 then keys[#keys + 1] = key end
   end
   table.sort(keys)
   for _, key in ipairs(keys) do
-    local action = Options.SellOne(key, units[key], itemOf(key), vendorOf(key), nowMs, charId)
+    local action = Options.SellOne(key, units[key] - (reserved[key] or 0), ctx.itemOf(key), ctx.vendorOf(key),
+                                   ctx.nowMs, ctx.charId)
     if action then out[#out + 1] = action end
   end
   return out
+end
+
+--- The character's known recipes that make an item, from SavedVariables.
+---@param db table      AHProfitDB
+---@param charId string
+---@return table[]      { spell, product, yieldMin, yieldMax, cooldown, reagents = { { key, count } } }, by spell
+function Options.KnownRecipes(db, charId)
+  local known, out = {}, {}
+  for spell in ((db.knownRecipes or {})[charId] or ""):gmatch("%d+") do known[tonumber(spell)] = true end
+  for _, definitions in pairs(db.recipes or {}) do
+    for spell, r in pairs(definitions) do
+      if known[spell] and r.product then
+        local reagents = {}
+        for key, count in (r.reagents or ""):gmatch("(%-?%d+),(%d+)") do reagents[#reagents + 1] = { tonumber(key), tonumber(count) } end
+        out[#out + 1] = { spell = spell, product = r.product, yieldMin = r.yieldMin or 1, yieldMax = r.yieldMax or r.yieldMin or 1,
+                          cooldown = r.cooldown, reagents = reagents, crafters = 1 }
+      end
+    end
+  end
+  table.sort(out, function(a, b) return a.spell < b.spell end)
+  return out
+end
+
+--- n -> expected net of n crafts' output posted now (recommend.pages._product_net). The addon has no
+--- queue simulation: it uses the product's posting-now chance for any quantity, so it equals the
+--- desktop's when that chance doesn't depend on how much is posted (C1-C3).
+---@param recipe table
+---@param item table|nil   The product's market item
+---@param vendorSell number  What a merchant pays for one product
+---@return function, number|nil  The function, and the chance it uses (nil without a price)
+function Options.ProductNet(recipe, item, vendorSell)
+  local avg = (recipe.yieldMin + recipe.yieldMax) / 2
+  local p = item and item.postPrice and (item.chance or 0) or nil
+  local duration = Fees.ShortestDurationCovering(Options.SELL_WINDOW_HOURS)
+  local cache = { [0] = 0.0 }
+  return function(n)
+    if cache[n] == nil then
+      local units = math.max(1, math.floor(n * avg + 0.5))
+      if p == nil then
+        cache[n] = units * vendorSell
+      else
+        cache[n] = SellProb.ExpectedPost(p, units, item.postPrice, vendorSell, Fees.DepositCopper(vendorSell, units, duration))
+      end
+    end
+    return cache[n]
+  end, p
+end
+
+--- Where a craft's mats can come from now: what you carry at its hold value, and the AH.
+---@param recipes table[]  Recipes considered
+---@param owned table      key -> units you carry, not yet used
+---@param ctx table        { itemOf, levelsOf }
+---@return table           A Craft.Option market
+local function CraftMarket(recipes, owned, ctx)
+  local market = { owned = owned, hold = {}, vendor = {}, books = {} }
+  for _, r in ipairs(recipes) do
+    for _, reagent in ipairs(r.reagents) do
+      local key = reagent[1]
+      local item, levels = ctx.itemOf(key), ctx.levelsOf(key)
+      market.hold[key] = item and item.sellValue or 0.0
+      local book = {}
+      if levels then
+        for i, level in ipairs(levels) do book[i] = { level.price, level.units } end
+      elseif item and item.cur and item.curQty then
+        book[1] = { item.cur, item.curQty }          -- no live book: cur × curQty (SPEC §3.4 depth unknown)
+      end
+      market.books[key] = book
+    end
+  end
+  return market
+end
+
+--- The addon's own craft actions (A9, A20): the best-paying craft first, each using what the
+--- ones before it left, until none pays. SPEC GAP: vendor-sold mats have no buy price in game
+--- data the addon keeps, so only owned and AH mats are used.
+---@param recipes table[]  Options.KnownRecipes, minus those AHSync's plan crafts
+---@param units table      key -> units carried
+---@param ctx table        { itemOf, levelsOf, vendorOf, nowMs, charId }
+---@return table[]         Plan-shaped craft actions
+---@return table           key -> owned units the crafts use (to leave out of the sell rows)
+function Options.Crafts(recipes, units, ctx)
+  local owned, reserved, out, left = {}, {}, {}, {}
+  for key, qty in pairs(units) do owned[key] = qty end
+  for i, r in ipairs(recipes) do left[i] = r end
+  while #left > 0 do
+    local best, bestAt
+    for i, r in ipairs(left) do
+      local net, p = Options.ProductNet(r, ctx.itemOf(r.product), ctx.vendorOf(r.product) or 0)
+      local option = Craft.Option(r, CraftMarket({ r }, owned, ctx), net)
+      option.p = p
+      if option.crafts > 0 and (not best or option.profit > best.profit) then best, bestAt = option, i end
+    end
+    if not best then break end
+    local r = table.remove(left, bestAt)
+    for key, used in pairs(best.ownedUsed) do
+      owned[key] = owned[key] - used
+      reserved[key] = (reserved[key] or 0) + used
+    end
+    out[#out + 1] = { id = "own:craft:" .. r.spell, kind = "craft", key = r.product, qty = best.crafts, net = best.profit,
+                      chance = best.p and math.floor(best.p * 100 + 0.5) or nil, at = ctx.nowMs, status = "pending",
+                      char = ctx.charId, own = true, ownSource = Craft.Source(best), matGold = best.matGold }
+  end
+  return out, reserved
 end
 
 --- Drop planned buys whose price is no longer on the AH (A2): a live scan shows no units at or

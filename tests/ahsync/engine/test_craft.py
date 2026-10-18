@@ -1,6 +1,11 @@
 """Tests for ahsync/engine/craft.py, including invariants CI1-CI3."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
+import pytest
+
 import pytest
 
 from ahsync.engine.craft import Market, Pool, Recipe, craft_option, fill, steps, walk_book
@@ -253,3 +258,18 @@ def test_LP1_committed_property_cases_match_python():
     path = Path(__file__).resolve().parents[3] / "tests" / "properties" / "craft.json"
     seed, fresh = gen.build()["craft"]
     assert json.loads(path.read_text(encoding="utf-8")) == json.loads(json.dumps({"seed": seed, "cases": fresh})),         "tests/properties/craft.json is stale: run python tools/gen_properties.py"
+
+
+SHARED = json.loads((Path(__file__).resolve().parents[3] / "tests" / "scenarios" / "craft_options.json")
+                    .read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("s", SHARED, ids=[s["name"] for s in SHARED])
+def test_shared_craft_options_with_the_addon(s):
+    a = s["args"]
+    recipe = Recipe(2663, ROD, 1, 1, tuple(tuple(r) for r in a["reagents"]), (BRUGAN,))
+    m = market(books={int(k): [tuple(level) for level in v] for k, v in a["books"].items()},
+               owned={int(k): float(v) for k, v in a["owned"].items()}, hold={int(k): float(v) for k, v in a["hold"].items()})
+    option = craft_option(recipe, m, {}, lambda n: n * float(a["value_each"]))
+    assert {"crafts": option.crafts, "mat_gold": option.mat_gold, "profit": option.profit, "source": option.source} == \
+        s["expect"], s["why"]
