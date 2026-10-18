@@ -792,7 +792,7 @@ Captured events (§2.2) are matched to plan actions automatically:
 **Vendor-sold items** (R22, A33). An item a merchant has been seen selling in unlimited supply (`vendor_reagents`, §3.2)
 is bought from the vendor only: the AH is not a source for it, even when a listing is cheaper (`craft.vendor_first`). An
 owned unit of it is worth no more than buying another from the vendor, so its hold value is capped at the vendor price,
-and it is never planned as a flip. The addon builds its craft market the same way.
+and it is never planned as a flip. **It is never posted either** (R23, A35): anyone can buy it from the vendor, so the sell plan only sells it to a merchant (when one pays) and plans no hold for it, and a recipe whose product a vendor sells is not crafted. The addon builds its craft market and its own sell rows the same way.
 
 #### 3.4.2 Item rules (blacklist)
 

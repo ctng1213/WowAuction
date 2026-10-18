@@ -82,7 +82,8 @@ end
 --- The addon's own sell actions for what a character carries (A15-A20).
 ---@param units table  key -> unbound units carried (Options.Units)
 ---@param ctx table    { planned = key -> true (AHSync covers it), reserved = key -> units crafts use,
----                    itemOf, vendorOf (key -> merchant price), nowMs, charId }
+---                    itemOf, vendorOf (key -> merchant price), vendorBuyOf (key -> vendor price; optional),
+---                    nowMs, charId }
 ---@return table[]     Plan-shaped actions, by key
 function Options.Sell(units, ctx)
   local keys, out, reserved = {}, {}, ctx.reserved or {}
@@ -91,8 +92,10 @@ function Options.Sell(units, ctx)
   end
   table.sort(keys)
   for _, key in ipairs(keys) do
-    local action = Options.SellOne(key, units[key] - (reserved[key] or 0), ctx.itemOf(key), ctx.vendorOf(key),
-                                   ctx.nowMs, ctx.charId)
+    -- A vendor-sold item is never posted: only a merchant sale is offered (R23, A35).
+    local vendorSold = ctx.vendorBuyOf and ctx.vendorBuyOf(key)
+    local action = Options.SellOne(key, units[key] - (reserved[key] or 0), (not vendorSold) and ctx.itemOf(key) or {},
+                                   ctx.vendorOf(key), ctx.nowMs, ctx.charId)
     if action then out[#out + 1] = action end
   end
   return out
@@ -198,7 +201,9 @@ end
 function Options.Crafts(recipes, units, ctx)
   local owned, reserved, out, left = {}, {}, {}, {}
   for key, qty in pairs(units) do owned[key] = qty end
-  for i, r in ipairs(recipes) do left[i] = r end
+  for _, r in ipairs(recipes) do
+    if not (ctx.vendorBuyOf and ctx.vendorBuyOf(r.product)) then left[#left + 1] = r end   -- R23: no vendor products
+  end
   while #left > 0 do
     local best, bestAt
     for i, r in ipairs(left) do
@@ -231,10 +236,11 @@ end
 function Options.CraftOptions(recipes, units, ctx)
   local out = {}
   for _, r in ipairs(recipes) do
+    local vendorSold = ctx.vendorBuyOf and ctx.vendorBuyOf(r.product)     -- R23: no vendor-sold products
     local net, p = Options.ProductNet(r, ctx.itemOf(r.product), ctx.vendorOf(r.product) or 0)
     local market = CraftMarket({ r }, units, ctx)
     local option = Craft.Option(r, market, net, nil, Options.CraftCap(r, ctx.itemOf(r.product)))
-    if option.crafts > 0 then
+    if option.crafts > 0 and not vendorSold then
       out[#out + 1] = { key = r.product, spell = r.spell, crafts = option.crafts, matGold = option.matGold,
                         profit = option.profit, p = p, source = Craft.Source(option), ownedUsed = option.ownedUsed,
                         bought = option.bought, fromVendor = option.fromVendor, vendorPrice = market.vendor,

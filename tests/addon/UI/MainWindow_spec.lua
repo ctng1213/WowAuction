@@ -267,6 +267,31 @@ describe("MainWindow", function()
     Stubs.ITEM_NAMES[4240] = nil
   end)
 
+  it("A35 a vendor-sold item is never posted, and a vendor-sold product never crafted", function()
+    Stubs.Reset()
+    _G.AHProfitPlan = nil
+    Stubs.ITEM_NAMES[4470], Stubs.ITEM_NAMES[4471] = "Simple Wood", "Basic Campfire Kit"
+    Stubs.ITEM_SELL[4470] = 9
+    Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 4470, count = 20 }, [2] = { id = 2589, count = 20 } } } }
+    UIWorld.Market({ [4470] = UIWorld.Item(60, 80, 40, { postPrice = 55, sellValue = 50, chance = 0.9 }),
+                     [2589] = UIWorld.Item(45, 86, 48, { postPrice = 45, sellValue = 42, chance = 0.9 }),
+                     [4471] = UIWorld.Item(99, 80, 10, { postPrice = 99, chance = 1, refStack = 1, supply = 18 }) }, NOW)
+    AHProfitMarket.vendor = { [4470] = 38, [4471] = 50 }
+    Stubs.Login()
+    AHProfitDB.knownRecipes["Amaya-Grommash"] = "6413"
+    AHProfitDB.recipes.Survival = { [6413] = { product = 4471, yieldMin = 1, yieldMax = 1, reagents = "4470,1" } }
+    Stubs.Slash("/ahp")
+    local ui, kinds = AHProfit.MainWindow.Frames(), {}
+    for i = 1, 4 do
+      local c = ui.rows[i].cells.today
+      if ui.rows[i]:IsShown() and c.item:IsShown() then kinds[#kinds + 1] = c.action:GetText() .. " " .. c.item:GetText() end
+    end
+    assert_eq(kinds, { "POST Linen Cloth", "VENDOR Simple Wood" })
+    AHProfit.MainWindow.ShowTab("craft")
+    assert_eq(ui.empty:GetText(), "None of your recipes pays right now.")
+    Stubs.ITEM_NAMES[4470], Stubs.ITEM_NAMES[4471], Stubs.ITEM_SELL[4470] = nil, nil, nil
+  end)
+
   it("A22 the Inventory tab lists what this character holds with its worth and plan", function()
     Stubs.Reset()
     _G.AHProfitPlan = nil

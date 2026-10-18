@@ -80,3 +80,14 @@ def test_R22_a_vendor_sold_mat_is_never_bought_on_the_ah_nor_flipped():
     buys = [a for a in actions if a.kind == "buy" and a.key == BAR]
     assert buys and all(a.price == 900 and a.source == "vendor" for a in buys)   # the 500 listings are no source
     assert not [a for a in actions if a.chain and a.chain.startswith("flip:")]
+
+
+def test_R23_a_vendor_sold_item_is_never_posted_held_or_crafted():
+    wood, thread = 4470, 2320
+    lots = (Lot("Brugan-G", wood, 20), Lot("Brugan-G", thread, 5))
+    market = craft.Market({BAR: [], ROD: []}, {wood: 38, thread: 10, ROD: 5000}, {}, {})
+    world = CraftWorld((ROD_RECIPE,), {ROD: [ROD_RECIPE]}, market, {ROD: facts(ROD, 9000)})
+    w = inputs(lots=lots, world=world, facts={wood: facts(wood, 60, vendor_sell=9), thread: facts(thread, 40, vendor_sell=0),
+                                              ROD: facts(ROD, 9000)})
+    actions = week.week_plan(w, NOW, S, FS, 3)
+    assert [(a.kind, a.key, a.qty, a.price) for a in actions] == [("vendor", wood, 20, 9)]   # no post, hold or craft
