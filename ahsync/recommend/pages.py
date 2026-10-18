@@ -128,7 +128,8 @@ def craft_market(state: StateReader, char_ids: list[str], stats: dict[int, ItemI
         books[key] = sorted(levels.items())
     vendor = {k: items[k].vendor_buy for k in state.vendor_reagent_keys() if k in items and items[k].vendor_buy}
     hold = {key: s.sell_value for key, s in stats.items() if s.sell_value is not None}
-    return craft.Market(books, vendor, {k: float(v) for k, v in state.owned_units(char_ids).items()}, hold)
+    return craft.vendor_first(craft.Market(books, vendor, {k: float(v) for k, v in state.owned_units(char_ids).items()},
+                                           hold))                                       # R22
 
 
 def _product_net(stats: ItemIntel | None, recipe: RecipeRow, items: dict[int, ItemInfo], now_ms: int, cfg: Config):

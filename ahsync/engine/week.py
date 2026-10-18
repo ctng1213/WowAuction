@@ -126,10 +126,10 @@ def week_plan(w: WeekInputs, now_ms: int, s: PlanSettings, fs: FlipSettings, max
     lots = [lot for lot in w.lots if lot.key not in w.ignore]
     facts = {k: f for k, f in w.facts.items() if k not in w.ignore}
     m = w.world.market
-    market = craft.Market({k: v for k, v in m.books.items() if k not in w.ignore},
-                          {k: v for k, v in m.vendor.items() if k not in w.ignore},
-                          {k: v for k, v in m.owned.items() if k not in w.ignore},
-                          hold_values(lots, facts, now_ms, s))       # an ignored item is no mat either (O9)
+    market = craft.vendor_first(craft.Market({k: v for k, v in m.books.items() if k not in w.ignore},
+                                             {k: v for k, v in m.vendor.items() if k not in w.ignore},
+                                             {k: v for k, v in m.owned.items() if k not in w.ignore},
+                                             hold_values(lots, facts, now_ms, s)))   # an ignored item is no mat (O9)
     world = replace(w.world, market=market)
     budgets, ledger = dict(w.budgets), {}
     crafts, after = craft_plan(world, budgets, w.total_gold, now_ms, s, fs.max_risk_pct, ledger, max_depth,
@@ -138,5 +138,6 @@ def week_plan(w: WeekInputs, now_ms: int, s: PlanSettings, fs: FlipSettings, max
     sold = sell_plan(without_used(lots, used), facts, now_ms, s, ledger)
     bought = _bought(world.market, after)
     flip_facts = {k: without_bought(f, bought.get(k, 0.0)) for k, f in facts.items()}
-    flips = flip_plan(flip_facts, budgets, w.total_gold, now_ms, s, fs, ledger, exclude=set(w.no_buy | w.ignore))
+    flips = flip_plan(flip_facts, budgets, w.total_gold, now_ms, s, fs, ledger,
+                      exclude=set(w.no_buy | w.ignore | set(m.vendor)))      # a vendor sells it: no flip (R22)
     return crafts + sold + flips

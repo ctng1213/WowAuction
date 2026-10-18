@@ -50,7 +50,7 @@ Frame AHProfitWindow 680,360 560x360
       FontString - 862,442 46x20 "Owned"
       FontString - 693,442 166x20 "Copper Rod"
     Frame AHProfitWindowRow2 690,462 526x20
-      FontString - 693,462 519x20 "uses 6 owned Copper Bar"
+      FontString - 693,462 519x20 "use 6 owned Copper Bar"
     Frame AHProfitWindowRow3 690,482 526x20 (hidden)
     Frame AHProfitWindowRow4 690,502 526x20 (hidden)
     Frame AHProfitWindowRow5 690,522 526x20 (hidden)

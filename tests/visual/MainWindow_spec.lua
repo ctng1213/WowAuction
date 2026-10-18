@@ -101,7 +101,7 @@ describe("MainWindow layout", function()
     local ui = CraftWindow()
     ui.frame:SetSize(560, 360)
     Layout.Golden("UI11_craft", ui.frame)
-    assert_eq({ ui.rows[1].cells.craft.mats:GetText(), ui.rows[2].note:GetText() }, { "—", "uses 6 owned Copper Bar" })
+    assert_eq({ ui.rows[1].cells.craft.mats:GetText(), ui.rows[2].note:GetText() }, { "—", "use 6 owned Copper Bar" })
   end)
 
   it("UI14 a note starts where the Item column starts: under the item on Craft, after the time and badge on Week", function()

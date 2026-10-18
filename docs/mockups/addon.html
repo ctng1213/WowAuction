@@ -390,9 +390,9 @@ const VIEWS = {
     footer: `<span>3 of 5 known recipes pay now</span><span>Budget ${money(314000)}</span>`,
     note: `<b>Craft</b>: the recipes the character you're playing knows that pay right now (SPEC §4.3, A27). Each is costed on its own against what you carry (less what you keep for yourself); Today shares the mats out, best craft first. <b>Source</b>: <b>Owned</b> (all from your bags), <b>AH</b> (all bought) or <b>Mixed</b>. <b>Mats</b> = gold for the mats to buy at the AH's current prices, "—" when you own them all. Profit counts owned mats at their hold value; crafts stop where one more would lose money. The dashboard's Craft page adds who knows it, crafted reagents (chains) and cooldowns across characters.`,
     html: () => `<table>${head([['Product'], ['Source'], ['×', 1], ['Mats', 1], ['Profit', 1], ...PAIR, ['Risk', 1]])}
-      ${cr('Copper Rod', 1, 'Mixed', 3, 2000, 5600, 'uses 4 owned Copper Bar · buys 2 Copper Bar')}
-      ${cr('Heavy Grinding Stone', 1, 'Owned', 4, null, 134, 'uses 8 owned Heavy Stone')}
-      ${cr('Linen Belt', 1, 'Mixed', 2, 150, 28, 'uses 10 owned Linen Cloth · buys 2 Coarse Thread')}
+      ${cr('Copper Rod', 1, 'Mixed', 3, 2000, 5600, 'use 4 owned Copper Bar<br>buy 2 Copper Bar on the AH · 20s')}
+      ${cr('Heavy Grinding Stone', 1, 'Owned', 4, null, 134, 'use 8 owned Heavy Stone')}
+      ${cr('Linen Belt', 1, 'Mixed', 2, 150, 28, 'use 10 owned Linen Cloth<br>buy 2 Coarse Thread from a vendor · 20c')}
     </table>`
   },
   Flip: {

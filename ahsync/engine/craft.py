@@ -126,6 +126,23 @@ class Market:
     hold_value: Mapping[int, float]                      # key -> opportunity cost per owned unit
 
 
+def vendor_first(market: Market) -> Market:
+    """The market with vendor-sold reagents bought from the vendor only (SPEC §3.4 vendor-sold items, R22).
+
+    The AH is no source for an item a vendor sells in unlimited supply, even when a listing is
+    cheaper, and an owned unit is worth no more than buying another from the vendor.
+
+    Args:
+        market: Books, vendor prices, stock and hold values.
+
+    Returns:
+        A copy without books for vendor-sold keys and with their hold values capped at the vendor price.
+    """
+    books = {k: v for k, v in market.books.items() if k not in market.vendor}
+    hold = {k: min(v, market.vendor[k]) if k in market.vendor else v for k, v in market.hold_value.items()}
+    return Market(books, market.vendor, market.owned, hold)
+
+
 @dataclass(frozen=True)
 class Crafted:
     """The cheapest way you can craft one unit of an intermediate."""

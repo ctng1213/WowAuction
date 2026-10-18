@@ -8,7 +8,7 @@ import pytest
 
 import pytest
 
-from ahsync.engine.craft import Market, Pool, Recipe, craft_option, fill, steps, walk_book
+from ahsync.engine.craft import Market, Pool, Recipe, craft_option, fill, steps, vendor_first, walk_book
 from tests.support.gen import cases
 
 BAR, ROD, RUNED, DUST, ESSENCE = 2840, 6217, 6218, 10940, 10938
@@ -274,3 +274,11 @@ def test_shared_craft_options_with_the_addon(s):
     option = craft_option(recipe, m, {}, lambda n: n * float(a["value_each"]))
     assert {"crafts": option.crafts, "mat_gold": option.mat_gold, "profit": option.profit, "source": option.source} == \
         s["expect"], s["why"]
+
+
+def test_R22_vendor_first_drops_the_ah_for_vendor_sold_mats_and_caps_their_hold_value():
+    m = vendor_first(market(books={BAR: [(500, 20.0)], ROD: [(4000, 1.0)]}, vendor={BAR: 900},
+                                  owned={BAR: 6.0}, hold={BAR: 1500.0, ROD: 3000.0}))
+    assert (dict(m.books), dict(m.hold_value)) == ({ROD: [(4000, 1.0)]}, {BAR: 900, ROD: 3000.0})
+    option = rod(m, max_crafts=4)
+    assert (option.owned_used, option.from_vendor, option.source) == ({BAR: 6.0}, {BAR: 2.0}, "Mixed")

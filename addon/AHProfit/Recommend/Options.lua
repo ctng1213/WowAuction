@@ -156,7 +156,9 @@ function Options.CraftCap(recipe, item)
   return math.max(1, math.floor(units / ((recipe.yieldMin + recipe.yieldMax) / 2)))
 end
 
---- Where a craft's mats can come from now: what you carry at its hold value, the AH and vendors.
+--- Where a craft's mats can come from now: what you carry at its hold value, the AH and vendors. A
+--- vendor-sold mat comes from the vendor only, and what you carry of it is worth no more than the
+--- vendor's price (craft.vendor_first, R22, A33).
 ---@param recipes table[]  Recipes considered
 ---@param owned table      key -> units you carry, not yet used
 ---@param ctx table        { itemOf, levelsOf, vendorBuyOf (key -> vendor price or nil; optional) }
@@ -167,10 +169,14 @@ local function CraftMarket(recipes, owned, ctx)
     for _, reagent in ipairs(r.reagents) do
       local key = reagent[1]
       local item, levels = ctx.itemOf(key), ctx.levelsOf(key)
+      local vendor = ctx.vendorBuyOf and ctx.vendorBuyOf(key) or nil
+      market.vendor[key] = vendor
       market.hold[key] = item and item.sellValue or 0.0
-      market.vendor[key] = ctx.vendorBuyOf and ctx.vendorBuyOf(key) or nil
+      if vendor then market.hold[key] = math.min(market.hold[key], vendor) end
       local book = {}
-      if levels then
+      if vendor then
+        -- no AH source for a vendor-sold mat
+      elseif levels then
         for i, level in ipairs(levels) do book[i] = { level.price, level.units } end
       elseif item and item.cur and item.curQty then
         book[1] = { item.cur, item.curQty }          -- no live book: cur × curQty (SPEC §3.4 depth unknown)
@@ -221,7 +227,7 @@ end
 ---@param units table      key -> units carried, less what you keep
 ---@param ctx table        { itemOf, levelsOf, vendorOf, vendorBuyOf }
 ---@return table[]         { key, spell, crafts, matGold, profit, p, source, ownedUsed, bought, fromVendor,
----                        vendorGold }, best profit first
+---                        vendorPrice (key -> copper), ahGold (key -> copper) }, best profit first
 function Options.CraftOptions(recipes, units, ctx)
   local out = {}
   for _, r in ipairs(recipes) do
@@ -229,11 +235,10 @@ function Options.CraftOptions(recipes, units, ctx)
     local market = CraftMarket({ r }, units, ctx)
     local option = Craft.Option(r, market, net, nil, Options.CraftCap(r, ctx.itemOf(r.product)))
     if option.crafts > 0 then
-      local vendorGold = 0.0
-      for key, used in pairs(option.fromVendor) do vendorGold = vendorGold + used * market.vendor[key] end
       out[#out + 1] = { key = r.product, spell = r.spell, crafts = option.crafts, matGold = option.matGold,
                         profit = option.profit, p = p, source = Craft.Source(option), ownedUsed = option.ownedUsed,
-                        bought = option.bought, fromVendor = option.fromVendor, vendorGold = vendorGold }
+                        bought = option.bought, fromVendor = option.fromVendor, vendorPrice = market.vendor,
+                        ahGold = option.ahGold }
     end
   end
   table.sort(out, function(a, b)

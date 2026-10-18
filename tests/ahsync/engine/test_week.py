@@ -69,3 +69,14 @@ def test_crafts_buying_auctions_leave_the_rest_for_flips():
     assert week.without_bought(f, 7).book == ((950, 5, 4, 1),)      # 10 cheapest units bought (two auctions of 5)
     assert week.without_bought(f, 0) is f and week.without_bought(replace(f, book=None), 5).book is None
     assert week.without_used([Lot("A", BAR, 4), Lot("B", BAR, 4)], {BAR: 5.5}) == [Lot("B", BAR, 2)]
+
+
+def test_R22_a_vendor_sold_mat_is_never_bought_on_the_ah_nor_flipped():
+    # Bars: a vendor sells them at 900; the AH lists 20 at 500 and would flip well (cur 500, peak 1200).
+    market = craft.Market({BAR: [(500, 20.0)], ROD: []}, {BAR: 900}, {BAR: 6.0}, {})
+    w = inputs(world=CraftWorld((ROD_RECIPE,), {ROD: [ROD_RECIPE]}, market, {ROD: facts(ROD, 4000)}),
+               facts={BAR: facts(BAR, 1000, cur=500, cur_qty=20, book=((500, 20, 4, 1),)), ROD: facts(ROD, 4000)})
+    actions = week.week_plan(w, NOW, S, FS, 3)
+    buys = [a for a in actions if a.kind == "buy" and a.key == BAR]
+    assert buys and all(a.price == 900 and a.source == "vendor" for a in buys)   # the 500 listings are no source
+    assert not [a for a in actions if a.chain and a.chain.startswith("flip:")]

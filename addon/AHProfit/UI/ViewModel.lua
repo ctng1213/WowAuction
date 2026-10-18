@@ -495,6 +495,7 @@ function ViewModel.WithNotes(rows)
   for _, row in ipairs(rows) do
     lines[#lines + 1] = row
     if row.note and row.note ~= "" then lines[#lines + 1] = { noteLine = true, text = row.note } end
+    for _, text in ipairs(row.notes or {}) do lines[#lines + 1] = { noteLine = true, text = text } end   -- A34
   end
   return lines
 end
@@ -696,17 +697,33 @@ end
 
 -- ------------------------------------------------------------------ Craft tab (A27, UI11)
 
---- "6 owned Copper Bar"-style parts of a craft note, by item key.
----@param units table     key -> units (float)
----@param lookOf function key -> look
----@param prefix string   "owned " or ""
----@return string         e.g. "4 owned Copper Bar, 2 owned Coarse Thread"; "" for none
-local function MatList(units, lookOf, prefix)
-  local keys, parts = {}, {}
-  for key in pairs(units) do keys[#keys + 1] = key end
-  table.sort(keys)
-  for i, key in ipairs(keys) do parts[i] = ViewModel.RoundHalfUp(units[key]) .. " " .. prefix .. lookOf(key).name end
-  return table.concat(parts, ", ")
+--- A craft row's note lines, one per mat and source (A34): what it uses of yours, then what it buys
+--- from a vendor, then on the AH, each by item key.
+---@param o table          From Options.CraftOptions
+---@param lookOf function  key -> look
+---@return string[]        e.g. { "use 10 owned Linen Cloth", "buy 2 Coarse Thread from a vendor · 20c" }
+local function MatLines(o, lookOf)
+  local fromVendor, vendorPrice, ahGold = o.fromVendor or {}, o.vendorPrice or {}, o.ahGold or {}
+  local fromAH = {}
+  for key, units in pairs(o.bought) do
+    if units > (fromVendor[key] or 0) then fromAH[key] = units - (fromVendor[key] or 0) end
+  end
+  local lines = {}
+  --- Add one line per key of a tally, in key order.
+  ---@param units table      key -> units
+  ---@param text function    (units text, name, key) -> line
+  local function Add(units, text)
+    local keys = {}
+    for key in pairs(units) do keys[#keys + 1] = key end
+    table.sort(keys)
+    for _, key in ipairs(keys) do lines[#lines + 1] = text(ViewModel.RoundHalfUp(units[key]), lookOf(key).name, key) end
+  end
+  Add(o.ownedUsed, function(n, name) return "use " .. n .. " owned " .. name end)
+  Add(fromVendor, function(n, name, key)
+    return "buy " .. n .. " " .. name .. " from a vendor · " .. ViewModel.Money(fromVendor[key] * (vendorPrice[key] or 0))
+  end)
+  Add(fromAH, function(n, name, key) return "buy " .. n .. " " .. name .. " on the AH · " .. ViewModel.Money(ahGold[key]) end)
+  return lines
 end
 
 --- The Craft tab's rows (views.craft_row for one character, D6-D8).
@@ -720,22 +737,12 @@ function ViewModel.CraftRows(options, lookOf, totalGold)
     local look = lookOf(o.key)
     local risk, amber = ViewModel.Risk(o.matGold, totalGold)
     local chance = o.p and ViewModel.RoundHalfUp(o.p * 100) or nil
-    local fromVendor, fromAH = o.fromVendor or {}, {}
-    for key, units in pairs(o.bought) do
-      if units > (fromVendor[key] or 0) then fromAH[key] = units - (fromVendor[key] or 0) end
-    end
-    local vendorGold = o.vendorGold or 0
-    local used, vendor, ah = MatList(o.ownedUsed, lookOf, "owned "), MatList(fromVendor, lookOf, ""), MatList(fromAH, lookOf, "")
-    local note = {}
-    if used ~= "" then note[#note + 1] = "uses " .. used end
-    if vendor ~= "" then note[#note + 1] = "vendor: " .. vendor .. " (" .. ViewModel.Money(vendorGold) .. ")" end
-    if ah ~= "" then note[#note + 1] = "AH: " .. ah .. " (" .. ViewModel.Money(o.matGold - vendorGold) .. ")" end
     rows[#rows + 1] = {
       key = o.key, item = look.name, quality = look.quality, kind = "craft", source = o.source, crafts = "×" .. o.crafts,
       mats = o.matGold > 0 and ViewModel.Money(o.matGold) or "—", profit = ViewModel.SignedMoney(o.profit),
       netColor = "pos", chance = chance and (chance .. "%") or "—", dot = chance and ViewModel.Level(look.conf) or nil,
       volume = look.soldPerDay and (ViewModel.RoundHalfUp(look.soldPerDay) .. "/day") or "—",
-      risk = risk, riskAmber = amber, note = table.concat(note, " · "),
+      risk = risk, riskAmber = amber, notes = MatLines(o, lookOf),
     }
   end
   return rows

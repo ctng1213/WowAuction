@@ -112,12 +112,16 @@ local function TakeAll(recipe, market, left)
   return fills
 end
 
---- Add a craft's fills to the option's tallies (craft._record without crafted reagents).
+--- Add a craft's fills to the option's tallies (craft._record without crafted reagents), with the
+--- gold each reagent's AH part costs, for the Craft tab's per-mat notes (A34).
 ---@param option table
 ---@param fills table[]  From TakeAll
-local function Record(option, fills)
+---@param market table   { vendor }: vendor prices
+local function Record(option, fills, market)
   for _, kf in ipairs(fills) do
     local f = kf.fill
+    local ahGold = f.gold - f.used.vendor * (market.vendor[kf.key] or 0)
+    if f.used.ah > 0 then option.ahGold[kf.key] = (option.ahGold[kf.key] or 0.0) + ahGold end
     if f.used.owned > 0 then option.ownedUsed[kf.key] = (option.ownedUsed[kf.key] or 0.0) + f.used.owned end
     if f.used.ah > 0 or f.used.vendor > 0 then
       option.bought[kf.key] = (option.bought[kf.key] or 0.0) + f.used.ah + f.used.vendor
@@ -133,9 +137,10 @@ end
 ---@param productNet function  n -> expected net of n crafts' output, float copper
 ---@param budget number|nil Most copper to spend on mats
 ---@param maxCrafts number|nil Most crafts (craft_option's max_crafts); default MAX_CRAFTS
----@return table            { crafts, matGold, profit, profits, ownedUsed, bought, fromVendor, missing }
+---@return table            { crafts, matGold, profit, profits, ownedUsed, bought, fromVendor, ahGold, missing }
 function Craft.Option(recipe, market, productNet, budget, maxCrafts)
-  local option = { crafts = 0, matGold = 0.0, profit = 0.0, profits = {}, ownedUsed = {}, bought = {}, fromVendor = {} }
+  local option = { crafts = 0, matGold = 0.0, profit = 0.0, profits = {}, ownedUsed = {}, bought = {}, fromVendor = {},
+                   ahGold = {} }
   local limit = (recipe.cooldown and recipe.cooldown > 0) and (recipe.crafters or 1) or (maxCrafts or Craft.MAX_CRAFTS)
   local left = { owned = {}, books = CopyBooks(market.books) }
   for key, units in pairs(market.owned) do left.owned[key] = units end
@@ -154,7 +159,7 @@ function Craft.Option(recipe, market, productNet, budget, maxCrafts)
       if #short > 0 and option.crafts == 0 then option.missing = short end
       break
     end
-    Record(option, fills)
+    Record(option, fills, market)
     option.matGold = option.matGold + gold
     option.profits[#option.profits + 1] = marginal
     option.profit = option.profit + marginal
