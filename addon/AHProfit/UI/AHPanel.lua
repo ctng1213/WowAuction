@@ -105,7 +105,11 @@ local function BuildRow(parent, i, y)
     row.cells[i] = cell
   end
   row.item, row.colA, row.colB, row.qty = row.cells[1], row.cells[2], row.cells[3], row.cells[4]
-  row:SetScript("OnClick", function(self) if self.itemName then AHPanel.Search(self.key, self.itemName) end end)
+  row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+  row:SetScript("OnClick", function(self, button)
+    if not self.itemName then return end
+    if button == "RightButton" then AHProfit.RowMenu.Open(self, self.key, self.itemName) else AHPanel.Search(self.key, self.itemName) end
+  end)
   return row
 end
 
@@ -330,3 +334,4 @@ Events.Register("AUCTION_HOUSE_SHOW", AHPanel.OnShow)
 Events.Register("AUCTION_HOUSE_CLOSED", AHPanel.OnClosed)
 Events.Register("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED", AHPanel.OnBrowseResults)
 Replicate.OnBook(function() if ui and ui.frame:IsShown() then AHPanel.Render() end end)
+AHProfit.RowMenu.OnChange(function() if ui and ui.frame:IsShown() then AHPanel.Render() end end)

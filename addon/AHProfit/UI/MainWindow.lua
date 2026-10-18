@@ -14,6 +14,7 @@ local VM = AHProfit.ViewModel
 local Events = AHProfit.Events
 local Options = AHProfit.Options
 local Live = AHProfit.Live
+local Reserves = AHProfit.Reserves
 local Inventory = AHProfit.Capture.Inventory
 
 local MainWindow = {}
@@ -203,6 +204,9 @@ local function BuildRow(list, i)
   row.hover:SetAllPoints(row)
   row.hover:Hide()
   row:EnableMouse(true)
+  row:SetScript("OnMouseUp", function(self, button)
+    if button == "RightButton" and self.isRow and self.key then AHProfit.RowMenu.Open(self, self.key, self.itemName) end
+  end)
   row:SetScript("OnEnter", function(self) self.hover:SetShown(self.isRow == true) end)
   row:SetScript("OnLeave", function(self) self.hover:Hide() end)
   row.cells = {}
@@ -429,6 +433,7 @@ end
 ---@param row table
 ---@param line table  A view-model row
 local function FillRow(row, line)
+  row.key, row.itemName = line.key, line.item
   local cells = row.cells[view.tab]
   for _, c in ipairs(MainWindow.COLUMNS[view.tab]) do
     local text = line[c[2]]
@@ -473,8 +478,11 @@ end
 ---@param nowMs number
 ---@return table[], number  Actions, and the buys dropped as gone
 local function CharacterActions(charId, nowMs)
-  local actions, gone = Options.WithoutGoneBuys(Plan.CharacterActions(charId), LevelsOf)
   local db = DB.Get() or {}
+  local reserves = Reserves.Get(db, charId)
+  local held = Options.Units(Inventory.Decode(((db.inventory or {})[charId] or {}).bags))
+  local actions, gone = Options.WithoutGoneBuys(Plan.CharacterActions(charId), LevelsOf)
+  actions = Reserves.Trim(actions, reserves, held)          -- what you keep is never sold (A25)
   local planned, crafted, recipes = {}, {}, {}
   for _, a in ipairs(actions) do
     planned[a.key] = true
@@ -483,7 +491,7 @@ local function CharacterActions(charId, nowMs)
   for _, r in ipairs(Options.KnownRecipes(db, charId)) do
     if not crafted[r.product] then recipes[#recipes + 1] = r end
   end
-  local units = Options.Units(Inventory.Decode(((db.inventory or {})[charId] or {}).bags))
+  local units = Reserves.Apply(held, reserves)
   local ctx = { itemOf = LiveItem, levelsOf = LevelsOf, vendorOf = VendorOf, nowMs = nowMs, charId = charId,
                 planned = planned }
   local crafts, reserved = Options.Crafts(recipes, units, ctx)
@@ -532,7 +540,7 @@ local function Lines(nowMs, gold)
   end
   if view.tab == "inventory" then
     local actions = CharacterActions(charId, nowMs)
-    local rows = VM.Inventory(Holdings(charId), actions, LookOf, LiveItem, offset)
+    local rows = VM.Inventory(Holdings(charId), actions, LookOf, LiveItem, offset, Reserves.Get(DB.Get() or {}, charId))
     return VM.WithNotes(rows), VM.InventoryFooter(rows), "Nothing in your bags, bank or mail yet."
   end
   local actions, gone = Plan.CharacterActions(charId), 0
@@ -664,4 +672,5 @@ end
 Adapter.RegisterSlash("AHPROFIT", { "/ahp", "/ahprofit" }, function(args) MainWindow.OnSlash(args) end)
 -- A finished AH scan re-prices and re-ranks the open window (SPEC §4.0, A2).
 AHProfit.Scan.Replicate.OnBook(function() if ui and ui.frame:IsShown() then MainWindow.Refresh() end end)
+AHProfit.RowMenu.OnChange(function() if ui and ui.frame:IsShown() then MainWindow.Refresh() end end)
 Events.Register("BAG_UPDATE_DELAYED", MainWindow.OnBags)

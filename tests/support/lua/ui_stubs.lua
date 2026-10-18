@@ -189,6 +189,14 @@ Methods.SetEnabled = Record("enabled")
 Methods.SetChecked = Record("checked")
 Methods.SetVerticalScroll = Record("verticalScroll")
 Methods.SetScrollChild = function(self, child) self.scrollChild = child end
+Methods.SetNumeric = Record("numeric")
+Methods.SetAutoFocus = Record("autoFocus")
+Methods.SetMaxLetters = Record("maxLetters")
+--- EditBox:SetFocus: recorded only.
+function Methods:SetFocus() self.focused = true end
+--- EditBox:ClearFocus: recorded only.
+function Methods:ClearFocus() self.focused = false end
+
 --- Start moving (dragging) the frame: recorded only.
 function Methods:StartMoving() self.moving = true end
 --- Stop moving or sizing: recorded only.

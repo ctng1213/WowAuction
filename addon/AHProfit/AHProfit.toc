@@ -23,7 +23,9 @@ Core\Market.lua
 Core\Plan.lua
 Recommend\Live.lua
 Recommend\Options.lua
+Recommend\Reserves.lua
 UI\ViewModel.lua
+UI\RowMenu.lua
 UI\MainWindow.lua
 UI\Tooltip.lua
 UI\AHPanel.lua

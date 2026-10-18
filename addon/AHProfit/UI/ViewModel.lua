@@ -578,6 +578,16 @@ local function PlanText(a, craftedInto, offsetMs)
   return "Hold for a later week" .. who
 end
 
+--- An Inventory note with what you keep in front of the plan for the rest (A25).
+---@param kept number|nil  The reserve (-1: all)
+---@param plan string      The plan's note
+---@return string
+function ViewModel.KeptNote(kept, plan)
+  if kept == nil then return plan end
+  if kept == -1 then return "Kept for yourself" end
+  return "Keeping " .. kept .. " for yourself · " .. plan
+end
+
 --- The Inventory tab: what this character holds, best worth first (A22). Worth is what its plan
 --- expects (the action's net per unit), else its sell value; bound items have none.
 ---@param holdings table[]  { where, key, qty, bound }
@@ -585,8 +595,9 @@ end
 ---@param lookOf function   key -> look
 ---@param itemOf function   key -> market item or nil
 ---@param offsetMs number
+---@param reserves table|nil key -> units you keep (A25)
 ---@return table[]          Rows { item, quality, where, qty, worth, chance, dot, volume, note, sortWorth }
-function ViewModel.Inventory(holdings, actions, lookOf, itemOf, offsetMs)
+function ViewModel.Inventory(holdings, actions, lookOf, itemOf, offsetMs, reserves)
   local sale, craftedInto = {}, {}
   local sorted = {}
   for i, a in ipairs(actions) do sorted[i] = a end
@@ -612,7 +623,7 @@ function ViewModel.Inventory(holdings, actions, lookOf, itemOf, offsetMs)
       worth = worth and ViewModel.Money(worth) or "—", chance = chance and (chance .. "%") or "—",
       dot = chance and ViewModel.Level(look.conf) or nil,
       volume = (look.soldPerDay and not h.bound) and (ViewModel.RoundHalfUp(look.soldPerDay) .. "/day") or "—",
-      note = h.bound and "Bound · not planned" or PlanText(a, craftedInto[h.key], offsetMs),
+      note = h.bound and "Bound · not planned" or ViewModel.KeptNote((reserves or {})[h.key], PlanText(a, craftedInto[h.key], offsetMs)),
       sortWorth = worth and ViewModel.RoundHalfUp(worth) or -1, netColor = "muted", riskAmber = false,
     }
   end

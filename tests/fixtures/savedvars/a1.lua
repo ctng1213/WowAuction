@@ -127,6 +127,8 @@ AHProfitDB = {
 			},
 		},
 	},
+	["reserves"] = {
+	},
 	["rules"] = {
 	},
 	["scans"] = {

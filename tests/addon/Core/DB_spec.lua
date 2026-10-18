@@ -29,7 +29,7 @@ describe("DB", function()
     local DB = Boot(nil)
     assert_eq(DB.Get(), AHProfitDB)
     assert_eq(AHProfitDB, { formatVersion = 1, addonVersion = "0.1.0", characters = {}, professions = {},
-      recipes = {}, knownRecipes = {}, inventory = {}, ownAuctions = {}, scans = {}, events = {}, rules = {} })
+      recipes = {}, knownRecipes = {}, inventory = {}, ownAuctions = {}, scans = {}, events = {}, rules = {}, reserves = {} })
   end)
 
   it("ignores ADDON_LOADED for other addons", function()
