@@ -99,6 +99,7 @@ class PlanAction:
     net: float                    # expected − what you paid
     duration_h: int | None = None # posts: auction duration
     chain: str | None = None      # links a buy to its follow-up post, e.g. "flip:2589" (SPEC §3.4 expected net)
+    source: str | None = None     # buys: "vendor" or "ah" (D41)
 
 
 @dataclass(frozen=True)

@@ -254,6 +254,7 @@ end
 ---@return string
 function ViewModel.NoteOf(a, countedNote, posts, crafts, offsetMs)
   local parts = {}
+  if a.kind == "buy" and a.vendor then parts[1] = "from a vendor" end      -- D41, A32
   if a.kind == "post" and a.peak then
     local _, peak = ViewModel.Clock(a.peak, offsetMs)
     parts[#parts + 1] = "for the " .. peak .. " peak"
@@ -884,18 +885,21 @@ function ViewModel.PostableRows(rows, held, limit)
 end
 
 --- The panel's shopping and post lists (UI7).
----@param targets table[]  { key, qty, price (the most to pay each) } in list order
+---@param targets table[]  { key, qty, price (the most to pay each), vendor (bought from a vendor) } in list order
 ---@param posts table[]    Today rows of posts { item, quality, qty, each, chance, dot }
 ---@param levelsOf function key -> live levels, or nil when not checked yet
 ---@param lookOf function  key -> look
 ---@param gold number      All your gold, copper
 ---@return table           { shopping = rows, checked = "3 of 5", posts = rows, footer }
 function ViewModel.AHPanel(targets, posts, levelsOf, lookOf, gold)
-  local shopping, checked, found, spend = {}, 0, 0, 0
+  local shopping, checked, found, spend, onAH = {}, 0, 0, 0, 0
   for _, t in ipairs(targets) do
     local look, levels = lookOf(t.key), levelsOf(t.key)
     local row = { key = t.key, item = look.name, quality = look.quality, qty = "×" .. t.qty, max = ViewModel.Money(t.price) }
-    if not levels then
+    if not t.vendor then onAH = onAH + 1 end
+    if t.vendor then                                           -- A32: not on the AH, never searched
+      row.state, row.text, row.price, row.vendor = "vendor", "vendor", "vendor", true
+    elseif not levels then
       row.state, row.text, row.price = "checking", "checking", "checking"
     else
       checked = checked + 1
@@ -911,6 +915,6 @@ function ViewModel.AHPanel(targets, posts, levelsOf, lookOf, gold)
     end
     shopping[#shopping + 1] = row
   end
-  return { shopping = shopping, checked = checked .. " of " .. #targets, posts = posts,
+  return { shopping = shopping, checked = checked .. " of " .. onAH, posts = posts,
            footer = found .. " found · budget left " .. ViewModel.Money(math.max(0, gold - spend)) }
 end

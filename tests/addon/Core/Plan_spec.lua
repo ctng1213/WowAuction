@@ -43,12 +43,18 @@ describe("Plan", function()
     assert_eq(Ids(AHProfitDB.events), { "e2" })
   end)
 
+  it("EX7 a vendor buy decodes as vendor; an AH buy and an older 12-field string do not", function()
+    local Plan = LoginWithRows()
+    assert_eq({ Plan.DecodeAction("w;buy;4470;7;38;1;0;;;pending;;;v").vendor, Plan.DecodeAction("l;buy;2589;20;45;1;0;;;pending;;;").vendor,
+                Plan.DecodeAction("l;buy;2589;20;45;1;0;;;pending;;").vendor }, { true, false, false })
+  end)
+
   it("EX3 decodes the open actions and the rules, clears included", function()
     local Plan = LoginWithRows()
     assert_eq(Plan.Problem(), nil)
     local actions = Plan.Actions(A)
     assert_eq(actions[1], { id = "m:1:0", kind = "post", key = 2589, qty = 20, price = 55, at = T + 5 * HOUR, net = 1046,
-                            windowEnd = T + 10 * HOUR, status = "pending", chance = 93, peak = T + 13 * HOUR })
+                            windowEnd = T + 10 * HOUR, status = "pending", chance = 93, peak = T + 13 * HOUR, vendor = false })
     assert_eq({ actions[2].kind, actions[2].price, actions[2].parent, actions[2].status }, { "hold", nil, "m:1:0", "late" })
     assert_eq(Plan.Actions(B), {})
     assert_eq({ Plan.Rule(2589) }, { "no_buy", T })

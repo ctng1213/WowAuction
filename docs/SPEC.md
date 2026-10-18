@@ -335,7 +335,8 @@ purchases(event_id PK, char_id, key, qty, price, source, at, action_id, confirme
 crafts(event_id PK, char_id, spell_id, count, cost_each, at, action_id)   -- index (char_id,spell_id,at)
 cost_basis(key PK, qty, total_cost, untracked_qty)
 actions(action_id PK, run_at, slot_ms, char_id, kind, key, qty, price, expected_net, conf, status, done_qty, done_at, parent_id,
-        window_start_ms, window_end_ms, anchor_net, anchor_window_ms, replaces_id, week_start_ms)
+        window_start_ms, window_end_ms, anchor_net, anchor_window_ms, replaces_id, week_start_ms, peak_ms,
+        source)   -- buys: 'vendor' or 'ah' (D41)
 item_rules(key PK, rule, set_at, source)
 reserves(char_id, key, qty,  PK(char_id,key))   -- qty -1 = all (§3.4.3)
 characters(id PK, name, realm, faction, market, class, level, gold, updated)

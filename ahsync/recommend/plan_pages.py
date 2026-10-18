@@ -32,7 +32,7 @@ def view_actions(actions: list[PlanAction], rows: list[tuple], history: list[tup
                       in_chain=bool(h[1]) or h[0] in parents) for h in history]
     for a, r in zip(actions, rows):
         out.append(ViewAction(r[0], r[13], a.kind, a.char_id, a.key, a.qty, a.price, a.at_ms, a.net, a.p, "pending",
-                              a.peak_ms, a.chain is not None, a.expected))
+                              a.peak_ms, a.chain is not None, a.expected, a.source == "vendor"))
     return out
 
 

@@ -40,6 +40,7 @@ class ViewAction:
     peak_ms: int | None = None     # posts: the target window's best hour
     in_chain: bool = False         # part of a chain (has a parent, or is a parent)
     expected: float = 0.0          # expected value as planned (a flip's buy: its posts' value), float copper
+    vendor: bool = False           # a buy from a vendor (D41)
 
 
 def clock(ms: int, offset_ms: int) -> tuple[str, str]:
@@ -320,9 +321,10 @@ def note_of(a: ViewAction, counted_note: str, posts: dict[str, ViewAction], craf
 
     Returns:
         The parts joined by " · ", e.g. "for the 18:00 peak · profit counted on the Fri 14:10 buy" or
-        "Flip: post Sat 10:00, for the 18:00 peak"; "" when there is nothing to say.
+        "Flip: post Sat 10:00, for the 18:00 peak" or "from a vendor · for crafting Basic Campfire Kit";
+        "" when there is nothing to say.
     """
-    parts = [_post_note(a, offset_ms)]
+    parts = [_post_note(a, offset_ms), "from a vendor" if a.kind == "buy" and a.vendor else ""]   # D41
     if role(a) == "step" and a.kind != "craft" and chain_id(a) in crafts:
         parts.append(f"for crafting {crafts[chain_id(a)]}")
     if a.kind == "hold":

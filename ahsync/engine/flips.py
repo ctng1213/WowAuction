@@ -171,7 +171,7 @@ def _flip_actions(f: SellFacts, stage: _Stage, char_id: str, now_ms: int, s: Pla
     chain = f"flip:{f.key}"
     opts = [o for o in post_options(f, now_ms, s) if o.window is not None]
     buy = PlanAction("buy", char_id, f.key, stage.units, stage.top_price, now_ms, None, None, None, None,
-                     stage.expected, stage.expected - stage.cost, chain=chain)
+                     stage.expected, stage.expected - stage.cost, chain=chain, source="ah")
     posts = []
     for i, (units, expected, sold, cost) in sorted(stage.posts.items()):
         o = opts[i]

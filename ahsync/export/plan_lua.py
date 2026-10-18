@@ -43,16 +43,17 @@ def action_text(row: tuple) -> str:
 
     Args:
         row: (action_id, char_id, kind, key, qty, price, slot_ms, expected_net, parent_id, window_end_ms, status,
-            chance 0-1 or None, peak_ms or None).
+            chance 0-1 or None, peak_ms or None, source "vendor" | "ah" | None).
 
     Returns:
-        "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status;chance;peakMs".
+        "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status;chance;peakMs;source", source "v" for a
+        vendor buy and empty otherwise (EX7).
     """
-    action_id, _, kind, key, qty, price, slot_ms, net, parent, window_end, status, chance, peak = row
+    action_id, _, kind, key, qty, price, slot_ms, net, parent, window_end, status, chance, peak, source = row
     net_copper = None if net is None else round_half_up(net)
     percent = None if chance is None else round_half_up(chance * 100)
     return ";".join(_field(v) for v in (action_id, kind, key, qty, price, slot_ms, net_copper, parent, window_end, status,
-                                        percent, peak))
+                                        percent, peak, "v" if source == "vendor" else None))
 
 
 def plan_lua(actions: Sequence[tuple], rules: Sequence[tuple[int, str, int]], ingested_until: Mapping[str, int],

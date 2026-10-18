@@ -52,7 +52,7 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 742,422 280x20 "Linen Cloth"
       Texture - 691,426 48x12
     Frame AHProfitWindowRow3 650,442 606x20
-      FontString - 709,442 543x20 "Flip: post Fri 08:53, for the 16:53 peak"
+      FontString - 742,442 510x20 "Flip: post Fri 08:53, for the 16:53 peak"
     Frame AHProfitWindowRow4 650,462 606x20
       FontString - 654,466 40x12 "Fri 10"
       FontString - 1232,466 20x12 "0  "
@@ -68,7 +68,7 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 742,482 280x20 "Linen Cloth"
       Texture - 691,486 48x12
     Frame AHProfitWindowRow6 650,502 606x20
-      FontString - 709,502 543x20 "for the 16:53 peak · profit counted on the Thu 08:53 buy"
+      FontString - 742,502 510x20 "for the 16:53 peak · profit counted on the Thu 08:53 buy"
     Frame AHProfitWindowRow7 650,522 606x20
       FontString - 654,526 40x12 "Sat 11"
       FontString - 1232,526 20x12 "0  "

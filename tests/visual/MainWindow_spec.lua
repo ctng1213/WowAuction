@@ -1,4 +1,4 @@
--- Layout snapshots of the /ahp window (SPEC §8.4 layer 2, UI1-UI4, UI9, UI11-UI13). Each scenario draws the
+-- Layout snapshots of the /ahp window (SPEC §8.4 layer 2, UI1-UI4, UI9, UI11-UI14). Each scenario draws the
 -- window with the stub frames, runs the automatic layout checks and compares the frame tree with
 -- tests/visual/golden/<scenario>.txt. `python tools/visual.py --update` accepts a change, and
 -- `--html` draws it for comparison with docs/mockups/addon.html.
@@ -36,6 +36,34 @@ local function Open(n, marketMissing)
   return AHProfit.MainWindow.Frames()
 end
 
+--- The Craft tab with Copper Rod made from the 6 Copper Bars in the bags (UI11, UI14).
+---@return table  The window's frames
+local function CraftWindow()
+  Stubs.Reset()
+  _G.AHProfitPlan = nil
+  Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 2840, count = 6 } } } }
+  UIWorld.Market({ [6217] = UIWorld.Item(4100, 86, 6, { postPrice = 4000, chance = 1, sellValue = 3800, refStack = 1 }),
+                   [2840] = UIWorld.Item(5000, 80, 40, { postPrice = 1000, sellValue = 950 }) }, NOW)
+  Stubs.Login()
+  AHProfitDB.knownRecipes["Amaya-Grommash"] = "2663"
+  AHProfitDB.recipes.Blacksmithing = { [2663] = { product = 6217, yieldMin = 1, yieldMax = 1, reagents = "2840,2" } }
+  Stubs.Slash("/ahp")
+  AHProfit.MainWindow.ShowTab("craft")
+  return AHProfit.MainWindow.Frames()
+end
+
+--- The x of the first shown note line and of its tab's Item column.
+---@param ui table   The window's frames
+---@param tab string
+---@return number|nil, number
+local function NoteAndItem(ui, tab)
+  local rects = Layout.Resolve(ui.frame)
+  for _, r in ipairs(ui.rows) do
+    if r:IsShown() and r.note:IsShown() then return rects[r.note].x, rects[ui.rows[1].cells[tab].item].x end
+  end
+  return nil, rects[ui.rows[1].cells[tab].item].x
+end
+
 describe("MainWindow layout", function()
   it("UI1 Today with 12 mixed actions", function()
     local ui = Open(12)
@@ -70,20 +98,22 @@ describe("MainWindow layout", function()
   end)
 
   it("UI11 the Craft tab at the minimum size: a recipe covered by owned mats shows Mats \"—\"", function()
-    Stubs.Reset()
-    _G.AHProfitPlan = nil
-    Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 2840, count = 6 } } } }
-    UIWorld.Market({ [6217] = UIWorld.Item(4100, 86, 6, { postPrice = 4000, chance = 1, sellValue = 3800, refStack = 1 }),
-                     [2840] = UIWorld.Item(5000, 80, 40, { postPrice = 1000, sellValue = 950 }) }, NOW)
-    Stubs.Login()
-    AHProfitDB.knownRecipes["Amaya-Grommash"] = "2663"
-    AHProfitDB.recipes.Blacksmithing = { [2663] = { product = 6217, yieldMin = 1, yieldMax = 1, reagents = "2840,2" } }
-    Stubs.Slash("/ahp")
-    AHProfit.MainWindow.ShowTab("craft")
-    local ui = AHProfit.MainWindow.Frames()
+    local ui = CraftWindow()
     ui.frame:SetSize(560, 360)
     Layout.Golden("UI11_craft", ui.frame)
     assert_eq({ ui.rows[1].cells.craft.mats:GetText(), ui.rows[2].note:GetText() }, { "—", "uses 6 owned Copper Bar" })
+  end)
+
+  it("UI14 a note starts where the Item column starts: under the item on Craft, after the time and badge on Week", function()
+    local note, item = NoteAndItem(CraftWindow(), "craft")
+    assert_eq({ note, item }, { item, item }, "Craft: the first column")
+    Stubs.Reset()
+    UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48) }, NOW - UIWorld.HOUR)
+    UIWorld.Plan({ { id = "f", kind = "buy", key = 2589, qty = 20, price = 38, at = NOW, net = 210, vendor = true } })
+    Stubs.Login()
+    Stubs.Slash("/ahp week")
+    note, item = NoteAndItem(AHProfit.MainWindow.Frames(), "week")
+    assert_eq({ note, item }, { item, item }, "Week: after the time and the badge")
   end)
 
   it("UI13 the Flip tab at the minimum size: seven tabs fit beside the Min chance box", function()

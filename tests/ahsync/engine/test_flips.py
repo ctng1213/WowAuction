@@ -45,7 +45,7 @@ def test_a_flip_buys_the_cheap_auctions_and_posts_for_the_peak():
     actions = flips.flip_plan({SILK: silk()}, {"Amaya-G": RICH}, RICH, NOW, S, FS, {})
     buy, *posts = actions
     # The three auctions at 60c and the two at 1s: 1s resold at 1s 50c still clears 20% after the cut.
-    assert (buy.kind, buy.qty, buy.price, buy.chain) == ("buy", 100, 100, "flip:4306")
+    assert (buy.kind, buy.qty, buy.price, buy.chain, buy.source) == ("buy", 100, 100, "flip:4306", "ah")
     assert all(p.peak_ms == MONDAY + SAT * DAY + 18 * HOUR and p.chain == buy.chain for p in posts)
     assert sum(p.qty for p in posts) == 100 and buy.net == buy.expected - (60 * 60 + 40 * 100)
 

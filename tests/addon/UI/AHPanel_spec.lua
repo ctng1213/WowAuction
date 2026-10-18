@@ -194,4 +194,32 @@ describe("AHPanel", function()
               { "1", "Linen Cloth", "×5", AHProfit.ViewModel.WithCoins("+2s 50c") })
     Stubs.ITEM_NAMES[4471] = nil
   end)
+
+  it("A32 a vendor buy is marked, not counted or searched; a click says where to buy it", function()
+    Stubs.Reset()
+    Stubs.ITEM_NAMES[4470] = "Simple Wood"
+    UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48) }, NOW - 3600000)
+    UIWorld.Plan({ { id = "w", kind = "buy", key = 4470, qty = 7, price = 38, at = NOW, net = 0, vendor = true },
+                   { id = "l", kind = "buy", key = 2589, qty = 20, price = 45, at = NOW, net = 200 } })
+    Stubs.Login()
+    local ah = AHWorld.Install()
+    Stubs.FireEvent("AUCTION_HOUSE_SHOW")
+    local ui = AHProfit.AHPanel.Frames()
+    local wood = ui.shop[1]
+    assert_eq({ wood.item:GetText(), wood.colA:GetText(), wood.colB:GetText(), ui.checked:GetText() },
+              { "Simple Wood", "vendor", AHProfit.ViewModel.WithCoins("38c"), "0 of 1" })
+    assert_eq(wood.icon.texture, AHProfit.AHPanel.ICONS.vendor)
+    ui.next:Click()
+    assert_eq(ah.searches, { "Linen Cloth" })                    -- the wood is skipped
+    wood:Click()
+    assert_eq({ ah.searches, ui.status:GetText() }, { { "Linen Cloth" }, "buy Simple Wood from a vendor" })
+    Stubs.Slash("/ahp")
+    local notes = {}
+    for _, row in ipairs(AHProfit.MainWindow.Frames().rows) do
+      if row:IsShown() and row.note:IsShown() then notes[#notes + 1] = row.note:GetText() end
+    end
+    assert_eq(notes, { "from a vendor" })                         -- Today's wood row
+    Stubs.ITEM_NAMES[4470] = nil
+  end)
 end)
+

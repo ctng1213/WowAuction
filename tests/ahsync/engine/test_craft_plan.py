@@ -113,6 +113,17 @@ def test_nothing_is_planned_without_a_paying_product_or_a_known_crafter():
     assert craft_plan.units_made(0, ROD_RECIPE) == 0 and craft_plan.units_made(3, ROD_RECIPE) == 3
 
 
+def test_D41_a_chain_says_where_it_buys_each_mat():
+    flux = 2880
+    recipe = craft.Recipe(2663, ROD, 1, 1, ((BAR, 2), (flux, 1)), ("Brugan-G",))
+    w = world(recipes=(recipe,))
+    w = replace(w, market=craft.Market(w.market.books, {flux: 100}, {}, {}))
+    actions, _ = craft_plan.craft_plan(w, {"Brugan-G": RICH}, RICH, NOW, S, 25, {})
+    buys = {a.key: a.source for a in actions if a.kind == "buy"}
+    assert buys == {BAR: "ah", flux: "vendor"}
+    assert craft_plan.buy_source(w.market, flux) == "vendor" and craft_plan.buy_source(w.market, BAR) == "ah"
+
+
 def test_vendor_mats_are_bought_at_the_vendor_price():
     market = craft.Market({}, {BAR: 900}, {}, {})
     assert craft_plan.buy_terms(market, BAR, 2) == (900, 1800)

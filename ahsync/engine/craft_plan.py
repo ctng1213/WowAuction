@@ -179,6 +179,19 @@ def buy_terms(market: craft.Market, key: int, units: float) -> tuple[int, int]:
     return top, math.ceil(cost)
 
 
+def buy_source(market: craft.Market, key: int) -> str:
+    """Where a chain buys a mat, as buy_terms prices it: a vendor that sells it, else the AH (D41).
+
+    Args:
+        market: The market before the buy.
+        key: The mat.
+
+    Returns:
+        "vendor" or "ah".
+    """
+    return "vendor" if key in market.vendor else "ah"
+
+
 def chain_actions(recipe: craft.Recipe, option: craft.CraftOption, world: CraftWorld, ledger: dict, now_ms: int,
                   s: PlanSettings) -> list[PlanAction]:
     """One planned craft as its linked steps, all under chain id "craft:<spell>" (SPEC §3.4C.3, C7, D22).
@@ -210,13 +223,13 @@ def chain_actions(recipe: craft.Recipe, option: craft.CraftOption, world: CraftW
     for crafter, key, units in intermediate_buys(option, recipe, world):
         price, _ = buy_terms(world.market, key, units)
         out.append(PlanAction("buy", crafter, key, math.ceil(units - 1e-9), price, at, None, None, None, None, 0.0,
-                              0.0, chain=chain))
+                              0.0, chain=chain, source=buy_source(world.market, key)))
         at += STEP_MS
     for step in craft.steps(option, recipe):
         if step[0] == "buy":
             price, _ = buy_terms(world.market, step[1], step[2])
             out.append(PlanAction("buy", option.crafter, step[1], math.ceil(step[2] - 1e-9), price, at, None, None,
-                                  None, None, 0.0, 0.0, chain=chain))
+                                  None, None, 0.0, 0.0, chain=chain, source=buy_source(world.market, step[1])))
         elif step[0] == "mail":
             out.append(PlanAction("mail", step[2], step[1], needs.get(step[1], 1), None, at, None, None, None, None, 0.0, 0.0,
                                   chain=chain))

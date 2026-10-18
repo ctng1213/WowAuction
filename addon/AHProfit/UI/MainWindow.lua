@@ -475,6 +475,10 @@ local function Fill(row, line)
   if not line then return end
   if line.noteLine then
     ShowParts(row, "note")
+    -- Start where this tab's Item column starts (UI14): the line's own, hidden, item cell.
+    row.note:ClearAllPoints()
+    row.note:SetPoint("TOPLEFT", row.cells[view.tab].item, "TOPLEFT", 0, 0)
+    row.note:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -4, 0)
     row.note:SetText(line.text)
   elseif line.header then
     ShowParts(row, "day")

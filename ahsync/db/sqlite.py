@@ -24,7 +24,7 @@ from ahsync.intel.store import IntelStore
 from ahsync.recommend.store import RecommendStore
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
@@ -54,6 +54,11 @@ MIGRATIONS: dict[int, str] = {
         CREATE TABLE IF NOT EXISTS reserves(
             char_id TEXT NOT NULL, key INTEGER NOT NULL, qty INTEGER NOT NULL, PRIMARY KEY(char_id, key)
         ) WITHOUT ROWID
+    """,
+    # 5: where a planned buy buys, so the addon and the dashboard can say "from a vendor" (D41).
+    5: """
+        ALTER TABLE actions ADD COLUMN source TEXT;
+        ALTER TABLE plan_new ADD COLUMN source TEXT
     """,
 }
 BACKUP_KEEP = 3

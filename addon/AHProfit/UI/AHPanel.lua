@@ -28,8 +28,9 @@ AHPanel.COLUMNS = {
            { "Est. profit", 180, 66, "RIGHT", "postNet" }, { "Chance", 248, 36, "RIGHT", "chance" } },
 }
 local MONEY = { each = true, postNet = true }
+-- UNVERIFIED: the gossip vendor icon's path on Forever (Classic's GossipFrame icons).
 AHPanel.ICONS = { found = "Interface\\RaidFrame\\ReadyCheck-Ready", gone = "Interface\\RaidFrame\\ReadyCheck-NotReady",
-                  checking = "Interface\\RaidFrame\\ReadyCheck-Waiting" }
+                  checking = "Interface\\RaidFrame\\ReadyCheck-Waiting", vendor = "Interface\\GossipFrame\\VendorGossipIcon" }
 local FLAT = "Interface\\Buttons\\WHITE8X8"
 local GOLD, MUTED, BORDER = { 1, 0.82, 0 }, { 0.56, 0.54, 0.49 }, { 0.42, 0.35, 0.2 }
 
@@ -58,12 +59,12 @@ end
 
 --- What to shop for: this character's planned buys, then disenchant targets your enchanter can do.
 ---@param charId string
----@return table[]  { key, qty, price }
+---@return table[]  { key, qty, price, vendor }
 local function Targets(charId)
   local out, seen = {}, {}
   for _, a in ipairs(Plan.CharacterActions(charId)) do
     if a.kind == "buy" and a.price and not seen[a.key] then
-      out[#out + 1], seen[a.key] = { key = a.key, qty = a.qty, price = a.price }, true
+      out[#out + 1], seen[a.key] = { key = a.key, qty = a.qty, price = a.price, vendor = a.vendor }, true
     end
   end
   local best = Options.BestSkill(DB.Get() or {}, "Enchanting")
@@ -140,6 +141,7 @@ function AHPanel.OnRowClick(row, button)
   if not row.itemName then return end
   if button == "RightButton" then return AHProfit.RowMenu.Open(row, row.key, row.itemName) end
   if row.isPost then return AHPanel.Sell(row.key, row.itemName, row.sellUnits, row.sellPrice) end
+  if row.vendor then return ui.status:SetText("buy " .. row.itemName .. " from a vendor") end   -- A32
   AHPanel.Search(row.key, row.itemName)
 end
 
@@ -248,7 +250,7 @@ end
 local function FillShop(row, line)
   row:SetShown(line ~= nil)
   if not line then return end
-  row.key, row.itemName = line.key, line.item
+  row.key, row.itemName, row.vendor = line.key, line.item, line.vendor
   row.icon:SetTexture(AHPanel.ICONS[line.state])
   row.item:SetText(line.item)
   row.colA:SetText(VM.WithCoins(line.price))
@@ -333,7 +335,7 @@ end
 --- Next search: the next Shopping row, top to bottom, not yet searched this AH visit.
 function AHPanel.NextSearch()
   for _, row in ipairs(current and current.shopping or {}) do
-    if not searchedThisVisit[row.key] then return AHPanel.Search(row.key, row.item) end
+    if not row.vendor and not searchedThisVisit[row.key] then return AHPanel.Search(row.key, row.item) end
   end
   if ui then ui.status:SetText("all searched this visit") end
 end

@@ -176,7 +176,7 @@ def plan_rows(actions: list[PlanAction], market: str, now_ms: int) -> list[tuple
         rows.append((action_id, now_ms, a.at_ms, a.char_id, a.kind, a.key, a.qty, a.price, a.net, a.p, "pending",
                      0, None, parent, a.window_start_ms, a.window_end_ms,
                      a.net if a.kind == "post" else None, a.window_start_ms if a.kind == "post" else None, None, week,
-                     a.peak_ms))
+                     a.peak_ms, a.source))
     return rows
 
 
