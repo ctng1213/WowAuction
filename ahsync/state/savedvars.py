@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Callable
 
 # Re-exported so callers need only this module.
+from ahsync.state.diagnostics import Diagnostics, read_diagnostics  # noqa: F401
 from ahsync.state.luadata import LuaTable, SavedVarsError, SavedVarsParseError, parse_lua  # noqa: F401
 
 SUPPORTED_FORMAT_VERSION = 1
@@ -25,6 +26,7 @@ GLOBAL_NAME = "AHProfitDB"
 LOCATIONS = ("bags", "bank", "mail")          # SPEC §3.2 inventory.location
 SCAN_KINDS = ("full", "partial")
 RULES = ("no_buy", "ignore", "keep", "none")  # SPEC §3.4.2
+RESERVE_ALL = -1                              # SPEC §3.4.3: a reserve that keeps every unit
 PURCHASE_SOURCES = ("ah", "vendor")
 MAIL_OUTCOMES = ("sold", "expired", "cancelled", "won")
 
@@ -194,23 +196,11 @@ class ItemRule:
 
 
 @dataclass(frozen=True, slots=True)
-class Diagnostics:
-    """What the addon saw last session, to explain missing captures (SPEC §2.2.1, §6).
+class Reserves:
+    """One character's reserves: items kept for yourself (SPEC §3.4.3)."""
 
-    Not ingested into the database; read by tools/savedvars_report.py.
-    """
-
-    at_ms: int | None
-    client: str | None                     # e.g. "1.60.1 70009"
-    apis: tuple[tuple[str, str], ...]      # (API name, Lua type: "function", "table", "nil", ...)
-    errors: tuple[str, ...]                # handler errors caught this session, oldest first
-    skill_lines: str | None                # raw Skills-tab rows "name|isHeader|isExpanded|rank|max;..."
-    merchant: str | None                   # raw last-merchant rows "itemKey|numAvailable|extendedCost;..."
-    setup_error: str | None                # why AHProfitDB setup failed, if it did
-    namespaces: tuple[tuple[str, tuple[str, ...] | None], ...] = ()   # (namespace, its function names; None = missing)
-    professions: str | None = None         # raw GetProfessions slots "slot|index|name|rank|max;..."
-    trade_skill: str | None = None         # raw last trade skill window "name=..|ids=..|learned=..|first=.."
-    scan: str | None = None                # last full-scan read "calls=..|n=..|skipped=..|steps=..|maxStepMs=..|kind=..|rows=..|dropped=.."
+    char_id: str
+    items: tuple[tuple[int, int], ...]     # (item key, units kept; RESERVE_ALL keeps all), by key
 
 
 @dataclass(frozen=True, slots=True)
@@ -250,6 +240,8 @@ class AHProfitData:
     diagnostics: Diagnostics | None = None
     rejected: tuple[RejectedRow, ...] = ()   # scans and events set aside, oldest first per section
     item_names: tuple[ItemName, ...] = ()    # names of items the addon has seen in your inventory
+    reserves: tuple[Reserves, ...] | None = None   # by character; None when the file has no reserves table
+    reserves_set_aside: tuple[str, ...] = ()       # characters whose reserves were malformed
 
 
 # ---------------------------------------------------------------- item keys
@@ -771,6 +763,25 @@ def _rule(key: object, row: object) -> list[ItemRule]:
     return [ItemRule(_int(key, "item key"), _str(row.get("rule"), "rule", RULES), _int(row.get("setAt"), "setAt"))]
 
 
+def _reserves(char_id: object, value: object) -> list[Reserves]:
+    """Convert one character's reserves (SPEC §2.2.1, §3.4.3).
+
+    Args:
+        char_id: Its key, "Name-Realm".
+        value: "key,qty;key,qty", qty -1 for all; "" for none.
+
+    Returns:
+        One Reserves.
+
+    Raises:
+        _RowError: When a row is malformed, a quantity is below 1 (other than -1) or a key repeats.
+    """
+    rows = _compact_rows(value, 2, "reserves")
+    if any(qty < 1 and qty != RESERVE_ALL for _, qty in rows) or len({k for k, _ in rows}) != len(rows):
+        raise _RowError(f"reserves {value!r}: each item once, keeping at least 1 unit or -1 (all)")
+    return [Reserves(_str(char_id, "character id"), tuple(sorted(rows)))]
+
+
 def _item_name(key: object, value: object) -> list[ItemName]:
     """Convert one itemNames entry.
 
@@ -788,53 +799,6 @@ def _item_name(key: object, value: object) -> list[ItemName]:
     if not quality.isdigit() or not 0 <= int(quality) <= 7 or not name:
         raise _RowError(f"item name {value!r} is not \"quality,name\"")
     return [ItemName(_int(key, "item key"), name, int(quality))]
-
-
-def _diagnostics(value: object) -> Diagnostics | None:
-    """Read the addon's diagnostics block leniently: it exists to explain failures.
-
-    Args:
-        value: AHProfitDB.diagnostics, or None when the addon hasn't saved one.
-
-    Returns:
-        The diagnostics, with any malformed part read as None or empty; None when absent.
-    """
-    if not isinstance(value, dict):
-        return None
-
-    def text(name: str) -> str | None:
-        """Read one string field of the diagnostics block.
-
-        Args:
-            name: Field name in AHProfitDB.diagnostics.
-
-        Returns:
-            The value when it is a string, else None.
-        """
-        item = value.get(name)
-        return item if isinstance(item, str) else None
-
-    apis = []
-    for pair in (text("apis") or "").split(";"):
-        name, sep, kind = pair.partition("=")
-        if sep:
-            apis.append((name, kind))
-    raw_errors = value.get("errors")
-    if isinstance(raw_errors, dict):
-        raw_errors = [raw_errors[k] for k in sorted(k for k in raw_errors if isinstance(k, int))]
-    errors = tuple(e for e in raw_errors if isinstance(e, str)) if isinstance(raw_errors, list) else ()
-    namespaces = []
-    for pair in (text("namespaces") or "").split(";"):
-        name, sep, functions = pair.partition("=")
-        if sep:
-            namespaces.append((name, None if functions == "nil" else tuple(functions.split())))
-    at = value.get("at")
-    return Diagnostics(
-        at_ms=at if isinstance(at, int) and not isinstance(at, bool) else None,
-        client=text("client"), apis=tuple(apis), errors=errors,
-        skill_lines=text("skillLines"), merchant=text("merchant"), setup_error=text("setupError"),
-        namespaces=tuple(namespaces), professions=text("professions"), trade_skill=text("tradeSkill"), scan=text("scan"),
-    )
 
 
 def _rejected_row(row: object) -> RejectedRow:
@@ -955,6 +919,9 @@ def read_ahprofit(text: str) -> AHProfitData:
     rejected: list[RejectedRow] = []
     version, addon_version, refresh_ms = _header(db, problems)
     item_names = tuple(_each(db.get("itemNames"), "itemNames", problems, _item_name))
+    reserves_problems: list[str] = []
+    reserves = _each(db.get("reserves"), "reserves", reserves_problems, _reserves)
+    problems.extend(reserves_problems)
     return AHProfitData(
         format_version=version,
         addon_version=addon_version,
@@ -972,10 +939,28 @@ def read_ahprofit(text: str) -> AHProfitData:
         events=tuple(_each(db.get("events"), "events", problems, _tracking(_event, rejected))),
         rules=tuple(_each(db.get("rules"), "rules", problems, _rule)),
         problems=tuple(problems),
-        diagnostics=_diagnostics(db.get("diagnostics")),
+        diagnostics=read_diagnostics(db.get("diagnostics")),
         rejected=tuple(rejected),
         item_names=item_names,
+        reserves=None if db.get("reserves") is None else tuple(reserves),
+        reserves_set_aside=_reserves_set_aside(db.get("reserves"), reserves),
     )
+
+
+def _reserves_set_aside(table: object, kept: list[Reserves]) -> tuple[str, ...]:
+    """The characters whose reserves entry was set aside, so the importer leaves their stored ones alone.
+
+    Args:
+        table: AHProfitDB.reserves.
+        kept: The reserves that parsed.
+
+    Returns:
+        Character ids, sorted; () when the table is absent or not a table.
+    """
+    if not isinstance(table, dict):
+        return ()
+    good = {r.char_id for r in kept}
+    return tuple(sorted(str(c) for c in table if str(c) not in good))
 
 
 def read_ahprofit_file(path: Path) -> AHProfitData:

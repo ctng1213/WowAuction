@@ -144,7 +144,7 @@
 </div>
 
 <h2>3. Tooltip and right-click menu</h2>
-<p class="note">The tooltip adds a short label/value block under the item's own lines (UI8, max 320 wide). All prices are per unit. Disenchant value is left out when none of your characters can disenchant the item. Right-clicking any row opens the rules menu (SPEC §3.4.2).</p>
+<p class="note">The tooltip adds a short label/value block under the item's own lines (UI8, max 320 wide). All prices are per unit. Disenchant value is left out when none of your characters can disenchant the item. Right-clicking any row in the window or the AH panel opens the keep menu (SPEC §3.4.3, A25): keep all of the item for this character, keep at least a number of units (only what you hold above it is suggested), or sell normally again. SPEC GAP: the blacklist rules (§3.4.2) are not in the addon's menu yet.</p>
 <div class="stage">
   <div class="tooltip">
     <div class="tt-name">Scouting Gloves of the Monkey</div>
@@ -159,13 +159,10 @@
     <div class="tt-line"><span>Chance to sell</span><span>46%</span></div>
   </div>
   <div class="menu">
-    <div class="h">Heavy Leather</div>
-    <div>Search the AH</div>
-    <div>Mark action as skipped</div>
-    <div class="sep"></div>
-    <div>Blacklist: don't buy or craft</div>
-    <div>Blacklist: ignore completely</div>
-    <div>Keep (start its record fresh)</div>
+    <div class="h">Refreshing Spring Water</div>
+    <div>Keep all for myself</div>
+    <div>Keep at least… <span class="muted">[ 10 ] OK</span></div>
+    <div>Sell normally</div>
     <div class="sep"></div>
     <div class="muted">Cancel</div>
   </div>

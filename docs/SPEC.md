@@ -124,6 +124,7 @@ AHSync reads `WTF/Account/*/SavedVariables/AHProfit.lua`. It watches the file an
 | **Mail to your own characters**: from, to, item, quantity, time (matches plan `mail` actions) | a hook on the send-mail call |
 | **Auction mail**: sold / expired / cancelled / won, item, quantity, price (from the invoice), time | live system messages; mailbox opened |
 | **Item rules** set in game (blacklist, §3.4.2) | a right-click on a row |
+| **Reserves**: per character, items you keep for yourself, all or at least N units (§3.4.3) | a right-click on a row: Keep all, Keep at least…, Sell normally |
 
 **You never have to report anything by hand.** The inventory snapshot (bags, bank, mail, own auctions) is the source of truth for *what* you own, so a missed event can't make the app think you own something you don't. Events only say *where* items came from and *what they cost*. Items from outside the AH (farmed, traded, mailed between characters) have no recorded cost and are valued at their opportunity cost. Auctions that sell or expire while you're offline are learned at your next mailbox visit.
 
@@ -194,6 +195,7 @@ AHProfitDB = {
       confirmed = true },
   },
   rules = { [2589] = { rule = "no_buy", setAt = 1760000000000 } },   -- set in game; "none" = cleared (§3.4.2)
+  reserves = { ["Amaya-Grommash"] = "2589,10;4306,-1" },  -- "key,qty" kept for yourself; qty -1 = all (§3.4.3)
 }
 ```
 
@@ -335,6 +337,7 @@ cost_basis(key PK, qty, total_cost, untracked_qty)
 actions(action_id PK, run_at, slot_ms, char_id, kind, key, qty, price, expected_net, conf, status, done_qty, done_at, parent_id,
         window_start_ms, window_end_ms, anchor_net, anchor_window_ms, replaces_id, week_start_ms)
 item_rules(key PK, rule, set_at, source)
+reserves(char_id, key, qty,  PK(char_id,key))   -- qty -1 = all (§3.4.3)
 characters(id PK, name, realm, faction, market, class, level, gold, updated)
 professions(char_id, profession, skill, max_skill,           PK(char_id,profession))
 recipes(profession, spell_id, product_key, yield_min, yield_max, skill_req, cooldown_s,  PK(profession,spell_id))
@@ -792,6 +795,15 @@ Captured events (§2.2) are matched to plan actions automatically:
 - `keep` (the **Keep** button on a "not selling" prompt): clears the flag and starts the item's sell record fresh from that moment, so `P'`, the quantity cut and the price cut all reset (§3.3.3). If it then expires again while cheapest (`keep_retry_streak`, default 1), the prompt comes back. Choosing Keep again resets it again.
 
 You set or clear a rule from any dashboard row, from the **Rules** page, or by right-clicking a row in the addon. Rules set in the addon reach AHSync through SavedVariables, and rules set on the dashboard reach the addon through `PortfolioPlan.lua`. When both sides changed the same item, the newer `set_at` wins. **Clearing is a change too:** it is recorded as rule `none` with its own `set_at` (§3.2), so a clear on one side beats an older rule on the other instead of being undone by it.
+
+#### 3.4.3 Reserves (keep for yourself)
+
+Some items you hold are for your own use: food, potions, mats for your own gear. A **reserve** keeps them out of every suggestion without hiding the item. It is set per character, because what you keep belongs to the character that uses it, by right-clicking a row in the addon (window or AH panel): **Keep all**, **Keep at least…** (a number) or **Sell normally** (clears it).
+
+- Kept units are never sold, disenchanted, vendored or used as craft mats, in the addon (A25) or the plan (R20). Only what the character holds above the reserve is planned; "keep all" plans none of it.
+- The addon applies a reserve at once, trimming any AHSync action for the item to the free units and scaling its net. AHSync reads `AHProfitDB.reserves` and **follows the file** like professions: when the character's `updated` is at least the stored one, its reserves are replaced with the file's (S14). The next refresh plans with them.
+- Inventory still lists kept items and counts their worth at hold value; the plan cell says "Kept for yourself" or "Keeping 10 for yourself · …" (D40).
+- SPEC GAP: reserves are set only in game; the dashboard shows them but has no editor yet.
 
 ### 3.5 Outputs
 

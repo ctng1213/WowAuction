@@ -40,6 +40,10 @@ class FakeState:
         """No rules."""
         return {}
 
+    def reserves(self, char_ids):
+        """Nothing kept."""
+        return {}
+
 
 def test_the_page_gathers_holdings_cost_basis_crafts_and_details():
     craft = ViewAction("c", None, "craft", "Brugan-G", ROD, 4, None, NOW, 120.0, None, "pending")

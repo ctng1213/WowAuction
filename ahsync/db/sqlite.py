@@ -24,7 +24,7 @@ from ahsync.intel.store import IntelStore
 from ahsync.recommend.store import RecommendStore
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
@@ -48,6 +48,12 @@ MIGRATIONS: dict[int, str] = {
     3: """
         ALTER TABLE actions ADD COLUMN peak_ms INTEGER;
         ALTER TABLE plan_new ADD COLUMN peak_ms INTEGER
+    """,
+    # 4: items each character keeps for itself, read from the addon (S14, SPEC §3.4.3).
+    4: """
+        CREATE TABLE IF NOT EXISTS reserves(
+            char_id TEXT NOT NULL, key INTEGER NOT NULL, qty INTEGER NOT NULL, PRIMARY KEY(char_id, key)
+        ) WITHOUT ROWID
     """,
 }
 BACKUP_KEEP = 3

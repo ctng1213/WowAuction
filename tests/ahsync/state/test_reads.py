@@ -61,6 +61,18 @@ def test_R10_a_bound_item_is_never_a_lot_for_the_sell_plan(db):
     assert db.owned_lots(["A-R", "B-R"]) == [("A-R", 2840, 7), ("B-R", 2840, 2)] and db.owned_lots([]) == []
 
 
+def test_R20_kept_units_are_never_lots_or_mats_on_hand(db):
+    sql(db, "INSERT INTO inventory(char_id, location, key, qty, bound) VALUES (?, ?, ?, ?, ?)",
+        ("A-R", "bags", 2589, 15, 0), ("A-R", "bank", 2589, 5, 0), ("A-R", "bags", 4306, 7, 0), ("B-R", "bags", 2589, 4, 0))
+    sql(db, "INSERT INTO reserves(char_id, key, qty) VALUES (?, ?, ?)", ("A-R", 2589, 10), ("A-R", 4306, -1))
+    # A keeps 10 of her 20 Linen and all her Silk; B keeps nothing, so A's reserve never touches B's 4.
+    assert db.owned_lots(["A-R", "B-R"]) == [("A-R", 2589, 10), ("B-R", 2589, 4)]
+    assert db.owned_units(["A-R", "B-R"]) == {2589: 14} and db.owned_units([]) == {}
+    assert db.reserves(["A-R", "B-R"]) == {("A-R", 2589): 10, ("A-R", 4306): -1} and db.reserves([]) == {}
+    sql(db, "INSERT INTO reserves(char_id, key, qty) VALUES (?, ?, ?)", ("B-R", 2589, 30))   # more than B holds
+    assert db.owned_lots(["B-R"]) == []
+
+
 def test_inventory_rows_include_bound_ones_and_cost_basis_skips_empty_rows(db):
     sql(db, "INSERT INTO inventory(char_id, location, key, qty, bound) VALUES (?, ?, ?, ?, ?)",
         ("B-R", "bank", 2840, 2, 0), ("A-R", "mail", 2840, 3, 0), ("A-R", "bags", 6948, 1, 1), ("C-R", "bags", 1, 1, 0))

@@ -64,8 +64,18 @@ class StateReader(Protocol):
             Recipes with reagents and crafters.
         """
 
+    def reserves(self, char_ids: list[str]) -> dict[tuple[str, int], int]:
+        """Items the characters keep for themselves.
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            (character id, item key) -> units kept; -1 keeps all.
+        """
+
     def owned_units(self, char_ids: list[str]) -> dict[int, int]:
-        """Unbound units owned across the characters.
+        """Unbound units owned across the characters, less their reserves.
 
         Args:
             char_ids: Character ids.
@@ -75,7 +85,7 @@ class StateReader(Protocol):
         """
 
     def owned_lots(self, char_ids: list[str]) -> list[tuple[str, int, int]]:
-        """Unbound units per character and item.
+        """Unbound units per character and item, less their reserves.
 
         Args:
             char_ids: Character ids.
@@ -191,20 +201,35 @@ class StateReads:
         return out
 
     def owned_units(self, char_ids: list[str]) -> dict[int, int]:
-        """Unbound units you own in bags, bank and mail across the characters (SPEC §3.4B owned).
+        """Unbound units you own in bags, bank and mail across the characters, less what each keeps
+        for itself (SPEC §3.4B owned, §3.4.3, R20).
 
         Args:
             char_ids: Character ids.
 
         Returns:
-            Item key -> units.
+            Item key -> free units; items with none free are left out.
+        """
+        units: dict[int, int] = {}
+        for _, key, qty in self.owned_lots(char_ids):
+            units[key] = units.get(key, 0) + qty
+        return dict(sorted(units.items()))
+
+    def reserves(self, char_ids: list[str]) -> dict[tuple[str, int], int]:
+        """Items the characters keep for themselves (SPEC §3.4.3).
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            (character id, item key) -> units kept; -1 keeps all.
         """
         if not char_ids:
             return {}
         marks = ",".join("?" * len(char_ids))
-        return dict(self.conn.execute(
-            f"SELECT key, SUM(qty) FROM inventory WHERE bound = 0 AND char_id IN ({marks}) "
-            f"GROUP BY key ORDER BY key", tuple(char_ids)).fetchall())
+        return {(c, k): q for c, k, q in self.conn.execute(
+            f"SELECT char_id, key, qty FROM reserves WHERE char_id IN ({marks}) ORDER BY char_id, key",
+            tuple(char_ids))}
 
     def vendor_reagent_keys(self) -> set[int]:
         """Items a merchant was seen selling in unlimited supply (SPEC §3.4B vendor).
@@ -223,22 +248,26 @@ class StateReads:
         return dict(self.conn.execute("SELECT key, rule FROM item_rules WHERE rule != 'none' ORDER BY key").fetchall())
 
     def owned_lots(self, char_ids: list[str]) -> list[tuple[str, int, int]]:
-        """Unbound units per character and item, bags, bank and mail together (SPEC §3.4C.1, R10).
+        """Unbound units per character and item, bags, bank and mail together, less what the character
+        keeps for itself (SPEC §3.4C.1, §3.4.3, R10, R20).
 
-        Bound items are never lots: they can't be sold or mailed.
+        Bound items are never lots: they can't be sold or mailed. Neither are kept units.
 
         Args:
             char_ids: Character ids.
 
         Returns:
-            (character id, item key, units), sorted by character then key.
+            (character id, item key, free units), sorted by character then key; none free is left out.
         """
         if not char_ids:
             return []
         marks = ",".join("?" * len(char_ids))
-        return [tuple(r) for r in self.conn.execute(
-            f"SELECT char_id, key, SUM(qty) FROM inventory WHERE bound = 0 AND char_id IN ({marks}) "
-            f"GROUP BY char_id, key ORDER BY char_id, key", tuple(char_ids))]
+        rows = self.conn.execute(
+            f"SELECT i.char_id, i.key, SUM(i.qty) - COALESCE(MAX(r.qty), 0), MAX(r.qty) = -1 FROM inventory i "
+            f"LEFT JOIN reserves r ON r.char_id = i.char_id AND r.key = i.key "
+            f"WHERE i.bound = 0 AND i.char_id IN ({marks}) GROUP BY i.char_id, i.key ORDER BY i.char_id, i.key",
+            tuple(char_ids))
+        return [(c, k, free) for c, k, free, keep_all in rows if free > 0 and not keep_all]
 
     def holdings(self, char_ids: list[str]) -> list[tuple[str, str, int, int, bool]]:
         """Every inventory row of the characters, bound ones too (SPEC §3.5 Inventory).

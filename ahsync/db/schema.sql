@@ -132,6 +132,11 @@ CREATE TABLE IF NOT EXISTS item_rules(
     key INTEGER PRIMARY KEY, rule TEXT NOT NULL, set_at INTEGER NOT NULL, source TEXT
 );
 
+-- Items a character keeps for itself (SPEC §3.4.3); qty -1 keeps every unit. Set in game only.
+CREATE TABLE IF NOT EXISTS reserves(
+    char_id TEXT NOT NULL, key INTEGER NOT NULL, qty INTEGER NOT NULL, PRIMARY KEY(char_id, key)
+) WITHOUT ROWID;
+
 CREATE TABLE IF NOT EXISTS characters(
     id TEXT PRIMARY KEY, name TEXT, realm TEXT, faction TEXT, market TEXT, class TEXT, level INTEGER,
     gold INTEGER, updated INTEGER

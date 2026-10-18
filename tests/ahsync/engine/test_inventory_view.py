@@ -11,8 +11,9 @@ HOUR, DAY = 3_600_000, 86_400_000
 MONDAY = 345_600_000 + 3000 * 7 * DAY
 SAT = MONDAY + 5 * DAY
 NOW = MONDAY + 4 * DAY + 14 * HOUR                  # Fri 14:00 UTC
-LINEN, WOOL, BAR, ROD, GLOVES, RING, FANG = 2589, 2592, 2840, 6217, 2851, 1000, 3300
+LINEN, WOOL, BAR, ROD, GLOVES, RING, FANG, SILK = 2589, 2592, 2840, 6217, 2851, 1000, 3300, 4306
 LOOKS = {LINEN: ItemLook("Linen Cloth", 1, 86, 48.0, "ahf", 93), WOOL: ItemLook("Wool Cloth", 1),
+         SILK: ItemLook("Silk Cloth", 1),
          BAR: ItemLook("Copper Bar", 1, 80, 40.0, "ahf", 150), ROD: ItemLook("Copper Rod", 1),
          GLOVES: ItemLook("Scouting Gloves", 2), RING: ItemLook("Band of Thorns", 2), FANG: ItemLook("Broken Fang", 0)}
 
@@ -94,3 +95,20 @@ def test_vendor_hold_craft_only_and_chain_posts():
     # A flip's post sells what the flip buys, not this stock: Linen stays unplanned, worth its hold value.
     assert (rows["Linen Cloth"]["plan"], rows["Linen Cloth"]["worth"]) == ("Not planned", "80c")
     assert [r["item"] for r in view["rows"]] == ["Linen Cloth", "Broken Fang", "Copper Bar"]
+
+
+def test_D40_kept_items_say_so_and_keep_their_worth():
+    post = action("p", "post", "Amaya-G", LINEN, 10, 55, 522.5, p=1.0)
+    view = inventory_view([Holding("Amaya-G", "bags", LINEN, 20, False), Holding("Amaya-G", "bags", SILK, 7, False)],
+                          world(post, values={LINEN: 50.0, SILK: 70.0},
+                                reserves={("Amaya-G", LINEN): 10, ("Amaya-G", SILK): -1}))
+    rows = {r["item"]: r for r in view["rows"]}
+    assert (rows["Linen Cloth"]["plan"], rows["Linen Cloth"]["plan_kind"]) ==         ("Keeping 10 for yourself · Post 10 now at 55c", "post")
+    # Silk: 7 x 70c hold value, even though none of it is planned.
+    assert (rows["Silk Cloth"]["plan"], rows["Silk Cloth"]["plan_kind"], rows["Silk Cloth"]["worth"]) ==         ("Kept for yourself", "kept", "4s 90c")
+
+
+def test_a_partial_reserve_with_nothing_else_planned_still_says_what_is_kept():
+    [row] = inventory_view([Holding("Amaya-G", "bags", LINEN, 4, False)],
+                           world(reserves={("Amaya-G", LINEN): 10}))["rows"]
+    assert (row["plan"], row["plan_kind"]) == ("Keeping 10 for yourself", "kept")

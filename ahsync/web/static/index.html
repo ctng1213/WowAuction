@@ -266,12 +266,12 @@ const LIVE = {
     row: r => `<td>${item(r.item, r.quality)}</td><td>${esc(r.character)}</td><td class="muted">${esc(r.where)}</td><td class="num">${esc(r.qty)}</td>` +
               `<td class="num">${esc(r.paid_each)}${r.paid_note ? `<span class="sub">${esc(r.paid_note)}</span>` : ''}</td><td class="num">${esc(r.paid_total)}</td>` +
               `<td class="num">${dash(r.worth)}</td><td>${dash(r.windows)}</td>${marketCells(r)}` +
-              `<td class="${['bound', 'ignored', 'none'].includes(r.plan_kind) ? 'muted' : ''}">${esc(r.plan)}</td>`,
+              `<td class="${['bound', 'ignored', 'none', 'kept'].includes(r.plan_kind) ? 'muted' : ''}">${esc(r.plan)}</td>`,
     filters: [
       { id: 'search', label: null, kind: 'search', placeholder: 'Search items…', test: (r, v) => !v || String(r.item).toLowerCase().includes(v.toLowerCase()) },
       { id: 'character', label: 'Character', fromRows: 'character', test: (r, v) => v === '' || r.character === v },
       { id: 'where', label: 'Where', options: [['', 'All'], ['bags', 'Bags'], ['bank', 'Bank'], ['mail', 'Mail']], test: (r, v) => v === '' || r.where === v },
-      { id: 'plan', label: 'Plan', options: [['', 'All'], ['post', 'Post'], ['de', 'Disenchant'], ['vendor', 'Vendor'], ['hold', 'Hold'], ['craft', 'Craft'], ['none', 'Not planned'], ['bound', 'Bound'], ['ignored', 'Ignored']],
+      { id: 'plan', label: 'Plan', options: [['', 'All'], ['post', 'Post'], ['de', 'Disenchant'], ['vendor', 'Vendor'], ['hold', 'Hold'], ['craft', 'Craft'], ['none', 'Not planned'], ['bound', 'Bound'], ['ignored', 'Ignored'], ['kept', 'Kept for yourself']],
         test: (r, v) => v === '' || r.plan_kind === v },
     ],
   },

@@ -99,7 +99,8 @@ def inventory_page(state: StateReader, char_ids: list[str], actions: list[ViewAc
         elif info is not None and info.vendor_sell:
             values[key] = float(info.vendor_sell)
     world = InventoryWorld(actions, looks, {k: windows_of(stats[k].sell_windows) for k in keys if k in stats},
-                           values, craft_uses(state, char_ids, actions, looks), state.item_rules(), offset_ms)
+                           values, craft_uses(state, char_ids, actions, looks), state.item_rules(), offset_ms,
+                           state.reserves(char_ids))
     view = inventory_view(holdings, world)
     details = {str(k): item_detail(detail_facts(looks[k], stats[k]), offset_ms) for k in sorted(keys) if k in stats}
     return {**view, "details": details, "help": COLUMN_HELP}

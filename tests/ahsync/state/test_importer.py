@@ -249,6 +249,27 @@ def test_S13_the_addon_names_items_ahfs_list_leaves_out_and_ahf_always_wins(db):
     assert rows(db, "SELECT name, updated FROM items WHERE key = 6948") == [("Hearthstone (AHF)", T + HOUR)]
 
 
+def test_S14_reserves_follow_the_newest_file_and_a_bad_entry_keeps_the_stored_ones(db):
+    def save(updated: int, reserves) -> ApplyResult:
+        """Apply a file with Amaya at this updated time and these reserves."""
+        return apply_db(db, {"characters": {AMAYA: CHAR[AMAYA] | {"updated": updated}}, "reserves": reserves})
+
+    def stored() -> list[tuple]:
+        """Amaya's stored reserves."""
+        return rows(db, "SELECT key, qty FROM reserves WHERE char_id = ? ORDER BY key", (AMAYA,))
+
+    assert save(T, {AMAYA: "2589,10;4306,-1"}).dirty_keys >= {2589, 4306} and stored() == [(2589, 10), (4306, -1)]
+    assert save(T + HOUR, {AMAYA: "2589,5"}).dirty_keys >= {2589, 4306} and stored() == [(2589, 5)]
+    save(T, {AMAYA: "2589,10;4306,-1"})                                   # older save: changes nothing
+    assert stored() == [(2589, 5)]
+    result = save(T + 2 * HOUR, {AMAYA: "2589,x"})                        # malformed: set aside alone
+    assert stored() == [(2589, 5)] and any("reserves" in p for p in result.problems)
+    apply_db(db, {"characters": {AMAYA: CHAR[AMAYA] | {"updated": T + 3 * HOUR}}})   # an older addon: no table
+    assert stored() == [(2589, 5)]
+    save(T + 4 * HOUR, {})                                                # all cleared in game
+    assert stored() == []
+
+
 def test_a_malformed_item_name_is_set_aside_alone(db):
     data = read_ahprofit(savedvars_text({"itemNames": {6948: "1,Hearthstone", 2589: "x,Linen", 2592: "3,"}}))
     assert [n.key for n in data.item_names] == [6948] and len(data.problems) == 2

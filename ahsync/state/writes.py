@@ -95,6 +95,18 @@ class IngestWrites:
         return bool(self._replace_rows("professions", {"char_id": char_id}, ("profession", "skill", "max_skill"),
                                        rows))
 
+    def replace_reserves(self, char_id: str, items: dict[int, int]) -> set[int]:
+        """Replace a character's reserves with a file's (SPEC §3.4.3, S14).
+
+        Args:
+            char_id: "Name-Realm".
+            items: Item key -> units kept (-1 keeps all); empty clears them.
+
+        Returns:
+            Item keys whose reserve was added, removed or changed.
+        """
+        return self._replace_rows("reserves", {"char_id": char_id}, ("key", "qty"), {(k,): q for k, q in items.items()})
+
     def upsert_recipe(self, row: dict[str, object], reagents: dict[int, int]) -> bool:
         """Store a recipe definition and its reagents; a known skill or cooldown is never replaced by unknown.
 

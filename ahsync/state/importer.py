@@ -343,6 +343,23 @@ class _Apply:
                 self.mark([r.key])
 
 
+    def reserves(self, data: sv.AHProfitData) -> None:
+        """Replace each followed character's reserves with the file's (SPEC §3.4.3, S14).
+
+        A character missing from the file's reserves table keeps nothing; one whose entry was
+        set aside keeps what is stored. A file without the table (an older addon) changes nothing.
+
+        Args:
+            data: The parsed file.
+        """
+        if data.reserves is None:
+            return
+        by_char = {r.char_id: dict(r.items) for r in data.reserves}
+        for char_id in sorted(self.follows - set(data.reserves_set_aside)):
+            items = by_char.get(char_id, {})
+            self.guarded(f"reserves[{char_id!r}]", lambda c=char_id, i=items: self.mark(self.db.replace_reserves(c, i)))
+
+
 def _group_counts(rows: Iterable[sv.AuctionRow]) -> dict[tuple, int]:
     """Sum auction or book rows that share key, price, stack and band.
 
@@ -417,6 +434,7 @@ def apply_data(db: Database, data: sv.AHProfitData, realms: Mapping[str, str], n
         work.mark(derive_from_scans(db, work.new_scans))     # local prices and book volume (SPEC §4.2)
         work.events(data.events)
         work.rules(data.rules)
+        work.reserves(data)
         db.add_item_names((n.key, sv.base_item_id(n.key), n.name, n.quality) for n in data.item_names)
     advanced = _advance_ingested_until(db, work.pruning.candidates())
     return ApplyResult(frozenset(work.dirty), data.problems + tuple(work.problems), advanced)

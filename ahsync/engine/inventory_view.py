@@ -10,7 +10,7 @@ on the owner's row with who does it. Bound and ignored items are never planned (
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ahsync.engine.item_detail import windows_short
 from ahsync.engine.patterns import Window
@@ -44,6 +44,7 @@ class InventoryWorld:
     uses: dict[int, str]                  # item key -> the product of a planned craft that uses it
     rules: dict[int, str]                 # item key -> live rule ("ignore", "no_buy", "keep")
     offset_ms: int = 0                    # local time minus UTC
+    reserves: dict[tuple[str, int], int] = field(default_factory=dict)   # (char, key) -> units kept; -1 all
 
 
 def _name(char_id: str) -> str:
@@ -86,7 +87,7 @@ class _Plan:
     """An Inventory row's plan cell."""
 
     text: str
-    kind: str                     # filter value: post | de | vendor | hold | craft | none | bound | ignored
+    kind: str                     # filter value: post | de | vendor | hold | craft | none | bound | ignored | kept
     p: float | None               # chance of its first post
 
 
@@ -106,14 +107,18 @@ def _plan(h: Holding, held: int, mine: list[ViewAction], w: InventoryWorld) -> _
         return _Plan("Bound · not planned", "bound", None)
     if w.rules.get(h.key) == "ignore":
         return _Plan("Ignored · not planned", "ignored", None)
+    kept = w.reserves.get((h.char_id, h.key), 0)
+    if kept == -1:                                  # SPEC §3.4.3, D40
+        return _Plan("Kept for yourself", "kept", None)
     parts = [_action_text(a, h.char_id, held, w.offset_ms) for a in mine]
-    left = held - sum(a.qty for a in mine)
+    left = held - kept - sum(a.qty for a in mine)
     if left > 0 and h.key in w.uses:
         parts.append(f"{left} for crafting {w.uses[h.key]}" if mine else f"For crafting {w.uses[h.key]}")
     if not parts:
-        return _Plan("Not planned", "none", None)
+        return _Plan(f"Keeping {kept} for yourself" if kept else "Not planned", "kept" if kept else "none", None)
     posts = [a.p for a in mine if a.kind == "post"]
-    return _Plan(" · ".join(parts), mine[0].kind if mine else "craft", posts[0] if posts else None)
+    note = [f"Keeping {kept} for yourself"] if kept else []
+    return _Plan(" · ".join(note + parts), mine[0].kind if mine else "craft", posts[0] if posts else None)
 
 
 def _worth_by_key(holdings: Sequence[Holding], w: InventoryWorld) -> dict[int, float | None]:
