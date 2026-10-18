@@ -428,6 +428,16 @@ const VIEWS = {
       ${inv('Hearthstone Band', 2, 'Brugan', 'bags', 1, 0, null, '<span class="muted">bound · not planned</span>')}
     </table>`
   },
+  Reservations: {
+    ctl: '',
+    footer: `<span>3 items kept · click a row to change it</span><span>Budget ${money(314000)}</span>`,
+    note: `<b>Reservations</b>: what this character keeps for itself (SPEC §3.4.3, A26), held or not. Kept units are never suggested for selling or crafting; only <b>Free</b> ones are. Click a row (either button) for the keep menu: change the number, keep all, or Sell normally to undo.`,
+    html: () => `<table>${head([['Item'], ['Keeping', 1], ['Held', 1], ['Free', 1]])}
+      <tr class="row"><td>${item('Linen Cloth', 1)}</td><td class="num">5</td><td class="num">×0</td><td class="num muted">—</td></tr>
+      <tr class="row"><td>${item('Refreshing Spring Water', 1)}</td><td class="num">10</td><td class="num">×13</td><td class="num">×3</td></tr>
+      <tr class="row"><td>${item('Silk Cloth', 1)}</td><td class="num">All</td><td class="num">×7</td><td class="num muted">—</td></tr>
+    </table>`
+  },
 };
 
 function todayRow(a, n, q, qty, each, e, P, c, who, spend, note) {

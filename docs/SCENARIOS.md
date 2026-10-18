@@ -391,11 +391,12 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | A23 | the addon's Disenchant tab with no enchanter on the account: the market file lists Scouting Gloves (green armor, ilvl 18, Enchanting 1) at 8 s; Strange Dust is worth 6 s and Greater Magic Essence 10 s each | the tab is there anyway and shows the gloves: ilvl 18, skill 1, buy 8 s, EV 14 s 25 c (0.75 × 2.5 × 6 s + 0.2 × 1.5 × 10 s), profit +6 s 25 c, note "1.9 Strange Dust · 0.3 Greater Magic Essence · no enchanter yet"; with Amaya at Enchanting 150 the note drops the warning, and an item needing 225 says "needs Enchanting 225 (best 150)"; unprofitable items are left out |
 | A24 | at the AH, a search for Linen Cloth returns min 38 c × 20 (no full scan this visit); the plan buys 20 Linen at ≤ 45 c | the Linen row turns ✓ "38c ≤ 45c"; clicking a row searches for it, and Next search searches the first row still checking; Full scan asks for a ReplicateItems scan unless one was asked for in the last 20 min (it says how long to wait) |
 | A25 | Amaya carries 13 Refreshing Spring Water that Post suggests selling; she right-clicks it and keeps at least 10; later she keeps all; then she picks "Sell normally" | with 10 kept, Post and Today suggest 3 (an AHSync plan post of 13 is trimmed to 3, its net scaled to 3/13) and Inventory says "Keeping 10 for yourself"; with all kept, no row suggests selling or crafting with it and Inventory says "Kept for yourself"; after Sell normally all 13 are suggested again. The reserve is saved per character in `AHProfitDB.reserves` |
+| A26 | Amaya keeps all 7 of her Silk, at least 10 of her 13 Refreshing Spring Water, and 5 Linen she no longer holds; she opens the Reservations tab, clicks the water and picks "Sell normally" | the tab lists every reserve by name: Linen Cloth keeping 5, held ×0, free —; Refreshing Spring Water keeping 10, held ×13, free ×3; Silk Cloth keeping All, held ×7, free —; footer "3 items kept · click a row to change it". A left or right click opens the keep menu; after Sell normally the water is gone and the footer says "2 items kept". With nothing kept the tab says how to keep something |
 | A19 | Amaya carries 20 Linen; the market file (refreshed 3 h ago) says post at 45 c, sell value 42 c; a full in-game scan now shows the cheapest Linen at 40 c, nothing below; med7 49 c; the curve says 80% at 0 ahead this hour | the addon's own row re-prices from the scan: post at 39 c (40 − 1, below med7), chance 80%, deposit 3 c (20 × 3 c vendor × 5% for the 8 h auction), net 0.8 × 20 × 39 × 0.95 + 0.2 × (20 × 3 − 3) = 604.2 c, shown +6 s 4 c; note "post now at the live price · AHSync has no plan for it" |
 | PP1 | post price from the cheapest other auction and the 7-day median: 55 c and 60 c; 70 c and 60 c; none and 60 c; 55 c and none; neither | 54 c (undercut by 1 c); 60 c (the median is lower); 60 c; 54 c; no price. The same in Python and Lua (shared scenario) |
 | A9 | no `PortfolioPlan.lua`; Brugan knows Copper Rod (2 Copper Bar each); the intelligence says Copper Rod posts at 40 s with `P` = 1 and Copper Bar is worth 9 s 50 c to hold; his bags hold 6 bars; the AH has no bars | the addon itself offers CRAFT ×3 Copper Rod, net +57 s (3 × (38 s − 19 s), the desktop's C1), chance 100%, note "from your own mats · AHSync has no plan for it"; with the bars bought on the AH at 10 s instead it says "mats from the AH: 60s" and nets +54 s (C2) |
 
-## 2. Visual tests (UI1–UI11)
+## 2. Visual tests (UI1–UI12)
 
 Layers and tooling: SPEC §8.4.
 
@@ -412,6 +413,7 @@ Layers and tooling: SPEC §8.4.
 | UI9 | window at its minimum size, 560 × 360 | layout checks pass; no overlaps |
 | UI10 | Today with 1 row below the "Min chance" filter and 1 "not selling" item | sorted by net; footer "1 hidden"; Needs a decision section at the bottom |
 | UI11 | Craft tab with one recipe fully covered by owned mats | its each and total show "—" |
+| UI12 | Reservations tab with 3 reserves, in the window at its minimum size | five tabs fit left of the Min chance box (hidden on this tab); columns Item · Keeping · Held · Free; layout checks pass |
 
 ## 3. Views and tooltip (D16–D22, TT1–TT5)
 

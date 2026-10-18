@@ -1,4 +1,4 @@
--- Layout snapshots of the /ahp window (SPEC §8.4 layer 2, UI1-UI4, UI9). Each scenario draws the
+-- Layout snapshots of the /ahp window (SPEC §8.4 layer 2, UI1-UI4, UI9, UI12). Each scenario draws the
 -- window with the stub frames, runs the automatic layout checks and compares the frame tree with
 -- tests/visual/golden/<scenario>.txt. `python tools/visual.py --update` accepts a change, and
 -- `--html` draws it for comparison with docs/mockups/addon.html.
@@ -67,6 +67,23 @@ describe("MainWindow layout", function()
     local ui = Open(12)
     ui.frame:SetSize(560, 360)
     Layout.Golden("UI9_minimum", ui.frame)
+  end)
+
+  it("UI12 the Reservations tab at the minimum size: five tabs fit beside the Min chance box", function()
+    Stubs.Reset()
+    Stubs.ITEM_NAMES[159] = "Refreshing Spring Water"
+    Stubs.world.containers = { [0] = { size = 4, slots = { [1] = { id = 159, count = 13 }, [2] = { id = 4306, count = 7 } } } }
+    UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48) }, NOW - UIWorld.HOUR)
+    UIWorld.Plan({})
+    Stubs.Login()
+    AHProfitDB.reserves["Amaya-Grommash"] = "159,10;2589,5;4306,-1"
+    Stubs.Slash("/ahp")
+    AHProfit.MainWindow.ShowTab("reservations")
+    local ui = AHProfit.MainWindow.Frames()
+    ui.frame:SetSize(560, 360)
+    Layout.Golden("UI12_reservations", ui.frame)
+    assert_eq(ui.chance:IsShown(), false)
+    Stubs.ITEM_NAMES[159] = nil
   end)
 
   it("Week with a flip: day headers, notes under rows and coin money (D37, mockup Week tab)", function()

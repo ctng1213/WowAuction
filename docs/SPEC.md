@@ -803,6 +803,7 @@ Some items you hold are for your own use: food, potions, mats for your own gear.
 - Kept units are never sold, disenchanted, vendored or used as craft mats, in the addon (A25) or the plan (R20). Only what the character holds above the reserve is planned; "keep all" plans none of it.
 - The addon applies a reserve at once, trimming any AHSync action for the item to the free units and scaling its net. AHSync reads `AHProfitDB.reserves` and **follows the file** like professions: when the character's `updated` is at least the stored one, its reserves are replaced with the file's (S14). The next refresh plans with them.
 - Inventory still lists kept items and counts their worth at hold value; the plan cell says "Kept for yourself" or "Keeping 10 for yourself · …" (D40).
+- The addon's **Reservations** tab lists the character's reserves, held or not: item, how many it keeps ("All" or a number), how many it holds and how many are free to sell. Clicking a row (either button) opens the same menu, to change the number or pick Sell normally (A26).
 - SPEC GAP: reserves are set only in game; the dashboard shows them but has no editor yet.
 
 ### 3.5 Outputs
@@ -1004,6 +1005,7 @@ The window's tabs, each shown in the mockup:
 | Craft | product, who knows it, **source** (Owned / AH / Mixed, plus "+ crafted" for chains; filterable), crafts, mat gold each and total ("—" when you own every mat), profit, Chance · Volume, risk, cooldown; a note lists which mats are owned and which are bought |
 | Flip | item, quantity, buy each and total, expected sell price, sell slot, profit, Chance · Volume, risk % |
 | Inventory | what the character you're playing holds: item, where (bags, bank, mail), quantity, worth, Chance · Volume, and its plan as a note under the row (AHSync's, marked "(AHSync)", or the addon's own: "Post now at 45c", "For crafting Copper Rod", "Bound · not planned"), best worth first (A22). Paid joins it with tracking (M6b), and listed auctions with On the AH |
+| Reservations | what the character keeps for itself (§3.4.3): item, Keeping (All or a number), Held, Free; click a row to change or clear it (A26) |
 
 Right-clicking a row opens a menu: Search the AH, Mark as skipped, Blacklist: don't buy or craft, Blacklist: ignore completely, and Keep (start fresh) on a "not selling" item.
 

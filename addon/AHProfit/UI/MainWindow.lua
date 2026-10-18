@@ -26,7 +26,9 @@ MainWindow.ROWS, MainWindow.ROW_HEIGHT = 12, 20
 MainWindow.GAP = 3
 MainWindow.CHANCE_STEPS = { 0, 25, 50, 75 }
 -- The mockup's order. Disenchant is always there: an alt may be the enchanter (A23).
-MainWindow.TABS = { { "today", "Today" }, { "week", "Week" }, { "disenchant", "Disenchant" }, { "inventory", "Inventory" } }
+-- Reservations lists what you keep for yourself, to change or undo it (A26).
+MainWindow.TABS = { { "today", "Today" }, { "week", "Week" }, { "disenchant", "Disenchant" }, { "inventory", "Inventory" },
+                    { "reservations", "Reservations", 84 } }
 MainWindow.MONEY_FIELDS = { each = true, total = true, net = true, worth = true, buy = true, ev = true, profit = true }
 
 -- { header, row field, width (nil = fills), justify }; columns after the filling one anchor from the right.
@@ -42,6 +44,8 @@ MainWindow.COLUMNS = {
                  { "Chance", "chance", 46, "RIGHT" }, { "Volume", "volume", 52, "RIGHT" } },
   inventory = { { "Item", "item", nil, "LEFT" }, { "Where", "where", 44, "LEFT" }, { "Qty", "qty", 28, "RIGHT" },
                 { "Worth", "worth", 88, "RIGHT" }, { "Chance", "chance", 46, "RIGHT" }, { "Volume", "volume", 52, "RIGHT" } },
+  reservations = { { "Item", "item", nil, "LEFT" }, { "Keeping", "keeping", 52, "RIGHT" }, { "Held", "held", 44, "RIGHT" },
+                   { "Free", "free", 44, "RIGHT" } },
 }
 
 -- The mockup's palette (docs/mockups/addon.html :root), as 0-1 RGB.
@@ -205,7 +209,9 @@ local function BuildRow(list, i)
   row.hover:Hide()
   row:EnableMouse(true)
   row:SetScript("OnMouseUp", function(self, button)
-    if button == "RightButton" and self.isRow and self.key then AHProfit.RowMenu.Open(self, self.key, self.itemName) end
+    if self.isRow and self.key and (button == "RightButton" or view.tab == "reservations") then
+      AHProfit.RowMenu.Open(self, self.key, self.itemName)
+    end
   end)
   row:SetScript("OnEnter", function(self) self.hover:SetShown(self.isRow == true) end)
   row:SetScript("OnLeave", function(self) self.hover:Hide() end)
@@ -260,7 +266,7 @@ local function BuildTabs(frame)
   local previous = nil
   for _, tab in ipairs(MainWindow.TABS) do
     local button = Adapter.CreateFrame("Button", "AHProfitWindowTab" .. tab[2], frame, "BackdropTemplate")
-    button:SetSize(72, 22)
+    button:SetSize(tab[3] or 72, 22)
     button:SetNormalFontObject("GameFontNormalSmall")
     button:SetText(tab[2])
     if previous then button:SetPoint("LEFT", previous, "RIGHT", 2, 0) else button:SetPoint("TOPLEFT", frame, "TOPLEFT", 10, -36) end
@@ -537,6 +543,11 @@ local function Lines(nowMs, gold)
     local targets = Options.Disenchant(Market.Disenchantable(), { itemOf = LiveItem, levelsOf = LevelsOf })
     local rows = VM.DisenchantRows(targets, LookOf, best)
     return VM.WithNotes(rows), VM.DisenchantFooter(rows, best), "Nothing on the AH pays to disenchant right now."
+  end
+  if view.tab == "reservations" then
+    local rows = VM.Reservations(Reserves.Get(DB.Get() or {}, charId), Holdings(charId), LookOf)
+    return rows, VM.ReservationsFooter(rows),
+      "Nothing kept for yourself. Right-click an item on any tab and pick Keep."
   end
   if view.tab == "inventory" then
     local actions = CharacterActions(charId, nowMs)

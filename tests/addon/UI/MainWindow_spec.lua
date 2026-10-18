@@ -248,4 +248,34 @@ describe("MainWindow", function()
     Stubs.Slash("/ahp")
     assert_eq(Stubs.chat[#Stubs.chat]:find("the window failed: .*boom") ~= nil, true)
   end)
+
+  it("A26 the Reservations tab lists what you keep; a click changes it", function()
+    Stubs.Reset()
+    Stubs.ITEM_NAMES[159] = "Refreshing Spring Water"
+    Stubs.world.containers = { [0] = { size = 4, slots = { [1] = { id = 159, count = 13 }, [2] = { id = 4306, count = 7 } } } }
+    UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48) }, NOW - UIWorld.HOUR)
+    UIWorld.Plan({})
+    Stubs.Login()
+    Stubs.Slash("/ahp")
+    local MainWindow = AHProfit.MainWindow
+    MainWindow.ShowTab("reservations")
+    local ui = MainWindow.Frames()
+    assert_eq({ ui.empty:IsShown(), ui.empty:GetText() },
+              { true, "Nothing kept for yourself. Right-click an item on any tab and pick Keep." })
+    AHProfitDB.reserves["Amaya-Grommash"] = "159,10;2589,5;4306,-1"
+    MainWindow.Refresh()
+    local seen = {}
+    for i = 1, 3 do
+      local c = ui.rows[i].cells.reservations
+      seen[i] = table.concat({ c.item:GetText(), c.keeping:GetText(), c.held:GetText(), c.free:GetText() }, " ")
+    end
+    assert_eq(seen, { "Linen Cloth 5 ×0 —", "Refreshing Spring Water 10 ×13 ×3", "Silk Cloth All ×7 —" })
+    assert_eq(ui.footer:GetText(), "3 items kept · click a row to change it")
+    ui.rows[2]:GetScript("OnMouseUp")(ui.rows[2], "LeftButton")
+    local menu = AHProfit.RowMenu.Frames()
+    assert_eq({ menu.frame:IsShown(), menu.title:GetText() }, { true, "Refreshing Spring Water" })
+    menu.sell:Click()
+    assert_eq({ AHProfitDB.reserves["Amaya-Grommash"], ui.footer:GetText() }, { "2589,5;4306,-1", "2 items kept · click a row to change it" })
+    Stubs.ITEM_NAMES[159] = nil
+  end)
 end)

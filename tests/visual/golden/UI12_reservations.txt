@@ -1,0 +1,59 @@
+Frame AHProfitWindow 680,360 560x360
+  Texture - 682,362 556x28
+  Texture - 682,390 556x1
+  FontString - 692,370 53x12 "AHProfit"
+  FontString - 755,371 88x10 "Grommash · Horde"
+  Button AHProfitWindowClose 1212,364 24x24
+  Frame AHProfitWindowAge 1110,367 96x18
+    FontString - 1125,371 66x10 "data 1 h old"
+  Button AHProfitWindowTabToday 690,396 72x22 "Today"
+  Button AHProfitWindowTabWeek 764,396 72x22 "Week"
+  Button AHProfitWindowTabDisenchant 838,396 72x22 "Disenchant"
+  Button AHProfitWindowTabInventory 912,396 72x22 "Inventory"
+  Button AHProfitWindowTabReservations 986,396 84x22 "Reservations"
+  Texture - 682,418 556x1
+  Button AHProfitWindowMinChance 1100,396 130x20 "Min chance: 50%   " (hidden)
+  Frame AHProfitWindowHeadertoday 690,420 526x20 (hidden)
+  Frame AHProfitWindowHeaderweek 690,420 526x20 (hidden)
+  Frame AHProfitWindowHeaderdisenchant 690,420 526x20 (hidden)
+  Frame AHProfitWindowHeaderinventory 690,420 526x20 (hidden)
+  Frame AHProfitWindowHeaderreservations 690,420 526x20
+    FontString - 1168,420 44x20 "Free"
+    Button - 1168,420 44x20
+    FontString - 1121,420 44x20 "Held"
+    Button - 1121,420 44x20
+    FontString - 1066,420 52x20 "Keeping"
+    Button - 1066,420 52x20
+    FontString - 693,420 370x20 "Item"
+    Button - 693,420 370x20
+  Frame AHProfitWindowList 690,442 540x240
+    Frame AHProfitWindowRow1 690,442 526x20
+      Texture - 692,442 522x1
+      FontString - 1168,442 44x20 "—"
+      FontString - 1121,442 44x20 "×0"
+      FontString - 1066,442 52x20 "5"
+      FontString - 693,442 370x20 "Linen Cloth"
+    Frame AHProfitWindowRow2 690,462 526x20
+      Texture - 692,462 522x1
+      FontString - 1168,462 44x20 "×3"
+      FontString - 1121,462 44x20 "×13"
+      FontString - 1066,462 52x20 "10"
+      FontString - 693,462 370x20 "Refreshing Spring Water"
+    Frame AHProfitWindowRow3 690,482 526x20
+      Texture - 692,482 522x1
+      FontString - 1168,482 44x20 "—"
+      FontString - 1121,482 44x20 "×7"
+      FontString - 1066,482 52x20 "All"
+      FontString - 693,482 370x20 "Silk Cloth"
+    Frame AHProfitWindowRow4 690,502 526x20 (hidden)
+    Frame AHProfitWindowRow5 690,522 526x20 (hidden)
+    Frame AHProfitWindowRow6 690,542 526x20 (hidden)
+    Frame AHProfitWindowRow7 690,562 526x20 (hidden)
+    Frame AHProfitWindowRow8 690,582 526x20 (hidden)
+    Frame AHProfitWindowRow9 690,602 526x20 (hidden)
+    Frame AHProfitWindowRow10 690,622 526x20 (hidden)
+    Frame AHProfitWindowRow11 690,642 526x20 (hidden)
+    Frame AHProfitWindowRow12 690,662 526x20 (hidden)
+  Texture - 682,691 556x1
+  FontString - 692,700 215x10 "3 items kept · click a row to change it"
+  FontString - 1173,700 55x10 "Budget 0  "

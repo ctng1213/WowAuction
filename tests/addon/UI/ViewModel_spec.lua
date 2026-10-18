@@ -210,6 +210,17 @@ describe("ViewModel", function()
     LOOKS[6585], LOOKS[10940], LOOKS[10939], LOOKS[10978] = nil, nil, nil, nil
   end)
 
+  it("counts held units across places, leaves bound ones out and ties on the key", function()
+    local VM = Boot()
+    local holdings = { { where = "bags", key = 7, qty = 4 }, { where = "bank", key = 7, qty = 3 },
+                       { where = "bags", key = 8, qty = 1, bound = true } }
+    local rows = VM.Reservations({ [7] = 2, [8] = -1, [9] = 1 }, holdings, function() return { name = "Same", quality = 1 } end)
+    local out = {}
+    for i, r in ipairs(rows) do out[i] = r.key .. " " .. r.keeping .. " " .. r.held .. " " .. r.free end
+    assert_eq(out, { "7 2 ×7 ×5", "8 All ×0 —", "9 1 ×0 —" })
+    assert_eq(VM.ReservationsFooter({ rows[1] }), "1 item kept · click a row to change it")
+  end)
+
   it("UI7 the AH panel's states: found at or below the target, gone, or still checking; 3 of 5 checked", function()
     local VM = Boot()
     local levels = { [1] = { { price = 38, units = 20 } }, [2] = { { price = 800, units = 1 } }, [3] = { { price = 60, units = 2 } } }

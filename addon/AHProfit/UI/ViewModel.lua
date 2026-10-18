@@ -38,6 +38,9 @@ ViewModel.COLUMN_HELP = {
   Time = "When to do it, local time",
   Price = "Cheapest listing seen now (your latest scan or search). \"gone\": none at or below Max; \"checking\": not seen yet",
   Max = "The most to pay each: above this the buy no longer pays",
+  Keeping = "Units this character keeps for itself; \"All\" keeps every one. Click the row to change it",
+  Held = "Units held in bags, bank and mail",
+  Free = "Units above what you keep: the only ones suggested for selling or crafting",
 }
 
 --- Round half up, as every display does (SPEC §3.3).
@@ -642,6 +645,40 @@ function ViewModel.InventoryFooter(rows)
   local total = 0
   for _, r in ipairs(rows) do if r.sortWorth > 0 then total = total + r.sortWorth end end
   return #rows .. (#rows == 1 and " item" or " items") .. " · worth " .. ViewModel.Money(total)
+end
+
+-- ------------------------------------------------------------------ Reservations tab (A26)
+
+--- The Reservations tab: every item this character keeps, held or not, by name (A26).
+---@param reserves table    key -> units kept (-1: all), from Reserves.Get
+---@param holdings table[]  { where, key, qty, bound }, every place
+---@param lookOf function   key -> look
+---@return table[]          Rows { key, item, quality, keeping, held, free }
+function ViewModel.Reservations(reserves, holdings, lookOf)
+  local held = {}
+  for _, h in ipairs(holdings) do
+    if not h.bound then held[h.key] = (held[h.key] or 0) + h.qty end
+  end
+  local rows = {}
+  for key, kept in pairs(reserves) do
+    local look, units = lookOf(key), held[key] or 0
+    local free = kept == -1 and 0 or math.max(0, units - kept)
+    rows[#rows + 1] = { key = key, item = look.name, quality = look.quality, kind = "reservation",
+                        keeping = kept == -1 and "All" or tostring(kept), held = "×" .. units,
+                        free = free > 0 and ("×" .. free) or "—", netColor = "muted", riskAmber = false }
+  end
+  table.sort(rows, function(x, y)
+    if x.item ~= y.item then return x.item < y.item end
+    return x.key < y.key
+  end)
+  return rows
+end
+
+--- The footer under Reservations.
+---@param rows table[]  From ViewModel.Reservations
+---@return string       e.g. "3 items kept · click a row to change it"
+function ViewModel.ReservationsFooter(rows)
+  return #rows .. (#rows == 1 and " item" or " items") .. " kept · click a row to change it"
 end
 
 -- ------------------------------------------------------------------ Disenchant tab (A23)
