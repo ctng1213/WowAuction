@@ -220,6 +220,8 @@ describe("ViewModel", function()
     for i, r in ipairs(panel.shopping) do states[i] = r.state .. " " .. r.text end
     assert_eq(states, { "found 38c ≤ 45c", "found 8s ≤ 9s", "gone gone", "checking checking", "checking checking" })
     assert_eq({ panel.checked, panel.footer }, { "3 of 5", "2 found · budget left 31g 24s 40c" })    -- 31g 40s - 7s 60c - 8s
+    assert_eq({ panel.shopping[1].price, panel.shopping[1].max, panel.shopping[3].price, panel.shopping[4].price },
+              { "38c", "45c", "gone", "checking" })
   end)
 
   it("labels a window in local time, with its strength when it isn't established", function()

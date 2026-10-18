@@ -26,8 +26,9 @@ end
 describe("AHPanel", function()
   it("A24 opens docked to the AH with every target still checking, and closes with it", function()
     local ui = OpenAH()
-    assert_eq({ ui.frame:IsShown(), ui.checked:GetText(), ui.shop[1].item:GetText(), ui.shop[1].detail:GetText() },
+    assert_eq({ ui.frame:IsShown(), ui.checked:GetText(), ui.shop[1].item:GetText(), ui.shop[1].colA:GetText() },
               { true, "0 of 3", "Linen Cloth", "checking" })
+    assert_eq(ui.shop[1].colB:GetText(), AHProfit.ViewModel.WithCoins("45c"))
     assert_eq({ ui.post[1].item:GetText(), ui.post[1].qty:GetText(), ui.postCount:GetText() }, { "Linen Cloth", "×20", "1" })
     Stubs.FireEvent("AUCTION_HOUSE_CLOSED")
     assert_eq(ui.frame:IsShown(), false)
@@ -39,8 +40,8 @@ describe("AHPanel", function()
     assert_eq(ah.searches, { "Copper Bar" })
     C_AuctionHouse.GetBrowseResults = function() return { { itemKey = { itemID = 2589 }, minPrice = 38, totalQuantity = 20 } } end
     Stubs.FireEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
-    assert_eq({ ui.shop[1].detail:GetText(), ui.checked:GetText() },
-              { AHProfit.ViewModel.WithCoins("38c ≤ 45c"), "1 of 3" })
+    assert_eq({ ui.shop[1].colA:GetText(), ui.shop[1].colB:GetText(), ui.checked:GetText() },
+              { AHProfit.ViewModel.WithCoins("38c"), AHProfit.ViewModel.WithCoins("45c"), "1 of 3" })
     ui.next:Click()                                   -- Linen is found and Copper Bar was searched: Silk is next
     assert_eq(ah.searches, { "Copper Bar", "Silk Cloth" })
     ui.next:Click()
@@ -54,7 +55,7 @@ describe("AHPanel", function()
     Stubs.FireEvent("AUCTION_HOUSE_SHOW")
     ui.next:Click()
     assert_eq(ah.searches, { "Linen Cloth", "Linen Cloth" })      -- searched again: the queue was rebuilt
-    assert_eq(ui.shop[2].detail:GetText(), "checking")
+    assert_eq(ui.shop[2].colA:GetText(), "checking")
   end)
 
   it("A24 Full scan asks for a ReplicateItems scan at most every 20 minutes", function()
@@ -84,5 +85,19 @@ describe("AHPanel", function()
     local ui = AHProfit.AHPanel.Frames()
     assert_eq({ ui.empty:IsShown(), ui.empty:GetText(), ui.postCount:GetText(), ui.post[1].qty:GetText() },
               { true, "Nothing to buy: no planned buys or disenchant targets", "1", "×20" })   -- the 10% post is filtered
+  end)
+
+  it("UI7 each section has labelled columns, and every header explains itself on hover", function()
+    local ui = OpenAH()
+    local shop, post = {}, {}
+    for i, h in ipairs(ui.shopHeaders) do shop[i] = h:GetText() end
+    for i, h in ipairs(ui.postHeaders) do post[i] = h:GetText() end
+    assert_eq({ shop, post }, { { "Item", "Price", "Max", "Qty" }, { "Item", "Each", "Chance", "Qty" } })
+    for _, h in ipairs(ui.shopHeaders) do
+      h.hit:GetScript("OnEnter")(h.hit)
+      assert_eq(Stubs.tooltip.lines[2] ~= nil, true, h:GetText() .. " has no tooltip text")
+    end
+    assert_eq({ ui.post[1].colA:GetText(), ui.post[1].colB:GetText():match("^%d+%%") },
+              { AHProfit.ViewModel.WithCoins("55c"), "92%" })
   end)
 end)

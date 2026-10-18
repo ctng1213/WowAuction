@@ -19,6 +19,11 @@ local AHPanel = {}
 AHProfit.AHPanel = AHPanel
 
 AHPanel.WIDTH, AHPanel.ROW_HEIGHT, AHPanel.SHOP_ROWS, AHPanel.POST_ROWS = 260, 20, 10, 5
+-- Columns: { header, x (from the row's left), width, justify }; the same for rows and headers.
+AHPanel.COLUMNS = {
+  shopping = { { "Item", 18, 88, "LEFT" }, { "Price", 110, 48, "RIGHT" }, { "Max", 162, 44, "RIGHT" }, { "Qty", 214, 30, "RIGHT" } },
+  post = { { "Item", 18, 88, "LEFT" }, { "Each", 110, 48, "RIGHT" }, { "Chance", 162, 44, "RIGHT" }, { "Qty", 214, 30, "RIGHT" } },
+}
 AHPanel.ICONS = { found = "Interface\\RaidFrame\\ReadyCheck-Ready", gone = "Interface\\RaidFrame\\ReadyCheck-NotReady",
                   checking = "Interface\\RaidFrame\\ReadyCheck-Waiting" }
 local FLAT = "Interface\\Buttons\\WHITE8X8"
@@ -90,20 +95,16 @@ local function BuildRow(parent, i, y)
   row.icon = row:CreateTexture(nil, "ARTWORK")
   row.icon:SetSize(14, 14)
   row.icon:SetPoint("LEFT", row, "LEFT", 0, 0)
-  row.item = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  row.item:SetPoint("LEFT", row, "LEFT", 18, 0)
-  row.item:SetWidth(96)
-  row.item:SetWordWrap(false)
-  row.item:SetJustifyH("LEFT")
-  row.detail = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  row.detail:SetPoint("LEFT", row, "LEFT", 118, 0)
-  row.detail:SetWidth(90)
-  row.detail:SetWordWrap(false)
-  row.detail:SetJustifyH("LEFT")
-  row.qty = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  row.qty:SetPoint("RIGHT", row, "RIGHT", 0, 0)
-  row.qty:SetWidth(30)
-  row.qty:SetJustifyH("RIGHT")
+  row.cells = {}
+  for i, c in ipairs(AHPanel.COLUMNS.shopping) do
+    local cell = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    cell:SetPoint("LEFT", row, "LEFT", c[2], 0)
+    cell:SetWidth(c[3])
+    cell:SetWordWrap(false)
+    cell:SetJustifyH(c[4])
+    row.cells[i] = cell
+  end
+  row.item, row.colA, row.colB, row.qty = row.cells[1], row.cells[2], row.cells[3], row.cells[4]
   row:SetScript("OnClick", function(self) if self.itemName then AHPanel.Search(self.key, self.itemName) end end)
   return row
 end
@@ -120,6 +121,28 @@ local function Heading(parent, y, text)
   local count = parent:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   count:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -10, -y)
   return label, count
+end
+
+--- A section's column headers, each with a tooltip on hover (the same texts as the window's).
+---@param parent table
+---@param y number         Pixels down from the panel's top
+---@param columns table    AHPanel.COLUMNS.shopping or .post
+---@return table           The header labels
+local function ColumnHeaders(parent, y, columns)
+  local labels = {}
+  for i, c in ipairs(columns) do
+    local label = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    label:SetPoint("TOPLEFT", parent, "TOPLEFT", 8 + c[2], -y)
+    label:SetSize(c[3], AHPanel.ROW_HEIGHT)
+    label:SetJustifyH(c[4])
+    label:SetText(c[1])
+    label.hit = Adapter.CreateFrame("Button", nil, parent)
+    label.hit:SetAllPoints(label)
+    label.hit:SetScript("OnEnter", function(self) Adapter.ShowTooltip(self, c[1], VM.COLUMN_HELP[c[1]]) end)
+    label.hit:SetScript("OnLeave", function() Adapter.HideTooltip() end)
+    labels[i] = label
+  end
+  return labels
 end
 
 --- A red panel button.
@@ -144,8 +167,10 @@ end
 ---@param anchor table  The AH window
 local function Build(anchor)
   local frame = Adapter.CreateFrame("Frame", "AHProfitPanel", anchor, "BackdropTemplate")
-  local shopTop, postTop = 34, 34 + 20 + AHPanel.SHOP_ROWS * AHPanel.ROW_HEIGHT + 6
-  local height = postTop + 20 + AHPanel.POST_ROWS * AHPanel.ROW_HEIGHT + 80   -- buttons, status line, footer
+  -- Each section: its heading (20 px), its column headers (20 px), then its rows.
+  local shopTop = 34
+  local postTop = shopTop + 40 + AHPanel.SHOP_ROWS * AHPanel.ROW_HEIGHT + 6
+  local height = postTop + 40 + AHPanel.POST_ROWS * AHPanel.ROW_HEIGHT + 80   -- buttons, status line, footer
   frame:SetSize(AHPanel.WIDTH, height)
   frame:SetPoint("TOPLEFT", anchor, "TOPRIGHT", 2, 0)
   frame:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 2 })
@@ -157,10 +182,12 @@ local function Build(anchor)
   ui.title:SetText("AHProfit at the AH")
   ui.title:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
   ui.shopLabel, ui.checked = Heading(frame, shopTop, "Shopping")
-  for i = 1, AHPanel.SHOP_ROWS do ui.shop[i] = BuildRow(frame, i, shopTop + 20 + (i - 1) * AHPanel.ROW_HEIGHT) end
+  ui.shopHeaders = ColumnHeaders(frame, shopTop + 18, AHPanel.COLUMNS.shopping)
+  for i = 1, AHPanel.SHOP_ROWS do ui.shop[i] = BuildRow(frame, i, shopTop + 40 + (i - 1) * AHPanel.ROW_HEIGHT) end
   ui.postLabel, ui.postCount = Heading(frame, postTop, "Post")
+  ui.postHeaders = ColumnHeaders(frame, postTop + 18, AHPanel.COLUMNS.post)
   for i = 1, AHPanel.POST_ROWS do
-    ui.post[i] = BuildRow(frame, AHPanel.SHOP_ROWS + i, postTop + 20 + (i - 1) * AHPanel.ROW_HEIGHT)
+    ui.post[i] = BuildRow(frame, AHPanel.SHOP_ROWS + i, postTop + 40 + (i - 1) * AHPanel.ROW_HEIGHT)
   end
   ui.next = Button(frame, "AHProfitPanelNext", "Next search", function() AHPanel.NextSearch() end)
   ui.next:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 10, 34)
@@ -172,7 +199,7 @@ local function Build(anchor)
   ui.status = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   ui.status:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 10, 62)
   ui.empty = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  ui.empty:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -(shopTop + 24))
+  ui.empty:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -(shopTop + 44))
 end
 
 --- Fill a shopping row.
@@ -184,9 +211,10 @@ local function FillShop(row, line)
   row.key, row.itemName = line.key, line.item
   row.icon:SetTexture(AHPanel.ICONS[line.state])
   row.item:SetText(line.item)
-  row.detail:SetText(VM.WithCoins(line.text))
-  row.detail:SetTextColor(line.state == "found" and 0.24 or MUTED[1], line.state == "found" and 0.86 or MUTED[2],
-                          line.state == "found" and 0.31 or MUTED[3])
+  row.colA:SetText(VM.WithCoins(line.price))
+  row.colA:SetTextColor(line.state == "found" and 0.24 or MUTED[1], line.state == "found" and 0.86 or MUTED[2],
+                        line.state == "found" and 0.31 or MUTED[3])
+  row.colB:SetText(VM.WithCoins(line.max))
   row.qty:SetText(line.qty)
 end
 
@@ -199,8 +227,9 @@ local function FillPost(row, line)
   row.key, row.itemName = line.key, line.item
   row.icon:SetTexture(nil)
   row.item:SetText(line.item)
-  row.detail:SetText(VM.WithCoins(line.each) .. "  " .. line.chance)
-  row.detail:SetTextColor(1, 1, 1)
+  row.colA:SetText(VM.WithCoins(line.each))
+  row.colA:SetTextColor(1, 1, 1)
+  row.colB:SetText(line.chance)
   row.qty:SetText(line.qty)
 end
 

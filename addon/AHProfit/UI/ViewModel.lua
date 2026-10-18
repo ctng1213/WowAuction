@@ -36,6 +36,8 @@ ViewModel.COLUMN_HELP = {
   Where = "Bags, bank or mail",
   Worth = "What it is expected to bring under its plan, else its sell value",
   Time = "When to do it, local time",
+  Price = "Cheapest listing seen now (your latest scan or search). \"gone\": none at or below Max; \"checking\": not seen yet",
+  Max = "The most to pay each: above this the buy no longer pays",
 }
 
 --- Round half up, as every display does (SPEC §3.3).
@@ -687,9 +689,9 @@ function ViewModel.AHPanel(targets, posts, levelsOf, lookOf, gold)
   local shopping, checked, found, spend = {}, 0, 0, 0
   for _, t in ipairs(targets) do
     local look, levels = lookOf(t.key), levelsOf(t.key)
-    local row = { key = t.key, item = look.name, quality = look.quality, qty = "×" .. t.qty }
+    local row = { key = t.key, item = look.name, quality = look.quality, qty = "×" .. t.qty, max = ViewModel.Money(t.price) }
     if not levels then
-      row.state, row.text = "checking", "checking"
+      row.state, row.text, row.price = "checking", "checking", "checking"
     else
       checked = checked + 1
       local units = 0
@@ -697,8 +699,9 @@ function ViewModel.AHPanel(targets, posts, levelsOf, lookOf, gold)
       if units >= t.qty then
         found, spend = found + 1, spend + levels[1].price * t.qty
         row.state, row.text = "found", ViewModel.Money(levels[1].price) .. " ≤ " .. ViewModel.Money(t.price)
+        row.price = ViewModel.Money(levels[1].price)
       else
-        row.state, row.text = "gone", "gone"
+        row.state, row.text, row.price = "gone", "gone", "gone"
       end
     end
     shopping[#shopping + 1] = row
