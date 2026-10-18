@@ -35,7 +35,7 @@ describe("AHPanel layout", function()
     local ui = AHProfit.AHPanel.Frames()
     AHProfit.AHPanel.FullScan()                          -- the status line has its own row: it can't overlap the footer
     local snapshot = Layout.Golden("UI7_ah_panel", ui.frame)
-    assert_eq(snapshot:find("AHProfitPanel 902,100 260x", 1, true) ~= nil, true)        -- right of the 800 px AH at x 100
+    assert_eq(snapshot:find("AHProfitPanel 902,100 300x", 1, true) ~= nil, true)        -- right of the 800 px AH at x 100
     assert_eq(ui.checked:GetText(), "3 of 5")
     Stubs.ITEM_NAMES[6586] = nil
   end)

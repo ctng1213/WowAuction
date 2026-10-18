@@ -410,7 +410,7 @@ Layers and tooling: SPEC §8.4.
 | UI4 | no `MarketIntelligence.lua` | empty state "Run AHSync, then /reload"; no rows |
 | UI5 | data 30 h old | age badge amber |
 | UI6 | an item flagged "not selling" | NOT SELLING label, record line, Blacklist and Keep buttons inside the row |
-| UI7 | AH panel: 5 targets, 2 found, 1 gone, 2 checking | ✓ / ✗ / … states (ready-check icons: WoW's fonts have no ✓ ✗ glyphs); "3 of 5"; labelled columns, each header with a tooltip: Shopping "Item · Price · Max · Qty" (a found row "38c" under Price, "45c" under Max), Post "Item · Each · Chance · Qty"; panel docked to the AH frame's right edge |
+| UI7 | AH panel: 5 targets, 2 found, 1 gone, 2 checking | ✓ / ✗ / … states (ready-check icons: WoW's fonts have no ✓ ✗ glyphs); "3 of 5"; labelled columns, each header with a tooltip: Shopping "Item · Price · Max · Qty" (a found row "38c" under Price, "45c" under Max), Post "Item · List price · Qty · Est. profit · Chance" (a post of 5 Copper Rod at 41 s with net +63 s 6 c shows "41s", "×5", "+63s 6c", "58%"); panel 300 px wide, docked to the AH frame's right edge |
 | UI8 | tooltip for a disenchantable item | header + 6 label/value lines in the spec order; deltas vs current 8s: historical 11s → +38%, disenchant 14s 25c → +78%, best 12s 30c → +54%, none wider than 320 px; without an enchanter, the Disenchant value line is left out |
 | UI9 | window at its minimum size, 560 × 360 | layout checks pass; no overlaps |
 | UI10 | Today with 1 row below the "Min chance" filter and 1 "not selling" item | sorted by net; footer "1 hidden"; Needs a decision section at the bottom |

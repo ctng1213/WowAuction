@@ -96,12 +96,16 @@ describe("AHPanel", function()
     local shop, post = {}, {}
     for i, h in ipairs(ui.shopHeaders) do shop[i] = h:GetText() end
     for i, h in ipairs(ui.postHeaders) do post[i] = h:GetText() end
-    assert_eq({ shop, post }, { { "Item", "Price", "Max", "Qty" }, { "Item", "Each", "Chance", "Qty" } })
-    for _, h in ipairs(ui.shopHeaders) do
-      h.hit:GetScript("OnEnter")(h.hit)
-      assert_eq(Stubs.tooltip.lines[2] ~= nil, true, h:GetText() .. " has no tooltip text")
+    assert_eq({ shop, post }, { { "Item", "Price", "Max", "Qty" }, { "Item", "List price", "Qty", "Est. profit", "Chance" } })
+    for _, headers in ipairs({ ui.shopHeaders, ui.postHeaders }) do
+      for _, h in ipairs(headers) do
+        h.hit:GetScript("OnEnter")(h.hit)
+        assert_eq(Stubs.tooltip.lines[2] ~= nil, true, h:GetText() .. " has no tooltip text")
+      end
     end
-    assert_eq({ ui.post[1].colA:GetText(), ui.post[1].colB:GetText():match("^%d+%%") },
-              { AHProfit.ViewModel.WithCoins("55c"), "92%" })
+    -- 20 Linen listed at 55c each; the post's own expected profit is 1000c.
+    local row = ui.post[1]
+    assert_eq({ row.item:GetText(), row.price:GetText(), row.qty:GetText(), row.profit:GetText(), row.chance:GetText():match("^%d+%%") },
+              { "Linen Cloth", AHProfit.ViewModel.WithCoins("55c"), "×20", AHProfit.ViewModel.WithCoins("+10s"), "92%" })
   end)
 end)

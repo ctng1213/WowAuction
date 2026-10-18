@@ -38,6 +38,9 @@ ViewModel.COLUMN_HELP = {
   Time = "When to do it, local time",
   Price = "Cheapest listing seen now (your latest scan or search). \"gone\": none at or below Max; \"checking\": not seen yet",
   Max = "The most to pay each: above this the buy no longer pays",
+  ["List price"] = "The price to list at, each",
+  ["Est. profit"] = "Expected profit of posting all of them: price × chance it sells, after the AH cut and deposit, "
+                    .. "less what the units are worth otherwise",
   Keeping = "Units this character keeps for itself; \"All\" keeps every one. Click the row to change it",
   Held = "Units held in bags, bank and mail",
   Free = "Units above what you keep: the only ones suggested for selling or crafting",
@@ -287,6 +290,8 @@ local function Row(a, counted, chance, look, totalGold, offsetMs)
     quality = look.quality, qty = "×" .. a.qty, each = ViewModel.Money(a.price),
     total = a.price and ViewModel.Money(a.price * a.qty) or "—",
     net = net == nil and "—" or ViewModel.SignedMoney(net),
+    -- The action's own expected profit, even when a chain counts it elsewhere: the AH panel's Est. profit.
+    postNet = ViewModel.SignedMoney(a.net or 0), postNetColor = (a.net or 0) < 0 and "neg" or "pos",
     netColor = (net or 0) > 0 and "pos" or ((net or 0) < 0 and "neg" or "muted"),
     chance = chance and (chance .. "%") or "—", dot = chance and ViewModel.Level(look.conf) or nil,
     confidence = chance and look.conf or nil,

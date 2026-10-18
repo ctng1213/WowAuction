@@ -18,12 +18,16 @@ local VM = AHProfit.ViewModel
 local AHPanel = {}
 AHProfit.AHPanel = AHPanel
 
-AHPanel.WIDTH, AHPanel.ROW_HEIGHT, AHPanel.SHOP_ROWS, AHPanel.POST_ROWS = 260, 20, 10, 5
--- Columns: { header, x (from the row's left), width, justify }; the same for rows and headers.
+AHPanel.WIDTH, AHPanel.ROW_HEIGHT, AHPanel.SHOP_ROWS, AHPanel.POST_ROWS = 300, 20, 10, 5
+-- Columns: { header, x (from the row's left), width, justify, row field }; the same for rows and headers.
+-- Shopping rows start after the state icon; post rows have none.
 AHPanel.COLUMNS = {
-  shopping = { { "Item", 18, 88, "LEFT" }, { "Price", 110, 48, "RIGHT" }, { "Max", 162, 44, "RIGHT" }, { "Qty", 214, 30, "RIGHT" } },
-  post = { { "Item", 18, 88, "LEFT" }, { "Each", 110, 48, "RIGHT" }, { "Chance", 162, 44, "RIGHT" }, { "Qty", 214, 30, "RIGHT" } },
+  shopping = { { "Item", 18, 128, "LEFT" }, { "Price", 150, 48, "RIGHT" }, { "Max", 202, 44, "RIGHT" },
+               { "Qty", 254, 30, "RIGHT" } },
+  post = { { "Item", 0, 88, "LEFT", "item" }, { "List price", 90, 58, "RIGHT", "each" }, { "Qty", 150, 28, "RIGHT", "qty" },
+           { "Est. profit", 180, 66, "RIGHT", "postNet" }, { "Chance", 248, 36, "RIGHT", "chance" } },
 }
+local MONEY = { each = true, postNet = true }
 AHPanel.ICONS = { found = "Interface\\RaidFrame\\ReadyCheck-Ready", gone = "Interface\\RaidFrame\\ReadyCheck-NotReady",
                   checking = "Interface\\RaidFrame\\ReadyCheck-Waiting" }
 local FLAT = "Interface\\Buttons\\WHITE8X8"
@@ -86,8 +90,9 @@ end
 ---@param parent table
 ---@param i number
 ---@param y number  Pixels down from the panel's top
+---@param columns table  AHPanel.COLUMNS.shopping or .post
 ---@return table
-local function BuildRow(parent, i, y)
+local function BuildRow(parent, i, y, columns)
   local row = Adapter.CreateFrame("Button", "AHProfitPanelRow" .. i, parent)
   row:SetHeight(AHPanel.ROW_HEIGHT)
   row:SetPoint("TOPLEFT", parent, "TOPLEFT", 8, -y)
@@ -96,7 +101,7 @@ local function BuildRow(parent, i, y)
   row.icon:SetSize(14, 14)
   row.icon:SetPoint("LEFT", row, "LEFT", 0, 0)
   row.cells = {}
-  for i, c in ipairs(AHPanel.COLUMNS.shopping) do
+  for i, c in ipairs(columns) do
     local cell = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     cell:SetPoint("LEFT", row, "LEFT", c[2], 0)
     cell:SetWidth(c[3])
@@ -104,7 +109,11 @@ local function BuildRow(parent, i, y)
     cell:SetJustifyH(c[4])
     row.cells[i] = cell
   end
-  row.item, row.colA, row.colB, row.qty = row.cells[1], row.cells[2], row.cells[3], row.cells[4]
+  if columns == AHPanel.COLUMNS.post then
+    row.item, row.price, row.qty, row.profit, row.chance = unpack(row.cells)
+  else
+    row.item, row.colA, row.colB, row.qty = unpack(row.cells)
+  end
   row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   row:SetScript("OnClick", function(self, button)
     if not self.itemName then return end
@@ -196,11 +205,11 @@ local function Build(anchor)
   ui.title:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
   ui.shopLabel, ui.checked = Heading(frame, shopTop, "Shopping")
   ui.shopHeaders = ColumnHeaders(frame, shopTop + 18, AHPanel.COLUMNS.shopping)
-  for i = 1, AHPanel.SHOP_ROWS do ui.shop[i] = BuildRow(frame, i, shopTop + 40 + (i - 1) * AHPanel.ROW_HEIGHT) end
+  for i = 1, AHPanel.SHOP_ROWS do ui.shop[i] = BuildRow(frame, i, shopTop + 40 + (i - 1) * AHPanel.ROW_HEIGHT, AHPanel.COLUMNS.shopping) end
   ui.postLabel, ui.postCount = Heading(frame, postTop, "Post")
   ui.postHeaders = ColumnHeaders(frame, postTop + 18, AHPanel.COLUMNS.post)
   for i = 1, AHPanel.POST_ROWS do
-    ui.post[i] = BuildRow(frame, AHPanel.SHOP_ROWS + i, postTop + 40 + (i - 1) * AHPanel.ROW_HEIGHT)
+    ui.post[i] = BuildRow(frame, AHPanel.SHOP_ROWS + i, postTop + 40 + (i - 1) * AHPanel.ROW_HEIGHT, AHPanel.COLUMNS.post)
   end
   ui.next = Button(frame, "AHProfitPanelNext", "Next search", function() AHPanel.NextSearch() end)
   ui.next:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 10, 34)
@@ -245,11 +254,12 @@ local function FillPost(row, line)
   if not line then return end
   row.key, row.itemName = line.key, line.item
   row.icon:SetTexture(nil)
-  row.item:SetText(line.item)
-  row.colA:SetText(VM.WithCoins(line.each))
-  row.colA:SetTextColor(1, 1, 1)
-  row.colB:SetText(line.chance)
-  row.qty:SetText(line.qty)
+  for i, c in ipairs(AHPanel.COLUMNS.post) do
+    local text = line[c[5]]
+    row.cells[i]:SetText(MONEY[c[5]] and VM.WithCoins(text) or text)
+  end
+  row.profit:SetTextColor(line.postNetColor == "neg" and 1 or 0.24, line.postNetColor == "neg" and 0.29 or 0.86,
+                            line.postNetColor == "neg" and 0.24 or 0.31)
 end
 
 --- Redraw the panel from the live data.
