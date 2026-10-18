@@ -152,13 +152,17 @@ local QUALITY_BY_COLOR = { ["9d9d9d"] = 0, ffffff = 1, ["1eff00"] = 2, ["0070dd"
                            e6cc80 = 6, ["00ccff"] = 7 }
 
 --- An item's name and quality from its link, with no item-cache lookup.
----@param link string|nil  "|cff9d9d9d|Hitem:...|h[Broken Fang]|h|r"
+--- Forever writes the quality as a tag, "|cnIQ2:" (verified 2026-10-18); older clients use a
+--- colour, "|cff1eff00", which is read as a fallback.
+---@param link string|nil  "|cnIQ2:|Hitem:...|h[Scouting Gloves]|h|r" or "|cff9d9d9d|Hitem:...|h[Broken Fang]|h|r"
 ---@return string|nil      The name; nil when the link has none
----@return number|nil      Quality 0-7 from the link's colour; nil when the colour is unknown
+---@return number|nil      Quality 0-7; nil when the link carries neither form
 function Adapter.ItemNameFromLink(link)
   if type(link) ~= "string" then return nil, nil end
   local name = link:match("|h%[(.-)%]|h")
   if not name or name == "" then return nil, nil end
+  local tag = link:match("^|cnIQ(%d):")
+  if tag then return name, tonumber(tag) end
   local color = link:match("^|c%x%x(%x%x%x%x%x%x)")
   return name, color and QUALITY_BY_COLOR[color:lower()]
 end

@@ -25,6 +25,9 @@ describe("Inventory", function()
     assert_eq({ AHProfit.Adapter.ItemNameFromLink("|cffffffff|Hitem:2840::::::::60::::|h[]|h|r") }, {})
     assert_eq({ AHProfit.Adapter.ItemNameFromLink("|cff123456|Hitem:2840|h[Copper Bar]|h|r") }, { "Copper Bar" })
     assert_eq({ AHProfit.Adapter.ItemNameFromLink(nil) }, {})
+    -- Forever's form: the quality as a tag, not a colour.
+    assert_eq({ AHProfit.Adapter.ItemNameFromLink("|cnIQ2:|Hitem:14117::::::28644::14::::|h[Aboriginal Gloves of Frost Protection]|h|r") },
+              { "Aboriginal Gloves of Frost Protection", 2 })
   end)
 
   it("login snapshots the bags; bank and mail stay nil until visited", function()
