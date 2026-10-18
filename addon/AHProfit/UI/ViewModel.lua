@@ -28,7 +28,6 @@ ViewModel.COLUMN_HELP = {
            .. "amber 45% or more, grey below",
   Volume = "Units the market sells per day (last 7 days)",
   Risk = "Gold this action spends ÷ all your gold. Amber above 25%",
-  Who = "Which of your characters does it",
 }
 
 --- Round half up, as every display does (SPEC §3.3).

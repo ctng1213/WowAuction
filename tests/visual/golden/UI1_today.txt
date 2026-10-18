@@ -13,181 +13,167 @@ Frame AHProfitWindow 640,320 640x440
   Frame AHProfitWindowHeadertoday 650,380 606x20
     FontString - 654,380 52x20
     Button - 654,380 52x20
-    FontString - 1192,380 60x20 "Who"
-    Button - 1192,380 60x20
-    FontString - 1155,380 34x20 "Risk"
-    Button - 1155,380 34x20
-    FontString - 1110,380 42x20 "Volume"
-    Button - 1110,380 42x20
-    FontString - 1061,380 46x20 "Chance"
-    Button - 1061,380 46x20
-    FontString - 988,380 70x20 "Net"
-    Button - 988,380 70x20
-    FontString - 929,380 56x20 "Total"
-    Button - 929,380 56x20
-    FontString - 874,380 52x20 "Each"
-    Button - 874,380 52x20
-    FontString - 843,380 28x20 "Qty"
-    Button - 843,380 28x20
-    FontString - 709,380 131x20 "Item"
-    Button - 709,380 131x20
+    FontString - 1218,380 34x20 "Risk"
+    Button - 1218,380 34x20
+    FontString - 1173,380 42x20 "Volume"
+    Button - 1173,380 42x20
+    FontString - 1124,380 46x20 "Chance"
+    Button - 1124,380 46x20
+    FontString - 1051,380 70x20 "Net"
+    Button - 1051,380 70x20
+    FontString - 992,380 56x20 "Total"
+    Button - 992,380 56x20
+    FontString - 937,380 52x20 "Each"
+    Button - 937,380 52x20
+    FontString - 906,380 28x20 "Qty"
+    Button - 906,380 28x20
+    FontString - 709,380 194x20 "Item"
+    Button - 709,380 194x20
   Frame AHProfitWindowHeaderweek 650,380 606x20 (hidden)
   Frame AHProfitWindowList 650,402 620x240
     Frame AHProfitWindowRow1 650,402 606x20
       Texture - 652,402 602x1
       FontString - 654,402 48x20 "VENDOR"
-      FontString - 1192,402 60x20 "Amaya"
-      FontString - 1155,402 34x20 "0.0%"
-      FontString - 1110,402 42x20 "—"
-      FontString - 1061,402 46x20 "—"
-      FontString - 988,402 70x20 "+16   50  "
-      FontString - 929,402 56x20 "48   40  "
-      FontString - 874,402 52x20 "4   40  "
-      FontString - 843,402 28x20 "×11"
-      FontString - 705,402 135x20 "Copper Bar"
+      FontString - 1218,402 34x20 "0.0%"
+      FontString - 1173,402 42x20 "—"
+      FontString - 1124,402 46x20 "—"
+      FontString - 1051,402 70x20 "+16   50  "
+      FontString - 992,402 56x20 "48   40  "
+      FontString - 937,402 52x20 "4   40  "
+      FontString - 906,402 28x20 "×11"
+      FontString - 705,402 198x20 "Copper Bar"
       Texture - 654,406 48x12
     Frame AHProfitWindowRow2 650,422 606x20
       Texture - 652,422 602x1
       FontString - 654,422 48x20 "DE"
-      FontString - 1192,422 60x20 "Brugan"
-      FontString - 1155,422 34x20 "0.0%"
-      FontString - 1110,422 42x20 "—"
-      FontString - 1061,422 46x20 "—"
-      FontString - 988,422 70x20 "+15  "
-      FontString - 929,422 56x20 "40  "
-      FontString - 874,422 52x20 "4  "
-      FontString - 843,422 28x20 "×10"
-      FontString - 705,422 135x20 "Linen Cloth"
+      FontString - 1218,422 34x20 "0.0%"
+      FontString - 1173,422 42x20 "—"
+      FontString - 1124,422 46x20 "—"
+      FontString - 1051,422 70x20 "+15  "
+      FontString - 992,422 56x20 "40  "
+      FontString - 937,422 52x20 "4  "
+      FontString - 906,422 28x20 "×10"
+      FontString - 705,422 198x20 "Linen Cloth"
       Texture - 654,426 48x12
     Frame AHProfitWindowRow3 650,442 606x20
       Texture - 652,442 602x1
       FontString - 654,442 48x20 "CRAFT"
-      FontString - 1192,442 60x20 "Amaya"
-      FontString - 1155,442 34x20 "0.0%"
-      FontString - 1110,442 42x20 "—"
-      FontString - 1061,442 46x20 "—"
-      FontString - 988,442 70x20 "+13   50  "
-      FontString - 929,442 56x20 "32   40  "
-      FontString - 874,442 52x20 "3   60  "
-      FontString - 843,442 28x20 "×9"
-      FontString - 705,442 135x20 "Scouting Gloves of the …"
+      FontString - 1218,442 34x20 "0.0%"
+      FontString - 1173,442 42x20 "—"
+      FontString - 1124,442 46x20 "—"
+      FontString - 1051,442 70x20 "+13   50  "
+      FontString - 992,442 56x20 "32   40  "
+      FontString - 937,442 52x20 "3   60  "
+      FontString - 906,442 28x20 "×9"
+      FontString - 705,442 198x20 "Scouting Gloves of the Monkey"
       Texture - 654,446 48x12
     Frame AHProfitWindowRow4 650,462 606x20
       Texture - 652,462 602x1
       FontString - 654,462 48x20 "BUY"
-      FontString - 1192,462 60x20 "Amaya"
-      FontString - 1155,462 34x20 "1.9%"
-      FontString - 1110,462 42x20 "—"
-      FontString - 1061,462 46x20 "—"
-      FontString - 988,462 70x20 "+10   50  "
-      FontString - 929,462 56x20 "19   60  "
-      FontString - 874,462 52x20 "2   80  "
-      FontString - 843,462 28x20 "×7"
-      FontString - 705,462 135x20 "Linen Cloth"
+      FontString - 1218,462 34x20 "1.9%"
+      FontString - 1173,462 42x20 "—"
+      FontString - 1124,462 46x20 "—"
+      FontString - 1051,462 70x20 "+10   50  "
+      FontString - 992,462 56x20 "19   60  "
+      FontString - 937,462 52x20 "2   80  "
+      FontString - 906,462 28x20 "×7"
+      FontString - 705,462 198x20 "Linen Cloth"
       Texture - 654,466 48x12
     Frame AHProfitWindowRow5 650,482 606x20
       Texture - 652,482 602x1
       FontString - 654,482 48x20 "POST"
-      FontString - 1192,482 60x20 "Brugan"
-      FontString - 1155,482 34x20 "0.0%"
-      FontString - 1110,482 42x20 "3/day"
-      FontString - 1061,482 46x20 "66%   "
-      FontString - 988,482 70x20 "+9  "
-      FontString - 929,482 56x20 "14   40  "
-      FontString - 874,482 52x20 "2   40  "
-      FontString - 843,482 28x20 "×6"
-      FontString - 705,482 135x20 "Scouting Gloves of the …"
+      FontString - 1218,482 34x20 "0.0%"
+      FontString - 1173,482 42x20 "3/day"
+      FontString - 1124,482 46x20 "66%   "
+      FontString - 1051,482 70x20 "+9  "
+      FontString - 992,482 56x20 "14   40  "
+      FontString - 937,482 52x20 "2   40  "
+      FontString - 906,482 28x20 "×6"
+      FontString - 705,482 198x20 "Scouting Gloves of the Monkey"
       Texture - 654,486 48x12
     Frame AHProfitWindowRow6 650,502 606x20
       Texture - 652,502 602x1
       FontString - 654,502 48x20 "VENDOR"
-      FontString - 1192,502 60x20 "Amaya"
-      FontString - 1155,502 34x20 "0.0%"
-      FontString - 1110,502 42x20 "—"
-      FontString - 1061,502 46x20 "—"
-      FontString - 988,502 70x20 "+7   50  "
-      FontString - 929,502 56x20 "10  "
-      FontString - 874,502 52x20 "2  "
-      FontString - 843,502 28x20 "×5"
-      FontString - 705,502 135x20 "Copper Bar"
+      FontString - 1218,502 34x20 "0.0%"
+      FontString - 1173,502 42x20 "—"
+      FontString - 1124,502 46x20 "—"
+      FontString - 1051,502 70x20 "+7   50  "
+      FontString - 992,502 56x20 "10  "
+      FontString - 937,502 52x20 "2  "
+      FontString - 906,502 28x20 "×5"
+      FontString - 705,502 198x20 "Copper Bar"
       Texture - 654,506 48x12
     Frame AHProfitWindowRow7 650,522 606x20
       Texture - 652,522 602x1
       FontString - 654,522 48x20 "CRAFT"
-      FontString - 1192,522 60x20 "Amaya"
-      FontString - 1155,522 34x20 "0.0%"
-      FontString - 1110,522 42x20 "—"
-      FontString - 1061,522 46x20 "—"
-      FontString - 988,522 70x20 "+4   50  "
-      FontString - 929,522 56x20 "3   60  "
-      FontString - 874,522 52x20 "1   20  "
-      FontString - 843,522 28x20 "×3"
-      FontString - 705,522 135x20 "Scouting Gloves of the …"
+      FontString - 1218,522 34x20 "0.0%"
+      FontString - 1173,522 42x20 "—"
+      FontString - 1124,522 46x20 "—"
+      FontString - 1051,522 70x20 "+4   50  "
+      FontString - 992,522 56x20 "3   60  "
+      FontString - 937,522 52x20 "1   20  "
+      FontString - 906,522 28x20 "×3"
+      FontString - 705,522 198x20 "Scouting Gloves of the Monkey"
       Texture - 654,526 48x12
     Frame AHProfitWindowRow8 650,542 606x20
       Texture - 652,542 602x1
       FontString - 654,542 48x20 "POST"
-      FontString - 1192,542 60x20 "Brugan"
-      FontString - 1155,542 34x20 "0.0%"
-      FontString - 1110,542 42x20 "40/day"
-      FontString - 1061,542 46x20 "62%   "
-      FontString - 988,542 70x20 "+3  "
-      FontString - 929,542 56x20 "1   60  "
-      FontString - 874,542 52x20 "80  "
-      FontString - 843,542 28x20 "×2"
-      FontString - 705,542 135x20 "Copper Bar"
+      FontString - 1218,542 34x20 "0.0%"
+      FontString - 1173,542 42x20 "40/day"
+      FontString - 1124,542 46x20 "62%   "
+      FontString - 1051,542 70x20 "+3  "
+      FontString - 992,542 56x20 "1   60  "
+      FontString - 937,542 52x20 "80  "
+      FontString - 906,542 28x20 "×2"
+      FontString - 705,542 198x20 "Copper Bar"
       Texture - 654,546 48x12
     Frame AHProfitWindowRow9 650,562 606x20
       Texture - 652,562 602x1
       FontString - 654,562 48x20 "BUY"
-      FontString - 1192,562 60x20 "Amaya"
-      FontString - 1155,562 34x20 "0.0%"
-      FontString - 1110,562 42x20 "—"
-      FontString - 1061,562 46x20 "—"
-      FontString - 988,562 70x20 "+1   50  "
-      FontString - 929,562 56x20 "40  "
-      FontString - 874,562 52x20 "40  "
-      FontString - 843,562 28x20 "×1"
-      FontString - 705,562 135x20 "Linen Cloth"
+      FontString - 1218,562 34x20 "0.0%"
+      FontString - 1173,562 42x20 "—"
+      FontString - 1124,562 46x20 "—"
+      FontString - 1051,562 70x20 "+1   50  "
+      FontString - 992,562 56x20 "40  "
+      FontString - 937,562 52x20 "40  "
+      FontString - 906,562 28x20 "×1"
+      FontString - 705,562 198x20 "Linen Cloth"
       Texture - 654,566 48x12
     Frame AHProfitWindowRow10 650,582 606x20
       Texture - 652,582 602x1
       FontString - 654,582 48x20 "DE"
-      FontString - 1192,582 60x20 "Brugan"
-      FontString - 1155,582 34x20 "0.0%"
-      FontString - 1110,582 42x20 "—"
-      FontString - 1061,582 46x20 "—"
-      FontString - 988,582 70x20 "−80  "
-      FontString - 929,582 56x20 "6   40  "
-      FontString - 874,582 52x20 "1   60  "
-      FontString - 843,582 28x20 "×4"
-      FontString - 705,582 135x20 "Linen Cloth"
+      FontString - 1218,582 34x20 "0.0%"
+      FontString - 1173,582 42x20 "—"
+      FontString - 1124,582 46x20 "—"
+      FontString - 1051,582 70x20 "−80  "
+      FontString - 992,582 56x20 "6   40  "
+      FontString - 937,582 52x20 "1   60  "
+      FontString - 906,582 28x20 "×4"
+      FontString - 705,582 198x20 "Linen Cloth"
       Texture - 654,586 48x12
     Frame AHProfitWindowRow11 650,602 606x20
       Texture - 652,602 602x1
       FontString - 654,602 48x20 "POST"
-      FontString - 1192,602 60x20 "Brugan"
-      FontString - 1155,602 34x20 "0.0%"
-      FontString - 1110,602 42x20 "40/day"
-      FontString - 1061,602 46x20 "68%   "
-      FontString - 988,602 70x20 "−1   60  "
-      FontString - 929,602 56x20 "25   60  "
-      FontString - 874,602 52x20 "3   20  "
-      FontString - 843,602 28x20 "×8"
-      FontString - 705,602 135x20 "Copper Bar"
+      FontString - 1218,602 34x20 "0.0%"
+      FontString - 1173,602 42x20 "40/day"
+      FontString - 1124,602 46x20 "68%   "
+      FontString - 1051,602 70x20 "−1   60  "
+      FontString - 992,602 56x20 "25   60  "
+      FontString - 937,602 52x20 "3   20  "
+      FontString - 906,602 28x20 "×8"
+      FontString - 705,602 198x20 "Copper Bar"
       Texture - 654,606 48x12
     Frame AHProfitWindowRow12 650,622 606x20
       Texture - 652,622 602x1
       FontString - 654,622 48x20 "POST"
-      FontString - 1192,622 60x20 "Brugan"
-      FontString - 1155,622 34x20 "0.0%"
-      FontString - 1110,622 42x20 "3/day"
-      FontString - 1061,622 46x20 "72%   "
-      FontString - 988,622 70x20 "−2   40  "
-      FontString - 929,622 56x20 "57   60  "
-      FontString - 874,622 52x20 "4   80  "
-      FontString - 843,622 28x20 "×12"
-      FontString - 705,622 135x20 "Scouting Gloves of the …"
+      FontString - 1218,622 34x20 "0.0%"
+      FontString - 1173,622 42x20 "3/day"
+      FontString - 1124,622 46x20 "72%   "
+      FontString - 1051,622 70x20 "−2   40  "
+      FontString - 992,622 56x20 "57   60  "
+      FontString - 937,622 52x20 "4   80  "
+      FontString - 906,622 28x20 "×12"
+      FontString - 705,622 198x20 "Scouting Gloves of the Monkey"
       Texture - 654,626 48x12
   Texture - 642,731 636x1
   FontString - 652,740 176x10 "12 actions · expected +76   20  "

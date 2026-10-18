@@ -104,6 +104,15 @@ function Plan.AllActions()
   return out
 end
 
+--- One character's open plan actions, each with its character id (the window shows only these).
+---@param charId string  "Name-Realm"
+---@return table[]       As Plan.Actions, plus char
+function Plan.CharacterActions(charId)
+  local out = Plan.Actions(charId)
+  for _, a in ipairs(out) do a.char = charId end
+  return out
+end
+
 --- An item rule set on the dashboard (SPEC §3.4.2).
 ---@param key number    Item key
 ---@return string|nil   "no_buy" | "ignore" | "keep" | "none" (a clear)

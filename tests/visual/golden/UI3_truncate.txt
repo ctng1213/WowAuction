@@ -13,64 +13,59 @@ Frame AHProfitWindow 680,360 560x360
   Frame AHProfitWindowHeadertoday 690,420 526x20
     FontString - 694,420 52x20
     Button - 694,420 52x20
-    FontString - 1152,420 60x20 "Who"
-    Button - 1152,420 60x20
-    FontString - 1115,420 34x20 "Risk"
-    Button - 1115,420 34x20
-    FontString - 1070,420 42x20 "Volume"
-    Button - 1070,420 42x20
-    FontString - 1021,420 46x20 "Chance"
-    Button - 1021,420 46x20
-    FontString - 948,420 70x20 "Net"
-    Button - 948,420 70x20
-    FontString - 889,420 56x20 "Total"
-    Button - 889,420 56x20
-    FontString - 834,420 52x20 "Each"
-    Button - 834,420 52x20
-    FontString - 803,420 28x20 "Qty"
-    Button - 803,420 28x20
-    FontString - 749,420 51x20 "Item"
-    Button - 749,420 51x20
+    FontString - 1178,420 34x20 "Risk"
+    Button - 1178,420 34x20
+    FontString - 1133,420 42x20 "Volume"
+    Button - 1133,420 42x20
+    FontString - 1084,420 46x20 "Chance"
+    Button - 1084,420 46x20
+    FontString - 1011,420 70x20 "Net"
+    Button - 1011,420 70x20
+    FontString - 952,420 56x20 "Total"
+    Button - 952,420 56x20
+    FontString - 897,420 52x20 "Each"
+    Button - 897,420 52x20
+    FontString - 866,420 28x20 "Qty"
+    Button - 866,420 28x20
+    FontString - 749,420 114x20 "Item"
+    Button - 749,420 114x20
   Frame AHProfitWindowHeaderweek 690,420 526x20 (hidden)
   Frame AHProfitWindowList 690,442 540x240
     Frame AHProfitWindowRow1 690,442 526x20
       Texture - 692,442 522x1
       FontString - 694,442 48x20 "CRAFT"
-      FontString - 1152,442 60x20 "Amaya"
-      FontString - 1115,442 34x20 "0.0%"
-      FontString - 1070,442 42x20 "—"
-      FontString - 1021,442 46x20 "—"
-      FontString - 948,442 70x20 "+4   50  "
-      FontString - 889,442 56x20 "3   60  "
-      FontString - 834,442 52x20 "1   20  "
-      FontString - 803,442 28x20 "×3"
-      FontString - 745,442 55x20 "Scouting…"
+      FontString - 1178,442 34x20 "0.0%"
+      FontString - 1133,442 42x20 "—"
+      FontString - 1084,442 46x20 "—"
+      FontString - 1011,442 70x20 "+4   50  "
+      FontString - 952,442 56x20 "3   60  "
+      FontString - 897,442 52x20 "1   20  "
+      FontString - 866,442 28x20 "×3"
+      FontString - 745,442 118x20 "Scouting Gloves of t…"
       Texture - 694,446 48x12
     Frame AHProfitWindowRow2 690,462 526x20
       Texture - 692,462 522x1
       FontString - 694,462 48x20 "POST"
-      FontString - 1152,462 60x20 "Brugan"
-      FontString - 1115,462 34x20 "0.0%"
-      FontString - 1070,462 42x20 "40/day"
-      FontString - 1021,462 46x20 "62%   "
-      FontString - 948,462 70x20 "+3  "
-      FontString - 889,462 56x20 "1   60  "
-      FontString - 834,462 52x20 "80  "
-      FontString - 803,462 28x20 "×2"
-      FontString - 745,462 55x20 "Copper B…"
+      FontString - 1178,462 34x20 "0.0%"
+      FontString - 1133,462 42x20 "40/day"
+      FontString - 1084,462 46x20 "62%   "
+      FontString - 1011,462 70x20 "+3  "
+      FontString - 952,462 56x20 "1   60  "
+      FontString - 897,462 52x20 "80  "
+      FontString - 866,462 28x20 "×2"
+      FontString - 745,462 118x20 "Copper Bar"
       Texture - 694,466 48x12
     Frame AHProfitWindowRow3 690,482 526x20
       Texture - 692,482 522x1
       FontString - 694,482 48x20 "BUY"
-      FontString - 1152,482 60x20 "Amaya"
-      FontString - 1115,482 34x20 "0.0%"
-      FontString - 1070,482 42x20 "—"
-      FontString - 1021,482 46x20 "—"
-      FontString - 948,482 70x20 "+1   50  "
-      FontString - 889,482 56x20 "40  "
-      FontString - 834,482 52x20 "40  "
-      FontString - 803,482 28x20 "×1"
-      FontString - 745,482 55x20 "Linen Cl…"
+      FontString - 1178,482 34x20 "0.0%"
+      FontString - 1133,482 42x20 "—"
+      FontString - 1084,482 46x20 "—"
+      FontString - 1011,482 70x20 "+1   50  "
+      FontString - 952,482 56x20 "40  "
+      FontString - 897,482 52x20 "40  "
+      FontString - 866,482 28x20 "×1"
+      FontString - 745,482 118x20 "Linen Cloth"
       Texture - 694,486 48x12
     Frame AHProfitWindowRow4 690,502 526x20 (hidden)
     Frame AHProfitWindowRow5 690,522 526x20 (hidden)

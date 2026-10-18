@@ -26,8 +26,7 @@ local function Open(n, marketMissing)
   for i = 1, n do
     local kind = KINDS[(i - 1) % #KINDS + 1]
     actions[i] = { id = string.format("a%02d", i), kind = kind, key = keys[(i - 1) % 3 + 1], qty = i, price = 40 * i,
-                   at = NOW, net = (i % 4 == 0) and -20 * i or 150 * i, chance = kind == "post" and 60 + i or nil,
-                   char = i % 2 == 0 and "Brugan-Grommash" or nil }
+                   at = NOW, net = (i % 4 == 0) and -20 * i or 150 * i, chance = kind == "post" and 60 + i or nil }
   end
   UIWorld.Plan(actions)
   Stubs.Login()

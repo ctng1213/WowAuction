@@ -1,4 +1,6 @@
--- UI/MainWindow.lua: the /ahp window (SPEC §4.3, docs/mockups/addon.html).
+-- UI/MainWindow.lua: the /ahp window (SPEC §4.3, docs/mockups/addon.html). It is about the
+-- character you are playing: it shows that character's actions only, so it has no Who column
+-- (the dashboard shows every character, with one).
 -- Frame code only: every text, colour flag and number comes from UI/ViewModel.lua. Frames
 -- are built the first time the window opens (SPEC §5.1 lazy frames) and its rows are a fixed
 -- pool that scrolls, so the window never grows past its size.
@@ -25,11 +27,10 @@ MainWindow.MONEY_FIELDS = { each = true, total = true, net = true }
 MainWindow.COLUMNS = {
   today = { { "", "action", 52, "LEFT" }, { "Item", "item", nil, "LEFT" }, { "Qty", "qty", 28, "RIGHT" },
             { "Each", "each", 52, "RIGHT" }, { "Total", "total", 56, "RIGHT" }, { "Net", "net", 70, "RIGHT" },
-            { "Chance", "chance", 46, "RIGHT" }, { "Volume", "volume", 42, "RIGHT" }, { "Risk", "risk", 34, "RIGHT" },
-            { "Who", "who", 60, "LEFT" } },
+            { "Chance", "chance", 46, "RIGHT" }, { "Volume", "volume", 42, "RIGHT" }, { "Risk", "risk", 34, "RIGHT" } },
   week = { { "Time", "time", 34, "LEFT" }, { "", "action", 52, "LEFT" }, { "Item", "item", nil, "LEFT" },
            { "Qty", "qty", 28, "RIGHT" }, { "Total", "total", 56, "RIGHT" }, { "Net", "net", 70, "RIGHT" },
-           { "Chance", "chance", 46, "RIGHT" }, { "Who", "who", 60, "LEFT" } },
+           { "Chance", "chance", 46, "RIGHT" } },
 }
 
 -- The mockup's palette (docs/mockups/addon.html :root), as 0-1 RGB.
@@ -412,7 +413,8 @@ end
 ---@return table[], string, string
 local function Lines(nowMs, gold)
   local offset = Adapter.LocalOffsetMs(nowMs)
-  local actions = Plan.AllActions()
+  local info = Adapter.PlayerInfo()
+  local actions = Plan.CharacterActions(info.name .. "-" .. info.realm)
   if view.tab == "today" then
     local today = VM.Today(actions, nowMs, offset, view.minChance, LookOf, gold)
     return VM.WithNotes(today.rows), VM.TodayFooter(today, view.minChance), "Nothing to do in the next hour."

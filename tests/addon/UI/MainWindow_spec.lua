@@ -45,7 +45,7 @@ describe("MainWindow", function()
     Stubs.Slash("/ahp")
     local row, coins = FirstRow("today"), AHProfit.ViewModel.WithCoins
     assert_eq({ row.action, row.item, row.qty, row.each, row.total, row.net, row.chance, row.volume, row.who },
-              { "POST", "Linen Cloth", "×20", coins("55c"), coins("11s"), coins("+10s 46c"), row.chance, "48/day", "Amaya" })
+              { "POST", "Linen Cloth", "×20", coins("55c"), coins("11s"), coins("+10s 46c"), row.chance, "48/day", nil })
     assert_eq(row.chance:match("^92%% |T.-:7:7:0:0:8:8:0:8:0:8:(%d+:%d+:%d+)|t$"), "61:219:79")   -- the high (green) dot
     local ui = MainWindow.Frames()
     assert_eq({ ui.age:GetText(), ui.sub:GetText(), ui.footer:GetText(), ui.budget:GetText() },
@@ -90,6 +90,18 @@ describe("MainWindow", function()
     assert_eq({ Stubs.tooltip.shown, Stubs.tooltip.lines[1] }, { true, "Chance" })
     header.hit:GetScript("OnLeave")(header.hit)
     assert_eq(Stubs.tooltip.shown, false)
+  end)
+
+  it("only the logged-in character's actions show, and there is no Who column", function()
+    Stubs.Reset()
+    UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48) }, NOW)
+    UIWorld.Plan({ { id = "a", kind = "post", key = 2589, qty = 1, price = 50, at = NOW, net = 40, chance = 90 },
+                   { id = "b", kind = "post", key = 2589, qty = 2, price = 50, at = NOW, net = 90, chance = 90,
+                     char = "Brugan-Grommash" } })
+    Stubs.Login()
+    Stubs.Slash("/ahp")
+    local ui = AHProfit.MainWindow.Frames()
+    assert_eq({ FirstRow("today").qty, ui.rows[2]:IsShown(), ui.headerCells.today.who }, { "×1", false, nil })
   end)
 
   it("scrolling moves through a long list and stops at its ends", function()

@@ -997,12 +997,12 @@ Right-clicking a row opens a menu: Search the AH, Mark as skipped, Blacklist: do
 ┌ AHProfit ── Grommash · Horde PvP ───────────────────────── data 2 h old ── [x] ┐
 │ [Today] [Week] [Disenchant] [Craft] [Flip] [Inventory]      Min chance [50%▾] │
 │───────────────────────────────────────────────────────────────────────────────│
-│       Item            Qty  Each    Total   Net      Chance   Volume Risk  Who │
-│ BUY   Mithril Spurs   ×1   3g      3g      +73s 42c  85% ◐    3/day 9.6%  Bru │
-│ POST  Copper Rod      ×5   41s     2g 5s   +63s 6c   58% ◐    6/day 0.0%  Bru │
+│       Item              Qty  Each    Total   Net       Chance   Volume  Risk │
+│ BUY   Mithril Spurs     ×1   3g      3g      +73s 42c   85% ◐    3/day  9.6% │
+│ POST  Copper Rod        ×5   41s     2g 5s   +63s 6c    58% ◐    6/day  0.0% │
 │       Your record: 2 of 5 sold · P 80% → 58% · price −10% · qty ¼            │
-│ BUY   Silk Cloth      ×40  70c     28s     +7s 30c   88% ●   64/day 0.9%  Ama │
-│ DE    Scouting Glov…  ×1   8s      8s      +6s 25c  100% ●  210/day 0.3%  Ama │
+│ BUY   Silk Cloth        ×40  70c     28s     +7s 30c    88% ●   64/day  0.9% │
+│ DE    Scouting Glov…    ×1   8s      8s      +6s 25c   100% ●  210/day  0.3% │
 │ ...                                                                    ▲▼     │
 │ Needs a decision                                                              │
 │ POST  Heavy Leather   ×5   47c     2s 35c  NOT SELLING    [Blacklist ▾] [Keep] │
@@ -1013,7 +1013,8 @@ Right-clicking a row opens a menu: Search the AH, Mark as skipped, Blacklist: do
 
 The dot after each chance is its confidence. Hovering "85% ◐" shows "Confidence 63%".
 
-- Each row shows: action, item (in its quality colour), quantity, **each** and **total** (§3.4), expected net (green when positive, red when negative), then the standard pair **Chance · Volume**, then **risk %** and the character.
+- **The window is about the character you are playing.** It shows only that character's actions, so it has no Who column; the dashboard shows every character, with one.
+- Each row shows: action, item (in its quality colour), quantity, **each** and **total** (§3.4), expected net (green when positive, red when negative), then the standard pair **Chance · Volume**, then **risk %** (measured against all your characters' gold).
 - **The pair is identical on every addon tab.** (The dashboard shows the fuller market activity columns, §3.5.)
   - **Chance** is `P'` (§3.3.2) with the **confidence dot** inside the cell (● ≥ 75%, ◐ ≥ 45%, ○ below; §3.3.5). Hover shows the exact confidence %.
   - **Volume** is units sold per day. The dashboard also shows the source and the units on the AH.

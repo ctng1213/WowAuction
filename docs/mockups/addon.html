@@ -322,11 +322,11 @@ const VIEWS = {
       <li>Rows come from the desktop plan (<code>PortfolioPlan.lua</code>: which character acts, mail between characters) merged with the addon's own options, which it re-ranks live as prices, bags and gold change.</li>
       <li><b>Risk</b> = gold this action spends ÷ all your gold. For a post, that's the deposit. It turns amber above 25%.</li>
       <li>"Not selling" items wait in <b>Needs a decision</b>. Keep starts the item's record fresh, and one more expiry while cheapest asks again.</li></ul>`,
-    html: () => `<table>${head([[''], ['Item'], ['Qty', 1], ['Each', 1], ['Total', 1], ['Net', 1], ...PAIR, ['Risk', 1], ['Who']])}
+    html: () => `<table>${head([[''], ['Item'], ['Qty', 1], ['Each', 1], ['Total', 1], ['Net', 1], ...PAIR, ['Risk', 1]])}
       ${TODAY.map(r => todayRow(...r)).join('')}
-      <tr class="section"><td colspan="10">Needs a decision</td></tr>
-      <tr class="row"><td>${act('post')}</td><td>${item('Heavy Leather', 1)}</td><td class="num">×5</td><td class="num">${money(47)}</td><td class="num">${money(235)}</td><td colspan="4"><span class="flag">NOT SELLING</span></td><td class="muted">Brugan</td></tr>
-      <tr class="record"><td></td><td colspan="9">Expired 3× while cheapest &nbsp; <span class="btn">Blacklist ▾</span> <span class="btn">Keep</span></td></tr>
+      <tr class="section"><td colspan="9">Needs a decision</td></tr>
+      <tr class="row"><td>${act('post')}</td><td>${item('Heavy Leather', 1)}</td><td class="num">×5</td><td class="num">${money(47)}</td><td class="num">${money(235)}</td><td colspan="4"><span class="flag">NOT SELLING</span></td></tr>
+      <tr class="record"><td></td><td colspan="8">Expired 3× while cheapest &nbsp; <span class="btn">Blacklist ▾</span> <span class="btn">Keep</span></td></tr>
     </table>`
   },
   Week: {
@@ -432,8 +432,8 @@ const VIEWS = {
 };
 
 function todayRow(a, n, q, qty, each, e, P, c, who, spend, note) {
-  return `<tr class="row"><td>${act(a)}</td><td>${item(n, q)}</td><td class="num">×${qty}</td><td class="num">${money(each)}</td><td class="num">${each === null ? money(null) : money(each * qty)}</td><td class="num">${net(e)}</td>${pair(n, P)}<td class="num">${risk(spend)}</td><td class="muted">${who}</td></tr>`
-    + (note ? `<tr class="record"><td></td><td colspan="9">${note}</td></tr>` : '');
+  return `<tr class="row"><td>${act(a)}</td><td>${item(n, q)}</td><td class="num">×${qty}</td><td class="num">${money(each)}</td><td class="num">${each === null ? money(null) : money(each * qty)}</td><td class="num">${net(e)}</td>${pair(n, P)}<td class="num">${risk(spend)}</td></tr>`
+    + (note ? `<tr class="record"><td></td><td colspan="8">${note}</td></tr>` : '');
 }
 function de(n, ilvl, buy, mats, ev, profit, live) {
   return `<tr class="row"><td>${item(n, 2, 120)}</td><td class="num">${ilvl}</td><td class="num">${money(buy)}</td><td class="muted">${mats}</td><td class="num">${money(ev)}</td><td class="num">${net(profit)}</td>${pair(n)}<td class="num">${risk(buy)}</td><td class="${live === '✓' ? 'pos' : 'muted'}">${live}</td></tr>`;
