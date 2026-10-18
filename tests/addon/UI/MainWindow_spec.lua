@@ -173,6 +173,35 @@ describe("MainWindow", function()
               { "uses 4 owned Copper Bar · buys 2 Copper Bar", false, "1 of 2 known recipes pay now" })
   end)
 
+  it("A28 the Flip tab lists the plan's flips, re-checked against the live AH", function()
+    Stubs.Reset()
+    Stubs.world.money = 10000                                           -- 1g: Linen's 8s buy is 8.0%
+    local SAT10, SAT18, SUN11 = 1760176800000, 1760205600000, 1760266800000   -- Sat 11 Oct 10:00 and 18:00, Sun 11:00 UTC
+    UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48), [4306] = UIWorld.Item(70, 80, 60), [2840] = UIWorld.Item(500, 80, 40) },
+                   NOW - UIWorld.HOUR)
+    UIWorld.Plan({ { id = "f1", kind = "buy", key = 2589, qty = 20, price = 40, at = NOW, net = 210 },
+                   { id = "f2", kind = "post", key = 2589, qty = 20, price = 55, at = SAT10, net = 900, parent = "f1",
+                     chance = 88, peak = SAT18 },
+                   { id = "s1", kind = "buy", key = 4306, qty = 5, price = 70, at = NOW, net = 40 },
+                   { id = "s2", kind = "post", key = 4306, qty = 5, price = 100, at = SUN11, net = 120, parent = "s1", chance = 70 },
+                   { id = "m1", kind = "buy", key = 2840, qty = 2, price = 500, at = NOW, net = 0 },
+                   { id = "m2", kind = "craft", key = 6217, qty = 1, at = NOW, net = 300, parent = "m1" },
+                   { id = "m3", kind = "post", key = 6217, qty = 1, price = 4000, at = SAT10, net = 300, parent = "m1" } })
+    Stubs.Login()
+    AHProfit.Scan.Replicate.LastBook = function()
+      return { at = NOW + 60000, book = { [2589] = { [38] = { [101] = 1 } }, [4306] = { [80] = { [26] = 1 } } } }
+    end
+    Stubs.Slash("/ahp")
+    AHProfit.MainWindow.ShowTab("flip")
+    local ui, VM = AHProfit.MainWindow.Frames(), AHProfit.ViewModel
+    local row = FirstRow("flip")
+    assert_eq({ row.item, row.qty, row.buy, row.sell, row.when, row.profit, row.chance:match("^%d+%%"), row.risk },
+              { "Linen Cloth", "×20", VM.WithCoins("40c"), VM.WithCoins("55c"), "Sat 18:00", VM.WithCoins("+2s 10c"), "88%", "8.0%" })
+    assert_eq({ ui.rows[2].note:GetText(), ui.rows[3]:IsShown() },
+              { "post Sat 10:00, for the 18:00 peak · on the AH now from 38c", false })
+    assert_eq(ui.footer:GetText(), VM.WithCoins("1 flip · capital needed 8s · 1 gone"))
+  end)
+
   it("A22 the Inventory tab lists what this character holds with its worth and plan", function()
     Stubs.Reset()
     _G.AHProfitPlan = nil

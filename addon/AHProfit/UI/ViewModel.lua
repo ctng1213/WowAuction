@@ -44,6 +44,8 @@ ViewModel.COLUMN_HELP = {
   Source = "Where the mats come from: Owned (your bags), AH (bought), or Mixed",
   ["×"] = "Crafts that each still pay, given the mats you have and what the AH lists",
   Mats = "Gold for the mats you need to buy, at the AH's current prices. \"—\": you own them all",
+  Sell = "The price to post at, each, for the selling window",
+  When = "The peak the post is for, local time: post 8 hours before it",
 }
 
 --- Round half up, as every display does (SPEC §3.3).
@@ -731,6 +733,63 @@ end
 ---@return string       e.g. "1 of 2 known recipes pay now"
 function ViewModel.CraftFooter(rows, known)
   return #rows .. " of " .. known .. (known == 1 and " known recipe" or " known recipes") .. " pay now"
+end
+
+-- ------------------------------------------------------------------ Flip tab (A28, UI13)
+
+--- The Flip tab's rows: AHSync's flips for this character, a buy whose chain ends in a post (A28).
+---@param actions table[]  This character's plan actions, gone buys already dropped
+---@param lookOf function  key -> look
+---@param levelsOf function key -> live levels or nil
+---@param totalGold number All your gold, copper, for risk
+---@param offsetMs number
+---@return table[]         Rows of text, best profit first (ties: id); each with spend (copper)
+function ViewModel.FlipRows(actions, lookOf, levelsOf, totalGold, offsetMs)
+  local posts, crafts = {}, {}
+  local sorted = {}
+  for i, a in ipairs(actions) do sorted[i] = a end
+  table.sort(sorted, ByTime)
+  for _, a in ipairs(sorted) do
+    if a.parent and a.kind == "post" and not posts[a.parent] then posts[a.parent] = a end
+    if a.parent and a.kind == "craft" then crafts[a.parent] = true end
+  end
+  local rows = {}
+  for _, a in ipairs(sorted) do
+    local post = a.kind == "buy" and not crafts[a.id] and posts[a.id] or nil
+    if post then
+      local look, levels = lookOf(a.key), levelsOf(a.key)
+      local spend = (a.price or 0) * a.qty
+      local risk, amber = ViewModel.Risk(spend, totalGold)
+      local day, peak = ViewModel.Clock(post.peak or post.at, offsetMs)
+      local postDay, postHour = ViewModel.Clock(post.at, offsetMs)
+      local note = { "post " .. postDay .. " " .. postHour .. ", for the " .. peak .. " peak" }
+      if levels and levels[1] then note[2] = "on the AH now from " .. ViewModel.Money(levels[1].price) end
+      rows[#rows + 1] = {
+        id = a.id, key = a.key, item = look.name, quality = look.quality, kind = "buy", qty = "×" .. a.qty,
+        buy = ViewModel.Money(a.price), sell = ViewModel.Money(post.price), when = day .. " " .. peak,
+        profit = ViewModel.SignedMoney(a.net or 0), netColor = (a.net or 0) > 0 and "pos" or "neg",
+        chance = post.chance and (post.chance .. "%") or "—", dot = post.chance and ViewModel.Level(look.conf) or nil,
+        risk = risk, riskAmber = amber, note = table.concat(note, " · "), spend = spend, netCopper = a.net or 0,
+      }
+    end
+  end
+  table.sort(rows, function(x, y)
+    if x.netCopper ~= y.netCopper then return x.netCopper > y.netCopper end
+    return x.id < y.id
+  end)
+  return rows
+end
+
+--- The footer under Flip.
+---@param rows table[]     From ViewModel.FlipRows, gone buys dropped
+---@param planned table[]  From ViewModel.FlipRows over every planned action, so the difference is the gone flips
+---@return string          e.g. "1 flip · capital needed 8s · 1 gone"
+function ViewModel.FlipFooter(rows, planned)
+  local capital, gone = 0, #planned - #rows
+  for _, r in ipairs(rows) do capital = capital + r.spend end
+  local text = #rows .. (#rows == 1 and " flip" or " flips") .. " · capital needed " .. ViewModel.Money(capital)
+  if gone > 0 then text = text .. " · " .. gone .. " gone" end
+  return text
 end
 
 -- ------------------------------------------------------------------ Disenchant tab (A23)

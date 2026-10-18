@@ -1,0 +1,76 @@
+Frame AHProfitWindow 680,360 560x360
+  Texture - 682,362 556x28
+  Texture - 682,390 556x1
+  FontString - 692,370 53x12 "AHProfit"
+  FontString - 755,371 88x10 "Grommash · Horde"
+  Button AHProfitWindowClose 1212,364 24x24
+  Frame AHProfitWindowAge 1110,367 96x18
+    FontString - 1125,371 66x10 "data 1 h old"
+  Button AHProfitWindowTabToday 690,396 48x22 "Today"
+  Button AHProfitWindowTabWeek 740,396 46x22 "Week"
+  Button AHProfitWindowTabDisenchant 788,396 68x22 "Disenchant"
+  Button AHProfitWindowTabCraft 858,396 46x22 "Craft"
+  Button AHProfitWindowTabFlip 906,396 40x22 "Flip"
+  Button AHProfitWindowTabInventory 948,396 62x22 "Inventory"
+  Button AHProfitWindowTabReservations 1012,396 78x22 "Reservations"
+  Texture - 682,418 556x1
+  Button AHProfitWindowMinChance 1100,396 130x20 "Min chance: 50%   " (hidden)
+  Frame AHProfitWindowHeadertoday 690,420 526x20 (hidden)
+  Frame AHProfitWindowHeaderweek 690,420 526x20 (hidden)
+  Frame AHProfitWindowHeaderdisenchant 690,420 526x20 (hidden)
+  Frame AHProfitWindowHeadercraft 690,420 526x20 (hidden)
+  Frame AHProfitWindowHeaderflip 690,420 526x20
+    FontString - 1178,420 34x20 "Risk"
+    Button - 1178,420 34x20
+    FontString - 1129,420 46x20 "Chance"
+    Button - 1129,420 46x20
+    FontString - 1062,420 64x20 "Profit"
+    Button - 1062,420 64x20
+    FontString - 997,420 62x20 "When"
+    Button - 997,420 62x20
+    FontString - 948,420 46x20 "Sell"
+    Button - 948,420 46x20
+    FontString - 899,420 46x20 "Buy"
+    Button - 899,420 46x20
+    FontString - 868,420 28x20 "Qty"
+    Button - 868,420 28x20
+    FontString - 693,420 172x20 "Item"
+    Button - 693,420 172x20
+  Frame AHProfitWindowHeaderinventory 690,420 526x20 (hidden)
+  Frame AHProfitWindowHeaderreservations 690,420 526x20 (hidden)
+  Frame AHProfitWindowList 690,442 540x240
+    Frame AHProfitWindowRow1 690,442 526x20
+      Texture - 692,442 522x1
+      FontString - 1178,442 34x20 "8.0%"
+      FontString - 1129,442 46x20 "88%   "
+      FontString - 1062,442 64x20 "+2   10  "
+      FontString - 997,442 62x20 "Sat 18:00"
+      FontString - 948,442 46x20 "55  "
+      FontString - 899,442 46x20 "40  "
+      FontString - 868,442 28x20 "×20"
+      FontString - 693,442 172x20 "Linen Cloth"
+    Frame AHProfitWindowRow2 690,462 526x20
+      FontString - 749,462 463x20 "post Sat 10:00, for the 18:00 peak"
+    Frame AHProfitWindowRow3 690,482 526x20
+      Texture - 692,482 522x1
+      FontString - 1178,482 34x20 "3.5%"
+      FontString - 1129,482 46x20 "70%   "
+      FontString - 1062,482 64x20 "+40  "
+      FontString - 997,482 62x20 "Sun 11:00"
+      FontString - 948,482 46x20 "1  "
+      FontString - 899,482 46x20 "70  "
+      FontString - 868,482 28x20 "×5"
+      FontString - 693,482 172x20 "Silk Cloth"
+    Frame AHProfitWindowRow4 690,502 526x20
+      FontString - 749,502 463x20 "post Sun 11:00, for the 11:00 peak"
+    Frame AHProfitWindowRow5 690,522 526x20 (hidden)
+    Frame AHProfitWindowRow6 690,542 526x20 (hidden)
+    Frame AHProfitWindowRow7 690,562 526x20 (hidden)
+    Frame AHProfitWindowRow8 690,582 526x20 (hidden)
+    Frame AHProfitWindowRow9 690,602 526x20 (hidden)
+    Frame AHProfitWindowRow10 690,622 526x20 (hidden)
+    Frame AHProfitWindowRow11 690,642 526x20 (hidden)
+    Frame AHProfitWindowRow12 690,662 526x20 (hidden)
+  Texture - 682,691 556x1
+  FontString - 692,700 187x10 "2 flips · capital needed 11   50  "
+  FontString - 1173,700 55x10 "Budget 1  "

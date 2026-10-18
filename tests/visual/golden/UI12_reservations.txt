@@ -10,14 +10,16 @@ Frame AHProfitWindow 680,360 560x360
   Button AHProfitWindowTabWeek 740,396 46x22 "Week"
   Button AHProfitWindowTabDisenchant 788,396 68x22 "Disenchant"
   Button AHProfitWindowTabCraft 858,396 46x22 "Craft"
-  Button AHProfitWindowTabInventory 906,396 62x22 "Inventory"
-  Button AHProfitWindowTabReservations 970,396 78x22 "Reservations"
+  Button AHProfitWindowTabFlip 906,396 40x22 "Flip"
+  Button AHProfitWindowTabInventory 948,396 62x22 "Inventory"
+  Button AHProfitWindowTabReservations 1012,396 78x22 "Reservations"
   Texture - 682,418 556x1
   Button AHProfitWindowMinChance 1100,396 130x20 "Min chance: 50%   " (hidden)
   Frame AHProfitWindowHeadertoday 690,420 526x20 (hidden)
   Frame AHProfitWindowHeaderweek 690,420 526x20 (hidden)
   Frame AHProfitWindowHeaderdisenchant 690,420 526x20 (hidden)
   Frame AHProfitWindowHeadercraft 690,420 526x20 (hidden)
+  Frame AHProfitWindowHeaderflip 690,420 526x20 (hidden)
   Frame AHProfitWindowHeaderinventory 690,420 526x20 (hidden)
   Frame AHProfitWindowHeaderreservations 690,420 526x20
     FontString - 1168,420 44x20 "Free"

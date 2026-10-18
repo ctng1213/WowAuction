@@ -226,6 +226,24 @@ describe("ViewModel", function()
     assert_eq({ VM.CraftFooter(rows, 5), VM.CraftFooter({}, 1) }, { "2 of 5 known recipes pay now", "0 of 1 known recipe pay now" })
   end)
 
+  it("flip rows: best profit first (ties: id), no live note without a scan, a post without a peak uses its own time", function()
+    local VM = Boot()
+    local lookOf = function() return { name = "Linen Cloth", quality = 1 } end
+    local actions = { { id = "b", kind = "buy", key = 1, qty = 2, price = 10, at = 0, net = 50 },
+                      { id = "b2", kind = "post", key = 1, qty = 2, price = 30, at = 3600000, parent = "b" },
+                      { id = "a", kind = "buy", key = 1, qty = 1, price = 10, at = 0, net = 50 },
+                      { id = "a2", kind = "post", key = 1, qty = 1, price = 30, at = 7200000, parent = "a" },
+                      { id = "c", kind = "buy", key = 1, qty = 1, price = 10, at = 0 },
+                      { id = "c2", kind = "post", key = 1, qty = 1, price = 5, at = 7200000, parent = "c" } }
+    local rows = VM.FlipRows(actions, lookOf, function() return nil end, 0, 0)
+    assert_eq({ rows[1].id, rows[2].id, rows[3].id }, { "a", "b", "c" })
+    assert_eq({ rows[1].when, rows[1].chance, rows[1].dot, rows[1].risk, rows[1].note },
+              { "Thu 02:00", "—", nil, "—", "post Thu 02:00, for the 02:00 peak" })
+    assert_eq({ rows[3].profit, rows[3].netColor }, { "0c", "neg" })
+    assert_eq({ VM.FlipFooter({}, {}), VM.FlipFooter({ rows[1] }, rows) },
+              { "0 flips · capital needed 0c", "1 flip · capital needed 10c · 2 gone" })
+  end)
+
   it("counts held units across places, leaves bound ones out and ties on the key", function()
     local VM = Boot()
     local holdings = { { where = "bags", key = 7, qty = 4 }, { where = "bank", key = 7, qty = 3 },

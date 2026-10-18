@@ -29,9 +29,10 @@ MainWindow.CHANCE_STEPS = { 0, 25, 50, 75 }
 -- Reservations lists what you keep for yourself, to change or undo it (A26). Each tab is as wide as
 -- its label, so all of them fit beside the Min chance box at the minimum width.
 MainWindow.TABS = { { "today", "Today", 48 }, { "week", "Week", 46 }, { "disenchant", "Disenchant", 68 },
-                    { "craft", "Craft", 46 }, { "inventory", "Inventory", 62 }, { "reservations", "Reservations", 78 } }
+                    { "craft", "Craft", 46 }, { "flip", "Flip", 40 }, { "inventory", "Inventory", 62 },
+                    { "reservations", "Reservations", 78 } }
 MainWindow.MONEY_FIELDS = { each = true, total = true, net = true, worth = true, buy = true, ev = true, profit = true,
-                            mats = true }
+                            mats = true, sell = true }
 
 -- { header, row field, width (nil = fills), justify }; columns after the filling one anchor from the right.
 MainWindow.COLUMNS = {
@@ -49,6 +50,9 @@ MainWindow.COLUMNS = {
   craft = { { "Item", "item", nil, "LEFT" }, { "Source", "source", 46, "LEFT" }, { "×", "crafts", 28, "RIGHT" },
             { "Mats", "mats", 56, "RIGHT" }, { "Profit", "profit", 70, "RIGHT" }, { "Chance", "chance", 46, "RIGHT" },
             { "Volume", "volume", 52, "RIGHT" }, { "Risk", "risk", 34, "RIGHT" } },
+  flip = { { "Item", "item", nil, "LEFT" }, { "Qty", "qty", 28, "RIGHT" }, { "Buy", "buy", 46, "RIGHT" },
+           { "Sell", "sell", 46, "RIGHT" }, { "When", "when", 62, "LEFT" }, { "Profit", "profit", 64, "RIGHT" },
+           { "Chance", "chance", 46, "RIGHT" }, { "Risk", "risk", 34, "RIGHT" } },
   reservations = { { "Item", "item", nil, "LEFT" }, { "Keeping", "keeping", 52, "RIGHT" }, { "Held", "held", 44, "RIGHT" },
                    { "Free", "free", 44, "RIGHT" } },
 }
@@ -559,6 +563,12 @@ local function Lines(nowMs, gold)
     local empty = #recipes == 0 and "No recipes seen on this character yet. Open each profession window once."
       or "None of your recipes pays right now."
     return VM.WithNotes(rows), VM.CraftFooter(rows, #recipes), empty
+  end
+  if view.tab == "flip" then
+    local planned = Plan.CharacterActions(charId)
+    local rows = VM.FlipRows(Options.WithoutGoneBuys(planned, LevelsOf), LookOf, LevelsOf, gold, offset)
+    local footer = VM.FlipFooter(rows, VM.FlipRows(planned, LookOf, LevelsOf, gold, offset))
+    return VM.WithNotes(rows), footer, "No flips in AHSync's plan for this character right now."
   end
   if view.tab == "reservations" then
     local rows = VM.Reservations(Reserves.Get(DB.Get() or {}, charId), Holdings(charId), LookOf)

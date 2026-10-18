@@ -395,13 +395,13 @@ const VIEWS = {
     </table>`
   },
   Flip: {
-    ctl: 'Min chance: 50% ▾',
-    footer: `<span>3 flips ≥ 20% margin · ranked by profit × confidence</span><span>Capital needed ${money(36300)}</span>`,
-    note: `<b>Flip</b>: buy now, sell at a later peak (SPEC §3.4C.2). Shown when expected profit ÷ buy cost (after fees and chance to sell) is at least 20%. Quantities stay within what the market sells in the window. Risk above 25% of your gold is amber. Built in game, like Disenchant; the dashboard adds Seasonality Strength and Expected ROI columns.`,
-    html: () => `<table>${head([['Item'], ['Qty', 1], ['Buy each', 1], ['Buy total', 1], ['Sell each', 1], ['Slot'], ['Profit', 1], ...PAIR, ['Risk', 1]])}
-      ${fl('Mithril Spurs', 3, 1, 30000, 45000, 'Sat 18:00', 7342)}
-      ${fl('Silk Cloth', 1, 40, 70, 105, 'Sat 19:00', 730)}
-      ${fl('Elixir of Agility', 1, 5, 700, 1300, 'Wed 20:00', 958)}
+    ctl: '',
+    footer: `<span>3 flips · capital needed ${money(36300)} · 1 gone</span><span>Budget ${money(314000)}</span>`,
+    note: `<b>Flip</b>: buy now, sell at a later peak (SPEC §3.4C.2). These are the flips AHSync's plan has for the character you're playing: it sizes them with its queue simulation, which the addon never runs (SPEC §4.0). <b>Buy</b> is the most to pay each; <b>When</b> is the peak the post is for (post 8 h before). A live scan drops a flip that is gone or now costs more, and the footer counts it. Risk above 25% of your gold is amber. The dashboard adds Seasonality Strength and Expected ROI columns.`,
+    html: () => `<table>${head([['Item'], ['Qty', 1], ['Buy', 1], ['Sell', 1], ['When'], ['Profit', 1], ['Chance', 1], ['Risk', 1]])}
+      ${fl('Mithril Spurs', 3, 1, 30000, 45000, 'Sat 18:00', 7342, 'post Sat 10:00, for the 18:00 peak · on the AH now from 2g 95s')}
+      ${fl('Silk Cloth', 1, 40, 70, 105, 'Sat 19:00', 730, 'post Sat 11:00, for the 19:00 peak')}
+      ${fl('Elixir of Agility', 1, 5, 700, 1300, 'Wed 20:00', 958, 'post Wed 12:00, for the 20:00 peak')}
     </table>`
   },
   Inventory: {
@@ -443,8 +443,9 @@ function cr(n, q, src, crafts, mats, profit, note) {
   return `<tr class="row"><td>${item(n, q, 150)}</td><td class="${srcColor}">${src}</td><td class="num">×${crafts}</td><td class="num">${money(mats)}</td><td class="num">${net(profit)}</td>${pair(n)}<td class="num">${risk(mats || 0)}</td></tr>`
     + (note ? `<tr class="record"><td colspan="8">${note}</td></tr>` : '');
 }
-function fl(n, q, qty, buy, sell, slot, profit) {
-  return `<tr class="row"><td>${item(n, q, 140)}</td><td class="num">×${qty}</td><td class="num">${money(buy)}</td><td class="num">${money(buy * qty)}</td><td class="num">${money(sell)}</td><td class="muted">${slot}</td><td class="num">${net(profit)}</td>${pair(n)}<td class="num">${risk(buy * qty)}</td></tr>`;
+function fl(n, q, qty, buy, sell, slot, profit, note) {
+  return `<tr class="row"><td>${item(n, q, 140)}</td><td class="num">×${qty}</td><td class="num">${money(buy)}</td><td class="num">${money(sell)}</td><td class="muted">${slot}</td><td class="num">${net(profit)}</td>${pair(n).split('</td>')[0]}</td><td class="num">${risk(buy * qty)}</td></tr>`
+    + (note ? `<tr class="record"><td colspan="8">${note}</td></tr>` : '');
 }
 function inv(n, q, who, where, qty, paid, worth, plan) {
   return `<tr class="row"><td>${item(n, q, 140)}</td><td class="muted">${where}</td><td class="num">${qty}</td><td class="num">${paid === 0 ? '0 <span class="muted">found</span>' : money(paid)}</td><td class="num">${money(worth)}</td>${plan.includes('bound') || plan === 'Vendor' ? DASHES : pair(n)}<td>${plan}</td></tr>`;
