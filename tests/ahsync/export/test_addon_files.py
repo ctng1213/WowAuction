@@ -115,15 +115,15 @@ def test_the_plan_file_holds_open_actions_rules_and_ingested_until(db, tmp_path)
     assert addon_files.export_plan(db, cfg, now, lambda s: None) is False             # no AddOns folder yet
     folder.mkdir(parents=True)
     sql(db, "INSERT INTO characters(id, market, gold) VALUES (?, ?, ?)", ("Brugan-G", M, 100), ("Other-X", None, 1))
-    sql(db, "INSERT INTO actions(action_id, char_id, kind, key, qty, price, slot_ms, expected_net, status) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        ("a1", "Brugan-G", "post", LINEN, 20, 55, now, 1045.5, "pending"),
-        ("a2", "Brugan-G", "buy", SILK, 5, 70, now - DAY, 10.0, "missed"),
-        ("a3", "Other-X", "post", WOOL, 1, 1, now, 1.0, "pending"))
+    sql(db, "INSERT INTO actions(action_id, char_id, kind, key, qty, price, slot_ms, expected_net, status, conf) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ("a1", "Brugan-G", "post", LINEN, 20, 55, now, 1045.5, "pending", 0.8),
+        ("a2", "Brugan-G", "buy", SILK, 5, 70, now - DAY, 10.0, "missed", None),
+        ("a3", "Other-X", "post", WOOL, 1, 1, now, 1.0, "pending", 1.0))
     sql(db, "INSERT INTO item_rules(key, rule, set_at, source) VALUES (?, ?, ?, ?)", (LINEN, "none", now, "dashboard"))
     db.set_meta("savedvars_ingested_until:Brugan-G", str(now - HOUR))
     assert addon_files.export_plan(db, cfg, now, lambda s: None) is True
     text = (folder / "PortfolioPlan.lua").read_text(encoding="utf-8")
-    assert f'"a1;post;{LINEN};20;55;{now};1046;;;pending"' in text and "a2;" not in text and "a3;" not in text
+    assert f'"a1;post;{LINEN};20;55;{now};1046;;;pending;80"' in text and "a2;" not in text and "a3;" not in text
     assert f'[{LINEN}] = "none,{now}"' in text and f'["Brugan-G"] = {now - HOUR},' in text
     assert db.addon_actions([]) == []

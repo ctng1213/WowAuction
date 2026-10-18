@@ -154,7 +154,8 @@ def plan_rows(actions: list[PlanAction], market: str, now_ms: int) -> list[tuple
     """Planned actions as `actions` rows, status pending (SPEC §3.2 actions, §3.4.1).
 
     Ids are "<market>:<run ms>:<n>", unique per run. A chain's later steps name its first
-    action as their parent, so a done buy or craft keeps its follow-up (§3.4.1).
+    action as their parent, so a done buy or craft keeps its follow-up (§3.4.1). `conf` holds
+    the action's planned chance to sell (posts), the P' its expected net assumed.
 
     Args:
         actions: From plan_market, in plan order.
@@ -171,7 +172,7 @@ def plan_rows(actions: list[PlanAction], market: str, now_ms: int) -> list[tuple
         parent = first_of_chain.get(a.chain) if a.chain else None
         if a.chain and parent is None:
             first_of_chain[a.chain] = action_id
-        rows.append((action_id, now_ms, a.at_ms, a.char_id, a.kind, a.key, a.qty, a.price, a.net, None, "pending",
+        rows.append((action_id, now_ms, a.at_ms, a.char_id, a.kind, a.key, a.qty, a.price, a.net, a.p, "pending",
                      0, None, parent, a.window_start_ms, a.window_end_ms,
                      a.net if a.kind == "post" else None, a.window_start_ms if a.kind == "post" else None, None, week))
     return rows

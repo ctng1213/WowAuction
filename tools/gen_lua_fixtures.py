@@ -156,8 +156,8 @@ def generate_plan(out_dir: Path = OUT / "plan") -> list[Path]:
 
     hour, t = 3_600_000, 1_760_000_000_000
     amaya = "Amaya-Grommash"
-    actions = [("m:1:0", amaya, "post", 2589, 20, 55, t + 5 * hour, 1045.5, None, t + 10 * hour, "pending"),
-               ("m:1:1", amaya, "hold", 6948, 1, None, t + 6 * hour, None, "m:1:0", None, "late")]
+    actions = [("m:1:0", amaya, "post", 2589, 20, 55, t + 5 * hour, 1045.5, None, t + 10 * hour, "pending", 0.925),
+               ("m:1:1", amaya, "hold", 6948, 1, None, t + 6 * hour, None, "m:1:0", None, "late", None)]
     text = plan_lua(actions, [(2589, "no_buy", t), (4306, "none", t + hour)], {amaya: t + 2 * hour}, t + 3 * hour)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "ex3.lua").write_text(text, encoding="utf-8", newline=chr(10))

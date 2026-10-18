@@ -63,7 +63,7 @@ local function Optional(s)
 end
 
 --- Split one action string (EX3).
----@param text string  "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status"
+---@param text string  "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status;chance"
 ---@return table       Fields by name; numbers as numbers, empty fields nil
 function Plan.DecodeAction(text)
   local f, i = {}, 0
@@ -73,7 +73,7 @@ function Plan.DecodeAction(text)
   end
   return { id = f[1], kind = f[2], key = tonumber(f[3]), qty = tonumber(f[4]), price = tonumber(f[5]),
            at = tonumber(f[6]), net = tonumber(f[7]), parent = Optional(f[8]), windowEnd = tonumber(f[9]),
-           status = f[10] }
+           status = f[10], chance = tonumber(f[11]) }
 end
 
 --- A character's open plan actions, in time order.

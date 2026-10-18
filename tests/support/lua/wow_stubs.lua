@@ -43,6 +43,7 @@ function Stubs.NewWorld()
     money = 0,                -- copper
     serverTime = 1760000000,  -- seconds; GetServerTime floors it
     inCombat = false,
+    localOffsetS = 0,         -- the machine's local time minus UTC, seconds (date() uses it)
     skillLines = {},          -- { name, header = bool, collapsed = bool, rank, max }
     containers = {},          -- [bagId] = { size = n, slots = { [slot] = { id, count, bound, suffix, noLink } } }
     inbox = {},               -- one array of { id, count, noLink = bool } attachments per mail
@@ -388,6 +389,12 @@ local function InstallCore()
   Define("GetMoney", function() return Stubs.world.money end)
   Define("GetServerTime", function() return math.floor(Stubs.world.serverTime) end)
   Define("InCombatLockdown", function() return Stubs.world.inCombat end)
+  -- date(): the client's, with the machine's time zone fixed by world.localOffsetS so tests are deterministic.
+  Define("date", function(format, seconds)
+    seconds = seconds or math.floor(Stubs.world.serverTime)
+    if format:sub(1, 1) == "!" then return os.date(format, seconds) end
+    return os.date("!" .. format, seconds + Stubs.world.localOffsetS)
+  end)
   Define("debugprofilestop", function() return profileMs end)
   Define("C_Timer", { After = function(seconds, fn)
     timerSeq = timerSeq + 1

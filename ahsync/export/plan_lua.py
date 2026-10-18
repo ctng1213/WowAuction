@@ -3,12 +3,13 @@
     AHProfitPlan = {
       schemaVersion, generatedAt, checksum, basedOnUntil,
       ingestedUntil = { [charId] = ms },     -- the addon deletes that character's rows at or before it
-      actions = { [charId] = { "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status", ... } },
+      actions = { [charId] = { "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status;chance", ... } },
       rules = { [key] = "rule,setAtMs" },    -- "none" is a clear and travels too (SPEC §3.4.2)
     }
 
 Only open actions (pending, late) are exported, in time order; an empty field is
-unavailable. Net is the planned expected net in copper, rounded half up. The checksum
+unavailable. Net is the planned expected net in copper, rounded half up; chance is the
+planned chance to sell in whole percent (posts; empty otherwise). The checksum
 is "<strings>:<their total length>" over every action and rule string, like
 MarketIntelligence.lua's. It is account-specific: every account on the machine shares
 it, which is why ingestedUntil is per character (SPEC §2.2).
@@ -40,14 +41,17 @@ def action_text(row: tuple) -> str:
     """One open action as the addon reads it (EX3).
 
     Args:
-        row: (action_id, char_id, kind, key, qty, price, slot_ms, expected_net, parent_id, window_end_ms, status).
+        row: (action_id, char_id, kind, key, qty, price, slot_ms, expected_net, parent_id, window_end_ms, status,
+            chance 0-1 or None).
 
     Returns:
-        "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status".
+        "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status;chance".
     """
-    action_id, _, kind, key, qty, price, slot_ms, net, parent, window_end, status = row
+    action_id, _, kind, key, qty, price, slot_ms, net, parent, window_end, status, chance = row
     net_copper = None if net is None else round_half_up(net)
-    return ";".join(_field(v) for v in (action_id, kind, key, qty, price, slot_ms, net_copper, parent, window_end, status))
+    percent = None if chance is None else round_half_up(chance * 100)
+    return ";".join(_field(v) for v in (action_id, kind, key, qty, price, slot_ms, net_copper, parent, window_end, status,
+                                        percent))
 
 
 def plan_lua(actions: Sequence[tuple], rules: Sequence[tuple[int, str, int]], ingested_until: Mapping[str, int],

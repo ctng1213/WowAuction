@@ -24,6 +24,25 @@ function Adapter.NowMs()
   return GetServerTime() * 1000
 end
 
+--- Format a moment in UTC (the caller adds the local offset first).
+---@param format string   date() format without the "!" prefix, e.g. "%a %H:%M"
+---@param seconds number  Unix seconds
+---@return string
+function Adapter.UtcDate(format, seconds)
+  return date("!" .. format, seconds)
+end
+
+--- This machine's local time minus UTC, from the client's date() (SPEC §4.3: times are local).
+---@param nowMs number  Now, UTC ms
+---@return number       Offset in ms (whole minutes)
+function Adapter.LocalOffsetMs(nowMs)
+  local seconds = math.floor(nowMs / 1000)
+  local localT, utcT = date("*t", seconds), date("!*t", seconds)
+  local days = localT.yday - utcT.yday
+  if days > 1 then days = -1 elseif days < -1 then days = 1 end       -- across a year boundary
+  return ((days * 24 + localT.hour - utcT.hour) * 60 + localT.min - utcT.min) * 60000
+end
+
 --- Run a callback once after a delay; the only timer the addon uses (SPEC §5.1).
 ---@param seconds number      Delay in seconds
 ---@param callback function   Called with no arguments
