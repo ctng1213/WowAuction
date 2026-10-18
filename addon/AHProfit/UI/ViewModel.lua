@@ -298,7 +298,7 @@ local function Row(a, counted, chance, look, totalGold, offsetMs)
     confidence = chance and look.conf or nil,
     volume = (chance and look.soldPerDay) and (ViewModel.RoundHalfUp(look.soldPerDay) .. "/day") or "—",
     risk = risk, riskAmber = amber, who = a.char:match("^([^-]+)") or a.char, day = day, time = hour,
-    price = a.price, units = a.qty,                -- numbers, for the AH panel's Sell tab fill (A29)
+    price = a.price, units = a.qty, postNetCopper = a.net or 0,   -- numbers, for the AH panel (A29, A31)
     status = a.status, note = counted.note, netCopper = ViewModel.RoundHalfUp(net or 0),
   }
 end
@@ -850,16 +850,35 @@ end
 
 -- ------------------------------------------------------------------ AH side panel (SPEC §4.3, UI7, A24)
 
---- The Post list's rows: Today's posts for items you hold; a post for an item you don't hold yet is a
---- later step of a chain and waits (A30).
+--- A copy of a post row for fewer units, its Est. profit scaled to match (A31).
+---@param row table    A Today post row
+---@param units number Units, fewer than row.units
+---@return table
+local function PostFor(row, units)
+  local copy = {}
+  for k, v in pairs(row) do copy[k] = v end
+  local net = row.postNetCopper * units / row.units
+  copy.units, copy.qty, copy.postNetCopper = units, "×" .. units, net
+  copy.postNet, copy.postNetColor = ViewModel.SignedMoney(net), net < 0 and "neg" or "pos"
+  return copy
+end
+
+--- The Post list's rows: Today's posts for items you hold, each capped at the units you still hold
+--- (shared in order across rows of the same item). A post for an item you don't hold yet is a later
+--- step of a chain and waits (A30, A31).
 ---@param rows table[]  Today rows
 ---@param held table    key -> units in your bags
 ---@param limit number  Most rows
 ---@return table[]
 function ViewModel.PostableRows(rows, held, limit)
-  local out = {}
+  local out, left = {}, {}
+  for key, units in pairs(held) do left[key] = units end
   for _, row in ipairs(rows) do
-    if row.kind == "post" and (held[row.key] or 0) > 0 and #out < limit then out[#out + 1] = row end
+    local units = math.min(row.units or 0, left[row.key] or 0)
+    if row.kind == "post" and units > 0 and #out < limit then
+      out[#out + 1] = units < row.units and PostFor(row, units) or row
+      left[row.key] = left[row.key] - units
+    end
   end
   return out
 end

@@ -14,6 +14,13 @@ AHProfit.Capture.Inventory = Inventory
 
 local bankOpen = false
 local mailOpen = false
+local listeners = {}       -- functions called after a snapshot is stored (A31)
+
+--- Call fn after every stored bags, bank or mail snapshot, so views follow what you hold (A31).
+---@param fn function  Called with the location ("bags", "bank" or "mail")
+function Inventory.OnChange(fn)
+  listeners[#listeners + 1] = fn
+end
 
 --- Sum slots per (key, bound) and encode them, ascending by key then bound (SPEC §2.2.1).
 ---@param items table[]  { key, qty, bound } per slot or attachment
@@ -79,6 +86,7 @@ function Inventory.CaptureLocation(db, charId, location, items)
   entry[location] = Inventory.Encode(items)
   entry[TIME_FIELD[location]] = Adapter.NowMs()
   Inventory.RememberNames(db, items)
+  for _, fn in ipairs(listeners) do fn(location) end
   return true
 end
 

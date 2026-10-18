@@ -390,9 +390,10 @@ function MainWindow.OnItemInfo()
   if ui and ui.frame:IsShown() then Events.Debounce("window.names", MainWindow.Refresh) end
 end
 
---- BAG_UPDATE_DELAYED: what you carry changed, so the addon's own options do too (debounced).
+--- A new bags, bank or mail snapshot was stored: what you carry changed, so the addon's own options
+--- do too. The capture is already debounced, so this redraws straight away (A31).
 function MainWindow.OnBags()
-  if ui and ui.frame:IsShown() then Events.Debounce("window.bags", MainWindow.Refresh) end
+  if ui and ui.frame:IsShown() then MainWindow.Refresh() end
 end
 
 --- What a merchant pays for one of an item, from the item cache.
@@ -711,4 +712,4 @@ Adapter.RegisterSlash("AHPROFIT", { "/ahp", "/ahprofit" }, function(args) MainWi
 -- A finished AH scan re-prices and re-ranks the open window (SPEC §4.0, A2).
 AHProfit.Scan.Replicate.OnBook(function() if ui and ui.frame:IsShown() then MainWindow.Refresh() end end)
 AHProfit.RowMenu.OnChange(function() if ui and ui.frame:IsShown() then MainWindow.Refresh() end end)
-Events.Register("BAG_UPDATE_DELAYED", MainWindow.OnBags)
+Inventory.OnChange(function() MainWindow.OnBags() end)

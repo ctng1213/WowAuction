@@ -383,4 +383,6 @@ Events.Register("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED", AHPanel.OnBrowseResults)
 Events.Register("COMMODITY_SEARCH_RESULTS_UPDATED", AHPanel.OnSellSearch)
 Events.Register("ITEM_SEARCH_RESULTS_UPDATED", AHPanel.OnSellSearch)
 Replicate.OnBook(function() if ui and ui.frame:IsShown() then AHPanel.Render() end end)
+-- A post (or a buy) changes the bags; redraw once they have been read again (A31).
+AHProfit.Capture.Inventory.OnChange(function() if ui and ui.frame:IsShown() then AHPanel.Render() end end)
 AHProfit.RowMenu.OnChange(function() if ui and ui.frame:IsShown() then AHPanel.Render() end end)

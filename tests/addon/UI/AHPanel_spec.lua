@@ -174,4 +174,24 @@ describe("AHPanel", function()
     assert_eq({ ui.postCount:GetText(), ui.post[1].item:GetText(), ui.post[2]:IsShown() }, { "1", "Linen Cloth", false })
     Stubs.ITEM_NAMES[4471] = nil
   end)
+
+  it("A31 posting from your bags updates the Post list: a posted item goes, a part-posted one shrinks", function()
+    Stubs.Reset()
+    Stubs.ITEM_NAMES[4471] = "Basic Campfire Kit"
+    Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 2589, count = 20 }, [2] = { id = 4471, count = 1 } } } }
+    UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48), [4471] = UIWorld.Item(99, 80, 10) }, NOW - 3600000)
+    UIWorld.Plan({ { id = "k", kind = "post", key = 4471, qty = 1, price = 99, at = NOW, net = 94, chance = 100 },
+                   { id = "p", kind = "post", key = 2589, qty = 20, price = 55, at = NOW, net = 1000, chance = 92 } })
+    Stubs.Login()
+    AHWorld.Install()
+    Stubs.FireEvent("AUCTION_HOUSE_SHOW")
+    local ui = AHProfit.AHPanel.Frames()
+    assert_eq(ui.postCount:GetText(), "2")
+    Stubs.world.containers[0].slots = { [1] = { id = 2589, count = 5 } }    -- the kit and 15 Linen are on the AH now
+    Stubs.FireEvent("BAG_UPDATE_DELAYED")
+    Stubs.Advance(2)                                                       -- the bag read is debounced
+    assert_eq({ ui.postCount:GetText(), ui.post[1].item:GetText(), ui.post[1].qty:GetText(), ui.post[1].profit:GetText() },
+              { "1", "Linen Cloth", "×5", AHProfit.ViewModel.WithCoins("+2s 50c") })
+    Stubs.ITEM_NAMES[4471] = nil
+  end)
 end)
