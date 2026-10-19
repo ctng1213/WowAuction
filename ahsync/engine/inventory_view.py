@@ -182,6 +182,7 @@ def _row(h: Holding, plan: _Plan, worth: float | None, w: InventoryWorld) -> dic
     paid_each = h.paid_each or 0
     return {
         "key": str(h.key), "item": look.name, "quality": look.quality, "character": _name(h.char_id),
+        "char_id": h.char_id,                                                           # the Keep control (D52)
         "where": h.where, "qty": h.qty, "paid_each": money(paid_each), "paid_total": money(paid_each * h.qty),
         "paid_note": "before tracking" if h.paid_each is None else "", "worth": money(worth),
         "windows": windows_short(w.windows.get(h.key, ()), w.offset_ms), "plan": plan.text, "plan_kind": plan.kind,

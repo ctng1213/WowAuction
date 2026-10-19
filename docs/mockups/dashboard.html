@@ -564,7 +564,7 @@ function flRow(n, q, qty, buy, sell, slot, why, profit, strength, roi, P) {
   return `<tr><td>${item(n, q)}</td><td class="num">${qty}</td><td class="num">${money(buy)}</td><td class="num">${money(buy * qty)}</td><td class="num">${money(sell)}</td><td>${slot}</td><td class="muted">${why}</td><td class="num">${net(profit)}</td>${strengthCell}<td class="num">${roi}%</td>${market(n, P)}<td class="num">${risk(buy * qty)}</td></tr>`;
 }
 function invRow(n, q, who, where, qty, paidEach, worth, plan, P, windows, sel) {
-  return `<tr${sel ? ' style="outline:2px solid var(--accent);outline-offset:-2px"' : ''}><td>${item(n, q)}</td><td>${who}</td><td class="muted">${where}</td><td class="num">${qty}</td><td class="num">${paid(paidEach)}</td><td class="num">${money(paidEach * qty)}</td><td class="num">${money(worth)}</td><td>${windows}</td>${market(n, P)}<td>${plan}</td></tr>`;
+  return `<tr${sel ? ' style="outline:2px solid var(--accent);outline-offset:-2px"' : ''}><td>${item(n, q)}</td><td>${who}</td><td class="muted">${where}</td><td class="num">${qty}</td><td class="num">${paid(paidEach)}</td><td class="num">${money(paidEach * qty)}</td><td class="num">${money(worth)}</td><td>${windows}</td>${market(n, P)}<td>${plan} <span class="select">Keep… ▾</span></td></tr>`;
 }
 function windowRow(rank, when, uplift, strength) {
   return `<div class="window"><span class="rank">${rank}</span><b>${when}</b><span class="pos">+${uplift}% price</span><span class="muted">${strength}</span></div>`;

@@ -96,7 +96,9 @@ class IngestWrites:
                                        rows))
 
     def replace_reserves(self, char_id: str, items: dict[int, int]) -> set[int]:
-        """Replace a character's reserves with a file's (SPEC §3.4.3, S14).
+        """Replace a character's reserves that have no time with an older addon's file's (SPEC §3.4.3, S14, S15).
+
+        Reserves with a time (from the dashboard or a newer addon) are left alone.
 
         Args:
             char_id: "Name-Realm".
@@ -105,7 +107,50 @@ class IngestWrites:
         Returns:
             Item keys whose reserve was added, removed or changed.
         """
-        return self._replace_rows("reserves", {"char_id": char_id}, ("key", "qty"), {(k,): q for k, q in items.items()})
+        old = dict(self.conn.execute("SELECT key, qty FROM reserves WHERE char_id = ? AND set_at IS NULL", (char_id,)))
+        timed = {k for (k,) in self.conn.execute("SELECT key FROM reserves WHERE char_id = ? AND set_at IS NOT NULL",
+                                                   (char_id,))}
+        new = {k: q for k, q in items.items() if k not in timed}
+        if old == new:
+            return set()
+        self.conn.execute("DELETE FROM reserves WHERE char_id = ? AND set_at IS NULL", (char_id,))
+        self.conn.executemany("INSERT INTO reserves(char_id, key, qty, set_at, source) VALUES (?, ?, ?, NULL, 'addon')",
+                              [(char_id, k, q) for k, q in sorted(new.items())])
+        return {k for k, _ in old.items() ^ new.items()}
+
+    def set_reserve(self, char_id: str, key: int, qty: int, set_at_ms: int, source: str) -> bool:
+        """Store one reserve if it is newer than the stored one (SPEC §3.4.3, S15, SEC9).
+
+        Args:
+            char_id: "Name-Realm".
+            key: Item key.
+            qty: Units kept; -1 keeps all; 0 clears it (kept as a dated clear).
+            set_at_ms: When it was set, UTC ms.
+            source: 'addon' or 'dashboard'.
+
+        Returns:
+            True when stored. Equal times are settled by the larger quantity, so the order of reading doesn't matter.
+        """
+        row = {"char_id": char_id, "key": key, "qty": qty, "set_at": set_at_ms, "source": source}
+        return self._upsert("reserves", row, ("char_id", "key"), {c: f"excluded.{c}" for c in ("qty", "set_at", "source")},
+                            "reserves.set_at IS NULL OR excluded.set_at > reserves.set_at OR "
+                            "(excluded.set_at = reserves.set_at AND excluded.qty > reserves.qty)")
+
+    def timed_reserves(self, char_ids: list[str]) -> list[tuple[str, int, int, int]]:
+        """Reserves with a time, clears included, for PortfolioPlan.lua (SPEC §3.4.3, EX12).
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            (character id, item key, units kept, set_at ms), by character then key.
+        """
+        if not char_ids:
+            return []
+        marks = ",".join("?" * len(char_ids))
+        return [tuple(r) for r in self.conn.execute(
+            f"SELECT char_id, key, qty, set_at FROM reserves WHERE set_at IS NOT NULL AND char_id IN ({marks}) "
+            f"ORDER BY char_id, key", tuple(char_ids))]
 
     def upsert_recipe(self, row: dict[str, object], reagents: dict[int, int]) -> bool:
         """Store a recipe definition and its reagents; a known skill or cooldown is never replaced by unknown.

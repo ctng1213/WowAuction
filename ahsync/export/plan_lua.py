@@ -58,7 +58,8 @@ def action_text(row: tuple) -> str:
 
 
 def plan_lua(actions: Sequence[tuple], rules: Sequence[tuple[int, str, int]], ingested_until: Mapping[str, int],
-             generated_ms: int, records: Mapping[int, str] | None = None) -> str:
+             generated_ms: int, records: Mapping[int, str] | None = None,
+             reserves: Sequence[tuple[str, int, int, int]] = ()) -> str:
     """The whole PortfolioPlan.lua (SPEC §3.5, EX3).
 
     Args:
@@ -68,6 +69,8 @@ def plan_lua(actions: Sequence[tuple], rules: Sequence[tuple[int, str, int]], in
         generated_ms: Now, UTC ms.
         records: Item key -> "1;line" (not selling) or "0;line", your sell records (EX8); outside the checksum,
             so an older addon still reads the file.
+        reserves: (character id, item key, units kept, set_at ms) with a time, clears (0) included (EX12); outside
+            the checksum.
 
     Returns:
         Lua source defining the global AHProfitPlan.
@@ -92,5 +95,10 @@ def plan_lua(actions: Sequence[tuple], rules: Sequence[tuple[int, str, int]], in
     lines += [f"    [{key}] = {lua_string(text)}," for key, text in sorted(rule_texts.items())]
     lines += ["  },", "  records = {"]
     lines += [f"    [{key}] = {lua_string(text)}," for key, text in sorted((records or {}).items())]
+    kept: dict[str, list[str]] = {}
+    for char_id, key, qty, set_at in sorted(reserves):
+        kept.setdefault(char_id, []).append(f"{key},{qty},{set_at}")
+    lines += ["  },", "  reserves = {"]
+    lines += [f"    [{lua_string(c)}] = {lua_string(';'.join(parts))}," for c, parts in sorted(kept.items())]
     lines += ["  },", "}", ""]
     return "\n".join(lines)

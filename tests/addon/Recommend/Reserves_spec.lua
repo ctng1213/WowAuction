@@ -37,4 +37,24 @@ describe("Reserves", function()
               { "Keeping 10 for yourself", "Kept for yourself", nil })
     assert_eq({ Reserves.Free(5, 10), Reserves.Free(5, nil) }, { 0, 5 })
   end)
+  it("A60 at login the plan's newer reserves win per item; setting one in game records its time", function()
+    local T, HOUR, A = 1760000000000, 3600000, "Amaya-Grommash"
+    local LINEN, SILK, WOOL = 2589, 4306, 2592
+    Stubs.Reset()
+    Stubs.Login()                                                        -- creates the saved table
+    AHProfitDB.reserves[A] = LINEN .. ",10;" .. SILK .. ",3"
+    AHProfitDB.reserveTimes[A] = LINEN .. "," .. T .. ";" .. SILK .. "," .. (T + 2 * HOUR)
+    Stubs.Reset({ keepSaved = true })
+    _G.AHProfitPlan = { schemaVersion = 1, generatedAt = T, checksum = "0:0", ingestedUntil = {}, actions = {}, rules = {},
+      reserves = { [A] = LINEN .. ",5," .. (T + HOUR) .. ";" .. SILK .. ",0," .. (T + HOUR) .. ";" .. WOOL .. ",-1," .. (T + HOUR) } }
+    Stubs.Login()
+    local Reserves = AHProfit.Reserves
+    assert_eq(Reserves.Get(AHProfitDB, A), { [LINEN] = 5, [SILK] = 3, [WOOL] = Reserves.ALL })
+    assert_eq(Reserves.Times(AHProfitDB, A), { [LINEN] = T + HOUR, [SILK] = T + 2 * HOUR, [WOOL] = T + HOUR })
+    Reserves.Set(AHProfitDB, A, SILK, nil)                               -- cleared in game: its time is recorded
+    assert_eq({ Reserves.Get(AHProfitDB, A)[SILK], Reserves.Times(AHProfitDB, A)[SILK] }, { nil, AHProfit.Adapter.NowMs() })
+    Reserves.Set(AHProfitDB, A, SILK, 2, T + 3 * HOUR)                 -- kept again in game, later than the plan
+    assert_eq(Reserves.Merge(AHProfitDB, A, AHProfit.Plan.Reserves(A)), 0)   -- nothing in the plan is newer now
+    _G.AHProfitPlan = nil
+  end)
 end)

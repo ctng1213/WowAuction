@@ -49,7 +49,7 @@ BUSY_TIMEOUT_MS = 5000
 PAGES = ("today", "week", "on_ah", "disenchant", "craft", "flip", "inventory", "history", "rules",
          "characters", "status")
 GET_PATHS = ("/", "/api/markets")
-POST_PATHS = ("/api/refresh", "/api/skip", "/api/rule")
+POST_PATHS = ("/api/refresh", "/api/skip", "/api/rule", "/api/reserve")
 RULES = ("no_buy", "ignore", "keep", "none")       # SPEC §3.4.2: what the dashboard may set
 VIEWS_PREFIX = "/api/views/"
 
@@ -291,6 +291,8 @@ class DashboardApp:
             return json_response(202, {"queued": True})
         if path == "/api/rule":
             return self.rule(body)
+        if path == "/api/reserve":
+            return self.reserve(body)
         return self.skip(body)
 
     def rule(self, body: bytes) -> Response:
@@ -310,17 +312,52 @@ class DashboardApp:
             key, rule = None, None
         if key is None or rule not in RULES:
             return json_response(400, {"error": "bad_request"})
+        response = self._store_and_replan(lambda now: self.db.upsert_item_rule(key, rule, now, "dashboard"), "a rule")
+        log.info("rule %s set on item %s from the dashboard", rule, key)
+        return response
+
+    def reserve(self, body: bytes) -> Response:
+        """Set or clear a character's reserve from the dashboard, then re-plan and rewrite the plan file (SPEC §3.4.3, SEC9).
+
+        Args:
+            body: JSON {"char": "<Name-Realm>", "key": <item key>, "qty": <units kept; -1 all; 0 sells normally>}.
+
+        Returns:
+            200 {"set": true|false}; 400 for a bad body or a character AHSync doesn't know; 503 when the database
+            is busy.
+        """
+        try:
+            request = json.loads(body.decode("utf-8"))
+            char_id, key, qty = request.get("char"), int(request.get("key")), int(request.get("qty"))
+        except (ValueError, AttributeError, TypeError):
+            char_id, key, qty = None, None, None
+        known = {c for c, *_ in self.db.characters()}
+        if char_id not in known or key is None or qty is None or qty < -1:
+            return json_response(400, {"error": "bad_request"})
+        response = self._store_and_replan(lambda now: self.db.set_reserve(char_id, key, qty, now, "dashboard"), "a reserve")
+        log.info("reserve of item %s for %s set to %s from the dashboard", key, char_id, qty)
+        return response
+
+    def _store_and_replan(self, write: Callable[[int], bool], what: str) -> Response:
+        """Store one dashboard change, re-plan and rewrite the plan file (SPEC §3.4.2, §3.4.3).
+
+        Args:
+            write: now ms -> whether the change was stored (called inside a transaction).
+            what: What it is, for the log.
+
+        Returns:
+            200 {"set": stored}; 503 {"error": "database_busy"} when the database is busy.
+        """
         now = self.clock.now_ms()
         try:
             with self._lock:
                 with self.db.transaction():
-                    changed = self.db.upsert_item_rule(key, rule, now, "dashboard")
+                    changed = write(now)
                 replan_all(self.db, now, self.config, self.clock.local_offset_ms(now))
                 export_plan(self.db, self.config, now, self.clock.sleep)
         except sqlite3.Error as error:
-            log.warning("setting a rule failed: %s", error)
+            log.warning("setting %s failed: %s", what, error)
             return json_response(503, {"error": "database_busy"})
-        log.info("rule %s set on item %s from the dashboard", rule, key)
         return json_response(200, {"set": changed})
 
     def skip(self, body: bytes) -> Response:

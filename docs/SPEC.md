@@ -351,7 +351,7 @@ actions(action_id PK, run_at, slot_ms, char_id, kind, key, qty, price, expected_
         window_start_ms, window_end_ms, anchor_net, anchor_window_ms, replaces_id, week_start_ms, peak_ms,
         source)   -- buys: 'vendor' or 'ah' (D41)
 item_rules(key PK, rule, set_at, source)
-reserves(char_id, key, qty,  PK(char_id,key))   -- qty -1 = all (§3.4.3)
+reserves(char_id, key, qty, set_at, source,  PK(char_id,key))   -- qty -1 = all, 0 = cleared (kept for newest-wins); set_at NULL from an older addon (§3.4.3)
 characters(id PK, name, realm, faction, market, class, level, gold, updated)
 professions(char_id, profession, skill, max_skill,           PK(char_id,profession))
 recipes(profession, spell_id, product_key, yield_min, yield_max, skill_req, cooldown_s,  PK(profession,spell_id))
@@ -825,7 +825,7 @@ Some items you hold are for your own use: food, potions, mats for your own gear.
 - The addon applies a reserve at once, trimming any AHSync action for the item to the free units and scaling its net. AHSync reads `AHProfitDB.reserves` and **follows the file** like professions: when the character's `updated` is at least the stored one, its reserves are replaced with the file's (S14). The next refresh plans with them.
 - Inventory still lists kept items and counts their worth at hold value; the plan cell says "Kept for yourself" or "Keeping 10 for yourself · …" (D40).
 - The addon's **Reservations** tab lists the character's reserves, held or not: item, how many it keeps ("All" or a number), how many it holds and how many are free to sell. Clicking a row (either button) opens the same menu, to change the number or pick Sell normally (A26).
-- SPEC GAP: reserves are set only in game; the dashboard shows them but has no editor yet.
+- **Both sides edit reserves; the newest change wins** (S15, EX12, SEC9, D52, A60). The addon records when it set or cleared each reserve in `AHProfitDB.reserveTimes[charId] = "key,ms;…"`. AHSync stores every reserve with `set_at` and `source`, a clear as quantity 0, and takes a file's reserve only when its time is newer than the stored one; a file without times (an older addon) replaces the reserves that have no time, never a dashboard one. The dashboard's Inventory sets them per character and item through `POST /api/reserve {char, key, qty}` (qty −1 keeps all, 0 sells normally), re-plans and writes `PortfolioPlan.lua`, which carries them as `reserves = { [charId] = "key,qty,ms;…" }` outside the checksum; at login the addon applies each one newer than its own time for that item.
 
 ### 3.5 Outputs
 

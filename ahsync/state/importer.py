@@ -355,10 +355,29 @@ class _Apply:
         """
         if data.reserves is None:
             return
-        by_char = {r.char_id: dict(r.items) for r in data.reserves}
+        by_char = {r.char_id: r for r in data.reserves}
         for char_id in sorted(self.follows - set(data.reserves_set_aside)):
-            items = by_char.get(char_id, {})
-            self.guarded(f"reserves[{char_id!r}]", lambda c=char_id, i=items: self.mark(self.db.replace_reserves(c, i)))
+            r = by_char.get(char_id)
+            if r is not None and r.times is not None:          # a newer addon: newest wins per item (S15)
+                self.guarded(f"reserves[{char_id!r}]", lambda r=r: self.mark(self._timed_reserves(r)))
+            else:
+                items = dict(r.items) if r else {}
+                self.guarded(f"reserves[{char_id!r}]", lambda c=char_id, i=items: self.mark(self.db.replace_reserves(c, i)))
+
+    def _timed_reserves(self, r: sv.Reserves) -> set[int]:
+        """Store each reserve the file has a time for, where it is newer than the stored one (S15).
+
+        Args:
+            r: One character's reserves with times.
+
+        Returns:
+            Item keys whose reserve changed.
+        """
+        items, changed = dict(r.items), set()
+        for key, at_ms in r.times or ():
+            if self.db.set_reserve(r.char_id, key, items.get(key, 0), at_ms, "addon"):
+                changed.add(key)
+        return changed
 
 
 def _group_counts(rows: Iterable[sv.AuctionRow]) -> dict[tuple, int]:

@@ -200,6 +200,7 @@ class Reserves:
 
     char_id: str
     items: tuple[tuple[int, int], ...]     # (item key, units kept; RESERVE_ALL keeps all), by key
+    times: tuple[tuple[int, int], ...] | None = None   # (item key, set or cleared at ms), by key; None: an older addon
 
 
 @dataclass(frozen=True, slots=True)
@@ -734,9 +735,36 @@ def read_ahprofit(text: str) -> AHProfitData:
         diagnostics=read_diagnostics(db.get("diagnostics")),
         rejected=tuple(rejected),
         item_names=item_names,
-        reserves=None if db.get("reserves") is None else tuple(reserves),
+        reserves=None if db.get("reserves") is None else tuple(_with_times(reserves, db.get("reserveTimes"), problems)),
         reserves_set_aside=_reserves_set_aside(db.get("reserves"), reserves),
     )
+
+
+def _with_times(reserves: list[Reserves], table: object, problems: list[str]) -> list[Reserves]:
+    """Attach each character's reserve times (SPEC §3.4.3, S15); a character listed only there gets an empty entry.
+
+    Args:
+        reserves: The parsed reserves.
+        table: AHProfitDB.reserveTimes, or None from an older addon.
+        problems: Receives one message per malformed entry (its character then keeps no times).
+
+    Returns:
+        The reserves with times, by character id.
+    """
+    if not isinstance(table, dict):
+        return reserves
+    by_char = {r.char_id: r for r in reserves}
+    out = []
+    for char_id in sorted(set(by_char) | {c for c in table if isinstance(c, str)}):
+        times: tuple | None = None
+        if char_id in table:
+            try:
+                times = tuple(sorted(dict(_compact_rows(table[char_id], 2, "reserveTimes")).items()))
+            except _RowError as error:
+                problems.append(f"reserveTimes[{char_id!r}]: {error}")
+        base = by_char.get(char_id, Reserves(char_id, ()))
+        out.append(Reserves(base.char_id, base.items, times))
+    return out
 
 
 def _reserves_set_aside(table: object, kept: list[Reserves]) -> tuple[str, ...]:

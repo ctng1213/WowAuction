@@ -219,6 +219,18 @@ function Plan.OnLogin()
   if s.status == "ok" and db then DB.Prune(db, s.file.ingestedUntil, Adapter.NowMs()) end
 end
 
+--- The reserves AHSync's plan carries for a character: dashboard and synced ones, clears included (EX12).
+---@param charId string
+---@return table  key -> { qty (−1 all, 0 cleared), at (ms) }; empty without a usable plan
+function Plan.Reserves(charId)
+  local s, out = State(), {}
+  local text = s.status == "ok" and (s.file.reserves or {})[charId] or ""
+  for key, qty, at in text:gmatch("(%-?%d+),(%-?%d+),(%d+)") do
+    out[tonumber(key)] = { qty = tonumber(qty), at = tonumber(at) }
+  end
+  return out
+end
+
 --- Forget the checked file (tests).
 function Plan.Reset()
   state = nil

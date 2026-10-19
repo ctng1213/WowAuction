@@ -129,6 +129,8 @@ AHProfitDB = {
 			},
 		},
 	},
+	["reserveTimes"] = {
+	},
 	["reserves"] = {
 	},
 	["rules"] = {

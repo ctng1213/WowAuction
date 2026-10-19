@@ -278,7 +278,7 @@ class StateReads:
             return {}
         marks = ",".join("?" * len(char_ids))
         return {(c, k): q for c, k, q in self.conn.execute(
-            f"SELECT char_id, key, qty FROM reserves WHERE char_id IN ({marks}) ORDER BY char_id, key",
+            f"SELECT char_id, key, qty FROM reserves WHERE char_id IN ({marks}) AND qty != 0 ORDER BY char_id, key",
             tuple(char_ids))}
 
     def vendor_reagent_keys(self) -> set[int]:

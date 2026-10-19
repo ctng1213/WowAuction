@@ -1,7 +1,8 @@
 -- Recommend/Reserves.lua: items you keep for yourself (A25). Per character, because what you keep
 -- (food, potions) belongs to the character that uses it: AHProfitDB.reserves[charId] =
 -- "key,qty;key,qty", where qty -1 keeps them all. Reserved units are never suggested for selling
--- or crafting; only what you hold above the reserve is.
+-- or crafting; only what you hold above the reserve is. AHProfitDB.reserveTimes[charId] = "key,ms;…"
+-- records when each was set or cleared, so the newer of the addon's and the dashboard's wins (A60, S15).
 
 local AHProfit = AHProfit
 
@@ -25,7 +26,16 @@ end
 ---@param charId string
 ---@param key number
 ---@param qty number|nil    Units to keep (Reserves.ALL: all); nil sells normally again
-function Reserves.Set(db, charId, key, qty)
+---@param atMs number|nil   When it was set (default now); recorded in reserveTimes (A60)
+function Reserves.Set(db, charId, key, qty, atMs)
+  local times = Reserves.Times(db, charId)
+  times[key] = atMs or AHProfit.Adapter.NowMs()
+  local timeKeys, timeParts = {}, {}
+  for k in pairs(times) do timeKeys[#timeKeys + 1] = k end
+  table.sort(timeKeys)
+  for i, k in ipairs(timeKeys) do timeParts[i] = k .. "," .. string.format("%.0f", times[k]) end
+  db.reserveTimes = db.reserveTimes or {}
+  db.reserveTimes[charId] = table.concat(timeParts, ";")
   local reserves = Reserves.Get(db, charId)
   reserves[key] = qty
   local keys, parts = {}, {}
@@ -35,6 +45,47 @@ function Reserves.Set(db, charId, key, qty)
   db.reserves = db.reserves or {}
   db.reserves[charId] = #parts > 0 and table.concat(parts, ";") or nil
 end
+
+--- When each of a character's reserves was last set or cleared in the addon (A60).
+---@param db table      AHProfitDB
+---@param charId string
+---@return table        key -> ms
+function Reserves.Times(db, charId)
+  local out = {}
+  for key, at in (((db.reserveTimes or {})[charId]) or ""):gmatch("(%-?%d+),(%d+)") do out[tonumber(key)] = tonumber(at) end
+  return out
+end
+
+--- Apply the plan's reserves that are newer than the addon's own for the same item (A60, S15).
+---@param db table        AHProfitDB; reserves and reserveTimes change
+---@param charId string
+---@param fromPlan table  key -> { qty (−1 all, 0 cleared), at (ms) } (Plan.Reserves)
+---@return number         Reserves changed
+function Reserves.Merge(db, charId, fromPlan)
+  local times, changed = Reserves.Times(db, charId), 0
+  local keys = {}
+  for key in pairs(fromPlan) do keys[#keys + 1] = key end
+  table.sort(keys)
+  for _, key in ipairs(keys) do
+    local r = fromPlan[key]
+    if r.at > (times[key] or -1) then
+      Reserves.Set(db, charId, key, r.qty ~= 0 and r.qty or nil, r.at)
+      changed = changed + 1
+    end
+  end
+  return changed
+end
+
+--- PLAYER_LOGIN: take the dashboard's newer reserves for this character from the plan file (A60).
+local function OnLogin()
+  local db = AHProfit.DB.Get()
+  if not db then return end
+  local info = AHProfit.Adapter.PlayerInfo()
+  local charId = info.name .. "-" .. info.realm
+  Reserves.Merge(db, charId, AHProfit.Plan.Reserves(charId))
+end
+
+AHProfit.Events.Register("PLAYER_LOGIN", OnLogin)
 
 --- Units free to sell or craft with, once the reserves are kept.
 ---@param held number      Units held

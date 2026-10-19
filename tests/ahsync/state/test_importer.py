@@ -274,6 +274,31 @@ def test_S14_reserves_follow_the_newest_file_and_a_bad_entry_keeps_the_stored_on
     assert stored() == []
 
 
+def test_S15_reserves_with_times_take_the_newest_change_and_an_older_addon_leaves_dated_ones_alone(db):
+    linen, bars, silk, wool, ore = 2589, 2840, 4306, 2592, 2770
+    with db.transaction():
+        db.set_reserve(AMAYA, linen, 5, T + HOUR, "dashboard")
+        db.conn.execute("INSERT INTO reserves(char_id, key, qty, set_at, source) VALUES (?, ?, 3, NULL, 'addon')", (AMAYA, bars))
+
+    def stored() -> list[tuple]:
+        """Amaya's stored reserves with times."""
+        return rows(db, "SELECT key, qty, set_at, source FROM reserves WHERE char_id = ? ORDER BY key", (AMAYA,))
+    apply_db(db, {"characters": {AMAYA: CHAR[AMAYA] | {"updated": T + 2 * HOUR}},
+                  "reserves": {AMAYA: f"{linen},10;{wool},-1"},
+                  "reserveTimes": {AMAYA: f"{linen},{T};{silk},{T + 2 * HOUR};{wool},{T + 2 * HOUR}"}})
+    assert stored() == [(linen, 5, T + HOUR, "dashboard"), (wool, -1, T + 2 * HOUR, "addon"),
+                        (bars, 3, None, "addon"), (silk, 0, T + 2 * HOUR, "addon")]
+    assert db.reserves([AMAYA]) == {(AMAYA, linen): 5, (AMAYA, wool): -1, (AMAYA, bars): 3}   # a clear keeps nothing
+    apply_db(db, {"characters": {AMAYA: CHAR[AMAYA] | {"updated": T + 3 * HOUR}}, "reserves": {AMAYA: f"{ore},4"}})
+    assert stored() == [(linen, 5, T + HOUR, "dashboard"), (wool, -1, T + 2 * HOUR, "addon"),
+                        (ore, 4, None, "addon"), (silk, 0, T + 2 * HOUR, "addon")]
+    with db.transaction():
+        assert not db.set_reserve(AMAYA, linen, 1, T, "addon")                      # older: ignored
+        assert db.set_reserve(AMAYA, linen, 6, T + HOUR, "addon")                    # a tie: the larger keeps
+    assert db.timed_reserves([AMAYA]) == [(AMAYA, linen, 6, T + HOUR), (AMAYA, wool, -1, T + 2 * HOUR),
+                                           (AMAYA, silk, 0, T + 2 * HOUR)] and db.timed_reserves([]) == []
+
+
 def test_a_malformed_item_name_is_set_aside_alone(db):
     data = read_ahprofit(savedvars_text({"itemNames": {6948: "1,Hearthstone", 2589: "x,Linen", 2592: "3,"}}))
     assert [n.key for n in data.item_names] == [6948] and len(data.problems) == 2

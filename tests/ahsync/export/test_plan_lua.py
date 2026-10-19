@@ -47,3 +47,12 @@ def test_EX8_records_go_outside_the_checksum():
     text = plan_lua.plan_lua([POST], [], {}, T, {2318: "1;Your record (30 d): 0 of 3 sold"})
     assert '    [2318] = "1;Your record (30 d): 0 of 3 sold",' in text and "  records = {\n  }," in plain
     assert plain.split("checksum = ")[1].split(",")[0] == text.split("checksum = ")[1].split(",")[0]
+
+
+def test_EX12_reserves_with_times_go_outside_the_checksum_by_character_and_key():
+    reserves = [(AMAYA, 4306, 0, T + 2 * HOUR), (AMAYA, 2589, -1, T), (AMAYA, 2840, 5, T + HOUR)]
+    plain = plan_lua.plan_lua([POST], [], {}, T)
+    text = plan_lua.plan_lua([POST], [], {}, T, None, reserves)
+    assert f'    ["{AMAYA}"] = "2589,-1,{T};2840,5,{T + HOUR};4306,0,{T + 2 * HOUR}",' in text
+    assert "  reserves = {\n  }," in plain
+    assert plain.split("checksum = ")[1].split(",")[0] == text.split("checksum = ")[1].split(",")[0]

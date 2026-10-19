@@ -25,7 +25,7 @@ from ahsync.recommend.store import RecommendStore
 from ahsync.state.journal import JournalReads
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
@@ -98,6 +98,11 @@ MIGRATIONS: dict[int, str] = {
             char_id TEXT NOT NULL, key INTEGER NOT NULL, at INTEGER NOT NULL, delta INTEGER NOT NULL,
             PRIMARY KEY(char_id, key, at)
         )
+    """,
+    # 13: reserves carry when and where they were set, so the newest change wins both ways (S15).
+    13: """
+        ALTER TABLE reserves ADD COLUMN set_at INTEGER;
+        ALTER TABLE reserves ADD COLUMN source TEXT
     """,
 }
 BACKUP_KEEP = 3

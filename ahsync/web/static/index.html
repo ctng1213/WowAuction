@@ -357,7 +357,9 @@ const LIVE = {
     row: r => `<td>${item(r.item, r.quality)}</td><td>${esc(r.character)}</td><td class="muted">${esc(r.where)}</td><td class="num">${esc(r.qty)}</td>` +
               `<td class="num">${esc(r.paid_each)}${r.paid_note ? `<span class="sub">${esc(r.paid_note)}</span>` : ''}</td><td class="num">${esc(r.paid_total)}</td>` +
               `<td class="num">${dash(r.worth)}</td><td>${dash(r.windows)}</td>${marketCells(r)}` +
-              `<td class="${['bound', 'ignored', 'none', 'kept'].includes(r.plan_kind) ? 'muted' : ''}">${esc(r.plan)}</td>`,
+              `<td class="${['bound', 'ignored', 'none', 'kept'].includes(r.plan_kind) ? 'muted' : ''}">${esc(r.plan)}` +
+              (r.plan_kind === 'bound' ? '' : ` <select class="btn" data-reserve-char="${esc(r.char_id)}" data-reserve-key="${esc(r.key)}" title="Keep it for yourself (D52)">` +
+                `<option value="">Keep…</option><option value="-1">Keep all</option><option value="n">Keep a number…</option><option value="0">Sell normally</option></select>`) + `</td>`,
     filters: [
       { id: 'search', label: null, kind: 'search', placeholder: 'Search items…', test: (r, v) => !v || String(r.item).toLowerCase().includes(v.toLowerCase()) },
       { id: 'character', label: 'Character', fromRows: 'character', test: (r, v) => v === '' || r.character === v },
@@ -516,6 +518,7 @@ function render(id) {
   card.querySelectorAll('[data-skip]').forEach(btn => { btn.onclick = () => skip(btn.dataset.skip, btn); });
   card.querySelectorAll('button[data-rule]').forEach(btn => { btn.onclick = () => setRule(id, btn.dataset.ruleKey, btn.dataset.rule, btn); });
   card.querySelectorAll('select[data-rule-key]').forEach(sel => { sel.onchange = () => sel.value && setRule(id, sel.dataset.ruleKey, sel.value, sel); });
+  card.querySelectorAll('select[data-reserve-key]').forEach(sel => { sel.onchange = () => sel.value && setReserve(id, sel); });
 }
 
 // Set an item rule from Needs a decision (SPEC §3.4.2, D43): AHSync stores it, re-plans and rewrites the plan file.
@@ -529,6 +532,25 @@ async function setRule(id, key, rule, el) {
     notice("AHSync isn't answering. Is it still running?", 'warn');
   }
   el.disabled = false;
+}
+
+// Keep an item for one character from Inventory (SPEC §3.4.3, D52, SEC9): AHSync stores it, re-plans and tells the addon.
+async function setReserve(id, sel) {
+  let qty = sel.value;
+  if (qty === 'n') {
+    const typed = window.prompt('Keep how many?', '1');
+    if (typed === null || !/^\d+$/.test(typed.trim()) || Number(typed) < 1) { sel.value = ''; return; }
+    qty = typed.trim();
+  }
+  sel.disabled = true;
+  try {
+    const r = await post('/api/reserve', { char: sel.dataset.reserveChar, key: Number(sel.dataset.reserveKey), qty: Number(qty) });
+    if (r && r.status === 200) { notice(qty === '0' ? 'Selling it normally again.' : 'Kept: the plan leaves it alone.', 'ok'); load(id); }
+    else if (r) notice(`Not saved (${r.body.error || r.status}).`, 'warn');
+  } catch (e) {
+    notice("AHSync isn't answering. Is it still running?", 'warn');
+  }
+  sel.disabled = false;
 }
 
 // A table row: pages with `selectKey` get a clickable row that selects it (Inventory's item detail).

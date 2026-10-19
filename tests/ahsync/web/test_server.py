@@ -527,3 +527,33 @@ def test_every_css_class_the_pages_build_bars_and_profession_rows_with_is_styled
     for cls in ("bar", "prof", "tiles", "tile", "grid2", "card", "kv"):
         if f'class="{cls}"' in page:
             assert re.search(rf"\.{cls}[ {{,:]", page), f".{cls} is used but has no style"
+
+
+def test_SEC9_a_reserve_is_stored_from_the_dashboard_and_checked_like_every_write(app, db, monkeypatch):
+    from ahsync.web import server as server_module
+    replans, exports = [], []
+    monkeypatch.setattr(server_module, "replan_all", lambda *a: replans.append(a) or [])
+    monkeypatch.setattr(server_module, "export_plan", lambda *a: exports.append(a) or True)
+    with db.transaction():
+        db.conn.execute("INSERT INTO characters(id, market, gold) VALUES ('Amaya-Grommash', ?, 1)", (M,))
+    reply = app.handle("POST", "/api/reserve", write_headers(), b'{"char": "Amaya-Grommash", "key": 2589, "qty": 5}')
+    assert reply.status == 200 and json.loads(reply.body) == {"set": True}
+    assert db.conn.execute("SELECT qty, source FROM reserves WHERE key = 2589").fetchall() == [(5, "dashboard")]
+    assert len(replans) == 1 and len(exports) == 1
+    assert app.handle("POST", "/api/reserve", write_headers(), b'{"char": "Amaya-Grommash", "key": 2589, "qty": -2}').status == 400
+    assert app.handle("POST", "/api/reserve", write_headers(), b'{"char": "Nobody-X", "key": 2589, "qty": 1}').status == 400
+    assert app.handle("POST", "/api/reserve", write_headers(), b'{"char": "Amaya-Grommash", "key": "x", "qty": 1}').status == 400
+    foreign = app.handle("POST", "/api/reserve", write_headers(origin="https://evil.example"),
+                         b'{"char": "Amaya-Grommash", "key": 4306, "qty": 1}')
+    assert foreign.status == 403 and not db.conn.execute("SELECT 1 FROM reserves WHERE key = 4306").fetchall()
+
+
+def test_a_busy_database_answers_503_for_a_reserve(app, db, monkeypatch):
+    with db.transaction():
+        db.conn.execute("INSERT INTO characters(id, market, gold) VALUES ('Amaya-Grommash', ?, 1)", (M,))
+
+    def busy(*_args):
+        """Fail like a locked database."""
+        raise sqlite3.OperationalError("database is locked")
+    monkeypatch.setattr(app.db, "set_reserve", busy)
+    assert app.handle("POST", "/api/reserve", write_headers(), b'{"char": "Amaya-Grommash", "key": 2, "qty": 1}').status == 503

@@ -112,3 +112,8 @@ def test_a_partial_reserve_with_nothing_else_planned_still_says_what_is_kept():
     [row] = inventory_view([Holding("Amaya-G", "bags", LINEN, 4, False)],
                            world(reserves={("Amaya-G", LINEN): 10}))["rows"]
     assert (row["plan"], row["plan_kind"]) == ("Keeping 10 for yourself", "kept")
+
+
+def test_D52_each_row_carries_its_full_character_id_for_the_keep_control():
+    [row] = inventory_view([Holding("Amaya-G", "bags", GLOVES, 1, False)], world())["rows"]
+    assert (row["character"], row["char_id"], row["key"]) == ("Amaya", "Amaya-G", str(GLOVES))
