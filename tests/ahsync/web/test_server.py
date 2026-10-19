@@ -288,7 +288,7 @@ def test_every_live_table_has_the_market_columns_in_order_and_every_header_a_too
     assert re.findall(r"\['([^']+)', 1, '(\w+)'\]", market) == [(h, c) for h, c in MARKET_COLUMNS]
     live = html[html.index("const LIVE = {"):html.index("// ---------- state")]
     tables = re.findall(r"cols: (\[.*?\]),\n\s*row:", live, re.S)
-    assert len(tables) == 5 and all("...MARKET_COLS" in cols for cols in tables)     # today, flip, inventory, DE, craft
+    assert len(tables) == 6 and all("...MARKET_COLS" in cols for cols in tables)     # today, flip, on the AH, inventory, DE, craft
     headers = set(re.findall(r"\['([^']+)', [01], ", live + market))
     assert headers - set(COLUMN_HELP) == set()        # SPEC §3.5: every column header has a tooltip
 

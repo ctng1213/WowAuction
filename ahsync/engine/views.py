@@ -104,6 +104,15 @@ COLUMN_HELP = {
                             'profitable it is. "—" = too little evidence',
     "Expected ROI": "Expected profit ÷ buy cost. Flips need at least 20%",
     "Where": "Bags, bank or mail. Auctions you have up are on On the AH",
+    "Listed each": "Your buyout per unit",
+    "Listed total": "Listed each × quantity",
+    "Cost each": "What it cost you per unit: what you paid, or the mats for a craft; 0 for items you found or held "
+                 "before tracking started",
+    "Cost total": "Cost each × quantity",
+    "Deposit": 'Deposit you paid to post; back on a sale, lost on expiry. "—" = its post was not captured',
+    "Profit if sold": "Listed total after the 5% cut, less the cost",
+    "Time left": "The time left the AH shows for the auction",
+    "Position": '"cheapest" at or below the cheapest listing now; else who is cheaper, and at what price',
     "Paid each": "What you paid per unit, averaged across all your characters; 0 for items you found or held "
                  "before tracking started",
     "Paid total": "Paid each × quantity",

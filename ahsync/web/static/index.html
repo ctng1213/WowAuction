@@ -267,6 +267,23 @@ const LIVE = {
       daysFilter,
     ],
   },
+  on_ah: {
+    lede: 'Everything you have listed right now, on every character (SPEC §3.5). <b>Cost</b> is what it cost you: what you paid, or what the mats cost you for a craft; items you found cost 0. <b>Profit if sold</b> is the listed total after the 5% cut, less that cost; the deposit comes back on a sale.',
+    above: d => tilesHtml(d.tiles),
+    cols: [['Item', 0, null], ['Character', 0, null], ['Qty', 1, 'qty'], ['Listed each', 1, null], ['Listed total', 1, 'listed'],
+           ['Cost each', 1, null], ['Cost total', 1, 'cost'], ['Deposit', 1, null], ['Profit if sold', 1, 'profit'],
+           ['Time left', 0, 'band'], ['Position', 0, null], ...MARKET_COLS],
+    row: r => `<td>${item(r.item, r.quality)}</td><td>${esc(r.character)}</td><td class="num">${esc(r.qty)}</td>` +
+              `<td class="num">${esc(r.listed_each)}</td><td class="num">${esc(r.listed_total)}</td>` +
+              `<td class="num">${esc(r.cost_each)}${r.cost_note ? `<span class="sub">${esc(r.cost_note)}</span>` : ''}</td><td class="num">${esc(r.cost_total)}</td>` +
+              `<td class="num">${dash(r.deposit)}</td>${profitCell(r)}<td class="muted">${esc(r.time_left)}</td>` +
+              `<td><span class="${r.position_class === 'pos' ? 'pos' : 'neg'}">${esc(r.position)}</span></td>${marketCells(r)}`,
+    filters: [
+      { id: 'search', label: null, kind: 'search', placeholder: 'Search items…', test: (r, v) => !v || String(r.item).toLowerCase().includes(v.toLowerCase()) },
+      { id: 'character', label: 'Character', fromRows: 'character', test: (r, v) => v === '' || r.character === v },
+      { id: 'position', label: 'Position', options: [['', 'All'], ['pos', 'Cheapest'], ['neg', 'Undercut']], test: (r, v) => v === '' || r.position_class === v },
+    ],
+  },
   inventory: {
     lede: 'What you own on every character: bags, bank and mail (auctions you have up are on <b>On the AH</b>). <b>Paid</b> is what you paid (0 for items you found or held before tracking started); <b>Worth</b> is what the item is expected to bring under its plan. <b>Click a row</b> to see when it sells best and why.',
     above: d => tilesHtml(d.tiles),

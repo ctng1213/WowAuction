@@ -835,6 +835,8 @@ Some items you hold are for your own use: food, potions, mats for your own gear.
      - time left, your position (cheapest, or undercut by whom and how much), and the chance it sells.
      
      Tiles at the top total the listed value, the cost, the expected profit and the deposits at stake.
+
+     **Built** (`engine/on_ah_view`, `recommend/on_ah_page`, D18) from the own-auctions snapshots the addon captures: one row per group of identical auctions; the deposit comes from the post event that made it ("—" when that post wasn't captured); position compares with the item's current cheapest listing; the chance is the item's posting-now chance. SPEC GAP: the chance for the rest of the auction's own window, and who undercut you, are not worked out yet.
    - **Disenchant** / **Craft** / **Flip** tables, sortable and filterable, with each, total and risk %. Craft adds a Source column (Owned / AH / Mixed) and filter, and a per-row breakdown of owned versus bought mats
    - **Inventory**: what you own, what you paid, what it's worth, and its plan. Selecting a row shows *why*: the 30-day price line and the hour-of-week heat map behind its sell slot
      - **Worth** is counted once per item across all its rows, then split by quantity: the expected value of its planned posts, disenchants and vendor sales, plus its other units (held for a later week, or used by a planned craft, "6 for crafting Copper Rod") at their hold value. A disenchant planned for another character shows who ("Disenchant (Brugan)"). Bound and ignored items say "not planned" and have no worth (D25–D28).

@@ -17,6 +17,7 @@ from ahsync.analysis.market import analyze_market
 from ahsync.config import Config, market_settings
 from ahsync.db.sqlite import Database
 from ahsync.recommend.inventory_page import inventory_page
+from ahsync.recommend.on_ah_page import on_ah_page
 from ahsync.recommend.pages import craft_page, disenchant_page
 from ahsync.recommend.plan import plan_market, plan_rows, sell_records
 from ahsync.recommend.plan_pages import plan_pages, view_actions
@@ -104,6 +105,7 @@ def _stage_recommendations(db: Database, market: str, stats: dict, now_ms: int, 
     total_gold = sum(g for _, g in characters)
     db.stage_view("disenchant", market, disenchant_page(db, char_ids, stats, items, total_gold, now_ms, cfg), now_ms)
     db.stage_view("craft", market, craft_page(db, char_ids, stats, items, total_gold, now_ms, cfg), now_ms)
+    db.stage_view("on_ah", market, on_ah_page(db, char_ids, stats, items), now_ms)          # D18
     _stage_plan(db, market, characters, stats, items, now_ms, offset_ms, cfg)
 
 

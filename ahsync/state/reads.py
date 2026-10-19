@@ -104,6 +104,17 @@ class StateReader(Protocol):
             (character id, place, item key, units, bound), sorted by character, place, key, bound.
         """
 
+    def own_auctions(self, char_ids: list[str]) -> list[tuple[str, int, int, int, int, int, int | None]]:
+        """Your auctions as the addon last saw them, with the deposit of the post behind each (SPEC §3.5 On the AH).
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            (char_id, key, price each copper, stack, band 1-4, auctions, deposit per auction copper or None when
+            its post wasn't captured), by character, key, price, stack, band.
+        """
+
     def cost_basis(self) -> dict[int, tuple[int, int]]:
         """What you paid for items, account-wide.
 
@@ -338,6 +349,26 @@ class StateReads:
         """
         return {key: (qty, total) for key, qty, total in self.conn.execute(
             "SELECT key, qty, total_cost FROM cost_basis WHERE qty > 0 ORDER BY key")}
+
+    def own_auctions(self, char_ids: list[str]) -> list[tuple[str, int, int, int, int, int, int | None]]:
+        """Your auctions as the addon last saw them, with the deposit of the post behind each (SPEC §3.5 On the AH).
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            (char_id, key, price each copper, stack, band 1-4, auctions, deposit per auction copper or None when
+            its post wasn't captured), by character, key, price, stack, band.
+        """
+        if not char_ids:
+            return []
+        marks = ",".join("?" * len(char_ids))
+        return [tuple(r) for r in self.conn.execute(
+            f"SELECT a.char_id, a.key, a.price, a.stack, a.band, COALESCE(a.count, 1), "
+            f"(SELECT p.deposit FROM posts p WHERE p.char_id = a.char_id AND p.key = a.key AND p.stack = a.stack "
+            f" AND p.price = a.price AND p.outcome IS NULL ORDER BY p.at DESC LIMIT 1) "
+            f"FROM own_auctions a WHERE a.char_id IN ({marks}) ORDER BY a.char_id, a.key, a.price, a.stack, a.band",
+            tuple(char_ids))]
 
     def characters(self) -> list[tuple[str, str, str, str | None, int | None]]:
         """Every character, on any market or none (SPEC §3.5 Status).

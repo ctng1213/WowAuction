@@ -466,7 +466,7 @@ D19–D22 are listed with the display scenarios in section 1.
 |---|---|---|
 | D16 | Today rows with net 10 s, 5 s, 5 s (P' 0.8 and 0.9) | order 10 s, then the 5 s with P' 0.9, then the other 5 s; footer total 20 s |
 | D17 | a Week day with actions +8 s 30 c, +1 g 10 s and −20 c | day total +1 g 18 s 10 c; the category and character totals add up to the week total |
-| D18 | On the AH rows from T9–T11 | the listed, cost, profit and deposit tiles equal the sums of their columns |
+| D18 | On the AH rows from T9–T11: a Copper Rod you crafted (cost 10 s) up at 41 s with a 9 c deposit, and 5 Linen you looted up at 45 c each (no deposit captured) | rows: the rod listed 41s, cost 10s, deposit 9c, profit if sold +28s 95c (41 × 0.95 − 10); the Linen cost 0c "before tracking", deposit "—", profit +2s 14c; the listed, cost, profit and deposit tiles equal the sums of their columns (43s 25c, 10s, +31s 9c, 9c); position "cheapest" at or below the cheapest listing, else "undercut: <cheapest>" |
 | TT1 | current 8 s, med30 11 s, DE 14 s 25 c, best 12 s 30 c | deltas +38%, +78%, +54% |
 | TT2 | current 10 s, historical 9 s | −10%, shown red |
 | TT3 | no current price | values shown, no deltas |
