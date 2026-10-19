@@ -96,3 +96,29 @@ def take_within_caps(candidates: list[Candidate], caps: dict[int, float],
         else:
             dropped.append(c.id)
     return taken, dropped
+
+
+SUPPLY_ROWS, SUPPLY_STEPS = 24, 20       # 24 starting hours; factors in 5% steps (SPEC §4.3, EX13)
+
+
+def supply_factor_row(supply_how: Sequence[float], first_hour: int, window_hours: int) -> str:
+    """The supply factors the addon's cap applies, one per starting hour (SPEC §3.4 Liquidity, EX13).
+
+    Args:
+        supply_how: 168 listed-supply ratios; empty when there is no pattern.
+        first_hour: The refresh's clock hour, floor(ms / 3600000): row 0 starts there.
+        window_hours: sell_window_hours.
+
+    Returns:
+        24 characters, each char(35 + n) with n = floor(f × 20 + 0.5) clamped to 0-50, where f is
+        window_supply(1, …) for a window starting that hour; "" without a pattern.
+    """
+    if not supply_how:
+        return ""
+    out = []
+    for row in range(SUPPLY_ROWS):
+        start = first_hour + row
+        factor = window_supply(1, supply_how, start, list(range(start, start + window_hours)))
+        out.append(chr(35 + max(0, min(50, math.floor(factor * SUPPLY_STEPS + 0.5)))))
+    return "".join(out)
+

@@ -625,7 +625,7 @@ local function Lines(nowMs, gold)
                                  Reserves.Get(db, charId))
     local actions = CharacterActions(charId, nowMs)        -- what a made product is for (A37)
     local ctx = { itemOf = LiveItem, levelsOf = LevelsOf, vendorOf = VendorOf, vendorBuyOf = Market.VendorPrice,
-                  listed = Listed(charId, nowMs) }
+                  listed = Listed(charId, nowMs), nowMs = nowMs }
     local rows = VM.CraftRows(Options.CraftOptions(recipes, units, ctx), LookOf, gold, actions, nowMs, offset)
     local empty = #recipes == 0 and "No recipes seen on this character yet. Open each profession window once."
       or "None of your recipes pays right now."

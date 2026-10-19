@@ -155,11 +155,13 @@ end
 ---@param recipe table      { yieldMin, yieldMax }
 ---@param item table|nil    The product's market item (supply, refStack)
 ---@param held number|nil   Units of the product you hold
+---@param nowMs number|nil  Now, for the supply factor of this hour (A62); nil applies none
 ---@return number|nil       Crafts, 0 when what you hold fills the cap; nil (no cap) when neither the current nor
 ---                          the typical supply is known
-function Options.CraftCap(recipe, item, held)
+function Options.CraftCap(recipe, item, held, nowMs)
   local supply = item and (item.supply or item.typicalSupply)          -- typical daily supply as a fallback (A57)
   if not supply then return nil end
+  supply = supply * Options.SupplyFactor(item, nowMs)                  -- over the window, not just now (A62)
   local units = math.max(item.refStack or 1, math.floor(Options.MAX_SUPPLY_SHARE * supply)) - (held or 0)
   if units <= 0 then return 0 end
   return math.max(1, math.floor(units / ((recipe.yieldMin + recipe.yieldMax) / 2)))
@@ -180,6 +182,16 @@ function Options.Buyable(item, price)
   local function Outside(p) return p < Options.SUSPECT_LOW * item.p10 or p > Options.SUSPECT_HIGH * item.p90 end
   if not Outside(price) then return true end
   return item.cur ~= nil and Outside(item.cur) and item.suspect == 0
+end
+
+--- The supply factor over the posting-now window for this hour, from the item's S row (SPEC §3.4 Liquidity, A62).
+---@param item table        A market item (supplyRow, curveHour)
+---@param nowMs number|nil  Now, UTC ms
+---@return number           The factor (5% steps); 1 without a row or a time
+function Options.SupplyFactor(item, nowMs)
+  if not (item.supplyRow and item.curveHour and nowMs) then return 1 end
+  local code = item.supplyRow:byte(SellProb.CurveRow(item.curveHour * 3600000, nowMs) + 1)
+  return code and (code - 35) / 20 or 1
 end
 
 --- Where a craft's mats can come from now: what you carry at its hold value, the AH and vendors. A
@@ -234,7 +246,8 @@ function Options.Crafts(recipes, units, ctx)
     for i, r in ipairs(left) do
       local net, p = Options.ProductNet(r, ctx.itemOf(r.product), ctx.vendorOf(r.product) or 0)
       local listed = (ctx.listed or {})[r.product]
-      local cap = Options.CraftCap(r, ctx.itemOf(r.product), (units[r.product] or 0) + (listed and listed.units or 0))
+      local cap = Options.CraftCap(r, ctx.itemOf(r.product), (units[r.product] or 0) + (listed and listed.units or 0),
+                                   ctx.nowMs)
       local option = Craft.Option(r, CraftMarket({ r }, owned, ctx), net, nil, cap)
       option.p = p
       if option.crafts > 0 and (not best or option.profit > best.profit) then best, bestAt = option, i end
@@ -270,7 +283,7 @@ function Options.CraftOptions(recipes, units, ctx)
     local market = CraftMarket({ r }, units, ctx)
     local inBags, listed = units[r.product] or 0, (ctx.listed or {})[r.product]   -- your auctions count too (A42)
     local held = inBags + (listed and listed.units or 0)
-    local cap = Options.CraftCap(r, ctx.itemOf(r.product), held)
+    local cap = Options.CraftCap(r, ctx.itemOf(r.product), held, ctx.nowMs)
     local option = Craft.Option(r, market, net, nil, cap)
     if cap == 0 and held > 0 and not vendorSold then
       out[#out + 1] = { key = r.product, spell = r.spell, made = held, inBags = inBags,

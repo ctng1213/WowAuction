@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 
+from ahsync.engine import capacity, profile
 from ahsync.engine.sellprob import CURVE_AHEAD, CURVE_AHEAD_TOOLTIP, CURVE_ROWS
 from ahsync.engine.views import round_half_up
 from ahsync.intel.contract import IntelWindow, ItemIntel, MarketIntelligence
@@ -151,6 +152,27 @@ def exported_items(intel: MarketIntelligence, shortlist: set[int]) -> list[tuple
             for key, s in sorted(intel.items.items()) if wanted(key, s)]
 
 
+def _supply_rows(intel: MarketIntelligence, keys: set[int], window_hours: int) -> str:
+    """The shortlist's supply factor rows as a Lua table body (EX13).
+
+    Args:
+        intel: The market's intelligence.
+        keys: Shortlisted, exported item keys.
+        window_hours: sell_window_hours.
+
+    Returns:
+        '[key] = "…", …' for items with a supply pattern, by key.
+    """
+    parts = []
+    for key in sorted(keys):
+        s = intel.items[key]
+        pattern = profile.unpack(s.supply_how, s.supply_weeks).values if s.supply_how else ()
+        row = capacity.supply_factor_row(pattern, intel.built_ms // HOUR_MS, window_hours)
+        if row:
+            parts.append(f"[{key}] = {lua_string(row)}")
+    return ", ".join(parts)
+
+
 def _market_block(name: str, items: list[tuple[int, str, str]], de: Mapping[int, str]) -> list[str]:
     """Lua statements filling one market's I, C and D tables, CHUNK items per function (A3).
 
@@ -196,7 +218,7 @@ def checksum(markets: Iterable[list[tuple[int, str, str]]], des: Iterable[Mappin
 def market_lua(intels: Sequence[MarketIntelligence], shortlists: Mapping[str, set[int]],
                char_markets: Mapping[str, str], generated_ms: int,
                disenchantable: Mapping[int, str] | None = None, vendor: Mapping[int, int] | None = None,
-               flips: Mapping[str, Mapping[int, str]] | None = None) -> str:
+               flips: Mapping[str, Mapping[int, str]] | None = None, window_hours: int = 8) -> str:
     """The whole MarketIntelligence.lua (SPEC §3.5, EX2).
 
     Args:
@@ -208,6 +230,7 @@ def market_lua(intels: Sequence[MarketIntelligence], shortlists: Mapping[str, se
         vendor: Item key -> vendor buy price in copper, for vendor-sold items (EX6).
         flips: Market -> item key -> "expected,price,slot" flip offers (EX11); exported items only, outside the
             checksum.
+        window_hours: sell_window_hours, for the shortlist's supply factors (EX13).
 
     Returns:
         Lua source defining the global AHProfitMarket.
@@ -222,8 +245,10 @@ def market_lua(intels: Sequence[MarketIntelligence], shortlists: Mapping[str, se
         exported = {key for key, _, _ in items}
         offers = ", ".join(f"[{key}] = {lua_string(text)}" for key, text in sorted((flips or {}).get(intel.market, {}).items())
                            if key in exported)
+        rows = _supply_rows(intel, shortlists.get(intel.market, set()) & exported, window_hours)
         entries.append(f"  [{lua_string(intel.market)}] = {{ observationsUntil = {until}, "
-                       f"curveHour = {intel.built_ms // HOUR_MS}, I = I{n}, C = C{n}, D = D{n}, F = {{ {offers} }} }},")
+                       f"curveHour = {intel.built_ms // HOUR_MS}, I = I{n}, C = C{n}, D = D{n}, F = {{ {offers} }}, "
+                       f"S = {{ {rows} }} }},")
     chars = ", ".join(f"[{lua_string(c)}] = {lua_string(m)}" for c, m in sorted(char_markets.items()))
     vendors = ", ".join(f"[{key}] = {price}" for key, price in sorted((vendor or {}).items()))
     lines += ["AHProfitMarket = {", f"  schemaVersion = {MARKET_SCHEMA_VERSION},", f"  generatedAt = {generated_ms},",

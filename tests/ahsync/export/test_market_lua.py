@@ -37,7 +37,7 @@ def test_EX2_the_file_holds_compact_item_strings_curves_and_a_checked_header():
     strings = len("45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900,,0;138:4:139:1120:7;") + 72 + len(",,,,,,,0,,,,6,,,1,,1,250,,0;;")
     assert f'checksum = "3:{strings}"' in text and "schemaVersion = 1," in text and f"generatedAt = {BUILT}," in text
     assert f'charMarkets = {{ ["Amaya-Grommash"] = "{M}" }}' in text
-    assert f'["{M}"] = {{ observationsUntil = {BUILT - HOUR}, curveHour = {BUILT // HOUR}, I = I1, C = C1, D = D1, F = {{  }} }},' in text
+    assert f'["{M}"] = {{ observationsUntil = {BUILT - HOUR}, curveHour = {BUILT // HOUR}, I = I1, C = C1, D = D1, F = {{  }}, S = {{  }} }},' in text
 
 
 def test_AR6_the_shortlist_keeps_the_full_curve_and_others_get_the_0_5_20_columns_unchanged():
@@ -111,3 +111,13 @@ def test_EX11_flip_offers_go_in_each_market_entry_for_exported_items_outside_the
     text = market_lua.market_lua([intel(LINEN_INTEL)], {M: set()}, {}, BUILT, flips={M: {LINEN: "53,61,138", 999: "1,1,1"}})
     assert f'F = {{ [{LINEN}] = "53,61,138" }}' in text and "[999]" not in text
     assert plain.split("checksum = ")[1].split(",")[0] == text.split("checksum = ")[1].split(",")[0]
+
+
+def test_EX13_shortlisted_items_with_a_supply_pattern_carry_their_factor_row():
+    flat = ",".join(["1000"] * 168)
+    weeks = ",".join(["7"] * 168)
+    patterned = replace(LINEN_INTEL, supply_how=flat, supply_weeks=weeks)
+    text = market_lua.market_lua([intel(patterned)], {M: {LINEN}}, {}, BUILT, window_hours=8)
+    assert f'S = {{ [{LINEN}] = "{"7" * 24}" }}' in text                 # flat: 1.0 every hour
+    assert 'S = {  }' in market_lua.market_lua([intel(patterned)], {M: set()}, {}, BUILT)      # not shortlisted
+    assert 'S = {  }' in market_lua.market_lua([intel(LINEN_INTEL)], {M: {LINEN}}, {}, BUILT)  # no pattern

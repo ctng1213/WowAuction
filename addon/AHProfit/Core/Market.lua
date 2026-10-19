@@ -127,6 +127,8 @@ function Market.Item(key)
   if not text then return nil end
   if cached >= Market.CACHE_LIMIT then cache, cached = {}, 0 end
   item = Market.Decode(text)
+  item.supplyRow = s.market.S and s.market.S[key]             -- 24 supply factors for the shortlist (EX13)
+  item.curveHour = s.market.curveHour
   cache[key], cached = item, cached + 1
   return item
 end

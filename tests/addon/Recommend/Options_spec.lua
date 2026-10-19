@@ -191,4 +191,17 @@ describe("Options", function()
     local unconfirmed = { p10 = 30, p90 = 40, cur = 1, curQty = 2, suspect = 1 }
     assert_eq({ Options.Buyable(confirmed, 1), Options.Buyable(unconfirmed, 1) }, { true, false })
   end)
+  it("A62 the craft cap applies the supply factor for this hour from the item's S row", function()
+    local Options = Boot()
+    local rod = { yieldMin = 1, yieldMax = 1 }
+    local NOW = 1760000000000
+    local hour = math.floor(NOW / 3600000)
+    local doubled = string.rep(string.char(35 + 40), 24)               -- 2.0 every hour
+    local item = { refStack = 1, supply = 6, supplyRow = doubled, curveHour = hour - 3 }
+    assert_eq(Options.SupplyFactor(item, NOW), 2)
+    assert_eq({ Options.CraftCap(rod, item, 0, NOW), Options.CraftCap(rod, item, 0) }, { 6, 3 })   -- 6 × 2 → 6; no time: 3
+    assert_eq(Options.SupplyFactor({ supply = 6 }, NOW), 1)
+    local rows = string.rep(string.char(35 + 20), 3) .. string.char(35 + 30) .. string.rep(string.char(35 + 20), 20)
+    assert_eq(Options.SupplyFactor({ supplyRow = rows, curveHour = hour - 3 }, NOW), 1.5)   -- row 3 is this hour
+  end)
 end)

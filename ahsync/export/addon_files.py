@@ -168,7 +168,7 @@ def export_market(db: Database, cfg: Config, now_ms: int, sleep: Callable[[float
     vendor = vendor_prices(db)
     items = db.items()
     flips = {i.market: flip_offers(i.items, items, set(vendor), now_ms, cfg) for i in intels}       # EX11
-    text = market_lua(intels, shortlists, char_markets, now_ms, disenchantable(db), vendor, flips)
+    text = market_lua(intels, shortlists, char_markets, now_ms, disenchantable(db), vendor, flips, cfg.sell_window_hours)
     return _write(db, folder / MARKET_FILE, text, MAX_MARKET_BYTES, now_ms, sleep, replace)
 
 

@@ -45,3 +45,18 @@ def test_buys_are_taken_best_profit_first_with_a_full_tie_break_and_units_alread
 def test_a_mat_without_a_cap_is_an_error():
     with pytest.raises(KeyError):
         take_within_caps([Candidate(1, 1.0, {DUST: 1.0})], {})
+
+
+def test_EX13_supply_factor_rows_for_the_addon():
+    from ahsync.engine.capacity import supply_factor_row
+    pattern = [1.0] * 168
+    for slot in range(20, 28):                                            # Mon 20:00 to Tue 03:00
+        pattern[slot] = 2.0
+    monday_18 = (7 * 2900 + 4) * 24 + 18                                   # an hour number that is Mon 18:00 UTC
+    assert slot_of(monday_18) == 18
+    row = supply_factor_row(pattern, monday_18, 8)
+    assert len(row) == 24 and row[0] == "F" and row[2] == "7"             # (2 × 1 + 6 × 2) ÷ 8 = 1.75; 2.0 ÷ 2.0 = 1.0
+    assert supply_factor_row([], monday_18, 8) == ""
+    huge = [0.1] * 168
+    huge[18 + 1] = 99.0
+    assert supply_factor_row(huge, monday_18, 8)[0] == chr(35 + 50)      # clamped at 2.5
