@@ -23,18 +23,18 @@ function Auctions.Band(seconds)
 end
 
 --- Encode auctions as the snapshot's rows and ends (SPEC §2.2.1).
----@param auctions table[]  { key, price, qty, leftSeconds } from Adapter.ReadOwnedAuctions
+---@param auctions table[]  { key, price, qty, leftSeconds|nil, band } from Adapter.ReadOwnedAuctions
 ---@param nowMs number
----@return string  rows "key,price,stack,band,count", grouped, ascending
----@return string  ends "key,units,end ms,unit price", one per auction, ascending
+---@return string  rows "key,price,stack,band,count", grouped, ascending; the band from the seconds when known
+---@return string  ends "key,units,end ms,unit price", one per auction whose seconds are known (A70), ascending
 function Auctions.Encode(auctions, nowMs)
   local groups, ends = {}, {}
   for _, a in ipairs(auctions) do
-    local group = { a.key, a.price, a.qty, Auctions.Band(a.leftSeconds) }
+    local group = { a.key, a.price, a.qty, a.leftSeconds and Auctions.Band(a.leftSeconds) or a.band or 0 }
     local id = table.concat(group, ",")
     groups[id] = groups[id] or { fields = group, count = 0 }
     groups[id].count = groups[id].count + 1
-    ends[#ends + 1] = { a.key, a.qty, nowMs + a.leftSeconds * 1000, a.price }
+    if a.leftSeconds then ends[#ends + 1] = { a.key, a.qty, nowMs + a.leftSeconds * 1000, a.price } end
   end
   local rows = {}
   for _, g in pairs(groups) do rows[#rows + 1] = { g.fields[1], g.fields[2], g.fields[3], g.fields[4], g.count } end
@@ -77,10 +77,19 @@ function Auctions.Active(entry, nowMs)
   return out
 end
 
+local lastProbe = nil   -- "timeLeftSeconds=<type>" from the last owned-auctions read with an auction (A70)
+
+--- What the last owned-auctions read showed of the time-left field, for the diagnostics (A70).
+---@return string|nil  "timeLeftSeconds=number" or "timeLeftSeconds=nil"; nil when no auction was read this session
+function Auctions.Describe()
+  return lastProbe
+end
+
 --- Store the answer to the last owned-auctions query and tell the views.
 local function CaptureLive()
   local db = DB.Get()
-  local auctions = Adapter.ReadOwnedAuctions()
+  local auctions, probe = Adapter.ReadOwnedAuctions()
+  lastProbe = probe or lastProbe
   if not (db and auctions) then return end
   local now = Adapter.NowMs()
   local rows, ends = Auctions.Encode(auctions, now)

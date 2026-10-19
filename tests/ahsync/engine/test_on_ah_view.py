@@ -41,6 +41,13 @@ def test_D53_time_left_from_the_end_and_what_is_listed_below_you():
                        Listing("Brugan-G", LINEN, 45, 20, 4, 1, None, None, 40, None, now - hour, (20, 40, 40))],
                       LOOKS, now)
     cells = {(r["character"], r["item"]): (r["time_left"], r["position"], r["position_class"]) for r in view["rows"]}
-    assert cells[("Amaya", "Copper Rod")] == ("ends in 5 h", "undercut by 12 at 38c–40c", "neg")
+    assert cells[("Amaya", "Copper Rod")] == ("ends in 5 h", "12 units listed below you at 38c–40c", "neg")
     assert cells[("Amaya", "Linen Cloth")] == ("2 – 8 h", "cheapest", "pos")
-    assert cells[("Brugan", "Linen Cloth")] == ("ending", "undercut by 20 at 40c", "neg")
+    assert cells[("Brugan", "Linen Cloth")] == ("ending", "20 units listed below you at 40c", "neg")
+
+
+def test_D61_the_position_counts_units_listed_below_you_singular_for_one():
+    view = on_ah_view([Listing("Amaya-G", ROD, 4100, 1, 3, 2, None, None, 3800, 0.4, None, (12, 38, 40)),
+                       Listing("Brugan-G", ROD, 4100, 1, 3, 1, None, None, 4000, 0.4, None, (1, 4000, 4000))], LOOKS)
+    assert [r["position"] for r in view["rows"]] == ["12 units listed below you at 38c–40c",
+                                                    "1 unit listed below you at 40s"]

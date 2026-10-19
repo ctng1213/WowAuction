@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from ahsync.engine.plan import PlanAction
-from ahsync.history.reads import ItemInfo
+from ahsync.history.reads import ItemCatalog, ItemInfo, load_suffix_names
 from ahsync.intel.contract import ItemIntel
 from ahsync.recommend import plan_pages
 from ahsync.recommend.plan import plan_rows
@@ -48,3 +48,14 @@ def test_pages_today_by_filter_step_week_and_flip():
 def test_an_unknown_suffix_key_is_named_after_its_base_item():
     looks = plan_pages.item_looks({-LINEN, LINEN, 99}, {}, ITEMS)
     assert [looks[k].name for k in (-LINEN, LINEN, 99)] == ["Linen Cloth (unknown suffix)", "Linen Cloth", "99"]
+
+
+def test_D60_today_names_a_variant_from_its_base_item_and_the_suffix_table():
+    bracers, variant = 15507, 61486751825043                # suffix 14316 "of Defense" (ahsync/data/bonus_suffixes.json)
+    items = ItemCatalog([(bracers, ItemInfo(bracers, "Grunt's Bracers", 2, 19, 4, 1820, 364, 1))], load_suffix_names())
+    post = PlanAction("post", "Amaya-G", variant, 1, 5000, NOW, NOW + HOUR, NOW + 5 * HOUR, None, 0.9, 4000.0, 4000.0, 24)
+    views = plan_pages.view_actions([post], plan_rows([post], M, NOW), [])
+    [row] = plan_pages.plan_pages(views, {}, items, 314_000, NOW, 0)["today"]["by_min"]["0"]["rows"]
+    assert (row["item"], row["quality"]) == ("Grunt's Bracers of Defense", 2)
+    plain = plan_pages.item_looks({variant}, {}, {bracers: items[bracers]})      # no suffix table: still its base
+    assert plain[variant].name == "Grunt's Bracers (variant)"

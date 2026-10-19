@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from ahsync.engine.plan import PlanAction
 from ahsync.engine.plan_views import ItemLook, ViewAction, flip_view, today_view, week_view
-from ahsync.engine.views import COLUMN_HELP, round_half_up
-from ahsync.history.reads import ItemInfo
+from ahsync.engine.views import COLUMN_HELP, item_name, item_quality, round_half_up
+from ahsync.history.reads import ItemInfo, suffix_names_of
 from ahsync.intel.contract import ItemIntel, price_level
 
 MIN_CHANCE_STEPS = (0, 25, 50, 75)        # the Today page's "Min chance" dropdown, percent
@@ -48,13 +48,13 @@ def item_looks(keys: set[int], stats: dict[int, ItemIntel], items: dict[int, Ite
         records: Item key -> your sell record (SPEC §3.3.3, D42); None for none.
 
     Returns:
-        Item key -> ItemLook; an unknown item shows its key.
+        Item key -> ItemLook; a variant missing from items is named from its base item and suffix (D60); an
+        unknown item shows its key.
     """
     out = {}
     for key in sorted(keys):
-        info, s = items.get(key) or (items.get(-key) if key < 0 else None), stats.get(key)
-        name = (info.name + (" (unknown suffix)" if key < 0 else "")) if info else str(key)   # SPEC §2.2.1: −itemId
-        quality = (info.quality or 1) if info else 1
+        s = stats.get(key)
+        name, quality = item_name(key, items, suffix_names_of(items)), item_quality(key, items)   # SPEC §2.2.1, D60
         basis = (paid or {}).get(key)
         paid_each = round_half_up(basis[1] / basis[0]) if basis and basis[0] else None
         record = (records or {}).get(key)

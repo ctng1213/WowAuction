@@ -1,6 +1,7 @@
 """Tests for ahsync/state/diagnostics.py: the addon's diagnostics block (SPEC §2.2.1, §6)."""
 from __future__ import annotations
 
+from ahsync.state.diagnostics import read_diagnostics
 from ahsync.state.savedvars import read_ahprofit
 from tests.ahsync.state.test_savedvars import db_text
 
@@ -37,3 +38,17 @@ def test_missing_or_malformed_diagnostics_never_break_the_read():
     assert read_ahprofit(db_text("")).diagnostics is None
     d = read_ahprofit(db_text('\t["diagnostics"] = { ["at"] = "soon", ["apis"] = 5, ["errors"] = "x" },')).diagnostics
     assert (d.at_ms, d.apis, d.errors, d.client) == (None, (), (), None)
+
+
+def test_A70_the_owned_auctions_probe_is_read_for_the_report():
+    import importlib.util
+    from pathlib import Path
+    assert read_diagnostics({"ownAuctions": "timeLeftSeconds=nil"}).own_auctions == "timeLeftSeconds=nil"
+    assert read_diagnostics({"ownAuctions": 5}).own_auctions is None and read_diagnostics({}).own_auctions is None
+    path = Path(__file__).resolve().parents[3] / "tools" / "savedvars_report.py"
+    spec = importlib.util.spec_from_file_location("savedvars_report", path)
+    report = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(report)
+    assert report.own_auctions_line("timeLeftSeconds=nil").endswith("shows each auction's time-left band")
+    assert report.own_auctions_line("timeLeftSeconds=number").endswith("each auction's end is saved")
+    assert report.own_auctions_line(None).startswith("none read")

@@ -7,10 +7,12 @@ The addon's twin is UI/ViewModel.lua (M5).
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from ahsync.engine.confidence import level
+from ahsync.engine.item_key import KEY_SUFFIX_FACTOR, variant_name
 from ahsync.engine.volume import supply_to_volume
 
 HIGH_RISK_PCT = 25.0        # config high_risk_pct (SPEC §3.4)
@@ -96,6 +98,53 @@ def signed_money(copper: float) -> str:
     return "+" + text if round_half_up(copper) > 0 else text
 
 
+def _item_and_base(key: int, items: Mapping[int, Any]) -> tuple[Any, Any]:
+    """An item's own metadata and its base item's.
+
+    Args:
+        key: Item key (−item id for an unknown suffix).
+        items: Item key -> metadata with .name and .quality (history.reads.ItemInfo).
+
+    Returns:
+        (its own row or None, its base item's row or None).
+    """
+    return items.get(key), items.get(-key if key < 0 else key % KEY_SUFFIX_FACTOR)
+
+
+def item_name(key: int, items: Mapping[int, Any], suffix_names: Mapping[int, str]) -> str:
+    """The one display name of an item key, for every page (SPEC §2.2.1, D60).
+
+    Args:
+        key: Item key (−item id for an unknown suffix).
+        items: Item key -> metadata with .name (history.reads.ItemInfo).
+        suffix_names: Random suffix id -> name ("of Defense").
+
+    Returns:
+        The key's own name ("(unknown suffix)" added for a negative key); else, for a variant missing from items,
+        its base item's name with its suffix (item_key.variant_name); else the key as text.
+    """
+    info, base = _item_and_base(key, items)
+    if info is not None and key >= 0:
+        return info.name
+    named = info or base
+    return variant_name(key, named.name, suffix_names) if named is not None else str(key)
+
+
+def item_quality(key: int, items: Mapping[int, Any]) -> int:
+    """An item key's quality, from its base item when the variant has no row of its own (D60).
+
+    Args:
+        key: Item key.
+        items: Item key -> metadata with .quality.
+
+    Returns:
+        WoW quality 0-5; 1 (common) when unknown.
+    """
+    info, base = _item_and_base(key, items)
+    named = info or base
+    return (named.quality or 1) if named is not None else 1
+
+
 # The market activity columns, in their required order (SPEC §3.5): header -> row cell name.
 MARKET_COLUMNS = (("Chance", "chance"), ("Est. Sales/Day", "sales"), ("Current Supply", "supply"),
                   ("Supply/Volume", "days"))
@@ -155,7 +204,7 @@ COLUMN_HELP = {
     "Deposit": 'Deposit you paid to post; back on a sale, lost on expiry. "—" = its post was not captured',
     "Profit if sold": "Listed total after the 5% cut, less the cost",
     "Time left": "The time left the AH shows for the auction",
-    "Position": '"cheapest" at or below the cheapest listing now; else who is cheaper, and at what price',
+    "Position": '"cheapest" at or below the cheapest listing now; else how many units are listed below you, and at what prices',
     "Paid each": "What you paid per unit, averaged across all your characters; 0 for items you found or held "
                  "before tracking started",
     "Paid total": "Paid each × quantity",

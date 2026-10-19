@@ -45,8 +45,8 @@ def test_V36_a_snapshot_with_ids_prices_items_and_feeds_id_and_group_volume_idem
         (LINEN, 48, 10, "blizzard"), (ORE, 30, 150, "blizzard")]
     assert db.conn.execute("SELECT src, kind FROM scans ORDER BY at").fetchall() == [("blizzard", "full")] * 2
     expected = [("blizzard", LINEN, 20.0, 0.0, 10.0, "ids"), ("blizzard", ORE, 50.0, 0.0, 0.0, "ids"),
-                ("books", LINEN, 20.0, 0.0, 10.0, "groups"), ("books", ORE, 200.0, 0.0, 150.0, "groups")]
-    assert volume(db) == expected              # the groups see the partial buy as one gone, one new (SPEC §3.3.1)
+                ("books", LINEN, 20.0, 0.0, 10.0, "groups"), ("books", ORE, 50.0, 0.0, 0.0, "groups")]
+    assert volume(db) == expected              # units per price level measure the partial buy too (SPEC §3.3.1)
     assert db.conn.execute("SELECT covered FROM volume_cover WHERE src = 'blizzard'").fetchone()[0] == \
         ",".join("3600" if h == 18 else "0" for h in range(24))
     ingest_snapshot(db, store, SECOND)

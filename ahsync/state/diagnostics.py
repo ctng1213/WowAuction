@@ -26,6 +26,7 @@ class Diagnostics:
     trade_skill: str | None = None         # raw last trade skill window "name=..|ids=..|learned=..|first=.."
     scan: str | None = None                # last full-scan read "calls=..|n=..|skipped=..|steps=..|maxStepMs=..|kind=..|rows=..|dropped=.."
     traces: tuple[str, ...] = ()           # last capture decisions, oldest first ("take 1 money=.. -> payout")
+    own_auctions: str | None = None        # owned-auction probe "timeLeftSeconds=number|nil" (A70); None: none read
 
 
 
@@ -73,5 +74,5 @@ def read_diagnostics(value: object) -> Diagnostics | None:
         client=text("client"), apis=tuple(apis), errors=errors,
         skill_lines=text("skillLines"), merchant=text("merchant"), setup_error=text("setupError"),
         namespaces=tuple(namespaces), professions=text("professions"), trade_skill=text("tradeSkill"), scan=text("scan"),
-        traces=tuple(t for t in (text("traces") or "").split(";") if t),
+        traces=tuple(t for t in (text("traces") or "").split(";") if t), own_auctions=text("ownAuctions"),
     )

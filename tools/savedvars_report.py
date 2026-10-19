@@ -92,6 +92,22 @@ def report_character(data: AHProfitData, char_id: str, gaps: list[str]) -> None:
             print(f"         suffix item {key % SUFFIX_BASE} v={key // SUFFIX_BASE} key={key}")
 
 
+def own_auctions_line(probe: str | None) -> str:
+    """Explain the owned-auctions probe: whether Forever gives each auction's seconds left (A70, SPEC §6).
+
+    Args:
+        probe: Diagnostics ownAuctions, "timeLeftSeconds=<Lua type>"; None when no auction was read.
+
+    Returns:
+        One line for the report.
+    """
+    if probe is None:
+        return "none read this session (open the AH with an auction up)"
+    if probe == "timeLeftSeconds=number":
+        return "timeLeftSeconds is a number: each auction's end is saved"
+    return f"{probe}: no end is saved, so the dashboard shows each auction's time-left band"
+
+
 def report_diagnostics(data: AHProfitData, verbose: bool) -> None:
     """Print what the addon saw last session: client, missing APIs, errors, raw skill and merchant rows.
 
@@ -133,6 +149,7 @@ def report_diagnostics(data: AHProfitData, verbose: bool) -> None:
             print(f"  {namespace}: {len(functions)} functions: {' '.join(functions)}")
     print(f"  last trade skill window: {(d.trade_skill or 'none opened this session').replace('|', '  ')}")
     print(f"  last full scan read: {(d.scan or 'no scan this session').replace('|', '  ')}")
+    print(f"  own auctions: {own_auctions_line(d.own_auctions)}")
     print("  capture trace (money takes, disenchants; oldest first):")
     for line in d.traces or ("nothing taken or disenchanted this session",):
         print(f"    {line}")

@@ -19,7 +19,7 @@ SUPPLY_DAYS = 30            # median_daily_supply looks back this far (SPEC §3.
 MAX_GAP_MS = 6 * HOUR_MS
 SALES_PAIR_MAX_GAP_MS = 2 * HOUR_MS     # hourly sales rates need books this close (SPEC §3.3 sales_how)
 CROSS_SOURCE_MIN_GAP_MS = 15 * 60_000   # books of different sources closer than this never pair (SPEC §3.3.1, V39)
-VOLUME_METHOD_VERSION = 3     # bump when the estimation changes; stored data is then recomputed (SPEC §3.3.6)
+VOLUME_METHOD_VERSION = 4     # bump when the estimation changes; stored data is then recomputed (SPEC §3.3.6)
 KINDS = ("ids", "groups", "own")       # volume kinds in trust order (SPEC §3.3.1)
 LEGACY_KIND = {"ahf": "groups", "books": "groups", "mail": "own"}   # rows stored without a cover (V24)
 # Time-left bands [lo, hi) in hours, by WoW band code (SPEC §3.3.1). UNVERIFIED for Forever (§6 item 5).
@@ -131,7 +131,10 @@ def expiring_fraction(band: int, gap_hours: float) -> float:
 
 
 def estimate_volume(prev: Book, next_: Book, max_gap_ms: int = MAX_GAP_MS) -> dict[int, Volume] | None:
-    """Estimate units sold, expired and newly listed between two order books (SPEC §3.3.1).
+    """Estimate units sold, expired and newly listed between two order books (SPEC §3.3.1 source 2).
+
+    Units are diffed per price level (item, unit price): stack size and band are not part of the group, so a
+    partly bought commodity auction (200 -> 150 units) counts 50 sold, not 200 gone plus 150 new (V42).
 
     Args:
         prev: The earlier complete order book.
@@ -139,34 +142,34 @@ def estimate_volume(prev: Book, next_: Book, max_gap_ms: int = MAX_GAP_MS) -> di
         max_gap_ms: Largest allowed time between the books, in ms.
 
     Returns:
-        Item key -> Volume(sold, expired, listed) in units, or None when the
-        books are more than max_gap_ms apart. Known errors: a cancelled auction
-        counts as sold, and a repost at a new price as sold plus new.
+        Item key -> Volume(sold, expired, listed) in units, or None when the books are more than max_gap_ms
+        apart. Per level: gone = max(0, before − after), new = max(0, after − before), expired = min(gone,
+        units expiring by band), sold = gone − expired. Known errors: a cancel counts as sold; a repost at a
+        new price counts as sold at the old level and listed at the new; a repost at the same price as nothing.
     """
     gap_ms = next_.at_ms - prev.at_ms
     if gap_ms > max_gap_ms:
         return None
     gap_hours = gap_ms / HOUR_MS
-    prev_count: dict[tuple[int, int, int], int] = {}
-    expiring: dict[tuple[int, int, int], float] = {}
+    before: dict[tuple[int, int], int] = {}
+    expiring: dict[tuple[int, int], float] = {}
     for e in prev.entries:
-        group = (e.key, e.price, e.stack)        # band is not part of the group (V6)
-        prev_count[group] = prev_count.get(group, 0) + e.count
-        expiring[group] = expiring.get(group, 0.0) + e.count * expiring_fraction(e.band, gap_hours)
-    next_count: dict[tuple[int, int, int], int] = {}
+        level = (e.key, e.price)                 # stack and band are not part of the level (V6, V42, V43)
+        before[level] = before.get(level, 0) + e.stack * e.count
+        expiring[level] = expiring.get(level, 0.0) + e.stack * e.count * expiring_fraction(e.band, gap_hours)
+    after: dict[tuple[int, int], int] = {}
     for e in next_.entries:
-        group = (e.key, e.price, e.stack)
-        next_count[group] = next_count.get(group, 0) + e.count
+        level = (e.key, e.price)
+        after[level] = after.get(level, 0) + e.stack * e.count
     totals: dict[int, list[float]] = {}
-    for group in sorted(set(prev_count) | set(next_count)):
-        before, after = prev_count.get(group, 0), next_count.get(group, 0)
-        gone, new = max(0, before - after), max(0, after - before)
-        expired = min(gone, expiring.get(group, 0.0))
-        stack = group[2]
-        total = totals.setdefault(group[0], [0.0, 0.0, 0.0])
-        total[0] += (gone - expired) * stack
-        total[1] += expired * stack
-        total[2] += new * stack
+    for level in sorted(set(before) | set(after)):
+        units_before, units_after = before.get(level, 0), after.get(level, 0)
+        gone, new = max(0, units_before - units_after), max(0, units_after - units_before)
+        expired = min(gone, expiring.get(level, 0.0))
+        total = totals.setdefault(level[0], [0.0, 0.0, 0.0])
+        total[0] += gone - expired
+        total[1] += expired
+        total[2] += new
     return {key: Volume(sold, expired, listed) for key, (sold, expired, listed) in sorted(totals.items())}
 
 

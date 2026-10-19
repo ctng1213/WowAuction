@@ -49,6 +49,30 @@ describe("Auctions", function()
     Stubs.Advance(2)
     assert_eq(AHProfitDB.ownAuctions["Amaya-Grommash"], nil)
   end)
+  it("A70 an auction without timeLeftSeconds gets no end, its band from timeLeft, and the diagnostics say nil", function()
+    Boot({
+      { itemLink = Stubs.ItemLink(6217), status = 0, quantity = 1, timeLeft = 2, buyoutAmount = 4100 },   -- no seconds
+      { itemLink = Stubs.ItemLink(2589), status = 0, quantity = 20, buyoutAmount = 40 },                 -- neither
+    })
+    Stubs.FireEvent("OWNED_AUCTIONS_UPDATED")
+    Stubs.Advance(2)
+    local snap = AHProfitDB.ownAuctions["Amaya-Grommash"]
+    assert_eq(snap, { at = snap.at, rows = "2589,40,20,0,1;6217,4100,1,3,1", ends = "" })
+    Stubs.FireEvent("PLAYER_LOGOUT")
+    assert_eq(AHProfitDB.diagnostics.ownAuctions, "timeLeftSeconds=nil")
+  end)
+
+  it("A70 an auction with timeLeftSeconds gets its end as before, and the diagnostics say number", function()
+    Boot({ { itemLink = Stubs.ItemLink(6217), status = 0, quantity = 1, timeLeftSeconds = 5 * 3600, timeLeft = 3,
+             buyoutAmount = 4100 } })
+    Stubs.FireEvent("OWNED_AUCTIONS_UPDATED")
+    Stubs.Advance(2)
+    local snap = AHProfitDB.ownAuctions["Amaya-Grommash"]
+    assert_eq(snap, { at = snap.at, rows = "6217,4100,1,3,1", ends = "6217,1," .. (snap.at + 5 * 3600000) .. ",4100" })
+    Stubs.FireEvent("PLAYER_LOGOUT")
+    assert_eq(AHProfitDB.diagnostics.ownAuctions, "timeLeftSeconds=number")
+  end)
+
   it("A61 the long band runs to 8 h, as the spec and the dashboard say", function()
     Stubs.Reset()
     Stubs.Login()

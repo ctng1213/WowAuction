@@ -138,3 +138,12 @@ def test_SRC3_remote_sources_rank_as_configured_after_your_own_scans(db):
     assert item.current.src == "blizzard"
     [default] = db.market_history(M, history_window(t + 3 * HOUR))
     assert default.hourly_closes[0] == (t, 100) and default.current.src == "ahf"
+
+
+def test_D60_item_metadata_carries_the_suffix_names_that_name_variants(db, tmp_path):
+    from ahsync.history.reads import ItemCatalog, load_suffix_names, suffix_names_of
+    items = db.items()
+    assert isinstance(items, ItemCatalog) and items.suffix_names[14316] == "of Defense"   # AHF /items suffixes
+    assert suffix_names_of(items) is items.suffix_names and suffix_names_of({}) == {}
+    (tmp_path / "old.json").write_text('{"build": "x", "suffixes": {}}', encoding="utf-8")
+    assert load_suffix_names(tmp_path / "old.json") == {} and load_suffix_names(tmp_path / "missing.json") == {}

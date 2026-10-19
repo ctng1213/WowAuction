@@ -5,10 +5,14 @@ one locally, or a cloud store later.
 """
 from __future__ import annotations
 
+import json
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Protocol
+
+SUFFIX_TABLE = Path(__file__).resolve().parents[1] / "data" / "bonus_suffixes.json"   # tools/gen_bonus_suffixes.py
 
 
 @dataclass(frozen=True)
@@ -63,6 +67,48 @@ class ItemHistory:
     volume_cover: dict[int, dict[str, tuple[str, tuple[int, ...] | None]]] = field(default_factory=dict)
 
 
+class ItemCatalog(dict):
+    """Item key -> ItemInfo, plus AHF's random suffix names, so pages can name a variant `items` lacks (D60)."""
+
+    def __init__(self, rows: Iterable[tuple[int, ItemInfo]] = (), suffix_names: Mapping[int, str] | None = None):
+        """Build the catalog.
+
+        Args:
+            rows: (item key, ItemInfo) pairs.
+            suffix_names: Random suffix id -> name ("of Defense"); None for none.
+        """
+        super().__init__(rows)
+        self.suffix_names: Mapping[int, str] = dict(suffix_names or {})
+
+
+def suffix_names_of(items: Mapping[int, ItemInfo]) -> Mapping[int, str]:
+    """The suffix names that come with item metadata (D60).
+
+    Args:
+        items: An ItemCatalog, or a plain mapping (tests), which has none.
+
+    Returns:
+        Suffix id -> name; empty for a plain mapping.
+    """
+    return items.suffix_names if isinstance(items, ItemCatalog) else {}
+
+
+def load_suffix_names(path: Path = SUFFIX_TABLE) -> dict[int, str]:
+    """AHF's random suffix id -> name table, generated with the bonus table (SPEC §2.1, §2.2.1).
+
+    Args:
+        path: The generated JSON (tools/gen_bonus_suffixes.py).
+
+    Returns:
+        Suffix id -> name; empty when the file or its `names` table is missing (variants then read "(variant)").
+    """
+    try:
+        table = json.loads(path.read_text(encoding="utf-8")).get("names") or {}
+    except (OSError, ValueError):
+        return {}
+    return {int(suffix): name for suffix, name in table.items()}
+
+
 class HistoryReader(Protocol):
     """What historical analysis may read (SPEC §5.0 contracts). Times are UTC ms, money copper.
 
@@ -99,14 +145,14 @@ class HistoryReads:
 
     conn: sqlite3.Connection
 
-    def items(self) -> dict[int, ItemInfo]:
-        """All item metadata.
+    def items(self) -> ItemCatalog:
+        """All item metadata, with the suffix names that name variants missing from it (D60).
 
         Returns:
-            Item key -> ItemInfo.
+            Item key -> ItemInfo, as an ItemCatalog.
         """
         rows = self.conn.execute("SELECT key, name, quality, ilvl, class, vendor_buy, vendor_sell, stack FROM items")
-        return {r[0]: ItemInfo(r[0], r[1] or str(r[0]), *r[2:]) for r in rows}
+        return ItemCatalog(((r[0], ItemInfo(r[0], r[1] or str(r[0]), *r[2:])) for r in rows), load_suffix_names())
 
     def market_history(self, market: str, window: HistoryWindow) -> Iterator[ItemHistory]:
         """Every priced item's history, one query per table, merged by key (SPEC §5.0 bulk reads, AR7).

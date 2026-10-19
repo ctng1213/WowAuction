@@ -15,7 +15,7 @@ from ahsync.engine.de_table import DE_TABLE
 from ahsync.engine.plan import PlanAction
 from ahsync.engine.planned_crafts import chain_lines, craft_chains
 from ahsync.engine.sellprob import Supply
-from ahsync.history.reads import ItemInfo
+from ahsync.history.reads import ItemInfo, suffix_names_of
 from ahsync.intel.contract import ItemIntel, supply_level
 from ahsync.state.reads import RecipeRow, StateReader
 
@@ -274,9 +274,8 @@ def _chain_rows(state: StateReader, recipes: list[RecipeRow], planned: Sequence[
         f = c.final
         trade = profession.get(f.key, "")
         skill = state.skill_of(f.char_id, trade) if trade else None
-        product = items.get(f.key)
         out.append(views.craft_row(views.CraftInput(
-            0, product.name if product else str(f.key), (product.quality or 1) if product else 1, trade,
+            0, views.item_name(f.key, items, suffix_names_of(items)), views.item_quality(f.key, items), trade,
             f"{f.char_id.split('-')[0]} ({trade} {skill})" if skill is not None else f.char_id.split("-")[0],
             "Plan", f.qty, views.craft_money(f.qty, c.mat_gold, {}, names), c.mat_gold,
             c.sale.price if c.sale and c.sale.kind == "post" else None, c.net, _market(stats.get(f.key)), "", "",
@@ -331,12 +330,11 @@ def craft_page(state: StateReader, char_ids: list[str], stats: dict[int, ItemInt
         crafter, mail = craft.gather(option.owned_used, held, engine_recipes[r.spell].crafters)
         crafter = crafter or option.crafter
         skill = state.skill_of(crafter, r.profession)
-        product = items.get(r.product)
         value_each = _product_net(stats.get(r.product), r, items, now_ms, cfg)(1)
         lines = views.craft_lines(views.CraftMats(option.owned_used, option.from_vendor, option.bought, option.spent,
                                                   {k: c.crafter for k, c in option.crafted.items()}, mail), names)
         rows.append((option.profit, r.spell, views.craft_row(views.CraftInput(
-            r.spell, product.name if product else str(r.product), (product.quality or 1) if product else 1,
+            r.spell, views.item_name(r.product, items, suffix_names_of(items)), views.item_quality(r.product, items),
             r.profession,
             f"{crafter.split('-')[0]} ({r.profession} {skill})" if skill is not None else crafter.split("-")[0],
             option.source, option.crafts,

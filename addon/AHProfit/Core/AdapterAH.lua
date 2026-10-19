@@ -140,25 +140,47 @@ function Adapter.QueryOwnedAuctions()
   return (pcall(AH.QueryOwnedAuctions, {}))
 end
 
+--- The time-left band of an owned auction without seconds, from its band enum (A70).
+--- UNVERIFIED: info.timeLeft as retail's Enum.AuctionHouseTimeLeftBand (0 short ... 3 very long).
+---@param timeLeft any  info.timeLeft
+---@return number       Band 1-4; 0 when unknown (AHSync shows "—")
+local function OwnedBand(timeLeft)
+  if type(timeLeft) == "number" and timeLeft >= 0 and timeLeft <= 3 then return timeLeft + 1 end
+  return 0
+end
+
+--- One active owned auction as the capture stores it, or nil for a sold one or one without a key.
+---@param info table|nil  A GetOwnedAuctionInfo result
+---@return table|nil      { key, price, qty, leftSeconds (nil when not a number), band (used without seconds) }
+local function OwnedAuction(info)
+  if not (info and info.status == 0 and info.buyoutAmount) then return nil end
+  local key = (info.itemLink and Adapter.ItemKey(info.itemLink)) or (info.itemKey and info.itemKey.itemID)
+  if not key then return nil end
+  local seconds = type(info.timeLeftSeconds) == "number" and info.timeLeftSeconds or nil
+  return { key = key, price = info.buyoutAmount, qty = info.quantity or 1, leftSeconds = seconds,
+           band = OwnedBand(info.timeLeft) }
+end
+
 --- Your active auctions, as the last query answered.
 --- UNVERIFIED: C_AuctionHouse.GetNumOwnedAuctions and GetOwnedAuctionInfo(i), 1-based, returning
---- { itemLink, itemKey = { itemID }, status (0 active, 1 sold), quantity, timeLeftSeconds, buyoutAmount
+--- { itemLink, itemKey = { itemID }, status (0 active, 1 sold), quantity, timeLeftSeconds, timeLeft, buyoutAmount
 --- (per unit for a commodity; an item auction is one unit) }, as on retail.
----@return table[]|nil  { key, price (copper each), qty, leftSeconds } per active auction; nil without the API
+--- UNVERIFIED: whether Forever fills timeLeftSeconds; without it no end is known (A70, SPEC §6).
+---@return table[]|nil  { key, price (copper each), qty, leftSeconds|nil, band } per active auction; nil without the API
+---@return string|nil   "timeLeftSeconds=<Lua type>" of the first active auction, for the diagnostics; nil with none
 function Adapter.ReadOwnedAuctions()
   local AH = _G.C_AuctionHouse
   if not (AH and AH.GetNumOwnedAuctions and AH.GetOwnedAuctionInfo) then return nil end
-  local out = {}
+  local out, probe = {}, nil
   for i = 1, AH.GetNumOwnedAuctions() or 0 do
     local info = AH.GetOwnedAuctionInfo(i)
-    if info and info.status == 0 and info.buyoutAmount then
-      local key = (info.itemLink and Adapter.ItemKey(info.itemLink)) or (info.itemKey and info.itemKey.itemID)
-      if key then
-        out[#out + 1] = { key = key, price = info.buyoutAmount, qty = info.quantity or 1, leftSeconds = info.timeLeftSeconds or 0 }
-      end
+    local auction = OwnedAuction(info)
+    if auction then
+      out[#out + 1] = auction
+      probe = probe or ("timeLeftSeconds=" .. type(info.timeLeftSeconds))
     end
   end
-  return out
+  return out, probe
 end
 
 -- ------------------------------------------------------------------ purchases (SPEC §4.3, A39)

@@ -7,8 +7,10 @@ each bonus ID to its suffix id (`bonusLists`), and AHF keys a suffixed item as
 item + 2^31 × (2 × suffix id). The addon needs the bonus -> suffix part to
 compute those keys, so this writes it to addon/AHProfit/Data/BonusSuffixes.lua
 as one compact string, and the same table to ahsync/data/bonus_suffixes.json
-for providers that give bonus lists (engine/item_key.py). /items is public: no
-API key is used.
+for providers that give bonus lists (engine/item_key.py). The JSON also carries
+AHF's suffix id -> name table (`suffixes`, e.g. 14322 -> "of Frost Protection"),
+so AHSync can name a variant AHF's `variants` list lacks (SPEC §2.2.1, D60).
+/items is public: no API key is used.
 """
 from __future__ import annotations
 
@@ -52,6 +54,19 @@ def bonus_suffixes(items: dict) -> list[tuple[int, int]]:
     return sorted(pairs)
 
 
+def suffix_names(items: dict) -> list[tuple[int, str]]:
+    """Extract suffix id -> name pairs.
+
+    Args:
+        items: The /items response; suffixes maps a suffix id to its name ("of the Owl").
+
+    Returns:
+        (suffix id, name) pairs sorted by suffix id; an empty list when the response has no table.
+    """
+    table = items.get("suffixes") or {}
+    return sorted((int(suffix), name) for suffix, name in table.items() if isinstance(name, str) and name)
+
+
 def render(pairs: list[tuple[int, int]], build: str) -> str:
     """Render the Lua data file.
 
@@ -71,17 +86,19 @@ def render(pairs: list[tuple[int, int]], build: str) -> str:
     )
 
 
-def render_json(pairs: list[tuple[int, int]], build: str) -> str:
+def render_json(pairs: list[tuple[int, int]], names: list[tuple[int, str]], build: str) -> str:
     """Render the Python data file.
 
     Args:
         pairs: From bonus_suffixes.
+        names: From suffix_names.
         build: The client build AHF's tables come from.
 
     Returns:
-        JSON: {"build", "suffixes": {bonus ID: suffix id}}, bonus IDs ascending.
+        JSON: {"build", "suffixes": {bonus ID: suffix id}, "names": {suffix id: name}}, ids ascending.
     """
-    return json.dumps({"build": build, "suffixes": {str(b): s for b, s in pairs}}, separators=(",", ":")) + "\n"
+    return json.dumps({"build": build, "suffixes": {str(b): s for b, s in pairs},
+                       "names": {str(i): n for i, n in names}}, separators=(",", ":"), ensure_ascii=False) + "\n"
 
 
 def main() -> int:
@@ -92,10 +109,11 @@ def main() -> int:
     """
     items = fetch_items()
     pairs = bonus_suffixes(items)
+    names = suffix_names(items)
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(render(pairs, items.get("build", "unknown")), encoding="utf-8", newline="\n")
-    OUT_JSON.write_text(render_json(pairs, items.get("build", "unknown")), encoding="utf-8", newline="\n")
-    print(f"gen_bonus_suffixes: {len(pairs)} bonus IDs -> {OUT.relative_to(ROOT).as_posix()}, "
+    OUT_JSON.write_text(render_json(pairs, names, items.get("build", "unknown")), encoding="utf-8", newline="\n")
+    print(f"gen_bonus_suffixes: {len(pairs)} bonus IDs, {len(names)} suffix names -> {OUT.relative_to(ROOT).as_posix()}, "
           f"{OUT_JSON.relative_to(ROOT).as_posix()}")
     return 0
 

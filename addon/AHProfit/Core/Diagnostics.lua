@@ -57,7 +57,7 @@ local lastTradeSkill = nil -- DescribeTradeSkill() text from the last trade skil
 
 --- Build the diagnostics table from the current session.
 ---@return table  { at, client, apis, errors, skillLines, merchant, tradeSkill, namespaces, professions, setupError, scan,
----                traces } (SPEC §2.2.1)
+---                traces, ownAuctions } (SPEC §2.2.1)
 function Diagnostics.Build()
   local errors = {}
   for i, message in ipairs(Events.Errors()) do errors[i] = message end
@@ -74,6 +74,7 @@ function Diagnostics.Build()
     setupError = DB.SetupError(),
     scan = AHProfit.Scan.Replicate.Describe(),
     traces = table.concat(Events.Traces(), ";"),
+    ownAuctions = AHProfit.Capture.Auctions.Describe(),
   }
 end
 

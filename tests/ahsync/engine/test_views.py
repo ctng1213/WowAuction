@@ -193,3 +193,19 @@ def test_D24_a_row_built_on_old_snapshots_says_so():
     assert stale_note([("Brugan-G", "bank", 2 * day), ("Amaya-G", "bags", 3 * day), ("Amaya-G", "mail", day)]) == \
         "based on Amaya's bags from 3 d ago, Brugan's bank from 2 d ago"           # exactly 24 h is not old
     assert stale_note([("Amaya-G", "bags", 3_600_000)]) == "" and stale_note([]) == ""
+
+
+def test_D60_one_name_for_every_page_plain_variant_and_unknown_suffix_keys():
+    from types import SimpleNamespace
+    from ahsync.engine.views import item_name, item_quality
+    bracers, variant = 15507, 61486751825043
+    items = {bracers: SimpleNamespace(name="Grunt's Bracers", quality=2), 7: SimpleNamespace(name="Seven", quality=None),
+             -9: SimpleNamespace(name="Nine", quality=3)}
+    names = {14316: "of Defense"}
+    assert item_name(bracers, items, names) == "Grunt's Bracers"
+    assert item_name(variant, items, names) == "Grunt's Bracers of Defense"
+    assert item_name(variant, items, {}) == "Grunt's Bracers (variant)"
+    assert item_name(-bracers, items, names) == "Grunt's Bracers (unknown suffix)"
+    assert item_name(-9, items, names) == "Nine (unknown suffix)"              # a negative key's own row
+    assert item_name(99, items, names) == "99"
+    assert [item_quality(k, items) for k in (variant, 7, 99, -9)] == [2, 1, 1, 3]

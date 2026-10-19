@@ -45,14 +45,15 @@ def _position(x: Listing) -> tuple[str, str]:
         x: The auctions.
 
     Returns:
-        ("cheapest" | "undercut by 12 at 38c–40c" | "undercut: 39s", "pos" | "neg").
+        ("cheapest" | "12 units listed below you at 38c–40c" | "1 unit listed below you at 40c" | "undercut: 39s",
+        "pos" | "neg"). Units, not sellers: who listed them is not in the scan data (D61).
     """
     if x.below is not None:
         units, lo, hi = x.below
         if not units:
             return "cheapest", "pos"
         prices = money(lo) if lo == hi else f"{money(lo)}–{money(hi)}"
-        return f"undercut by {units} at {prices}", "neg"
+        return f"{units} {'unit' if units == 1 else 'units'} listed below you at {prices}", "neg"
     if x.cheapest is None or x.price <= x.cheapest:
         return "cheapest", "pos"
     return f"undercut: {money(x.cheapest)}", "neg"

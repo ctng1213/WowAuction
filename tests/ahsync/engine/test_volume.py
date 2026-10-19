@@ -94,6 +94,17 @@ def test_V7_units_are_auctions_times_stack_summed_per_item():
     assert v.sold == 30
 
 
+def test_V42_a_partial_fill_is_measured_exactly():
+    prev = Book(0, (BookEntry(ORE, 30, 200, LONG, 1),))
+    next_ = Book(2 * HOUR_MS, (BookEntry(ORE, 30, 150, LONG, 1),))
+    assert estimate_volume(prev, next_)[ORE] == Volume(50, 0, 0)
+
+
+def test_V43_a_same_price_re_split_is_nothing_and_a_new_price_repost_is_sold_plus_listed():
+    assert linen([(30, 200, LONG, 1)], [(30, 100, LONG, 2)]) == Volume(0, 0, 0)
+    assert linen([(30, 100, LONG, 1)], [(28, 100, LONG, 1)]) == Volume(100, 0, 100)
+
+
 def test_V8_books_more_than_six_hours_apart_give_no_estimate():
     assert estimate_volume(*books([(50, 20, LONG, 1)], [], hours=7)) is None
 

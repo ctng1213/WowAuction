@@ -29,3 +29,40 @@ def item_key(item_id: int, bonus_ids: Sequence[int], suffixes: Mapping[int, int]
         if suffix is not None:
             return item_id + KEY_SUFFIX_FACTOR * 2 * suffix
     return -item_id if bonus_ids else item_id
+
+
+def suffix_id(key: int) -> int | None:
+    """The random suffix id a positive item key encodes (SPEC §2.1: v = 2 × suffix id).
+
+    Args:
+        key: An AHF item key.
+
+    Returns:
+        v ÷ 2 for a suffixed key; None for a plain item, a negative (unknown-suffix) key or an odd v.
+    """
+    v = key // KEY_SUFFIX_FACTOR if key > 0 else 0
+    return v // 2 if v and v % 2 == 0 else None
+
+
+def variant_name(key: int, base_name: str, suffix_names: Mapping[int, str]) -> str:
+    """The display name of an item key from its base item's name (SPEC §2.2.1, D60).
+
+    AHF's `variants` list misses some suffixed keys, so a variant is named from its base item plus AHF's suffix
+    name table (true for all 523 variants AHF does list: "Grunt's Bracers" + "of Defense").
+
+    Args:
+        key: An AHF item key, or −item id for an item whose suffix is unknown.
+        base_name: The base item's name.
+        suffix_names: Suffix id -> name ("of Defense").
+
+    Returns:
+        The base name for a plain key; "<base> <suffix name>" for a suffixed key, "<base> (variant)" when its
+        suffix has no known name; "<base> (unknown suffix)" for a negative key.
+    """
+    if key < 0:
+        return f"{base_name} (unknown suffix)"
+    if key < KEY_SUFFIX_FACTOR:
+        return base_name
+    suffix_of_key = suffix_id(key)
+    suffix = suffix_names.get(suffix_of_key) if suffix_of_key is not None else None
+    return f"{base_name} {suffix}" if suffix else f"{base_name} (variant)"
