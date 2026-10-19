@@ -42,6 +42,9 @@ Diagnostics.APIS = {
   -- post, purchase and craft events (A44-A47)
   "C_AuctionHouse.PostCommodity", "C_AuctionHouse.PostItem", "C_AuctionHouse.StartCommoditiesPurchase",
   "ItemLocation.GetBagAndSlot", "BuyMerchantItem", "C_MerchantFrame.GetItemInfo",
+  -- auction mail (A48)
+  "GetInboxHeaderInfo", "GetInboxInvoiceInfo", "AUCTION_EXPIRED_MAIL_SUBJECT", "AUCTION_REMOVED_MAIL_SUBJECT",
+  "AUCTION_WON_MAIL_SUBJECT",
 }
 
 -- Namespaces whose function lists we need to write the modern readers (SPEC §6).

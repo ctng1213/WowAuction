@@ -197,6 +197,7 @@ AHProfitDB = {
   },
   rules = { [2589] = { rule = "no_buy", setAt = 1760000000000 } },   -- set in game; "none" = cleared (§3.4.2)
   reserves = { ["Amaya-Grommash"] = "2589,10;4306,-1" },  -- "key,qty" kept for yourself; qty -1 = all (§3.4.3)
+  mailSeen = { ["sold:2589:20:48:1760000000000"] = 1762678400000 },  -- auction mails already turned into events (A48)
 }
 ```
 
@@ -219,6 +220,7 @@ AHProfitDB = {
   - `purchase` on the AH: a commodity purchase uses the unit price the AH quoted (`COMMODITY_PRICE_UPDATED` after `StartCommoditiesPurchase`), is added on `ConfirmCommoditiesPurchase` and confirmed on `COMMODITY_PURCHASE_SUCCEEDED`; a buyout (`PlaceBid` at the buyout, read with `GetAuctionInfoByID`) is confirmed on `AUCTION_HOUSE_PURCHASE_COMPLETED`. A bid below the buyout is not a purchase.
   - `purchase` from a merchant: `BuyMerchantItem(index, quantity)`, at the merchant's price per unit; confirmed at once.
   - `craft`: `UNIT_SPELLCAST_SUCCEEDED` for the player with a spell among the character's known recipes; one event per cast, `count` 1.
+  - `auction_mail` (A48): read from the mailbox when it shows (`MAIL_INBOX_UPDATE`). A seller invoice (`GetInboxInvoiceInfo`) is `sold` at its sale price ÷ count, a buyer invoice or "Auction won: …" `won`, and the subjects "Auction expired: …" and "Auction cancelled: …" (the client's `AUCTION_EXPIRED_MAIL_SUBJECT` and `AUCTION_REMOVED_MAIL_SUBJECT`) `expired` and `cancelled`, keyed by the attachment's link, or, for a sold invoice (which has no attachment), by the item's name in `itemNames`. Each mail becomes one event: a fingerprint (outcome, item, quantity, price and its send time, from the days left of a 30-day auction mail) is kept in `mailSeen` until 31 days after it was sent. The event's `at` is when the mail was first seen, so the pruning handshake never drops it before AHSync reads it; `sentAt` carries the send time. SPEC GAP: `payout` (the gold taken from a sold mail) is not captured yet.
 - Untracked changes (FM21) are not events. AHSync derives them by comparing consecutive inventory snapshots with the events between them.
 
 ## 3. AHSync (companion app)

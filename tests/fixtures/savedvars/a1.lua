@@ -68,6 +68,8 @@ AHProfitDB = {
 		["Amaya-Grommash"] = "7418;7421",
 		["Brugan-Grommash"] = "2660;2662;2663",
 	},
+	["mailSeen"] = {
+	},
 	["ownAuctions"] = {
 	},
 	["professions"] = {

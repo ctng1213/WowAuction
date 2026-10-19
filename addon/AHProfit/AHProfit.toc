@@ -14,6 +14,7 @@ Capture\Characters.lua
 Capture\Professions.lua
 Capture\Inventory.lua
 Capture\Auctions.lua
+Capture\Mail.lua
 Scan\Replicate.lua
 Core\Diagnostics.lua
 Engine\Fees.lua

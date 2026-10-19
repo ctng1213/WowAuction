@@ -678,6 +678,54 @@ function Adapter.ReadInbox()
   return items
 end
 
+--- Pattern from a client format string such as "Auction expired: %s": the %s becomes a capture.
+---@param format string|nil
+---@return string|nil
+local function SubjectPattern(format)
+  if type(format) ~= "string" then return nil end
+  local escaped = format:gsub("([%(%)%.%+%-%*%?%[%]%^%$])", "%%%1")
+  return "^" .. escaped:gsub("%%s", "(.+)") .. "$"
+end
+
+--- The auction mails in the inbox, classified (A48). Letters and other mail are left out.
+--- UNVERIFIED: GetInboxHeaderInfo(i) (subject 4th, daysLeft 7th), GetInboxInvoiceInfo(i) returning
+--- invoiceType ("seller" | "buyer"), itemName, playerName, bid, buyout, deposit, consignment, moneyDelay,
+--- etaHour, etaMin, count, and the subjects AUCTION_EXPIRED_MAIL_SUBJECT, AUCTION_REMOVED_MAIL_SUBJECT and
+--- AUCTION_WON_MAIL_SUBJECT, as on Classic.
+---@param nameToKey function  item name -> key, for a sold invoice (it has no attachment)
+---@return table[]            { outcome, key, qty, price (copper each; sold and won), daysLeft } per auction mail
+function Adapter.ReadAuctionMail(nameToKey)
+  local out = {}
+  if not GetInboxHeaderInfo then return out end
+  local expired, removed, won = SubjectPattern(_G.AUCTION_EXPIRED_MAIL_SUBJECT),
+    SubjectPattern(_G.AUCTION_REMOVED_MAIL_SUBJECT), SubjectPattern(_G.AUCTION_WON_MAIL_SUBJECT)
+  for i = 1, (GetInboxNumItems()) do
+    local _, _, _, subject, _, _, daysLeft = GetInboxHeaderInfo(i)
+    local invoice, itemName, _, bid, _, _, _, _, _, _, count = nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil
+    if GetInboxInvoiceInfo then invoice, itemName, _, bid, _, _, _, _, _, _, count = GetInboxInvoiceInfo(i) end
+    local _, _, _, attached = GetInboxItem(i, 1)
+    local key = attached and Adapter.ItemKey(GetInboxItemLink(i, 1))
+    local outcome
+    if invoice == "seller" then
+      outcome, key, attached = "sold", nameToKey(itemName), count or 1
+    elseif invoice == "buyer" or (won and subject and subject:match(won)) then
+      outcome = "won"
+    elseif expired and subject and subject:match(expired) then
+      outcome = "expired"
+    elseif removed and subject and subject:match(removed) then
+      outcome = "cancelled"
+    end
+    if outcome and key and attached then
+      local qty = attached
+      local price = (outcome == "sold" or outcome == "won") and bid and math.floor(bid / math.max(1, qty)) or nil
+      if outcome ~= "won" or price then
+        out[#out + 1] = { outcome = outcome, key = key, qty = qty, price = price, daysLeft = daysLeft or 30 }
+      end
+    end
+  end
+  return out
+end
+
 -- ------------------------------------------------------------------ full AH scan (ReplicateItems)
 -- Forever has C_AuctionHouse.ReplicateItems (verified 2026-10-16, SPEC §4.2). The reader
 -- follows AuctionHouseFYI's: rows are 0-based, owner and bidder fields are never read.

@@ -20,7 +20,7 @@ DB.migrations = {}
 
 -- Top-level tables every version-1 database has (SPEC §2.2.1).
 local TABLE_FIELDS = { "characters", "professions", "recipes", "knownRecipes",
-                       "inventory", "ownAuctions", "scans", "events", "rules", "reserves" }
+                       "inventory", "ownAuctions", "scans", "events", "rules", "reserves", "mailSeen" }
 
 local current = nil        -- the live database once set up; nil before or on error
 local setupError = nil     -- why setup failed, for the status line
