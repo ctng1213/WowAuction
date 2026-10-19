@@ -340,7 +340,8 @@ const LIVE = {
     ],
   },
   craft: {
-    lede: 'Every recipe your characters know, priced now (SPEC §3.4B), whether or not you have the mats. <b>Source</b>: <span class="pos">Owned</span> = all mats from your stock; <span class="amber">AH</span> = all mats bought; Mixed = your stock topped up from the AH; <b>+ crafted</b> = one of your characters makes a reagent first. <b>Mats each / total</b> is the gold to buy the mats you\'re missing, per craft and for all crafts ("—" when you already own every mat). Profit counts owned mats at their <b>hold value</b>.',
+    footer: d => esc(d.footer || ''),
+    lede: 'The recipes your characters know that are worth crafting now (SPEC §3.4B), whether or not you have the mats; the footer says why the others are not listed. Each row lists its mats, with mail to bring your own to the crafter. <b>Source</b>: <span class="pos">Owned</span> = all mats from your stock; <span class="amber">AH</span> = all mats bought; Mixed = your stock topped up from the AH; <b>+ crafted</b> = one of your characters makes a reagent first. <b>Mats each / total</b> is the gold to buy the mats you\'re missing, per craft and for all crafts ("—" when you already own every mat). Profit counts owned mats at their <b>hold value</b>.',
     cols: [['Product', 0, null], ['Recipe known by', 0, null], ['Source', 0, null], ['Crafts', 1, 'crafts'], ['Mats each', 1, null],
            ['Mats total', 1, 'mats_total'], ['Value each', 1, 'value_each'], ['Expected profit', 1, 'profit'], ...MARKET_COLS,
            ['Risk', 1, 'risk'], ['Cooldown', 0, null]],

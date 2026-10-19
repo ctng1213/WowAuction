@@ -83,12 +83,21 @@ def test_D45_crafts_stop_at_what_the_market_takes_less_what_you_have_and_within_
     assert rod["crafts"] == 1                                    # others list 3 rods: half of that, at least a stack
     with state.transaction():
         state.conn.execute("INSERT INTO inventory(char_id, location, key, qty, bound) VALUES ('Brugan-G', 'bags', ?, 1, 0)", (ROD,))
-    [rod] = craft_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 500_000, NOW, cfg)["rows"]
-    assert (rod["crafts"], rod["note"]) == (0, "×1 held or listed: the market takes about 1")
+    page = craft_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 500_000, NOW, cfg)
+    assert (page["rows"], page["footer"]) == ([], "0 recipes worth crafting · 1 not shown: 1 already held or listed")
     with state.transaction():
         state.conn.execute("DELETE FROM inventory")
-    [rod] = craft_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 4_000, NOW, cfg)["rows"]
-    assert (rod["crafts"], rod["mats_total"]) == (0, "—")        # 20s of bars is over 25% of 40s
+    page = craft_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 4_000, NOW, cfg)   # 20s of bars is over 25% of 40s
+    assert (page["rows"], page["footer"]) == ([], "0 recipes worth crafting · 1 not shown: 1 over your risk limit")
+
+
+def test_D46_only_recipes_worth_crafting_are_rows_and_the_footer_says_why_the_rest_are_not():
+    from ahsync.engine.views import craft_footer
+    assert craft_footer(1, {"pay": 1, "mats": 1, "risk": 1, "held": 1}) == (
+        "1 recipe worth crafting · 4 not shown: 1 doesn't pay now · 1 lacks mats · 1 over your risk limit · "
+        "1 already held or listed")
+    assert craft_footer(2, {"pay": 3}) == "2 recipes worth crafting · 3 not shown: 3 don't pay now"
+    assert craft_footer(2, {}) == "2 recipes worth crafting"
 
 
 def test_D44_owned_mats_on_another_character_are_mailed_to_the_crafter(state):

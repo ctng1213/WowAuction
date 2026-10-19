@@ -161,9 +161,8 @@ def test_unknown_volume_and_missing_mats(db):
     rows(db, "INSERT INTO known_recipes(char_id, spell_id) VALUES (?, ?)", (BRUGAN, 9999))
     refresh.refresh_all(db, NOW, CFG)
     craft, _ = db.view("craft", M)
-    missing = [r for r in craft["rows"] if r["spell"] == 9999][0]
-    assert (missing["crafts"], missing["source"], missing["note"]) == (0, "—", "missing: 3 Rare Ore")
-    assert missing["product"] == "778"
+    assert not [r for r in craft["rows"] if r["spell"] == 9999]                  # not craftable: no row (D46)
+    assert "1 lacks mats" in craft["footer"]
 
 
 def test_a_refresh_publishes_the_plan_and_the_next_one_keeps_what_was_done(db):

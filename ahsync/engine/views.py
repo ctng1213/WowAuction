@@ -269,6 +269,29 @@ def craft_lines(m: CraftMats, names: dict[int, str]) -> tuple[str, ...]:
     return tuple(lines)
 
 
+CRAFT_SKIPS = (("pay", "doesn't pay now", "don't pay now"), ("mats", "lacks mats", "lack mats"),
+               ("risk", "over your risk limit", "over your risk limit"),
+               ("held", "already held or listed", "already held or listed"))
+
+
+def craft_footer(shown: int, skipped: dict[str, int]) -> str:
+    """The Craft page's footer: what is shown and why the other recipes are not (D46).
+
+    Args:
+        shown: Rows shown.
+        skipped: Reason ("pay", "mats", "risk", "held") -> recipes not shown for it.
+
+    Returns:
+        E.g. "1 recipe worth crafting · 4 not shown: 1 doesn't pay now · 1 lacks mats · …".
+    """
+    text = f"{shown} recipe{'' if shown == 1 else 's'} worth crafting"
+    hidden = sum(skipped.values())
+    if hidden:
+        parts = [f"{skipped[k]} {one if skipped[k] == 1 else many}" for k, one, many in CRAFT_SKIPS if skipped.get(k)]
+        text += f" · {hidden} not shown: " + " · ".join(parts)
+    return text
+
+
 def age_text(age_ms: int | None) -> str:
     """A data age for display, e.g. "20 min", "2 h", "6 d" (the largest whole unit).
 
