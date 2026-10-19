@@ -105,3 +105,15 @@ def test_D44_owned_mats_on_another_character_are_mailed_to_the_crafter(state):
         state.conn.execute("INSERT INTO inventory(char_id, location, key, qty, bound) VALUES ('Amaya-G', 'bags', ?, 2, 0)", (BAR,))
     [rod] = craft_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 500_000, NOW, Config(markets=(M,)))["rows"]
     assert (rod["lines"], rod["crafter"]) == (["use 2 owned Copper Bar · mail 2 from Amaya"], "Brugan (Blacksmithing 112)")
+
+
+def test_D24_a_craft_row_using_mats_from_old_bags_says_how_old(state):
+    with state.transaction():
+        state.conn.execute("INSERT INTO inventory(char_id, location, key, qty, bound) VALUES ('Brugan-G', 'bags', ?, 2, 0)", (BAR,))
+        state.conn.execute("INSERT INTO snapshots(char_id, location, at) VALUES ('Brugan-G', 'bags', ?)", (NOW - 3 * 86_400_000,))
+    [rod] = craft_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 500_000, NOW, Config(markets=(M,)))["rows"]
+    assert rod["note"] == "based on Brugan's bags from 3 d ago"
+    with state.transaction():
+        state.conn.execute("UPDATE snapshots SET at = ?", (NOW - 3_600_000,))
+    [rod] = craft_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 500_000, NOW, Config(markets=(M,)))["rows"]
+    assert rod["note"] == ""

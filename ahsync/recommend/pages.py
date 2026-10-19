@@ -215,6 +215,25 @@ def _craft_room(r: RecipeRow, stats: dict[int, ItemIntel], have: dict[int, int],
     return max(1, math.floor((cap - units) / avg_yield)), ""
 
 
+def _places(state: StateReader, char_ids: list[str], now_ms: int) -> dict[int, list[tuple[str, str, int]]]:
+    """Where each item you own sits, with the age of that snapshot (D24).
+
+    Args:
+        state: Character state.
+        char_ids: Your characters.
+        now_ms: Now.
+
+    Returns:
+        Item key -> (character id, place, snapshot age ms) per place holding unbound units.
+    """
+    times = state.snapshot_times(char_ids)
+    out: dict[int, list[tuple[str, str, int]]] = {}
+    for char_id, place, key, _, bound in state.holdings(char_ids):
+        if not bound and (char_id, place) in times:
+            out.setdefault(key, []).append((char_id, place, now_ms - times[(char_id, place)]))
+    return out
+
+
 def craft_page(state: StateReader, char_ids: list[str], stats: dict[int, ItemIntel], items: dict[int, ItemInfo],
                total_gold: int, now_ms: int, cfg: Config) -> dict:
     """The Craft page payload (SPEC §3.4B, §3.5): the known recipes worth crafting now (D46).
@@ -241,6 +260,7 @@ def craft_page(state: StateReader, char_ids: list[str], stats: dict[int, ItemInt
     market = craft_market(state, char_ids, stats, items)
     names = {k: i.name for k, i in items.items()}
     held = {(c, k): float(q) for c, k, q in state.owned_lots(char_ids)}
+    places = _places(state, char_ids, now_ms)
     have = _held_and_listed(state, char_ids)
     rows, skipped = [], {}
     for r in recipes:
@@ -268,7 +288,8 @@ def craft_page(state: StateReader, char_ids: list[str], stats: dict[int, ItemInt
             f"{crafter.split('-')[0]} ({r.profession} {skill})" if skill is not None else crafter.split("-")[0],
             option.source, option.crafts,
             views.craft_money(option.crafts, option.mat_gold, option.owned_used, names), option.mat_gold,
-            value_each, option.profit, _market(stats.get(r.product)), "", "", lines), total_gold)))
+            value_each, option.profit, _market(stats.get(r.product)), "",
+            views.stale_note([p for key in option.owned_used for p in places.get(key, ())]), lines), total_gold)))
     rows.sort(key=lambda row: (-row[0], row[1]))
     return {"rows": [row for _, _, row in rows], "hidden": sum(skipped.values()),
             "footer": views.craft_footer(len(rows), skipped), "help": views.COLUMN_HELP}

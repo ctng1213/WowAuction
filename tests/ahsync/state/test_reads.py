@@ -102,3 +102,10 @@ def test_own_auctions_carry_the_deposit_of_their_open_post(db):
         ("p1", "A-R", 6217, 1, 4100, 7, 1, "expired"), ("p2", "A-R", 6217, 1, 4100, 9, 2, None))
     assert db.own_auctions(["A-R"]) == [("A-R", 2589, 45, 5, 3, 1, None), ("A-R", 6217, 4100, 1, 4, 1, 9)]
     assert db.own_auctions([]) == []
+
+
+def test_snapshot_times_per_place_leave_out_the_auctions_snapshot(db):
+    sql(db, "INSERT INTO snapshots(char_id, location, at) VALUES (?, ?, ?)",
+        ("A-R", "bags", 5), ("A-R", "auctions", 6), ("B-R", "bank", 7), ("C-R", "bags", 8))
+    assert db.snapshot_times(["A-R", "B-R"]) == {("A-R", "bags"): 5, ("B-R", "bank"): 7}
+    assert db.snapshot_times([]) == {}

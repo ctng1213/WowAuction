@@ -7,6 +7,7 @@ The addon's twin is UI/ViewModel.lua (M5).
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from ahsync.engine.confidence import level
@@ -290,6 +291,25 @@ def craft_footer(shown: int, skipped: dict[str, int]) -> str:
         parts = [f"{skipped[k]} {one if skipped[k] == 1 else many}" for k, one, many in CRAFT_SKIPS if skipped.get(k)]
         text += f" · {hidden} not shown: " + " · ".join(parts)
     return text
+
+
+STALE_SNAPSHOT_MS = 86_400_000      # SPEC §3.4.1 stale state: older than 24 h
+
+
+def stale_note(places: Sequence[tuple[str, str, int]]) -> str:
+    """Which character snapshots a row is built on are old (SPEC §3.4.1 stale state, D24).
+
+    Args:
+        places: (character id, place, age ms) the row's owned units come from.
+
+    Returns:
+        "based on Amaya's bags from 3 d ago, Brugan's bank from 2 d ago" for those over 24 h old, by
+        character then place; "" when none is.
+    """
+    old = sorted((c, place, age) for c, place, age in places if age > STALE_SNAPSHOT_MS)
+    if not old:
+        return ""
+    return "based on " + ", ".join(f"{c.split('-')[0]}'s {place} from {age_text(age)} ago" for c, place, age in old)
 
 
 def age_text(age_ms: int | None) -> str:

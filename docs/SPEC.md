@@ -801,7 +801,7 @@ Captured events (§2.2) are matched to plan actions automatically, by the tracki
   - A sold invoice resolves the oldest pending post with the same character, item, stack and price.
   - An expired or cancelled mail has no price, so it resolves the oldest pending post with the same character, item and stack.
   - Each outcome updates your sell record (§3.3.3).
-- **Stale state.** Every recommendation records the age of the character snapshot it used (§2.2.1 per-location times). One built on a snapshot older than 24 h says so, e.g. "based on Amaya's bags from 3 d ago" (D24). The addon uses its live state instead.
+- **Stale state.** Every recommendation records the age of the character snapshot it used (§2.2.1 per-location times). One built on a snapshot older than 24 h says so, e.g. "based on Amaya's bags from 3 d ago" (D24): on the Craft page, for every place (bags, bank, mail) of a character that holds an owned mat the row uses. The addon uses its live state instead.
 - **Re-planning.** Each engine run replaces `pending` and `late` actions. `done`, `partial`, `missed` and `skipped` actions are kept as history.
 
 **Vendor-sold items** (R22, A33). An item a merchant has been seen selling in unlimited supply (`vendor_reagents`, §3.2)

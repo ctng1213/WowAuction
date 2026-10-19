@@ -247,7 +247,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | D21 | post 5 Linen you looted, at 45 c, `P` = 1 | net = 5 × 45 c × 0.95 − 0 = 213.75 c, shown +2 s 14 c |
 | D22 | a craft with 2 mat buys and 1 mail step feeding it | the mat buys and the mail show no net ("for …"); the craft carries the chain's profit |
 | D23 | a Craft row whose product sells 48/day (AHF) with 93 listed | columns Chance, Est. Sales/Day "48 AHF", Current Supply "93", Supply/Volume "1.9 days", in that order; each has a sort key |
-| D24 | a Craft row uses Amaya's bags captured 3 days ago | the row says "based on Amaya's bags from 3 d ago"; a row on today's snapshot says nothing |
+| D24 | a Craft row uses Amaya's bags captured 3 days ago and Brugan's bank from 2 days ago | the row says "based on Amaya's bags from 3 d ago, Brugan's bank from 2 d ago"; a row on today's snapshot says nothing; a snapshot exactly 24 h old says nothing |
 | D25 | Inventory: Amaya holds 20 Linen in bags and 10 in the bank; the plan posts all 30 Sat 10:00 at 55 c for the 18:00 peak, expected 1,567.5 c (30 × 55 c × 0.95, `P` = 1) | both rows say "Post Sat 10:00 at 55c (18:00 peak)" with chance 100%; worth 10 s 45 c (20/30) and 5 s 23 c (10/30 = 522.5, half up); Worth tile 15 s 68 c |
 | D26 | Brugan holds 12 Copper Bar; the plan posts 6 now at 12 s (expected 6 × 12 s × 0.95 = 68 s 40 c) and a planned Copper Rod craft uses the other 6, whose hold value is 10 s each | plan "Post 6 now at 12s · 6 for crafting Copper Rod"; worth 68 s 40 c + 6 × 10 s = 1 g 28 s 40 c |
 | D27 | a soulbound ring in Brugan's bags; 4 Broken Fang that you set to ignore | "Bound · not planned" and "Ignored · not planned", worth "—"; the Not planned tile says "2 items" |

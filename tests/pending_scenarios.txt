@@ -30,6 +30,6 @@ A5
 V23-V24 K4
 
 # Architecture amendment (SPEC §5.0)
-D24
+
 
 # Cloud-ready intelligence amendment (SPEC §5.0 contents, bulk reads, cloud boundary): done

@@ -104,6 +104,16 @@ class StateReader(Protocol):
             (character id, place, item key, units, bound), sorted by character, place, key, bound.
         """
 
+    def snapshot_times(self, char_ids: list[str]) -> dict[tuple[str, str], int]:
+        """When each place of each character was last captured (SPEC §2.2.1 per-location times, D24).
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            (character id, place) -> capture time, UTC ms.
+        """
+
     def own_auctions(self, char_ids: list[str]) -> list[tuple[str, int, int, int, int, int, int | None]]:
         """Your auctions as the addon last saw them, with the deposit of the post behind each (SPEC §3.5 On the AH).
 
@@ -340,6 +350,22 @@ class StateReads:
         return [(c, loc, key, qty, bool(bound)) for c, loc, key, qty, bound in self.conn.execute(
             f"SELECT char_id, location, key, qty, bound FROM inventory WHERE char_id IN ({marks}) "
             f"ORDER BY char_id, location, key, bound", tuple(char_ids))]
+
+    def snapshot_times(self, char_ids: list[str]) -> dict[tuple[str, str], int]:
+        """When each place of each character was last captured (SPEC §2.2.1 per-location times, D24).
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            (character id, place) -> capture time, UTC ms.
+        """
+        if not char_ids:
+            return {}
+        marks = ",".join("?" * len(char_ids))
+        return {(c, loc): at for c, loc, at in self.conn.execute(
+            f"SELECT char_id, location, at FROM snapshots WHERE char_id IN ({marks}) AND location != 'auctions'",
+            tuple(char_ids))}
 
     def cost_basis(self) -> dict[int, tuple[int, int]]:
         """What you paid for items, account-wide (SPEC §3.2 cost_basis).

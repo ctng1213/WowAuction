@@ -8,6 +8,7 @@ import pytest
 
 from ahsync.engine.views import (
     COLUMN_HELP, MARKET_COLUMNS, CraftInput, CraftMats, DisenchantInput, MarketActivity, TooltipLine, age_text, craft_lines,
+    stale_note,
     craft_money,
     craft_row, delta_percent, disenchant_row, market_activity, money, risk, round_half_up,
     signed_money, tooltip,
@@ -169,3 +170,10 @@ def test_D44_a_craft_row_lists_each_mat_by_source_with_the_mail_that_gathers_it(
     assert craft_lines(mats, names) == ("use 10 owned Linen Cloth · mail 6 from Cara", "buy 2 Coarse Thread from a vendor · 20c",
                                         "buy 1 Wool Cloth on the AH · 33c", "craft Bolt of Linen Cloth first (Brugan)")
     assert craft_lines(CraftMats({9: 1.0}, {}, {}, {}, {}, {}), {}) == ("use 1 owned 9",)
+
+
+def test_D24_a_row_built_on_old_snapshots_says_so():
+    day = 86_400_000
+    assert stale_note([("Brugan-G", "bank", 2 * day), ("Amaya-G", "bags", 3 * day), ("Amaya-G", "mail", day)]) == \
+        "based on Amaya's bags from 3 d ago, Brugan's bank from 2 d ago"           # exactly 24 h is not old
+    assert stale_note([("Amaya-G", "bags", 3_600_000)]) == "" and stale_note([]) == ""
