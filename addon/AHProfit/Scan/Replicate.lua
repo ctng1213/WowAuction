@@ -127,10 +127,18 @@ local function SavePhase()
   stats.kind, stats.rows = finished.complete and "full" or "partial", finished.rows
   if finished.complete then
     lastBook = { at = finished.at, book = finished.book }
-    for _, fn in ipairs(listeners) do fn() end
+    -- The redraws it causes (the panel, the window) get a frame of their own and are timed (A51).
+    Adapter.After(0, Replicate.NotifyBook)
   end
   finishedRun = { auctions = finished.n, complete = finished.complete }
   NotifyProgress()
+end
+
+--- Tell the book listeners a complete scan arrived, timing them for the diagnostics (A51).
+function Replicate.NotifyBook()
+  local start = Adapter.ProfileMs()
+  for _, fn in ipairs(listeners) do fn() end
+  stats.notifyMs = Adapter.ProfileMs() - start
 end
 
 --- The last complete scan's order book this session (SPEC §4.0 live prices).
@@ -375,7 +383,8 @@ local SKIP_REASONS = { "pet", "count", "buyout", "band", "link" }
 
 --- The last scan's numbers for diagnostics (SPEC §2.2.1).
 ---@return string  "calls=..|n=..|skipped=..|pet=..|count=..|buyout=..|band=..|link=..|byId=..|left=1:..,2:..|steps=..|maxStepMs=..
----                |readMs=..|sortMs=..|encodeMs=..|saveMs=..|kind=..|rows=..|dropped=.."; ms are the slowest step per phase
+---                |readMs=..|sortMs=..|encodeMs=..|saveMs=..|notifyMs=..|kind=..|rows=..|dropped=.."; ms are the
+---                slowest step per phase, and notifyMs the redraws after a complete scan (A51)
 function Replicate.Describe()
   local s = stats
   local parts = { "calls=" .. s.calls, "n=" .. tostring(s.n), "skipped=" .. tostring(s.skipped) }
@@ -389,6 +398,7 @@ function Replicate.Describe()
   for _, phase in ipairs({ "read", "sort", "encode", "save" }) do
     parts[#parts + 1] = phase .. "Ms=" .. string.format("%.2f", (s.phaseMs or {})[phase] or 0)
   end
+  parts[#parts + 1] = "notifyMs=" .. string.format("%.2f", s.notifyMs or 0)
   parts[#parts + 1] = "kind=" .. tostring(s.kind)
   parts[#parts + 1] = "rows=" .. tostring(s.rows)
   parts[#parts + 1] = "dropped=" .. tostring(s.dropped)

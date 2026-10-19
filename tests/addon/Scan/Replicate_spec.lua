@@ -109,7 +109,8 @@ describe("Replicate", function()
     assert_eq(AHProfitDB.scans[1].rows, "2589,45,20,3,1")
     Stubs.FireEvent("PLAYER_LOGOUT")
     assert_eq(AHProfitDB.diagnostics.scan, "calls=0|n=5|skipped=4|pet=1|count=0|buyout=1|band=2|link=0|byId=0"
-      .. "|left=0:1,3:1,nil:1|steps=4|maxStepMs=0.04|readMs=0.04|sortMs=0.00|encodeMs=0.00|saveMs=0.00|kind=full|rows=1|dropped=0",
+      .. "|left=0:1,3:1,nil:1|steps=4|maxStepMs=0.04|readMs=0.04|sortMs=0.00|encodeMs=0.00|saveMs=0.00|notifyMs=0.00"
+      .. "|kind=full|rows=1|dropped=0",
       "one skip per reason; the histogram shows every raw time left; read, sort, encode and save each take a frame")
   end)
 
@@ -192,6 +193,18 @@ describe("Replicate", function()
     assert_eq(ids, kept, "the oldest full scan went")
     assert_eq(#AHProfitDB.events, 1, "events are never dropped")
     assert_eq(AHProfit.Scan.Replicate.Warning(), "Dropped 1 old full scan(s): run AHSync to sync")
+  end)
+
+  it("A51 a complete scan's redraws run a frame after it is saved, timed as notifyMs", function()
+    Boot({ auctions = { Stubs.Auction(LINEN, 45, 20, 3) } })
+    local calls = 0
+    AHProfit.Scan.Replicate.OnBook(function() calls = calls + 1 end)
+    Stubs.FireEvent("AUCTION_HOUSE_SHOW")
+    Stubs.FireEvent("REPLICATE_ITEM_LIST_UPDATE")
+    for _ = 1, 3 do Stubs.RunDueTimers() end                       -- (read ran at once) sort, encode, save: not yet told
+    assert_eq({ #AHProfitDB.scans, calls }, { 1, 0 })
+    Stubs.RunDueTimers()
+    assert_eq({ calls, AHProfit.Scan.Replicate.Describe():match("notifyMs=(%d+%.%d+)") ~= nil }, { 1, true })
   end)
 
   it("partial scans don't count toward the cap, and a repeated update starts no second scan", function()
