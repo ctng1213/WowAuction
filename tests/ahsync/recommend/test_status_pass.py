@@ -59,7 +59,7 @@ def statuses(db: Database) -> dict[str, tuple]:
         "SELECT action_id, kind, status, replaces_id, anchor_net, window_start_ms FROM actions")}
 
 
-def test_the_status_pass_marks_late_and_missed_and_moves_a_missed_peak(db, monkeypatch):
+def test_IU10_the_idle_status_pass_marks_missed_without_history_and_the_plan_file_drops_it(db, monkeypatch):
     for name in ("market_history", "hourly_closes", "daily_closes", "volume_rows"):     # no history reads (IU10)
         monkeypatch.setattr(HistoryReads, name, lambda *a, **k: pytest.fail("the status pass read history"))
     counts = status_pass(db, CFG, NOW)
@@ -69,6 +69,9 @@ def test_the_status_pass_marks_late_and_missed_and_moves_a_missed_peak(db, monke
     assert (kind, status, replaces, anchor, start) == ("post", "pending", "post1", 800.0, MONDAY + WED * DAY + 20 * HOUR)
     assert counts == {"late": 1, "missed": 2, "replaced": 1}
     assert status_pass(db, CFG, NOW) == {"late": 0, "missed": 0, "replaced": 0}      # nothing left to change
+    exported = {r[0]: r[10] for r in db.addon_actions(["Amaya-G"])}                   # what PortfolioPlan.lua gets
+    assert "buy1" not in exported and "post1" not in exported and exported["post2"] == "late"
+    assert exported["post1:r"] == "pending"
 
 
 def test_a_missed_post_without_intelligence_or_a_window_is_just_missed(db):

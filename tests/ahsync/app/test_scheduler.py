@@ -185,3 +185,30 @@ def test_a_pending_press_is_covered_by_the_daily_refresh():
     clock.advance(5_000)
     scheduler.tick()
     assert len(refreshes) == 1
+
+
+def test_IU7_idle_for_10_minutes_runs_no_job_and_checks_the_files_once_every_5s():
+    clock = FakeClock()
+    now = clock.now_ms()
+    clock.advance((now // HOUR_MS + 1) * HOUR_MS + 7 * 60_000 - now)          # hh:07, after the :00 and :06 jobs
+    start = clock.now_ms()
+    daily = f"{((start + clock.local_offset_ms(start)) // HOUR_MS + 12) % 24:02d}:00"   # half a day away
+    stats: list[Path] = []
+    mtimes = {SV: start - HOUR_MS}                                           # unchanged all along
+
+    def stat(path: Path) -> int | None:
+        """Count each stat."""
+        stats.append(path)
+        return mtimes.get(path)
+    ran: list[str] = []
+    hooks = SchedulerHooks(store_hour=lambda: ran.append("store"), status_pass=lambda: ran.append("status"),
+                           full_refresh=lambda: ran.append("refresh"), daily=lambda: ran.append("daily"),
+                           savedvars_changed=lambda p: ran.append("ingest"))
+    watcher = SavedVarsWatcher(lambda: [SV], stat)
+    watcher.prime()
+    stats.clear()
+    scheduler = Scheduler(clock, hooks, watcher, daily_refresh_time=daily)
+    for _ in range(120):                                                     # 10 minutes in 5 s steps
+        clock.advance(5_000)
+        assert scheduler.tick() == []
+    assert (ran, len(stats)) == ([], 120)                                    # no engine call; one stat per 5 s
