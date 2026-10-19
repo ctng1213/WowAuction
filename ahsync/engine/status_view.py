@@ -11,7 +11,8 @@ import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from ahsync.engine.views import age_text
+from ahsync.engine.sell_record import Calibration
+from ahsync.engine.views import age_text, round_half_up
 
 HOUR_MS = 3_600_000
 DAY_MS = 86_400_000
@@ -65,6 +66,7 @@ class StatusFacts:
     key_set: bool
     db_bytes: int
     retention_days: int
+    calibration: Calibration | None = None   # resolved posts with their planned chance (SPEC §8.8)
 
 
 def when(ms: int, offset_ms: int) -> str:
@@ -362,6 +364,46 @@ def _characters_card(facts: StatusFacts, now_ms: int) -> dict:
             "lines": lines or [["No characters yet", "log in with AHProfit enabled, then /reload", "muted"]]}
 
 
+def _pct(x: float) -> int:
+    """A share as whole percent.
+
+    Args:
+        x: In [0, 1].
+
+    Returns:
+        Percent, half up.
+    """
+    return round_half_up(x * 100)
+
+
+def calibration_view(c: Calibration | None) -> dict | None:
+    """The Status page's sell-probability calibration section (SPEC §8.8, K6).
+
+    Args:
+        c: The calibration, or None.
+
+    Returns:
+        {"title", "brier", "warnings": [text], "rows": [{"bucket", "posts", "predicted", "actual", "off", "bad",
+        "predicted_pct", "actual_pct"}]}; None without resolved posts.
+    """
+    if c is None or not c.posts:
+        return None
+    rows, warnings = [], []
+    for b in c.buckets:
+        name = f"{_pct(b.low)}–{_pct(b.high)}%"
+        off = _pct(b.actual) - _pct(b.predicted)
+        rows.append({"bucket": name, "posts": str(b.posts), "predicted": f"{_pct(b.predicted)}%",
+                     "actual": f"{_pct(b.actual)}%", "off": f"{'+' if off > 0 else '−' if off < 0 else ''}{abs(off)} pts",
+                     "bad": b.off_target, "predicted_pct": _pct(b.predicted), "actual_pct": _pct(b.actual)})
+        if b.off_target:
+            warnings.append(f"Posts predicted {name} actually sold {_pct(b.actual)}% ({b.posts} posts). Chances in that "
+                            f"range are too {'optimistic' if off < 0 else 'pessimistic'}.")
+    brier = round_half_up(c.brier * 100)
+    return {"title": f"Predicted vs actual (last 90 days, {c.posts} resolved posts)",
+            "brier": f"Brier score {brier // 100}.{brier % 100:02d} · always guessing 50% would score 0.25",
+            "warnings": warnings, "rows": rows}
+
+
 def status_view(rows: Sequence[StatusRow], facts: StatusFacts, now_ms: int, offset_ms: int) -> dict:
     """The Status page (SPEC §3.5, D32-D36).
 
@@ -372,7 +414,8 @@ def status_view(rows: Sequence[StatusRow], facts: StatusFacts, now_ms: int, offs
         offset_ms: Local time minus UTC, ms.
 
     Returns:
-        {"alerts": [...], "cards": [...]}: market cards in config order, then API, Characters, Storage.
+        {"alerts": [...], "cards": [...], "calibration": section or None}: market cards in config order, then API,
+        Characters, Storage.
     """
     megabytes = facts.db_bytes * 10 // 1_048_576
     storage = {"title": "Storage", "badge": "", "badge_class": "", "lines": [
@@ -380,4 +423,5 @@ def status_view(rows: Sequence[StatusRow], facts: StatusFacts, now_ms: int, offs
         ["Retention", f"{facts.retention_days} days", ""]]}
     cards = [_market_card(m, now_ms, offset_ms) for m in facts.markets]
     cards += [_api_card(rows, facts, offset_ms), _characters_card(facts, now_ms), storage]
-    return {"alerts": alerts(rows, facts, now_ms, offset_ms), "cards": cards}
+    return {"alerts": alerts(rows, facts, now_ms, offset_ms), "cards": cards,
+            "calibration": calibration_view(facts.calibration)}

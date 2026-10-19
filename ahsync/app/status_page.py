@@ -2,16 +2,18 @@
 
 Unlike the other pages it is not staged by the full refresh: sync runs, SavedVariables
 reads and failures change it between refreshes. It reads only small tables (status
-lines, sync state, current prices, scans, characters) and the database file's size,
+lines, sync state, current prices, scans, characters, resolved posts) and the database file's size,
 never history or the intelligence; engine.status_view makes every text.
 """
 from __future__ import annotations
 
 from ahsync.config import Config
 from ahsync.db.sqlite import Database
+from ahsync.engine.sell_record import calibration
 from ahsync.engine.status_view import CharacterFacts, MarketFacts, StatusFacts, StatusRow, status_view
 
 DAY_MS = 86_400_000
+CALIBRATION_DAYS = 90            # SPEC §8.8: the last 90 days of resolved posts
 
 
 def _db_bytes(db: Database) -> int:
@@ -49,7 +51,11 @@ def status_facts(db: Database, cfg: Config, now_ms: int) -> StatusFacts:
         newest, priced, oldest, latest, local, books = db.sync_facts(market, now_ms - 7 * DAY_MS)
         markets.append(MarketFacts(market, state.last_hour, state.last_run, newest, priced, oldest, latest, local, books))
     characters = tuple(CharacterFacts(*row) for row in db.characters())
-    return StatusFacts(tuple(markets), characters, bool(cfg.api_key), _db_bytes(db), cfg.retention_days)
+    results = [(p, outcome == "sold") for p, outcome in db.conn.execute(
+        "SELECT p_at_post, outcome FROM posts WHERE outcome IN ('sold', 'expired') AND p_at_post IS NOT NULL "
+        "AND at >= ? ORDER BY post_id", (now_ms - CALIBRATION_DAYS * DAY_MS,))]
+    return StatusFacts(tuple(markets), characters, bool(cfg.api_key), _db_bytes(db), cfg.retention_days,
+                       calibration(results))
 
 
 def status_page(db: Database, cfg: Config, now_ms: int, offset_ms: int) -> dict:

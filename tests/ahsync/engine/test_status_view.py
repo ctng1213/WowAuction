@@ -131,3 +131,19 @@ def test_a_fresh_market_card():
         ["Hourly history stored", "Thu 17 Sep 23:00–Sat 17 Oct 22:00", ""], ["Your scans (7 d)", "6", ""],
         ["AHF order books (7 d)", "3", ""]]
     assert status_view.hour_ranges([5, 3, 4, 9]) == [(3, 5), (9, 9)]
+
+
+def test_K6_status_shows_calibration_and_its_warnings():
+    from ahsync.engine.sell_record import calibration
+    c = calibration([(0.8, True)] * 8 + [(0.8, False)] * 2 + [(0.5, True)] * 7 + [(0.5, False)] * 18)
+    section = status_view.status_view([], facts(calibration=c), NOW, 0)["calibration"]
+    assert section["title"] == "Predicted vs actual (last 90 days, 35 resolved posts)"
+    assert section["brier"] == "Brier score 0.22 · always guessing 50% would score 0.25"     # (1.6 + 6.25) ÷ 35
+    assert [(r["bucket"], r["posts"], r["predicted"], r["actual"], r["off"], r["bad"]) for r in section["rows"]] == [
+        ("40–60%", "25", "50%", "28%", "−22 pts", True), ("80–100%", "10", "80%", "80%", "0 pts", False)]
+    assert section["warnings"] == ["Posts predicted 40–60% actually sold 28% (25 posts). Chances in that range are too "
+                                   "optimistic."]
+    assert status_view.status_view([], facts(calibration=calibration([])), NOW, 0)["calibration"] is None
+    assert status_view.status_view([], facts(), NOW, 0)["calibration"] is None
+    high = status_view.calibration_view(calibration([(0.1, True)] * 20))
+    assert high["rows"][0]["off"] == "+90 pts" and high["warnings"][0].endswith("too pessimistic.")

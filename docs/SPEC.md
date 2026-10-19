@@ -1523,6 +1523,8 @@ The invariants prove the formula is sensible. Only your real sales can show whet
 - It reports the **Brier score**, the mean of `(P' − outcome)²` where outcome is 1 for sold and 0 for expired. Lower is better. Always guessing 50% scores 0.25.
 - The **Status** page shows both. A bucket that is off by more than 15 points, with at least 20 posts in it, raises a warning, e.g. "40–60% predictions actually sold 28%". That suggests `default_sell_prob`, `own_record_weight` or the volume source needs adjusting.
 
+**Built** (K1–K3, K5, K6): `engine/sell_record.calibration` over the last 90 days of sold and expired posts with a `p_at_post`, which the tracking pass copies from the matched action's planned `P'` (`actions.conf`); a post that matched no action, such as one the addon suggested on its own, is left out. The Status page shows it below the cards (`engine/status_view.calibration_view`), with the bucket warnings as alerts in that section.
+
 Scenarios K1–K4: [SCENARIOS.md §4](SCENARIOS.md#4-calibration-k1k3).
 
 ### 8.9 Definition of done for any feature

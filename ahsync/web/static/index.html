@@ -221,6 +221,17 @@ const ALERT_CLASS = { error: 'bad', warn: 'warn', info: 'info' };
 const VALUE_CLASS = { amber: 'amber', muted: 'muted', pos: 'pos', neg: 'neg' };
 const statusCard = c => `<div class="card"><div class="card-h"><b>${esc(c.title)}</b>${c.badge ? `<span class="pill ${c.badge_class === 'ok' || c.badge_class === 'warn' || c.badge_class === 'gold' ? c.badge_class : ''}">${esc(c.badge)}</span>` : ''}</div>` +
   `<dl class="kv">${c.lines.map(([k, v, cls]) => `<dt>${esc(k)}</dt><dd class="${VALUE_CLASS[cls] || ''}">${esc(v)}</dd>`).join('')}</dl></div>`;
+// Status: the sell-probability calibration section (SPEC §8.8); every text and width comes from engine/status_view.py.
+const calBar = (pct, color) => `<div class="bar" style="width:160px"><i style="width:${Number(pct)}%;background:${color}"></i></div>`;
+const calibrationHtml = c => !c ? '<div class="empty">Sell-probability calibration appears here once your posts are tracked to their outcome.</div>' :
+  `<h3 style="padding:0 12px">Sell-probability calibration</h3><div style="padding:0 12px">` +
+  c.warnings.map(w => `<div class="alert warn"><b>Off target</b><span class="grow">${esc(w)}</span></div>`).join('') +
+  `<div class="card"><div class="card-h"><b>${esc(c.title)}</b><span class="muted">${esc(c.brier)}</span></div><table><thead><tr>` +
+  `<th>Predicted chance</th><th class="num">Posts</th><th class="num">Predicted</th><th class="num">Actually sold</th><th class="num">Off by</th><th></th></tr></thead><tbody>` +
+  c.rows.map(r => `<tr><td>${esc(r.bucket)}</td><td class="num">${esc(r.posts)}</td><td class="num">${esc(r.predicted)}</td>` +
+    `<td class="num ${r.bad ? 'neg' : ''}">${esc(r.actual)}</td><td class="num ${r.bad ? 'neg' : 'muted'}">${esc(r.off)}</td>` +
+    `<td>${calBar(r.predicted_pct, 'var(--muted)')}${calBar(r.actual_pct, r.bad ? 'var(--neg)' : 'var(--pos)')}</td></tr>`).join('') +
+  `</tbody></table></div></div>`;
 const totalsList = obj => Object.entries(obj || {}).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${signed(v)}</dd>`).join('');
 
 // ---------- live pages (SPEC §3.5 dashboard data) ----------
@@ -308,7 +319,7 @@ const LIVE = {
     render: d => `<div style="padding:12px">${(d.alerts || []).map(a => `<div class="alert ${ALERT_CLASS[a.level] || 'info'}"><b>${esc(a.title)}</b><span class="grow">${esc(a.text)}</span></div>`).join('') ||
       '<div class="alert info"><b>All clear</b><span class="grow">Nothing needs attention.</span></div>'}</div>` +
       `<div class="grid2">${(d.cards || []).map(statusCard).join('')}</div>` +
-      `<div class="empty">Sell-probability calibration appears here once your posts are tracked to their outcome.</div>`,
+      calibrationHtml(d.calibration),
     filters: [],
   },
   disenchant: {

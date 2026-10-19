@@ -486,6 +486,8 @@ Rules: SPEC §8.8.
 | K1 | 10 posts predicted 0.8, 8 sold | bucket 80–100%: predicted 80%, actual 80%; Brier = (8 × 0.04 + 2 × 0.64) ÷ 10 = 0.16 |
 | K2 | 25 posts predicted 0.5, 7 sold | bucket 40–60% actual 28%; warning raised (off by 22 points, ≥ 20 posts) |
 | K3 | 5 posts predicted 0.5, 0 sold | no warning (fewer than 20 posts) |
+| K5 | a post matched to its plan action, which planned P' 0.62; it sells | the post's `p_at_post` is 0.62 (the action's `conf`), so it counts in the 60–80% bucket as sold; a post that matched no action has no `p_at_post` and is left out |
+| K6 | Status with K1's and K2's posts | a "Sell-probability calibration" section: "Predicted vs actual (last 90 days, 35 resolved posts)", "Brier score 0.22 · always guessing 50% would score 0.25" ((1.6 + 6.25) ÷ 35), rows 40–60% (25 posts, predicted 50%, sold 28%, −22 pts, off) and 80–100% (10, 80%, 80%, 0 pts); the warning "Posts predicted 40–60% actually sold 28% (25 posts). Chances in that range are too optimistic."; with no resolved posts the section says it appears once posts are tracked |
 | K4 | 10 days with both AHF and book volume: book ÷ AHF ratios 0.8 ×4, 1.0 ×4, 1.5 ×2 | Status: median ratio 1.0; 8 of 10 days (80%) within ±25% |
 
 ## 5. Invariants (SPEC §8.7)

@@ -38,3 +38,19 @@ def test_a_database_file_that_cant_be_read_counts_as_0_bytes(tmp_path):
         path = tmp_path / "gone.db"
 
     assert status_page._db_bytes(Missing()) == 0
+
+
+def test_calibration_reads_resolved_posts_of_the_last_90_days_with_a_planned_chance(tmp_path):
+    now = FakeClock().now_ms()
+    db = Database.open(tmp_path / "ahsync.db", now, None)
+    try:
+        with db.transaction():
+            db.conn.executemany(
+                "INSERT INTO posts(post_id, char_id, key, stack, price, at, outcome, p_at_post) VALUES (?, 'A-R', 1, 1, 1, ?, ?, ?)",
+                [("sold", now - DAY, "sold", 0.8), ("gone", now - DAY, "expired", 0.8), ("open", now - DAY, None, 0.8),
+                 ("unplanned", now - DAY, "sold", None), ("old", now - 91 * DAY, "sold", 0.8),
+                 ("pulled", now - DAY, "cancelled", 0.8)])
+        c = status_page.status_facts(db, Config(markets=(M,)), now).calibration
+        assert (c.posts, c.buckets[0].actual) == (2, 0.5)
+    finally:
+        db.close()

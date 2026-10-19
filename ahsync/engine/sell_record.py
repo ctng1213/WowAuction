@@ -6,7 +6,9 @@ undercut (a close below your price: something cheaper was listed), lowest (you w
 cheapest in every close) or unknown (no closes; counted like lowest). streak counts lowest and
 unknown expiries in a row since the last sale; an undercut expiry neither adds to it nor resets
 it. After a Keep only later posts count. The item is not selling once the streak reaches
-struggle_streak, or keep_retry_streak after a Keep. Pure.
+struggle_streak, or keep_retry_streak after a Keep.
+
+Calibration (SPEC §8.8) compares the chance each post was planned with against what happened. Pure.
 """
 from __future__ import annotations
 
@@ -15,6 +17,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 DAY_MS = 86_400_000
+CALIBRATION_BUCKETS = ((0.0, 0.2), (0.2, 0.4), (0.4, 0.6), (0.6, 0.8), (0.8, 1.0))   # SPEC §8.8
+CALIBRATION_WARN_POINTS = 15     # a bucket further off than this ...
+CALIBRATION_MIN_POSTS = 20       # ... with at least this many posts raises a warning (K2, K3)
 
 
 @dataclass(frozen=True)
@@ -98,6 +103,55 @@ def sell_record(posts: Sequence[ResolvedPost], closes: Sequence[tuple[int, int]]
             streak, lowest = streak + 1, lowest + 1
     threshold = s.keep_retry_streak if keep_at_ms is not None else s.struggle_streak
     return Record(sold, expired, streak, lowest, undercut_last, streak >= threshold)
+
+
+@dataclass(frozen=True)
+class Bucket:
+    """One predicted-chance bucket of resolved posts."""
+
+    low: float                     # includes its lower edge; the last bucket also includes 1
+    high: float
+    posts: int
+    predicted: float               # mean planned P'
+    actual: float                  # share that sold
+
+    @property
+    def off_target(self) -> bool:
+        """Whether this bucket should raise a warning.
+
+        Returns:
+            True when predicted and actual differ by more than 15 points with at least 20 posts (K2, K3).
+        """
+        return abs(self.actual - self.predicted) * 100 > CALIBRATION_WARN_POINTS and self.posts >= CALIBRATION_MIN_POSTS
+
+
+@dataclass(frozen=True)
+class Calibration:
+    """Predicted against actual sell rates (SPEC §8.8)."""
+
+    posts: int
+    buckets: tuple[Bucket, ...]    # the non-empty ones, lowest first
+    brier: float | None            # mean (P' − outcome)²; None without posts
+
+
+def calibration(results: Sequence[tuple[float, bool]]) -> Calibration:
+    """Calibrate the planned chances against outcomes (SPEC §8.8, K1-K3).
+
+    Args:
+        results: (planned P' in [0, 1], sold) per resolved post; expired is not sold.
+
+    Returns:
+        The buckets with posts in them and the Brier score.
+    """
+    groups: dict[int, list[tuple[float, bool]]] = {}
+    for p, sold in results:
+        index = next(i for i, (low, high) in enumerate(CALIBRATION_BUCKETS)
+                     if low <= p < high or i == len(CALIBRATION_BUCKETS) - 1)
+        groups.setdefault(index, []).append((p, sold))
+    buckets = tuple(Bucket(*CALIBRATION_BUCKETS[i], len(g), sum(p for p, _ in g) / len(g), sum(s for _, s in g) / len(g))
+                    for i, g in sorted(groups.items()))
+    brier = sum((p - (1.0 if sold else 0.0)) ** 2 for p, sold in results) / len(results) if results else None
+    return Calibration(len(results), buckets, brier)
 
 
 def stacks_to_post(stacks: int, streak: int) -> int:

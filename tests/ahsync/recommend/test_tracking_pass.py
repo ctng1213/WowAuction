@@ -145,3 +145,12 @@ def test_T19_a_disenchant_matches_the_planned_de_action(db):
     assert tracking_pass(db)["matched"] == 1
     assert rows(db, "SELECT status, done_qty FROM actions WHERE action_id = 'de'") == [("done", 1)]
     assert rows(db, "SELECT action_id FROM disenchants") == [("de",)]
+
+
+def test_K5_a_matched_post_keeps_the_chance_it_was_planned_with(db):
+    with db.transaction():
+        db.conn.execute("UPDATE actions SET conf = 0.62 WHERE action_id = 'post'")
+        db.conn.executemany("INSERT INTO posts(post_id, event_id, char_id, key, stack, price, at, confirmed) "
+                            "VALUES (?, ?, ?, ?, 20, 55, ?, 1)", [("p", "p", AMAYA, LINEN, T + DAY), ("q", "q", AMAYA, ROD, T)])
+    tracking_pass(db)
+    assert rows(db, "SELECT post_id, p_at_post FROM posts ORDER BY post_id") == [("p", 0.62), ("q", None)]

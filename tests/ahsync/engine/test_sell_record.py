@@ -1,7 +1,8 @@
 """Tests for ahsync/engine/sell_record.py: your own sell record (SPEC §3.3.3)."""
 from __future__ import annotations
 
-from ahsync.engine.sell_record import Record, RecordSettings, ResolvedPost, cause, repriced, sell_record, stacks_to_post
+from ahsync.engine.sell_record import (Bucket, Record, RecordSettings, ResolvedPost, calibration, cause, repriced, sell_record,
+                                       stacks_to_post)
 
 HOUR, DAY = 3_600_000, 86_400_000
 NOW = 1_760_000_000_000
@@ -85,3 +86,27 @@ def test_O12_O13_the_price_drops_5_percent_per_step_but_never_below_the_vendor_f
     assert repriced(50, 2, 0.05, 47, None) == 47                # floor ceil(44 ÷ 0.95) = 47
     assert repriced(50, 0, 0.05, 1, 46) == 46                   # an undercut cap of curOthers − 1
     assert repriced(100, 1, 0.05, 1, None) == 95                # floored without float slips
+
+
+def test_K1_a_well_calibrated_bucket_and_its_brier_score():
+    c = calibration([(0.8, True)] * 8 + [(0.8, False)] * 2)
+    [b] = c.buckets
+    assert (b.low, b.high, b.posts, b.predicted, b.actual, b.off_target) == (0.8, 1.0, 10, 0.8, 0.8, False)
+    assert abs(c.brier - 0.16) < 1e-12                       # (8 × 0.04 + 2 × 0.64) ÷ 10
+
+
+def test_K2_an_optimistic_bucket_with_enough_posts_warns():
+    [b] = calibration([(0.5, True)] * 7 + [(0.5, False)] * 18).buckets
+    assert (b.low, b.posts, b.actual, b.off_target) == (0.4, 25, 0.28, True)   # 28% against 50%: 22 points off
+
+
+def test_K3_too_few_posts_never_warn():
+    [b] = calibration([(0.5, False)] * 5).buckets
+    assert (b.actual, b.off_target) == (0.0, False)
+
+
+def test_buckets_include_their_lower_edge_and_the_last_includes_1():
+    c = calibration([(0.0, False), (0.2, True), (0.6, True), (1.0, True)])
+    assert [(b.low, b.posts) for b in c.buckets] == [(0.0, 1), (0.2, 1), (0.6, 1), (0.8, 1)]
+    assert calibration([]) == calibration(()) and calibration([]).brier is None
+    assert Bucket(0.4, 0.6, 20, 0.5, 0.7).off_target                           # too pessimistic also warns

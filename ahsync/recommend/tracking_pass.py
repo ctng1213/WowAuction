@@ -74,6 +74,9 @@ def _match(db: Database) -> int:
     for m in matches:
         table = tables[m.event_id]
         db.conn.execute(f"UPDATE {table} SET action_id = ? WHERE {_ID_COLUMN[table]} = ?", (m.action_id, m.event_id))
+        if table == "posts":           # the P' it was planned with, for calibration (SPEC §8.8, K5)
+            db.conn.execute("UPDATE posts SET p_at_post = (SELECT conf FROM actions WHERE action_id = ?) "
+                            "WHERE post_id = ?", (m.action_id, m.event_id))
         last[m.action_id] = max(last.get(m.action_id, 0), at[m.event_id])
     for action_id, (done_qty, state) in status.items():
         db.conn.execute("UPDATE actions SET done_qty = ?, status = ?, done_at = ? WHERE action_id = ?",

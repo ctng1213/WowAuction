@@ -17,7 +17,6 @@ IU1-IU2 IU6-IU7 IU10
 
 
 
-K1-K3
 
 
 
