@@ -493,3 +493,14 @@ def test_no_single_quoted_dashboard_string_holds_an_apostrophe():
     code = [line for line in page.splitlines() if not line.lstrip().startswith("//")]
     broken = [line.strip() for line in code if re.search(r"[(:,=]\s*'[^'\"`\n]*[A-Za-z]'[A-Za-z]", line)]
     assert broken == []
+
+
+def test_every_table_row_is_its_own_tr():
+    # rowHtml wraps a row in <tr> only for pages with selectKey; every other page's row must bring its own,
+    # or the browser runs all the rows together into one line.
+    live = INDEX_HTML.read_text(encoding="utf-8").split("const LIVE = {", 1)[1]
+    specs = re.split(r"\n  (\w+): \{\n", live)[1:]
+    for name, body in zip(specs[::2], specs[1::2]):
+        row = re.search(r"row: r => `(.*?)`", body, re.S)
+        if row and "selectKey" not in body:
+            assert row.group(1).startswith("<tr") and "</tr>`" in body, name
