@@ -459,7 +459,7 @@ async function setRule(id, key, rule, el) {
     if (r && r.status === 200) { notice(rule === 'keep' ? 'Kept: its record starts fresh.' : 'Blacklisted: the plan no longer buys or crafts it.', 'ok'); load(id); }
     else if (r) notice(`Not saved (${r.body.error || r.status}).`, 'warn');
   } catch (e) {
-    notice('AHSync isn't answering. Is it still running?', 'warn');
+    notice("AHSync isn't answering. Is it still running?", 'warn');
   }
   el.disabled = false;
 }

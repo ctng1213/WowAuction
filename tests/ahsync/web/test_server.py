@@ -485,3 +485,11 @@ def test_a_busy_database_answers_503_for_a_rule(app, monkeypatch):
 
     monkeypatch.setattr(app.db, "upsert_item_rule", busy)
     assert app.handle("POST", "/api/rule", write_headers(), b'{"key": 2, "rule": "keep"}').status == 503
+
+
+def test_no_single_quoted_dashboard_string_holds_an_apostrophe():
+    # A contraction inside a '...' JS string ends it early: the whole script fails and the page is blank.
+    page = INDEX_HTML.read_text(encoding="utf-8")
+    code = [line for line in page.splitlines() if not line.lstrip().startswith("//")]
+    broken = [line.strip() for line in code if re.search(r"[(:,=]\s*'[^'\"`\n]*[A-Za-z]'[A-Za-z]", line)]
+    assert broken == []
