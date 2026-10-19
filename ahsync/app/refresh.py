@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from ahsync.analysis.market import analyze_market
+from ahsync.analysis.market import analyze_market, with_scan
 from ahsync.config import Config, market_settings
 from ahsync.db.sqlite import Database
 from ahsync.recommend.inventory_page import inventory_page
@@ -114,7 +114,8 @@ def replan_all(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0) -> li
 
     It runs after a SavedVariables read, so what you did in game (bought, crafted, posted, moved
     stock, kept something) shows on the dashboard and in PortfolioPlan.lua without a full refresh.
-    No history is read and the intelligence is not rebuilt: only the plan and the pages are.
+    No history is read and the intelligence is not rebuilt: only the plan and the pages are, after your
+    in-game scans made since the intelligence was built update the items they priced (IU6).
 
     Args:
         db: Database.
@@ -131,9 +132,10 @@ def replan_all(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0) -> li
     try:
         db.drop_staging()
         for market in markets:
+            scanned = with_scan(intels[market], *db.scans_since(market, intels[market].built_ms))   # IU6
             with db.transaction():
-                _stage_recommendations(db, market, intels[market].items, now_ms, offset_ms, cfg)
-        db.publish_refresh(markets, with_intel=False)
+                _stage_recommendations(db, market, scanned.items, now_ms, offset_ms, cfg)
+        db.publish_refresh(markets, with_intel=False)       # the stored intelligence stays the analysis' own
     except Exception as error:                         # noqa: BLE001  keep the last good plan (SPEC §5.2 rule 4)
         log.error("re-plan failed: %s: %s", type(error).__name__, error)
         db.drop_staging()

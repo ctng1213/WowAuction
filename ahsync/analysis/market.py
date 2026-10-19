@@ -9,6 +9,7 @@ and the rest carry on (FM8).
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import replace
 
 from ahsync.engine import confidence, fees, patterns, prices, profile, sellprob
 from ahsync.engine.profile import Profile
@@ -173,6 +174,44 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
         **weekly_fields(item, med30, volume, ref, now_ms, settings),
         cur_suspect=prices.suspect_price(cur.price if cur else None, p10, p90, recent),
         median_daily_supply=median_daily_supply(item.hourly_supply, now_ms))
+
+
+def with_scan(intel: MarketIntelligence, prices: dict[int, tuple[int, int, int]],
+              books: dict[int, tuple[int, list[tuple[int, int, int, int]]]]) -> MarketIntelligence:
+    """The intelligence with your newer in-game scans applied to the items they priced (SPEC §3.1.1, IU6).
+
+    Args:
+        intel: The published intelligence.
+        prices: Item key -> (lowest buyout copper, units at it, seen ms) from your scans after intel.built_ms.
+        books: Item key -> (scan ms, [(price, stack, band, count)]) from your newest complete scan after it.
+
+    Returns:
+        A copy whose scanned items have the scan's cur, cur_qty, price age (0 when seen after the build), book
+        and current supply, and cur_suspect re-checked; every other item and the build time unchanged.
+    """
+    items = dict(intel.items)
+    for key in sorted(set(prices) & set(items)):
+        i, (price, qty, _at) = items[key], prices[key]
+        book = books.get(key)
+        rows = tuple(book[1]) if book else i.book
+        items[key] = replace(i, cur=price, cur_qty=qty, cur_age_ms=0, book=rows,
+                             units_on_ah=sum(stack * count for _, stack, _, count in rows) if book else i.units_on_ah,
+                             cur_suspect=prices_suspect(price, i.p10_30, i.p90_30))
+    return replace(intel, items=items)
+
+
+def prices_suspect(price: int, p10: int | None, p90: int | None) -> bool:
+    """Whether one fresh scan price is out of the item's usual range (FM5), with no second hour to confirm it.
+
+    Args:
+        price: Copper.
+        p10: The 30-day 10th percentile.
+        p90: The 30-day 90th percentile.
+
+    Returns:
+        As engine.prices.suspect_price with no recent closes.
+    """
+    return prices.suspect_price(price, p10, p90, [])
 
 
 def analyze_market(history: HistoryReader, market: str, now_ms: int,

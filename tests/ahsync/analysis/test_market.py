@@ -265,3 +265,21 @@ def test_AR8_an_unknown_suffix_key_gets_no_intelligence():
             return super().hourly_closes(market_id, 6217, from_ms, to_ms)
     intel, failed = market.analyze_market(WithUnknownSuffix(), M, NOW, MarketSettings())
     assert (set(intel.items), failed) == ({6217}, {})
+
+
+def test_IU6_a_newer_in_game_scan_updates_only_the_items_it_priced():
+    from ahsync.intel.contract import ItemIntel, MarketIntelligence
+    silk, linen = 4306, 2589
+
+    def item(key: int, cur: int) -> ItemIntel:
+        """An item priced at cur, with 5 listed."""
+        return ItemIntel(key, cur, 5, HOUR, cur, cur, 80, 120, 0.0, 10.0, 0.0, 10.0, "books", {"books": 7}, cur, 1, 0.5,
+                         False, float(cur), 60, 5, None, ())
+    intel = MarketIntelligence(M, NOW, NOW, 1, {silk: item(silk, 100), linen: item(linen, 45)})
+    book = [(90, 12, 4, 1), (95, 12, 4, 2)]
+    after = market.with_scan(intel, {silk: (90, 12, NOW + HOUR), 999: (5, 1, NOW + HOUR)}, {silk: (NOW + HOUR, book)})
+    s = after.items[silk]
+    assert (s.cur, s.cur_qty, s.cur_age_ms, s.book, s.units_on_ah, s.cur_suspect) == (90, 12, 0, tuple(book), 36, False)
+    assert after.items[linen] == intel.items[linen] and after.built_ms == NOW and 999 not in after.items
+    lone = market.with_scan(intel, {silk: (5, 1, NOW + HOUR)}, {}).items[silk]        # no book in this scan
+    assert (lone.cur, lone.book, lone.units_on_ah, lone.cur_suspect) == (5, (), 5, True)   # 5c < 10% of 80c

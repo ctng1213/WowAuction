@@ -316,12 +316,12 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 
 | # | Scenario | Then |
 |---|---|---|
-| IU1 | you buy 20 Linen Cloth (SavedVariables changes) | only Linen is dirty; its options and plan rows are recomputed; other items' rows are untouched; history reads = 0 (counted by a fake `db`) |
+| IU1 | you buy 20 Linen Cloth (SavedVariables changes) | the re-plan reads no history and rebuilds no intelligence; the plan is re-planned whole (budgets and windows are shared, §3.1.1), so Linen's rows change and every other item whose inputs didn't change keeps the same rows |
 | IU2 | a new hourly AHF file arrives | stored; market intelligence, plan and the addon files unchanged; "prices newer than numbers" flag set: every page response carries `prices_newer: true` (an AHF price observed after the published intelligence was built), and the dashboard's pill reads "numbers from … · prices newer than numbers · Refresh now"; false before any newer price and before the first refresh |
 | IU3 | `daily_refresh_time` 06:00 passes while AHSync runs | one full refresh on the next timer tick; none again until the next day |
 | IU4 | "Refresh now" pressed twice within a second | one full refresh (the second request is merged in) |
 | IU5 | the curve row for the current hour has P(2 ahead) = 0.90 and P(5 ahead) = 0.78; 3 units are now ahead | P = 0.90 − 0.12 × (1 ÷ 3) = 0.86, in both Python and Lua |
-| IU6 | an in-game scan changes Silk Cloth's price | only Silk Cloth and the crafts that use it are recomputed |
+| IU6 | after the last full refresh, an in-game scan lists Silk Cloth as one stack of 12 at 90 c and two of 12 at 95 c, where the intelligence had 1 s; Linen is not in the scan | before the re-plan, Silk's `cur` becomes 90 c with `curQty` 12, its book and current supply (36) come from the scan, its price age is the scan's; Linen and the stored intelligence's build time are unchanged; the plan and the Craft page then use 90 c; AHF prices that arrived meanwhile are not applied (IU2) |
 | IU7 | idle for 10 minutes, no file change | no engine call; one SavedVariables stat every 5 s |
 | IU8 | refresh at 06:00; it is now 20:00; the 06:00 row gives P(0 ahead) = 0.40 and the 20:00 row 0.84 (evening buyers) | P = 0.84: the current hour's row, in both Python and Lua |
 | IU11 | the simulation gives P = 0.853 for a curve point | exported as 0.86 (2% steps: floor(0.853 × 50 + 0.5) = 43 → 43 ÷ 50), stored as the character `string.char(35 + 43)` = "N"; Python and Lua both read 0.86 |

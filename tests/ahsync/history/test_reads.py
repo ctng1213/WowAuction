@@ -102,3 +102,18 @@ def test_market_history_streams_the_same_values_as_the_per_item_reads(db):
     one = bulk[0]
     assert (one.hourly_closes, one.hourly_supply) == ([(0, 50), (HOUR, 48)], [(0, 12), (HOUR, 9)])   # local first;
     assert one.book == (HOUR, [(47, 1, 2, 1)])     # a local hour without a close falls back to AHF's; ties: scan id
+
+
+
+def test_IU6_scans_since_reads_your_newer_scan_prices_and_the_newest_complete_book(db):
+    sql(db, "INSERT INTO scans(scan_id, market, src, at, kind, coverage) VALUES (?, ?, ?, ?, ?, ?)",
+        ("old", M, "local", 1 * DAY, "full", 1.0), ("new", M, "local", 3 * DAY, "full", 1.0),
+        ("part", M, "local", 4 * DAY, "partial", 0.4), ("ahf", M, "ahf", 5 * DAY, "full", 1.0))
+    sql(db, "INSERT INTO book_entries(scan_id, key, price, stack, band, count) VALUES (?, ?, ?, ?, ?, ?)",
+        ("old", 1, 50, 20, 3, 1), ("new", 1, 55, 20, 4, 2), ("new", 1, 45, 5, 3, 1), ("ahf", 1, 40, 1, 3, 1))
+    sql(db, "INSERT INTO current(market, key, price, qty, at, src) VALUES (?, ?, ?, ?, ?, ?)",
+        (M, 1, 45, 5, 4 * DAY, "local"), (M, 2, 9, 1, 1 * DAY, "local"), (M, 3, 7, 1, 5 * DAY, "ahf"))
+    prices, books = db.scans_since(M, 2 * DAY)
+    assert prices == {1: (45, 5, 4 * DAY)}                                   # item 2's scan is older; AHF never counts
+    assert books == {1: (3 * DAY, [(45, 5, 3, 1), (55, 20, 4, 2)])}          # the newest complete local book
+    assert db.scans_since(M, 5 * DAY) == ({}, {})

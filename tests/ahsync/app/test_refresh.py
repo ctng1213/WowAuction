@@ -304,3 +304,38 @@ def test_FI1_a_crash_at_any_commit_point_then_a_restart_gives_the_same_database_
         commits.update(n=0, crash_at=0)
         _pipeline(folder, clock)                             # the restart
         assert _snapshot(folder) == reference, f"crash before commit {crash_at}"
+
+
+def _plan_rows(db: Database, *exclude: int) -> list[tuple]:
+    """The live plan's actions as (char, kind, key, qty, price, slot), without run ids, for comparing plans."""
+    return sorted(r for r in db.conn.execute(
+        "SELECT char_id, kind, key, qty, price, slot_ms FROM actions WHERE status IN ('pending', 'late')").fetchall()
+        if r[2] not in exclude)
+
+
+def test_IU1_a_buy_re_plans_without_history_and_leaves_items_whose_inputs_did_not_change(db, monkeypatch):
+    from ahsync.history.reads import HistoryReads
+    refresh.refresh_all(db, NOW, CFG)
+    before = _plan_rows(db, ESSENCE)
+    rows(db, "INSERT INTO inventory(char_id, location, key, qty, bound) VALUES (?, ?, ?, ?, ?)", (AMAYA, "bags", ESSENCE, 20, 0))
+    for name in ("market_history", "hourly_closes", "daily_closes", "volume_rows", "newest_book"):
+        monkeypatch.setattr(HistoryReads, name, lambda *a, **k: pytest.fail("a re-plan read history"))
+    refresh.replan_all(db, NOW, CFG)
+    assert db.conn.execute("SELECT COUNT(*) FROM actions WHERE key = ? AND status = 'pending'", (ESSENCE,)).fetchone()[0]
+    assert _plan_rows(db, ESSENCE) == before                    # the other items' rows are the same
+
+
+def test_IU6_your_newer_in_game_scan_reaches_the_plan_and_pages_on_the_next_re_plan(db):
+    refresh.refresh_all(db, NOW, CFG)
+    [rod] = db.view("craft", M)[0]["rows"]
+    assert rod["mats_each"] == "20s"                            # 2 bars at 10s
+    rows(db, "INSERT INTO scans(scan_id, market, src, char_id, at, kind, coverage) VALUES (?, ?, ?, ?, ?, ?, ?)",
+         ("scan", M, "local", AMAYA, NOW + HOUR, "full", 1.0))
+    rows(db, "INSERT INTO book_entries(scan_id, key, price, stack, band, count) VALUES (?, ?, ?, ?, ?, ?)",
+         ("scan", BAR, 500, 1, 4, 6))
+    rows(db, "INSERT INTO current(market, key, price, qty, at, src) VALUES (?, ?, ?, ?, ?, ?)",
+         (M, BAR, 500, 6, NOW + HOUR, "local"))
+    refresh.replan_all(db, NOW + 2 * HOUR, CFG)
+    [rod] = db.view("craft", M)[0]["rows"]
+    assert rod["mats_each"] == "10s"                            # the scan's 5s bars
+    assert db.read_intel(M).items[BAR].cur == 1000              # the stored intelligence is analysis' own

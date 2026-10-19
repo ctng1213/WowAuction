@@ -305,6 +305,32 @@ class HistoryReads:
             "ORDER BY price, stack, band", (row[0], key)).fetchall()
         return row[1], [tuple(e) for e in entries]
 
+    def scans_since(self, market: str, since_ms: int
+                    ) -> tuple[dict[int, tuple[int, int, int]], dict[int, tuple[int, list[tuple[int, int, int, int]]]]]:
+        """Your in-game scans' prices and newest complete book after a time (SPEC §3.1.1, IU6).
+
+        Args:
+            market: Market id.
+            since_ms: Only later scans count (the intelligence's build time).
+
+        Returns:
+            (item key -> (lowest buyout, units at it, seen ms) from `current` src local, item key -> (scan ms,
+            [(price, stack, band, count)] by price)) from the newest complete local scan after since_ms.
+        """
+        prices = {key: (price, qty, at) for key, price, qty, at in self.conn.execute(
+            "SELECT key, price, qty, at FROM current WHERE market = ? AND src = 'local' AND at > ? "
+            "AND price IS NOT NULL ORDER BY key", (market, since_ms))}
+        newest = self.conn.execute(
+            "SELECT scan_id, at FROM scans WHERE market = ? AND src = 'local' AND kind = 'full' AND coverage >= 1 "
+            "AND at > ? ORDER BY at DESC, scan_id LIMIT 1", (market, since_ms)).fetchone()
+        books: dict[int, tuple[int, list[tuple[int, int, int, int]]]] = {}
+        if newest:
+            for key, price, stack, band, count in self.conn.execute(
+                    "SELECT key, price, stack, band, count FROM book_entries WHERE scan_id = ? "
+                    "ORDER BY key, price, stack, band", (newest[0],)):
+                books.setdefault(key, (newest[1], []))[1].append((price, stack, band, count))
+        return prices, books
+
     def local_full_scans(self, market: str, from_ms: int, to_ms: int) -> list[tuple[str, int]]:
         """Complete local scans of a market in a time range.
 

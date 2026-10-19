@@ -273,7 +273,7 @@ All the heavy lifting happens in AHSync, and only in a **full refresh**. Everyth
 - It re-plans every market from its **published** intelligence and the new character state, and rebuilds the pages: the plan, Today, Week, Flip, Inventory, Craft and Disenchant. No history is read and the intelligence is not rebuilt, so it costs the recommendation half of a full refresh, not the analysis half.
 - The plan is re-planned whole rather than item by item, because budgets and each selling window's capacity are shared across items (§3.4C.4); a per-item update would let two items spend the same gold.
 - It is published like a full refresh (staged, then swapped in), keeping the live intelligence; a failure leaves the previous plan and pages live.
-- A new in-game scan updates `cur`, `curQty` and the book for the scanned items only.
+- A new in-game scan updates `cur`, `curQty`, the book and the current supply for the scanned items only (`analysis.market.with_scan`, IU6): the re-plan applies your scans made after the intelligence was built to the items they priced, in memory, for the plan and the pages; the stored intelligence stays as analysis built it.
 - Hourly and live AHF data are **stored but not applied** until the next full refresh, so the numbers stay stable through the day. The exception is items you scanned in game, whose prices update immediately. The dashboard shows "prices newer than numbers · Refresh now" when newer data is waiting: each `/api/views` response carries `prices_newer`, true when the newest stored AHF price is newer than the published intelligence (IU2).
 
 **Status pass** (`plan.status_pass`, run by `sync/scheduler`). Time passing changes the plan even when no data does, so AHSync runs this once an hour at :00. It runs on precomputed options only, with no history reads and no simulation:
@@ -306,7 +306,7 @@ A full refresh builds into staging tables and swaps them in with one transaction
 | Memory when idle | ≤ 150 MB |
 | Memory during a full refresh | ≤ 400 MB peak (streaming, item by item) |
 | Full refresh time | ≤ 120 s for one market of about 9k items with 90 days of hourly history (it runs once a day in the background; weekly patterns and the 24 × 8 curve for every item, §5.0) |
-| Incremental update | ≤ 1 s (a whole re-plan from the published intelligence: 1.05 s measured on a real 15k-item market, 2026-10-18) |
+| Incremental update | ≤ 1 s (a whole re-plan from the published intelligence: 0.96 s measured on a real 15k-item market, 2026-10-18; applying a full in-game scan's 12k prices adds 0.13 s, IU6) |
 | Dashboard request | ≤ 50 ms (precomputed JSON, paged at 100 rows) |
 | `MarketIntelligence.lua` size | ≤ 2 MB (`PortfolioPlan.lua` ≤ 200 KB) |
 
