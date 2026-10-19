@@ -1,4 +1,4 @@
-"""The recommendation side's store (SPEC §3.5): dashboard pages and plan-action skips, mixed into db.sqlite.Database."""
+"""The recommendation side's store (SPEC §3.5): dashboard pages, plan actions, alternatives and skips, mixed into db.sqlite.Database."""
 from __future__ import annotations
 
 import json
@@ -35,6 +35,31 @@ class RecommendStore:
             "conf, status, done_qty, done_at, parent_id, window_start_ms, window_end_ms, anchor_net, anchor_window_ms, "
             "replaces_id, week_start_ms, peak_ms, source, duration_h, to_char) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+
+    def stage_alternatives(self, market: str, rows: list[tuple[str, str, str, str, str]]) -> None:
+        """Write a market's unfunded candidates into the staging table, published with the plan (SPEC §3.4D, M9).
+
+        Args:
+            market: Market id.
+            rows: (cand_id, char_id, list 'today' | 'week', reason = the §3.4D.6 status,
+                data = engine.portfolio.candidate_to_json).
+        """
+        self.conn.executemany(
+            "INSERT OR REPLACE INTO alternatives_new(market, cand_id, char_id, list, reason, data) "
+            "VALUES (?, ?, ?, ?, ?, ?)", [(market, *row) for row in rows])
+
+    def alternatives(self, market: str) -> list[tuple[str, str, str, str, str]]:
+        """A market's published alternatives (SPEC §3.4D).
+
+        Args:
+            market: Market id.
+
+        Returns:
+            (cand_id, char_id, list, reason, data), by candidate id.
+        """
+        return [tuple(r) for r in self.conn.execute(
+            "SELECT cand_id, char_id, list, reason, data FROM alternatives WHERE market = ? ORDER BY cand_id",
+            (market,))]
 
     def open_actions(self, char_ids: list[str]) -> list[tuple]:
         """The characters' pending and late actions, for the status pass (SPEC §3.4.1).

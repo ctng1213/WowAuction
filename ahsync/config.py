@@ -16,6 +16,7 @@ from pathlib import Path
 
 from ahsync.engine.flips import FlipSettings
 from ahsync.engine.plan import PlanSettings
+from ahsync.engine.portfolio import PortfolioSettings
 from ahsync.engine.sell_record import RecordSettings
 from ahsync.engine.sellprob import MarketSettings
 from ahsync.engine.volume import VolumePrior
@@ -72,11 +73,21 @@ class Config:
     max_supply_share: float = 0.5
     max_supply_share_gear: float = 1.0
     min_gear_units: int = 2
-    max_risk_pct: float = 25
+    max_risk_pct: float = 25                   # until M10: the per-buy cap the exposure budget replaces (§3.6)
     window_margin: float = 0.15
     pattern_full_weeks: int = 6
     max_trend_total: float = 0.15
     max_actions_per_day: int = 0
+    risk_tolerance: float = 0.30               # the portfolio optimizer (§3.4D); read and checked, used from M10
+    premium_base: float = 0.15
+    premium_per_day: float = 0.05
+    immediate_hours: int = 8
+    top_buy_windows: int = 3
+    top_sell_windows: int = 3
+    today_limit: int = 20
+    week_limit: int = 20
+    candidate_export: int = 150
+    horizon_days: int = 7
     launch_wow_after_catchup: bool = False
     realms: Mapping[str, str] = field(default_factory=dict)
     budgets: Mapping[str, int] = field(default_factory=dict)
@@ -100,13 +111,15 @@ _TYPES: dict[str, tuple[tuple[type, ...], str]] = {
 }
 for _name in ("retention_days", "dashboard_port", "live_refresh_minutes", "own_record_days",
               "struggle_streak", "keep_retry_streak", "post_lead_hours", "sell_window_hours",
-              "max_craft_depth", "max_actions_per_day", "min_gear_units", "pattern_full_weeks"):
+              "max_craft_depth", "max_actions_per_day", "min_gear_units", "pattern_full_weeks",
+              "immediate_hours", "top_buy_windows", "top_sell_windows", "today_limit", "week_limit",
+              "candidate_export", "horizon_days"):
     _TYPES[_name] = _INT
 for _name in ("min_flip_margin", "default_sell_prob", "default_sell_prob_cheapest", "volume_prior_per_day",
               "volume_prior_hours", "default_undercut_share", "own_record_weight",
               "reprice_step", "min_sell_prob", "high_risk_pct", "pattern_half_life_weeks",
               "window_threshold", "peak_tolerance", "max_supply_share", "max_supply_share_gear", "max_risk_pct",
-              "window_margin", "max_trend_total"):
+              "window_margin", "max_trend_total", "risk_tolerance", "premium_base", "premium_per_day"):
     _TYPES[_name] = _NUMBER
 
 
@@ -190,9 +203,11 @@ def _check_values(text: str, values: dict) -> None:
     for name in ("default_sell_prob", "default_sell_prob_cheapest"):
         if name in values and not 0 <= values[name] <= 1:
             raise _fail(text, name, "must be between 0 and 1")
-    for name in ("volume_prior_per_day", "volume_prior_hours", "window_margin", "max_trend_total"):
+    for name in ("volume_prior_per_day", "volume_prior_hours", "window_margin", "max_trend_total", "premium_base",
+                 "premium_per_day"):
         if name in values and values[name] < 0:
             raise _fail(text, name, "must be 0 or more")
+    _check_portfolio(text, values)
     if "daily_refresh_time" in values and not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", values["daily_refresh_time"]):
         raise _fail(text, "daily_refresh_time", 'must be a time like "06:00"')
     if "week_start" in values and values["week_start"] not in WEEKDAYS:
@@ -205,6 +220,37 @@ def _check_values(text: str, values: dict) -> None:
             raise ConfigError(f"config.toml [budgets]: {char_id} must be a whole number of copper, 0 or more")
     for market, table in values.get("sources", {}).items():
         _check_sources(market, table)
+
+
+# Whole-number portfolio settings -> (lowest, highest) allowed (SPEC §3.6); None = no upper bound.
+_PORTFOLIO_RANGES: dict[str, tuple[int, int | None]] = {
+    "top_buy_windows": (1, 10), "top_sell_windows": (1, 10), "today_limit": (1, 100), "week_limit": (1, 100),
+    "candidate_export": (20, None),
+}
+
+
+def _check_portfolio(text: str, values: dict) -> None:
+    """Check the portfolio optimizer's settings (SPEC §3.6, §3.4D).
+
+    Args:
+        text: The config file's contents (for line numbers).
+        values: Parsed top-level settings, types already checked.
+
+    Raises:
+        ConfigError: risk_tolerance outside (0, 1], immediate_hours other than 8 or 24, horizon_days
+            other than 7 (fixed until the optimizer is built), or a count outside its range.
+    """
+    if "risk_tolerance" in values and not 0 < values["risk_tolerance"] <= 1:
+        raise _fail(text, "risk_tolerance", "must be more than 0 and at most 1")
+    if "immediate_hours" in values and values["immediate_hours"] not in (8, 24):
+        raise _fail(text, "immediate_hours", "must be 8 or 24")
+    if "horizon_days" in values and values["horizon_days"] != 7:
+        raise _fail(text, "horizon_days", "must be 7 (the horizon is fixed for now)")
+    for name, (low, high) in _PORTFOLIO_RANGES.items():
+        if name in values and high is None and values[name] < low:
+            raise _fail(text, name, f"must be {low} or more")
+        if name in values and high is not None and not low <= values[name] <= high:
+            raise _fail(text, name, f"must be between {low} and {high}")
 
 
 def _check_sources(market: str, table: object) -> None:
@@ -357,6 +403,20 @@ def plan_settings(config: Config) -> PlanSettings:
                         config.default_sell_prob, config.reprice_step, config.own_record_weight,
                         config.default_sell_prob_cheapest, config.window_margin, config.pattern_full_weeks,
                         config.max_trend_total)
+
+
+def portfolio_settings(config: Config) -> PortfolioSettings:
+    """The settings the portfolio optimizer needs (SPEC §3.4D, §3.6), from the config.
+
+    Args:
+        config: Settings.
+
+    Returns:
+        The engine's PortfolioSettings.
+    """
+    return PortfolioSettings(config.risk_tolerance, config.premium_base, config.premium_per_day,
+                             config.immediate_hours, config.top_buy_windows, config.top_sell_windows,
+                             config.today_limit, config.week_limit, config.candidate_export, config.horizon_days)
 
 
 def record_settings(config: Config) -> RecordSettings:

@@ -25,7 +25,7 @@ from ahsync.recommend.store import RecommendStore
 from ahsync.state.journal import JournalReads
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 19
+SCHEMA_VERSION = 20
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
@@ -153,6 +153,16 @@ MIGRATIONS: dict[int, str] = {
         ALTER TABLE crafts ADD COLUMN expected_net REAL;
         ALTER TABLE disenchants ADD COLUMN expected_net REAL
     """,
+    # 20: the portfolio optimizer's alternatives, unfunded candidates with their reason, staged and swapped
+    # with the plan (SPEC §3.2 planned tables, §3.4D, M9).
+    20: """
+        CREATE TABLE IF NOT EXISTS alternatives(
+            market TEXT NOT NULL, cand_id TEXT NOT NULL, char_id TEXT NOT NULL, list TEXT NOT NULL, reason TEXT NOT NULL,
+            data TEXT NOT NULL, PRIMARY KEY(market, cand_id));
+        CREATE TABLE IF NOT EXISTS alternatives_new(
+            market TEXT NOT NULL, cand_id TEXT NOT NULL, char_id TEXT NOT NULL, list TEXT NOT NULL, reason TEXT NOT NULL,
+            data TEXT NOT NULL, PRIMARY KEY(market, cand_id))
+    """,
     # 14: sell records, stored for the hourly status pass (M8).
     14: """
         CREATE TABLE IF NOT EXISTS sell_records(
@@ -164,7 +174,7 @@ MIGRATIONS: dict[int, str] = {
 }
 BACKUP_KEEP = 3
 BACKUP_PREFIX = "ahsync-"
-STAGING_TABLES = ("intel_new", "plan_new", "views_new")
+STAGING_TABLES = ("intel_new", "plan_new", "views_new", "alternatives_new")
 CANDLE_TABLES = ("candles_h1", "candles_d1")
 # Tables and time columns prune may delete from (SPEC §3.2 retention). Guards the SQL built in delete_before.
 PRUNABLE = {
@@ -800,14 +810,15 @@ class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, JournalRea
         return newest, priced, oldest, latest, scans.get("local", 0), scans.get(src, 0)
 
     def publish_refresh(self, markets: list[str], with_intel: bool = True) -> None:
-        """Swap the staged intelligence, pages and plan in for these markets, in one transaction (SPEC §5.2 rule 3).
+        """Swap the staged intelligence, pages, plan and alternatives in for these markets, in one transaction (SPEC §5.2 rule 3).
 
         The plan replaces the market's characters' pending and late actions; done, partial,
         missed and skipped ones stay as history (SPEC §3.4.1 re-planning).
 
         Args:
             markets: The markets this refresh rebuilt.
-            with_intel: False for a re-plan, which staged no intelligence: the live one stays (IU13).
+            with_intel: False for a re-plan, which staged no intelligence: the live one stays (IU13). Pages and
+                alternatives (SPEC §3.4D) are swapped either way, like the plan.
         """
         with self.transaction():
             for market in markets:
@@ -817,7 +828,8 @@ class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, JournalRea
                 self.conn.execute(f"INSERT INTO actions SELECT * FROM plan_new WHERE char_id IN ({chars})", (market,))
                 self.conn.execute(f"DELETE FROM plan_new WHERE char_id IN ({chars})", (market,))
                 swaps = (("intel", "intel_new", "market, schema_version, body, built"),
-                         ("views", "views_new", "page, market, body, built"))
+                         ("views", "views_new", "page, market, body, built"),
+                         ("alternatives", "alternatives_new", "market, cand_id, char_id, list, reason, data"))
                 for live, staged, cols in (swaps if with_intel else swaps[1:]):
                     self.conn.execute(f"DELETE FROM {live} WHERE market = ?", (market,))
                     self.conn.execute(f"INSERT INTO {live}({cols}) SELECT {cols} FROM {staged} WHERE market = ?",

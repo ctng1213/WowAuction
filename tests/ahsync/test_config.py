@@ -4,7 +4,8 @@ from __future__ import annotations
 import pytest
 
 from ahsync.config import (Config, ConfigError, load_config, market_settings, parse_config, plan_settings,
-                           resolve_api_key, setting_line)
+                           portfolio_settings, resolve_api_key, setting_line)
+from ahsync.engine.portfolio import PortfolioSettings
 
 EXAMPLE = '''api_key = ""
 markets = ["forever.pvp.horde.us"]
@@ -137,3 +138,33 @@ def test_R26_TT7_the_window_margin_and_the_trend_clamp_are_settings(tmp_path):
         with pytest.raises(ConfigError) as error:
             parse_config(text, {}, tmp_path)
         assert str(error.value).endswith(message)
+
+
+def test_the_portfolio_settings_are_read_with_their_defaults(tmp_path):
+    assert portfolio_settings(Config()) == PortfolioSettings()
+    assert (Config().risk_tolerance, Config().max_risk_pct) == (0.30, 25)        # max_risk_pct stays until M10
+    text = ("risk_tolerance = 0.4\npremium_base = 0\npremium_per_day = 0.1\nimmediate_hours = 24\n"
+            "top_buy_windows = 10\ntop_sell_windows = 1\ntoday_limit = 100\nweek_limit = 1\n"
+            "candidate_export = 20\nhorizon_days = 7\n")
+    assert portfolio_settings(parse_config(text, {}, tmp_path)) == PortfolioSettings(0.4, 0, 0.1, 24, 10, 1, 100, 1, 20, 7)
+
+
+@pytest.mark.parametrize("text, message", [
+    ("risk_tolerance = 0\n", "risk_tolerance must be more than 0 and at most 1"),
+    ("risk_tolerance = 1.5\n", "risk_tolerance must be more than 0 and at most 1"),
+    ('risk_tolerance = "high"\n', "risk_tolerance must be a number"),
+    ("premium_base = -0.1\n", "premium_base must be 0 or more"),
+    ("premium_per_day = -1\n", "premium_per_day must be 0 or more"),
+    ("immediate_hours = 12\n", "immediate_hours must be 8 or 24"),
+    ("immediate_hours = 8.5\n", "immediate_hours must be a whole number"),
+    ("top_buy_windows = 0\n", "top_buy_windows must be between 1 and 10"),
+    ("top_sell_windows = 11\n", "top_sell_windows must be between 1 and 10"),
+    ("today_limit = 0\n", "today_limit must be between 1 and 100"),
+    ("week_limit = 101\n", "week_limit must be between 1 and 100"),
+    ("candidate_export = 19\n", "candidate_export must be 20 or more"),
+    ("horizon_days = 14\n", "horizon_days must be 7"),
+])
+def test_bad_portfolio_settings_are_refused_with_the_line_and_reason(tmp_path, text, message):
+    with pytest.raises(ConfigError) as error:
+        parse_config(text, {}, tmp_path)
+    assert str(error.value).startswith(f"config.toml line 1: {message}")

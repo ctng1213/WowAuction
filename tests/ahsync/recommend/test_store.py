@@ -52,3 +52,20 @@ def test_skip_action_changes_only_open_actions(db):
     assert db.skip_action("a1", 99) is True
     assert db.skip_action("a2", 99) is False and db.skip_action("nope", 99) is False
     assert db.conn.execute("SELECT status, done_at FROM actions WHERE action_id = 'a1'").fetchone() == ("skipped", 99)
+
+
+def test_alternatives_are_staged_and_swapped_in_with_the_plan(db):
+    row = ("craft:6217:Brugan-Grommash:2840c/-/now:1", "Brugan-Grommash", "today",
+           "Exceeds risk tolerance (needs 45s, 24s 40c left)", "{}")
+    with db.transaction():
+        db.stage_alternatives(M, [row])
+        db.stage_alternatives(OTHER, [row])
+    assert db.alternatives(M) == []                    # staged, not live
+    db.publish_refresh([M], with_intel=False)          # a re-plan publishes them too
+    assert db.alternatives(M) == [row] and db.alternatives(OTHER) == []
+    with db.transaction():
+        db.stage_alternatives(M, [])
+    db.drop_staging()                                  # an interrupted refresh keeps the live ones (FM7)
+    assert db.alternatives(M) == [row] and db.count("alternatives_new") == 0
+    db.publish_refresh([M])                            # nothing staged: the market's alternatives are emptied
+    assert db.alternatives(M) == []

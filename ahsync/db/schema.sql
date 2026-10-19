@@ -163,6 +163,17 @@ CREATE TABLE IF NOT EXISTS plan_new(
     replaces_id TEXT, week_start_ms INTEGER, peak_ms INTEGER, source TEXT, duration_h INTEGER, to_char TEXT
 );
 
+-- Unfunded portfolio candidates and the reason they were left out (SPEC §3.4D.6), swapped in with the plan.
+-- list: 'today' | 'week'; reason: the D.6 status; data: the candidate as engine.portfolio.candidate_to_json.
+CREATE TABLE IF NOT EXISTS alternatives(
+    market TEXT NOT NULL, cand_id TEXT NOT NULL, char_id TEXT NOT NULL, list TEXT NOT NULL, reason TEXT NOT NULL,
+    data TEXT NOT NULL, PRIMARY KEY(market, cand_id)
+);
+CREATE TABLE IF NOT EXISTS alternatives_new(
+    market TEXT NOT NULL, cand_id TEXT NOT NULL, char_id TEXT NOT NULL, list TEXT NOT NULL, reason TEXT NOT NULL,
+    data TEXT NOT NULL, PRIMARY KEY(market, cand_id)
+);
+
 -- rule: 'no_buy' | 'ignore' | 'keep' | 'none' (tombstone); source: 'dashboard' | 'addon'.
 CREATE TABLE IF NOT EXISTS item_rules(
     key INTEGER PRIMARY KEY, rule TEXT NOT NULL, set_at INTEGER NOT NULL, source TEXT

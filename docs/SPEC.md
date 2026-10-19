@@ -381,13 +381,13 @@ status(topic PK, level, kind, data, at)                      -- Status page line
 fetch_failures(market, hour, failures, last_error, last_at,  PK(market,hour))   -- hour files to retry (§5.2)
 ```
 
-**Planned tables** (M14, §3.4D.9), added by a migration when positions are built:
+**Portfolio tables.** `alternatives` is built (schema 20, M9): the plan's unfunded candidates with their D.6 reason, staged in `alternatives_new` and swapped in by `publish_refresh` with the plan, on a full refresh and a re-plan alike (`recommend/store.py` `stage_alternatives`, `alternatives`). Nothing writes it until M10. The position tables are **planned** (M14, §3.4D.9), added by a migration when positions are built:
 
 ```
 positions(position_id PK, char_id, market, cand_id, strategy, key, state, opened_at, units, units_left, cost_total, cost_left,
           expected_net_open, expected_net_now, target_window_ms, latest_window_ms, next_action, realized, closed_at)
 position_lots(position_id, event_id, units, unit_cost, at,    PK(position_id,event_id))   -- a matched purchase or craft event
-alternatives(market, cand_id, char_id, list, reason, data,    PK(market,cand_id))          -- unfunded candidates and their D.6 reason, staged and swapped like plan_new
+alternatives(market, cand_id, char_id, list, reason, data,    PK(market,cand_id))          -- built (schema 20): list 'today' | 'week', data = candidate_to_json
 ```
 
 - A position's `state` is one of §3.4D.9's eight. `cost_left` is what you paid for the units still held, listed, in the mail or sold but not yet paid out; the sum over open positions is the committed capital (§3.4D.1). Positions are kept 90 days after they close, like actions.
@@ -827,7 +827,7 @@ Output is a calendar of **actions**: `when · character · action (buy/craft/pos
 
 #### 3.4D The portfolio optimizer (planned)
 
-**Nothing in this section is built yet** (milestones M9–M15, §7). It turns §3.4A–C into one decision: **which combination of actions, across all your characters, Today and the next 7 days together, makes the most timing-adjusted expected net profit without tying up more gold than your risk tolerance allows.** It doesn't sort by return on investment, and it doesn't show each list's best trades on their own. A profitable trade that isn't funded is shown as an alternative, with the reason it was left out.
+**Only its data contracts are built** (M9, 2026-10-19): the candidate record, the accounting, the new config keys and the `alternatives` table (`engine/portfolio.py`, PF1, PF3, PF8, PF22, PF23). Nothing reads them yet, and the plan is still §3.4C.4's allocation. The rest comes with milestones M10–M15 (§7). It turns §3.4A–C into one decision: **which combination of actions, across all your characters, Today and the next 7 days together, makes the most timing-adjusted expected net profit without tying up more gold than your risk tolerance allows.** It doesn't sort by return on investment, and it doesn't show each list's best trades on their own. A profitable trade that isn't funded is shown as an alternative, with the reason it was left out.
 
 When built, **the funded selection is the plan.** Its actions replace §3.4C.4's allocation in `actions` and `PortfolioPlan.lua` (pending and late, as today), so Today, Week, the Craft and Flip pages and the addon all read one plan. Unfunded candidates are stored as alternatives with their reason, never as actions.
 
@@ -869,6 +869,7 @@ The examples below use the mockups' world: Monday 10:38, Amaya 21 g and Brugan 1
 - **A shown suggestion reserves nothing durably.** Gold for funded but unexecuted rows is reserved only inside one allocation run; the next run starts again from what you hold. Only a confirmed purchase or craft commits gold (a position, D.9).
 - **No reinvestment of projected proceeds.** v1 funds only from gold in hand: a sale planned for Thursday doesn't fund a Friday buy.
 - `max_item_capital_share` and `slow_market_days` (§3.4 market capacity) still cap slow markets inside the budget.
+- **Built (M9)** as `engine.portfolio.accounting(chars, positions, risk_tolerance, reserved)` → `Accounting` (cash gold, committed capital, capital base, risk budget, remaining capacity, reserved, capacity left, spendable and reserved per character, available new investment), with `available_for(char)` for one character's next row (PF23) and `committed_share_pct` (PF8's 12%). The risk budget is integer: the tolerance is taken in whole thousandths, `floor(x × 1000 + 0.5)`, and the budget is `floor(base × permille ÷ 1000)`, so float error never loses a copper and Lua gets the same number. Capacity left is `max(0, remaining capacity − Σ reserved)`, and available new investment is `max(0, min(capacity left, spendable − reserved))`. Positions are passed in as `OpenPosition` (just their cost left) until M14 builds them.
 - **Risk tolerance** is `risk_tolerance` in config.toml. The Portfolio page's dropdown (10–50%, §3.5) writes it through `POST /api/risk_tolerance` and re-runs the allocation without reading history (SEC11, D79): only selection changes, never the candidates (PF1).
 
 **D.2 The timing premium** (PF17–PF20).
@@ -916,6 +917,7 @@ Buying mats for a later craft is part of the Craft and Multistage candidates (ma
   - the resources it claims: owned units by character and place, and capacity per item and window;
   - the intelligence's `built_ms` and the method versions it was computed with.
 - **The universe is bigger than what is shown.** Every candidate is evaluated; the export keeps the best `candidate_export` (150): the funded ones first, then the best alternatives by adjusted profit (PF3, D.10).
+- **Built (M9)**: the record is `engine.portfolio.Candidate`, a frozen dataclass with `strategy` (a code: `flip`, `buy_later`, `craft`, `multistage`, `disenchant`, `sell_stock`; `label` gives the Strategy column's text), `key`, `char_id`, `route`, `batch`, `out_qty`, `inputs` ((key, units) by key), `gold_buys`, `gold_mats`, `gold_deposits` (`gold_needed` is their sum), `cost_basis`, `expected_net` (float), `chance`, `exec_qty`, `conf`, `needs` (`Requirements`: profession, skill, spell_id, cooldown_s), `buy_ms`, `sale_ms`, `owned_claims` (`OwnedClaim`: char, place, key, units), `capacity_claims` (`CapacityClaim`: key, window start ms or None for now, as the §3.4C.4 ledger keys them, units), `built_ms` and `method_versions`. It has no risk field (PF1). `cand_id` is built by `candidate_id` from its parts, so the two can't disagree. The **route** is `<reagents>/<buy>/<sale>`: reagents as `<key><letters>` joined by `+`, by key, the letters being the reagent's sources in the order `o` owned, `v` vendor, `a` AH, `c` crafted by you, or `-` with no reagents; buy and sale as `-` (none), `now` (at or before the run's now, so a "now" route doesn't change every run) or `h<hour>` (`floor(ms ÷ 3,600,000)`). For example `craft:6217:Brugan-Grommash:2840c/-/now:1`. Id parts may not hold `:`, `;`, `,` or `|`. `candidate_to_json` writes it with sorted keys, its id and a schema version (`CANDIDATE_SCHEMA_VERSION` 1), and `candidate_from_json` refuses a newer version or an id that doesn't match its parts. `export_subset(candidates, funded_ids, adjusted, limit)` keeps the funded in funding order, then the rest by adjusted profit (an input until M10 builds the premium), ties by id (PF3).
 
 **D.4 Selection (stage B)** (PF5–PF16).
 
@@ -1234,16 +1236,16 @@ max_trend_total = 0.15                        # the most the trend may move a wi
 max_actions_per_day = 0                       # 0 = no limit (§3.4C.4)
 max_item_capital_share = 0.25                 # most of your gold in slow markets (§3.4 market capacity)
 slow_market_days = 7                          # supply/volume above this many days is a slow market (§3.3.6)
-risk_tolerance = 0.30                         # planned: share of the capital base that may be tied up at once (§3.4D.1)
-premium_base = 0.15                           # planned: timing premium for profit realized after the immediate window (§3.4D.2)
-premium_per_day = 0.05                        # planned: added premium per day of wait
-immediate_hours = 8                           # planned: profit realized within this many hours has no premium; 8 or 24
-top_buy_windows = 3                           # planned: buying windows kept per item, by actionable value (§3.3.6)
-top_sell_windows = 3                          # planned: selling windows kept per item (§3.3.4)
-today_limit = 20                              # planned: most funded rows in Today (§3.4D.4)
-week_limit = 20                               # planned: most funded rows in Next 7 days
-candidate_export = 150                        # planned: candidates exported to the addon (§3.4D.3; benchmark 100-200, §6)
-horizon_days = 7                              # planned: the plan's horizon in days (today 7 is fixed)
+risk_tolerance = 0.30                         # share of the capital base that may be tied up at once, 0 < x ≤ 1 (§3.4D.1)
+premium_base = 0.15                           # timing premium for profit realized after the immediate window, ≥ 0 (§3.4D.2)
+premium_per_day = 0.05                        # added premium per day of wait, ≥ 0
+immediate_hours = 8                           # profit realized within this many hours has no premium; 8 or 24
+top_buy_windows = 3                           # buying windows kept per item, by actionable value, 1-10 (§3.3.6)
+top_sell_windows = 3                          # selling windows kept per item, 1-10 (§3.3.4)
+today_limit = 20                              # most funded rows in Today, 1-100 (§3.4D.4)
+week_limit = 20                               # most funded rows in Next 7 days, 1-100
+candidate_export = 150                        # candidates exported to the addon, ≥ 20 (§3.4D.3; benchmark 100-200, §6)
+horizon_days = 7                              # the plan's horizon in days; only 7 is accepted for now
 launch_wow_after_catchup = false
 
 [realms]                                      # realm -> ruleset; needed only when you sync several markets per faction (§2.1)
@@ -1259,6 +1261,8 @@ rank = ["ahf"]                                # remote price sources, most trust
 # ahf = ""                                    # "" = this market takes nothing from AHF
 # blizzard = "us/4728/2"                      # a future provider's address (§5.0)
 ```
+
+**The portfolio keys** (`risk_tolerance` to `horizon_days`) are read and checked since M9: a value outside the range in its comment refuses to start, with the line and the reason, like any other (FM16). `config.portfolio_settings` hands them to the engine as `engine.portfolio.PortfolioSettings`. Nothing uses them yet: selection, the premium and the limits come with M10, the window counts with M11.
 
 **Removed (planned, M10): `max_risk_pct`.** The per-buy cap is replaced by the portfolio exposure budget (`risk_tolerance`, §3.4 Risk, §3.4D.1). Until M10 is built, the code still reads `max_risk_pct` (default 25) for R19, C24, D45, D46 and A64.
 
@@ -1489,7 +1493,7 @@ The system is built as separate components that talk only through versioned cont
 | Export | `export/` | `MarketIntelligence.lua` (the intelligence, trimmed to the shortlist) and `PortfolioPlan.lua` (§3.5) | analysis, recommendations |
 | State Importer | `state/` | reading SavedVariables, idempotent import, character snapshots and the transaction journal, freshness per character | recommendations |
 | Desktop Recommendations | `recommend/` | per-character Disenchant, Craft, Flip, Sell options from intelligence + state | collection, history |
-| Portfolio Optimizer | `recommend/plan.py` (formulas in `engine/plan.py`, `engine/craft_plan.py`, `engine/week.py`); planned: `recommend/portfolio.py` with `engine/portfolio.py` (candidates, selection, validation), `engine/timing.py` (the premium), `engine/positions.py`, `engine/graph.py` | the cross-character plan: capital, shared market capacity, transfers (§3.4C); planned: the funded portfolio, its alternatives and positions (§3.4D) | raw collection |
+| Portfolio Optimizer | `recommend/plan.py` (formulas in `engine/plan.py`, `engine/craft_plan.py`, `engine/week.py`); built (M9): `engine/portfolio.py`'s contracts (the candidate record, the accounting, the export subset); planned: `recommend/portfolio.py`, selection and validation in `engine/portfolio.py`, `engine/timing.py` (the premium), `engine/positions.py`, `engine/graph.py` | the cross-character plan: capital, shared market capacity, transfers (§3.4C); planned: the funded portfolio, its alternatives and positions (§3.4D) | raw collection |
 | Dashboard | `web/` | showing results; writes only through its secured endpoints (§3.5) | any calculation |
 | Engine | `engine/` | the pure formulas every component above uses (§3.3, §3.4) | I/O of any kind |
 | Lifecycle | `app/` | the scheduler and the order of a refresh: analysis → recommendations → publish | formulas |
@@ -1770,7 +1774,7 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `MarketIntellig
 | # | Deliverable | Done when |
 |---|---|---|
 | M8 | Inspect the code and map the portfolio spec onto it (phase 1) | every requirement has a SPEC section, a scenario ID in `tests/pending_scenarios.txt`, or an entry in §9; nothing is claimed built (this merge, 2026-10-19) |
-| M9 | Unified data contracts (phase 2): the candidate record, the portfolio accounting, the new config keys, the `alternatives` table | PF1, PF3, PF8, PF22, PF23 pass; `config.py` reads the new keys and refuses bad values |
+| M9 | Unified data contracts (phase 2): the candidate record, the portfolio accounting, the new config keys, the `alternatives` table | PF1, PF3, PF8, PF22, PF23 pass; `config.py` reads the new keys and refuses bad values (built 2026-10-19) |
 | M10 | The portfolio optimizer (phase 3): candidates as marginal batches, the timing premium, selection with one swap pass, validation, exclusion reasons; `max_risk_pct` removed | PF2, PF4–PF21, PF24–PF27 pass; R19, C24, D45, D46 and A64 are rewritten for the exposure budget; WP1's snapshot is updated on purpose and stays byte-identical across runs; the full refresh stays within 120 s and the re-plan within 1 s (`tools/bench.py`) |
 | M11 | Desktop forecasting and exports (phase 4): buy windows by actionable value, window fields, the candidate universe, the graph and the portfolio snapshot in the addon files (`EXPORT_VERSION` 3) | W14, W15, EX17, EX18, FM40 pass; `MarketIntelligence.lua` ≤ 2 MB and `PortfolioPlan.lua` ≤ 200 KB on the 9k-item world |
 | M12 | Addon live adaptation (phase 5): graph repricing, bounded reselection for the logged-in character, live buy-now, learned recipes | DG1–DG7, A76–A78, A80, A83, FM39 pass in Lua; PF15 passes in both languages; one state change stays within 2 ms (`/ahp perf`) |
