@@ -699,7 +699,7 @@ class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, IntelStore
                                        (market, since_ms)).fetchall())
         return newest, priced, oldest, latest, scans.get("local", 0), scans.get("ahf", 0)
 
-    def publish_refresh(self, markets: list[str]) -> None:
+    def publish_refresh(self, markets: list[str], with_intel: bool = True) -> None:
         """Swap the staged intelligence, pages and plan in for these markets, in one transaction (SPEC §5.2 rule 3).
 
         The plan replaces the market's characters' pending and late actions; done, partial,
@@ -707,6 +707,7 @@ class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, IntelStore
 
         Args:
             markets: The markets this refresh rebuilt.
+            with_intel: False for a re-plan, which staged no intelligence: the live one stays (IU13).
         """
         with self.transaction():
             for market in markets:
@@ -715,8 +716,9 @@ class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, IntelStore
                                   (market,))
                 self.conn.execute(f"INSERT INTO actions SELECT * FROM plan_new WHERE char_id IN ({chars})", (market,))
                 self.conn.execute(f"DELETE FROM plan_new WHERE char_id IN ({chars})", (market,))
-                for live, staged, cols in (("intel", "intel_new", "market, schema_version, body, built"),
-                                           ("views", "views_new", "page, market, body, built")):
+                swaps = (("intel", "intel_new", "market, schema_version, body, built"),
+                         ("views", "views_new", "page, market, body, built"))
+                for live, staged, cols in (swaps if with_intel else swaps[1:]):
                     self.conn.execute(f"DELETE FROM {live} WHERE market = ?", (market,))
                     self.conn.execute(f"INSERT INTO {live}({cols}) SELECT {cols} FROM {staged} WHERE market = ?",
                                       (market,))

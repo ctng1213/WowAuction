@@ -28,7 +28,7 @@ from ahsync.state.importer import ingest_file
 from ahsync.db.sqlite import Database, DatabaseError
 from ahsync.history.prune import prune
 from ahsync.collect.catchup import SyncContext, check_capabilities, run_catchup, sync_markets
-from ahsync.app.refresh import refresh_all
+from ahsync.app.refresh import refresh_all, replan_all
 from ahsync.export.addon_files import export_market, export_plan
 from ahsync.recommend.status_pass import status_pass
 from ahsync.recommend.tracking_pass import tracking_pass
@@ -193,6 +193,8 @@ def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path,
         result = ingest_file(path, ctx.db, ctx.clock, config.realms, markets=config.markets)
         if result.ingested:                       # ingestedUntil may have moved: the addon may prune (SPEC §2.2)
             tracking_pass(ctx.db)                 # a buy or post marks its action done (SPEC §3.4.1)
+            now = ctx.clock.now_ms()
+            replan_all(ctx.db, now, config, ctx.clock.local_offset_ms(now))   # the dashboard follows the game (IU13)
             export_plan(ctx.db, config, ctx.clock.now_ms(), ctx.clock.sleep)
 
     def hourly_status() -> None:

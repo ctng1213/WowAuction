@@ -267,9 +267,10 @@ All the heavy lifting happens in AHSync, and only in a **full refresh**. Everyth
 2. **Precomputes each item's options:** sell values and hold values (§3.4), disenchant EV, the crafting options with their sourcing, flip candidates, and the sell-probability curve (below).
 3. **Builds the recommendations, the plan, the views and the addon files** (`MarketIntelligence.lua`, `PortfolioPlan.lua`).
 
-**Incremental update** (`engine.update_items`). It runs when SavedVariables changes: inventory, posts, purchases, crafts, mail, rules or a new scan.
-- The changed events mark items **dirty**. Only those items' options, plan actions and view rows are recomputed, from their precomputed `item_stats` row, with no history reads.
-- The plan's budget allocation re-runs over the precomputed candidates, which is a cheap greedy pass with no simulation.
+**Incremental update** (`app.refresh.replan_all`, IU13). It runs when SavedVariables changes (inventory, posts, purchases, crafts, mail, rules, reserves or a new scan), after the tracking pass and before `PortfolioPlan.lua` is written.
+- It re-plans every market from its **published** intelligence and the new character state, and rebuilds the pages: the plan, Today, Week, Flip, Inventory, Craft and Disenchant. No history is read and the intelligence is not rebuilt, so it costs the recommendation half of a full refresh, not the analysis half.
+- The plan is re-planned whole rather than item by item, because budgets and each selling window's capacity are shared across items (§3.4C.4); a per-item update would let two items spend the same gold.
+- It is published like a full refresh (staged, then swapped in), keeping the live intelligence; a failure leaves the previous plan and pages live.
 - A new in-game scan updates `cur`, `curQty` and the book for the scanned items only.
 - Hourly and live AHF data are **stored but not applied** until the next full refresh, so the numbers stay stable through the day. The exception is items you scanned in game, whose prices update immediately. The dashboard shows "prices newer than numbers · Refresh now" when newer data is waiting.
 
@@ -303,7 +304,7 @@ A full refresh builds into staging tables and swaps them in with one transaction
 | Memory when idle | ≤ 150 MB |
 | Memory during a full refresh | ≤ 400 MB peak (streaming, item by item) |
 | Full refresh time | ≤ 120 s for one market of about 9k items with 90 days of hourly history (it runs once a day in the background; weekly patterns and the 24 × 8 curve for every item, §5.0) |
-| Incremental update | ≤ 1 s for up to 50 dirty items |
+| Incremental update | ≤ 1 s (a whole re-plan from the published intelligence: 1.05 s measured on a real 15k-item market, 2026-10-18) |
 | Dashboard request | ≤ 50 ms (precomputed JSON, paged at 100 rows) |
 | `MarketIntelligence.lua` size | ≤ 2 MB (`PortfolioPlan.lua` ≤ 200 KB) |
 

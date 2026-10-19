@@ -179,3 +179,32 @@ def test_a_refresh_publishes_the_plan_and_the_next_one_keeps_what_was_done(db):
     later = db.conn.execute("SELECT action_id, status, run_at FROM actions").fetchall()
     assert (first[0][0], "done", NOW) in later                                         # history is kept
     assert all(run == NOW + HOUR for _, status, run in later if status == "pending")    # pending re-planned
+
+
+def test_IU13_a_replan_follows_new_stock_from_the_published_intelligence_and_keeps_it(db, monkeypatch):
+    refresh.refresh_all(db, NOW, CFG)
+    intel_before = db.conn.execute("SELECT built FROM intel WHERE market = ?", (M,)).fetchone()
+    assert not db.conn.execute("SELECT 1 FROM actions WHERE kind = 'post' AND key = ?", (DUST,)).fetchall()
+    rows(db, "INSERT INTO inventory(char_id, location, key, qty, bound) VALUES (?, ?, ?, ?, ?)", (AMAYA, "bags", DUST, 40, 0))
+    monkeypatch.setattr(refresh, "analyze_market", lambda *a: pytest.fail("a re-plan reads no history"))
+    assert refresh.replan_all(db, NOW + HOUR, CFG) == [M]
+    sells = db.conn.execute("SELECT kind, run_at FROM actions WHERE key = ? AND char_id = ?", (DUST, AMAYA)).fetchall()
+    assert sells and all(run == NOW + HOUR for _, run in sells)                     # Amaya's new dust gets a plan
+    assert db.conn.execute("SELECT built FROM intel WHERE market = ?", (M,)).fetchone() == intel_before
+    _, built = db.view("today", M)
+    assert built == NOW + HOUR                                                      # the pages follow
+
+
+def test_IU13_a_failed_replan_keeps_the_last_plan_and_a_market_without_intelligence_is_skipped(db, monkeypatch):
+    assert refresh.replan_all(db, NOW, CFG) == []                                   # nothing published yet
+    refresh.refresh_all(db, NOW, CFG)
+    plan = db.conn.execute("SELECT action_id FROM actions ORDER BY 1").fetchall()
+
+    def boom(*_args):
+        """Fail like a full disk."""
+        raise sqlite3.OperationalError("database or disk is full")
+
+    monkeypatch.setattr(refresh, "_stage_plan", boom)
+    assert refresh.replan_all(db, NOW + HOUR, CFG) == []
+    assert db.conn.execute("SELECT action_id FROM actions ORDER BY 1").fetchall() == plan
+    assert db.conn.execute("SELECT COUNT(*) FROM plan_new").fetchone()[0] == 0

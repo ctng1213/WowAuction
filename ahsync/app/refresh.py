@@ -79,17 +79,62 @@ def refresh_market(db: Database, market: str, now_ms: int, cfg: Config, result: 
     for key, error in sorted(failed.items()):
         result.failed[f"{market}:{key}"] = error
         log.warning("refresh: item %s on %s failed: %s", key, market, error)
+    with db.transaction():
+        db.stage_intel(intel)
+        _stage_recommendations(db, market, intel.items, now_ms, offset_ms, cfg)
+    result.items += len(intel.items)
+
+
+def _stage_recommendations(db: Database, market: str, stats: dict, now_ms: int, offset_ms: int, cfg: Config) -> None:
+    """Stage a market's plan and every page built from its intelligence and character state (SPEC §3.5).
+
+    Args:
+        db: Database (inside a transaction).
+        market: Market id.
+        stats: Item key -> intelligence.
+        now_ms: Now.
+        offset_ms: Local time minus UTC.
+        cfg: Config.
+    """
     items = db.items()
-    stats = intel.items
     characters = db.characters_in(market)
     char_ids = [c for c, _ in characters]
     total_gold = sum(g for _, g in characters)
-    with db.transaction():
-        db.stage_intel(intel)
-        db.stage_view("disenchant", market, disenchant_page(db, char_ids, stats, items, total_gold, now_ms, cfg), now_ms)
-        db.stage_view("craft", market, craft_page(db, char_ids, stats, items, total_gold, now_ms, cfg), now_ms)
-        _stage_plan(db, market, characters, stats, items, now_ms, offset_ms, cfg)
-    result.items += len(stats)
+    db.stage_view("disenchant", market, disenchant_page(db, char_ids, stats, items, total_gold, now_ms, cfg), now_ms)
+    db.stage_view("craft", market, craft_page(db, char_ids, stats, items, total_gold, now_ms, cfg), now_ms)
+    _stage_plan(db, market, characters, stats, items, now_ms, offset_ms, cfg)
+
+
+def replan_all(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0) -> list[str]:
+    """The incremental update: re-plan every market from its published intelligence (SPEC §3.1.1, IU13).
+
+    It runs after a SavedVariables read, so what you did in game (bought, crafted, posted, moved
+    stock, kept something) shows on the dashboard and in PortfolioPlan.lua without a full refresh.
+    No history is read and the intelligence is not rebuilt: only the plan and the pages are.
+
+    Args:
+        db: Database.
+        now_ms: Now.
+        cfg: Config.
+        offset_ms: Local time minus UTC, for the plan pages.
+
+    Returns:
+        The markets re-planned (those with published intelligence); [] when it failed, in which
+        case the previous plan and pages stay live and the log says why.
+    """
+    intels = {m: i for m in cfg.markets if (i := db.read_intel(m)) is not None}
+    markets = list(intels)
+    try:
+        db.drop_staging()
+        for market in markets:
+            with db.transaction():
+                _stage_recommendations(db, market, intels[market].items, now_ms, offset_ms, cfg)
+        db.publish_refresh(markets, with_intel=False)
+    except Exception as error:                         # noqa: BLE001  keep the last good plan (SPEC §5.2 rule 4)
+        log.error("re-plan failed: %s: %s", type(error).__name__, error)
+        db.drop_staging()
+        return []
+    return markets
 
 
 def refresh_all(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0) -> RefreshResult:

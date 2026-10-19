@@ -320,6 +320,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | IU11 | the simulation gives P = 0.853 for a curve point | exported as 0.86 (2% steps: floor(0.853 × 50 + 0.5) = 43 → 43 ÷ 50), stored as the character `string.char(35 + 43)` = "N"; Python and Lua both read 0.86 |
 | IU9 | refresh at 06:00 Fri; it is 08:00 Sat with no refresh since | the 08:00 row from Fri is reused; the age badge is amber (over 24 h) |
 | IU10 | a pending buy's slot passes 24 h while AHSync idles with no file change | the :00 status pass marks it missed; history reads = 0; no simulation; `PortfolioPlan.lua` rewritten |
+| IU13 | Amaya buys 7 Simple Wood and crafts 7 Basic Campfire Kits, then /reloads while AHSync runs | within a few seconds the dashboard's Today, Week, Inventory and Craft pages and `PortfolioPlan.lua` follow: the chain's buy and craft show done, the kits' post is planned from the kits she now holds, and the wood is no longer bought. No history is read and the market intelligence is not rebuilt (the re-plan uses the published one); when it fails, the previous plan and pages stay live |
 | IU12 | a refresh exports a shortlist item (7 weeks of hour-of-week data, top 3 sell and buy windows) and a non-shortlist item | both carry their top windows; the shortlist item has the 24 × 8 curve and the other the 24 × 3; neither string holds a 168-slot `how`, `sales_how` or `supply_how` (SPEC §3.5: the addon shows no week heatmap) |
 
 **Confidence percentage** (`confidence.score`):

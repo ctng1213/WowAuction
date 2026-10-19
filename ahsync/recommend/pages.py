@@ -116,10 +116,12 @@ def craft_market(state: StateReader, char_ids: list[str], stats: dict[int, ItemI
         items: Item metadata (vendor prices).
 
     Returns:
-        The craft Market.
+        The craft Market, for the mats of the characters' known recipes only: a craft never looks at
+        another item's book, and copying all ~15k books per craft tried made a re-plan seconds slower.
     """
+    mats = {key for r in state.known_recipes(char_ids) for key, _ in r.reagents}
     books = {}
-    for key, s in stats.items():
+    for key, s in ((k, stats[k]) for k in sorted(mats) if k in stats):
         levels: dict[int, float] = {}
         for price, stack, _, count in s.book:
             levels[price] = levels.get(price, 0.0) + stack * count
@@ -127,7 +129,7 @@ def craft_market(state: StateReader, char_ids: list[str], stats: dict[int, ItemI
             levels = {s.cur: float(s.cur_qty)}          # no book: cur × curQty (SPEC §3.4 "depth unknown")
         books[key] = sorted(levels.items())
     vendor = {k: items[k].vendor_buy for k in state.vendor_reagent_keys() if k in items and items[k].vendor_buy}
-    hold = {key: s.sell_value for key, s in stats.items() if s.sell_value is not None}
+    hold = {key: stats[key].sell_value for key in sorted(mats) if key in stats and stats[key].sell_value is not None}
     return craft.vendor_first(craft.Market(books, vendor, {k: float(v) for k, v in state.owned_units(char_ids).items()},
                                            hold))                                       # R22
 

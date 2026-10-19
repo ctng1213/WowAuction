@@ -577,9 +577,10 @@ def read_and_apply(path: Path, db: Database, clock: Clock, realms: Mapping[str, 
 
 
 def incremental_update(db: Database, dirty_keys: frozenset[int], now_ms: int) -> None:
-    """Hook for the incremental update of the items a SavedVariables read changed (SPEC §3.1.1).
+    """Hook for work on just the items a SavedVariables read changed (SPEC §3.1.1).
 
-    A no-op until the engine lands (M3): it will call ``engine.update_items`` with these keys.
+    A no-op: the incremental update is app.refresh.replan_all, run by the app after the tracking pass,
+    which re-plans from the published intelligence (IU13). The dirty keys are kept for a narrower one.
 
     Args:
         db: The database.
