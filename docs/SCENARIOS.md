@@ -81,7 +81,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | FM2 | hour 41's file cut off at 60% | not committed; logged; refetched next run |
 | FM3 | the same hour bad 3 runs in a row | Status "bad file: hour 41"; later hours still sync |
 | FM4 | the snapshot has a renamed field | snapshot disabled this run; last good `current` kept; Status "AHF format changed: snapshot" |
-| FM5 | Linen `cur` 1 c while `p10_30` is 30 c | flagged suspect; no buy recommendation from it; a second observation at 1 c clears the flag |
+| FM5 | Linen `cur` 1 c while `p10_30` is 30 c (1 c is below 10% of it, 3 c); likewise 400 c over a `p90_30` of 35 c | flagged suspect (`cur_suspect`): no flip, no AH mat buy from its book and no disenchant buy; a second hour whose close is also out of range (two in the last 24 h) clears the flag |
 | FM6 | crash after committing hour 37 of 112 | restart resumes at 38; no duplicates (as S2) |
 | FM7 | crash halfway through a full refresh | on restart, the staging tables are dropped; the old `item_stats` and plan are still served; the refresh re-runs |
 | FM8 | one item's stats raise an error | that item is excluded and listed on Status; all others refreshed |

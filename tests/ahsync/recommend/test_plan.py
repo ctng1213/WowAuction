@@ -76,6 +76,7 @@ def test_a_green_is_disenchanted_by_the_enchanter_who_can():
 def test_only_items_whose_peak_could_beat_their_cheapest_auction_are_flip_candidates():
     assert plan.flip_candidate(replace(STATS[ROD], cur=2500), 0.2)            # 4000 × 0.95 ≥ 1.2 × 2500
     assert not plan.flip_candidate(STATS[ROD], 0.2) and not plan.flip_candidate(STATS[BAR], 0.2)   # no window
+    assert not plan.flip_candidate(replace(STATS[ROD], cur=2500, cur_suspect=True), 0.2)  # FM5
 
 
 def test_rows_link_a_chain_to_its_first_step_and_carry_the_plan_week():

@@ -79,7 +79,8 @@ def disenchant_page(state: StateReader, char_ids: list[str], stats: dict[int, It
     """
     listings = [(key, s.cur, items[key].quality, items[key].ilvl, DE_KIND[items[key].item_class])
                 for key, s in sorted(stats.items())
-                if s.cur and key in items and items[key].item_class in DE_KIND and items[key].ilvl]
+                if s.cur and not s.cur_suspect and key in items and items[key].item_class in DE_KIND
+                and items[key].ilvl]                                                   # FM5
     sell = {key: s.sell_value for key, s in stats.items() if s.sell_value is not None}
     found, too_risky = [], 0
     risk_limit = total_gold * cfg.max_risk_pct / 100
@@ -121,7 +122,7 @@ def craft_market(state: StateReader, char_ids: list[str], stats: dict[int, ItemI
     """
     mats = {key for r in state.known_recipes(char_ids) for key, _ in r.reagents}
     books = {}
-    for key, s in ((k, stats[k]) for k in sorted(mats) if k in stats):
+    for key, s in ((k, stats[k]) for k in sorted(mats) if k in stats and not stats[k].cur_suspect):   # FM5
         levels: dict[int, float] = {}
         for price, stack, _, count in s.book:
             levels[price] = levels.get(price, 0.0) + stack * count

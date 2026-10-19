@@ -32,6 +32,7 @@ class WeekInputs:
     total_gold: int                           # all your characters' gold
     no_buy: frozenset[int] = frozenset()      # never buy or craft (rules no_buy, ignore; not selling)
     ignore: frozenset[int] = frozenset()      # in no recommendation, not even the sell plan (rule ignore)
+    suspect: frozenset[int] = frozenset()     # lowest price out of range and unconfirmed: never flipped (FM5)
 
 
 def hold_values(lots: Sequence[Lot], facts: dict[int, SellFacts], now_ms: int, s: PlanSettings) -> dict[int, float]:
@@ -144,5 +145,5 @@ def week_plan(w: WeekInputs, now_ms: int, s: PlanSettings, fs: FlipSettings, max
     bought = _bought(world.market, after)
     flip_facts = {k: without_bought(f, bought.get(k, 0.0)) for k, f in facts.items()}
     flips = flip_plan(flip_facts, budgets, w.total_gold, now_ms, s, fs, ledger,
-                      exclude=set(w.no_buy | w.ignore) | vendor_sold | struggling)   # R22, O5
+                      exclude=set(w.no_buy | w.ignore | w.suspect) | vendor_sold | struggling)   # R22, O5, FM5
     return crafts + sold + flips

@@ -101,3 +101,12 @@ def test_O5_an_item_flagged_not_selling_is_not_crafted_or_flipped_but_your_stock
     actions = week.week_plan(w, NOW, S, FS, 3)
     assert not [a for a in actions if a.kind == "craft"]                       # no new rods
     assert sum(a.qty for a in actions if a.key == BAR) == 6                    # the bars are still planned
+
+
+def test_FM5_an_item_with_a_suspect_price_is_not_flipped():
+    # Bars would flip well (cur 500, peak 1200), but the 500 is suspect.
+    market = craft.Market({BAR: [(500, 20.0)]}, {}, {}, {})
+    flippy = {BAR: facts(BAR, 1000, cur=500, cur_qty=20, book=((500, 1, 4, 20),))}
+    w = inputs(world=CraftWorld((), {}, market, {}), facts=flippy)
+    assert [a for a in week.week_plan(w, NOW, S, FS, 3) if a.chain and a.chain.startswith("flip:")]   # flips normally
+    assert not [a for a in week.week_plan(replace(w, suspect=frozenset({BAR})), NOW, S, FS, 3) if a.chain and a.chain.startswith("flip:")]

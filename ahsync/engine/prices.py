@@ -14,6 +14,7 @@ HOUR_MS = 3_600_000
 DAY_MS = 86_400_000
 MIN_HOURLY_CLOSES = 24      # fewer than this in a window → use daily closes (SPEC §3.3 med7/med30)
 MIN_TREND_DAYS = 4          # trend7 needs at least this many daily medians (SPEC §3.3)
+SUSPECT_LOW, SUSPECT_HIGH = 0.1, 10.0   # below 10% of p10_30 or above 10× p90_30 (SPEC §5.2, FM5)
 
 
 def median(values: Sequence[int]) -> int | None:
@@ -152,6 +153,35 @@ def cur_others(book: Sequence[tuple[int, int]], own: Sequence[tuple[int, int]], 
         book_count[price] = book_count.get(price, 0) + count
     others = [price for price, count in book_count.items() if count > own_count.get(price, 0)]
     return min(others) if others else None
+
+
+def suspect_price(cur: int | None, p10: int | None, p90: int | None, recent: Sequence[int]) -> bool:
+    """Whether the lowest buyout looks like a mistake rather than the market (SPEC §5.2, FM5).
+
+    Args:
+        cur: The lowest buyout now, copper; None when there is none.
+        p10: The 30-day 10th percentile of hourly closes, copper.
+        p90: The 30-day 90th percentile, copper.
+        recent: Hourly closes of the last 24 h, copper (one per hour).
+
+    Returns:
+        True when cur is below 10% of p10 or above 10× p90 and fewer than two of the recent hours
+        closed out of that range too (a second observation confirms it); False without the numbers.
+    """
+    if cur is None or p10 is None or p90 is None:
+        return False
+
+    def outside(price: int) -> bool:
+        """Whether a price is out of the item's usual range.
+
+        Args:
+            price: Copper.
+
+        Returns:
+            True below 10% of p10 or above 10× p90.
+        """
+        return price < SUSPECT_LOW * p10 or price > SUSPECT_HIGH * p90
+    return outside(cur) and sum(1 for c in recent if outside(c)) < 2
 
 
 def post_price(cur_others_copper: int | None, med7: int | None) -> int | None:

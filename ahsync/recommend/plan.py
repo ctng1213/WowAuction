@@ -124,10 +124,10 @@ def flip_candidate(i: ItemIntel, min_flip_margin: float) -> bool:
 
     Returns:
         True when the price level × the best peak hour's price ratio × the most a week of trend adds,
-        after the cut, ≥ (1 + margin) × cur (SPEC §3.4C.1, R21).
+        after the cut, ≥ (1 + margin) × cur (SPEC §3.4C.1, R21); never for a suspect cur (FM5).
     """
     level = price_level(i)
-    if not (i.cur and level and i.sell_windows):
+    if not (i.cur and level and i.sell_windows) or i.cur_suspect:
         return False
     how = _pattern(i.how, i.how_weeks, FLAT)
     best = max(how[w.best_slot] for w in i.sell_windows)
@@ -169,7 +169,21 @@ def week_inputs(state: StateReader, characters: list[tuple[str, int]], stats: di
     rules = state.item_rules()
     return WeekInputs(lots, facts, world, {c: cfg.budgets.get(c, g) for c, g in gold.items()}, sum(gold.values()),
                       frozenset(k for k, r in rules.items() if r in ("no_buy", "ignore")),
-                      frozenset(k for k, r in rules.items() if r == "ignore"))
+                      frozenset(k for k, r in rules.items() if r == "ignore"),
+                      frozenset(facts_suspect(stats, facts)))
+
+
+def facts_suspect(stats: dict[int, ItemIntel], facts: dict) -> list[int]:
+    """The planned items whose lowest price is suspect (FM5).
+
+    Args:
+        stats: Item key -> intelligence.
+        facts: The plan's items.
+
+    Returns:
+        Their keys, ascending.
+    """
+    return [k for k in sorted(facts) if stats[k].cur_suspect]
 
 
 def week_start_ms(now_ms: int) -> int:

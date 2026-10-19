@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from ahsync.engine.prices import (
-    DAY_MS, HOUR_MS, cur_others, median, percentile, post_price, trend7, weekday_hour, window_median,
+    DAY_MS, HOUR_MS, cur_others, median, percentile, post_price, suspect_price, trend7, weekday_hour, window_median,
 )
 
 SHARED = json.loads((Path(__file__).resolve().parents[3] / "tests" / "scenarios" / "prices.json").read_text(encoding="utf-8"))
@@ -110,3 +110,11 @@ def test_post_price_with_missing_inputs():
 @pytest.mark.parametrize("s", SHARED, ids=[s["name"] for s in SHARED])
 def test_PP1_post_price_shared_with_the_addon(s):
     assert post_price(s["args"]["cur_others"], s["args"]["med7"]) == s["expect"], s["why"]
+
+
+def test_FM5_a_price_far_out_of_range_is_suspect_until_a_second_hour_confirms_it():
+    assert suspect_price(1, 30, 40, [1])                  # 1c < 10% of a 30c p10 (3c); one hour of it is no proof
+    assert not suspect_price(1, 30, 40, [1, 1])           # two hours at 1c: it is the market now
+    assert suspect_price(401, 30, 40, [45])               # 401c > 10 × a 40c p90
+    assert not suspect_price(3, 30, 40, [])               # 3c is not below 3c
+    assert not suspect_price(None, 30, 40, []) and not suspect_price(1, None, 40, []) and not suspect_price(1, 30, None, [])

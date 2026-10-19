@@ -158,17 +158,20 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
         deposit = fees.deposit_copper(vendor_sell, ref, fees.shortest_duration_covering(settings.sell_window_hours))
         sell_value = sellprob.expected_post(chance, ref, price, float(vendor_sell), deposit) / ref
     book_age = now_ms - newest[0] if newest else None
+    p10, p90 = prices.percentile(last30, 0.1), prices.percentile(last30, 0.9)
+    recent = [c for t, c in hourly if t > now_ms - DAY_MS]
     conf = confidence.percent(confidence.score(len(last30), volume.days_by_source, book_age, None, 0))
     main_source = max(volume.days_by_source, key=lambda s: (volume.days_by_source[s], s)) \
         if volume.days_by_source else None
     return ItemIntel(
         key, cur.price if cur else None, cur.qty if cur else None, now_ms - cur.at if cur else None,
-        med7, med30, prices.percentile(last30, 0.1), prices.percentile(last30, 0.9),
+        med7, med30, p10, p90,
         prices.trend7(hourly, now_ms, med7), volume.sold_per_day, volume.expired_per_day, volume.listed_per_day,
         main_source, volume.days_by_source, price, ref, chance, unknown, sell_value, conf,
         sum(stack * count for _, stack, _, count in book) if book else (cur.qty if cur else None),
         book_age, tuple(book or ()),
-        **weekly_fields(item, med30, volume, ref, now_ms, settings))
+        **weekly_fields(item, med30, volume, ref, now_ms, settings),
+        cur_suspect=prices.suspect_price(cur.price if cur else None, p10, p90, recent))
 
 
 def analyze_market(history: HistoryReader, market: str, now_ms: int,

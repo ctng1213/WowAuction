@@ -1,6 +1,8 @@
 """Tests for ahsync/recommend/pages.py: pages from intelligence plus state only (AR3)."""
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from ahsync.config import Config
@@ -66,3 +68,10 @@ def test_disenchant_page_from_intelligence(state):
 def test_a_disenchant_buy_that_risks_too_much_of_your_gold_is_left_out(state):
     page = disenchant_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 2_000, NOW, Config(markets=(M,)))
     assert (page["rows"], page["hidden"]) == ([], 1)     # the 8s gloves are over 25% of 20s
+
+
+def test_FM5_a_suspect_price_is_no_mat_source_and_no_disenchant_buy(state):
+    suspect = {**STATS, BAR: replace(STATS[BAR], cur_suspect=True), GLOVES: replace(STATS[GLOVES], cur_suspect=True)}
+    crafts = craft_page(state, ["Amaya-G", "Brugan-G"], suspect, ITEMS, 500_000, NOW, Config(markets=(M,)))
+    assert all(r["source"] != "AH" for r in crafts["rows"])                    # the bars' book is not used
+    assert disenchant_page(state, ["Amaya-G", "Brugan-G"], suspect, ITEMS, 500_000, NOW, Config(markets=(M,)))["rows"] == []

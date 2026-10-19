@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 
-INTEL_SCHEMA_VERSION = 3       # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13)
+INTEL_SCHEMA_VERSION = 4       # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5)
 
 
 class IntelVersionError(ValueError):
@@ -71,6 +71,7 @@ class ItemIntel:
     buy_windows: tuple[IntelWindow, ...] = ()      # up to 3, cheapest first
     curve: str = ""                       # 24 × 8 encoded P grid (SPEC §3.1.1); "" when sales are unknown
     curve_hour: int | None = None         # hour number floor(ms / 3600000) of the curve's first row
+    cur_suspect: bool = False             # cur is out of the usual range and unconfirmed: never bought from (FM5)
 
 
 @dataclass(frozen=True)
