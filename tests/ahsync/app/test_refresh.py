@@ -207,3 +207,100 @@ def test_IU13_a_failed_replan_keeps_the_last_plan_and_a_market_without_intellige
     assert refresh.replan_all(db, NOW + HOUR, CFG) == []
     assert db.conn.execute("SELECT action_id FROM actions ORDER BY 1").fetchall() == plan
     assert db.conn.execute("SELECT COUNT(*) FROM plan_new").fetchone()[0] == 0
+
+
+# ---------------------------------------------------------------- FI1: a crash at any commit point
+
+def _pipeline(folder, clock) -> None:
+    """One AHSync run: catch-up, a SavedVariables ingest, tracking, a full refresh and both addon files."""
+    from ahsync.collect.ahf import AhfApi
+    from ahsync.collect.catchup import run_catchup
+    from ahsync.collect.client import ApiClient
+    from ahsync.export.addon_files import export_market, export_plan
+    from ahsync.recommend.tracking_pass import tracking_pass
+    from ahsync.state.importer import apply_data
+    from ahsync.state.savedvars import read_ahprofit
+    from tests.support.builders import AhfWorld
+    from tests.support.savedvars_builder import REALMS, savedvars_text
+
+    now = clock.now_ms()
+    cfg = Config(markets=(M,), wow_path=folder / "wow")
+    db = Database.open(folder / "ahsync.db", now, None)
+    try:
+        run_catchup(AhfApi(ApiClient(AhfWorld(clock).transport, clock, "")), db, clock, (M,))
+        character = {"name": "Amaya", "realm": "Grommash", "faction": "Horde", "class": "MAGE", "level": 60,
+                     "gold": 100_000, "updated": now}
+        buy = {"id": f"{AMAYA}:{now - HOUR}:0", "type": "purchase", "char": AMAYA, "at": now - HOUR, "key": BAR,
+               "qty": 4, "price": 900, "source": "ah", "confirmed": True}
+        data = read_ahprofit(savedvars_text({"characters": {AMAYA: character}, "events": [buy],
+                                             "inventory": {AMAYA: {"bags": f"{BAR},4,0", "bagsAt": now}}}))
+        apply_data(db, data, REALMS, now)
+        tracking_pass(db)
+        refresh.refresh_all(db, now, cfg)
+        export_market(db, cfg, now, clock.sleep)
+        export_plan(db, cfg, now, clock.sleep)
+    finally:
+        db.close()
+
+
+def _prepare(folder, clock) -> None:
+    """The world before the run: the seeded database, three hours behind AHF, and an AddOns folder."""
+    from ahsync.export.addon_files import data_folder
+    from tests.support.builders import AhfWorld
+
+    db = Database.open(folder / "ahsync.db", clock.now_ms(), None)
+    seed(db)
+    db.update_sync_state(M, last_hour=AhfWorld(clock).sealed_h1 - 3, last_run=clock.now_ms() - 4 * HOUR)
+    db.close()
+    data_folder(Config(markets=(M,), wow_path=folder / "wow")).mkdir(parents=True)
+
+
+def _snapshot(folder) -> tuple[dict, dict]:
+    """Every table's rows, sorted, and every addon file's bytes."""
+    conn = sqlite3.connect(folder / "ahsync.db")
+    try:
+        tables = [t for (t,) in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' "
+                                             "AND name NOT LIKE 'sqlite_%' ORDER BY name")]
+        rows_by_table = {t: sorted(conn.execute(f"SELECT * FROM {t}").fetchall(), key=repr) for t in tables}
+    finally:
+        conn.close()
+    files = {p.name: p.read_bytes() for p in sorted((folder / "wow").rglob("*.lua"))}
+    return rows_by_table, files
+
+
+def test_FI1_a_crash_at_any_commit_point_then_a_restart_gives_the_same_database_and_addon_files(tmp_path, monkeypatch):
+    import contextlib
+
+    from tests.support.fake_transport import SimulatedCrash
+
+    real = Database.transaction
+    commits = {"n": 0, "crash_at": 0}
+
+    @contextlib.contextmanager
+    def counted(self):
+        """A transaction that counts its commits and crashes just before the chosen one."""
+        outermost = not self._depth
+        with real(self):
+            yield
+            if outermost:
+                commits["n"] += 1
+                if commits["n"] == commits["crash_at"]:
+                    raise SimulatedCrash(f"crash before commit {commits['n']}")
+
+    clock = FakeClock(NOW)
+    _prepare(tmp_path / "ref", clock)
+    monkeypatch.setattr(Database, "transaction", counted)
+    _pipeline(tmp_path / "ref", clock)
+    reference, total = _snapshot(tmp_path / "ref"), commits["n"]
+    assert total > 10 and reference[1]                       # the run has many commit points and writes both files
+    for crash_at in range(1, total + 1):
+        folder = tmp_path / f"crash{crash_at}"
+        monkeypatch.setattr(Database, "transaction", real)
+        _prepare(folder, clock)
+        monkeypatch.setattr(Database, "transaction", counted)
+        commits.update(n=0, crash_at=crash_at)
+        with pytest.raises(SimulatedCrash):
+            _pipeline(folder, clock)
+        commits.update(n=0, crash_at=0)
+        _pipeline(folder, clock)                             # the restart
+        assert _snapshot(folder) == reference, f"crash before commit {crash_at}"
