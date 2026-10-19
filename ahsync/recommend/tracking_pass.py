@@ -161,7 +161,14 @@ def _cost_basis(db: Database) -> int:
             "SELECT key, SUM(qty) FROM inventory WHERE bound = 0 GROUP BY key UNION ALL "
             "SELECT key, SUM(stack * COALESCE(count, 1)) FROM own_auctions GROUP BY key"):
         held[key] = held.get(key, 0) + units
-    basis = cost_basis(bought, _made(db), held, _disenchanted(db))
+    disenchanted = _disenchanted(db)
+    results = sorted({k for d in disenchanted for k, _ in d.results})
+    prices: dict[int, int] = {}
+    for key in results:                                  # each result's lowest price now, any source (T20)
+        row = db.conn.execute("SELECT MIN(price) FROM current WHERE key = ? AND price > 0", (key,)).fetchone()
+        if row[0] is not None:
+            prices[key] = row[0]
+    basis = cost_basis(bought, _made(db), held, disenchanted, prices)
     db.conn.execute("DELETE FROM cost_basis")
     db.conn.executemany("INSERT INTO cost_basis(key, qty, total_cost, untracked_qty) VALUES (?, ?, ?, ?)",
                         [(k, b.qty, int(b.total_cost + 0.5), b.untracked) for k, b in basis.items()])

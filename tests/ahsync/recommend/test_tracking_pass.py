@@ -180,3 +180,17 @@ def test_FM21_items_missing_after_a_crash_are_no_sale_and_no_new_cost(db):
     tracking_pass(db)
     # 25 held of the 40 bought: all of them may be bought ones, so each still costs the 40c paid (nothing invented)
     assert rows(db, "SELECT qty, total_cost, untracked_qty FROM cost_basis") == [(25, 1000, 0)]
+
+
+def test_T20_the_pass_splits_a_disenchant_by_the_results_lowest_price_now(db):
+    with db.transaction():
+        db.conn.execute("INSERT INTO purchases(event_id, char_id, key, qty, price, source, at, confirmed) "
+                        "VALUES ('bracers', ?, 4570, 1, 3000, 'ah', ?, 1)", (AMAYA, T))
+        db.conn.execute("INSERT INTO disenchants(event_id, char_id, key, results, at) "
+                        "VALUES ('de', ?, 4570, '10938,1;10940,3', ?)", (AMAYA, T + HOUR))
+        db.conn.executemany("INSERT INTO inventory(char_id, location, key, qty, bound) VALUES (?, 'bags', ?, ?, 0)",
+                            [(AMAYA, 10938, 1), (AMAYA, 10940, 3)])
+        db.conn.executemany("INSERT INTO current(market, key, price, qty, at, src) VALUES ('m', ?, ?, 5, ?, ?)",
+                            [(10940, 120, T, "ahf"), (10940, 100, T, "local"), (10938, 700, T, "ahf")])
+    tracking_pass(db)
+    assert db.cost_basis() == {10938: (1, 2100), 10940: (3, 900)}             # the dust's cheapest is 1s

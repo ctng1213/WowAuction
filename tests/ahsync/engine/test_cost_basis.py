@@ -52,3 +52,12 @@ def test_T18_a_disenchant_passes_the_items_cost_to_its_results_by_units():
 def test_T18_an_untracked_item_disenchanted_passes_on_0():
     basis = cost_basis([], [], {DUST: 3}, [Disenchanted("de", BRACERS, ((DUST, 3),), T)])
     assert basis == {DUST: Basis(3, 0.0, 0)}
+
+
+def test_T20_a_disenchant_splits_its_cost_by_the_results_market_value():
+    de = Disenchanted("de", BRACERS, ((ESSENCE, 1), (DUST, 3)), T + 1)
+    basis = cost_basis([Bought("b", BRACERS, 1, 3000, T)], [], {ESSENCE: 1, DUST: 3}, [de], {DUST: 100, ESSENCE: 700})
+    # 3 dust × 1s = 3s and the essence 7s of 10s: the dust holds 9s, the essence 21s
+    assert basis == {ESSENCE: Basis(1, 2100.0, 0), DUST: Basis(3, 900.0, 0)}
+    unpriced = cost_basis([Bought("b", BRACERS, 1, 3000, T)], [], {ESSENCE: 1, DUST: 3}, [de], {DUST: 100})
+    assert unpriced == {ESSENCE: Basis(1, 750.0, 0), DUST: Basis(3, 2250.0, 0)}        # by units (T18)
