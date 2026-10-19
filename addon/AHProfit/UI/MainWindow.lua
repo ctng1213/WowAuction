@@ -76,6 +76,7 @@ local ARROW = "|TInterface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up:14:14|t"
 local ui = nil                     -- the frames, once built
 local waitingForNames = false      -- a shown row's name isn't in the client's item cache yet
 local computed = nil               -- { lines, footer, empty }: what the tab shows, until something changes
+local lastGood = nil               -- the last { lines, footer, empty } computed without an error (A5)
 local view = { tab = "today", offset = 0, minChance = 50 }
 
 --- Colour a font string from an { r, g, b } triple.
@@ -653,6 +654,23 @@ local function RenderChrome(nowMs)
   ui.chance:SetShown(view.tab == "today")
 end
 
+--- Compute the tab's lines; an engine error keeps the last good lines and says so in the footer (SPEC §4.3, A5).
+---@param nowMs number
+---@param gold number  All characters' gold, copper
+---@return table       { lines, footer, empty }
+local function Compute(nowMs, gold)
+  local problem = Market.Problem()
+  if problem then return { lines = {}, footer = "", empty = problem } end
+  local ok, lines, footer, empty = pcall(Lines, nowMs, gold)
+  if ok then
+    lastGood = { lines = lines, footer = footer, empty = empty }
+    return lastGood
+  end
+  local why = tostring(lines):gsub("^.-:%d+: ", "")
+  return { lines = lastGood and lastGood.lines or {}, footer = "couldn't update: " .. why .. " (showing the last good list)",
+           empty = "couldn't update: " .. why }
+end
+
 --- Redraw the window from the view model.
 function MainWindow.Render()
   if not ui then return end
@@ -662,9 +680,7 @@ function MainWindow.Render()
   if not computed then
     -- Computing is the costly part (the addon's own options); scrolling only re-pages it.
     waitingForNames = false
-    local problem = Market.Problem()
-    computed = { lines = {}, footer = "", empty = problem }
-    if not problem then computed.lines, computed.footer, computed.empty = Lines(nowMs, gold) end
+    computed = Compute(nowMs, gold)
   end
   local lines, footer, emptyText = computed.lines, computed.footer, computed.empty
   local page = VM.Page(lines, view.offset, MainWindow.ROWS)
@@ -740,7 +756,7 @@ end
 
 --- Forget the view state (tests).
 function MainWindow.Reset()
-  ui, view, computed = nil, { tab = "today", offset = 0, minChance = 50 }, nil
+  ui, view, computed, lastGood = nil, { tab = "today", offset = 0, minChance = 50 }, nil, nil
 end
 
 --- /ahp: open the window; a failure becomes a chat line, never a Lua error popup (SPEC §4.3, A5).

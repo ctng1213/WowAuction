@@ -23,7 +23,7 @@ IU1-IU2 IU6-IU7 IU10
 
 
 # M2/M5 addon
-A5
+
 
 
 # Market activity amendment (SPEC §3.3.6, §3.4 capacity, §8.8 volume backtest)

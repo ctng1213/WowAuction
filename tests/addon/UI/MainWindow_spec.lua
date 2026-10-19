@@ -558,4 +558,18 @@ describe("MainWindow", function()
     assert_eq({ AHProfitDB.reserves["Amaya-Grommash"], ui.footer:GetText() }, { "2589,5;4306,-1", "2 items kept · click a row to change it" })
     Stubs.ITEM_NAMES[159] = nil
   end)
+
+  it("A5 an engine error during a re-rank keeps the last good list and shows a status line, no popup", function()
+    local MainWindow = Boot()
+    Stubs.Slash("/ahp")
+    local before = FirstRow("today").item
+    local VM, today = AHProfit.ViewModel, AHProfit.ViewModel.Today
+    VM.Today = function() error("boom") end
+    MainWindow.Refresh()                                       -- e.g. a finished scan re-ranks the window
+    VM.Today = today
+    assert_eq(FirstRow("today").item, before)
+    assert_eq(MainWindow.Frames().footer:GetText(), "couldn't update: boom (showing the last good list)")
+    MainWindow.Refresh()
+    assert_eq(MainWindow.Frames().footer:GetText():find("couldn't", 1, true), nil)
+  end)
 end)
