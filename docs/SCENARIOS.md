@@ -319,6 +319,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | M4 | Wed is 96% of the original but P' 0.40 | Wed fails "likely to sell"; Thu is checked next |
 | M5 | Wed passes on price and chance, but `E` is below the vendor value | fails "still worth it"; next window, or hold |
 | M6 | Mon 00:00 of the next week, item on hold | fresh slate: the anchor is the new week's best window; the misses stay in History only |
+| M8 | a missed Linen post whose replacement window prices it at 49 c; Linen's stored record has a streak of 1 (expired once while cheapest) | the replacement is priced as the plan would: 49 × 0.95 = 46.55, rounded down to 46 c (as `repriced` does), and its P' blends the record; without a stored record it is 49 c; a bigger cut that drops it below 90% of the original peak makes it a hold (M2); the status pass still reads no history |
 | M7 | Tue 18:00, the post time (12:00) passed, but the window (20:00–23:00) hasn't started | "post now (late)"; not missed; chance over 18:00–22:59 |
 
 **Refresh model** (`refresh.refresh_all`, `refresh.update_items`, `sellprob.from_curve`):

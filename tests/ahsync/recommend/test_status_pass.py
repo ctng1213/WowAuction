@@ -79,3 +79,24 @@ def test_a_missed_post_without_intelligence_or_a_window_is_just_missed(db):
         db.conn.execute("DELETE FROM intel")
     counts = status_pass(db, CFG, NOW)
     assert counts["replaced"] == 0 and statuses(db)["post1"][1] == "missed"
+
+def test_M8_a_missed_posts_replacement_uses_the_stored_sell_record(db, tmp_path):
+    import sqlite3
+
+    from ahsync.engine.sell_record import Record
+    copy = tmp_path / "plain.db"
+    target = sqlite3.connect(copy)
+    db.conn.backup(target)
+    target.close()
+    plain = Database.open(copy, FakeClock().now_ms(), None)
+    try:
+        status_pass(plain, CFG, NOW)                                     # no stored record: as in M1
+        base = plain.conn.execute("SELECT price FROM actions WHERE action_id = 'post1:r'").fetchone()[0]
+    finally:
+        plain.close()
+    with db.transaction():
+        db.store_sell_records(M, {LINEN: Record(0, 1, 1, 1, False, False)})
+    assert db.stored_sell_records(M) == {LINEN: Record(0, 1, 1, 1, False, False)}
+    status_pass(db, CFG, NOW)
+    cut = db.conn.execute("SELECT price FROM actions WHERE action_id = 'post1:r'").fetchone()[0]
+    assert (base, cut) == (49, 46)                                          # 49c, cut 5% by the record: 46.55 down to 46

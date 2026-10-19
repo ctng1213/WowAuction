@@ -15,7 +15,8 @@ from ahsync.recommend.plan import de_offer, sell_facts
 DAY_MS = 86_400_000
 
 
-def _replacement(row: tuple, db: Database, market: str, now_ms: int, cfg: Config, enchanters: list) -> tuple | None:
+def _replacement(row: tuple, db: Database, market: str, now_ms: int, cfg: Config, enchanters: list,
+                 records: dict) -> tuple | None:
     """The replacement action row for a missed post, or None when it can't be re-planned.
 
     Args:
@@ -25,6 +26,7 @@ def _replacement(row: tuple, db: Database, market: str, now_ms: int, cfg: Config
         now_ms: Now.
         cfg: Config.
         enchanters: (character id, Enchanting skill) on the market, best first.
+        records: Item key -> sell record, as the last refresh or re-plan stored them (M8).
 
     Returns:
         An `actions` row (a pending post or hold), or None without a window or intelligence.
@@ -34,7 +36,7 @@ def _replacement(row: tuple, db: Database, market: str, now_ms: int, cfg: Config
     if window_end is None or anchor is None or intel is None or key not in intel.items:
         return None
     items = db.items()
-    f = sell_facts(intel.items[key], items.get(key), de_offer(items.get(key), intel.items, enchanters))
+    f = sell_facts(intel.items[key], items.get(key), de_offer(items.get(key), intel.items, enchanters), records.get(key))
     r = replan_missed(anchor, window_end, qty, f, now_ms, week_start + 7 * DAY_MS, plan_settings(cfg),
                       cfg.min_sell_prob, cfg.peak_tolerance)
     start, end, _best = r.window if r.window else (None, None, None)
@@ -59,6 +61,7 @@ def status_pass(db: Database, cfg: Config, now_ms: int) -> dict[str, int]:
         char_ids = [c for c, _ in db.characters_in(market)]
         enchanters = sorted(((c, db.skill_of(c, "Enchanting")) for c in char_ids), key=lambda e: (-(e[1] or -1), e[0]))
         enchanters = [(c, s) for c, s in enchanters if s is not None]
+        records = db.stored_sell_records(market)                                     # M8: no history read
         with db.transaction():
             for row in db.open_actions(char_ids):
                 action_id, kind, _, _, _, slot_ms, window_end, *_rest, status = row
@@ -68,7 +71,7 @@ def status_pass(db: Database, cfg: Config, now_ms: int) -> dict[str, int]:
                 db.set_action_status(action_id, new)
                 counts[new] = counts.get(new, 0) + 1
                 if new == "missed" and kind == "post":
-                    replacement = _replacement(row, db, market, now_ms, cfg, enchanters)
+                    replacement = _replacement(row, db, market, now_ms, cfg, enchanters, records)
                     if replacement is not None:
                         db.add_action(replacement)
                         counts["replaced"] += 1

@@ -89,6 +89,13 @@ CREATE TABLE IF NOT EXISTS untracked(
     PRIMARY KEY(char_id, key, at)
 );
 
+-- Your sell record per item, as the last refresh or re-plan computed it, for the hourly status pass (M8).
+CREATE TABLE IF NOT EXISTS sell_records(
+    market TEXT NOT NULL, key INTEGER NOT NULL, sold INTEGER NOT NULL, expired INTEGER NOT NULL, streak INTEGER NOT NULL,
+    lowest_expiries INTEGER NOT NULL, undercut_last INTEGER NOT NULL, not_selling INTEGER NOT NULL,
+    PRIMARY KEY(market, key)
+);
+
 -- Gold taken from a sold mail (SPEC §2.2.1 payout, T17): the sold mail it paid and the profit it realized,
 -- set once by the tracking pass (copper; NULL until then).
 CREATE TABLE IF NOT EXISTS payouts(

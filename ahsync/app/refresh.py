@@ -56,6 +56,7 @@ def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], in
         cfg: Config.
     """
     records = sell_records(db, [c for c, _ in characters], market, now_ms, cfg)      # SPEC §3.3.3
+    db.store_sell_records(market, records)                                           # for the status pass (M8)
     actions = plan_market(db, characters, intel_items, items, now_ms, cfg, records)
     rows = plan_rows(actions, market, now_ms)
     db.stage_plan(rows)

@@ -4,6 +4,9 @@ from __future__ import annotations
 import json
 import sqlite3
 
+from ahsync.engine.sell_record import Record
+
+
 class RecommendStore:
     """Staged dashboard pages, the published page read, and skipping an action; needs `self.conn`."""
 
@@ -78,6 +81,34 @@ class RecommendStore:
             status: Its new status.
         """
         self.conn.execute("UPDATE actions SET status = ? WHERE action_id = ?", (status, action_id))
+
+    def store_sell_records(self, market: str, records: dict[int, Record]) -> None:
+        """Replace a market's stored sell records with the ones just computed (SPEC §3.3.3, M8).
+
+        Args:
+            market: Market id.
+            records: Item key -> engine.sell_record.Record.
+        """
+        self.conn.execute("DELETE FROM sell_records WHERE market = ?", (market,))
+        self.conn.executemany(
+            "INSERT INTO sell_records(market, key, sold, expired, streak, lowest_expiries, undercut_last, not_selling) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [(market, k, r.sold, r.expired, r.streak, r.lowest_expiries, int(r.undercut_last), int(r.not_selling))
+             for k, r in sorted(records.items())])
+
+    def stored_sell_records(self, market: str) -> dict[int, Record]:
+        """The sell records the last refresh or re-plan stored for a market (M8).
+
+        Args:
+            market: Market id.
+
+        Returns:
+            Item key -> engine.sell_record.Record.
+        """
+        return {k: Record(sold, expired, streak, lowest, bool(undercut), bool(stuck))
+                for k, sold, expired, streak, lowest, undercut, stuck in self.conn.execute(
+                    "SELECT key, sold, expired, streak, lowest_expiries, undercut_last, not_selling FROM sell_records "
+                    "WHERE market = ? ORDER BY key", (market,))}
 
     def add_action(self, row: tuple) -> None:
         """Add one action straight to the live plan (a missed post's replacement, SPEC §3.4.0).
