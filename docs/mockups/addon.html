@@ -58,6 +58,7 @@
   tr.section td { color: var(--title); padding-top: 10px; border-bottom: 1px solid #3a3424; font-size: 12px; }
   .act { font-size: 9px; font-weight: bold; letter-spacing: .4px; padding: 1px 3px; border-radius: 2px; color: #000; }
   .act.buy { background: #5fb4ff; } .act.post { background: #ffd100; } .act.de { background: #b37bff; }
+  .act.decide { background: var(--neg); }
   .act.craft { background: #ff9a3d; } .act.vendor { background: #aaa; } .act.mail { background: #8fd3ff; } .act.hold { background: var(--amber); }
   .item { max-width: 130px; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: bottom; }
   .q0 { color: var(--q0); } .q1 { color: var(--q1); } .q2 { color: var(--q2); } .q3 { color: var(--q3); } .q4 { color: var(--q4); }
@@ -90,6 +91,14 @@
   .tooltip .tt-line { display: flex; justify-content: space-between; gap: 12px; color: #8fd3ff; }
   .tooltip .tt-line > span:last-child { color: #fff; }
   .tooltip hr { border: none; border-top: 1px solid #2c3550; margin: 6px 0; }
+  .tooltip .tt-hdr { display: flex; justify-content: space-between; gap: 12px; color: var(--title); }
+  .tooltip .tt-age { color: var(--muted); } .tooltip .tt-age.old { color: var(--amber); }
+  .tooltip .tt-do > span:first-child { color: #fff; } .tooltip .tt-do .lbl { color: #8fd3ff; }
+  .tooltip .tt-line.dim > span:last-child { color: var(--muted); }
+  .tooltip .tt-only { color: var(--muted); }
+  .v-post { color: #ffd100; } .v-buy { color: #5fb4ff; } .v-craft { color: #ff9a3d; } .v-de { color: #b37bff; }
+  .v-grey { color: #aaa; } .v-mail { color: #8fd3ff; } .v-kept { color: var(--muted); }
+  .tt-cap { color: var(--muted); font: 11px/1.3 system-ui, sans-serif; margin-bottom: 4px; max-width: 320px; }
   .legend { max-width: 560px; font: 12px/1.45 system-ui, sans-serif; color: var(--text); }
   .legend td { white-space: normal; vertical-align: top; padding: 4px 8px; border-top: 1px solid #2a2a2a; }
   .legend td:first-child { color: #8fd3ff; white-space: nowrap; }
@@ -97,12 +106,29 @@
   .menu div { padding: 3px 12px; } .menu .h { color: var(--title); } .menu .sep { border-top: 1px solid #2c3550; margin: 4px 0; padding: 0; }
   .empty { padding: 60px 20px; text-align: center; color: var(--muted); }
   .empty b { color: var(--text); display: block; margin-bottom: 6px; font-size: 15px; }
+  .pfsum { padding: 4px 8px; font-size: 12px; border-bottom: 1px solid #3a3424; white-space: nowrap; }
+  .pfnote { padding: 2px 8px 0; font-size: 11px; color: var(--muted); }
+  tr.unfunded td:not(.why) { opacity: .5; }
+  td.why { white-space: normal; max-width: 150px; font-size: 10px; line-height: 1.2; }
+  .adj-sub { display: block; font-size: 10px; color: var(--muted); }
+  .unf { font-size: 9px; color: var(--muted); border: 1px solid #3a3424; border-radius: 6px; padding: 0 4px; margin-left: 3px; }
+  tr.unf-row td { color: var(--muted); }
+  .body.scrolls #view { position: absolute; top: 0; bottom: 0; left: 0; right: 0; padding-right: 6px; overflow-y: auto;
+                        scrollbar-width: thin; scrollbar-color: #5a4a26 #1a1a1a; }
+  .body.scrolls #view::-webkit-scrollbar { width: 10px; }
+  .body.scrolls #view::-webkit-scrollbar-track { background: #1a1a1a; border-radius: 5px; }
+  .body.scrolls #view::-webkit-scrollbar-thumb { background: #5a4a26; border-radius: 4px; }
+  .body.scrolls .scroll { display: none; }
+  .badge.funded { color: var(--pos); border-color: #2c6b32; } .badge.hold { color: var(--amber); border-color: #7a5a1b; }
+  .badge.partial { color: #8fd3ff; border-color: #2c4f6b; } .badge.ready { color: var(--pos); border-color: #2c6b32; }
+  .badge.listed { color: var(--title); border-color: var(--border); } .badge.proc { color: #ff9a3d; border-color: #7a4a1b; }
+  .badge.acq { color: #5fb4ff; border-color: #24507a; } .badge.recon { color: var(--neg); border-color: #7a2a24; }
 </style>
 </head>
 <body>
 
 <h1>AHProfit (addon): UI mockup</h1>
-<p class="note">This defines the look of the in-game addon (SPEC §4.3). Sizes are in game pixels at UI scale 1, and names and numbers are placeholders (your characters hold 31g 40s in total, which is what risk % is measured against). The real UI uses Blizzard fonts and textures, so the expected match is layout, content, colours and states, not exact pixels. <b>Click the tabs</b> to see each view. The desktop dashboard is in <code>dashboard.html</code>.</p>
+<p class="note">This defines the look of the in-game addon (SPEC §4.3). Sizes are in game pixels at UI scale 1, and names and numbers are placeholders (your characters hold 31g 40s in total, which is what risk % is measured against). The real UI uses Blizzard fonts and textures, so the expected match is layout, content, colours and states, not exact pixels. <b>Click the tabs</b> to see each view. The <b>Portfolio</b> tab replaces the old Today and Week tabs (the dashboard keeps both pages); it scrolls, and an unclipped copy is under States. The desktop dashboard is in <code>dashboard.html</code>.</p>
 
 <h2>1. Main window (<code>/ahp</code>, 640 × 440)</h2>
 <div class="frame" style="width:640px;height:440px">
@@ -113,18 +139,18 @@
   <div class="tabs" role="tablist" id="tabs">
     <span class="spacer"></span><span class="dropdown" id="tabctl"></span>
   </div>
-  <div class="body"><div id="view"></div><div class="scroll"></div></div>
+  <div class="body" id="body"><div id="view"></div><div class="scroll"></div></div>
   <div class="footer" id="footer"></div>
 </div>
 <div class="note tabnote" id="tabnote"></div>
 
 <h2>2. AH side panel (docked right of the auction house, 300 wide)</h2>
-<p class="note">Clicking a Shopping row searches for that item. <b>Clicking a Post row fills the AH's Sell tab</b> with the item, quantity and list price; you check it and press the AH's own Post button (A29). Right-click any row to keep the item for yourself. Shopping lists only what to buy on the AH: a mat the plan buys from a vendor stays on Today, as a line under its craft marked “from a vendor” (A32, A71). ✓ found at or below target · ✗ gone or no longer profitable · … still being searched. <b>For</b> says why it's bought: CRAFT, FLIP or DE (A40). A search that lists nothing marks the row ✗ gone (A38); buyouts lower Qty, and a row drops off once it's all bought (A39). The bar under the status line follows any full scan: waiting, reading n of total, saving, then “full scan done” (A43). Covers UI7.</p>
+<p class="note">Clicking a Shopping row searches for that item. <b>Clicking a Post row fills the AH's Sell tab</b> with the item, quantity and list price; you check it and press the AH's own Post button (A29). Right-click any row to keep the item for yourself. Both lists show <b>funded rows first, then unfunded ones</b>, muted with an “unfunded” tag: they're still clickable, for when you choose to go past your risk tolerance. Shopping lists only what to buy on the AH: a mat the plan buys from a vendor stays on the Portfolio tab's Today section, as a line under its craft marked “from a vendor” (A32, A71). ✓ found at or below target · ✗ gone or no longer profitable · … still being searched. <b>For</b> says why it's bought: CRAFT, FLIP or DE (A40). A search that lists nothing marks the row ✗ gone (A38); buyouts lower Qty, and a row drops off once it's all bought (A39). The bar under the status line follows any full scan: waiting, reading n of total, saving, then “full scan done” (A43). Covers UI7.</p>
 <div class="docked">
   <div class="ahstub">Blizzard auction house window<br>(not ours)</div>
   <div class="frame" style="width:300px">
     <div class="titlebar"><span class="name">AHProfit at the AH</span></div>
-    <div class="sec"><span>Shopping</span><span class="muted">3 of 5</span></div>
+    <div class="sec"><span>Shopping</span><span class="muted">3 of 5 + 1 unfunded</span></div>
     <table>
       <tr><th></th><th title="The item">Item</th><th title="Why it's bought: CRAFT, FLIP or DE">For</th><th class="num" title="Cheapest listing seen now; gone / checking">Price</th><th></th><th class="num" title="The most to pay each">Max</th><th class="num" title="Units still to buy">Qty</th></tr>
       <tr><td class="pos">✓</td><td><span class="item q1" style="max-width:80px">Linen Cloth</span></td><td style="color:#5eb5ff;font-size:10px">FLIP</td><td class="num" data-m="38"></td><td class="num">≤</td><td class="num" data-m="45"></td><td class="num">×20</td></tr>
@@ -132,11 +158,13 @@
       <tr class="gone"><td class="neg">✗</td><td><span class="item q1" style="max-width:80px">Copper Bar</span></td><td style="color:#ff9a3d;font-size:10px">CRAFT</td><td colspan="4">gone</td></tr>
       <tr><td class="muted">…</td><td><span class="item q1" style="max-width:80px">Silk Cloth</span></td><td style="color:#5eb5ff;font-size:10px">FLIP</td><td colspan="4" class="muted">checking</td></tr>
       <tr><td class="muted">…</td><td><span class="item q1" style="max-width:80px">Iron Ore</span></td><td style="color:#ff9a3d;font-size:10px">CRAFT</td><td colspan="4" class="muted">checking</td></tr>
+      <tr class="unf-row" title="Unfunded: Insufficient liquidity: 3/day, 40 planned. Click to search anyway"><td class="muted">…</td><td><span class="item" style="max-width:62px">Elixir of Fortitude</span><span class="unf">unfunded</span></td><td style="font-size:10px">FLIP</td><td class="num" data-m="300"></td><td class="num">≤</td><td class="num" data-m="300"></td><td class="num">×40</td></tr>
     </table>
-    <div class="sec"><span>Post</span><span class="muted">1</span></div>
+    <div class="sec"><span>Post</span><span class="muted">1 + 1 unfunded</span></div>
     <table>
       <tr><th title="The item">Item</th><th class="num" title="The price to list at, each">List price</th><th class="num" title="Units to post">Qty</th><th class="num" title="Expected profit of posting all of them">Est. profit</th><th class="num" title="Chance it sells in its window; the dot is the confidence">Chance</th></tr>
       <tr><td><span class="item q1" style="max-width:90px">Copper Rod</span></td><td class="num" data-m="4100"></td><td class="num">×5</td><td class="num pos">+<span data-m="6306"></span></td><td class="num">58% <span class="amber">◐</span></td></tr>
+      <tr class="unf-row" title="Unfunded: Insufficient liquidity: 3/day, 40 planned. Click to fill the Sell tab anyway"><td><span class="item" style="max-width:62px">Elixir of Fortitude</span><span class="unf">unfunded</span></td><td class="num" data-m="350"></td><td class="num">×40</td><td class="num">+<span data-m="900"></span></td><td class="num">35% ◐</td></tr>
     </table>
     <div style="padding:4px 8px 0;font-size:10px">full scan: reading 23,400 of 47,667</div>
     <div style="margin:3px 8px 0;height:4px;background:#1a1a1a"><div style="width:42%;height:4px;background:#ffd100"></div></div>
@@ -146,20 +174,10 @@
 </div>
 
 <h2>3. Tooltip and right-click menu</h2>
-<p class="note">The tooltip adds a short label/value block under the item's own lines (UI8, max 320 wide). All prices are per unit. Disenchant value is left out when none of your characters can disenchant the item. Right-clicking any row in the window or the AH panel opens the keep menu (SPEC §3.4.3, A25): keep all of the item for this character, keep at least a number of units (only what you hold above it is suggested), or sell normally again. SPEC GAP: the blacklist rules (§3.4.2) are not in the addon's menu yet.</p>
-<div class="stage">
-  <div class="tooltip">
-    <div class="tt-name">Scouting Gloves of the Monkey</div>
-    <div>Binds when equipped</div><div>Hands · Leather</div><div>+3 Agility · +3 Stamina</div>
-    <hr>
-    <div class="tt-head">AHProfit</div>
-    <div class="tt-line"><span>Current AH price</span><span>8s <span class="muted">(2h ago)</span></span></div>
-    <div class="tt-line"><span>Historical price</span><span>11s <span class="muted">(30d,</span> <span class="pos">+38%</span><span class="muted">)</span></span></div>
-    <div class="tt-line"><span>Disenchant value</span><span>14s 25c <span class="pos">(+78%)</span></span></div>
-    <div class="tt-line"><span>Best time to sell</span><span>Sat 17:00–21:00</span></div>
-    <div class="tt-line"><span>Price at best time</span><span>12s 30c <span class="pos">(+54%)</span></span></div>
-    <div class="tt-line"><span>Chance to sell</span><span>46%</span></div>
-  </div>
+<p class="note">Hovering an item adds an <b>AHProfit</b> block under the item's own lines (UI8). It is drawn with two-column lines like <code>GameTooltip:AddDoubleLine</code>, label left and value right, at most 320 wide. All prices are per unit; differences are green above the current price and red below. The first line after the header is <b>Do</b>: what to do with this item, with the verb in its badge colour. The variants below cover every case. Lines that would pass 320 are shortened: hour ranges become "Sat 17–21", and a long Do value continues on a second line with an empty label (variants 1, 2, 4, 8, 9 and 14). A Best-time line is never dropped: when now is the best time it says "now" (variants 9 and 14). Right-clicking any row in the window or the AH panel opens the keep menu (SPEC §3.4.3, A25): keep all of the item for this character, keep at least a number of units (only what you hold above it is suggested), or sell normally again. SPEC GAP: the blacklist rules (§3.4.2) are not in the addon's menu yet.</p>
+<div class="stage" id="tt-variants"></div>
+<div class="stage" style="margin-top:18px">
+  <div><div class="tt-cap">Right-click menu</div>
   <div class="menu">
     <div class="h">Refreshing Spring Water</div>
     <div>Keep all for myself</div>
@@ -167,16 +185,17 @@
     <div>Sell normally</div>
     <div class="sep"></div>
     <div class="muted">Cancel</div>
-  </div>
+  </div></div>
 </div>
-<h2 style="font-size:13px;margin-top:18px">What each tooltip field means</h2>
+<h2 style="font-size:13px;margin-top:18px">What each tooltip line means</h2>
 <table class="legend">
-  <tr><td>Current AH price</td><td>The cheapest listing on the AH right now, and how long ago that price was seen.</td></tr>
-  <tr><td>Historical price</td><td>The median price over the last 30 days, and how much higher or lower that is than the current AH price.</td></tr>
-  <tr><td>Disenchant value</td><td>What disenchanting one is worth, and how much higher or lower that is than the current AH price. Left out when none of your characters can disenchant it.</td></tr>
-  <tr><td>Best time to sell</td><td>The item's best selling window in the week: the hours where price × number of buyers is highest, learned from past weeks. Shows "(early pattern)" until there are 3 weeks of data.</td></tr>
-  <tr><td>Price at best time</td><td>The expected price in that window, and how much higher (or lower) that is than the current AH price.</td></tr>
-  <tr><td>Chance to sell</td><td>How likely a normal-size post made now sells within the next 8 hours.</td></tr>
+  <tr><td>AHProfit · data age</td><td>The header, with how old <code>MarketIntelligence.lua</code> is. The age and its dot turn amber past 24 h.</td></tr>
+  <tr><td>Do</td><td>The plan's action for the character you're on (<code>PortfolioPlan.lua</code>); without one, the addon's own best option. The verb has its badge colour: POST gold, BUY blue, CRAFT orange, DE purple, VENDOR and HOLD grey, MAIL light blue, KEPT and UNFUNDED muted. The value is what the action makes, then its chance; the chance belongs to the action (for a craft, its product's). A second line carries what doesn't fit: the next step or a reason. An AH listing that is on none of your lists has no Do line.</td></tr>
+  <tr><td>Market</td><td>The lowest price now with its age ("now" while you browse the AH, else how old the scan is), then the 30-day median and its difference from the price now.</td></tr>
+  <tr><td>Disenchant</td><td>What disenchanting one is worth and its difference from the price now. Only shown when one of your characters can disenchant it.</td></tr>
+  <tr><td>Best time to sell / buy</td><td>The week's top window, its expected price, the difference from now and its strength: <i>early</i> (under 3 weeks of data), <i>pattern</i> (3–5 weeks) or <i>established</i> (6 weeks or more). Never left out. When now falls inside the best sell window it reads "now (Sat 17–21) · 12s 30c · pattern", and the Do line adds "best time to sell is now" (on a second value-only line if it doesn't fit; variant 14). When the price now is below every buy window's expected price it reads "now · cheaper than Tue 20–23 (7s 10c)", shortened to "now · under Tue 20–23 (7s 10c)" when it would pass 320 wide (variant 9). On an AH browse row the Do line then adds "best time to buy is now".</td></tr>
+  <tr><td>Activity</td><td>Sales per day, units listed now and days of supply, in muted text.</td></tr>
+  <tr><td>No market data</td><td>Two lines only: the header with the data age, and "no market data yet".</td></tr>
 </table>
 
 <h2>4. States</h2>
@@ -205,6 +224,31 @@
     <div class="footer"><span class="amber">AHSync is older than this addon: restart AHSync, then /reload</span></div>
   </div>
 </div>
+<p class="note">Portfolio tab. Left: nothing new is funded because committed capital is over the risk limit (after Amaya spent 6g 70s on new positions, 4g 18s + 6g 70s = 10g 88s is committed against the 10g 67s 40c limit; the capital base stays 35g 58s). Positions still show, so the tab is never blank. Min chance is a view filter here too: a funded row it hides stays funded and counted in the totals. Right: right-clicking the "excluded" line under Today lists each left-out row and its reason. Shown for Brugan, whose Lesser Mana Potion needs more than the shared pool has left (UI8 tooltip style, max 320 wide).</p>
+<div class="stage">
+  <div class="frame" style="width:300px">
+    <div class="titlebar"><span class="name">AHProfit</span><span class="sub">Portfolio</span><span class="badge fresh">data 2 h old</span></div>
+    <div class="pfsum" style="white-space:normal">Amaya <span data-m="143000"></span> · portfolio <span data-m="355800"></span> · 30% risk · capacity <span data-m="0"></span> · <span class="muted">snapshot 10:38</span></div>
+    <div class="empty" style="padding:28px 16px"><b>Nothing funded: risk budget exhausted</b><span data-m="108800"></span> committed of a <span data-m="106740"></span> limit. New rows come back as positions sell.</div>
+    <div class="footer"><span>funded <span data-m="0"></span></span><span>3 positions</span></div>
+  </div>
+  <div class="tooltip">
+    <div class="tt-name" style="color:var(--q1)">Not funded today (Brugan)</div>
+    <hr>
+    <div class="tt-head">Lesser Mana Potion <span class="muted">· CRAFT ×10</span></div>
+    <div class="amber">Exceeds risk tolerance: needs 45s, 24s 40c left</div>
+    <div class="tt-line"><span>Expected net</span><span>+<span data-m="80"></span></span></div>
+    <div class="tt-line"><span>Risk limit</span><span><span data-m="106740"></span> · committed <span data-m="41800"></span></span></div>
+    <div class="tt-line"><span>Funded before it</span><span><span data-m="62500"></span> of <span data-m="64940"></span></span></div>
+  </div>
+</div>
+<p class="note">Portfolio tab, unclipped: the same 640-wide window at full height, so every row of Positions, Today and Next 7 days is visible without scrolling (in game the list scrolls inside 640 × 440).</p>
+<div class="frame" style="width:640px">
+  <div class="titlebar"><span class="name">AHProfit</span><span class="sub">Grommash · Horde PvP</span><span class="badge fresh">data 2 h old</span><span class="close">✕</span></div>
+  <div class="tabs" id="pf-full-tabs"></div>
+  <div style="padding-right:6px" id="pf-full-view"></div>
+  <div class="footer" id="pf-full-footer"></div>
+</div>
 
 <script>
 const TOTAL_GOLD = 314000; // copper across all characters; risk % is measured against this
@@ -215,7 +259,7 @@ function money(c, signed) {
   const sign = c < 0 ? '−' : (signed ? '+' : '');
   const a = Math.abs(Math.round(c)); let out = '';
   const g = Math.floor(a / 10000), s = Math.floor(a % 10000 / 100), cp = a % 100;
-  if (g) out += g + '<span class="coin g"></span>';
+  if (g) out += String(g).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '<span class="coin g"></span>';
   if (s) out += s + '<span class="coin s"></span>';
   if (cp || !out) out += cp + '<span class="coin c"></span>';
   return sign + out;
@@ -259,6 +303,9 @@ const HELP = {
   'Worth': 'What it is worth under its best plan',
   'Plan': 'What the plan does with it',
   'Where': 'Bags, bank, mail or AH',
+  'Status': 'Funded, or why it was left out. For a position: Acquiring, Processing, Holding, Ready to sell, Listed, Partially sold or Needs reconciliation',
+  'Next': 'The next thing to do for this position',
+  'Adjusted': 'Net ÷ (1 + waiting premium): 15% + 5% × the wait, in fractional days from now to the expected sale hour; 0% for what is realized today. The plan ranks Today and the week together by this',
 };
 const head = cols => '<tr>' + cols.map(([t, n]) => `<th${n ? ' class="num"' : ''} title="${String(HELP[t]).replace(/"/g, '&quot;')}">${t}</th>`).join('') + '</tr>';
 
@@ -306,74 +353,76 @@ function pair(n, P) {
   return `<td class="num" title="Confidence ${c}%${VOL_DAY[n] === null ? ' · volume unknown: default chance' : ''}">${P}% ${dot(c >= 75 ? 'h' : c >= 45 ? 'm' : 'l')}</td>${volume(n)}`;
 }
 
-// Today rows: [action, item, quality, qty, each, net, P, conf, who, spend (copper the action spends), note and lines, one per \n]
-const TODAY = [
-  ['buy', 'Mithril Spurs', 3, 1, 30000, 7342, 85, 'm', 'Brugan', 30000, 'then: post Sat 10:00, for the 18:00 peak'],
-  ['post', 'Copper Rod', 1, 5, 4100, 6306, 58, 'm', 'Brugan', 100, 'Your record (30 d): 2 of 5 sold · expired 2× while cheapest · P 80% → 58% · price −10% · qty ¼'],
-  ['buy', 'Silk Cloth', 1, 40, 70, 730, 88, 'h', 'Amaya', 2800, 'then: post Sat 11:00, for the 19:00 peak'],
-  ['de', 'Scouting Gloves of the Monkey', 2, 1, 800, 625, 100, 'm', 'Amaya', 800],
-  ['craft', 'Bolt of Silk Cloth', 1, 2, 280, 194, 85, 'h', 'Amaya', 560, 'buy 8 Silk Cloth on the AH · 5s 60c\n2 Spider\'s Silk from Brugan · not mailed yet\nthen: post Sun 11:00, for the 19:00 peak'],
-  ['craft', 'Heavy Grinding Stone', 1, 4, null, 134, 75, 'h', 'Brugan', 0, 'uses 8 owned Heavy Stone\nthen: post Sat 11:00, for the 19:00 peak'],
+// Portfolio tab (Unified Portfolio Optimizer, spec v1.1): the logged-in character's share of AHSync's one shared plan, here Amaya.
+// It replaces the old Today and Week tabs. Cross-character numbers are a cached copy of AHSync's snapshot (the dashboard's Portfolio page):
+// 31g 40s in hand + 4g 18s committed = 35g 58s base; 30% → 10g 67s 40c limit; − 4g 18s = 6g 49s 40c capacity; 6g 25s allocated;
+// 24s 40c unallocated. Exposure lasts until a payout is collected from the mailbox.
+const PF = { base: 355800, riskPct: 30, capacity: 64940, unallocated: 2440, snapshot: '10:38' };
+const PF_NOW_MIN = 10 * 60 + 38; // now: Mon 10:38, in minutes after Mon 00:00
+const PF_STAGE = { acq: 'Acquiring', proc: 'Processing', hold: 'Holding', ready: 'Ready to sell', listed: 'Listed', partial: 'Partially sold', recon: 'Needs reconciliation' };
+Object.assign(CONF_PCT, { 'Embossed Leather Gloves': 82, "Grunt's Bracers of Defense": 80, 'Elixir of Fortitude': 60 });
+Object.assign(VOL_DAY, { 'Embossed Leather Gloves': 210, "Grunt's Bracers of Defense": 210, 'Elixir of Fortitude': 3 });
+Object.assign(SUPPLY, { 'Embossed Leather Gloves': 400, "Grunt's Bracers of Defense": 400, 'Elixir of Fortitude': 11 });
+// This character's positions: [item, quality, qty, stage, est. net (copper, null = unknown), next action, cost basis left (copper)].
+const PF_POS = [
+  ['Mageweave Cloth', 1, '10 of 25', 'partial', 600, 'collect mail: 15 sold, 25s 65c waiting', 3000],
+  ['Wool Cloth', 1, 20, 'hold', 472, 'hold · found, uses no capital', 0],
+  ['Medium Leather', 1, 20, 'recon', null, 'check bags and mail: 14 of 20 found', 4000],
 ];
+// This character's rows realized today: [action, item, quality, qty, each, net, P, gold needed (= cash: no bought stock used), lines, one per \n,
+// status (null = funded, else [class, reason])]. Funded first, then the unfunded ones.
+const PF_TODAY = [
+  ['de', 'Scouting Gloves of the Monkey', 2, 1, 800, 625, 100, 800, 'disenchant now · post the dust for the 18:00 peak tonight'],
+  ['de', 'Embossed Leather Gloves', 2, 1, 500, 380, 100, 500, 'disenchant now · post the dust for the 18:00 peak tonight'],
+  ['buy', 'Linen Cloth', 1, 20, 38, 203, 92, 760, 'relist now at 55c, for the 18:00 peak tonight', null, 'Your record (30 d): 2 of 2 sold · P 88% → 92%'],
+  ['de', "Grunt's Bracers of Defense", 2, 1, 1500, 600, 100, 1500, '', ['neg', 'Required profession unavailable: Enchanting 150']],
+  ['buy', 'Elixir of Fortitude', 1, 40, 300, 900, 35, 12000, '', ['amber', 'Insufficient liquidity: 3/day, 40 planned']],
+];
+// This character's rows for the next 7 days: [action, item, quality, qty, plan, net, expected sale hour [days after today, hour],
+// cash (new gold; the Spider's Silk in Bolt of Silk Cloth is found), status (null = funded, else [class, reason])].
+const PF_WEEK = [
+  ['buy', 'Thick Leather', 1, 30, 'buy Tue 20:00 · sell Thu 19:00', 5500, [3, 19], 16080, null],
+  ['craft', 'Runed Copper Rod', 2, 1, 'craft Wed · sell Sun 18:00', 1630, [6, 18], 3700, null],
+  ['buy', 'Silk Cloth', 1, 40, 'buy now · sell Sat 19:00', 730, [5, 19], 2800, null],
+  ['craft', 'Bolt of Silk Cloth', 1, 2, 'craft today · sell Sun 19:00', 194, [6, 19], 560, null],
+  ['buy', 'Greater Magic Essence', 2, 4, 'buy Wed 20:00 · sell Sun 19:00', 1200, [6, 19], 3600, ['amber', 'Forecast too uncertain (1 week of data)']],
+];
+// Wait in hundredths of a day (half up), premium in hundredths of a percent (15% + 5% × wait), adjusted = net ÷ (1 + premium), half up.
+const pfWait = ([day, hour]) => Math.floor((day * 1440 + hour * 60 - PF_NOW_MIN) * 100 / 1440 + 0.5);
+const pfPremium = w100 => 1500 + 5 * w100;
+const pfAdjusted = (e, w100) => Math.floor(e * 10000 / (10000 + pfPremium(w100)) + 0.5);
+const pfFundedToday = PF_TODAY.filter(r => !r[9]), pfFundedWeek = PF_WEEK.filter(r => !r[8]);
+const pfSum = (rows, i) => rows.reduce((t, r) => t + r[i], 0);
+const pfTodayNet = pfSum(pfFundedToday, 5), pfTodayCash = pfSum(pfFundedToday, 7);
+const pfWeekNet = pfSum(pfFundedWeek, 5), pfWeekCash = pfSum(pfFundedWeek, 7);
+const pfPosBasis = pfSum(PF_POS, 6), pfPosNet = PF_POS.reduce((t, p) => t + (p[4] || 0), 0);
+const pfPct = (e, cash) => Math.floor(e * 100 / cash + 0.5);
+// Min chance is a view filter only (A84): it hides rows below it, funded or not; totals still count every funded row.
+const PF_MIN_CHANCE = 50;
+const pfShownToday = PF_TODAY.filter(r => r[6] >= PF_MIN_CHANCE);
 
 const VIEWS = {
-  Today: {
+  Portfolio: {
     ctl: 'Min chance: 50% ▾',
-    footer: `<span>6 actions · expected <span class="pos">${money(15331, true)}</span> · 1 hidden (chance &lt; 50%)</span><span>Budget ${money(TOTAL_GOLD)}</span>`,
-    note: `<b>Today</b>: what to do now, <b>sorted by expected net, highest first</b>. Covers UI1, UI3, UI6, UI10 and UI15.
-      <ul><li><b>A chain is one row</b> (A71): the craft or flip carries its profit; its mat buys, intermediate crafts and the mail another character sends for it are grey lines under it, then when it sells ("then: post Sun 11:00, for the 19:00 peak"). The character who sends that mail sees a <b>MAIL</b> row ("to Amaya") on their own Today (A74); clicking it does nothing special yet. Holds and vendor sales are on Inventory, not here (A73).</li></ul>
-      <ul><li><b>Each</b> is per unit and <b>Total</b> is each × quantity. For a craft, it's the gold for mats you still need to buy; "—" means you own them all.</li>
-      <li><b>Chance</b> is the chance to sell (P') with a confidence dot. Rows below the <b>Min chance</b> filter are hidden (here, Iron Ore at 30%), and the footer counts them.</li>
-      <li><b>Every column header has a tooltip</b> on hover saying what it means (the dashboard uses the same texts).</li>
-      <li><b>Volume</b> is units sold per day. Hover it for the units on the AH now and the days of supply. "—" means volume unknown: the chance is then a default, 50% when you'd be the cheapest seller and 25% otherwise, and the row is never hidden by Min chance.</li>
-      <li>Rows come from the desktop plan (<code>PortfolioPlan.lua</code>: which character acts, mail between characters) merged with the addon's own options, which it re-ranks live as prices, bags and gold change.</li>
-      <li><b>Risk</b> = gold this action spends ÷ all your gold. For a post, that's the deposit. It turns amber above 25%.</li>
-      <li>"Not selling" items wait in <b>Needs a decision</b>. Keep starts the item's record fresh, and one more expiry while cheapest asks again.</li></ul>`,
-    html: () => `<table>${head([[''], ['Item'], ['Qty', 1], ['Each', 1], ['Total', 1], ['Net', 1], ...PAIR, ['Risk', 1]])}
-      ${TODAY.map(r => todayRow(...r)).join('')}
-      <tr class="section"><td colspan="9">Needs a decision</td></tr>
-      <tr class="row"><td>${act('post')}</td><td>${item('Heavy Leather', 1)}</td><td class="num">×5</td><td class="num">${money(47)}</td><td class="num">${money(235)}</td><td colspan="4"><span class="flag">NOT SELLING</span></td></tr>
-      <tr class="record"><td></td><td colspan="8">Expired 3× while cheapest &nbsp; <span class="btn">Blacklist ▾</span> <span class="btn">Keep</span></td></tr>
-    </table>`
-  },
-  Week: {
-    ctl: 'Char: All ▾',
-    footer: `<span>Fri 16 → Thu 22 · 27 actions · expected <span class="pos">${money(26854, true)}</span></span><span>Peak: Sat 18:00</span>`,
-    note: `<b>Week</b>: a rolling 7 days that <b>always starts today</b> (SPEC §3.4C). Each day shows its total; done actions are ticked. <b>A chain is one row</b> (A72): a craft's mat buys and intermediate crafts are the lines under it, then its post; the post is a row of its own on its day. In the Sat 12:00–12:30 chain Brugan's steps (buy bars, craft the Copper Rod, <b>mail</b> it to Amaya) are Brugan's rows, and Amaya's Runed Copper Rod row says "1 Copper Rod from Brugan · not mailed yet". Holds and vendor sales are on Inventory (A73). <b>Posts are timed 8 h before the peak</b>, and their chance to sell runs from the post to the end of its selling window. The line under each post names its peak. <b>A chain's profit is counted once</b>, on its first action: a post that sells stock from a buy or craft shown in the plan says "profit counted on …" and adds nothing to the day total. If the post time has passed, it says "now" (Fri Copper Rod). <b>Missed a peak</b> (✗): the post moves to the next window this week only if it's within 10% of the original and still likely to sell (Wool Cloth → Sun). Otherwise it holds until next week (on Inventory), which starts fresh (Mageweave → Tue). Times are local.`,
-    html: () => {
-      // A chain's profit sits on its first action in view (SPEC §3.4 expected net).
-      const days = [
-        ['Fri 16 Oct · today', 15534, [['✗ 05:00', 'post', 'Wool Cloth', 1, 20, 30, null, 'missed the Fri 11:00–14:00 peak → moved to Sun (−4% vs original, 81% chance)'],
-          ['✓ 14:10', 'buy', 'Linen Cloth', 1, 20, 38, 203, 'then: post Sat 10:00, for the 18:00 peak'],
-          ['14:30', 'buy', 'Mithril Spurs', 3, 1, 30000, 7342, 'then: post Sat 10:00, for the 18:00 peak'],
-          ['14:30', 'post', 'Copper Rod', 1, 5, 4100, 6306, 'now: for the 19:00 peak (11:00 has passed)'],
-          ['14:30', 'de', 'Scouting Gloves of the Monkey', 2, 1, 800, 625],
-          ['20:00', 'craft', 'Heavy Grinding Stone', 1, 4, null, 134, 'uses 8 owned Heavy Stone\nthen: post Sat 11:00, for the 19:00 peak'],
-          ['20:30', 'craft', 'Bolt of Silk Cloth', 1, 2, 280, 194, 'buy 8 Silk Cloth on the AH · 5s 60c\nthen: post Sun 11:00, for the 19:00 peak'],
-          ['21:00', 'buy', 'Silk Cloth', 1, 40, 70, 730, 'then: post Sat 11:00, for the 19:00 peak']]],
-        ['Sat 17 Oct', 4787, [
-          ['10:00', 'post', 'Linen Cloth', 1, 20, 55, null, 'for the 18:00 peak · profit counted on the Fri 14:10 buy'],
-          ['10:00', 'post', 'Mithril Spurs', 3, 1, 45000, null, 'for the 18:00 peak · profit counted on the Fri 14:30 buy'],
-          ['11:00', 'post', 'Heavy Grinding Stone', 1, 4, 100, null, 'for the 19:00 peak · profit counted on the Fri 20:00 craft'],
-          ['11:00', 'post', 'Silk Cloth', 1, 40, 105, null, 'for the 19:00 peak · profit counted on the Fri 21:00 buy'],
-          ['11:00', 'post', 'Copper Bar', 1, 6, 1200, 3157, 'for the 19:00 peak · worth more there than the AH asks, so the chain buys its bars'],
-          ['12:00', 'buy', 'Copper Bar', 1, 2, 1000, null, 'Brugan · for crafting Runed Copper Rod'],
-          ['12:15', 'craft', 'Copper Rod', 1, 1, null, null, 'Brugan · for crafting Runed Copper Rod'],
-          ['12:20', 'mail', 'Copper Rod', 1, 1, null, null, 'Brugan · to Amaya · for crafting Runed Copper Rod'],
-          ['12:30', 'craft', 'Runed Copper Rod', 2, 1, 3700, 1630, 'Amaya\nbuy 1 Strange Dust + 1 Lesser Magic Essence on the AH · 17s\n1 Copper Rod from Brugan · not mailed yet\nthen: post Sun 10:00, for the 18:00 peak']]],
-        ['Sun 18 Oct', 143, [['10:00', 'post', 'Runed Copper Rod', 2, 1, 5900, null, 'for the 18:00 peak · profit counted on the Sat 12:30 craft'], ['11:00', 'post', 'Wool Cloth', 1, 20, 30, 472, 'for the 19:00 peak · replaces the missed Fri post'], ['11:00', 'post', 'Bolt of Silk Cloth', 1, 2, 450, null, 'for the 19:00 peak · profit counted on the Fri 20:30 craft'], ['12:00', 'post', 'Heavy Leather', 1, 5, 47, -329, 'for the 20:00 peak · below what you paid']]],
-        ['Mon 19 Oct', 1700, [['21:00', 'de', 'Green items', 2, 3, 800, 1700]]],
-        ['Tue 20 Oct', 2835, [['12:00', 'post', 'Mageweave Cloth', 1, 20, 120, 1877, 'new week, fresh slate · for the 20:00 raid-night peak'], ['19:00', 'buy', 'Elixir of Agility', 1, 5, 700, 958, 'flip → post Wed 12:00']]],
-        ['Wed 21 Oct', 0, [['12:00', 'post', 'Elixir of Agility', 1, 5, 1300, null, 'for the 20:00 peak · profit counted on the Tue 19:00 buy']]],
-        ['Thu 22 Oct', 1855, [['10:00', 'craft', 'Transmute: Iron to Gold', 2, 1, 4200, 1855, 'buy 1 Iron Bar on the AH · 42s\nthen: post Thu 11:00, for the 19:00 peak'], ['11:00', 'post', 'Gold Bar', 2, 1, 9500, null, 'for the 19:00 peak · profit counted on the Thu 10:00 craft']]],
-      ];
-      return `<table>${head([['When'], [''], ['Item'], ['Qty', 1], ['Each', 1], ['Total', 1], ['Net', 1], ...PAIR])}` + days.map(([d, tot, rows]) =>
-        `<tr class="day"><td colspan="6">${d}</td><td class="num">${net(tot)}</td><td colspan="2"></td></tr>` +
-        rows.map(([t, a, n, q, qty, each, e, follow]) =>
-          `<tr class="row"><td class="${t.startsWith('✓') ? 'pos' : t.startsWith('✗') ? 'neg' : 'muted'}">${t}</td><td>${act(a)}</td><td>${item(n, q, 140)}</td><td class="num">×${qty}</td><td class="num">${money(each)}</td><td class="num">${each === null ? money(null) : money(each * qty)}</td><td class="num">${net(e)}</td>${e === null && a !== 'post' ? DASHES : pair(n)}</tr>` +
-          (follow ? follow.split('\n').map(l => `<tr class="record"><td></td><td></td><td colspan="7">${l}</td></tr>`).join('') : '')).join('')
-      ).join('') + '</table>';
-    }
+    footer: `<span>funded <span class="pos">${money(pfTodayNet + pfWeekNet, true)}</span> · cost ${money(pfTodayCash + pfWeekCash)} · ${pfPct(pfTodayNet + pfWeekNet, pfTodayCash + pfWeekCash)}% on cash</span><span>capacity ${money(PF.capacity)} · ${money(PF.unallocated)} unallocated</span>`,
+    note: `<b>Portfolio</b>: the character you're playing's share of AHSync's one shared plan (Unified Portfolio Optimizer, spec v1.1). It <b>replaces the Today and Week tabs</b>. The list scrolls; the unclipped copy under States shows every row at once. The top line is the <b>only place the addon shows cross-character totals</b>, and it is a <b>cached copy</b> of AHSync's last portfolio snapshot (hover "snapshot 10:38"); the addon never adds up other characters' gold itself.
+      <ul><li><b>Positions</b>: what this character already has gold in, with its stage and next action. A position stays until it sells, whatever later refreshes say.</li>
+      <li><b>Today</b>: only what is realized today (posts and sales now, buy-and-relist now, craft-and-post now, disenchant now), funded rows only, with a <b>Status</b> badge and chain lines under each row. Rows the plan left out follow the funded ones, greyed, with their reason in <b>Status</b> (there is no red line in the addon): Grunt's Bracers of Defense (Required profession unavailable: Enchanting 150); Elixir of Fortitude (Insufficient liquidity: 3/day, 40 planned) is there too but hidden here by Min chance 50%, since its chance is 35%. A row with a sell record shows it as a grey line (Linen Cloth). <b>Min chance</b> in the header row only filters the view: a funded row it hides stays funded and still counts in the totals, and the totals line says how many it hid. <b>Needs a decision</b> follows Today's totals: an item that expired 3× in a row while cheapest; right-click it to Blacklist or Keep. Each section ends with a totals line over its funded rows only; <b>cost</b> is the cash they take and the % is profit on that cash. <b>Risk</b> is gold needed ÷ all your gold (31g 40s), as on the other tabs.</li>
+      <li><b>Next 7 days</b>: anything realized later, with buy and sell times on one line, then net → <b>adjusted</b> profit, net ÷ (1 + premium), and Status (Greater Magic Essence: Forecast too uncertain (1 week of data)). Within the immediate window (8 h by default, 24 h optional) there is no premium; beyond it the premium is 15% + 5% × the wait, in fractional days from now (Mon 10:38) to the expected sale hour: Thick Leather sells Thu 19:00, 3.35 d away, so 31.75%, and its 55s scores 55s ÷ 1.3175 = 41s 75c, above the 40s Silver Rod Brugan has today.</li>
+      <li><b>Footer</b>: what this character's funded rows add (today +12s 8c + 7 days +80s 54c = +92s 62c), their cash (20s 60c + 2g 31s 40c = 2g 52s; 92s 62c ÷ 2g 52s = 36.8% → 37% on cash), then the shared pool from the snapshot: capacity 6g 49s 40c (the 10g 67s 40c risk limit − 4g 18s committed; exposure lasts until a payout is collected), of which 24s 40c is left unallocated after the plan.</li></ul>`,
+    html: () => `<div class="pfsum">portfolio ${money(PF.base)} · ${PF.riskPct}% risk · capacity ${money(PF.capacity)} · ${money(PF.unallocated)} unallocated · <span class="muted" title="Cached: cross-character totals come from AHSync's last portfolio snapshot, not live">snapshot ${PF.snapshot}</span></div>
+      <div class="sec"><span>Positions</span><span class="muted">this character · ${PF_POS.length}</span></div>
+      <table>${head([['Item'], ['Qty', 1], ['Status'], ['Net', 1], ['Next']])}${PF_POS.map(pfPosRow).join('')}</table>
+      <div class="pfnote">committed ${money(pfPosBasis)} · est. ${net(pfPosNet)} · +${pfPct(pfPosNet, pfPosBasis)}% on committed capital</div>
+      <div class="sec"><span>Today</span><span class="muted">realized today · funded, then unfunded</span></div>
+      <table>${head([[''], ['Item'], ['Qty', 1], ['Each', 1], ['Total', 1], ['Net', 1], ...PAIR, ['Risk', 1], ['Status']])}${pfShownToday.map(pfTodayRow).join('')}</table>
+      <div class="pfnote">funded: cost ${money(pfTodayCash)} · profit ${net(pfTodayNet)} · ${pfPct(pfTodayNet, pfTodayCash)}% on cash · ${PF_TODAY.length - pfShownToday.length} hidden by Min chance</div>
+      <div class="sec"><span>Needs a decision</span><span class="muted">expired 3× in a row while cheapest · rules apply to every character</span></div>
+      <table><tr class="row"><td>${act('decide')}</td><td>${item('Heavy Leather', 1)}</td><td class="num">×5</td><td class="num">${money(47)}</td><td class="num">${money(235)}</td><td colspan="4"><span class="flag">NOT SELLING</span></td></tr>
+      <tr class="record"><td></td><td colspan="8">Expired 3× while cheapest · right-click: Blacklist or Keep</td></tr></table>
+      <div class="sec"><span>Next 7 days</span><span class="muted">net → adjusted · wait · premium</span></div>
+      <table>${head([[''], ['Item'], ['Plan'], ['Net', 1], ['Adjusted', 1], ['Status']])}${PF_WEEK.map(pfWeekRow).join('')}</table>
+      <div class="pfnote">funded: cost ${money(pfWeekCash)} · profit ${net(pfWeekNet)} · ${pfPct(pfWeekNet, pfWeekCash)}% on cash</div>`
   },
   Disenchant: {
     ctl: 'Min chance: 50% ▾',
@@ -391,7 +440,7 @@ const VIEWS = {
   Craft: {
     ctl: '',
     footer: `<span>1 planned · 3 of 4 known recipes pay now</span><span>Budget ${money(314000)}</span>`,
-    note: `<b>Craft</b>: the recipes the character you're playing knows that pay right now (SPEC §4.3, A27). AHSync's planned crafts come first (source <b>Plan</b>, A63): one row per chain for its final product, with every mat buy and intermediate craft, so each CRAFT buy on the AH panel's Shopping list is under one of them (Shopping totals an item's buys across chains, A65). The addon's own options follow. Each is costed on its own against what you carry (less what you keep for yourself); Today shares the mats out, best craft first. <b>Source</b>: <b>Owned</b> (all from your bags), <b>AH</b> (all bought) or <b>Mixed</b>. <b>Mats</b> = gold for the mats to buy at the AH's current prices, "—" when you own them all. Profit counts owned mats at their hold value; crafts stop where one more would lose money. The dashboard's Craft page adds who knows it, crafted reagents (chains) and cooldowns across characters.`,
+    note: `<b>Craft</b>: the recipes the character you're playing knows that pay right now (SPEC §4.3, A27). AHSync's planned crafts come first (source <b>Plan</b>, A63): one row per chain for its final product, with every mat buy and intermediate craft, so each CRAFT buy on the AH panel's Shopping list is under one of them (Shopping totals an item's buys across chains, A65). The addon's own options follow. Each is costed on its own against what you carry (less what you keep for yourself); the Portfolio tab's Today section shares the mats out, best craft first. <b>Source</b>: <b>Owned</b> (all from your bags), <b>AH</b> (all bought) or <b>Mixed</b>. <b>Mats</b> = gold for the mats to buy at the AH's current prices, "—" when you own them all. Profit counts owned mats at their hold value; crafts stop where one more would lose money. The dashboard's Craft page adds who knows it, crafted reagents (chains) and cooldowns across characters.`,
     html: () => `<table>${head([['Product'], ['Source'], ['×', 1], ['Mats', 1], ['Profit', 1], ...PAIR, ['Risk', 1]])}
       ${cr('Bronze Bar', 1, 'Plan', 44, 11132, 3868, 'buy 22 Copper Ore on the AH · 50s 82c<br>buy 22 Tin Ore on the AH · 60s 50c<br>craft 22 Copper Bar first<br>craft 22 Tin Bar first<br>post Sun 23:56, for the 19:00 peak')}
       ${cr('Copper Rod', 1, 'Mixed', 3, 2000, 5600, 'use 4 owned Copper Bar<br>buy 2 Copper Bar on the AH · 20s')}
@@ -437,9 +486,20 @@ const VIEWS = {
   },
 };
 
-function todayRow(a, n, q, qty, each, e, P, c, who, spend, note) {
-  return `<tr class="row"><td>${act(a)}</td><td>${item(n, q)}</td><td class="num">×${qty}</td><td class="num">${money(each)}</td><td class="num">${each === null ? money(null) : money(each * qty)}</td><td class="num">${net(e)}</td>${pair(n, P)}<td class="num">${risk(spend)}</td></tr>`
-    + (note ? note.split('\n').map(l => `<tr class="record"><td></td><td colspan="8">${l}</td></tr>`).join('') : '');
+function pfPosRow([n, q, qty, st, est, next]) {
+  return `<tr class="row"><td>${item(n, q, 150)}</td><td class="num">×${qty}</td><td><span class="badge ${st}">${PF_STAGE[st]}</span></td><td class="num">${net(est)}</td><td class="muted">${next}</td></tr>`;
+}
+// Status cell: the Funded badge, or the reason the plan left the row out (the dashboard's texts).
+const pfStatus = s => s ? `<td class="why"><span class="${s[0]}">${s[1]}</span></td>` : '<td><span class="badge funded">Funded</span></td>';
+function pfTodayRow([a, n, q, qty, each, e, P, spend, note, status, record]) {
+  return `<tr class="row${status ? ' unfunded' : ''}"><td>${act(a)}</td><td>${item(n, q)}</td><td class="num">×${qty}</td><td class="num">${money(each)}</td><td class="num">${money(each * qty)}</td><td class="num">${net(e)}</td>${pair(n, P)}<td class="num">${risk(spend)}</td>${pfStatus(status)}</tr>`
+    + (note ? note.split('\n').map(l => `<tr class="record"><td></td><td colspan="9">${l}</td></tr>`).join('') : '')
+    + (record ? `<tr class="record"><td></td><td colspan="9">${record}</td></tr>` : '');
+}
+function pfWeekRow([a, n, q, qty, plan, e, sale, cash, status]) {
+  const w = pfWait(sale), bp = pfPremium(w);
+  return `<tr class="row${status ? ' unfunded' : ''}"><td>${act(a)}</td><td>${item(n, q, 120)} <span class="muted">×${qty}</span></td><td class="muted">${plan}</td><td class="num">${net(e)}</td>` +
+    `<td class="num" title="Net ÷ ${(1 + bp / 10000).toFixed(4)}">→ ${net(pfAdjusted(e, w))}<span class="adj-sub">${(w / 100).toFixed(2)} d · ${(bp / 100).toFixed(2)}%</span></td>${pfStatus(status)}</tr>`;
 }
 function de(n, ilvl, buy, mats, ev, profit, live) {
   return `<tr class="row"><td>${item(n, 2, 120)}</td><td class="num">${ilvl}</td><td class="num">${money(buy)}</td><td class="muted">${mats}</td><td class="num">${money(ev)}</td><td class="num">${net(profit)}</td>${pair(n)}<td class="num">${risk(buy)}</td><td class="${live === '✓' ? 'pos' : 'muted'}">${live}</td></tr>`;
@@ -457,10 +517,74 @@ function inv(n, q, who, where, qty, paid, worth, plan) {
   return `<tr class="row"><td>${item(n, q, 140)}</td><td class="muted">${where}</td><td class="num">${qty}</td><td class="num">${paid === 0 ? '0 <span class="muted">found</span>' : money(paid)}</td><td class="num">${money(worth)}</td>${plan.includes('bound') || plan === 'Vendor' ? DASHES : pair(n)}<td>${plan}</td></tr>`;
 }
 
+// ---------- tooltip variants (section 3) ----------
+// Two-column tooltip lines (GameTooltip:AddDoubleLine). Differences: green above the price now, red below.
+const up = p => `<span class="pos">(+${p}%)</span>`, dn = p => `<span class="neg">(−${p}%)</span>`;
+const verb = (cls, t) => `<span class="lbl">Do:</span> <span class="v-${cls}">${t}</span>`;
+const copperRod = age => [['Market', `${money(4200)} (${age}) · ${money(4500)} 30-day ${up(7)}`], ['Best time to sell', `Fri 18–21 · ${money(4500)} ${up(7)} · pattern`],
+  ['Best time to buy', `Mon 03–07 · ${money(3800)} ${dn(10)} · early`], ['Activity', '6/day · 14 listed · 2.3 d supply', 1]];
+const COPPER_BAR = [['Market', `${money(1000)} (2 h) · ${money(950)} 30-day ${dn(5)}`], ['Best time to sell', `Sat 18–21 · ${money(1200)} ${up(20)} · established`],
+  ['Best time to buy', `Wed 04–08 · ${money(920)} ${dn(8)} · pattern`], ['Activity', '40/day · 150 listed · 3.8 d supply', 1]];
+// [caption, item, quality, data age, stale, Do lines [[left, right]], body lines [[label, value, muted]]]
+const TT = [
+  ['1. Bag item with a planned post', 'Copper Rod', 1, '2 h', false,
+    [[`${verb('post', 'POST')} 5 now at ${money(4100)}`, `<span class="pos">+${money(6306)}</span> · 58% chance`], ['', 'then nothing']], copperRod('2 h')],
+  ['2. Bag item planned for a later peak', 'Mithril Spurs', 3, '2 h', false,
+    [[`${verb('post', 'POST')} Sat 10:00`, `${money(45000)} · <span class="pos">+53%</span> vs now · 85%`], ['', 'for the 18:00 peak']],
+    [['Market', `${money(29500)} (2 h) · ${money(38000)} 30-day ${up(29)}`], ['Disenchant', `${money(18000)} ${dn(39)}`],
+     ['Best time to sell', `Sat 18–21 · ${money(45000)} ${up(53)} · pattern`], ['Best time to buy', `Tue 20–23 · ${money(28000)} ${dn(5)} · pattern`],
+     ['Activity', '3/day · 4 listed · 1.3 d supply', 1]]],
+  ['3. Hold', 'Mageweave Cloth', 1, '2 h', false,
+    [[`${verb('grey', 'HOLD')} until next Tue`, 'no window pays this week']],
+    [['Market', `${money(110)} (2 h) · ${money(115)} 30-day ${up(5)}`], ['Best time to sell', `Tue 20–22 · ${money(120)} ${up(9)} · pattern`],
+     ['Best time to buy', `Sun 03–07 · ${money(102)} ${dn(7)} · early`], ['Activity', '55/day · 120 listed · 2.2 d supply', 1]]],
+  ['4. Craft mat in bags (on Brugan, who knows the recipe)', 'Copper Bar', 1, '2 h', false,
+    [[`${verb('craft', 'CRAFT')} 5 Copper Rod`, `<span class="pos">+${money(971)}</span> · 90%`], ['', `mats ${money(248)} · then post Sat 10:00`]], COPPER_BAR],
+  ['5. Mail step (on Amaya, who holds the bars)', 'Copper Bar', 1, '2 h', false,
+    [[`${verb('mail', 'MAIL')} 6 to Brugan`, 'for crafting Copper Rod']], COPPER_BAR],
+  ['6. Disenchant', 'Scouting Gloves of the Monkey', 2, '2 h', false,
+    [[verb('de', 'DISENCHANT'), `<span class="pos">+${money(625)}</span> · mats ${money(1425)} · 100%`]],
+    [['Market', `${money(800)} (2 h) · ${money(1100)} 30-day ${up(38)}`], ['Disenchant', `${money(1425)} ${up(78)}`],
+     ['Best time to sell', `Sat 17–21 · ${money(1230)} ${up(54)} · early`], ['Best time to buy', `Mon 03–07 · ${money(710)} ${dn(11)} · early`],
+     ['Activity', '210/day · 400 listed · 1.9 d supply', 1]]],
+  ['7. AH listing on your Shopping list (hovering a browse row)', 'Copper Bar', 1, '2 h', false,
+    [[`${verb('buy', 'BUY')} ≤ ${money(1000)} · for Copper Rod`, 'funded · 6 needed']],
+    [['Market', `${money(980)} now · ${money(950)} 30-day ${dn(3)}`], ['Best time to sell', `Sat 18–21 · ${money(1200)} ${up(22)} · established`],
+     ['Best time to buy', `Wed 04–08 · ${money(920)} ${dn(6)} · pattern`], ['Activity', '40/day · 150 listed · 3.8 d supply', 1]]],
+  ['8. Unfunded alternative (on Brugan)', 'Lesser Mana Potion', 1, '2 h', false,
+    [[`${verb('kept', 'UNFUNDED')} craft · +${money(80)}`, '<span class="amber">exceeds risk tolerance</span>'], ['', `needs ${money(4500)}, ${money(2440)} left`]],
+    [['Market', `${money(520)} (2 h) · ${money(540)} 30-day ${up(4)}`], ['Best time to sell', `Sat 19–22 · ${money(580)} ${up(12)} · pattern`],
+     ['Best time to buy', `Thu 02–06 · ${money(490)} ${dn(6)} · early`], ['Activity', '10/day · 25 listed · 2.5 d supply', 1]]],
+  ['9. Kept item', 'Refreshing Spring Water', 1, '2 h', false,
+    [[`${verb('kept', 'KEPT')} for yourself`, 'keep at least 10'], ['', 'right-click to change']],
+    [['Market', `${money(25)} (2 h) · ${money(24)} 30-day ${dn(4)}`], ['Best time to sell', `Sun 19–22 · ${money(27)} ${up(8)} · early`],
+     ['Best time to buy', `now · cheaper than Tue 03–07 (${money(26)})`], ['Activity', '30/day · 200 listed · 6.7 d supply', 1]]],
+  ['10. Vendor', 'Broken Fang', 0, '2 h', false,
+    [[`${verb('grey', 'VENDOR')} ${money(12)} each`, 'nothing better']],
+    [['Market', `none listed · ${money(10)} 30-day`], ['Activity', '0/day · 0 listed', 1]]],
+  ['11. No market data', 'Glimmering Mail Pauldrons', 2, '2 h', false, [], [['<span class="tt-only">no market data yet</span>', '']]],
+  ['12. Stale data (more than 24 h old)', 'Copper Rod', 1, '2 d', true,
+    [[`${verb('post', 'POST')} 5 now at ${money(4100)}`, `<span class="pos">+${money(6306)}</span> · 58% chance`], ['', 'then nothing']], copperRod('2 d')],
+  ['13. AH listing on none of your lists: no Do line', 'Bolt of Linen Cloth', 1, '2 h', false, [],
+    [['Market', `${money(1150)} now · ${money(1200)} 30-day ${up(4)}`], ['Best time to sell', `Sat 17–21 · ${money(1300)} ${up(13)} · established`],
+     ['Best time to buy', `Tue 08–12 · ${money(1080)} ${dn(6)} · pattern`], ['Activity', '26/day · 45 listed · 1.7 d supply', 1]]],
+  ['14. Bag item inside its best sell window (Fri 18:30)', 'Copper Rod', 1, '2 h', false,
+    [[`${verb('post', 'POST')} 5 now at ${money(4100)}`, `<span class="pos">+${money(6306)}</span> · 58% chance`], ['', 'then nothing · best time to sell is now']],
+    [['Market', `${money(4200)} (2 h) · ${money(4500)} 30-day ${up(7)}`], ['Best time to sell', `now (Fri 18–21) · ${money(4500)} · pattern`],
+     ['Best time to buy', `Mon 03–07 · ${money(3800)} ${dn(10)} · early`], ['Activity', '6/day · 14 listed · 2.3 d supply', 1]]],
+];
+function ttip([cap, n, q, age, stale, dos, body]) {
+  return `<div><div class="tt-cap">${cap}</div><div class="tooltip"><div class="tt-name" style="color:var(--q${q})">${n}</div><hr>` +
+    `<div class="tt-hdr"><span>AHProfit</span><span class="tt-age${stale ? ' old' : ''}">data ${age} old <span class="${stale ? 'amber' : 'pos'}">●</span></span></div>` +
+    dos.map(([l, r]) => `<div class="tt-line tt-do"><span>${l}</span><span>${r}</span></div>`).join('') +
+    body.map(([l, v, dim]) => `<div class="tt-line${dim ? ' dim' : ''}"><span>${l}</span><span>${v}</span></div>`).join('') + '</div></div>';
+}
+document.getElementById('tt-variants').innerHTML = TT.map(ttip).join('');
+
 const tabs = document.getElementById('tabs');
 const spacer = tabs.querySelector('.spacer');
-let saved = 'Today';
-try { saved = localStorage.getItem('ahp-mock-tab') || 'Today'; } catch (e) {}
+let saved = 'Portfolio';
+try { saved = localStorage.getItem('ahp-mock-tab') || 'Portfolio'; } catch (e) {}
 Object.keys(VIEWS).forEach(name => {
   const b = document.createElement('button');
   b.className = 'tab'; b.textContent = name; b.setAttribute('role', 'tab');
@@ -468,17 +592,23 @@ Object.keys(VIEWS).forEach(name => {
   tabs.insertBefore(b, spacer);
 });
 function show(name) {
-  if (!VIEWS[name]) name = 'Today';
+  if (!VIEWS[name]) name = 'Portfolio';
   const v = VIEWS[name];
   document.getElementById('view').innerHTML = v.html();
+  document.getElementById('body').className = name === 'Portfolio' ? 'body scrolls' : 'body';
   document.getElementById('footer').innerHTML = v.footer;
   document.getElementById('tabnote').innerHTML = v.note;
   document.getElementById('tabctl').textContent = v.ctl;
   tabs.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t.textContent === name));
   try { localStorage.setItem('ahp-mock-tab', name); } catch (e) {}
 }
+// The unclipped copy of the Portfolio tab under States: the same content at full height.
+document.getElementById('pf-full-tabs').innerHTML = Object.keys(VIEWS).map(n => `<span class="tab"${n === 'Portfolio' ? ' aria-selected="true"' : ''}>${n}</span>`).join('')
+  + `<span class="spacer"></span><span class="dropdown">${VIEWS.Portfolio.ctl}</span>`;
+document.getElementById('pf-full-view').innerHTML = VIEWS.Portfolio.html();
+document.getElementById('pf-full-footer').innerHTML = VIEWS.Portfolio.footer;
 document.querySelectorAll('[data-m]').forEach(el => el.innerHTML = money(+el.dataset.m));
-// addon.html#Week opens that tab directly.
+// addon.html#Craft opens that tab directly.
 show(decodeURIComponent(location.hash.slice(1)) || saved);
 </script>
 </body>

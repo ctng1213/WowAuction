@@ -33,3 +33,8 @@
 
 
 # Cloud-ready intelligence amendment (SPEC §5.0 contents, bulk reads, cloud boundary): done
+
+# Unified portfolio optimizer (SPEC §3.4D, M9-M15): nothing built yet
+PF1-PF27 PO1-PO13 DG1-DG7
+W14-W15 EX17-EX18 FM38-FM40 SEC11
+D71-D79 A76-A84 UI16-UI19 TT8-TT21

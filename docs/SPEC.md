@@ -1,4 +1,4 @@
-# WowAuction — Spec (draft v0.4, 2026-10-16)
+# WowAuction — Spec (draft v0.5, 2026-10-19)
 
 Two pieces:
 
@@ -16,6 +16,7 @@ What it recommends:
 1. buy and disenchant
 2. craft and sell now
 3. a weekly plan: buy or craft now and sell later, plus **when to sell what you already own** for the most profit
+4. **planned:** one funded portfolio across all your characters, Today and the next 7 days together, that makes the most timing-adjusted profit within your risk tolerance (§3.4D)
 
 Names are placeholders.
 
@@ -314,7 +315,8 @@ A full refresh builds into staging tables and swaps them in with one transaction
 | Full refresh time | ≤ 120 s for one market of about 9k items with 90 days of hourly history (it runs once a day in the background; weekly patterns and the 24 × 8 curve for every item, §5.0) |
 | Incremental update | ≤ 1 s (a whole re-plan from the published intelligence: 0.96 s measured on a real 15k-item market, 2026-10-18; applying a full in-game scan's 12k prices adds 0.13 s, IU6) |
 | Dashboard request | ≤ 50 ms (precomputed JSON, paged at 100 rows) |
-| `MarketIntelligence.lua` size | ≤ 2 MB (`PortfolioPlan.lua` ≤ 200 KB) |
+| `MarketIntelligence.lua` size | ≤ 2 MB, the planned candidate universe and dependency graph included (§3.5, FM40); `PortfolioPlan.lua` ≤ 200 KB, the planned portfolio snapshot and positions included |
+| Portfolio selection (planned, §3.4D.4) | inside the full refresh's 120 s and the incremental update's 1 s; `tools/bench.py` measures it with `candidate_export` and the whole universe of the 9k-item world (§6 item 16) |
 
 Storage rules:
 - SQLite runs in WAL mode.
@@ -378,6 +380,18 @@ mail_sent(event_id PK, char_id, to_char, key, qty, at, action_id, confirmed)
 status(topic PK, level, kind, data, at)                      -- Status page lines; data = JSON fields, rendered by views (§8.5)
 fetch_failures(market, hour, failures, last_error, last_at,  PK(market,hour))   -- hour files to retry (§5.2)
 ```
+
+**Planned tables** (M14, §3.4D.9), added by a migration when positions are built:
+
+```
+positions(position_id PK, char_id, market, cand_id, strategy, key, state, opened_at, units, units_left, cost_total, cost_left,
+          expected_net_open, expected_net_now, target_window_ms, latest_window_ms, next_action, realized, closed_at)
+position_lots(position_id, event_id, units, unit_cost, at,    PK(position_id,event_id))   -- a matched purchase or craft event
+alternatives(market, cand_id, char_id, list, reason, data,    PK(market,cand_id))          -- unfunded candidates and their D.6 reason, staged and swapped like plan_new
+```
+
+- A position's `state` is one of §3.4D.9's eight. `cost_left` is what you paid for the units still held, listed, in the mail or sold but not yet paid out; the sum over open positions is the committed capital (§3.4D.1). Positions are kept 90 days after they close, like actions.
+- Lots are upserted by `event_id`, so reading the same SavedVariables twice never adds a lot twice (PO8).
 
 - Candle and `current` `src` is `ahf` or `local`.
 - Volume `src` is `ahf` (Premium depth), `books` (own order-book diffs) or `mail`, ranked in that order of trust; `qty_drop` rows hold listing turnover, never sales (§3.3.1). `conf` is `high`, `medium` or `low`.
@@ -643,7 +657,16 @@ Missing observation periods never count as zero sales or zero supply; they are l
 - **Insufficient evidence** (strength None, shown "—" with "insufficient evidence"): fewer than 3 weeks of data, fewer than 24 held-out closes, or a flat error of 0.
 - Consistent patterns score high even when the premium is small; a big premium that doesn't repeat scores low.
 
-**Buying windows.** The mirror of selling windows (§3.3.4): the slots whose price ratio is at most `min(how) ÷ window_threshold` (within about 11% of the cheapest slot), joined into windows that may cross midnight, ranked by lowest average `how`, top 3. Flips buy in them (§3.4C.2). With no pattern there are none, and a buy is planned for now.
+**Buying windows.** The mirror of selling windows (§3.3.4): the slots whose price ratio is at most `min(how) ÷ window_threshold` (within about 11% of the cheapest slot), joined into windows that may cross midnight. **Built:** they are ranked by lowest average `how`, and the top 3 are kept. Flips buy in them (§3.4C.2). With no pattern there are none, and a buy is planned for now.
+- **Planned (M11): ranked by actionable value, not by price** (W14). The cheapest hour is worth little when almost nothing is listed in it. Each qualifying window gets:
+  - an **expected price** `e`: the price level × the window's average `how` × the trend factor, as `slot_price` prices a window (§3.4C.1);
+  - an **executable quantity** `x` = `max(1 stack, floor(max_supply_share × others' listed units in the window))`. This is §3.4's liquidity rule applied to the window's supply (current supply × the window's mean `supply_how` ÷ `supply_how` now), and it is 1 stack when the supply is unknown;
+  - its **confidence** `c` (§3.3.5, as a fraction, with the window's weeks as the pattern component);
+  - a **value** = `max(0, s × (1 − cut) − e) × x × c`, where `s` is the expected price at the item's top selling window, or the price level when it has none.
+
+  Windows rank by value, highest first (ties: the lower `e`, then the earlier start slot). The top `top_buy_windows` (config, 3) are kept, and a window worth 0 is dropped. Example: level 100 c, top selling window 1.2 (`s` = 120 c, 114 c after the cut), a reference stack of 5, confidence 0.8. Mon 03–06 at 0.85 with 10 listed scores (114 − 85) × 5 × 0.8 = 116. Thu 04 at 0.93 with 100 listed scores (114 − 93) × 50 × 0.8 = 840, so Thu ranks first although Mon is cheaper.
+- **Every window then carries the same fields** (planned, M11): weekday, start, end, expected price, executable quantity, confidence, strength (§3.3.4) and the intelligence's `built_ms` as its forecast time. Selling windows keep their `sell_score` ranking (§3.3.4) and the top `top_sell_windows` (3); their executable quantity is the window's liquidity cap (W15).
+- **Forecasts are reference data, not rules.** A live price below every buy window's expected price is a buy now (§4.0, A76), and the next historical peak is not always the actionable one: windows are turned into actual upcoming hours from now (§3.4C), and the wait to each is what the timing premium prices (§3.4D.2).
 
 **Price volatility and long windows.** `volatility_30` = standard deviation ÷ mean of the daily medians over 30 days; 7-, 30- and 90-day medians and nearest-rank percentiles. A close outside 10 × p90 or below 10% of p10 is a suspect price (§5.2), excluded from all statistics until a second observation confirms it.
 
@@ -672,7 +695,7 @@ Missing observation periods never count as zero sales or zero supply; they are l
 - **Flips:** units bought ≤ the liquidity cap of the windows they'll sell in, minus units you already hold or have planned for that item.
 - **Crafts:** the craft count already stops when an extra craft stops paying (the product's chance falls as more is posted); the planned output also counts against the product's cap.
 - **Disenchant:** the **mats** from all disenchant buys together stay within each mat's cap for its sell windows; buys are taken best profit first until a mat's cap is reached.
-- **Portfolio (§3.4C.4):** the allocation spends one shared capacity per item and window across characters, so two characters never plan to fill the same demand, and no more than `max_item_capital_share` (config, 0.25) of total gold goes into items whose supply/volume ratio is above `slow_market_days` (config, 7).
+- **Portfolio (§3.4C.4):** the allocation spends one shared capacity per item and window across characters, so two characters never plan to fill the same demand, and no more than `max_item_capital_share` (config, 0.25) of total gold goes into items whose supply/volume ratio is above `slow_market_days` (config, 7). The planned portfolio optimizer (§3.4D) spends this same ledger and these same caps; it adds no second one.
 - Volume estimates are uncertain inputs: caps use the estimate as given, and a low `volume_confidence` lowers the result's confidence (§3.3.5), never inflates it.
 
 All money is net of fees. Estimates come with a confidence level.
@@ -716,11 +739,14 @@ All money is net of fees. Estimates come with a confidence level.
 - **Risk %** = gold the action spends ÷ the total gold across all your characters (sum of `characters.gold`) × 100, shown to one decimal place.
   - The gold spent is the total for a buy or DE buy, the mat gold for a craft, and the deposit for a post (the only gold a post can lose). It is 0 for a vendor sale and for mail. On Today and Week a chain's row risks the chain's gold: its mat buys for a craft (D62), its buy for a flip; a post row risks its deposit (`fees.deposit_copper` of the item's vendor sell price, units and the post's duration; 0 when the vendor price or duration is unknown, e.g. a kept history row) in `plan_chains.row_money` and `ViewModel.RowMoney` alike (D62, A72).
   - Rows above `high_risk_pct` (25%) show their risk in amber.
-  - **No buy risks more than `max_risk_pct` (config, 25%) of all your gold.** A flip, mat buy or buy-to-disenchant takes the cheapest auctions first and stops before the next one would cross it, so one stack is the default size but a partial stack is fine (R19). Posting stock you already own risks only its deposit.
+  - **Built until M10: no buy risks more than `max_risk_pct` (25%) of all your gold.** A flip, mat buy or buy-to-disenchant takes the cheapest auctions first and stops before the next one would cross it, so one stack is the default size but a partial stack is fine (R19). The plan's crafts (C24), the Craft page (D45, D46) and the addon's own crafts (A64) use the same cap. Posting stock you already own risks only its deposit.
+  - **Planned (M10): the portfolio exposure budget replaces the per-buy cap** (§3.4D.1). `max_risk_pct` is removed. One limit, `risk_tolerance` × the capital base, caps all the gold tied up at once, across every action and character, and the allocation decides how it is shared. R19, C24, D45, D46 and A64 change with it: their sizes then come from the remaining capacity, not from 25% per buy. `max_item_capital_share` and `slow_market_days` stay (market capacity, above). **Risk %** stays as a display: the gold the row needs ÷ all your gold.
 
 **A. Disenchant.** For each disenchantable item on the AH (AHF snapshot or own scans), where at least one of your characters has the Enchanting skill to do it:
 
 `EV = Σ P(mat)·E[qty]·sellValue(mat)` and `profit = EV − buy`. Here `P(mat)` is the drop chance from the DE table.
+
+**Planned (M15): research is never gated by profession** (D71, PF2). Every disenchantable item is evaluated whether or not a character can disenchant it, and the Disenchant page lists it with its calculations, sorting, filters and details unchanged, under the notice "Research only: no character has Enchanting yet. These rows enter the funded plan once one does." Only funding needs a character with Enchanting at the item's skill (§3.4D.4, PF9). R2 changes with it: the item is listed, but not funded. The addon's Disenchant tab already works this way (A23).
 
 **B. Craft now.** For each recipe in `known_recipes` for any of your characters:
 
@@ -782,7 +808,7 @@ The rows are sorted by **expected net, highest first**. Ties go to the higher `P
 2. **Buy to flip**: items whose expected profit (`E_post` of posting now or at an upcoming peak slot − buy cost) is at least `min_flip_margin` (20%) × buy cost. Typical sources are a weekday or hour pattern, a dip below `p10_30`, or one stack dumped below the next price level (relisted now, R24). They are ranked by expected profit × `conf` (as a fraction).
    - **How a flip is built** (`engine/flips.py`): it buys other sellers' auctions now, cheapest first, and posts each one where it is worth most, with the auctions it bought taken out of the competition: **posting now** or a selling window. Posting now is priced for the book left after the buy (`flips.relisted`: `post_price` of the cheapest listing left, `med7` and `p90_30`, after your record; no room when nothing is left to price by), with the posting-now window's chance and duration. An auction is added only while it fits the spend limit, an option with room, and its own expected profit is at least `min_flip_margin` × its cost; prices only rise along the book, so the first one that fails ends the flip. A window still wins when it pays more (R24) by at least its required uplift over relisting now (§3.4C.1, R26), and an item without a selling window can still flip now. A flip's post must beat disenchanting or vendoring the stock: an auction joins only when its chosen option's expected value per unit exceeds that per-unit value (as in the sell plan), else it is a disenchant buy, not a flip (R27). Example (R24): Linen 1 × 20 at 10 c below 5 × 20 at 50 c, med7 48 c, p90 55 c, P 0.9: buy the 10 c stack and post it now at 49 c, expected 0.9 × 20 × 49 × 0.95 + 0.1 × (20 × 10 − 10) = 856.9 c against 200 c; with the next level at 50 c and the cheapest at 45 c it is no flip (856.9 < 1.2 × 900, R25).
    - **The actions**: a `buy` now and its `post`s, chain `flip:<key>`; a post for now has no window (`window_start_ms` and `peak_ms` empty), is due now and lasts the shortest duration covering the posting-now window. Like any post planned for now, the status pass marks it missed 24 h after its post time (§3.4.0). The Flip page's row says "relist now, under the listings left" for it.
-   - **Who buys**: each item gets at most one flip, bought by the character with the most budget left (ties: character id), so two characters never fill the same demand (R16). The spend limit is that character's budget and `max_risk_pct` of all your gold (R9, R19). The flips' posts share the windows' capacity with your own stock (PL4).
+   - **Who buys**: each item gets at most one flip, bought by the character with the most budget left (ties: character id), so two characters never fill the same demand (R16). The spend limit is that character's budget and `max_risk_pct` of all your gold (R9, R19; until M10, when the exposure budget replaces it, §3.4 Risk). The flips' posts share the windows' capacity with your own stock (PL4).
    - The buy carries the chain's expected profit; each post also records its own net against what its units cost, for when the buy has left the view (§3.4 expected net).
 3. **Craft to sell later**: buy mats on cheap slots, craft, and post at the product's peak slot. It uses all three sourcing paths (B).
    - **Mats to buy appear as their own buy actions, scheduled before the craft** and linked to it by `parent_id`, e.g. "20:15 buy 8 Silk Cloth → for Bolt of Silk Cloth". A mat buy can be on an earlier, cheaper slot.
@@ -791,13 +817,197 @@ The rows are sorted by **expected net, highest first**. Ties go to the higher `P
    - **Every planned craft has a follow-up for its product within 7 days after the craft**, linked by `parent_id`. It is a post, or a disenchant for craft → DE.
    - The follow-up also has to fall inside the plan window. A craft whose product has no worthwhile slot in time is not planned.
    - This applies to crafts listed for right now (B) as well. When the craft is done, the follow-up stays planned (§3.4.1).
-   - **How chains are built** (`engine/craft_plan.py`): each recipe's output is valued at the product's best selling window in the 7 days (or posting now) that still has room in the shared capacity, a window beating posting now only by its required uplift (§3.4C.1, R26); output no window has room for is worth nothing, so the craft count stops where capacity ends. Chains are taken best expected profit × confidence first. A chain's mat gold comes from its crafter's budget and stays within `max_risk_pct` (§3.4 Risk); the mats it uses (owned or bought) are gone for later chains and for flips.
+   - **How chains are built** (`engine/craft_plan.py`): each recipe's output is valued at the product's best selling window in the 7 days (or posting now) that still has room in the shared capacity, a window beating posting now only by its required uplift (§3.4C.1, R26); output no window has room for is worth nothing, so the craft count stops where capacity ends. Chains are taken best expected profit × confidence first. A chain's mat gold comes from its crafter's budget and stays within `max_risk_pct` (§3.4 Risk; until M10); the mats it uses (owned or bought) are gone for later chains and for flips.
    - **Steps:** each intermediate's crafter buys that intermediate's mats (none when it is made from your own stock), the final crafter (`craft.gather`'s choice, C22) buys the rest, then the intermediate crafts and their mail, then the mail of owned mats other characters hold (§3.4B, C22), then the craft, a minute apart from now; the post follows at the product's window. The craft carries the chain's expected profit; mat buys, intermediate crafts and mail carry none (D22). On Today and Week the chain is one row (§3.4B Today list).
 4. **Capital and time limits**: a budget per character (default: the character's gold, overridable in config `[budgets]`) and an optional maximum number of actions per day (`max_actions_per_day`, 0 = no limit). The allocation also spends each owned unit only once, either on a craft or in the sell plan (§3.4 hold value).
 
 Output is a calendar of **actions**: `when · character · action (buy/craft/post/DE/vendor/mail/hold) · item · qty · each · total · expected net · P' · risk % · confidence`. The Week view shows it like Today (`plan_views.week_view`, `ViewModel.Week`; D63, D64, D65, A72, A73): one card per chain on its carrier's day with its steps as lines, posts as cards of their own on their day (a chain's follow-up post says "profit counted on the Mon 10:38 craft" while that craft is in view), mail as the sender's card, and no holds or vendor sales. Each dashboard card names its character (short form, D65); the addon's Week is the character you play and shows none. Totals are shown per day, per category and per character, over the cards shown.
 
 **Building and storing the plan** (`engine/week.py`, `recommend/plan.py`). Each full refresh plans each market's characters together, in this order, with one capacity ledger and one set of budgets: a first sell plan of everything you own gives each item's hold value; crafts use owned mats at that value; the sell plan covers the stock that is left; flips buy from the auctions the crafts left. Facts are built only for items the plan can use: your stock, your recipes' products and mats, and **flip candidates** (`recommend.plan.flip_candidate`): items whose best peak hour (the price level × its price ratio × the most a week of trend can add, after the cut) could beat the cheapest auction by `min_flip_margin` (`window_candidate`), or whose book's second price level `p2` could: `(p2 − 1) × (1 − cut) × chance ≥ (1 + min_flip_margin) × cur`, `chance` being the item's posting-now chance for one reference stack (`now_candidate`, R24, R25). Neither admits a suspect `cur` (FM5). The market file's flip offers (EX11) still come from window candidates only, so its format is unchanged. Rule `ignore` also takes the item out of every craft as a mat. The plan is staged in `plan_new` and published with the intelligence and pages in one transaction; it replaces the market's characters' `pending` and `late` actions, while `done`, `partial`, `missed` and `skipped` ones stay as history (§3.4.1). A chain's later steps name its first action as their parent.
+
+#### 3.4D The portfolio optimizer (planned)
+
+**Nothing in this section is built yet** (milestones M9–M15, §7). It turns §3.4A–C into one decision: **which combination of actions, across all your characters, Today and the next 7 days together, makes the most timing-adjusted expected net profit without tying up more gold than your risk tolerance allows.** It doesn't sort by return on investment, and it doesn't show each list's best trades on their own. A profitable trade that isn't funded is shown as an alternative, with the reason it was left out.
+
+When built, **the funded selection is the plan.** Its actions replace §3.4C.4's allocation in `actions` and `PortfolioPlan.lua` (pending and late, as today), so Today, Week, the Craft and Flip pages and the addon all read one plan. Unfunded candidates are stored as alternatives with their reason, never as actions.
+
+It extends what is built. Where it needs something that already exists, it reuses it:
+
+| It needs | Already built as |
+|---|---|
+| owned materials valued once, at what they could fetch, never free | hold value = opportunity cost (§3.4 hold value, reagent cost) |
+| one market capacity per item and window, shared by all characters | §3.4 market capacity and the §3.4C.4 ledger (PL4) |
+| a multistage strategy funded once, as one plan | chain profit counted once (§3.4 expected net, VW1, CI3); crafting chains (§3.4B) |
+| mail between characters as a task, and mail on its way as the recipient's | mail is the sender's row (§3.4B Today list); matching (§3.4.1, T21); transit (§3.4B, T22) |
+| live prices that create opportunities outside buy windows | flip now (§3.4C.2, R24, A69) and the addon's live repricing (§4.0) |
+| sunk costs are not avoidable costs | "below what you paid" is still planned (§3.4.1 follow-up, T7) |
+| never infer a sale from missing inventory | untracked changes (§2.2.1, FM21, D51) |
+| idempotent, deduplicated events | event ids (§5.2 rule 2) |
+| no history rebuild when only eligibility or risk change | the incremental re-plan from the published intelligence (§3.1.1, IU13) |
+| the same numbers on the desktop and in the addon | shared scenarios (§8.1) and LP1 |
+| Disenchant visible without an enchanter, in the addon | A23 |
+
+The examples below use the mockups' world: Monday 10:38, Amaya 21 g and Brugan 10 g 40 s in hand (31 g 40 s), 4 g 18 s committed in positions, risk tolerance 30%.
+
+**D.1 Accounting and the risk budget** (PF8, PF22, PF23).
+
+| Term | Definition | Mockup |
+|---|---|---|
+| Cash gold | `characters.gold` summed over your characters, each at its last snapshot | 31 g 40 s |
+| Spendable gold of a character | its `[budgets]` value when set (§3.6), else its gold | Brugan 10 g 40 s |
+| Committed capital | the remaining cost basis of open positions (D.9): what you paid for the units still held, listed, in the mail, or sold with their gold still waiting in the mailbox | 4 g 18 s |
+| Capital base | cash gold + committed capital | 35 g 58 s |
+| Risk budget (exposure limit) | capital base × `risk_tolerance` (config, 0.30) | 10 g 67 s 40 c |
+| Remaining capacity | max(0, risk budget − committed capital) | 6 g 49 s 40 c |
+| Available new investment | min(remaining capacity, spendable gold − the gold already reserved by funded actions not yet executed, deposits included) | 6 g 49 s 40 c |
+
+- The pasted spec's example: gold 2,000 g, committed 250 g, 30% → base 2,250 g, budget 675 g, available 425 g (PF8).
+- **Exposure is cost, never the expected loss.** Gold in stock or on the AH is locked until the item sells (at least the 2 h shortest auction, usually a day) and then until the payout is taken from the mailbox. A funded row's exposure is its **gold needed**: its buys, the mats it buys and its deposits, all from the acting character. A post of stock you own needs only its deposit. The gold moves into committed capital when it is spent (a position opens, D.9). A unit's cost leaves it only when its payout is **collected** (T17), at the moment the gold reaches cash gold, so the capital base never dips while gold waits in the mailbox. Mageweave Cloth, 25 bought for 30 s with 15 sold and their 25 s 65 c not yet collected, still commits all 30 s: 12 s for the 10 held and 18 s for the 15 sold.
+- **Cost basis, not mark-to-market.** A position counts what you paid, not today's price.
+- **Found items** (cost 0: looted, farmed, held before tracking) add nothing to the capital base, the risk budget or spendable gold. Their worth shows only as expected profit and in Inventory's Worth. Their opportunity cost as a craft mat is unchanged: the hold value (PF22).
+- **Gold stays on its character.** A row is funded from the gold of the character who acts, and the plan never moves gold between characters (items are still mailed, §3.4B). A row the account could afford but its character can't is "Insufficient gold on <character>" (D.6).
+- **A shown suggestion reserves nothing durably.** Gold for funded but unexecuted rows is reserved only inside one allocation run; the next run starts again from what you hold. Only a confirmed purchase or craft commits gold (a position, D.9).
+- **No reinvestment of projected proceeds.** v1 funds only from gold in hand: a sale planned for Thursday doesn't fund a Friday buy.
+- `max_item_capital_share` and `slow_market_days` (§3.4 market capacity) still cap slow markets inside the budget.
+- **Risk tolerance** is `risk_tolerance` in config.toml. The Portfolio page's dropdown (10–50%, §3.5) writes it through `POST /api/risk_tolerance` and re-runs the allocation without reading history (SEC11, D79): only selection changes, never the candidates (PF1).
+
+**D.2 The timing premium** (PF17–PF20).
+
+Profit later is worth less than profit now: it ties gold up longer, and the forecast may miss. So every candidate is scored by its **adjusted profit** = expected net ÷ (1 + premium):
+
+- **wait** = the days from now to the expected sale hour, which is the start of the selling window the sale is planned in ("now" for a post now). It is fractional, rounded half up to 0.01 d: `floor(minutes × 100 ÷ 1440 + 0.5) ÷ 100`.
+- **premium** = 0 when wait × 24 ≤ `immediate_hours` (config 8, the posting-now window; 24 is allowed), else `premium_base` (0.15) + `premium_per_day` (0.05) × wait: 20% at 1 day, 30% at 3 days, 50% at 7 days.
+- Adjusted profit is a float (§3.3), rounded half up only when shown.
+
+Examples:
+- 40 s now against 55 s in exactly 3 days: 55 s ÷ 1.30 = 42 s 31 c, so waiting wins (PF17).
+- At Mon 10:38, Thick Leather sells in the Thu 19:00–22:00 window. The wait is 4,822 min ÷ 1,440 = 3.349 → 3.35 d, so the premium is 15% + 5% × 3.35 = 31.75%, and 55 s ÷ 1.3175 = 41 s 75 c. That still beats the 40 s Silver Rod Brugan can make today (PF18).
+- A post for tonight's 18:00 peak waits 0.31 d (7.37 h; 7.44 h after rounding), inside the 8 h window, so its premium is 0 (PF19).
+
+Two rules come with it:
+- **The premium is the only timing rule.** No extra rule says weekly rows must beat the best Today row, and neither list has a fixed count: Today and the week compete in one pool.
+- **Trust and time are different axes, and both apply.** The premium prices *time*. Whether a window's forecast can be *trusted* is still §3.4C.1's gate (R26: `window_margin`, `pattern_full_weeks`): a window that doesn't beat posting now by its required uplift is not eligible, whatever its adjusted profit. The pasted spec's §7.4 drops fixed counts and the "beat Today" rule; it does not drop the trust gate. A **Buy for later** candidate (D.3) has no posting-now alternative to beat, because it exists only for its window, so it needs that window to be at least a "pattern" (3 weeks of data, §3.3.4). Both cases are excluded as "Forecast too uncertain (N weeks of data)" (D.6). Greater Magic Essence's Sunday peak, seen in 1 week, is excluded that way (PF20).
+
+**D.3 Candidates (stage A: generation)** (PF1–PF4).
+
+Candidates are generated broadly, **independently of your risk tolerance and of which professions your characters have**:
+
+| Strategy (the Strategy column) | Built from |
+|---|---|
+| Flip | §3.4C.2, flip now included (R24) |
+| Buy for later | new: buy in a top buy window, or now when the price is below `p10_30`, hold, and sell at a top selling window (Silk Cloth "below its 10th percentile now"; Greater Magic Essence in its Wednesday buy window) |
+| Craft | §3.4B and §3.4C.3: craft, then post now or at a window |
+| Multistage craft | a crafting chain (§3.4B), mail steps included, as one candidate |
+| Disenchant | §3.4A, for every disenchantable item, enchanter or not |
+| Sell stock | the sell plan's post options for what you own (§3.4C.1) |
+
+Buying mats for a later craft is part of the Craft and Multistage candidates (mat buys on earlier, cheaper slots, C7).
+
+- **Marginal batches.** Each opportunity is split into batches of one reference stack, or one craft, each worth less than the one before. Batch 2 of a flip buys the next auctions up the book and sells into what is left of the window, exactly as the flip, sell-plan and craft loops already add one stack or craft at a time (§3.4C.1 allocation, §3.4C.2, §3.4B "How many crafts"). The first batch that would lose money ends the opportunity.
+- **Alternative routes are separate candidates for the same output**: buy the reagent or craft it, post now or at each window. The capacity, material and gold constraints let only one of them use a resource (PF4).
+- **What generation may leave out**: recipes no character knows (crafts only: disenchants are never left out for that), vendor-sold items as posts (R23), suspect prices (FM5), unknown-suffix keys (§2.2.1), items whose rule is `ignore` or `no_buy` (§3.4.2), and "not selling" items as new stock (§3.3.3). Thin data lowers confidence, which the selection uses; it doesn't hide a candidate.
+- **A candidate's fields**:
+  - a stable id, `<strategy>:<key>:<charId>:<route>:<batch>`, unchanged between runs while those parts don't change;
+  - strategy, input and output keys and quantities, and the route (each reagent's source, §3.4B);
+  - gold needed and its parts (buys, mats, deposits), and the cost basis of bought stock it uses;
+  - expected net (§3.4 expected net: fees, deposits, the chance it sells, unsold units at their fallback), the chance `P'`, the executable quantity (the liquidity room it fits in) and confidence;
+  - the acting character and what it needs (profession, skill, recipe, cooldown);
+  - its buy time and expected sale hour;
+  - the resources it claims: owned units by character and place, and capacity per item and window;
+  - the intelligence's `built_ms` and the method versions it was computed with.
+- **The universe is bigger than what is shown.** Every candidate is evaluated; the export keeps the best `candidate_export` (150): the funded ones first, then the best alternatives by adjusted profit (PF3, D.10).
+
+**D.4 Selection (stage B)** (PF5–PF16).
+
+1. **Eligibility.** Each candidate is checked against its acting character: profession and skill, recipe known, cooldown ready, owned materials (a unit claimed by a better candidate is gone), room in the capacity ledger, and the trust gate (D.2). A failure is an exclusion reason (D.6). The candidate stays in the universe and is checked again at the next run, or live in game after a learned recipe or a skill-up (PF10).
+2. **Greedy fill.** Eligible batches are taken in order of **adjusted profit per copper of exposure** (gold needed). Batches that need no gold come first, by adjusted profit. Ties go to the candidate id. A batch is funded when:
+   - its gold needed fits the remaining capacity and its character's spendable gold left;
+   - its list has room (`today_limit` 20, `week_limit` 20);
+   - its resources are still free;
+   - and, for batch n + 1 of an opportunity, batch n is funded.
+
+   Otherwise it is excluded with the first reason that fails, in D.6's order.
+3. **One swap pass.** It takes the funded batches in funding order, as they stood when the pass began. For each one, it tries each batch excluded for capacity, gold or a list limit, in step 2's order: remove the funded batch, add the excluded one, then refill greedily (step 2) from the batches still excluded. The swap is kept when the total adjusted profit rises; ties go to the earlier candidate id. A swap never leaves batch n + 1 of an opportunity funded without batch n. There is one pass, so the run is bounded: at most (funded × excluded) refills.
+4. **Today and Next 7 days.** A funded row whose wait is within the immediate window is **Today**; every other row is **Next 7 days** (horizon `horizon_days`, 7). A flip bought now and sold on a later day is Next 7 days (Mithril Spurs: buy now, sell Saturday). The list limits are selection constraints, so the funded allocation always fits what is shown and no gold is reserved for a hidden row (PF13).
+5. **Validation** (D.5), then publish.
+
+**Selection order and display order differ.** Rows are *selected* by adjusted profit per copper of exposure, then the swap pass; the Portfolio page's funding card *shows* the funded rows by adjusted profit, best first, with the capacity left after each (§3.5). In the mockup both give the same 12 funded rows.
+
+This is a heuristic, not an exhaustive search. The ratio order prefers trades that earn the most per copper tied up, and the swap pass catches the bigger trades that a run of small ones crowded out: with 1 g of capacity, A (60 s for 30 s adjusted), B (50 s for 20 s) and C (50 s for 19 s), the fill takes A alone (30 s), and the swap pass replaces it with B and C (39 s) (PF5). A higher return on a smaller trade is never preferred just for its ratio (PF11). Selection is deterministic and standard library only. It runs inside the full refresh's 120 s, and it is benchmarked against the incremental re-plan's 1 s (§3.1.2, §6 item 16).
+
+The mockup's pool (PF6): capacity 6 g 49 s 40 c. The fill funds 12 rows, 5 for Today (51 s 60 c) and 7 for the week (5 g 73 s 40 c), 6 g 25 s in all, which leaves 24 s 40 c. Lesser Mana Potion, a Today craft that needs 45 s, is excluded "Exceeds risk tolerance (needs 45s, 24s 40c left)" even though Today's list has room: the week's rows used the shared capacity first (Mithril Spurs alone takes 3 g).
+
+**D.5 Validation before publishing.** A failure here is a bug: the run is not published, the previous plan stays live, and Status shows an error (§5.2 rules 3 and 4).
+- **Gold:** Σ gold needed of the funded rows ≤ available new investment, and each character's share ≤ its spendable gold.
+- **Exposure:** committed capital + Σ gold needed ≤ the risk budget.
+- **Materials:** each owned unit is claimed at most once, and every chain's steps are funded together.
+- **Capabilities:** every funded row's character can do it.
+- **Quantities:** every item and window stays within its liquidity cap (PL4).
+- **Counts:** Today ≤ `today_limit` and the week ≤ `week_limit`.
+- **Totals:** profit and gold totals sum funded rows only; an excluded row counts in no total.
+- **Zero funded rows is a valid result** (D.7, PF14).
+
+**D.6 Exclusion reasons.** The Status cell says "Funded" (a badge) or why the row was left out, in the same words on the dashboard and in the addon. The checks run in this order, and the first that fails is shown (PF24):
+
+| Status | When | Example (mockup) |
+|---|---|---|
+| Required profession unavailable: <profession> <skill> | no character has the profession, or none has the skill. The detail names the best one ("Amaya has Enchanting 142") or says "no character has Enchanting" | Grunt's Bracers of Defense: Enchanting 150 |
+| Forecast too uncertain (<n> week(s) of data) | the trust gate fails (D.2) | Greater Magic Essence: "its Sunday peak has been seen once; a forecast needs 3 weeks" |
+| Forecast too stale (prices <age> old) | the item's newest price is more than 24 h old | — |
+| Insufficient liquidity: <s>/day, <q> planned | the batch would take longer than the horizon to sell at the item's sales rate (`q ÷ s > horizon_days`), or its windows' liquidity caps have no room left | Elixir of Fortitude: 3/day, 40 planned, "the market sells about 3 a day; 40 would take about 13 days" |
+| Missing materials: <n> <item> | a mat with no stock, no AH listing and no vendor | — |
+| Resources already claimed: <item> (<funded row>) | an owned unit, or the capacity it needs, went to a better funded row | — |
+| Insufficient gold (needs <x>, all characters hold <y>) | its gold needed is more than all your characters' spendable gold | — |
+| Insufficient gold on <character> (needs <x>, has <y>) | its character's spendable gold left is too low, though the account's would cover it | — |
+| Recommendation limit reached (20 of 20 today), or (… this week) | its list is full | — |
+| Exceeds risk tolerance (needs <x>, <y> left) | its gold needed is more than the capacity left at its turn | Lesser Mana Potion: needs 45 s, 24 s 40 c left |
+
+The pasted spec's "exceeds risk tolerance" and "affordable but blocked by risk" are this one status. Its detail line says which applies: better rows took the capacity ("its turn came after every funded row, so 24s 40c is also what stays unallocated"), or the batch alone is bigger than the whole remaining capacity.
+
+**D.7 Empty states** (PF14, D77, UI19). When nothing new is funded, sections B and C are replaced by one block that gives the reason; positions (A) stay. The first matching reason wins:
+
+1. **No gold in hand**: no character had gold at the last snapshot.
+2. **No characters yet**: log in once with the addon so AHSync knows your gold and professions.
+3. **Risk budget exhausted**: committed capital is at or over the limit. For example, after Amaya spends 6 g 70 s on new positions: "No new opportunities: risk budget exhausted (10g 67s 40c limit, 10g 88s committed)".
+4. **Recommendation limit reached**: 20 of 20 funded in that list.
+5. **Market data too old**: the newest prices are more than 24 h old; run AHSync.
+6. **Nothing pays**: no opportunity nets above 0 after fees, deposits and the chance it sells.
+7. **Every candidate excluded**: each one has a reason, and they are listed as alternatives.
+
+A recommendation is never made up to fill the list.
+
+**D.8 Profit % (return on cash)** (PF21). Profit % = expected net ÷ **cash**, where cash = the gold needed + the cost basis of bought stock the row uses. Found stock counts 0. It is a whole percent, rounded half up. A row whose cash is 0 (it uses only found stock) shows "—" and is left out of the % totals; its net still counts in the expected totals. The % is shown per row in the funding card and in both opportunity footers. It is never a ranking key (D.4).
+- Copper Rod (post 5 rods bought at 10 s each, 1 s deposit): cash 51 s, net 63 s 6 c → 124%.
+- Today's funded rows: 1 g 15 s 14 c ÷ 1 g 1 s 60 c (51 s 60 c gold needed + 50 s of bought rods) → 113%.
+- The week's funded rows: (1 g 73 s 85 c − Heavy Grinding Stone's 1 s 34 c, which uses only found Heavy Stone) ÷ 5 g 73 s 40 c → 30%.
+- **Positions** show "+X% on committed capital": Σ est. net of the positions that have one ÷ committed capital. 96 s 79 c ÷ 4 g 18 s → +23%; Medium Leather's 40 s and Mageweave's 18 s of sold, uncollected units count in the base.
+
+**D.9 Positions** (PO1–PO13). A **position** is a durable record of gold you actually committed. It is not an action, so a re-plan never replaces it.
+
+- **Opens** when a confirmed purchase or craft matches a funded opportunity (§3.4.1 matching). An unconfirmed attempt opens nothing.
+- **Holds:** the character, the candidate id and strategy, the item, its **lots** (event id, units, unit cost, time), the units and cost left, the expected net at open and now, the original target window and the latest recommended one, its state and the proceeds realized so far.
+- **Remaining cost** leaves at the position's average lot cost when a sold unit's payout is collected, or when a unit is vendored, disenchanted or used. A craft turns the mat lots of a Processing position into its product.
+- **An extra purchase is a new decision.** Matched to a new funded opportunity, it opens a new position with its own lots; earlier positions are unchanged (PO6). A purchase that matches no funded row opens none and only feeds the average cost basis (§3.2 `cost_basis`), which stays the record for items that never matched a plan (PO12).
+- **Closes** (Completed) when no units are left and every sale is paid out (PO11).
+- **Found stock the plan holds for a later window** shows in section A as a Holding row with Paid 0 and cost basis left 0. It is not a durable position, since no gold was committed: the sell plan rebuilds it at each refresh (Wool Cloth in the mockup).
+
+| State | When | Mockup |
+|---|---|---|
+| Acquiring | its buys are partly done and their window is still open | — |
+| Processing | a craft or disenchant step is still to do on its units | Iron Ore: "smelt today · post Thu 11:00 for the 19:00 peak" |
+| Holding | units held, waiting for their window | Copper Bar: "post Sat 11:00 for the 19:00 peak" |
+| Ready to sell | now is inside its window, or selling now beats waiting: `E_now ≥ E_target ÷ (1 + premium)`, with the premium for the wait to its target window (D.2) and what you paid left out (sunk) | Elixir of Agility: "sell now: price spike +38%" |
+| Listed | its units are on the AH | Mithril Coif: "undercut: relist at 4g 49s 99c" |
+| Partially sold | some units sold, the rest held or listed | Mageweave Cloth: "collect mail: 15 sold, 25s 65c waiting" |
+| Completed | nothing left and paid out (closed) | — |
+| Needs reconciliation | the journal says more units than the newest snapshots show, and no event explains the gap | Medium Leather: "check bags and mail: 14 of 20 found" |
+
+- **Adaptive exit.** Every refresh, and the addon live, re-evaluates each position's sell-now against hold with live prices (Ready to sell, above). A position past its window keeps being tracked, and its next action is re-planned.
+- **Never infer a sale from missing inventory.** A Needs reconciliation position keeps its cost committed and its est. net unknown. It leaves the state when events explain the gap (auction mail, a payout, mail sent) or the units reappear. If nothing explains it 31 days later (auction mail is kept 30 days), the missing units close as an untracked loss at their cost, listed in History (PO10).
+- **Mail tasks persist once executed.** A matched `mail_sent` stays the position's next action ("collect mail on Amaya") across re-plans until the recipient's mail or bags snapshot holds the items (the transit rule, §3.4B, T22). A suggested transfer that wasn't sent commits nothing (PO7).
+- **History compares at position level** once positions exist (§3.4.1, PO9).
+
+**D.10 Export and the addon.** The desktop exports the candidate universe, the dependency graph and a portfolio snapshot (§3.5 formats, §5.0 contracts). The addon reselects the logged-in character's part live (§4.0). Desktop and addon share the money rules, risk semantics, profit and timing formulas, constraints, capability rules, candidate ids, quantities, tie-breaks and validation, so equivalent inputs give the same selection (PF15, PF27). Differences come only from different observed data.
 
 #### 3.4.0 Missed peaks: move, or hold for next week
 
@@ -843,6 +1053,7 @@ Captured events (§2.2) are matched to plan actions automatically, by the tracki
   - **A chain carrier** (a buy or craft whose action is in a chain and carries a net; mat buys and intermediate crafts carry none): the sum of what the chain's posts realized so far, as above, times the event's share; "N of M posts paid"; "nothing sold yet" while no post has resolved. The chain's posts are the confirmed posts matched to post actions with the carrier's chain id (`COALESCE(parent_id, action_id)`). It is open until every one of those posts has resolved and none of the chain's post actions is still pending or late. A chain that plans a disenchant and no post shows "mats sold separately".
   - **A disenchant**: not tracked, "mats sold separately": its mats are sold later as posts of their own.
   - Other rows (sold, expired and cancelled mail, payouts, vendor buys, mat buys, mail, missed and skipped actions, untracked changes) are not judged. A craft that carries no chain shows "—" for both.
+- **Positions** (planned, M14, §3.4D.9). A confirmed purchase or craft that matches a funded opportunity also opens a position, which outlives every re-plan. Once positions exist, History compares expected and realized **per position**: one row per position with its expected net at open (Expected) and its proceeds less its cost and lost deposits (Realized), open until it is Completed. Its buy, craft and post events then count on the position, never again on their own, so a profit is still counted once (PO9). Events of items that never matched a plan keep the event-level rows above, and their cost stays the average cost basis.
 - **Stale state.** Every recommendation records the age of the character snapshot it used (§2.2.1 per-location times). One built on a snapshot older than 24 h says so, e.g. "based on Amaya's bags from 3 d ago" (D24): on the Craft page, for every place (bags, bank, mail) of a character that holds an owned mat the row uses. The addon uses its live state instead.
 - **Re-planning.** Each engine run replaces `pending` and `late` actions. `done`, `partial`, `missed` and `skipped` actions are kept as history.
 
@@ -872,8 +1083,17 @@ Some items you hold are for your own use: food, potions, mats for your own gear.
 ### 3.5 Outputs
 
 1. **Dashboard** (out of game), at `http://localhost:8765`, served by Python's standard library and bound to `127.0.0.1` only. The look of every page is defined by the mockup [docs/mockups/dashboard.html](mockups/dashboard.html). It uses an always-dark WoW theme: stone panels, gold trim and serif gold headings, Blizzard-style red buttons and item-quality colours. Data tables stay in a plain sans-serif font for readability. Open it in a browser and click through the pages, or use a direct link such as `dashboard.html#Week`.
+   - **Portfolio** (planned, M13; §3.4D; the first page in the bar; D72, D73, D77–D79). One plan for all your gold, laid out as in the mockup:
+     - **Summary tiles**: Gold in hand (31g 40s, "Amaya 21g · Brugan 10g 40s"); Committed capital (4g 18s, "12% of capital base"); Capital base (35g 58s, "gold in hand + committed"); Risk tolerance, a dropdown of 10, 20, 30, 40 and 50% ("exposure limit 10g 67s 40c · changing it re-runs the allocation"); Remaining capacity (6g 49s 40c, "10g 67s 40c limit − 4g 18s committed"); Allocated to new opportunities ("6g 25s of 6g 49s 40c", "Today 51s 60c · next 7 days 5g 73s 40c · 24s 40c left"). Under them, one muted line: "portfolio snapshot Mon 10:38 · tiles show the values at 30% · gold as each character last logged in · positions from the journal".
+     - **A. Active positions** (§3.4D.9): Item (with a note line) · Qty · Character · Status (the stage badge) · Paid · Cost basis left · Est. net · Sell window · Next action. The footer says "Capital committed 4g · 12% of capital base (4g 18s ÷ 35g 58s) · estimated profit on positions +96s 79c · +23% on committed capital", and a muted line lists the stages. Positions take no recommendation slots.
+     - **B. Top opportunities today** (realized within the immediate window, no premium): Strategy · Action · Item (its chain lines under it) · Qty · Each · Total · Expected net · Chance · Est. Sales/Day · Current Supply · Supply/Volume · Risk · Character · Status · Skip. Funded rows come first, best expected net first; then one red line, "capacity reached · 24s 40c left"; then every excluded row, greyed, with its reason in Status (§3.4D.6). A Min chance dropdown (default 0%) hides rows from view only: a hidden funded row stays funded and is counted in the footer, so no gold goes to a row you can't see. Footer: "5 of 20 funded · expected +1g 15s 14c · gold needed 51s 60c · profit 113% on cash · 3 alternatives excluded (in no total)".
+     - **C. Top opportunities, next 7 days**: Strategy · Item · Qty · Buy when · Process · Sell when (with "expected sale 19:00") · Gold needed · Materials · Expected net · Adjusted (with "Wait 3.35 d · premium 31.75%") · the four market columns · Character · Status · Skip. Funded rows by adjusted profit, the red line, then the excluded ones. Footer: "7 of 20 funded · expected +1g 73s 85c · adjusted +1g 26s 24c · gold needed 5g 73s 40c · profit 30% on cash · 1 alternative excluded (in no total)", and a note with the wait and premium of every sale hour the plan uses.
+     - **How the pool was funded**: # · Item · Sells · Adjusted · Expected net · Gold needed · Cash · Profit % · Left. The funded rows of both lists, shown best adjusted profit first (they were selected by adjusted profit per copper of exposure, then the swap pass, §3.4D.4), with the capacity left after each; a Total funded row (12 rows, adjusted 2g 41s 38c, expected +2g 88s 99c, gold 6g 25s, cash 6g 75s, 43%, 24s 40c left, noting which rows the % leaves out); the red line; then the first excluded row ("needs 45s: not funded").
+     - **Empty state** (§3.4D.7): sections B and C give way to one alert with the first matching reason; A stays.
+     - Every number is built by `engine/portfolio_view` (§8.5); the page computes nothing.
    - **Today**: summary tiles (expected today and this week, budget left, inventory worth), alerts (low coverage, stale data), the actions for right now sorted by expected net with the minimum-chance filter, and a Needs a decision section. Each row has a Skip button. One row per chain with its steps as grey lines under the item (§3.4B Today list), mail as the sender's row, no holds or vendor sales; the footer counts its rows
    - **Week**: the rolling calendar from §3.4C (today first), one column per day with a day total, plus totals per category and per character. Each card names its character, right of the action badge (D65), and a chain's card lists its lines. Posts show at their post time (8 h before the peak) with "for the HH:00 peak"
+   - **Today and Week stay during the rollout** (planned, D76). Once the optimizer is built they show the funded plan's actions (§3.4D). Removing them from the dashboard is decided only after the Portfolio page has been validated in real use (M15). The addon replaces its Today and Week tabs with a Portfolio tab (§4.3).
    - **On the AH**: every auction you have up right now, on all characters. Each row shows:
      - quantity, listed price each and total;
      - **what it cost you** each and total (what you paid, or what the mats cost you for a craft; 0 for items you found);
@@ -883,10 +1103,12 @@ Some items you hold are for your own use: food, potions, mats for your own gear.
      Tiles at the top total the listed value, the cost, the expected profit and the deposits at stake.
 
      **Built** (`engine/on_ah_view`, `recommend/on_ah_page`, D18) from the own-auctions snapshots the addon captures: one row per group of identical auctions; the deposit comes from the post event that made it ("—" when that post wasn't captured); position compares with the item's current cheapest listing; the chance is the item's posting-now chance. Each group also carries its soonest end, from the snapshot's `ends` (S16): the row shows the time left ("ends in 5 h"), and its chance is the queue model's for the units still up, at their price, over the time actually left (the posting-now window cut to it). An auction the addon saved without an end (its `timeLeftSeconds` was not a number, A70) shows its band's bounds ("2 – 8 h"), as for a snapshot without `ends`, and its chance stays the posting-now chance; before A70 such an auction was written as ending now and showed "ending" with 0%. Position says how many units are listed below you now ("12 units listed below you at 38c–40c", "1 unit …" for one, D61), from the item's newest book; who listed them is not in the scan data. (D53)
-   - **Disenchant** / **Craft** / **Flip** tables, sortable and filterable, with each, total and risk %. Craft adds a Source column (Owned / AH / Mixed) and filter, and a per-row breakdown of owned versus bought mats **Each row lists its mats** one grey line each, by source, as in the addon (A34): owned (with "mail N from <character>" when they sit on another of your characters), from a vendor, on the AH with what they cost, and intermediates another character crafts first. The crafter is the one who knows the recipe and already holds the most of its owned mats (C19, D44). Crafts stop at the product's liquidity cap for the posting-now window, less what you hold or have listed, and the mats stay within `max_risk_pct` of your gold, as in the plan and the addon (D45). Only recipes worth at least one craft are rows; the footer counts the rest by reason: doesn't pay now, lacks mats, over your risk limit, already held or listed (D46). The page lists the plan's craft chains first, as the addon does (D56, `engine/planned_crafts`): one row per chain for its final product, with its mat buys, the intermediate crafts and when to sell; its own ideas cover the recipes the plan doesn't craft.
+   - **Disenchant** / **Craft** / **Flip** tables, sortable and filterable, with each, total and risk %. Craft adds a Source column (Owned / AH / Mixed) and filter, and a per-row breakdown of owned versus bought mats **Each row lists its mats** one grey line each, by source, as in the addon (A34): owned (with "mail N from <character>" when they sit on another of your characters), from a vendor, on the AH with what they cost, and intermediates another character crafts first. The crafter is the one who knows the recipe and already holds the most of its owned mats (C19, D44). Crafts stop at the product's liquidity cap for the posting-now window, less what you hold or have listed, and the mats stay within `max_risk_pct` of your gold, as in the plan and the addon (D45; until M10, §3.4 Risk). Only recipes worth at least one craft are rows; the footer counts the rest by reason: doesn't pay now, lacks mats, over your risk limit, already held or listed (D46). The page lists the plan's craft chains first, as the addon does (D56, `engine/planned_crafts`): one row per chain for its final product, with its mat buys, the intermediate crafts and when to sell; its own ideas cover the recipes the plan doesn't craft.
+     - **Disenchant research** (planned, M15, D71): the page is never gated by profession (§3.4A). With no character able to disenchant, an info notice above the table reads "Research only: no character has Enchanting yet. These rows enter the funded plan once one does."; rows, sorting and filters are unchanged.
    - **Inventory**: what you own, what you paid, what it's worth, and its plan. Selecting a row shows *why*: the 30-day price line and the hour-of-week heat map behind its sell slot
      - **Worth** is counted once per item across all its rows, then split by quantity: the expected value of its planned posts, disenchants and vendor sales, plus its other units (held for a later week, or used by a planned craft, "6 for crafting Copper Rod") at their hold value. A disenchant planned for another character shows who ("Disenchant (Brugan)"). Bound and ignored items say "not planned" and have no worth (D25–D28).
      - **Paid** is the account-wide cost basis per unit; with none it is 0, "before tracking" (D29).
+     - **Character filter** (planned, M15, D75): "Character: All characters ▾" by default. Picking one narrows the rows **and the tiles** to that character. An item counts once, where it is now: auctions are on On the AH, not here, and mail on its way counts for the character it's addressed to, never the sender (§3.4B transit). Brugan alone: Worth 1g 79s 33c (1g 13s 6c + 61s 57c + 4s 70c), Paid 88s, Not planned 1 item.
    - **History**: your posts and their outcomes, purchases, crafts, plan actions (done, missed, skipped), and deposits lost (**built**, D47, D48: `state.journal`, `engine/history_view`, `recommend/history_page`; the last 30 days of posts, sold / expired / cancelled / won mail, AH and vendor purchases, crafts, disenchants, payouts with their realized profit, mail sent, and missed or skipped plan actions, each with the plan action it matched; tiles for sold after the cut, expired, deposits lost, plan actions and realized profit. untracked changes are listed too, D51)
      - **Expected next to realized** (D68–D70, §3.4.1 "Expected and realized"): every post, chain-carrying purchase, craft and disenchant row has an **Expected** cell (the copied expected net, "—" when the event matched no action) and a **Realized** cell with its note ("expired", "not sold yet", "2 of 3 posts paid", "mats sold separately"), green when realized ≥ expected in whole copper, amber below, muted while unknown. Three more tiles (`engine/tracking.profit_sums`, `history_view`): **Expected (resolved)** = Σ expected and **Realized** = Σ realized over the rows that matched an action and whose realized is known, and **Realized ÷ expected** as a whole percent, half up ("—" when nothing is resolved or Σ expected ≤ 0). A chain's profit counts once: a follow-up post whose chain's carrier is among the rows counts on the carrier, not on its own. Open rows count in neither sum; the line under the tiles says how many ("1 post open · 2 chains in progress (counted once resolved)", or "nothing open").
    - **Rules**: blacklisted items, and items flagged "not selling" waiting for a decision (**built**, D50: `engine/rules_view`, `recommend/rules_page`; Waiting for a decision with Blacklist and Keep, Kept on a fresh start with what sold since, and the Blacklist; Undo clears a rule through `POST /api/rule` with `none`. The Blacklist card has an item search (D54): `GET /api/items?q=…` answers up to 20 items whose name contains the text, those starting with it first (then by name and key), unknown-suffix items left out; each result offers "Don't buy or craft" and "Ignore completely", stored through `POST /api/rule`. The search only reads (SEC10).)
@@ -897,9 +1119,11 @@ Some items you hold are for your own use: food, potions, mats for your own gear.
 
    Item names link to auctionhouse.fyi.
 
+   **Gold pill** (planned, M15, D74): the top bar shows "Gold 31g 40s · 2 characters · Mon 10:38" (gold in hand across your characters at the last portfolio snapshot, with its time) on every page except Rules, Characters and Status.
+
    **Security.** Binding to `127.0.0.1` keeps other machines out, but not other web pages. Any site open in your browser can send requests to `localhost:8765`, and a DNS-rebinding site can even read the replies. So `web/server.py`:
    - **Checks `Host`.** It rejects any request whose `Host` header is not `127.0.0.1:<port>` or `localhost:<port>` (DNS rebinding).
-   - **Never changes state on GET.** Skip, rules, Keep and Refresh now are `POST` only.
+   - **Never changes state on GET.** Skip, rules, Keep, Refresh now and the risk tolerance (planned) are `POST` only.
    - **Checks every write** in two ways, and rejects it with `403` and a log line (without the token) if either fails:
      - the `Origin` header is the dashboard's own origin;
      - an `X-AHSync-Token` header matches a random token generated at each start and embedded in the served page.
@@ -931,9 +1155,11 @@ Some items you hold are for your own use: food, potions, mats for your own gear.
    **Dashboard data (the contract between the full refresh and `web/`).** A full refresh writes one JSON payload per page and market into `views` (§3.2), swapped in atomically (§5.2). The server serves them as stored and computes nothing (§8.5).
    - `GET /` serves the page (`web/static/index.html`) with the per-run token embedded.
    - `GET /api/markets` returns `{"markets": [...], "default": "<id>"}` from the config.
-   - `GET /api/views/<page>?market=<id>` returns `{"built": <ms>, "data": <payload>}`, or `404 {"error": "no_refresh_yet"}` before the first refresh. `<page>` is `disenchant`, `craft` (M3), `today`, `week`, `flip`, `inventory` (M4), `status`, and later `on_ah`, `history`, `rules`, `characters`. **`status` is the one page built on request** (`app/status_page.py`, texts by `engine/status_view.py`), because sync runs, SavedVariables reads and failures change it between refreshes; it reads only small tables (status lines, sync state, current prices, scans, characters) and the database file's size, and `built` is the request time. Its payload is `{"alerts": [{"level", "title", "text"}], "cards": [{"title", "badge", "badge_class", "lines": [[label, value, class]]}]}`.
+   - `GET /api/views/<page>?market=<id>` returns `{"built": <ms>, "data": <payload>}`, or `404 {"error": "no_refresh_yet"}` before the first refresh. `<page>` is `disenchant`, `craft` (M3), `today`, `week`, `flip`, `inventory` (M4), `status`, and later `on_ah`, `history`, `rules`, `characters`, and `portfolio` (planned, M13). **`status` is the one page built on request** (`app/status_page.py`, texts by `engine/status_view.py`), because sync runs, SavedVariables reads and failures change it between refreshes; it reads only small tables (status lines, sync state, current prices, scans, characters) and the database file's size, and `built` is the request time. Its payload is `{"alerts": [{"level", "title", "text"}], "cards": [{"title", "badge", "badge_class", "lines": [[label, value, class]]}]}`.
    - Payload of `disenchant` and `craft`: `{"rows": [...], "hidden": <n>, "help": {header: tooltip}}`. Each row is built by `views.disenchant_row` / `views.craft_row`: every cell is already formatted text (money, percents, the market activity cells `chance` with its `dot`, `sales`, `supply` and `days`, risk with `risk_amber`), plus a `sort` object with one number per sortable column (−1 for an unavailable value). `help` is `views.COLUMN_HELP`, the header tooltips. The page sorts by `sort` values and filters by row fields (quality, profession, source, profit); it never parses or computes numbers.
    - Payloads of the plan pages (`recommend/plan_pages.py`, built by `engine/plan_views.py`): `today` is `{"by_min": {"0"|"25"|"50"|"75": {"rows", "hidden", "total"}}, "help"}`, one complete view per step of the page's "Min chance" dropdown, so the page only picks one and never filters or totals itself (`hidden` counts only rows that step's filter hid; rows of volume-unknown items are in every step's `rows`, with `chance_note` "volume unknown", D58); `week` is `{"days": [{"label", "today", "total", "rows"}], "total", "categories", "characters", "sums", "help"}`; every Today and Week row carries `lines` (its chain's lines, [] for any other row) and `character` (D62, D65); `flip` is `{"rows", "hidden", "help"}`; `inventory` (`recommend/inventory_page.py`, built by `engine/inventory_view.py` and `engine/item_detail.py`) is `{"rows", "tiles", "details", "help"}`, where `details` maps each held item's key to its item detail (windows, the three selling answers, market activity lines and the three 7 × 24 heatmaps, each cell with a level 0–4 or none for no data and its title), so selecting a row only looks one up. Days and times are in the machine's local time (the clock's offset). Week rows include the week's kept history, so done actions show ticked.
+   - **Planned (M13, M15).** `portfolio` (`recommend/portfolio_page.py`, built by `engine/portfolio_view.py`) is `{"tiles", "fresh", "risk": {"options": [10, 20, 30, 40, 50], "selected": 30}, "positions": {"rows", "foot", "note"}, "today": {"by_min": {"0"|"25"|"50"|"75": {"funded", "excluded", "cut", "foot", "hidden"}}, "note"}, "week": {"funded", "excluded", "cut", "foot", "note"}, "pool": {"rows", "total", "cut", "first_excluded"}, "empty": null | {"title", "text"}, "help"}`: every cell formatted, each row with its `status` (`funded`, or the reason and its detail) and its `sort` values; `cut` is the red line's text ("capacity reached · 24s 40c left"). Every page response except `rules`, `characters` and `status` carries `gold`, the gold pill's text (`views.gold_pill`). `inventory` gains `by_char`: one complete `{rows, tiles}` per character id plus `""` for all characters, so the filter only picks one.
+   - `POST /api/risk_tolerance {"risk_tolerance": 0.4}` (planned, M13; SEC11) accepts one of 0.1, 0.2, 0.3, 0.4 and 0.5. It rewrites only the `risk_tolerance` line of config.toml (temp file + rename; every other line and comment kept), re-runs the allocation as an incremental update (no history read, §3.1.1) and rewrites `PortfolioPlan.lua`, then returns `200 {"set": true}`; any other value is `400`. Writes follow the Security rules above.
    - `POST /api/refresh` asks for a full refresh (merged with one already queued; IU4) and returns `202`. `POST /api/skip {"action_id": ...}` marks a plan action skipped (§3.4.1) and returns `200 {"skipped": true|false}` (false when the action isn't open) or `400` for a bad body. Writes follow the Security rules above.
    - A market not in the config is `404 unknown_market`; no `market` means the first configured one. A busy database is `503 database_busy`.
    - **Accepted risk:** another process or Windows user on the same machine can send the right `Host`, read the token from `GET /` and write. That is inherent to a loopback tool; the checks protect against web pages, not local processes.
@@ -945,6 +1171,10 @@ Some items you hold are for your own use: food, potions, mats for your own gear.
      - **The hour-of-week profiles are never exported.** The 168-slot `how`, `sales_how` and `supply_how` stay in AHSync: the addon shows no week heatmap (heatmaps are dashboard-only), and its live decisions use only the windows and the curve, so it never reads or scans a 168-slot array.
      - The disenchant table and the bonus-suffix table are static, so they ship with the addon (`Data/Disenchant.lua`, `Data/BonusSuffixes.lua`) instead of being exported.
      - **Format** (`export/market_lua.py`, read by `Core/Market.lua`): `AHProfitMarket = { schemaVersion, exportVersion, generatedAt, checksum, charMarkets, markets = { [market] = { observationsUntil, curveHour, I, C } } }`. `I[key]` is one string per item, `"cur,curQty,curAgeMin,med7,med30,p10,p90,trend10,sold10,listed10,supply,conf,seasonality,postPrice,refStack,sellValue,volumeUnknown,chance1000;sellWindows;buyWindows"`: integers, an empty field meaning unavailable, ages in minutes before `generatedAt`, trend and per-day rates in tenths, `chance1000` the chance a reference stack posted now sells in thousandths, and each window `start:hours:best:how1000:weeks` joined by `/`. `C[key]` is the curve (§3.1.1). `D[key] = "skill,quality,ilvl,kind"` (kind `a` armor, `w` weapon) for exported items one could disenchant, from AHSync's item list and the disenchant table, so the addon can list targets without an enchanter (A23); the checksum counts them too. Items are filled 2,000 per generated function, so no function exceeds Lua 5.1's constant limits (A3). Every item with a price seen in the last 7 days is exported, plus the shortlist (EX2, EX5); older prices stay on the dashboard. `charMarkets` maps each character to its market; a character it doesn't name uses the only market of its faction (S12). `vendor = { [key] = copper }` holds the buy price of every item AHSync has seen a merchant sell in unlimited supply (`vendor_reagents` with a known vendor price), so the addon's crafts can buy mats from a vendor (EX6); it is not in the checksum, and a file without it reads as no vendor prices.
+     - **Planned (M11): the candidate universe and the dependency graph** (§3.4D.10, EX17, EX18), per market, inside the checksum and the 2 MB budget:
+       - `K` = one string per exported candidate, funded ones first in funding order, then the best alternatives by adjusted profit, `candidate_export` (150) in all: `"cid;strategy;charId;outKey;outQty;inputs;gold;cashBasis;net;chance1000;saleMs;windowEndMs;conf;needs;status"`. `inputs` is `key:count:source` joined by `/` (source `own`, `ah`, `vendor` or `craft`); `gold` and `cashBasis` are copper; `net` is copper rounded half up; `needs` is `Profession:skill` (empty when none); `status` is empty for a funded row, else the reason code of §3.4D.6. It carries what repricing, feasibility and selection need, and nothing else: no history and no 168-slot profile (IU12).
+       - `G` = the dependency graph, limited to the recipes your characters know plus disenchant transforms: `R[spell] = "product:yield1000:key*count/key*count"`, the reverse index `U[key] = "spell,spell"` (the recipes that use an item), `DE = "key,key"` (the exported items one could disenchant; results come from `Data/Disenchant.lua`) and `order`, every graph item in a topological order (inputs before what they make). A recipe loop is cut on the desktop the way chains cut it (C13, FM39).
+       - When candidates and graph don't fit the budget, the lowest alternatives are dropped first, never a funded row, with a Status warning (FM40).
      - **The shortlist** (EX1): what you hold, your recipes' products and reagents, open plan actions, the rows of the desktop lists, and items in your *partial* (targeted) scans of the last 7 days. Full scans are left out because they cover the whole AH.
      - **The checksum** is `"<strings>:<their total length>"` over every `I` and `C` string: cheap to check at login, and a truncated or mixed-up file fails it. A file whose `schemaVersion` differs, or whose checksum fails, is refused with a status line, never a Lua error (FM17).
      - AHSync writes it after every published full refresh (`export/addon_files.py`); a write blocked 3 times leaves the old file and a Status warning (FM14), and a file over 2 MB is written with a warning.
@@ -952,6 +1182,7 @@ Some items you hold are for your own use: food, potions, mats for your own gear.
      - **Format** (`export/plan_lua.py`, read by `Core/Plan.lua`): `AHProfitPlan = { schemaVersion, exportVersion, generatedAt, checksum, basedOnUntil, ingestedUntil = { [charId] = ms }, actions = { [charId] = { "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status;chance;peakMs;source;durationH;toChar", ... } }, rules = { [key] = "rule,setAtMs" } }`. `toChar` is a mail's recipient (`actions.to_char`) and empty for any other action (EX16); it came with `EXPORT_VERSION` 2 on both sides (`export/market_lua.py`, `Core/Market.lua`), so an addon and an AHSync of different builds say which is stale (FM34, FM35). The addon reads it as `to`; `Plan.IncomingMail(charId)` is the open mail other characters' plans send to a character. Only open actions (pending, late) travel, in time order; `net` is copper, rounded half up, and `chance` the planned chance to sell in whole percent (from `actions.conf`, which holds each action's planned `P'`), and `peakMs` the hour a post is for (`actions.peak_ms`); cleared rules travel as `none` so a clear on the dashboard beats an older rule in game. `basedOnUntil` is the newest `ingestedUntil`. The checksum works like `MarketIntelligence.lua`'s, over every action and rule string (EX3).
      - It is rewritten after each commit that changes it: a published full refresh, a SavedVariables read, and the hourly status pass.
      - **At login**, once both addons have loaded, the addon checks it and prunes each character's committed rows (§2.2, A4). A plan of another schema version, or one that fails its checksum, prunes nothing and shows no plan rows, with a status line (EX4). No plan at all is normal: the addon's own recommendations still work.
+     - **Planned (M11): the portfolio snapshot and positions** (§3.4D, EX18), inside the checksum: `portfolio = "snapshotMs;riskTolerance1000;premiumBase1000;premiumPerDay1000;immediateHours;todayLimit;weekLimit;horizonDays;configVersion;capitalBase;committed;capacity;allocated"` (money in copper); `gold = { [charId] = "copper,atMs" }`; `reserved = { [charId] = copper }`, the gold the funded plan reserves per character; and `positions = { [charId] = { "positionId;key;state;units;unitsLeft;costLeft;netNow;targetMs;nextAction", ... } }`. The addon reads its scoring settings from here, since it has no config channel (§3.6). These fields and `K`/`G` come with `EXPORT_VERSION` 3 on both sides (FM34, FM35).
      - Outside the checksum, so an older addon still reads the file: `records = { [key] = "1;line" }`, each item's sell record line and not-selling flag (EX8), and `reserves = { [charId] = "key,qty,ms;…" }` (EX12).
    - Raw history is never exported. Both files have a size budget: ≤ 2 MB and ≤ 200 KB.
 
@@ -997,13 +1228,22 @@ max_craft_depth = 3                           # longest crafting chain followed 
 max_supply_share = 0.5                        # your units per window ≤ this share of others' listed units (§3.4 liquidity)
 max_supply_share_gear = 1.0                   # the same for weapons and armor: you may double the market (§3.4 liquidity)
 min_gear_units = 2                            # gear always gets this many pieces per window, even on an empty market
-max_risk_pct = 25                             # no single buy spends more than this % of all your gold (§3.4 Risk)
 window_margin = 0.15                          # how much more than posting now an untrusted window must pay (§3.4C.1, R26)
 pattern_full_weeks = 6                        # weeks of data at which a window needs no margin over posting now (R26)
 max_trend_total = 0.15                        # the most the trend may move a window's price forecast, ± (§3.4C.1, TT7)
 max_actions_per_day = 0                       # 0 = no limit (§3.4C.4)
 max_item_capital_share = 0.25                 # most of your gold in slow markets (§3.4 market capacity)
 slow_market_days = 7                          # supply/volume above this many days is a slow market (§3.3.6)
+risk_tolerance = 0.30                         # planned: share of the capital base that may be tied up at once (§3.4D.1)
+premium_base = 0.15                           # planned: timing premium for profit realized after the immediate window (§3.4D.2)
+premium_per_day = 0.05                        # planned: added premium per day of wait
+immediate_hours = 8                           # planned: profit realized within this many hours has no premium; 8 or 24
+top_buy_windows = 3                           # planned: buying windows kept per item, by actionable value (§3.3.6)
+top_sell_windows = 3                          # planned: selling windows kept per item (§3.3.4)
+today_limit = 20                              # planned: most funded rows in Today (§3.4D.4)
+week_limit = 20                               # planned: most funded rows in Next 7 days
+candidate_export = 150                        # planned: candidates exported to the addon (§3.4D.3; benchmark 100-200, §6)
+horizon_days = 7                              # planned: the plan's horizon in days (today 7 is fixed)
 launch_wow_after_catchup = false
 
 [realms]                                      # realm -> ruleset; needed only when you sync several markets per faction (§2.1)
@@ -1019,6 +1259,10 @@ rank = ["ahf"]                                # remote price sources, most trust
 # ahf = ""                                    # "" = this market takes nothing from AHF
 # blizzard = "us/4728/2"                      # a future provider's address (§5.0)
 ```
+
+**Removed (planned, M10): `max_risk_pct`.** The per-buy cap is replaced by the portfolio exposure budget (`risk_tolerance`, §3.4 Risk, §3.4D.1). Until M10 is built, the code still reads `max_risk_pct` (default 25) for R19, C24, D45, D46 and A64.
+
+**Settings live in config.toml.** "Persisted in the desktop" means this file; a settings page may come later. Only `risk_tolerance` has a dashboard control (§3.5). The addon has no config channel, so `PortfolioPlan.lua` carries the values its scoring and selection use, with a config version (§3.5). A changed setting invalidates only what depends on it: a scoring, eligibility or allocation setting re-runs the allocation from the published intelligence; a forecast setting (`top_buy_windows`, `top_sell_windows`) waits for the next full refresh.
 
 The market id (`forever.<ruleset>.<faction>.us`) is AHSync's own key in every table, whatever the source. `[sources]` maps it to each provider's address, so a provider that names markets differently changes the config, not the stored data.
 
@@ -1038,8 +1282,18 @@ The market id (`forever.<ruleset>.<faction>.us`) is AHSync's own key in every ta
 - **Built so far** (A15–A18): sell options for what the logged-in character carries. Each unbound item in the bags with market data gets its best option, posting now (the intelligence's sell value and posting-now chance, `chance1000`) or a merchant (`GetItemInfo`'s sell price), shown on Today with the note "post now · AHSync has no plan for it". Items AHSync's plan already has an action for keep the plan's row.
   - **Live prices** (A2, A19): the scanner keeps the last complete full scan's order book in memory (`Scan/Replicate.lua`), and `Recommend/Live.lua` reads an item's listings from it when it is newer than the market file's newest observation. Your own sell rows are re-priced from it the way analysis prices them: post at `min(cheapest − 1, max(med7, p90))` (`Engine/Prices.lua`, shared scenarios PP1, PP2), `P` from the curve row for this hour at the units ahead (an item with volume unknown has no curve: `SellProb.DefaultChance` for the post's position in the live book, A67), `E_post` with the merchant price as the fallback and the deposit for the posting-now window; the note says "post now at the live price". A planned buy with no units left at or below its price is dropped from Today, and the footer counts it ("2 gone"). A finished scan redraws the open window.
   - **Crafts** (A9, A20): for the logged-in character's known recipes that AHSync's plan doesn't already craft, `Engine/Craft.lua`'s `Option` (a port of `craft_option` without crafted intermediates, shared scenarios C1–C3) sources mats from the bags at their hold value and from the AH (the live book, else `cur × curQty`), and counts crafts while each still pays. The best-paying craft goes first and each uses what the ones before it left; the mats they use get no sell row. The product's output is valued with its posting-now chance for any quantity (the desktop simulates per quantity, so the two agree when the chance doesn't depend on it). The note says where the mats come from ("from your own mats", "mats from the AH: 60s", "your mats topped up from the AH: 20s"). Vendor-sold mats are bought at the vendor price from the market file's `vendor` table (EX6) when that is cheaper than the AH, as on the desktop (R5). The note says where the mats come from ("mats from a vendor: 2s 66c"). Crafts stop at the product's liquidity cap for the posting-now window, as the plan's do: `max(refStack, floor(max_supply_share × supply))` units, less the product you already hold, divided by the average yield, at least 1 while any units are left (`capacity.liquidity_cap`; A30, A36). When what you hold fills the cap, the Craft tab shows the recipe as made: a green check and "made", with a note to post it (A36). Your own auctions count like the units you hold, until their end passes, and the made note says "×1 on the AH · ends in 11 h" (A42). The addon reads them into `ownAuctions` when the AH opens and after a post or a cancel (A41). UNVERIFIED on Forever: `C_AuctionHouse.QueryOwnedAuctions`, `GetNumOwnedAuctions`, `GetOwnedAuctionInfo` (fields `itemLink`, `itemKey`, `status`, `quantity`, `timeLeftSeconds`, `timeLeft`, `buyoutAmount`), `OWNED_AUCTIONS_UPDATED`, `AUCTION_HOUSE_AUCTION_CREATED` and `AUCTION_CANCELED`; the diagnostics probe them. Without the current supply the cap uses the item's typical (median daily) supply from the market file (EX10, A57); with neither there is no cap. The supply pattern over the window is applied too (EX13, A62): for shortlisted items the market file carries `S[key]`, 24 characters, one per hour from the refresh, each the factor `window_supply` gives for a posting-now window starting that hour (mean supply over the window ÷ supply at its start), in 5% steps (`char(35 + floor(f × 20 + 0.5))`, 0–2.5); the cap multiplies the supply by the factor for the current hour (the curve's row rule). The full 168-slot pattern per item doesn't fit the file's 2 MB budget, so other items get no factor (1).
-  - **Disenchant** (A23) and **Craft** (A27) tabs: every target or known recipe that pays, each on its own. The Craft tab first lists the crafts AHSync's plan has for the character (A63: source "Plan", the chain's mat buys as lines, its profit and when to sell), so it agrees with Shopping's CRAFT buys; the addon's own options follow, for recipes the plan doesn't craft, with their mats within `max_risk_pct` of your gold (A64).
+  - **Disenchant** (A23) and **Craft** (A27) tabs: every target or known recipe that pays, each on its own. The Craft tab first lists the crafts AHSync's plan has for the character (A63: source "Plan", the chain's mat buys as lines, its profit and when to sell), so it agrees with Shopping's CRAFT buys; the addon's own options follow, for recipes the plan doesn't craft, with their mats within `max_risk_pct` of your gold (A64; until M10, §3.4 Risk).
   - **Flip** (A28): the plan's flips, re-checked live. The addon also offers flips of its own, one reference stack each, from the market file's flip offers (EX11, A59): during the full refresh AHSync works out, market-wide, each flip candidate's expected value per unit at its best window (`flips.flip_offer`, the plan's `slot_price` and `expected_post` with the posting-now chance); the Flip tab lists an offer when the cheapest price seen now is at or below `floor(expected ÷ (1 + min_flip_margin))`, for items AHSync's plan doesn't flip and no rule blocks. **Flip-now offers** (A69, FN1) need nothing new in the market file: once per complete live scan, `Live.FlipCandidates` lists the items whose two cheapest price levels pass `(second − 1) × (1 − cut) ≥ (1 + min_flip_margin) × cheapest` (the test with a chance of 1); for each with market data the Flip tab prices buying the cheapest level (its units, at most one reference stack) and relisting now at `Prices.PostPrice(second, med7, p90)`, with `P` from the curve row for this hour at 0 units ahead (after the buy you are the cheapest), or `SellProb.DefaultChance` for the cheapest position without a curve (volume unknown). `Prices.FlipNow` (the twin of `flips.flip_now_offer`) gives `E_post(P, units, relist, merchant price, deposit)`, offered when `expected − cost ≥ min_flip_margin × cost`. The row reads "buy at 10c, relist now at 49c", When "now"; an item with both kinds of offer shows the better paying one. Sizing beyond one stack still needs the queue simulation, which only AHSync runs (§4.0).
+- **Planned (M12): the addon reselects the portfolio live** (§3.4D; A76–A83, DG1–DG7). The desktop's funded plan is the starting suggestion, and the addon adapts the logged-in character's part of it:
+  - **Inputs.** From `PortfolioPlan.lua`: the portfolio snapshot (each character's gold, committed capital, capital base, remaining capacity, the gold the funded plan reserves per character, the positions, the snapshot time) and the scoring settings with their config version. From `MarketIntelligence.lua`: the candidate universe `K` and the dependency graph `G` (§3.5 formats).
+  - **Live state**: the character's gold (`GetMoney` and `PLAYER_MONEY`, through the Adapter), bags, bank and mail, own auctions, the last full scan's book, search results, recipes captured when a profession window opens (§2.2), and the events recorded since `basedOnUntil`.
+  - **Repricing through the graph.** A changed price marks its item dirty. The reverse index then walks every recipe and disenchant that uses it, down through every level, deduplicated, and recomputes in the exported topological order: intermediates first, then downstream costs, the cheaper route (bought or crafted, §3.4B), and each affected candidate's gold needed, expected net, quantity and eligibility. Unaffected candidates keep their cached values (DG4). Work per change is bounded by the graph (chains are at most `max_craft_depth` levels, §3.4B) and counted in tests (DG7). A burst of changes, such as a full scan, is batched into one pass after the scan is saved (§4.2).
+  - **Reselection** is a separate step, run only when a change could add or remove a funded row: a funded row's adjusted profit or gold changed, an excluded row's reason may have cleared, or the gold or bags changed (DG5). It is the desktop's selection (§3.4D.4, ported as `Engine/Portfolio.lua`, with the premium as `Engine/Timing.lua`) over this character's candidates. Its spendable gold is min(the character's live gold, the exported remaining capacity − what the funded plan reserves for the other characters). In the mockup, Amaya's cap is 6g 49s 40c − Brugan's 3g 73s = 2g 76s 40c (A80).
+  - **Never another character's gold.** Other characters' rows and every cross-character total stay as cached in the snapshot, and are shown with its time ("snapshot 10:38", amber after 24 h; A78). The addon never adds up other characters' gold itself.
+  - **Live opportunities outside windows.** Windows are reference data: when the live price is below a candidate's expected buy price at every buy window, its buy moves to now (A76).
+  - **A newly learned recipe.** The profession window already captures recipes (§2.2). A recipe the graph doesn't have is added to the in-memory graph from its captured definition, with candidates valued at posting now (the addon's craft option, Crafts above), and reselection runs. The desktop rebuilds the graph at the next sync (A83).
+  - **Never overwrite newer state with an older snapshot.** Events the addon recorded after the snapshot's `basedOnUntil` (a purchase that opened a position, a post, a sale) win over the snapshot until AHSync's next export includes them (FM18 for actions, FM38 for positions; A81).
+  - **The addon never discovers the graph.** It is exported by the desktop. A graph whose `order` isn't a valid topological order (a cycle) is refused with a status line, and the candidates keep their exported values (DG6, FM39).
 - **When state changes in game**, the addon does only O(1) work per changed item:
   1. a new price → re-read `P` from the curve row for the current hour (§3.1.1); posting-time advice comes from the precomputed top windows, never from per-slot profiles;
   2. recompute that item's options with the small ported formulas (fees, `E_post`, DE EV, craft cost);
@@ -1084,8 +1338,9 @@ The window's tabs, each shown in the mockup:
 
 | Tab | Shows |
 |---|---|
-| Today | actions for now, sorted by expected net (highest first), with the "Min chance" filter and a Needs a decision section (wireframe below) |
-| Week | the rolling 7-day plan from today, grouped by day with day totals; done actions ticked; one row per chain with its mat buys, intermediate crafts and incoming mail as lines, then its sale; posts are rows on their own day, timed 8 h before their peak; mail this character sends is a MAIL row; no holds or vendor sales (A72, A73) |
+| Portfolio (planned, M13) | **replaces Today and Week** (they stay until it is built); the character you're playing's share of AHSync's one shared plan, in three sections, as in the mockup (A79, UI16). A top line, the only place the addon shows cross-character totals, cached from AHSync's last snapshot: "portfolio 35g 58s · 30% risk · capacity 6g 49s 40c · 24s 40c unallocated · snapshot 10:38". **Positions**: Item · Qty · Status (the stage badge) · Net · Next, then "committed 70s · est. +10s 72c · +15% on committed capital". **Today**: action · Item · Qty · Each · Total · Net · Chance · Volume · Risk · Status, with chain lines under each row; funded rows first, then the unfunded ones greyed with their reason in Status (no red line in the addon), then "funded: cost 20s 60c · profit +12s 8c · 59% on cash". As on the old Today tab, a row your sell record changed has its record line under it, a **Needs a decision** section for "not selling" items follows the Today section (right-click: Blacklist or Keep), and the **Min chance** dropdown filters Today's rows for view only: a hidden funded row stays funded and the footer counts it (A84). **Next 7 days**: action · Item (×qty) · Plan ("buy Tue 20:00 · sell Thu 19:00") · Net · Adjusted ("→ +41s 75c" over "3.35 d · 31.75%") · Status, then its totals line. Footer: "funded +92s 62c · cost 2g 52s · 37% on cash" and "capacity 6g 49s 40c · 24s 40c unallocated". The list scrolls inside the window. Right-clicking the excluded rows lists each with its reason (UI19). Empty state: "Nothing funded: risk budget exhausted" with positions still shown (UI19) |
+| Today (until M13) | actions for now, sorted by expected net (highest first), with the "Min chance" filter and a Needs a decision section (wireframe below) |
+| Week (until M13) | the rolling 7-day plan from today, grouped by day with day totals; done actions ticked; one row per chain with its mat buys, intermediate crafts and incoming mail as lines, then its sale; posts are rows on their own day, timed 8 h before their peak; mail this character sends is a MAIL row; no holds or vendor sales (A72, A73) |
 | Disenchant | **always shown**, even with no enchanter on the account: an alt may be the one (A23). Item, ilvl, the Enchanting skill it needs, buy (the live scan's cheapest, else the file's), EV, profit, Chance · Volume (of the main mat), and a note with the expected mats; "no enchanter yet" when nobody on the account has Enchanting, "needs Enchanting 225 (best 150)" (greyed) when your best is too low. Only targets that pay. Live search state (✓ / ✗ / …) comes with the AH panel |
 | Craft | Dashboard: product, who knows it, **source** (Owned / AH / Vendor / Mixed, plus "+ crafted" for chains; filterable), crafts, mat gold each and total ("—" when you own every mat), profit, Chance · Volume, risk, cooldown; a note lists which mats are owned and which are bought. The addon's tab is the character you're playing: product, Source, ×, Mats (gold for the mats to buy, "—" when you own them all), profit, Chance · Volume, risk, and a note of the mats used and bought. Each known recipe is costed on its own against what you carry less what you keep; only recipes that pay are listed (A27, UI11). Source is Owned, AH, Vendor or Mixed (C17, C18), and the note has one grey line per mat (A34): "use 4 owned Simple Wood", "buy 3 Coarse Thread from a vendor · 30c", "buy 2 Copper Bar on the AH · 20s" (A30, A34) |
 | Flip | Dashboard: item, quantity, buy each and total, expected sell price, sell slot, profit, Chance · Volume, risk %. The addon's tab lists the flips AHSync's plan has for the character you're playing (a buy whose chain ends in a post): item, Qty, Buy (at or below), Sell, When (the post's peak), Profit (the chain's), Chance (its first post's), Risk, and a note with the post time and the live cheapest price. A live scan drops a flip that is gone or now costs more than its buy price, and the footer counts it (A28, UI13) |
@@ -1153,34 +1408,38 @@ The dot after each chance is its confidence. Hovering "85% ◐" shows "Confidenc
 
 Clicking a row searches for that item.
 
+**Planned (M13): funded first, then unfunded** (A82, UI18). Both lists show the funded rows first, then the rows the portfolio left out, muted with an "unfunded" tag and the reason on hover ("Unfunded: Insufficient liquidity: 3/day, 40 planned. Click to search anyway"). They stay clickable, for when you choose to go past your risk tolerance. The section headers count them: "3 of 5 + 1 unfunded", "1 + 1 unfunded".
+
 In the addon (`UI/AHPanel.lua`, rows from `ViewModel.AHPanel`; UI7, A24, FM24): it opens docked to the AH window's right edge on `AUCTION_HOUSE_SHOW` and hides on close. **Shopping** is the character's planned buys, then disenchant targets your best enchanter can do (bought at most at their EV), up to 10. A row is ✓ when the live data (the last full scan, or an AH search's result if newer) has its quantity at or below its price ("38c ≤ 45c"), ✗ "gone" when not, and … "checking" until one has been seen; the states are WoW's ready-check icons, since its fonts have no ✓ ✗ glyphs. "3 of 5" counts the rows checked. Each section has labelled columns whose headers explain themselves on hover: Shopping **Item · For · Price · Max · Qty**, For being why it is bought: CRAFT (a mat for a planned craft), FLIP (to resell later) or DE (to disenchant), from what follows the buy in its plan chain (A40) (Price is the cheapest listing seen now, or "gone" / "checking"; Max is the most worth paying each), Post **Item · List price · Qty · Est. profit · Chance** (Est. profit is the post's own expected net for all its units, even when a flip counts its profit on the buy). **Post** lists the character's Today posts (AHSync's posts due now and the addon's own "post now" options), with Today's Min chance filter, with price and chance. Shopping has one row per item, totalling every planned buy of it at the lowest of their price caps (A65). Shopping lists only what to buy on the AH: a vendor buy stays on Today, marked "from a vendor" (A32). AHSync's posts, vendor sales and disenchants of stock (no parent) are never shown for more than the character holds in bags, bank and mail above what it keeps, so a posted item leaves Today as soon as the bags are read again; a chain's later step stays (A49). Only items in your bags are listed in Post: a post for an item you don't hold yet is a later step of a chain (a craft or a flip) and waits until you have it (A30). Each row is capped at the units you hold (shared in order across rows of the same item), with its Est. profit scaled to match, and the panel and the window redraw whenever the bags have been read again, so a posted item drops off or shrinks at once (A31). **Clicking a Post row fills the AH's Sell tab** (A29): the item from your bags (the first unbound stack), the quantity (at most what you can post) and the unit price; you check it and press the AH's own Post button, so a wrong suggestion never lists by itself. When the AH fills in its own price from a search right after (within 10 s), the suggested price is put back once. Without the Sell tab's API the status line says so (FM30). Right-click keeps the item for yourself (§3.4.3). The auction duration is set too (A56): the plan's post carries it (EX9), an own "post now" row uses the shortest duration covering the posting-now window; without the AH's duration control the status line says which duration to pick. UNVERIFIED on Forever: `AuctionHouseFrame:SetPostItem`, `ItemLocation:CreateFromBagAndSlot`, the sell frames' price and quantity inputs, `C_AuctionHouse.GetItemCommodityStatus`, `GetAvailablePostCount`, `IsSellItemValid` and the search-result events; the diagnostics probe them. An empty Shopping list says why. A click searches through the AH window's search bar (a hardware event); the status line says what it searched and how far this visit has got ("searched Linen Cloth · 2 of 5"); a search whose results don't list the item marks it ✗ gone, and a result is matched to a random-suffix item by its item id (A38). A buyout or commodity purchase seen this session (hooks that only observe `C_AuctionHouse.ConfirmCommoditiesPurchase` and buyout-sized `PlaceBid`; a commodity purchase counts once `COMMODITY_PURCHASE_SUCCEEDED` fires and is dropped on `COMMODITY_PURCHASE_FAILED`) lowers that row's quantity, and a row whose quantity is bought drops off; a bid changes nothing (A39). The purchases are saved as events, so this holds after a /reload too, until AHSync's next plan includes them (FM18); **Full scan** asks for a ReplicateItems scan within the same 20-minute gap as the fallback and says how long to wait otherwise. A progress bar under the status line follows every scan, whoever asked for it: waiting for the server, reading ("reading 23,400 of 47,667", up to 85% of the bar), saving, then "full scan done · 47,667 auctions"; it updates every 10 steps, never per frame. An own request with no answer after 60 s says "no answer: another addon may have scanned recently" (A43). Search results (`AUCTION_HOUSE_BROWSE_RESULTS_UPDATED`, `C_AuctionHouse.GetBrowseResults`) update that item's live price for the session. Closing the AH drops the search queue (FM24). UNVERIFIED on Forever: the search bar's `SetSearchText`/`StartSearch`, the browse event and results; the diagnostics probe them.
 
-**Tooltip**: a short block under the item's own lines. It uses label/value pairs (`AddDoubleLine`), one fact per line, and every price is per unit:
+**Tooltip** (planned, M13; replaces the six-line block, TT8–TT21, UI17). An **AHProfit** block under the item's own lines, drawn with two-column lines (`AddDoubleLine`, label left, value right), at most 320 px wide, every price per unit. Section 3 of the mockup shows all 14 variants. A bag item with a planned post:
 
 ```
-AHProfit
-Current AH price        8s (2h ago)
-Historical price        11s (30d, +38%)
-Disenchant value        14s 25c (+78%)
-Best time to sell       Sat 17:00–21:00
-Price at best time      12s 30c (+54%)
-Chance to sell          46%
+AHProfit                                 data 2 h old ●
+Do: POST 5 now at 41s          +63s 6c · 58% chance
+                                          then nothing
+Market               42s (2 h) · 45s 30-day (+7%)
+Best time to sell     Fri 18–21 · 45s (+7%) · pattern
+Best time to buy      Mon 03–07 · 38s (−10%) · early
+Activity            6/day · 14 listed · 2.3 d supply
 ```
 
-| Line | Meaning | Source |
+| Line | Shows | Source |
 |---|---|---|
-| Current AH price | the cheapest listing on the AH right now (`cur`), with how long ago it was seen (`curAge`) | §3.3 |
-| Historical price | the median price over the last 30 days (`med30`), with its delta from the current AH price. It falls back to daily closes when hourly data is sparse | §3.3 |
-| Disenchant value | expected mats × their sell value, with its delta from the current AH price. The line is left out when none of your characters can disenchant the item | §3.4A |
-| Best time to sell | the top best-selling window, e.g. "Sat 17:00–21:00", and the pattern strength when it's not yet established | §3.3.4 |
-| Price at best time | the expected price in that window (`level × how × trend factor`, level `med7` else `med30`, the factor clamped to `1 ± max_trend_total`), with its delta from the current AH price | §3.4C |
-| Chance to sell | `P'` for posting one reference stack (§3.4) now (next 8 hours), including your own record | §3.3.2–3 |
+| Header | "AHProfit", then the age of `MarketIntelligence.lua` with a dot; the age and dot turn amber past 24 h | §3.5 |
+| Do | what to do with this item, always the first line after the header: the plan's action for the character you're on (`PortfolioPlan.lua`: its funded row, or its unfunded alternative), else the addon's own best option (§4.0). The verb has its badge colour: POST gold, BUY blue, CRAFT orange, DISENCHANT purple, VENDOR and HOLD grey, MAIL light blue, KEPT and UNFUNDED muted. The value is what the action makes, then its chance; the chance belongs to the action (for a craft, its product's). A second, value-only line carries what doesn't fit: the next step ("then post Sat 10:00", "then nothing") or a reason ("needs 45s, 24s 40c left"). An AH listing on your Shopping list reads "BUY ≤ 10s · for Copper Rod" with "funded · 6 needed"; an AH listing on none of your lists has no Do line | §3.4D, §4.0 |
+| Market | the lowest price now with its age ("now" while you browse the AH, else how old the scan is), then the 30-day median and its delta; "none listed · 10c 30-day" when nothing is listed | §3.3 |
+| Disenchant | what disenchanting one is worth, and its delta. Only shown when one of your characters can disenchant the item | §3.4A |
+| Best time to sell | the top selling window ("Sat 17–21"), its expected price (the plan's `slot_price`), its delta and its strength: *early* (under 3 weeks of data), *pattern* (3–5) or *established* (6 or more). When now falls inside it, it reads "now (Fri 18–21) · 45s · pattern", and the Do line adds "best time to sell is now" | §3.3.4, §3.4C |
+| Best time to buy | the top buying window (ranked by actionable value, §3.3.6), with its expected price, delta and strength. When the price now is below every buy window's expected price, it reads "now · cheaper than Tue 20–23 (7s 10c)", shortened to "now · under Tue 20–23 (7s 10c)" when it would pass 320 px; on a Shopping-list AH row the Do line then adds "best time to buy is now" | §3.3.6 |
+| Activity | in muted text: sales per day, units listed now and days of supply ("6/day · 14 listed · 2.3 d supply"; "0/day · 0 listed" when nothing is listed) | §3.3.6 |
 
-**Delta** on the Historical price, Disenchant value and Price at best time lines = `(value − cur) ÷ cur × 100`, rounded half up to a whole percent and shown with a sign. Positive is green and negative is red. It is left out when there is no current price. A positive delta means the item is worth more than it costs right now: a higher historical price or price at best time means it's cheap now, and a higher disenchant value means buying to disenchant pays.
+- **A best-time line is never dropped to make room.** Hour ranges are written "Sat 17–21", and a long Do value continues on a second line with an empty label (variants 1, 2, 4, 8, 9 and 14). An item with no windows at all (W7) has neither best-time line (variant 10).
+- **No market data:** two lines only, the header and "no market data yet" (variant 11). This replaces A21's "adds nothing".
+- **Delta** works as built (TT1–TT5): `(value − cur) ÷ cur × 100`, rounded half up to a whole percent and shown with a sign, green above the price now and red below, left out when there is no current price. A positive delta means the item is worth more than it costs right now.
+- `ViewModel.Tooltip`, the Lua twin of `views.tooltip`, builds the lines; `UI/Tooltip.lua` only draws them (§8.5).
 
-A line with no data shows "—", except Disenchant value, which is left out as described above.
-
-**In the addon** (`UI/Tooltip.lua`, lines from `ViewModel.Tooltip`, the Lua twin of `views.tooltip`; TT1–TT5 are shared scenarios run in both, A21, UI8): the block reads the market file, and a newer in-game scan's cheapest price replaces `cur` ("40c (now)"), with the deltas following it. Best time to sell is the top selling window in local time, tagged "(early)" under 3 weeks of data and "(pattern)" under 6, so the longest line fits 320 px (UI8). Price at best time is the plan's `slot_price`: `level × how × (1 + trend7 ÷ 100 × days until the window's best hour)` (`med7`, else `med30`; trend clamped to ±5%/day and the factor to `1 ± max_trend_total`; TT6, TT7), ported as `Engine/Prices.SlotPrice`. The addon has no config channel, so `Prices.MAX_TREND_TOTAL` holds the default 0.15, as `min_flip_margin` is held in `UI/FlipView.lua`; change both sides together. The Disenchant line uses the ported disenchant table with the item's quality, level and class from the client and your best Enchanting skill. An item without market data adds nothing, and a failure never breaks the tooltip. The hook is `TooltipDataProcessor` where the client has it, else `GameTooltip`'s `OnTooltipSetItem` (UNVERIFIED on Forever).
+**Built today** (until M13; A21, UI8, TT1–TT7): a label/value block of six lines, Current AH price ("8s (2h ago)"), Historical price ("11s (30d, +38%)"), Disenchant value ("14s 25c (+78%)", left out when no character can disenchant), Best time to sell ("Sat 17:00–21:00"), Price at best time ("12s 30c (+54%)") and Chance to sell ("46%", `P'` for one reference stack posted now), with "—" for a line with no data. `UI/Tooltip.lua` draws the lines of `ViewModel.Tooltip`, the Lua twin of `views.tooltip`. The block reads the market file, and a newer in-game scan's cheapest price replaces `cur` ("40c (now)"), with the deltas following it. Best time to sell is the top selling window in local time, tagged "(early)" under 3 weeks of data and "(pattern)" under 6, so the longest line fits 320 px (UI8). Price at best time is the plan's `slot_price`: `level × how × (1 + trend7 ÷ 100 × days until the window's best hour)` (`med7`, else `med30`; trend clamped to ±5%/day and the factor to `1 ± max_trend_total`; TT6, TT7), ported as `Engine/Prices.SlotPrice`. The addon has no config channel, so `Prices.MAX_TREND_TOTAL` holds the default 0.15, as `min_flip_margin` is held in `UI/FlipView.lua`; change both sides together. The Disenchant line uses the ported disenchant table with the item's quality, level and class from the client and your best Enchanting skill. An item without market data adds nothing, and a failure never breaks the tooltip. The hook is `TooltipDataProcessor` where the client has it, else `GameTooltip`'s `OnTooltipSetItem` (UNVERIFIED on Forever).
 
 **Structure.** `UI/ViewModel.lua` turns the addon files, the addon's own recommendations and the live state into plain tables of rows, labels, colours and formatted money. The frame code (`Window`, `AHPanel`, `Tooltip`) only draws those tables. So most UI behaviour is testable as plain Lua, without frames.
 
@@ -1230,7 +1489,7 @@ The system is built as separate components that talk only through versioned cont
 | Export | `export/` | `MarketIntelligence.lua` (the intelligence, trimmed to the shortlist) and `PortfolioPlan.lua` (§3.5) | analysis, recommendations |
 | State Importer | `state/` | reading SavedVariables, idempotent import, character snapshots and the transaction journal, freshness per character | recommendations |
 | Desktop Recommendations | `recommend/` | per-character Disenchant, Craft, Flip, Sell options from intelligence + state | collection, history |
-| Portfolio Optimizer | `recommend/plan.py` (formulas in `engine/plan.py`, `engine/craft_plan.py`, `engine/week.py`) | the cross-character plan: capital, shared market capacity, transfers (§3.4C) | raw collection |
+| Portfolio Optimizer | `recommend/plan.py` (formulas in `engine/plan.py`, `engine/craft_plan.py`, `engine/week.py`); planned: `recommend/portfolio.py` with `engine/portfolio.py` (candidates, selection, validation), `engine/timing.py` (the premium), `engine/positions.py`, `engine/graph.py` | the cross-character plan: capital, shared market capacity, transfers (§3.4C); planned: the funded portfolio, its alternatives and positions (§3.4D) | raw collection |
 | Dashboard | `web/` | showing results; writes only through its secured endpoints (§3.5) | any calculation |
 | Engine | `engine/` | the pure formulas every component above uses (§3.3, §3.4) | I/O of any kind |
 | Lifecycle | `app/` | the scheduler and the order of a refresh: analysis → recommendations → publish | formulas |
@@ -1249,6 +1508,8 @@ The system is built as separate components that talk only through versioned cont
 | State Importer → Recommendations, Portfolio | `state.reads.StateReader` (characters with freshness, skills, recipes, stock, journal) |
 | Recommendations → Portfolio → Dashboard | option and plan records; dashboard pages as in §3.5 |
 | Export → Addon | `MarketIntelligence.lua`, `PortfolioPlan.lua` (§3.5) |
+| Portfolio Optimizer → Export (planned, M11) | the **candidate universe** (`engine.portfolio.Candidate`, the funded ones and the best alternatives, `candidate_export` in all, §3.4D.3) and the **dependency graph** (`engine.graph.Graph`: recipes your characters know plus disenchant transforms, reverse index, topological order) into `MarketIntelligence.lua`; the **portfolio snapshot** (gold per character, committed capital, capital base, capacity, reservations per character, scoring settings and their config version, the snapshot time) and the **positions** into `PortfolioPlan.lua` (§3.5). Together they stay inside the files' 2 MB and 200 KB budgets (§3.1.2, FM40) |
+| State Importer → Portfolio (planned, M14) | positions and their lots (`state.reads.StateReader`), built from matched purchase and craft events (§3.4D.9) |
 
 **Architectural invariants** (checked by AR1–AR4 and the convention test):
 1. Collection is independent of analysis; analysis is independent of character state: `analysis/` imports only `engine/`, `history.reads` and `intel.contract`.
@@ -1343,6 +1604,8 @@ docs/SPEC.md, docs/SCENARIOS.md, docs/mockups/addon.html (in game), docs/mockups
 CLAUDE.md
 ```
 
+**Planned modules** (M9–M14, §3.4D), each with its mirrored test file when it lands: `ahsync/engine/portfolio.py`, `timing.py`, `positions.py`, `graph.py`, `portfolio_view.py`; `ahsync/recommend/portfolio.py`, `portfolio_page.py`; `addon/AHProfit/Engine/Portfolio.lua`, `Timing.lua`, `Graph.lua` (ports, so the selection, premium and graph walk stay formula-for-formula identical, §8.1); `addon/AHProfit/UI/PortfolioView.lua`.
+
 `tools/deploy.py` copies `addon/*` into the WoW AddOns folder.
 
 ### 5.1 Addon performance (WoW best practices)
@@ -1422,6 +1685,8 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `MarketIntellig
 | A dashboard client stalls mid-request | requests run on their own daemon threads with a 10 s timeout, so others are answered and exit never waits for it | — (FM28) |
 | A stored dashboard page can't be decoded | that request answers `503 bad_view` and is logged | the next full refresh replaces it (FM29) |
 | Bad `config.toml` | refuses to start with the line and the reason | — |
+| A recipe loop in the dependency graph (planned) | the desktop cuts the back edge as chains do (C13), exports an acyclic graph with its order, and logs the loop at INFO | — (FM39) |
+| The candidate export would push `MarketIntelligence.lua` past 2 MB (planned) | the lowest-adjusted alternatives are dropped first, never a funded candidate, until it fits; Status "candidate export trimmed to 112 of 150 to fit 2 MB" | lower `candidate_export`, or it clears when the file fits again (FM40) |
 
 **Addon failures (in game):**
 
@@ -1434,6 +1699,8 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `MarketIntellig
 | An addon file from a newer AHSync build (`exportVersion` higher than the addon's) | refused the same way; the footer says "This addon is older than AHSync's files: run tools/deploy.py, then /reload" | deploy the addon, then `/reload` (FM35) |
 | Plan older than your last session (`PortfolioPlan.lua` `basedOnUntil` < your newest event) | the plan is shown as **provisional**: actions already matched by your newer events are marked done locally (`Plan.DoneLocally`, FM18: events after the character's `ingestedUntil`; a confirmed purchase takes its units off the earliest buy of that item, a confirmed post its stack off the earliest post, a craft one craft off the earliest craft of its product; an action with nothing left goes; Today's and Week's footers say "provisional: N done in game since AHSync's plan") | the next AHSync run replaces it |
 | Lua error in the engine or UI | caught with `pcall` at the UI boundary; shown as a status line | that list shows its last good state |
+| Portfolio snapshot older than the addon's own state (planned) | positions and done actions the addon recorded after the snapshot's `basedOnUntil` stay as the addon has them; the older snapshot never overwrites them, and cross-character numbers show the snapshot's time | the next AHSync export includes the events (FM38) |
+| An exported dependency graph whose order isn't topological (planned) | refused with the status line "dependency graph invalid: using AHSync's numbers"; candidates keep their exported values and reselection still runs on them | the next AHSync export (FM39) |
 | Full scan interrupted (AH closed, disconnect, combat, reload) | saved as `partial` with its coverage %. Partial books are **never** used for volume diffs, which need complete books | the next full scan starts fresh |
 | Search queue interrupted (AH closed) | the queue is dropped | rebuilt on the next AH open |
 | A buy or post hook fires but the action fails (outbid, sold out, not enough gold, error) | recorded as an **attempt**. It counts only when confirmed: by the "won" message or mail for a buy, by the own-auctions list for a post. Unconfirmed attempts expire after 1 h | not matched, no cost basis change |
@@ -1480,6 +1747,10 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `MarketIntellig
    - The addon computes it in `Adapter.ItemKey` from `Data/BonusSuffixes.lua`, generated by `tools/gen_bonus_suffixes.py` (re-run it when AHF adds suffixes).
 12. **To build: the undercut share `u(p)`** (§3.3.2). `sellprob.undercut_share` is written and tested but nothing calls it; every simulation uses `default_undercut_share` (0.5). It needs the share of newly listed units priced at or below yours, from book history (AHF books or your scans).
 13. **To build: price-tier sell-through `ST_tier`** (§3.3.2). Never computed, so `blend` always returns `P_queue` (`e` = 0). It needs sold versus expired auctions per price tier over 30 days, from the order-book diffs (§3.3.1).
+14. **Portfolio: learned recipes live** (§4.0). Whether Forever fires an event when a recipe is learned (`NEW_RECIPE_LEARNED` on retail) so the addon can add it to its graph at once, or whether it has to wait for the next profession window.
+15. **Portfolio: live gold.** That `GetMoney` and `PLAYER_MONEY` give the character's gold at once after a buy, a post's deposit and a mail payout on Forever (the addon funds from it, §4.0).
+16. **Portfolio: benchmarks.** `candidate_export` between 100 and 200 against the 2 MB market file, login time (≤ 100 ms, §5.1) and the 2 ms state-change budget of a reselection; the selection and its swap pass against the full refresh's 120 s and the incremental update's 1 s (§3.1.2). The default 150 is a starting point.
+17. **Portfolio: the greedy fill with one swap pass** (§3.4D.4) is a heuristic. Compare it against an exhaustive search on small generated worlds before M10 is done; if it misses often, the fallback is a second fill by plain adjusted profit, keeping the better of the two.
 
 ## 7. Milestones
 
@@ -1493,6 +1764,19 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `MarketIntellig
 | M6 | In-game AH scanning (targeted + full, order books) as a `local` source + own-sales mail capture | Own scans feed prices and sales-volume estimates |
 | M6b | Tracking: post, purchase and craft capture, action matching, cost basis, own sell record, blacklist (§3.3.3, §3.4.1–2) | A buy marks its action done with no typing; 3 expiries lower `P`, cut the quantity and offer Blacklist |
 | M7 | Polish: `.exe`, auto-launch WoW | |
+
+**The unified portfolio optimizer** (planned; §3.4D, from the portfolio spec v1.1's eight phases). The dashboard keeps all its pages until M15 has validated the optimizer.
+
+| # | Deliverable | Done when |
+|---|---|---|
+| M8 | Inspect the code and map the portfolio spec onto it (phase 1) | every requirement has a SPEC section, a scenario ID in `tests/pending_scenarios.txt`, or an entry in §9; nothing is claimed built (this merge, 2026-10-19) |
+| M9 | Unified data contracts (phase 2): the candidate record, the portfolio accounting, the new config keys, the `alternatives` table | PF1, PF3, PF8, PF22, PF23 pass; `config.py` reads the new keys and refuses bad values |
+| M10 | The portfolio optimizer (phase 3): candidates as marginal batches, the timing premium, selection with one swap pass, validation, exclusion reasons; `max_risk_pct` removed | PF2, PF4–PF21, PF24–PF27 pass; R19, C24, D45, D46 and A64 are rewritten for the exposure budget; WP1's snapshot is updated on purpose and stays byte-identical across runs; the full refresh stays within 120 s and the re-plan within 1 s (`tools/bench.py`) |
+| M11 | Desktop forecasting and exports (phase 4): buy windows by actionable value, window fields, the candidate universe, the graph and the portfolio snapshot in the addon files (`EXPORT_VERSION` 3) | W14, W15, EX17, EX18, FM40 pass; `MarketIntelligence.lua` ≤ 2 MB and `PortfolioPlan.lua` ≤ 200 KB on the 9k-item world |
+| M12 | Addon live adaptation (phase 5): graph repricing, bounded reselection for the logged-in character, live buy-now, learned recipes | DG1–DG7, A76–A78, A80, A83, FM39 pass in Lua; PF15 passes in both languages; one state change stays within 2 ms (`/ahp perf`) |
+| M13 | The unified UI (phase 6): the dashboard's Portfolio page and risk dropdown, the addon's Portfolio tab (replacing Today and Week), the side panel's unfunded rows, the new tooltip | D72, D73, D77–D79, SEC11, A79, A82, UI16–UI19, TT8–TT21 pass; golden snapshots updated and reviewed against both mockups. Section A shows the holding rows the sell plan derives until M14 adds durable positions |
+| M14 | Positions and reconciliation (phase 7) | PO1–PO13, A81, FM38 pass; History compares per position (PO9) |
+| M15 | The other UI updates and validation (phase 8): the gold pill, the Inventory character filter, Disenchant research, the existing pages kept | D71, D74–D76 pass; a week of real play shows the funded plan and realized profit (K7) agree well enough to decide whether the dashboard's Today and Week pages go |
 
 ## 8. Testing
 
@@ -1526,7 +1810,7 @@ Builders accept item names, `"1g 20s 5c"` prices and `T0+2h` times, and convert 
 
 ### 8.3 Required scenarios (minimum set)
 
-The minimum set lives in **[SCENARIOS.md](SCENARIOS.md)**, grouped by module, with IDs V*, S*, FM*, SEC*, P*, W*, R*, O*, D*, C*, M*, IU*, CF*, T*, A* and UI*, TT*, K*, plus the invariants PI*, VI*, CI*, PL*, VW*, LP* and FI* (§8.7).
+The minimum set lives in **[SCENARIOS.md](SCENARIOS.md)**, grouped by module, with IDs V*, S*, FM*, SEC*, P*, W*, R*, O*, D*, C*, M*, IU*, CF*, T*, A* and UI*, TT*, K*, the planned portfolio IDs PF*, PO* and DG* (§3.4D), plus the invariants PI*, VI*, CI*, PL*, VW*, LP* and FI* (§8.7).
 Spec sections refer to scenarios by ID. A convention test keeps that file and the tests in step (§8.1).
 
 ### 8.4 Visual tests (addon UI)
@@ -1543,7 +1827,7 @@ No tool renders a Classic-era addon exactly like the game outside it, so there a
 3. **Rendered screenshots** (optional, through wow-ui-sim in Docker). The same scenarios are rendered to PNG and compared with `tests/visual/golden/*.png` within a pixel tolerance. Pillow is a dev-only dependency for the comparison. This depends on the §6 spike. If wow-ui-sim can't load a Classic-style addon, this layer is dropped, and layer 2's HTML view and layer 4 cover it.
 4. **In game** (manual, once per milestone): `/ahp demo`, then screenshot each tab and compare with the mockup.
 
-Scenarios UI1–UI15: [SCENARIOS.md §2](SCENARIOS.md#2-visual-tests-ui1ui11).
+Scenarios UI1–UI19: [SCENARIOS.md §2](SCENARIOS.md#2-visual-tests-ui1ui19).
 
 ### 8.5 Every number on every tab is tested
 
@@ -1560,19 +1844,23 @@ Each number a tab shows comes from a pure function in `ahsync/engine/`. The dash
 | Inventory | `inventory_view.inventory_view` (worth, plan cell, tiles), `item_detail.item_detail` (heatmaps, windows, the three answers), `tracking.cost_basis` | R7, R10, T7, T12, D25–D31, W9 |
 | History | `tracking.match`, `tracking.judge` and `tracking.profit_sums` (expected next to realized, the three tiles), `history_view` | T1–T8, T14–T16, T23, D47, D48, D68–D70 |
 | Rules | `sell_record.sell_record`, the rule filters in `flips`, `craft_plan`, `week` and `inventory_view` | O1–O18 |
-| Tooltip | `views.tooltip` | TT1–TT5 |
+| Tooltip | `views.tooltip` | TT1–TT7; planned (M13): the new tooltip's lines, TT8–TT21, UI17 |
+| Portfolio (dashboard, planned) | `portfolio.candidates`, `portfolio.select`, `portfolio.validate`, `timing.adjusted`, `portfolio_view` (tiles, the three sections, the funding card, footers, profit %, the empty state) | PF1–PF24, D72, D73, D77–D79 |
+| Portfolio tab (addon, planned) | `ViewModel.Portfolio`, `Engine/Portfolio.lua`, `Engine/Timing.lua`, `Engine/Graph.lua` | A76–A83, DG1–DG7, UI16, UI18, UI19 |
+| Positions (planned) | `positions.open`, `positions.state`, `positions.history_rows` | PO1–PO13 |
+| Gold pill, Inventory filter (planned) | `views.gold_pill`, `inventory_view` per character | D74, D75 |
 | Status | `status_view.status_view` (alerts, cards), `collect.catchup`, `sell_record.calibration`, `tracking.profit_sums` (the profit line) | S1–S10, D32–D36, K1–K3, K6, K7 |
 | Weekly patterns, best windows | `patterns.sell_windows`, `patterns.weighted_median` | W1–W7 |
 | Confidence % | `confidence.score` | CF1–CF4 |
 | Refresh and incremental updates | `refresh.refresh_all`, `refresh.update_items`, `plan.status_pass`, `sellprob.from_curve` | IU1–IU11 |
 | Failure handling | `sync.*`, `ingest.*`, `export.*`, `refresh.*`, addon `Core/*` | FM1–FM24, FI1–FI2 |
-| Dashboard security (not engine; `web/server`) | request checks | SEC1–SEC7 |
+| Dashboard security (not engine; `web/server`) | request checks | SEC1–SEC10; planned SEC11 |
 | Sell probability, expected value | `sellprob.simulate`, `sellprob.blend`, `sellprob.expected` | P5–P9, P12–P24, PI1–PI17, K1–K3 |
 | Volume | `volume.*` (incl. the per-day source choice, coverage scaling and calibration) | V1–V35, S11, the invariants below |
 
 `tests/test_conventions.py` fails if a view field has no scenario that checks it. Branch coverage of `ahsync/engine/` must be 100% (`coverage.py`, dev-only).
 
-The view and tooltip scenarios (D16–D18, TT1–TT5) are in [SCENARIOS.md §3](SCENARIOS.md#3-views-and-tooltip-d16d22-tt1tt5).
+The view and tooltip scenarios (D16–D18, TT1–TT21) are in [SCENARIOS.md §3](SCENARIOS.md#3-views-and-tooltip-d16d22-tt1tt21).
 
 ### 8.6 Determinism
 
@@ -1590,7 +1878,7 @@ Single scenarios check one example. Invariants check that a formula behaves sens
 - **How cases are made.** `tests/support/gen.py` makes cases from a fixed seed with `random.Random(seed)`. A failure prints the seed and the inputs, so it can be reproduced. The generated cases are saved to `tests/properties/*.json`, so the Lua port is checked against exactly the same cases.
 - **Scale.** At least 1,000 cases per invariant.
 
-The invariants (PI1–PI17, VI1–VI4, CI1–CI3, PL1–PL5, VW1, LP1, FI1–FI2) are listed in [SCENARIOS.md §5](SCENARIOS.md#5-invariants-spec-87), with the other test IDs, so the convention test (§8.1) sees one list.
+The invariants (PI1–PI17, VI1–VI4, CI1–CI3, PL1–PL5, VW1, LP1, FI1–FI2, and the planned portfolio invariants PF25–PF27) are listed in [SCENARIOS.md §5](SCENARIOS.md#5-invariants-spec-87), with the other test IDs, so the convention test (§8.1) sees one list.
 
 ### 8.8 Calibration: does the chance to sell match reality?
 

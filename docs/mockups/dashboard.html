@@ -122,6 +122,18 @@
   .breakdown div { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; border-bottom: 1px dashed var(--border); font-size: 13px; }
   .breakdown span { color: var(--muted); } .breakdown b { font-weight: 600; text-align: right; }
   .chance { color: var(--text); }
+  /* Portfolio: position stage badges, the Funded status, greyed alternatives and card footers */
+  .st { display: inline-block; font-size: 11px; padding: 0 7px; border-radius: 9px; border: 1px solid currentColor; white-space: nowrap; }
+  .st.acq { color: var(--buy); } .st.proc { color: var(--craft); } .st.hold { color: var(--amber); } .st.ready { color: var(--pos); }
+  .st.listed { color: var(--post); } .st.partial { color: var(--info); } .st.recon { color: var(--neg); } .st.funded { color: var(--pos); }
+  tr.excluded td:not(.why) { opacity: .45; }
+  .foot { display: flex; gap: 8px; flex-wrap: wrap; padding: 8px 14px; border-top: 1px solid var(--border-hi); background: #120f0b; font-size: 13px; }
+  .foot.note { border-top-color: var(--border); background: none; color: var(--muted); font-size: 12px; }
+  .fresh { color: var(--muted); font-size: 12px; margin: -8px 0 16px; }
+  .states li { margin: 2px 0; }
+  tr.cut td { color: var(--neg); border-top: 2px solid var(--neg); border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 600; padding: 3px 12px; background: none !important; letter-spacing: .3px; }
+  .tile select { font: inherit; color: var(--text); background: #0b0a08; border: 1px solid var(--border-hi); border-radius: 4px; padding: 0 4px; cursor: pointer; }
+  tr.total td { font-weight: 650; border-top: 1px solid var(--border-hi); }
 
   @media (max-width: 760px) {
     .layout { grid-template-columns: 1fr; }
@@ -139,6 +151,7 @@
   <div class="brand">AH<span>Sync</span></div>
   <span class="select">Market: forever.pvp.horde.us ▾</span>
   <span class="grow"></span>
+  <span class="pill gold" id="goldpill" title="Gold in hand across your characters at the last portfolio snapshot. Hidden on Rules, Characters and Status"></span>
   <span class="pill" title="Numbers are recomputed at start, once a day after 06:00, or when you press Refresh now. Your in-game changes update the affected items immediately.">numbers from 06:00 · <span class="amber">prices newer</span></span>
   <span class="btn primary" title="Full refresh: recompute every statistic, chance and the plan (about a minute)">⟳ Refresh now</span>
   <span class="pill ok">● synced 14:06 · hour data 2 h old</span>
@@ -158,7 +171,7 @@ function money(c, signed) {
   const sign = c < 0 ? '−' : (signed ? '+' : '');
   const a = Math.abs(c), g = Math.floor(a / 10000), s = Math.floor(a % 10000 / 100), cp = a % 100;
   const parts = [];
-  if (g) parts.push(`${g}<span style="color:#c9a227">g</span>`);
+  if (g) parts.push(`${String(g).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}<span style="color:#c9a227">g</span>`);
   if (s) parts.push(`${s}<span style="color:#9aa0a6">s</span>`);
   if (cp || !parts.length) parts.push(`${cp}<span style="color:#b8693a">c</span>`);
   return sign + parts.join(' ');
@@ -282,7 +295,24 @@ const HELP = {
   'Last expired': 'When it last expired while cheapest',
   'Kept': 'When you chose Keep',
   'Since then': 'Posts and sales since Keep',
-  'Status': 'How it is doing since Keep',
+  'Status': 'Where it stands. Rules: how it is doing since Keep. Portfolio: a position\'s stage, or Funded / why an opportunity was left out',
+  'Strategy': 'How it makes money: Flip, Craft, Multistage craft (a reagent is crafted first), Disenchant, Sell stock (items you own) or Buy for later',
+  'Paid': 'What you paid for the whole position; 0 for items you found',
+  'Cost basis left': 'What you paid for the units you still hold: the capital this position ties up',
+  'Est. net': 'Expected profit on what is left, after the 5% cut, deposits and the chance it sells',
+  'Sell window': 'When it is planned to sell: the day and the peak hours',
+  'Next action': 'The one thing to do next for this position',
+  'Buy when': 'When to buy: now, or the buy window the price dips in',
+  'Process': 'A craft or disenchant step between buying and selling, and when',
+  'Sell when': 'The day and peak hours it is planned to sell',
+  'Gold needed': 'New gold it takes from the remaining capacity: buys, mats and deposits',
+  'Materials': 'What it needs besides the item itself: mats to buy, or owned',
+  'Adjusted': 'Expected net ÷ (1 + waiting premium). Premium: 0% if it is realized today, else 15% + 5% × the wait, in fractional days from now to the expected sale hour. One list across Today and the week is ranked by this',
+  '#': 'Selection order: adjusted profit per copper of exposure, then the swap pass; shown by adjusted profit',
+  'Sells': 'When the profit is realized: the expected sale hour',
+  'Profit %': 'Return on cash: expected net ÷ cash (new gold + what you paid for bought stock it uses), half up. "—" when it uses only found stock; such rows are left out of the % totals',
+  'Cash': 'Gold needed + the cost basis of bought stock the row uses. Found stock counts 0',
+  'Left': 'Remaining capacity after this row is funded',
   'Rule': 'The blacklist rule',
   'Effect': 'What the rule changes',
   'Set': 'When the rule was set',
@@ -298,11 +328,190 @@ const HELP = {
 };
 const table = (cols, rows, sorted) => `<div class="scrollx"><table><thead><tr>${cols.map(([t, n], i) =>
   `<th class="${n ? 'num ' : ''}${t ? (i === sorted ? 'sort sorted' : 'sort') : ''}"${t ? ` title="${String(HELP[t]).replace(/"/g, '&quot;')}"` : ''}>${t}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
-const filters = extra => `<div class="filters"><span class="select search">🔍 Search items…</span><span class="select">Character: All ▾</span>${extra || ''}</div>`;
+const filters = (extra, who) => `<div class="filters"><span class="select search">🔍 Search items…</span><span class="select">Character: ${who || 'All'} ▾</span>${extra || ''}</div>`;
 const tiles = list => `<div class="tiles">${list.map(([k, v, d]) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="d">${d || ''}</div></div>`).join('')}</div>`;
+
+// ---------- portfolio (Unified Portfolio Optimizer, spec v1.1) ----------
+// The same world as the other pages: 31g 40s in hand (TOTAL_GOLD), 4g committed, 30% risk tolerance.
+const PF_GOLD = { Amaya: 210000, Brugan: 104000 }; // gold in hand per character at the snapshot, copper; sums to TOTAL_GOLD
+const PF_SNAPSHOT = 'Mon 10:38';
+const PF_NOW_MIN = 10 * 60 + 38; // now: Mon 10:38, in minutes after Mon 00:00
+const PF_RISK_PCT = 30;
+const PF_LIMIT = 20; // funded rows per list: 20 for Today and 20 for the next 7 days, separately
+const PF_IMMEDIATE_HOURS = 8; // config immediate_hours: profit realized within it has no premium (8 = the posting-now window; 24 allowed)
+const pfGold = () => PF_GOLD.Amaya + PF_GOLD.Brugan;
+// The global gold pill (top bar, every page except Rules, Characters and Status).
+const goldPill = () => `Gold ${money(pfGold())} · 2 characters · ${PF_SNAPSHOT}`;
+// Market activity and confidence for the portfolio's items that the pages above don't already have (example values).
+// A disenchant row's activity describes its mats, as on Disenchant.
+Object.assign(VOL, {
+  'Embossed Leather Gloves': [210, 'AHF', 400], "Grunt's Bracers of Defense": [210, 'AHF', 400], 'Lesser Mana Potion': [10, 'AHF', 25],
+  'Elixir of Fortitude': [3, 'AHF', 11], 'Thick Leather': [20, 'AHF', 45], 'Greater Magic Essence': [8, 'est.', 18],
+});
+Object.assign(CONF, {
+  'Embossed Leather Gloves': 82, "Grunt's Bracers of Defense": 80, 'Lesser Mana Potion': 60, 'Elixir of Fortitude': 60, 'Thick Leather': 80, 'Greater Magic Essence': 33,
+});
+// Section A, positions: [item, quality, qty, character, stage, paid (copper), cost basis left, est. net (null = unknown), sell window, next action, note].
+// Cost basis left sums to the committed capital: 3g + 30s + 14s + 0 + 30s + 4s + 40s = 4g 18s. Exposure lasts until the payout is
+// collected: Mageweave Cloth keeps all 25 units' cost (30s) while 25s 65c of its sales waits in the mailbox.
+const POS = [
+  ['Mithril Coif', 2, 1, 'Brugan', 'listed', 30000, 30000, 4500, 'listed<span class="sub">22 h left</span>', 'undercut: relist at 4g 49s 99c', 'listed at 4g 50s · bought for 3g'],
+  ['Copper Bar', 1, 6, 'Brugan', 'hold', 3000, 3000, 3157, 'Sat 19:00–22:00', 'post Sat 11:00 for the 19:00 peak', 'bought for later sale at 5s each'],
+  ['Elixir of Agility', 1, 2, 'Brugan', 'ready', 1400, 1400, 800, 'now<span class="sub">planned Wed 20:00–22:00</span>', 'sell now: price spike +38%', 'bought for Wed; the price is 38% over its median now'],
+  ['Wool Cloth', 1, 20, 'Amaya', 'hold', 0, 0, 472, 'Sun 19:00–22:00', 'hold', 'found · uses no capital · worth 6s at 30c each before the cut'],
+  ['Mageweave Cloth', 1, '10 <span class="muted">of 25</span>', 'Amaya', 'partial', 3000, 3000, 600, 'Tue 20:00–22:00<span class="sub">listed</span>', 'collect mail: 15 sold, 25s 65c waiting', '25 bought at 1s 20c · 15 × 1s 80c after the 5% cut = 25s 65c · all 30s stays committed until you collect it'],
+  ['Iron Ore', 1, 10, 'Brugan', 'proc', 400, 400, 150, 'Thu 19:00–22:00<span class="sub">as Iron Bar</span>', 'smelt today · post Thu 11:00 for the 19:00 peak', ''],
+  ['Medium Leather', 1, 20, 'Amaya', 'recon', 4000, 4000, null, DASH, 'check bags and mail: 14 of 20 found', 'the journal says 20; the last bag snapshot shows 14'],
+];
+// Section B, realized today (no premium): [strategy, action, item, quality, qty, each, expected net, P, character,
+// gold needed (copper: buy total, mats to buy, or a post's deposit), lines under the row, status (null = funded, else [class, reason, detail]),
+// cost basis of bought stock the row uses (copper; found stock counts 0)]. Today's rows sell by the 18:00 peak, 7.37 h from now.
+// Funded rows first, best expected net first; then the alternatives.
+const TODAY_OPP = [
+  ['Sell stock', 'post', 'Copper Rod', 1, 5, 4100, 6306, 58, 'Brugan', 100, "owned (Brugan's bags) · gold needed is the 1s deposit · post now, for the 18:00 peak tonight · the 5 rods cost 10s each (bought), so cash = 1s + 50s", null, 5000],
+  ['Craft', 'craft', 'Silver Rod', 1, 1, 3000, 4000, 75, 'Brugan', 3000, 'buy 1 Silver Bar on the AH · 28s · 2 Weak Flux from a vendor · 2s</span><span class="sub">then: post now, for the 18:00 peak tonight', null, 0],
+  ['Disenchant', 'de', 'Scouting Gloves of the Monkey', 2, 1, 800, 625, 100, 'Amaya', 800, 'ilvl 25 · disenchant now, post the dust for the 18:00 peak tonight', null, 0],
+  ['Disenchant', 'de', 'Embossed Leather Gloves', 2, 1, 500, 380, 100, 'Amaya', 500, 'ilvl 23 · disenchant now, post the dust for the 18:00 peak tonight', null, 0],
+  ['Flip', 'buy', 'Linen Cloth', 1, 20, 38, 203, 92, 'Amaya', 760, 'relist now at 55c, for the 18:00 peak tonight', null, 0],
+  ['Craft', 'craft', 'Lesser Mana Potion', 1, 10, 450, 80, 60, 'Brugan', 4500, 'buy 10 Mageroyal + 10 Stranglekelp on the AH · 45s',
+    ['amber', 'Exceeds risk tolerance (needs 45s, 24s 40c left)', 'its turn came after every funded row, so 24s 40c is also what stays unallocated'], 0],
+  ['Disenchant', 'de', "Grunt's Bracers of Defense", 2, 1, 1500, 600, 100, 'Amaya', 1500, 'ilvl 36', ['neg', 'Required profession unavailable: Enchanting 150', 'Amaya has Enchanting 142'], 0],
+  ['Flip', 'buy', 'Elixir of Fortitude', 1, 40, 300, 900, 35, 'Amaya', 12000, 'relist now, for the 18:00 peak tonight', ['amber', 'Insufficient liquidity: 3/day, 40 planned', 'the market sells about 3 a day; 40 would take about 13 days'], 0],
+];
+// Section C, realized in the next 7 days: [strategy, item, quality, qty, buy when, process, sell window,
+// expected sale hour [days after today, hour], gold needed, materials, expected net, P, character, lines under the row, status,
+// cost basis of bought stock the row uses (copper; found stock counts 0)].
+// Funded rows first, best adjusted profit first; then the alternatives.
+const WEEK_OPP = [
+  ['Flip', 'Mithril Spurs', 3, 1, 'now', DASH, 'Sat 18:00–21:00', [5, 18], 30000, DASH, 7342, 85, 'Brugan', 'post Sat 10:00, for the 18:00 peak', null, 0],
+  ['Flip', 'Thick Leather', 1, 30, 'Tue 20:00–23:00<span class="sub">buy window</span>', DASH, 'Thu 19:00–22:00', [3, 19], 16080, DASH, 5500, 78, 'Amaya', '30 × 5s 36c · post Thu 11:00, for the 19:00 peak', null, 0],
+  ['Craft', 'Transmute: Iron to Gold', 2, 1, 'now', 'transmute Thu 10:00<span class="sub">cooldown ready Thu 09:00</span>', 'Thu 19:00–22:00', [3, 19], 4200, 'Iron Bar 42s', 1855, 65, 'Brugan', 'then: post the Gold Bar Thu 11:00, for the 19:00 peak', null, 0],
+  ['Multistage craft', 'Runed Copper Rod', 2, 1, 'now', 'Brugan crafts Copper Rod Tue<span class="sub">mails it · Amaya crafts Wed</span>', 'Sun 18:00–21:00', [6, 18], 3700, '2 Copper Bar 20s · Strange Dust + Lesser Magic Essence 17s', 1630, 95, 'Amaya', 'post Sun 10:00, for the 18:00 peak', null, 0],
+  ['Buy for later', 'Silk Cloth', 1, 40, 'now', DASH, 'Sat 19:00–22:00', [5, 19], 2800, DASH, 730, 88, 'Amaya', 'below its 10th percentile now · post Sat 11:00, for the 19:00 peak', null, 0],
+  ['Craft', 'Bolt of Silk Cloth', 1, 2, 'now', 'craft today', 'Sun 19:00–22:00', [6, 19], 560, '8 Silk Cloth 5s 60c · 2 Spider\'s Silk (found)', 194, 85, 'Amaya', 'post Sun 11:00, for the 19:00 peak', null, 0],
+  ['Craft', 'Heavy Grinding Stone', 1, 4, `${DASH}<span class="sub">owned mats</span>`, 'craft today', 'Sat 19:00–22:00', [5, 19], 0, '8 Heavy Stone (found)', 134, 75, 'Brugan', 'post Sat 11:00, for the 19:00 peak', null, 0],
+  ['Buy for later', 'Greater Magic Essence', 2, 4, 'Wed 20:00–23:00<span class="sub">buy window</span>', DASH, 'Sun 19:00–22:00', [6, 19], 3600, DASH, 1200, 55, 'Amaya', '',
+    ['amber', 'Forecast too uncertain (1 week of data)', 'its Sunday peak has been seen once; a forecast needs 3 weeks'], 0],
+];
+// Wait (spec v1.1, one clock): fractional days from now to the expected sale hour, kept in hundredths of a day, half up.
+const waitHundredths = ([day, hour]) => Math.floor((day * 1440 + hour * 60 - PF_NOW_MIN) * 100 / 1440 + 0.5);
+// Waiting premium in hundredths of a percent: 0 within the immediate window, else 15% + 5% × wait (fractional days).
+const premiumBp = w100 => w100 * 24 <= PF_IMMEDIATE_HOURS * 100 ? 0 : 1500 + 5 * w100;
+// Adjusted profit in copper: expected net ÷ (1 + premium), rounded with floor(x + 0.5) (SPEC §3.3).
+const adjusted = (e, w100) => Math.floor(e * 10000 / (10000 + premiumBp(w100)) + 0.5);
+const weekScore = r => adjusted(r[10], waitHundredths(r[7]));
+const halfUpPct = (a, b) => Math.floor(a * 100 / b + 0.5);
+// Return on cash: [expected net, cash] pairs → "x%" over the rows with cash; rows using only found stock (cash 0) are left out.
+const cashPct = pairs => { const c = pairs.filter(([, cash]) => cash > 0); const cash = c.reduce((t, p) => t + p[1], 0);
+  return cash ? `${halfUpPct(c.reduce((t, p) => t + p[0], 0), cash)}%` : DASH; };
+const todayCash = r => r[9] + r[12], weekCash = r => r[8] + r[15];
+const hhmm = h => `${String(h).padStart(2, '0')}:00`;
+const STAGE = { acq: 'Acquiring', proc: 'Processing', hold: 'Holding', ready: 'Ready to sell', listed: 'Listed', partial: 'Partially sold', recon: 'Needs reconciliation' };
+const statusCell = s => `<td class="why">${s ? `<span class="${s[0]}">${s[1]}</span>${s[2] ? `<span class="sub">${s[2]}</span>` : ''}` : '<span class="st funded">Funded</span>'}</td>`;
+// The red line between funded rows and alternatives.
+const cutRow = (span, left) => `<tr class="cut"><td colspan="${span}">capacity reached · ${money(left)} left</td></tr>`;
+// Capital base, risk budget and the shared pool, all computed from the rows above so every total reconciles.
+function pfSummary() {
+  const gold = pfGold();
+  const committed = POS.reduce((t, p) => t + p[6], 0);
+  const base = gold + committed, limit = base * PF_RISK_PCT / 100, capacity = limit - committed;
+  const fundedToday = TODAY_OPP.filter(r => !r[11]), fundedWeek = WEEK_OPP.filter(r => !r[14]);
+  const today = fundedToday.reduce((t, r) => t + r[9], 0), week = fundedWeek.reduce((t, r) => t + r[8], 0);
+  return { gold, committed, base, limit, capacity, today, week, alloc: today + week, left: capacity - today - week,
+           committedPct: halfUpPct(committed, base), fundedToday, fundedWeek };
+}
+function posRow([n, q, qty, who, st, paidC, basis, est, sell, next, note]) {
+  return `<tr><td>${item(n, q)}${note ? `<span class="sub">${note}</span>` : ''}</td><td class="num">${qty}</td><td>${who}</td><td><span class="st ${st}">${STAGE[st]}</span></td>` +
+    `<td class="num">${paid(paidC)}</td><td class="num">${money(basis)}</td><td class="num">${net(est)}</td><td>${sell}</td><td>${next}</td></tr>`;
+}
+function todayOppRow([strategy, a, n, q, qty, each, e, P, who, spend, note, status]) {
+  return `<tr${status ? ' class="excluded"' : ''}><td>${strategy}</td><td>${act(a)}</td><td>${item(n, q)}${note ? `<span class="sub">${note}</span>` : ''}</td><td class="num">${qty}</td>` +
+    `<td class="num">${money(each)}</td><td class="num">${money(each * qty)}</td><td class="num">${net(e)}</td>${market(n, P)}<td class="num">${risk(spend)}</td><td>${who}</td>` +
+    `${statusCell(status)}<td>${status ? '' : '<span class="btn">Skip</span>'}</td></tr>`;
+}
+function weekOppRow([strategy, n, q, qty, buy, process, sell, sale, gold, mats, e, P, who, note, status]) {
+  const w = waitHundredths(sale), bp = premiumBp(w);
+  return `<tr${status ? ' class="excluded"' : ''}><td>${strategy}</td><td>${item(n, q)}${note ? `<span class="sub">${note}</span>` : ''}</td><td class="num">${qty}</td><td>${buy}</td><td>${process}</td>` +
+    `<td>${sell}<span class="sub">expected sale ${hhmm(sale[1])}</span></td><td class="num">${money(gold)}</td><td class="muted">${mats}</td><td class="num">${net(e)}</td>` +
+    `<td class="num" title="Expected net ÷ ${(1 + bp / 10000).toFixed(4)}">${net(adjusted(e, w))}<span class="sub">Wait ${(w / 100).toFixed(2)} d · premium ${(bp / 100).toFixed(2)}%</span></td>` +
+    `${market(n, P)}<td>${who}</td>${statusCell(status)}<td>${status ? '' : '<span class="btn">Skip</span>'}</td></tr>`;
+}
+// The one shared pool in funding order: every funded row by adjusted profit (Today's rows: their expected net), with
+// expected net, gold needed, profit % and the capacity left after it; then totals, the red line and the first row that didn't fit.
+function poolTable(s) {
+  const rows = [...s.fundedToday.map(r => [r[2], 'today 18:00', r[6], r[6], r[9], todayCash(r)]),
+                ...s.fundedWeek.map(r => [r[1], `${r[6].split(' ')[0]} ${hhmm(r[7][1])}`, weekScore(r), r[10], r[8], weekCash(r)])]
+    .sort((a, b) => b[2] - a[2] || a[0].localeCompare(b[0]));
+  const pctCell = (e, cash) => cash ? `${halfUpPct(e, cash)}%` : `${DASH}<span class="sub">found stock</span>`;
+  let left = s.capacity;
+  const out = rows.map(([n, when, score, e, gold, cash], i) => { left -= gold;
+    return `<tr><td class="num">${i + 1}</td><td>${n}</td><td>${when}</td><td class="num">${money(score)}</td><td class="num">${net(e)}</td><td class="num">${money(gold)}</td><td class="num">${money(cash)}</td><td class="num">${pctCell(e, cash)}</td><td class="num">${money(left)}</td></tr>`; });
+  const tot = (i) => rows.reduce((t, r) => t + r[i], 0);
+  const found = rows.filter(r => !r[5]).map(r => r[0]);
+  out.push(`<tr class="total"><td></td><td>Total funded<span class="sub">% leaves out ${found.join(', ')} (found stock only)</span></td><td class="muted">${rows.length} rows</td><td class="num">${money(tot(2))}</td><td class="num">${net(tot(3))}</td><td class="num">${money(tot(4))}</td><td class="num">${money(tot(5))}</td><td class="num">${cashPct(rows.map(r => [r[3], r[5]]))}</td><td class="num">${money(left)}</td></tr>`);
+  out.push(cutRow(9, left));
+  const x = TODAY_OPP.find(r => r[11] && r[11][1].startsWith('Exceeds'));
+  out.push(`<tr class="excluded"><td></td><td>${x[2]}</td><td>today 18:00</td><td class="num">${money(x[6])}</td><td class="num">${net(x[6])}</td><td class="num">${money(x[9])}</td><td class="num">${money(todayCash(x))}</td><td class="num">${pctCell(x[6], todayCash(x))}</td><td class="num why"><span class="amber">needs ${money(x[9])}: not funded</span></td></tr>`);
+  return table([['#', 1], ['Item'], ['Sells'], ['Adjusted', 1], ['Expected net', 1], ['Gold needed', 1], ['Cash', 1], ['Profit %', 1], ['Left', 1]], out, null);
+}
+// The premium table under section C: wait and premium for each expected sale hour the plan uses.
+const premiumTable = () => [['Tue', 1, 19], ['Wed', 2, 19], ['Thu', 3, 19], ['Fri', 4, 19], ['Sat', 5, 18], ['Sat', 5, 19], ['Sun', 6, 18], ['Sun', 6, 19]]
+  .map(([d, day, h]) => { const w = waitHundredths([day, h]); return `${d} ${hhmm(h)} ${(w / 100).toFixed(2)} d → ${(premiumBp(w) / 100).toFixed(2)}%`; }).join(' · ');
 
 // ---------- pages ----------
 const PAGES = {
+  Portfolio: { count: 12, html: () => {
+    const s = pfSummary();
+    const sum = (rows, i) => rows.reduce((t, r) => t + r[i], 0);
+    const weekAdj = s.fundedWeek.reduce((t, r) => t + weekScore(r), 0);
+    const posNet = POS.reduce((t, p) => t + (p[7] || 0), 0);
+    const exToday = TODAY_OPP.filter(r => r[11]), exWeek = WEEK_OPP.filter(r => r[14]);
+    const colsB = [['Strategy'], ['Action'], ['Item'], ['Qty', 1], ['Each', 1], ['Total', 1], ['Expected net', 1], ...MARKET, ['Risk', 1], ['Character'], ['Status'], ['']];
+    const colsC = [['Strategy'], ['Item'], ['Qty', 1], ['Buy when'], ['Process'], ['Sell when'], ['Gold needed', 1], ['Materials'], ['Expected net', 1], ['Adjusted', 1], ...MARKET, ['Character'], ['Status'], ['']];
+    const riskSelect = `<select aria-label="Risk tolerance" title="Changing it re-runs the allocation">${[10, 20, 30, 40, 50].map(p => `<option${p === PF_RISK_PCT ? ' selected' : ''}>${p}%</option>`).join('')}</select>`;
+    return `<h1>Portfolio</h1><p class="lede">One plan for all your gold, in the same numbers as every other page. Your characters' gold plus what you've already paid for what you hold is the <b>capital base</b> (${money(s.gold)} + ${money(s.committed)} = ${money(s.base)}). <b>Risk tolerance</b> caps how much of it may be tied up at once (${PF_RISK_PCT}% → ${money(s.limit)}), and what isn't tied up yet is the <b>remaining capacity</b> (${money(s.limit)} − ${money(s.committed)} = ${money(s.capacity)}). <b>Today</b> holds only what is realized today: posts and sales now, buy-and-relist now, craft-and-post now, disenchant now. Anything realized later is in <b>Next 7 days</b>, including a flip bought now and sold on a later day (Mithril Spurs: buy now, sell Sat). Both lists draw on <b>one shared pool</b>, ranked together by <b>adjusted profit</b>: expected net ÷ (1 + waiting premium). Profit realized within the <b>immediate window</b> (config <code>immediate_hours</code>: 8 h by default, the posting-now window; 24 h allowed) has no premium; Today's rows sell by the 18:00 peak tonight, 7.37 h away. Beyond the window the premium is 15% + 5% × the <b>wait</b>, in fractional days from now (Mon 10:38) to the expected sale hour: Thu 19:00 is 3.35 days away, so 31.75%. Immediate profit wins unless waiting pays the premium: ${money(5500)} in exactly 3 days scores ${money(5500)} ÷ 1.30 = ${money(Math.floor(5500 / 1.3 + 0.5))} and beats ${money(4000)} now. Thick Leather's ${money(5500)}, sold Thu 19:00, scores ${money(5500)} ÷ 1.3175 = ${money(adjusted(5500, 335))}, still above today's ${money(4000)} Silver Rod. Funding runs down that list until the capacity runs out, and the <span class="neg">red line</span> marks where it did. Rows below it are greyed alternatives with the reason they were left out; they never count in a total. Each list funds up to ${PF_LIMIT} rows. <b>Profit %</b> is return on cash: expected net ÷ (new gold + what you paid for bought stock the row uses); rows that use only found stock show "—" and stay out of the % (their profit still counts). Once you spend gold on a suggestion it becomes a <b>position</b> (A) and stays until it sells, whatever later refreshes say. Its exposure stays until the gold is collected from the mailbox, since gold waiting in the mail can't be spent; positions take no slots. Suggestions you haven't acted on are recomputed freely at every refresh.</p>
+    ${tiles([['Gold in hand', money(s.gold), `Amaya ${money(PF_GOLD.Amaya)} · Brugan ${money(PF_GOLD.Brugan)}`],
+             ['Committed capital', money(s.committed), `${s.committedPct}% of capital base`],
+             ['Capital base', money(s.base), 'gold in hand + committed'],
+             ['Risk tolerance', riskSelect, `exposure limit ${money(s.limit)} · changing it re-runs the allocation`],
+             ['Remaining capacity', money(s.capacity), `${money(s.limit)} limit − ${money(s.committed)} committed`],
+             ['Allocated to new opportunities', `${money(s.alloc)} <span class="muted" style="font-size:13px;font-weight:400">of ${money(s.capacity)}</span>`, `Today ${money(s.today)} · next 7 days ${money(s.week)} · ${money(s.left)} left`]])}
+    <div class="fresh">portfolio snapshot ${PF_SNAPSHOT} · tiles show the values at ${PF_RISK_PCT}% · gold as each character last logged in · positions from the journal</div>
+
+    <div class="card"><div class="card-h"><b>A. Active positions</b><span class="muted">gold already committed · ${POS.length} positions · they don't use recommendation slots</span></div>
+    ${table([['Item'], ['Qty', 1], ['Character'], ['Status'], ['Paid', 1], ['Cost basis left', 1], ['Est. net', 1], ['Sell window'], ['Next action']], POS.map(posRow), null)}
+    <div class="foot"><span>Capital committed <b>${money(s.committed)}</b></span><span class="muted">·</span><span>${s.committedPct}% of capital base (${money(s.committed)} ÷ ${money(s.base)})</span><span class="muted">·</span><span>estimated profit on positions ${net(posNet)}</span><span class="muted">·</span><span class="pos">+${halfUpPct(posNet, s.committed)}% on committed capital</span><span class="muted">(${money(posNet)} ÷ ${money(s.committed)}; Medium Leather counts once it's reconciled)</span></div>
+    <div class="foot note">Stages: <span class="st acq">Acquiring</span> <span class="st proc">Processing</span> <span class="st hold">Holding</span> <span class="st ready">Ready to sell</span> <span class="st listed">Listed</span> <span class="st partial">Partially sold</span> <span class="st recon">Needs reconciliation</span> · Cost basis left is what you paid for the units not yet paid out to you: a sold unit stays in it until its gold is collected from the mailbox (Mageweave Cloth: all 25 × 1s 20c = 30s while 25s 65c waits). Found items cost 0 and use no capital, but their worth still counts in Est. net.</div></div>
+
+    <div class="card"><div class="card-h"><b>B. Top opportunities today</b><span class="muted">realized within the immediate window (8 h): no premium, so adjusted profit = expected net</span><span class="select">Min chance to sell: 0% ▾</span></div>
+    ${table(colsB, [...s.fundedToday.map(todayOppRow), cutRow(colsB.length, s.left), ...exToday.map(todayOppRow)], 6)}
+    <div class="foot"><span>${s.fundedToday.length} of ${PF_LIMIT} funded · expected ${net(sum(s.fundedToday, 6))} · gold needed ${money(s.today)} · profit ${cashPct(s.fundedToday.map(r => [r[6], todayCash(r)]))} on cash</span><span class="muted">·</span><span class="muted">${exToday.length} alternatives excluded (in no total)</span></div>
+    <div class="foot note">Risk = gold needed ÷ gold in hand (${money(s.gold)}), as on every page. A post needs only its deposit (Copper Rod: 1s). Profit on cash = ${money(sum(s.fundedToday, 6))} ÷ ${money(s.fundedToday.reduce((t, r) => t + todayCash(r), 0))}: the ${money(s.today)} gold needed + 50s for the 5 Copper Rods you bought. No row here uses only found stock.</div></div>
+
+    <div class="card"><div class="card-h"><b>C. Top opportunities, next 7 days</b><span class="muted">ranked by adjusted profit, in the same pool as Today</span></div>
+    ${table(colsC, [...s.fundedWeek.map(weekOppRow), cutRow(colsC.length, s.left), ...exWeek.map(weekOppRow)], 9)}
+    <div class="foot"><span>${s.fundedWeek.length} of ${PF_LIMIT} funded · expected ${net(sum(s.fundedWeek, 10))} · adjusted ${net(weekAdj)} · gold needed ${money(s.week)} · profit ${cashPct(s.fundedWeek.map(r => [r[10], weekCash(r)]))} on cash</span><span class="muted">·</span><span class="muted">${exWeek.length} alternative excluded (in no total)</span></div>
+    <div class="foot note">Premium = 15% + 5% × wait. The wait is in fractional days (to 0.01 d, half up) from now, Mon 10:38, to the expected sale hour: ${premiumTable()}. Within the immediate window (8 h by default, 24 h optional): 0%. Profit on cash = ${money(s.fundedWeek.filter(r => weekCash(r)).reduce((t, r) => t + r[10], 0))} ÷ ${money(s.fundedWeek.reduce((t, r) => t + weekCash(r), 0))}; Heavy Grinding Stone uses only found Heavy Stone, so its ${money(134)} counts in the expected total but not in the %. Bolt of Silk Cloth's Spider's Silk is found too, so its cash is just the ${money(560)} of Silk Cloth.</div></div>
+
+    <div class="card"><div class="card-h"><b>How the pool was funded</b><span class="muted">${money(s.capacity)} remaining capacity, best adjusted profit first, Today and the week together</span></div>
+    ${poolTable(s)}</div>
+
+    <h3>States</h3>
+    <div class="card"><div class="card-h"><b>Empty: nothing new is funded</b><span class="muted">replaces sections B and C; positions (A) stay</span></div>
+    <div style="padding:12px 14px">
+      <div class="alert bad" style="margin-bottom:10px"><span class="grow"><b>No new opportunities: risk budget exhausted (${money(106740)} limit, ${money(108800)} committed)</b><span class="sub">New suggestions come back as positions sell and free capital. Your positions (A) are unchanged above it.</span></span></div>
+      <div class="muted" style="font-size:12px">The same block names whichever reason applies, first match wins:</div>
+      <ul class="states muted" style="font-size:13px;margin:4px 0 0 18px;padding:0">
+        <li><b>No gold in hand</b>: no character had gold at the last snapshot</li>
+        <li><b>No characters yet</b>: log in once with the addon so AHSync knows your gold and professions</li>
+        <li><b>Risk budget exhausted</b> (above): committed capital is at or over the limit</li>
+        <li><b>Recommendation limit reached</b>: 20 of 20 funded in that list</li>
+        <li><b>Market data too old</b>: the newest prices are more than 24 h old; run AHSync</li>
+        <li><b>Nothing pays</b>: no opportunity nets above 0 after fees, deposits and the chance it sells</li>
+        <li><b>Every candidate excluded</b>: each one has a reason (risk tolerance, profession, liquidity, forecast); they're listed as alternatives</li>
+      </ul>
+    </div></div>`; } },
+
   Today: { count: 7, html: () => `
     <h1>Today</h1><p class="lede">What to do right now at the AH, sorted by expected net (highest first). <b>A chain is one row</b>: the craft or flip carries its profit, and its mat buys, intermediate crafts and incoming mail are grey lines under it, ending with when it sells. Mail you send for another character's craft is a row of yours. Holds and vendor sales are on Inventory. It is re-checked live in game when you open the AH. In every table, the <b>dot after a chance is its confidence</b>: how much the data behind it can be trusted (<span class="dot h"></span>≥ 75% · <span class="dot m"></span>≥ 45% · <span class="dot l"></span>below). Hover a chance for the exact %. The market activity columns follow it everywhere: <b>Est. Sales/Day</b> (with its source: AHF, or est. from your scans' order books), <b>Current Supply</b> (units on the AH now) and <b>Supply/Volume</b> (days of supply). A "—" means the data can't support a number; it is never a guess and never 0.</p>
     ${tiles([['Expected today', `<span class="pos">${money(15331, true)}</span>`, `7 actions left · 1 done (${money(203, true)})`], ['This week', `<span class="pos">${money(26854, true)}</span>`, '27 actions'],
@@ -359,8 +568,9 @@ const PAGES = {
     </div>`; } },
 
   Disenchant: { count: 5, html: () => `
-    <h1>Disenchant</h1><p class="lede">AH items worth buying to disenchant (SPEC §3.4A). Only shown when one of your characters has the skill (here Amaya, Enchanting 142). Chance (with its confidence dot) and the market activity columns describe the <b>mats</b>, since they're what you sell.</p>
+    <h1>Disenchant</h1><p class="lede">AH items worth buying to disenchant (SPEC §3.4A). <b>Always shown, as research</b>, even when none of your characters can disenchant: a notice then says so, and the rows stay out of the funded plan (Portfolio) until one can. Here Amaya has Enchanting 142, so the notice below is an example state. Chance (with its confidence dot) and the market activity columns describe the <b>mats</b>, since they're what you sell.</p>
     <div class="card">${filters('<span class="select">Min profit: 2s ▾</span><span class="select">Quality: Uncommon+ ▾</span>')}
+    <div class="alert info" style="margin:0;border-radius:0;border-width:0 0 1px 4px"><span class="grow"><b>Research only:</b> no character has Enchanting yet. These rows enter the funded plan once one does.</span><span class="muted" style="font-size:12px">example state</span></div>
     ${table([['Item'], ['ilvl', 1], ['Buy', 1], ['Expected mats'], ['EV', 1], ['Profit', 1], ...MARKET, ['Risk', 1], ['Price age', 1]], [
       deRow('Ridge Cleaver of the Bear', 29, 1500, '1.2 Lesser Astral Essence · 0.6 Soul Dust', 2310, 810, 'm', '2 h', 88),
       deRow('Scouting Gloves of the Monkey', 25, 800, '2.5 Strange Dust (75%) · Lesser Magic (20%)', 1425, 625, 'm', '2 h', 100),
@@ -406,8 +616,8 @@ const PAGES = {
 
   Inventory: { count: 46, html: () => `
     <h1>Inventory</h1><p class="lede">What you own on every character: bags, bank and mail (auctions are on <b>On the AH</b>). It shows what you paid (0 for items you found), what it's worth and its plan. Select a row to see why.</p>
-    ${tiles([['Worth', money(842000), 'under each item's plan'], ['Paid', money(512000), 'found items and items from before tracking count as 0'], ['Not planned', '5 items', 'bound or ignored']])}
-    <div class="card">${filters('<span class="select">Where: All ▾</span><span class="select">Plan: All ▾</span>')}
+    ${tiles([['Worth', money(842000), "under each item's plan"], ['Paid', money(512000), 'found items and items from before tracking count as 0'], ['Not planned', '5 items', 'bound or ignored']])}
+    <div class="card">${filters('<span class="select">Where: All ▾</span><span class="select">Plan: All ▾</span>', 'All characters')}
     ${table([['Item'], ['Character'], ['Where'], ['Qty', 1], ['Paid each', 1], ['Paid total', 1], ['Worth', 1], ['Best selling windows'], ...MARKET, ['Plan']], [
       invRow('Linen Cloth', 1, 'Amaya', 'bags', 20, 38, 963, 'Post Sat 10:00 at 55c (18:00 peak)', 92, 'Sat 17–21 · Sun 19–22', true),
       invRow('Copper Rod', 1, 'Brugan', 'bags', 5, 1000, 11306, 'Post now at 41s (19:00 peak)', 58, 'Fri 18–21'),
@@ -462,7 +672,17 @@ const PAGES = {
         <div class="muted" style="font-size:12px;margin:10px 0 4px">Listed supply by hour (<code>supply_how</code>)</div>${heat('supply')}
         <div class="legend">Brighter = higher. Outlined cells are the best selling windows (price × buyers). Each week of history adds to every slot; recent weeks count more (half-life 4 weeks). Hover a cell for its value and the weeks behind it.</div>
       </div>
-    </div></div>` },
+    </div></div>
+    <h3>Example: Character set to Brugan</h3>
+    <p class="lede">The Character filter narrows the rows <b>and the totals</b> to one character. An item counts once, where it is now: Brugan's auctions are on <b>On the AH</b>, not here, and mail in transit counts for the character it's addressed to, never for the sender, so nothing is counted twice.</p>
+    ${tiles([['Worth', money(17933), 'Brugan only · 1g 13s 6c + 61s 57c + 4s 70c'], ['Paid', money(8800), '5 × 10s + 6 × 5s + 10 × 80c + 0'], ['Not planned', '1 item', 'bound']])}
+    <div class="card">${filters('<span class="select">Where: All ▾</span><span class="select">Plan: All ▾</span>', 'Brugan')}
+    ${table([['Item'], ['Character'], ['Where'], ['Qty', 1], ['Paid each', 1], ['Paid total', 1], ['Worth', 1], ['Best selling windows'], ...MARKET, ['Plan']], [
+      invRow('Copper Rod', 1, 'Brugan', 'bags', 5, 1000, 11306, 'Post now at 41s (19:00 peak)', 58, 'Fri 18–21'),
+      invRow('Copper Bar', 1, 'Brugan', 'bags', 6, 500, 6157, 'Post Sat 11:00 at 12s (19:00 peak)', 90, 'Sat 18–21'),
+      invRow('Heavy Leather', 1, 'Brugan', 'bank', 10, 80, 470, '<span class="neg">Post 5 at 47c · below what you paid</span>', 25, 'Sun 18–21 <span class="muted">(early pattern)</span>'),
+      invRow('Hearthstone Band', 2, 'Brugan', 'bags', 1, 0, null, '<span class="muted">Bound · not planned</span>', null, '—'),
+    ], 6)}</div>` },
 
   History: { count: null, html: () => `
     <h1>History</h1><p class="lede">The journal: everything the addon recorded and how it matched your plan (SPEC §3.4.1). You never type any of this in. In game, the addon appends every post, purchase, craft, disenchant, mail and payout to its journal as it happens; WoW writes the journal to disk at each <code>/reload</code>, logout or disconnect, and AHSync picks it up then. A sale is three separate events: posted, sold and paid out. Anything the journal missed (a crash before the write) shows up as <span class="amber">Untracked</span> when the next bag snapshot differs, with cost 0, so nothing is invented. <b>Expected</b> is what the plan expected an event to make, copied when it matched its plan action; <b>Realized</b> is what it made: a post its payout, a craft or flip what its posts made so far (the tiles compare them over resolved events, a chain once).</p>
@@ -642,7 +862,7 @@ function daily() {
 
 // ---------- tab switching ----------
 const nav = document.getElementById('nav');
-const ORDER = ['Today', 'Week', 'On the AH', 'Disenchant', 'Craft', 'Flip', 'Inventory', 'History', 'Rules', 'Characters', 'Status'];
+const ORDER = ['Portfolio', 'Today', 'Week', 'On the AH', 'Disenchant', 'Craft', 'Flip', 'Inventory', 'History', 'Rules', 'Characters', 'Status'];
 ORDER.map(name => [name, PAGES[name]]).forEach(([name, p]) => {
   const b = document.createElement('button');
   b.setAttribute('role', 'tab'); b.dataset.page = name;
@@ -650,14 +870,17 @@ ORDER.map(name => [name, PAGES[name]]).forEach(([name, p]) => {
   b.onclick = () => show(name);
   nav.appendChild(b);
 });
+const NO_GOLD_PILL = ['Rules', 'Characters', 'Status'];
+document.getElementById('goldpill').innerHTML = goldPill();
 function show(name) {
-  if (!PAGES[name]) name = 'Today';
+  if (!PAGES[name]) name = 'Portfolio';
   document.getElementById('main').innerHTML = PAGES[name].html();
+  document.getElementById('goldpill').style.display = NO_GOLD_PILL.includes(name) ? 'none' : '';
   nav.querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', b.dataset.page === name));
   try { localStorage.setItem('ahsync-mock-page', name); } catch (e) {}
 }
-let start = 'Today';
-try { start = localStorage.getItem('ahsync-mock-page') || 'Today'; } catch (e) {}
+let start = 'Portfolio';
+try { start = localStorage.getItem('ahsync-mock-page') || 'Portfolio'; } catch (e) {}
 // dashboard.html#Week opens that page directly.
 show(decodeURIComponent(location.hash.slice(1)) || start);
 </script>
