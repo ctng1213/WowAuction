@@ -160,6 +160,7 @@ class ItemLook:
     units_on_ah: int | None = None
     level: int | None = None                # price level: med7, else med30 (SPEC §3.4C.1)
     seasonality: int | None = None
+    paid_each: int | None = None            # what you paid per unit, copper; None before tracking (T7)
 
 
 def _activity(look: ItemLook, p: float | None) -> MarketActivity:
@@ -238,7 +239,8 @@ def today_view(actions: Sequence[ViewAction], now_ms: int, offset_ms: int, min_s
             continue
         net, note = nets[a.action_id]
         rows.append((-(net or 0.0), -(p if p is not None else -1.0), looks[a.key].name, a.char_id,
-                     _row(a, net, note_of(a, note, posts, crafts, offset_ms), p, looks[a.key], total_gold, offset_ms)))
+                     _row(a, net, note_of(a, note, posts, crafts, offset_ms, looks[a.key].paid_each), p, looks[a.key],
+                          total_gold, offset_ms)))
     rows.sort(key=lambda r: r[:4])
     total = sum(r[4]["sort"]["net"] for r in rows)
     return {"rows": [r[4] for r in rows], "hidden": hidden, "total": signed_money(total)}
@@ -309,7 +311,7 @@ def chain_crafts(actions: Sequence[ViewAction], looks: dict[int, "ItemLook"]) ->
 
 
 def note_of(a: ViewAction, counted_note: str, posts: dict[str, ViewAction], crafts: dict[str, str],
-            offset_ms: int) -> str:
+            offset_ms: int, paid_each: int | None = None) -> str:
     """A row's note: what it is for and why it counts what it counts (D37-D39).
 
     Args:
@@ -318,6 +320,7 @@ def note_of(a: ViewAction, counted_note: str, posts: dict[str, ViewAction], craf
         posts: From chain_posts.
         crafts: From chain_crafts.
         offset_ms: Local time minus UTC.
+        paid_each: What you paid per unit for the item, copper; None before tracking.
 
     Returns:
         The parts joined by " · ", e.g. "for the 18:00 peak · profit counted on the Fri 14:10 buy" or
@@ -334,6 +337,8 @@ def note_of(a: ViewAction, counted_note: str, posts: dict[str, ViewAction], craf
         day, hour = clock(post.at_ms, offset_ms)
         parts.append(f"{'Flip' if a.kind == 'buy' else 'Then'}: post {day} {hour}, for the "
                      f"{clock(post.peak_ms, offset_ms)[1]} peak")
+    if a.kind in ("post", "vendor") and paid_each and a.price is not None and a.price < paid_each:
+        parts.append(f"below what you paid ({money(paid_each)})")      # still the best option: it is spent (T7)
     parts.append(counted_note)
     return " · ".join(p for p in parts if p)
 
@@ -367,7 +372,8 @@ def week_view(actions: Sequence[ViewAction], now_ms: int, offset_ms: int, looks:
     for a in shown:
         d = (a.at_ms - start) // DAY_MS
         net, note = nets[a.action_id]
-        row = _row(a, net, note_of(a, note, posts, crafts, offset_ms), chance_of(a, chances), looks[a.key], total_gold,
+        row = _row(a, net, note_of(a, note, posts, crafts, offset_ms, looks[a.key].paid_each), chance_of(a, chances),
+                   looks[a.key], total_gold,
                    offset_ms)
         days[d]["rows"].append(row)
         cents = row["sort"]["net"]

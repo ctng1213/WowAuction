@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from ahsync.engine.plan import PlanAction
 from ahsync.engine.plan_views import ItemLook, ViewAction, flip_view, today_view, week_view
-from ahsync.engine.views import COLUMN_HELP
+from ahsync.engine.views import COLUMN_HELP, round_half_up
 from ahsync.history.reads import ItemInfo
 from ahsync.intel.contract import ItemIntel, price_level
 
@@ -36,13 +36,15 @@ def view_actions(actions: list[PlanAction], rows: list[tuple], history: list[tup
     return out
 
 
-def item_looks(keys: set[int], stats: dict[int, ItemIntel], items: dict[int, ItemInfo]) -> dict[int, ItemLook]:
+def item_looks(keys: set[int], stats: dict[int, ItemIntel], items: dict[int, ItemInfo],
+               paid: dict[int, tuple[int, int]] | None = None) -> dict[int, ItemLook]:
     """Names and market activity for the items the plan names.
 
     Args:
         keys: Item keys.
         stats: Item key -> intelligence.
         items: Item metadata.
+        paid: Item key -> (units, total cost copper) from the cost basis (T7); None for none.
 
     Returns:
         Item key -> ItemLook; an unknown item shows its key.
@@ -52,14 +54,16 @@ def item_looks(keys: set[int], stats: dict[int, ItemIntel], items: dict[int, Ite
         info, s = items.get(key), stats.get(key)
         name = info.name if info else str(key)
         quality = (info.quality or 1) if info else 1
+        basis = (paid or {}).get(key)
+        paid_each = round_half_up(basis[1] / basis[0]) if basis and basis[0] else None
         out[key] = ItemLook(name, quality, s.conf if s else None, s.sold_per_day if s else None,
                             s.volume_source if s else None, s.units_on_ah if s else None, price_level(s) if s else None,
-                            s.seasonality if s else None) if s else ItemLook(name, quality)
+                            s.seasonality if s else None, paid_each) if s else ItemLook(name, quality, paid_each=paid_each)
     return out
 
 
 def plan_pages(actions: list[ViewAction], stats: dict[int, ItemIntel], items: dict[int, ItemInfo], total_gold: int,
-               now_ms: int, offset_ms: int) -> dict[str, dict]:
+               now_ms: int, offset_ms: int, paid: dict[int, tuple[int, int]] | None = None) -> dict[str, dict]:
     """The Today, Week and Flip payloads (SPEC §3.5 dashboard data).
 
     Args:
@@ -69,11 +73,12 @@ def plan_pages(actions: list[ViewAction], stats: dict[int, ItemIntel], items: di
         total_gold: All your gold.
         now_ms: Now.
         offset_ms: Local time minus UTC.
+        paid: Item key -> (units, total cost copper) from the cost basis, for "below what you paid" (T7).
 
     Returns:
         {"today": {"by_min": {"0": view, ...}, "help"}, "week": view, "flip": view}.
     """
-    looks = item_looks({a.key for a in actions}, stats, items)
+    looks = item_looks({a.key for a in actions}, stats, items, paid)
     today = {str(step): today_view(actions, now_ms, offset_ms, step / 100, looks, total_gold)
              for step in MIN_CHANCE_STEPS}
     week = week_view(actions, now_ms, offset_ms, looks, total_gold)

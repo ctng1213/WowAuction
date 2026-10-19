@@ -7,6 +7,7 @@ recipe's product. engine.tracking decides; this module only reads and writes the
 from __future__ import annotations
 
 from ahsync.db.sqlite import Database
+from ahsync.engine.cost_basis import Bought, Made, cost_basis
 from ahsync.engine.tracking import AuctionMail, DoneEvent, OpenAction, OpenPost, match, resolve_posts
 
 # event table -> (action kind, SQL for its unmatched rows as event_id, char_id, key, qty, price, at)
@@ -97,18 +98,66 @@ def _resolve(db: Database) -> int:
     return len(resolutions)
 
 
+def _made(db: Database) -> list[Made]:
+    """Every craft with the units it made and the mats it used, from its recipe.
+
+    Args:
+        db: Database.
+
+    Returns:
+        Made, one per craft event whose recipe makes an item.
+    """
+    recipes = {spell: (product, ymin or 1, ymax or ymin or 1) for spell, product, ymin, ymax in db.conn.execute(
+        "SELECT spell_id, MIN(product_key), MIN(yield_min), MIN(yield_max) FROM recipes WHERE product_key IS NOT NULL "
+        "GROUP BY spell_id")}
+    reagents: dict[int, list[tuple[int, int]]] = {}
+    for spell, key, count in db.conn.execute(
+            "SELECT spell_id, key, MIN(count) FROM reagents GROUP BY spell_id, key ORDER BY spell_id, key"):
+        reagents.setdefault(spell, []).append((key, count))
+    out = []
+    for event_id, spell, count, at in db.conn.execute("SELECT event_id, spell_id, count, at FROM crafts"):
+        if spell in recipes and count:
+            product, ymin, ymax = recipes[spell]
+            units = (count * (ymin + ymax) + 1) // 2        # count × average yield, half up
+            out.append(Made(event_id, product, units, tuple((k, n * count) for k, n in reagents.get(spell, ())), at))
+    return out
+
+
+def _cost_basis(db: Database) -> int:
+    """Replace the cost basis table from purchases, crafts and what you hold now (SPEC §3.2, T9-T13).
+
+    Args:
+        db: Database (inside a transaction).
+
+    Returns:
+        Items with a basis.
+    """
+    bought = [Bought(*r) for r in db.conn.execute(
+        "SELECT event_id, key, qty, price, at FROM purchases WHERE confirmed = 1 AND qty > 0 AND price IS NOT NULL")]
+    held: dict[int, int] = {}
+    for key, units in db.conn.execute(
+            "SELECT key, SUM(qty) FROM inventory WHERE bound = 0 GROUP BY key UNION ALL "
+            "SELECT key, SUM(stack * COALESCE(count, 1)) FROM own_auctions GROUP BY key"):
+        held[key] = held.get(key, 0) + units
+    basis = cost_basis(bought, _made(db), held)
+    db.conn.execute("DELETE FROM cost_basis")
+    db.conn.executemany("INSERT INTO cost_basis(key, qty, total_cost, untracked_qty) VALUES (?, ?, ?, ?)",
+                        [(k, b.qty, int(b.total_cost + 0.5), b.untracked) for k, b in basis.items()])
+    return len(basis)
+
+
 def tracking_pass(db: Database) -> dict[str, int]:
-    """Match events to actions and resolve posts, in one transaction (SPEC §3.4.1).
+    """Match events to actions, resolve posts and rebuild the cost basis, in one transaction (SPEC §3.4.1, §3.2).
 
     Args:
         db: Database (not inside a transaction).
 
     Returns:
-        {"matched": n, "resolved": n}.
+        {"matched": n, "resolved": n, "costed": items with a basis}.
 
     Side effects:
-        Sets action_id on matched events, done_qty, status and done_at on their actions, and outcome
-        and resolved_at on resolved posts (with the mail's post_id).
+        Sets action_id on matched events, done_qty, status and done_at on their actions, outcome
+        and resolved_at on resolved posts (with the mail's post_id), and replaces cost_basis.
     """
     with db.transaction():
-        return {"matched": _match(db), "resolved": _resolve(db)}
+        return {"matched": _match(db), "resolved": _resolve(db), "costed": _cost_basis(db)}

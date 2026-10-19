@@ -112,6 +112,15 @@ def test_D41_a_vendor_buy_says_so_in_its_note():
     assert rows["b"]["note"] == "for crafting Basic Campfire Kit"
 
 
+def test_T7_a_sale_below_what_you_paid_says_so_and_is_still_planned():
+    looks = {**LOOKS, BAR: replace(LOOKS[BAR], paid_each=40)}
+    post = act("p", "post", 650, NOW, 0.9, key=BAR, qty=20, price=35)
+    rows = {r["id"]: r for r in plan_views.week_view([post], NOW, 0, looks, GOLD)["days"][0]["rows"]}
+    assert rows["p"]["note"] == "below what you paid (40c)"
+    above = {r["id"]: r for r in plan_views.week_view([replace(post, price=45)], NOW, 0, looks, GOLD)["days"][0]["rows"]}
+    assert above["p"]["note"] == ""
+
+
 def test_D20_once_the_buy_has_left_the_week_the_post_carries_its_own_net():
     buy = act("f", "buy", 210, FRI + 14 * HOUR + 10 * MINUTE, in_chain=True, status="done")
     post = act("g", "post", 95, FRI + DAY + 10 * HOUR, 1.0, parent_id="f", in_chain=True, price=45)
