@@ -323,6 +323,30 @@ const LIVE = {
           `<div class="bar"><i style="width:${Number(p.pct)}%"></i></div></div>`).join('') + '<div style="height:10px"></div></div>').join('')}</div>`,
     filters: [],
   },
+  rules: {
+    lede: 'Items that keep failing to sell, and items you have blacklisted (SPEC §3.3.3, §3.4.2). Rules sync both ways with the addon; the newer change wins.',
+    render: d => {
+      const undo = r => `<button class="btn" type="button" data-rule-key="${esc(r.key)}" data-rule="none" title="Clear this rule">Undo</button>`;
+      const head = cols => `<thead><tr>${cols.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead>`;
+      const card = (title, note, cols, rows, empty) => `<div class="card"><div class="card-h"><b>${esc(title)}</b><span class="muted">${esc(note)}</span></div>` +
+        (rows.length ? `<div class="scrollx"><table>${head(cols)}<tbody>${rows.join('')}</tbody></table></div>` : `<div class="empty">${esc(empty)}</div>`);
+      return `<div style="padding:12px">` +
+        card('Waiting for a decision', 'expired while cheapest, again and again', ['Item', 'Record (30 d)', 'Last expired', 'Owned', ''],
+          (d.decisions || []).map(r => `<tr><td>${item(r.item, r.quality)}</td><td class="muted">${esc(r.record)}</td><td>${esc(r.last_expired)}</td><td>${esc(r.owned)}</td>` +
+            `<td><select class="btn" data-rule-key="${esc(r.key)}" title="Blacklist it"><option value="">Blacklist…</option><option value="no_buy">Don't buy or craft</option>` +
+            `<option value="ignore">Ignore completely</option></select> <button class="btn" type="button" data-rule-key="${esc(r.key)}" data-rule="keep" title="Keep selling it: its record starts fresh">Keep</button></td></tr>`),
+          'Nothing is waiting: every item you post is selling.') +
+        card('Kept: on a fresh start', 'record reset when you chose Keep', ['Item', 'Kept', 'Since then', 'Status', ''],
+          (d.kept || []).map(r => `<tr><td>${item(r.item, r.quality)}</td><td>${esc(r.kept)}</td><td>${esc(r.since)}</td>` +
+            `<td class="${r.status_class === 'pos' ? 'pos' : 'amber'}">${esc(r.status)}</td><td>${undo(r)}</td></tr>`),
+          'Nothing kept.') +
+        card('Blacklist', 'set here, on Today, or by right-clicking a row in the addon', ['Item', 'Rule', 'Effect', 'Set', 'From', ''],
+          (d.blacklist || []).map(r => `<tr><td>${item(r.item, r.quality)}</td><td>${esc(r.rule)}</td><td class="muted">${esc(r.effect)}</td>` +
+            `<td>${esc(r.set)}</td><td class="muted">${esc(r.from)}</td><td>${undo(r)}</td></tr>`),
+          'No blacklisted items.') + '</div>';
+    },
+    filters: [],
+  },
   inventory: {
     lede: 'What you own on every character: bags, bank and mail (auctions you have up are on <b>On the AH</b>). <b>Paid</b> is what you paid (0 for items you found or held before tracking started); <b>Worth</b> is what the item is expected to bring under its plan. <b>Click a row</b> to see when it sells best and why.',
     above: d => tilesHtml(d.tiles),
@@ -499,7 +523,7 @@ async function setRule(id, key, rule, el) {
   el.disabled = true;
   try {
     const r = await post('/api/rule', { key: Number(key), rule });
-    if (r && r.status === 200) { notice(rule === 'keep' ? 'Kept: its record starts fresh.' : 'Blacklisted: the plan no longer buys or crafts it.', 'ok'); load(id); }
+    if (r && r.status === 200) { notice({ keep: 'Kept: its record starts fresh.', none: 'Rule cleared.' }[rule] || 'Blacklisted: the plan no longer buys or crafts it.', 'ok'); load(id); }
     else if (r) notice(`Not saved (${r.body.error || r.status}).`, 'warn');
   } catch (e) {
     notice("AHSync isn't answering. Is it still running?", 'warn');

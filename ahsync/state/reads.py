@@ -456,6 +456,15 @@ class StateReads:
             "SELECT DISTINCT e.key FROM book_entries e JOIN scans s ON s.scan_id = e.scan_id "
             "WHERE s.market = ? AND s.src = 'local' AND s.kind = 'partial' AND s.at >= ?", (market, since_ms))}
 
+    def live_rule_rows(self) -> list[tuple[int, str, int, str]]:
+        """Your live item rules with when and where each was set, for the Rules page (SPEC §3.4.2, D50).
+
+        Returns:
+            (item key, rule, set_at ms, source "addon" | "dashboard"), cleared ones left out, by key.
+        """
+        return [tuple(r) for r in self.conn.execute(
+            "SELECT key, rule, set_at, source FROM item_rules WHERE rule != 'none' ORDER BY key")]
+
     def rule_rows(self) -> list[tuple[int, str, int]]:
         """Every item rule with its time, cleared ones ("none") included, for PortfolioPlan.lua (SPEC §3.4.2).
 

@@ -22,6 +22,7 @@ from ahsync.recommend.inventory_page import inventory_page
 from ahsync.recommend.on_ah_page import on_ah_page
 from ahsync.recommend.pages import craft_page, disenchant_page
 from ahsync.recommend.plan import plan_market, plan_rows, sell_records
+from ahsync.recommend.rules_page import rules_page
 from ahsync.recommend.plan_pages import plan_pages, view_actions
 
 DAY_MS = 86_400_000
@@ -112,6 +113,7 @@ def _stage_recommendations(db: Database, market: str, stats: dict, now_ms: int, 
     sheets = [CharacterSheet(c, cls, level, faction, m, gold, cfg.budgets.get(c), recipes, updated, profs)
               for c, cls, level, faction, m, gold, recipes, updated, profs in db.character_sheets(char_ids)]
     db.stage_view("characters", market, characters_view(sheets, now_ms), now_ms)                      # D49
+    db.stage_view("rules", market, rules_page(db, char_ids, market, stats, items, now_ms, offset_ms, cfg), now_ms)   # D50
     _stage_plan(db, market, characters, stats, items, now_ms, offset_ms, cfg)
 
 
