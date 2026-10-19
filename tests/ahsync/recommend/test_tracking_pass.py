@@ -164,3 +164,19 @@ def test_FM20_a_failed_buy_attempt_matches_nothing_and_changes_no_cost_basis(db)
     assert tracking_pass(db)["matched"] == 0
     assert db.cost_basis() == {}                                                # the 20 Linen still cost "before tracking"
     assert rows(db, "SELECT status FROM actions WHERE action_id = 'buy'") == [("pending",)]
+
+
+def test_FM21_items_missing_after_a_crash_are_no_sale_and_no_new_cost(db):
+    with db.transaction():
+        db.conn.execute("INSERT INTO purchases(event_id, char_id, key, qty, price, source, at, confirmed) "
+                        "VALUES ('b', ?, ?, 40, 40, 'ah', ?, 1)", (AMAYA, LINEN, T))
+        # The session that moved 20 of them was lost in a crash: the bags now show 20, later 25.
+        db.conn.execute("INSERT INTO inventory(char_id, location, key, qty, bound) VALUES (?, 'bags', ?, 20, 0)", (AMAYA, LINEN))
+    tracking_pass(db)
+    assert rows(db, "SELECT qty, total_cost, untracked_qty FROM cost_basis") == [(20, 800, 0)]   # 40c each, unchanged
+    assert rows(db, "SELECT COUNT(*) FROM posts WHERE outcome IS NOT NULL") == [(0,)]           # no sale invented
+    with db.transaction():
+        db.conn.execute("UPDATE inventory SET qty = 25")
+    tracking_pass(db)
+    # 25 held of the 40 bought: all of them may be bought ones, so each still costs the 40c paid (nothing invented)
+    assert rows(db, "SELECT qty, total_cost, untracked_qty FROM cost_basis") == [(25, 1000, 0)]
