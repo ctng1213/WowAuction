@@ -93,4 +93,23 @@ describe("CraftView", function()
     local capped = Options.CraftOptions({ recipe }, {}, ctx)[1]
     assert_eq({ free.crafts > 2, capped.crafts, capped.matGold <= 4500 }, { true, 2, true })
   end)
+  it("A63 a chain with intermediate crafts is one row for its final product, best profit first", function()
+    local VM = Boot()
+    local names = { [2770] = "Copper Ore", [2771] = "Tin Ore", [2840] = "Copper Bar", [3576] = "Tin Bar", [2841] = "Bronze Bar" }
+    local lookOf = function(key) return { name = names[key] or tostring(key), quality = 1 } end
+    local actions = {
+      { id = "8", kind = "buy", key = 2770, qty = 22, price = 231, at = NOW, net = 0 },
+      { id = "9", kind = "buy", key = 2771, qty = 22, price = 279, at = NOW + 1, parent = "8", net = 0 },
+      { id = "10", kind = "craft", key = 2840, qty = 22, at = NOW + 2, parent = "8", net = 0 },
+      { id = "11", kind = "craft", key = 3576, qty = 22, at = NOW + 3, parent = "8", net = 0 },
+      { id = "12", kind = "craft", key = 2841, qty = 22, at = NOW + 4, parent = "8", net = 7799 },
+      { id = "13", kind = "post", key = 2841, qty = 22, price = 455, at = NOW + 5, parent = "8", net = 0, chance = 100 },
+      { id = "14", kind = "buy", key = 2771, qty = 40, price = 279, at = NOW, net = 0 },
+      { id = "15", kind = "craft", key = 3576, qty = 40, at = NOW + 2, parent = "14", net = 5180 } }
+    local rows = VM.PlannedCraftRows(actions, lookOf, GOLD, NOW, 0)
+    assert_eq({ #rows, rows[1].item, rows[1].crafts, rows[2].item }, { 2, "Bronze Bar", "×22", "Tin Bar" })
+    assert_eq(rows[1].notes, { "buy 22 Copper Ore on the AH · " .. VM.Money(5082), "buy 22 Tin Ore on the AH · " .. VM.Money(6138),
+                               "craft 22 Copper Bar first", "craft 22 Tin Bar first", "post it now at " .. VM.Money(455) })
+    assert_eq(rows[1].mats, VM.Money(11220))
+  end)
 end)

@@ -123,8 +123,9 @@ function ViewModel.CraftRows(options, lookOf, totalGold, actions, nowMs, offsetM
   return rows
 end
 
---- One planned craft as a Craft tab row: its chain's mat buys, profit and when to sell (A63).
----@param craft table      The craft action
+--- One planned craft chain as a Craft tab row for its final product: every mat buy, the intermediate crafts
+--- made first, the chain's profit and when to sell (A63).
+---@param craft table      The chain's last craft (its final product)
 ---@param chain table[]    Every action of its chain, in time order
 ---@param lookOf function  key -> look
 ---@param totalGold number All your gold, copper, for risk
@@ -144,6 +145,9 @@ local function PlannedRow(craft, chain, lookOf, totalGold, nowMs, offsetMs)
       post = a
     end
   end
+  for _, a in ipairs(chain) do                                         -- intermediates, after the buys (A63)
+    if a.kind == "craft" and a ~= craft then notes[#notes + 1] = "craft " .. a.qty .. " " .. lookOf(a.key).name .. " first" end
+  end
   notes[#notes + 1] = SaleNote(post, nowMs, offsetMs)
   local risk, amber = ViewModel.Risk(mats, totalGold)
   local chance = post and post.chance
@@ -153,7 +157,7 @@ local function PlannedRow(craft, chain, lookOf, totalGold, nowMs, offsetMs)
     netColor = net > 0 and "pos" or "neg", chance = chance and (chance .. "%") or "—",
     dot = chance and ViewModel.Level(look.conf) or nil,
     volume = look.soldPerDay and (ViewModel.RoundHalfUp(look.soldPerDay) .. "/day") or "—",
-    risk = risk, riskAmber = amber, notes = notes, planned = true,
+    risk = risk, riskAmber = amber, notes = notes, planned = true, netCopper = net,
   }
 end
 
@@ -163,20 +167,29 @@ end
 ---@param totalGold number  All your gold, copper
 ---@param nowMs number
 ---@param offsetMs number
----@return table[]          Rows, in the plan's time order (ties: id)
+---@return table[]          One row per chain with a craft, for its last craft; best profit first (ties: chain id)
 function ViewModel.PlannedCraftRows(actions, lookOf, totalGold, nowMs, offsetMs)
-  local sorted, chains = {}, {}
+  local sorted, chains, order, last = {}, {}, {}, {}
   for i, a in ipairs(actions) do sorted[i] = a end
   table.sort(sorted, ViewModel.ByTime)
   for _, a in ipairs(sorted) do
     local chain = a.parent or a.id
-    chains[chain] = chains[chain] or {}
+    if not chains[chain] then chains[chain], order[#order + 1] = {}, chain end
     table.insert(chains[chain], a)
+    if a.kind == "craft" then last[chain] = a end
   end
   local rows = {}
-  for _, a in ipairs(sorted) do
-    if a.kind == "craft" then rows[#rows + 1] = PlannedRow(a, chains[a.parent or a.id], lookOf, totalGold, nowMs, offsetMs) end
+  for _, chain in ipairs(order) do
+    if last[chain] then
+      local row = PlannedRow(last[chain], chains[chain], lookOf, totalGold, nowMs, offsetMs)
+      row.chain = chain
+      rows[#rows + 1] = row
+    end
   end
+  table.sort(rows, function(x, y)
+    if x.netCopper ~= y.netCopper then return x.netCopper > y.netCopper end
+    return x.chain < y.chain
+  end)
   return rows
 end
 
