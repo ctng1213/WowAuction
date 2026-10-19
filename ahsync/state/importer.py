@@ -271,9 +271,20 @@ class _Apply:
                              self.db.replace_snapshot(p.char_id, p.location, p.at_ms, rows) or ()))
         for snap in data.own_auctions:
             groups = _group_counts(snap.rows)
-            self.guarded(f"ownAuctions[{snap.char_id!r}]",
-                         lambda s=snap, g=groups: self.mark(
-                             self.db.replace_snapshot(s.char_id, "auctions", s.at_ms, g) or ()))
+            self.guarded(f"ownAuctions[{snap.char_id!r}]", lambda s=snap, g=groups: self._own_auctions(s, g))
+
+    def _own_auctions(self, snap: sv.OwnAuctionSnapshot, groups: dict[tuple, int]) -> None:
+        """Store an own-auctions snapshot and each group's soonest end (S16).
+
+        Args:
+            snap: The snapshot.
+            groups: (key, price, stack, band) -> auctions.
+        """
+        changed = self.db.replace_snapshot(snap.char_id, "auctions", snap.at_ms, groups)
+        if changed is None:
+            return
+        self.mark(changed)
+        self.db.set_auction_ends(snap.char_id, auction_ends(snap.ends, snap.at_ms))
 
     def scans(self, scans: Iterable[sv.Scan]) -> None:
         """Store own scans as local order books; a scan never changes once stored.
@@ -378,6 +389,25 @@ class _Apply:
             if self.db.set_reserve(r.char_id, key, items.get(key, 0), at_ms, "addon"):
                 changed.add(key)
         return changed
+
+
+def auction_ends(ends: Iterable[tuple[int, int, int]], at_ms: int) -> dict[tuple[int, int, int], int]:
+    """Each (key, stack, band) group's soonest end, the band worked out as the addon does (S16, A61).
+
+    Args:
+        ends: (key, stack, end ms) per auction.
+        at_ms: When the snapshot was taken.
+
+    Returns:
+        (key, stack, band) -> soonest end ms.
+    """
+    out: dict[tuple[int, int, int], int] = {}
+    for key, stack, end in ends:
+        left = (end - at_ms) / 1000
+        band = 1 if left < 1800 else 2 if left < 7200 else 3 if left < 28800 else 4
+        group = (key, stack, band)
+        out[group] = min(out.get(group, end), end)
+    return out
 
 
 def _group_counts(rows: Iterable[sv.AuctionRow]) -> dict[tuple, int]:

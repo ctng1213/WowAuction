@@ -249,6 +249,17 @@ class IngestWrites:
         return self._replace_rows("inventory", {"char_id": char_id, "location": location},
                                   ("key", "bound", "qty"), rows)
 
+    def set_auction_ends(self, char_id: str, ends: dict[tuple[int, int, int], int]) -> None:
+        """Stamp a character's own-auction groups with their soonest end (S16).
+
+        Args:
+            char_id: "Name-Realm".
+            ends: (key, stack, band) -> soonest end ms; groups not in it get none.
+        """
+        self.conn.execute("UPDATE own_auctions SET end_ms = NULL WHERE char_id = ?", (char_id,))
+        self.conn.executemany("UPDATE own_auctions SET end_ms = ? WHERE char_id = ? AND key = ? AND stack = ? AND band = ?",
+                              [(end, char_id, key, stack, band) for (key, stack, band), end in sorted(ends.items())])
+
     def upsert_event(self, table: str, row: dict[str, object]) -> bool:
         """Store a captured event by its id (SPEC §5.2 rule 2).
 

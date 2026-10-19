@@ -32,3 +32,15 @@ def test_an_undercut_auction_names_the_cheapest_and_a_loss_is_negative():
 def test_no_listing_seen_counts_as_cheapest_and_an_unknown_band_shows_a_dash():
     row = on_ah_view([Listing("Brugan-G", ROD, 4100, 1, 9, 1, None, None, None, None)], LOOKS)["rows"][0]
     assert (row["position"], row["time_left"]) == ("cheapest", "—")
+
+
+def test_D53_time_left_from_the_end_and_what_is_listed_below_you():
+    now, hour = 1_760_000_000_000, 3_600_000
+    view = on_ah_view([Listing("Amaya-G", ROD, 4100, 1, 3, 2, None, None, 3800, 0.4, now + 5 * hour, (12, 38, 40)),
+                       Listing("Amaya-G", LINEN, 40, 20, 3, 1, None, None, 40, None, None, (0, 0, 0)),
+                       Listing("Brugan-G", LINEN, 45, 20, 4, 1, None, None, 40, None, now - hour, (20, 40, 40))],
+                      LOOKS, now)
+    cells = {(r["character"], r["item"]): (r["time_left"], r["position"], r["position_class"]) for r in view["rows"]}
+    assert cells[("Amaya", "Copper Rod")] == ("ends in 5 h", "undercut by 12 at 38c–40c", "neg")
+    assert cells[("Amaya", "Linen Cloth")] == ("2 – 8 h", "cheapest", "pos")
+    assert cells[("Brugan", "Linen Cloth")] == ("ending", "undercut by 20 at 40c", "neg")

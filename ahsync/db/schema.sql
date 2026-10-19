@@ -206,7 +206,7 @@ CREATE TABLE IF NOT EXISTS inventory(
 -- same stack at the same price can be posted twice with different time left.
 CREATE TABLE IF NOT EXISTS own_auctions(
     char_id TEXT NOT NULL, key INTEGER NOT NULL, price INTEGER NOT NULL, stack INTEGER NOT NULL, band INTEGER NOT NULL,
-    count INTEGER, seen INTEGER,
+    count INTEGER, seen INTEGER, end_ms INTEGER,         -- end_ms: the group's soonest end (S16)
     PRIMARY KEY(char_id, key, price, stack, band)
 );
 

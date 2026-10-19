@@ -14,11 +14,11 @@ AHProfit.Capture.Auctions = Auctions
 
 --- Classic's time-left band of an auction (the replicate scan's bands, SPEC §4.2).
 ---@param seconds number  Time left
----@return number         1 short (< 30 min), 2 medium (< 2 h), 3 long (< 12 h), 4 very long
+---@return number         1 short (< 30 min), 2 medium (< 2 h), 3 long (< 8 h, SPEC §3.3.1, A61), 4 very long
 function Auctions.Band(seconds)
   if seconds < 1800 then return 1 end
   if seconds < 7200 then return 2 end
-  if seconds < 43200 then return 3 end
+  if seconds < 28800 then return 3 end
   return 4
 end
 

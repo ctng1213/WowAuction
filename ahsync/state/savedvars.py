@@ -137,6 +137,7 @@ class OwnAuctionSnapshot:
     char_id: str
     at_ms: int
     rows: tuple[AuctionRow, ...]
+    ends: tuple[tuple[int, int, int], ...] = ()   # (key, stack, end ms) per auction (S16); () from an older addon
 
 
 @dataclass(frozen=True, slots=True)
@@ -448,14 +449,19 @@ def _own_auctions(char_id: object, entry: object) -> list[OwnAuctionSnapshot]:
 
     Args:
         char_id: Its key, "Name-Realm".
-        entry: { at, rows }.
+        entry: { at, rows, ends }; ends "key,units,end ms,unit price;…" (the price may be missing).
 
     Returns:
         One OwnAuctionSnapshot.
     """
     entry = _table(entry, "ownAuctions")
+    ends = []
+    for part in (entry.get("ends") or "").split(";") if isinstance(entry.get("ends"), str) else ():
+        fields = part.split(",")
+        if len(fields) >= 3 and all(f.lstrip("-").isdigit() for f in fields[:3]):
+            ends.append((int(fields[0]), int(fields[1]), int(fields[2])))
     return [OwnAuctionSnapshot(_str(char_id, "character id"), _int(entry.get("at"), "at"),
-                               _auction_rows(entry.get("rows", ""), "rows"))]
+                               _auction_rows(entry.get("rows", ""), "rows"), tuple(sorted(ends)))]
 
 
 def _scan(_index: object, row: object) -> list[Scan]:

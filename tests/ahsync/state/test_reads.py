@@ -100,7 +100,7 @@ def test_own_auctions_carry_the_deposit_of_their_open_post(db):
         ("A-R", 6217, 4100, 1, 4, 1, 9), ("A-R", 2589, 45, 5, 3, None, 9), ("C-R", 2589, 45, 5, 3, 1, 9))
     sql(db, "INSERT INTO posts(post_id, char_id, key, stack, price, deposit, at, outcome) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         ("p1", "A-R", 6217, 1, 4100, 7, 1, "expired"), ("p2", "A-R", 6217, 1, 4100, 9, 2, None))
-    assert db.own_auctions(["A-R"]) == [("A-R", 2589, 45, 5, 3, 1, None), ("A-R", 6217, 4100, 1, 4, 1, 9)]
+    assert db.own_auctions(["A-R"]) == [("A-R", 2589, 45, 5, 3, 1, None, None), ("A-R", 6217, 4100, 1, 4, 1, 9, None)]
     assert db.own_auctions([]) == []
 
 

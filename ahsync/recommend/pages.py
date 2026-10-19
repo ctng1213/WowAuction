@@ -188,7 +188,7 @@ def _held_and_listed(state: StateReader, char_ids: list[str]) -> dict[int, int]:
         Item key -> units.
     """
     have = dict(state.owned_units(char_ids))
-    for _, key, _, stack, _, count, _ in state.own_auctions(char_ids):
+    for _, key, _, stack, _, count, *_ in state.own_auctions(char_ids):
         have[key] = have.get(key, 0) + stack * count
     return have
 

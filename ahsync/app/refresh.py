@@ -110,7 +110,7 @@ def _stage_recommendations(db: Database, market: str, stats: dict, now_ms: int, 
     total_gold = sum(g for _, g in characters)
     db.stage_view("disenchant", market, disenchant_page(db, char_ids, stats, items, total_gold, now_ms, cfg), now_ms)
     db.stage_view("craft", market, craft_page(db, char_ids, stats, items, total_gold, now_ms, cfg), now_ms)
-    db.stage_view("on_ah", market, on_ah_page(db, char_ids, stats, items), now_ms)          # D18
+    db.stage_view("on_ah", market, on_ah_page(db, char_ids, stats, items, now_ms, cfg), now_ms)   # D18, D53
     db.stage_view("history", market, history_page(db, char_ids, stats, items, now_ms, offset_ms), now_ms)   # D47
     sheets = [CharacterSheet(c, cls, level, faction, m, gold, cfg.budgets.get(c), recipes, updated, profs)
               for c, cls, level, faction, m, gold, recipes, updated, profs in db.character_sheets(char_ids)]

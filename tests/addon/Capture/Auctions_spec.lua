@@ -33,13 +33,13 @@ describe("Auctions", function()
     local snap = AHProfitDB.ownAuctions["Amaya-Grommash"]
     local at = snap.at                                            -- read once the debounce fires
     assert_eq(at >= NOW, true)
-    assert_eq(snap, { at = at, rows = "2840,950,5,1,1;4471,80,1,3,1",
+    assert_eq(snap, { at = at, rows = "2840,950,5,1,1;4471,80,1,4,1",
                       ends = "2840,5," .. (at + 1200000) .. ",950;4471,1," .. (at + 11 * 3600000) .. ",80" })
   end)
 
   it("bands follow Classic's time left; ended auctions stop counting; no API stores nothing", function()
     local A = (Boot({}) and AHProfit.Capture.Auctions)
-    assert_eq({ A.Band(1799), A.Band(1800), A.Band(7199), A.Band(43199), A.Band(43200) }, { 1, 2, 2, 3, 4 })
+    assert_eq({ A.Band(1799), A.Band(1800), A.Band(7199), A.Band(28799), A.Band(28800) }, { 1, 2, 2, 3, 4 })
     local entry = { ends = "4471,1,5000,80;4471,2,9000;2840,5,3000,9" }        -- an older row has no price
     assert_eq(A.Listed(entry, 4000), { [4471] = { units = 3, endsAt = 5000 } })
     assert_eq(A.Active(entry, 4000), { { key = 4471, units = 1, endsAt = 5000, price = 80 }, { key = 4471, units = 2, endsAt = 9000 } })
@@ -48,5 +48,11 @@ describe("Auctions", function()
     Stubs.FireEvent("OWNED_AUCTIONS_UPDATED")
     Stubs.Advance(2)
     assert_eq(AHProfitDB.ownAuctions["Amaya-Grommash"], nil)
+  end)
+  it("A61 the long band runs to 8 h, as the spec and the dashboard say", function()
+    Stubs.Reset()
+    Stubs.Login()
+    local A = AHProfit.Capture.Auctions
+    assert_eq({ A.Band(8 * 3600 - 60), A.Band(8 * 3600), A.Band(2 * 3600) }, { 3, 4, 3 })
   end)
 end)

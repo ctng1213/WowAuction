@@ -25,7 +25,7 @@ from ahsync.recommend.store import RecommendStore
 from ahsync.state.journal import JournalReads
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
@@ -103,6 +103,10 @@ MIGRATIONS: dict[int, str] = {
     13: """
         ALTER TABLE reserves ADD COLUMN set_at INTEGER;
         ALTER TABLE reserves ADD COLUMN source TEXT
+    """,
+    # 15: each own-auction group's soonest end, from the snapshot's ends (S16, D53).
+    15: """
+        ALTER TABLE own_auctions ADD COLUMN end_ms INTEGER
     """,
     # 14: sell records, stored for the hourly status pass (M8).
     14: """

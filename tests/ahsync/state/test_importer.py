@@ -582,3 +582,13 @@ def test_ingest_file_passes_the_dirty_keys_to_the_incremental_update_hook(tmp_pa
 
 def test_the_incremental_update_hook_is_a_no_op_until_the_engine_lands(db):
     assert apply_module.incremental_update(db, frozenset({2589}), T) is None
+
+
+def test_S16_each_own_auction_group_keeps_its_soonest_end(db):
+    ends = f"6217,1,{T + 5 * HOUR},4100;6217,1,{T + 7 * HOUR},4100;2589,20,{T + 20 * HOUR},40"
+    snapshot = {"at": T, "rows": "6217,4100,1,3,2;2589,40,20,4,1", "ends": ends}
+    apply_db(db, {"characters": CHAR, "ownAuctions": {AMAYA: snapshot}})
+    assert rows(db, "SELECT key, band, end_ms FROM own_auctions ORDER BY key") == [(2589, 4, T + 20 * HOUR),
+                                                                                   (6217, 3, T + 5 * HOUR)]
+    apply_db(db, {"characters": CHAR, "ownAuctions": {AMAYA: {"at": T + HOUR, "rows": "6217,4100,1,3,2"}}})
+    assert rows(db, "SELECT key, end_ms FROM own_auctions") == [(6217, None)]     # an older addon: no ends

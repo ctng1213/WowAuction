@@ -125,7 +125,7 @@ class StateReader(Protocol):
             by name) per character, by id.
         """
 
-    def own_auctions(self, char_ids: list[str]) -> list[tuple[str, int, int, int, int, int, int | None]]:
+    def own_auctions(self, char_ids: list[str]) -> list[tuple[str, int, int, int, int, int, int | None, int | None]]:
         """Your auctions as the addon last saw them, with the deposit of the post behind each (SPEC §3.5 On the AH).
 
         Args:
@@ -133,7 +133,7 @@ class StateReader(Protocol):
 
         Returns:
             (char_id, key, price each copper, stack, band 1-4, auctions, deposit per auction copper or None when
-            its post wasn't captured), by character, key, price, stack, band.
+            its post wasn't captured, soonest end ms or None), by character, key, price, stack, band.
         """
 
     def cost_basis(self) -> dict[int, tuple[int, int]]:
@@ -411,7 +411,7 @@ class StateReads:
         return {key: (qty, total) for key, qty, total in self.conn.execute(
             "SELECT key, qty, total_cost FROM cost_basis WHERE qty > 0 ORDER BY key")}
 
-    def own_auctions(self, char_ids: list[str]) -> list[tuple[str, int, int, int, int, int, int | None]]:
+    def own_auctions(self, char_ids: list[str]) -> list[tuple[str, int, int, int, int, int, int | None, int | None]]:
         """Your auctions as the addon last saw them, with the deposit of the post behind each (SPEC §3.5 On the AH).
 
         Args:
@@ -419,7 +419,7 @@ class StateReads:
 
         Returns:
             (char_id, key, price each copper, stack, band 1-4, auctions, deposit per auction copper or None when
-            its post wasn't captured), by character, key, price, stack, band.
+            its post wasn't captured, soonest end ms or None), by character, key, price, stack, band.
         """
         if not char_ids:
             return []
@@ -427,7 +427,7 @@ class StateReads:
         return [tuple(r) for r in self.conn.execute(
             f"SELECT a.char_id, a.key, a.price, a.stack, a.band, COALESCE(a.count, 1), "
             f"(SELECT p.deposit FROM posts p WHERE p.char_id = a.char_id AND p.key = a.key AND p.stack = a.stack "
-            f" AND p.price = a.price AND p.outcome IS NULL ORDER BY p.at DESC LIMIT 1) "
+            f" AND p.price = a.price AND p.outcome IS NULL ORDER BY p.at DESC LIMIT 1), a.end_ms "
             f"FROM own_auctions a WHERE a.char_id IN ({marks}) ORDER BY a.char_id, a.key, a.price, a.stack, a.band",
             tuple(char_ids))]
 
