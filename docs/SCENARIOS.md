@@ -98,7 +98,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | FM19 | AH closed at 40% of a full scan | saved as partial (coverage 40%); excluded from volume diffs |
 | FM20 | buy hook fires, then "not enough gold" | an attempt only; it expires after 1 h; no cost basis change |
 | FM21 | crash before logout; at the next login 20 Linen are missing from bags | recorded as an untracked change; no invented sale or cost |
-| FM22 | SavedVariables at its cap with 5 un-ingested full scans | the oldest scan is dropped; all events kept; warning shown |
+| FM22 | SavedVariables at its cap with 13 un-ingested full scans | the oldest scan is dropped; all events kept; warning shown |
 | FM23 | migration from SavedVariables v1 to v2 fails halfway | v1 data untouched; error shown; nothing deleted |
 | FM24 | the AH is closed and opened again after 1 of 3 rows was searched | this visit's searches are forgotten: rows no scan or search has priced show "checking", and the next search counts "1 of 3" again |
 | FM25 | the key is expired: `/files` returns 401 with the key and 200 without it | the run continues on the free path; Status "API key rejected"; no traceback, no key in the log |

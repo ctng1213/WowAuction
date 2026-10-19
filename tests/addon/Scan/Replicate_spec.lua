@@ -171,9 +171,9 @@ describe("Replicate", function()
     assert_eq({ AHProfitDB.scans[1].kind, AHProfitDB.scans[1].coverage }, { "partial", 0.2 })
   end)
 
-  it("FM22 a fifth un-ingested full scan drops the oldest; events are kept", function()
+  it("FM22 a 13th un-ingested full scan drops the oldest; events are kept", function()
     local old = {}
-    for i = 1, 4 do
+    for i = 1, 12 do
       old[i] = { id = "Amaya-Grommash:175999000" .. i .. "000:0", char = "Amaya-Grommash", at = 1759990000000 + i * 1000,
                  kind = "full", coverage = 1, rows = "2589,40,20,4,1" }
     end
@@ -186,7 +186,10 @@ describe("Replicate", function()
     Stubs.Advance(1)
     local ids = {}
     for i, scan in ipairs(AHProfitDB.scans) do ids[i] = scan.at end
-    assert_eq(ids, { 1759990002000, 1759990003000, 1759990004000, 1760000000000 }, "the oldest full scan went")
+    local kept = {}
+    for i = 2, 12 do kept[#kept + 1] = 1759990000000 + i * 1000 end
+    kept[#kept + 1] = 1760000000000
+    assert_eq(ids, kept, "the oldest full scan went")
     assert_eq(#AHProfitDB.events, 1, "events are never dropped")
     assert_eq(AHProfit.Scan.Replicate.Warning(), "Dropped 1 old full scan(s): run AHSync to sync")
   end)

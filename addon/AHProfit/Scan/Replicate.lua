@@ -19,7 +19,7 @@ Replicate.FALLBACK_WAIT_S = 30       -- SPEC §4.2: no answer this long after op
 Replicate.MIN_CALL_GAP_S = 1200      -- SPEC §4.2: at most one own call per 20 min
 Replicate.MAX_CALL_GAP_S = 7200      -- an unanswered call doubles the gap, up to 2 h
 Replicate.MIN_RUN_GAP_S = 60         -- a repeated update for the same answer starts no second scan
-Replicate.MAX_FULL_SCANS = 4         -- SPEC §5.1, FM22: un-ingested full scans kept
+Replicate.MAX_FULL_SCANS = 12        -- SPEC §5.1, FM22: un-ingested full scans kept (hourly for 12 h; ~0.4 MB each)
 Replicate.ANSWER_WAIT_S = 60         -- A43: an own request with no answer this long says so
 Replicate.PROGRESS_EVERY = 10        -- A43: steps between progress updates, a few a second
 
