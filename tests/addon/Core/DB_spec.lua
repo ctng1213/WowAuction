@@ -86,6 +86,27 @@ describe("DB", function()
     assert_eq(saved, { formatVersion = 1, keep = "me" })
   end)
 
+  it("FM23 a migration that fails halfway leaves v1 data untouched, says so, and deletes nothing", function()
+    Stubs.Reset()
+    local saved = { formatVersion = 1, addonVersion = "0.1.0", characters = {}, professions = {}, recipes = {},
+                    knownRecipes = {}, inventory = {}, ownAuctions = {}, scans = {}, rules = {}, reserves = {}, mailSeen = {},
+                    events = { { id = "Amaya-Grommash:1:0", char = "Amaya-Grommash", type = "craft", at = 1, spell = 1, count = 1 } } }
+    AHProfitDB = saved
+    _G.AHProfitPlan = { ingestedUntil = { ["Amaya-Grommash"] = 5 } }     -- a plan that would prune that event
+    Stubs.LoadAddon()
+    AHProfit.DB.FORMAT_VERSION = 2                                       -- as a v2 addon would be
+    AHProfit.DB.migrations[1] = function(db) db.events = nil; error("disk full", 0) end
+    Stubs.FireEvent("ADDON_LOADED", "AHProfit")
+    Stubs.FireEvent("PLAYER_LOGIN")
+    assert_eq(AHProfitDB, saved)
+    assert_eq(#AHProfitDB.events, 1)                                    -- nothing deleted
+    assert_eq(AHProfit.DB.Get(), nil)
+    assert_eq(Stubs.chat[#Stubs.chat]:find("migration 1 -> 2 failed: disk full", 1, true) ~= nil, true)
+    Stubs.Slash("/ahp")
+    assert_eq(AHProfit.MainWindow.Frames().footer:GetText(), "not recording: migration 1 -> 2 failed: disk full")
+    _G.AHProfitPlan = nil
+  end)
+
   it("a missing migration step fails", function()
     local DB = Boot(nil)
     local migrated, err = DB.Migrate({ formatVersion = 1 }, {}, 2)

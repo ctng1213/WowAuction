@@ -163,6 +163,8 @@ function DB.OnAddonLoaded(_, addonName)
   if db then
     DB.SeedEventIds(db)
     Adapter.StoreSaved(DB.SAVED_NAME, db)
+  else                                      -- say so once: capture is off, the saved data is kept as it was (FM23)
+    Adapter.Print(tostring(err) .. ". Nothing is recorded until this is fixed; your saved data is untouched.")
   end
 end
 

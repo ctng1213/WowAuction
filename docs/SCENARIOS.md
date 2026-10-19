@@ -99,7 +99,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | FM20 | buy hook fires, then "not enough gold" | an attempt only; it expires after 1 h; no cost basis change |
 | FM21 | crash before logout; at the next login 20 Linen are missing from bags | recorded as an untracked change; no invented sale or cost |
 | FM22 | SavedVariables at its cap with 13 un-ingested full scans | the oldest scan is dropped; all events kept; warning shown |
-| FM23 | migration from SavedVariables v1 to v2 fails halfway | v1 data untouched; error shown; nothing deleted |
+| FM23 | migration from SavedVariables v1 to v2 fails halfway | v1 data untouched (the migration runs on a copy, and the untouched table is what WoW saves); the error is printed in chat once and the window's footer reads "not recording: migration 1 -> 2 failed: …"; nothing deleted: capture is off and the login prune does not run |
 | FM24 | the AH is closed and opened again after 1 of 3 rows was searched | this visit's searches are forgotten: rows no scan or search has priced show "checking", and the next search counts "1 of 3" again |
 | FM25 | the key is expired: `/files` returns 401 with the key and 200 without it | the run continues on the free path; Status "API key rejected"; no traceback, no key in the log |
 | FM26 | a 10-day gap with Premium; h1c returns 403 from the first h1c hour | h1c disabled after that request; no further h1c requests; those hours reported lost (or day-only where d1c covers them); public h1 hours still sync |
