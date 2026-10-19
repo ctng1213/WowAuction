@@ -76,6 +76,12 @@ CREATE TABLE IF NOT EXISTS auction_mail(
 );
 CREATE INDEX IF NOT EXISTS auction_mail_char_key_at ON auction_mail(char_id, key, at, outcome);
 
+-- A disenchant and what it gave, "key,qty;..." by key (SPEC §2.2.1 disenchant, T18).
+CREATE TABLE IF NOT EXISTS disenchants(
+    event_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, key INTEGER NOT NULL, results TEXT NOT NULL,
+    at INTEGER NOT NULL, action_id TEXT
+);
+
 -- Gold taken from a sold mail (SPEC §2.2.1 payout, T17): the sold mail it paid and the profit it realized,
 -- set once by the tracking pass (copper; NULL until then).
 CREATE TABLE IF NOT EXISTS payouts(

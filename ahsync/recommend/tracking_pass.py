@@ -7,7 +7,7 @@ recipe's product. engine.tracking decides; this module only reads and writes the
 from __future__ import annotations
 
 from ahsync.db.sqlite import Database
-from ahsync.engine.cost_basis import Bought, Made, cost_basis
+from ahsync.engine.cost_basis import Bought, Disenchanted, Made, cost_basis
 from ahsync.engine.tracking import (AuctionMail, DoneEvent, OpenAction, OpenPost, Payout, SoldMail, match, realize,
                                     resolve_posts)
 
@@ -20,8 +20,10 @@ _EVENTS = {
                         "JOIN recipes r ON r.spell_id = c.spell_id AND r.product_key IS NOT NULL "
                         "WHERE c.action_id IS NULL GROUP BY c.event_id"),
     "mail_sent": ("mail", "SELECT event_id, char_id, key, qty, NULL, at FROM mail_sent WHERE action_id IS NULL"),
+    "disenchants": ("de", "SELECT event_id, char_id, key, 1, NULL, at FROM disenchants WHERE action_id IS NULL"),
 }
-_ID_COLUMN = {"purchases": "event_id", "posts": "post_id", "crafts": "event_id", "mail_sent": "event_id"}
+_ID_COLUMN = {"purchases": "event_id", "posts": "post_id", "crafts": "event_id", "mail_sent": "event_id",
+              "disenchants": "event_id"}
 
 
 def _open_actions(db: Database) -> list[OpenAction]:
@@ -124,8 +126,24 @@ def _made(db: Database) -> list[Made]:
     return out
 
 
+def _disenchanted(db: Database) -> list[Disenchanted]:
+    """Every disenchant with what it gave (T18).
+
+    Args:
+        db: Database.
+
+    Returns:
+        Disenchanted, one per event; results as stored ("key,qty;..." by key).
+    """
+    out = []
+    for event_id, key, results, at in db.conn.execute("SELECT event_id, key, results, at FROM disenchants"):
+        pairs = (part.split(",") for part in results.split(";"))
+        out.append(Disenchanted(event_id, key, tuple((int(k), int(n)) for k, n in pairs), at))
+    return out
+
+
 def _cost_basis(db: Database) -> int:
-    """Replace the cost basis table from purchases, crafts and what you hold now (SPEC §3.2, T9-T13).
+    """Replace the cost basis table from purchases, crafts, disenchants and what you hold now (SPEC §3.2, T9-T13, T18).
 
     Args:
         db: Database (inside a transaction).
@@ -140,7 +158,7 @@ def _cost_basis(db: Database) -> int:
             "SELECT key, SUM(qty) FROM inventory WHERE bound = 0 GROUP BY key UNION ALL "
             "SELECT key, SUM(stack * COALESCE(count, 1)) FROM own_auctions GROUP BY key"):
         held[key] = held.get(key, 0) + units
-    basis = cost_basis(bought, _made(db), held)
+    basis = cost_basis(bought, _made(db), held, _disenchanted(db))
     db.conn.execute("DELETE FROM cost_basis")
     db.conn.executemany("INSERT INTO cost_basis(key, qty, total_cost, untracked_qty) VALUES (?, ?, ?, ?)",
                         [(k, b.qty, int(b.total_cost + 0.5), b.untracked) for k, b in basis.items()])

@@ -613,6 +613,47 @@ local function ReadContainers(bagIds)
   return items
 end
 
+--- Whether a bag slot is locked, and its item link.
+--- UNVERIFIED: C_Container's isLocked, or the legacy GetContainerItemInfo's 3rd return.
+---@param bag number
+---@param slot number
+---@return string|nil link, boolean locked
+local function SlotLock(bag, slot)
+  if C_Container and C_Container.GetContainerItemInfo then
+    local info = C_Container.GetContainerItemInfo(bag, slot)
+    return info and info.hyperlink, info and info.isLocked and true or false
+  end
+  local _, _, locked, _, _, _, link = GetContainerItemInfo(bag, slot)
+  return link, locked and true or false
+end
+
+--- The item in the first locked bag slot: the target of a spell cast on an item, while it casts (A55).
+--- UNVERIFIED: the client locks the target's slot during the cast, as on Classic.
+---@return number|nil  Item key; nil when no slot is locked
+function Adapter.LockedBagItem()
+  for _, bag in ipairs(BAG_IDS) do
+    for slot = 1, NumSlots(bag) do
+      local link, locked = SlotLock(bag, slot)
+      if locked and link then return Adapter.ItemKey(link) end
+    end
+  end
+  return nil
+end
+
+--- The items in the open loot window, coin left out (A55).
+--- UNVERIFIED: GetNumLootItems, GetLootSlotLink(i) and GetLootSlotInfo(i) (quantity 3rd), as on Classic.
+---@return table[]  { key, qty } per loot slot with an item
+function Adapter.ReadLoot()
+  local out = {}
+  if not (GetNumLootItems and GetLootSlotLink and GetLootSlotInfo) then return out end
+  for i = 1, GetNumLootItems() do
+    local key = Adapter.ItemKey(GetLootSlotLink(i))
+    local _, _, qty = GetLootSlotInfo(i)
+    if key and (qty or 0) > 0 then out[#out + 1] = { key = key, qty = qty } end
+  end
+  return out
+end
+
 --- Which item is in each bag slot, for naming what a post took from a slot that is empty by then (A44).
 ---@return table  "bag:slot" -> item key, occupied slots only
 function Adapter.ReadBagSlots()

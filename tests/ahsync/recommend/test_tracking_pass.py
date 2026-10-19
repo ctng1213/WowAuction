@@ -122,3 +122,26 @@ def test_T17_posted_sold_and_paid_out_are_three_events_and_profit_is_realized_on
     assert rows(db, "SELECT mail_id, realized FROM payouts") == [("sold", 550.0)]
     assert rows(db, "SELECT m.post_id FROM auction_mail m") == [("post",)]
     assert tracking_pass(db)["paid"] == 0                                       # counted once
+
+
+def test_T18_a_stored_disenchant_moves_the_cost_to_its_mats(db):
+    with db.transaction():
+        db.conn.execute("INSERT INTO purchases(event_id, char_id, key, qty, price, source, at, confirmed) "
+                        "VALUES ('bracers', ?, 4570, 1, 3000, 'ah', ?, 1)", (AMAYA, T))
+        db.conn.execute("INSERT INTO disenchants(event_id, char_id, key, results, at) "
+                        "VALUES ('de', ?, 4570, '10938,1;10940,3', ?)", (AMAYA, T + HOUR))
+        db.conn.executemany("INSERT INTO inventory(char_id, location, key, qty, bound) VALUES (?, 'bags', ?, ?, 0)",
+                            [(AMAYA, 10938, 1), (AMAYA, 10940, 3)])
+    tracking_pass(db)
+    assert db.cost_basis() == {10938: (1, 750), 10940: (3, 2250)}             # 30s over 4 units
+
+
+def test_T19_a_disenchant_matches_the_planned_de_action(db):
+    with db.transaction():
+        db.conn.execute("INSERT INTO actions(action_id, char_id, kind, key, qty, slot_ms, status, done_qty) "
+                        "VALUES ('de', ?, 'de', 4570, 1, ?, 'pending', 0)", (AMAYA, T))
+        db.conn.execute("INSERT INTO disenchants(event_id, char_id, key, results, at) "
+                        "VALUES ('d1', ?, 4570, '10940,3', ?)", (AMAYA, T + HOUR))
+    assert tracking_pass(db)["matched"] == 1
+    assert rows(db, "SELECT status, done_qty FROM actions WHERE action_id = 'de'") == [("done", 1)]
+    assert rows(db, "SELECT action_id FROM disenchants") == [("de",)]

@@ -45,6 +45,8 @@ Diagnostics.APIS = {
   -- auction mail (A48)
   "GetInboxHeaderInfo", "GetInboxInvoiceInfo", "AUCTION_EXPIRED_MAIL_SUBJECT", "AUCTION_REMOVED_MAIL_SUBJECT",
   "AUCTION_WON_MAIL_SUBJECT", "TakeInboxMoney", "AutoLootMailItem",
+  -- disenchant (A55)
+  "GetNumLootItems", "GetLootSlotLink", "GetLootSlotInfo",
 }
 
 -- Namespaces whose function lists we need to write the modern readers (SPEC §6).

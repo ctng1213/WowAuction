@@ -349,14 +349,15 @@ local function InstallItems()
       local item = SlotItem(bag, slot)
       if not item then return nil end
       return { stackCount = item.count, hyperlink = not item.noLink and Stubs.ItemLink(item.id, item.suffix) or nil,
-               isBound = item.bound or false, itemID = item.id }
+               isBound = item.bound or false, isLocked = item.locked or false, itemID = item.id }
     end,
   })
   Define("GetContainerNumSlots", numSlots)
   Define("GetContainerItemInfo", function(bag, slot)
     local item = SlotItem(bag, slot)
     if item then
-      return "icon", item.count, false, 1, false, false, not item.noLink and Stubs.ItemLink(item.id, item.suffix) or nil
+      return "icon", item.count, item.locked or false, 1, false, false,
+        not item.noLink and Stubs.ItemLink(item.id, item.suffix) or nil
     end
   end)
   Define("GetInboxNumItems", function() return #Stubs.world.inbox, Stubs.world.inboxTotal or #Stubs.world.inbox end)

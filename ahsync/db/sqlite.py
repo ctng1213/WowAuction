@@ -24,7 +24,7 @@ from ahsync.intel.store import IntelStore
 from ahsync.recommend.store import RecommendStore
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
@@ -71,6 +71,13 @@ MIGRATIONS: dict[int, str] = {
             at INTEGER NOT NULL, mail_id TEXT, realized REAL
         )
     """,
+    # 8: disenchants and what they gave (SPEC §2.2.1 disenchant, T18).
+    8: """
+        CREATE TABLE IF NOT EXISTS disenchants(
+            event_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, key INTEGER NOT NULL, results TEXT NOT NULL,
+            at INTEGER NOT NULL, action_id TEXT
+        )
+    """,
 }
 BACKUP_KEEP = 3
 BACKUP_PREFIX = "ahsync-"
@@ -79,7 +86,7 @@ CANDLE_TABLES = ("candles_h1", "candles_d1")
 # Tables and time columns prune may delete from (SPEC §3.2 retention). Guards the SQL built in delete_before.
 PRUNABLE = {
     "candles_h1": "t", "candles_d1": "t", "sales_h1": "t", "volume_d1": "day", "posts": "at", "purchases": "at",
-    "crafts": "at", "auction_mail": "at", "payouts": "at", "mail_sent": "at", "skips": "at", "actions": "run_at",
+    "crafts": "at", "disenchants": "at", "auction_mail": "at", "payouts": "at", "mail_sent": "at", "skips": "at", "actions": "run_at",
     "fetch_failures": "hour",
 }
 

@@ -220,6 +220,7 @@ AHProfitDB = {
   - `purchase` on the AH: a commodity purchase uses the unit price the AH quoted (`COMMODITY_PRICE_UPDATED` after `StartCommoditiesPurchase`), is added on `ConfirmCommoditiesPurchase` and confirmed on `COMMODITY_PURCHASE_SUCCEEDED`; a buyout (`PlaceBid` at the buyout, read with `GetAuctionInfoByID`) is confirmed on `AUCTION_HOUSE_PURCHASE_COMPLETED`. A bid below the buyout is not a purchase.
   - `purchase` from a merchant: `BuyMerchantItem(index, quantity)`, at the merchant's price per unit; confirmed at once.
   - `craft`: `UNIT_SPELLCAST_SUCCEEDED` for the player with a spell among the character's known recipes; one event per cast, `count` 1.
+  - `disenchant` (A55): `UNIT_SPELLCAST_START` of Disenchant (13262) for the player notes the item in the locked bag slot (the cast's target); `UNIT_SPELLCAST_SUCCEEDED` marks it cast and `INTERRUPTED` / `FAILED` drop it; the next `LOOT_OPENED` reads the loot (coin left out) into `results`, summed per item and ordered by key. AHSync passes the item's average cost to the results, split by units (T18), and matches the event to a planned DE action like a craft (T19). SPEC GAP: splitting by units, not by value, gives dust and essence the same cost per unit.
   - `auction_mail` (A48): read from the mailbox when it shows (`MAIL_INBOX_UPDATE`). A seller invoice (`GetInboxInvoiceInfo`) is `sold` at its sale price ÷ count, a buyer invoice or "Auction won: …" `won`, and the subjects "Auction expired: …" and "Auction cancelled: …" (the client's `AUCTION_EXPIRED_MAIL_SUBJECT` and `AUCTION_REMOVED_MAIL_SUBJECT`) `expired` and `cancelled`, keyed by the attachment's link, or, for a sold invoice (which has no attachment), by the item's name in `itemNames`. Each mail becomes one event: a fingerprint (outcome, item, quantity, price and its send time, from the days left of a 30-day auction mail) is kept in `mailSeen` until 31 days after it was sent. The event's `at` is when the mail was first seen, so the pruning handshake never drops it before AHSync reads it; `sentAt` carries the send time.
   - `payout` (A54, T17): a hook that only observes `TakeInboxMoney(index)` and `AutoLootMailItem(index)` reads the mail before the take lands (its header still shows the money): a seller invoice with money becomes one `payout` of that money, keyed like a sold mail, deduplicated by a `paid:` fingerprint in `mailSeen`. AHSync links each payout to the oldest sold mail of the same character, item and quantity not yet paid, and realizes its profit once: money − units × cost basis − the post's deposit for those units (§3.4.1).
 - Untracked changes (FM21) are not events. AHSync derives them by comparing consecutive inventory snapshots with the events between them.
@@ -341,6 +342,7 @@ scans(scan_id PK, market, src, char_id, at, kind)            -- src: local (your
 book_entries(scan_id, key, price, stack, band, count,        PK(scan_id,key,price,stack,band))
 auction_mail(event_id PK, char_id, key, qty, price, outcome, at)   -- index (char_id,key,at,outcome)
 payouts(event_id PK, char_id, key, qty, money, at, mail_id, realized)   -- gold taken from a sold mail; realized copper, set once (T17)
+disenchants(event_id PK, char_id, key, results, at, action_id)   -- results "key,qty;..." by key (T18)
 posts(post_id PK, char_id, market, key, stack, price, cost_each, p_at_post, duration_h, deposit, at, outcome, resolved_at, action_id)
 purchases(event_id PK, char_id, key, qty, price, source, at, action_id, confirmed)   -- index (char_id,key,at)
 crafts(event_id PK, char_id, spell_id, count, cost_each, at, action_id)   -- index (char_id,spell_id,at)
@@ -380,7 +382,7 @@ fetch_failures(market, hour, failures, last_error, last_at,  PK(market,hour))   
   - Items you already held when tracking started count as cost 0, and `untracked_qty` marks them, so the UI can say "before tracking".
 - `item_rules.rule` is `no_buy`, `ignore`, `keep` or `none` (§3.4.2). `source` is `dashboard` or `addon`. Clearing a rule writes `none` with a new `set_at` rather than deleting the row. That tombstone is what lets a clear beat an older rule from the other side. Tombstones older than 90 days are pruned.
 - **Failure handling (§5.2):**
-  - **Event ids.** Every event table (`posts`, `purchases`, `crafts`, `auction_mail`, `payouts`, `mail_sent`, `skips`) is keyed by `event_id` (`charId:timeMs:seq`, unique), and ingest upserts on it. A natural key such as (character, item, time) would merge two identical buys in the same second.
+  - **Event ids.** Every event table (`posts`, `purchases`, `crafts`, `disenchants`, `auction_mail`, `payouts`, `mail_sent`, `skips`) is keyed by `event_id` (`charId:timeMs:seq`, unique), and ingest upserts on it. A natural key such as (character, item, time) would merge two identical buys in the same second.
   - **Snapshots.** `snapshots` holds each place's capture time, so an older file never overwrites a newer snapshot, not even an empty one.
   - **Skips** follow the 90-day retention. A skip whose action doesn't exist yet is applied when matching creates it (§3.4.1, M4).
   - **Attempts.** `purchases` and `posts` have `confirmed` (0/1); unconfirmed rows older than 1 h are ignored.
@@ -1230,7 +1232,7 @@ ahsync/
   history/    reads.py (HistoryReader protocol + SQLite reads), writes.py, prune.py
   analysis/   market.py (history → MarketIntelligence, §3.3)
   intel/      contract.py (MarketIntelligence, ItemIntel, INTEL_SCHEMA_VERSION), store.py (IntelReader/IntelWriter + SQLite)
-  state/      luadata.py (WoW SavedVariables Lua parser), savedvars.py (AHProfitDB → records, §2.2.1), importer.py (records → store),
+  state/      luadata.py (WoW SavedVariables Lua parser), savedvars.py (AHProfitDB → records, §2.2.1) with savedvars_fields.py (its field converters), importer.py (records → store),
               writes.py, reads.py (StateReader + SQLite)
   recommend/  pages.py (Disenchant and Craft options and pages), later flips and sells
   portfolio/  plan.py (cross-character plan, §3.4C; M4)
