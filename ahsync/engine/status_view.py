@@ -12,6 +12,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from ahsync.engine.sell_record import Calibration
+from ahsync.engine.volume import Backtest
 from ahsync.engine.views import age_text, round_half_up
 
 HOUR_MS = 3_600_000
@@ -44,6 +45,7 @@ class MarketFacts:
     newest_candle_ms: int | None
     local_scans_7d: int           # your full or partial scans in the last 7 days
     ahf_books_7d: int             # AHF order books in the last 7 days
+    backtests: tuple[tuple[str, Backtest], ...] = ()   # (confirmed source, estimates against it), by source (K4)
 
 
 @dataclass(frozen=True)
@@ -321,7 +323,27 @@ def _market_card(m: MarketFacts, now_ms: int, offset_ms: int) -> dict:
         ["Hourly history stored", history, ""],
         ["Your scans (7 d)", str(m.local_scans_7d), ""],
         ["AHF order books (7 d)", str(m.ahf_books_7d), "" if m.ahf_books_7d else "muted"],
+        *_backtest_lines(m.backtests),
     ]}
+
+
+def _backtest_lines(backtests: tuple[tuple[str, Backtest], ...]) -> list[list[str]]:
+    """The market card's estimate checks: your scans' sales against each confirmed source (SPEC §8.8, K4).
+
+    Args:
+        backtests: (confirmed source, Backtest), by source.
+
+    Returns:
+        One line per source with overlap; one muted line when there is none.
+    """
+    lines = []
+    for source, b in backtests:
+        if b.days:
+            tenths = round_half_up(b.median_ratio * 10)
+            share = round_half_up(100 * b.within / b.days)
+            lines.append([f"Your scans vs {source} (30 d)", f"median {tenths // 10}.{tenths % 10} · {b.within} of {b.days} "
+                          f"item-days ({share}%) within ±25%", "" if share >= 50 else "amber"])
+    return lines or [["Your scans vs confirmed sales", "no confirmed sales to compare with yet", "muted"]]
 
 
 def _api_card(rows: Sequence[StatusRow], facts: StatusFacts, offset_ms: int) -> dict:

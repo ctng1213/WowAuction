@@ -254,3 +254,31 @@ def median_daily_supply(hourly_supply: Sequence[tuple[int, int]], now_ms: int, d
         if now_ms - days * 86_400_000 < t <= now_ms:
             by_day.setdefault(t // 86_400_000, []).append(units)
     return median([median(units) for _, units in sorted(by_day.items())])
+
+
+@dataclass(frozen=True)
+class Backtest:
+    """How estimated daily sales compare with confirmed ones (SPEC §8.8, K4)."""
+
+    days: int                      # item-days with both
+    median_ratio: float | None     # median of estimated ÷ confirmed; None without a pair
+    within: int                    # item-days whose ratio is within the tolerance of 1
+
+
+def backtest(ratios: Sequence[float], tolerance: float = 0.25) -> Backtest:
+    """Summarize estimated ÷ confirmed daily sales (SPEC §8.8 volume backtest, K4).
+
+    Args:
+        ratios: One ratio per item and day with both an estimate and a confirmed count above 0.
+        tolerance: How far from 1 still counts as close (0.25: within ±25%).
+
+    Returns:
+        The count, the median ratio (mean of the middle two for an even count) and how many are within tolerance.
+    """
+    ordered = sorted(ratios)
+    if not ordered:
+        return Backtest(0, None, 0)
+    mid = len(ordered) // 2
+    median_ratio = ordered[mid] if len(ordered) % 2 else (ordered[mid - 1] + ordered[mid]) / 2
+    return Backtest(len(ordered), median_ratio, sum(1 for r in ordered if abs(r - 1) <= tolerance + 1e-12))
+

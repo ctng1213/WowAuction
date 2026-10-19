@@ -54,3 +54,20 @@ def test_calibration_reads_resolved_posts_of_the_last_90_days_with_a_planned_cha
         assert (c.posts, c.buckets[0].actual) == (2, 0.5)
     finally:
         db.close()
+
+
+def test_K4_backtests_pair_your_scan_estimates_with_confirmed_rows_of_the_same_item_and_day(tmp_path):
+    now = FakeClock().now_ms()
+    db = Database.open(tmp_path / "ahsync.db", now, None)
+    try:
+        today = now // DAY
+        with db.transaction():
+            db.conn.executemany("INSERT INTO volume_d1(market, key, day, listed, sold, expired, src) VALUES (?, ?, ?, 0, ?, 0, ?)",
+                                [(M, 1, today, 8.0, "books"), (M, 1, today, 10.0, "ahf"),      # 0.8
+                                 (M, 2, today, 5.0, "books"), (M, 2, today, 0.0, "ahf"),       # confirmed 0: no ratio
+                                 (M, 3, today - 40, 9.0, "books"), (M, 3, today - 40, 9.0, "ahf"),   # too old
+                                 (M, 4, today, 4.0, "books")])                                  # nothing to compare
+        [(src, b)] = status_page.status_facts(db, Config(markets=(M,)), now).markets[0].backtests
+        assert (src, b.days, b.median_ratio, b.within) == ("ahf", 1, 0.8, 1)
+    finally:
+        db.close()

@@ -496,7 +496,7 @@ Rules: SPEC §8.8.
 | K3 | 5 posts predicted 0.5, 0 sold | no warning (fewer than 20 posts) |
 | K5 | a post matched to its plan action, which planned P' 0.62; it sells | the post's `p_at_post` is 0.62 (the action's `conf`), so it counts in the 60–80% bucket as sold; a post that matched no action has no `p_at_post` and is left out |
 | K6 | Status with K1's and K2's posts | a "Sell-probability calibration" section: "Predicted vs actual (last 90 days, 35 resolved posts)", "Brier score 0.22 · always guessing 50% would score 0.25" ((1.6 + 6.25) ÷ 35), rows 40–60% (25 posts, predicted 50%, sold 28%, −22 pts, off) and 80–100% (10, 80%, 80%, 0 pts); the warning "Posts predicted 40–60% actually sold 28% (25 posts). Chances in that range are too optimistic."; with no resolved posts the section says it appears once posts are tracked |
-| K4 | 10 days with both AHF and book volume: book ÷ AHF ratios 0.8 ×4, 1.0 ×4, 1.5 ×2 | Status: median ratio 1.0; 8 of 10 days (80%) within ±25% |
+| K4 | 10 item-days with both AHF and book volume in the last 30 days: book ÷ AHF ratios 0.8 ×4, 1.0 ×4, 1.5 ×2 | Status, on the market's card: "Your scans vs ahf (30 d)" "median 1.0 · 8 of 10 item-days (80%) within ±25%"; a source with no overlap shows nothing, and with no confirmed source at all the card says "no confirmed sales to compare with yet"; days with a confirmed 0 sold are left out (no ratio) |
 
 ## 5. Invariants (SPEC §8.7)
 

@@ -10,10 +10,12 @@ from __future__ import annotations
 from ahsync.config import Config
 from ahsync.db.sqlite import Database
 from ahsync.engine.sell_record import calibration
+from ahsync.engine.volume import backtest
 from ahsync.engine.status_view import CharacterFacts, MarketFacts, StatusFacts, StatusRow, status_view
 
 DAY_MS = 86_400_000
 CALIBRATION_DAYS = 90            # SPEC §8.8: the last 90 days of resolved posts
+BACKTEST_DAYS = 30               # SPEC §8.8 volume backtest: the last 30 days
 
 
 def _db_bytes(db: Database) -> int:
@@ -34,6 +36,26 @@ def _db_bytes(db: Database) -> int:
     return total
 
 
+def _backtests(db: Database, market: str, now_ms: int) -> tuple:
+    """Estimated sales against each confirmed source over the last 30 days (SPEC §8.8, K4).
+
+    Args:
+        db: Database.
+        market: Market id.
+        now_ms: Now.
+
+    Returns:
+        (source, Backtest) per confirmed source with a row in the window, by source.
+    """
+    ratios: dict[str, list[float]] = {}
+    for src, estimated, confirmed in db.conn.execute(
+            "SELECT c.src, e.sold, c.sold FROM volume_d1 e JOIN volume_d1 c ON c.market = e.market AND c.key = e.key "
+            "AND c.day = e.day AND c.src NOT IN ('books') WHERE e.market = ? AND e.src = 'books' AND e.day >= ? "
+            "AND e.sold IS NOT NULL AND c.sold > 0 ORDER BY c.src", (market, (now_ms - BACKTEST_DAYS * DAY_MS) // DAY_MS)):
+        ratios.setdefault(src, []).append(estimated / confirmed)
+    return tuple((src, backtest(r)) for src, r in sorted(ratios.items()))
+
+
 def status_facts(db: Database, cfg: Config, now_ms: int) -> StatusFacts:
     """Gather the Status page's facts.
 
@@ -49,7 +71,8 @@ def status_facts(db: Database, cfg: Config, now_ms: int) -> StatusFacts:
     for market in cfg.markets:
         state = db.get_sync_state(market)
         newest, priced, oldest, latest, local, books = db.sync_facts(market, now_ms - 7 * DAY_MS)
-        markets.append(MarketFacts(market, state.last_hour, state.last_run, newest, priced, oldest, latest, local, books))
+        markets.append(MarketFacts(market, state.last_hour, state.last_run, newest, priced, oldest, latest, local, books,
+                                   _backtests(db, market, now_ms)))
     characters = tuple(CharacterFacts(*row) for row in db.characters())
     results = [(p, outcome == "sold") for p, outcome in db.conn.execute(
         "SELECT p_at_post, outcome FROM posts WHERE outcome IN ('sold', 'expired') AND p_at_post IS NOT NULL "

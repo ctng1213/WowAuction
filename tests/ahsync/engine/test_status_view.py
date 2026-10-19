@@ -130,8 +130,17 @@ def test_a_fresh_market_card():
         ["Last sync run", "Sat 17 Oct 22:05", ""], ["Hours handled up to", "Sat 17 Oct 22:00", ""],
         ["Newest AHF price", "Sat 17 Oct 21:30 · 1 h ago", ""], ["Items with prices", "8,929", ""],
         ["Hourly history stored", "Thu 17 Sep 23:00–Sat 17 Oct 22:00", ""], ["Your scans (7 d)", "6", ""],
-        ["AHF order books (7 d)", "3", ""]]
+        ["AHF order books (7 d)", "3", ""], ["Your scans vs confirmed sales", "no confirmed sales to compare with yet", "muted"]]
     assert status_view.hour_ranges([5, 3, 4, 9]) == [(3, 5), (9, 9)]
+
+
+def test_K4_the_market_card_compares_your_scan_estimates_with_each_confirmed_source():
+    from ahsync.engine.volume import backtest
+    k4 = backtest([0.8] * 4 + [1.0] * 4 + [1.5] * 2)
+    card = status_view.status_view([], facts(market(backtests=(("ahf", k4), ("blizzard", backtest([])),
+                                                                ("mail", backtest([2.0, 3.0]))))), NOW, 0)["cards"][0]
+    assert card["lines"][-2:] == [["Your scans vs ahf (30 d)", "median 1.0 · 8 of 10 item-days (80%) within ±25%", ""],
+                                  ["Your scans vs mail (30 d)", "median 2.5 · 0 of 2 item-days (0%) within ±25%", "amber"]]
 
 
 def test_K6_status_shows_calibration_and_its_warnings():

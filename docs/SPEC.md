@@ -1515,7 +1515,7 @@ The invariants (PI1–PI17, VI1, CI1–CI3, PL1–PL3, VW1, LP1, FI1–FI2) are 
 
 ### 8.8 Calibration: does the chance to sell match reality?
 
-**Volume backtest.** Where both exist for the same item and day, book-estimated sales are compared with AHF volume and with your mail-confirmed sales: the Status page reports the median ratio and the share of days within ±25%, per source, over the last 30 days (K4). A ratio far from 1 shows up before it misleads the plan.
+**Volume backtest.** Where both exist for the same item and day, book-estimated sales are compared with AHF volume and with your mail-confirmed sales: the Status page reports the median ratio and the share of days within ±25%, per source, over the last 30 days (K4). A ratio far from 1 shows up before it misleads the plan. **Built** (K4): every estimated source (`books`) is compared with every confirmed source in `volume_d1` (AHF today; any later one, such as a Blizzard API job, without changes), by `engine.volume.backtest`, on each market's Status card.
 
 The invariants prove the formula is sensible. Only your real sales can show whether it is *right*. Every post therefore records the `P'` it was planned with (`posts.p_at_post`). `record.calibration` compares that with what actually happened:
 

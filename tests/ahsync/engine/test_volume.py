@@ -234,3 +234,9 @@ def test_V23_median_daily_supply_leaves_days_without_observations_out():
     assert median_daily_supply(obs, now) == 100                                # not dragged to 0 by the empty days
     assert median_daily_supply([(now - day, 90), (now - day + 3_600_000, 110)], now) == 100   # one day: its median
     assert median_daily_supply([(now - 31 * day, 50)], now) is None and median_daily_supply([], now) is None
+
+
+def test_K4_backtest_median_ratio_and_days_within_25_percent():
+    from ahsync.engine.volume import Backtest, backtest
+    assert backtest([0.8] * 4 + [1.0] * 4 + [1.5] * 2) == Backtest(10, 1.0, 8)     # 1.25 would count; 1.5 doesn't
+    assert backtest([0.75, 1.25, 1.3]) == Backtest(3, 1.25, 2) and backtest([]) == Backtest(0, None, 0)
