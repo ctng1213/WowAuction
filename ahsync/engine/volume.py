@@ -18,7 +18,8 @@ HOUR_MS = 3_600_000
 SUPPLY_DAYS = 30            # median_daily_supply looks back this far (SPEC §3.3.6)
 MAX_GAP_MS = 6 * HOUR_MS
 SALES_PAIR_MAX_GAP_MS = 2 * HOUR_MS     # hourly sales rates need books this close (SPEC §3.3 sales_how)
-VOLUME_METHOD_VERSION = 2     # bump when the estimation changes; stored data is then recomputed (SPEC §3.3.6)
+CROSS_SOURCE_MIN_GAP_MS = 15 * 60_000   # books of different sources closer than this never pair (SPEC §3.3.1, V39)
+VOLUME_METHOD_VERSION = 3     # bump when the estimation changes; stored data is then recomputed (SPEC §3.3.6)
 KINDS = ("ids", "groups", "own")       # volume kinds in trust order (SPEC §3.3.1)
 LEGACY_KIND = {"ahf": "groups", "books": "groups", "mail": "own"}   # rows stored without a cover (V24)
 # Time-left bands [lo, hi) in hours, by WoW band code (SPEC §3.3.1). UNVERIFIED for Forever (§6 item 5).
@@ -43,6 +44,7 @@ class Book:
 
     at_ms: int
     entries: tuple[BookEntry, ...]
+    src: str | None = None        # "local", "ahf" or a provider's name; None = unknown (same source as any other None)
 
 
 @dataclass(frozen=True)
@@ -72,6 +74,8 @@ class DailyVolume:
     listed_per_day: float | None
     days_by_source: dict[str, int] = field(default_factory=dict)
     volume_score: float = 0.0         # the confidence component for volume, 0-1 (SPEC §3.3.5)
+    main_source: str | None = None    # the source used on most days (ties: the greater name); None without one
+    main_kind: str | None = None      # its kind ("ids" | "groups" | "own") on the first day it was used (D57)
 
 
 def expiring_fraction(band: int, gap_hours: float) -> float:
@@ -223,28 +227,53 @@ def covered_seconds(pairs: Sequence[tuple[int, int]]) -> tuple[int, ...]:
     return tuple(ms // 1000 for ms in covered_ms)
 
 
-def hourly_sales(books: Sequence[Book], max_gap_ms: int = SALES_PAIR_MAX_GAP_MS) -> dict[int, dict[int, float]]:
-    """Sales rate per clock hour from consecutive complete books (SPEC §3.3 sales_how, V25-V26).
+def book_pairs(books: Sequence[tuple[int, str | None]], max_gap_ms: int) -> list[tuple[int, int]]:
+    """Which consecutive complete books pair for volume (SPEC §3.3.1, V39-V40).
+
+    One walk in time order keeps a current book. A next book of a different source less than
+    CROSS_SOURCE_MIN_GAP_MS after the current one is dropped: it is never part of a pair, and the current book
+    stays. Any other next book pairs with the current one when 0 < gap <= max_gap_ms, and becomes the current
+    book either way. So every interval between kept books is covered by exactly one pair.
 
     Args:
-        books: Complete books of one market, oldest first.
+        books: (time ms, source or None) of complete books of one market, oldest first.
         max_gap_ms: Largest gap between a pair's books, in ms.
 
     Returns:
-        Item key -> hour start ms -> units sold per hour. Each pair counts for the hour
-        of its earlier book; an hour pools the sold units and gaps of all its pairs. An
-        item that appears in an hour's books but sold nothing has rate 0 (observed, not missing).
+        (earlier index, later index) into books for each pair, oldest first.
+    """
+    pairs: list[tuple[int, int]] = []
+    current = 0
+    for i in range(1, len(books)):
+        gap_ms = books[i][0] - books[current][0]
+        if books[i][1] != books[current][1] and gap_ms < CROSS_SOURCE_MIN_GAP_MS:
+            continue
+        if 0 < gap_ms <= max_gap_ms:
+            pairs.append((current, i))
+        current = i
+    return pairs
+
+
+def hourly_sales(books: Sequence[Book], max_gap_ms: int = SALES_PAIR_MAX_GAP_MS) -> dict[int, dict[int, float]]:
+    """Sales rate per clock hour from consecutive complete books (SPEC §3.3 sales_how, V25-V26, V40).
+
+    Args:
+        books: Complete books of one market, oldest first; their `src` decides cross-source pairs.
+        max_gap_ms: Largest gap between a pair's books, in ms.
+
+    Returns:
+        Item key -> hour start ms -> units sold per hour. Books pair as `book_pairs` says (books of different
+        sources less than 15 min apart never pair). Each pair counts for the hour of its earlier book; an hour
+        pools the sold units and gaps of all its pairs. An item that appears in an hour's books but sold nothing
+        has rate 0 (observed, not missing).
     """
     sold: dict[int, dict[int, float]] = {}
     gap_by_hour: dict[int, int] = {}
-    for prev, next_ in zip(books, books[1:]):
-        gap_ms = next_.at_ms - prev.at_ms
-        volume = estimate_volume(prev, next_, max_gap_ms) if gap_ms > 0 else None
-        if volume is None:
-            continue
+    for i, j in book_pairs([(b.at_ms, b.src) for b in books], max_gap_ms):
+        prev, next_ = books[i], books[j]
         hour_ms = prev.at_ms // HOUR_MS * HOUR_MS
-        gap_by_hour[hour_ms] = gap_by_hour.get(hour_ms, 0) + gap_ms
-        for key, v in volume.items():
+        gap_by_hour[hour_ms] = gap_by_hour.get(hour_ms, 0) + next_.at_ms - prev.at_ms
+        for key, v in estimate_volume(prev, next_, max_gap_ms).items():
             by_hour = sold.setdefault(key, {})
             by_hour[hour_ms] = by_hour.get(hour_ms, 0.0) + v.sold
     return {key: {hour: units * HOUR_MS / gap_by_hour[hour] for hour, units in sorted(by_hour.items())}
@@ -445,12 +474,14 @@ def daily_volume(rows: dict[int, dict[str, Volume]], days: Sequence[int],
         Sold per day = the window's sold units ÷ the day-equivalents of sales observed (a 2 h sample is 2/24
         of a day when sales are flat); expired and listed per day likewise by hours observed. Group diffs are
         multiplied by the id calibration, and never fall below your own mail's sold units for the part of the
-        day observed. All None when no day has a source.
+        day observed. All None when no day has a source. main_source / main_kind name the source used on most
+        days and its kind, for the label shown with sales (D57).
     """
     cover = cover or {}
     factor = ids_factor(rows, cover, sales_how) or 1.0
     sold = expired = listed = shares = time_shares = score = 0.0
     used: dict[str, int] = {}
+    kinds: dict[str, str] = {}
     for day in days:
         sources = rows.get(day, {})
         ranked = _ranked(sources, cover.get(day, {}), day, sales_how)
@@ -469,10 +500,12 @@ def daily_volume(rows: dict[int, dict[str, Volume]], days: Sequence[int],
         time_shares += time_share
         score += day_score(c, time_share)
         used[src] = used.get(src, 0) + 1
+        kinds.setdefault(src, c.kind)
     if not used:
         return DailyVolume(None, None, None, {})
+    main = max(used, key=lambda s: (used[s], s))
     return DailyVolume(sold / shares, expired / time_shares, listed / time_shares, used,
-                       min(1.0, score / max(1, len(days))))
+                       min(1.0, score / max(1, len(days))), main, kinds[main])
 
 
 def median_daily_supply(hourly_supply: Sequence[tuple[int, int]], now_ms: int, days: int = SUPPLY_DAYS) -> int | None:

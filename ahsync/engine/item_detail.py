@@ -27,7 +27,7 @@ class DetailFacts:
     med30: int | None                 # copper
     trend7: float                     # % per day
     sold_per_day: float | None
-    source: str | None                # main volume source: "ahf", "books", "mail"
+    source: str | None                # main volume source: "books", "mail", "ahf" or a provider's name
     days_covered: int                 # days of the last 7 with any volume source
     units_on_ah: int | None
     listed_per_day: float | None      # newly listed units per day (§3.3.1)
@@ -38,6 +38,7 @@ class DetailFacts:
     supply: Profile
     sell_windows: tuple[Window, ...] = ()     # best first
     turnover_per_day: float | None = None   # observed listing turnover: info only, never sales (§3.3.6, V37)
+    kind: str | None = None           # the main source's kind, "ids" | "groups" | "own"; it picks the label (D57)
 
 
 def local_slot(slot: int, offset_ms: int) -> int:
@@ -207,7 +208,7 @@ def _activity_lines(f: DetailFacts) -> list[tuple[str, str]]:
     Returns:
         (label, value) lines; "—" for anything unavailable.
     """
-    m = market_activity(None, f.conf, f.sold_per_day, f.source, f.units_on_ah)
+    m = market_activity(None, f.conf, f.sold_per_day, f.source, f.units_on_ah, f.kind)
     sales = m.sales if f.sold_per_day is None else f"{m.sales} · {f.days_covered} of 7 days covered"
     listed = "—" if f.listed_per_day is None else f"{round_half_up(f.listed_per_day)}/day"
     turnover = "—" if f.turnover_per_day is None else f"{round_half_up(f.turnover_per_day)}/day"

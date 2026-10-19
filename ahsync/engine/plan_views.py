@@ -163,6 +163,7 @@ class ItemLook:
     seasonality: int | None = None
     paid_each: int | None = None            # what you paid per unit, copper; None before tracking (T7)
     record: Record | None = None            # your own sell record (SPEC §3.3.3)
+    kind: str | None = None                 # the main volume source's kind: "ids" | "groups" | "own" (D57)
 
 
 def _activity(look: ItemLook, p: float | None) -> MarketActivity:
@@ -175,7 +176,7 @@ def _activity(look: ItemLook, p: float | None) -> MarketActivity:
     Returns:
         views.market_activity's cells.
     """
-    return market_activity(p, look.conf, look.sold_per_day, look.source, look.units_on_ah)
+    return market_activity(p, look.conf, look.sold_per_day, look.source, look.units_on_ah, look.kind)
 
 
 QTY_FRACTIONS = {1: "½", 2: "¼"}            # Latin-1 only: WoW's fonts lack ⅛ (shown "1/8")

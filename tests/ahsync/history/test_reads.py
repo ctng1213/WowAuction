@@ -75,6 +75,7 @@ def test_hourly_sales_and_complete_scans_of_either_source(db):
     sql(db, "INSERT INTO scans(scan_id, market, src, at, kind, coverage) VALUES (?, ?, ?, ?, ?, ?)",
         ("a", M, "ahf", 5, "full", 1.0), ("l", M, "local", 3, "full", 1.0), ("p", M, "local", 4, "partial", 0.6))
     assert db.complete_scans(M, 0, 10) == [("l", 3), ("a", 5)]
+    assert db.complete_books(M, 0, 10) == [("l", 3, "local"), ("a", 5, "ahf")]
 
 
 def test_market_history_streams_the_same_values_as_the_per_item_reads(db):

@@ -43,7 +43,8 @@ def detail_facts(look: ItemLook, s: ItemIntel) -> DetailFacts:
     return DetailFacts(look.name, look.quality, s.med30, s.trend7, s.sold_per_day, s.volume_source,
                        min(7, sum(s.days_by_source.values())), s.units_on_ah, s.listed_per_day, s.conf, s.seasonality,
                        unpack(s.how, s.how_weeks), unpack(s.sales_how, s.sales_weeks),
-                       unpack(s.supply_how, s.supply_weeks), windows_of(s.sell_windows), s.observed_listing_turnover)
+                       unpack(s.supply_how, s.supply_weeks), windows_of(s.sell_windows), s.observed_listing_turnover,
+                       s.volume_kind)
 
 
 def craft_uses(state: StateReader, char_ids: list[str], actions: list[ViewAction],

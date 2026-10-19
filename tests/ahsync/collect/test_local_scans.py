@@ -183,6 +183,19 @@ def test_V29_books_of_every_source_pair_for_daily_volume_and_record_the_hours_ob
     assert book_days(db, M, [eighteen]) == {D}
 
 
+def test_V39_a_cross_source_pair_seconds_apart_is_skipped_and_its_neighbours_pair_across_it(db):
+    eighteen = D * DAY + 18 * HOUR
+    db.store_book(BookScan("ahf1", M, "ahf", None, eighteen, "full", 1.0), [(LINEN, 50, 20, LONG, 5)])
+    # AHF's book skipped a bid-only Copper Bar auction that your scan 40 s later lists
+    close = scan(db, "s1", eighteen + 40_000, [(LINEN, 50, 20, LONG, 5), (BAR, 100, 5, LONG, 2)])
+    later = scan(db, "s2", eighteen + 2 * HOUR, [(LINEN, 50, 20, LONG, 3)])
+    with db.transaction():
+        derive_from_scans(db, [close, later])
+    assert volume(db, D) == [(LINEN, 40.0, 0.0, 0.0)]           # AHF 18:00 -> local 20:00 only; no phantom Bar
+    expected = ",".join("3600" if h in (18, 19) else "0" for h in range(24))
+    assert cover(db, D) == [("groups", expected)]
+
+
 def test_a_day_without_pairs_has_no_cover(db):
     lone = scan(db, "s1", D * DAY + 10 * HOUR, [(LINEN, 50, 20, LONG, 5)])
     with db.transaction():

@@ -199,19 +199,18 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
     book_age = now_ms - newest[0] if newest else None
     recent = [c for t, c in raw if t > now_ms - DAY_MS]
     conf = confidence.percent(confidence.score(len(last30), volume.volume_score, book_age, None, 0))
-    main_source = max(volume.days_by_source, key=lambda s: (volume.days_by_source[s], s)) \
-        if volume.days_by_source else None
     return ItemIntel(
         key, cur.price if cur else None, cur.qty if cur else None, now_ms - cur.at if cur else None,
         med7, med30, p10, p90,
         prices.trend7(hourly, now_ms, med7), volume.sold_per_day, volume.expired_per_day, volume.listed_per_day,
-        main_source, volume.days_by_source, price, ref, chance, unknown, sell_value, conf,
+        volume.main_source, volume.days_by_source, price, ref, chance, unknown, sell_value, conf,
         sum(stack * count for _, stack, _, count in book) if book else (cur.qty if cur else None),
         book_age, tuple(book or ()),
         **weekly_fields(item, med30, volume, ref, now_ms, settings, sales),
         cur_suspect=prices.suspect_price(cur.price if cur else None, p10, p90, recent),
         median_daily_supply=median_daily_supply(item.hourly_supply, now_ms),
-        observed_listing_turnover=observed_turnover(item.hourly_supply, now_ms))
+        observed_listing_turnover=observed_turnover(item.hourly_supply, now_ms),
+        volume_kind=volume.main_kind)
 
 
 def with_scan(intel: MarketIntelligence, prices: dict[int, tuple[int, int, int]],

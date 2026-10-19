@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 
 from ahsync.engine.volume import (
-    Auction, Book, BookEntry, Cover, IdBook, Volume, calibration_factor, covered_seconds, daily_volume, day_shares,
+    MAX_GAP_MS, Auction, Book, BookEntry, Cover, IdBook, Volume, book_pairs, calibration_factor, covered_seconds, daily_volume, day_shares,
     estimate_volume, estimate_volume_ids, expiring_fraction, group_book, hourly_sales, observed_turnover, listing_turnover, supply_to_volume,
 )
 from tests.support.gen import cases
@@ -360,6 +360,16 @@ def test_V25_hourly_sales_need_books_at_most_two_hours_apart():
 def test_V26_pairs_in_one_hour_pool_their_sold_units_and_gaps():
     rates = hourly_sales([linen_book(10, 5), linen_book(10.5, 4), linen_book(11, 2)])
     assert rates == {LINEN: {10 * HOUR_MS: 60.0}}
+
+
+def test_V40_hourly_sales_skip_a_cross_source_pair_seconds_apart():
+    ten = 10 * HOUR_MS
+    ahf = Book(ten, (BookEntry(LINEN, 50, 20, 3, 5),), "ahf")
+    close = Book(ten + 30_000, (BookEntry(LINEN, 50, 20, 3, 5), BookEntry(ORE, 100, 5, 3, 2)), "local")
+    later = Book(ten + HOUR_MS, (BookEntry(LINEN, 50, 20, 3, 3),), "local")
+    assert hourly_sales([ahf, close, later]) == {LINEN: {ten: 40.0}}     # ahf 10:00 -> local 11:00 only
+    assert book_pairs([(0, "ahf"), (30_000, "local"), (HOUR_MS, "local")], MAX_GAP_MS) == [(0, 2)]
+    assert book_pairs([(0, "local"), (30_000, "local")], MAX_GAP_MS) == [(0, 1)]     # same source: any gap > 0
 
 
 def test_hourly_sales_of_nothing_sold_is_an_observed_zero():

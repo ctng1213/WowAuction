@@ -8,7 +8,7 @@ and an hour's sales rate are recomputed whole from the stored books.
 from __future__ import annotations
 
 from ahsync.engine.volume import (Book, BookEntry, MAX_GAP_MS, SALES_PAIR_MAX_GAP_MS, VOLUME_METHOD_VERSION,
-                                  covered_seconds, estimate_volume, hourly_sales)
+                                  book_pairs, covered_seconds, estimate_volume, hourly_sales)
 from ahsync.db.sqlite import Database
 
 HOUR_MS = 3_600_000
@@ -57,25 +57,29 @@ def store_scan_prices(db: Database, market: str, scan_id: str, at_ms: int, src: 
     return set(prices)
 
 
-def _book(db: Database, scan_id: str, at_ms: int) -> Book:
+def _book(db: Database, scan_id: str, at_ms: int, src: str | None = None) -> Book:
     """A stored scan as an engine Book.
 
     Args:
         db: Database.
         scan_id: The scan.
         at_ms: Its time.
+        src: Its source ("local", "ahf" or a provider's name).
 
     Returns:
         The Book.
     """
-    return Book(at_ms, tuple(BookEntry(*row) for row in db.scan_entries(scan_id)))
+    return Book(at_ms, tuple(BookEntry(*row) for row in db.scan_entries(scan_id)), src)
 
 
 def recompute_book_volume(db: Database, market: str, day: int) -> dict[int, tuple[float, float, float]]:
     """A day's `books` volume from consecutive complete books of any source at most 6 h apart (V19, V20, V29).
 
-    A pair counts for the day of its later book. Partial scans are never part of a pair. The day's cover
-    records the hours its pairs observed, so a partly observed day is scaled, not taken as a whole day (V30).
+    Books pair as `engine.volume.book_pairs` says, walking from the first complete book 6 h before the day:
+    a book of a different source less than 15 min after the current one is dropped, so its neighbours pair
+    across it (V39). A pair counts for the day of its later book. Partial scans are never part of a pair. The
+    day's cover records the hours its counted pairs observed, so a partly observed day is scaled, not taken as
+    a whole day (V30).
 
     Args:
         db: Database, inside the caller's transaction.
@@ -85,16 +89,16 @@ def recompute_book_volume(db: Database, market: str, day: int) -> dict[int, tupl
     Returns:
         key -> (sold, expired, listed) written for that day (the day's rows are replaced whole).
     """
-    scans = db.complete_scans(market, day * DAY_MS - MAX_GAP_MS, (day + 1) * DAY_MS - 1)
+    scans = db.complete_books(market, day * DAY_MS - MAX_GAP_MS, (day + 1) * DAY_MS - 1)
     totals: dict[int, list[float]] = {}
     pairs: list[tuple[int, int]] = []
-    for (prev_id, prev_at), (next_id, next_at) in zip(scans, scans[1:]):
-        if next_at // DAY_MS != day or next_at == prev_at:
+    for i, j in book_pairs([(at, src) for _, at, src in scans], MAX_GAP_MS):
+        (prev_id, prev_at, prev_src), (next_id, next_at, next_src) = scans[i], scans[j]
+        if next_at // DAY_MS != day:
             continue
-        volume = estimate_volume(_book(db, prev_id, prev_at), _book(db, next_id, next_at))
-        if volume is not None:
-            pairs.append((prev_at, next_at))
-        for key, v in (volume or {}).items():
+        volume = estimate_volume(_book(db, prev_id, prev_at, prev_src), _book(db, next_id, next_at, next_src))
+        pairs.append((prev_at, next_at))
+        for key, v in volume.items():
             row = totals.setdefault(key, [0.0, 0.0, 0.0])
             row[0] += v.sold
             row[1] += v.expired
@@ -114,14 +118,13 @@ def book_days(db: Database, market: str, times_ms: list[int]) -> set[int]:
         times_ms: Times of the newly stored complete books.
 
     Returns:
-        Each book's day, and the day of the next complete book after it (an older book read late pairs with it).
+        Each book's day, and the days of the complete books up to 6 h after it: an older book read late pairs
+        with one of them, which need not be the next when that one is a different source close by (V39).
     """
     days = set()
     for at_ms in times_ms:
         days.add(at_ms // DAY_MS)
-        later = db.complete_scans(market, at_ms + 1, at_ms + MAX_GAP_MS)
-        if later:
-            days.add(later[0][1] // DAY_MS)
+        days |= {at // DAY_MS for _, at in db.complete_scans(market, at_ms + 1, at_ms + MAX_GAP_MS)}
     return days
 
 
@@ -168,9 +171,11 @@ def _hour_ranges(times_ms: list[int]) -> list[tuple[int, int]]:
 
 
 def recompute_sales_hours(db: Database, market: str, times_ms: list[int]) -> None:
-    """Recompute `sales_h1` for the hours newly stored complete books touch (V25-V27).
+    """Recompute `sales_h1` for the hours newly stored complete books touch (V25-V27, V40).
 
-    Books of either source pair, partial books never do. Each affected hour is rewritten whole.
+    Books of every source pair, partial books never do; books of different sources less than 15 min apart
+    never pair (`engine.volume.book_pairs`). The walk starts 2 h before the first affected hour, so it drops
+    the same books a recompute of the earlier hours drops. Each affected hour is rewritten whole.
 
     Args:
         db: Database, inside the caller's transaction.
@@ -178,8 +183,8 @@ def recompute_sales_hours(db: Database, market: str, times_ms: list[int]) -> Non
         times_ms: Times of the newly stored complete books.
     """
     for first, last in _hour_ranges(times_ms):
-        scans = db.complete_scans(market, first, last + HOUR_MS - 1 + SALES_PAIR_MAX_GAP_MS)
-        rates = hourly_sales([_book(db, scan_id, at) for scan_id, at in scans])
+        scans = db.complete_books(market, first - SALES_PAIR_MAX_GAP_MS, last + HOUR_MS - 1 + SALES_PAIR_MAX_GAP_MS)
+        rates = hourly_sales([_book(db, scan_id, at, src) for scan_id, at, src in scans])
         db.replace_sales_hours(market, first, last, rates)
 
 

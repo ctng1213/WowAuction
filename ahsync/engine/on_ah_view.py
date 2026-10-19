@@ -89,7 +89,7 @@ def _row(x: Listing, look: ItemLook, now_ms: int) -> tuple[dict, dict]:
     cost = (x.paid_each or 0.0) * units
     profit = listed * (1 - fees.AH_CUT) - cost
     position, position_class = _position(x)
-    m = market_activity(x.p, look.conf, look.sold_per_day, look.source, look.units_on_ah)
+    m = market_activity(x.p, look.conf, look.sold_per_day, look.source, look.units_on_ah, look.kind)
     row = {
         "key": str(x.key), "item": look.name, "quality": look.quality, "character": x.char_id.split("-")[0],
         "qty": units, "listed_each": money(x.price), "listed_total": money(listed),

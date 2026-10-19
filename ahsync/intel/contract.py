@@ -12,8 +12,8 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 
-INTEL_SCHEMA_VERSION = 6       # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
-                               # 5: median_daily_supply (V23); 6: observed_listing_turnover (V37)
+INTEL_SCHEMA_VERSION = 7       # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
+                               # 5: median_daily_supply (V23); 6: observed_listing_turnover (V37); 7: volume_kind (D57)
 
 
 class IntelVersionError(ValueError):
@@ -47,7 +47,7 @@ class ItemIntel:
     sold_per_day: float | None            # estimated sales per day (SPEC §3.3.6)
     expired_per_day: float | None
     listed_per_day: float | None
-    volume_source: str | None             # the source covering most of the last 7 days
+    volume_source: str | None             # the source covering most of the last 7 days (its kind: volume_kind)
     days_by_source: dict[str, int]
     post_price: int | None
     ref_stack: int
@@ -75,6 +75,8 @@ class ItemIntel:
     cur_suspect: bool = False             # cur is out of the usual range and unconfirmed: never bought from (FM5)
     median_daily_supply: int | None = None   # typical listed units, 30 days (V23); None without observations
     observed_listing_turnover: float | None = None   # units/day that left the AH, 7 days (V37); info only, never sales
+    volume_kind: str | None = None        # volume_source's kind, "ids" | "groups" | "own" (D57); None in documents
+                                          # before version 7, which are labelled by source name (views.volume_label)
 
 
 @dataclass(frozen=True)

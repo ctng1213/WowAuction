@@ -14,7 +14,43 @@ from ahsync.engine.confidence import level
 from ahsync.engine.volume import supply_to_volume
 
 HIGH_RISK_PCT = 25.0        # config high_risk_pct (SPEC §3.4)
-VOLUME_SOURCE_LABEL = {"ahf": "AHF", "books": "est.", "mail": "est."}
+SOURCE_LABELS = {"ahf": "AHF"}
+# The sales label by the main volume source's kind (SPEC §3.5, D57); "ids" shows the source's own name.
+VOLUME_KIND_LABEL = {"groups": "est.", "own": "own"}
+# Intelligence written before kinds were stored (INTEL_SCHEMA_VERSION < 7) is labelled by source name.
+LEGACY_VOLUME_SOURCE_LABEL = {"ahf": "AHF", "books": "est.", "mail": "est."}
+
+
+def source_label(src: str) -> str:
+    """How pages name a remote source (Status, and confirmed sales volume).
+
+    Args:
+        src: Source name, e.g. "ahf".
+
+    Returns:
+        "AHF" for AuctionHouseFYI, else the name as configured.
+    """
+    return SOURCE_LABELS.get(src, src)
+
+
+def volume_label(volume_source: str | None, volume_kind: str | None) -> str:
+    """The label after estimated sales per day: it follows the main volume source's kind (SPEC §3.5, D57).
+
+    Args:
+        volume_source: The main volume source ("ahf", "books", "mail", a provider's name), or None.
+        volume_kind: Its kind: "ids" | "groups" | "own"; None when the intelligence predates kinds.
+
+    Returns:
+        kind "ids": the source's name ("AHF", "blizzard"); "groups": "est."; "own": "own"; without a kind, the
+        older label by source name ("AHF" for ahf, else "est."); "" without a source.
+    """
+    if volume_source is None:
+        return ""
+    if volume_kind == "ids":
+        return source_label(volume_source)
+    if volume_kind in VOLUME_KIND_LABEL:
+        return VOLUME_KIND_LABEL[volume_kind]
+    return LEGACY_VOLUME_SOURCE_LABEL.get(volume_source, "est.")
 
 
 def round_half_up(x: float) -> int:
@@ -138,7 +174,7 @@ class MarketActivity:
     chance: str              # "92%"; "—" when nothing is sold
     confidence: int | None   # exact confidence %, shown on hover
     dot: str | None          # "high" / "medium" / "low": the dot's colour
-    sales: str               # "48 AHF", "31 est." or "—"
+    sales: str               # "48 AHF", "48 blizzard", "31 est.", "3 own" or "—"
     supply: str              # "93" or "—"
     days: str                # "1.9 days" or "—"
     percent: int | None = None    # sort keys: the chance as a whole percent, None when nothing is sold;
@@ -149,23 +185,24 @@ class MarketActivity:
 
 
 def market_activity(p: float | None, confidence_percent: int | None, sold_per_day: float | None,
-                    volume_source: str | None, units_on_ah: int | None) -> MarketActivity:
+                    volume_source: str | None, units_on_ah: int | None,
+                    volume_kind: str | None = None) -> MarketActivity:
     """Build the market activity cells in one place (SPEC §3.5, D23).
 
     Args:
         p: P' for the row's own window, or None for rows with nothing to sell.
         confidence_percent: Confidence 0-100.
         sold_per_day: Estimated units sold per day, or None when unavailable.
-        volume_source: The main volume source ("ahf", "books", "mail"), or None.
+        volume_source: The main volume source ("ahf", "books", "mail" or a provider's name), or None.
         units_on_ah: Units listed now, or None when never seen.
+        volume_kind: The main source's kind ("ids" | "groups" | "own"), or None when unknown (volume_label).
 
     Returns:
         The cells; "—" for anything the data can't support, never 0 (SPEC §3.3.6).
     """
     sales, sales_tenths = "—", -1
     if sold_per_day is not None:
-        label = VOLUME_SOURCE_LABEL.get(volume_source, "est.") if volume_source else ""
-        sales = f"{round_half_up(sold_per_day)} {label}".rstrip()
+        sales = f"{round_half_up(sold_per_day)} {volume_label(volume_source, volume_kind)}".rstrip()
         sales_tenths = round_half_up(sold_per_day * 10)
     days, days_tenths = "—", -1
     ratio = supply_to_volume(units_on_ah, sold_per_day)

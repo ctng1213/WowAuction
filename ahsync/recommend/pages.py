@@ -34,7 +34,8 @@ def _market(stats: ItemIntel | None) -> views.MarketActivity:
     """
     if stats is None:
         return views.market_activity(None, None, None, None, None)
-    return views.market_activity(stats.chance, stats.conf, stats.sold_per_day, stats.volume_source, stats.units_on_ah)
+    return views.market_activity(stats.chance, stats.conf, stats.sold_per_day, stats.volume_source, stats.units_on_ah,
+                                 stats.volume_kind)
 
 
 def _mat_caps(mat_keys: set[int], stats: dict[int, ItemIntel], now_ms: int, cfg: Config) -> dict[int, float]:

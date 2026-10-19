@@ -13,12 +13,11 @@ from dataclasses import dataclass
 
 from ahsync.engine.sell_record import Calibration
 from ahsync.engine.volume import Backtest
-from ahsync.engine.views import age_text, round_half_up
+from ahsync.engine.views import age_text, round_half_up, source_label
 
 HOUR_MS = 3_600_000
 DAY_MS = 86_400_000
 STALE_MS = 6 * HOUR_MS          # newest primary-source price older than this: the data has stopped arriving (D33)
-SOURCE_LABELS = {"ahf": "AHF"}
 LEVEL_ORDER = {"error": 0, "warn": 1, "info": 2}
 
 
@@ -253,18 +252,6 @@ def _bad_files(rows: Sequence[StatusRow], offset_ms: int) -> list[tuple[StatusRo
                 f"usually AHF simply has no file for those hours.")
         out.append((min(group, key=lambda r: r.topic), "AHF files failing", text))
     return out
-
-
-def source_label(src: str) -> str:
-    """How the Status page names a remote source.
-
-    Args:
-        src: Source name, e.g. "ahf".
-
-    Returns:
-        "AHF" for AuctionHouseFYI, else the name as configured.
-    """
-    return SOURCE_LABELS.get(src, src)
 
 
 def _stale(m: MarketFacts, now_ms: int, offset_ms: int) -> tuple[str, str] | None:

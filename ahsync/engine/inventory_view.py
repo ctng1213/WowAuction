@@ -178,7 +178,7 @@ def _row(h: Holding, plan: _Plan, worth: float | None, w: InventoryWorld) -> dic
         Row dict with display cells and numeric sort keys.
     """
     look = w.looks[h.key]
-    m = market_activity(plan.p, look.conf, look.sold_per_day, look.source, look.units_on_ah)
+    m = market_activity(plan.p, look.conf, look.sold_per_day, look.source, look.units_on_ah, look.kind)
     paid_each = h.paid_each or 0
     return {
         "key": str(h.key), "item": look.name, "quality": look.quality, "character": _name(h.char_id),

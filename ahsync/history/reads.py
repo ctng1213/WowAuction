@@ -370,6 +370,21 @@ class HistoryReads:
             "SELECT scan_id, at FROM scans WHERE market = ? AND kind = 'full' AND coverage >= 1 "
             "AND at BETWEEN ? AND ? ORDER BY at, scan_id", (market, from_ms, to_ms))]
 
+    def complete_books(self, market: str, from_ms: int, to_ms: int) -> list[tuple[str, int, str]]:
+        """Complete books of a market from every source in a time range, with each one's source (V39).
+
+        Args:
+            market: Market id.
+            from_ms: Start, inclusive.
+            to_ms: End, inclusive.
+
+        Returns:
+            (scan id, time ms, source: "local", "ahf" or a provider's name), oldest first (ties: scan id).
+        """
+        return [tuple(r) for r in self.conn.execute(
+            "SELECT scan_id, at, src FROM scans WHERE market = ? AND kind = 'full' AND coverage >= 1 "
+            "AND at BETWEEN ? AND ? ORDER BY at, scan_id", (market, from_ms, to_ms))]
+
     def scan_entries(self, scan_id: str) -> list[tuple[int, int, int, int, int]]:
         """One stored book's rows.
 

@@ -1,4 +1,4 @@
-"""Tests for ahsync/engine/views.py: display scenarios D3-D8 and the tooltip TT1-TT5."""
+"""Tests for ahsync/engine/views.py: display scenarios D3-D8, D23, D57 and the tooltip TT1-TT5."""
 from __future__ import annotations
 
 import json
@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from ahsync.engine.volume import Cover, Volume, daily_volume
 from ahsync.engine.views import (
     COLUMN_HELP, MARKET_COLUMNS, CraftInput, CraftMats, DisenchantInput, MarketActivity, TooltipLine, age_text, craft_lines,
     stale_note,
@@ -92,6 +93,21 @@ def test_D23_market_activity_columns_in_order_with_sort_keys():
     assert [row[cell] for _, cell in MARKET_COLUMNS] == ["92%", "48 AHF", "93", "1.9 days"]
     assert {cell: row["sort"][cell] for _, cell in MARKET_COLUMNS} == {"chance": 92, "sales": 480, "supply": 93, "days": 19}
     assert all(header in COLUMN_HELP for header, _ in MARKET_COLUMNS)
+
+
+def test_D57_the_sales_label_follows_the_main_sources_kind_not_its_name():
+    week = range(20_000, 20_007)
+    def sales(rows: dict[int, dict[str, tuple[float, str]]]) -> str:
+        """The Est. Sales/Day cell for day -> src -> (sold, kind) rows over the week."""
+        volume = daily_volume({d: {src: Volume(sold, 0, 0) for src, (sold, _) in by.items()} for d, by in rows.items()},
+                              week, {d: {src: Cover(kind) for src, (_, kind) in by.items()} for d, by in rows.items()})
+        return market_activity(0.5, 50, volume.sold_per_day, volume.main_source, 10, volume.main_kind).sales
+    mixed = {d: ({"blizzard": (48, "ids")} if d < 20_005 else {"books": (48, "groups")}) for d in week}
+    assert sales(mixed) == "48 blizzard"                    # 5 days of id diffs: a confirmed source, named
+    assert sales({d: {"books": (31, "groups")} for d in week}) == "31 est."
+    assert sales({d: {"mail": (3, "own")} for d in week}) == "3 own"
+    assert market_activity(0.5, 50, 48, "ahf", 10, "ids").sales == "48 AHF"
+    assert market_activity(0.5, 50, 48, "blizzard", 10).sales == "48 est."   # intelligence without kinds: by name
 
 
 def test_market_activity_never_makes_up_a_value():
