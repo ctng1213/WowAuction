@@ -513,7 +513,12 @@ function render(id) {
     : shown.length === 0 ? `<div class="empty">No rows match the filters.</div>`
     : `<div class="scrollx"><table><thead><tr>${head}</tr></thead><tbody>${shown.map(r => rowHtml(spec, r, selected)).join('')}</tbody></table></div>`;
   card.innerHTML = (spec.above ? spec.above(data) : '') + hidden + filterBar(id, rows) + body + (spec.below ? spec.below(data, values, selected) : '');
-  card.querySelectorAll('tr[data-select]').forEach(tr => { tr.onclick = () => { state.selected[id] = tr.dataset.select; render(id); }; });
+  card.querySelectorAll('tr[data-select]').forEach(tr => {
+    tr.onclick = e => {
+      if (e.target.closest('select, button, input, a')) return;      // a control in the row keeps its focus (D55)
+      state.selected[id] = tr.dataset.select; render(id);
+    };
+  });
   card.querySelectorAll('th[data-key]').forEach(th => { th.onclick = () => toggleSort(id, th.dataset.key); });
   card.querySelectorAll('[data-filter]').forEach(el => {
     el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', () => { values[el.dataset.filter] = el.value; render(id); refocus(el.dataset.filter); });

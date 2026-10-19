@@ -576,3 +576,9 @@ def test_a_busy_database_answers_503_for_an_item_search(app, monkeypatch):
         raise sqlite3.OperationalError("database is locked")
     monkeypatch.setattr(app.db, "search_items", busy)
     assert app.handle("GET", "/api/items?q=linen", GOOD).status == 503
+
+
+def test_D55_a_click_on_a_rows_control_does_not_select_the_row():
+    page = INDEX_HTML.read_text(encoding="utf-8")
+    handler = page[page.index("tr[data-select]').forEach"):][:400]
+    assert "e.target.closest('select, button, input, a')" in handler and handler.index("closest") < handler.index("render(id)")

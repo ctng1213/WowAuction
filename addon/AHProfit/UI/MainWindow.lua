@@ -534,7 +534,8 @@ local function CharacterActions(charId, nowMs)
   end
   local units = Reserves.Apply(held, reserves)
   local ctx = { itemOf = LiveItem, levelsOf = LevelsOf, vendorOf = VendorOf, vendorBuyOf = Market.VendorPrice,
-                listed = Listed(charId, nowMs), nowMs = nowMs, charId = charId, planned = planned }
+                listed = Listed(charId, nowMs), nowMs = nowMs, charId = charId, planned = planned,
+                budget = VM.TotalGold((DB.Get() or {}).characters) * VM.HIGH_RISK_PCT / 100 }      -- A64
   local crafts, reserved = Options.Crafts(recipes, units, ctx)
   ctx.reserved = reserved
   for _, a in ipairs(crafts) do actions[#actions + 1] = a end
@@ -624,9 +625,14 @@ local function Lines(nowMs, gold)
     local units = Reserves.Apply(Options.Units(Inventory.Decode(((db.inventory or {})[charId] or {}).bags)),
                                  Reserves.Get(db, charId))
     local actions = CharacterActions(charId, nowMs)        -- what a made product is for (A37)
+    local plannedRows = VM.PlannedCraftRows(Plan.CharacterActions(charId), LookOf, gold, nowMs, offset)   -- A63
+    local plannedKeys, own = {}, {}
+    for _, row in ipairs(plannedRows) do plannedKeys[row.key] = true end
+    for _, r in ipairs(recipes) do if not plannedKeys[r.product] then own[#own + 1] = r end end
     local ctx = { itemOf = LiveItem, levelsOf = LevelsOf, vendorOf = VendorOf, vendorBuyOf = Market.VendorPrice,
-                  listed = Listed(charId, nowMs), nowMs = nowMs }
-    local rows = VM.CraftRows(Options.CraftOptions(recipes, units, ctx), LookOf, gold, actions, nowMs, offset)
+                  listed = Listed(charId, nowMs), nowMs = nowMs, budget = gold * VM.HIGH_RISK_PCT / 100 }   -- A64
+    local rows = VM.CraftRows(Options.CraftOptions(own, units, ctx), LookOf, gold, actions, nowMs, offset)
+    for i = #plannedRows, 1, -1 do table.insert(rows, 1, plannedRows[i]) end
     local empty = #recipes == 0 and "No recipes seen on this character yet. Open each profession window once."
       or "None of your recipes pays right now."
     return VM.WithNotes(rows), VM.CraftFooter(rows, #recipes), empty

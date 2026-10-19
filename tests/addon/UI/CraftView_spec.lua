@@ -60,4 +60,37 @@ describe("CraftView", function()
     assert_eq({ VM.CraftFooter(rows, 5), VM.CraftFooter({}, 1) }, { "3 of 5 known recipes pay now", "0 of 1 known recipe pay now" })
   end)
 
+  it("A63 AHSync's planned crafts are rows of their own, with the chain's buys and when to sell", function()
+    local VM = Boot()
+    local looks = { [6303] = { name = "Raw Longjaw Mud Snapper", quality = 1 },
+                    [4592] = { name = "Longjaw Mud Snapper", quality = 1, conf = 80, soldPerDay = 362 } }
+    local SAT9, SAT18 = NOW + 2 * DAY - 5 * HOUR - 30 * MINUTE, NOW + 2 * DAY + 3 * HOUR + 30 * MINUTE
+    local actions = {
+      { id = "b", kind = "buy", key = 6303, qty = 100, price = 47, at = NOW, net = 0 },
+      { id = "c", kind = "craft", key = 4592, qty = 100, at = NOW + HOUR, parent = "b", net = 0 },
+      { id = "p", kind = "post", key = 4592, qty = 100, price = 120, at = SAT9, peak = SAT18, parent = "b", net = 9791, chance = 99 },
+      { id = "x", kind = "post", key = 2589, qty = 20, price = 55, at = NOW, net = 1000 } }
+    local rows = VM.PlannedCraftRows(actions, function(key) return looks[key] or { name = tostring(key), quality = 1 } end,
+                                     GOLD, NOW, 0)
+    assert_eq(#rows, 1)
+    local r = rows[1]
+    assert_eq({ r.item, r.source, r.crafts, r.mats, r.profit, r.chance, r.planned },
+              { "Longjaw Mud Snapper", "Plan", "×100", VM.Money(4700), VM.SignedMoney(9791), "99%", true })
+    assert_eq(r.notes, { "buy 100 Raw Longjaw Mud Snapper on the AH · " .. VM.Money(4700), "post Sat 09:00, for the 18:00 peak" })
+    assert_eq(VM.CraftFooter({ r, { made = false }, { made = true } }, 3), "1 planned · 1 of 2 known recipes pay now · 1 made")
+  end)
+
+  it("A64 an own craft's mats stay within 25% of your gold", function()
+    Boot()
+    local Options = AHProfit.Options
+    local recipe = { spell = 1, product = 6217, yieldMin = 1, yieldMax = 1, reagents = { { 2840, 2 } } }
+    local items = { [6217] = { postPrice = 4000, sellValue = 3800, chance = 1, supply = 100, refStack = 1 },
+                    [2840] = { cur = 1000, curQty = 40, sellValue = 950 } }
+    local ctx = { itemOf = function(k) return items[k] end, levelsOf = function() return nil end,
+                  vendorOf = function() return 0 end, nowMs = NOW }
+    local free = Options.CraftOptions({ recipe }, {}, ctx)[1]
+    ctx.budget = 4500                                                     -- 25% of 1.8g: two crafts' bars
+    local capped = Options.CraftOptions({ recipe }, {}, ctx)[1]
+    assert_eq({ free.crafts > 2, capped.crafts, capped.matGold <= 4500 }, { true, 2, true })
+  end)
 end)

@@ -248,7 +248,7 @@ function Options.Crafts(recipes, units, ctx)
       local listed = (ctx.listed or {})[r.product]
       local cap = Options.CraftCap(r, ctx.itemOf(r.product), (units[r.product] or 0) + (listed and listed.units or 0),
                                    ctx.nowMs)
-      local option = Craft.Option(r, CraftMarket({ r }, owned, ctx), net, nil, cap)
+      local option = Craft.Option(r, CraftMarket({ r }, owned, ctx), net, ctx.budget, cap)          -- A64
       option.p = p
       if option.crafts > 0 and (not best or option.profit > best.profit) then best, bestAt = option, i end
     end
@@ -284,7 +284,7 @@ function Options.CraftOptions(recipes, units, ctx)
     local inBags, listed = units[r.product] or 0, (ctx.listed or {})[r.product]   -- your auctions count too (A42)
     local held = inBags + (listed and listed.units or 0)
     local cap = Options.CraftCap(r, ctx.itemOf(r.product), held, ctx.nowMs)
-    local option = Craft.Option(r, market, net, nil, cap)
+    local option = Craft.Option(r, market, net, ctx.budget, cap)                          -- A64
     if cap == 0 and held > 0 and not vendorSold then
       out[#out + 1] = { key = r.product, spell = r.spell, made = held, inBags = inBags,
                         listed = listed and listed.units or 0, endsAt = listed and listed.endsAt, profit = 0 }

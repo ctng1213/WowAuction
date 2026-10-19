@@ -123,13 +123,75 @@ function ViewModel.CraftRows(options, lookOf, totalGold, actions, nowMs, offsetM
   return rows
 end
 
+--- One planned craft as a Craft tab row: its chain's mat buys, profit and when to sell (A63).
+---@param craft table      The craft action
+---@param chain table[]    Every action of its chain, in time order
+---@param lookOf function  key -> look
+---@param totalGold number All your gold, copper, for risk
+---@param nowMs number
+---@param offsetMs number
+---@return table           Row of text
+local function PlannedRow(craft, chain, lookOf, totalGold, nowMs, offsetMs)
+  local look, notes, mats, net, post = lookOf(craft.key), {}, 0, 0, nil
+  for _, a in ipairs(chain) do
+    net = net + (a.net or 0)
+    if a.kind == "buy" then
+      local cost = (a.price or 0) * a.qty
+      mats = mats + cost
+      notes[#notes + 1] = "buy " .. a.qty .. " " .. lookOf(a.key).name .. (a.vendor and " from a vendor · " or " on the AH · ")
+        .. ViewModel.Money(cost)
+    elseif a.kind ~= "craft" and a.key == craft.key and not post then
+      post = a
+    end
+  end
+  notes[#notes + 1] = SaleNote(post, nowMs, offsetMs)
+  local risk, amber = ViewModel.Risk(mats, totalGold)
+  local chance = post and post.chance
+  return {
+    key = craft.key, item = look.name, quality = look.quality, kind = "craft", source = "Plan", crafts = "×" .. craft.qty,
+    mats = mats > 0 and ViewModel.Money(mats) or "—", profit = ViewModel.SignedMoney(net),
+    netColor = net > 0 and "pos" or "neg", chance = chance and (chance .. "%") or "—",
+    dot = chance and ViewModel.Level(look.conf) or nil,
+    volume = look.soldPerDay and (ViewModel.RoundHalfUp(look.soldPerDay) .. "/day") or "—",
+    risk = risk, riskAmber = amber, notes = notes, planned = true,
+  }
+end
+
+--- The crafts AHSync's plan has for this character, as Craft tab rows (A63), so the tab agrees with Shopping.
+---@param actions table[]   The character's plan actions
+---@param lookOf function   key -> look
+---@param totalGold number  All your gold, copper
+---@param nowMs number
+---@param offsetMs number
+---@return table[]          Rows, in the plan's time order (ties: id)
+function ViewModel.PlannedCraftRows(actions, lookOf, totalGold, nowMs, offsetMs)
+  local sorted, chains = {}, {}
+  for i, a in ipairs(actions) do sorted[i] = a end
+  table.sort(sorted, ViewModel.ByTime)
+  for _, a in ipairs(sorted) do
+    local chain = a.parent or a.id
+    chains[chain] = chains[chain] or {}
+    table.insert(chains[chain], a)
+  end
+  local rows = {}
+  for _, a in ipairs(sorted) do
+    if a.kind == "craft" then rows[#rows + 1] = PlannedRow(a, chains[a.parent or a.id], lookOf, totalGold, nowMs, offsetMs) end
+  end
+  return rows
+end
+
 --- The footer under Craft.
----@param rows table[]  From ViewModel.CraftRows
+---@param rows table[]  From ViewModel.CraftRows, planned rows first
 ---@param known number  Recipes the character knows that make an item
----@return string       e.g. "1 of 2 known recipes pay now", plus " · 1 made" (A36)
+---@return string       e.g. "1 planned · 1 of 2 known recipes pay now", plus " · 1 made" (A36, A63)
 function ViewModel.CraftFooter(rows, known)
-  local made = 0
-  for _, r in ipairs(rows) do if r.made then made = made + 1 end end
-  local text = (#rows - made) .. " of " .. known .. (known == 1 and " known recipe" or " known recipes") .. " pay now"
+  local made, planned = 0, 0
+  for _, r in ipairs(rows) do
+    if r.made then made = made + 1 end
+    if r.planned then planned = planned + 1 end
+  end
+  local own = #rows - made - planned
+  local text = own .. " of " .. (known - planned) .. ((known - planned) == 1 and " known recipe" or " known recipes") .. " pay now"
+  if planned > 0 then text = planned .. " planned · " .. text end
   return made > 0 and (text .. " · " .. made .. " made") or text
 end
