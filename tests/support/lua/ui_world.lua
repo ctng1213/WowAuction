@@ -42,7 +42,8 @@ function UIWorld.Plan(actions)
   local byChar, count, length = {}, 0, 0
   for _, a in ipairs(actions) do
     local text = table.concat({ a.id, a.kind, a.key, a.qty, a.price or "", a.at, a.net or "", a.parent or "", "",
-                                a.status or "pending", a.chance or "", a.peak or "", a.vendor and "v" or "" }, ";")
+                                a.status or "pending", a.chance or "", a.peak or "", a.vendor and "v" or "",
+                                a.duration or "" }, ";")
     local char = a.char or "Amaya-Grommash"
     byChar[char] = byChar[char] or {}
     table.insert(byChar[char], text)

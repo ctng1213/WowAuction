@@ -30,8 +30,8 @@ class RecommendStore:
         self.conn.executemany(
             "INSERT OR REPLACE INTO plan_new(action_id, run_at, slot_ms, char_id, kind, key, qty, price, expected_net, "
             "conf, status, done_qty, done_at, parent_id, window_start_ms, window_end_ms, anchor_net, anchor_window_ms, "
-            "replaces_id, week_start_ms, peak_ms, source) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+            "replaces_id, week_start_ms, peak_ms, source, duration_h) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
 
     def open_actions(self, char_ids: list[str]) -> list[tuple]:
         """The characters' pending and late actions, for the status pass (SPEC §3.4.1).
@@ -59,14 +59,14 @@ class RecommendStore:
 
         Returns:
             (action_id, char_id, kind, key, qty, price, slot_ms, expected_net, parent_id, window_end_ms, status,
-            conf = the planned chance to sell, peak_ms, source), pending and late only, by time then id.
+            conf = the planned chance to sell, peak_ms, source, duration_h), pending and late only, by time then id.
         """
         if not char_ids:
             return []
         marks = ",".join("?" * len(char_ids))
         return [tuple(r) for r in self.conn.execute(
             f"SELECT action_id, char_id, kind, key, qty, price, slot_ms, expected_net, parent_id, window_end_ms, status, "
-            f"conf, peak_ms, source FROM actions WHERE status IN ('pending', 'late') AND char_id IN ({marks}) "
+            f"conf, peak_ms, source, duration_h FROM actions WHERE status IN ('pending', 'late') AND char_id IN ({marks}) "
             f"ORDER BY slot_ms, action_id",
             tuple(char_ids))]
 
@@ -88,7 +88,8 @@ class RecommendStore:
         self.conn.execute(
             "INSERT OR REPLACE INTO actions(action_id, run_at, slot_ms, char_id, kind, key, qty, price, expected_net, "
             "conf, status, done_qty, done_at, parent_id, window_start_ms, window_end_ms, anchor_net, anchor_window_ms, "
-            "replaces_id, week_start_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", row)
+            "replaces_id, week_start_ms, duration_h) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            row)
 
     def history_actions(self, char_ids: list[str], from_ms: int, to_ms: int) -> list[tuple]:
         """Kept plan actions (done, partial, missed, skipped) of some characters in a time range (SPEC §3.4.1).

@@ -179,6 +179,27 @@ describe("AHPanel", function()
     assert_eq(ui.status:GetText(), "no Copper Rod in your bags")
   end)
 
+  it("A56 a Post click sets the plan's auction duration, or says which to pick without the control", function()
+    Stubs.Reset()
+    Stubs.world.containers = { [0] = { size = 2, slots = { [2] = { id = 6217, count = 5 } } } }
+    UIWorld.Market({ [6217] = UIWorld.Item(4200, 80, 6) }, NOW - 3600000)
+    UIWorld.Plan({ { id = "p", kind = "post", key = 6217, qty = 5, price = 4100, at = NOW, net = 6306, chance = 58,
+                     duration = 24 } })
+    Stubs.Login()
+    local ah = AHWorld.Install()
+    Stubs.FireEvent("AUCTION_HOUSE_SHOW")
+    local ui = AHProfit.AHPanel.Frames()
+    local sell = AHWorld.InstallSell(ah, 7)
+    ui.post[1]:Click()
+    assert_eq(ui.status:GetText(), AHProfit.ViewModel.WithCoins("Sell tab: ×5 at 41s each · set the duration to 24 h · press Post"))
+    sell.DurationDropDown = { SetDuration = function(self, index) self.index = index end }
+    ui.post[1]:Click()
+    assert_eq(sell.DurationDropDown.index, 3)                          -- the third duration: 24 h
+    assert_eq(ui.status:GetText(), AHProfit.ViewModel.WithCoins("Sell tab: ×5 at 41s each · 24 h · press Post"))
+    assert_eq(AHProfit.Plan.DecodeAction("a;post;1;1;1;1;1;;;pending;50;;;8").duration, 8)
+    assert_eq(AHProfit.Plan.DecodeAction("a;post;1;1;1;1;1;;;pending;50;;").duration, nil)     -- an older file
+  end)
+
   it("FM30 without the Sell tab's API, or for an item the AH won't take, a click says so", function()
     local ui, ah = RodsAtAH()
     ui.post[1]:Click()

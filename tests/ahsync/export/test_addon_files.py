@@ -124,7 +124,7 @@ def test_the_plan_file_holds_open_actions_rules_and_ingested_until(db, tmp_path)
     db.set_meta("savedvars_ingested_until:Brugan-G", str(now - HOUR))
     assert addon_files.export_plan(db, cfg, now, lambda s: None) is True
     text = (folder / "PortfolioPlan.lua").read_text(encoding="utf-8")
-    assert f'"a1;post;{LINEN};20;55;{now};1046;;;pending;80;;"' in text and "a2;" not in text and "a3;" not in text
+    assert f'"a1;post;{LINEN};20;55;{now};1046;;;pending;80;;;"' in text and "a2;" not in text and "a3;" not in text
     assert f'[{LINEN}] = "none,{now}"' in text and f'["Brugan-G"] = {now - HOUR},' in text
     assert db.addon_actions([]) == []
 

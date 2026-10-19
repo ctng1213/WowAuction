@@ -63,8 +63,9 @@ local function Optional(s)
 end
 
 --- Split one action string (EX3).
----@param text string  "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status;chance;peakMs;source"
----@return table       Fields by name; numbers as numbers, empty fields nil; vendor = true for a vendor buy (EX7)
+---@param text string  "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status;chance;peakMs;source;durationH"
+---@return table       Fields by name; numbers as numbers, empty fields nil; vendor = true for a vendor buy (EX7);
+---                    duration in hours for a post (EX9), nil from an older 13-field string
 function Plan.DecodeAction(text)
   local f, i = {}, 0
   for field in (text .. ";"):gmatch("([^;]*);") do
@@ -73,7 +74,8 @@ function Plan.DecodeAction(text)
   end
   return { id = f[1], kind = f[2], key = tonumber(f[3]), qty = tonumber(f[4]), price = tonumber(f[5]),
            at = tonumber(f[6]), net = tonumber(f[7]), parent = Optional(f[8]), windowEnd = tonumber(f[9]),
-           status = f[10], chance = tonumber(f[11]), peak = tonumber(f[12]), vendor = f[13] == "v" }
+           status = f[10], chance = tonumber(f[11]), peak = tonumber(f[12]), vendor = f[13] == "v",
+           duration = tonumber(f[14]) }
 end
 
 --- A recipe's product, from the recipes the addon has seen.

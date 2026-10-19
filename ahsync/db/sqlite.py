@@ -25,7 +25,7 @@ from ahsync.recommend.store import RecommendStore
 from ahsync.state.journal import JournalReads
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
@@ -86,6 +86,11 @@ MIGRATIONS: dict[int, str] = {
     # 10: the method version of each estimated volume row, so a new method recomputes them (V24).
     10: """
         ALTER TABLE volume_d1 ADD COLUMN method INTEGER
+    """,
+    # 11: each planned post's auction duration, for the addon's Sell tab (EX9, A56).
+    11: """
+        ALTER TABLE actions ADD COLUMN duration_h INTEGER;
+        ALTER TABLE plan_new ADD COLUMN duration_h INTEGER
     """,
 }
 BACKUP_KEEP = 3

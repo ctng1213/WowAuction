@@ -60,6 +60,18 @@ local function SellFrame(frame, location)
   return commodity and frame.CommoditiesSellFrame or frame.ItemSellFrame
 end
 
+--- Choose the auction duration on a sell frame (A56).
+--- UNVERIFIED: the sell frame's DurationDropDown:SetDuration(index), index 1/2/3 = 2/8/24 h, as on retail.
+---@param sell table    The sell frame
+---@param hours number  2, 8 or 24
+---@return boolean      true when set
+local function ApplyDuration(sell, hours)
+  local index = ({ [2] = 1, [8] = 2, [24] = 3 })[hours]
+  local drop = sell.DurationDropDown
+  if not (index and drop and drop.SetDuration) then return false end
+  return (pcall(drop.SetDuration, drop, index))
+end
+
 --- Set a sell frame's unit price.
 --- UNVERIFIED: the sell frame's SetPrice, else its PriceInput:SetAmount (retail's money input).
 ---@param sell table
@@ -88,9 +100,11 @@ end
 ---@param slot number
 ---@param qty number    Units wanted
 ---@param price number  Unit price, copper
+---@param hours number|nil  Auction duration, hours (A56); nil leaves the AH's own
 ---@return number|nil   Units put up (at most what can be posted); nil when the Sell tab can't take it
 ---@return string|nil   Why not: "unavailable" (no Sell tab API) or "invalid" (can't be sold on the AH)
-function Adapter.FillSell(bag, slot, qty, price)
+---@return boolean|nil  Whether the duration was set (nil when none was asked for)
+function Adapter.FillSell(bag, slot, qty, price, hours)
   local frame = _G.AuctionHouseFrame
   if not (frame and frame.SetPostItem and ItemLocation and ItemLocation.CreateFromBagAndSlot and C_AuctionHouse) then
     return nil, "unavailable"
@@ -105,7 +119,7 @@ function Adapter.FillSell(bag, slot, qty, price)
   ApplyQuantity(sell, units)
   ApplyPrice(sell, price)
   lastSell = sell
-  return units
+  return units, nil, hours ~= nil and ApplyDuration(sell, hours)
 end
 
 --- Put the suggested price back after the AH fills in its own from a search (A29).

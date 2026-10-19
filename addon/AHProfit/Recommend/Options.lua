@@ -66,6 +66,7 @@ function Options.SellOne(key, qty, item, vendorEach, nowMs, charId)
   local action = { id = "own:" .. key, key = key, qty = qty, at = nowMs, status = "pending", char = charId, own = true }
   if postEach and item.postPrice and postEach >= vendor and postEach > 0 then
     action.kind, action.price, action.net = "post", item.postPrice, postEach * qty
+    action.duration = Fees.ShortestDurationCovering(Options.SELL_WINDOW_HOURS)        -- A56
     action.chance = item.chance and math.floor(item.chance * 100 + 0.5) or nil
     action.ownNote = item.live and "post now at the live price · AHSync has no plan for it"
                      or "post now · AHSync has no plan for it"

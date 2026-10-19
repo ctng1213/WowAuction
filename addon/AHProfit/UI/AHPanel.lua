@@ -145,7 +145,7 @@ end
 function AHPanel.OnRowClick(row, button)
   if not row.itemName then return end
   if button == "RightButton" then return AHProfit.RowMenu.Open(row, row.key, row.itemName) end
-  if row.isPost then return AHPanel.Sell(row.key, row.itemName, row.sellUnits, row.sellPrice) end
+  if row.isPost then return AHPanel.Sell(row.key, row.itemName, row.sellUnits, row.sellPrice, row.sellHours) end
   AHPanel.Search(row.key, row.itemName)
 end
 
@@ -282,7 +282,8 @@ end
 local function FillPost(row, line)
   row:SetShown(line ~= nil)
   if not line then return end
-  row.key, row.itemName, row.sellUnits, row.sellPrice = line.key, line.item, line.units, line.price
+  row.key, row.itemName, row.sellUnits, row.sellPrice, row.sellHours = line.key, line.item, line.units, line.price,
+    line.durationH
   row.icon:SetTexture(nil)
   for i, c in ipairs(AHPanel.COLUMNS.post) do
     local text = line[c[5]]
@@ -328,16 +329,18 @@ end
 ---@param name string
 ---@param units number|nil  Units to post
 ---@param price number|nil  Unit price, copper
-function AHPanel.Sell(key, name, units, price)
+---@param hours number|nil  Auction duration, hours (A56); nil leaves the AH's own
+function AHPanel.Sell(key, name, units, price, hours)
   if not (ui and units and price) then return end
   local bag, slot = Adapter.FindInBags(key)
   if not bag then return ui.status:SetText("no " .. name .. " in your bags") end
-  local ok, placed, why = pcall(Adapter.FillSell, bag, slot, units, price)
+  local ok, placed, why, durationSet = pcall(Adapter.FillSell, bag, slot, units, price, hours)
   if not ok or not placed then
     return ui.status:SetText(why == "invalid" and (name .. " can't be sold on the AH") or "Sell tab unavailable")
   end
   pendingSell = { price = price, untilMs = Adapter.NowMs() + AHPanel.REFILL_MS }
-  ui.status:SetText(VM.WithCoins("Sell tab: ×" .. placed .. " at " .. VM.Money(price) .. " each · press Post"))
+  local length = hours and (durationSet and (" · " .. hours .. " h") or (" · set the duration to " .. hours .. " h")) or ""
+  ui.status:SetText(VM.WithCoins("Sell tab: ×" .. placed .. " at " .. VM.Money(price) .. " each" .. length .. " · press Post"))
 end
 
 --- The AH's search results for the item on the Sell tab: it may have put its own price in, so put

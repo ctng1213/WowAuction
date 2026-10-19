@@ -31,6 +31,7 @@ def test_new_plan_and_kept_history_become_view_actions():
     assert [(v.action_id, v.status, v.in_chain) for v in views] == [
         ("old", "done", True), ("kid", "missed", True), (rows[0][0], "pending", True), (rows[1][0], "pending", True)]
     assert views[1].net == 0.0 and views[3].parent_id == rows[0][0] and views[3].peak_ms == NOW + 2 * DAY + HOUR
+    assert (rows[0][-1], rows[1][-1]) == (None, 24)                  # EX9: the post carries its 24 h duration
 
 
 def test_pages_today_by_filter_step_week_and_flip():

@@ -39,7 +39,7 @@ describe("Options", function()
     local units = Options.Units({ { key = 2589, qty = 15, bound = false }, { key = 2589, qty = 5, bound = false } })
     local rows = Options.Sell(units, Ctx({}, { [2589] = LINEN }, { [2589] = 3 }))
     assert_eq(rows, { { id = "own:2589", kind = "post", key = 2589, qty = 20, price = 45, net = 840, chance = 90, at = NOW,
-                        status = "pending", char = "Amaya-Grommash", own = true,
+                        status = "pending", char = "Amaya-Grommash", own = true, duration = 8,   -- A56
                         ownNote = "post now · AHSync has no plan for it" } })
   end)
 

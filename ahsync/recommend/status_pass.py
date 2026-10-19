@@ -39,7 +39,8 @@ def _replacement(row: tuple, db: Database, market: str, now_ms: int, cfg: Config
                       cfg.min_sell_prob, cfg.peak_tolerance)
     start, end, _best = r.window if r.window else (None, None, None)
     return (f"{action_id}:r", now_ms, r.at_ms if r.at_ms is not None else now_ms, char_id, r.kind, key, qty, r.price,
-            r.net, None, "pending", 0, None, None, start, end, anchor, anchor_window, action_id, week_start)
+            r.net, None, "pending", 0, None, None, start, end, anchor, anchor_window, action_id, week_start,
+            r.duration_h if r.kind == "post" else None)
 
 
 def status_pass(db: Database, cfg: Config, now_ms: int) -> dict[str, int]:

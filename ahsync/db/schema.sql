@@ -130,7 +130,8 @@ CREATE TABLE IF NOT EXISTS actions(
     action_id TEXT PRIMARY KEY, run_at INTEGER, slot_ms INTEGER, char_id TEXT, kind TEXT, key INTEGER,
     qty INTEGER, price INTEGER, expected_net REAL, conf REAL, status TEXT, done_qty INTEGER, done_at INTEGER,
     parent_id TEXT, window_start_ms INTEGER, window_end_ms INTEGER, anchor_net REAL, anchor_window_ms INTEGER,
-    replaces_id TEXT, week_start_ms INTEGER, peak_ms INTEGER, source TEXT   -- source: buys, 'vendor' | 'ah' (D41)
+    replaces_id TEXT, week_start_ms INTEGER, peak_ms INTEGER, source TEXT,  -- source: buys, 'vendor' | 'ah' (D41)
+    duration_h INTEGER                    -- posts: the auction duration, hours (EX9)
 );
 
 -- Staging twin of actions for the atomic swap after a full refresh (§3.1.1, §5.2).
@@ -138,7 +139,7 @@ CREATE TABLE IF NOT EXISTS plan_new(
     action_id TEXT PRIMARY KEY, run_at INTEGER, slot_ms INTEGER, char_id TEXT, kind TEXT, key INTEGER,
     qty INTEGER, price INTEGER, expected_net REAL, conf REAL, status TEXT, done_qty INTEGER, done_at INTEGER,
     parent_id TEXT, window_start_ms INTEGER, window_end_ms INTEGER, anchor_net REAL, anchor_window_ms INTEGER,
-    replaces_id TEXT, week_start_ms INTEGER, peak_ms INTEGER, source TEXT
+    replaces_id TEXT, week_start_ms INTEGER, peak_ms INTEGER, source TEXT, duration_h INTEGER
 );
 
 -- rule: 'no_buy' | 'ignore' | 'keep' | 'none' (tombstone); source: 'dashboard' | 'addon'.
