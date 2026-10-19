@@ -5,7 +5,8 @@ Each row: (at ms, character id, kind, item key, units, price each copper or None
 (status, done units, planned units) of the action the event matched, or None, and a / b depend on the kind:
 posted (duration h, deposit), sold / expired / cancelled / won (its post's time or None, that post's deposit
 or None), bought and bought_vendor (-, -), crafted (-, -), disenchanted (results "key,qty;...", -),
-paid_out (money taken, profit realized or None), mailed (to character, -), missed and skipped (action kind, -).
+paid_out (money taken, profit realized or None), mailed (to character, -), missed and skipped (action kind, -),
+untracked (units, + gained or − lost, -).
 """
 from __future__ import annotations
 
@@ -33,6 +34,8 @@ _QUERIES = (
      "LEFT JOIN actions a ON a.action_id = s.action_id WHERE 1 = 1", "s", "at"),
     ("a.slot_ms, a.char_id, a.status, a.key, a.qty, a.price, a.status, COALESCE(a.done_qty, 0), a.qty, a.kind, NULL "
      "FROM actions a WHERE a.status IN ('missed', 'skipped')", "a", "slot_ms"),
+    ("x.at, x.char_id, 'untracked', x.key, ABS(x.delta), NULL, NULL, NULL, NULL, x.delta, NULL FROM untracked x "
+     "WHERE 1 = 1", "x", "at"),
 )
 
 

@@ -26,6 +26,7 @@ from pathlib import Path
 from ahsync.clock import Clock
 from ahsync.state import savedvars as sv
 from ahsync.collect.local_scans import derive_from_scans
+from ahsync.state import untracked
 from ahsync.db.sqlite import BookScan, Database
 from ahsync.app.scheduler import STABLE_MS, file_mtime_ms
 
@@ -433,10 +434,12 @@ def apply_data(db: Database, data: sv.AHProfitData, realms: Mapping[str, str], n
     with db.transaction():
         work.characters(data.characters)       # first: scans and posts look up the market
         work.recipes(data)
+        held = untracked.before(db.conn, {p.char_id: p.at_ms for p in data.inventories if p.location == "bags"})
         work.snapshots(data)
         work.scans(data.scans)
         work.mark(derive_from_scans(db, work.new_scans))     # local prices and book volume (SPEC §4.2)
         work.events(data.events)
+        work.mark(untracked.record(db.conn, held))           # what no event explains (FM21, D51)
         work.rules(data.rules)
         work.reserves(data)
         db.add_item_names((n.key, sv.base_item_id(n.key), n.name, n.quality) for n in data.item_names)

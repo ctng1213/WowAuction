@@ -70,3 +70,11 @@ def test_a_payout_before_its_profit_is_known_and_local_time():
     assert short_when(NOW, NOW, 0) == "Thu 08:53"
     [row] = history_view([(NOW, A, "bought", ROD, 1, None, None, None, None)], LOOKS, NAMES, NOW, 0)["rows"]
     assert row["detail"] == ""
+
+
+def test_D51_untracked_changes_say_what_they_likely_were():
+    rows = history_view([(NOW, A, "untracked", LINEN, 12, None, None, 12, None),
+                         (NOW, A, "untracked", ROD, 5, None, None, -5, None)], LOOKS, NAMES, NOW, 0)["rows"]
+    assert [(r["event"], r["event_class"], r["qty"], r["price"], r["detail"]) for r in rows] == [
+        ("Untracked", "amber", 12, "—", "+12: looted, traded or found · cost 0 · no recorded event"),
+        ("Untracked", "amber", 5, "—", "−5: used, sold to a vendor or destroyed · no recorded event")]

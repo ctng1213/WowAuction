@@ -83,6 +83,12 @@ CREATE TABLE IF NOT EXISTS disenchants(
     at INTEGER NOT NULL, action_id TEXT
 );
 
+-- What holdings did that no event explains, per bag snapshot (SPEC §2.2.1, FM21, D51): delta units, + gained.
+CREATE TABLE IF NOT EXISTS untracked(
+    char_id TEXT NOT NULL, key INTEGER NOT NULL, at INTEGER NOT NULL, delta INTEGER NOT NULL,
+    PRIMARY KEY(char_id, key, at)
+);
+
 -- Gold taken from a sold mail (SPEC §2.2.1 payout, T17): the sold mail it paid and the profit it realized,
 -- set once by the tracking pass (copper; NULL until then).
 CREATE TABLE IF NOT EXISTS payouts(

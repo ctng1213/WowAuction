@@ -42,6 +42,7 @@ def db(tmp_path):
                   (A, ROD, NOW - HOUR))
         c.execute("INSERT INTO mail_sent(event_id, char_id, to_char, key, qty, at) VALUES ('s', ?, ?, ?, 5, ?)",
                   (A, B, LINEN, NOW - 8 * HOUR))
+        c.execute("INSERT INTO untracked(char_id, key, delta, at) VALUES (?, ?, -3, ?)", (A, LINEN, NOW - 9 * HOUR))
     yield database
     database.close()
 
@@ -50,7 +51,8 @@ def test_D47_the_journal_reads_every_kind_of_event_with_the_plan_action_it_match
     rows = db.journal([A], NOW - 30 * DAY)
     assert [(r[2], r[3]) for r in rows] == [
         ("paid_out", ROD), ("sold", ROD), ("bought", LINEN), ("bought_vendor", 2320), ("crafted", ROD),
-        ("disenchanted", CINCH), ("mailed", LINEN), ("missed", SILK), ("skipped", SILK), ("posted", ROD)]
+        ("disenchanted", CINCH), ("mailed", LINEN), ("untracked", LINEN), ("missed", SILK), ("skipped", SILK),
+        ("posted", ROD)]
     by_kind = {r[2]: r for r in rows}
     assert by_kind["paid_out"][7:] == (3915, 1915.0)
     assert by_kind["sold"][7:] == (NOW - 3 * DAY, 20)                       # the post it resolved
@@ -58,4 +60,5 @@ def test_D47_the_journal_reads_every_kind_of_event_with_the_plan_action_it_match
     assert by_kind["missed"][6:8] == (("missed", 0, 40), "buy")
     assert by_kind["posted"][5:] == (4100, None, 24, 20)
     assert by_kind["mailed"][7] == B and by_kind["disenchanted"][7] == f"{DUST},2"
+    assert by_kind["untracked"][4:8] == (3, None, None, -3)
     assert db.journal([], NOW) == []

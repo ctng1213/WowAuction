@@ -309,7 +309,7 @@ const LIVE = {
     filters: [
       { id: 'search', label: null, kind: 'search', placeholder: 'Search items…', test: (r, v) => !v || String(r.item).toLowerCase().includes(v.toLowerCase()) },
       { id: 'character', label: 'Character', fromRows: 'character', test: (r, v) => v === '' || r.character === v },
-      { id: 'event', label: 'Event', options: [['', 'All'], ['posted', 'Posted'], ['sold', 'Sold'], ['expired', 'Expired'], ['paid_out', 'Paid out'], ['bought', 'Bought'], ['crafted', 'Crafted'], ['disenchanted', 'Disenchanted'], ['mailed', 'Mailed'], ['missed', 'Missed'], ['skipped', 'Skipped']],
+      { id: 'event', label: 'Event', options: [['', 'All'], ['posted', 'Posted'], ['sold', 'Sold'], ['expired', 'Expired'], ['paid_out', 'Paid out'], ['bought', 'Bought'], ['crafted', 'Crafted'], ['disenchanted', 'Disenchanted'], ['mailed', 'Mailed'], ['missed', 'Missed'], ['skipped', 'Skipped'], ['untracked', 'Untracked']],
         test: (r, v) => v === '' || r.kind === v || (v === 'bought' && r.kind === 'bought_vendor') },
       { id: 'days', label: 'When', options: [['', 'Last 30 days'], ['7', 'Last 7 days'], ['1', 'Today and yesterday']], test: (r, v) => v === '' || r.sort.age_days < Number(v) },
     ],

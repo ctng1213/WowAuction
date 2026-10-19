@@ -18,7 +18,7 @@ EVENTS = {   # kind -> (label, class)
     "posted": ("Posted", ""), "sold": ("Sold", "pos"), "expired": ("Expired", "neg"), "cancelled": ("Cancelled", "muted"),
     "won": ("Won", ""), "bought": ("Bought", ""), "bought_vendor": ("Bought (vendor)", ""), "crafted": ("Crafted", ""),
     "disenchanted": ("Disenchanted", ""), "paid_out": ("Paid out", "pos"), "mailed": ("Mailed", "muted"),
-    "missed": ("—", "muted"), "skipped": ("—", "muted"),
+    "missed": ("—", "muted"), "skipped": ("—", "muted"), "untracked": ("Untracked", "amber"),
 }
 
 
@@ -87,6 +87,9 @@ def _detail(row: tuple, names: dict[int, str], now_ms: int, offset_ms: int) -> s
         return f"{a} slot passed, nothing matched"
     if kind == "skipped":
         return "skipped by you"
+    if kind == "untracked":
+        return (f"+{a}: looted, traded or found · cost 0" if a > 0 else
+                f"−{-a}: used, sold to a vendor or destroyed") + " · no recorded event"
     return ""
 
 

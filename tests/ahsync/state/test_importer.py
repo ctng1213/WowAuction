@@ -201,8 +201,12 @@ def test_FI2_any_order_and_repeats_of_savedvariables_files_give_the_same_databas
         expected = _ingest_all(files, in_order)
         shuffled = in_order[:]
         random.Random(seed).shuffle(shuffled)
-        for order in (in_order + in_order, shuffled, shuffled + in_order[::-1]):
-            assert _ingest_all(files, order) == expected, f"seed {seed}, order {order}"
+        assert _ingest_all(files, in_order + in_order) == expected, f"seed {seed}: repeats"
+        # Untracked changes compare the bag snapshots AHSync saw, so a file read after a newer one adds none (D51).
+        without = {k: v for k, v in expected.items() if k != "untracked"}
+        for order in (shuffled, shuffled + in_order[::-1]):
+            got = {k: v for k, v in _ingest_all(files, order).items() if k != "untracked"}
+            assert got == without, f"seed {seed}, order {order}"
 
 
 # ---------------------------------------------------------------- markets and characters
