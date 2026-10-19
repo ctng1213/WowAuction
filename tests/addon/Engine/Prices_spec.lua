@@ -1,5 +1,5 @@
 -- Specs for addon/AHProfit/Engine/Prices.lua: the shared post-price and live-flip scenarios
--- (tests/scenarios/prices.json: PP1, PP2, FN1).
+-- (tests/scenarios/prices.json: PP1, PP2, FN1, TT7).
 
 local Stubs = require("wow_stubs")
 
@@ -26,6 +26,9 @@ end
 local function Run(Prices, s)
   local a = s.args
   if s.call == "post_price" then return Prices.PostPrice(Value(a.cur_others), Value(a.med7), Value(a.p90)) end
+  if s.call == "slot_price" then
+    return Prices.SlotPrice(a.level, a.how_best, a.trend7, a.days_ahead, a.max_trend_total)
+  end
   return Prices.FlipNow(a.p, a.units, a.cheapest, a.relist, a.fallback, a.deposit, a.min_flip_margin)
 end
 

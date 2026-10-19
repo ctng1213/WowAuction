@@ -17,8 +17,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
 from ahsync.engine import fees, sellprob
-from ahsync.engine.plan import PlanAction, PlanSettings, PostOption, SellFacts, alternative, post_chance, \
-    post_options, record_price, slot_price, window_id
+from ahsync.engine.plan import PlanAction, PlanSettings, PostOption, SellFacts, alternative, choose_option, \
+    post_chance, post_options, record_price, slot_price, window_id
 from ahsync.engine.prices import post_price
 
 
@@ -124,28 +124,27 @@ def _best_window(f: SellFacts, opts: list[PostOption], used: list[float], stage:
         s: Settings.
 
     Returns:
-        (option index, expected value, P), highest value first (ties: the earlier option); None when no option
-        has room.
+        (option index, expected value, P) as plan.choose_option picks it: a window must beat relisting now by
+        its required uplift (R26); None when no option has room.
     """
-    best = None
+    scored = []
     for i, o in enumerate(opts):
         mine = sum(slot[0] for (j, _), slot in stage.posts.items() if j == i)
         if used[i] + mine + qty > o.cap:
             continue
         p = post_chance(f, o.price, qty, o.hours, used[i] + mine, s)
         deposit = fees.deposit_copper(f.vendor_sell, qty, o.duration_h)
-        e = sellprob.expected_post(p, qty, o.price, alternative(f)[1], deposit)
-        if best is None or e > best[1]:
-            best = (i, e, p)
-    return best
+        scored.append((i, sellprob.expected_post(p, qty, o.price, alternative(f)[1], deposit), p))
+    return choose_option(opts, scored, s)
 
 
 def build_flip(f: SellFacts, now_ms: int, s: PlanSettings, fs: FlipSettings, ledger: dict, spend_limit: int) -> _Stage | None:
     """The flip worth making for one item: auctions bought cheapest first while each still pays.
 
     An auction is added while it fits the spend limit and an option with room (posting now, under what is left
-    after the buy, or a selling window), and while its own expected profit is at least min_flip_margin × its
-    cost; prices only rise along the book, so the first one that fails ends the flip.
+    after the buy, or a selling window), while that option is worth more per unit than disenchanting or
+    vendoring the units (else it is a disenchant buy, not a flip, R27), and while its own expected profit is at
+    least min_flip_margin × its cost; prices only rise along the book, so the first one that fails ends the flip.
 
     Args:
         f: The item.
@@ -168,7 +167,7 @@ def build_flip(f: SellFacts, now_ms: int, s: PlanSettings, fs: FlipSettings, led
         left = _remaining_book(f, n + 1)
         here = relisted(left, opts, s)
         best = _best_window(left, here, used, stage, stack, s)
-        if best is None or not pays(best[1], cost, fs.min_flip_margin):
+        if best is None or best[1] / stack <= alternative(f)[1] or not pays(best[1], cost, fs.min_flip_margin):
             break
         i, e, p = best
         slot = stage.posts.setdefault((i, here[i].price), [0, 0.0, 0.0, 0])
@@ -252,7 +251,7 @@ def flip_plan(facts: dict[int, SellFacts], budgets: dict[str, int], total_gold: 
 
 
 def flip_offer(level: int, how_best: float, trend7: float, days_ahead: float, p: float, fallback: float, deposit: int,
-               ref: int) -> tuple[float, int]:
+               ref: int, max_trend_total: float) -> tuple[float, int]:
     """What one reference stack bought now could fetch at the item's best window, market-wide (SPEC §4.3, EX11).
 
     Args:
@@ -264,11 +263,12 @@ def flip_offer(level: int, how_best: float, trend7: float, days_ahead: float, p:
         fallback: Value per unsold unit, float copper.
         deposit: Deposit for the stack, copper.
         ref: Reference stack, units.
+        max_trend_total: Config max_trend_total (slot_price's total trend clamp, TT7).
 
     Returns:
         (expected value per unit after fees, float copper; the window's unit price, copper).
     """
-    price = slot_price(level, how_best, trend7, days_ahead)
+    price = slot_price(level, how_best, trend7, days_ahead, max_trend_total)
     return sellprob.expected_post(p, ref, price, fallback, deposit) / ref, price
 
 

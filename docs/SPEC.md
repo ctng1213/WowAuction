@@ -266,7 +266,7 @@ Every write is an idempotent upsert, so re-running any range is harmless.
 All the heavy lifting happens in AHSync, and only in a **full refresh**. Everything else is a small, targeted update.
 
 **Full refresh** (`engine.refresh_all`). It runs at start, at the first run after `daily_refresh_time` (default 06:00 local), on the dashboard's **Refresh now** button, or when the addon sets a refresh request (`/ahp refresh`, picked up on the next `/reload` or logout). This is the only time AHSync reads through history:
-1. **Builds `item_stats`**, one materialized row per item and market with everything §3.3 defines: medians, percentiles, trend, `how`, `sales_how`, `sell_score`, best windows, volume per source, tier sell-through, undercut share, calibration and confidence components. It works item by item and streams the candle and book tables in key order, so memory stays flat.
+1. **Builds `item_stats`**, one materialized row per item and market with everything §3.3 defines: medians, percentiles, trend, `how`, `sales_how`, `sell_score`, best windows, volume per source, calibration and confidence components. (Tier sell-through and the undercut share are not built yet: their defaults apply, §3.3.2, §6.) It works item by item and streams the candle and book tables in key order, so memory stays flat.
 2. **Precomputes each item's options:** sell values and hold values (§3.4), disenchant EV, the crafting options with their sourcing, flip candidates, and the sell-probability curve (below).
 3. **Builds the recommendations, the plan, the views and the addon files** (`MarketIntelligence.lua`, `PortfolioPlan.lua`).
 
@@ -499,8 +499,8 @@ Both use the same formulas with or without Premium. Premium only supplies better
 | `X` | units expired per day | AHF `volume` | estimates |
 | `L` | units newly listed per day | AHF `volume` | estimates |
 | book | every competing auction: unit price, units, time-left band | AHF `books` (latest) | your newest scan, if under 24 h old |
-| `u(p)` | **undercut share**: of the units newly listed over the last 7 days, the share priced at or below your price relative to the lowest price at the time they were listed | AHF book history | your scans' history, else `default_undercut_share` (0.5) |
-| `ST_tier` | **sell-through by price tier**: of the auctions that disappeared in the last 30 days, the share that sold rather than expired, grouped by how their price compared with the cheapest competitor | AHF book history | your scans' history, else none |
+| `u(p)` | **undercut share**: of the units newly listed over the last 7 days, the share priced at or below your price relative to the lowest price at the time they were listed. **Not built: the default applies** (`default_undercut_share`, 0.5, everywhere; `sellprob.undercut_share` exists but nothing calls it, §6) | AHF book history | your scans' history, else `default_undercut_share` (0.5) |
+| `ST_tier` | **sell-through by price tier**: of the auctions that disappeared in the last 30 days, the share that sold rather than expired, grouped by how their price compared with the cheapest competitor. **Not built: the default applies** (no tier history, so `e` = 0 and `P = P_queue`, §6) | AHF book history | your scans' history, else none |
 
 **Market facts shown with every result** (informational):
 - **Market sell-through** = `S ÷ (S + X)`, e.g. "72% of auctions sell".
@@ -526,7 +526,7 @@ Both use the same formulas with or without Premium. Premium only supplies better
 
 `ST_tier = sold ÷ (sold + expired)` for that item's auctions in the tier, using the order-book diff method of §3.3.1. `n_tier` is how many auctions it is based on.
 
-**3. Blend.**
+**3. Blend.** *Not built yet: `ST_tier` is never computed, so `e` = 0 and the blend returns `P_queue` (§6).*
 - `e = 0.5 × min(1, n_tier ÷ 30)`, with `e = 0` when there is no tier history.
 - `P = (1 − e) × P_queue + e × ST_tier`.
 - The history never counts for more than half. The simulation sees today's competition, and the history catches what the simulation misses, such as buyers who skip an item at any price.
@@ -599,7 +599,7 @@ The week's 168 hours are treated as **repeating slots**: every Tuesday 19:00 is 
 - A week whose every slot qualifies (a flat score) has no best window: posting time doesn't matter, so the plan posts now.
 - **Pattern strength**, from the weeks of data in the window's slots (the fewest weeks of any slot in the window): under 3 weeks is "early pattern", 3–5 is "pattern", 6 or more is "established". It feeds the window's confidence. With no pattern, the item has no windows and the plan uses posting now.
 - **Where windows are used.** The Week plan's peak slot is the best slot inside the top window, and the post is placed 8 h before it (§3.4C). Windows are also shown on the tooltip ("Best time to sell"), on the item detail (heat map plus windows) and in Inventory.
-- **Forecast.** The expected price in a window next week = `level × how × (1 + trend7/100 × days ahead)` (§3.4C), where the **price level** is `med7`, or `med30` when there is no `med7`. A month-old level misleads when a market has moved: old listings that sat unsold keep `med30` high while the item now sells far lower (R21). The chance to sell there is the simulation over that window (§3.3.2), using `sales_how` for demand. Both get more confident as the pattern strengthens.
+- **Forecast.** The expected price in a window next week = `level × how × (1 + trend7/100 × days ahead)` (§3.4C; the trend factor is clamped to `1 ± max_trend_total`), where the **price level** is `med7`, or `med30` when there is no `med7`. A month-old level misleads when a market has moved: old listings that sat unsold keep `med30` high while the item now sells far lower (R21). The chance to sell there is the simulation over that window (§3.3.2), using `sales_how` for demand. Both get more confident as the pattern strengthens.
 
 #### 3.3.6 Market activity metrics
 
@@ -751,18 +751,18 @@ The result is shown as the row's **Source**. The base tells where the raw mats c
 
 1. **Sell plan for what you own** (all characters: bags, bank and mail; bound items are left out, and items already on the AH are shown as "listed" rather than planned again). For each item, it compares `E_post` for:
    - post now at `p`
-   - post for the best slot in the next 7 days, at price `level × how[slot] × (1 + trend7/100 × days ahead)`, the level being `med7`, else `med30` (R21). `trend7` is clamped to ±5% per day. The auction duration is chosen so the listing covers the peak.
+   - post for the best slot in the next 7 days, at price `level × how[slot] × factor`, `factor = clamp(1 + trend7/100 × days ahead, 1 − max_trend_total, 1 + max_trend_total)`, the level being `med7`, else `med30` (R21). `trend7` is clamped to ±5% per day, and the whole factor to ±`max_trend_total` (config, 0.15), so a week of thin data can't move a 7-day forecast 35% (`plan.slot_price`, TT6, TT7). The auction duration is chosen so the listing covers the peak.
    - **Every post action is scheduled `post_lead_hours` (8) before the best hour of its target selling window**, not at it. That is the same 8 hours used for posting now. Its chance to sell is computed from the post through the end of the window (§3.3.2), and a window that ends with no post is a missed peak (§3.4.0). The row says which peak it is for, e.g. "Sat 10:00 · post · for the 18:00 peak". If that time has already passed, the post is planned for now.
    - disenchant (if a character can)
    - vendor
    - hold beyond 7 days (only flagged, never planned)
 
-   It picks the option with the highest expected value. Large stacks are split across slots so that what you post for each window stays within the liquidity cap (§3.4).
-   - **How it allocates** (`engine/plan.py`): each character's lot, in character order, is split into reference stacks; a character's last remainder may be smaller (PL2). Each stack goes to the post option with the highest expected value that still has room in its window. When no post this week pays more per unit than disenchanting or vendoring (no window has room left, or one more stack would mostly not sell), it is a **hold** while the AH price after the cut still pays more than either, so stock waits for later weeks instead of being dumped; otherwise it is disenchanted or vendored.
+   It picks the option with the highest expected value, except that **a window must beat posting now by a margin that shrinks as its pattern earns trust** (R26, PL5). `required_uplift(weeks) = window_margin × (1 − min(1, weeks ÷ pattern_full_weeks))`, with config `window_margin` 0.15 and `pattern_full_weeks` 6 (the "established" strength, §3.3.4), `weeks` being the window's weeks of data. A window is eligible only when `E_window ≥ E_now × (1 + required_uplift)` (`E_now + required_uplift × |E_now|` when `E_now` is negative), `E_now` being posting now's expected value for the same units; without a posting-now option with room (no post price, or its cap is full) the windows compete among themselves. Among eligible options the highest expected value wins, ties to the earlier post time. So with 1 week of data a window needs +12.5% (E_now 100: 110 posts now, 120 takes the window), and from 6 weeks any gain will do (101). The same rule (`plan.choose_option`) decides between posting now and a window in flips (§3.4C.2) and crafts (§3.4C.3). Large stacks are split across slots so that what you post for each window stays within the liquidity cap (§3.4).
+   - **How it allocates** (`engine/plan.py`): each character's lot, in character order, is split into reference stacks; a character's last remainder may be smaller (PL2). Each stack goes to the post option with the highest expected value that still has room in its window, a window counting only when it beats posting now by its required uplift (R26). When no post this week pays more per unit than disenchanting or vendoring (no window has room left, or one more stack would mostly not sell), it is a **hold** while the AH price after the cut still pays more than either, so stock waits for later weeks instead of being dumped; otherwise it is disenchanted or vendored.
    - **A post's chance** is the queue simulation over its hours (§3.3.2), with `sales_how` as demand, today's book as the competition, and your own units already planned for the same window ahead of you. Your sell record is added once it is tracked (M6b, §3.3.3).
    - **The duration** is the shortest one that keeps the listing up through the window's best hour.
 2. **Buy to flip**: items whose expected profit (`E_post` of posting now or at an upcoming peak slot − buy cost) is at least `min_flip_margin` (20%) × buy cost. Typical sources are a weekday or hour pattern, a dip below `p10_30`, or one stack dumped below the next price level (relisted now, R24). They are ranked by expected profit × `conf` (as a fraction).
-   - **How a flip is built** (`engine/flips.py`): it buys other sellers' auctions now, cheapest first, and posts each one where it is worth most, with the auctions it bought taken out of the competition: **posting now** or a selling window. Posting now is priced for the book left after the buy (`flips.relisted`: `post_price` of the cheapest listing left, `med7` and `p90_30`, after your record; no room when nothing is left to price by), with the posting-now window's chance and duration. An auction is added only while it fits the spend limit, an option with room, and its own expected profit is at least `min_flip_margin` × its cost; prices only rise along the book, so the first one that fails ends the flip. A window still wins when it pays more (R24), and an item without a selling window can still flip now. Example (R24): Linen 1 × 20 at 10 c below 5 × 20 at 50 c, med7 48 c, p90 55 c, P 0.9: buy the 10 c stack and post it now at 49 c, expected 0.9 × 20 × 49 × 0.95 + 0.1 × (20 × 10 − 10) = 856.9 c against 200 c; with the next level at 50 c and the cheapest at 45 c it is no flip (856.9 < 1.2 × 900, R25).
+   - **How a flip is built** (`engine/flips.py`): it buys other sellers' auctions now, cheapest first, and posts each one where it is worth most, with the auctions it bought taken out of the competition: **posting now** or a selling window. Posting now is priced for the book left after the buy (`flips.relisted`: `post_price` of the cheapest listing left, `med7` and `p90_30`, after your record; no room when nothing is left to price by), with the posting-now window's chance and duration. An auction is added only while it fits the spend limit, an option with room, and its own expected profit is at least `min_flip_margin` × its cost; prices only rise along the book, so the first one that fails ends the flip. A window still wins when it pays more (R24) by at least its required uplift over relisting now (§3.4C.1, R26), and an item without a selling window can still flip now. A flip's post must beat disenchanting or vendoring the stock: an auction joins only when its chosen option's expected value per unit exceeds that per-unit value (as in the sell plan), else it is a disenchant buy, not a flip (R27). Example (R24): Linen 1 × 20 at 10 c below 5 × 20 at 50 c, med7 48 c, p90 55 c, P 0.9: buy the 10 c stack and post it now at 49 c, expected 0.9 × 20 × 49 × 0.95 + 0.1 × (20 × 10 − 10) = 856.9 c against 200 c; with the next level at 50 c and the cheapest at 45 c it is no flip (856.9 < 1.2 × 900, R25).
    - **The actions**: a `buy` now and its `post`s, chain `flip:<key>`; a post for now has no window (`window_start_ms` and `peak_ms` empty), is due now and lasts the shortest duration covering the posting-now window. Like any post planned for now, the status pass marks it missed 24 h after its post time (§3.4.0). The Flip page's row says "relist now, under the listings left" for it.
    - **Who buys**: each item gets at most one flip, bought by the character with the most budget left (ties: character id), so two characters never fill the same demand (R16). The spend limit is that character's budget and `max_risk_pct` of all your gold (R9, R19). The flips' posts share the windows' capacity with your own stock (PL4).
    - The buy carries the chain's expected profit; each post also records its own net against what its units cost, for when the buy has left the view (§3.4 expected net).
@@ -773,7 +773,7 @@ The result is shown as the row's **Source**. The base tells where the raw mats c
    - **Every planned craft has a follow-up for its product within 7 days after the craft**, linked by `parent_id`. It is a post, or a disenchant for craft → DE.
    - The follow-up also has to fall inside the plan window. A craft whose product has no worthwhile slot in time is not planned.
    - This applies to crafts listed for right now (B) as well. When the craft is done, the follow-up stays planned (§3.4.1).
-   - **How chains are built** (`engine/craft_plan.py`): each recipe's output is valued at the product's best selling window in the 7 days (or posting now) that still has room in the shared capacity; output no window has room for is worth nothing, so the craft count stops where capacity ends. Chains are taken best expected profit × confidence first. A chain's mat gold comes from its crafter's budget and stays within `max_risk_pct` (§3.4 Risk); the mats it uses (owned or bought) are gone for later chains and for flips.
+   - **How chains are built** (`engine/craft_plan.py`): each recipe's output is valued at the product's best selling window in the 7 days (or posting now) that still has room in the shared capacity, a window beating posting now only by its required uplift (§3.4C.1, R26); output no window has room for is worth nothing, so the craft count stops where capacity ends. Chains are taken best expected profit × confidence first. A chain's mat gold comes from its crafter's budget and stays within `max_risk_pct` (§3.4 Risk); the mats it uses (owned or bought) are gone for later chains and for flips.
    - **Steps:** each intermediate's crafter buys that intermediate's mats (none when it is made from your own stock), the final crafter buys the rest, then the intermediate crafts and mail, then the craft, a minute apart from now; the post follows at the product's window. The craft carries the chain's expected profit; mat buys, intermediate crafts and mail carry none (D22).
 4. **Capital and time limits**: a budget per character (default: the character's gold, overridable in config `[budgets]`) and an optional maximum number of actions per day (`max_actions_per_day`, 0 = no limit). The allocation also spends each owned unit only once, either on a craft or in the sell plan (§3.4 hold value).
 
@@ -973,6 +973,9 @@ max_supply_share = 0.5                        # your units per window ≤ this s
 max_supply_share_gear = 1.0                   # the same for weapons and armor: you may double the market (§3.4 liquidity)
 min_gear_units = 2                            # gear always gets this many pieces per window, even on an empty market
 max_risk_pct = 25                             # no single buy spends more than this % of all your gold (§3.4 Risk)
+window_margin = 0.15                          # how much more than posting now an untrusted window must pay (§3.4C.1, R26)
+pattern_full_weeks = 6                        # weeks of data at which a window needs no margin over posting now (R26)
+max_trend_total = 0.15                        # the most the trend may move a window's price forecast, ± (§3.4C.1, TT7)
 max_actions_per_day = 0                       # 0 = no limit (§3.4C.4)
 max_item_capital_share = 0.25                 # most of your gold in slow markets (§3.4 market capacity)
 slow_market_days = 7                          # supply/volume above this many days is a slow market (§3.3.6)
@@ -1144,14 +1147,14 @@ Chance to sell          46%
 | Historical price | the median price over the last 30 days (`med30`), with its delta from the current AH price. It falls back to daily closes when hourly data is sparse | §3.3 |
 | Disenchant value | expected mats × their sell value, with its delta from the current AH price. The line is left out when none of your characters can disenchant the item | §3.4A |
 | Best time to sell | the top best-selling window, e.g. "Sat 17:00–21:00", and the pattern strength when it's not yet established | §3.3.4 |
-| Price at best time | the expected price in that window (`level × how × trend`, level `med7` else `med30`), with its delta from the current AH price | §3.4C |
+| Price at best time | the expected price in that window (`level × how × trend factor`, level `med7` else `med30`, the factor clamped to `1 ± max_trend_total`), with its delta from the current AH price | §3.4C |
 | Chance to sell | `P'` for posting one reference stack (§3.4) now (next 8 hours), including your own record | §3.3.2–3 |
 
 **Delta** on the Historical price, Disenchant value and Price at best time lines = `(value − cur) ÷ cur × 100`, rounded half up to a whole percent and shown with a sign. Positive is green and negative is red. It is left out when there is no current price. A positive delta means the item is worth more than it costs right now: a higher historical price or price at best time means it's cheap now, and a higher disenchant value means buying to disenchant pays.
 
 A line with no data shows "—", except Disenchant value, which is left out as described above.
 
-**In the addon** (`UI/Tooltip.lua`, lines from `ViewModel.Tooltip`, the Lua twin of `views.tooltip`; TT1–TT5 are shared scenarios run in both, A21, UI8): the block reads the market file, and a newer in-game scan's cheapest price replaces `cur` ("40c (now)"), with the deltas following it. Best time to sell is the top selling window in local time, tagged "(early)" under 3 weeks of data and "(pattern)" under 6, so the longest line fits 320 px (UI8). Price at best time is the plan's `slot_price`: `level × how × (1 + trend7 ÷ 100 × days until the window's best hour)` (`med7`, else `med30`; trend clamped to ±5%/day; TT6), ported as `Engine/Prices.SlotPrice`. The Disenchant line uses the ported disenchant table with the item's quality, level and class from the client and your best Enchanting skill. An item without market data adds nothing, and a failure never breaks the tooltip. The hook is `TooltipDataProcessor` where the client has it, else `GameTooltip`'s `OnTooltipSetItem` (UNVERIFIED on Forever).
+**In the addon** (`UI/Tooltip.lua`, lines from `ViewModel.Tooltip`, the Lua twin of `views.tooltip`; TT1–TT5 are shared scenarios run in both, A21, UI8): the block reads the market file, and a newer in-game scan's cheapest price replaces `cur` ("40c (now)"), with the deltas following it. Best time to sell is the top selling window in local time, tagged "(early)" under 3 weeks of data and "(pattern)" under 6, so the longest line fits 320 px (UI8). Price at best time is the plan's `slot_price`: `level × how × (1 + trend7 ÷ 100 × days until the window's best hour)` (`med7`, else `med30`; trend clamped to ±5%/day and the factor to `1 ± max_trend_total`; TT6, TT7), ported as `Engine/Prices.SlotPrice`. The addon has no config channel, so `Prices.MAX_TREND_TOTAL` holds the default 0.15, as `min_flip_margin` is held in `UI/FlipView.lua`; change both sides together. The Disenchant line uses the ported disenchant table with the item's quality, level and class from the client and your best Enchanting skill. An item without market data adds nothing, and a failure never breaks the tooltip. The hook is `TooltipDataProcessor` where the client has it, else `GameTooltip`'s `OnTooltipSetItem` (UNVERIFIED on Forever).
 
 **Structure.** `UI/ViewModel.lua` turns the addon files, the addon's own recommendations and the live state into plain tables of rows, labels, colours and formatted money. The frame code (`Window`, `AHPanel`, `Tooltip`) only draws those tables. So most UI behaviour is testable as plain Lua, without frames.
 
@@ -1298,17 +1301,18 @@ tests/
   ahsync/...           test_<module>.py, same tree as ahsync/
   addon/...            <Module>_spec.lua, same tree as addon/AHProfit/
   fixtures/ahf/        trimmed recordings of real AHF responses (the templates)
-  fixtures/worlds/     w1.json + w1.expected.json: the whole-plan snapshot (§8.6)
+  fixtures/worlds/     w1.json (generated by tools/gen_world.py) + w1.expected.json (tools/snapshot.py): the whole-plan snapshot (§8.6)
   properties/          generated invariant cases shared by Python and Lua (§8.7)
   scenarios/           named JSON scenarios shared by the Python and Lua tests (their Lua form goes to addon/generated/, not committed)
   support/             builders.py, fake_clock.py, fake_transport.py, gen.py (seeded case generator), lua/runner.lua, lua/wow_stubs.lua,
                        lua/layout.lua (anchor solver + layout checks)
   visual/              scenarios/*.lua (UI1…), golden/*.txt (frame-tree snapshots), golden/*.png (renders)
+  tools/               tests of tools/ (test_snapshot.py runs the whole-plan snapshot, WP1)
   test_conventions.py  docstrings, size limits, mirroring, scenario IDs (§8.1)
   pending_scenarios.txt  listed IDs not built yet (§8.1)
 pyproject.toml         pytest and coverage settings only (no runtime dependencies)
 requirements-dev.txt   pytest, coverage
-tools/                 record_fixtures.py, gen_lua_fixtures.py, gen_properties.py (LP1 cases, §8.7), gen_bonus_suffixes.py, gen_disenchant_data.py, deploy.py, savedvars_report.py (what the addon captured; §6 checks), visual.py, bench.py (performance budgets, §3.1.2)
+tools/                 record_fixtures.py, gen_lua_fixtures.py, gen_properties.py (LP1 cases, §8.7), gen_bonus_suffixes.py, gen_disenchant_data.py, deploy.py, savedvars_report.py (what the addon captured; §6 checks), visual.py, bench.py (performance budgets, §3.1.2), gen_world.py (the snapshot world, §8.6), snapshot.py (the whole-plan snapshot, §8.6)
 docs/SPEC.md, docs/SCENARIOS.md, docs/mockups/addon.html (in game), docs/mockups/dashboard.html (desktop)
 CLAUDE.md
 ```
@@ -1423,7 +1427,7 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `MarketIntellig
   - no `OnUpdate` script may be set (checked by `wow_stubs.lua`).
 - `/ahp perf` reports the real numbers in game against the budgets.
 
-## 6. To verify
+## 6. To verify and to build
 
 1. ~~**API key tier**~~: done 2026-10-16 (§2.1). The key has Premium features through the contributor role, which expires unless scans are uploaded. The `books`, candle, snapshot and items formats were recorded on 2026-10-16 (§2.1 Response formats). Still to check: the `volume` row format, because the file was empty for our market. Re-run `tools/record_fixtures.py` once it has data.
 2. **Forever game APIs.** Verified 2026-10-16 on client 1.60.1 70425 through the addon's diagnostics: **Forever uses the modern (retail-style) API, not Classic's.**
@@ -1447,6 +1451,8 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `MarketIntellig
    - AHF's `/items.bonusLists` maps a bonus ID to `[suffix id, stats]`, and AHF's key uses **`v = 2 × suffix id`** (true for all 523 variants in `/items`).
    - Checked on a real link: Aboriginal Gloves of Frost Protection carries bonus 12742 → suffix 14322 → v = 28644 → key 61512521627429, which is AHF's variant of that name.
    - The addon computes it in `Adapter.ItemKey` from `Data/BonusSuffixes.lua`, generated by `tools/gen_bonus_suffixes.py` (re-run it when AHF adds suffixes).
+12. **To build: the undercut share `u(p)`** (§3.3.2). `sellprob.undercut_share` is written and tested but nothing calls it; every simulation uses `default_undercut_share` (0.5). It needs the share of newly listed units priced at or below yours, from book history (AHF books or your scans).
+13. **To build: price-tier sell-through `ST_tier`** (§3.3.2). Never computed, so `blend` always returns `P_queue` (`e` = 0). It needs sold versus expired auctions per price tier over 30 days, from the order-book diffs (§3.3.1).
 
 ## 7. Milestones
 
@@ -1548,7 +1554,7 @@ The engine must give **the same output for the same input, every time and on eve
 - **No hidden inputs.** The current time is passed in as `now_ms`. There is no randomness. Config values are arguments.
 - **Explicit order.** Every sort has a full tie-break that ends in a unique key, such as an item key or a character id. Nothing depends on dict, set or Lua `pairs` order. Lua code walks sorted key lists.
 - **Exact numbers.** The numeric rules in §3.3 apply: integer copper, floats only for expected values, `floor(x + 0.5)` at output, and the defined median and percentile. Tests compare rounded output exactly, not "close enough".
-- **Whole-plan snapshot.** A fixture world, `tests/fixtures/worlds/w1.json`, holds characters, inventory, recipes, prices, order books, history and `now_ms`. It is built from the mockups' example data. The test runs the whole engine on it and compares every tab's view model with `tests/fixtures/worlds/w1.expected.json`. Running it twice must give byte-identical output. Where the mockups and the engine disagree, the engine's tested numbers win and the mockup is updated.
+- **Whole-plan snapshot** (built: WP1). A fixture world, `tests/fixtures/worlds/w1.json`, holds characters, inventory, recipes, prices, order books, history and `now_ms`, as the database rows catch-up and ingest would write. It is generated by `tools/gen_world.py` (fixed seed; the JSON is committed): two characters, 12 items, 5 with 6 weeks of hourly closes and a weekly pattern and one with an early pattern, three complete scans, a two-step craft chain and a disenchantable green, using the mockups' item names. `tests/tools/test_snapshot.py` (WP1) loads it into a fresh database, runs `refresh_all` at its `now_ms`, writes both addon files, and compares every page payload (the `views` table), the plan's actions and the two files' text, as one sorted-key JSON document, with `tests/fixtures/worlds/w1.expected.json`; running it twice must give byte-identical output. Heat-map cells are kept as digests and a long market file is trimmed to its first lines, so the snapshot stays small. After an intended change, `python tools/snapshot.py --update` rewrites it and prints a diff summary; review the diff. Where the mockups and the engine disagree, the engine's tested numbers win and the mockup is updated.
 
 ### 8.7 Invariants: is the logic sound?
 
@@ -1557,7 +1563,7 @@ Single scenarios check one example. Invariants check that a formula behaves sens
 - **How cases are made.** `tests/support/gen.py` makes cases from a fixed seed with `random.Random(seed)`. A failure prints the seed and the inputs, so it can be reproduced. The generated cases are saved to `tests/properties/*.json`, so the Lua port is checked against exactly the same cases.
 - **Scale.** At least 1,000 cases per invariant.
 
-The invariants (PI1–PI17, VI1–VI3, CI1–CI3, PL1–PL3, VW1, LP1, FI1–FI2) are listed in [SCENARIOS.md §5](SCENARIOS.md#5-invariants-spec-87), with the other test IDs, so the convention test (§8.1) sees one list.
+The invariants (PI1–PI17, VI1–VI4, CI1–CI3, PL1–PL5, VW1, LP1, FI1–FI2) are listed in [SCENARIOS.md §5](SCENARIOS.md#5-invariants-spec-87), with the other test IDs, so the convention test (§8.1) sees one list.
 
 ### 8.8 Calibration: does the chance to sell match reality?
 

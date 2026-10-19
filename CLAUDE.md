@@ -17,6 +17,8 @@ python tools/deploy.py --restart  # ...then restart AHSync and wait until it has
 python tools/savedvars_report.py  # after /reload in game: what the addon captured, and what is missing
 python tools/gen_bonus_suffixes.py  # refresh addon/AHProfit/Data/BonusSuffixes.lua from AHF /items (no key)
 python tools/visual.py         # UI layout snapshots vs golden (--update to accept, --html to view)
+python tools/snapshot.py       # whole-plan snapshot vs tests/fixtures/worlds/w1.expected.json (--update to accept, prints a diff summary)
+python tools/gen_world.py      # regenerate the snapshot's fixture world w1.json (fixed seed), then snapshot.py --update
 ```
 
 `lua5.1` is a standalone Lua 5.1 interpreter that must be on PATH. Use 5.1, not 5.4: WoW runs 5.1, and the two differ in integer and `#` behaviour.
@@ -111,7 +113,7 @@ local function SellProbability(soldPerDay, windowDays, ahead, qty, defaultP) ...
 - Expected values are written as numbers a human can check by hand, with a `why` explaining them.
 - A bug fix starts with a failing scenario that reproduces it.
 - **Every displayed number is engine-made and tested** (SPEC §8.5). No arithmetic in `web/` or UI frame code. Totals, sorting, filters and deltas go in `engine/views.py` (and `UI/ViewModel.lua`). A new tab field needs a scenario in the SPEC §8.5 map. Engine branch coverage stays at 100%.
-- **Determinism** (SPEC §8.6). Pass `now_ms` in, use no randomness, and give every sort a full tie-break ending in a unique key. Never rely on dict, set or `pairs` order. The whole-plan snapshot (`w1.expected.json`) must be byte-identical across runs. Update it only on purpose, and review the diff.
+- **Determinism** (SPEC §8.6). Pass `now_ms` in, use no randomness, and give every sort a full tie-break ending in a unique key. Never rely on dict, set or `pairs` order. The whole-plan snapshot (`w1.expected.json`, checked by `tests/tools/test_snapshot.py`, WP1) must be byte-identical across runs. Update it only on purpose (`python tools/snapshot.py --update`), and review the diff.
 - **Invariants** (SPEC §8.7). A change to `sellprob`, `volume`, `craft`, `plan` or `views` keeps its invariants passing. A new formula gets its invariants in the same change. Generated cases use a fixed seed, and failures print it.
 - **UI**: logic goes in `UI/ViewModel.lua` and is tested there; frame code only draws. A UI change updates the golden snapshots (`tools/visual.py --update`) in the same change, and the diff is reviewed against [docs/mockups/addon.html](docs/mockups/addon.html). See SPEC §8.4. Dashboard changes follow [docs/mockups/dashboard.html](docs/mockups/dashboard.html). A UI change that departs from a mockup updates the mockup in the same change.
 

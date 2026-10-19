@@ -27,7 +27,7 @@ def raid_nights(wed: float, thu: float, **changes) -> SellFacts:
     """An item with Tue, Wed and Thu 20:00-23:00 windows peaking at 20:00; level 10s; no vendor value or deposit."""
     how = [1.0] * 168
     how[WED * 24 + 20], how[THU * 24 + 20] = wed, thu
-    windows = tuple(PlanWindow(d * 24 + 20, 3, d * 24 + 20) for d in (TUE, WED, THU))
+    windows = tuple(PlanWindow(d * 24 + 20, 3, d * 24 + 20, 6) for d in (TUE, WED, THU))
     base = SellFacts(2589, level=1000, trend7=0.0, post_price=1000, sold_per_day=40.0, listed_per_day=10.0,
                      ref_stack=1, how=tuple(how), sales_how=tuple([1.0] * 168), windows=windows, book=(), cur=1000,
                      cur_qty=1, vendor_sell=0, supply_now=40)

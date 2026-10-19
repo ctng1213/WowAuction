@@ -1,0 +1,5508 @@
+{
+ "actions": [
+  {
+   "action_id": "forever.pvp.horde.us:1728477000000:0",
+   "anchor_net": null,
+   "anchor_window_ms": null,
+   "char_id": "Brugan-Grommash",
+   "conf": null,
+   "done_at": null,
+   "done_qty": 0,
+   "duration_h": null,
+   "expected_net": 0.0,
+   "key": 2770,
+   "kind": "buy",
+   "parent_id": null,
+   "peak_ms": null,
+   "price": 248,
+   "qty": 30,
+   "replaces_id": null,
+   "run_at": 1728477000000,
+   "slot_ms": 1728477000000,
+   "source": "ah",
+   "status": "pending",
+   "week_start_ms": 1728259200000,
+   "window_end_ms": null,
+   "window_start_ms": null
+  },
+  {
+   "action_id": "forever.pvp.horde.us:1728477000000:1",
+   "anchor_net": null,
+   "anchor_window_ms": null,
+   "char_id": "Brugan-Grommash",
+   "conf": null,
+   "done_at": null,
+   "done_qty": 0,
+   "duration_h": null,
+   "expected_net": 25091.801862745087,
+   "key": 2840,
+   "kind": "craft",
+   "parent_id": "forever.pvp.horde.us:1728477000000:0",
+   "peak_ms": null,
+   "price": null,
+   "qty": 50,
+   "replaces_id": null,
+   "run_at": 1728477000000,
+   "slot_ms": 1728477060000,
+   "source": null,
+   "status": "pending",
+   "week_start_ms": 1728259200000,
+   "window_end_ms": null,
+   "window_start_ms": null
+  },
+  {
+   "action_id": "forever.pvp.horde.us:1728477000000:2",
+   "anchor_net": 25091.801862745087,
+   "anchor_window_ms": null,
+   "char_id": "Brugan-Grommash",
+   "conf": 0.9906274509803921,
+   "done_at": null,
+   "done_qty": 0,
+   "duration_h": 8,
+   "expected_net": 25091.801862745087,
+   "key": 2840,
+   "kind": "post",
+   "parent_id": "forever.pvp.horde.us:1728477000000:0",
+   "peak_ms": null,
+   "price": 791,
+   "qty": 50,
+   "replaces_id": null,
+   "run_at": 1728477000000,
+   "slot_ms": 1728477120000,
+   "source": null,
+   "status": "pending",
+   "week_start_ms": 1728259200000,
+   "window_end_ms": null,
+   "window_start_ms": null
+  },
+  {
+   "action_id": "forever.pvp.horde.us:1728477000000:3",
+   "anchor_net": null,
+   "anchor_window_ms": null,
+   "char_id": "Brugan-Grommash",
+   "conf": null,
+   "done_at": null,
+   "done_qty": 0,
+   "duration_h": null,
+   "expected_net": 0.0,
+   "key": 2770,
+   "kind": "buy",
+   "parent_id": null,
+   "peak_ms": null,
+   "price": 248,
+   "qty": 5,
+   "replaces_id": null,
+   "run_at": 1728477000000,
+   "slot_ms": 1728477000000,
+   "source": "ah",
+   "status": "pending",
+   "week_start_ms": 1728259200000,
+   "window_end_ms": null,
+   "window_start_ms": null
+  },
+  {
+   "action_id": "forever.pvp.horde.us:1728477000000:4",
+   "anchor_net": null,
+   "anchor_window_ms": null,
+   "char_id": "Brugan-Grommash",
+   "conf": null,
+   "done_at": null,
+   "done_qty": 0,
+   "duration_h": null,
+   "expected_net": 0.0,
+   "key": 2840,
+   "kind": "craft",
+   "parent_id": "forever.pvp.horde.us:1728477000000:3",
+   "peak_ms": null,
+   "price": null,
+   "qty": 5,
+   "replaces_id": null,
+   "run_at": 1728477000000,
+   "slot_ms": 1728477060000,
+   "source": null,
+   "status": "pending",
+   "week_start_ms": 1728259200000,
+   "window_end_ms": null,
+   "window_start_ms": null
+  },
+  {
+   "action_id": "forever.pvp.horde.us:1728477000000:5",
+   "anchor_net": null,
+   "anchor_window_ms": null,
+   "char_id": "Brugan-Grommash",
+   "conf": null,
+   "done_at": null,
+   "done_qty": 0,
+   "duration_h": null,
+   "expected_net": 12770.318333333336,
+   "key": 6217,
+   "kind": "craft",
+   "parent_id": "forever.pvp.horde.us:1728477000000:3",
+   "peak_ms": null,
+   "price": null,
+   "qty": 5,
+   "replaces_id": null,
+   "run_at": 1728477000000,
+   "slot_ms": 1728477120000,
+   "source": null,
+   "status": "pending",
+   "week_start_ms": 1728259200000,
+   "window_end_ms": null,
+   "window_start_ms": null
+  },
+  {
+   "action_id": "forever.pvp.horde.us:1728477000000:6",
+   "anchor_net": 12770.318333333336,
+   "anchor_window_ms": null,
+   "char_id": "Brugan-Grommash",
+   "conf": 0.9933333333333337,
+   "done_at": null,
+   "done_qty": 0,
+   "duration_h": 8,
+   "expected_net": 12770.318333333336,
+   "key": 6217,
+   "kind": "post",
+   "parent_id": "forever.pvp.horde.us:1728477000000:3",
+   "peak_ms": null,
+   "price": 2969,
+   "qty": 5,
+   "replaces_id": null,
+   "run_at": 1728477000000,
+   "slot_ms": 1728477180000,
+   "source": null,
+   "status": "pending",
+   "week_start_ms": 1728259200000,
+   "window_end_ms": null,
+   "window_start_ms": null
+  },
+  {
+   "action_id": "forever.pvp.horde.us:1728477000000:7",
+   "anchor_net": 2827.017647058824,
+   "anchor_window_ms": null,
+   "char_id": "Amaya-Grommash",
+   "conf": 0.8173202614379087,
+   "done_at": null,
+   "done_qty": 0,
+   "duration_h": 8,
+   "expected_net": 2827.017647058824,
+   "key": 2318,
+   "kind": "post",
+   "parent_id": null,
+   "peak_ms": null,
+   "price": 118,
+   "qty": 30,
+   "replaces_id": null,
+   "run_at": 1728477000000,
+   "slot_ms": 1728477000000,
+   "source": null,
+   "status": "pending",
+   "week_start_ms": 1728259200000,
+   "window_end_ms": null,
+   "window_start_ms": null
+  },
+  {
+   "action_id": "forever.pvp.horde.us:1728477000000:8",
+   "anchor_net": 1862.0,
+   "anchor_window_ms": null,
+   "char_id": "Amaya-Grommash",
+   "conf": 1.0,
+   "done_at": null,
+   "done_qty": 0,
+   "duration_h": 8,
+   "expected_net": 1862.0,
+   "key": 2589,
+   "kind": "post",
+   "parent_id": null,
+   "peak_ms": null,
+   "price": 49,
+   "qty": 40,
+   "replaces_id": null,
+   "run_at": 1728477000000,
+   "slot_ms": 1728477000000,
+   "source": null,
+   "status": "pending",
+   "week_start_ms": 1728259200000,
+   "window_end_ms": null,
+   "window_start_ms": null
+  },
+  {
+   "action_id": "forever.pvp.horde.us:1728477000000:9",
+   "anchor_net": null,
+   "anchor_window_ms": null,
+   "char_id": "Amaya-Grommash",
+   "conf": null,
+   "done_at": null,
+   "done_qty": 0,
+   "duration_h": null,
+   "expected_net": 2112.5625,
+   "key": 4239,
+   "kind": "de",
+   "parent_id": null,
+   "peak_ms": null,
+   "price": null,
+   "qty": 1,
+   "replaces_id": null,
+   "run_at": 1728477000000,
+   "slot_ms": 1728477000000,
+   "source": null,
+   "status": "pending",
+   "week_start_ms": 1728259200000,
+   "window_end_ms": null,
+   "window_start_ms": null
+  },
+  {
+   "action_id": "forever.pvp.horde.us:1728477000000:10",
+   "anchor_net": 77520.0,
+   "anchor_window_ms": null,
+   "char_id": "Amaya-Grommash",
+   "conf": 1.0,
+   "done_at": null,
+   "done_qty": 0,
+   "duration_h": 8,
+   "expected_net": 77520.0,
+   "key": 4306,
+   "kind": "post",
+   "parent_id": null,
+   "peak_ms": null,
+   "price": 2040,
+   "qty": 40,
+   "replaces_id": null,
+   "run_at": 1728477000000,
+   "slot_ms": 1728477000000,
+   "source": null,
+   "status": "pending",
+   "week_start_ms": 1728259200000,
+   "window_end_ms": null,
+   "window_start_ms": null
+  },
+  {
+   "action_id": "forever.pvp.horde.us:1728477000000:11",
+   "anchor_net": 1055.5785294117645,
+   "anchor_window_ms": null,
+   "char_id": "Brugan-Grommash",
+   "conf": 0.954754901960784,
+   "done_at": null,
+   "done_qty": 0,
+   "duration_h": 8,
+   "expected_net": 1055.5785294117645,
+   "key": 2835,
+   "kind": "post",
+   "parent_id": null,
+   "peak_ms": null,
+   "price": 29,
+   "qty": 40,
+   "replaces_id": null,
+   "run_at": 1728477000000,
+   "slot_ms": 1728477000000,
+   "source": null,
+   "status": "pending",
+   "week_start_ms": 1728259200000,
+   "window_end_ms": null,
+   "window_start_ms": null
+  },
+  {
+   "action_id": "forever.pvp.horde.us:1728477000000:12",
+   "anchor_net": null,
+   "anchor_window_ms": null,
+   "char_id": "Brugan-Grommash",
+   "conf": null,
+   "done_at": null,
+   "done_qty": 0,
+   "duration_h": null,
+   "expected_net": 0.0,
+   "key": 2840,
+   "kind": "hold",
+   "parent_id": null,
+   "peak_ms": null,
+   "price": null,
+   "qty": 4,
+   "replaces_id": null,
+   "run_at": 1728477000000,
+   "slot_ms": 1728477000000,
+   "source": null,
+   "status": "pending",
+   "week_start_ms": 1728259200000,
+   "window_end_ms": null,
+   "window_start_ms": null
+  },
+  {
+   "action_id": "forever.pvp.horde.us:1728477000000:13",
+   "anchor_net": 9424.0,
+   "anchor_window_ms": 1728748800000,
+   "char_id": "Amaya-Grommash",
+   "conf": 1.0,
+   "done_at": null,
+   "done_qty": 0,
+   "duration_h": 24,
+   "expected_net": 9424.0,
+   "key": 2589,
+   "kind": "post",
+   "parent_id": null,
+   "peak_ms": 1728756000000,
+   "price": 62,
+   "qty": 160,
+   "replaces_id": null,
+   "run_at": 1728477000000,
+   "slot_ms": 1728727200000,
+   "source": null,
+   "status": "pending",
+   "week_start_ms": 1728259200000,
+   "window_end_ms": 1728770400000,
+   "window_start_ms": 1728748800000
+  },
+  {
+   "action_id": "forever.pvp.horde.us:1728477000000:14",
+   "anchor_net": null,
+   "anchor_window_ms": null,
+   "char_id": "Brugan-Grommash",
+   "conf": null,
+   "done_at": null,
+   "done_qty": 0,
+   "duration_h": null,
+   "expected_net": 12791.0,
+   "key": 2592,
+   "kind": "buy",
+   "parent_id": null,
+   "peak_ms": null,
+   "price": 300,
+   "qty": 20,
+   "replaces_id": null,
+   "run_at": 1728477000000,
+   "slot_ms": 1728477000000,
+   "source": "ah",
+   "status": "pending",
+   "week_start_ms": 1728259200000,
+   "window_end_ms": null,
+   "window_start_ms": null
+  },
+  {
+   "action_id": "forever.pvp.horde.us:1728477000000:15",
+   "anchor_net": 12791.0,
+   "anchor_window_ms": null,
+   "char_id": "Brugan-Grommash",
+   "conf": 1.0,
+   "done_at": null,
+   "done_qty": 0,
+   "duration_h": 8,
+   "expected_net": 12791.0,
+   "key": 2592,
+   "kind": "post",
+   "parent_id": "forever.pvp.horde.us:1728477000000:14",
+   "peak_ms": null,
+   "price": 989,
+   "qty": 20,
+   "replaces_id": null,
+   "run_at": 1728477000000,
+   "slot_ms": 1728477000000,
+   "source": null,
+   "status": "pending",
+   "week_start_ms": 1728259200000,
+   "window_end_ms": null,
+   "window_start_ms": null
+  }
+ ],
+ "addon_files": {
+  "MarketIntelligence.lua": "-- MarketIntelligence.lua: generated by AHSync (SPEC §3.5). Do not edit; it is replaced on every refresh.\nlocal I1, C1, D1 = {}, {}, {}\ndo local fill = function(I, C, D)\nI[1475]=\"109,20,60,110,110,108,112,2,,,80,47,,108,20,63,1,500,40,0;;\"\nI[2318]=\"119,40,60,120,120,118,122,-2,978,486,200,75,,118,20,112,0,1000,198,0;;\" C[2318]=\"UUUTG.##UUUTG.##UUUTG.##UUUTG.##UUUTG.##UUUTG.##UUUTG.##UUUTG.##UUUTG.##UUUTG.##UUUTG.##UUUTG.##UUUTG.##UUUTG.##UUUTG.##UUUTG.##UUUTG.##UUUTG.##UUUTG.##UUUTG.##UUUTG.##UUUTG.##UUUTG.##UUUTG.##\"\nI[2589]=\"50,60,60,50,50,47,51,-2,11825,5910,320,75,38,49,20,47,0,1000,302,0;136:6:138:1180:6;143:19:148:984:6/167:136:100:986:6\" C[2589]=\"UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU\"\nI[2592]=\"300,20,60,995,994,936,1015,-3,1433,714,220,75,37,299,20,284,0,1000,199,0;136:7:139:1113:6/66:4:69:1057:6;70:66:101:990:6/143:91:4:991:6\" C[2592]=\"UUUUUK##UUUUUK##UUUUUK##UUUUUK##UUUUUK##UUUUUK##UUUUUK##UUUUUK##UUUUUK##UUUUUK##UUUUUK##UUUUUK##UUUUUK##UUUUUK##UUUUUK##UUUUUK##UUUUUK##UUUUUK##UUUUUK##UUUUUK##UUUUUK##UUUUUK##UUUUUK##UUUUUK##\"\nI[2770]=\"248,60,60,250,250,246,254,-2,3002,1498,320,75,,247,20,235,0,1000,292,0;;\" C[2770]=\"UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#\"\nI[2835]=\"30,80,60,30,30,30,31,0,1525,758,400,75,,29,20,28,0,1000,398,0;;\" C[2835]=\"UUUUUP##UUUUUP##UUUUUP##UUUUUP##UUUUUP##UUUUUP##UUUUUP##UUUUUP##UUUUUP##UUUUUP##UUUUUP##UUUUUP##UUUUUP##UUUUUP##UUUUUP##UUUUUP##UUUUUP##UUUUUP##UUUUUP##UUUUUP##UUUUUP##UUUUUP##UUUUUP##UUUUUP##\"\nI[2840]=\"792,20,60,794,795,748,811,-3,1979,987,120,75,41,791,20,751,0,1000,121,0;;\" C[2840]=\"UUUUUU##UUUUUU##UUUUUU##UUUUUU##UUUUUU##UUUUUU##UUUUUU##UUUUUU##UUUUUU##UUUUUU##UUUUUU##UUUUUU##UUUUUU##UUUUUU##UUUUUU##UUUUUU##UUUUUU##UUUUUU##UUUUUU##UUUUUU##UUUUUU##UUUUUU##UUUUUU##UUUUUU##\"\nI[4239]=\"800,1,60,1498,1498,1477,1522,1,20,10,2,75,,799,1,424,0,496,3,0;;\" C[4239]=\"<#######<#######<#######<#######<#######<#######<#######<#######<#######<#######<#######<#######<#######<#######<#######<#######<#######<#######<#######<#######<#######<#######<#######<#######\" D[4239]=\"25,2,25,a\"\nI[4306]=\"2060,20,60,2004,2001,1969,2040,-2,2938,1467,80,75,,2040,20,1938,0,1000,60,0;70:76:122:1036:1;142:148:25:1001:1\" C[4306]=\"UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#UUUUUUU#\"\nI[6217]=\"2970,20,60,2973,2982,2809,3048,-2,198,98,80,75,39,2969,20,736,0,248,12,0;135:7:138:1118:6;143:160:77:990:6\" C[6217]=\"/-*#####/-*#####/-*#####/-*#####/-*#####/-*#####/-*#####/-*#####/-*#####/-*#####/-*#####/-*#####/-*#####/-*#####/-*#####/-*#####/-*#####/-*#####/-*#####/-*#####/-*#####/-*#####/-*#####/-*#####\"\nI[10938]=\"891,10,60,900,900,885,914,0,813,404,60,75,,890,10,846,0,1000,49,0;;\" C[10938]=\"UU%UU%UU%UU%UU%UU%UU%UU%UU%UU%UU%UU%UU%UU%UU%UU%UU%UU%UU%UU%UU%UU%UU%UU%\"\nI[10940]=\"594,80,60,594,596,561,609,-3,5012,2505,400,75,39,593,20,563,0,1000,399,0;160:8:163:1098:6;167:162:4:991:6\" C[10940]=\"UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU\"\nend fill(I1, C1, D1) end\nAHProfitMarket = {\n  schemaVersion = 1,\n  exportVersion = 1,\n  generatedAt = 1728477000000,\n  checksum = \"24:3043\",\n  charMarkets = { [\"Amaya-Grommash\"] = \"forever.pvp.horde.us\", [\"Brugan-Grommash\"] = \"forever.pvp.horde.us\" },\n  vendor = {  },\n  markets = {\n  [\"forever.pvp.horde.us\"] = { observationsUntil = 1728473400000, curveHour = 480132, I = I1, C = C1, D = D1, F = { [2592] = \"1081,1138,139\" }, S = { [2318] = \"777777777887777777777777\", [2589] = \"877777777777777777777777\", [2592] = \"777777777777777777777777\", [2770] = \"777777777777777777777777\", [2835] = \"777777777777777777777777\", [2840] = \"777677777777777777777777\", [4239] = \"777777777777777777777777\", [4306] = \"777777777777777777777777\", [6217] = \"776667778888777777766666\", [10940] = \"777888777777777777777777\" } },\n  },\n}\n",
+  "PortfolioPlan.lua": "-- PortfolioPlan.lua: generated by AHSync (SPEC §3.5). Do not edit; it is replaced whenever the plan changes.\nAHProfitPlan = {\n  schemaVersion = 1,\n  exportVersion = 1,\n  generatedAt = 1728477000000,\n  checksum = \"16:1626\",\n  basedOnUntil = nil,\n  ingestedUntil = {\n  },\n  actions = {\n    [\"Amaya-Grommash\"] = {\n      \"forever.pvp.horde.us:1728477000000:10;post;4306;40;2040;1728477000000;77520;;;pending;100;;;8\",\n      \"forever.pvp.horde.us:1728477000000:7;post;2318;30;118;1728477000000;2827;;;pending;82;;;8\",\n      \"forever.pvp.horde.us:1728477000000:8;post;2589;40;49;1728477000000;1862;;;pending;100;;;8\",\n      \"forever.pvp.horde.us:1728477000000:9;de;4239;1;;1728477000000;2113;;;pending;;;;\",\n      \"forever.pvp.horde.us:1728477000000:13;post;2589;160;62;1728727200000;9424;;1728770400000;pending;100;1728756000000;;24\",\n    },\n    [\"Brugan-Grommash\"] = {\n      \"forever.pvp.horde.us:1728477000000:0;buy;2770;30;248;1728477000000;0;;;pending;;;;\",\n      \"forever.pvp.horde.us:1728477000000:11;post;2835;40;29;1728477000000;1056;;;pending;95;;;8\",\n      \"forever.pvp.horde.us:1728477000000:12;hold;2840;4;;1728477000000;0;;;pending;;;;\",\n      \"forever.pvp.horde.us:1728477000000:14;buy;2592;20;300;1728477000000;12791;;;pending;;;;\",\n      \"forever.pvp.horde.us:1728477000000:15;post;2592;20;989;1728477000000;12791;forever.pvp.horde.us:1728477000000:14;;pending;100;;;8\",\n      \"forever.pvp.horde.us:1728477000000:3;buy;2770;5;248;1728477000000;0;;;pending;;;;\",\n      \"forever.pvp.horde.us:1728477000000:1;craft;2840;50;;1728477060000;25092;forever.pvp.horde.us:1728477000000:0;;pending;;;;\",\n      \"forever.pvp.horde.us:1728477000000:4;craft;2840;5;;1728477060000;0;forever.pvp.horde.us:1728477000000:3;;pending;;;;\",\n      \"forever.pvp.horde.us:1728477000000:2;post;2840;50;791;1728477120000;25092;forever.pvp.horde.us:1728477000000:0;;pending;99;;;8\",\n      \"forever.pvp.horde.us:1728477000000:5;craft;6217;5;;1728477120000;12770;forever.pvp.horde.us:1728477000000:3;;pending;;;;\",\n      \"forever.pvp.horde.us:1728477000000:6;post;6217;5;2969;1728477180000;12770;forever.pvp.horde.us:1728477000000:3;;pending;99;;;8\",\n    },\n  },\n  rules = {\n  },\n  records = {\n  },\n  reserves = {\n  },\n}\n"
+ },
+ "now_ms": 1728477000000,
+ "views": {
+  "characters": {
+   "forever.pvp.horde.us": {
+    "cards": [
+     {
+      "lines": [
+       ["Realm", "Horde · Grommash (pvp)"],
+       ["Market", "forever.pvp.horde.us"],
+       ["Gold (budget)", "25g"],
+       ["Known recipes", "1"],
+       ["Last seen", "2 h ago"]
+      ],
+      "professions": [
+       {
+        "name": "Enchanting",
+        "pct": 95,
+        "skill": "142 / 150"
+       },
+       {
+        "name": "Tailoring",
+        "pct": 63,
+        "skill": "95 / 150"
+       }
+      ],
+      "subtitle": "Mage · 28",
+      "title": "Amaya"
+     },
+     {
+      "lines": [
+       ["Realm", "Horde · Grommash (pvp)"],
+       ["Market", "forever.pvp.horde.us"],
+       ["Gold (budget)", "40g"],
+       ["Known recipes", "2"],
+       ["Last seen", "2 h ago"]
+      ],
+      "professions": [
+       {
+        "name": "Blacksmithing",
+        "pct": 75,
+        "skill": "112 / 150"
+       },
+       {
+        "name": "Mining",
+        "pct": 80,
+        "skill": "120 / 150"
+       }
+      ],
+      "subtitle": "Warrior · 30",
+      "title": "Brugan"
+     }
+    ],
+    "empty": ""
+   }
+  },
+  "craft": {
+   "forever.pvp.horde.us": {
+    "footer": "2 planned · 0 recipes worth crafting",
+    "help": {
+     "Action": "What to do: BUY, POST, DE (disenchant), CRAFT, VENDOR, MAIL or HOLD",
+     "Best selling windows": "The hours of the week it sells best (price × buyers), local time. \"early pattern\" = under 3 weeks of data",
+     "Buy": "Cheapest buyout on the AH now",
+     "Buy each": "Price to pay now, per unit (buy at or below it)",
+     "Buy total": "What the whole buy costs",
+     "Chance": "Chance it sells in its planned window. The dot is the confidence in that chance: green ≥ 75%, amber ≥ 45%, grey below. Hover a cell for the exact %",
+     "Character": "Which of your characters does it",
+     "Cooldown": "When the recipe can be used again",
+     "Cost each": "What it cost you per unit: what you paid, or the mats for a craft; 0 for items you found or held before tracking started",
+     "Cost total": "Cost each × quantity",
+     "Crafts": "How many to make: stops where one more would lose money",
+     "Current Supply": "Units on the AH now, in the newest scan",
+     "Deposit": "Deposit you paid to post; back on a sale, lost on expiry. \"—\" = its post was not captured",
+     "Detail": "The deposit, the post it resolved, what it cost or realized, or why the plan action was missed",
+     "EV": "Expected value of the mats: average results × their sell value",
+     "Each": "Per unit: the price you pay, or post at",
+     "Est. Sales/Day": "Units the market sells per day (last 7 days), with its source: AHF, or est. from order books in your scans. \"—\" = no sales data",
+     "Event": "What happened: posted, sold, expired, paid out, bought, crafted, disenchanted, mailed. \"—\" is a plan action with no event",
+     "Expected ROI": "Expected profit ÷ buy cost. Flips need at least 20%",
+     "Expected mats": "Average disenchant results for this quality and item level",
+     "Expected net": "What this action adds on average, after fees, deposits and the chance it sells. A chain counts it once, on its first action",
+     "Expected profit": "Average profit after fees and the chance it sells; owned mats count at their hold value",
+     "Item": "The item, in its quality colour. Click to open it on auctionhouse.fyi",
+     "Listed each": "Your buyout per unit",
+     "Listed total": "Listed each × quantity",
+     "Mats each": "Gold for mats you must buy, per craft. \"—\" = you own them all",
+     "Mats total": "Mats each × crafts",
+     "Paid each": "What you paid per unit, averaged across all your characters; 0 for items you found or held before tracking started",
+     "Paid total": "Paid each × quantity",
+     "Plan": "What this week's plan does with it",
+     "Plan action": "The plan action this event completed: done, partial, or missed and skipped ones",
+     "Position": "\"cheapest\" at or below the cheapest listing now; else who is cheaper, and at what price",
+     "Price": "Each, copper as the AH or vendor charged it; for Paid out, the gold taken from the mailbox",
+     "Price age": "How long ago the buy price was seen. Older prices are less likely to still be there",
+     "Product": "What the recipe makes",
+     "Profit": "EV − buy price, after fees",
+     "Profit if sold": "Listed total after the 5% cut, less the cost",
+     "Qty": "Units (or crafts) this row is about",
+     "Recipe known by": "The character who knows it, and their skill",
+     "Risk": "Gold this action spends ÷ all your gold. Amber above 25%",
+     "Seasonality Strength": "0–100: how predictable the weekly price pattern is, tested on a held-out week. Not how profitable it is. \"—\" = too little evidence",
+     "Sell each": "Expected sell price per unit at the sell slot",
+     "Sell slot": "When to sell: the peak hour the flip is for",
+     "Source": "Where the mats come from: Owned, AH, Mixed, + crafted (another character makes a reagent first)",
+     "Supply/Volume": "Days of supply: current supply ÷ sales per day. Not a time-to-sell guarantee",
+     "Time left": "The time left the AH shows for the auction",
+     "Total": "Each × quantity",
+     "Value each": "What one product is expected to sell for",
+     "When": "When it happened, in your local time",
+     "Where": "Bags, bank or mail. Auctions you have up are on On the AH",
+     "Why": "How far the peak's price is above the 30-day median",
+     "Worth": "What it is expected to bring under its plan: planned sales after fees and the chance they sell, other units at their hold value",
+     "ilvl": "Item level: sets the disenchant results"
+    },
+    "hidden": 0,
+    "rows": [
+     {
+      "chance": "100%",
+      "chance_note": "",
+      "confidence": 75,
+      "cooldown": "",
+      "crafter": "Brugan (Mining 120)",
+      "crafts": 50,
+      "days": "0.6 days",
+      "dot": "high",
+      "lines": ["buy 30 Copper Ore on the AH · 74s 40c", "post Wed 12:32"],
+      "mats_each": "1s 49c",
+      "mats_total": "74s 40c",
+      "note": "",
+      "product": "Copper Bar",
+      "profession": "Mining",
+      "profit": "+2g 50s 92c",
+      "profit_class": "pos",
+      "quality": 1,
+      "risk": "1.1%",
+      "risk_amber": false,
+      "sales": "198 est.",
+      "sort": {
+       "chance": 100,
+       "crafts": 50,
+       "days": 6,
+       "mats_total": 7440,
+       "profit": 25092,
+       "risk": 11,
+       "sales": 1979,
+       "supply": 120,
+       "value_each": 791
+      },
+      "source": "Plan",
+      "spell": 0,
+      "supply": "120",
+      "value_each": "7s 91c"
+     },
+     {
+      "chance": "25%",
+      "chance_note": "",
+      "confidence": 75,
+      "cooldown": "",
+      "crafter": "Brugan (Blacksmithing 112)",
+      "crafts": 5,
+      "days": "4.0 days",
+      "dot": "high",
+      "lines": ["buy 5 Copper Ore on the AH · 12s 40c", "craft 5 Copper Bar first", "post Wed 12:33"],
+      "mats_each": "2s 48c",
+      "mats_total": "12s 40c",
+      "note": "",
+      "product": "Copper Rod",
+      "profession": "Blacksmithing",
+      "profit": "+1g 27s 70c",
+      "profit_class": "pos",
+      "quality": 1,
+      "risk": "0.2%",
+      "risk_amber": false,
+      "sales": "20 est.",
+      "sort": {
+       "chance": 25,
+       "crafts": 5,
+       "days": 40,
+       "mats_total": 1240,
+       "profit": 12770,
+       "risk": 2,
+       "sales": 198,
+       "supply": 80,
+       "value_each": 2969
+      },
+      "source": "Plan",
+      "spell": 0,
+      "supply": "80",
+      "value_each": "29s 69c"
+     }
+    ]
+   }
+  },
+  "disenchant": {
+   "forever.pvp.horde.us": {
+    "help": {
+     "Action": "What to do: BUY, POST, DE (disenchant), CRAFT, VENDOR, MAIL or HOLD",
+     "Best selling windows": "The hours of the week it sells best (price × buyers), local time. \"early pattern\" = under 3 weeks of data",
+     "Buy": "Cheapest buyout on the AH now",
+     "Buy each": "Price to pay now, per unit (buy at or below it)",
+     "Buy total": "What the whole buy costs",
+     "Chance": "Chance it sells in its planned window. The dot is the confidence in that chance: green ≥ 75%, amber ≥ 45%, grey below. Hover a cell for the exact %",
+     "Character": "Which of your characters does it",
+     "Cooldown": "When the recipe can be used again",
+     "Cost each": "What it cost you per unit: what you paid, or the mats for a craft; 0 for items you found or held before tracking started",
+     "Cost total": "Cost each × quantity",
+     "Crafts": "How many to make: stops where one more would lose money",
+     "Current Supply": "Units on the AH now, in the newest scan",
+     "Deposit": "Deposit you paid to post; back on a sale, lost on expiry. \"—\" = its post was not captured",
+     "Detail": "The deposit, the post it resolved, what it cost or realized, or why the plan action was missed",
+     "EV": "Expected value of the mats: average results × their sell value",
+     "Each": "Per unit: the price you pay, or post at",
+     "Est. Sales/Day": "Units the market sells per day (last 7 days), with its source: AHF, or est. from order books in your scans. \"—\" = no sales data",
+     "Event": "What happened: posted, sold, expired, paid out, bought, crafted, disenchanted, mailed. \"—\" is a plan action with no event",
+     "Expected ROI": "Expected profit ÷ buy cost. Flips need at least 20%",
+     "Expected mats": "Average disenchant results for this quality and item level",
+     "Expected net": "What this action adds on average, after fees, deposits and the chance it sells. A chain counts it once, on its first action",
+     "Expected profit": "Average profit after fees and the chance it sells; owned mats count at their hold value",
+     "Item": "The item, in its quality colour. Click to open it on auctionhouse.fyi",
+     "Listed each": "Your buyout per unit",
+     "Listed total": "Listed each × quantity",
+     "Mats each": "Gold for mats you must buy, per craft. \"—\" = you own them all",
+     "Mats total": "Mats each × crafts",
+     "Paid each": "What you paid per unit, averaged across all your characters; 0 for items you found or held before tracking started",
+     "Paid total": "Paid each × quantity",
+     "Plan": "What this week's plan does with it",
+     "Plan action": "The plan action this event completed: done, partial, or missed and skipped ones",
+     "Position": "\"cheapest\" at or below the cheapest listing now; else who is cheaper, and at what price",
+     "Price": "Each, copper as the AH or vendor charged it; for Paid out, the gold taken from the mailbox",
+     "Price age": "How long ago the buy price was seen. Older prices are less likely to still be there",
+     "Product": "What the recipe makes",
+     "Profit": "EV − buy price, after fees",
+     "Profit if sold": "Listed total after the 5% cut, less the cost",
+     "Qty": "Units (or crafts) this row is about",
+     "Recipe known by": "The character who knows it, and their skill",
+     "Risk": "Gold this action spends ÷ all your gold. Amber above 25%",
+     "Seasonality Strength": "0–100: how predictable the weekly price pattern is, tested on a held-out week. Not how profitable it is. \"—\" = too little evidence",
+     "Sell each": "Expected sell price per unit at the sell slot",
+     "Sell slot": "When to sell: the peak hour the flip is for",
+     "Source": "Where the mats come from: Owned, AH, Mixed, + crafted (another character makes a reagent first)",
+     "Supply/Volume": "Days of supply: current supply ÷ sales per day. Not a time-to-sell guarantee",
+     "Time left": "The time left the AH shows for the auction",
+     "Total": "Each × quantity",
+     "Value each": "What one product is expected to sell for",
+     "When": "When it happened, in your local time",
+     "Where": "Bags, bank or mail. Auctions you have up are on On the AH",
+     "Why": "How far the peak's price is above the 30-day median",
+     "Worth": "What it is expected to bring under its plan: planned sales after fees and the chance they sell, other units at their hold value",
+     "ilvl": "Item level: sets the disenchant results"
+    },
+    "hidden": 0,
+    "rows": [
+     {
+      "buy": "8s",
+      "chance": "100%",
+      "chance_note": "",
+      "confidence": 75,
+      "days": "0.8 days",
+      "dot": "high",
+      "ev": "21s 13c",
+      "ilvl": 25,
+      "item": "Embossed Leather Gloves",
+      "key": 4239,
+      "mats": "3.8 Strange Dust · 0.3 10998 · 0.1 10978",
+      "price_age": "1 h",
+      "profit": "+13s 13c",
+      "profit_class": "pos",
+      "quality": 2,
+      "risk": "0.1%",
+      "risk_amber": false,
+      "sales": "501 est.",
+      "sort": {
+       "buy": 800,
+       "chance": 100,
+       "days": 8,
+       "ev": 2113,
+       "ilvl": 25,
+       "price_age": 3600000,
+       "profit": 1313,
+       "risk": 1,
+       "sales": 5012,
+       "supply": 400
+      },
+      "supply": "400"
+     }
+    ]
+   }
+  },
+  "flip": {
+   "forever.pvp.horde.us": {
+    "help": {
+     "Action": "What to do: BUY, POST, DE (disenchant), CRAFT, VENDOR, MAIL or HOLD",
+     "Best selling windows": "The hours of the week it sells best (price × buyers), local time. \"early pattern\" = under 3 weeks of data",
+     "Buy": "Cheapest buyout on the AH now",
+     "Buy each": "Price to pay now, per unit (buy at or below it)",
+     "Buy total": "What the whole buy costs",
+     "Chance": "Chance it sells in its planned window. The dot is the confidence in that chance: green ≥ 75%, amber ≥ 45%, grey below. Hover a cell for the exact %",
+     "Character": "Which of your characters does it",
+     "Cooldown": "When the recipe can be used again",
+     "Cost each": "What it cost you per unit: what you paid, or the mats for a craft; 0 for items you found or held before tracking started",
+     "Cost total": "Cost each × quantity",
+     "Crafts": "How many to make: stops where one more would lose money",
+     "Current Supply": "Units on the AH now, in the newest scan",
+     "Deposit": "Deposit you paid to post; back on a sale, lost on expiry. \"—\" = its post was not captured",
+     "Detail": "The deposit, the post it resolved, what it cost or realized, or why the plan action was missed",
+     "EV": "Expected value of the mats: average results × their sell value",
+     "Each": "Per unit: the price you pay, or post at",
+     "Est. Sales/Day": "Units the market sells per day (last 7 days), with its source: AHF, or est. from order books in your scans. \"—\" = no sales data",
+     "Event": "What happened: posted, sold, expired, paid out, bought, crafted, disenchanted, mailed. \"—\" is a plan action with no event",
+     "Expected ROI": "Expected profit ÷ buy cost. Flips need at least 20%",
+     "Expected mats": "Average disenchant results for this quality and item level",
+     "Expected net": "What this action adds on average, after fees, deposits and the chance it sells. A chain counts it once, on its first action",
+     "Expected profit": "Average profit after fees and the chance it sells; owned mats count at their hold value",
+     "Item": "The item, in its quality colour. Click to open it on auctionhouse.fyi",
+     "Listed each": "Your buyout per unit",
+     "Listed total": "Listed each × quantity",
+     "Mats each": "Gold for mats you must buy, per craft. \"—\" = you own them all",
+     "Mats total": "Mats each × crafts",
+     "Paid each": "What you paid per unit, averaged across all your characters; 0 for items you found or held before tracking started",
+     "Paid total": "Paid each × quantity",
+     "Plan": "What this week's plan does with it",
+     "Plan action": "The plan action this event completed: done, partial, or missed and skipped ones",
+     "Position": "\"cheapest\" at or below the cheapest listing now; else who is cheaper, and at what price",
+     "Price": "Each, copper as the AH or vendor charged it; for Paid out, the gold taken from the mailbox",
+     "Price age": "How long ago the buy price was seen. Older prices are less likely to still be there",
+     "Product": "What the recipe makes",
+     "Profit": "EV − buy price, after fees",
+     "Profit if sold": "Listed total after the 5% cut, less the cost",
+     "Qty": "Units (or crafts) this row is about",
+     "Recipe known by": "The character who knows it, and their skill",
+     "Risk": "Gold this action spends ÷ all your gold. Amber above 25%",
+     "Seasonality Strength": "0–100: how predictable the weekly price pattern is, tested on a held-out week. Not how profitable it is. \"—\" = too little evidence",
+     "Sell each": "Expected sell price per unit at the sell slot",
+     "Sell slot": "When to sell: the peak hour the flip is for",
+     "Source": "Where the mats come from: Owned, AH, Mixed, + crafted (another character makes a reagent first)",
+     "Supply/Volume": "Days of supply: current supply ÷ sales per day. Not a time-to-sell guarantee",
+     "Time left": "The time left the AH shows for the auction",
+     "Total": "Each × quantity",
+     "Value each": "What one product is expected to sell for",
+     "When": "When it happened, in your local time",
+     "Where": "Bags, bank or mail. Auctions you have up are on On the AH",
+     "Why": "How far the peak's price is above the 30-day median",
+     "Worth": "What it is expected to bring under its plan: planned sales after fees and the chance they sell, other units at their hold value",
+     "ilvl": "Item level: sets the disenchant results"
+    },
+    "hidden": 0,
+    "rows": [
+     {
+      "buy_each": "3s",
+      "buy_total": "60s",
+      "chance": "100%",
+      "chance_note": "",
+      "character": "Brugan",
+      "confidence": 75,
+      "days": "1.5 days",
+      "dot": "high",
+      "id": "forever.pvp.horde.us:1728477000000:14",
+      "item": "Wool Cloth",
+      "profit": "+1g 27s 91c",
+      "qty": 20,
+      "quality": 1,
+      "risk": "0.9%",
+      "risk_amber": false,
+      "roi": "213%",
+      "sales": "143 est.",
+      "seasonality": "37",
+      "sell_each": "9s 89c",
+      "sell_slot": "Wed 12:30",
+      "sort": {
+       "buy_total": 6000,
+       "chance": 100,
+       "days": 15,
+       "profit": 12791,
+       "qty": 20,
+       "risk": 9,
+       "roi": 213,
+       "sales": 1433,
+       "seasonality": 37,
+       "supply": 220
+      },
+      "supply": "220",
+      "why": "relist now, under the listings left"
+     }
+    ]
+   }
+  },
+  "history": {
+   "forever.pvp.horde.us": {
+    "rows": [],
+    "tiles": [
+     ["Sold (30 d)", "0 auctions", "0c after the cut"],
+     ["Expired (30 d)", "0 auctions", "0 cancelled"],
+     ["Deposits lost", "0c", "30 days"],
+     ["Plan actions", "0 done", "0 missed · 0 skipped"],
+     ["Realized profit", "0c", "0 payouts · after cost and deposit"]
+    ]
+   }
+  },
+  "inventory": {
+   "forever.pvp.horde.us": {
+    "details": {
+     "2318": {
+      "activity": [
+       ["Est. sales per day", "98 est. · 7 of 7 days covered"],
+       ["Current supply", "200 units"],
+       ["Supply/volume", "2.0 days"],
+       ["Volume confidence", "75%"],
+       ["Seasonality strength", "— · too little evidence"],
+       ["Newly listed per day", "49/day"],
+       ["Listing turnover (info only, not sales)", "169/day"]
+      ],
+      "answers": {
+       "best": "—",
+       "price": "Mon 00:00 · ×1.00",
+       "sales": "—"
+      },
+      "heat": {
+       "price": [
+        {
+         "cells": {
+          "first": "Mon 00:00 ×1.00 · 1 weeks",
+          "levels": "444444444444444444444444",
+          "titles_sha256": "92fd23660082dd1f95f13b609b9e3cc539c3283cbcc7e883fb1d44adc0dfa8aa"
+         },
+         "day": "Mon"
+        },
+        {
+         "cells": {
+          "first": "Tue 00:00 ×1.00 · 1 weeks",
+          "levels": "444444444444444444444433",
+          "titles_sha256": "61c9879d5d158dac6ffd27deeb9d2d0761db32c376ffbc718fa961cd02dd3fea"
+         },
+         "day": "Tue"
+        },
+        {
+         "cells": {
+          "first": "Wed 00:00 ×1.00 · 1 weeks",
+          "levels": "210000000000NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "90fd54207b60832c5b8b661f512bff3d38ce6ef4f6fe9b256e5d0d067d01de85"
+         },
+         "day": "Wed"
+        },
+        {
+         "cells": {
+          "first": "Thu 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "64715b93485689d20dc059316c53c330bf98c37dc1a60e84e1bb60aef444e7d1"
+         },
+         "day": "Thu"
+        },
+        {
+         "cells": {
+          "first": "Fri 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "352a2bf9deba8b7445c5c8df2010fd8fcdaf5f66349036963c16ddd8279d624e"
+         },
+         "day": "Fri"
+        },
+        {
+         "cells": {
+          "first": "Sat 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone444444444444",
+          "titles_sha256": "c22ea8f9a6257e3c95ecac3b42dc50af16c53bc2f5ddbd107041b9cf560bca3b"
+         },
+         "day": "Sat"
+        },
+        {
+         "cells": {
+          "first": "Sun 00:00 ×1.00 · 1 weeks",
+          "levels": "444444444444444444444444",
+          "titles_sha256": "53efa520bb0ca00ed53b25bd1acf5a3dc9dc24e9dd78a114948897b7637aef4e"
+         },
+         "day": "Sun"
+        }
+       ],
+       "sales": [
+        {
+         "cells": {
+          "first": "Mon 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "15a832748a9f267d0b9b15d048241e20d887b2cf2148ede6e5d9ea11bbdcf628"
+         },
+         "day": "Mon"
+        },
+        {
+         "cells": {
+          "first": "Tue 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "b7490fd929d5ce5fff28957be84984bd8f0177d87968d566d8d9208ab728dde2"
+         },
+         "day": "Tue"
+        },
+        {
+         "cells": {
+          "first": "Wed 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "ca38238eecfd65b425dd924837e62dec01db6a31148638ec73342736c4d42a52"
+         },
+         "day": "Wed"
+        },
+        {
+         "cells": {
+          "first": "Thu 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "64715b93485689d20dc059316c53c330bf98c37dc1a60e84e1bb60aef444e7d1"
+         },
+         "day": "Thu"
+        },
+        {
+         "cells": {
+          "first": "Fri 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "352a2bf9deba8b7445c5c8df2010fd8fcdaf5f66349036963c16ddd8279d624e"
+         },
+         "day": "Fri"
+        },
+        {
+         "cells": {
+          "first": "Sat 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "3313fa1a108274e255d81c840ac0d7d4678f52848ca6e4e479b01dd1f8faed36"
+         },
+         "day": "Sat"
+        },
+        {
+         "cells": {
+          "first": "Sun 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "ee4fa15bb92d51893f7d60d31b41401ea36de20e9f760ac10fbb4c6eeca4aabb"
+         },
+         "day": "Sun"
+        }
+       ],
+       "supply": [
+        {
+         "cells": {
+          "first": "Mon 00:00 ×1.0 · 1 weeks",
+          "levels": "334444444444444444444443",
+          "titles_sha256": "1441a5b920dc5bd383fd3a973287bcc1ccae93299c49984dd58fd8fadeaa1b62"
+         },
+         "day": "Mon"
+        },
+        {
+         "cells": {
+          "first": "Tue 00:00 ×1.0 · 1 weeks",
+          "levels": "322222222222222222222211",
+          "titles_sha256": "20aca2991ceead48fd99bed870d3a596c6a40a55d9d33cb98874ca27ab99d8f9"
+         },
+         "day": "Tue"
+        },
+        {
+         "cells": {
+          "first": "Wed 00:00 ×1.0 · 1 weeks",
+          "levels": "100000000000NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "5ebb14e0cc5bf949145d7fc6f8b4809f9722ecb6b04235914d32efd6c13836df"
+         },
+         "day": "Wed"
+        },
+        {
+         "cells": {
+          "first": "Thu 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "64715b93485689d20dc059316c53c330bf98c37dc1a60e84e1bb60aef444e7d1"
+         },
+         "day": "Thu"
+        },
+        {
+         "cells": {
+          "first": "Fri 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "352a2bf9deba8b7445c5c8df2010fd8fcdaf5f66349036963c16ddd8279d624e"
+         },
+         "day": "Fri"
+        },
+        {
+         "cells": {
+          "first": "Sat 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone444444444433",
+          "titles_sha256": "a703267c730a358817d34b082fee3ca633aa070a67a57cd3c74a192f985efd49"
+         },
+         "day": "Sat"
+        },
+        {
+         "cells": {
+          "first": "Sun 00:00 ×1.0 · 1 weeks",
+          "levels": "211111111111111111111122",
+          "titles_sha256": "2764b849fc4c8d41ae76d57f72366517635aa9456fa38eebaad9f20c40327bb1"
+         },
+         "day": "Sun"
+        }
+       ]
+      },
+      "name": "Light Leather",
+      "quality": 1,
+      "summary": "med30 1s 20c · trend −0.2%/day · 1 weeks of data",
+      "windows": []
+     },
+     "2589": {
+      "activity": [
+       ["Est. sales per day", "1183 est. · 7 of 7 days covered"],
+       ["Current supply", "320 units"],
+       ["Supply/volume", "0.3 days"],
+       ["Volume confidence", "75%"],
+       ["Seasonality strength", "38"],
+       ["Newly listed per day", "591/day"],
+       ["Listing turnover (info only, not sales)", "249/day"]
+      ],
+      "answers": {
+       "best": "Sat 16:00–22:00",
+       "price": "Sat 18:00 · ×1.24",
+       "sales": "—"
+      },
+      "heat": {
+       "price": [
+        {
+         "cells": {
+          "first": "Mon 00:00 ×0.99 · 6 weeks",
+          "levels": "110000001111111111111111",
+          "titles_sha256": "53f0b4dcab325f598702ac5c1a153519cb3e29e09167e9049f131a5d58d554b0"
+         },
+         "day": "Mon"
+        },
+        {
+         "cells": {
+          "first": "Tue 00:00 ×0.99 · 6 weeks",
+          "levels": "110000001111111111111111",
+          "titles_sha256": "1d65fe37f0cd218d040ef498011a6e11f0e7c966536f105f8c61eb46340b3aae"
+         },
+         "day": "Tue"
+        },
+        {
+         "cells": {
+          "first": "Wed 00:00 ×0.99 · 6 weeks",
+          "levels": "110000001111111111111111",
+          "titles_sha256": "05692fcf6e7061261b4e3d71eb5b40bfd65cad232bb84eea10c592d6298a9e29"
+         },
+         "day": "Wed"
+        },
+        {
+         "cells": {
+          "first": "Thu 00:00 ×0.99 · 6 weeks",
+          "levels": "110000001111111111111111",
+          "titles_sha256": "88b9b3edf643f6f42131181592c7ce0757dcfe8cd42925a77edfdbfceaef64b1"
+         },
+         "day": "Thu"
+        },
+        {
+         "cells": {
+          "first": "Fri 00:00 ×0.99 · 6 weeks",
+          "levels": "110000001111111111111111",
+          "titles_sha256": "6545dba101e0cc7cce1545fc9763ed4bc7cf1107492b7bb3d7361d84cbb761ac"
+         },
+         "day": "Fri"
+        },
+        {
+         "cells": {
+          "first": "Sat 00:00 ×0.99 · 6 weeks",
+          "levels": "110000001111111223443221",
+          "titles_sha256": "81f5038840ab31be9ef0900970e00a3001ae6f77cf4d2e23688fe36338570292"
+         },
+         "day": "Sat"
+        },
+        {
+         "cells": {
+          "first": "Sun 00:00 ×0.99 · 6 weeks",
+          "levels": "110000001111111111222221",
+          "titles_sha256": "e96a70b383b6e35b8e62c49e28a33e0775f31809bb1120ee246a9fe003bcd314"
+         },
+         "day": "Sun"
+        }
+       ],
+       "sales": [
+        {
+         "cells": {
+          "first": "Mon 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "15a832748a9f267d0b9b15d048241e20d887b2cf2148ede6e5d9ea11bbdcf628"
+         },
+         "day": "Mon"
+        },
+        {
+         "cells": {
+          "first": "Tue 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "b7490fd929d5ce5fff28957be84984bd8f0177d87968d566d8d9208ab728dde2"
+         },
+         "day": "Tue"
+        },
+        {
+         "cells": {
+          "first": "Wed 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "ca38238eecfd65b425dd924837e62dec01db6a31148638ec73342736c4d42a52"
+         },
+         "day": "Wed"
+        },
+        {
+         "cells": {
+          "first": "Thu 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "64715b93485689d20dc059316c53c330bf98c37dc1a60e84e1bb60aef444e7d1"
+         },
+         "day": "Thu"
+        },
+        {
+         "cells": {
+          "first": "Fri 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "352a2bf9deba8b7445c5c8df2010fd8fcdaf5f66349036963c16ddd8279d624e"
+         },
+         "day": "Fri"
+        },
+        {
+         "cells": {
+          "first": "Sat 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "3313fa1a108274e255d81c840ac0d7d4678f52848ca6e4e479b01dd1f8faed36"
+         },
+         "day": "Sat"
+        },
+        {
+         "cells": {
+          "first": "Sun 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "ee4fa15bb92d51893f7d60d31b41401ea36de20e9f760ac10fbb4c6eeca4aabb"
+         },
+         "day": "Sun"
+        }
+       ],
+       "supply": [
+        {
+         "cells": {
+          "first": "Mon 00:00 ×1.0 · 6 weeks",
+          "levels": "332322100002323332212233",
+          "titles_sha256": "b11b7cf83d412b6674ff9c41404df5dc1e1690181ea5d8fe61608da0727be510"
+         },
+         "day": "Mon"
+        },
+        {
+         "cells": {
+          "first": "Tue 00:00 ×1.0 · 6 weeks",
+          "levels": "443222121111122111001201",
+          "titles_sha256": "a170e02de541909cf1dc41fa77a16616efa31546deb648e0f538b792364c0b73"
+         },
+         "day": "Tue"
+        },
+        {
+         "cells": {
+          "first": "Wed 00:00 ×1.0 · 6 weeks",
+          "levels": "110111233221123332221120",
+          "titles_sha256": "ba5ca1a2e45e0350f9bdb370e08790c1a21fef635409206a61ab753e7e31f39b"
+         },
+         "day": "Wed"
+        },
+        {
+         "cells": {
+          "first": "Thu 00:00 ×1.0 · 6 weeks",
+          "levels": "011010011112212221211111",
+          "titles_sha256": "bf708b071855127b63c190c7a895fb3be50e7e5f86e241c1912fcb5b44baaec4"
+         },
+         "day": "Thu"
+        },
+        {
+         "cells": {
+          "first": "Fri 00:00 ×1.0 · 6 weeks",
+          "levels": "122333221111110011121112",
+          "titles_sha256": "b304a00b9fe2c065d3d8df2604261be7584972db45845ce76d65d0cb7cbafe75"
+         },
+         "day": "Fri"
+        },
+        {
+         "cells": {
+          "first": "Sat 00:00 ×1.0 · 6 weeks",
+          "levels": "222333332221111233333333",
+          "titles_sha256": "614b8f7bfc5b8cc4a93ba07f03ffedda9831652128f8dc451e05cb247ef805a2"
+         },
+         "day": "Sat"
+        },
+        {
+         "cells": {
+          "first": "Sun 00:00 ×1.0 · 6 weeks",
+          "levels": "432322222211111111222322",
+          "titles_sha256": "df8bb83bdc74a5d17d40d00920da0dca27690c4df9117a831c98fec4d9d1304b"
+         },
+         "day": "Sun"
+        }
+       ]
+      },
+      "name": "Linen Cloth",
+      "quality": 1,
+      "summary": "med30 50c · trend −0.2%/day · 6 weeks of data",
+      "windows": [
+       {
+        "strength": "established · 6 weeks",
+        "uplift": "+18% price",
+        "uplift_class": "pos",
+        "when": "Sat 16:00–22:00"
+       }
+      ]
+     },
+     "2770": {
+      "activity": [
+       ["Est. sales per day", "300 est. · 7 of 7 days covered"],
+       ["Current supply", "320 units"],
+       ["Supply/volume", "1.1 days"],
+       ["Volume confidence", "75%"],
+       ["Seasonality strength", "— · too little evidence"],
+       ["Newly listed per day", "150/day"],
+       ["Listing turnover (info only, not sales)", "231/day"]
+      ],
+      "answers": {
+       "best": "—",
+       "price": "Sun 02:00 · ×1.00",
+       "sales": "—"
+      },
+      "heat": {
+       "price": [
+        {
+         "cells": {
+          "first": "Mon 00:00 ×1.00 · 1 weeks",
+          "levels": "333333333333333333333322",
+          "titles_sha256": "92fd23660082dd1f95f13b609b9e3cc539c3283cbcc7e883fb1d44adc0dfa8aa"
+         },
+         "day": "Mon"
+        },
+        {
+         "cells": {
+          "first": "Tue 00:00 ×1.00 · 1 weeks",
+          "levels": "221111111111111111111111",
+          "titles_sha256": "4cddaad63e05381521d5525617f20b7e39cf5c75870e9dc5a86bfd3403a6dd5d"
+         },
+         "day": "Tue"
+        },
+        {
+         "cells": {
+          "first": "Wed 00:00 ×0.99 · 1 weeks",
+          "levels": "100000000000NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "bb6a4459744dd22af5cd74f101ce601318b5e3c36fe2de120d49ad3a713e2461"
+         },
+         "day": "Wed"
+        },
+        {
+         "cells": {
+          "first": "Thu 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "64715b93485689d20dc059316c53c330bf98c37dc1a60e84e1bb60aef444e7d1"
+         },
+         "day": "Thu"
+        },
+        {
+         "cells": {
+          "first": "Fri 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "352a2bf9deba8b7445c5c8df2010fd8fcdaf5f66349036963c16ddd8279d624e"
+         },
+         "day": "Fri"
+        },
+        {
+         "cells": {
+          "first": "Sat 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone111111111122",
+          "titles_sha256": "c22ea8f9a6257e3c95ecac3b42dc50af16c53bc2f5ddbd107041b9cf560bca3b"
+         },
+         "day": "Sat"
+        },
+        {
+         "cells": {
+          "first": "Sun 00:00 ×1.00 · 1 weeks",
+          "levels": "334444444444444444444443",
+          "titles_sha256": "53efa520bb0ca00ed53b25bd1acf5a3dc9dc24e9dd78a114948897b7637aef4e"
+         },
+         "day": "Sun"
+        }
+       ],
+       "sales": [
+        {
+         "cells": {
+          "first": "Mon 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "15a832748a9f267d0b9b15d048241e20d887b2cf2148ede6e5d9ea11bbdcf628"
+         },
+         "day": "Mon"
+        },
+        {
+         "cells": {
+          "first": "Tue 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "b7490fd929d5ce5fff28957be84984bd8f0177d87968d566d8d9208ab728dde2"
+         },
+         "day": "Tue"
+        },
+        {
+         "cells": {
+          "first": "Wed 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "ca38238eecfd65b425dd924837e62dec01db6a31148638ec73342736c4d42a52"
+         },
+         "day": "Wed"
+        },
+        {
+         "cells": {
+          "first": "Thu 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "64715b93485689d20dc059316c53c330bf98c37dc1a60e84e1bb60aef444e7d1"
+         },
+         "day": "Thu"
+        },
+        {
+         "cells": {
+          "first": "Fri 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "352a2bf9deba8b7445c5c8df2010fd8fcdaf5f66349036963c16ddd8279d624e"
+         },
+         "day": "Fri"
+        },
+        {
+         "cells": {
+          "first": "Sat 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "3313fa1a108274e255d81c840ac0d7d4678f52848ca6e4e479b01dd1f8faed36"
+         },
+         "day": "Sat"
+        },
+        {
+         "cells": {
+          "first": "Sun 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "ee4fa15bb92d51893f7d60d31b41401ea36de20e9f760ac10fbb4c6eeca4aabb"
+         },
+         "day": "Sun"
+        }
+       ],
+       "supply": [
+        {
+         "cells": {
+          "first": "Mon 00:00 ×1.0 · 1 weeks",
+          "levels": "433333333333333333333332",
+          "titles_sha256": "1441a5b920dc5bd383fd3a973287bcc1ccae93299c49984dd58fd8fadeaa1b62"
+         },
+         "day": "Mon"
+        },
+        {
+         "cells": {
+          "first": "Tue 00:00 ×1.0 · 1 weeks",
+          "levels": "211111111111111111111110",
+          "titles_sha256": "20aca2991ceead48fd99bed870d3a596c6a40a55d9d33cb98874ca27ab99d8f9"
+         },
+         "day": "Tue"
+        },
+        {
+         "cells": {
+          "first": "Wed 00:00 ×1.0 · 1 weeks",
+          "levels": "000000000000NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "5ebb14e0cc5bf949145d7fc6f8b4809f9722ecb6b04235914d32efd6c13836df"
+         },
+         "day": "Wed"
+        },
+        {
+         "cells": {
+          "first": "Thu 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "64715b93485689d20dc059316c53c330bf98c37dc1a60e84e1bb60aef444e7d1"
+         },
+         "day": "Thu"
+        },
+        {
+         "cells": {
+          "first": "Fri 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "352a2bf9deba8b7445c5c8df2010fd8fcdaf5f66349036963c16ddd8279d624e"
+         },
+         "day": "Fri"
+        },
+        {
+         "cells": {
+          "first": "Sat 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone000000000012",
+          "titles_sha256": "a703267c730a358817d34b082fee3ca633aa070a67a57cd3c74a192f985efd49"
+         },
+         "day": "Sat"
+        },
+        {
+         "cells": {
+          "first": "Sun 00:00 ×1.0 · 1 weeks",
+          "levels": "334444444444444444444444",
+          "titles_sha256": "2764b849fc4c8d41ae76d57f72366517635aa9456fa38eebaad9f20c40327bb1"
+         },
+         "day": "Sun"
+        }
+       ]
+      },
+      "name": "Copper Ore",
+      "quality": 1,
+      "summary": "med30 2s 50c · trend −0.2%/day · 1 weeks of data",
+      "windows": []
+     },
+     "2835": {
+      "activity": [
+       ["Est. sales per day", "152 est. · 7 of 7 days covered"],
+       ["Current supply", "400 units"],
+       ["Supply/volume", "2.6 days"],
+       ["Volume confidence", "75%"],
+       ["Seasonality strength", "— · too little evidence"],
+       ["Newly listed per day", "76/day"],
+       ["Listing turnover (info only, not sales)", "346/day"]
+      ],
+      "answers": {
+       "best": "—",
+       "price": "Mon 00:00 · ×1.00",
+       "sales": "—"
+      },
+      "heat": {
+       "price": [
+        {
+         "cells": {
+          "first": "Mon 00:00 ×1.00 · 1 weeks",
+          "levels": "222222222222222222222222",
+          "titles_sha256": "92fd23660082dd1f95f13b609b9e3cc539c3283cbcc7e883fb1d44adc0dfa8aa"
+         },
+         "day": "Mon"
+        },
+        {
+         "cells": {
+          "first": "Tue 00:00 ×1.00 · 1 weeks",
+          "levels": "222222222222222222222222",
+          "titles_sha256": "61c9879d5d158dac6ffd27deeb9d2d0761db32c376ffbc718fa961cd02dd3fea"
+         },
+         "day": "Tue"
+        },
+        {
+         "cells": {
+          "first": "Wed 00:00 ×1.00 · 1 weeks",
+          "levels": "222222222222NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "6bdbc7c65e10cd656e30f066c51dc779b33320bae3e0c5dbb06626e008a5b91b"
+         },
+         "day": "Wed"
+        },
+        {
+         "cells": {
+          "first": "Thu 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "64715b93485689d20dc059316c53c330bf98c37dc1a60e84e1bb60aef444e7d1"
+         },
+         "day": "Thu"
+        },
+        {
+         "cells": {
+          "first": "Fri 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "352a2bf9deba8b7445c5c8df2010fd8fcdaf5f66349036963c16ddd8279d624e"
+         },
+         "day": "Fri"
+        },
+        {
+         "cells": {
+          "first": "Sat 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone222222222222",
+          "titles_sha256": "c22ea8f9a6257e3c95ecac3b42dc50af16c53bc2f5ddbd107041b9cf560bca3b"
+         },
+         "day": "Sat"
+        },
+        {
+         "cells": {
+          "first": "Sun 00:00 ×1.00 · 1 weeks",
+          "levels": "222222222222222222222222",
+          "titles_sha256": "53efa520bb0ca00ed53b25bd1acf5a3dc9dc24e9dd78a114948897b7637aef4e"
+         },
+         "day": "Sun"
+        }
+       ],
+       "sales": [
+        {
+         "cells": {
+          "first": "Mon 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "15a832748a9f267d0b9b15d048241e20d887b2cf2148ede6e5d9ea11bbdcf628"
+         },
+         "day": "Mon"
+        },
+        {
+         "cells": {
+          "first": "Tue 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "b7490fd929d5ce5fff28957be84984bd8f0177d87968d566d8d9208ab728dde2"
+         },
+         "day": "Tue"
+        },
+        {
+         "cells": {
+          "first": "Wed 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "ca38238eecfd65b425dd924837e62dec01db6a31148638ec73342736c4d42a52"
+         },
+         "day": "Wed"
+        },
+        {
+         "cells": {
+          "first": "Thu 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "64715b93485689d20dc059316c53c330bf98c37dc1a60e84e1bb60aef444e7d1"
+         },
+         "day": "Thu"
+        },
+        {
+         "cells": {
+          "first": "Fri 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "352a2bf9deba8b7445c5c8df2010fd8fcdaf5f66349036963c16ddd8279d624e"
+         },
+         "day": "Fri"
+        },
+        {
+         "cells": {
+          "first": "Sat 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "3313fa1a108274e255d81c840ac0d7d4678f52848ca6e4e479b01dd1f8faed36"
+         },
+         "day": "Sat"
+        },
+        {
+         "cells": {
+          "first": "Sun 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "ee4fa15bb92d51893f7d60d31b41401ea36de20e9f760ac10fbb4c6eeca4aabb"
+         },
+         "day": "Sun"
+        }
+       ],
+       "supply": [
+        {
+         "cells": {
+          "first": "Mon 00:00 ×1.0 · 1 weeks",
+          "levels": "211111111111111111111111",
+          "titles_sha256": "1441a5b920dc5bd383fd3a973287bcc1ccae93299c49984dd58fd8fadeaa1b62"
+         },
+         "day": "Mon"
+        },
+        {
+         "cells": {
+          "first": "Tue 00:00 ×1.0 · 1 weeks",
+          "levels": "111111111111111111111111",
+          "titles_sha256": "20aca2991ceead48fd99bed870d3a596c6a40a55d9d33cb98874ca27ab99d8f9"
+         },
+         "day": "Tue"
+        },
+        {
+         "cells": {
+          "first": "Wed 00:00 ×1.0 · 1 weeks",
+          "levels": "111111111111NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "5ebb14e0cc5bf949145d7fc6f8b4809f9722ecb6b04235914d32efd6c13836df"
+         },
+         "day": "Wed"
+        },
+        {
+         "cells": {
+          "first": "Thu 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "64715b93485689d20dc059316c53c330bf98c37dc1a60e84e1bb60aef444e7d1"
+         },
+         "day": "Thu"
+        },
+        {
+         "cells": {
+          "first": "Fri 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "352a2bf9deba8b7445c5c8df2010fd8fcdaf5f66349036963c16ddd8279d624e"
+         },
+         "day": "Fri"
+        },
+        {
+         "cells": {
+          "first": "Sat 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone000000000012",
+          "titles_sha256": "a703267c730a358817d34b082fee3ca633aa070a67a57cd3c74a192f985efd49"
+         },
+         "day": "Sat"
+        },
+        {
+         "cells": {
+          "first": "Sun 00:00 ×1.0 · 1 weeks",
+          "levels": "234444444444444444444433",
+          "titles_sha256": "2764b849fc4c8d41ae76d57f72366517635aa9456fa38eebaad9f20c40327bb1"
+         },
+         "day": "Sun"
+        }
+       ]
+      },
+      "name": "Rough Stone",
+      "quality": 1,
+      "summary": "med30 30c · trend +0.0%/day · 1 weeks of data",
+      "windows": []
+     },
+     "2840": {
+      "activity": [
+       ["Est. sales per day", "198 est. · 7 of 7 days covered"],
+       ["Current supply", "120 units"],
+       ["Supply/volume", "0.6 days"],
+       ["Volume confidence", "75%"],
+       ["Seasonality strength", "41"],
+       ["Newly listed per day", "99/day"],
+       ["Listing turnover (info only, not sales)", "99/day"]
+      ],
+      "answers": {
+       "best": "—",
+       "price": "Mon 11:00 · ×1.01",
+       "sales": "—"
+      },
+      "heat": {
+       "price": [
+        {
+         "cells": {
+          "first": "Mon 00:00 ×0.99 · 6 weeks",
+          "levels": "322111123344444443434444",
+          "titles_sha256": "7a576f50513771a13f1458af5f2bdc18ee4ba205000cf785a16d7c3eb651d43c"
+         },
+         "day": "Mon"
+        },
+        {
+         "cells": {
+          "first": "Tue 00:00 ×1.00 · 6 weeks",
+          "levels": "332111123343334444433444",
+          "titles_sha256": "a7ed81c98fd84264d1134042b106d02826fe661a2127995f3c9dcaf40c03e908"
+         },
+         "day": "Tue"
+        },
+        {
+         "cells": {
+          "first": "Wed 00:00 ×0.99 · 6 weeks",
+          "levels": "322100112343333334444444",
+          "titles_sha256": "57ae186c421e12dde6fa1cf78ecbe1fddcd85b54b6d33b4a78ee3f7aa2ac5919"
+         },
+         "day": "Wed"
+        },
+        {
+         "cells": {
+          "first": "Thu 00:00 ×1.00 · 6 weeks",
+          "levels": "332100122344444443333444",
+          "titles_sha256": "02612697ffcaf72d69fbc51218160b4e5dcc425077b71b60c128ef3f56c849ae"
+         },
+         "day": "Thu"
+        },
+        {
+         "cells": {
+          "first": "Fri 00:00 ×0.99 · 6 weeks",
+          "levels": "322100122344444444444444",
+          "titles_sha256": "0c7293554a02f834e6668092f85beb3e5815148314d0dc52b7f834270c969618"
+         },
+         "day": "Fri"
+        },
+        {
+         "cells": {
+          "first": "Sat 00:00 ×1.00 · 6 weeks",
+          "levels": "322100122344444444444444",
+          "titles_sha256": "60266dd7d4913deb3675588c9a8adf64e188dbcb6eec0ee067ad6f686146a87b"
+         },
+         "day": "Sat"
+        },
+        {
+         "cells": {
+          "first": "Sun 00:00 ×1.00 · 6 weeks",
+          "levels": "332100112344444444443334",
+          "titles_sha256": "8a38a55a20380b48ed945e4d9251252efe4e5d545b8c756a021a5f63ca1aa0a6"
+         },
+         "day": "Sun"
+        }
+       ],
+       "sales": [
+        {
+         "cells": {
+          "first": "Mon 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "15a832748a9f267d0b9b15d048241e20d887b2cf2148ede6e5d9ea11bbdcf628"
+         },
+         "day": "Mon"
+        },
+        {
+         "cells": {
+          "first": "Tue 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "b7490fd929d5ce5fff28957be84984bd8f0177d87968d566d8d9208ab728dde2"
+         },
+         "day": "Tue"
+        },
+        {
+         "cells": {
+          "first": "Wed 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "ca38238eecfd65b425dd924837e62dec01db6a31148638ec73342736c4d42a52"
+         },
+         "day": "Wed"
+        },
+        {
+         "cells": {
+          "first": "Thu 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "64715b93485689d20dc059316c53c330bf98c37dc1a60e84e1bb60aef444e7d1"
+         },
+         "day": "Thu"
+        },
+        {
+         "cells": {
+          "first": "Fri 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "352a2bf9deba8b7445c5c8df2010fd8fcdaf5f66349036963c16ddd8279d624e"
+         },
+         "day": "Fri"
+        },
+        {
+         "cells": {
+          "first": "Sat 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "3313fa1a108274e255d81c840ac0d7d4678f52848ca6e4e479b01dd1f8faed36"
+         },
+         "day": "Sat"
+        },
+        {
+         "cells": {
+          "first": "Sun 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "ee4fa15bb92d51893f7d60d31b41401ea36de20e9f760ac10fbb4c6eeca4aabb"
+         },
+         "day": "Sun"
+        }
+       ],
+       "supply": [
+        {
+         "cells": {
+          "first": "Mon 00:00 ×1.0 · 6 weeks",
+          "levels": "221222222332222233222112",
+          "titles_sha256": "b11b7cf83d412b6674ff9c41404df5dc1e1690181ea5d8fe61608da0727be510"
+         },
+         "day": "Mon"
+        },
+        {
+         "cells": {
+          "first": "Tue 00:00 ×1.0 · 6 weeks",
+          "levels": "222222332332222121112222",
+          "titles_sha256": "a170e02de541909cf1dc41fa77a16616efa31546deb648e0f538b792364c0b73"
+         },
+         "day": "Tue"
+        },
+        {
+         "cells": {
+          "first": "Wed 00:00 ×1.0 · 6 weeks",
+          "levels": "322101122222234433221222",
+          "titles_sha256": "ba5ca1a2e45e0350f9bdb370e08790c1a21fef635409206a61ab753e7e31f39b"
+         },
+         "day": "Wed"
+        },
+        {
+         "cells": {
+          "first": "Thu 00:00 ×1.0 · 6 weeks",
+          "levels": "223333322222323222232333",
+          "titles_sha256": "bf708b071855127b63c190c7a895fb3be50e7e5f86e241c1912fcb5b44baaec4"
+         },
+         "day": "Thu"
+        },
+        {
+         "cells": {
+          "first": "Fri 00:00 ×1.0 · 6 weeks",
+          "levels": "333221222332333232212122",
+          "titles_sha256": "b304a00b9fe2c065d3d8df2604261be7584972db45845ce76d65d0cb7cbafe75"
+         },
+         "day": "Fri"
+        },
+        {
+         "cells": {
+          "first": "Sat 00:00 ×1.0 · 6 weeks",
+          "levels": "222212322221112222323223",
+          "titles_sha256": "614b8f7bfc5b8cc4a93ba07f03ffedda9831652128f8dc451e05cb247ef805a2"
+         },
+         "day": "Sat"
+        },
+        {
+         "cells": {
+          "first": "Sun 00:00 ×1.0 · 6 weeks",
+          "levels": "334321001111121111122332",
+          "titles_sha256": "df8bb83bdc74a5d17d40d00920da0dca27690c4df9117a831c98fec4d9d1304b"
+         },
+         "day": "Sun"
+        }
+       ]
+      },
+      "name": "Copper Bar",
+      "quality": 1,
+      "summary": "med30 7s 95c · trend −0.3%/day · 6 weeks of data",
+      "windows": []
+     },
+     "4239": {
+      "activity": [
+       ["Est. sales per day", "2 est. · 7 of 7 days covered"],
+       ["Current supply", "2 units"],
+       ["Supply/volume", "1.0 days"],
+       ["Volume confidence", "75%"],
+       ["Seasonality strength", "— · too little evidence"],
+       ["Newly listed per day", "1/day"],
+       ["Listing turnover (info only, not sales)", "0/day"]
+      ],
+      "answers": {
+       "best": "—",
+       "price": "Mon 02:00 · ×1.01",
+       "sales": "—"
+      },
+      "heat": {
+       "price": [
+        {
+         "cells": {
+          "first": "Mon 00:00 ×1.00 · 1 weeks",
+          "levels": "344444444444444444444432",
+          "titles_sha256": "8b29a6e7d12dc35c8b271515761874fdcb85771b7aec6e71215441819ee10f52"
+         },
+         "day": "Mon"
+        },
+        {
+         "cells": {
+          "first": "Tue 00:00 ×1.00 · 1 weeks",
+          "levels": "210000000000000000000001",
+          "titles_sha256": "61c9879d5d158dac6ffd27deeb9d2d0761db32c376ffbc718fa961cd02dd3fea"
+         },
+         "day": "Tue"
+        },
+        {
+         "cells": {
+          "first": "Wed 00:00 ×1.00 · 1 weeks",
+          "levels": "223333333333NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "6bdbc7c65e10cd656e30f066c51dc779b33320bae3e0c5dbb06626e008a5b91b"
+         },
+         "day": "Wed"
+        },
+        {
+         "cells": {
+          "first": "Thu 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "64715b93485689d20dc059316c53c330bf98c37dc1a60e84e1bb60aef444e7d1"
+         },
+         "day": "Thu"
+        },
+        {
+         "cells": {
+          "first": "Fri 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "352a2bf9deba8b7445c5c8df2010fd8fcdaf5f66349036963c16ddd8279d624e"
+         },
+         "day": "Fri"
+        },
+        {
+         "cells": {
+          "first": "Sat 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone000000000001",
+          "titles_sha256": "c22ea8f9a6257e3c95ecac3b42dc50af16c53bc2f5ddbd107041b9cf560bca3b"
+         },
+         "day": "Sat"
+        },
+        {
+         "cells": {
+          "first": "Sun 00:00 ×1.00 · 1 weeks",
+          "levels": "112222222222222222222222",
+          "titles_sha256": "53efa520bb0ca00ed53b25bd1acf5a3dc9dc24e9dd78a114948897b7637aef4e"
+         },
+         "day": "Sun"
+        }
+       ],
+       "sales": [
+        {
+         "cells": {
+          "first": "Mon 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "15a832748a9f267d0b9b15d048241e20d887b2cf2148ede6e5d9ea11bbdcf628"
+         },
+         "day": "Mon"
+        },
+        {
+         "cells": {
+          "first": "Tue 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "b7490fd929d5ce5fff28957be84984bd8f0177d87968d566d8d9208ab728dde2"
+         },
+         "day": "Tue"
+        },
+        {
+         "cells": {
+          "first": "Wed 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "ca38238eecfd65b425dd924837e62dec01db6a31148638ec73342736c4d42a52"
+         },
+         "day": "Wed"
+        },
+        {
+         "cells": {
+          "first": "Thu 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "64715b93485689d20dc059316c53c330bf98c37dc1a60e84e1bb60aef444e7d1"
+         },
+         "day": "Thu"
+        },
+        {
+         "cells": {
+          "first": "Fri 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "352a2bf9deba8b7445c5c8df2010fd8fcdaf5f66349036963c16ddd8279d624e"
+         },
+         "day": "Fri"
+        },
+        {
+         "cells": {
+          "first": "Sat 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "3313fa1a108274e255d81c840ac0d7d4678f52848ca6e4e479b01dd1f8faed36"
+         },
+         "day": "Sat"
+        },
+        {
+         "cells": {
+          "first": "Sun 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "ee4fa15bb92d51893f7d60d31b41401ea36de20e9f760ac10fbb4c6eeca4aabb"
+         },
+         "day": "Sun"
+        }
+       ],
+       "supply": [
+        {
+         "cells": {
+          "first": "Mon 00:00 ×1.0 · 1 weeks",
+          "levels": "222222222222222222222222",
+          "titles_sha256": "1441a5b920dc5bd383fd3a973287bcc1ccae93299c49984dd58fd8fadeaa1b62"
+         },
+         "day": "Mon"
+        },
+        {
+         "cells": {
+          "first": "Tue 00:00 ×1.0 · 1 weeks",
+          "levels": "222222222222222222222222",
+          "titles_sha256": "20aca2991ceead48fd99bed870d3a596c6a40a55d9d33cb98874ca27ab99d8f9"
+         },
+         "day": "Tue"
+        },
+        {
+         "cells": {
+          "first": "Wed 00:00 ×1.0 · 1 weeks",
+          "levels": "222222222222NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "5ebb14e0cc5bf949145d7fc6f8b4809f9722ecb6b04235914d32efd6c13836df"
+         },
+         "day": "Wed"
+        },
+        {
+         "cells": {
+          "first": "Thu 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "64715b93485689d20dc059316c53c330bf98c37dc1a60e84e1bb60aef444e7d1"
+         },
+         "day": "Thu"
+        },
+        {
+         "cells": {
+          "first": "Fri 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "352a2bf9deba8b7445c5c8df2010fd8fcdaf5f66349036963c16ddd8279d624e"
+         },
+         "day": "Fri"
+        },
+        {
+         "cells": {
+          "first": "Sat 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone222222222222",
+          "titles_sha256": "a703267c730a358817d34b082fee3ca633aa070a67a57cd3c74a192f985efd49"
+         },
+         "day": "Sat"
+        },
+        {
+         "cells": {
+          "first": "Sun 00:00 ×1.0 · 1 weeks",
+          "levels": "222222222222222222222222",
+          "titles_sha256": "2764b849fc4c8d41ae76d57f72366517635aa9456fa38eebaad9f20c40327bb1"
+         },
+         "day": "Sun"
+        }
+       ]
+      },
+      "name": "Embossed Leather Gloves",
+      "quality": 2,
+      "summary": "med30 14s 98c · trend +0.1%/day · 1 weeks of data",
+      "windows": []
+     },
+     "4306": {
+      "activity": [
+       ["Est. sales per day", "294 est. · 7 of 7 days covered"],
+       ["Current supply", "80 units"],
+       ["Supply/volume", "0.3 days"],
+       ["Volume confidence", "75%"],
+       ["Seasonality strength", "— · too little evidence"],
+       ["Newly listed per day", "147/day"],
+       ["Listing turnover (info only, not sales)", "46/day"]
+      ],
+      "answers": {
+       "best": "Wed 22:00–Sun 02:00",
+       "price": "Sat 02:00 · ×1.11",
+       "sales": "—"
+      },
+      "heat": {
+       "price": [
+        {
+         "cells": {
+          "first": "Mon 00:00 ×1.00 · 2 weeks",
+          "levels": "000000000000000000000000",
+          "titles_sha256": "26c54588fad331ae611b9d4b57caabaea049b16be7e9f15d771207f533f6be55"
+         },
+         "day": "Mon"
+        },
+        {
+         "cells": {
+          "first": "Tue 00:00 ×1.00 · 2 weeks",
+          "levels": "000000000000000000000000",
+          "titles_sha256": "62cc4bacc8279d2863c8a67b1f8919831948a62be8dc4cf861953cf9eb2974f4"
+         },
+         "day": "Tue"
+        },
+        {
+         "cells": {
+          "first": "Wed 00:00 ×1.00 · 2 weeks",
+          "levels": "000000000000000000000000",
+          "titles_sha256": "d34d8f9b0de89c05357eab051d26bff9b7ed0b51d9d3b4a6b8c1cb7cd2bbb375"
+         },
+         "day": "Wed"
+        },
+        {
+         "cells": {
+          "first": "Thu 00:00 ×1.00 · 1 weeks",
+          "levels": "000000000000000000000000",
+          "titles_sha256": "e27a59611548b4cb649eef023a4ba08906547e7f11586048ecdc4ee15bc598f1"
+         },
+         "day": "Thu"
+        },
+        {
+         "cells": {
+          "first": "Fri 00:00 ×1.00 · 1 weeks",
+          "levels": "000000000000000000000012",
+          "titles_sha256": "4b2d2a2cbb56ecba9f1589baf6e1a627cb02c41b2f8574cac079367150225a2e"
+         },
+         "day": "Fri"
+        },
+        {
+         "cells": {
+          "first": "Sat 00:00 ×1.07 · 1 weeks",
+          "levels": "334444444444444444444432",
+          "titles_sha256": "2bde92b7bc24604ead9d4e7a95ca4e850dbc26d661ff81b5bc737d88d04fc86b"
+         },
+         "day": "Sat"
+        },
+        {
+         "cells": {
+          "first": "Sun 00:00 ×1.04 · 1 weeks",
+          "levels": "210000000000000000000000",
+          "titles_sha256": "b0b1b2504d2ef75dc4f14d55d4b0b6bdbe6d4881754c9ee3d8ac700d75f3d4db"
+         },
+         "day": "Sun"
+        }
+       ],
+       "sales": [
+        {
+         "cells": {
+          "first": "Mon 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "15a832748a9f267d0b9b15d048241e20d887b2cf2148ede6e5d9ea11bbdcf628"
+         },
+         "day": "Mon"
+        },
+        {
+         "cells": {
+          "first": "Tue 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "b7490fd929d5ce5fff28957be84984bd8f0177d87968d566d8d9208ab728dde2"
+         },
+         "day": "Tue"
+        },
+        {
+         "cells": {
+          "first": "Wed 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "ca38238eecfd65b425dd924837e62dec01db6a31148638ec73342736c4d42a52"
+         },
+         "day": "Wed"
+        },
+        {
+         "cells": {
+          "first": "Thu 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "64715b93485689d20dc059316c53c330bf98c37dc1a60e84e1bb60aef444e7d1"
+         },
+         "day": "Thu"
+        },
+        {
+         "cells": {
+          "first": "Fri 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "352a2bf9deba8b7445c5c8df2010fd8fcdaf5f66349036963c16ddd8279d624e"
+         },
+         "day": "Fri"
+        },
+        {
+         "cells": {
+          "first": "Sat 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "3313fa1a108274e255d81c840ac0d7d4678f52848ca6e4e479b01dd1f8faed36"
+         },
+         "day": "Sat"
+        },
+        {
+         "cells": {
+          "first": "Sun 00:00 no data",
+          "levels": "NoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNoneNone",
+          "titles_sha256": "ee4fa15bb92d51893f7d60d31b41401ea36de20e9f760ac10fbb4c6eeca4aabb"
+         },
+         "day": "Sun"
+        }
+       ],
+       "supply": [
+        {
+         "cells": {
+          "first": "Mon 00:00 ×1.0 · 2 weeks",
+          "levels": "000000000000000000000001",
+          "titles_sha256": "10416f373f9b714435138ba38c46d15abf3dd337a365a1fd2cdcab363f336476"
+         },
+         "day": "Mon"
+        },
+        {
+         "cells": {
+          "first": "Tue 00:00 ×1.0 · 2 weeks",
+          "levels": "122222222222222222222222",
+          "titles_sha256": "583f008fe36ed0878ca71d6d6d0263858cccb3ac6beeb811eafe37da51aeb9c0"
+         },
+         "day": "Tue"
+        },
+        {
+         "cells": {
+          "first": "Wed 00:00 ×1.0 · 2 weeks",
+          "levels": "111111111111111111111111",
+          "titles_sha256": "c91f1532f28d420e4fc1b21321b2af76e06f8582d91d6b941b52afcf8f77df00"
+         },
+         "day": "Wed"
+        },
+        {
+         "cells": {
+          "first": "Thu 00:00 ×1.0 · 1 weeks",
+          "levels": "111111111111111111111111",
+          "titles_sha256": "0e33557560d525ab276926bd254cf256df9c2cbb7d7cd4aa4f48784985e15872"
+         },
+         "day": "Thu"
+        },
+        {
+         "cells": {
+          "first": "Fri 00:00 ×1.0 · 1 weeks",
+          "levels": "111111111111111111111122",
+          "titles_sha256": "44c5c559a0f741bce7ddf863337d4912efa330d063e7dab7c0ce47d893cb05b9"
+         },
+         "day": "Fri"
+        },
+        {
+         "cells": {
+          "first": "Sat 00:00 ×1.0 · 1 weeks",
+          "levels": "334444444444444444444432",
+          "titles_sha256": "226baf928ece91527852ea8e0887a6a0c6d2dac120187ccb8d6ea048f9bf813c"
+         },
+         "day": "Sat"
+        },
+        {
+         "cells": {
+          "first": "Sun 00:00 ×1.0 · 1 weeks",
+          "levels": "210000000000000000000000",
+          "titles_sha256": "7317f3b0745be9354a3dca8ceabc8d69ec16d4fe61912decf3380ff4ded303b6"
+         },
+         "day": "Sun"
+        }
+       ]
+      },
+      "name": "Silk Cloth",
+      "quality": 1,
+      "summary": "med30 20s 1c · trend −0.2%/day · 2 weeks of data",
+      "windows": [
+       {
+        "strength": "early pattern · 1 weeks",
+        "uplift": "+4% price",
+        "uplift_class": "pos",
+        "when": "Wed 22:00–Sun 02:00"
+       }
+      ]
+     }
+    },
+    "help": {
+     "Action": "What to do: BUY, POST, DE (disenchant), CRAFT, VENDOR, MAIL or HOLD",
+     "Best selling windows": "The hours of the week it sells best (price × buyers), local time. \"early pattern\" = under 3 weeks of data",
+     "Buy": "Cheapest buyout on the AH now",
+     "Buy each": "Price to pay now, per unit (buy at or below it)",
+     "Buy total": "What the whole buy costs",
+     "Chance": "Chance it sells in its planned window. The dot is the confidence in that chance: green ≥ 75%, amber ≥ 45%, grey below. Hover a cell for the exact %",
+     "Character": "Which of your characters does it",
+     "Cooldown": "When the recipe can be used again",
+     "Cost each": "What it cost you per unit: what you paid, or the mats for a craft; 0 for items you found or held before tracking started",
+     "Cost total": "Cost each × quantity",
+     "Crafts": "How many to make: stops where one more would lose money",
+     "Current Supply": "Units on the AH now, in the newest scan",
+     "Deposit": "Deposit you paid to post; back on a sale, lost on expiry. \"—\" = its post was not captured",
+     "Detail": "The deposit, the post it resolved, what it cost or realized, or why the plan action was missed",
+     "EV": "Expected value of the mats: average results × their sell value",
+     "Each": "Per unit: the price you pay, or post at",
+     "Est. Sales/Day": "Units the market sells per day (last 7 days), with its source: AHF, or est. from order books in your scans. \"—\" = no sales data",
+     "Event": "What happened: posted, sold, expired, paid out, bought, crafted, disenchanted, mailed. \"—\" is a plan action with no event",
+     "Expected ROI": "Expected profit ÷ buy cost. Flips need at least 20%",
+     "Expected mats": "Average disenchant results for this quality and item level",
+     "Expected net": "What this action adds on average, after fees, deposits and the chance it sells. A chain counts it once, on its first action",
+     "Expected profit": "Average profit after fees and the chance it sells; owned mats count at their hold value",
+     "Item": "The item, in its quality colour. Click to open it on auctionhouse.fyi",
+     "Listed each": "Your buyout per unit",
+     "Listed total": "Listed each × quantity",
+     "Mats each": "Gold for mats you must buy, per craft. \"—\" = you own them all",
+     "Mats total": "Mats each × crafts",
+     "Paid each": "What you paid per unit, averaged across all your characters; 0 for items you found or held before tracking started",
+     "Paid total": "Paid each × quantity",
+     "Plan": "What this week's plan does with it",
+     "Plan action": "The plan action this event completed: done, partial, or missed and skipped ones",
+     "Position": "\"cheapest\" at or below the cheapest listing now; else who is cheaper, and at what price",
+     "Price": "Each, copper as the AH or vendor charged it; for Paid out, the gold taken from the mailbox",
+     "Price age": "How long ago the buy price was seen. Older prices are less likely to still be there",
+     "Product": "What the recipe makes",
+     "Profit": "EV − buy price, after fees",
+     "Profit if sold": "Listed total after the 5% cut, less the cost",
+     "Qty": "Units (or crafts) this row is about",
+     "Recipe known by": "The character who knows it, and their skill",
+     "Risk": "Gold this action spends ÷ all your gold. Amber above 25%",
+     "Seasonality Strength": "0–100: how predictable the weekly price pattern is, tested on a held-out week. Not how profitable it is. \"—\" = too little evidence",
+     "Sell each": "Expected sell price per unit at the sell slot",
+     "Sell slot": "When to sell: the peak hour the flip is for",
+     "Source": "Where the mats come from: Owned, AH, Mixed, + crafted (another character makes a reagent first)",
+     "Supply/Volume": "Days of supply: current supply ÷ sales per day. Not a time-to-sell guarantee",
+     "Time left": "The time left the AH shows for the auction",
+     "Total": "Each × quantity",
+     "Value each": "What one product is expected to sell for",
+     "When": "When it happened, in your local time",
+     "Where": "Bags, bank or mail. Auctions you have up are on On the AH",
+     "Why": "How far the peak's price is above the 30-day median",
+     "Worth": "What it is expected to bring under its plan: planned sales after fees and the chance they sell, other units at their hold value",
+     "ilvl": "Item level: sets the disenchant results"
+    },
+    "rows": [
+     {
+      "chance": "100%",
+      "chance_note": "",
+      "char_id": "Amaya-Grommash",
+      "character": "Amaya",
+      "confidence": 75,
+      "days": "0.3 days",
+      "dot": "high",
+      "item": "Silk Cloth",
+      "key": "4306",
+      "paid_each": "0c",
+      "paid_note": "before tracking",
+      "paid_total": "0c",
+      "plan": "Post now at 20s 40c",
+      "plan_kind": "post",
+      "qty": 40,
+      "quality": 1,
+      "sales": "294 est.",
+      "sort": {
+       "chance": 100,
+       "days": 3,
+       "paid": 0,
+       "qty": 40,
+       "sales": 2938,
+       "supply": 80,
+       "worth": 77520
+      },
+      "supply": "80",
+      "where": "bags",
+      "windows": "Wed 22–Sun 02 (early pattern)",
+      "worth": "7g 75s 20c"
+     },
+     {
+      "chance": "100%",
+      "chance_note": "",
+      "char_id": "Amaya-Grommash",
+      "character": "Amaya",
+      "confidence": 75,
+      "days": "0.3 days",
+      "dot": "high",
+      "item": "Linen Cloth",
+      "key": "2589",
+      "paid_each": "0c",
+      "paid_note": "before tracking",
+      "paid_total": "0c",
+      "plan": "Post 40 now at 49c · Post 160 Sat 10:00 at 62c (18:00 peak)",
+      "plan_kind": "post",
+      "qty": 120,
+      "quality": 1,
+      "sales": "1183 est.",
+      "sort": {
+       "chance": 100,
+       "days": 3,
+       "paid": 0,
+       "qty": 120,
+       "sales": 11825,
+       "supply": 320,
+       "worth": 6772
+      },
+      "supply": "320",
+      "where": "bags",
+      "windows": "Sat 16–22",
+      "worth": "67s 72c"
+     },
+     {
+      "chance": "—",
+      "chance_note": "",
+      "char_id": "Brugan-Grommash",
+      "character": "Brugan",
+      "confidence": null,
+      "days": "1.1 days",
+      "dot": null,
+      "item": "Copper Ore",
+      "key": "2770",
+      "paid_each": "0c",
+      "paid_note": "before tracking",
+      "paid_total": "0c",
+      "plan": "For crafting Copper Bar",
+      "plan_kind": "craft",
+      "qty": 20,
+      "quality": 1,
+      "sales": "300 est.",
+      "sort": {
+       "chance": -1,
+       "days": 11,
+       "paid": 0,
+       "qty": 20,
+       "sales": 3002,
+       "supply": 320,
+       "worth": 4693
+      },
+      "supply": "320",
+      "where": "bags",
+      "windows": "—",
+      "worth": "46s 93c"
+     },
+     {
+      "chance": "100%",
+      "chance_note": "",
+      "char_id": "Amaya-Grommash",
+      "character": "Amaya",
+      "confidence": 75,
+      "days": "0.3 days",
+      "dot": "high",
+      "item": "Linen Cloth",
+      "key": "2589",
+      "paid_each": "0c",
+      "paid_note": "before tracking",
+      "paid_total": "0c",
+      "plan": "Post 40 now at 49c · Post 160 Sat 10:00 at 62c (18:00 peak)",
+      "plan_kind": "post",
+      "qty": 80,
+      "quality": 1,
+      "sales": "1183 est.",
+      "sort": {
+       "chance": 100,
+       "days": 3,
+       "paid": 0,
+       "qty": 80,
+       "sales": 11825,
+       "supply": 320,
+       "worth": 4514
+      },
+      "supply": "320",
+      "where": "bank",
+      "windows": "Sat 16–22",
+      "worth": "45s 14c"
+     },
+     {
+      "chance": "—",
+      "chance_note": "",
+      "char_id": "Brugan-Grommash",
+      "character": "Brugan",
+      "confidence": null,
+      "days": "0.6 days",
+      "dot": null,
+      "item": "Copper Bar",
+      "key": "2840",
+      "paid_each": "0c",
+      "paid_note": "before tracking",
+      "paid_total": "0c",
+      "plan": "Hold for a later week",
+      "plan_kind": "hold",
+      "qty": 4,
+      "quality": 1,
+      "sales": "198 est.",
+      "sort": {
+       "chance": -1,
+       "days": 6,
+       "paid": 0,
+       "qty": 4,
+       "sales": 1979,
+       "supply": 120,
+       "worth": 3006
+      },
+      "supply": "120",
+      "where": "bags",
+      "windows": "—",
+      "worth": "30s 6c"
+     },
+     {
+      "chance": "82%",
+      "chance_note": "",
+      "char_id": "Amaya-Grommash",
+      "character": "Amaya",
+      "confidence": 75,
+      "days": "2.0 days",
+      "dot": "high",
+      "item": "Light Leather",
+      "key": "2318",
+      "paid_each": "0c",
+      "paid_note": "before tracking",
+      "paid_total": "0c",
+      "plan": "Post now at 1s 18c",
+      "plan_kind": "post",
+      "qty": 30,
+      "quality": 1,
+      "sales": "98 est.",
+      "sort": {
+       "chance": 82,
+       "days": 20,
+       "paid": 0,
+       "qty": 30,
+       "sales": 978,
+       "supply": 200,
+       "worth": 2827
+      },
+      "supply": "200",
+      "where": "bags",
+      "windows": "—",
+      "worth": "28s 27c"
+     },
+     {
+      "chance": "—",
+      "chance_note": "",
+      "char_id": "Amaya-Grommash",
+      "character": "Amaya",
+      "confidence": null,
+      "days": "1.0 days",
+      "dot": null,
+      "item": "Embossed Leather Gloves",
+      "key": "4239",
+      "paid_each": "0c",
+      "paid_note": "before tracking",
+      "paid_total": "0c",
+      "plan": "Disenchant",
+      "plan_kind": "de",
+      "qty": 1,
+      "quality": 2,
+      "sales": "2 est.",
+      "sort": {
+       "chance": -1,
+       "days": 10,
+       "paid": 0,
+       "qty": 1,
+       "sales": 20,
+       "supply": 2,
+       "worth": 2113
+      },
+      "supply": "2",
+      "where": "bags",
+      "windows": "—",
+      "worth": "21s 13c"
+     },
+     {
+      "chance": "95%",
+      "chance_note": "",
+      "char_id": "Brugan-Grommash",
+      "character": "Brugan",
+      "confidence": 75,
+      "days": "2.6 days",
+      "dot": "high",
+      "item": "Rough Stone",
+      "key": "2835",
+      "paid_each": "0c",
+      "paid_note": "before tracking",
+      "paid_total": "0c",
+      "plan": "Post now at 29c",
+      "plan_kind": "post",
+      "qty": 40,
+      "quality": 1,
+      "sales": "152 est.",
+      "sort": {
+       "chance": 95,
+       "days": 26,
+       "paid": 0,
+       "qty": 40,
+       "sales": 1525,
+       "supply": 400,
+       "worth": 1056
+      },
+      "supply": "400",
+      "where": "bags",
+      "windows": "—",
+      "worth": "10s 56c"
+     }
+    ],
+    "tiles": [
+     ["Worth", "10g 25s", "under each item's plan"],
+     ["Paid", "0c", "found items and items from before tracking count as 0"],
+     ["Not planned", "0 items", "bound or ignored"]
+    ]
+   }
+  },
+  "on_ah": {
+   "forever.pvp.horde.us": {
+    "help": {
+     "Action": "What to do: BUY, POST, DE (disenchant), CRAFT, VENDOR, MAIL or HOLD",
+     "Best selling windows": "The hours of the week it sells best (price × buyers), local time. \"early pattern\" = under 3 weeks of data",
+     "Buy": "Cheapest buyout on the AH now",
+     "Buy each": "Price to pay now, per unit (buy at or below it)",
+     "Buy total": "What the whole buy costs",
+     "Chance": "Chance it sells in its planned window. The dot is the confidence in that chance: green ≥ 75%, amber ≥ 45%, grey below. Hover a cell for the exact %",
+     "Character": "Which of your characters does it",
+     "Cooldown": "When the recipe can be used again",
+     "Cost each": "What it cost you per unit: what you paid, or the mats for a craft; 0 for items you found or held before tracking started",
+     "Cost total": "Cost each × quantity",
+     "Crafts": "How many to make: stops where one more would lose money",
+     "Current Supply": "Units on the AH now, in the newest scan",
+     "Deposit": "Deposit you paid to post; back on a sale, lost on expiry. \"—\" = its post was not captured",
+     "Detail": "The deposit, the post it resolved, what it cost or realized, or why the plan action was missed",
+     "EV": "Expected value of the mats: average results × their sell value",
+     "Each": "Per unit: the price you pay, or post at",
+     "Est. Sales/Day": "Units the market sells per day (last 7 days), with its source: AHF, or est. from order books in your scans. \"—\" = no sales data",
+     "Event": "What happened: posted, sold, expired, paid out, bought, crafted, disenchanted, mailed. \"—\" is a plan action with no event",
+     "Expected ROI": "Expected profit ÷ buy cost. Flips need at least 20%",
+     "Expected mats": "Average disenchant results for this quality and item level",
+     "Expected net": "What this action adds on average, after fees, deposits and the chance it sells. A chain counts it once, on its first action",
+     "Expected profit": "Average profit after fees and the chance it sells; owned mats count at their hold value",
+     "Item": "The item, in its quality colour. Click to open it on auctionhouse.fyi",
+     "Listed each": "Your buyout per unit",
+     "Listed total": "Listed each × quantity",
+     "Mats each": "Gold for mats you must buy, per craft. \"—\" = you own them all",
+     "Mats total": "Mats each × crafts",
+     "Paid each": "What you paid per unit, averaged across all your characters; 0 for items you found or held before tracking started",
+     "Paid total": "Paid each × quantity",
+     "Plan": "What this week's plan does with it",
+     "Plan action": "The plan action this event completed: done, partial, or missed and skipped ones",
+     "Position": "\"cheapest\" at or below the cheapest listing now; else who is cheaper, and at what price",
+     "Price": "Each, copper as the AH or vendor charged it; for Paid out, the gold taken from the mailbox",
+     "Price age": "How long ago the buy price was seen. Older prices are less likely to still be there",
+     "Product": "What the recipe makes",
+     "Profit": "EV − buy price, after fees",
+     "Profit if sold": "Listed total after the 5% cut, less the cost",
+     "Qty": "Units (or crafts) this row is about",
+     "Recipe known by": "The character who knows it, and their skill",
+     "Risk": "Gold this action spends ÷ all your gold. Amber above 25%",
+     "Seasonality Strength": "0–100: how predictable the weekly price pattern is, tested on a held-out week. Not how profitable it is. \"—\" = too little evidence",
+     "Sell each": "Expected sell price per unit at the sell slot",
+     "Sell slot": "When to sell: the peak hour the flip is for",
+     "Source": "Where the mats come from: Owned, AH, Mixed, + crafted (another character makes a reagent first)",
+     "Supply/Volume": "Days of supply: current supply ÷ sales per day. Not a time-to-sell guarantee",
+     "Time left": "The time left the AH shows for the auction",
+     "Total": "Each × quantity",
+     "Value each": "What one product is expected to sell for",
+     "When": "When it happened, in your local time",
+     "Where": "Bags, bank or mail. Auctions you have up are on On the AH",
+     "Why": "How far the peak's price is above the 30-day median",
+     "Worth": "What it is expected to bring under its plan: planned sales after fees and the chance they sell, other units at their hold value",
+     "ilvl": "Item level: sets the disenchant results"
+    },
+    "rows": [
+     {
+      "chance": "0%",
+      "chance_note": "",
+      "character": "Brugan",
+      "confidence": 75,
+      "cost_each": "0c",
+      "cost_note": "before tracking",
+      "cost_total": "0c",
+      "days": "2.6 days",
+      "deposit": "—",
+      "dot": "high",
+      "item": "Rough Stone",
+      "key": "2835",
+      "listed_each": "30c",
+      "listed_total": "6s",
+      "position": "cheapest",
+      "position_class": "pos",
+      "profit": "+5s 70c",
+      "profit_class": "pos",
+      "qty": 20,
+      "quality": 1,
+      "sales": "152 est.",
+      "sort": {
+       "band": 1728513000000,
+       "chance": 0,
+       "cost": 0,
+       "listed": 600,
+       "profit": 570,
+       "qty": 20
+      },
+      "supply": "400",
+      "time_left": "ends in 10 h"
+     }
+    ],
+    "tiles": [
+     ["Listed value", "6s", "1 auctions · 1 characters"],
+     ["Cost to you", "0c", "bought + crafted; found items 0"],
+     ["Profit if all sell", "+5s 70c", "after the 5% cut"],
+     ["Deposits at stake", "0c", "lost only if they expire"]
+    ]
+   }
+  },
+  "rules": {
+   "forever.pvp.horde.us": {
+    "blacklist": [],
+    "decisions": [],
+    "kept": []
+   }
+  },
+  "today": {
+   "forever.pvp.horde.us": {
+    "by_min": {
+     "0": {
+      "decisions": [],
+      "hidden": 0,
+      "rows": [
+       {
+        "action": "post",
+        "chance": "100%",
+        "chance_note": "",
+        "character": "Amaya",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "0.3 days",
+        "dot": "high",
+        "each": "20s 40c",
+        "id": "forever.pvp.horde.us:1728477000000:10",
+        "item": "Silk Cloth",
+        "net": "+7g 75s 20c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 40,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "294 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 100,
+         "days": 3,
+         "net": 77520,
+         "risk": 0,
+         "sales": 2938,
+         "supply": 80
+        },
+        "status": "pending",
+        "supply": "80",
+        "time": "12:30",
+        "total": "8g 16s"
+       },
+       {
+        "action": "craft",
+        "chance": "99%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "0.6 days",
+        "dot": "high",
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:1",
+        "item": "Copper Bar",
+        "net": "+2g 50s 92c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 50,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "198 est.",
+        "sort": {
+         "at": 1728477060000,
+         "chance": 99,
+         "days": 6,
+         "net": 25092,
+         "risk": 0,
+         "sales": 1979,
+         "supply": 120
+        },
+        "status": "pending",
+        "supply": "120",
+        "time": "12:31",
+        "total": "—"
+       },
+       {
+        "action": "buy",
+        "chance": "100%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "1.5 days",
+        "dot": "high",
+        "each": "3s",
+        "id": "forever.pvp.horde.us:1728477000000:14",
+        "item": "Wool Cloth",
+        "net": "+1g 27s 91c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 20,
+        "quality": 1,
+        "record": "",
+        "risk": "0.9%",
+        "risk_amber": false,
+        "sales": "143 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 100,
+         "days": 15,
+         "net": 12791,
+         "risk": 9,
+         "sales": 1433,
+         "supply": 220
+        },
+        "status": "pending",
+        "supply": "220",
+        "time": "12:30",
+        "total": "60s"
+       },
+       {
+        "action": "craft",
+        "chance": "99%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "4.0 days",
+        "dot": "high",
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:5",
+        "item": "Copper Rod",
+        "net": "+1g 27s 70c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 5,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "20 est.",
+        "sort": {
+         "at": 1728477120000,
+         "chance": 99,
+         "days": 40,
+         "net": 12770,
+         "risk": 0,
+         "sales": 198,
+         "supply": 80
+        },
+        "status": "pending",
+        "supply": "80",
+        "time": "12:32",
+        "total": "—"
+       },
+       {
+        "action": "post",
+        "chance": "82%",
+        "chance_note": "",
+        "character": "Amaya",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "2.0 days",
+        "dot": "high",
+        "each": "1s 18c",
+        "id": "forever.pvp.horde.us:1728477000000:7",
+        "item": "Light Leather",
+        "net": "+28s 27c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 30,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "98 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 82,
+         "days": 20,
+         "net": 2827,
+         "risk": 0,
+         "sales": 978,
+         "supply": 200
+        },
+        "status": "pending",
+        "supply": "200",
+        "time": "12:30",
+        "total": "35s 40c"
+       },
+       {
+        "action": "de",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Amaya",
+        "confidence": null,
+        "day": "Wed",
+        "days": "1.0 days",
+        "dot": null,
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:9",
+        "item": "Embossed Leather Gloves",
+        "net": "+21s 13c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 1,
+        "quality": 2,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "2 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": -1,
+         "days": 10,
+         "net": 2113,
+         "risk": 0,
+         "sales": 20,
+         "supply": 2
+        },
+        "status": "pending",
+        "supply": "2",
+        "time": "12:30",
+        "total": "—"
+       },
+       {
+        "action": "post",
+        "chance": "100%",
+        "chance_note": "",
+        "character": "Amaya",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "0.3 days",
+        "dot": "high",
+        "each": "49c",
+        "id": "forever.pvp.horde.us:1728477000000:8",
+        "item": "Linen Cloth",
+        "net": "+18s 62c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 40,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "1183 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 100,
+         "days": 3,
+         "net": 1862,
+         "risk": 0,
+         "sales": 11825,
+         "supply": 320
+        },
+        "status": "pending",
+        "supply": "320",
+        "time": "12:30",
+        "total": "19s 60c"
+       },
+       {
+        "action": "post",
+        "chance": "95%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "2.6 days",
+        "dot": "high",
+        "each": "29c",
+        "id": "forever.pvp.horde.us:1728477000000:11",
+        "item": "Rough Stone",
+        "net": "+10s 56c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 40,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "152 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 95,
+         "days": 26,
+         "net": 1056,
+         "risk": 0,
+         "sales": 1525,
+         "supply": 400
+        },
+        "status": "pending",
+        "supply": "400",
+        "time": "12:30",
+        "total": "11s 60c"
+       },
+       {
+        "action": "post",
+        "chance": "100%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "1.5 days",
+        "dot": "high",
+        "each": "9s 89c",
+        "id": "forever.pvp.horde.us:1728477000000:15",
+        "item": "Wool Cloth",
+        "net": "0c",
+        "net_class": "",
+        "note": "profit counted on the Wed 12:30 buy",
+        "qty": 20,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "143 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 100,
+         "days": 15,
+         "net": 0,
+         "risk": 0,
+         "sales": 1433,
+         "supply": 220
+        },
+        "status": "pending",
+        "supply": "220",
+        "time": "12:30",
+        "total": "1g 97s 80c"
+       },
+       {
+        "action": "post",
+        "chance": "99%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "4.0 days",
+        "dot": "high",
+        "each": "29s 69c",
+        "id": "forever.pvp.horde.us:1728477000000:6",
+        "item": "Copper Rod",
+        "net": "0c",
+        "net_class": "",
+        "note": "profit counted on the Wed 12:32 craft",
+        "qty": 5,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "20 est.",
+        "sort": {
+         "at": 1728477180000,
+         "chance": 99,
+         "days": 40,
+         "net": 0,
+         "risk": 0,
+         "sales": 198,
+         "supply": 80
+        },
+        "status": "pending",
+        "supply": "80",
+        "time": "12:33",
+        "total": "1g 48s 45c"
+       },
+       {
+        "action": "post",
+        "chance": "99%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "0.6 days",
+        "dot": "high",
+        "each": "7s 91c",
+        "id": "forever.pvp.horde.us:1728477000000:2",
+        "item": "Copper Bar",
+        "net": "0c",
+        "net_class": "",
+        "note": "profit counted on the Wed 12:31 craft",
+        "qty": 50,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "198 est.",
+        "sort": {
+         "at": 1728477120000,
+         "chance": 99,
+         "days": 6,
+         "net": 0,
+         "risk": 0,
+         "sales": 1979,
+         "supply": 120
+        },
+        "status": "pending",
+        "supply": "120",
+        "time": "12:32",
+        "total": "3g 95s 50c"
+       },
+       {
+        "action": "craft",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": null,
+        "day": "Wed",
+        "days": "0.6 days",
+        "dot": null,
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:4",
+        "item": "Copper Bar",
+        "net": "—",
+        "net_class": "",
+        "note": "",
+        "qty": 5,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "198 est.",
+        "sort": {
+         "at": 1728477060000,
+         "chance": -1,
+         "days": 6,
+         "net": 0,
+         "risk": 0,
+         "sales": 1979,
+         "supply": 120
+        },
+        "status": "pending",
+        "supply": "120",
+        "time": "12:31",
+        "total": "—"
+       },
+       {
+        "action": "hold",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": null,
+        "day": "Wed",
+        "days": "0.6 days",
+        "dot": null,
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:12",
+        "item": "Copper Bar",
+        "net": "—",
+        "net_class": "",
+        "note": "hold for a later week",
+        "qty": 4,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "198 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": -1,
+         "days": 6,
+         "net": 0,
+         "risk": 0,
+         "sales": 1979,
+         "supply": 120
+        },
+        "status": "pending",
+        "supply": "120",
+        "time": "12:30",
+        "total": "—"
+       },
+       {
+        "action": "buy",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": null,
+        "day": "Wed",
+        "days": "1.1 days",
+        "dot": null,
+        "each": "2s 48c",
+        "id": "forever.pvp.horde.us:1728477000000:0",
+        "item": "Copper Ore",
+        "net": "—",
+        "net_class": "",
+        "note": "for crafting Copper Bar",
+        "qty": 30,
+        "quality": 1,
+        "record": "",
+        "risk": "1.1%",
+        "risk_amber": false,
+        "sales": "300 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": -1,
+         "days": 11,
+         "net": 0,
+         "risk": 11,
+         "sales": 3002,
+         "supply": 320
+        },
+        "status": "pending",
+        "supply": "320",
+        "time": "12:30",
+        "total": "74s 40c"
+       },
+       {
+        "action": "buy",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": null,
+        "day": "Wed",
+        "days": "1.1 days",
+        "dot": null,
+        "each": "2s 48c",
+        "id": "forever.pvp.horde.us:1728477000000:3",
+        "item": "Copper Ore",
+        "net": "—",
+        "net_class": "",
+        "note": "for crafting Copper Rod",
+        "qty": 5,
+        "quality": 1,
+        "record": "",
+        "risk": "0.2%",
+        "risk_amber": false,
+        "sales": "300 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": -1,
+         "days": 11,
+         "net": 0,
+         "risk": 2,
+         "sales": 3002,
+         "supply": 320
+        },
+        "status": "pending",
+        "supply": "320",
+        "time": "12:30",
+        "total": "12s 40c"
+       }
+      ],
+      "total": "+13g 60s 31c"
+     },
+     "25": {
+      "decisions": [],
+      "hidden": 0,
+      "rows": [
+       {
+        "action": "post",
+        "chance": "100%",
+        "chance_note": "",
+        "character": "Amaya",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "0.3 days",
+        "dot": "high",
+        "each": "20s 40c",
+        "id": "forever.pvp.horde.us:1728477000000:10",
+        "item": "Silk Cloth",
+        "net": "+7g 75s 20c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 40,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "294 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 100,
+         "days": 3,
+         "net": 77520,
+         "risk": 0,
+         "sales": 2938,
+         "supply": 80
+        },
+        "status": "pending",
+        "supply": "80",
+        "time": "12:30",
+        "total": "8g 16s"
+       },
+       {
+        "action": "craft",
+        "chance": "99%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "0.6 days",
+        "dot": "high",
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:1",
+        "item": "Copper Bar",
+        "net": "+2g 50s 92c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 50,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "198 est.",
+        "sort": {
+         "at": 1728477060000,
+         "chance": 99,
+         "days": 6,
+         "net": 25092,
+         "risk": 0,
+         "sales": 1979,
+         "supply": 120
+        },
+        "status": "pending",
+        "supply": "120",
+        "time": "12:31",
+        "total": "—"
+       },
+       {
+        "action": "buy",
+        "chance": "100%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "1.5 days",
+        "dot": "high",
+        "each": "3s",
+        "id": "forever.pvp.horde.us:1728477000000:14",
+        "item": "Wool Cloth",
+        "net": "+1g 27s 91c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 20,
+        "quality": 1,
+        "record": "",
+        "risk": "0.9%",
+        "risk_amber": false,
+        "sales": "143 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 100,
+         "days": 15,
+         "net": 12791,
+         "risk": 9,
+         "sales": 1433,
+         "supply": 220
+        },
+        "status": "pending",
+        "supply": "220",
+        "time": "12:30",
+        "total": "60s"
+       },
+       {
+        "action": "craft",
+        "chance": "99%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "4.0 days",
+        "dot": "high",
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:5",
+        "item": "Copper Rod",
+        "net": "+1g 27s 70c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 5,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "20 est.",
+        "sort": {
+         "at": 1728477120000,
+         "chance": 99,
+         "days": 40,
+         "net": 12770,
+         "risk": 0,
+         "sales": 198,
+         "supply": 80
+        },
+        "status": "pending",
+        "supply": "80",
+        "time": "12:32",
+        "total": "—"
+       },
+       {
+        "action": "post",
+        "chance": "82%",
+        "chance_note": "",
+        "character": "Amaya",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "2.0 days",
+        "dot": "high",
+        "each": "1s 18c",
+        "id": "forever.pvp.horde.us:1728477000000:7",
+        "item": "Light Leather",
+        "net": "+28s 27c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 30,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "98 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 82,
+         "days": 20,
+         "net": 2827,
+         "risk": 0,
+         "sales": 978,
+         "supply": 200
+        },
+        "status": "pending",
+        "supply": "200",
+        "time": "12:30",
+        "total": "35s 40c"
+       },
+       {
+        "action": "de",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Amaya",
+        "confidence": null,
+        "day": "Wed",
+        "days": "1.0 days",
+        "dot": null,
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:9",
+        "item": "Embossed Leather Gloves",
+        "net": "+21s 13c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 1,
+        "quality": 2,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "2 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": -1,
+         "days": 10,
+         "net": 2113,
+         "risk": 0,
+         "sales": 20,
+         "supply": 2
+        },
+        "status": "pending",
+        "supply": "2",
+        "time": "12:30",
+        "total": "—"
+       },
+       {
+        "action": "post",
+        "chance": "100%",
+        "chance_note": "",
+        "character": "Amaya",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "0.3 days",
+        "dot": "high",
+        "each": "49c",
+        "id": "forever.pvp.horde.us:1728477000000:8",
+        "item": "Linen Cloth",
+        "net": "+18s 62c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 40,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "1183 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 100,
+         "days": 3,
+         "net": 1862,
+         "risk": 0,
+         "sales": 11825,
+         "supply": 320
+        },
+        "status": "pending",
+        "supply": "320",
+        "time": "12:30",
+        "total": "19s 60c"
+       },
+       {
+        "action": "post",
+        "chance": "95%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "2.6 days",
+        "dot": "high",
+        "each": "29c",
+        "id": "forever.pvp.horde.us:1728477000000:11",
+        "item": "Rough Stone",
+        "net": "+10s 56c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 40,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "152 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 95,
+         "days": 26,
+         "net": 1056,
+         "risk": 0,
+         "sales": 1525,
+         "supply": 400
+        },
+        "status": "pending",
+        "supply": "400",
+        "time": "12:30",
+        "total": "11s 60c"
+       },
+       {
+        "action": "post",
+        "chance": "100%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "1.5 days",
+        "dot": "high",
+        "each": "9s 89c",
+        "id": "forever.pvp.horde.us:1728477000000:15",
+        "item": "Wool Cloth",
+        "net": "0c",
+        "net_class": "",
+        "note": "profit counted on the Wed 12:30 buy",
+        "qty": 20,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "143 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 100,
+         "days": 15,
+         "net": 0,
+         "risk": 0,
+         "sales": 1433,
+         "supply": 220
+        },
+        "status": "pending",
+        "supply": "220",
+        "time": "12:30",
+        "total": "1g 97s 80c"
+       },
+       {
+        "action": "post",
+        "chance": "99%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "4.0 days",
+        "dot": "high",
+        "each": "29s 69c",
+        "id": "forever.pvp.horde.us:1728477000000:6",
+        "item": "Copper Rod",
+        "net": "0c",
+        "net_class": "",
+        "note": "profit counted on the Wed 12:32 craft",
+        "qty": 5,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "20 est.",
+        "sort": {
+         "at": 1728477180000,
+         "chance": 99,
+         "days": 40,
+         "net": 0,
+         "risk": 0,
+         "sales": 198,
+         "supply": 80
+        },
+        "status": "pending",
+        "supply": "80",
+        "time": "12:33",
+        "total": "1g 48s 45c"
+       },
+       {
+        "action": "post",
+        "chance": "99%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "0.6 days",
+        "dot": "high",
+        "each": "7s 91c",
+        "id": "forever.pvp.horde.us:1728477000000:2",
+        "item": "Copper Bar",
+        "net": "0c",
+        "net_class": "",
+        "note": "profit counted on the Wed 12:31 craft",
+        "qty": 50,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "198 est.",
+        "sort": {
+         "at": 1728477120000,
+         "chance": 99,
+         "days": 6,
+         "net": 0,
+         "risk": 0,
+         "sales": 1979,
+         "supply": 120
+        },
+        "status": "pending",
+        "supply": "120",
+        "time": "12:32",
+        "total": "3g 95s 50c"
+       },
+       {
+        "action": "craft",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": null,
+        "day": "Wed",
+        "days": "0.6 days",
+        "dot": null,
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:4",
+        "item": "Copper Bar",
+        "net": "—",
+        "net_class": "",
+        "note": "",
+        "qty": 5,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "198 est.",
+        "sort": {
+         "at": 1728477060000,
+         "chance": -1,
+         "days": 6,
+         "net": 0,
+         "risk": 0,
+         "sales": 1979,
+         "supply": 120
+        },
+        "status": "pending",
+        "supply": "120",
+        "time": "12:31",
+        "total": "—"
+       },
+       {
+        "action": "hold",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": null,
+        "day": "Wed",
+        "days": "0.6 days",
+        "dot": null,
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:12",
+        "item": "Copper Bar",
+        "net": "—",
+        "net_class": "",
+        "note": "hold for a later week",
+        "qty": 4,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "198 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": -1,
+         "days": 6,
+         "net": 0,
+         "risk": 0,
+         "sales": 1979,
+         "supply": 120
+        },
+        "status": "pending",
+        "supply": "120",
+        "time": "12:30",
+        "total": "—"
+       },
+       {
+        "action": "buy",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": null,
+        "day": "Wed",
+        "days": "1.1 days",
+        "dot": null,
+        "each": "2s 48c",
+        "id": "forever.pvp.horde.us:1728477000000:0",
+        "item": "Copper Ore",
+        "net": "—",
+        "net_class": "",
+        "note": "for crafting Copper Bar",
+        "qty": 30,
+        "quality": 1,
+        "record": "",
+        "risk": "1.1%",
+        "risk_amber": false,
+        "sales": "300 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": -1,
+         "days": 11,
+         "net": 0,
+         "risk": 11,
+         "sales": 3002,
+         "supply": 320
+        },
+        "status": "pending",
+        "supply": "320",
+        "time": "12:30",
+        "total": "74s 40c"
+       },
+       {
+        "action": "buy",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": null,
+        "day": "Wed",
+        "days": "1.1 days",
+        "dot": null,
+        "each": "2s 48c",
+        "id": "forever.pvp.horde.us:1728477000000:3",
+        "item": "Copper Ore",
+        "net": "—",
+        "net_class": "",
+        "note": "for crafting Copper Rod",
+        "qty": 5,
+        "quality": 1,
+        "record": "",
+        "risk": "0.2%",
+        "risk_amber": false,
+        "sales": "300 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": -1,
+         "days": 11,
+         "net": 0,
+         "risk": 2,
+         "sales": 3002,
+         "supply": 320
+        },
+        "status": "pending",
+        "supply": "320",
+        "time": "12:30",
+        "total": "12s 40c"
+       }
+      ],
+      "total": "+13g 60s 31c"
+     },
+     "50": {
+      "decisions": [],
+      "hidden": 0,
+      "rows": [
+       {
+        "action": "post",
+        "chance": "100%",
+        "chance_note": "",
+        "character": "Amaya",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "0.3 days",
+        "dot": "high",
+        "each": "20s 40c",
+        "id": "forever.pvp.horde.us:1728477000000:10",
+        "item": "Silk Cloth",
+        "net": "+7g 75s 20c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 40,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "294 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 100,
+         "days": 3,
+         "net": 77520,
+         "risk": 0,
+         "sales": 2938,
+         "supply": 80
+        },
+        "status": "pending",
+        "supply": "80",
+        "time": "12:30",
+        "total": "8g 16s"
+       },
+       {
+        "action": "craft",
+        "chance": "99%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "0.6 days",
+        "dot": "high",
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:1",
+        "item": "Copper Bar",
+        "net": "+2g 50s 92c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 50,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "198 est.",
+        "sort": {
+         "at": 1728477060000,
+         "chance": 99,
+         "days": 6,
+         "net": 25092,
+         "risk": 0,
+         "sales": 1979,
+         "supply": 120
+        },
+        "status": "pending",
+        "supply": "120",
+        "time": "12:31",
+        "total": "—"
+       },
+       {
+        "action": "buy",
+        "chance": "100%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "1.5 days",
+        "dot": "high",
+        "each": "3s",
+        "id": "forever.pvp.horde.us:1728477000000:14",
+        "item": "Wool Cloth",
+        "net": "+1g 27s 91c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 20,
+        "quality": 1,
+        "record": "",
+        "risk": "0.9%",
+        "risk_amber": false,
+        "sales": "143 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 100,
+         "days": 15,
+         "net": 12791,
+         "risk": 9,
+         "sales": 1433,
+         "supply": 220
+        },
+        "status": "pending",
+        "supply": "220",
+        "time": "12:30",
+        "total": "60s"
+       },
+       {
+        "action": "craft",
+        "chance": "99%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "4.0 days",
+        "dot": "high",
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:5",
+        "item": "Copper Rod",
+        "net": "+1g 27s 70c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 5,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "20 est.",
+        "sort": {
+         "at": 1728477120000,
+         "chance": 99,
+         "days": 40,
+         "net": 12770,
+         "risk": 0,
+         "sales": 198,
+         "supply": 80
+        },
+        "status": "pending",
+        "supply": "80",
+        "time": "12:32",
+        "total": "—"
+       },
+       {
+        "action": "post",
+        "chance": "82%",
+        "chance_note": "",
+        "character": "Amaya",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "2.0 days",
+        "dot": "high",
+        "each": "1s 18c",
+        "id": "forever.pvp.horde.us:1728477000000:7",
+        "item": "Light Leather",
+        "net": "+28s 27c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 30,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "98 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 82,
+         "days": 20,
+         "net": 2827,
+         "risk": 0,
+         "sales": 978,
+         "supply": 200
+        },
+        "status": "pending",
+        "supply": "200",
+        "time": "12:30",
+        "total": "35s 40c"
+       },
+       {
+        "action": "de",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Amaya",
+        "confidence": null,
+        "day": "Wed",
+        "days": "1.0 days",
+        "dot": null,
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:9",
+        "item": "Embossed Leather Gloves",
+        "net": "+21s 13c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 1,
+        "quality": 2,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "2 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": -1,
+         "days": 10,
+         "net": 2113,
+         "risk": 0,
+         "sales": 20,
+         "supply": 2
+        },
+        "status": "pending",
+        "supply": "2",
+        "time": "12:30",
+        "total": "—"
+       },
+       {
+        "action": "post",
+        "chance": "100%",
+        "chance_note": "",
+        "character": "Amaya",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "0.3 days",
+        "dot": "high",
+        "each": "49c",
+        "id": "forever.pvp.horde.us:1728477000000:8",
+        "item": "Linen Cloth",
+        "net": "+18s 62c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 40,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "1183 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 100,
+         "days": 3,
+         "net": 1862,
+         "risk": 0,
+         "sales": 11825,
+         "supply": 320
+        },
+        "status": "pending",
+        "supply": "320",
+        "time": "12:30",
+        "total": "19s 60c"
+       },
+       {
+        "action": "post",
+        "chance": "95%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "2.6 days",
+        "dot": "high",
+        "each": "29c",
+        "id": "forever.pvp.horde.us:1728477000000:11",
+        "item": "Rough Stone",
+        "net": "+10s 56c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 40,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "152 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 95,
+         "days": 26,
+         "net": 1056,
+         "risk": 0,
+         "sales": 1525,
+         "supply": 400
+        },
+        "status": "pending",
+        "supply": "400",
+        "time": "12:30",
+        "total": "11s 60c"
+       },
+       {
+        "action": "post",
+        "chance": "100%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "1.5 days",
+        "dot": "high",
+        "each": "9s 89c",
+        "id": "forever.pvp.horde.us:1728477000000:15",
+        "item": "Wool Cloth",
+        "net": "0c",
+        "net_class": "",
+        "note": "profit counted on the Wed 12:30 buy",
+        "qty": 20,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "143 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 100,
+         "days": 15,
+         "net": 0,
+         "risk": 0,
+         "sales": 1433,
+         "supply": 220
+        },
+        "status": "pending",
+        "supply": "220",
+        "time": "12:30",
+        "total": "1g 97s 80c"
+       },
+       {
+        "action": "post",
+        "chance": "99%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "4.0 days",
+        "dot": "high",
+        "each": "29s 69c",
+        "id": "forever.pvp.horde.us:1728477000000:6",
+        "item": "Copper Rod",
+        "net": "0c",
+        "net_class": "",
+        "note": "profit counted on the Wed 12:32 craft",
+        "qty": 5,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "20 est.",
+        "sort": {
+         "at": 1728477180000,
+         "chance": 99,
+         "days": 40,
+         "net": 0,
+         "risk": 0,
+         "sales": 198,
+         "supply": 80
+        },
+        "status": "pending",
+        "supply": "80",
+        "time": "12:33",
+        "total": "1g 48s 45c"
+       },
+       {
+        "action": "post",
+        "chance": "99%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "0.6 days",
+        "dot": "high",
+        "each": "7s 91c",
+        "id": "forever.pvp.horde.us:1728477000000:2",
+        "item": "Copper Bar",
+        "net": "0c",
+        "net_class": "",
+        "note": "profit counted on the Wed 12:31 craft",
+        "qty": 50,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "198 est.",
+        "sort": {
+         "at": 1728477120000,
+         "chance": 99,
+         "days": 6,
+         "net": 0,
+         "risk": 0,
+         "sales": 1979,
+         "supply": 120
+        },
+        "status": "pending",
+        "supply": "120",
+        "time": "12:32",
+        "total": "3g 95s 50c"
+       },
+       {
+        "action": "craft",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": null,
+        "day": "Wed",
+        "days": "0.6 days",
+        "dot": null,
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:4",
+        "item": "Copper Bar",
+        "net": "—",
+        "net_class": "",
+        "note": "",
+        "qty": 5,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "198 est.",
+        "sort": {
+         "at": 1728477060000,
+         "chance": -1,
+         "days": 6,
+         "net": 0,
+         "risk": 0,
+         "sales": 1979,
+         "supply": 120
+        },
+        "status": "pending",
+        "supply": "120",
+        "time": "12:31",
+        "total": "—"
+       },
+       {
+        "action": "hold",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": null,
+        "day": "Wed",
+        "days": "0.6 days",
+        "dot": null,
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:12",
+        "item": "Copper Bar",
+        "net": "—",
+        "net_class": "",
+        "note": "hold for a later week",
+        "qty": 4,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "198 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": -1,
+         "days": 6,
+         "net": 0,
+         "risk": 0,
+         "sales": 1979,
+         "supply": 120
+        },
+        "status": "pending",
+        "supply": "120",
+        "time": "12:30",
+        "total": "—"
+       },
+       {
+        "action": "buy",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": null,
+        "day": "Wed",
+        "days": "1.1 days",
+        "dot": null,
+        "each": "2s 48c",
+        "id": "forever.pvp.horde.us:1728477000000:0",
+        "item": "Copper Ore",
+        "net": "—",
+        "net_class": "",
+        "note": "for crafting Copper Bar",
+        "qty": 30,
+        "quality": 1,
+        "record": "",
+        "risk": "1.1%",
+        "risk_amber": false,
+        "sales": "300 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": -1,
+         "days": 11,
+         "net": 0,
+         "risk": 11,
+         "sales": 3002,
+         "supply": 320
+        },
+        "status": "pending",
+        "supply": "320",
+        "time": "12:30",
+        "total": "74s 40c"
+       },
+       {
+        "action": "buy",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": null,
+        "day": "Wed",
+        "days": "1.1 days",
+        "dot": null,
+        "each": "2s 48c",
+        "id": "forever.pvp.horde.us:1728477000000:3",
+        "item": "Copper Ore",
+        "net": "—",
+        "net_class": "",
+        "note": "for crafting Copper Rod",
+        "qty": 5,
+        "quality": 1,
+        "record": "",
+        "risk": "0.2%",
+        "risk_amber": false,
+        "sales": "300 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": -1,
+         "days": 11,
+         "net": 0,
+         "risk": 2,
+         "sales": 3002,
+         "supply": 320
+        },
+        "status": "pending",
+        "supply": "320",
+        "time": "12:30",
+        "total": "12s 40c"
+       }
+      ],
+      "total": "+13g 60s 31c"
+     },
+     "75": {
+      "decisions": [],
+      "hidden": 0,
+      "rows": [
+       {
+        "action": "post",
+        "chance": "100%",
+        "chance_note": "",
+        "character": "Amaya",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "0.3 days",
+        "dot": "high",
+        "each": "20s 40c",
+        "id": "forever.pvp.horde.us:1728477000000:10",
+        "item": "Silk Cloth",
+        "net": "+7g 75s 20c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 40,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "294 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 100,
+         "days": 3,
+         "net": 77520,
+         "risk": 0,
+         "sales": 2938,
+         "supply": 80
+        },
+        "status": "pending",
+        "supply": "80",
+        "time": "12:30",
+        "total": "8g 16s"
+       },
+       {
+        "action": "craft",
+        "chance": "99%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "0.6 days",
+        "dot": "high",
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:1",
+        "item": "Copper Bar",
+        "net": "+2g 50s 92c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 50,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "198 est.",
+        "sort": {
+         "at": 1728477060000,
+         "chance": 99,
+         "days": 6,
+         "net": 25092,
+         "risk": 0,
+         "sales": 1979,
+         "supply": 120
+        },
+        "status": "pending",
+        "supply": "120",
+        "time": "12:31",
+        "total": "—"
+       },
+       {
+        "action": "buy",
+        "chance": "100%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "1.5 days",
+        "dot": "high",
+        "each": "3s",
+        "id": "forever.pvp.horde.us:1728477000000:14",
+        "item": "Wool Cloth",
+        "net": "+1g 27s 91c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 20,
+        "quality": 1,
+        "record": "",
+        "risk": "0.9%",
+        "risk_amber": false,
+        "sales": "143 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 100,
+         "days": 15,
+         "net": 12791,
+         "risk": 9,
+         "sales": 1433,
+         "supply": 220
+        },
+        "status": "pending",
+        "supply": "220",
+        "time": "12:30",
+        "total": "60s"
+       },
+       {
+        "action": "craft",
+        "chance": "99%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "4.0 days",
+        "dot": "high",
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:5",
+        "item": "Copper Rod",
+        "net": "+1g 27s 70c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 5,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "20 est.",
+        "sort": {
+         "at": 1728477120000,
+         "chance": 99,
+         "days": 40,
+         "net": 12770,
+         "risk": 0,
+         "sales": 198,
+         "supply": 80
+        },
+        "status": "pending",
+        "supply": "80",
+        "time": "12:32",
+        "total": "—"
+       },
+       {
+        "action": "post",
+        "chance": "82%",
+        "chance_note": "",
+        "character": "Amaya",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "2.0 days",
+        "dot": "high",
+        "each": "1s 18c",
+        "id": "forever.pvp.horde.us:1728477000000:7",
+        "item": "Light Leather",
+        "net": "+28s 27c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 30,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "98 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 82,
+         "days": 20,
+         "net": 2827,
+         "risk": 0,
+         "sales": 978,
+         "supply": 200
+        },
+        "status": "pending",
+        "supply": "200",
+        "time": "12:30",
+        "total": "35s 40c"
+       },
+       {
+        "action": "de",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Amaya",
+        "confidence": null,
+        "day": "Wed",
+        "days": "1.0 days",
+        "dot": null,
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:9",
+        "item": "Embossed Leather Gloves",
+        "net": "+21s 13c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 1,
+        "quality": 2,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "2 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": -1,
+         "days": 10,
+         "net": 2113,
+         "risk": 0,
+         "sales": 20,
+         "supply": 2
+        },
+        "status": "pending",
+        "supply": "2",
+        "time": "12:30",
+        "total": "—"
+       },
+       {
+        "action": "post",
+        "chance": "100%",
+        "chance_note": "",
+        "character": "Amaya",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "0.3 days",
+        "dot": "high",
+        "each": "49c",
+        "id": "forever.pvp.horde.us:1728477000000:8",
+        "item": "Linen Cloth",
+        "net": "+18s 62c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 40,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "1183 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 100,
+         "days": 3,
+         "net": 1862,
+         "risk": 0,
+         "sales": 11825,
+         "supply": 320
+        },
+        "status": "pending",
+        "supply": "320",
+        "time": "12:30",
+        "total": "19s 60c"
+       },
+       {
+        "action": "post",
+        "chance": "95%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "2.6 days",
+        "dot": "high",
+        "each": "29c",
+        "id": "forever.pvp.horde.us:1728477000000:11",
+        "item": "Rough Stone",
+        "net": "+10s 56c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 40,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "152 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 95,
+         "days": 26,
+         "net": 1056,
+         "risk": 0,
+         "sales": 1525,
+         "supply": 400
+        },
+        "status": "pending",
+        "supply": "400",
+        "time": "12:30",
+        "total": "11s 60c"
+       },
+       {
+        "action": "post",
+        "chance": "100%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "1.5 days",
+        "dot": "high",
+        "each": "9s 89c",
+        "id": "forever.pvp.horde.us:1728477000000:15",
+        "item": "Wool Cloth",
+        "net": "0c",
+        "net_class": "",
+        "note": "profit counted on the Wed 12:30 buy",
+        "qty": 20,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "143 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 100,
+         "days": 15,
+         "net": 0,
+         "risk": 0,
+         "sales": 1433,
+         "supply": 220
+        },
+        "status": "pending",
+        "supply": "220",
+        "time": "12:30",
+        "total": "1g 97s 80c"
+       },
+       {
+        "action": "post",
+        "chance": "99%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "4.0 days",
+        "dot": "high",
+        "each": "29s 69c",
+        "id": "forever.pvp.horde.us:1728477000000:6",
+        "item": "Copper Rod",
+        "net": "0c",
+        "net_class": "",
+        "note": "profit counted on the Wed 12:32 craft",
+        "qty": 5,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "20 est.",
+        "sort": {
+         "at": 1728477180000,
+         "chance": 99,
+         "days": 40,
+         "net": 0,
+         "risk": 0,
+         "sales": 198,
+         "supply": 80
+        },
+        "status": "pending",
+        "supply": "80",
+        "time": "12:33",
+        "total": "1g 48s 45c"
+       },
+       {
+        "action": "post",
+        "chance": "99%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "0.6 days",
+        "dot": "high",
+        "each": "7s 91c",
+        "id": "forever.pvp.horde.us:1728477000000:2",
+        "item": "Copper Bar",
+        "net": "0c",
+        "net_class": "",
+        "note": "profit counted on the Wed 12:31 craft",
+        "qty": 50,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "198 est.",
+        "sort": {
+         "at": 1728477120000,
+         "chance": 99,
+         "days": 6,
+         "net": 0,
+         "risk": 0,
+         "sales": 1979,
+         "supply": 120
+        },
+        "status": "pending",
+        "supply": "120",
+        "time": "12:32",
+        "total": "3g 95s 50c"
+       },
+       {
+        "action": "craft",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": null,
+        "day": "Wed",
+        "days": "0.6 days",
+        "dot": null,
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:4",
+        "item": "Copper Bar",
+        "net": "—",
+        "net_class": "",
+        "note": "",
+        "qty": 5,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "198 est.",
+        "sort": {
+         "at": 1728477060000,
+         "chance": -1,
+         "days": 6,
+         "net": 0,
+         "risk": 0,
+         "sales": 1979,
+         "supply": 120
+        },
+        "status": "pending",
+        "supply": "120",
+        "time": "12:31",
+        "total": "—"
+       },
+       {
+        "action": "hold",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": null,
+        "day": "Wed",
+        "days": "0.6 days",
+        "dot": null,
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:12",
+        "item": "Copper Bar",
+        "net": "—",
+        "net_class": "",
+        "note": "hold for a later week",
+        "qty": 4,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "198 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": -1,
+         "days": 6,
+         "net": 0,
+         "risk": 0,
+         "sales": 1979,
+         "supply": 120
+        },
+        "status": "pending",
+        "supply": "120",
+        "time": "12:30",
+        "total": "—"
+       },
+       {
+        "action": "buy",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": null,
+        "day": "Wed",
+        "days": "1.1 days",
+        "dot": null,
+        "each": "2s 48c",
+        "id": "forever.pvp.horde.us:1728477000000:0",
+        "item": "Copper Ore",
+        "net": "—",
+        "net_class": "",
+        "note": "for crafting Copper Bar",
+        "qty": 30,
+        "quality": 1,
+        "record": "",
+        "risk": "1.1%",
+        "risk_amber": false,
+        "sales": "300 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": -1,
+         "days": 11,
+         "net": 0,
+         "risk": 11,
+         "sales": 3002,
+         "supply": 320
+        },
+        "status": "pending",
+        "supply": "320",
+        "time": "12:30",
+        "total": "74s 40c"
+       },
+       {
+        "action": "buy",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": null,
+        "day": "Wed",
+        "days": "1.1 days",
+        "dot": null,
+        "each": "2s 48c",
+        "id": "forever.pvp.horde.us:1728477000000:3",
+        "item": "Copper Ore",
+        "net": "—",
+        "net_class": "",
+        "note": "for crafting Copper Rod",
+        "qty": 5,
+        "quality": 1,
+        "record": "",
+        "risk": "0.2%",
+        "risk_amber": false,
+        "sales": "300 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": -1,
+         "days": 11,
+         "net": 0,
+         "risk": 2,
+         "sales": 3002,
+         "supply": 320
+        },
+        "status": "pending",
+        "supply": "320",
+        "time": "12:30",
+        "total": "12s 40c"
+       }
+      ],
+      "total": "+13g 60s 31c"
+     }
+    },
+    "help": {
+     "Action": "What to do: BUY, POST, DE (disenchant), CRAFT, VENDOR, MAIL or HOLD",
+     "Best selling windows": "The hours of the week it sells best (price × buyers), local time. \"early pattern\" = under 3 weeks of data",
+     "Buy": "Cheapest buyout on the AH now",
+     "Buy each": "Price to pay now, per unit (buy at or below it)",
+     "Buy total": "What the whole buy costs",
+     "Chance": "Chance it sells in its planned window. The dot is the confidence in that chance: green ≥ 75%, amber ≥ 45%, grey below. Hover a cell for the exact %",
+     "Character": "Which of your characters does it",
+     "Cooldown": "When the recipe can be used again",
+     "Cost each": "What it cost you per unit: what you paid, or the mats for a craft; 0 for items you found or held before tracking started",
+     "Cost total": "Cost each × quantity",
+     "Crafts": "How many to make: stops where one more would lose money",
+     "Current Supply": "Units on the AH now, in the newest scan",
+     "Deposit": "Deposit you paid to post; back on a sale, lost on expiry. \"—\" = its post was not captured",
+     "Detail": "The deposit, the post it resolved, what it cost or realized, or why the plan action was missed",
+     "EV": "Expected value of the mats: average results × their sell value",
+     "Each": "Per unit: the price you pay, or post at",
+     "Est. Sales/Day": "Units the market sells per day (last 7 days), with its source: AHF, or est. from order books in your scans. \"—\" = no sales data",
+     "Event": "What happened: posted, sold, expired, paid out, bought, crafted, disenchanted, mailed. \"—\" is a plan action with no event",
+     "Expected ROI": "Expected profit ÷ buy cost. Flips need at least 20%",
+     "Expected mats": "Average disenchant results for this quality and item level",
+     "Expected net": "What this action adds on average, after fees, deposits and the chance it sells. A chain counts it once, on its first action",
+     "Expected profit": "Average profit after fees and the chance it sells; owned mats count at their hold value",
+     "Item": "The item, in its quality colour. Click to open it on auctionhouse.fyi",
+     "Listed each": "Your buyout per unit",
+     "Listed total": "Listed each × quantity",
+     "Mats each": "Gold for mats you must buy, per craft. \"—\" = you own them all",
+     "Mats total": "Mats each × crafts",
+     "Paid each": "What you paid per unit, averaged across all your characters; 0 for items you found or held before tracking started",
+     "Paid total": "Paid each × quantity",
+     "Plan": "What this week's plan does with it",
+     "Plan action": "The plan action this event completed: done, partial, or missed and skipped ones",
+     "Position": "\"cheapest\" at or below the cheapest listing now; else who is cheaper, and at what price",
+     "Price": "Each, copper as the AH or vendor charged it; for Paid out, the gold taken from the mailbox",
+     "Price age": "How long ago the buy price was seen. Older prices are less likely to still be there",
+     "Product": "What the recipe makes",
+     "Profit": "EV − buy price, after fees",
+     "Profit if sold": "Listed total after the 5% cut, less the cost",
+     "Qty": "Units (or crafts) this row is about",
+     "Recipe known by": "The character who knows it, and their skill",
+     "Risk": "Gold this action spends ÷ all your gold. Amber above 25%",
+     "Seasonality Strength": "0–100: how predictable the weekly price pattern is, tested on a held-out week. Not how profitable it is. \"—\" = too little evidence",
+     "Sell each": "Expected sell price per unit at the sell slot",
+     "Sell slot": "When to sell: the peak hour the flip is for",
+     "Source": "Where the mats come from: Owned, AH, Mixed, + crafted (another character makes a reagent first)",
+     "Supply/Volume": "Days of supply: current supply ÷ sales per day. Not a time-to-sell guarantee",
+     "Time left": "The time left the AH shows for the auction",
+     "Total": "Each × quantity",
+     "Value each": "What one product is expected to sell for",
+     "When": "When it happened, in your local time",
+     "Where": "Bags, bank or mail. Auctions you have up are on On the AH",
+     "Why": "How far the peak's price is above the 30-day median",
+     "Worth": "What it is expected to bring under its plan: planned sales after fees and the chance they sell, other units at their hold value",
+     "ilvl": "Item level: sets the disenchant results"
+    }
+   }
+  },
+  "week": {
+   "forever.pvp.horde.us": {
+    "categories": {
+     "Crafts": "+3g 78s 62c",
+     "Disenchant": "+21s 13c",
+     "Flips": "+1g 27s 91c",
+     "Sell owned": "+9g 26s 89c"
+    },
+    "characters": {
+     "Amaya": "+9g 37s 46c",
+     "Brugan": "+5g 17s 9c"
+    },
+    "days": [
+     {
+      "cents": 136031,
+      "label": "Wed 9",
+      "rows": [
+       {
+        "action": "buy",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": null,
+        "day": "Wed",
+        "days": "1.1 days",
+        "dot": null,
+        "each": "2s 48c",
+        "id": "forever.pvp.horde.us:1728477000000:0",
+        "item": "Copper Ore",
+        "net": "—",
+        "net_class": "",
+        "note": "for crafting Copper Bar",
+        "qty": 30,
+        "quality": 1,
+        "record": "",
+        "risk": "1.1%",
+        "risk_amber": false,
+        "sales": "300 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": -1,
+         "days": 11,
+         "net": 0,
+         "risk": 11,
+         "sales": 3002,
+         "supply": 320
+        },
+        "status": "pending",
+        "supply": "320",
+        "time": "12:30",
+        "total": "74s 40c"
+       },
+       {
+        "action": "post",
+        "chance": "100%",
+        "chance_note": "",
+        "character": "Amaya",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "0.3 days",
+        "dot": "high",
+        "each": "20s 40c",
+        "id": "forever.pvp.horde.us:1728477000000:10",
+        "item": "Silk Cloth",
+        "net": "+7g 75s 20c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 40,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "294 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 100,
+         "days": 3,
+         "net": 77520,
+         "risk": 0,
+         "sales": 2938,
+         "supply": 80
+        },
+        "status": "pending",
+        "supply": "80",
+        "time": "12:30",
+        "total": "8g 16s"
+       },
+       {
+        "action": "post",
+        "chance": "95%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "2.6 days",
+        "dot": "high",
+        "each": "29c",
+        "id": "forever.pvp.horde.us:1728477000000:11",
+        "item": "Rough Stone",
+        "net": "+10s 56c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 40,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "152 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 95,
+         "days": 26,
+         "net": 1056,
+         "risk": 0,
+         "sales": 1525,
+         "supply": 400
+        },
+        "status": "pending",
+        "supply": "400",
+        "time": "12:30",
+        "total": "11s 60c"
+       },
+       {
+        "action": "hold",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": null,
+        "day": "Wed",
+        "days": "0.6 days",
+        "dot": null,
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:12",
+        "item": "Copper Bar",
+        "net": "—",
+        "net_class": "",
+        "note": "hold for a later week",
+        "qty": 4,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "198 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": -1,
+         "days": 6,
+         "net": 0,
+         "risk": 0,
+         "sales": 1979,
+         "supply": 120
+        },
+        "status": "pending",
+        "supply": "120",
+        "time": "12:30",
+        "total": "—"
+       },
+       {
+        "action": "buy",
+        "chance": "100%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "1.5 days",
+        "dot": "high",
+        "each": "3s",
+        "id": "forever.pvp.horde.us:1728477000000:14",
+        "item": "Wool Cloth",
+        "net": "+1g 27s 91c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 20,
+        "quality": 1,
+        "record": "",
+        "risk": "0.9%",
+        "risk_amber": false,
+        "sales": "143 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 100,
+         "days": 15,
+         "net": 12791,
+         "risk": 9,
+         "sales": 1433,
+         "supply": 220
+        },
+        "status": "pending",
+        "supply": "220",
+        "time": "12:30",
+        "total": "60s"
+       },
+       {
+        "action": "post",
+        "chance": "100%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "1.5 days",
+        "dot": "high",
+        "each": "9s 89c",
+        "id": "forever.pvp.horde.us:1728477000000:15",
+        "item": "Wool Cloth",
+        "net": "0c",
+        "net_class": "",
+        "note": "profit counted on the Wed 12:30 buy",
+        "qty": 20,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "143 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 100,
+         "days": 15,
+         "net": 0,
+         "risk": 0,
+         "sales": 1433,
+         "supply": 220
+        },
+        "status": "pending",
+        "supply": "220",
+        "time": "12:30",
+        "total": "1g 97s 80c"
+       },
+       {
+        "action": "buy",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": null,
+        "day": "Wed",
+        "days": "1.1 days",
+        "dot": null,
+        "each": "2s 48c",
+        "id": "forever.pvp.horde.us:1728477000000:3",
+        "item": "Copper Ore",
+        "net": "—",
+        "net_class": "",
+        "note": "for crafting Copper Rod",
+        "qty": 5,
+        "quality": 1,
+        "record": "",
+        "risk": "0.2%",
+        "risk_amber": false,
+        "sales": "300 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": -1,
+         "days": 11,
+         "net": 0,
+         "risk": 2,
+         "sales": 3002,
+         "supply": 320
+        },
+        "status": "pending",
+        "supply": "320",
+        "time": "12:30",
+        "total": "12s 40c"
+       },
+       {
+        "action": "post",
+        "chance": "82%",
+        "chance_note": "",
+        "character": "Amaya",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "2.0 days",
+        "dot": "high",
+        "each": "1s 18c",
+        "id": "forever.pvp.horde.us:1728477000000:7",
+        "item": "Light Leather",
+        "net": "+28s 27c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 30,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "98 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 82,
+         "days": 20,
+         "net": 2827,
+         "risk": 0,
+         "sales": 978,
+         "supply": 200
+        },
+        "status": "pending",
+        "supply": "200",
+        "time": "12:30",
+        "total": "35s 40c"
+       },
+       {
+        "action": "post",
+        "chance": "100%",
+        "chance_note": "",
+        "character": "Amaya",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "0.3 days",
+        "dot": "high",
+        "each": "49c",
+        "id": "forever.pvp.horde.us:1728477000000:8",
+        "item": "Linen Cloth",
+        "net": "+18s 62c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 40,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "1183 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": 100,
+         "days": 3,
+         "net": 1862,
+         "risk": 0,
+         "sales": 11825,
+         "supply": 320
+        },
+        "status": "pending",
+        "supply": "320",
+        "time": "12:30",
+        "total": "19s 60c"
+       },
+       {
+        "action": "de",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Amaya",
+        "confidence": null,
+        "day": "Wed",
+        "days": "1.0 days",
+        "dot": null,
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:9",
+        "item": "Embossed Leather Gloves",
+        "net": "+21s 13c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 1,
+        "quality": 2,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "2 est.",
+        "sort": {
+         "at": 1728477000000,
+         "chance": -1,
+         "days": 10,
+         "net": 2113,
+         "risk": 0,
+         "sales": 20,
+         "supply": 2
+        },
+        "status": "pending",
+        "supply": "2",
+        "time": "12:30",
+        "total": "—"
+       },
+       {
+        "action": "craft",
+        "chance": "99%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "0.6 days",
+        "dot": "high",
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:1",
+        "item": "Copper Bar",
+        "net": "+2g 50s 92c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 50,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "198 est.",
+        "sort": {
+         "at": 1728477060000,
+         "chance": 99,
+         "days": 6,
+         "net": 25092,
+         "risk": 0,
+         "sales": 1979,
+         "supply": 120
+        },
+        "status": "pending",
+        "supply": "120",
+        "time": "12:31",
+        "total": "—"
+       },
+       {
+        "action": "craft",
+        "chance": "—",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": null,
+        "day": "Wed",
+        "days": "0.6 days",
+        "dot": null,
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:4",
+        "item": "Copper Bar",
+        "net": "—",
+        "net_class": "",
+        "note": "",
+        "qty": 5,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "198 est.",
+        "sort": {
+         "at": 1728477060000,
+         "chance": -1,
+         "days": 6,
+         "net": 0,
+         "risk": 0,
+         "sales": 1979,
+         "supply": 120
+        },
+        "status": "pending",
+        "supply": "120",
+        "time": "12:31",
+        "total": "—"
+       },
+       {
+        "action": "post",
+        "chance": "99%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "0.6 days",
+        "dot": "high",
+        "each": "7s 91c",
+        "id": "forever.pvp.horde.us:1728477000000:2",
+        "item": "Copper Bar",
+        "net": "0c",
+        "net_class": "",
+        "note": "profit counted on the Wed 12:31 craft",
+        "qty": 50,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "198 est.",
+        "sort": {
+         "at": 1728477120000,
+         "chance": 99,
+         "days": 6,
+         "net": 0,
+         "risk": 0,
+         "sales": 1979,
+         "supply": 120
+        },
+        "status": "pending",
+        "supply": "120",
+        "time": "12:32",
+        "total": "3g 95s 50c"
+       },
+       {
+        "action": "craft",
+        "chance": "99%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "4.0 days",
+        "dot": "high",
+        "each": "—",
+        "id": "forever.pvp.horde.us:1728477000000:5",
+        "item": "Copper Rod",
+        "net": "+1g 27s 70c",
+        "net_class": "pos",
+        "note": "",
+        "qty": 5,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "20 est.",
+        "sort": {
+         "at": 1728477120000,
+         "chance": 99,
+         "days": 40,
+         "net": 12770,
+         "risk": 0,
+         "sales": 198,
+         "supply": 80
+        },
+        "status": "pending",
+        "supply": "80",
+        "time": "12:32",
+        "total": "—"
+       },
+       {
+        "action": "post",
+        "chance": "99%",
+        "chance_note": "",
+        "character": "Brugan",
+        "confidence": 75,
+        "day": "Wed",
+        "days": "4.0 days",
+        "dot": "high",
+        "each": "29s 69c",
+        "id": "forever.pvp.horde.us:1728477000000:6",
+        "item": "Copper Rod",
+        "net": "0c",
+        "net_class": "",
+        "note": "profit counted on the Wed 12:32 craft",
+        "qty": 5,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "20 est.",
+        "sort": {
+         "at": 1728477180000,
+         "chance": 99,
+         "days": 40,
+         "net": 0,
+         "risk": 0,
+         "sales": 198,
+         "supply": 80
+        },
+        "status": "pending",
+        "supply": "80",
+        "time": "12:33",
+        "total": "1g 48s 45c"
+       }
+      ],
+      "today": true,
+      "total": "+13g 60s 31c"
+     },
+     {
+      "cents": 0,
+      "label": "Thu 10",
+      "rows": [],
+      "today": false,
+      "total": "0c"
+     },
+     {
+      "cents": 0,
+      "label": "Fri 11",
+      "rows": [],
+      "today": false,
+      "total": "0c"
+     },
+     {
+      "cents": 9424,
+      "label": "Sat 12",
+      "rows": [
+       {
+        "action": "post",
+        "chance": "100%",
+        "chance_note": "",
+        "character": "Amaya",
+        "confidence": 75,
+        "day": "Sat",
+        "days": "0.3 days",
+        "dot": "high",
+        "each": "62c",
+        "id": "forever.pvp.horde.us:1728477000000:13",
+        "item": "Linen Cloth",
+        "net": "+94s 24c",
+        "net_class": "pos",
+        "note": "for the 18:00 peak",
+        "qty": 160,
+        "quality": 1,
+        "record": "",
+        "risk": "0.0%",
+        "risk_amber": false,
+        "sales": "1183 est.",
+        "sort": {
+         "at": 1728727200000,
+         "chance": 100,
+         "days": 3,
+         "net": 9424,
+         "risk": 0,
+         "sales": 11825,
+         "supply": 320
+        },
+        "status": "pending",
+        "supply": "320",
+        "time": "10:00",
+        "total": "99s 20c"
+       }
+      ],
+      "today": false,
+      "total": "+94s 24c"
+     },
+     {
+      "cents": 0,
+      "label": "Sun 13",
+      "rows": [],
+      "today": false,
+      "total": "0c"
+     },
+     {
+      "cents": 0,
+      "label": "Mon 14",
+      "rows": [],
+      "today": false,
+      "total": "0c"
+     },
+     {
+      "cents": 0,
+      "label": "Tue 15",
+      "rows": [],
+      "today": false,
+      "total": "0c"
+     }
+    ],
+    "help": {
+     "Action": "What to do: BUY, POST, DE (disenchant), CRAFT, VENDOR, MAIL or HOLD",
+     "Best selling windows": "The hours of the week it sells best (price × buyers), local time. \"early pattern\" = under 3 weeks of data",
+     "Buy": "Cheapest buyout on the AH now",
+     "Buy each": "Price to pay now, per unit (buy at or below it)",
+     "Buy total": "What the whole buy costs",
+     "Chance": "Chance it sells in its planned window. The dot is the confidence in that chance: green ≥ 75%, amber ≥ 45%, grey below. Hover a cell for the exact %",
+     "Character": "Which of your characters does it",
+     "Cooldown": "When the recipe can be used again",
+     "Cost each": "What it cost you per unit: what you paid, or the mats for a craft; 0 for items you found or held before tracking started",
+     "Cost total": "Cost each × quantity",
+     "Crafts": "How many to make: stops where one more would lose money",
+     "Current Supply": "Units on the AH now, in the newest scan",
+     "Deposit": "Deposit you paid to post; back on a sale, lost on expiry. \"—\" = its post was not captured",
+     "Detail": "The deposit, the post it resolved, what it cost or realized, or why the plan action was missed",
+     "EV": "Expected value of the mats: average results × their sell value",
+     "Each": "Per unit: the price you pay, or post at",
+     "Est. Sales/Day": "Units the market sells per day (last 7 days), with its source: AHF, or est. from order books in your scans. \"—\" = no sales data",
+     "Event": "What happened: posted, sold, expired, paid out, bought, crafted, disenchanted, mailed. \"—\" is a plan action with no event",
+     "Expected ROI": "Expected profit ÷ buy cost. Flips need at least 20%",
+     "Expected mats": "Average disenchant results for this quality and item level",
+     "Expected net": "What this action adds on average, after fees, deposits and the chance it sells. A chain counts it once, on its first action",
+     "Expected profit": "Average profit after fees and the chance it sells; owned mats count at their hold value",
+     "Item": "The item, in its quality colour. Click to open it on auctionhouse.fyi",
+     "Listed each": "Your buyout per unit",
+     "Listed total": "Listed each × quantity",
+     "Mats each": "Gold for mats you must buy, per craft. \"—\" = you own them all",
+     "Mats total": "Mats each × crafts",
+     "Paid each": "What you paid per unit, averaged across all your characters; 0 for items you found or held before tracking started",
+     "Paid total": "Paid each × quantity",
+     "Plan": "What this week's plan does with it",
+     "Plan action": "The plan action this event completed: done, partial, or missed and skipped ones",
+     "Position": "\"cheapest\" at or below the cheapest listing now; else who is cheaper, and at what price",
+     "Price": "Each, copper as the AH or vendor charged it; for Paid out, the gold taken from the mailbox",
+     "Price age": "How long ago the buy price was seen. Older prices are less likely to still be there",
+     "Product": "What the recipe makes",
+     "Profit": "EV − buy price, after fees",
+     "Profit if sold": "Listed total after the 5% cut, less the cost",
+     "Qty": "Units (or crafts) this row is about",
+     "Recipe known by": "The character who knows it, and their skill",
+     "Risk": "Gold this action spends ÷ all your gold. Amber above 25%",
+     "Seasonality Strength": "0–100: how predictable the weekly price pattern is, tested on a held-out week. Not how profitable it is. \"—\" = too little evidence",
+     "Sell each": "Expected sell price per unit at the sell slot",
+     "Sell slot": "When to sell: the peak hour the flip is for",
+     "Source": "Where the mats come from: Owned, AH, Mixed, + crafted (another character makes a reagent first)",
+     "Supply/Volume": "Days of supply: current supply ÷ sales per day. Not a time-to-sell guarantee",
+     "Time left": "The time left the AH shows for the auction",
+     "Total": "Each × quantity",
+     "Value each": "What one product is expected to sell for",
+     "When": "When it happened, in your local time",
+     "Where": "Bags, bank or mail. Auctions you have up are on On the AH",
+     "Why": "How far the peak's price is above the 30-day median",
+     "Worth": "What it is expected to bring under its plan: planned sales after fees and the chance they sell, other units at their hold value",
+     "ilvl": "Item level: sets the disenchant results"
+    },
+    "sums": {
+     "categories": {
+      "Crafts": 37862,
+      "Disenchant": 2113,
+      "Flips": 12791,
+      "Sell owned": 92689
+     },
+     "characters": {
+      "Amaya": 93746,
+      "Brugan": 51709
+     },
+     "total": 145455
+    },
+    "total": "+14g 54s 55c"
+   }
+  }
+ }
+}

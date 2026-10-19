@@ -38,6 +38,9 @@ class PlanSettings:
     reprice_step: float = 0.05         # config reprice_step: price cut per lowest expiry (SPEC §3.3.3)
     own_record_weight: float = 4       # config own_record_weight: the model's worth in posts
     default_sell_prob_cheapest: float = 0.5   # config default_sell_prob_cheapest: P without volume when cheapest
+    window_margin: float = 0.15        # config window_margin: what an untrusted window must beat posting now by (R26)
+    pattern_full_weeks: int = 6        # config pattern_full_weeks: weeks of data at which a window is fully trusted
+    max_trend_total: float = 0.15      # config max_trend_total: the most the trend may move a forecast (TT7)
 
 
 @dataclass(frozen=True)
@@ -47,6 +50,7 @@ class PlanWindow:
     start_slot: int
     hours: int
     best_slot: int
+    weeks: int                     # weeks of data behind it (IntelWindow.weeks): how far it is trusted (R26)
 
 
 @dataclass(frozen=True)
@@ -119,10 +123,11 @@ class PostOption:
     window: tuple[int, int, int] | None   # (start ms, end ms, best ms), or None for posting now
     cap: int                       # liquidity cap in units
     duration_h: int
+    weeks: int = 0                 # the window's weeks of data; 0 for posting now (R26)
 
 
 
-def occurrences(windows: Sequence[PlanWindow], now_ms: int, horizon_days: int) -> list[tuple[int, int, int]]:
+def occurrences(windows: Sequence[PlanWindow], now_ms: int, horizon_days: int) -> list[tuple[int, int, int, int]]:
     """The windows' occurrences that haven't ended and start within the horizon.
 
     Args:
@@ -131,7 +136,8 @@ def occurrences(windows: Sequence[PlanWindow], now_ms: int, horizon_days: int) -
         horizon_days: Plan length in days.
 
     Returns:
-        (start ms, end ms, best-hour ms) per occurrence, by start (ties: best hour).
+        (start ms, end ms, best-hour ms, the window's weeks of data) per occurrence, by start (ties: best hour,
+        then weeks).
     """
     now_h, end_h = now_ms // HOUR_MS, now_ms // HOUR_MS + horizon_days * 24
     found = []
@@ -141,25 +147,30 @@ def occurrences(windows: Sequence[PlanWindow], now_ms: int, horizon_days: int) -
             start -= WEEK_SLOTS
         while start < end_h:
             best = start + (w.best_slot - w.start_slot) % WEEK_SLOTS
-            found.append((start * HOUR_MS, (start + w.hours) * HOUR_MS, best * HOUR_MS))
+            found.append((start * HOUR_MS, (start + w.hours) * HOUR_MS, best * HOUR_MS, w.weeks))
             start += WEEK_SLOTS
-    return sorted(found, key=lambda o: (o[0], o[2]))
+    return sorted(found, key=lambda o: (o[0], o[2], o[3]))
 
 
-def slot_price(level: int, how_best: float, trend7: float, days_ahead: float) -> int:
-    """Expected price at a window's best hour: level × how × (1 + trend7 ÷ 100 × days ahead) (SPEC §3.4C.1).
+def slot_price(level: int, how_best: float, trend7: float, days_ahead: float, max_trend_total: float) -> int:
+    """Expected price at a window's best hour: level × how × trend factor (SPEC §3.4C.1, TT6, TT7).
+
+    The trend factor is 1 + trend7 ÷ 100 × days ahead, with trend7 clamped to ±5% a day and the factor
+    clamped to 1 ± max_trend_total, so a week of thin data can't move a forecast 35%.
 
     Args:
         level: The price level (med7, else med30), copper.
         how_best: Price ratio of the best hour.
         trend7: % per day, clamped to ±5.
         days_ahead: Days from now to the best hour.
+        max_trend_total: Config max_trend_total, a fraction (0.15).
 
     Returns:
         Copper, rounded half up.
     """
     trend = max(-TREND_CLAMP_PCT, min(TREND_CLAMP_PCT, trend7))
-    return math.floor(level * how_best * (1 + trend / 100 * days_ahead) + 0.5)
+    factor = max(1 - max_trend_total, min(1 + max_trend_total, 1 + trend / 100 * days_ahead))
+    return math.floor(level * how_best * factor + 0.5)
 
 
 def post_options(f: SellFacts, now_ms: int, s: PlanSettings) -> list[PostOption]:
@@ -180,14 +191,14 @@ def post_options(f: SellFacts, now_ms: int, s: PlanSettings) -> list[PostOption]
                            fees.shortest_duration_covering(s.sell_window_hours)))
     if f.level is None:
         return out
-    for start, end, best in occurrences(f.windows, now_ms, s.horizon_days):
+    for start, end, best, weeks in occurrences(f.windows, now_ms, s.horizon_days):
         post = max(best - s.post_lead_hours * HOUR_MS, now_ms)
         hours = tuple(sellprob.planned_window(post, end, now_ms))    # never empty: occurrences haven't ended
-        price = record_price(f, slot_price(f.level, f.how[slot_of(best // HOUR_MS)], f.trend7, (best - now_ms) / DAY_MS),
-                              s)
+        price = record_price(f, slot_price(f.level, f.how[slot_of(best // HOUR_MS)], f.trend7, (best - now_ms) / DAY_MS,
+                                           s.max_trend_total), s)
         covering = -(-(best + HOUR_MS - post) // HOUR_MS)      # the listing stays up through the best hour
         out.append(PostOption(post, hours, price, (start, end, best), _cap(f, hours, now_ms, s),
-                           fees.shortest_duration_covering(covering)))
+                           fees.shortest_duration_covering(covering), weeks))
     return out
 
 
@@ -295,9 +306,48 @@ def alternative(f: SellFacts) -> tuple[str, float]:
     return "hold", 0.0
 
 
+def required_uplift(weeks: int, s: PlanSettings) -> float:
+    """How much more than posting now a window must pay, by how trusted its pattern is (SPEC §3.4C.1, R26).
+
+    Args:
+        weeks: The window's weeks of data.
+        s: Settings (window_margin, pattern_full_weeks).
+
+    Returns:
+        window_margin × (1 − min(1, weeks ÷ pattern_full_weeks)), a fraction: 0.125 at 1 week, 0 from 6 weeks.
+    """
+    return s.window_margin * (1 - min(1.0, weeks / s.pattern_full_weeks))
+
+
+def choose_option(opts: Sequence[PostOption], scored: Sequence[tuple[int, float, float]],
+                  s: PlanSettings) -> tuple[int, float, float] | None:
+    """The best option with room, where a window must beat posting now by its required uplift (SPEC §3.4C.1, R26).
+
+    A window is eligible only when E_window ≥ E_now + required_uplift(weeks) × |E_now|, which is
+    E_now × (1 + uplift) for the usual E_now ≥ 0; E_now is posting now's expected value for the same units.
+    Without a posting-now option with room, windows compete among themselves.
+
+    Args:
+        opts: The post options.
+        scored: (option index, expected value, P) of each option with room, in option order.
+        s: Settings.
+
+    Returns:
+        The eligible option with the highest expected value (ties: the earlier option); None when none has room.
+    """
+    now = next((e for i, e, _ in scored if opts[i].window is None), None)
+    best = None
+    for i, e, p in scored:
+        if now is not None and opts[i].window is not None and e < now + required_uplift(opts[i].weeks, s) * abs(now):
+            continue
+        if best is None or e > best[1]:
+            best = (i, e, p)
+    return best
+
+
 def _best_post(f: SellFacts, opts: list[PostOption], used: list[float], qty: int,
                s: PlanSettings) -> tuple[int, float, float] | None:
-    """The best option for one more stack, within its window's cap.
+    """The best option for one more stack, within its window's cap (choose_option, R26).
 
     Args:
         f: The item.
@@ -307,18 +357,16 @@ def _best_post(f: SellFacts, opts: list[PostOption], used: list[float], qty: int
         s: Settings.
 
     Returns:
-        (option index, expected value, P), best value per unit first (ties: earlier post); None when no option has room.
+        (option index, expected value, P); None when no option has room.
     """
-    best = None
+    scored = []
     for i, o in enumerate(opts):
         if used[i] + qty > o.cap:
             continue
         p = post_chance(f, o.price, qty, o.hours, used[i], s)
         deposit = fees.deposit_copper(f.vendor_sell, qty, o.duration_h)
-        e = sellprob.expected_post(p, qty, o.price, max(alternative(f)[1], 0.0), deposit)
-        if best is None or e > best[1]:
-            best = (i, e, p)
-    return best
+        scored.append((i, sellprob.expected_post(p, qty, o.price, max(alternative(f)[1], 0.0), deposit), p))
+    return choose_option(opts, scored, s)
 
 
 def window_id(opt: PostOption) -> int | None:

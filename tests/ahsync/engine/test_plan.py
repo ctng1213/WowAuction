@@ -1,7 +1,9 @@
-"""Tests for ahsync/engine/plan.py: the sell plan for what you own (SPEC §3.4C.1), invariant PL2."""
+"""Tests for ahsync/engine/plan.py: the sell plan for what you own (SPEC §3.4C.1), invariants PL2 and PL5."""
 from __future__ import annotations
 
+import json
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -17,6 +19,8 @@ NOW = MONDAY + FRI * DAY + 14 * HOUR + 30 * 60_000      # Fri 14:30
 LINEN, GLOVES = 2589, 4239
 S = PlanSettings()
 SEED_PL2 = 4022
+SEED_PL5 = 4026
+SHARED = json.loads((Path(__file__).resolve().parents[3] / "tests" / "scenarios" / "prices.json").read_text(encoding="utf-8"))
 
 
 def at(day: int, hour: int, week: int = 0) -> int:
@@ -24,9 +28,9 @@ def at(day: int, hour: int, week: int = 0) -> int:
     return MONDAY + (week * 7 + day) * DAY + hour * HOUR
 
 
-def window(day: int, start: int, hours: int, best: int) -> PlanWindow:
-    """A selling window on a weekday, as hours of the week."""
-    return PlanWindow(day * 24 + start, hours, day * 24 + best)
+def window(day: int, start: int, hours: int, best: int, weeks: int = 6) -> PlanWindow:
+    """A selling window on a weekday, as hours of the week; 6 weeks of data (established) unless stated (R26)."""
+    return PlanWindow(day * 24 + start, hours, day * 24 + best, weeks)
 
 
 def linen(**changes) -> SellFacts:
@@ -87,10 +91,10 @@ def test_D13_a_post_whose_lead_time_passed_is_planned_now_over_the_rest_of_the_w
 def test_window_occurrences_and_prices():
     running = window(FRI, 13, 3, 14)                                  # Fri 13-16, running now
     # Still running now, and again next Friday at 13:00, which starts before the horizon ends (Fri 14:30).
-    assert plan.occurrences([running], NOW, 7) == [(at(FRI, 13), at(FRI, 16), at(FRI, 14)),
-                                                   (at(FRI, 13, 1), at(FRI, 16, 1), at(FRI, 14, 1))]
-    assert plan.occurrences([window(0, 0, 2, 1)], NOW, 7) == [(at(0, 0, 1), at(0, 2, 1), at(0, 1, 1))]
-    assert plan.slot_price(100, 1.1, 10.0, 2) == 121                  # trend clamped to 5%/day: 100 × 1.1 × 1.1
+    assert plan.occurrences([running], NOW, 7) == [(at(FRI, 13), at(FRI, 16), at(FRI, 14), 6),
+                                                   (at(FRI, 13, 1), at(FRI, 16, 1), at(FRI, 14, 1), 6)]
+    assert plan.occurrences([window(0, 0, 2, 1, 2)], NOW, 7) == [(at(0, 0, 1), at(0, 2, 1), at(0, 1, 1), 2)]
+    assert plan.slot_price(100, 1.1, 10.0, 2, 0.15) == 121                 # trend clamped to 5%/day: 100 × 1.1 × 1.1
     assert plan.slot_of(NOW // HOUR) == FRI * 24 + 14
 
 
@@ -120,8 +124,9 @@ def random_world(rng):
     stack = rng.choice([1, 5, 20])
     sold = rng.choice([None, 2.0, 12.0, 40.0, 200.0])
     lots = [Lot(char, LINEN, rng.randint(1, 120)) for char in ("A", "B", "C")[:rng.randint(1, 3)]]
-    windows = tuple(window(rng.randint(0, 6), rng.randint(0, 20), rng.randint(1, 4), 0) for _ in range(rng.randint(0, 3)))
-    windows = tuple(PlanWindow(w.start_slot, w.hours, w.start_slot + rng.randint(0, w.hours - 1)) for w in windows)
+    windows = tuple(window(rng.randint(0, 6), rng.randint(0, 20), rng.randint(1, 4), 0, rng.randint(1, 8))
+                    for _ in range(rng.randint(0, 3)))
+    windows = tuple(PlanWindow(w.start_slot, w.hours, w.start_slot + rng.randint(0, w.hours - 1), w.weeks) for w in windows)
     now = MONDAY + rng.randint(0, 7 * 24 - 1) * HOUR + rng.randint(0, 59) * 60_000
     return lots, linen(ref_stack=stack, sold_per_day=sold, windows=windows, post_price=rng.choice([None, 30, 45]),
                        vendor_sell=rng.choice([0, 5, 60]), supply_now=rng.choice([None, 0, 10, 93, 400])), now
@@ -168,9 +173,70 @@ def test_O13_O11_the_price_never_drops_below_the_vendor_floor_and_an_undercut_ca
     assert plan.post_options(linen(record=Record(3, 0, 0, 0, False, False)), NOW, S)[0].price == 45   # a clean record
 
 
+def two_options(weeks: int) -> list[plan.PostOption]:
+    """Posting now and one window with the given weeks of data (prices and caps don't matter to the choice)."""
+    return [plan.PostOption(NOW, (), 45, None, 40, 8),
+            plan.PostOption(at(SAT, 10), (), 50, (at(SAT, 17), at(SAT, 21), at(SAT, 18)), 40, 24, weeks)]
+
+
+def test_R26_a_window_must_beat_posting_now_by_a_margin_that_shrinks_with_its_weeks():
+    assert plan.required_uplift(1, S) == pytest.approx(0.125)              # 0.15 × (1 − 1/6)
+    assert plan.required_uplift(6, S) == 0.0 and plan.required_uplift(9, S) == 0.0
+    # E_now 100: 1 week of data needs 112.5; +10% (110) posts now, +20% (120) takes the window.
+    assert plan.choose_option(two_options(1), [(0, 100.0, 1.0), (1, 110.0, 1.0)], S)[0] == 0
+    assert plan.choose_option(two_options(1), [(0, 100.0, 1.0), (1, 120.0, 1.0)], S)[0] == 1
+    # 6 weeks: fully trusted, so +1% (101) is enough.
+    assert plan.choose_option(two_options(6), [(0, 100.0, 1.0), (1, 101.0, 1.0)], S)[0] == 1
+    # No posting-now option with room: the window competes on its own.
+    assert plan.choose_option(two_options(1), [(1, 90.0, 1.0)], S) == (1, 90.0, 1.0)
+    # A negative E_now (the deposit outweighs the sale) still needs the window to beat it by the margin.
+    assert plan.choose_option(two_options(1), [(0, -100.0, 0.1), (1, -95.0, 0.1)], S)[0] == 0   # needs ≥ −87.5
+    assert plan.choose_option(two_options(1), [], S) is None
+
+
+def test_R26_owned_linen_posts_now_while_its_saturday_window_has_one_week_of_data():
+    f = linen(level=47, how=tuple([1.0] * 168), sold_per_day=400.0, listed_per_day=0.0, supply_now=2000)   # 47c vs 45c
+    early = plan.sell_plan([Lot("A", LINEN, 20)], {LINEN: replace(f, windows=(window(SAT, 17, 4, 18, 1),))}, NOW, S)
+    assert [(a.kind, a.at_ms, a.window_start_ms) for a in early] == [("post", NOW, None)]          # +4% < +12.5%
+    trusted = plan.sell_plan([Lot("A", LINEN, 20)], {LINEN: replace(f, windows=(window(SAT, 17, 4, 18, 6),))}, NOW, S)
+    assert [(a.kind, a.at_ms, a.peak_ms) for a in trusted] == [("post", at(SAT, 10), at(SAT, 18))]   # value alone
+
+
+def random_choice(rng):
+    """Random options (posting now first when there is one) and their expected values."""
+    weeks = [rng.randint(1, 9) for _ in range(rng.randint(1, 4))]
+    opts = ([plan.PostOption(NOW, (), 45, None, 40, 8)] if rng.random() < 0.8 else []) + \
+        [plan.PostOption(at(SAT, 10), (), 50, (at(SAT, 17), at(SAT, 21), at(SAT, 18)), 40, 24, w) for w in weeks]
+    scored = [(i, rng.choice([-1.0, 1.0]) * rng.uniform(0, 1000), 0.5) for i in range(len(opts)) if rng.random() < 0.9]
+    return opts, scored
+
+
+def test_PL5_a_window_beats_posting_now_only_by_its_required_uplift():
+    for n, (opts, scored) in enumerate(cases(SEED_PL5, random_choice)):
+        best = plan.choose_option(opts, scored, S)
+        now = [e for i, e, _ in scored if opts[i].window is None]
+        if not scored:
+            assert best is None, (SEED_PL5, n)
+            continue
+        if all(opts[i].weeks >= S.pattern_full_weeks for i, _, _ in scored if opts[i].window is not None):
+            assert best[1] == max(e for _, e, _ in scored), (SEED_PL5, n)          # trusted: the plain maximum
+        if now and opts[best[0]].window is not None:
+            uplift = plan.required_uplift(opts[best[0]].weeks, S)
+            assert best[1] >= now[0] + uplift * abs(now[0]) >= now[0], (SEED_PL5, n)
+        if now:
+            assert best[1] >= now[0], (SEED_PL5, n)      # posting now never loses to a window worth less
+
+
+@pytest.mark.parametrize("s", [s for s in SHARED if s["call"] == "slot_price"], ids=lambda s: s["name"])
+def test_TT7_the_trend_moves_a_forecast_at_most_15_percent_in_total(s):
+    a = s["args"]
+    assert plan.slot_price(a["level"], a["how_best"], a["trend7"], a["days_ahead"], a["max_trend_total"]) == \
+        s["expect"], s["why"]
+
+
 def test_TT6_price_at_best_time_includes_the_clamped_trend():
-    assert plan.slot_price(49, 1.12, 2.0, 2) == 57                      # floor(49 × 1.12 × 1.04 + 0.5)
-    assert plan.slot_price(49, 1.12, 9.0, 2) == 60                      # clamped to 5%: floor(49 × 1.12 × 1.1 + 0.5)
+    assert plan.slot_price(49, 1.12, 2.0, 2, 0.15) == 57                     # floor(49 × 1.12 × 1.04 + 0.5)
+    assert plan.slot_price(49, 1.12, 9.0, 2, 0.15) == 60                     # clamped to 5%: floor(49 × 1.12 × 1.1 + 0.5)
 
 
 def test_P25_without_volume_the_chance_follows_where_the_post_would_stand():

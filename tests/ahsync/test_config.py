@@ -123,3 +123,17 @@ def test_the_volume_prior_and_the_cheapest_default_are_settings(tmp_path):
         with pytest.raises(ConfigError) as error:
             parse_config(text, {}, tmp_path)
         assert str(error.value).endswith(message)
+
+
+def test_R26_TT7_the_window_margin_and_the_trend_clamp_are_settings(tmp_path):
+    config = parse_config("window_margin = 0.1\npattern_full_weeks = 4\nmax_trend_total = 0.2\n", {}, tmp_path)
+    s = plan_settings(config)
+    assert (s.window_margin, s.pattern_full_weeks, s.max_trend_total) == (0.1, 4, 0.2)
+    defaults = plan_settings(Config())
+    assert (defaults.window_margin, defaults.pattern_full_weeks, defaults.max_trend_total) == (0.15, 6, 0.15)
+    for text, message in (("pattern_full_weeks = 0\n", "must be greater than 0"),
+                          ("window_margin = -0.1\n", "must be 0 or more"),
+                          ("max_trend_total = -1\n", "must be 0 or more")):
+        with pytest.raises(ConfigError) as error:
+            parse_config(text, {}, tmp_path)
+        assert str(error.value).endswith(message)

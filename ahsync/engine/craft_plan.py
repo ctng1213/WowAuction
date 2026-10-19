@@ -15,8 +15,8 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 
 from ahsync.engine import craft, fees, sellprob
-from ahsync.engine.plan import PlanAction, PlanSettings, PostOption, SellFacts, alternative, post_chance, \
-    post_options, window_id
+from ahsync.engine.plan import PlanAction, PlanSettings, PostOption, SellFacts, alternative, choose_option, \
+    post_chance, post_options, window_id
 
 STEP_MS = 60_000      # chain steps a minute apart, so their order shows in time
 
@@ -56,19 +56,18 @@ def _best_sale(f: SellFacts, opts: list[PostOption], ledger: dict, units: int,
         s: Settings.
 
     Returns:
-        (option index, expected value, P); None when no window has room.
+        (option index, expected value, P) as plan.choose_option picks it: a window must beat posting now by its
+        required uplift (R26); None when no window has room.
     """
-    best = None
+    scored = []
     for i, o in enumerate(opts):
         used = ledger.get((f.key, window_id(o)), 0.0)
         if used + units > o.cap:
             continue
         p = post_chance(f, o.price, units, o.hours, used, s)
         deposit = fees.deposit_copper(f.vendor_sell, units, o.duration_h)
-        e = sellprob.expected_post(p, units, o.price, alternative(f)[1], deposit)
-        if best is None or e > best[1]:
-            best = (i, e, p)
-    return best
+        scored.append((i, sellprob.expected_post(p, units, o.price, alternative(f)[1], deposit), p))
+    return choose_option(opts, scored, s)
 
 
 def product_value(f: SellFacts, recipe: craft.Recipe, opts: list[PostOption], ledger: dict,
@@ -220,9 +219,9 @@ def chain_actions(recipe: craft.Recipe, option: craft.CraftOption, world: CraftW
     cost = expected - profit
     out, at = [], now_ms
     needs = {key: count * option.crafts for key, count in recipe.reagents}     # intermediate units the craft uses
-    for crafter, key, units in intermediate_buys(option, recipe, world):
-        price, _ = buy_terms(world.market, key, units)
-        out.append(PlanAction("buy", crafter, key, math.ceil(units - 1e-9), price, at, None, None, None, None, 0.0,
+    for crafter, key, mat_units in intermediate_buys(option, recipe, world):
+        price, _ = buy_terms(world.market, key, mat_units)
+        out.append(PlanAction("buy", crafter, key, math.ceil(mat_units - 1e-9), price, at, None, None, None, None, 0.0,
                               0.0, chain=chain, source=buy_source(world.market, key)))
         at += STEP_MS
     for step in craft.steps(option, recipe):

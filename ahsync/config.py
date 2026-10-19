@@ -73,6 +73,9 @@ class Config:
     max_supply_share_gear: float = 1.0
     min_gear_units: int = 2
     max_risk_pct: float = 25
+    window_margin: float = 0.15
+    pattern_full_weeks: int = 6
+    max_trend_total: float = 0.15
     max_actions_per_day: int = 0
     launch_wow_after_catchup: bool = False
     realms: Mapping[str, str] = field(default_factory=dict)
@@ -97,12 +100,13 @@ _TYPES: dict[str, tuple[tuple[type, ...], str]] = {
 }
 for _name in ("retention_days", "dashboard_port", "live_refresh_minutes", "own_record_days",
               "struggle_streak", "keep_retry_streak", "post_lead_hours", "sell_window_hours",
-              "max_craft_depth", "max_actions_per_day", "min_gear_units"):
+              "max_craft_depth", "max_actions_per_day", "min_gear_units", "pattern_full_weeks"):
     _TYPES[_name] = _INT
 for _name in ("min_flip_margin", "default_sell_prob", "default_sell_prob_cheapest", "volume_prior_per_day",
               "volume_prior_hours", "default_undercut_share", "own_record_weight",
               "reprice_step", "min_sell_prob", "high_risk_pct", "pattern_half_life_weeks",
-              "window_threshold", "peak_tolerance", "max_supply_share", "max_supply_share_gear", "max_risk_pct"):
+              "window_threshold", "peak_tolerance", "max_supply_share", "max_supply_share_gear", "max_risk_pct",
+              "window_margin", "max_trend_total"):
     _TYPES[_name] = _NUMBER
 
 
@@ -179,13 +183,14 @@ def _check_values(text: str, values: dict) -> None:
             raise _fail(text, "markets", f"has {market!r}; expected forever.<normal|pvp|rp>.<alliance|horde>.us")
     if "markets" in values and not values["markets"]:
         raise _fail(text, "markets", "must list at least one market")
-    for name in ("retention_days", "dashboard_port", "live_refresh_minutes", "post_lead_hours", "sell_window_hours"):
+    for name in ("retention_days", "dashboard_port", "live_refresh_minutes", "post_lead_hours", "sell_window_hours",
+                 "pattern_full_weeks"):
         if name in values and values[name] <= 0:
             raise _fail(text, name, "must be greater than 0")
     for name in ("default_sell_prob", "default_sell_prob_cheapest"):
         if name in values and not 0 <= values[name] <= 1:
             raise _fail(text, name, "must be between 0 and 1")
-    for name in ("volume_prior_per_day", "volume_prior_hours"):
+    for name in ("volume_prior_per_day", "volume_prior_hours", "window_margin", "max_trend_total"):
         if name in values and values[name] < 0:
             raise _fail(text, name, "must be 0 or more")
     if "daily_refresh_time" in values and not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", values["daily_refresh_time"]):
@@ -350,7 +355,8 @@ def plan_settings(config: Config) -> PlanSettings:
     return PlanSettings(config.post_lead_hours, config.max_supply_share, config.max_supply_share_gear,
                         config.min_gear_units, config.sell_window_hours, 7, config.default_undercut_share,
                         config.default_sell_prob, config.reprice_step, config.own_record_weight,
-                        config.default_sell_prob_cheapest)
+                        config.default_sell_prob_cheapest, config.window_margin, config.pattern_full_weeks,
+                        config.max_trend_total)
 
 
 def record_settings(config: Config) -> RecordSettings:

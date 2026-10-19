@@ -24,7 +24,7 @@ def product(key: int, level: int, peak_day: int = SAT, peak_hour: int = 18, **ch
     how[peak_day * 24 + peak_hour] = 1.2
     base = SellFacts(key, level=level, trend7=0.0, post_price=level, sold_per_day=60.0, listed_per_day=20.0,
                      ref_stack=1, how=tuple(how), sales_how=tuple([1.0] * 168),
-                     windows=(PlanWindow(peak_day * 24 + peak_hour - 1, 3, peak_day * 24 + peak_hour),), book=(),
+                     windows=(PlanWindow(peak_day * 24 + peak_hour - 1, 3, peak_day * 24 + peak_hour, 6),), book=(),
                      cur=level, cur_qty=2, vendor_sell=50, supply_now=20, conf=70)
     return replace(base, **changes)
 
@@ -49,6 +49,33 @@ def test_C7_an_ah_sourced_craft_buys_its_mats_first_then_crafts_then_posts():
     buy, made, post = actions[:3]
     assert buy.at_ms <= made.at_ms < post.at_ms and buy.chain == made.chain == post.chain == "craft:2663"
     assert buy.qty == 2 * made.qty and buy.price == 1000
+
+
+def test_R26_a_crafted_rod_posts_now_while_its_window_is_early_and_only_slightly_better():
+    def rod(weeks: int) -> SellFacts:
+        """A rod whose Saturday peak is only 1.1× and backed by `weeks` weeks of data."""
+        how = [1.0] * 168
+        how[SAT * 24 + 18] = 1.1
+        return product(ROD, 4000, how=tuple(how), windows=(PlanWindow(SAT * 24 + 17, 3, SAT * 24 + 18, weeks),))
+    early, _ = craft_plan.craft_plan(world(products={ROD: rod(1)}), {"Brugan-G": RICH}, RICH, NOW, S, 25, {})
+    assert {a.window_start_ms for a in early if a.kind == "post"} == {None}             # +10% < +12.5%: post now
+    trusted, _ = craft_plan.craft_plan(world(products={ROD: rod(6)}), {"Brugan-G": RICH}, RICH, NOW, S, 25, {})
+    assert {a.peak_ms for a in trusted if a.kind == "post"} == {MONDAY + SAT * DAY + 18 * HOUR}
+
+
+def test_C20_a_chain_posts_the_units_it_crafted_not_the_units_of_its_last_mat_buy():
+    ore = 2770
+    smelt = craft.Recipe(2657, BAR, 1, 1, ((ore, 1),), ("Brugan-G",))           # 1 Copper Ore -> 1 Copper Bar
+    w = world(recipes=(ROD_RECIPE,), books={BAR: [], ore: [(100, 6.0)]},     # no bars listed: 6 ore at 1c
+              products={ROD: product(ROD, 4000, supply_now=6)})                 # others list 6 rods: cap 3
+    w = replace(w, by_product={**w.by_product, BAR: [smelt]})
+    ledger: dict = {}
+    actions, _ = craft_plan.craft_plan(w, {"Brugan-G": RICH}, RICH, NOW, S, 25, ledger)
+    buy = next(a for a in actions if a.kind == "buy")
+    post = next(a for a in actions if a.kind == "post")
+    assert (buy.key, buy.qty) == (ore, 6)                                       # 3 rods × 2 bars, smelted from ore
+    assert post.qty == 3 and isinstance(post.qty, int)                          # the 3 rods crafted, not 6.0
+    assert ledger == {(ROD, post.window_start_ms): 3.0}
 
 
 def test_D10_a_craft_planned_now_has_a_linked_post_within_7_days():

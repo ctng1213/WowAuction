@@ -154,5 +154,47 @@
   },
   "expect": 560.5,
   "why": "0.5 x 20 x 49 x 0.95 + 0.5 x (200 - 10) = 465.5 + 95 = 560.5 >= 1.2 x 200"
+ },
+ {
+  "id": "TT7",
+  "name": "a rising trend stops at +15% in total",
+  "call": "slot_price",
+  "args": {
+   "level": 100,
+   "how_best": 1.0,
+   "trend7": 5.0,
+   "days_ahead": 6,
+   "max_trend_total": 0.15
+  },
+  "expect": 115,
+  "why": "1 + 0.05 x 6 = 1.30 is clamped to 1 + 0.15: 100 x 1.15 = 115c, not 130c"
+ },
+ {
+  "id": "TT7",
+  "name": "a falling trend stops at -15% in total",
+  "call": "slot_price",
+  "args": {
+   "level": 100,
+   "how_best": 1.0,
+   "trend7": -5.0,
+   "days_ahead": 4,
+   "max_trend_total": 0.15
+  },
+  "expect": 85,
+  "why": "1 - 0.05 x 4 = 0.80 is clamped to 1 - 0.15: 100 x 0.85 = 85c, not 80c"
+ },
+ {
+  "id": "TT7",
+  "name": "a trend inside the clamp is unchanged",
+  "call": "slot_price",
+  "args": {
+   "level": 100,
+   "how_best": 1.0,
+   "trend7": 2.0,
+   "days_ahead": 3,
+   "max_trend_total": 0.15
+  },
+  "expect": 106,
+  "why": "1 + 0.02 x 3 = 1.06: 106c"
  }
 ]

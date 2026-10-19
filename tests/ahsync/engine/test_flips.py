@@ -28,7 +28,7 @@ def silk(**changes) -> SellFacts:
     how[SAT * 24 + 18] = 1.5
     base = SellFacts(SILK, level=100, trend7=0.0, post_price=100, sold_per_day=400.0, listed_per_day=100.0,
                      ref_stack=20, how=tuple(how), sales_how=tuple([1.0] * 168),
-                     windows=(PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18),),
+                     windows=(PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18, 6),),
                      book=((60, 20, 4, 3), (100, 20, 4, 2)), cur=60, cur_qty=20, vendor_sell=10,
                      supply_now=400, conf=80)
     return replace(base, **changes)
@@ -123,7 +123,7 @@ def test_PL4_planned_units_never_exceed_a_windows_capacity_across_characters():
 
 
 def test_the_best_window_wins_and_a_spent_budget_ends_later_flips():
-    two_windows = silk(windows=(PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18), PlanWindow(2 * 24 + 20, 2, 2 * 24 + 21)))
+    two_windows = silk(windows=(PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18, 6), PlanWindow(2 * 24 + 20, 2, 2 * 24 + 21, 6)))
     buy, *posts = flips.flip_plan({SILK: two_windows}, {"A": RICH}, RICH, NOW, S, FS, {})
     assert {p.peak_ms for p in posts} == {MONDAY + SAT * DAY + 18 * HOUR}     # Wed (1.0×) never beats Sat (1.5×)
     budgets = {"A": 1200}                                                    # one auction of 20 at 60c
@@ -132,7 +132,7 @@ def test_the_best_window_wins_and_a_spent_budget_ends_later_flips():
 
 
 def test_EX11_a_market_wide_flip_offer_for_one_reference_stack():
-    expected, price = flips.flip_offer(49, 1.25, 0.0, 2, 0.9, 10.0, 10, 20)
+    expected, price = flips.flip_offer(49, 1.25, 0.0, 2, 0.9, 10.0, 10, 20, 0.15)
     assert price == 61                                              # floor(49 × 1.25 + 0.5)
     assert abs(expected - 53.105) < 1e-9                            # 0.9 × 61 × 0.95 + 0.1 × (10 − 10 ÷ 20)
 
@@ -158,10 +158,46 @@ def test_R24_a_dumped_stack_is_bought_and_relisted_now_under_the_next_level():
     assert (post.kind, post.qty, post.price, post.at_ms, post.window_start_ms, post.peak_ms, post.duration_h) == \
         ("post", 20, 49, NOW, None, None, 8)                                # min(50 − 1, max(48, 55)), due now, 8 h
     assert (post.p, post.chain) == (pytest.approx(0.9), "flip:2589")
-    sat = dumped_linen(windows=(PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18),), book=((10, 20, 4, 1), (50, 20, 1, 5)),
+    sat = dumped_linen(windows=(PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18, 6),), book=((10, 20, 4, 1), (50, 20, 1, 5)),
                        how=tuple(1.5 if h == SAT * 24 + 18 else 1.0 for h in range(168)))
     buy, post = flips.flip_plan({LINEN: sat}, {"Amaya-G": RICH}, RICH, NOW, s, FS, {})
     assert (post.price, post.peak_ms, buy.expected) == (72, MONDAY + SAT * DAY + 18 * HOUR, pytest.approx(1368))
+
+
+def test_R26_a_flip_relists_now_unless_its_early_window_pays_enough_more():
+    s = replace(S, default_undercut_share=0.0)
+    how = tuple(1.05 if h == SAT * 24 + 18 else 1.0 for h in range(168))          # Saturday 18:00: 48 × 1.05 → 50c
+
+    def saturday(weeks: int) -> SellFacts:
+        """R24's Linen with a Saturday window backed by `weeks` weeks of data."""
+        return dumped_linen(windows=(PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18, weeks),), how=how,
+                            book=((10, 20, 4, 1), (50, 20, 1, 5)))
+    _, early = flips.flip_plan({LINEN: saturday(1)}, {"Amaya-G": RICH}, RICH, NOW, s, FS, {})
+    assert (early.price, early.window_start_ms) == (49, None)       # 20 × 50 × 0.95 = 950 < 856.9 × 1.125 = 964.0
+    _, trusted = flips.flip_plan({LINEN: saturday(6)}, {"Amaya-G": RICH}, RICH, NOW, s, FS, {})
+    assert (trusted.price, trusted.peak_ms) == (50, MONDAY + SAT * DAY + 18 * HOUR)    # 950 > 856.9
+
+
+def gloves(**changes) -> SellFacts:
+    """Embossed Leather Gloves (R27): listed at 8s and 16s, med7 and p90 15s, nobody buys them (P 0);
+    Amaya disenchants one for 21s, a merchant pays 1s."""
+    base = SellFacts(4239, level=1500, trend7=0.0, post_price=799, sold_per_day=0.0, listed_per_day=0.0, ref_stack=1,
+                     how=tuple([1.0] * 168), sales_how=tuple([1.0] * 168), windows=(),
+                     book=((800, 1, 3, 1), (1600, 1, 4, 1)), cur=800, cur_qty=1, vendor_sell=100, de_value=2100.0,
+                     de_char="Amaya-G", supply_now=2, conf=75, med7=1500, p90=1500)
+    return replace(base, **changes)
+
+
+def test_R27_a_flip_whose_post_pays_no_more_than_disenchanting_is_not_a_flip():
+    # P 0: the post is worth 1 × (21s − deposit) per glove, below the 21s of disenchanting it: a disenchant buy
+    # (the Disenchant page lists it), not a flip, even though 21s against 8s paid clears the margin.
+    assert flips.flip_plan({4239: gloves()}, {"Brugan-G": RICH}, RICH, NOW, S, FS, {}) == []
+    # Listed at 8s only, med7 and p90 30s, 2.7 sold a day (0.9 of a glove in the 8 h window): posting at 30s is
+    # worth about 0.9 × 30s × 0.95 + 0.1 × 21s ≈ 27s 75c per glove, above 21s: a flip.
+    selling = gloves(book=((800, 1, 3, 1),), sold_per_day=2.7, med7=3000, p90=3000, level=3000)
+    buy, post = flips.flip_plan({4239: selling}, {"Brugan-G": RICH}, RICH, NOW, S, FS, {})
+    assert (buy.qty, buy.price, post.price, post.p) == (1, 800, 3000, pytest.approx(0.9))
+    assert post.expected / post.qty > 2100
 
 
 def test_R25_no_flip_when_the_next_level_is_too_close():

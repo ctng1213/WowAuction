@@ -25,7 +25,7 @@ def facts(key: int, level: int, **changes) -> SellFacts:
     how[SAT * 24 + 18] = 1.2
     base = SellFacts(key, level=level, trend7=0.0, post_price=level, sold_per_day=60.0, listed_per_day=20.0,
                      ref_stack=1, how=tuple(how), sales_how=tuple([1.0] * 168),
-                     windows=(PlanWindow(SAT * 24 + 17, 3, SAT * 24 + 18),), book=(), cur=level, cur_qty=2,
+                     windows=(PlanWindow(SAT * 24 + 17, 3, SAT * 24 + 18, 6),), book=(), cur=level, cur_qty=2,
                      vendor_sell=50, supply_now=20, conf=70)
     return replace(base, **changes)
 

@@ -1,6 +1,6 @@
 -- Engine/Prices.lua: the post price (SPEC §3.4), a window's expected price and a live flip's value. Ports of
 -- post_price in ahsync/engine/prices.py, slot_price in ahsync/engine/plan.py and flip_now_offer in
--- ahsync/engine/flips.py; keep them identical (CLAUDE.md, PP1, PP2, TT6, FN1).
+-- ahsync/engine/flips.py; keep them identical (CLAUDE.md, PP1, PP2, TT6, TT7, FN1).
 
 local AHProfit = AHProfit
 AHProfit.Engine = AHProfit.Engine or {}
@@ -40,16 +40,23 @@ function Prices.FlipNow(p, units, cheapest, relist, fallback, deposit, margin)
 end
 
 Prices.TREND_CLAMP_PCT = 5         -- SPEC §3.4C.1: trend7 is clamped to ±5% per day
+-- Config max_trend_total (SPEC §3.6, TT7). The addon has no config channel (min_flip_margin is hard-coded the
+-- same way in UI/FlipView.lua), so this mirrors AHSync's default; change both together.
+Prices.MAX_TREND_TOTAL = 0.15
 
---- Expected price at a window's best hour: level × how × (1 + trend7 ÷ 100 × days ahead) (SPEC §3.4C.1, TT6).
----@param level number      Price level (med7, else med30), copper
----@param how number        The best hour's price ratio
----@param trend7 number     Trend, % per day; clamped to ±5
----@param daysAhead number  Days until that hour
----@return number           Copper, half up
-function Prices.SlotPrice(level, how, trend7, daysAhead)
+--- Expected price at a window's best hour: level × how × trend factor (SPEC §3.4C.1, TT6, TT7).
+--- The factor is 1 + trend7 ÷ 100 × days ahead, trend7 clamped to ±5%/day and the factor to 1 ± maxTotal.
+---@param level number          Price level (med7, else med30), copper
+---@param how number            The best hour's price ratio
+---@param trend7 number         Trend, % per day; clamped to ±5
+---@param daysAhead number      Days until that hour
+---@param maxTotal number|nil   Config max_trend_total, a fraction; nil for Prices.MAX_TREND_TOTAL
+---@return number               Copper, half up
+function Prices.SlotPrice(level, how, trend7, daysAhead, maxTotal)
+  maxTotal = maxTotal or Prices.MAX_TREND_TOTAL
   local trend = math.max(-Prices.TREND_CLAMP_PCT, math.min(Prices.TREND_CLAMP_PCT, trend7))
-  return math.floor(level * how * (1 + trend / 100 * daysAhead) + 0.5)
+  local factor = math.max(1 - maxTotal, math.min(1 + maxTotal, 1 + trend / 100 * daysAhead))
+  return math.floor(level * how * factor + 0.5)
 end
 
 --- Days from now until the next start of an hour of the week (UTC, 0 = Mon 00:00), as capacity.slot_of counts.

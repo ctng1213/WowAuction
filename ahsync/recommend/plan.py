@@ -109,29 +109,31 @@ def sell_facts(i: ItemIntel, info: ItemInfo | None, de: tuple[float, str] | None
     return SellFacts(
         i.key, price_level(i), i.trend7, i.post_price, i.sold_per_day, i.listed_per_day, i.ref_stack,
         _pattern(i.how, i.how_weeks, FLAT), _pattern(i.sales_how, i.sales_weeks, FLAT),
-        tuple(PlanWindow(w.start_slot, w.hours, w.best_slot) for w in i.sell_windows), i.book or None, i.cur,
+        tuple(PlanWindow(w.start_slot, w.hours, w.best_slot, w.weeks) for w in i.sell_windows), i.book or None, i.cur,
         i.cur_qty, (info.vendor_sell if info else None) or 0, de[0] if de else None, de[1] if de else None, 0.0,
         supply_level(i), _pattern(i.supply_how, i.supply_weeks, ()),                        # V23
         bool(info and info.item_class in GEAR_CLASSES), i.conf, record, i.med7, i.p90_30)
 
 
-def window_candidate(i: ItemIntel, min_flip_margin: float) -> bool:
+def window_candidate(i: ItemIntel, min_flip_margin: float, max_trend_total: float = 0.15) -> bool:
     """Whether an item's best window could beat its cheapest auction by the margin (SPEC §3.4C.2).
 
     Args:
         i: The item's intelligence.
         min_flip_margin: Config min_flip_margin.
+        max_trend_total: Config max_trend_total: the most the trend may add (slot_price, TT7).
 
     Returns:
-        True when the price level × the best peak hour's price ratio × the most a week of trend adds,
-        after the cut, ≥ (1 + margin) × cur (SPEC §3.4C.1, R21); never for a suspect cur (FM5).
+        True when the price level × the best peak hour's price ratio × the most a week of trend adds
+        (at most 1 + max_trend_total), after the cut, ≥ (1 + margin) × cur (SPEC §3.4C.1, R21); never for a
+        suspect cur (FM5).
     """
     level = price_level(i)
     if not (i.cur and level and i.sell_windows) or i.cur_suspect:
         return False
     how = _pattern(i.how, i.how_weeks, FLAT)
     best = max(how[w.best_slot] for w in i.sell_windows)
-    trend = 1 + max(0.0, min(TREND_CLAMP_PCT, i.trend7)) / 100 * 7
+    trend = 1 + min(max_trend_total, max(0.0, min(TREND_CLAMP_PCT, i.trend7)) / 100 * 7)
     return level * best * trend * (1 - fees.AH_CUT) >= (1 + min_flip_margin) * i.cur
 
 
@@ -152,17 +154,18 @@ def now_candidate(i: ItemIntel, min_flip_margin: float) -> bool:
     return (levels[1] - 1) * (1 - fees.AH_CUT) * i.chance >= (1 + min_flip_margin) * i.cur
 
 
-def flip_candidate(i: ItemIntel, min_flip_margin: float) -> bool:
+def flip_candidate(i: ItemIntel, min_flip_margin: float, max_trend_total: float = 0.15) -> bool:
     """Whether an item could flip at all: a cheap filter so the flip search runs on a few items, not the market.
 
     Args:
         i: The item's intelligence.
         min_flip_margin: Config min_flip_margin.
+        max_trend_total: Config max_trend_total.
 
     Returns:
         True when its best window (window_candidate) or relisting now (now_candidate) could pay the margin.
     """
-    return window_candidate(i, min_flip_margin) or now_candidate(i, min_flip_margin)
+    return window_candidate(i, min_flip_margin, max_trend_total) or now_candidate(i, min_flip_margin)
 
 
 def flip_offers(stats: dict[int, ItemIntel], items: dict[int, ItemInfo], vendor_sold: set[int], now_ms: int,
@@ -183,14 +186,15 @@ def flip_offers(stats: dict[int, ItemIntel], items: dict[int, ItemInfo], vendor_
     duration = fees.shortest_duration_covering(cfg.sell_window_hours)
     for key in sorted(stats):
         i = stats[key]
-        if key in vendor_sold or i.cur_suspect or not window_candidate(i, cfg.min_flip_margin):
+        if key in vendor_sold or i.cur_suspect or not window_candidate(i, cfg.min_flip_margin, cfg.max_trend_total):
             continue
         how = _pattern(i.how, i.how_weeks, FLAT)
         best = max(i.sell_windows, key=lambda w: (how[w.best_slot], -w.best_slot)).best_slot
         days = ((best - slot_of(now_ms // HOUR_MS)) % 168 * HOUR_MS - now_ms % HOUR_MS) / DAY_MS
         vendor_sell = (items[key].vendor_sell if key in items else None) or 0
         expected, price = flip_offer(price_level(i), how[best], i.trend7, max(0.0, days), i.chance, float(vendor_sell),
-                                     fees.deposit_copper(vendor_sell, i.ref_stack, duration), i.ref_stack)
+                                     fees.deposit_copper(vendor_sell, i.ref_stack, duration), i.ref_stack,
+                                     cfg.max_trend_total)
         if expected > 0:
             out[key] = f"{round_half_up(expected)},{price},{best}"
     return out
@@ -222,7 +226,7 @@ def week_inputs(state: StateReader, characters: list[tuple[str, int]], stats: di
     enchanters = sorted(((c, state.skill_of(c, "Enchanting")) for c in char_ids), key=lambda e: (-(e[1] or -1), e[0]))
     enchanters = [(c, s) for c, s in enchanters if s is not None]
     wanted = {lot.key for lot in lots} | {r.product for r in recipes} | {k for r in recipes for k, _ in r.reagents}
-    wanted |= {k for k, i in stats.items() if flip_candidate(i, cfg.min_flip_margin)}
+    wanted |= {k for k, i in stats.items() if flip_candidate(i, cfg.min_flip_margin, cfg.max_trend_total)}
     facts = {k: sell_facts(stats[k], items.get(k), de_offer(items.get(k), stats, enchanters), (records or {}).get(k))
              for k in sorted(wanted) if k in stats}
     world = CraftWorld(recipes, by_product, craft_market(state, char_ids, stats, items),
