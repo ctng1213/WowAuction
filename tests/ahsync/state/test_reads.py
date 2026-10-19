@@ -109,3 +109,15 @@ def test_snapshot_times_per_place_leave_out_the_auctions_snapshot(db):
         ("A-R", "bags", 5), ("A-R", "auctions", 6), ("B-R", "bank", 7), ("C-R", "bags", 8))
     assert db.snapshot_times(["A-R", "B-R"]) == {("A-R", "bags"): 5, ("B-R", "bank"): 7}
     assert db.snapshot_times([]) == {}
+
+
+def test_character_sheets_carry_professions_and_recipe_counts(db):
+    sql(db, "INSERT INTO characters(id, class, level, faction, market, gold, updated) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("B-R", "WARRIOR", 34, "Horde", M, 9, 5), ("A-R", "MAGE", 38, "Horde", M, 7, 6))
+    sql(db, "INSERT INTO professions(char_id, profession, skill, max_skill) VALUES (?, ?, ?, ?)",
+        ("A-R", "Tailoring", 160, 225), ("A-R", "Enchanting", 142, 225))
+    sql(db, "INSERT INTO known_recipes(char_id, spell_id) VALUES (?, ?)", ("A-R", 1), ("A-R", 2))
+    assert db.character_sheets(["A-R", "B-R"]) == [
+        ("A-R", "MAGE", 38, "Horde", M, 7, 2, 6, (("Enchanting", 142, 225), ("Tailoring", 160, 225))),
+        ("B-R", "WARRIOR", 34, "Horde", M, 9, 0, 5, ())]
+    assert db.character_sheets([]) == []

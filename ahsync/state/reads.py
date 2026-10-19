@@ -114,6 +114,17 @@ class StateReader(Protocol):
             (character id, place) -> capture time, UTC ms.
         """
 
+    def character_sheets(self, char_ids: list[str]) -> list[tuple]:
+        """What the addon captured about each character, for the Characters page (SPEC §3.5, D49).
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            (id, class, level, faction, market, gold copper, known recipes, updated ms, ((profession, skill, max), ...)
+            by name) per character, by id.
+        """
+
     def own_auctions(self, char_ids: list[str]) -> list[tuple[str, int, int, int, int, int, int | None]]:
         """Your auctions as the addon last saw them, with the deposit of the post behind each (SPEC §3.5 On the AH).
 
@@ -366,6 +377,30 @@ class StateReads:
         return {(c, loc): at for c, loc, at in self.conn.execute(
             f"SELECT char_id, location, at FROM snapshots WHERE char_id IN ({marks}) AND location != 'auctions'",
             tuple(char_ids))}
+
+    def character_sheets(self, char_ids: list[str]) -> list[tuple]:
+        """What the addon captured about each character, for the Characters page (SPEC §3.5, D49).
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            (id, class, level, faction, market, gold copper, known recipes, updated ms, ((profession, skill, max), ...)
+            by name) per character, by id.
+        """
+        if not char_ids:
+            return []
+        marks = ",".join("?" * len(char_ids))
+        profs: dict[str, list[tuple]] = {}
+        for c, name, skill, top in self.conn.execute(
+                f"SELECT char_id, profession, skill, max_skill FROM professions WHERE char_id IN ({marks}) "
+                f"ORDER BY char_id, profession", tuple(char_ids)):
+            profs.setdefault(c, []).append((name, skill, top))
+        return [(c, cls, level, faction, market, gold, recipes, updated, tuple(profs.get(c, ())))
+                for c, cls, level, faction, market, gold, updated, recipes in self.conn.execute(
+                    f"SELECT id, class, level, faction, market, gold, updated, "
+                    f"(SELECT COUNT(*) FROM known_recipes k WHERE k.char_id = c.id) FROM characters c "
+                    f"WHERE id IN ({marks}) ORDER BY id", tuple(char_ids))]
 
     def cost_basis(self) -> dict[int, tuple[int, int]]:
         """What you paid for items, account-wide (SPEC §3.2 cost_basis).

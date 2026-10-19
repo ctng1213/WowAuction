@@ -520,3 +520,10 @@ def test_IU2_an_ahf_price_newer_than_the_intelligence_flags_every_page(app, db):
     db.upsert_current(M, "ahf", [(2589, 44, 20, BUILT + 3_600_000)])                   # an hourly file after the refresh
     reply = json.loads(app.handle("GET", f"/api/views/today?market={M}", GOOD).body)
     assert reply["prices_newer"] is True and reply["data"] == {"rows": []}        # numbers unchanged
+
+
+def test_every_css_class_the_pages_build_bars_and_profession_rows_with_is_styled():
+    page = INDEX_HTML.read_text(encoding="utf-8")
+    for cls in ("bar", "prof", "tiles", "tile", "grid2", "card", "kv"):
+        if f'class="{cls}"' in page:
+            assert re.search(rf"\.{cls}[ {{,:]", page), f".{cls} is used but has no style"

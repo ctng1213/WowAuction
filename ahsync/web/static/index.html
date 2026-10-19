@@ -99,6 +99,9 @@
   .empty { padding: 28px 14px; text-align: center; color: var(--muted); }
   /* Inventory: tiles, the selected row and the item detail (heatmaps, windows, breakdowns) */
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .bar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; margin-top: 3px; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  .prof { padding: 6px 14px; }
   .tile { background: linear-gradient(#1f1b14, #14120e); border: 1px solid var(--border); border-top: 2px solid var(--border-hi); border-radius: 6px; padding: 10px 12px; }
   .tile .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
   .tile .v { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
@@ -310,6 +313,15 @@ const LIVE = {
         test: (r, v) => v === '' || r.kind === v || (v === 'bought' && r.kind === 'bought_vendor') },
       { id: 'days', label: 'When', options: [['', 'Last 30 days'], ['7', 'Last 7 days'], ['1', 'Today and yesterday']], test: (r, v) => v === '' || r.sort.age_days < Number(v) },
     ],
+  },
+  characters: {
+    lede: 'Captured by the addon at login and when profession windows open. Each character’s gold is its default budget; a <code>[budgets]</code> entry in config.toml overrides it.',
+    render: d => !(d.cards || []).length ? `<div class="empty">${esc(d.empty)}</div>` :
+      `<div class="grid2">${d.cards.map(c => `<div class="card"><div class="card-h"><b>${esc(c.title)}</b><span class="muted">${esc(c.subtitle)}</span></div>` +
+        `<dl class="kv">${c.lines.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` +
+        c.professions.map(p => `<div class="prof"><div style="display:flex;justify-content:space-between"><span>${esc(p.name)}</span><span class="muted">${esc(p.skill)}</span></div>` +
+          `<div class="bar"><i style="width:${Number(p.pct)}%"></i></div></div>`).join('') + '<div style="height:10px"></div></div>').join('')}</div>`,
+    filters: [],
   },
   inventory: {
     lede: 'What you own on every character: bags, bank and mail (auctions you have up are on <b>On the AH</b>). <b>Paid</b> is what you paid (0 for items you found or held before tracking started); <b>Worth</b> is what the item is expected to bring under its plan. <b>Click a row</b> to see when it sells best and why.',
