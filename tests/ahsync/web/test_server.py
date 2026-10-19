@@ -557,3 +557,22 @@ def test_a_busy_database_answers_503_for_a_reserve(app, db, monkeypatch):
         raise sqlite3.OperationalError("database is locked")
     monkeypatch.setattr(app.db, "set_reserve", busy)
     assert app.handle("POST", "/api/reserve", write_headers(), b'{"char": "Amaya-Grommash", "key": 2, "qty": 1}').status == 503
+
+
+def test_SEC10_the_item_search_only_reads_and_is_no_write_path(app, db):
+    with db.transaction():
+        db.conn.execute("INSERT INTO items(key, item_id, name, quality) VALUES (2589, 2589, 'Linen Cloth', 1)")
+    before = db.conn.execute("SELECT COUNT(*) FROM item_rules").fetchone()
+    reply = app.handle("GET", "/api/items?q=linen", GOOD)
+    assert reply.status == 200 and json.loads(reply.body) == {"items": [{"key": "2589", "name": "Linen Cloth", "quality": 1}]}
+    assert json.loads(app.handle("GET", "/api/items", GOOD).body) == {"items": []}
+    assert app.handle("POST", "/api/items", write_headers(), b'{"q": "linen"}').status in (404, 405)
+    assert db.conn.execute("SELECT COUNT(*) FROM item_rules").fetchone() == before
+
+
+def test_a_busy_database_answers_503_for_an_item_search(app, monkeypatch):
+    def busy(*_args, **_kwargs):
+        """Fail like a locked database."""
+        raise sqlite3.OperationalError("database is locked")
+    monkeypatch.setattr(app.db, "search_items", busy)
+    assert app.handle("GET", "/api/items?q=linen", GOOD).status == 503

@@ -48,7 +48,7 @@ BUSY_TIMEOUT_MS = 5000
 # SPEC §3.5 dashboard data. Every page is staged by the full refresh except status, built on request.
 PAGES = ("today", "week", "on_ah", "disenchant", "craft", "flip", "inventory", "history", "rules",
          "characters", "status")
-GET_PATHS = ("/", "/api/markets")
+GET_PATHS = ("/", "/api/markets", "/api/items")
 POST_PATHS = ("/api/refresh", "/api/skip", "/api/rule", "/api/reserve")
 RULES = ("no_buy", "ignore", "keep", "none")       # SPEC §3.4.2: what the dashboard may set
 VIEWS_PREFIX = "/api/views/"
@@ -210,11 +210,11 @@ class DashboardApp:
         """Serve a GET endpoint.
 
         Args:
-            path: "/", "/api/markets" or "/api/views/<page>".
+            path: "/", "/api/markets", "/api/items" or "/api/views/<page>".
             query: Parsed query string.
 
         Returns:
-            The page, the markets, or a stored view payload.
+            The page, the markets, an item search (D54), or a stored view payload.
         """
         if path == "/":
             html = self.page_html.replace(TOKEN_PLACEHOLDER, self.token).encode("utf-8")
@@ -222,7 +222,26 @@ class DashboardApp:
         if path == "/api/markets":
             markets = list(self.config.markets)
             return json_response(200, {"markets": markets, "default": markets[0]})
+        if path == "/api/items":
+            return self.search_items(query.get("q", [""])[0])
         return self.get_view(path[len(VIEWS_PREFIX):], query.get("market", [""])[0])
+
+    def search_items(self, text: str) -> Response:
+        """Search items by name for the Rules page's Blacklist (SPEC §3.5 Rules, D54, SEC10). Reads only.
+
+        Args:
+            text: What was typed.
+
+        Returns:
+            200 {"items": [{"key", "name", "quality"}]}; 503 when the database is busy.
+        """
+        try:
+            with self._lock:
+                found = self.db.search_items(text)
+        except sqlite3.Error as error:
+            log.warning("item search failed: %s", error)
+            return json_response(503, {"error": "database_busy"})
+        return json_response(200, {"items": [{"key": str(k), "name": n, "quality": q} for k, n, q in found]})
 
     def get_view(self, page: str, market: str) -> Response:
         """Serve one page's stored payload (SPEC §3.5 dashboard data).

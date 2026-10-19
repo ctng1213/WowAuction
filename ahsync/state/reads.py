@@ -456,6 +456,25 @@ class StateReads:
             "SELECT DISTINCT e.key FROM book_entries e JOIN scans s ON s.scan_id = e.scan_id "
             "WHERE s.market = ? AND s.src = 'local' AND s.kind = 'partial' AND s.at >= ?", (market, since_ms))}
 
+    def search_items(self, text: str, limit: int = 20) -> list[tuple[int, str, int]]:
+        """Items whose name contains a text, for the Rules page's search (SPEC §3.5 Rules, D54).
+
+        Args:
+            text: What was typed; % and _ match only themselves; case doesn't matter.
+            limit: Most items answered.
+
+        Returns:
+            (item key, name, quality): names starting with the text first, then by name and key; unknown-suffix
+            keys left out; none for under 2 characters.
+        """
+        text = text.strip()
+        if len(text) < 2:
+            return []
+        like = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        return [tuple(r) for r in self.conn.execute(
+            "SELECT key, name, COALESCE(quality, 1) FROM items WHERE key > 0 AND name LIKE ? ESCAPE '\\' "
+            "ORDER BY name NOT LIKE ? ESCAPE '\\', name, key LIMIT ?", (f"%{like}%", f"{like}%", limit))]
+
     def live_rule_rows(self) -> list[tuple[int, str, int, str]]:
         """Your live item rules with when and where each was set, for the Rules page (SPEC §3.4.2, D50).
 

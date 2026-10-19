@@ -340,6 +340,9 @@ const LIVE = {
           (d.kept || []).map(r => `<tr><td>${item(r.item, r.quality)}</td><td>${esc(r.kept)}</td><td>${esc(r.since)}</td>` +
             `<td class="${r.status_class === 'pos' ? 'pos' : 'amber'}">${esc(r.status)}</td><td>${undo(r)}</td></tr>`),
           'Nothing kept.') +
+        `<div class="card"><div class="card-h"><b>Add to the blacklist</b><span class="muted">search any item by name</span></div>` +
+        `<div style="padding:8px 14px"><input class="select search" type="search" data-item-search placeholder="Item name…" autocomplete="off" style="min-width:260px"></div>` +
+        `<div data-item-results></div></div>` +
         card('Blacklist', 'set here, on Today, or by right-clicking a row in the addon', ['Item', 'Rule', 'Effect', 'Set', 'From', ''],
           (d.blacklist || []).map(r => `<tr><td>${item(r.item, r.quality)}</td><td>${esc(r.rule)}</td><td class="muted">${esc(r.effect)}</td>` +
             `<td>${esc(r.set)}</td><td class="muted">${esc(r.from)}</td><td>${undo(r)}</td></tr>`),
@@ -519,6 +522,7 @@ function render(id) {
   card.querySelectorAll('button[data-rule]').forEach(btn => { btn.onclick = () => setRule(id, btn.dataset.ruleKey, btn.dataset.rule, btn); });
   card.querySelectorAll('select[data-rule-key]').forEach(sel => { sel.onchange = () => sel.value && setRule(id, sel.dataset.ruleKey, sel.value, sel); });
   card.querySelectorAll('select[data-reserve-key]').forEach(sel => { sel.onchange = () => sel.value && setReserve(id, sel); });
+  card.querySelectorAll('input[data-item-search]').forEach(inp => { inp.oninput = () => searchItems(id, card, inp.value); });
 }
 
 // Set an item rule from Needs a decision (SPEC §3.4.2, D43): AHSync stores it, re-plans and rewrites the plan file.
@@ -532,6 +536,26 @@ async function setRule(id, key, rule, el) {
     notice("AHSync isn't answering. Is it still running?", 'warn');
   }
   el.disabled = false;
+}
+
+// Rules: search items to blacklist (D54). The answer comes from GET /api/items; the choice posts to /api/rule.
+let searchTimer = null;
+function searchItems(id, card, text) {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(async () => {
+    const box = card.querySelector('[data-item-results]');
+    if (!box) return;
+    let items = [];
+    try {
+      const res = await fetch('/api/items?q=' + encodeURIComponent(text));
+      if (res.ok) items = (await res.json()).items || [];
+    } catch (e) { items = []; }
+    box.innerHTML = !items.length ? (text.trim().length >= 2 ? '<div class="empty">No item by that name.</div>' : '') :
+      `<div class="scrollx"><table><tbody>${items.map(i => `<tr><td>${item(i.name, i.quality)}</td>` +
+        `<td><select class="btn" data-rule-key="${esc(i.key)}" title="Blacklist it"><option value="">Blacklist…</option>` +
+        `<option value="no_buy">Don't buy or craft</option><option value="ignore">Ignore completely</option></select></td></tr>`).join('')}</tbody></table></div>`;
+    box.querySelectorAll('select[data-rule-key]').forEach(sel => { sel.onchange = () => sel.value && setRule(id, sel.dataset.ruleKey, sel.value, sel); });
+  }, 250);
 }
 
 // Keep an item for one character from Inventory (SPEC §3.4.3, D52, SEC9): AHSync stores it, re-plans and tells the addon.

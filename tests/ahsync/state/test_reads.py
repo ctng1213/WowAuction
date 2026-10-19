@@ -121,3 +121,16 @@ def test_character_sheets_carry_professions_and_recipe_counts(db):
         ("A-R", "MAGE", 38, "Horde", M, 7, 2, 6, (("Enchanting", 142, 225), ("Tailoring", 160, 225))),
         ("B-R", "WARRIOR", 34, "Horde", M, 9, 0, 5, ())]
     assert db.character_sheets([]) == []
+
+
+def test_D54_item_search_puts_names_that_start_with_the_text_first(db):
+    sql(db, "INSERT INTO items(key, item_id, name, quality) VALUES (?, ?, ?, ?)",
+        (2996, 2996, "Bolt of Linen Cloth", 1), (2589, 2589, "Linen Cloth", 1), (3530, 3530, "Heavy Linen Bandage", 1),
+        (2592, 2592, "Wool Cloth", 1), (-2589, 2589, "Linen Cloth", 1), (9, 9, "100% Linen_x", None))
+    found = [k for k, *_ in db.search_items("linen")]
+    assert found == [2589, 9, 2996, 3530]                 # starts with "linen" first, then by name ("1" sorts first)
+    assert [k for k, *_ in db.search_items("0%")] == [9] and [k for k, *_ in db.search_items("n_x")] == [9]
+    assert db.search_items("1_0") == []                   # "_" is not a wildcard
+    assert db.search_items("linen")[0] == (2589, "Linen Cloth", 1) and db.search_items("x %")[0:] == []
+    assert db.search_items("l") == [] and db.search_items("  ") == []
+    assert len(db.search_items("cloth", limit=2)) == 2

@@ -492,7 +492,8 @@ const PAGES = {
       `<tr><td>${item('Bolt of Linen Cloth', 1)}</td><td>14 Oct 20:15</td><td>1 posted · 1 sold</td><td class="pos">selling again</td><td><span class="btn">Undo</span></td></tr>`,
       `<tr><td>${item('Medium Leather', 1)}</td><td>15 Oct 18:40</td><td>1 posted · pending</td><td class="amber">watching: next expiry asks again</td><td><span class="btn">Undo</span></td></tr>`,
     ], null)}</div>
-    <div class="card"><div class="card-h"><b>Blacklist</b><span class="btn primary">+ Add item</span></div>
+    <div class="card"><div class="card-h"><b>Add to the blacklist</b><span class="muted">search any item by name</span></div><div style="padding:8px 14px"><span class="select" style="min-width:260px;display:inline-block">Item name…</span></div></div>
+    <div class="card"><div class="card-h"><b>Blacklist</b></div>
     ${table([['Item'], ['Rule'], ['Effect'], ['Set'], ['From'], ['']], [
       ruleRow('Coarse Stone', 1, "Don't buy or craft", 'owned stock still sold', '12 Oct 21:40', 'addon'),
       ruleRow('Light Leather', 1, 'Ignore completely', 'no recommendations at all', '10 Oct 19:02', 'dashboard'),
