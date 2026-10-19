@@ -1,0 +1,92 @@
+-- Capture/Auctions.lua: your own active auctions, one snapshot per character, replaced whole
+-- (SPEC §2.2.1 ownAuctions, A41). Read when the AH opens and after a post or a cancel. The
+-- Craft tab counts them like what you hold, until each one's end passes (A42).
+
+local AHProfit = AHProfit
+local Adapter = AHProfit.Adapter
+local Events = AHProfit.Events
+local DB = AHProfit.DB
+local Characters = AHProfit.Capture.Characters
+local Inventory = AHProfit.Capture.Inventory
+
+local Auctions = {}
+AHProfit.Capture.Auctions = Auctions
+
+--- Classic's time-left band of an auction (the replicate scan's bands, SPEC §4.2).
+---@param seconds number  Time left
+---@return number         1 short (< 30 min), 2 medium (< 2 h), 3 long (< 12 h), 4 very long
+function Auctions.Band(seconds)
+  if seconds < 1800 then return 1 end
+  if seconds < 7200 then return 2 end
+  if seconds < 43200 then return 3 end
+  return 4
+end
+
+--- Encode auctions as the snapshot's rows and ends (SPEC §2.2.1).
+---@param auctions table[]  { key, price, qty, leftSeconds } from Adapter.ReadOwnedAuctions
+---@param nowMs number
+---@return string  rows "key,price,stack,band,count", grouped, ascending
+---@return string  ends "key,units,end ms", one per auction, ascending
+function Auctions.Encode(auctions, nowMs)
+  local groups, ends = {}, {}
+  for _, a in ipairs(auctions) do
+    local group = { a.key, a.price, a.qty, Auctions.Band(a.leftSeconds) }
+    local id = table.concat(group, ",")
+    groups[id] = groups[id] or { fields = group, count = 0 }
+    groups[id].count = groups[id].count + 1
+    ends[#ends + 1] = { a.key, a.qty, nowMs + a.leftSeconds * 1000 }
+  end
+  local rows = {}
+  for _, g in pairs(groups) do rows[#rows + 1] = { g.fields[1], g.fields[2], g.fields[3], g.fields[4], g.count } end
+  --- Order rows by every field, so the text never depends on pairs order.
+  local function ByFields(a, b)
+    for i = 1, #a do if a[i] ~= b[i] then return a[i] < b[i] end end
+    return false
+  end
+  table.sort(rows, ByFields)
+  table.sort(ends, ByFields)
+  return DB.EncodeRows(rows), DB.EncodeRows(ends)
+end
+
+--- Units you have up on the AH per item, from a snapshot; auctions whose end has passed don't count.
+---@param entry table|nil  ownAuctions[charId]
+---@param nowMs number
+---@return table           key -> { units, endsAt = the soonest end, ms }
+function Auctions.Listed(entry, nowMs)
+  local out = {}
+  for key, units, endsAt in ((entry or {}).ends or ""):gmatch("(%-?%d+),(%d+),(%d+)") do
+    key, units, endsAt = tonumber(key), tonumber(units), tonumber(endsAt)
+    if endsAt > nowMs then
+      local listed = out[key] or { units = 0, endsAt = endsAt }
+      listed.units, listed.endsAt = listed.units + units, math.min(listed.endsAt, endsAt)
+      out[key] = listed
+    end
+  end
+  return out
+end
+
+--- Store the answer to the last owned-auctions query and tell the views.
+local function CaptureLive()
+  local db = DB.Get()
+  local auctions = Adapter.ReadOwnedAuctions()
+  if not (db and auctions) then return end
+  local now = Adapter.NowMs()
+  local rows, ends = Auctions.Encode(auctions, now)
+  db.ownAuctions[Characters.CurrentId()] = { at = now, rows = rows, ends = ends }
+  Inventory.Changed("auctions")
+end
+
+--- AUCTION_HOUSE_SHOW, AUCTION_HOUSE_AUCTION_CREATED, AUCTION_CANCELED: ask for your auctions again.
+local function Query()
+  Adapter.QueryOwnedAuctions()
+end
+
+--- OWNED_AUCTIONS_UPDATED: the answer arrived; read it once it settles (debounced).
+local function OnOwnedAuctions()
+  Events.Debounce("auctions.owned", CaptureLive)
+end
+
+Events.Register("AUCTION_HOUSE_SHOW", Query)
+Events.Register("AUCTION_HOUSE_AUCTION_CREATED", Query)
+Events.Register("AUCTION_CANCELED", Query)
+Events.Register("OWNED_AUCTIONS_UPDATED", OnOwnedAuctions)

@@ -211,7 +211,8 @@ function Options.Crafts(recipes, units, ctx)
     local best, bestAt
     for i, r in ipairs(left) do
       local net, p = Options.ProductNet(r, ctx.itemOf(r.product), ctx.vendorOf(r.product) or 0)
-      local cap = Options.CraftCap(r, ctx.itemOf(r.product), units[r.product])
+      local listed = (ctx.listed or {})[r.product]
+      local cap = Options.CraftCap(r, ctx.itemOf(r.product), (units[r.product] or 0) + (listed and listed.units or 0))
       local option = Craft.Option(r, CraftMarket({ r }, owned, ctx), net, nil, cap)
       option.p = p
       if option.crafts > 0 and (not best or option.profit > best.profit) then best, bestAt = option, i end
@@ -234,21 +235,24 @@ end
 --- tab's view. Today's crafts (Options.Crafts) share the mats out instead, best first.
 ---@param recipes table[]  Options.KnownRecipes
 ---@param units table      key -> units carried, less what you keep
----@param ctx table        { itemOf, levelsOf, vendorOf, vendorBuyOf }
+---@param ctx table        { itemOf, levelsOf, vendorOf, vendorBuyOf, listed (key -> { units, endsAt }: your auctions) }
 ---@return table[]         { key, spell, crafts, matGold, profit, p, source, ownedUsed, bought, fromVendor,
 ---                        vendorPrice (key -> copper), ahGold (key -> copper) }, best profit first; a recipe whose
----                        product you already hold up to its cap is { key, spell, made = units held, profit = 0 } (A36)
+---                        product you already hold up to its cap is { key, spell, made = units held, inBags,
+---                        listed, endsAt, profit = 0 } (A36, A42)
 function Options.CraftOptions(recipes, units, ctx)
   local out = {}
   for _, r in ipairs(recipes) do
     local vendorSold = ctx.vendorBuyOf and ctx.vendorBuyOf(r.product)     -- R23: no vendor-sold products
     local net, p = Options.ProductNet(r, ctx.itemOf(r.product), ctx.vendorOf(r.product) or 0)
     local market = CraftMarket({ r }, units, ctx)
-    local held = units[r.product] or 0
+    local inBags, listed = units[r.product] or 0, (ctx.listed or {})[r.product]   -- your auctions count too (A42)
+    local held = inBags + (listed and listed.units or 0)
     local cap = Options.CraftCap(r, ctx.itemOf(r.product), held)
     local option = Craft.Option(r, market, net, nil, cap)
     if cap == 0 and held > 0 and not vendorSold then
-      out[#out + 1] = { key = r.product, spell = r.spell, made = held, profit = 0 }
+      out[#out + 1] = { key = r.product, spell = r.spell, made = held, inBags = inBags,
+                        listed = listed and listed.units or 0, endsAt = listed and listed.endsAt, profit = 0 }
     elseif option.crafts > 0 and not vendorSold then
       out[#out + 1] = { key = r.product, spell = r.spell, crafts = option.crafts, matGold = option.matGold,
                         profit = option.profit, p = p, source = Craft.Source(option), ownedUsed = option.ownedUsed,

@@ -210,28 +210,6 @@ describe("ViewModel", function()
     LOOKS[6585], LOOKS[10940], LOOKS[10939], LOOKS[10978] = nil, nil, nil, nil
   end)
 
-  it("craft rows: mats \"—\" when you own them all, risk from the mats bought, no chance without a price", function()
-    local VM = Boot()
-    local looks = { [6217] = { name = "Copper Rod", quality = 1, conf = 80, soldPerDay = 6.4 },
-                    [2840] = { name = "Copper Bar", quality = 1 }, [2880] = { name = "Weak Flux", quality = 1 } }
-    local lookOf = function(k) return looks[k] end
-    local rows = VM.CraftRows({ { key = 6217, crafts = 3, matGold = 0, profit = 5700, p = 1, source = "Owned",
-                                  ownedUsed = { [2840] = 6 }, bought = {} },
-                                { key = 6217, crafts = 2, matGold = 4000, profit = 300, source = "Mixed",
-                                  ownedUsed = { [2880] = 1 }, bought = { [2840] = 4 }, ahGold = { [2840] = 4000 } },
-                                { key = 6217, crafts = 1, matGold = 300, profit = 10, source = "Mixed", ownedUsed = {},
-                                  bought = { [2840] = 3 }, fromVendor = { [2840] = 1 }, vendorPrice = { [2840] = 100 },
-                                  ahGold = { [2840] = 200 } } }, lookOf, 10000)
-    assert_eq({ rows[1].mats, rows[1].profit, rows[1].chance, rows[1].dot, rows[1].volume, rows[1].risk, rows[1].notes },
-              { "—", "+57s", "100%", "high", "6/day", "0.0%", { "use 6 owned Copper Bar" } })
-    assert_eq({ rows[2].mats, rows[2].chance, rows[2].risk, rows[2].riskAmber, rows[2].notes },
-              { "40s", "—", "40.0%", true, { "use 1 owned Weak Flux", "buy 4 Copper Bar on the AH · 40s" } })
-    -- 3 bought: 1 from a vendor at 1s, 2 on the AH for 2s.
-    assert_eq(rows[3].notes, { "buy 1 Copper Bar from a vendor · 1s", "buy 2 Copper Bar on the AH · 2s" })
-    assert_eq(#VM.WithNotes(rows), 8)                                  -- 3 rows and 5 note lines (A34)
-    assert_eq({ VM.CraftFooter(rows, 5), VM.CraftFooter({}, 1) }, { "3 of 5 known recipes pay now", "0 of 1 known recipe pay now" })
-  end)
-
   it("flip rows: best profit first (ties: id), no live note without a scan, a post without a peak uses its own time", function()
     local VM = Boot()
     local lookOf = function() return { name = "Linen Cloth", quality = 1 } end

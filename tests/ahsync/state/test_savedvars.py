@@ -287,3 +287,9 @@ def test_reserves_are_read_per_character_and_a_bad_entry_is_set_aside_alone():
     assert data.reserves_set_aside == (BRUGAN, "Cal-Grommash") and len(data.problems) == 2
     assert read_ahprofit(db_text("")).reserves is None
     assert read_ahprofit(db_text('["reserves"] = 5,')).reserves_set_aside == ()
+
+
+def test_A41_the_addons_ends_field_in_own_auctions_is_ignored():
+    data = read_ahprofit(db_text('["ownAuctions"] = { ["Amaya-Grommash"] = { at = 5, rows = "4471,80,1,3,1", ends = "4471,1,9" } },'))
+    assert data.problems == () and [(s.char_id, len(s.rows)) for s in data.own_auctions] == [(AMAYA, 1)]
+

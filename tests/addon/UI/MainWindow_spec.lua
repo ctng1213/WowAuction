@@ -329,6 +329,28 @@ describe("MainWindow", function()
                 "×1 in your bags · post it now at 80c", "×1 in your bags · post it at the AH" })
   end)
 
+  it("A42 a made product you have up on the AH stays made, with when it ends, until the auction ends", function()
+    Stubs.Reset()
+    _G.AHProfitPlan = nil
+    Stubs.ITEM_NAMES[4471], Stubs.ITEM_NAMES[4470] = "Basic Campfire Kit", "Simple Wood"
+    UIWorld.Market({ [4471] = UIWorld.Item(99, 80, 10, { postPrice = 99, chance = 1, refStack = 1, supply = 2 }) }, NOW)
+    AHProfitMarket.vendor = { [4470] = 38 }
+    Stubs.Login()
+    AHProfitDB.knownRecipes["Amaya-Grommash"] = "6413"
+    AHProfitDB.recipes.Survival = { [6413] = { product = 4471, yieldMin = 1, yieldMax = 1, reagents = "4470,1" } }
+    AHProfitDB.ownAuctions["Amaya-Grommash"] = { at = NOW, rows = "4471,80,1,3,1", ends = "4471,1," .. (NOW + 11 * 3600000 + 60000) }
+    Stubs.Slash("/ahp")
+    AHProfit.MainWindow.ShowTab("craft")
+    local ui, VM = AHProfit.MainWindow.Frames(), AHProfit.ViewModel
+    local row = FirstRow("craft")
+    assert_eq({ row.source, row.crafts, ui.rows[2].note:GetText(), ui.rows[3]:IsShown() },
+              { VM.CHECK .. " made", "×1", "×1 on the AH · ends in 11 h", false })
+    Stubs.Advance(12 * 3600)                                      -- the auction has ended
+    AHProfit.MainWindow.Refresh()
+    assert_eq({ FirstRow("craft").source, ui.rows[2].note:GetText() }, { "Vendor", "buy 1 Simple Wood from a vendor · 38c" })
+    Stubs.ITEM_NAMES[4471], Stubs.ITEM_NAMES[4470] = nil, nil
+  end)
+
   it("A22 the Inventory tab lists what this character holds with its worth and plan", function()
     Stubs.Reset()
     _G.AHProfitPlan = nil

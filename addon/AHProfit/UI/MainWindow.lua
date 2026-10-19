@@ -491,6 +491,14 @@ local function Fill(row, line)
   end
 end
 
+--- What this character has up on the AH, by item, from its last own-auctions snapshot (A42).
+---@param charId string
+---@param nowMs number
+---@return table  key -> { units, endsAt }
+local function Listed(charId, nowMs)
+  return AHProfit.Capture.Auctions.Listed(((DB.Get() or {}).ownAuctions or {})[charId], nowMs)
+end
+
 --- This character's actions: AHSync's plan, without buys a live scan shows gone (A2), plus the
 --- addon's own options where the plan is silent (SPEC §4.0): crafts first, then the rest of what
 --- you carry, so a mat is never both crafted and sold (A20).
@@ -513,8 +521,7 @@ local function CharacterActions(charId, nowMs)
   end
   local units = Reserves.Apply(held, reserves)
   local ctx = { itemOf = LiveItem, levelsOf = LevelsOf, vendorOf = VendorOf, vendorBuyOf = Market.VendorPrice,
-                nowMs = nowMs, charId = charId,
-                planned = planned }
+                listed = Listed(charId, nowMs), nowMs = nowMs, charId = charId, planned = planned }
   local crafts, reserved = Options.Crafts(recipes, units, ctx)
   ctx.reserved = reserved
   for _, a in ipairs(crafts) do actions[#actions + 1] = a end
@@ -565,9 +572,9 @@ local function Lines(nowMs, gold)
     local units = Reserves.Apply(Options.Units(Inventory.Decode(((db.inventory or {})[charId] or {}).bags)),
                                  Reserves.Get(db, charId))
     local actions = CharacterActions(charId, nowMs)        -- what a made product is for (A37)
-    local rows = VM.CraftRows(Options.CraftOptions(recipes, units, { itemOf = LiveItem, levelsOf = LevelsOf,
-                                                                     vendorOf = VendorOf, vendorBuyOf = Market.VendorPrice }), LookOf, gold,
-                              actions, nowMs, offset)
+    local ctx = { itemOf = LiveItem, levelsOf = LevelsOf, vendorOf = VendorOf, vendorBuyOf = Market.VendorPrice,
+                  listed = Listed(charId, nowMs) }
+    local rows = VM.CraftRows(Options.CraftOptions(recipes, units, ctx), LookOf, gold, actions, nowMs, offset)
     local empty = #recipes == 0 and "No recipes seen on this character yet. Open each profession window once."
       or "None of your recipes pays right now."
     return VM.WithNotes(rows), VM.CraftFooter(rows, #recipes), empty

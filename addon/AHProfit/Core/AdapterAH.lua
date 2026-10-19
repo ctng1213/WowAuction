@@ -115,6 +115,38 @@ function Adapter.RefillSellPrice(price)
   return lastSell ~= nil and ApplyPrice(lastSell, price)
 end
 
+-- ------------------------------------------------------------------ your own auctions (SPEC §2.2.1, A41)
+
+--- Ask the server for your own auctions; the answer is OWNED_AUCTIONS_UPDATED.
+--- UNVERIFIED: C_AuctionHouse.QueryOwnedAuctions(sorts), as on retail.
+---@return boolean  true when the call went out without an error
+function Adapter.QueryOwnedAuctions()
+  local AH = _G.C_AuctionHouse
+  if not (AH and AH.QueryOwnedAuctions) then return false end
+  return (pcall(AH.QueryOwnedAuctions, {}))
+end
+
+--- Your active auctions, as the last query answered.
+--- UNVERIFIED: C_AuctionHouse.GetNumOwnedAuctions and GetOwnedAuctionInfo(i), 1-based, returning
+--- { itemLink, itemKey = { itemID }, status (0 active, 1 sold), quantity, timeLeftSeconds, buyoutAmount
+--- (per unit for a commodity; an item auction is one unit) }, as on retail.
+---@return table[]|nil  { key, price (copper each), qty, leftSeconds } per active auction; nil without the API
+function Adapter.ReadOwnedAuctions()
+  local AH = _G.C_AuctionHouse
+  if not (AH and AH.GetNumOwnedAuctions and AH.GetOwnedAuctionInfo) then return nil end
+  local out = {}
+  for i = 1, AH.GetNumOwnedAuctions() or 0 do
+    local info = AH.GetOwnedAuctionInfo(i)
+    if info and info.status == 0 and info.buyoutAmount then
+      local key = (info.itemLink and Adapter.ItemKey(info.itemLink)) or (info.itemKey and info.itemKey.itemID)
+      if key then
+        out[#out + 1] = { key = key, price = info.buyoutAmount, qty = info.quantity or 1, leftSeconds = info.timeLeftSeconds or 0 }
+      end
+    end
+  end
+  return out
+end
+
 -- ------------------------------------------------------------------ purchases (SPEC §4.3, A39)
 
 local purchasesHooked = false
