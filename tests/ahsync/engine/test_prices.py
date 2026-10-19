@@ -7,7 +7,8 @@ from pathlib import Path
 import pytest
 
 from ahsync.engine.prices import (
-    DAY_MS, HOUR_MS, cur_others, median, percentile, post_price, suspect_price, trend7, weekday_hour, window_median,
+    DAY_MS, HOUR_MS, cur_others, drop_suspect, median, percentile, post_price, suspect_price, trend7, weekday_hour,
+    window_median,
 )
 
 SHARED = json.loads((Path(__file__).resolve().parents[3] / "tests" / "scenarios" / "prices.json").read_text(encoding="utf-8"))
@@ -118,3 +119,14 @@ def test_FM5_a_price_far_out_of_range_is_suspect_until_a_second_hour_confirms_it
     assert suspect_price(401, 30, 40, [45])               # 401c > 10 × a 40c p90
     assert not suspect_price(3, 30, 40, [])               # 3c is not below 3c
     assert not suspect_price(None, 30, 40, []) and not suspect_price(1, None, 40, []) and not suspect_price(1, 30, None, [])
+
+
+def test_FM31_a_lone_out_of_range_close_is_left_out_of_the_statistics_until_confirmed():
+    closes = [(h * HOUR_MS, 45) for h in range(100)]
+    lone = closes[:50] + [(50 * HOUR_MS, 1)] + closes[51:]
+    assert drop_suspect(lone, 40, 50) == closes[:50] + closes[51:]                   # 1c < 4c: dropped
+    pair = closes[:50] + [(50 * HOUR_MS, 1)] + closes[51:53] + [(53 * HOUR_MS, 400)] + closes[54:]
+    assert drop_suspect(pair, 40, 39) == pair                     # 1c and 400c (> 390c) 3 h apart confirm each other
+    far = closes[:10] + [(10 * HOUR_MS, 1)] + closes[11:90] + [(90 * HOUR_MS, 1)] + closes[91:]
+    assert len(drop_suspect(far, 40, 50)) == 98                   # 80 h apart: neither confirms the other
+    assert drop_suspect(lone, None, 50) == lone and drop_suspect([], 40, 50) == []

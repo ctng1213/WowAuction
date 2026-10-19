@@ -104,7 +104,8 @@ def item_text(s: ItemIntel) -> str:
               _tenths(s.trend7), _tenths(s.sold_per_day), _tenths(s.listed_per_day), _num(s.units_on_ah), _num(s.conf),
               _num(s.seasonality), _num(s.post_price), _num(s.ref_stack),
               "" if s.sell_value is None else str(round_half_up(s.sell_value)), "1" if s.volume_unknown else "0",
-              str(round_half_up(s.chance * 1000)), _num(s.median_daily_supply)]          # EX10
+              str(round_half_up(s.chance * 1000)), _num(s.median_daily_supply),          # EX10
+              "1" if s.cur_suspect else "0"]                                            # A58
     return f"{','.join(fields)};{windows_text(s.sell_windows)};{windows_text(s.buy_windows)}"
 
 

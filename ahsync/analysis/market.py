@@ -140,7 +140,11 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
     Returns:
         The ItemIntel.
     """
-    key, hourly, daily, cur = item.key, item.hourly_closes, item.daily_closes, item.current
+    key, raw, daily, cur = item.key, item.hourly_closes, item.daily_closes, item.current
+    raw30 = [c for t, c in raw if t > now_ms - 30 * DAY_MS]
+    p10, p90 = prices.percentile(raw30, 0.1), prices.percentile(raw30, 0.9)
+    hourly = prices.drop_suspect(raw, p10, p90)            # unconfirmed outliers count in no statistic (SPEC §5.2, FM31)
+    item = replace(item, hourly_closes=hourly)
     med7 = prices.window_median(hourly, daily, now_ms, 7)
     med30 = prices.window_median(hourly, daily, now_ms, 30)
     last30 = [c for t, c in hourly if t > now_ms - 30 * DAY_MS]
@@ -159,8 +163,7 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
         deposit = fees.deposit_copper(vendor_sell, ref, fees.shortest_duration_covering(settings.sell_window_hours))
         sell_value = sellprob.expected_post(chance, ref, price, float(vendor_sell), deposit) / ref
     book_age = now_ms - newest[0] if newest else None
-    p10, p90 = prices.percentile(last30, 0.1), prices.percentile(last30, 0.9)
-    recent = [c for t, c in hourly if t > now_ms - DAY_MS]
+    recent = [c for t, c in raw if t > now_ms - DAY_MS]
     conf = confidence.percent(confidence.score(len(last30), volume.days_by_source, book_age, None, 0))
     main_source = max(volume.days_by_source, key=lambda s: (volume.days_by_source[s], s)) \
         if volume.days_by_source else None

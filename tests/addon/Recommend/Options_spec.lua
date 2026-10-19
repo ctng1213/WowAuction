@@ -182,4 +182,13 @@ describe("Options", function()
     assert_eq(Options.CraftCap(rod, { refStack = 1, supply = 2, typicalSupply = 6 }), 1)  -- listed now wins
     assert_eq(Options.CraftCap(rod, { refStack = 1 }), nil)
   end)
+  it("A58 a mat listing far below its usual range is no source unless AHSync confirmed that price", function()
+    local Options = Boot()
+    local bars = { p10 = 30, p90 = 40, cur = 35, curQty = 10, suspect = 0 }
+    assert_eq({ Options.Buyable(bars, 1), Options.Buyable(bars, 35), Options.Buyable(bars, 401), Options.Buyable(nil, 1) },
+              { false, true, false, true })
+    local confirmed = { p10 = 30, p90 = 40, cur = 1, curQty = 2, suspect = 0 }
+    local unconfirmed = { p10 = 30, p90 = 40, cur = 1, curQty = 2, suspect = 1 }
+    assert_eq({ Options.Buyable(confirmed, 1), Options.Buyable(unconfirmed, 1) }, { true, false })
+  end)
 end)

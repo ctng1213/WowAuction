@@ -184,6 +184,29 @@ def suspect_price(cur: int | None, p10: int | None, p90: int | None, recent: Seq
     return outside(cur) and sum(1 for c in recent if outside(c)) < 2
 
 
+def drop_suspect(closes: Sequence[tuple[int, int]], p10: int | None, p90: int | None,
+                 confirm_ms: int = DAY_MS) -> list[tuple[int, int]]:
+    """Hourly closes without the unconfirmed suspect ones, for the statistics (SPEC §5.2, FM31).
+
+    Args:
+        closes: (hour start ms, close copper), any order.
+        p10: The 30-day 10th percentile of all closes.
+        p90: The 30-day 90th percentile.
+        confirm_ms: A second out-of-range close this close in time confirms one.
+
+    Returns:
+        The closes in their order, less each one below 10% of p10 or above 10× p90 that no other out-of-range
+        close within confirm_ms confirms; all of them without both percentiles.
+    """
+    if p10 is None or p90 is None:
+        return list(closes)
+    out_times = sorted(t for t, c in closes if c < SUSPECT_LOW * p10 or c > SUSPECT_HIGH * p90)
+    lone = {t for i, t in enumerate(out_times)
+            if not ((i > 0 and t - out_times[i - 1] <= confirm_ms) or
+                    (i + 1 < len(out_times) and out_times[i + 1] - t <= confirm_ms))}
+    return [(t, c) for t, c in closes if t not in lone]
+
+
 def post_price(cur_others_copper: int | None, med7: int | None) -> int | None:
     """Post price p = min(curOthers − 1, med7) (SPEC §3.4).
 

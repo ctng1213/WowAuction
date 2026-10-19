@@ -165,6 +165,23 @@ function Options.CraftCap(recipe, item, held)
   return math.max(1, math.floor(units / ((recipe.yieldMin + recipe.yieldMax) / 2)))
 end
 
+Options.SUSPECT_LOW, Options.SUSPECT_HIGH = 0.1, 10   -- engine.prices: below 10% of p10 or above 10× p90 (FM5)
+
+--- Whether a listing's price may be bought from (SPEC §5.2, FM5, A58): not far out of the item's usual
+--- range, unless AHSync already confirmed such a price (its cur is out of range and not suspect).
+---@param item table|nil  The mat's market item (p10, p90, cur, suspect)
+---@param price number    Copper each
+---@return boolean
+function Options.Buyable(item, price)
+  if not (item and item.p10 and item.p90) then return true end
+  --- Whether a price is out of the item's usual range.
+  ---@param p number  Copper
+  ---@return boolean
+  local function Outside(p) return p < Options.SUSPECT_LOW * item.p10 or p > Options.SUSPECT_HIGH * item.p90 end
+  if not Outside(price) then return true end
+  return item.cur ~= nil and Outside(item.cur) and item.suspect == 0
+end
+
 --- Where a craft's mats can come from now: what you carry at its hold value, the AH and vendors. A
 --- vendor-sold mat comes from the vendor only, and what you carry of it is worth no more than the
 --- vendor's price (craft.vendor_first, R22, A33).
@@ -186,8 +203,10 @@ local function CraftMarket(recipes, owned, ctx)
       if vendor then
         -- no AH source for a vendor-sold mat
       elseif levels then
-        for i, level in ipairs(levels) do book[i] = { level.price, level.units } end
-      elseif item and item.cur and item.curQty then
+        for _, level in ipairs(levels) do
+          if Options.Buyable(item, level.price) then book[#book + 1] = { level.price, level.units } end
+        end
+      elseif item and item.cur and item.curQty and Options.Buyable(item, item.cur) then
         book[1] = { item.cur, item.curQty }          -- no live book: cur × curQty (SPEC §3.4 depth unknown)
       end
       market.books[key] = book

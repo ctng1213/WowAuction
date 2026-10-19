@@ -283,3 +283,37 @@ def test_IU6_a_newer_in_game_scan_updates_only_the_items_it_priced():
     assert after.items[linen] == intel.items[linen] and after.built_ms == NOW and 999 not in after.items
     lone = market.with_scan(intel, {silk: (5, 1, NOW + HOUR)}, {}).items[silk]        # no book in this scan
     assert (lone.cur, lone.book, lone.units_on_ah, lone.cur_suspect) == (5, (), 5, True)   # 5c < 10% of 80c
+
+
+def test_FM31_a_lone_outlier_close_moves_no_median_but_still_sets_the_range():
+    base, _ = market.analyze_market(MemoryHistory(), M, NOW, MarketSettings())
+
+    class WithOutlier(MemoryHistory):
+        """The Copper Rod with one 1c hour yesterday."""
+
+        def hourly_closes(self, market_id: str, key: int, from_ms: int, to_ms: int) -> list[tuple[int, int]]:
+            """The usual closes plus one far below them."""
+            closes = super().hourly_closes(market_id, key, from_ms, to_ms)
+            if key != 6217 or not closes:
+                return closes
+            t = closes[-1][0] - 24 * HOUR
+            return sorted([c for c in closes if c[0] != t] + [(t, 1)])
+    odd, _ = market.analyze_market(WithOutlier(), M, NOW, MarketSettings())
+    a, b = base.items[6217], odd.items[6217]
+    assert (b.med7, b.med30, b.trend7, b.how) == (a.med7, a.med30, a.trend7, a.how)
+    assert b.p10_30 == a.p10_30 or b.p10_30 <= a.p10_30                      # the range uses every close
+
+
+def test_FM31_the_statistics_are_computed_from_the_filtered_closes(monkeypatch):
+    from ahsync.engine import prices
+    seen = []
+
+    def filtered(closes, p10, p90, **_k):
+        """Record the call and pretend every close was 7c."""
+        seen.append((len(closes), p10, p90))
+        return [(t, 7) for t, _ in closes]
+    monkeypatch.setattr(prices, "drop_suspect", filtered)
+    intel, _ = market.analyze_market(MemoryHistory(), M, NOW, MarketSettings())
+    rod = intel.items[6217]
+    assert (rod.med7, rod.med30) == (7, 7) and rod.p10_30 == 4000                 # medians from the filtered closes
+    assert seen and all(n > 0 for n, *_ in seen if n)
