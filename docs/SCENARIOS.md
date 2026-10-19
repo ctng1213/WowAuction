@@ -488,6 +488,7 @@ D19–D22 are listed with the display scenarios in section 1.
 | TT3 | no current price | values shown, no deltas |
 | TT4 | no character can disenchant it | no Disenchant value line |
 | TT5 | delta exactly +12.5% | +13% (half up) |
+| TT6 | Linen: level 49 c, the best window's hour is 1.12 × the level and 2 days ahead, trend +2%/day; then +9%/day | Price at best time 57 c = floor(49 × 1.12 × (1 + 0.02 × 2) + 0.5), as the plan prices it (`plan.slot_price`, `Prices.SlotPrice`); with +9%/day the trend is clamped to 5%: 60 c |
 
 ## 4. Calibration (K1–K3)
 

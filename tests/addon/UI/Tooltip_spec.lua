@@ -7,11 +7,12 @@ local HOUR = 3600000
 local NOW = 1760000000000
 
 --- Log in with Linen in the market file (written 2 h ago, its price seen 30 min before that).
----@param med7 number|nil  Linen's 7-day median (default 49c, the same as med30)
+---@param med7 number|nil     Linen's 7-day median (default 49c, the same as med30)
+---@param trend10 number|nil  Its trend in tenths of a percent a day (default 0)
 ---@return table  The tooltip stub
-local function Boot(med7)
+local function Boot(med7, trend10)
   Stubs.Reset()
-  local linen = "45,20,30," .. (med7 or 49) .. ",49,40,60,0,480,,93,86,72,45,20,42,0,900;138:4:139:1120:7;"
+  local linen = "45,20,30," .. (med7 or 49) .. ",49,40,60," .. (trend10 or 0) .. ",480,,93,86,72,45,20,42,0,900;138:4:139:1120:7;"
   _G.AHProfitMarket = { schemaVersion = 1, generatedAt = NOW - 2 * HOUR, checksum = "1:" .. #linen,
     charMarkets = { ["Amaya-Grommash"] = UIWorld.MARKET },
     markets = { [UIWorld.MARKET] = { observationsUntil = NOW - 2 * HOUR, curveHour = 0, I = { [2589] = linen }, C = {} } } }
@@ -36,6 +37,16 @@ describe("Tooltip", function()
     assert_eq(Pairs(tip), { { "Current AH price", "45c (2 h ago)" }, { "Historical price", "49c (30d, +9%)" },
       { "Best time to sell", "Sat 18:00–22:00" }, { "Price at best time", "55c (+22%)" }, { "Chance to sell", "90%" } })
     assert_eq({ tip.doubles[2][3], tip.doubles[2][4] }, { 0.24, 0.86 })           -- the green delta
+  end)
+
+  it("TT6 the price at best time includes the trend up to the window's best hour", function()
+    local tip = Boot(nil, 20)                                       -- +2%/day; Sat 19:00 UTC is 2.42 days away
+    Stubs.HoverItem(2589)
+    assert_eq(tip.doubles[4][2], "58c (+29%)")                     -- floor(49 × 1.12 × (1 + 0.02 × 2.42) + 0.5)
+    local Prices = AHProfit.Engine.Prices
+    assert_eq({ Prices.SlotPrice(49, 1.12, 2, 2), Prices.SlotPrice(49, 1.12, 9, 2), Prices.SlotPrice(49, 1.12, -9, 2) },
+              { 57, 60, 49 })                                       -- clamped to ±5%/day
+    assert_eq(Prices.DaysUntilSlot(80, NOW - (NOW % HOUR)), 0)     -- Thu 08:00 UTC is this hour's start
   end)
 
   it("R21 the price at best time starts from the 7-day median", function()

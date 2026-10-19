@@ -163,3 +163,8 @@ def test_O13_O11_the_price_never_drops_below_the_vendor_floor_and_an_undercut_ca
     undercut = linen(record=Record(0, 1, 0, 0, True, False))                            # cur 45: cap 44
     assert plan.post_options(undercut, NOW, S)[0].price == 44
     assert plan.post_options(linen(record=Record(3, 0, 0, 0, False, False)), NOW, S)[0].price == 45   # a clean record
+
+
+def test_TT6_price_at_best_time_includes_the_clamped_trend():
+    assert plan.slot_price(49, 1.12, 2.0, 2) == 57                      # floor(49 × 1.12 × 1.04 + 0.5)
+    assert plan.slot_price(49, 1.12, 9.0, 2) == 60                      # clamped to 5%: floor(49 × 1.12 × 1.1 + 0.5)
