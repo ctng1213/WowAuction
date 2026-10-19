@@ -169,6 +169,11 @@ def report(path: Path, verbose: bool = False) -> int:
         gaps.append("vendor")
     events = Counter(e.type for e in data.events)
     print("events: " + (", ".join(f"{t} {n}" for t, n in sorted(events.items())) or "none"))
+    names = {n.key: n.name for n in data.item_names}
+    for e in data.events:
+        if e.type == "payout" or (e.type == "auction_mail" and e.outcome == "sold"):
+            what = f"{e.money_copper}c taken" if e.type == "payout" else f"sold at {e.price_copper}c each"
+            print(f"  {e.type:<12} {e.char_id}  {names.get(e.key, e.key)} x{e.qty}  {what}")
     report_diagnostics(data, verbose)
     if data.problems:
         print(f"\nPROBLEMS ({len(data.problems)} rows set aside):")
