@@ -8,7 +8,7 @@ import pytest
 
 import pytest
 
-from ahsync.engine.craft import Market, Pool, Recipe, craft_option, fill, steps, vendor_first, walk_book
+from ahsync.engine.craft import Market, Pool, Recipe, craft_option, fill, gather, steps, vendor_first, walk_book
 from tests.support.gen import cases
 
 BAR, ROD, RUNED, DUST, ESSENCE = 2840, 6217, 6218, 10940, 10938
@@ -282,3 +282,12 @@ def test_R22_vendor_first_drops_the_ah_for_vendor_sold_mats_and_caps_their_hold_
     assert (dict(m.books), dict(m.hold_value)) == ({ROD: [(4000, 1.0)]}, {BAR: 900, ROD: 3000.0})
     option = rod(m, max_crafts=4)
     assert (option.owned_used, option.from_vendor, option.source) == ({BAR: 6.0}, {BAR: 2.0}, "Mixed")
+
+
+def test_C19_the_crafter_is_who_holds_the_most_mats_and_mail_brings_the_rest():
+    linen = 2589
+    held = {("Amaya-G", linen): 4.0, ("Brugan-G", linen): 3.0, ("Cara-G", linen): 6.0}
+    assert gather({linen: 10.0}, held, ["Amaya-G", "Brugan-G"]) == ("Amaya-G", {linen: (("Cara-G", 6),)})
+    assert gather({linen: 13.0}, held, ["Amaya-G", "Brugan-G"]) == ("Amaya-G", {linen: (("Cara-G", 6), ("Brugan-G", 3))})
+    assert gather({linen: 2.0}, held, ["Amaya-G", "Brugan-G"]) == ("Amaya-G", {})       # ties go to the first crafter
+    assert gather({linen: 1.0}, {}, ["Brugan-G"]) == ("Brugan-G", {}) and gather({}, held, []) == ("", {})

@@ -222,6 +222,53 @@ def craft_money(crafts: int, mat_gold: float, owned_used: dict[int, float], name
     return CraftMoney(money(mat_gold / crafts), money(mat_gold), note)
 
 
+@dataclass(frozen=True)
+class CraftMats:
+    """Where one craft option's mats come from, for its lines (D44)."""
+
+    owned: dict[int, float]                              # key -> owned units used
+    from_vendor: dict[int, float]                        # key -> units bought from a vendor
+    bought: dict[int, float]                             # key -> units bought (vendor and AH)
+    spent: dict[int, float]                              # key -> copper spent
+    crafted: dict[int, str]                              # key -> who crafts it first
+    mail: dict[int, tuple[tuple[str, int], ...]]         # key -> (from character, units) to gather owned mats
+
+
+def craft_lines(m: CraftMats, names: dict[int, str]) -> tuple[str, ...]:
+    """One line per mat, by source then key, as in the addon (A34, D44).
+
+    Args:
+        m: The option's mats.
+        names: Item key -> display name.
+
+    Returns:
+        "use 10 owned Linen Cloth · mail 6 from Cara", "buy 2 Coarse Thread from a vendor · 20c",
+        "buy 1 Wool Cloth on the AH · 33c", "craft Bolt of Linen Cloth first (Brugan)".
+    """
+    def name(key: int) -> str:
+        """The mat's name.
+
+        Args:
+            key: Item key.
+
+        Returns:
+            Its name, or its key.
+        """
+        return names.get(key, str(key))
+    lines = []
+    for key, units in sorted(m.owned.items()):
+        sends = ", ".join(f"{n} from {c.split('-')[0]}" for c, n in m.mail.get(key, ()))
+        lines.append(f"use {round_half_up(units)} owned {name(key)}" + (f" · mail {sends}" if sends else ""))
+    for key, units in sorted(m.from_vendor.items()):
+        lines.append(f"buy {round_half_up(units)} {name(key)} from a vendor · {money(m.spent.get(key, 0.0))}")
+    for key, units in sorted(m.bought.items()):
+        if key not in m.from_vendor:
+            lines.append(f"buy {round_half_up(units)} {name(key)} on the AH · {money(m.spent.get(key, 0.0))}")
+    for key, crafter in sorted(m.crafted.items()):
+        lines.append(f"craft {name(key)} first ({crafter.split('-')[0]})")
+    return tuple(lines)
+
+
 def age_text(age_ms: int | None) -> str:
     """A data age for display, e.g. "20 min", "2 h", "6 d" (the largest whole unit).
 
@@ -336,6 +383,7 @@ class CraftInput:
     market: MarketActivity      # market activity of the product
     cooldown: str               # "ready", a time left, or ""
     note: str                   # chain, bought mats, why crafts stop
+    lines: tuple[str, ...] = () # one per mat, by source (craft_lines, D44)
 
 
 def craft_row(c: CraftInput, total_gold: int) -> dict:
@@ -356,7 +404,8 @@ def craft_row(c: CraftInput, total_gold: int) -> dict:
         "value_each": money(c.value_each), "profit": signed_money(c.profit),
         "profit_class": "pos" if c.profit > 0 else "neg", **_market_cells(c.market),
         "risk": risk_text, "risk_amber": amber, "cooldown": c.cooldown,
-        "note": "; ".join(part for part in (c.cells.note, c.note) if part),
+        "note": "; ".join(part for part in ((c.cells.note,) if not c.lines else ()) + (c.note,) if part),
+        "lines": list(c.lines),
         "sort": {"crafts": c.crafts, "mats_total": round_half_up(c.mat_gold), "profit": round_half_up(c.profit),
                  "value_each": round_half_up(c.value_each) if c.value_each is not None else -1,
                  **_market_sort(c.market), "risk": risk_tenths(c.mat_gold, total_gold)},

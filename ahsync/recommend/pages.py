@@ -6,6 +6,8 @@ fallback is the vendor price only.
 """
 from __future__ import annotations
 
+import math
+
 from ahsync.config import Config, market_settings
 from ahsync.engine import capacity, craft, disenchant, fees, profile, sellprob, views
 from ahsync.engine.de_table import DE_TABLE
@@ -175,6 +177,44 @@ def _product_net(stats: ItemIntel | None, recipe: RecipeRow, items: dict[int, It
     return net
 
 
+def _held_and_listed(state: StateReader, char_ids: list[str]) -> dict[int, int]:
+    """Units of each item you hold or have up for auction, every character together (D45).
+
+    Args:
+        state: Character state.
+        char_ids: Your characters.
+
+    Returns:
+        Item key -> units.
+    """
+    have = dict(state.owned_units(char_ids))
+    for _, key, _, stack, _, count, _ in state.own_auctions(char_ids):
+        have[key] = have.get(key, 0) + stack * count
+    return have
+
+
+def _craft_room(r: RecipeRow, stats: dict[int, ItemIntel], have: dict[int, int], now_ms: int, cfg: Config
+                ) -> tuple[int, str]:
+    """How many crafts the market can take now: the product's liquidity cap, less what you have (D45, A30, A36).
+
+    Args:
+        r: The recipe.
+        stats: Item key -> intelligence.
+        have: Item key -> units you hold or have listed.
+        now_ms: Now (the posting-now window).
+        cfg: Config.
+
+    Returns:
+        (most crafts, at least 1 while any units are left; the note when what you have fills the cap, else "").
+    """
+    cap = _mat_caps({r.product}, stats, now_ms, cfg)[r.product]
+    units = have.get(r.product, 0)
+    avg_yield = (r.yield_min + r.yield_max) / 2
+    if units >= cap:
+        return 0, f"×{units} held or listed: the market takes about {cap}"
+    return max(1, math.floor((cap - units) / avg_yield)), ""
+
+
 def craft_page(state: StateReader, char_ids: list[str], stats: dict[int, ItemIntel], items: dict[int, ItemInfo],
                total_gold: int, now_ms: int, cfg: Config) -> dict:
     """The Craft page payload (SPEC §3.4B, §3.5): every known recipe that makes an item.
@@ -199,16 +239,23 @@ def craft_page(state: StateReader, char_ids: list[str], stats: dict[int, ItemInt
         by_product.setdefault(r.product, []).append(r)
     market = craft_market(state, char_ids, stats, items)
     names = {k: i.name for k, i in items.items()}
+    held = {(c, k): float(q) for c, k, q in state.owned_lots(char_ids)}
+    have = _held_and_listed(state, char_ids)
     rows = []
     for r in recipes:
+        left = _craft_room(r, stats, have, now_ms, cfg)
         option = craft.craft_option(engine_recipes[r.spell], market, by_product,
                                     _product_net(stats.get(r.product), r, items, now_ms, cfg),
-                                    max_depth=cfg.max_craft_depth)
-        crafter = option.crafter
+                                    budget=total_gold * cfg.max_risk_pct / 100, max_depth=cfg.max_craft_depth,
+                                    max_crafts=left[0])                                   # D45
+        crafter, mail = craft.gather(option.owned_used, held, engine_recipes[r.spell].crafters)
+        crafter = crafter or option.crafter
         skill = state.skill_of(crafter, r.profession)
         product = items.get(r.product)
         value_each = _product_net(stats.get(r.product), r, items, now_ms, cfg)(1)
         missing = ", ".join(f"{views.round_half_up(u)} {names.get(k, k)}" for k, u in option.missing)
+        lines = views.craft_lines(views.CraftMats(option.owned_used, option.from_vendor, option.bought, option.spent,
+                                                  {k: c.crafter for k, c in option.crafted.items()}, mail), names)
         rows.append((option.profit, r.spell, views.craft_row(views.CraftInput(
             r.spell, product.name if product else str(r.product), (product.quality or 1) if product else 1,
             r.profession,
@@ -216,6 +263,6 @@ def craft_page(state: StateReader, char_ids: list[str], stats: dict[int, ItemInt
             option.source if option.crafts else "—", option.crafts,
             views.craft_money(option.crafts, option.mat_gold, option.owned_used, names), option.mat_gold,
             value_each, option.profit, _market(stats.get(r.product)), "",
-            f"missing: {missing}" if missing else ""), total_gold)))
+            f"missing: {missing}" if missing else left[1], lines), total_gold)))
     rows.sort(key=lambda row: (-row[0], row[1]))
     return {"rows": [row for _, _, row in rows], "hidden": 0, "help": views.COLUMN_HELP}

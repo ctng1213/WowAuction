@@ -75,3 +75,24 @@ def test_FM5_a_suspect_price_is_no_mat_source_and_no_disenchant_buy(state):
     crafts = craft_page(state, ["Amaya-G", "Brugan-G"], suspect, ITEMS, 500_000, NOW, Config(markets=(M,)))
     assert all(r["source"] != "AH" for r in crafts["rows"])                    # the bars' book is not used
     assert disenchant_page(state, ["Amaya-G", "Brugan-G"], suspect, ITEMS, 500_000, NOW, Config(markets=(M,)))["rows"] == []
+
+
+def test_D45_crafts_stop_at_what_the_market_takes_less_what_you_have_and_within_the_risk_limit(state):
+    cfg = Config(markets=(M,))
+    [rod] = craft_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 500_000, NOW, cfg)["rows"]
+    assert rod["crafts"] == 1                                    # others list 3 rods: half of that, at least a stack
+    with state.transaction():
+        state.conn.execute("INSERT INTO inventory(char_id, location, key, qty, bound) VALUES ('Brugan-G', 'bags', ?, 1, 0)", (ROD,))
+    [rod] = craft_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 500_000, NOW, cfg)["rows"]
+    assert (rod["crafts"], rod["note"]) == (0, "×1 held or listed: the market takes about 1")
+    with state.transaction():
+        state.conn.execute("DELETE FROM inventory")
+    [rod] = craft_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 4_000, NOW, cfg)["rows"]
+    assert (rod["crafts"], rod["mats_total"]) == (0, "—")        # 20s of bars is over 25% of 40s
+
+
+def test_D44_owned_mats_on_another_character_are_mailed_to_the_crafter(state):
+    with state.transaction():
+        state.conn.execute("INSERT INTO inventory(char_id, location, key, qty, bound) VALUES ('Amaya-G', 'bags', ?, 2, 0)", (BAR,))
+    [rod] = craft_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 500_000, NOW, Config(markets=(M,)))["rows"]
+    assert (rod["lines"], rod["crafter"]) == (["use 2 owned Copper Bar · mail 2 from Amaya"], "Brugan (Blacksmithing 112)")

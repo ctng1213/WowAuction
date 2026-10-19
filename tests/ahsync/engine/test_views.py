@@ -7,7 +7,8 @@ from pathlib import Path
 import pytest
 
 from ahsync.engine.views import (
-    COLUMN_HELP, MARKET_COLUMNS, CraftInput, DisenchantInput, MarketActivity, TooltipLine, age_text, craft_money,
+    COLUMN_HELP, MARKET_COLUMNS, CraftInput, CraftMats, DisenchantInput, MarketActivity, TooltipLine, age_text, craft_lines,
+    craft_money,
     craft_row, delta_percent, disenchant_row, market_activity, money, risk, round_half_up,
     signed_money, tooltip,
 )
@@ -158,3 +159,13 @@ def test_shared_tooltip_with_the_addon(s):
     lines = tooltip(a["cur"], a["cur_age_text"], a["med30"], a["de_value"], a["can_disenchant"], a["best_window"],
                     a["best_price"], a["chance"])
     assert [[line.label, line.value, line.colour] for line in lines] == s["expect"], s["why"]
+
+
+def test_D44_a_craft_row_lists_each_mat_by_source_with_the_mail_that_gathers_it():
+    linen, thread, wool, bolt = 2589, 2320, 2592, 2996
+    names = {linen: "Linen Cloth", thread: "Coarse Thread", wool: "Wool Cloth", bolt: "Bolt of Linen Cloth"}
+    mats = CraftMats({linen: 10.0}, {thread: 2.0}, {thread: 2.0, wool: 1.0}, {thread: 20.0, wool: 33.0},
+                     {bolt: "Brugan-G"}, {linen: (("Cara-G", 6),)})
+    assert craft_lines(mats, names) == ("use 10 owned Linen Cloth · mail 6 from Cara", "buy 2 Coarse Thread from a vendor · 20c",
+                                        "buy 1 Wool Cloth on the AH · 33c", "craft Bolt of Linen Cloth first (Brugan)")
+    assert craft_lines(CraftMats({9: 1.0}, {}, {}, {}, {}, {}), {}) == ("use 1 owned 9",)

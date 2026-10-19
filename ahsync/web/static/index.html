@@ -344,7 +344,8 @@ const LIVE = {
     cols: [['Product', 0, null], ['Recipe known by', 0, null], ['Source', 0, null], ['Crafts', 1, 'crafts'], ['Mats each', 1, null],
            ['Mats total', 1, 'mats_total'], ['Value each', 1, 'value_each'], ['Expected profit', 1, 'profit'], ...MARKET_COLS,
            ['Risk', 1, 'risk'], ['Cooldown', 0, null]],
-    row: r => `<tr><td>${item(r.product, r.quality)}${r.note ? `<span class="sub">${esc(r.note)}</span>` : ''}</td><td>${esc(r.crafter)}</td>` +
+    row: r => `<tr><td>${item(r.product, r.quality)}${(r.lines || []).map(l => `<span class="sub">${esc(l)}</span>`).join('')}` +
+              `${r.note ? `<span class="sub">${esc(r.note)}</span>` : ''}</td><td>${esc(r.crafter)}</td>` +
               `<td class="${sourceClass(r.source)}">${esc(r.source)}</td><td class="num">${esc(r.crafts)}</td><td class="num">${dash(r.mats_each)}</td>` +
               `<td class="num">${dash(r.mats_total)}</td><td class="num">${dash(r.value_each)}</td>${profitCell(r)}${marketCells(r)}${riskCell(r)}` +
               `<td class="${r.cooldown === 'ready' ? 'pos' : ''}">${esc(r.cooldown)}</td></tr>`,

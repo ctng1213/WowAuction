@@ -165,6 +165,7 @@ class CraftOption:
     owned_used: dict[int, float] = field(default_factory=dict)
     bought: dict[int, float] = field(default_factory=dict)
     from_vendor: dict[int, float] = field(default_factory=dict)   # the part of `bought` from a vendor
+    spent: dict[int, float] = field(default_factory=dict)         # copper spent per mat, all crafts
     crafted: dict[int, Crafted] = field(default_factory=dict)
     profits: list[float] = field(default_factory=list)    # marginal profit of each craft
     missing: tuple[tuple[int, float], ...] = ()           # (key, units short) when not craftable
@@ -318,6 +319,8 @@ def _record(option: CraftOption, pool: Pool, key: int, f: Fill) -> None:
         option.bought[key] = option.bought.get(key, 0.0) + f.used["ah"] + f.used["vendor"]
     if f.used["vendor"]:
         option.from_vendor[key] = option.from_vendor.get(key, 0.0) + f.used["vendor"]
+    if f.gold:
+        option.spent[key] = option.spent.get(key, 0.0) + f.gold
     if f.used["crafted"]:
         option.crafted[key] = pool.crafted(key)
 
@@ -362,6 +365,48 @@ def craft_option(recipe: Recipe, market: Market, by_product: Mapping[int, Sequen
         option.profits.append(marginal)
         option.crafts += 1
     return option
+
+
+def gather(need: Mapping[int, float], held: Mapping[tuple[str, int], float], crafters: Sequence[str]
+           ) -> tuple[str, dict[int, tuple[tuple[str, int], ...]]]:
+    """Who should craft, and the mail that brings your own mats to them (SPEC §3.4B, C19).
+
+    Args:
+        need: Item key -> owned units the crafts use (all characters together).
+        held: (character id, item key) -> units that character holds, unbound and not kept.
+        crafters: The characters who know the recipe, sorted.
+
+    Returns:
+        (the crafter who already holds the most of `need`, ties to the first; item key -> ((from character,
+        units), ...) for the rest, the biggest holder first, ties by id); ("", {}) without crafters.
+    """
+    if not crafters:
+        return "", {}
+    def here(char_id: str) -> float:
+        """Units of the need a character already holds.
+
+        Args:
+            char_id: Character id.
+
+        Returns:
+            Units, each mat counted up to its need.
+        """
+        return sum(min(units, held.get((char_id, key), 0.0)) for key, units in need.items())
+    crafter = max(crafters, key=lambda c: (here(c), -crafters.index(c)))
+    mail: dict[int, tuple[tuple[str, int], ...]] = {}
+    for key, units in sorted(need.items()):
+        left = math.ceil(units - min(units, held.get((crafter, key), 0.0)) - 1e-9)
+        givers = sorted(((c, n) for (c, k), n in held.items() if k == key and c != crafter and n > 0),
+                        key=lambda g: (-g[1], g[0]))
+        sends = []
+        for char_id, n in givers:
+            if left <= 0:
+                break
+            sends.append((char_id, min(left, int(n))))
+            left -= sends[-1][1]
+        if sends:
+            mail[key] = tuple(sends)
+    return crafter, mail
 
 
 def steps(option: CraftOption, recipe: Recipe) -> list[tuple]:
