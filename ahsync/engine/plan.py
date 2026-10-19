@@ -94,9 +94,10 @@ class SellFacts:
 
 @dataclass(frozen=True)
 class PlanAction:
-    """One planned action: a post, a disenchant, a vendor sale, or a hold (flagged, never planned)."""
+    """One planned action: a post, a disenchant, a vendor sale, a hold (flagged, never planned), or a chain step
+    (a buy, a craft, or mail between your characters)."""
 
-    kind: str                     # "post" | "de" | "vendor" | "hold"
+    kind: str                     # "post" | "de" | "vendor" | "hold" | "buy" | "craft" | "mail"
     char_id: str
     key: int
     qty: int
@@ -111,6 +112,7 @@ class PlanAction:
     duration_h: int | None = None # posts: auction duration
     chain: str | None = None      # links a buy to its follow-up post, e.g. "flip:2589" (SPEC §3.4 expected net)
     source: str | None = None     # buys: "vendor" or "ah" (D41)
+    to_char: str | None = None    # mail: the character it goes to (C22); char_id is the sender
 
 
 @dataclass(frozen=True)

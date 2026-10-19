@@ -126,7 +126,8 @@ CREATE INDEX IF NOT EXISTS crafts_char_spell_at ON crafts(char_id, spell_id, at)
 -- Columns per §3.2 (mail_sent), following §2.2.1.
 CREATE TABLE IF NOT EXISTS mail_sent(
     event_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, to_char TEXT NOT NULL, key INTEGER NOT NULL,
-    qty INTEGER, at INTEGER NOT NULL, action_id TEXT
+    qty INTEGER, at INTEGER NOT NULL, action_id TEXT,
+    confirmed INTEGER NOT NULL DEFAULT 1     -- 0: sent, not yet confirmed by MAIL_SEND_SUCCESS (A75)
 );
 
 -- SPEC GAP: §3.2 has no table for skip events (§2.2.1). Each is kept here, so an action that doesn't exist yet
@@ -146,7 +147,8 @@ CREATE TABLE IF NOT EXISTS actions(
     qty INTEGER, price INTEGER, expected_net REAL, conf REAL, status TEXT, done_qty INTEGER, done_at INTEGER,
     parent_id TEXT, window_start_ms INTEGER, window_end_ms INTEGER, anchor_net REAL, anchor_window_ms INTEGER,
     replaces_id TEXT, week_start_ms INTEGER, peak_ms INTEGER, source TEXT,  -- source: buys, 'vendor' | 'ah' (D41)
-    duration_h INTEGER                    -- posts: the auction duration, hours (EX9)
+    duration_h INTEGER,                   -- posts: the auction duration, hours (EX9)
+    to_char TEXT                          -- mail: the recipient; char_id is the sender (C22)
 );
 
 -- Staging twin of actions for the atomic swap after a full refresh (§3.1.1, §5.2).
@@ -154,7 +156,7 @@ CREATE TABLE IF NOT EXISTS plan_new(
     action_id TEXT PRIMARY KEY, run_at INTEGER, slot_ms INTEGER, char_id TEXT, kind TEXT, key INTEGER,
     qty INTEGER, price INTEGER, expected_net REAL, conf REAL, status TEXT, done_qty INTEGER, done_at INTEGER,
     parent_id TEXT, window_start_ms INTEGER, window_end_ms INTEGER, anchor_net REAL, anchor_window_ms INTEGER,
-    replaces_id TEXT, week_start_ms INTEGER, peak_ms INTEGER, source TEXT, duration_h INTEGER
+    replaces_id TEXT, week_start_ms INTEGER, peak_ms INTEGER, source TEXT, duration_h INTEGER, to_char TEXT
 );
 
 -- rule: 'no_buy' | 'ignore' | 'keep' | 'none' (tombstone); source: 'dashboard' | 'addon'.

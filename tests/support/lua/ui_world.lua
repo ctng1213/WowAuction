@@ -13,7 +13,7 @@ UIWorld.HOUR = 3600000
 function UIWorld.Market(items, generatedAt, flips)
   local count, length = 0, 0
   for _, text in pairs(items) do count, length = count + 1, length + #text end
-  _G.AHProfitMarket = { schemaVersion = 1, exportVersion = 1, generatedAt = generatedAt, checksum = count .. ":" .. length,
+  _G.AHProfitMarket = { schemaVersion = 1, exportVersion = 2, generatedAt = generatedAt, checksum = count .. ":" .. length,
                         charMarkets = { ["Amaya-Grommash"] = UIWorld.MARKET },
                         markets = { [UIWorld.MARKET] = { observationsUntil = generatedAt, curveHour = 0, I = items, C = {},
                                                          F = flips or {} } } }
@@ -37,7 +37,7 @@ end
 --- Install AHProfitPlan with these actions for Amaya (and any other characters named in them).
 --- AHSync only plans sales of stock you hold, so when the test set no bags, Amaya's posts, vendor sales
 --- and disenchants that start no chain (no parent) put their units in her bags (A49).
----@param actions table[]  { id, kind, key, qty, price, at, net, parent, chance, peak, char, vendor }
+---@param actions table[]  { id, kind, key, qty, price, at, net, parent, chance, peak, char, vendor, duration, to }
 function UIWorld.Plan(actions)
   local Stubs = require("wow_stubs")
   if next(Stubs.world.containers) == nil then UIWorld.StockFor(actions) end
@@ -45,13 +45,13 @@ function UIWorld.Plan(actions)
   for _, a in ipairs(actions) do
     local text = table.concat({ a.id, a.kind, a.key, a.qty, a.price or "", a.at, a.net or "", a.parent or "", "",
                                 a.status or "pending", a.chance or "", a.peak or "", a.vendor and "v" or "",
-                                a.duration or "" }, ";")
+                                a.duration or "", a.to or "" }, ";")
     local char = a.char or "Amaya-Grommash"
     byChar[char] = byChar[char] or {}
     table.insert(byChar[char], text)
     count, length = count + 1, length + #text
   end
-  _G.AHProfitPlan = { schemaVersion = 1, exportVersion = 1, generatedAt = 0, checksum = count .. ":" .. length,
+  _G.AHProfitPlan = { schemaVersion = 1, exportVersion = 2, generatedAt = 0, checksum = count .. ":" .. length,
                       ingestedUntil = {}, actions = byChar, rules = {} }
 end
 

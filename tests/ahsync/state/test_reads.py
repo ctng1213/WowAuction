@@ -73,6 +73,23 @@ def test_R20_kept_units_are_never_lots_or_mats_on_hand(db):
     assert db.owned_lots(["B-R"]) == []
 
 
+def test_T22_confirmed_mail_on_its_way_is_the_recipients_stock_until_her_snapshot_is_newer(db):
+    t = 1_760_000_000_000
+    sql(db, "INSERT INTO inventory(char_id, location, key, qty, bound) VALUES (?, ?, ?, ?, ?)", ("A-R", "bags", 2840, 8, 0))
+    sql(db, "INSERT INTO snapshots(char_id, location, at) VALUES (?, ?, ?)",
+        ("A-R", "bags", t - 3_600_000), ("A-R", "mail", t - 7_200_000), ("B-R", "bags", t + 60_000))
+    sql(db, "INSERT INTO mail_sent(event_id, char_id, to_char, key, qty, at, confirmed) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("s", "B-R", "A-R", 2840, 6, t, 1), ("u", "B-R", "A-R", 2589, 20, t, 0))           # the 20 Linen: an attempt
+    [record] = db.transit(["A-R"])
+    assert (record.recipient, record.sender, record.key, record.qty, record.sent_at_ms) == ("A-R", "B-R", 2840, 6, t)
+    assert db.owned_lots(["A-R", "B-R"]) == [("A-R", 2840, 14)] and db.owned_units(["A-R"]) == {2840: 14}
+    sql(db, "INSERT INTO reserves(char_id, key, qty) VALUES (?, ?, ?)", ("A-R", 2840, 10))
+    assert db.owned_lots(["A-R"]) == [("A-R", 2840, 4)]                                  # she keeps 10 of the 14
+    sql(db, "UPDATE snapshots SET at = ? WHERE char_id = 'A-R' AND location = 'mail'", (t + 60_000,))
+    assert db.transit(["A-R"]) == [] and db.transit([]) == []                            # her mailbox shows them now
+    assert db.owned_lots(["A-R"]) == [] and db.holdings([]) == []
+
+
 def test_inventory_rows_include_bound_ones_and_cost_basis_skips_empty_rows(db):
     sql(db, "INSERT INTO inventory(char_id, location, key, qty, bound) VALUES (?, ?, ?, ?, ?)",
         ("B-R", "bank", 2840, 2, 0), ("A-R", "mail", 2840, 3, 0), ("A-R", "bags", 6948, 1, 1), ("C-R", "bags", 1, 1, 0))

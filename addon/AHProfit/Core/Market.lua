@@ -12,7 +12,7 @@ AHProfit.Market = Market
 Market.SCHEMA_VERSION = 1          -- must equal ahsync/export/market_lua.py MARKET_SCHEMA_VERSION (FM17)
 -- The build of both generated files' format; must equal ahsync/export/market_lua.py EXPORT_VERSION. A file of
 -- another build says which side is stale (FM34, FM35). Core/Plan.lua, which loads after this file, reads it too.
-AHProfit.EXPORT_VERSION = 1
+AHProfit.EXPORT_VERSION = 2            -- 2: plan actions carry a mail's recipient (C22, EX16)
 Market.CACHE_LIMIT = 500           -- decoded items kept before the cache starts again
 Market.FIELDS = { "cur", "curQty", "curAgeMin", "med7", "med30", "p10", "p90", "trend10", "sold10", "listed10",
                   "supply", "conf", "seasonality", "postPrice", "refStack", "sellValue", "volumeUnknown",

@@ -33,8 +33,8 @@ class RecommendStore:
         self.conn.executemany(
             "INSERT OR REPLACE INTO plan_new(action_id, run_at, slot_ms, char_id, kind, key, qty, price, expected_net, "
             "conf, status, done_qty, done_at, parent_id, window_start_ms, window_end_ms, anchor_net, anchor_window_ms, "
-            "replaces_id, week_start_ms, peak_ms, source, duration_h) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+            "replaces_id, week_start_ms, peak_ms, source, duration_h, to_char) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
 
     def open_actions(self, char_ids: list[str]) -> list[tuple]:
         """The characters' pending and late actions, for the status pass (SPEC §3.4.1).
@@ -62,14 +62,16 @@ class RecommendStore:
 
         Returns:
             (action_id, char_id, kind, key, qty, price, slot_ms, expected_net, parent_id, window_end_ms, status,
-            conf = the planned chance to sell, peak_ms, source, duration_h), pending and late only, by time then id.
+            conf = the planned chance to sell, peak_ms, source, duration_h, to_char = a mail's recipient), pending and
+            late only, by time then id.
         """
         if not char_ids:
             return []
         marks = ",".join("?" * len(char_ids))
         return [tuple(r) for r in self.conn.execute(
             f"SELECT action_id, char_id, kind, key, qty, price, slot_ms, expected_net, parent_id, window_end_ms, status, "
-            f"conf, peak_ms, source, duration_h FROM actions WHERE status IN ('pending', 'late') AND char_id IN ({marks}) "
+            f"conf, peak_ms, source, duration_h, to_char FROM actions WHERE status IN ('pending', 'late') "
+            f"AND char_id IN ({marks}) "
             f"ORDER BY slot_ms, action_id",
             tuple(char_ids))]
 
@@ -131,13 +133,15 @@ class RecommendStore:
             to_ms: End, exclusive.
 
         Returns:
-            (action_id, parent_id, kind, char_id, key, qty, price, slot_ms, expected_net, status), by time then id.
+            (action_id, parent_id, kind, char_id, key, qty, price, slot_ms, expected_net, status, done_at, to_char),
+            by time then id.
         """
         if not char_ids:
             return []
         marks = ",".join("?" * len(char_ids))
         return [tuple(r) for r in self.conn.execute(
-            f"SELECT action_id, parent_id, kind, char_id, key, qty, price, slot_ms, expected_net, status FROM actions "
+            f"SELECT action_id, parent_id, kind, char_id, key, qty, price, slot_ms, expected_net, status, done_at, "
+            f"to_char FROM actions "
             f"WHERE status NOT IN ('pending', 'late') AND char_id IN ({marks}) AND slot_ms >= ? AND slot_ms < ? "
             f"ORDER BY slot_ms, action_id", (*char_ids, from_ms, to_ms))]
 

@@ -37,7 +37,7 @@ from ahsync.intel.contract import IntelWindow, ItemIntel, MarketIntelligence
 MARKET_SCHEMA_VERSION = 1      # the addon refuses any other (FM17)
 # Bumped on ANY change to either addon file's format, additive or not, so an addon and an AHSync of
 # different builds say which side is stale (SPEC §3.5, FM34, FM35). Equals AHProfit.EXPORT_VERSION (Core/Market.lua).
-EXPORT_VERSION = 1
+EXPORT_VERSION = 2
 HOUR_MS = 3_600_000
 MINUTE_MS = 60_000
 STALE_PRICE_MS = 7 * 86_400_000   # older prices are left out unless shortlisted (EX5: the 2 MB budget)

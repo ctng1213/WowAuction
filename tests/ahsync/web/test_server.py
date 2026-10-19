@@ -507,6 +507,14 @@ def test_every_table_row_is_its_own_tr():
             assert row.group(1).startswith("<tr") and "</tr>`" in body, name
 
 
+def test_D65_week_cards_name_the_character_and_chain_rows_draw_their_lines():
+    page = INDEX_HTML.read_text(encoding="utf-8")
+    chip = page[page.index("const chip = r =>"):page.index("// Your own sell record under a row")]
+    assert "${esc(r.character)}" in chip and "chainLines(r," in chip and re.search(r"\.chip \.who[ {]", page)
+    today = page[page.index("  today: {"):page.index("  week: {")]
+    assert "chainLines(r, '<span class=\"sub\">', '</span>')" in today          # D62: the lines under a chain's row
+
+
 def test_IU2_an_ahf_price_newer_than_the_intelligence_flags_every_page(app, db):
     from ahsync.intel.contract import MarketIntelligence
     publish(db, "today", M, {"rows": []})

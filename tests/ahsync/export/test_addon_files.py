@@ -125,7 +125,7 @@ def test_the_plan_file_holds_open_actions_rules_and_ingested_until(db, tmp_path)
     db.set_meta("savedvars_ingested_until:Brugan-G", str(now - HOUR))
     assert addon_files.export_plan(db, cfg, now, lambda s: None) is True
     text = (folder / "PortfolioPlan.lua").read_text(encoding="utf-8")
-    assert f'"a1;post;{LINEN};20;55;{now};1046;;;pending;80;;;"' in text and "a2;" not in text and "a3;" not in text
+    assert f'"a1;post;{LINEN};20;55;{now};1046;;;pending;80;;;;"' in text and "a2;" not in text and "a3;" not in text
     assert f'[{LINEN}] = "none,{now}"' in text and f'["Brugan-G"] = {now - HOUR},' in text
     assert db.addon_actions([]) == []
 
@@ -160,17 +160,17 @@ def plan_with_one_action(db: Database, tmp_path, now: int):
     return Config(markets=(M,), wow_path=str(tmp_path)), folder
 
 
-def test_EX14_both_addon_files_carry_export_version_1_after_schema_version_outside_the_checksum(db, tmp_path):
+def test_EX14_both_addon_files_carry_export_version_2_after_schema_version_outside_the_checksum(db, tmp_path):
     now = FakeClock().now_ms()
     cfg, folder = plan_with_one_action(db, tmp_path, now)
     assert addon_files.export_market(db, cfg, now, lambda s: None) and addon_files.export_plan(db, cfg, now, lambda s: None)
-    assert addon_files.EXPORT_VERSION == 1
+    assert addon_files.EXPORT_VERSION == 2                              # 2: a mail's recipient (EX16)
     for name in ("MarketIntelligence.lua", "PortfolioPlan.lua"):
         header = (folder / name).read_text(encoding="utf-8").splitlines()
         at = header.index("  schemaVersion = 1,")
-        assert header[at + 1] == "  exportVersion = 1,"
+        assert header[at + 1] == "  exportVersion = 2,"
     plan = (folder / "PortfolioPlan.lua").read_text(encoding="utf-8")
-    action = f"a1;post;{LINEN};20;55;{now};1046;;;pending;80;;;"
+    action = f"a1;post;{LINEN};20;55;{now};1046;;;pending;80;;;;"
     assert f'checksum = "1:{len(action)}"' in plan                       # the action string only
     market = (folder / "MarketIntelligence.lua").read_text(encoding="utf-8")
     linen = market_module.item_text(item(LINEN))
@@ -186,8 +186,8 @@ def test_EX15_each_written_addon_file_is_logged_with_its_size_time_and_contents(
     market_bytes = (folder / "MarketIntelligence.lua").stat().st_size
     plan_bytes = (folder / "PortfolioPlan.lua").stat().st_size
     assert [r.getMessage() for r in caplog.records if r.levelname == "INFO"] == [
-        f"wrote MarketIntelligence.lua: {market_bytes} bytes, generatedAt {now}, exportVersion 1, 1 items",
-        f"wrote PortfolioPlan.lua: {plan_bytes} bytes, generatedAt {now}, exportVersion 1, 1 open actions"]
+        f"wrote MarketIntelligence.lua: {market_bytes} bytes, generatedAt {now}, exportVersion 2, 1 items",
+        f"wrote PortfolioPlan.lua: {plan_bytes} bytes, generatedAt {now}, exportVersion 2, 1 open actions"]
 
     caplog.clear()
 

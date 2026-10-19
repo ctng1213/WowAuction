@@ -51,11 +51,12 @@ def test_D11_the_week_starts_today_and_shows_this_mornings_done_buy():
 
 
 def test_D17_day_category_and_character_totals_add_up():
+    # The −20c action is a disenchant: a vendor sale is no Week row since D64.
     rows = [act("a", "post", 830, FRI + 16 * HOUR), act("b", "post", 11000, FRI + 17 * HOUR),
-            act("c", "vendor", -20, FRI + 18 * HOUR, char_id="Brugan-G")]
+            act("c", "de", -20, FRI + 18 * HOUR, char_id="Brugan-G")]
     view = plan_views.week_view(rows, NOW, 0, LOOKS, GOLD)
     assert view["days"][0]["total"] == "+1g 18s 10c" == view["total"]
-    assert view["categories"] == {"Sell owned": "+1g 18s 10c"}
+    assert view["categories"] == {"Disenchant": "−20c", "Sell owned": "+1g 18s 30c"}
     assert view["characters"] == {"Amaya": "+1g 18s 30c", "Brugan": "−20c"}
 
 
@@ -85,31 +86,33 @@ def test_D38_today_says_which_peak_each_post_is_for_and_when_a_chain_posts():
                      peak_ms=FRI + DAY + 19 * HOUR)
     wool = act("w", "post", 100, at, 0.9, peak_ms=FRI + 20 * HOUR)
     rows = plan_views.today_view([buy, flip_post, craft, craft_post, wool], at, 0, 0.0, LOOKS, GOLD)["rows"]
-    notes = {r["id"]: r["note"] for r in rows}
-    assert notes == {"f": "Flip: post Sat 10:00, for the 18:00 peak", "k": "Then: post Sat 11:00, for the 19:00 peak",
-                     "w": "for the 20:00 peak"}
+    cells = {r["id"]: (r["note"], r["lines"]) for r in rows}
+    assert cells == {"f": ("", ["then: post Sat 10:00, for the 18:00 peak"]),
+                     "k": ("", ["then: post Sat 11:00, for the 19:00 peak"]), "w": ("for the 20:00 peak", [])}
 
 
-def test_D39_a_chains_mat_buy_says_what_it_is_for_and_a_hold_shows_no_net():
+def test_D39_another_characters_mat_buy_says_what_it_is_for_and_a_hold_is_no_row():
     looks = {**LOOKS, 5000: ItemLook("Basic Campfire Kit", 1)}
-    wood = act("w", "buy", 0, NOW, in_chain=True, key=BAR, qty=7, price=38)
+    wood = act("w", "buy", 0, NOW, in_chain=True, key=BAR, qty=7, price=38, char_id="Brugan-G")
     kit = act("k", "craft", 732, NOW + MINUTE, parent_id="w", in_chain=True, key=5000, qty=7, price=None)
     eggs = act("e", "hold", 0.0, NOW, qty=2, price=None)
     week = plan_views.week_view([wood, kit, eggs], NOW, 0, looks, GOLD)
     rows = {r["id"]: r for r in week["days"][0]["rows"]}
     assert (rows["w"]["net"], rows["w"]["note"]) == ("—", "for crafting Basic Campfire Kit")
-    assert (rows["e"]["net"], rows["e"]["note"]) == ("—", "hold for a later week")
-    assert week["total"] == "+7s 32c"
+    assert set(rows) == {"w", "k"} and week["total"] == "+7s 32c"
 
 
-def test_D41_a_vendor_buy_says_so_in_its_note():
-    looks = {**LOOKS, 5000: ItemLook("Basic Campfire Kit", 1)}
-    wood = act("w", "buy", 0, NOW, in_chain=True, key=BAR, qty=7, price=38, vendor=True)
-    bars = act("b", "buy", 0, NOW, in_chain=True, parent_id="w", key=BAR, qty=2, price=1000)
+def test_D41_a_vendor_buy_says_so_in_its_line_or_its_note():
+    looks = {**LOOKS, 4470: ItemLook("Simple Wood", 1), 5000: ItemLook("Basic Campfire Kit", 1)}
+    wood = act("w", "buy", 0, NOW, in_chain=True, key=4470, qty=7, price=38, vendor=True)
+    bars = act("b", "buy", 0, NOW + MINUTE // 2, in_chain=True, parent_id="w", key=BAR, qty=2, price=1000)
     kit = act("k", "craft", 732, NOW + MINUTE, parent_id="w", in_chain=True, key=5000, qty=7, price=None)
     rows = {r["id"]: r for r in plan_views.week_view([wood, bars, kit], NOW, 0, looks, GOLD)["days"][0]["rows"]}
+    assert list(rows) == ["k"] and rows["k"]["lines"] == ["buy 7 Simple Wood from a vendor · 2s 66c",
+                                                          "buy 2 Copper Bar on the AH · 20s"]
+    theirs = replace(wood, char_id="Brugan-G")                     # another character's step stays a row (D39)
+    rows = {r["id"]: r for r in plan_views.week_view([theirs, bars, kit], NOW, 0, looks, GOLD)["days"][0]["rows"]}
     assert rows["w"]["note"] == "from a vendor · for crafting Basic Campfire Kit"
-    assert rows["b"]["note"] == "for crafting Basic Campfire Kit"
 
 
 def test_T7_a_sale_below_what_you_paid_says_so_and_is_still_planned():
@@ -140,7 +143,7 @@ def test_steps_carry_no_net_and_crafts_show_their_products_chance():
     post = act("q", "post", 1800, NOW + DAY, 0.8, parent_id="m", in_chain=True, peak_ms=NOW + DAY + 8 * HOUR)
     view = plan_views.today_view([buy, craft, post], NOW, 0, 0.5, LOOKS, GOLD)
     nets = {r["action"]: (r["net"], r["chance"]) for r in view["rows"]}
-    assert nets == {"buy": ("—", "—"), "craft": ("+18s", "80%")}
+    assert nets == {"craft": ("+18s", "80%")}                      # its buy is a line under it (D62)
     week = plan_views.week_view([buy, craft, post], NOW, 0, LOOKS, GOLD)
     assert week["categories"] == {"Crafts": "+18s"}
     assert week["days"][1]["rows"][0]["note"] == "for the 22:30 peak · profit counted on the Fri 14:31 craft"
@@ -157,12 +160,13 @@ def test_the_flip_tab_shows_cost_roi_and_the_peak():
 
 
 def random_plan(rng):
-    """Random actions over the week: sales, flips and craft chains, some done."""
+    """Random actions over the week: sales, holds, flips and craft chains, some done."""
     out = []
     for n in range(rng.randint(1, 12)):
         at = NOW + rng.randint(-14, 160) * HOUR
         if rng.random() < 0.4:
-            out.append(act(f"s{n}", rng.choice(["post", "vendor", "de"]), rng.randint(-50, 5000), at, rng.random()))
+            out.append(act(f"s{n}", rng.choice(["post", "vendor", "de", "hold"]), rng.randint(-50, 5000), at,
+                           rng.random()))
             continue
         first, crafted = f"c{n}", rng.random() < 0.5
         # A flip's buy carries the profit; a craft chain's mat buy carries none (its craft does).
@@ -194,6 +198,10 @@ def test_VW1_totals_add_up_and_each_chains_profit_counts_once():
         assert all(n == 1 for n in by_chain.values()), (SEED_VW1, i)
         open_rows = plan_views.today_view(actions, NOW, 0, 0.0, LOOKS, GOLD)["rows"]
         assert [r["sort"]["net"] for r in open_rows] == sorted((r["sort"]["net"] for r in open_rows), reverse=True)
+        kinds = {a.action_id: a.kind for a in actions}
+        assert not [r for r in rows + open_rows if kinds[r["id"]] in ("hold", "vendor")], (SEED_VW1, i)   # D64
+        folds = plan_views.collapse(actions, actions)[2]
+        assert not [r for r in rows + open_rows if r["id"] in folds], (SEED_VW1, i)    # a folded step is no row (D62)
 
 
 def test_D42_the_record_line_shows_the_record_and_works_p_back_from_p_prime():
@@ -238,3 +246,102 @@ def test_R24_a_flip_relisted_now_says_so_on_the_flip_tab():
     post = act("g", "post", 657, NOW, 0.9, parent_id="f", in_chain=True, qty=20, price=49)
     [row] = plan_views.flip_view([buy, post], 0, LOOKS, GOLD)["rows"]
     assert (row["sell_each"], row["sell_slot"], row["why"]) == ("49c", "Fri 14:30", "relist now, under the listings left")
+
+
+# ---------------------------------------------------------------- one row per chain, mail between characters (D62-D66)
+
+MON = MONDAY + 10 * HOUR + 38 * MINUTE              # Mon 10:38 UTC
+BOWL, VIAL, SMALLFISH, ROD = 6370, 3371, 6303, 6217
+CHAIN_LOOKS = {**LOOKS, BOWL: ItemLook("Fish Bowl", 1, 80, 30.0, "ahf", 40), VIAL: ItemLook("Empty Vial", 1),
+               SMALLFISH: ItemLook("Raw Brilliant Smallfish", 1), ROD: ItemLook("Copper Rod", 1, 70, 6.0, "ahf", 6)}
+
+
+def fish_bowl_chain() -> list[ViewAction]:
+    """Amaya's Fish Bowl chain from the screenshots: 76 vials from a vendor at 20c, 76 smallfish on the AH at 75c,
+    76 crafts at 10:38 carrying +12g 4s 48c, posted Fri 11:00 for the 19:00 peak."""
+    head = dict(char_id="Amaya-G", in_chain=True)
+    return [act("v", "buy", 0, MON - 2 * MINUTE, key=VIAL, qty=76, price=20, vendor=True, **head),
+            act("f", "buy", 0, MON - MINUTE, parent_id="v", key=SMALLFISH, qty=76, price=75, **head),
+            act("k", "craft", 120448, MON, parent_id="v", key=BOWL, qty=76, price=None, **head),
+            act("p", "post", 120448, MONDAY + 4 * DAY + 11 * HOUR, 0.9, parent_id="v", key=BOWL, qty=76, price=2500,
+                peak_ms=MONDAY + 4 * DAY + 19 * HOUR, deposit=1570, **head)]
+
+
+def test_D62_today_shows_a_craft_chain_as_one_row_with_its_buys_as_lines():
+    view = plan_views.today_view(fish_bowl_chain(), MON, 0, 0.5, CHAIN_LOOKS, GOLD)
+    [row] = view["rows"]                                           # no BUY rows for the vial or the fish: 1 action
+    assert (row["action"], row["item"], row["qty"], row["each"], row["total"], row["net"]) == \
+        ("craft", "Fish Bowl", 76, "95c", "72s 20c", "+12g 4s 48c")      # 15s 20c + 57s = 72s 20c; ÷ 76 = 95c
+    assert row["lines"] == ["buy 76 Empty Vial from a vendor · 15s 20c",
+                            "buy 76 Raw Brilliant Smallfish on the AH · 57s",
+                            "then: post Fri 11:00, for the 19:00 peak"]
+    assert (row["note"], row["chance"], row["risk"], view["total"]) == ("", "90%", "2.3%", "+12g 4s 48c")   # 7220/314000
+    [post] = plan_views.week_view(fish_bowl_chain(), MON, 0, CHAIN_LOOKS, GOLD)["days"][4]["rows"]
+    assert (post["each"], post["total"], post["risk"]) == ("25s", "19g", "0.5%")   # a post risks its deposit, 15s 70c
+    owned = [a for a in fish_bowl_chain() if a.kind != "buy"]      # every mat owned: Each and Total "—"
+    [row] = plan_views.today_view(owned, MON, 0, 0.5, CHAIN_LOOKS, GOLD)["rows"]
+    assert (row["each"], row["total"], row["risk"], row["lines"]) == \
+        ("—", "—", "0.0%", ["then: post Fri 11:00, for the 19:00 peak"])
+
+
+def test_D63_week_shows_the_chain_as_one_card_and_its_post_on_its_day():
+    week = plan_views.week_view(fish_bowl_chain(), MON, 0, CHAIN_LOOKS, GOLD)
+    [craft] = week["days"][0]["rows"]
+    [post] = week["days"][4]["rows"]
+    assert (craft["id"], craft["lines"][-1], craft["total"]) == ("k", "then: post Fri 11:00, for the 19:00 peak",
+                                                                  "72s 20c")
+    assert (post["action"], post["net"], post["note"], post["lines"]) == \
+        ("post", "0c", "for the 19:00 peak · profit counted on the Mon 10:38 craft", [])
+    assert week["total"] == "+12g 4s 48c" and [len(d["rows"]) for d in week["days"]] == [1, 0, 0, 0, 1, 0, 0]
+
+
+def test_D64_holds_and_vendor_sales_are_no_rows_and_count_toward_no_total():
+    sales = [act("h1", "hold", 0.0, MON, qty=2, price=None), act("h2", "hold", 0.0, MON, key=BAR, qty=3, price=None),
+             act("x1", "vendor", 40, MON, qty=4, price=10), act("x2", "vendor", 25, MON, key=BAR, qty=5, price=5),
+             act("x3", "vendor", 12, MON, key=VIAL, qty=3, price=4, char_id="Brugan-G"),
+             act("w", "post", 500, MON, 0.9)]
+    plan = sales + fish_bowl_chain()
+    today = plan_views.today_view(plan, MON, 0, 0.5, CHAIN_LOOKS, GOLD)
+    assert [r["id"] for r in today["rows"]] == ["k", "w"] and today["total"] == "+12g 9s 48c"   # 2 actions, no 77c
+    week = plan_views.week_view(plan, MON, 0, CHAIN_LOOKS, GOLD)
+    assert [r["id"] for r in week["days"][0]["rows"]] == ["k", "w"] and week["total"] == "+12g 9s 48c"
+    assert week["characters"] == {"Amaya": "+12g 9s 48c"} and "Sell owned" in week["categories"]
+
+
+def test_D65_week_cards_carry_the_characters_name():
+    week = plan_views.week_view([act("w", "post", 500, MON, 0.9, char_id="Monstrscondm-Grommash")], MON, 0, LOOKS, GOLD)
+    assert week["days"][0]["rows"][0]["character"] == "Monstrscondm"
+
+
+def copper_rod_chain(mail_status: str = "pending", done_at: int | None = None) -> list[ViewAction]:
+    """Amaya crafts 7 Copper Rods; Brugan mails her 6 of his Copper Bars a minute before (C22)."""
+    mail = act("m", "mail", 0.0, MON - MINUTE, key=BAR, qty=6, price=None, char_id="Brugan-G", in_chain=True,
+               to_char="Amaya-G", status=mail_status, done_at=done_at)
+    craft = act("k", "craft", 9000, MON, parent_id="m", key=ROD, qty=7, price=None, in_chain=True)
+    post = act("p", "post", 9000, MON + 5 * HOUR, 0.8, parent_id="m", key=ROD, qty=7, price=4100, in_chain=True,
+               peak_ms=MON + 13 * HOUR)
+    return [mail, craft, post]
+
+
+def test_D66_mail_is_the_senders_row_and_a_line_under_the_crafters_row():
+    rows = {r["id"]: r for r in plan_views.today_view(copper_rod_chain(), MON, 0, 0.0, CHAIN_LOOKS, GOLD)["rows"]}
+    mail, craft = rows["m"], rows["k"]
+    assert (mail["action"], mail["character"], mail["qty"], mail["item"], mail["net"], mail["chance"], mail["risk"]) == \
+        ("mail", "Brugan", 6, "Copper Bar", "—", "—", "0.0%")
+    assert mail["note"] == "to Amaya · for crafting Copper Rod"
+    assert craft["character"] == "Amaya" and craft["lines"] == ["6 Copper Bar from Brugan · not mailed yet",
+                                                                 "then: post Mon 15:38, for the 23:38 peak"]
+    mailed = copper_rod_chain("done", MON + 2 * MINUTE)            # the mail_sent event matched it (T21)
+    today = {r["id"]: r for r in plan_views.today_view(mailed, MON, 0, 0.0, CHAIN_LOOKS, GOLD)["rows"]}
+    assert "m" not in today and today["k"]["lines"][0] == "6 Copper Bar from Brugan · mailed Mon 10:40"
+    week = plan_views.week_view(mailed, MON, 0, CHAIN_LOOKS, GOLD)
+    assert [(r["id"], r["status"]) for r in week["days"][0]["rows"]] == [("m", "done"), ("k", "pending"), ("p", "pending")]
+    partly = {r["id"]: r for r in plan_views.today_view(copper_rod_chain("partial", MON + 2 * MINUTE), MON, 0, 0.0,
+                                                        CHAIN_LOOKS, GOLD)["rows"]}
+    assert partly["k"]["lines"][0] == "6 Copper Bar from Brugan · partly mailed Mon 10:40"
+    skipped = {r["id"]: r for r in plan_views.week_view(copper_rod_chain("skipped"), MON, 0, CHAIN_LOOKS, GOLD)
+               ["days"][0]["rows"]}
+    assert skipped["k"]["lines"][0] == "6 Copper Bar from Brugan · skipped"
+    held = [a for a in copper_rod_chain() if a.kind != "mail"]     # Amaya's snapshot holds the bars: no mail, no line
+    [craft] = [r for r in plan_views.today_view(held, MON, 0, 0.0, CHAIN_LOOKS, GOLD)["rows"] if r["id"] == "k"]
+    assert craft["lines"] == ["then: post Mon 15:38, for the 23:38 peak"]

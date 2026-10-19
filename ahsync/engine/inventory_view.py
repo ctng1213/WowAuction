@@ -26,11 +26,13 @@ class Holding:
     """Units of one item in one place on one character (SPEC §3.2 inventory)."""
 
     char_id: str
-    where: str                    # "bags" | "bank" | "mail"
+    where: str                    # "bags" | "bank" | "mail" | "transit" (mail on its way, T22)
     key: int
     qty: int
     bound: bool
     paid_each: int | None = None  # average cost per unit, copper; None = no cost basis (before tracking)
+    sent_from: str = ""           # transit: who mailed it ("Brugan"; several joined by " and ")
+    sent_at_ms: int | None = None # transit: the newest send, UTC ms
 
 
 @dataclass(frozen=True)
@@ -165,6 +167,22 @@ def _sale_actions(key: int, owner: str, holders: set[str], actions: Sequence[Vie
     return sorted(out, key=lambda a: (a.at_ms, a.kind, a.action_id))
 
 
+def _transit_note(h: Holding, w: InventoryWorld) -> str:
+    """What an Inventory row of mail on its way says before its plan (T22).
+
+    Args:
+        h: The holding.
+        w: The world (local time).
+
+    Returns:
+        "On its way from Brugan, mailed Mon 10:40 · ", or "" for any other place.
+    """
+    if h.where != "transit" or h.sent_at_ms is None:
+        return ""
+    day, hour = clock(h.sent_at_ms, w.offset_ms)
+    return f"On its way from {h.sent_from}, mailed {day} {hour} · "
+
+
 def _row(h: Holding, plan: _Plan, worth: float | None, w: InventoryWorld) -> dict:
     """One Inventory row's cells.
 
@@ -185,7 +203,8 @@ def _row(h: Holding, plan: _Plan, worth: float | None, w: InventoryWorld) -> dic
         "char_id": h.char_id,                                                           # the Keep control (D52)
         "where": h.where, "qty": h.qty, "paid_each": money(paid_each), "paid_total": money(paid_each * h.qty),
         "paid_note": "before tracking" if h.paid_each is None else "", "worth": money(worth),
-        "windows": windows_short(w.windows.get(h.key, ()), w.offset_ms), "plan": plan.text, "plan_kind": plan.kind,
+        "windows": windows_short(w.windows.get(h.key, ()), w.offset_ms), "plan": _transit_note(h, w) + plan.text,
+        "plan_kind": plan.kind,
         "chance": m.chance, "chance_note": m.chance_note, "confidence": m.confidence, "dot": m.dot,
         "sales": m.sales, "supply": m.supply, "days": m.days,
         "sort": {"qty": h.qty, "paid": paid_each * h.qty, "worth": round_half_up(worth) if worth is not None else -1,

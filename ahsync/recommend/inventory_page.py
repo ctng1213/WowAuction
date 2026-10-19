@@ -71,6 +71,28 @@ def craft_uses(state: StateReader, char_ids: list[str], actions: list[ViewAction
     return out
 
 
+def transit_holdings(transit: list, paid: dict[int, tuple[int, int]]) -> list[Holding]:
+    """Mail on its way as Inventory holdings, one per recipient and item (T22).
+
+    Args:
+        transit: engine.transit.Transit records.
+        paid: Item key -> (units, total cost copper).
+
+    Returns:
+        Holdings in place "transit", their senders by name and the newest send time, by recipient then key.
+    """
+    grouped: dict[tuple[str, int], list] = {}
+    for t in transit:
+        grouped.setdefault((t.recipient, t.key), []).append(t)
+    out = []
+    for (recipient, key), records in sorted(grouped.items()):
+        senders = " and ".join(sorted({r.sender.split("-")[0] for r in records}))
+        out.append(Holding(recipient, "transit", key, sum(r.qty for r in records), False,
+                           round_half_up(paid[key][1] / paid[key][0]) if key in paid else None, senders,
+                           max(r.sent_at_ms for r in records)))
+    return out
+
+
 def inventory_page(state: StateReader, char_ids: list[str], actions: list[ViewAction], stats: dict[int, ItemIntel],
                    items: dict[int, ItemInfo], offset_ms: int) -> dict:
     """The Inventory payload (SPEC §3.5 dashboard data).
@@ -90,6 +112,7 @@ def inventory_page(state: StateReader, char_ids: list[str], actions: list[ViewAc
     holdings = [Holding(c, where, key, qty, bound,
                         round_half_up(paid[key][1] / paid[key][0]) if key in paid else None)
                 for c, where, key, qty, bound in state.holdings(char_ids)]
+    holdings += transit_holdings(state.transit(char_ids), paid)                      # T22
     keys = {h.key for h in holdings}
     looks = item_looks(keys | {a.key for a in actions}, stats, items)
     values = {}

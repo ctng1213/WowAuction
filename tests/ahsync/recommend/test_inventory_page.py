@@ -44,6 +44,10 @@ class FakeState:
         """Nothing kept."""
         return {}
 
+    def transit(self, char_ids):
+        """Nothing on its way unless a test sets `arriving`."""
+        return getattr(self, "arriving", [])
+
 
 def test_the_page_gathers_holdings_cost_basis_crafts_and_details():
     craft = ViewAction("c", None, "craft", "Brugan-G", ROD, 4, None, NOW, 120.0, None, "pending")
@@ -56,3 +60,15 @@ def test_the_page_gathers_holdings_cost_basis_crafts_and_details():
     assert sorted(page["details"]) == ["2589", "2840"]
     assert page["details"][str(LINEN)]["windows"][0]["when"] == "Sat 18:00–22:00"
     assert page["help"]["Worth"].startswith("What it is expected to bring")
+
+
+def test_T22_mail_on_its_way_is_a_transit_row_of_the_recipient_saying_from_whom_and_when():
+    from ahsync.engine.transit import Transit
+    state = FakeState()
+    monday = 345_600_000 + 3000 * 7 * 86_400_000                                  # a Monday 00:00 UTC
+    state.arriving = [Transit("Amaya-G", "Brugan-G", ROD, 2, monday + 10 * HOUR),
+                      Transit("Amaya-G", "Cara-G", ROD, 1, monday + 10 * HOUR + 40 * 60_000)]
+    page = inventory_page.inventory_page(state, ["Amaya-G", "Brugan-G"], [], STATS, ITEMS, 0)
+    [row] = [r for r in page["rows"] if r["where"] == "transit"]
+    assert (row["character"], row["item"], row["qty"]) == ("Amaya", "Copper Rod", 3)
+    assert row["plan"] == "On its way from Brugan and Cara, mailed Mon 10:40 · Not planned"

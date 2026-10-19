@@ -1,7 +1,7 @@
 -- UI/ViewModel.lua: everything the addon window shows, as text and flags (SPEC §4.3, §8.5).
 -- Lua twin of the parts of ahsync/engine/views.py and engine/plan_views.py the window uses:
--- money, risk, the chain rule that counts a chain's profit once (VW1), and the Today and
--- Week tabs. Frame code only draws what these functions return and does no arithmetic.
+-- money, risk and the chain rule that counts a chain's profit once (VW1); the Today and Week tabs
+-- are in UI/PlanView.lua. Frame code only draws what these functions return and does no arithmetic.
 -- Keep them formula-for-formula identical to the Python, rounding included (SPEC §3.3).
 
 local AHProfit = AHProfit
@@ -131,7 +131,7 @@ end
 --- How an action counts toward totals (plan_views.role).
 ---@param a table
 ---@return string  "sale", "step", "profit" or "follow"
-local function Role(a)
+function ViewModel.Role(a)
   if not a.inChain then return "sale" end
   if a.kind == "post" then return "follow" end
   if a.net and a.net ~= 0 then return "profit" end
@@ -141,9 +141,11 @@ end
 --- The chain an action belongs to (plan_views.chain_id).
 ---@param a table
 ---@return string
-local function ChainId(a)
+function ViewModel.ChainId(a)
   return a.parent or a.id
 end
+
+local Role, ChainId = ViewModel.Role, ViewModel.ChainId
 
 --- Sort actions by time, then id.
 ---@param a table
@@ -173,7 +175,7 @@ function ViewModel.Counted(actions, startMs, endMs, offsetMs)
   local out = {}
   for _, a in ipairs(shown) do
     local role, carrier = Role(a), carriers[ChainId(a)]
-    if role == "step" or a.kind == "hold" then         -- nothing sold now: no net (D39)
+    if role == "step" then                             -- nothing sold now: no net (D39); holds are no rows (D64)
       out[a.id] = { net = nil, note = "" }
     elseif role == "follow" and carrier then
       local day, hour = ViewModel.Clock(carrier.at, offsetMs)
@@ -189,34 +191,21 @@ end
 ---@param a table        A marked action
 ---@param chains table   chainId -> chance of its first post
 ---@return number|nil    Percent; nil when nothing is sold
-local function ChanceOf(a, chains)
+function ViewModel.ChanceOf(a, chains)
   if a.kind == "post" then return a.chance end
-  if a.kind == "de" or a.kind == "vendor" or a.kind == "hold" or Role(a) == "step" then return nil end
+  if a.kind == "de" or Role(a) == "step" then return nil end
   return chains[ChainId(a)]
 end
 
 --- Each chain's chance: its first post's (plan_views.chain_chances).
 ---@param actions table[]  Marked actions
 ---@return table           chainId -> percent
-local function ChainChances(actions)
+function ViewModel.ChainChances(actions)
   local sorted, out = {}, {}
   for i, a in ipairs(actions) do sorted[i] = a end
   table.sort(sorted, ViewModel.ByTime)
   for _, a in ipairs(sorted) do
     if a.kind == "post" and a.chance and a.inChain and out[ChainId(a)] == nil then out[ChainId(a)] = a.chance end
-  end
-  return out
-end
-
---- Each chain's first post that is for a peak (plan_views.chain_posts).
----@param actions table[]  Marked actions
----@return table           chainId -> that post
-local function ChainPosts(actions)
-  local sorted, out = {}, {}
-  for i, a in ipairs(actions) do sorted[i] = a end
-  table.sort(sorted, ViewModel.ByTime)
-  for _, a in ipairs(sorted) do
-    if a.kind == "post" and a.inChain and a.peak and out[ChainId(a)] == nil then out[ChainId(a)] = a end
   end
   return out
 end
@@ -237,7 +226,7 @@ end
 ---@param actions table[]  Marked actions
 ---@param lookOf function  key -> look
 ---@return table           chainId -> product name
-local function ChainCrafts(actions, lookOf)
+function ViewModel.ChainCrafts(actions, lookOf)
   local sorted, out = {}, {}
   for i, a in ipairs(actions) do sorted[i] = a end
   table.sort(sorted, ViewModel.ByTime)
@@ -247,112 +236,26 @@ local function ChainCrafts(actions, lookOf)
   return out
 end
 
---- A row's note (plan_views.note_of, D37-D39): the peak a post is for, what a chain's mat buy
---- is for, why a hold waits, where a chain's profit step will post, and why it counts what it
---- counts, joined by " · ".
+--- A row's note (plan_views.note_of, D37-D39, D66): the peak a post is for, whom a mail goes to, what a chain's
+--- step is for, and why it counts what it counts, joined by " · ". When a chain posts is its row's last line (D62).
 ---@param a table           The action
 ---@param countedNote string From Counted
----@param posts table       From ChainPosts
 ---@param crafts table      From ChainCrafts
----@param offsetMs number
+---@param offsetMs number   Local time minus UTC
 ---@return string
-function ViewModel.NoteOf(a, countedNote, posts, crafts, offsetMs)
+function ViewModel.NoteOf(a, countedNote, crafts, offsetMs)
   local parts = {}
   if a.kind == "buy" and a.vendor then parts[1] = "from a vendor" end      -- D41, A32
   if a.kind == "post" and a.peak then
     local _, peak = ViewModel.Clock(a.peak, offsetMs)
     parts[#parts + 1] = "for the " .. peak .. " peak"
   end
+  if a.kind == "mail" and a.to then parts[#parts + 1] = "to " .. ViewModel.ShortName(a.to) end   -- C22, A74
   if Role(a) == "step" and a.kind ~= "craft" and crafts[ChainId(a)] then
     parts[#parts + 1] = "for crafting " .. crafts[ChainId(a)]
   end
-  if a.kind == "hold" then parts[#parts + 1] = "hold for a later week" end
-  local post = (a.kind == "buy" or a.kind == "craft") and Role(a) == "profit" and posts[ChainId(a)] or nil
-  if post then
-    local day, hour = ViewModel.Clock(post.at, offsetMs)
-    local _, peak = ViewModel.Clock(post.peak, offsetMs)
-    parts[#parts + 1] = (a.kind == "buy" and "Flip" or "Then") .. ": post " .. day .. " " .. hour .. ", for the "
-                        .. peak .. " peak"
-  end
   if countedNote ~= "" then parts[#parts + 1] = countedNote end
   return table.concat(parts, " · ")
-end
-
---- One row's display cells, shared by Today and Week.
----@param a table          The action
----@param counted table    { net, note } from Counted
----@param chance number|nil Percent shown
----@param look table       { name, quality, conf, soldPerDay, volumeUnknown } for its item
----@param totalGold number All your gold, copper
----@param offsetMs number
----@return table           Row of text and flags
-local function Row(a, counted, chance, look, totalGold, offsetMs)
-  local spend = a.kind == "buy" and (a.price or 0) * a.qty or 0
-  local risk, amber = ViewModel.Risk(spend, totalGold)
-  local day, hour = ViewModel.Clock(a.at, offsetMs)
-  local net = counted.net
-  return {
-    id = a.id, kind = a.kind, action = ViewModel.ACTION_LABELS[a.kind] or a.kind, key = a.key, item = look.name,
-    quality = look.quality, qty = "×" .. a.qty, each = ViewModel.Money(a.price),
-    total = a.price and ViewModel.Money(a.price * a.qty) or "—",
-    net = net == nil and "—" or ViewModel.SignedMoney(net),
-    -- The action's own expected profit, even when a chain counts it elsewhere: the AH panel's Est. profit.
-    postNet = ViewModel.SignedMoney(a.net or 0), postNetColor = (a.net or 0) < 0 and "neg" or "pos",
-    netColor = (net or 0) > 0 and "pos" or ((net or 0) < 0 and "neg" or "muted"),
-    chance = chance and (chance .. "%") or "—", dot = chance and ViewModel.Level(look.conf) or nil,
-    confidence = chance and look.conf or nil,
-    volume = (chance and look.soldPerDay) and (ViewModel.RoundHalfUp(look.soldPerDay) .. "/day") or "—",
-    volumeUnknown = (chance and look.volumeUnknown) or nil,        -- "—" volume: the chance is a default (A68)
-    risk = risk, riskAmber = amber, who = a.char:match("^([^-]+)") or a.char, day = day, time = hour,
-    price = a.price, units = a.qty, postNetCopper = a.net or 0,   -- numbers, for the AH panel (A29, A31)
-    durationH = a.duration,                                         -- the auction duration to set (A56)
-    status = a.status, note = counted.note, netCopper = ViewModel.RoundHalfUp(net or 0),
-  }
-end
-
---- The Today tab: open actions due within the next hour, best expected net first (D1, D2, D16).
---- Ties go to the higher chance, then the item name, then the character. Rows whose chance is
---- below minChance are hidden and counted; rows with nothing to sell, and rows of items whose volume is
---- unknown (their chance is a default, A68), never are.
----@param actions table[]  Plan actions, each with char (the character id)
----@param nowMs number
----@param offsetMs number  Local time minus UTC
----@param minChance number Percent, 0-100
----@param lookOf function  key -> { name, quality, conf, soldPerDay, volumeUnknown }
----@param totalGold number All your gold, copper
----@return table           { rows, hidden, total (signed money), count }
-function ViewModel.Today(actions, nowMs, offsetMs, minChance, lookOf, totalGold)
-  ViewModel.MarkChains(actions)
-  local due, earliest = {}, nowMs
-  for _, a in ipairs(actions) do
-    if (a.status == "pending" or a.status == "late") and a.at < nowMs + HOUR_MS then
-      due[#due + 1] = a
-      earliest = math.min(earliest, a.at)
-    end
-  end
-  local nets, chains = ViewModel.Counted(due, earliest, nowMs + HOUR_MS, offsetMs), ChainChances(actions)
-  local posts, crafts = ChainPosts(actions), ChainCrafts(actions, lookOf)
-  local rows, hidden, total = {}, 0, 0
-  for _, a in ipairs(due) do
-    local chance, look = ChanceOf(a, chains), lookOf(a.key)
-    if chance ~= nil and chance < minChance and not look.volumeUnknown then
-      hidden = hidden + 1
-    else
-      local counted = nets[a.id]
-      local note = a.ownNote or ViewModel.OwnCraftNote(a) or ViewModel.NoteOf(a, counted.note, posts, crafts, offsetMs)
-      local row = Row(a, { net = counted.net, note = note }, chance, look, totalGold, offsetMs)
-      row.sortChance, row.sortChar = chance or -1, a.char
-      rows[#rows + 1] = row
-      total = total + row.netCopper
-    end
-  end
-  table.sort(rows, function(x, y)
-    if x.netCopper ~= y.netCopper then return x.netCopper > y.netCopper end
-    if x.sortChance ~= y.sortChance then return x.sortChance > y.sortChance end
-    if x.item ~= y.item then return x.item < y.item end
-    return x.sortChar < y.sortChar
-  end)
-  return { rows = rows, hidden = hidden, total = ViewModel.SignedMoney(total), count = #rows }
 end
 
 --- The footer's provisional label when your newer events were applied to an older plan (FM18).
@@ -401,44 +304,6 @@ function ViewModel.Decisions(keys, recordOf, lookOf, decided)
   return lines
 end
 
---- The Week tab: a rolling 7 days from today's local midnight, by day (D11, D17).
----@param actions table[]  Plan actions
----@param nowMs number
----@param offsetMs number
----@param lookOf function  key -> look
----@param totalGold number
----@return table           { days = { { label, today, total, rows } × 7 }, total }
-function ViewModel.Week(actions, nowMs, offsetMs, lookOf, totalGold)
-  ViewModel.MarkChains(actions)
-  local start = math.floor((nowMs + offsetMs) / DAY_MS) * DAY_MS - offsetMs
-  local finish = start + 7 * DAY_MS
-  local shown = {}
-  for _, a in ipairs(actions) do
-    if a.at >= start and a.at < finish then shown[#shown + 1] = a end
-  end
-  table.sort(shown, ViewModel.ByTime)
-  local nets, chains = ViewModel.Counted(shown, start, finish, offsetMs), ChainChances(actions)
-  local posts, crafts = ChainPosts(actions), ChainCrafts(actions, lookOf)
-  local days, total = {}, 0
-  for d = 0, 6 do
-    local midnight = start + d * DAY_MS
-    days[d + 1] = { label = Adapter.UtcDate("%a ", math.floor((midnight + offsetMs) / 1000))
-                      .. tonumber(Adapter.UtcDate("%d", math.floor((midnight + offsetMs) / 1000))),
-                    today = d == 0, cents = 0, rows = {} }
-  end
-  for _, a in ipairs(shown) do
-    local day = days[math.floor((a.at - start) / DAY_MS) + 1]
-    local counted = nets[a.id]
-    local row = Row(a, { net = counted.net, note = ViewModel.NoteOf(a, counted.note, posts, crafts, offsetMs) },
-                    ChanceOf(a, chains), lookOf(a.key), totalGold, offsetMs)
-    day.rows[#day.rows + 1] = row
-    day.cents = day.cents + row.netCopper
-    total = total + row.netCopper
-  end
-  for _, day in ipairs(days) do day.total = ViewModel.SignedMoney(day.cents) end
-  return { days = days, total = ViewModel.SignedMoney(total) }
-end
-
 --- The title bar's age badge (SPEC §4.3, UI5).
 ---@param generatedAt number|nil  When AHSync wrote the market data, ms
 ---@param nowMs number
@@ -454,18 +319,6 @@ function ViewModel.Age(generatedAt, nowMs)
   return { text = "data " .. text .. (minutes < 1 and "" or " old"), amber = nowMs - generatedAt > ViewModel.STALE_MS }
 end
 
---- The footer under Today (SPEC §4.3 wireframe, A2).
----@param today table      From ViewModel.Today
----@param minChance number Percent
----@param gone number|nil  Planned buys a live scan showed are gone
----@return string          e.g. "7 actions · expected +1g 54s 15c · 1 hidden (chance < 50%) · 2 gone"
-function ViewModel.TodayFooter(today, minChance, gone)
-  local text = today.count .. (today.count == 1 and " action" or " actions") .. " · expected " .. today.total
-  if today.hidden > 0 then text = text .. " · " .. today.hidden .. " hidden (chance < " .. minChance .. "%)" end
-  if gone and gone > 0 then text = text .. " · " .. gone .. " gone" end
-  return text
-end
-
 --- What the window shows about an item besides the plan: its name, quality and market activity.
 --- The name the addon saved from a link wins (it carries a random suffix, "… of Frost"), then
 --- the client's item cache, then the key itself.
@@ -474,13 +327,14 @@ end
 ---@param saved string|nil     AHProfitDB.itemNames[key], "quality,name"
 ---@param cachedName string|nil   Adapter.ItemInfo name
 ---@param cachedQuality number|nil Adapter.ItemInfo quality
----@return table               { name, quality, conf, soldPerDay, volumeUnknown }
-function ViewModel.Look(key, item, saved, cachedName, cachedQuality)
+---@param vendorSell number|nil    Adapter.ItemInfo sell price, copper (a post's deposit)
+---@return table               { name, quality, conf, soldPerDay, volumeUnknown, vendorSell }
+function ViewModel.Look(key, item, saved, cachedName, cachedQuality, vendorSell)
   local quality, name = (saved or ""):match("^(%d),(.+)$")
   name = name or cachedName or ("Item " .. key)
   quality = tonumber(quality) or cachedQuality or 1
   return { name = name, quality = quality, conf = item and item.conf, soldPerDay = item and item.soldPerDay,
-           volumeUnknown = (item and item.volumeUnknown) or false }
+           volumeUnknown = (item and item.volumeUnknown) or false, vendorSell = vendorSell }
 end
 
 --- The lines a list shows from a scroll offset, and where its scroll bar's thumb sits (UI2).
@@ -496,19 +350,6 @@ function ViewModel.Page(lines, offset, visible)
   for i = 1, math.min(visible, total - offset) do page[i] = lines[offset + i] end
   if total <= visible then return { lines = page, offset = offset, scrollable = false, thumbTop = 0, thumbSize = 1 } end
   return { lines = page, offset = offset, scrollable = true, thumbTop = offset / total, thumbSize = visible / total }
-end
-
---- The Week tab as one list: a header line per day with its total, then its rows.
----@param week table  From ViewModel.Week
----@return table[]    { header = true, label, total, today } or a row
-function ViewModel.WeekLines(week)
-  local lines = {}
-  for _, day in ipairs(week.days) do
-    lines[#lines + 1] = { header = true, label = day.label .. (day.today and " (today)" or ""), total = day.total,
-                          netColor = day.cents > 0 and "pos" or (day.cents < 0 and "neg" or "muted") }
-    for _, row in ipairs(day.rows) do lines[#lines + 1] = row end
-  end
-  return lines
 end
 
 --- The base item id of an item key (SPEC §2.1), for the client's item cache.

@@ -31,7 +31,7 @@ _QUERIES = (
     ("o.at, o.char_id, 'paid_out', o.key, o.qty, NULL, NULL, NULL, NULL, o.money, o.realized FROM payouts o WHERE 1 = 1",
      "o", "at"),
     (f"s.at, s.char_id, 'mailed', s.key, s.qty, NULL, {_PLAN}, s.to_char, NULL FROM mail_sent s "
-     "LEFT JOIN actions a ON a.action_id = s.action_id WHERE 1 = 1", "s", "at"),
+     "LEFT JOIN actions a ON a.action_id = s.action_id WHERE s.confirmed = 1", "s", "at"),
     ("a.slot_ms, a.char_id, a.status, a.key, a.qty, a.price, a.status, COALESCE(a.done_qty, 0), a.qty, a.kind, NULL "
      "FROM actions a WHERE a.status IN ('missed', 'skipped')", "a", "slot_ms"),
     ("x.at, x.char_id, 'untracked', x.key, ABS(x.delta), NULL, NULL, NULL, NULL, x.delta, NULL FROM untracked x "

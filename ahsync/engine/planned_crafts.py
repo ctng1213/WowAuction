@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from ahsync.engine.plan import PlanAction
-from ahsync.engine.plan_views import clock
+from ahsync.engine.plan_chains import buy_line, clock, first_line
 from ahsync.engine.views import money
 
 
@@ -100,9 +100,8 @@ def chain_lines(c: CraftChain, names: dict[int, str], offset_ms: int) -> tuple[s
             Its name, or its key.
         """
         return names.get(key, str(key))
-    lines = [f"buy {b.qty} {name(b.key)} {'from a vendor' if b.source == 'vendor' else 'on the AH'} · "
-             f"{money((b.price or 0) * b.qty)}" for b in c.buys]
-    lines += [f"craft {a.qty} {name(a.key)} first" for a in c.intermediates]
+    lines = [buy_line(b.qty, name(b.key), b.source == "vendor", (b.price or 0) * b.qty) for b in c.buys]   # D62 too
+    lines += [first_line(a.qty, name(a.key)) for a in c.intermediates]
     s = c.sale
     if s is None:
         lines.append("post it at the AH")

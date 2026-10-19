@@ -66,9 +66,10 @@ local function Optional(s)
 end
 
 --- Split one action string (EX3).
----@param text string  "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status;chance;peakMs;source;durationH"
+---@param text string  "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status;chance;peakMs;source;durationH;toChar"
 ---@return table       Fields by name; numbers as numbers, empty fields nil; vendor = true for a vendor buy (EX7);
----                    duration in hours for a post (EX9), nil from an older 13-field string
+---                    duration in hours for a post (EX9), nil from an older 13-field string; to = a mail's
+---                    recipient (C22, EX16)
 function Plan.DecodeAction(text)
   local f, i = {}, 0
   for field in (text .. ";"):gmatch("([^;]*);") do
@@ -78,7 +79,7 @@ function Plan.DecodeAction(text)
   return { id = f[1], kind = f[2], key = tonumber(f[3]), qty = tonumber(f[4]), price = tonumber(f[5]),
            at = tonumber(f[6]), net = tonumber(f[7]), parent = Optional(f[8]), windowEnd = tonumber(f[9]),
            status = f[10], chance = tonumber(f[11]), peak = tonumber(f[12]), vendor = f[13] == "v",
-           duration = tonumber(f[14]) }
+           duration = tonumber(f[14]), to = Optional(f[15] or "") }
 end
 
 --- A recipe's product, from the recipes the addon has seen.
@@ -177,6 +178,17 @@ end
 function Plan.CharacterActions(charId)
   local out = Plan.Actions(charId)
   for _, a in ipairs(out) do a.char = charId end
+  return out
+end
+
+--- The open mail other characters' plans send to this one (C22, A74): the lines under its craft rows.
+---@param charId string  "Name-Realm", the recipient
+---@return table[]       As Plan.DecodeAction plus char (the sender), senders by id, each in time order
+function Plan.IncomingMail(charId)
+  local out = {}
+  for _, a in ipairs(Plan.AllActions()) do
+    if a.kind == "mail" and a.to == charId and a.char ~= charId then out[#out + 1] = a end
+  end
   return out
 end
 

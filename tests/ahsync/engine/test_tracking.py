@@ -32,6 +32,19 @@ def test_T2_a_buy_of_part_of_it_marks_it_partial_and_the_rest_completes_it():
     assert status == {"b": (20, "done")}                         # only the 10 still to do are counted
 
 
+def test_T21_mail_to_the_planned_recipient_marks_the_mail_done_or_partial_and_mail_to_anyone_else_nothing():
+    brugan, bar = "Brugan-G", 2840
+    action = OpenAction("m", brugan, "mail", bar, 6, 0, None, T, None, to_char=AMAYA)
+
+    def sent(qty: int, to: str = AMAYA, at: int = T + 20 * HOUR) -> DoneEvent:
+        """A mail_sent event from Brugan."""
+        return DoneEvent("s", brugan, "mail", bar, qty, None, at, to)
+    assert match([sent(6)], [action])[1] == {"m": (6, "done")}
+    assert match([sent(4)], [action])[1] == {"m": (4, "partial")}
+    assert match([sent(6, to="Cara-G")], [action]) == ([], {})                  # another recipient
+    assert match([sent(6, at=T + 25 * HOUR)], [action]) == ([], {})              # more than 24 h after its slot
+
+
 def test_T3_a_buy_above_the_planned_price_matches_nothing():
     assert match([bought(price=50)], [buy()]) == ([], {})
     assert match([bought(price=None)], [buy()]) == ([], {})

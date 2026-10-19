@@ -131,7 +131,7 @@ def week_plan(w: WeekInputs, now_ms: int, s: PlanSettings, fs: FlipSettings, max
                                              {k: v for k, v in m.vendor.items() if k not in w.ignore},
                                              {k: v for k, v in m.owned.items() if k not in w.ignore},
                                              hold_values(lots, facts, now_ms, s)))   # an ignored item is no mat (O9)
-    world = replace(w.world, market=market)
+    world = replace(w.world, market=market, held={(lot.char_id, lot.key): float(lot.qty) for lot in lots})   # C22
     budgets, ledger = dict(w.budgets), {}
     vendor_sold = set(m.vendor)               # anyone can buy these from a vendor: never posted (R22, R23)
     # SPEC §3.3.3: an item flagged not selling is bought and crafted no more; your stock is still sold (O5).

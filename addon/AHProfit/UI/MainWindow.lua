@@ -377,12 +377,12 @@ local function LookOf(key)
   local saved = (DB.Get() or {}).itemNames
   -- Asking for an uncached item makes the client fetch it; GET_ITEM_INFO_RECEIVED then redraws.
   -- UNVERIFIED: Forever fires GET_ITEM_INFO_RECEIVED when a requested item arrives, as Classic does.
-  local name, quality = Adapter.ItemInfo(VM.BaseItemId(key))
+  local name, quality, sellPrice = Adapter.ItemInfo(VM.BaseItemId(key))
   if not name and not (saved and saved[key]) then
     waitingForNames = true
     Events.Register("GET_ITEM_INFO_RECEIVED", MainWindow.OnItemInfo)   -- listen only while a name is missing
   end
-  return VM.Look(key, Market.Item(key), saved and saved[key], name, quality)
+  return VM.Look(key, Market.Item(key), saved and saved[key], name, quality, sellPrice)
 end
 
 --- GET_ITEM_INFO_RECEIVED: an item the window asked for has arrived; redraw once, debounced,
@@ -543,6 +543,19 @@ local function CharacterActions(charId, nowMs)
   return actions, gone
 end
 
+--- The actions plus the mail other characters' plans send to this one, flagged incoming: a line under the craft
+--- that waits for it, never a row of this character's (C22, A74).
+---@param actions table[]  This character's actions; the mail is appended
+---@param charId string
+---@return table[]         The same list
+local function WithIncoming(actions, charId)
+  for _, m in ipairs(Plan.IncomingMail(charId)) do
+    m.incoming = true
+    actions[#actions + 1] = m
+  end
+  return actions
+end
+
 --- This character's Today rows, for the AH panel's post list: the same rows Today shows, with
 --- the same Min chance filter (50% until changed in the window).
 ---@param charId string
@@ -659,6 +672,7 @@ local function Lines(nowMs, gold)
   end
   local actions, gone = Plan.CharacterActions(charId), 0
   if view.tab == "today" then actions, gone = CharacterActions(charId, nowMs) end
+  actions = WithIncoming(actions, charId)                          -- A74
   if view.tab == "today" then
     local today = VM.Today(actions, nowMs, offset, view.minChance, LookOf, gold)
     local lines = VM.WithNotes(VM.AddRecords(today.rows, Plan.Record))

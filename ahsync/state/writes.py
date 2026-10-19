@@ -263,8 +263,8 @@ class IngestWrites:
     def upsert_event(self, table: str, row: dict[str, object]) -> bool:
         """Store a captured event by its id (SPEC §5.2 rule 2).
 
-        Posts and purchases carry `confirmed`: an attempt is stored with 0, and a later copy with 1 upgrades it
-        with that copy's fields; a confirmed row is never downgraded. Other events never change once stored.
+        Posts, purchases and sent mail carry `confirmed`: an attempt is stored with 0, and a later copy with 1
+        upgrades it with that copy's fields; a confirmed row is never downgraded. Other events never change once stored.
 
         Args:
             table: 'posts', 'purchases', 'crafts', 'disenchants', 'auction_mail', 'payouts' or 'mail_sent'.

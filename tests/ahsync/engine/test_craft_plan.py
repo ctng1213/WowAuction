@@ -213,3 +213,81 @@ def test_C14_a_rod_crafted_but_not_mailed_is_owned_stock_and_only_the_final_craf
     assert [(a.kind, a.key, a.char_id) for a in runed if a.kind != "post"][:2] == [("buy", DUST, "Amaya-G"),
                                                                                    ("craft", RUNED, "Amaya-G")]
     assert not [a for a in runed if a.kind == "craft" and a.key == ROD]           # the rod is not crafted again
+
+
+def test_C22_owned_mats_another_character_holds_are_mailed_to_the_crafter_gather_picks():
+    from ahsync.engine import plan_views
+    from ahsync.engine.plan_views import ItemLook
+    from ahsync.recommend.plan import plan_rows
+    from ahsync.recommend.plan_pages import view_actions
+    both = craft.Recipe(2663, ROD, 1, 1, ((BAR, 2),), ("Amaya-G", "Brugan-G"))
+
+    def plan(amaya: int, brugan: int) -> list:
+        """The rod chain when Amaya and Brugan hold these Copper Bars and the AH lists none."""
+        market = craft.Market({BAR: []}, {}, {BAR: float(amaya + brugan)}, {BAR: 100.0})
+        w = replace(world((both,)), market=market, held={("Amaya-G", BAR): float(amaya), ("Brugan-G", BAR): float(brugan)})
+        return craft_plan.craft_plan(w, {"Amaya-G": RICH, "Brugan-G": RICH}, RICH, NOW, S, 25, {})[0]
+    actions = plan(8, 6)
+    [mail] = [a for a in actions if a.kind == "mail"]
+    made = next(a for a in actions if a.kind == "craft")
+    assert (made.char_id, made.qty) == ("Amaya-G", 7)                          # she holds the most of the 14 bars
+    assert (mail.char_id, mail.to_char, mail.key, mail.qty) == ("Brugan-G", "Amaya-G", BAR, 6)
+    assert mail.at_ms == made.at_ms - 60_000 and mail.chain == made.chain and mail.net == 0
+    looks = {BAR: ItemLook("Copper Bar", 1), ROD: ItemLook("Copper Rod", 1, 70, 60.0, "ahf", 20)}
+    shown = view_actions(actions, plan_rows(actions, "m", NOW), [])
+    rows = {r["action"]: r for r in plan_views.today_view(shown, NOW, 0, 0.0, looks, RICH)["rows"]}
+    assert rows["craft"]["lines"][0] == "6 Copper Bar from Brugan · not mailed yet"
+    assert (rows["mail"]["character"], rows["mail"]["note"]) == ("Brugan", "to Amaya · for crafting Copper Rod")
+    flipped = plan(4, 10)                                                       # now Brugan holds the most
+    [mail] = [a for a in flipped if a.kind == "mail"]
+    assert (mail.char_id, mail.to_char, mail.qty) == ("Amaya-G", "Brugan-G", 4)
+    assert {a.char_id for a in flipped if a.kind in ("craft", "post")} == {"Brugan-G"}
+    assert not [a for a in plan(14, 0) if a.kind == "mail"]                     # she holds them all: no mail
+
+
+def test_use_held_takes_the_crafters_own_units_first_then_the_mailed_ones():
+    held = {("Amaya-G", BAR): 8.0, ("Brugan-G", BAR): 6.0, ("Cara-G", BAR): 1.0}
+    left = craft_plan.use_held(held, "Amaya-G", {BAR: 12.0}, {BAR: (("Brugan-G", 4),)})
+    assert left == {("Amaya-G", BAR): 0.0, ("Brugan-G", BAR): 2.0, ("Cara-G", BAR): 1.0}
+
+
+def test_C24_the_craft_count_is_checked_against_the_budget_of_the_crafter_gather_picks():
+    both = craft.Recipe(2663, ROD, 1, 1, ((BAR, 2),), ("Amaya-G", "Brugan-G"))
+    market = craft.Market({BAR: [(1000, 40.0)]}, {}, {BAR: 2.0}, {BAR: 100.0})      # Brugan holds the 2 owned bars
+    w = replace(world((both,), products={ROD: product(ROD, 9000, supply_now=200)}), market=market,
+                held={("Brugan-G", BAR): 2.0})
+    budgets = {"Amaya-G": 100_000, "Brugan-G": 10_000}                                # 10g and 1g
+    actions, _ = craft_plan.craft_plan(w, budgets, 110_000, NOW, S, 25, {})
+    made = next(a for a in actions if a.kind == "craft")
+    # Brugan's 1g buys 10 bars: with his 2 owned that is 6 crafts (Amaya's 10g would have allowed 14 within risk).
+    assert (made.char_id, made.qty) == ("Brugan-G", 6)
+    assert budgets == {"Amaya-G": 100_000, "Brugan-G": 0} and not [a for a in actions if a.kind == "mail"]
+
+
+def test_C23_a_re_plan_while_the_bars_are_on_their_way_mails_and_buys_nothing_and_says_on_its_way():
+    from ahsync.engine import plan_views
+    from ahsync.engine.plan_chains import Arriving
+    from ahsync.engine.plan_views import ItemLook
+    from ahsync.engine.transit import Transit
+    from ahsync.recommend.plan import plan_rows
+    from ahsync.recommend.plan_pages import view_actions
+    rod = craft.Recipe(2663, ROD, 1, 1, ((BAR, 2),), ("Amaya-G", "Brugan-G"))
+    # Brugan mailed his 6 bars at 10:40; his bags no longer have them and Amaya's mailbox wasn't read since:
+    # the 6 count as hers (state.owned_lots with transit, T22), next to the 8 in her bags. The AH lists bars too.
+    on_way = Transit("Amaya-G", "Brugan-G", BAR, 6, NOW - 20 * 60_000)
+    market = craft.Market({BAR: [(1000, 40.0)]}, {}, {BAR: 14.0}, {BAR: 100.0})
+    w = replace(world((rod,), products={ROD: product(ROD, 4000, supply_now=14)}), market=market,   # others list 14: cap 7
+                held={("Amaya-G", BAR): 14.0})
+    actions, _ = craft_plan.craft_plan(w, {"Amaya-G": RICH, "Brugan-G": RICH}, RICH, NOW, S, 25, {})
+    assert [(a.kind, a.char_id, a.qty) for a in actions if a.kind != "post"] == [("craft", "Amaya-G", 7)]
+    lost = replace(w, market=replace(market, owned={BAR: 8.0}), held={("Amaya-G", BAR): 8.0})   # without transit
+    again, _ = craft_plan.craft_plan(lost, {"Amaya-G": RICH, "Brugan-G": RICH}, RICH, NOW, S, 25, {})
+    assert [(a.kind, a.qty) for a in again if a.kind == "buy"] == [("buy", 6)]               # it would buy them again
+    looks = {BAR: ItemLook("Copper Bar", 1), ROD: ItemLook("Copper Rod", 1, 70, 60.0, "ahf", 20)}
+    shown = view_actions(actions, plan_rows(actions, "m", NOW), [])
+    arriving = Arriving((on_way,), {ROD: frozenset({BAR})})
+    [row] = plan_views.today_view(shown, NOW, 0, 0.0, looks, RICH, arriving)["rows"]
+    assert row["lines"][0] == "6 Copper Bar from Brugan · mailed Fri 13:40 · on its way"
+    other = Arriving((replace(on_way, recipient="Cara-G"),), {ROD: frozenset({BAR})})     # not hers: no line
+    [row] = plan_views.today_view(shown, NOW, 0, 0.0, looks, RICH, other)["rows"]
+    assert not [line for line in row["lines"] if "on its way" in line]

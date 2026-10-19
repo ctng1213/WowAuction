@@ -744,6 +744,31 @@ function Adapter.HookTakeMoney(fn)
   return hooked
 end
 
+--- The items attached to the mail being written, one entry per filled slot (A75).
+--- UNVERIFIED: Classic's GetSendMailItem(i) (count 4th) and GetSendMailItemLink(i), slots 1..ATTACHMENTS_MAX_SEND.
+---@return table[]  { key, qty } in slot order; slots without a readable link are left out
+function Adapter.ReadSendMailItems()
+  local out = {}
+  if not GetSendMailItem then return out end
+  for i = 1, ATTACHMENTS_MAX_SEND or MAIL_ATTACHMENTS do
+    local _, _, _, count = GetSendMailItem(i)
+    local key = count and Adapter.ItemKey(GetSendMailItemLink and GetSendMailItemLink(i))
+    if key then out[#out + 1] = { key = key, qty = count } end
+  end
+  return out
+end
+
+--- Watch the send-mail call without changing it (A75): fn runs right after SendMail is called, before the server
+--- answers, while the attachment slots still hold what is being sent.
+--- UNVERIFIED: SendMail(recipient, subject, body) is the global the mail frame calls on Forever, as on Classic.
+---@param fn function  fn(recipient, subject, body)
+---@return boolean     true when hooked
+function Adapter.HookSendMail(fn)
+  if not (hooksecurefunc and _G.SendMail) then return false end
+  hooksecurefunc("SendMail", fn)
+  return true
+end
+
 --- The money on a sold-auction mail, read before a take lands (A54).
 --- UNVERIFIED: GetInboxHeaderInfo(i) money 5th, still shown until the server answers the take.
 ---@param index number         Inbox index

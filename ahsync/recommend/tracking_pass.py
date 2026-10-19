@@ -11,16 +11,18 @@ from ahsync.engine.cost_basis import Bought, Disenchanted, Made, cost_basis
 from ahsync.engine.tracking import (AuctionMail, DoneEvent, OpenAction, OpenPost, Payout, SoldMail, match, realize,
                                     resolve_posts)
 
-# event table -> (action kind, SQL for its unmatched rows as event_id, char_id, key, qty, price, at)
+# event table -> (action kind, SQL for its unmatched rows as event_id, char_id, key, qty, price, at, recipient)
 _EVENTS = {
-    "purchases": ("buy", "SELECT event_id, char_id, key, qty, price, at FROM purchases "
+    "purchases": ("buy", "SELECT event_id, char_id, key, qty, price, at, NULL FROM purchases "
                          "WHERE action_id IS NULL AND confirmed = 1"),
-    "posts": ("post", "SELECT post_id, char_id, key, stack, price, at FROM posts WHERE action_id IS NULL AND confirmed = 1"),
-    "crafts": ("craft", "SELECT c.event_id, c.char_id, MIN(r.product_key), c.count, NULL, c.at FROM crafts c "
+    "posts": ("post", "SELECT post_id, char_id, key, stack, price, at, NULL FROM posts "
+                      "WHERE action_id IS NULL AND confirmed = 1"),
+    "crafts": ("craft", "SELECT c.event_id, c.char_id, MIN(r.product_key), c.count, NULL, c.at, NULL FROM crafts c "
                         "JOIN recipes r ON r.spell_id = c.spell_id AND r.product_key IS NOT NULL "
                         "WHERE c.action_id IS NULL GROUP BY c.event_id"),
-    "mail_sent": ("mail", "SELECT event_id, char_id, key, qty, NULL, at FROM mail_sent WHERE action_id IS NULL"),
-    "disenchants": ("de", "SELECT event_id, char_id, key, 1, NULL, at FROM disenchants WHERE action_id IS NULL"),
+    "mail_sent": ("mail", "SELECT event_id, char_id, key, qty, NULL, at, to_char FROM mail_sent "
+                          "WHERE action_id IS NULL AND confirmed = 1"),
+    "disenchants": ("de", "SELECT event_id, char_id, key, 1, NULL, at, NULL FROM disenchants WHERE action_id IS NULL"),
 }
 _ID_COLUMN = {"purchases": "event_id", "posts": "post_id", "crafts": "event_id", "mail_sent": "event_id",
               "disenchants": "event_id"}
@@ -36,7 +38,8 @@ def _open_actions(db: Database) -> list[OpenAction]:
         Pending, late and partial actions.
     """
     rows = db.conn.execute("SELECT action_id, char_id, kind, key, qty, COALESCE(done_qty, 0), price, slot_ms, "
-                           "window_end_ms FROM actions WHERE status IN ('pending', 'late', 'partial') ORDER BY action_id")
+                           "window_end_ms, to_char FROM actions WHERE status IN ('pending', 'late', 'partial') "
+                           "ORDER BY action_id")
     return [OpenAction(*r) for r in rows]
 
 
@@ -51,9 +54,9 @@ def _events(db: Database) -> tuple[list[DoneEvent], dict[str, str]]:
     """
     events, tables = [], {}
     for table, (kind, sql) in _EVENTS.items():
-        for event_id, char_id, key, qty, price, at in db.conn.execute(sql):
+        for event_id, char_id, key, qty, price, at, to_char in db.conn.execute(sql):
             if key is not None and qty:
-                events.append(DoneEvent(event_id, char_id, kind, key, qty, price, at))
+                events.append(DoneEvent(event_id, char_id, kind, key, qty, price, at, to_char))
                 tables[event_id] = table
     return events, tables
 

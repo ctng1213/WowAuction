@@ -52,7 +52,7 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 742,422 280x20 "Linen Cloth"
       Texture - 691,426 48x12
     Frame AHProfitWindowRow3 650,442 606x20
-      FontString - 742,442 510x20 "Flip: post Fri 08:53, for the 16:53 peak"
+      FontString - 742,442 510x20 "then: post Fri 08:53, for the 16:53 peak"
     Frame AHProfitWindowRow4 650,462 606x20
       FontString - 654,466 40x12 "Fri 10"
       FontString - 1232,466 20x12 "0  "

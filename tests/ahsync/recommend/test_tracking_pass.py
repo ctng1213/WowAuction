@@ -90,6 +90,39 @@ def test_a_craft_matches_by_its_recipes_product_and_an_unconfirmed_post_waits(db
     assert rows(db, "SELECT status FROM actions WHERE action_id = 'post'") == [("done",)]
 
 
+def test_T21_a_stored_mail_sent_event_matches_the_mail_to_its_recipient(db):
+    brugan = "Brugan-Grommash"
+    with db.transaction():
+        db.conn.execute("INSERT INTO actions(action_id, char_id, kind, key, qty, slot_ms, status, done_qty, to_char) "
+                        "VALUES ('mail', ?, 'mail', ?, 6, ?, 'pending', 0, ?)", (brugan, BAR, T, AMAYA))
+        db.conn.executemany("INSERT INTO mail_sent(event_id, char_id, to_char, key, qty, at) VALUES (?, ?, ?, ?, ?, ?)",
+                            [("x", brugan, "Cara-Grommash", BAR, 6, T + HOUR), ("s", brugan, AMAYA, BAR, 4, T + 2 * HOUR)])
+    assert tracking_pass(db)["matched"] == 1
+    assert rows(db, "SELECT status, done_qty, done_at FROM actions WHERE action_id = 'mail'") == [("partial", 4, T + 2 * HOUR)]
+    assert rows(db, "SELECT event_id, action_id FROM mail_sent ORDER BY event_id") == [("s", "mail"), ("x", None)]
+
+
+def test_A75_a_sent_mail_from_the_saved_variables_matches_only_once_the_client_confirmed_it(db):
+    brugan = "Brugan-Grommash"
+    with db.transaction():
+        db.conn.execute("INSERT INTO actions(action_id, char_id, kind, key, qty, slot_ms, status, done_qty, to_char) "
+                        "VALUES ('mail', ?, 'mail', ?, 6, ?, 'pending', 0, ?)", (brugan, BAR, T, AMAYA))
+    character = {"name": "Brugan", "realm": "Grommash", "faction": "Horde", "class": "MAGE", "level": 60, "gold": 1,
+                 "updated": T}
+
+    def sent(confirmed: bool) -> dict:
+        """Brugan's mail_sent event of 6 Copper Bar to Amaya."""
+        return {"id": f"{brugan}:{T + HOUR}:0", "type": "mail_sent", "char": brugan, "at": T + HOUR, "to": AMAYA,
+                "key": BAR, "qty": 6, "confirmed": confirmed}
+    apply_data(db, read_ahprofit(savedvars_text({"characters": {brugan: character}, "events": [sent(False)]})), REALMS, T)
+    assert tracking_pass(db)["matched"] == 0                                     # an attempt waits (FM20)
+    assert rows(db, "SELECT confirmed, action_id FROM mail_sent") == [(0, None)]
+    apply_data(db, read_ahprofit(savedvars_text({"characters": {brugan: character}, "events": [sent(True)]})), REALMS, T)
+    assert tracking_pass(db)["matched"] == 1
+    assert rows(db, "SELECT confirmed, action_id FROM mail_sent") == [(1, "mail")]
+    assert rows(db, "SELECT status FROM actions WHERE action_id = 'mail'") == [("done",)]
+
+
 def test_T4_T5_auction_mail_resolves_posts_once(db):
     with db.transaction():
         db.conn.executemany("INSERT INTO posts(post_id, event_id, char_id, key, stack, price, at, confirmed) "

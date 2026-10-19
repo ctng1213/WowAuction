@@ -19,6 +19,7 @@ from ahsync.collect.local_scans import recompute_stale_volume
 from ahsync.config import Config, market_settings, market_sources
 from ahsync.db.sqlite import Database
 from ahsync.engine.characters_view import CharacterSheet, characters_view
+from ahsync.engine.plan_chains import Arriving
 from ahsync.recommend.history_page import history_page
 from ahsync.recommend.inventory_page import inventory_page
 from ahsync.recommend.on_ah_page import on_ah_page
@@ -66,9 +67,14 @@ def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], in
     db.stage_plan(rows)
     week_start = (now_ms + offset_ms) // DAY_MS * DAY_MS - offset_ms
     history = db.history_actions([c for c, _ in characters], week_start, week_start + 7 * DAY_MS)
-    shown = view_actions(actions, rows, history)
+    shown = view_actions(actions, rows, history, items)
+    char_ids = [c for c, _ in characters]
+    uses: dict[int, frozenset[int]] = {}
+    for r in db.known_recipes(char_ids):
+        if r.product is not None:
+            uses[r.product] = uses.get(r.product, frozenset()) | {k for k, _ in r.reagents}
     pages = plan_pages(shown, intel_items, items, sum(g for _, g in characters), now_ms, offset_ms, db.cost_basis(),
-                       records)
+                       records, Arriving(tuple(db.transit(char_ids)), uses))                      # C23
     pages["inventory"] = inventory_page(db, [c for c, _ in characters], [a for a in shown if a.status == "pending"],
                                         intel_items, items, offset_ms)
     for page, body in pages.items():

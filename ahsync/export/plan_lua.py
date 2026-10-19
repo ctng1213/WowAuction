@@ -3,14 +3,15 @@
     AHProfitPlan = {
       schemaVersion, exportVersion, generatedAt, checksum, basedOnUntil,
       ingestedUntil = { [charId] = ms },     -- the addon deletes that character's rows at or before it
-      actions = { [charId] = { "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status;chance;peakMs", ... } },
+      actions = { [charId] = { "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status;chance;peakMs;source;
+                               durationH;toChar", ... } },
       rules = { [key] = "rule,setAtMs" },    -- "none" is a clear and travels too (SPEC §3.4.2)
     }
 
 Only open actions (pending, late) are exported, in time order; an empty field is
 unavailable. Net is the planned expected net in copper, rounded half up; chance is the
 planned chance to sell in whole percent and peakMs the hour a post is for (posts;
-empty otherwise). The checksum
+empty otherwise); toChar is a mail's recipient (C22, EXPORT_VERSION 2). The checksum
 is "<strings>:<their total length>" over every action and rule string, like
 MarketIntelligence.lua's. It is account-specific: every account on the machine shares
 it, which is why ingestedUntil is per character (SPEC §2.2). exportVersion (market_lua.EXPORT_VERSION, EX14) is
@@ -44,18 +45,20 @@ def action_text(row: tuple) -> str:
 
     Args:
         row: (action_id, char_id, kind, key, qty, price, slot_ms, expected_net, parent_id, window_end_ms, status,
-            chance 0-1 or None, peak_ms or None, source "vendor" | "ah" | None[, duration_h or None]).
+            chance 0-1 or None, peak_ms or None, source "vendor" | "ah" | None[, duration_h or None[, to_char]]).
 
     Returns:
-        "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status;chance;peakMs;source;durationH", source "v"
-        for a vendor buy and empty otherwise (EX7), durationH a post's auction duration in hours (EX9).
+        "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status;chance;peakMs;source;durationH;toChar", source
+        "v" for a vendor buy and empty otherwise (EX7), durationH a post's auction duration in hours (EX9), toChar a
+        mail's recipient and empty otherwise (C22, EX16).
     """
     action_id, _, kind, key, qty, price, slot_ms, net, parent, window_end, status, chance, peak, source = row[:14]
     duration = row[14] if len(row) > 14 else None
+    to_char = row[15] if len(row) > 15 else None
     net_copper = None if net is None else round_half_up(net)
     percent = None if chance is None else round_half_up(chance * 100)
     return ";".join(_field(v) for v in (action_id, kind, key, qty, price, slot_ms, net_copper, parent, window_end, status,
-                                        percent, peak, "v" if source == "vendor" else None, duration))
+                                        percent, peak, "v" if source == "vendor" else None, duration, to_char))
 
 
 def plan_lua(actions: Sequence[tuple], rules: Sequence[tuple[int, str, int]], ingested_until: Mapping[str, int],

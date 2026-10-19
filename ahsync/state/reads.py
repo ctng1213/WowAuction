@@ -5,6 +5,8 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Protocol
 
+from ahsync.engine.transit import Sent, Transit, in_transit, units as transit_units
+
 @dataclass(frozen=True)
 class RecipeRow:
     """A recipe with its reagents and the characters who know it."""
@@ -85,13 +87,23 @@ class StateReader(Protocol):
         """
 
     def owned_lots(self, char_ids: list[str]) -> list[tuple[str, int, int]]:
-        """Unbound units per character and item, less their reserves.
+        """Unbound units per character and item, mail on its way included, less their reserves.
 
         Args:
             char_ids: Character ids.
 
         Returns:
             (character id, item key, units), sorted by character then key.
+        """
+
+    def transit(self, char_ids: list[str]) -> list[Transit]:
+        """Mail on its way to the characters (SPEC §3.4B, T22).
+
+        Args:
+            char_ids: Character ids (the recipients).
+
+        Returns:
+            engine.transit.Transit records, by recipient, key and send time.
         """
 
     def holdings(self, char_ids: list[str]) -> list[tuple[str, str, int, int, bool]]:
@@ -324,8 +336,8 @@ class StateReads:
         return dict(self.conn.execute("SELECT key, set_at FROM item_rules WHERE rule = 'keep' ORDER BY key").fetchall())
 
     def owned_lots(self, char_ids: list[str]) -> list[tuple[str, int, int]]:
-        """Unbound units per character and item, bags, bank and mail together, less what the character
-        keeps for itself (SPEC §3.4C.1, §3.4.3, R10, R20).
+        """Unbound units per character and item, bags, bank, mail and mail on its way together, less what the
+        character keeps for itself (SPEC §3.4C.1, §3.4.3, §3.4B mail on its way, R10, R20, T22).
 
         Bound items are never lots: they can't be sold or mailed. Neither are kept units.
 
@@ -338,12 +350,41 @@ class StateReads:
         if not char_ids:
             return []
         marks = ",".join("?" * len(char_ids))
-        rows = self.conn.execute(
-            f"SELECT i.char_id, i.key, SUM(i.qty) - COALESCE(MAX(r.qty), 0), MAX(r.qty) = -1 FROM inventory i "
-            f"LEFT JOIN reserves r ON r.char_id = i.char_id AND r.key = i.key "
-            f"WHERE i.bound = 0 AND i.char_id IN ({marks}) GROUP BY i.char_id, i.key ORDER BY i.char_id, i.key",
-            tuple(char_ids))
-        return [(c, k, free) for c, k, free, keep_all in rows if free > 0 and not keep_all]
+        held = {(c, k): q for c, k, q in self.conn.execute(
+            f"SELECT char_id, key, SUM(qty) FROM inventory WHERE bound = 0 AND char_id IN ({marks}) "
+            f"GROUP BY char_id, key", tuple(char_ids))}
+        for place, qty in transit_units(self.transit(char_ids)).items():
+            held[place] = held.get(place, 0) + qty
+        kept = self.reserves(char_ids)
+        lots = [(c, k, q - max(0, kept.get((c, k), 0))) for (c, k), q in sorted(held.items()) if kept.get((c, k)) != -1]
+        return [lot for lot in lots if lot[2] > 0]
+
+    def transit(self, char_ids: list[str]) -> list[Transit]:
+        """Mail on its way to the characters: confirmed sends no snapshot shows yet (SPEC §3.4B, T22).
+
+        "Now" for the 30-day limit is the newest send or snapshot of the characters involved, so the result
+        depends on the data only.
+
+        Args:
+            char_ids: Character ids (the recipients).
+
+        Returns:
+            engine.transit.Transit records, by recipient, key and send time.
+        """
+        if not char_ids:
+            return []
+        marks = ",".join("?" * len(char_ids))
+        sent = [Sent(*r) for r in self.conn.execute(
+            f"SELECT event_id, char_id, to_char, key, qty, at FROM mail_sent WHERE confirmed = 1 AND qty > 0 "
+            f"AND to_char IN ({marks}) ORDER BY at, event_id", tuple(char_ids))]
+        if not sent:
+            return []
+        people = sorted({s.sender for s in sent} | set(char_ids))
+        snapshots = {(c, loc): at for c, loc, at in self.conn.execute(
+            f"SELECT char_id, location, at FROM snapshots WHERE char_id IN ({','.join('?' * len(people))})",
+            tuple(people))}
+        now_ms = max([s.at_ms for s in sent] + list(snapshots.values()))
+        return in_transit(sent, snapshots, now_ms)
 
     def holdings(self, char_ids: list[str]) -> list[tuple[str, str, int, int, bool]]:
         """Every inventory row of the characters, bound ones too (SPEC §3.5 Inventory).

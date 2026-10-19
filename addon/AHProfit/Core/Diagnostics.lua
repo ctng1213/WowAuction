@@ -47,6 +47,9 @@ Diagnostics.APIS = {
   "AUCTION_WON_MAIL_SUBJECT", "TakeInboxMoney", "AutoLootMailItem",
   -- disenchant (A55)
   "GetNumLootItems", "GetLootSlotLink", "GetLootSlotInfo",
+  -- mail sent to your own characters (A75); events are no globals, so MAIL_SEND_SUCCESS reads "nil" unless the
+  -- client defines a constant by that name: the event itself shows in the traces
+  "SendMail", "GetSendMailItem", "GetSendMailItemLink", "ATTACHMENTS_MAX_SEND", "MAIL_SEND_SUCCESS",
 }
 
 -- Namespaces whose function lists we need to write the modern readers (SPEC §6).

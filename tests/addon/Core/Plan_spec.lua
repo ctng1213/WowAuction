@@ -82,6 +82,13 @@ describe("Plan", function()
                 Plan.DecodeAction("l;buy;2589;20;45;1;0;;;pending;;").vendor }, { true, false, false })
   end)
 
+  it("EX16 a mail decodes with its recipient; any other action, and an older 14-field string, has none", function()
+    local Plan = LoginWithRows()
+    assert_eq({ Plan.DecodeAction("m;mail;2840;6;;1;0;c;;pending;;;;;Amaya-Grommash").to,
+                Plan.DecodeAction("p;post;2589;20;55;1;0;;;pending;93;;;24;").to,
+                Plan.DecodeAction("p;post;2589;20;55;1;0;;;pending;93;;;24").to }, { "Amaya-Grommash", nil, nil })
+  end)
+
   it("EX3 decodes the open actions and the rules, clears included", function()
     local Plan = LoginWithRows()
     assert_eq(Plan.Problem(), nil)
@@ -121,7 +128,7 @@ describe("Plan", function()
   end)
 
   it("FM35 a plan from a newer AHSync says to deploy the addon", function()
-    local Plan = LoginWithRows(function(plan) plan.exportVersion = 2 end)
+    local Plan = LoginWithRows(function(plan) plan.exportVersion = 3 end)
     assert_eq({ Plan.Actions(A), #AHProfitDB.scans }, { {}, 3 })
     assert_eq(Plan.Problem(), "This addon is older than AHSync's files: run tools/deploy.py, then /reload")
   end)

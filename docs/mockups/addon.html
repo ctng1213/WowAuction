@@ -119,7 +119,7 @@
 <div class="note tabnote" id="tabnote"></div>
 
 <h2>2. AH side panel (docked right of the auction house, 300 wide)</h2>
-<p class="note">Clicking a Shopping row searches for that item. <b>Clicking a Post row fills the AH's Sell tab</b> with the item, quantity and list price; you check it and press the AH's own Post button (A29). Right-click any row to keep the item for yourself. Shopping lists only what to buy on the AH: a mat the plan buys from a vendor stays on Today, marked “from a vendor” (A32). ✓ found at or below target · ✗ gone or no longer profitable · … still being searched. <b>For</b> says why it's bought: CRAFT, FLIP or DE (A40). A search that lists nothing marks the row ✗ gone (A38); buyouts lower Qty, and a row drops off once it's all bought (A39). The bar under the status line follows any full scan: waiting, reading n of total, saving, then “full scan done” (A43). Covers UI7.</p>
+<p class="note">Clicking a Shopping row searches for that item. <b>Clicking a Post row fills the AH's Sell tab</b> with the item, quantity and list price; you check it and press the AH's own Post button (A29). Right-click any row to keep the item for yourself. Shopping lists only what to buy on the AH: a mat the plan buys from a vendor stays on Today, as a line under its craft marked “from a vendor” (A32, A71). ✓ found at or below target · ✗ gone or no longer profitable · … still being searched. <b>For</b> says why it's bought: CRAFT, FLIP or DE (A40). A search that lists nothing marks the row ✗ gone (A38); buyouts lower Qty, and a row drops off once it's all bought (A39). The bar under the status line follows any full scan: waiting, reading n of total, saving, then “full scan done” (A43). Covers UI7.</p>
 <div class="docked">
   <div class="ahstub">Blizzard auction house window<br>(not ours)</div>
   <div class="frame" style="width:300px">
@@ -306,22 +306,22 @@ function pair(n, P) {
   return `<td class="num" title="Confidence ${c}%${VOL_DAY[n] === null ? ' · volume unknown: default chance' : ''}">${P}% ${dot(c >= 75 ? 'h' : c >= 45 ? 'm' : 'l')}</td>${volume(n)}`;
 }
 
-// Today rows: [action, item, quality, qty, each, net, P, conf, who, spend (copper the action spends), note]
+// Today rows: [action, item, quality, qty, each, net, P, conf, who, spend (copper the action spends), note and lines, one per \n]
 const TODAY = [
-  ['buy', 'Mithril Spurs', 3, 1, 30000, 7342, 85, 'm', 'Brugan', 30000, 'Flip: post Sat 10:00, for the 18:00 peak'],
+  ['buy', 'Mithril Spurs', 3, 1, 30000, 7342, 85, 'm', 'Brugan', 30000, 'then: post Sat 10:00, for the 18:00 peak'],
   ['post', 'Copper Rod', 1, 5, 4100, 6306, 58, 'm', 'Brugan', 100, 'Your record (30 d): 2 of 5 sold · expired 2× while cheapest · P 80% → 58% · price −10% · qty ¼'],
-  ['buy', 'Silk Cloth', 1, 40, 70, 730, 88, 'h', 'Amaya', 2800, 'Flip: post Sat 11:00, for the 19:00 peak'],
+  ['buy', 'Silk Cloth', 1, 40, 70, 730, 88, 'h', 'Amaya', 2800, 'then: post Sat 11:00, for the 19:00 peak'],
   ['de', 'Scouting Gloves of the Monkey', 2, 1, 800, 625, 100, 'm', 'Amaya', 800],
-  ['craft', 'Bolt of Silk Cloth', 1, 2, 280, 194, 85, 'h', 'Amaya', 560, 'Buys 8 Silk Cloth · then post Sun 11:00, for the 19:00 peak (Week)'],
-  ['craft', 'Heavy Grinding Stone', 1, 4, null, 134, 75, 'h', 'Brugan', 0, 'Uses 8 owned Heavy Stone · then post Sat 11:00, for the 19:00 peak'],
-  ['vendor', 'Broken Fang', 0, 7, 12, 84, null, 'h', 'Amaya', 0],
+  ['craft', 'Bolt of Silk Cloth', 1, 2, 280, 194, 85, 'h', 'Amaya', 560, 'buy 8 Silk Cloth on the AH · 5s 60c\n2 Spider\'s Silk from Brugan · not mailed yet\nthen: post Sun 11:00, for the 19:00 peak'],
+  ['craft', 'Heavy Grinding Stone', 1, 4, null, 134, 75, 'h', 'Brugan', 0, 'uses 8 owned Heavy Stone\nthen: post Sat 11:00, for the 19:00 peak'],
 ];
 
 const VIEWS = {
   Today: {
     ctl: 'Min chance: 50% ▾',
-    footer: `<span>7 actions · expected <span class="pos">${money(15415, true)}</span> · 1 hidden (chance &lt; 50%)</span><span>Budget ${money(TOTAL_GOLD)}</span>`,
-    note: `<b>Today</b>: what to do now, <b>sorted by expected net, highest first</b>. Covers UI1, UI3, UI6 and UI10.
+    footer: `<span>6 actions · expected <span class="pos">${money(15331, true)}</span> · 1 hidden (chance &lt; 50%)</span><span>Budget ${money(TOTAL_GOLD)}</span>`,
+    note: `<b>Today</b>: what to do now, <b>sorted by expected net, highest first</b>. Covers UI1, UI3, UI6, UI10 and UI15.
+      <ul><li><b>A chain is one row</b> (A71): the craft or flip carries its profit; its mat buys, intermediate crafts and the mail another character sends for it are grey lines under it, then when it sells ("then: post Sun 11:00, for the 19:00 peak"). The character who sends that mail sees a <b>MAIL</b> row ("to Amaya") on their own Today (A74); clicking it does nothing special yet. Holds and vendor sales are on Inventory, not here (A73).</li></ul>
       <ul><li><b>Each</b> is per unit and <b>Total</b> is each × quantity. For a craft, it's the gold for mats you still need to buy; "—" means you own them all.</li>
       <li><b>Chance</b> is the chance to sell (P') with a confidence dot. Rows below the <b>Min chance</b> filter are hidden (here, Iron Ore at 30%), and the footer counts them.</li>
       <li><b>Every column header has a tooltip</b> on hover saying what it means (the dashboard uses the same texts).</li>
@@ -338,44 +338,40 @@ const VIEWS = {
   },
   Week: {
     ctl: 'Char: All ▾',
-    footer: `<span>Fri 16 → Thu 22 · 32 actions · expected <span class="pos">${money(26938, true)}</span></span><span>Peak: Sat 18:00</span>`,
-    note: `<b>Week</b>: a rolling 7 days that <b>always starts today</b> (SPEC §3.4C). Each day shows its total; done actions are ticked. <b>Every craft comes after its mat buys and has a post for its product within 7 days</b> (the line under it shows both). A <b>crafting chain</b> (Sat 12:00–12:30) shows every step: buy bars → Brugan crafts the Copper Rod → <b>mail</b> to Amaya → Amaya crafts the Runed Copper Rod. <b>Posts are timed 8 h before the peak</b>, and their chance to sell runs from the post to the end of its selling window. The line under each post names its peak. <b>A chain's profit is counted once</b>, on its first action: a post that sells stock from a buy or craft shown in the plan says "profit counted on …" and adds nothing to the day total. If the post time has passed, it says "now" (Fri Copper Rod). <b>Missed a peak</b> (✗): the post moves to the next window this week only if it's within 10% of the original and still likely to sell (Wool Cloth → Sun). Otherwise it <b>holds</b> until next week, which starts fresh (Mageweave → Tue). Times are local.`,
+    footer: `<span>Fri 16 → Thu 22 · 27 actions · expected <span class="pos">${money(26854, true)}</span></span><span>Peak: Sat 18:00</span>`,
+    note: `<b>Week</b>: a rolling 7 days that <b>always starts today</b> (SPEC §3.4C). Each day shows its total; done actions are ticked. <b>A chain is one row</b> (A72): a craft's mat buys and intermediate crafts are the lines under it, then its post; the post is a row of its own on its day. In the Sat 12:00–12:30 chain Brugan's steps (buy bars, craft the Copper Rod, <b>mail</b> it to Amaya) are Brugan's rows, and Amaya's Runed Copper Rod row says "1 Copper Rod from Brugan · not mailed yet". Holds and vendor sales are on Inventory (A73). <b>Posts are timed 8 h before the peak</b>, and their chance to sell runs from the post to the end of its selling window. The line under each post names its peak. <b>A chain's profit is counted once</b>, on its first action: a post that sells stock from a buy or craft shown in the plan says "profit counted on …" and adds nothing to the day total. If the post time has passed, it says "now" (Fri Copper Rod). <b>Missed a peak</b> (✗): the post moves to the next window this week only if it's within 10% of the original and still likely to sell (Wool Cloth → Sun). Otherwise it holds until next week (on Inventory), which starts fresh (Mageweave → Tue). Times are local.`,
     html: () => {
       // A chain's profit sits on its first action in view (SPEC §3.4 expected net).
       const days = [
-        ['Fri 16 Oct · today', 15618, [['✗ 05:00', 'post', 'Wool Cloth', 1, 20, 30, null, 'missed the Fri 11:00–14:00 peak → moved to Sun (−4% vs original, 81% chance)'],
-          ['✓ 14:10', 'buy', 'Linen Cloth', 1, 20, 38, 203, 'flip → post Sat 10:00'],
-          ['14:30', 'hold', 'Mageweave Cloth', 1, 20, null, null, 'missed Tue & Wed peaks; Thu was 18% below → hold until next week (Tue 20:00 peak)'],
-          ['14:30', 'buy', 'Mithril Spurs', 3, 1, 30000, 7342, 'flip → post Sat 10:00'],
+        ['Fri 16 Oct · today', 15534, [['✗ 05:00', 'post', 'Wool Cloth', 1, 20, 30, null, 'missed the Fri 11:00–14:00 peak → moved to Sun (−4% vs original, 81% chance)'],
+          ['✓ 14:10', 'buy', 'Linen Cloth', 1, 20, 38, 203, 'then: post Sat 10:00, for the 18:00 peak'],
+          ['14:30', 'buy', 'Mithril Spurs', 3, 1, 30000, 7342, 'then: post Sat 10:00, for the 18:00 peak'],
           ['14:30', 'post', 'Copper Rod', 1, 5, 4100, 6306, 'now: for the 19:00 peak (11:00 has passed)'],
           ['14:30', 'de', 'Scouting Gloves of the Monkey', 2, 1, 800, 625],
-          ['14:30', 'vendor', 'Broken Fang', 0, 7, 12, 84],
-          ['20:00', 'craft', 'Heavy Grinding Stone', 1, 4, null, 134, 'Mats: owned · → post Sat 11:00 (for the 19:00 peak)'],
-          ['20:15', 'buy', 'Silk Cloth', 1, 8, 70, null, 'mats for Bolt of Silk Cloth (20:30)'],
-          ['20:30', 'craft', 'Bolt of Silk Cloth', 1, 2, 280, 194, 'Mats: bought 20:15 · → post Sun 11:00 (for the 19:00 peak)'],
-          ['21:00', 'buy', 'Silk Cloth', 1, 40, 70, 730, 'flip → post Sat 11:00']]],
+          ['20:00', 'craft', 'Heavy Grinding Stone', 1, 4, null, 134, 'uses 8 owned Heavy Stone\nthen: post Sat 11:00, for the 19:00 peak'],
+          ['20:30', 'craft', 'Bolt of Silk Cloth', 1, 2, 280, 194, 'buy 8 Silk Cloth on the AH · 5s 60c\nthen: post Sun 11:00, for the 19:00 peak'],
+          ['21:00', 'buy', 'Silk Cloth', 1, 40, 70, 730, 'then: post Sat 11:00, for the 19:00 peak']]],
         ['Sat 17 Oct', 4787, [
           ['10:00', 'post', 'Linen Cloth', 1, 20, 55, null, 'for the 18:00 peak · profit counted on the Fri 14:10 buy'],
           ['10:00', 'post', 'Mithril Spurs', 3, 1, 45000, null, 'for the 18:00 peak · profit counted on the Fri 14:30 buy'],
           ['11:00', 'post', 'Heavy Grinding Stone', 1, 4, 100, null, 'for the 19:00 peak · profit counted on the Fri 20:00 craft'],
           ['11:00', 'post', 'Silk Cloth', 1, 40, 105, null, 'for the 19:00 peak · profit counted on the Fri 21:00 buy'],
           ['11:00', 'post', 'Copper Bar', 1, 6, 1200, 3157, 'for the 19:00 peak · worth more there than the AH asks, so the chain buys its bars'],
-          ['12:00', 'buy', 'Copper Bar', 1, 2, 1000, null, 'Brugan · mats for Copper Rod (12:15)'],
-          ['12:15', 'craft', 'Copper Rod', 1, 1, null, null, 'Brugan · chain step 1: for Runed Copper Rod'],
-          ['12:20', 'mail', 'Copper Rod', 1, 1, null, null, 'Brugan → Amaya'],
-          ['12:25', 'buy', 'Strange Dust + Lesser Magic', 1, 1, 1700, null, 'Amaya · mats for Runed Copper Rod (12:30)'],
-          ['12:30', 'craft', 'Runed Copper Rod', 2, 1, 3700, 1630, 'Amaya · Source: AH + crafted · → post Sun 10:00 (for the 18:00 peak)']]],
+          ['12:00', 'buy', 'Copper Bar', 1, 2, 1000, null, 'Brugan · for crafting Runed Copper Rod'],
+          ['12:15', 'craft', 'Copper Rod', 1, 1, null, null, 'Brugan · for crafting Runed Copper Rod'],
+          ['12:20', 'mail', 'Copper Rod', 1, 1, null, null, 'Brugan · to Amaya · for crafting Runed Copper Rod'],
+          ['12:30', 'craft', 'Runed Copper Rod', 2, 1, 3700, 1630, 'Amaya\nbuy 1 Strange Dust + 1 Lesser Magic Essence on the AH · 17s\n1 Copper Rod from Brugan · not mailed yet\nthen: post Sun 10:00, for the 18:00 peak']]],
         ['Sun 18 Oct', 143, [['10:00', 'post', 'Runed Copper Rod', 2, 1, 5900, null, 'for the 18:00 peak · profit counted on the Sat 12:30 craft'], ['11:00', 'post', 'Wool Cloth', 1, 20, 30, 472, 'for the 19:00 peak · replaces the missed Fri post'], ['11:00', 'post', 'Bolt of Silk Cloth', 1, 2, 450, null, 'for the 19:00 peak · profit counted on the Fri 20:30 craft'], ['12:00', 'post', 'Heavy Leather', 1, 5, 47, -329, 'for the 20:00 peak · below what you paid']]],
         ['Mon 19 Oct', 1700, [['21:00', 'de', 'Green items', 2, 3, 800, 1700]]],
         ['Tue 20 Oct', 2835, [['12:00', 'post', 'Mageweave Cloth', 1, 20, 120, 1877, 'new week, fresh slate · for the 20:00 raid-night peak'], ['19:00', 'buy', 'Elixir of Agility', 1, 5, 700, 958, 'flip → post Wed 12:00']]],
         ['Wed 21 Oct', 0, [['12:00', 'post', 'Elixir of Agility', 1, 5, 1300, null, 'for the 20:00 peak · profit counted on the Tue 19:00 buy']]],
-        ['Thu 22 Oct', 1855, [['09:30', 'buy', 'Iron Bar', 1, 1, 4200, null, 'mats for Transmute (10:00)'], ['10:00', 'craft', 'Transmute: Iron to Gold', 2, 1, 4200, 1855, 'Mats: bought 09:30 · → post Thu 11:00 (for the 19:00 peak)'], ['11:00', 'post', 'Gold Bar', 2, 1, 9500, null, 'for the 19:00 peak · profit counted on the Thu 10:00 craft']]],
+        ['Thu 22 Oct', 1855, [['10:00', 'craft', 'Transmute: Iron to Gold', 2, 1, 4200, 1855, 'buy 1 Iron Bar on the AH · 42s\nthen: post Thu 11:00, for the 19:00 peak'], ['11:00', 'post', 'Gold Bar', 2, 1, 9500, null, 'for the 19:00 peak · profit counted on the Thu 10:00 craft']]],
       ];
       return `<table>${head([['When'], [''], ['Item'], ['Qty', 1], ['Each', 1], ['Total', 1], ['Net', 1], ...PAIR])}` + days.map(([d, tot, rows]) =>
         `<tr class="day"><td colspan="6">${d}</td><td class="num">${net(tot)}</td><td colspan="2"></td></tr>` +
         rows.map(([t, a, n, q, qty, each, e, follow]) =>
           `<tr class="row"><td class="${t.startsWith('✓') ? 'pos' : t.startsWith('✗') ? 'neg' : 'muted'}">${t}</td><td>${act(a)}</td><td>${item(n, q, 140)}</td><td class="num">×${qty}</td><td class="num">${money(each)}</td><td class="num">${each === null ? money(null) : money(each * qty)}</td><td class="num">${net(e)}</td>${e === null && a !== 'post' ? DASHES : pair(n)}</tr>` +
-          (follow ? `<tr class="record"><td></td><td></td><td colspan="7">${follow}</td></tr>` : '')).join('')
+          (follow ? follow.split('\n').map(l => `<tr class="record"><td></td><td></td><td colspan="7">${l}</td></tr>`).join('') : '')).join('')
       ).join('') + '</table>';
     }
   },
@@ -443,7 +439,7 @@ const VIEWS = {
 
 function todayRow(a, n, q, qty, each, e, P, c, who, spend, note) {
   return `<tr class="row"><td>${act(a)}</td><td>${item(n, q)}</td><td class="num">×${qty}</td><td class="num">${money(each)}</td><td class="num">${each === null ? money(null) : money(each * qty)}</td><td class="num">${net(e)}</td>${pair(n, P)}<td class="num">${risk(spend)}</td></tr>`
-    + (note ? `<tr class="record"><td></td><td colspan="8">${note}</td></tr>` : '');
+    + (note ? note.split('\n').map(l => `<tr class="record"><td></td><td colspan="8">${l}</td></tr>`).join('') : '');
 }
 function de(n, ilvl, buy, mats, ev, profit, live) {
   return `<tr class="row"><td>${item(n, 2, 120)}</td><td class="num">${ilvl}</td><td class="num">${money(buy)}</td><td class="muted">${mats}</td><td class="num">${money(ev)}</td><td class="num">${net(profit)}</td>${pair(n)}<td class="num">${risk(buy)}</td><td class="${live === '✓' ? 'pos' : 'muted'}">${live}</td></tr>`;

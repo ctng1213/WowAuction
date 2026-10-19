@@ -32,6 +32,7 @@ Capture\Purchases.lua
 Recommend\Options.lua
 Recommend\Reserves.lua
 UI\ViewModel.lua
+UI\PlanView.lua
 UI\CraftView.lua
 UI\FlipView.lua
 UI\InventoryView.lua

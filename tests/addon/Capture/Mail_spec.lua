@@ -90,4 +90,40 @@ describe("Mail", function()
       "take 1 money=970 invoice=seller item=Copper Rod -> payout", "take 1 money=970 invoice=seller item=Copper Rod -> seen before",
       "take 2 money=500 invoice=nil item=nil -> not a sold mail" })
   end)
+
+  it("A75 each item you mail to your character is a mail_sent event, confirmed on success, dropped on failure", function()
+    Stubs.Reset()
+    Stubs.world.player.name = "Brugan"
+    Stubs.Login()
+    --- The mail_sent events, as "to key qty confirmed".
+    ---@return string[]
+    local function Sent()
+      local out = {}
+      for _, e in ipairs(AHProfitDB.events) do
+        if e.type == "mail_sent" then out[#out + 1] = table.concat({ e.to, e.key, e.qty, tostring(e.confirmed) }, " ") end
+      end
+      return out
+    end
+    Stubs.world.sendMail = { [1] = { id = 2589, count = 20 }, [3] = { id = 2840, count = 6 } }
+    Stubs.FireEvent("MAIL_SEND_INFO_UPDATE")                       -- the two slots are filled
+    SendMail("amaya", "mats", "")                                  -- the hook runs right after the call
+    Stubs.world.sendMail = {}
+    Stubs.FireEvent("MAIL_SEND_INFO_UPDATE")                       -- the client empties the slots
+    assert_eq(Sent(), { "Amaya-Grommash 2589 20 false", "Amaya-Grommash 2840 6 false" })
+    Stubs.FireEvent("MAIL_SEND_SUCCESS")
+    assert_eq(Sent(), { "Amaya-Grommash 2589 20 true", "Amaya-Grommash 2840 6 true" })
+    Stubs.world.sendMail = { [1] = { id = 2840, count = 4 } }
+    Stubs.FireEvent("MAIL_SEND_INFO_UPDATE")
+    SendMail("Amaya", "more", "")
+    Stubs.FireEvent("MAIL_FAILED")                                 -- the send failed: its event goes
+    assert_eq(#Sent(), 2)
+    Stubs.world.sendMail = {}
+    Stubs.FireEvent("MAIL_SEND_INFO_UPDATE")
+    SendMail("Amaya", "a letter", "hi")                            -- nothing attached: nothing written
+    SendMail("Cara-Stormrage", "", "")                             -- another realm's character: not one of yours here
+    Stubs.FireEvent("MAIL_SEND_SUCCESS")                           -- nothing waits: changes nothing
+    assert_eq({ #Sent(), #Stubs.world.sent }, { 2, 4 })
+    assert_eq(AHProfit.Capture.Mail.RecipientId(nil, "Grommash"), nil)
+    assert_eq(AHProfit.Events.Traces(), { "sent 2 to Amaya-Grommash", "sent 1 to Amaya-Grommash" })
+  end)
 end)

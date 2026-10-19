@@ -510,7 +510,7 @@ _EVENT_TYPES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "post": (("key", "stack", "price", "durationH", "deposit", "confirmed"), ()),
     "purchase": (("key", "qty", "price", "source", "confirmed"), ()),
     "craft": (("spell", "count"), ()),
-    "mail_sent": (("to", "key", "qty"), ()),
+    "mail_sent": (("to", "key", "qty"), ("confirmed",)),   # confirmed since A75; missing = confirmed
     "auction_mail": (("outcome", "key", "qty"), ("price",)),
     "skip": (("action",), ()),
     "payout": (("key", "qty", "money"), ("deposit",)),

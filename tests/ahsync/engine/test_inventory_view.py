@@ -81,7 +81,8 @@ def test_D31_the_best_selling_windows_column_is_local_and_marks_an_early_pattern
     assert row["windows"] == "Sat 17–21 · Sun 19–22 (early pattern)"
 
 
-def test_vendor_hold_craft_only_and_chain_posts():
+def test_D64_vendor_sales_and_holds_keep_their_inventory_plan_cell_crafts_and_chain_posts_too():
+    # Holds and vendor sales are no Today or Week rows (D64), but Inventory still plans and values them.
     vendor = action("v", "vendor", "Amaya-G", FANG, 3, 7, 21.0)
     hold = action("h", "hold", "Amaya-G", FANG, 1, None, 0.0, at_ms=NOW + HOUR)
     chain_post = action("f", "post", "Amaya-G", LINEN, 20, 55, 1000.0, in_chain=True, p=0.9)

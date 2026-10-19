@@ -79,7 +79,7 @@ Frame AHProfitWindow 640,320 640x440
       Texture - 654,446 48x12
     Frame AHProfitWindowRow4 650,462 606x20
       Texture - 652,462 602x1
-      FontString - 654,462 48x20 "VENDOR"
+      FontString - 654,462 48x20 "DE"
       FontString - 1218,462 34x20 "0.0%"
       FontString - 1163,462 52x20 "—"
       FontString - 1114,462 46x20 "—"
@@ -139,7 +139,7 @@ Frame AHProfitWindow 640,320 640x440
       Texture - 654,546 48x12
     Frame AHProfitWindowRow9 650,562 606x20
       Texture - 652,562 602x1
-      FontString - 654,562 48x20 "VENDOR"
+      FontString - 654,562 48x20 "DE"
       FontString - 1218,562 34x20 "0.0%"
       FontString - 1163,562 52x20 "—"
       FontString - 1114,562 46x20 "—"

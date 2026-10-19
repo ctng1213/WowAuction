@@ -7,7 +7,9 @@ count and total, so the page never computes (SPEC §8.5).
 """
 from __future__ import annotations
 
+from ahsync.engine import fees
 from ahsync.engine.plan import PlanAction
+from ahsync.engine.plan_chains import Arriving
 from ahsync.engine.plan_views import ItemLook, ViewAction, flip_view, today_view, week_view
 from ahsync.engine.views import COLUMN_HELP, item_name, item_quality, round_half_up
 from ahsync.history.reads import ItemInfo, suffix_names_of
@@ -16,24 +18,46 @@ from ahsync.intel.contract import ItemIntel, price_level
 MIN_CHANCE_STEPS = (0, 25, 50, 75)        # the Today page's "Min chance" dropdown, percent
 
 
-def view_actions(actions: list[PlanAction], rows: list[tuple], history: list[tuple]) -> list[ViewAction]:
+def view_actions(actions: list[PlanAction], rows: list[tuple], history: list[tuple],
+                 items: dict[int, ItemInfo] | None = None) -> list[ViewAction]:
     """The new plan and the kept history as view actions.
 
     Args:
         actions: The new plan, in plan_rows order.
         rows: plan_rows(actions, ...): their ids and parents.
-        history: Kept actions (action_id, parent_id, kind, char_id, key, qty, price, slot_ms, expected_net, status).
+        history: Kept actions (action_id, parent_id, kind, char_id, key, qty, price, slot_ms, expected_net, status[,
+            done_at, to_char]).
+        items: Item metadata, for a post's deposit (its vendor sell price); None: deposits unknown.
 
     Returns:
-        History first, then the new plan; history has no chance, peak or expected value.
+        History first, then the new plan; history has no chance, peak or expected value; a mail names its recipient
+        and a done one when it was done (C22, D66); a new post carries its deposit (SPEC §3.4 Risk).
     """
     parents = {r[13] for r in rows if r[13]} | {h[1] for h in history if h[1]}
     out = [ViewAction(h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7], h[8] or 0.0, None, h[9],
-                      in_chain=bool(h[1]) or h[0] in parents) for h in history]
+                      in_chain=bool(h[1]) or h[0] in parents, to_char=h[11] if len(h) > 11 else None,
+                      done_at=h[10] if len(h) > 10 else None) for h in history]
     for a, r in zip(actions, rows):
         out.append(ViewAction(r[0], r[13], a.kind, a.char_id, a.key, a.qty, a.price, a.at_ms, a.net, a.p, "pending",
-                              a.peak_ms, a.chain is not None, a.expected, a.source == "vendor"))
+                              a.peak_ms, a.chain is not None, a.expected, a.source == "vendor", a.to_char,
+                              deposit=_deposit(a, items or {})))
     return out
+
+
+def _deposit(a: PlanAction, items: dict[int, ItemInfo]) -> int | None:
+    """A planned post's deposit (SPEC §3.4 fees).
+
+    Args:
+        a: The action.
+        items: Item metadata (the vendor sell price).
+
+    Returns:
+        Copper; None for anything but a post with a duration and a known item.
+    """
+    info = items.get(a.key)
+    if a.kind != "post" or a.duration_h is None or info is None:
+        return None
+    return fees.deposit_copper(info.vendor_sell or 0, a.qty, a.duration_h)
 
 
 def item_looks(keys: set[int], stats: dict[int, ItemIntel], items: dict[int, ItemInfo],
@@ -67,7 +91,7 @@ def item_looks(keys: set[int], stats: dict[int, ItemIntel], items: dict[int, Ite
 
 def plan_pages(actions: list[ViewAction], stats: dict[int, ItemIntel], items: dict[int, ItemInfo], total_gold: int,
                now_ms: int, offset_ms: int, paid: dict[int, tuple[int, int]] | None = None,
-               records: dict | None = None) -> dict[str, dict]:
+               records: dict | None = None, arriving: Arriving = Arriving()) -> dict[str, dict]:
     """The Today, Week and Flip payloads (SPEC §3.5 dashboard data).
 
     Args:
@@ -79,14 +103,15 @@ def plan_pages(actions: list[ViewAction], stats: dict[int, ItemIntel], items: di
         offset_ms: Local time minus UTC.
         paid: Item key -> (units, total cost copper) from the cost basis, for "below what you paid" (T7).
         records: Item key -> your sell record, for the record line and Needs a decision (D42, D43).
+        arriving: Mail on its way, for the craft rows' lines (C23).
 
     Returns:
         {"today": {"by_min": {"0": view, ...}, "help"}, "week": view, "flip": view}.
     """
-    looks = item_looks({a.key for a in actions}, stats, items, paid, records)
-    today = {str(step): today_view(actions, now_ms, offset_ms, step / 100, looks, total_gold)
+    looks = item_looks({a.key for a in actions} | {t.key for t in arriving.records}, stats, items, paid, records)
+    today = {str(step): today_view(actions, now_ms, offset_ms, step / 100, looks, total_gold, arriving)
              for step in MIN_CHANCE_STEPS}
-    week = week_view(actions, now_ms, offset_ms, looks, total_gold)
+    week = week_view(actions, now_ms, offset_ms, looks, total_gold, arriving)
     flips = flip_view([a for a in actions if a.status == "pending"], offset_ms, looks, total_gold)
     return {"today": {"by_min": today, "help": COLUMN_HELP}, "week": {**week, "help": COLUMN_HELP},
             "flip": {**flips, "help": COLUMN_HELP}}

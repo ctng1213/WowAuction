@@ -54,6 +54,8 @@ function Stubs.NewWorld()
     skillLines = {},          -- { name, header = bool, collapsed = bool, rank, max }
     containers = {},          -- [bagId] = { size = n, slots = { [slot] = { id, count, bound, suffix, noLink } } }
     inbox = {},               -- one array of { id, count, noLink = bool } attachments per mail
+    sendMail = {},            -- [slot] = { id, count }: the attachments of the mail being written (A75)
+    sent = {},                -- { recipient, subject, body } per SendMail call
     inboxTotal = nil,         -- mails on the server; default #inbox (all loaded)
     merchant = {},            -- { id, numAvailable (-1 = unlimited), extendedCost = bool }
     unknownEvents = {},       -- [event] = true: RegisterEvent raises, as the real client does
@@ -359,6 +361,18 @@ local function InstallItems()
       return "icon", item.count, item.locked or false, 1, false, false,
         not item.noLink and Stubs.ItemLink(item.id, item.suffix) or nil
     end
+  end)
+  Define("ATTACHMENTS_MAX_SEND", 12)
+  Define("GetSendMailItem", function(i)
+    local item = Stubs.world.sendMail[i]
+    if item then return Stubs.ITEM_NAMES[item.id], item.id, "icon", item.count, 1, true end
+  end)
+  Define("GetSendMailItemLink", function(i)
+    local item = Stubs.world.sendMail[i]
+    return item and Stubs.ItemLink(item.id)
+  end)
+  Define("SendMail", function(recipient, subject, body)
+    table.insert(Stubs.world.sent, { recipient = recipient, subject = subject, body = body })
   end)
   Define("GetInboxNumItems", function() return #Stubs.world.inbox, Stubs.world.inboxTotal or #Stubs.world.inbox end)
   Define("GetInboxItem", function(i, a)

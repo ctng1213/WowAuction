@@ -25,7 +25,7 @@ from ahsync.recommend.store import RecommendStore
 from ahsync.state.journal import JournalReads
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 17
+SCHEMA_VERSION = 18
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
@@ -137,6 +137,13 @@ MIGRATIONS: dict[int, str] = {
         ALTER TABLE scans_v17 RENAME TO scans;
         ALTER TABLE book_entries_v17 RENAME TO book_entries;
         CREATE INDEX IF NOT EXISTS scans_at ON scans(at)
+    """,
+    # 18: a mail action's recipient, so the sender's row and the crafter's line can name each other (C22, T21);
+    # sent mail is confirmed by the client like posts and purchases (A75).
+    18: """
+        ALTER TABLE actions ADD COLUMN to_char TEXT;
+        ALTER TABLE plan_new ADD COLUMN to_char TEXT;
+        ALTER TABLE mail_sent ADD COLUMN confirmed INTEGER NOT NULL DEFAULT 1
     """,
     # 14: sell records, stored for the hourly status pass (M8).
     14: """

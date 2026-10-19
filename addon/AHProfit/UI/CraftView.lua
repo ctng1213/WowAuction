@@ -155,14 +155,13 @@ local function PlannedRow(craft, chain, lookOf, totalGold, nowMs, offsetMs)
     if a.kind == "buy" then
       local cost = (a.price or 0) * a.qty
       mats = mats + cost
-      notes[#notes + 1] = "buy " .. a.qty .. " " .. lookOf(a.key).name .. (a.vendor and " from a vendor · " or " on the AH · ")
-        .. ViewModel.Money(cost)
+      notes[#notes + 1] = ViewModel.BuyLine(a.qty, lookOf(a.key).name, a.vendor, cost)   -- Today's wording too (A71)
     elseif a.kind ~= "craft" and a.key == craft.key and not post then
       post = a
     end
   end
   for _, a in ipairs(chain) do                                         -- intermediates, after the buys (A63)
-    if a.kind == "craft" and a ~= craft then notes[#notes + 1] = "craft " .. a.qty .. " " .. lookOf(a.key).name .. " first" end
+    if a.kind == "craft" and a ~= craft then notes[#notes + 1] = ViewModel.FirstLine(a.qty, lookOf(a.key).name) end
   end
   notes[#notes + 1] = SaleNote(post, nowMs, offsetMs)
   local risk, amber = ViewModel.Risk(mats, totalGold)

@@ -93,7 +93,7 @@ describe("ViewModel", function()
     for _, r in ipairs(today.rows) do by[r.id] = r end
     assert_eq({ by.buy.net, by.buy.chance, by.buy.risk }, { "+2s 90c", "90%", "0.2%" })   -- 760c / 314000c
     assert_eq({ by.post.net, by.post.note }, { "0c", "profit counted on the Thu 14:30 buy" })
-    assert_eq({ by.mats.net, by.mats.chance, by.mats.volume }, { "—", "—", "—" })
+    assert_eq({ by.mats, by.buy.notes }, { nil, { "buy 20 Copper Bar on the AH · 7s 60c", "then: relist now" } })  -- D62
     assert_eq(today.total, "+2s 90c")
   end)
 
@@ -116,22 +116,21 @@ describe("ViewModel", function()
     local wool = Act("w", "post", 100, NOW, 90, { peak = NOW + 5 * HOUR + 30 * MINUTE })
     local today = VM.Today({ buy, flipPost, craft, craftPost, wool }, NOW, 0, 0, Look, GOLD)
     local notes = {}
-    for _, r in ipairs(today.rows) do notes[r.id] = r.note end
-    assert_eq(notes, { f = "Flip: post Fri 10:00, for the 18:00 peak", k = "Then: post Fri 11:00, for the 19:00 peak",
-                       w = "for the 20:00 peak" })
+    for _, r in ipairs(today.rows) do notes[r.id] = { r.note, r.notes } end
+    assert_eq(notes, { f = { "", { "then: post Fri 10:00, for the 18:00 peak" } },     -- the chain's last line (D62)
+                       k = { "", { "then: post Fri 11:00, for the 19:00 peak" } }, w = { "for the 20:00 peak", {} } })
   end)
 
-  it("D39 a chain's mat buy says what it is for, and a hold shows no net", function()
+  it("D39 another character's mat buy says what it is for, and a hold is no row", function()
     local VM = Boot()
     LOOKS[5000] = { name = "Basic Campfire Kit", quality = 1 }
-    local wood = Act("w", "buy", 0, NOW, nil, { key = 2840, qty = 7 })
+    local wood = Act("w", "buy", 0, NOW, nil, { key = 2840, qty = 7, char = "Brugan-Grommash" })
     local kit = Act("k", "craft", 732, NOW + MINUTE, nil, { key = 5000, qty = 7, price = nil, parent = "w" })
     local eggs = Act("e", "hold", 0, NOW, nil, { qty = 2, price = nil })
     local week = VM.Week({ wood, kit, eggs }, NOW, 0, Look, GOLD)
     local rows = {}
     for _, r in ipairs(week.days[1].rows) do rows[r.id] = r end
-    assert_eq({ rows.w.net, rows.w.note }, { "—", "for crafting Basic Campfire Kit" })
-    assert_eq({ rows.e.net, rows.e.note }, { "—", "hold for a later week" })
+    assert_eq({ rows.w.net, rows.w.note, rows.e }, { "—", "for crafting Basic Campfire Kit", nil })
     assert_eq(week.total, "+7s 32c")
     LOOKS[5000] = nil
   end)
@@ -139,7 +138,7 @@ describe("ViewModel", function()
   it("D17 Week: seven local days from today, each with its total, and the week total", function()
     local VM = Boot()
     local actions = { Act("a", "post", 830, NOW + HOUR), Act("b", "post", 11000, NOW + 2 * HOUR),
-                      Act("c", "vendor", -20, NOW + DAY, nil, { char = "Brugan-Grommash" }),
+                      Act("c", "de", -20, NOW + DAY, nil, { char = "Brugan-Grommash" }),   -- a vendor sale is no row (D64)
                       Act("far", "post", 5, NOW + 8 * DAY) }
     local week = VM.Week(actions, NOW, 0, Look, GOLD)
     assert_eq({ #week.days, week.days[1].label, week.days[1].today, week.days[2].label }, { 7, "Thu 9", true, "Fri 10" })

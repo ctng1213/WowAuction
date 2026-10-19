@@ -1,4 +1,4 @@
--- Layout snapshots of the /ahp window (SPEC §8.4 layer 2, UI1-UI4, UI6, UI9, UI10, UI11-UI14). Each scenario draws the
+-- Layout snapshots of the /ahp window (SPEC §8.4 layer 2, UI1-UI4, UI6, UI9, UI10, UI11-UI15). Each scenario draws the
 -- window with the stub frames, runs the automatic layout checks and compares the frame tree with
 -- tests/visual/golden/<scenario>.txt. `python tools/visual.py --update` accepts a change, and
 -- `--html` draws it for comparison with docs/mockups/addon.html.
@@ -8,7 +8,7 @@ local Layout = require("layout")
 local UIWorld = require("ui_world")
 
 local NOW = 1760000000000
-local KINDS = { "buy", "post", "craft", "de", "vendor", "post" }
+local KINDS = { "buy", "post", "craft", "de", "de", "post" }   -- no vendor: a vendor sale is no Today row (D64, A73)
 
 --- Log in with n Today actions over a few items, then open the window.
 ---@param n number            Actions due now
@@ -201,6 +201,27 @@ describe("MainWindow layout", function()
     Stubs.Slash("/ahp week")
     local ui = AHProfit.MainWindow.Frames()
     Layout.Golden("week_notes", ui.frame)
-    assert_eq(ui.rows[3].note:GetText(), "Flip: post Fri 08:53, for the 16:53 peak")
+    assert_eq(ui.rows[3].note:GetText(), "then: post Fri 08:53, for the 16:53 peak")   -- the chain's last line (D62)
+  end)
+
+  it("UI15 Today with a craft chain: one CRAFT row, its buys and its sale as lines under it", function()
+    Stubs.Reset()
+    _G.AHProfitMarket = nil
+    Stubs.ITEM_NAMES[3371], Stubs.ITEM_NAMES[6303], Stubs.ITEM_NAMES[6370] = "Empty Vial", "Raw Brilliant Smallfish", "Fish Bowl"
+    UIWorld.Market({ [6370] = UIWorld.Item(2500, 80, 30) }, NOW - UIWorld.HOUR)
+    UIWorld.Plan({ { id = "v", kind = "buy", key = 3371, qty = 76, price = 20, at = NOW - 120000, net = 0, vendor = true },
+                   { id = "f", kind = "buy", key = 6303, qty = 76, price = 75, at = NOW - 60000, net = 0, parent = "v" },
+                   { id = "k", kind = "craft", key = 6370, qty = 76, at = NOW, net = 120448, parent = "v" },
+                   { id = "p", kind = "post", key = 6370, qty = 76, price = 2500, at = NOW + 3 * 86400000, net = 120448,
+                     parent = "v", chance = 90, peak = NOW + 3 * 86400000 + 8 * UIWorld.HOUR } })
+    Stubs.Login()
+    AHProfitDB.characters["Brugan-Grommash"] = { gold = 314000 }
+    Stubs.Slash("/ahp")
+    local ui = AHProfit.MainWindow.Frames()
+    Layout.Golden("UI15_chain", ui.frame)
+    assert_eq({ ui.rows[1].cells.today.action:GetText(), ui.rows[2].note:GetText(), ui.rows[4].note:GetText(),
+                ui.rows[5]:IsShown() },
+              { "CRAFT", "buy 76 Empty Vial from a vendor · 15s 20c", "then: post Sun 08:53, for the 16:53 peak", false })
+    Stubs.ITEM_NAMES[3371], Stubs.ITEM_NAMES[6303], Stubs.ITEM_NAMES[6370] = nil, nil, nil
   end)
 end)

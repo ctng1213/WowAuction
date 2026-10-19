@@ -3,7 +3,8 @@
 - An event matches the earliest open action (pending, late or partial) with the same character,
   kind and item that is still open for matching: a buy, craft or mail within 24 h of its slot; a
   post from 24 h before its post time to the end of its selling window. A buy matches only at or
-  below the planned price; a post at any price. One event matches one action.
+  below the planned price; a post at any price; a mail only to its planned recipient (T21). One event
+  matches one action.
 - Matching the full quantity makes an action done; part of it, partial.
 - A sold mail resolves the oldest open post with the same character, item, stack and price; an
   expired or cancelled mail, the oldest with the same character, item and stack.
@@ -34,6 +35,7 @@ class OpenAction:
     price: int | None              # each, copper (a buy: the most to pay)
     slot_ms: int                   # when it was planned (a post: its post time)
     window_end_ms: int | None      # a post's selling window end
+    to_char: str | None = None     # a mail's recipient (C22); None for other kinds
 
 
 @dataclass(frozen=True)
@@ -47,6 +49,7 @@ class DoneEvent:
     qty: int
     price: int | None              # each, copper (buys and posts)
     at_ms: int
+    to_char: str | None = None     # a sent mail's recipient (T21)
 
 
 @dataclass(frozen=True)
@@ -120,9 +123,11 @@ def _fits(a: OpenAction, e: DoneEvent, done: int) -> bool:
 
     Returns:
         True for the same character, kind and item, units still to do, open for matching at the
-        event's time, and (a buy) at or below the planned price.
+        event's time, (a buy) at or below the planned price, and (a mail with a recipient) to that recipient (T21).
     """
     if (a.char_id, a.kind, a.key) != (e.char_id, e.kind, e.key) or done >= a.qty or not _open_for(a, e):
+        return False
+    if a.kind == "mail" and a.to_char is not None and e.to_char != a.to_char:
         return False
     return a.kind != "buy" or (e.price is not None and a.price is not None and e.price <= a.price)
 

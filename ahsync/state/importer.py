@@ -457,7 +457,8 @@ def _event_row(e: sv.Event, market: str | None) -> tuple[str, dict[str, object]]
     if e.type == "craft":
         return "crafts", base | {"spell_id": e.spell_id, "count": e.count}
     if e.type == "mail_sent":
-        return "mail_sent", base | {"to_char": e.to_char_id, "key": e.key, "qty": e.qty}
+        return "mail_sent", base | {"to_char": e.to_char_id, "key": e.key, "qty": e.qty,
+                                    "confirmed": int(e.confirmed is not False)}          # A75
     if e.type == "disenchant":
         return "disenchants", base | {"key": e.key, "results": ";".join(f"{k},{n}" for k, n in e.results)}
     if e.type == "payout":
