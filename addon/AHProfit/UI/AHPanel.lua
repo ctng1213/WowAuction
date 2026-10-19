@@ -1,7 +1,7 @@
 -- UI/AHPanel.lua: the AHProfit panel docked to the right of the auction house (SPEC §4.3, UI7, A24).
 -- It lists what to buy (AHSync's planned buys and the disenchant targets your enchanter can do)
 -- with each one's state from the live data (the last scan, or a search), and what to post now.
--- Clicking a row searches for it; Next search steps through the rows still checking; Full scan
+-- Clicking a row searches for it; Full scan
 -- asks for a ReplicateItems scan. Frame code only: ViewModel.AHPanel makes the text.
 
 local AHProfit = AHProfit
@@ -22,8 +22,8 @@ AHPanel.WIDTH, AHPanel.ROW_HEIGHT, AHPanel.SHOP_ROWS, AHPanel.POST_ROWS = 300, 2
 -- Columns: { header, x (from the row's left), width, justify, row field }; the same for rows and headers.
 -- Shopping rows start after the state icon; post rows have none.
 AHPanel.COLUMNS = {
-  shopping = { { "Item", 18, 128, "LEFT" }, { "Price", 150, 48, "RIGHT" }, { "Max", 202, 44, "RIGHT" },
-               { "Qty", 254, 30, "RIGHT" } },
+  shopping = { { "Item", 18, 90, "LEFT" }, { "For", 110, 38, "LEFT" }, { "Price", 150, 48, "RIGHT" },
+               { "Max", 202, 44, "RIGHT" }, { "Qty", 254, 30, "RIGHT" } },
   post = { { "Item", 0, 82, "LEFT", "item" }, { "List price", 84, 58, "RIGHT", "each" }, { "Qty", 144, 26, "RIGHT", "qty" },
            { "Est. profit", 172, 64, "RIGHT", "postNet" }, { "Chance", 238, 46, "RIGHT", "chance" } },
 }
@@ -32,10 +32,13 @@ AHPanel.ICONS = { found = "Interface\\RaidFrame\\ReadyCheck-Ready", gone = "Inte
                   checking = "Interface\\RaidFrame\\ReadyCheck-Waiting" }
 local FLAT = "Interface\\Buttons\\WHITE8X8"
 local GOLD, MUTED, BORDER = { 1, 0.82, 0 }, { 0.56, 0.54, 0.49 }, { 0.42, 0.35, 0.2 }
+-- The window's action badge colours, for the For column (A40).
+local WHY_COLORS = { craft = { 1, 0.6, 0.24 }, flip = { 0.37, 0.71, 1 }, de = { 0.7, 0.48, 1 } }
 
 local ui = nil
 local searchedThisVisit = {}      -- key -> true: searched since the AH opened (FM24: dropped on close)
-local current = nil               -- the panel's last view, for Next search
+local current = nil               -- the panel's last view
+local lastSearch = nil            -- the key the last search was for, until its results arrive (A38)
 local pendingSell = nil           -- { price, untilMs }: put the price back once after the AH's own (A29)
 AHPanel.REFILL_MS = 10000
 
@@ -58,19 +61,21 @@ end
 
 --- What to shop for: this character's planned buys, then disenchant targets your enchanter can do.
 ---@param charId string
----@return table[]  { key, qty, price }
+---@return table[]  { key, qty (still to buy), price, why ("craft" | "flip" | "de" | nil) }
 local function Targets(charId)
   local out, seen = {}, {}
-  for _, a in ipairs(Plan.CharacterActions(charId)) do
-    if a.kind == "buy" and a.price and not a.vendor and not seen[a.key] then   -- vendor buys aren't on the AH (A32)
-      out[#out + 1], seen[a.key] = { key = a.key, qty = a.qty, price = a.price }, true
+  local actions = Plan.CharacterActions(charId)
+  for _, a in ipairs(actions) do
+    local left = a.kind == "buy" and a.qty - Live.Bought(a.key) or 0           -- buyouts this session (A39)
+    if a.kind == "buy" and a.price and not a.vendor and not seen[a.key] and left > 0 then   -- vendor buys: not the AH (A32)
+      out[#out + 1], seen[a.key] = { key = a.key, qty = left, price = a.price, why = VM.BuyReason(a, actions) }, true
     end
   end
   local best = Options.BestSkill(DB.Get() or {}, "Enchanting")
   if best then
     for _, t in ipairs(Options.Disenchant(Market.Disenchantable(), { itemOf = Market.Item, levelsOf = LevelsOf })) do
       if t.skill <= best and not seen[t.key] and #out < AHPanel.SHOP_ROWS then
-        out[#out + 1], seen[t.key] = { key = t.key, qty = 1, price = math.floor(t.ev) }, true
+        out[#out + 1], seen[t.key] = { key = t.key, qty = 1, price = math.floor(t.ev), why = "de" }, true
       end
     end
   end
@@ -121,7 +126,7 @@ local function BuildRow(parent, i, y, columns)
   if columns == AHPanel.COLUMNS.post then
     row.item, row.price, row.qty, row.profit, row.chance = unpack(row.cells)
   else
-    row.item, row.colA, row.colB, row.qty = unpack(row.cells)
+    row.item, row.why, row.colA, row.colB, row.qty = unpack(row.cells)
   end
   row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   row.isPost = columns == AHPanel.COLUMNS.post
@@ -223,10 +228,6 @@ local function Build(anchor)
   for i = 1, AHPanel.POST_ROWS do
     ui.post[i] = BuildRow(frame, AHPanel.SHOP_ROWS + i, postTop + 40 + (i - 1) * AHPanel.ROW_HEIGHT, AHPanel.COLUMNS.post)
   end
-  ui.next = Button(frame, "AHProfitPanelNext", "Next search", function() AHPanel.NextSearch() end)
-  ui.next:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 10, 34)
-  Explain(ui.next, "Next search", "Searches the next item on the Shopping list, one per click, top to bottom. "
-                                  .. "Each item is searched once per AH visit.")
   ui.scan = Button(frame, "AHProfitPanelScan", "Full scan", function() AHPanel.FullScan() end)
   ui.scan:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -10, 34)
   Explain(ui.scan, "Full scan", "Reads the whole auction house at once, which updates every price here. "
@@ -251,6 +252,9 @@ local function FillShop(row, line)
   row.key, row.itemName = line.key, line.item
   row.icon:SetTexture(AHPanel.ICONS[line.state])
   row.item:SetText(line.item)
+  row.why:SetText(line.why)
+  local tint = WHY_COLORS[line.whyKind] or MUTED
+  row.why:SetTextColor(tint[1], tint[2], tint[3])
   row.colA:SetText(VM.WithCoins(line.price))
   row.colA:SetTextColor(line.state == "found" and 0.24 or MUTED[1], line.state == "found" and 0.86 or MUTED[2],
                         line.state == "found" and 0.31 or MUTED[3])
@@ -294,7 +298,7 @@ end
 ---@param key number
 ---@param name string
 function AHPanel.Search(key, name)
-  searchedThisVisit[key] = true
+  searchedThisVisit[key], lastSearch = true, key
   local started = Adapter.SearchAH(name)
   if not ui then return end
   if not started then ui.status:SetText("search unavailable") return end
@@ -330,14 +334,6 @@ function AHPanel.OnSellSearch()
   pendingSell = nil
 end
 
---- Next search: the next Shopping row, top to bottom, not yet searched this AH visit.
-function AHPanel.NextSearch()
-  for _, row in ipairs(current and current.shopping or {}) do
-    if not searchedThisVisit[row.key] then return AHPanel.Search(row.key, row.item) end
-  end
-  if ui then ui.status:SetText("all searched this visit") end
-end
-
 --- Full scan: ask for a whole-AH scan, at most every 20 minutes.
 function AHPanel.FullScan()
   local asked, waitMinutes = Replicate.RequestScan()
@@ -347,10 +343,28 @@ function AHPanel.FullScan()
   else ui.status:SetText("scan already running") end
 end
 
+--- A purchase seen by the hooks (A39): note it and redraw.
+---@param itemId number
+---@param units number
+---@param confirmed boolean
+local function OnPurchase(itemId, units, confirmed)
+  Live.NoteBought(itemId, units, confirmed)
+  if confirmed and ui and ui.frame:IsShown() then AHPanel.Render() end
+end
+
+--- COMMODITY_PURCHASE_SUCCEEDED / _FAILED: settle the pending commodity purchase and redraw (A39).
+--- UNVERIFIED: the events' names on Forever, as on retail.
+---@param event string
+function AHPanel.OnCommodityPurchase(event)
+  Live.SettlePurchases(event == "COMMODITY_PURCHASE_SUCCEEDED")
+  if ui and ui.frame:IsShown() then AHPanel.Render() end
+end
+
 --- AUCTION_HOUSE_SHOW: dock and show the panel.
 function AHPanel.OnShow()
   local anchor = Adapter.AuctionFrame()
   if not anchor then return end
+  pcall(Adapter.HookPurchases, function(id, n) OnPurchase(id, n, false) end, function(id, n) OnPurchase(id, n, true) end)
   if not ui then Build(anchor) end
   ui.status:SetText("")
   ui.frame:Show()
@@ -359,7 +373,7 @@ end
 
 --- AUCTION_HOUSE_CLOSED: hide the panel; the search queue is dropped (FM24).
 function AHPanel.OnClosed()
-  searchedThisVisit, pendingSell = {}, nil
+  searchedThisVisit, pendingSell, lastSearch = {}, nil, nil
   if ui then ui.frame:Hide() end
 end
 
@@ -367,7 +381,14 @@ end
 --- UNVERIFIED: the event's name on Forever, as on retail.
 function AHPanel.OnBrowseResults()
   local now = Adapter.NowMs()
-  for _, r in ipairs(Adapter.ReadBrowseResults()) do Live.NoteSearch(r.itemId, r.minPrice, r.units, now) end
+  local listed = {}
+  for _, r in ipairs(Adapter.ReadBrowseResults()) do
+    Live.NoteSearch(r.itemId, r.minPrice, r.units, now)
+    listed[r.itemId] = true
+  end
+  -- The item just searched for isn't in the results: none are listed (A38).
+  if lastSearch and not listed[VM.BaseItemId(lastSearch)] then Live.NoteSearch(VM.BaseItemId(lastSearch), nil, 0, now) end
+  lastSearch = nil
   if ui and ui.frame:IsShown() then AHPanel.Render() end
 end
 
@@ -381,6 +402,8 @@ Events.Register("AUCTION_HOUSE_SHOW", AHPanel.OnShow)
 Events.Register("AUCTION_HOUSE_CLOSED", AHPanel.OnClosed)
 Events.Register("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED", AHPanel.OnBrowseResults)
 Events.Register("COMMODITY_SEARCH_RESULTS_UPDATED", AHPanel.OnSellSearch)
+Events.Register("COMMODITY_PURCHASE_SUCCEEDED", AHPanel.OnCommodityPurchase)
+Events.Register("COMMODITY_PURCHASE_FAILED", AHPanel.OnCommodityPurchase)
 Events.Register("ITEM_SEARCH_RESULTS_UPDATED", AHPanel.OnSellSearch)
 Replicate.OnBook(function() if ui and ui.frame:IsShown() then AHPanel.Render() end end)
 -- A post (or a buy) changes the bags; redraw once they have been read again (A31).

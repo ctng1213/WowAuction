@@ -115,6 +115,36 @@ function Adapter.RefillSellPrice(price)
   return lastSell ~= nil and ApplyPrice(lastSell, price)
 end
 
+-- ------------------------------------------------------------------ purchases (SPEC §4.3, A39)
+
+local purchasesHooked = false
+
+--- Watch AH purchases without changing them: a commodity purchase confirmed, or an item auction bid on at
+--- its buyout. Hooked once; a bid below the buyout is not a purchase.
+--- UNVERIFIED: C_AuctionHouse.ConfirmCommoditiesPurchase(itemID, quantity), PlaceBid(auctionID, bidAmount) and
+--- GetAuctionInfoByID(auctionID) -> { itemKey = { itemID }, quantity, buyoutAmount }, as on retail.
+---@param onCommodity function  (itemId, quantity) when a commodity purchase is confirmed (it may still fail)
+---@param onItem function       (itemId, quantity) when an item auction is bought out
+---@return boolean              true when at least one hook is in place
+function Adapter.HookPurchases(onCommodity, onItem)
+  local AH = _G.C_AuctionHouse
+  if purchasesHooked or not (AH and hooksecurefunc) then return purchasesHooked end
+  if AH.ConfirmCommoditiesPurchase then
+    hooksecurefunc(AH, "ConfirmCommoditiesPurchase", function(itemId, quantity) onCommodity(itemId, quantity) end)
+    purchasesHooked = true
+  end
+  if AH.PlaceBid and AH.GetAuctionInfoByID then
+    hooksecurefunc(AH, "PlaceBid", function(auctionId, bid)
+      local info = AH.GetAuctionInfoByID(auctionId)
+      if info and info.itemKey and info.buyoutAmount and bid and bid >= info.buyoutAmount then
+        onItem(info.itemKey.itemID, info.quantity or 1)
+      end
+    end)
+    purchasesHooked = true
+  end
+  return purchasesHooked
+end
+
 -- ------------------------------------------------------------------ replicate scan (SPEC §4.2)
 
 --- A value the client marks secret can't be read; treat it as missing.

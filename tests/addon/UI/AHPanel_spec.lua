@@ -50,32 +50,61 @@ describe("AHPanel", function()
     assert_eq(ui.frame:IsShown(), false)
   end)
 
-  it("A24 a search result turns its row found; clicking a row searches it; Next search takes the next one", function()
+  it("A24 a search result turns its row found; clicking a row searches it and says how far this visit has got", function()
     local ui, ah = OpenAH()
     ui.shop[2]:Click()
-    assert_eq(ah.searches, { "Copper Bar" })
+    assert_eq({ ah.searches, ui.status:GetText(), ui.next }, { { "Copper Bar" }, "searched Copper Bar · 1 of 3", nil })
     C_AuctionHouse.GetBrowseResults = function() return { { itemKey = { itemID = 2589 }, minPrice = 38, totalQuantity = 20 } } end
     Stubs.FireEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
     assert_eq({ ui.shop[1].colA:GetText(), ui.shop[1].colB:GetText(), ui.checked:GetText() },
-              { AHProfit.ViewModel.WithCoins("38c"), AHProfit.ViewModel.WithCoins("45c"), "1 of 3" })
-    ui.next:Click()                                   -- one per click, top to bottom, skipping what was searched
-    assert_eq({ ah.searches, ui.status:GetText() }, { { "Copper Bar", "Linen Cloth" }, "searched Linen Cloth · 2 of 3" })
-    ui.next:Click()
-    assert_eq(ah.searches, { "Copper Bar", "Linen Cloth", "Silk Cloth" })
-    ui.next:Click()
-    assert_eq(ui.status:GetText(), "all searched this visit")
-    ui.next:GetScript("OnEnter")(ui.next)
-    assert_eq(Stubs.tooltip.lines[1], "Next search")
+              { AHProfit.ViewModel.WithCoins("38c"), AHProfit.ViewModel.WithCoins("45c"), "2 of 3" })
+    ui.shop[1]:Click()
+    assert_eq(ui.status:GetText(), "searched Linen Cloth · 2 of 3")
   end)
 
-  it("FM24 closing the AH drops the search queue; unsearched targets stay checking", function()
+  it("A38 a search that doesn't list the item marks it gone; a random-suffix key matches its item id", function()
+    local ui = OpenAH()
+    C_AuctionHouse.GetBrowseResults = function() return {} end
+    ui.shop[3]:Click()                                            -- Silk: the search lists nothing
+    Stubs.FireEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
+    assert_eq(ui.shop[3].colA:GetText(), "gone")
+    local suffixed = 2589 + 2147483648 * 4
+    AHProfit.Live.NoteSearch(2589, 30, 5, NOW + 60000)
+    assert_eq(AHProfit.Live.Item(suffixed, NOW - 3600000), { { price = 30, units = 5 } })
+  end)
+
+  it("FM24 closing the AH forgets this visit's searches; unpriced rows stay checking", function()
     local ui, ah = OpenAH()
-    ui.next:Click()
+    ui.shop[1]:Click()
     Stubs.FireEvent("AUCTION_HOUSE_CLOSED")
     Stubs.FireEvent("AUCTION_HOUSE_SHOW")
-    ui.next:Click()
-    assert_eq(ah.searches, { "Linen Cloth", "Linen Cloth" })      -- searched again: the queue was rebuilt
-    assert_eq(ui.shop[2].colA:GetText(), "checking")
+    ui.shop[1]:Click()
+    assert_eq({ ah.searches, ui.status:GetText(), ui.shop[2].colA:GetText() },
+              { { "Linen Cloth", "Linen Cloth" }, "searched Linen Cloth · 1 of 3", "checking" })
+  end)
+
+  it("A39 a buyout lowers the row's quantity and a fully bought row drops off; a bid or a failed purchase does not", function()
+    local ui = OpenAH()
+    local house = C_AuctionHouse
+    house.ConfirmCommoditiesPurchase = function() end
+    house.PlaceBid = function() end
+    house.GetAuctionInfoByID = function(id) return { itemKey = { itemID = 4306 }, quantity = 2, buyoutAmount = 140 } end
+    Stubs.FireEvent("AUCTION_HOUSE_CLOSED")
+    Stubs.FireEvent("AUCTION_HOUSE_SHOW")                         -- hooks go in when the AH opens
+    house.ConfirmCommoditiesPurchase(2589, 4)
+    assert_eq(ui.shop[1].qty:GetText(), "×20")                     -- not until it succeeds
+    Stubs.FireEvent("COMMODITY_PURCHASE_SUCCEEDED")
+    assert_eq(ui.shop[1].qty:GetText(), "×16")
+    house.ConfirmCommoditiesPurchase(2589, 3)
+    Stubs.FireEvent("COMMODITY_PURCHASE_FAILED")
+    assert_eq(ui.shop[1].qty:GetText(), "×16")
+    house.PlaceBid(7, 100)                                        -- a bid: nothing changes
+    assert_eq(ui.shop[3].qty:GetText(), "×5")
+    house.PlaceBid(7, 140)                                        -- the buyout: 2 Silk
+    assert_eq(ui.shop[3].qty:GetText(), "×3")
+    house.ConfirmCommoditiesPurchase(2840, 6)
+    Stubs.FireEvent("COMMODITY_PURCHASE_SUCCEEDED")
+    assert_eq({ ui.shop[2].item:GetText(), ui.checked:GetText():match("of (%d+)") }, { "Silk Cloth", "2" })   -- bars all bought
   end)
 
   it("A24 Full scan asks for a ReplicateItems scan at most every 20 minutes", function()
@@ -113,7 +142,7 @@ describe("AHPanel", function()
     local shop, post = {}, {}
     for i, h in ipairs(ui.shopHeaders) do shop[i] = h:GetText() end
     for i, h in ipairs(ui.postHeaders) do post[i] = h:GetText() end
-    assert_eq({ shop, post }, { { "Item", "Price", "Max", "Qty" }, { "Item", "List price", "Qty", "Est. profit", "Chance" } })
+    assert_eq({ shop, post }, { { "Item", "For", "Price", "Max", "Qty" }, { "Item", "List price", "Qty", "Est. profit", "Chance" } })
     for _, headers in ipairs({ ui.shopHeaders, ui.postHeaders }) do
       for _, h in ipairs(headers) do
         h.hit:GetScript("OnEnter")(h.hit)
@@ -206,8 +235,6 @@ describe("AHPanel", function()
     Stubs.FireEvent("AUCTION_HOUSE_SHOW")
     local ui = AHProfit.AHPanel.Frames()
     assert_eq({ ui.shop[1].item:GetText(), ui.shop[2]:IsShown(), ui.checked:GetText() }, { "Linen Cloth", false, "0 of 1" })
-    ui.next:Click()
-    assert_eq(ah.searches, { "Linen Cloth" })
     Stubs.Slash("/ahp")
     local notes = {}
     for _, row in ipairs(AHProfit.MainWindow.Frames().rows) do
@@ -215,6 +242,23 @@ describe("AHPanel", function()
     end
     assert_eq(notes, { "from a vendor" })                         -- Today's wood row
     Stubs.ITEM_NAMES[4470] = nil
+  end)
+
+  it("A40 Shopping's For column says why each item is bought: CRAFT, FLIP or DE", function()
+    Stubs.Reset()
+    UIWorld.Market({ [2840] = UIWorld.Item(500, 80, 40), [4306] = UIWorld.Item(70, 80, 60) }, NOW - 3600000)
+    UIWorld.Plan({ { id = "b", kind = "buy", key = 2840, qty = 6, price = 500, at = NOW, net = 0 },
+                   { id = "c", kind = "craft", key = 6217, qty = 3, at = NOW, net = 900, parent = "b" },
+                   { id = "s", kind = "buy", key = 4306, qty = 5, price = 70, at = NOW, net = 50 },
+                   { id = "t", kind = "post", key = 4306, qty = 5, price = 105, at = NOW, net = 50, parent = "s" } })
+    Stubs.Login()
+    AHProfitDB.professions["Amaya-Grommash"] = { Enchanting = { skill = 300, max = 300 } }
+    AHProfit.Options.Disenchant = function() return { { key = 6585, skill = 1, ev = 900 } } end
+    AHWorld.Install()
+    Stubs.FireEvent("AUCTION_HOUSE_SHOW")
+    local ui, why = AHProfit.AHPanel.Frames(), {}
+    for i = 1, 3 do why[i] = ui.shop[i].item:GetText() .. " " .. ui.shop[i].why:GetText() end
+    assert_eq(why, { "Copper Bar CRAFT", "Silk Cloth FLIP", Stubs.ITEM_NAMES[6585] .. " DE" })
   end)
 end)
 

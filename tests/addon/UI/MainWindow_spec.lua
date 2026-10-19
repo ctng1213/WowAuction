@@ -315,6 +315,20 @@ describe("MainWindow", function()
     Stubs.ITEM_NAMES[4471], Stubs.ITEM_NAMES[4470] = nil, nil
   end)
 
+  it("A37 a made product's note says when to sell it: the plan's peak, a hold, or now", function()
+    Boot()
+    local VM = AHProfit.ViewModel
+    local look = function() return { name = "Basic Campfire Kit", quality = 1 } end
+    local made = { { key = 4471, spell = 1, made = 1, profit = 0 } }
+    local SUN9, SUN17 = 1760259600000, 1760288400000                -- Sun 12 Oct 09:00 and 17:00 UTC
+    local function Note(actions) return VM.CraftRows(made, look, 0, actions, NOW, 0)[1].notes[1] end
+    assert_eq({ Note({ { id = "p", kind = "post", key = 4471, qty = 1, price = 99, at = SUN9, peak = SUN17 } }),
+                Note({ { id = "h", kind = "hold", key = 4471, qty = 1, at = NOW } }),
+                Note({ { id = "o", kind = "post", key = 4471, qty = 1, price = 80, at = NOW, own = true } }), Note({}) },
+              { "×1 in your bags · post Sun 09:00, for the 17:00 peak", "×1 in your bags · hold for a later week",
+                "×1 in your bags · post it now at 80c", "×1 in your bags · post it at the AH" })
+  end)
+
   it("A22 the Inventory tab lists what this character holds with its worth and plan", function()
     Stubs.Reset()
     _G.AHProfitPlan = nil

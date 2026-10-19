@@ -119,26 +119,26 @@
 <div class="note tabnote" id="tabnote"></div>
 
 <h2>2. AH side panel (docked right of the auction house, 300 wide)</h2>
-<p class="note">Clicking a Shopping row searches for that item. <b>Clicking a Post row fills the AH's Sell tab</b> with the item, quantity and list price; you check it and press the AH's own Post button (A29). Right-click any row to keep the item for yourself. Shopping lists only what to buy on the AH: a mat the plan buys from a vendor stays on Today, marked “from a vendor” (A32). ✓ found at or below target · ✗ gone or no longer profitable · … still being searched. If Forever needs a click per search, <b>Next search</b> steps through the list (SPEC §4.0). Covers UI7.</p>
+<p class="note">Clicking a Shopping row searches for that item. <b>Clicking a Post row fills the AH's Sell tab</b> with the item, quantity and list price; you check it and press the AH's own Post button (A29). Right-click any row to keep the item for yourself. Shopping lists only what to buy on the AH: a mat the plan buys from a vendor stays on Today, marked “from a vendor” (A32). ✓ found at or below target · ✗ gone or no longer profitable · … still being searched. <b>For</b> says why it's bought: CRAFT, FLIP or DE (A40). A search that lists nothing marks the row ✗ gone (A38); buyouts lower Qty, and a row drops off once it's all bought (A39). Covers UI7.</p>
 <div class="docked">
   <div class="ahstub">Blizzard auction house window<br>(not ours)</div>
   <div class="frame" style="width:300px">
     <div class="titlebar"><span class="name">AHProfit at the AH</span></div>
     <div class="sec"><span>Shopping</span><span class="muted">3 of 5</span></div>
     <table>
-      <tr><th></th><th title="The item">Item</th><th class="num" title="Cheapest listing seen now; gone / checking">Price</th><th></th><th class="num" title="The most to pay each">Max</th><th class="num" title="Units to buy">Qty</th></tr>
-      <tr><td class="pos">✓</td><td><span class="item q1" style="max-width:90px">Linen Cloth</span></td><td class="num" data-m="38"></td><td class="num">≤</td><td class="num" data-m="45"></td><td class="num">×20</td></tr>
-      <tr><td class="pos">✓</td><td><span class="item q2" style="max-width:90px">Scouting Gloves of the Monkey</span></td><td class="num" data-m="800"></td><td class="num">≤</td><td class="num" data-m="900"></td><td class="num">×1</td></tr>
-      <tr class="gone"><td class="neg">✗</td><td><span class="item q1" style="max-width:90px">Copper Bar</span></td><td colspan="4">gone</td></tr>
-      <tr><td class="muted">…</td><td><span class="item q1" style="max-width:90px">Silk Cloth</span></td><td colspan="4" class="muted">checking</td></tr>
-      <tr><td class="muted">…</td><td><span class="item q1" style="max-width:90px">Iron Ore</span></td><td colspan="4" class="muted">checking</td></tr>
+      <tr><th></th><th title="The item">Item</th><th title="Why it's bought: CRAFT, FLIP or DE">For</th><th class="num" title="Cheapest listing seen now; gone / checking">Price</th><th></th><th class="num" title="The most to pay each">Max</th><th class="num" title="Units still to buy">Qty</th></tr>
+      <tr><td class="pos">✓</td><td><span class="item q1" style="max-width:80px">Linen Cloth</span></td><td style="color:#5eb5ff;font-size:10px">FLIP</td><td class="num" data-m="38"></td><td class="num">≤</td><td class="num" data-m="45"></td><td class="num">×20</td></tr>
+      <tr><td class="pos">✓</td><td><span class="item q2" style="max-width:80px">Scouting Gloves of the Monkey</span></td><td style="color:#b37aff;font-size:10px">DE</td><td class="num" data-m="800"></td><td class="num">≤</td><td class="num" data-m="900"></td><td class="num">×1</td></tr>
+      <tr class="gone"><td class="neg">✗</td><td><span class="item q1" style="max-width:80px">Copper Bar</span></td><td style="color:#ff9a3d;font-size:10px">CRAFT</td><td colspan="4">gone</td></tr>
+      <tr><td class="muted">…</td><td><span class="item q1" style="max-width:80px">Silk Cloth</span></td><td style="color:#5eb5ff;font-size:10px">FLIP</td><td colspan="4" class="muted">checking</td></tr>
+      <tr><td class="muted">…</td><td><span class="item q1" style="max-width:80px">Iron Ore</span></td><td style="color:#ff9a3d;font-size:10px">CRAFT</td><td colspan="4" class="muted">checking</td></tr>
     </table>
     <div class="sec"><span>Post</span><span class="muted">1</span></div>
     <table>
       <tr><th title="The item">Item</th><th class="num" title="The price to list at, each">List price</th><th class="num" title="Units to post">Qty</th><th class="num" title="Expected profit of posting all of them">Est. profit</th><th class="num" title="Chance it sells in its window; the dot is the confidence">Chance</th></tr>
       <tr><td><span class="item q1" style="max-width:90px">Copper Rod</span></td><td class="num" data-m="4100"></td><td class="num">×5</td><td class="num pos">+<span data-m="6306"></span></td><td class="num">58% <span class="amber">◐</span></td></tr>
     </table>
-    <div class="panel-actions"><span class="btn">Next search</span><span class="btn">Full scan</span></div>
+    <div class="panel-actions"><span></span><span class="btn">Full scan</span></div>
     <div class="footer"><span>2 found</span><span>budget <span data-m="314000"></span></span></div>
   </div>
 </div>

@@ -35,6 +35,8 @@ Diagnostics.APIS = {
   "AuctionHouseFrame.CommoditiesSellFrame.PriceInput.SetAmount", "AuctionHouseFrame.CommoditiesSellFrame.QuantityInput.SetQuantity",
   "AuctionHouseFrame.ItemSellFrame.SetPrice", "AuctionHouseFrame.ItemSellFrame.SetQuantity",
   "AuctionHouseFrame.ItemSellFrame.PriceInput.SetAmount", "AuctionHouseFrame.ItemSellFrame.QuantityInput.SetQuantity",
+  -- watching buyouts for the Shopping list (A39)
+  "C_AuctionHouse.ConfirmCommoditiesPurchase", "C_AuctionHouse.PlaceBid", "C_AuctionHouse.GetAuctionInfoByID",
 }
 
 -- Namespaces whose function lists we need to write the modern readers (SPEC §6).

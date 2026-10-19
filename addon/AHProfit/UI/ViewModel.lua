@@ -41,6 +41,7 @@ ViewModel.COLUMN_HELP = {
   Time = "When to do it, local time",
   Price = "Cheapest listing seen now (your latest scan or search). \"gone\": none at or below Max; \"checking\": not seen yet",
   Max = "The most to pay each: above this the buy no longer pays",
+  For = "Why it's bought: CRAFT (a mat for a planned craft), FLIP (to resell later) or DE (to disenchant)",
   ["List price"] = "The price to list at, each",
   ["Est. profit"] = "Expected profit of posting all of them: price × chance it sells, after the AH cut and deposit, "
                     .. "less what the units are worth otherwise",
@@ -729,15 +730,34 @@ local function MatLines(o, lookOf)
   return lines
 end
 
---- A recipe whose product you already hold up to its cap: a green check and "made" (A36).
+--- What to do with a made product, from its first sale action (A37).
+---@param a table|nil     The product's first post, hold, vendor or disenchant action, or nil
+---@param nowMs number
+---@param offsetMs number
+---@return string         e.g. "post Sun 09:00, for the 17:00 peak", "post it now at 80c", "hold for a later week"
+local function SaleNote(a, nowMs, offsetMs)
+  if not a then return "post it at the AH" end
+  if a.kind == "post" and a.peak and a.at > nowMs then
+    local day, hour = ViewModel.Clock(a.at, offsetMs)
+    local _, peak = ViewModel.Clock(a.peak, offsetMs)
+    return "post " .. day .. " " .. hour .. ", for the " .. peak .. " peak"
+  end
+  if a.kind == "post" then return "post it now at " .. ViewModel.Money(a.price) end
+  if a.kind == "hold" then return "hold for a later week" end
+  if a.kind == "vendor" then return "sell it to a merchant at " .. ViewModel.Money(a.price) .. " each" end
+  return "disenchant it"
+end
+
+--- A recipe whose product you already hold up to its cap: a green check and "made" (A36, A37).
 ---@param o table     { key, made = units held }
 ---@param look table  The product's look
+---@param sale string What to do with it, from SaleNote
 ---@return table      Row of text
-local function MadeRow(o, look)
+local function MadeRow(o, look, sale)
   return { key = o.key, item = look.name, quality = look.quality, kind = "craft", made = true,
            source = ViewModel.CHECK .. " made", crafts = "×" .. o.made, mats = "—", profit = "—", netColor = "muted",
            chance = "—", volume = look.soldPerDay and (ViewModel.RoundHalfUp(look.soldPerDay) .. "/day") or "—",
-           risk = "—", riskAmber = false, notes = { "×" .. o.made .. " in your bags · post it at the AH" } }
+           risk = "—", riskAmber = false, notes = { "×" .. o.made .. " in your bags · " .. sale } }
 end
 
 --- A recipe that pays now: its crafts, mats, profit and market cells (views.craft_row, D6-D8).
@@ -762,11 +782,23 @@ end
 ---@param options table[]  Options.CraftOptions
 ---@param lookOf function  key -> look
 ---@param totalGold number All your gold, copper, for risk
+---@param actions table[]|nil This character's actions: a made product's note says what they do with it (A37)
+---@param nowMs number|nil
+---@param offsetMs number|nil
 ---@return table[]         Rows of text, in the options' order
-function ViewModel.CraftRows(options, lookOf, totalGold)
+function ViewModel.CraftRows(options, lookOf, totalGold, actions, nowMs, offsetMs)
+  local sales, sorted = {}, {}
+  for i, a in ipairs(actions or {}) do sorted[i] = a end
+  table.sort(sorted, ByTime)
+  for _, a in ipairs(sorted) do
+    if (a.kind == "post" or a.kind == "hold" or a.kind == "vendor" or a.kind == "de") and not sales[a.key] then
+      sales[a.key] = a
+    end
+  end
   local rows = {}
   for i, o in ipairs(options) do
-    rows[i] = o.made and MadeRow(o, lookOf(o.key)) or CraftRow(o, lookOf, totalGold)
+    rows[i] = o.made and MadeRow(o, lookOf(o.key), SaleNote(sales[o.key], nowMs or 0, offsetMs or 0))
+              or CraftRow(o, lookOf, totalGold)
   end
   return rows
 end
@@ -917,8 +949,25 @@ function ViewModel.PostableRows(rows, held, limit)
   return out
 end
 
+ViewModel.WHY_LABELS = { craft = "CRAFT", flip = "FLIP", de = "DE" }
+
+--- Why a planned buy is made, from what follows it in its chain (A40).
+---@param a table         The buy
+---@param actions table[] This character's plan actions
+---@return string|nil     "craft" (a craft follows), "de" (a disenchant), "flip" (only a post); nil when alone
+function ViewModel.BuyReason(a, actions)
+  local chain, kinds = a.parent or a.id, {}
+  for _, b in ipairs(actions) do
+    if b ~= a and (b.parent == chain or b.id == chain) then kinds[b.kind] = true end
+  end
+  if kinds.craft then return "craft" end
+  if kinds.de then return "de" end
+  if kinds.post then return "flip" end
+  return nil
+end
+
 --- The panel's shopping and post lists (UI7).
----@param targets table[]  { key, qty, price (the most to pay each) } in list order
+---@param targets table[]  { key, qty, price (the most to pay each), why ("craft" | "flip" | "de" | nil) } in list order
 ---@param posts table[]    Today rows of posts { item, quality, qty, each, chance, dot }
 ---@param levelsOf function key -> live levels, or nil when not checked yet
 ---@param lookOf function  key -> look
@@ -928,7 +977,8 @@ function ViewModel.AHPanel(targets, posts, levelsOf, lookOf, gold)
   local shopping, checked, found, spend = {}, 0, 0, 0
   for _, t in ipairs(targets) do
     local look, levels = lookOf(t.key), levelsOf(t.key)
-    local row = { key = t.key, item = look.name, quality = look.quality, qty = "×" .. t.qty, max = ViewModel.Money(t.price) }
+    local row = { key = t.key, item = look.name, quality = look.quality, qty = "×" .. t.qty, max = ViewModel.Money(t.price),
+                  why = ViewModel.WHY_LABELS[t.why] or "", whyKind = t.why }
     if not levels then
       row.state, row.text, row.price = "checking", "checking", "checking"
     else

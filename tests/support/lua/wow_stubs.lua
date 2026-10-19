@@ -395,6 +395,17 @@ end
 
 --- Install player, clock, combat, timer and frame globals.
 local function InstallCore()
+  -- hooksecurefunc([table,] name, fn): run fn after the original, with the same arguments.
+  Define("hooksecurefunc", function(a, b, c)
+    local tbl, name, fn = a, b, c
+    if type(a) == "string" then tbl, name, fn = _G, a, b end
+    local original = tbl[name]
+    tbl[name] = function(...)
+      local results = { original(...) }
+      fn(...)
+      return unpack(results)
+    end
+  end)
   Define("UnitName", function(unit) if unit == "player" then return Stubs.world.player.name end end)
   Define("UnitClass", function() local p = Stubs.world.player; return p.className, p.class, 8 end)
   Define("UnitLevel", function() return Stubs.world.player.level end)

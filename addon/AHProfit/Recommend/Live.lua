@@ -9,6 +9,8 @@ local Live = {}
 AHProfit.Live = Live
 
 local searched = {}            -- item id -> { price, units, at } from AH search results this session (A24)
+local bought = {}              -- item id -> units bought on the AH this session (A39)
+local pending = {}             -- item id -> units of a commodity purchase not yet confirmed
 
 --- The units listed per unit price for an item, cheapest first, from a book.
 ---@param prices table|nil  unit price -> stack * 5 + band -> count
@@ -38,8 +40,11 @@ end
 ---@param observationsUntil number|nil
 ---@return table[]|nil  As Live.Levels; nil means "use the market file"
 function Live.Item(key, observationsUntil)
-  local last, found = Live.Book(observationsUntil), searched[key]
+  -- A search result is per item id; a random-suffix key matches it by its item id (A38).
+  local itemId = key < 0 and -key or key % 2147483648
+  local last, found = Live.Book(observationsUntil), searched[key] or searched[itemId]
   if found and (not observationsUntil or found.at > observationsUntil) and (not last or found.at > last.at) then
+    if not found.price then return {} end                         -- searched, and none listed (A38)
     return { { price = found.price, units = found.units } }      -- a search newer than any scan (A24)
   end
   if not last then return nil end
@@ -49,16 +54,40 @@ end
 --- Remember an AH search result: an item's cheapest price and units listed, seen now (A24).
 --- Only keys without a random suffix match a search result's item id.
 ---@param itemId number
----@param price number  Cheapest unit price, copper
+---@param price number|nil  Cheapest unit price, copper; nil when the search listed none (A38)
 ---@param units number
 ---@param atMs number
 function Live.NoteSearch(itemId, price, units, atMs)
   searched[itemId] = { price = price, units = units, at = atMs }
 end
 
---- Forget search results (tests).
+--- Note an AH purchase (A39): a commodity purchase waits for its confirmation; a buyout counts at once.
+---@param itemId number
+---@param units number
+---@param confirmed boolean  false for a commodity purchase still to be confirmed
+function Live.NoteBought(itemId, units, confirmed)
+  if confirmed then bought[itemId] = (bought[itemId] or 0) + units else pending[itemId] = (pending[itemId] or 0) + units end
+end
+
+--- The pending commodity purchases succeeded (true) or failed (false).
+---@param succeeded boolean
+function Live.SettlePurchases(succeeded)
+  for itemId, units in pairs(pending) do
+    if succeeded then bought[itemId] = (bought[itemId] or 0) + units end
+  end
+  pending = {}
+end
+
+--- Units of an item bought on the AH this session.
+---@param key number  Item key; a random-suffix key counts by its item id
+---@return number
+function Live.Bought(key)
+  return bought[key < 0 and -key or key % 2147483648] or 0
+end
+
+--- Forget search results and purchases (tests).
 function Live.Reset()
-  searched = {}
+  searched, bought, pending = {}, {}, {}
 end
 
 --- Units listed at or below a price.
