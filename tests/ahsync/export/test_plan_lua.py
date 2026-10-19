@@ -33,3 +33,10 @@ def test_EX7_a_vendor_buy_ends_in_v_and_an_ah_buy_in_an_empty_field():
     linen = ("l", AMAYA, "buy", 2589, 20, 45, T, 0.0, None, None, "pending", None, None, "ah")
     assert plan_lua.action_text(wood) == f"w;buy;4470;7;38;{T};0;;;pending;;;v"
     assert plan_lua.action_text(linen) == f"l;buy;2589;20;45;{T};0;;;pending;;;"
+
+
+def test_EX8_records_go_outside_the_checksum():
+    plain = plan_lua.plan_lua([POST], [], {}, T)
+    text = plan_lua.plan_lua([POST], [], {}, T, {2318: "1;Your record (30 d): 0 of 3 sold"})
+    assert '    [2318] = "1;Your record (30 d): 0 of 3 sold",' in text and "  records = {\n  }," in plain
+    assert plain.split("checksum = ")[1].split(",")[0] == text.split("checksum = ")[1].split(",")[0]

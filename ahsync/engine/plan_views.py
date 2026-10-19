@@ -16,6 +16,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from ahsync.engine.views import MarketActivity, market_activity, money, risk, round_half_up, signed_money
+from ahsync.engine.sell_record import Record
 
 HOUR_MS = 3_600_000
 DAY_MS = 86_400_000
@@ -161,6 +162,7 @@ class ItemLook:
     level: int | None = None                # price level: med7, else med30 (SPEC §3.4C.1)
     seasonality: int | None = None
     paid_each: int | None = None            # what you paid per unit, copper; None before tracking (T7)
+    record: Record | None = None            # your own sell record (SPEC §3.3.3)
 
 
 def _activity(look: ItemLook, p: float | None) -> MarketActivity:
@@ -174,6 +176,35 @@ def _activity(look: ItemLook, p: float | None) -> MarketActivity:
         views.market_activity's cells.
     """
     return market_activity(p, look.conf, look.sold_per_day, look.source, look.units_on_ah)
+
+
+QTY_FRACTIONS = {1: "½", 2: "¼", 3: "⅛"}
+RECORD_WEIGHT, REPRICE_STEP = 4, 0.05       # config own_record_weight and reprice_step defaults (SPEC §3.6)
+
+
+def record_line(r: Record, p_after: float | None = None, weight: float = RECORD_WEIGHT, step: float = REPRICE_STEP) -> str:
+    """The record line an item's rows show (SPEC §3.3.3, D42).
+
+    Args:
+        r: The item's record.
+        p_after: The row's P' when it is a post, else None.
+        weight: own_record_weight k.
+        step: reprice_step.
+
+    Returns:
+        E.g. "Your record (30 d): 2 of 5 sold · expired 2× while cheapest · P 80% → 58% · price −10% · qty ¼".
+        P before the blend is worked back from P' = (k·P + s) ÷ (k + s + x).
+    """
+    parts = [f"Your record (30 d): {r.sold} of {r.sold + r.expired} sold"]
+    if r.lowest_expiries:
+        parts.append(f"expired {r.lowest_expiries}× while cheapest")
+    if p_after is not None:
+        p_model = min(1.0, max(0.0, (p_after * (weight + r.sold + r.expired) - r.sold) / weight))
+        parts.append(f"P {round_half_up(p_model * 100)}% → {round_half_up(p_after * 100)}%")
+    if r.streak:
+        parts.append(f"price −{round_half_up((1 - (1 - step) ** r.streak) * 100)}%")
+        parts.append(f"qty {QTY_FRACTIONS.get(r.streak, '1/' + str(2 ** r.streak))}")
+    return " · ".join(parts)
 
 
 def _row(a: ViewAction, net: float | None, note: str, p: float | None, look: ItemLook, total_gold: int,
@@ -203,6 +234,7 @@ def _row(a: ViewAction, net: float | None, note: str, p: float | None, look: Ite
         "chance": m.chance, "chance_note": m.chance_note, "confidence": m.confidence, "dot": m.dot, "sales": m.sales,
         "supply": m.supply, "days": m.days, "risk": risk_text, "risk_amber": amber,
         "character": a.char_id.split("-")[0], "day": day, "time": hour, "status": a.status, "note": note,
+        "record": record_line(look.record, p if a.kind == "post" else None) if look.record else "",
         "sort": {"net": round_half_up(net or 0.0), "chance": m.percent if m.percent is not None else -1,
                  "sales": m.sales_tenths, "supply": m.supply_units, "days": m.days_tenths,
                  "risk": round_half_up(spend / total_gold * 1000) if total_gold > 0 else -1, "at": a.at_ms},
@@ -226,7 +258,7 @@ def today_view(actions: Sequence[ViewAction], now_ms: int, offset_ms: int, min_s
         total_gold: All your gold.
 
     Returns:
-        {"rows": [...], "hidden": n, "total": money of the shown rows' nets}.
+        {"rows": [...], "hidden": n, "total": money of the shown rows' nets, "decisions": the Needs a decision rows}.
     """
     due = [a for a in actions if a.status in ("pending", "late") and a.at_ms < now_ms + HOUR_MS]
     nets = counted(due, min(a.at_ms for a in due) if due else now_ms, now_ms + HOUR_MS, offset_ms)
@@ -243,7 +275,21 @@ def today_view(actions: Sequence[ViewAction], now_ms: int, offset_ms: int, min_s
                           total_gold, offset_ms)))
     rows.sort(key=lambda r: r[:4])
     total = sum(r[4]["sort"]["net"] for r in rows)
-    return {"rows": [r[4] for r in rows], "hidden": hidden, "total": signed_money(total)}
+    return {"rows": [r[4] for r in rows], "hidden": hidden, "total": signed_money(total), "decisions": decisions(looks)}
+
+
+def decisions(looks: dict[int, ItemLook]) -> list[dict]:
+    """Today's Needs a decision section: the items flagged not selling (SPEC §3.3.3, D43).
+
+    Args:
+        looks: Item key -> look, with its record.
+
+    Returns:
+        {"key", "item", "quality", "record"} per flagged item, by name then key.
+    """
+    flagged = [(look.name, key, look) for key, look in looks.items() if look.record is not None and look.record.not_selling]
+    return [{"key": str(key), "item": look.name, "quality": look.quality, "record": record_line(look.record)}
+            for _, key, look in sorted(flagged, key=lambda f: (f[0], f[1]))]
 
 
 def category(a: ViewAction, chains: dict[str, set[str]]) -> str:

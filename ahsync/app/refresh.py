@@ -57,7 +57,8 @@ def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], in
     week_start = (now_ms + offset_ms) // DAY_MS * DAY_MS - offset_ms
     history = db.history_actions([c for c, _ in characters], week_start, week_start + 7 * DAY_MS)
     shown = view_actions(actions, rows, history)
-    pages = plan_pages(shown, intel_items, items, sum(g for _, g in characters), now_ms, offset_ms, db.cost_basis())
+    pages = plan_pages(shown, intel_items, items, sum(g for _, g in characters), now_ms, offset_ms, db.cost_basis(),
+                       records)
     pages["inventory"] = inventory_page(db, [c for c, _ in characters], [a for a in shown if a.status == "pending"],
                                         intel_items, items, offset_ms)
     for page, body in pages.items():

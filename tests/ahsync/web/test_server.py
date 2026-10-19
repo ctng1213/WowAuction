@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import sqlite3
 import logging
 import re
 from dataclasses import dataclass, field
@@ -459,3 +460,28 @@ def test_preflight_and_head_get_no_cors_and_keep_the_safety_headers(live):
 def test_an_oversized_body_is_refused(live):
     reply = live_write(live, "/api/skip", {"action_id": "x" * 5000})
     assert reply.status == 413
+
+
+def test_SEC8_rule_is_stored_from_the_dashboard_and_checked_like_every_write(app, db, monkeypatch):
+    from ahsync.web import server as server_module
+    replans, exports = [], []
+    monkeypatch.setattr(server_module, "replan_all", lambda *a: replans.append(a) or [])
+    monkeypatch.setattr(server_module, "export_plan", lambda *a: exports.append(a) or True)
+    reply = app.handle("POST", "/api/rule", write_headers(), b'{"key": 2318, "rule": "keep"}')
+    assert reply.status == 200 and json.loads(reply.body) == {"set": True}
+    assert db.conn.execute("SELECT rule, source FROM item_rules WHERE key = 2318").fetchall() == [("keep", "dashboard")]
+    assert len(replans) == 1 and len(exports) == 1                                  # re-planned, plan file rewritten
+    assert app.handle("POST", "/api/rule", write_headers(), b'{"key": 2318, "rule": "maybe"}').status == 400
+    assert app.handle("POST", "/api/rule", write_headers(), b'{"rule": "keep"}').status == 400
+    assert app.handle("POST", "/api/rule", write_headers(), b'not json').status == 400
+    foreign = app.handle("POST", "/api/rule", write_headers(origin="https://evil.example"), b'{"key": 1, "rule": "ignore"}')
+    assert foreign.status == 403 and not db.conn.execute("SELECT 1 FROM item_rules WHERE key = 1").fetchall()
+
+
+def test_a_busy_database_answers_503_for_a_rule(app, monkeypatch):
+    def busy(*_args):
+        """Fail like a locked database."""
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(app.db, "upsert_item_rule", busy)
+    assert app.handle("POST", "/api/rule", write_headers(), b'{"key": 2, "rule": "keep"}').status == 503

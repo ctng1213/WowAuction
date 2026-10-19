@@ -194,3 +194,27 @@ def test_VW1_totals_add_up_and_each_chains_profit_counts_once():
         assert all(n == 1 for n in by_chain.values()), (SEED_VW1, i)
         open_rows = plan_views.today_view(actions, NOW, 0, 0.0, LOOKS, GOLD)["rows"]
         assert [r["sort"]["net"] for r in open_rows] == sorted((r["sort"]["net"] for r in open_rows), reverse=True)
+
+
+def test_D42_the_record_line_shows_the_record_and_works_p_back_from_p_prime():
+    from ahsync.engine.sell_record import Record
+    stuck = Record(0, 3, 3, 3, False, True)
+    assert plan_views.record_line(stuck, 4 * 0.8 / 7) == \
+        "Your record (30 d): 0 of 3 sold · expired 3× while cheapest · P 80% → 46% · price −14% · qty ⅛"
+    assert plan_views.record_line(Record(2, 0, 0, 0, False, False)) == "Your record (30 d): 2 of 2 sold"
+    assert plan_views.record_line(Record(0, 5, 5, 5, False, True)).endswith("qty 1/32")
+    looks = {**LOOKS, BAR: replace(LOOKS[BAR], record=stuck)}
+    post = act("p", "post", 650, NOW, 4 * 0.8 / 7, key=BAR, qty=5, price=47)
+    rows = {r["id"]: r for r in plan_views.week_view([post], NOW, 0, looks, GOLD)["days"][0]["rows"]}
+    assert rows["p"]["record"].startswith("Your record (30 d): 0 of 3 sold")
+    linen = act("l", "post", 650, NOW, 0.9, key=LINEN, qty=5, price=47)
+    assert plan_views.week_view([linen], NOW, 0, looks, GOLD)["days"][0]["rows"][0]["record"] == ""
+
+
+def test_D43_needs_a_decision_lists_the_items_flagged_not_selling():
+    from ahsync.engine.sell_record import Record
+    looks = {**LOOKS, BAR: replace(LOOKS[BAR], record=Record(0, 3, 3, 3, False, True)),
+             LINEN: replace(LOOKS[LINEN], record=Record(1, 1, 1, 1, False, False))}
+    today = plan_views.today_view([], NOW, 0, 0.0, looks, GOLD)
+    assert [(d["key"], d["item"]) for d in today["decisions"]] == [(str(BAR), "Copper Bar")]
+    assert today["decisions"][0]["record"].startswith("Your record (30 d): 0 of 3 sold")

@@ -187,7 +187,17 @@ const STATUS_CLASS = { done: ' done', missed: ' missed', skipped: ' done', parti
 const chip = r => `<div class="chip ${esc(r.action)}${STATUS_CLASS[r.status] || ''}"><span class="t">${esc(r.time)}</span> ${act(r.action)}<br>` +
   `${item(r.item, r.quality)} <span class="muted">×${esc(r.qty)}</span><br><span class="muted">${dash(r.each)} each · ${dash(r.total)}</span><br>` +
   `${r.net === '—' ? '' : signed(r.net)}${r.chance !== '—' ? ` <span class="muted">· ${esc(r.chance)} chance</span>` : ''}` +
-  `${r.note ? `<br><span class="muted">${esc(r.note)}</span>` : ''}</div>`;
+  `${r.note ? `<br><span class="muted">${esc(r.note)}</span>` : ''}${r.record ? `<br><span class="muted">${esc(r.record)}</span>` : ''}</div>`;
+// Your own sell record under a row (SPEC §3.3.3, D42), as the engine wrote it.
+const recordSub = r => r.record ? `<span class="sub">${esc(r.record)}</span>` : '';
+// Today's Needs a decision section (D43): items flagged not selling, with Blacklist and Keep (POST /api/rule, SEC8).
+const decisionsHtml = rows => !(rows || []).length ? '' :
+  `<div class="card-h" style="border-top:1px solid var(--border)"><b>Needs a decision</b><span class="muted">not selling: no more buys or crafts until you decide</span></div>` +
+  `<div class="scrollx"><table><tbody>${rows.map(d => `<tr><td>${item(d.item, d.quality)}<span class="sub">${esc(d.record)}</span></td>` +
+  `<td><span class="pill warn">NOT SELLING</span></td>` +
+  `<td><select class="btn" data-rule-key="${esc(d.key)}" title="Blacklist it"><option value="">Blacklist…</option>` +
+  `<option value="no_buy">Don't buy or craft</option><option value="ignore">Ignore completely</option></select> ` +
+  `<button class="btn" type="button" data-rule-key="${esc(d.key)}" data-rule="keep" title="Keep selling it: its record starts fresh">Keep</button></td></tr>`).join('')}</tbody></table></div>`;
 // Inventory: tiles and the item detail, all text from engine/inventory_view.py and engine/item_detail.py.
 const tilesHtml = tiles => `<div class="tiles">${(tiles || []).map(([k, v, d]) => `<div class="tile"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div><div class="d">${esc(d)}</div></div>`).join('')}</div>`;
 const HOUR_LABELS = ['0', '', '', '', '', '', '6', '', '', '', '', '', '12', '', '', '', '', '', '18', '', '', '', '', ''];
@@ -224,9 +234,10 @@ const LIVE = {
     pick: (raw, values) => ({ ...((raw.by_min || {})[values.minChance] || { rows: [], hidden: 0, total: '0c' }), help: raw.help }),
     cols: [['Action', 0, null], ['Item', 0, null], ['Qty', 1, null], ['Each', 1, null], ['Total', 1, null], ['Expected net', 1, 'net'],
            ...MARKET_COLS, ['Risk', 1, 'risk'], ['Character', 0, null], ['', 0, null]],
-    row: r => `<tr><td>${act(r.action)}</td><td>${item(r.item, r.quality)}${r.note ? `<span class="sub">${esc(r.note)}</span>` : ''}</td>` +
+    row: r => `<tr><td>${act(r.action)}</td><td>${item(r.item, r.quality)}${r.note ? `<span class="sub">${esc(r.note)}</span>` : ''}${recordSub(r)}</td>` +
               `<td class="num">${esc(r.qty)}</td><td class="num">${dash(r.each)}</td><td class="num">${dash(r.total)}</td>${netCell(r)}` +
               `${marketCells(r)}${riskCell(r)}<td>${esc(r.character)}</td><td>${skipButton(r)}</td></tr>`,
+    below: d => decisionsHtml(d.decisions),
     footer: (d, values) => `${esc(d.rows.length)} actions · expected ${signed(d.total)} · ${esc(d.hidden)} hidden (chance below ${esc(values.minChance)}%)`,
     filters: [
       { id: 'search', label: null, kind: 'search', placeholder: 'Search items…', test: (r, v) => !v || String(r.item).toLowerCase().includes(v.toLowerCase()) },
@@ -419,6 +430,21 @@ function render(id) {
     el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', () => { values[el.dataset.filter] = el.value; render(id); refocus(el.dataset.filter); });
   });
   card.querySelectorAll('[data-skip]').forEach(btn => { btn.onclick = () => skip(btn.dataset.skip, btn); });
+  card.querySelectorAll('button[data-rule]').forEach(btn => { btn.onclick = () => setRule(id, btn.dataset.ruleKey, btn.dataset.rule, btn); });
+  card.querySelectorAll('select[data-rule-key]').forEach(sel => { sel.onchange = () => sel.value && setRule(id, sel.dataset.ruleKey, sel.value, sel); });
+}
+
+// Set an item rule from Needs a decision (SPEC §3.4.2, D43): AHSync stores it, re-plans and rewrites the plan file.
+async function setRule(id, key, rule, el) {
+  el.disabled = true;
+  try {
+    const r = await post('/api/rule', { key: Number(key), rule });
+    if (r && r.status === 200) { notice(rule === 'keep' ? 'Kept: its record starts fresh.' : 'Blacklisted: the plan no longer buys or crafts it.', 'ok'); load(id); }
+    else if (r) notice(`Not saved (${r.body.error || r.status}).`, 'warn');
+  } catch (e) {
+    notice('AHSync isn't answering. Is it still running?', 'warn');
+  }
+  el.disabled = false;
 }
 
 // A table row: pages with `selectKey` get a clickable row that selects it (Inventory's item detail).

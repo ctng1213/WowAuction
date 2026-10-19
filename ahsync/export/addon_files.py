@@ -17,8 +17,10 @@ from ahsync.config import Config
 from ahsync.db.sqlite import Database
 from ahsync.engine import disenchant
 from ahsync.engine.de_table import DE_TABLE
+from ahsync.engine.plan_views import record_line
 from ahsync.export.market_lua import market_lua
 from ahsync.export.plan_lua import plan_lua
+from ahsync.recommend.plan import sell_records
 from ahsync.state.importer import ingested_until
 
 DATA_FOLDER = ("Interface", "AddOns", "AHProfit_Data")
@@ -219,5 +221,9 @@ def export_plan(db: Database, cfg: Config, now_ms: int, sleep: Callable[[float],
     if not folder.is_dir():
         return False
     char_ids = sorted(c for m in cfg.markets for c, _ in db.characters_in(m))
-    text = plan_lua(db.addon_actions(char_ids), db.rule_rows(), ingested_until(db), now_ms)
+    records = {}
+    for market in cfg.markets:
+        for key, r in sell_records(db, [c for c, _ in db.characters_in(market)], market, now_ms, cfg).items():
+            records[key] = f"{1 if r.not_selling else 0};{record_line(r)}"             # EX8
+    text = plan_lua(db.addon_actions(char_ids), db.rule_rows(), ingested_until(db), now_ms, records)
     return _write(db, folder / PLAN_FILE, text, MAX_PLAN_BYTES, now_ms, sleep, replace)

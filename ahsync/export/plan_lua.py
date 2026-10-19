@@ -57,7 +57,7 @@ def action_text(row: tuple) -> str:
 
 
 def plan_lua(actions: Sequence[tuple], rules: Sequence[tuple[int, str, int]], ingested_until: Mapping[str, int],
-             generated_ms: int) -> str:
+             generated_ms: int, records: Mapping[int, str] | None = None) -> str:
     """The whole PortfolioPlan.lua (SPEC §3.5, EX3).
 
     Args:
@@ -65,6 +65,8 @@ def plan_lua(actions: Sequence[tuple], rules: Sequence[tuple[int, str, int]], in
         rules: (item key, rule, set_at ms), cleared rules ("none") included.
         ingested_until: Character id -> newest committed scan or event time, ms.
         generated_ms: Now, UTC ms.
+        records: Item key -> "1;line" (not selling) or "0;line", your sell records (EX8); outside the checksum,
+            so an older addon still reads the file.
 
     Returns:
         Lua source defining the global AHProfitPlan.
@@ -87,5 +89,7 @@ def plan_lua(actions: Sequence[tuple], rules: Sequence[tuple[int, str, int]], in
         lines.append("    },")
     lines += ["  },", "  rules = {"]
     lines += [f"    [{key}] = {lua_string(text)}," for key, text in sorted(rule_texts.items())]
+    lines += ["  },", "  records = {"]
+    lines += [f"    [{key}] = {lua_string(text)}," for key, text in sorted((records or {}).items())]
     lines += ["  },", "}", ""]
     return "\n".join(lines)

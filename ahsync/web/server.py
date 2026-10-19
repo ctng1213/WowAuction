@@ -28,10 +28,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from ahsync.clock import Clock
+from ahsync.app.refresh import replan_all
 from ahsync.app.status_page import status_page
+from ahsync.clock import Clock
 from ahsync.config import Config
 from ahsync.db.sqlite import Database
+from ahsync.export.addon_files import export_plan
 
 log = logging.getLogger("ahsync.web")
 
@@ -47,7 +49,8 @@ BUSY_TIMEOUT_MS = 5000
 PAGES = ("today", "week", "on_ah", "disenchant", "craft", "flip", "inventory", "history", "rules",
          "characters", "status")
 GET_PATHS = ("/", "/api/markets")
-POST_PATHS = ("/api/refresh", "/api/skip")
+POST_PATHS = ("/api/refresh", "/api/skip", "/api/rule")
+RULES = ("no_buy", "ignore", "keep", "none")       # SPEC §3.4.2: what the dashboard may set
 VIEWS_PREFIX = "/api/views/"
 
 
@@ -275,17 +278,49 @@ class DashboardApp:
         """Serve a write endpoint whose checks passed.
 
         Args:
-            path: "/api/refresh" or "/api/skip".
+            path: "/api/refresh", "/api/skip" or "/api/rule".
             body: The request body.
 
         Returns:
-            202 for a queued refresh, or skip_action's response.
+            202 for a queued refresh, or skip's or rule's response.
         """
         if path == "/api/refresh":
             self.request_refresh()
             log.info("full refresh requested from the dashboard")
             return json_response(202, {"queued": True})
+        if path == "/api/rule":
+            return self.rule(body)
         return self.skip(body)
+
+    def rule(self, body: bytes) -> Response:
+        """Set or clear an item rule from the dashboard, then re-plan and rewrite the plan file (SPEC §3.4.2, D43, SEC8).
+
+        Args:
+            body: JSON {"key": <item key>, "rule": "no_buy" | "ignore" | "keep" | "none"}.
+
+        Returns:
+            200 {"set": true|false} (false when an equally new rule already won); 400 for a bad body;
+            503 when the database is busy.
+        """
+        try:
+            request = json.loads(body.decode("utf-8"))
+            key, rule = int(request.get("key")), request.get("rule")
+        except (ValueError, AttributeError, TypeError):
+            key, rule = None, None
+        if key is None or rule not in RULES:
+            return json_response(400, {"error": "bad_request"})
+        now = self.clock.now_ms()
+        try:
+            with self._lock:
+                with self.db.transaction():
+                    changed = self.db.upsert_item_rule(key, rule, now, "dashboard")
+                replan_all(self.db, now, self.config, self.clock.local_offset_ms(now))
+                export_plan(self.db, self.config, now, self.clock.sleep)
+        except sqlite3.Error as error:
+            log.warning("setting a rule failed: %s", error)
+            return json_response(503, {"error": "database_busy"})
+        log.info("rule %s set on item %s from the dashboard", rule, key)
+        return json_response(200, {"set": changed})
 
     def skip(self, body: bytes) -> Response:
         """Mark a plan action skipped (SPEC §3.4.1, §3.5).
