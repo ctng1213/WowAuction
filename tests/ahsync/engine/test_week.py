@@ -91,3 +91,13 @@ def test_R23_a_vendor_sold_item_is_never_posted_held_or_crafted():
                                               ROD: facts(ROD, 9000)})
     actions = week.week_plan(w, NOW, S, FS, 3)
     assert [(a.kind, a.key, a.qty, a.price) for a in actions] == [("vendor", wood, 20, 9)]   # no post, hold or craft
+
+
+def test_O5_an_item_flagged_not_selling_is_not_crafted_or_flipped_but_your_stock_still_sells():
+    from ahsync.engine.sell_record import Record
+    stuck = Record(0, 3, 3, 3, False, True)
+    w = inputs(facts={BAR: facts(BAR, 1000), ROD: facts(ROD, 4000, record=stuck)})
+    w = replace(w, world=replace(w.world, products={ROD: facts(ROD, 4000, record=stuck)}))
+    actions = week.week_plan(w, NOW, S, FS, 3)
+    assert not [a for a in actions if a.kind == "craft"]                       # no new rods
+    assert sum(a.qty for a in actions if a.key == BAR) == 6                    # the bars are still planned

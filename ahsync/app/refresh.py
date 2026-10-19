@@ -18,7 +18,7 @@ from ahsync.config import Config, market_settings
 from ahsync.db.sqlite import Database
 from ahsync.recommend.inventory_page import inventory_page
 from ahsync.recommend.pages import craft_page, disenchant_page
-from ahsync.recommend.plan import plan_market, plan_rows
+from ahsync.recommend.plan import plan_market, plan_rows, sell_records
 from ahsync.recommend.plan_pages import plan_pages, view_actions
 
 DAY_MS = 86_400_000
@@ -50,7 +50,8 @@ def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], in
         offset_ms: Local time minus UTC, for the pages' days and times.
         cfg: Config.
     """
-    actions = plan_market(db, characters, intel_items, items, now_ms, cfg)
+    records = sell_records(db, [c for c, _ in characters], market, now_ms, cfg)      # SPEC §3.3.3
+    actions = plan_market(db, characters, intel_items, items, now_ms, cfg, records)
     rows = plan_rows(actions, market, now_ms)
     db.stage_plan(rows)
     week_start = (now_ms + offset_ms) // DAY_MS * DAY_MS - offset_ms

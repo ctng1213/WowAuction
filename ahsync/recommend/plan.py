@@ -7,12 +7,14 @@ can use: your stock, your recipes' products and mats, and flip candidates.
 """
 from __future__ import annotations
 
-from ahsync.config import Config, flip_settings, plan_settings
+from ahsync.config import Config, flip_settings, plan_settings, record_settings
+from ahsync.db.sqlite import Database
 from ahsync.engine import craft, disenchant, fees, profile
 from ahsync.engine.capacity import slot_of
 from ahsync.engine.craft_plan import CraftWorld
 from ahsync.engine.de_table import DE_TABLE
 from ahsync.engine.plan import TREND_CLAMP_PCT, Lot, PlanAction, PlanWindow, SellFacts
+from ahsync.engine.sell_record import Record, ResolvedPost, sell_record
 from ahsync.engine.week import WeekInputs, week_plan
 from ahsync.history.reads import ItemInfo
 from ahsync.intel.contract import ItemIntel, price_level
@@ -20,6 +22,7 @@ from ahsync.recommend.pages import DE_KIND, craft_market
 from ahsync.state.reads import StateReader
 
 HOUR_MS = 3_600_000
+DAY_MS = 86_400_000
 FLAT = tuple([1.0] * 168)
 GEAR_CLASSES = (2, 4)            # weapon, armor: the lenient gear cap (SPEC §3.4 Liquidity)
 
@@ -60,13 +63,43 @@ def de_offer(info: ItemInfo | None, stats: dict[int, ItemIntel], enchanters: lis
     return disenchant.expected_value(row[1], values), able[0]
 
 
-def sell_facts(i: ItemIntel, info: ItemInfo | None, de: tuple[float, str] | None) -> SellFacts:
+def sell_records(db: Database, char_ids: list[str], market: str, now_ms: int, cfg: Config) -> dict[int, Record]:
+    """Your sell record of every item you posted lately on a market (SPEC §3.3.3).
+
+    Args:
+        db: Database (posts, Keep rules, hourly closes).
+        char_ids: The market's characters.
+        market: Market id, for the closes during each post.
+        now_ms: Now.
+        cfg: Config.
+
+    Returns:
+        Item key -> Record, for items with a sold or expired post that counts.
+    """
+    s = record_settings(cfg)
+    since = now_ms - s.days * DAY_MS
+    posts: dict[int, list[ResolvedPost]] = {}
+    for key, post_id, price, at, resolved, outcome in db.post_outcomes(char_ids, since):
+        posts.setdefault(key, []).append(ResolvedPost(post_id, price, at, resolved, outcome))
+    keeps = db.keep_times()
+    out = {}
+    for key, rows in sorted(posts.items()):
+        closes = db.hourly_closes(market, key, min(p.at_ms for p in rows), max(p.resolved_at_ms for p in rows))
+        record = sell_record(rows, closes, now_ms, keeps.get(key), s)
+        if record is not None:
+            out[key] = record
+    return out
+
+
+def sell_facts(i: ItemIntel, info: ItemInfo | None, de: tuple[float, str] | None,
+               record: Record | None = None) -> SellFacts:
     """What the plan knows about one item, from its intelligence (SPEC §3.4C).
 
     Args:
         i: The item's intelligence.
         info: Its metadata (vendor price, class), or None.
         de: (EV per unit, enchanter) when someone can disenchant it.
+        record: Your sell record of it (SPEC §3.3.3), or None.
 
     Returns:
         The SellFacts; cost basis 0 until tracking records it (M6b).
@@ -77,7 +110,7 @@ def sell_facts(i: ItemIntel, info: ItemInfo | None, de: tuple[float, str] | None
         tuple(PlanWindow(w.start_slot, w.hours, w.best_slot) for w in i.sell_windows), i.book or None, i.cur,
         i.cur_qty, (info.vendor_sell if info else None) or 0, de[0] if de else None, de[1] if de else None, 0.0,
         i.units_on_ah, _pattern(i.supply_how, i.supply_weeks, ()),
-        bool(info and info.item_class in GEAR_CLASSES), i.conf)
+        bool(info and info.item_class in GEAR_CLASSES), i.conf, record)
 
 
 def flip_candidate(i: ItemIntel, min_flip_margin: float) -> bool:
@@ -103,7 +136,7 @@ def flip_candidate(i: ItemIntel, min_flip_margin: float) -> bool:
 
 
 def week_inputs(state: StateReader, characters: list[tuple[str, int]], stats: dict[int, ItemIntel],
-                items: dict[int, ItemInfo], cfg: Config) -> WeekInputs:
+                items: dict[int, ItemInfo], cfg: Config, records: dict[int, Record] | None = None) -> WeekInputs:
     """The weekly plan's inputs for one market (SPEC §3.4C).
 
     Args:
@@ -112,6 +145,7 @@ def week_inputs(state: StateReader, characters: list[tuple[str, int]], stats: di
         stats: Item key -> intelligence.
         items: Item metadata.
         cfg: Config (budgets, margin).
+        records: Item key -> your sell record (SPEC §3.3.3); None for none.
 
     Returns:
         WeekInputs; budgets are each character's gold unless config [budgets] overrides it.
@@ -128,7 +162,7 @@ def week_inputs(state: StateReader, characters: list[tuple[str, int]], stats: di
     enchanters = [(c, s) for c, s in enchanters if s is not None]
     wanted = {lot.key for lot in lots} | {r.product for r in recipes} | {k for r in recipes for k, _ in r.reagents}
     wanted |= {k for k, i in stats.items() if flip_candidate(i, cfg.min_flip_margin)}
-    facts = {k: sell_facts(stats[k], items.get(k), de_offer(items.get(k), stats, enchanters))
+    facts = {k: sell_facts(stats[k], items.get(k), de_offer(items.get(k), stats, enchanters), (records or {}).get(k))
              for k in sorted(wanted) if k in stats}
     world = CraftWorld(recipes, by_product, craft_market(state, char_ids, stats, items),
                        {k: f for k, f in facts.items() if k in {r.product for r in recipes}})
@@ -181,7 +215,8 @@ def plan_rows(actions: list[PlanAction], market: str, now_ms: int) -> list[tuple
 
 
 def plan_market(state: StateReader, characters: list[tuple[str, int]], stats: dict[int, ItemIntel],
-                items: dict[int, ItemInfo], now_ms: int, cfg: Config) -> list[PlanAction]:
+                items: dict[int, ItemInfo], now_ms: int, cfg: Config,
+                records: dict[int, Record] | None = None) -> list[PlanAction]:
     """The weekly plan for one market's characters (SPEC §3.4C).
 
     Args:
@@ -191,11 +226,12 @@ def plan_market(state: StateReader, characters: list[tuple[str, int]], stats: di
         items: Item metadata.
         now_ms: Now.
         cfg: Config.
+        records: Item key -> your sell record (SPEC §3.3.3); None for none.
 
     Returns:
         The planned actions; empty without characters.
     """
     if not characters:
         return []
-    return week_plan(week_inputs(state, characters, stats, items, cfg), now_ms, plan_settings(cfg),
+    return week_plan(week_inputs(state, characters, stats, items, cfg, records), now_ms, plan_settings(cfg),
                      flip_settings(cfg), cfg.max_craft_depth)

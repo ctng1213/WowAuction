@@ -560,6 +560,8 @@ It changes recommendations in four ways:
    - Stock you already own stays in the sell plan, where vendor or disenchant often wins once `P'` is low.
    - The dashboard and the addon offer **Blacklist** or **Keep** (§3.4.2).
 
+**Built** (`engine/sell_record`, `recommend.plan.sell_records`): the records are computed from your resolved posts (§3.4.1 post outcomes) and the item's hourly closes at every full refresh and re-plan, and the plan applies all four effects. The undercut cap uses the item's current cheapest listing (yours has expired). SPEC GAP: the missed-peak re-plan of the hourly status pass doesn't use the record yet, and the record line and the Blacklist / Keep prompt below are not shown yet.
+
 It is always visible. Every action row for an item with a record shows (the tooltip only reflects it in Chance to sell), for example, "Your record (30 d): 2 of 5 sold · expired 2× while cheapest · P 80% → 58% · price −10% · qty ¼". So you can see when and why your own history changed a recommendation. Old failures stop counting after 30 days, so an item can recover.
 
 #### 3.3.4 Weekly patterns and best selling windows

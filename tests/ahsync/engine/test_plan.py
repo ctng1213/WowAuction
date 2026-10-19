@@ -142,3 +142,24 @@ def test_R18_gear_may_double_the_market_and_always_gets_two_pieces():
     assert [o.cap for o in plan.post_options(green, NOW, S)] == [2]          # nothing else listed: still 2 pieces
     assert [o.cap for o in plan.post_options(replace(green, supply_now=3), NOW, S)] == [3]   # match the 3 listed
     assert [o.cap for o in plan.post_options(replace(green, supply_now=3, gear=False), NOW, S)] == [1]   # mats: 0.5
+
+
+def test_O12_a_losing_streak_lowers_the_planned_price_and_posts_a_quarter_of_the_stacks():
+    from ahsync.engine.sell_record import Record
+    busy = linen(sold_per_day=400.0, supply_now=2000)          # room for every stack, so only the record limits it
+    record = Record(0, 2, 2, 2, False, False)
+    plain = [o.price for o in plan.post_options(busy, NOW, S)]
+    cut = [o.price for o in plan.post_options(replace(busy, record=record), NOW, S)]
+    assert cut == [int(p * 0.95 ** 2) for p in plain]                                   # 45c → 40c (45 × 0.9025)
+    posted = [a for a in plan.sell_plan([Lot("A", LINEN, 160)], {LINEN: replace(busy, record=record)}, NOW, S)
+              if a.kind == "post"]
+    assert sum(a.qty for a in posted) == 40                                             # 8 stacks × ¼ = 2 stacks
+
+
+def test_O13_O11_the_price_never_drops_below_the_vendor_floor_and_an_undercut_caps_it():
+    from ahsync.engine.sell_record import Record
+    f = linen(vendor_sell=44, post_price=50, record=Record(0, 2, 2, 2, False, False))
+    assert plan.post_options(f, NOW, S)[0].price == 47                                  # ceil(44 ÷ 0.95)
+    undercut = linen(record=Record(0, 1, 0, 0, True, False))                            # cur 45: cap 44
+    assert plan.post_options(undercut, NOW, S)[0].price == 44
+    assert plan.post_options(linen(record=Record(3, 0, 0, 0, False, False)), NOW, S)[0].price == 45   # a clean record

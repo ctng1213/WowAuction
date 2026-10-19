@@ -15,6 +15,7 @@ from dataclasses import dataclass
 
 from ahsync.engine import fees, sellprob
 from ahsync.engine.capacity import liquidity_cap, slot_of, window_supply
+from ahsync.engine.sell_record import Record, repriced, stacks_to_post
 
 HOUR_MS = 3_600_000
 DAY_MS = 86_400_000
@@ -34,6 +35,8 @@ class PlanSettings:
     horizon_days: int = 7
     default_undercut_share: float = 0.5
     default_sell_prob: float = 0.25
+    reprice_step: float = 0.05         # config reprice_step: price cut per lowest expiry (SPEC §3.3.3)
+    own_record_weight: float = 4       # config own_record_weight: the model's worth in posts
 
 
 @dataclass(frozen=True)
@@ -79,6 +82,7 @@ class SellFacts:
     supply_how: tuple[float, ...] = ()             # 168 listed-supply ratios; () when there is no pattern
     gear: bool = False                             # a weapon or armor: the lenient gear cap (SPEC §3.4 Liquidity)
     conf: int = 0                                  # confidence % of the item's numbers (SPEC §3.3.5)
+    record: Record | None = None                   # your own sell record (SPEC §3.3.3); None without one
 
 
 @dataclass(frozen=True)
@@ -169,14 +173,15 @@ def post_options(f: SellFacts, now_ms: int, s: PlanSettings) -> list[PostOption]
     out = []
     if f.post_price is not None:
         hours = tuple(sellprob.posting_now_window(now_ms, s.sell_window_hours))
-        out.append(PostOption(now_ms, hours, f.post_price, None, _cap(f, hours, now_ms, s),
+        out.append(PostOption(now_ms, hours, _record_price(f, f.post_price, s), None, _cap(f, hours, now_ms, s),
                            fees.shortest_duration_covering(s.sell_window_hours)))
     if f.level is None:
         return out
     for start, end, best in occurrences(f.windows, now_ms, s.horizon_days):
         post = max(best - s.post_lead_hours * HOUR_MS, now_ms)
         hours = tuple(sellprob.planned_window(post, end, now_ms))    # never empty: occurrences haven't ended
-        price = slot_price(f.level, f.how[slot_of(best // HOUR_MS)], f.trend7, (best - now_ms) / DAY_MS)
+        price = _record_price(f, slot_price(f.level, f.how[slot_of(best // HOUR_MS)], f.trend7, (best - now_ms) / DAY_MS),
+                              s)
         covering = -(-(best + HOUR_MS - post) // HOUR_MS)      # the listing stays up through the best hour
         out.append(PostOption(post, hours, price, (start, end, best), _cap(f, hours, now_ms, s),
                            fees.shortest_duration_covering(covering)))
@@ -218,17 +223,55 @@ def post_chance(f: SellFacts, price: int, qty: int, hours: Sequence[int], own_ah
         s: Settings.
 
     Returns:
-        P in [0, 1]; default_sell_prob when sales are unknown.
+        P' in [0, 1]: the simulation (default_sell_prob when sales are unknown) blended with your
+        own record when there is one (SPEC §3.3.3, O1, O2).
     """
     if f.sold_per_day is None:
-        return s.default_sell_prob
+        return _with_record(f, s.default_sell_prob, s)
     competitors = None if f.book is None else [(p, float(stack * count), band) for p, stack, band, count in f.book]
     ahead = sellprob.ahead_of(competitors, price, f.cur, f.cur_qty)
     if own_ahead:
         ahead = ahead + (sellprob.Competitor(price, own_ahead, 0),)
     queue = sellprob.QueueInputs(f.sold_per_day, f.listed_per_day or 0.0, s.default_undercut_share,
                                  sellprob.demand_for(hours, f.sales_how), qty, ahead)
-    return sellprob.simulate(queue)
+    return _with_record(f, sellprob.simulate(queue), s)
+
+
+def _with_record(f: SellFacts, p: float, s: PlanSettings) -> float:
+    """P blended with the item's own record (SPEC §3.3.3).
+
+    Args:
+        f: The item.
+        p: The model's P.
+        s: Settings.
+
+    Returns:
+        P' = (k·P + s) ÷ (k + s + x); P without a record.
+    """
+    if f.record is None:
+        return p
+    return sellprob.with_record(p, f.record.sold, f.record.expired, s.own_record_weight)
+
+
+def _record_price(f: SellFacts, price: int, s: PlanSettings) -> int:
+    """A planned price after the item's record (SPEC §3.3.3 price, O11-O13).
+
+    Args:
+        f: The item.
+        price: The plan's price, copper.
+        s: Settings.
+
+    Returns:
+        The price unchanged without a streak or an undercut expiry; else lowered 5% per streak step,
+        capped below the cheapest other listing after an undercut, never below what vendoring or
+        disenchanting pays after the cut.
+    """
+    r = f.record
+    if r is None or (r.streak == 0 and not r.undercut_last):
+        return price
+    floor = math.ceil(alternative(f)[1] / (1 - fees.AH_CUT))
+    cap = f.cur - 1 if r.undercut_last and f.cur else None
+    return repriced(price, r.streak, s.reprice_step, floor, cap)
 
 
 def alternative(f: SellFacts) -> tuple[str, float]:
@@ -310,12 +353,16 @@ def plan_item(lots: Sequence[Lot], f: SellFacts, now_ms: int, s: PlanSettings,
     used = [ledger.get((f.key, window_id(o)), 0.0) for o in opts]
     merged: dict[tuple, list] = {}            # (kind, char, option) -> [qty, expected, expected sold units]
     alt_kind, alt_value = alternative(f)
+    # SPEC §3.3.3 quantity: a losing streak halves the stacks posted per step (O3, O4).
+    stacks = sum(-(-lot.qty // f.ref_stack) for lot in lots)
+    postable = stacks_to_post(stacks, f.record.streak) if f.record else stacks
     for lot in sorted(lots, key=lambda lot: lot.char_id):
         left = lot.qty
         while left > 0:
             qty = min(f.ref_stack, left)
-            best = _best_post(f, opts, used, qty, s)
+            best = _best_post(f, opts, used, qty, s) if postable > 0 else None
             if best is not None and best[1] / qty > alt_value:
+                postable -= 1
                 i, e, p = best
                 used[i] += qty
                 slot = merged.setdefault(("post", lot.char_id, i), [0, 0.0, 0.0])

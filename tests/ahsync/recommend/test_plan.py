@@ -104,3 +104,21 @@ def test_R21_forecasts_start_from_the_7_day_median_not_a_month_old_level():
     assert not plan.flip_candidate(venom, 0.2)                    # 103 × 0.95 = 97.85 < 1.2 × 90
     month_only = replace(venom, med7=None)
     assert plan.sell_facts(month_only, None, None).level == 2094 and plan.flip_candidate(month_only, 0.2)
+
+
+def test_sell_records_come_from_your_resolved_posts_the_closes_during_them_and_keep(state):
+    t0 = NOW - 10 * DAY
+    with state.transaction():
+        state.conn.executemany("INSERT INTO posts(post_id, event_id, char_id, key, stack, price, at, outcome, resolved_at, "
+                               "confirmed) VALUES (?, ?, 'Brugan-G', ?, 1, 4000, ?, ?, ?, 1)",
+                               [(f"p{n}", f"p{n}", ROD, t0 + n * 2 * DAY, outcome, t0 + n * 2 * DAY + DAY)
+                                for n, outcome in enumerate(("expired", "expired", "expired"))])
+        state.conn.executemany("INSERT INTO candles_h1(market, key, t, close, src) VALUES (?, ?, ?, 4000, 'ahf')",
+                               [(M, ROD, t0 + n * 2 * DAY + HOUR) for n in range(3)])
+    records = plan.sell_records(state, ["Brugan-G", "Amaya-G"], M, NOW, Config(markets=(M,)))
+    assert (records[ROD].expired, records[ROD].streak, records[ROD].not_selling) == (3, 3, True)
+    with state.transaction():
+        state.conn.execute("INSERT OR REPLACE INTO item_rules(key, rule, set_at, source) VALUES (?, 'keep', ?, 'dashboard')",
+                           (ROD, NOW - DAY))
+    assert plan.sell_records(state, ["Brugan-G"], M, NOW, Config(markets=(M,))) == {}      # Keep: a fresh start
+    assert plan.sell_records(state, [], M, NOW, Config(markets=(M,))) == {}

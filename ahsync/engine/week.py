@@ -133,8 +133,10 @@ def week_plan(w: WeekInputs, now_ms: int, s: PlanSettings, fs: FlipSettings, max
     world = replace(w.world, market=market)
     budgets, ledger = dict(w.budgets), {}
     vendor_sold = set(m.vendor)               # anyone can buy these from a vendor: never posted (R22, R23)
+    # SPEC §3.3.3: an item flagged not selling is bought and crafted no more; your stock is still sold (O5).
+    struggling = {k for k, f in w.facts.items() if f.record is not None and f.record.not_selling}
     crafts, after = craft_plan(world, budgets, w.total_gold, now_ms, s, fs.max_risk_pct, ledger, max_depth,
-                               exclude=set(w.no_buy | w.ignore) | vendor_sold)
+                               exclude=set(w.no_buy | w.ignore) | vendor_sold | struggling)
     used = {k: world.market.owned.get(k, 0.0) - after.owned.get(k, 0.0) for k in world.market.owned}
     no_posts = {k: replace(f, post_price=None, level=None) if k in vendor_sold else f for k, f in facts.items()}
     sold = [a for a in sell_plan(without_used(lots, used), no_posts, now_ms, s, ledger)
@@ -142,5 +144,5 @@ def week_plan(w: WeekInputs, now_ms: int, s: PlanSettings, fs: FlipSettings, max
     bought = _bought(world.market, after)
     flip_facts = {k: without_bought(f, bought.get(k, 0.0)) for k, f in facts.items()}
     flips = flip_plan(flip_facts, budgets, w.total_gold, now_ms, s, fs, ledger,
-                      exclude=set(w.no_buy | w.ignore) | vendor_sold)      # a vendor sells it: no flip (R22)
+                      exclude=set(w.no_buy | w.ignore) | vendor_sold | struggling)   # R22, O5
     return crafts + sold + flips

@@ -16,6 +16,7 @@ from pathlib import Path
 
 from ahsync.engine.flips import FlipSettings
 from ahsync.engine.plan import PlanSettings
+from ahsync.engine.sell_record import RecordSettings
 from ahsync.engine.sellprob import MarketSettings
 
 API_KEY_ENV = "AUCTIONHOUSE_APIKEY"
@@ -279,7 +280,19 @@ def plan_settings(config: Config) -> PlanSettings:
     """
     return PlanSettings(config.post_lead_hours, config.max_supply_share, config.max_supply_share_gear,
                         config.min_gear_units, config.sell_window_hours, 7, config.default_undercut_share,
-                        config.default_sell_prob)
+                        config.default_sell_prob, config.reprice_step, config.own_record_weight)
+
+
+def record_settings(config: Config) -> RecordSettings:
+    """The settings your own sell record needs (SPEC §3.3.3), from the config.
+
+    Args:
+        config: Settings.
+
+    Returns:
+        The engine's RecordSettings.
+    """
+    return RecordSettings(config.own_record_days, config.struggle_streak, config.keep_retry_streak)
 
 
 def flip_settings(config: Config) -> FlipSettings:
