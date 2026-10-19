@@ -39,6 +39,9 @@ Diagnostics.APIS = {
   "C_AuctionHouse.ConfirmCommoditiesPurchase", "C_AuctionHouse.PlaceBid", "C_AuctionHouse.GetAuctionInfoByID",
   -- your own auctions (A41)
   "C_AuctionHouse.QueryOwnedAuctions", "C_AuctionHouse.GetNumOwnedAuctions", "C_AuctionHouse.GetOwnedAuctionInfo",
+  -- post, purchase and craft events (A44-A47)
+  "C_AuctionHouse.PostCommodity", "C_AuctionHouse.PostItem", "C_AuctionHouse.StartCommoditiesPurchase",
+  "ItemLocation.GetBagAndSlot", "BuyMerchantItem", "C_MerchantFrame.GetItemInfo",
 }
 
 -- Namespaces whose function lists we need to write the modern readers (SPEC §6).

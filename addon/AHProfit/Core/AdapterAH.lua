@@ -149,14 +149,48 @@ end
 
 -- ------------------------------------------------------------------ purchases (SPEC §4.3, A39)
 
-local purchasesHooked = false
+local purchasesHooked, postsHooked = false, false
+-- UNVERIFIED: the AH's duration 1/2/3 as Classic's 2/8/24 h, the engine's durations (Engine/Fees, SPEC §6 item 4).
+local DURATION_HOURS = { 2, 8, 24 }
+
+--- Watch AH posts without changing them (A44).
+--- UNVERIFIED: C_AuctionHouse.PostCommodity(itemLocation, duration, quantity, unitPrice) and
+--- PostItem(itemLocation, duration, quantity, bid, buyout), and ItemLocation:GetBagAndSlot(), as on retail.
+---@param fn function  (bag, slot, quantity, unit price, duration hours) after each post call
+---@return boolean     true when hooked
+function Adapter.HookPosts(fn)
+  local AH = _G.C_AuctionHouse
+  if postsHooked or not (AH and hooksecurefunc) then return postsHooked end
+  --- The bag and slot an item location points at, or nils.
+  ---@param location table
+  ---@return number|nil, number|nil
+  local function Where(location)
+    if type(location) == "table" and location.GetBagAndSlot then return location:GetBagAndSlot() end
+    return nil, nil
+  end
+  if AH.PostCommodity then
+    hooksecurefunc(AH, "PostCommodity", function(location, duration, quantity, unitPrice)
+      local bag, slot = Where(location)
+      fn(bag, slot, quantity, unitPrice, DURATION_HOURS[duration] or 24)
+    end)
+    postsHooked = true
+  end
+  if AH.PostItem then
+    hooksecurefunc(AH, "PostItem", function(location, duration, quantity, _, buyout)
+      local bag, slot = Where(location)
+      if buyout then fn(bag, slot, quantity, math.floor(buyout / math.max(1, quantity or 1)), DURATION_HOURS[duration] or 24) end
+    end)
+    postsHooked = true
+  end
+  return postsHooked
+end
 
 --- Watch AH purchases without changing them: a commodity purchase confirmed, or an item auction bid on at
 --- its buyout. Hooked once; a bid below the buyout is not a purchase.
 --- UNVERIFIED: C_AuctionHouse.ConfirmCommoditiesPurchase(itemID, quantity), PlaceBid(auctionID, bidAmount) and
---- GetAuctionInfoByID(auctionID) -> { itemKey = { itemID }, quantity, buyoutAmount }, as on retail.
+--- GetAuctionInfoByID(auctionID) -> { itemKey = { itemID }, itemLink, quantity, buyoutAmount }, as on retail.
 ---@param onCommodity function  (itemId, quantity) when a commodity purchase is confirmed (it may still fail)
----@param onItem function       (itemId, quantity) when an item auction is bought out
+---@param onItem function       (key, quantity, unit price, auctionId) when an item auction is bought out
 ---@return boolean              true when at least one hook is in place
 function Adapter.HookPurchases(onCommodity, onItem)
   local AH = _G.C_AuctionHouse
@@ -169,12 +203,28 @@ function Adapter.HookPurchases(onCommodity, onItem)
     hooksecurefunc(AH, "PlaceBid", function(auctionId, bid)
       local info = AH.GetAuctionInfoByID(auctionId)
       if info and info.itemKey and info.buyoutAmount and bid and bid >= info.buyoutAmount then
-        onItem(info.itemKey.itemID, info.quantity or 1)
+        local key = (info.itemLink and Adapter.ItemKey(info.itemLink)) or info.itemKey.itemID
+        local qty = info.quantity or 1
+        onItem(key, qty, math.floor(info.buyoutAmount / math.max(1, qty)), auctionId)
       end
     end)
     purchasesHooked = true
   end
   return purchasesHooked
+end
+
+local quotesHooked = false
+
+--- Watch the start of a commodity purchase, whose price quote (COMMODITY_PRICE_UPDATED) follows (A45).
+--- UNVERIFIED: C_AuctionHouse.StartCommoditiesPurchase(itemID, quantity), as on retail.
+---@param fn function  (itemId) when a purchase is started
+---@return boolean     true when hooked
+function Adapter.HookQuotes(fn)
+  local AH = _G.C_AuctionHouse
+  if quotesHooked or not (AH and hooksecurefunc and AH.StartCommoditiesPurchase) then return quotesHooked end
+  hooksecurefunc(AH, "StartCommoditiesPurchase", function(itemId) fn(itemId) end)
+  quotesHooked = true
+  return true
 end
 
 -- ------------------------------------------------------------------ replicate scan (SPEC §4.2)

@@ -100,7 +100,9 @@ describe("AHPanel", function()
     assert_eq(ui.shop[1].qty:GetText(), "×16")
     house.PlaceBid(7, 100)                                        -- a bid: nothing changes
     assert_eq(ui.shop[3].qty:GetText(), "×5")
-    house.PlaceBid(7, 140)                                        -- the buyout: 2 Silk
+    house.PlaceBid(7, 140)                                        -- the buyout: 2 Silk, once it completes
+    assert_eq(ui.shop[3].qty:GetText(), "×5")
+    Stubs.FireEvent("AUCTION_HOUSE_PURCHASE_COMPLETED", 7)
     assert_eq(ui.shop[3].qty:GetText(), "×3")
     house.ConfirmCommoditiesPurchase(2840, 6)
     Stubs.FireEvent("COMMODITY_PURCHASE_SUCCEEDED")

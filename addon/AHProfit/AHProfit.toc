@@ -21,9 +21,12 @@ Engine\SellProb.lua
 Engine\Disenchant.lua
 Engine\Craft.lua
 Engine\Prices.lua
+Capture\Posts.lua
+Capture\Crafts.lua
 Core\Market.lua
 Core\Plan.lua
 Recommend\Live.lua
+Capture\Purchases.lua
 Recommend\Options.lua
 Recommend\Reserves.lua
 UI\ViewModel.lua

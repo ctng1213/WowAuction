@@ -531,6 +531,28 @@ local function MerchantItem(i)
   return numAvailable, extendedCost
 end
 
+--- Watch merchant purchases without changing them (A46).
+--- UNVERIFIED: BuyMerchantItem(index, quantity), and GetMerchantItemInfo's price (3rd) per stack of
+--- its quantity (4th), as on Classic; C_MerchantFrame.GetItemInfo's price and stackCount where present.
+---@param fn function  (key, units, unit price in copper) after each purchase call
+---@return boolean     true when hooked
+function Adapter.HookMerchantBuys(fn)
+  if not (hooksecurefunc and BuyMerchantItem) then return false end
+  hooksecurefunc("BuyMerchantItem", function(index, quantity)
+    local key = Adapter.ItemKey(GetMerchantItemLink(index))
+    local price, stack
+    if C_MerchantFrame and C_MerchantFrame.GetItemInfo then
+      local info = C_MerchantFrame.GetItemInfo(index) or {}
+      price, stack = info.price, info.stackCount
+    else
+      local _, _, p, s = GetMerchantItemInfo(index)
+      price, stack = p, s
+    end
+    if key and price then fn(key, quantity or stack or 1, math.floor(price / math.max(1, stack or 1))) end
+  end)
+  return true
+end
+
 --- Items the open merchant sells in unlimited supply for gold (SPEC §3.4B vendor reagents).
 --- UNVERIFIED: Classic GetMerchantNumItems/GetMerchantItemInfo/GetMerchantItemLink.
 ---@return number[]  Item keys, in merchant order
@@ -589,6 +611,20 @@ local function ReadContainers(bagIds)
     end
   end
   return items
+end
+
+--- Which item is in each bag slot, for naming what a post took from a slot that is empty by then (A44).
+---@return table  "bag:slot" -> item key, occupied slots only
+function Adapter.ReadBagSlots()
+  local out = {}
+  for _, bag in ipairs(BAG_IDS) do
+    for slot = 1, NumSlots(bag) do
+      local link, count = ReadSlot(bag, slot)
+      local key = count and Adapter.ItemKey(link)
+      if key then out[bag .. ":" .. slot] = key end
+    end
+  end
+  return out
 end
 
 --- The first unbound bag slot holding an item, to put on the AH's Sell tab (A29).

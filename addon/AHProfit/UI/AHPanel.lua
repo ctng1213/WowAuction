@@ -366,28 +366,10 @@ function AHPanel.ShowScan()
   if s.px > 0 then ui.fill:SetWidth(s.px) end
 end
 
---- A purchase seen by the hooks (A39): note it and redraw.
----@param itemId number
----@param units number
----@param confirmed boolean
-local function OnPurchase(itemId, units, confirmed)
-  Live.NoteBought(itemId, units, confirmed)
-  if confirmed and ui and ui.frame:IsShown() then AHPanel.Render() end
-end
-
---- COMMODITY_PURCHASE_SUCCEEDED / _FAILED: settle the pending commodity purchase and redraw (A39).
---- UNVERIFIED: the events' names on Forever, as on retail.
----@param event string
-function AHPanel.OnCommodityPurchase(event)
-  Live.SettlePurchases(event == "COMMODITY_PURCHASE_SUCCEEDED")
-  if ui and ui.frame:IsShown() then AHPanel.Render() end
-end
-
 --- AUCTION_HOUSE_SHOW: dock and show the panel.
 function AHPanel.OnShow()
   local anchor = Adapter.AuctionFrame()
   if not anchor then return end
-  pcall(Adapter.HookPurchases, function(id, n) OnPurchase(id, n, false) end, function(id, n) OnPurchase(id, n, true) end)
   if not ui then Build(anchor) end
   ui.status:SetText("")
   ui.frame:Show()
@@ -425,11 +407,11 @@ Events.Register("AUCTION_HOUSE_SHOW", AHPanel.OnShow)
 Events.Register("AUCTION_HOUSE_CLOSED", AHPanel.OnClosed)
 Events.Register("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED", AHPanel.OnBrowseResults)
 Events.Register("COMMODITY_SEARCH_RESULTS_UPDATED", AHPanel.OnSellSearch)
-Events.Register("COMMODITY_PURCHASE_SUCCEEDED", AHPanel.OnCommodityPurchase)
-Events.Register("COMMODITY_PURCHASE_FAILED", AHPanel.OnCommodityPurchase)
 Events.Register("ITEM_SEARCH_RESULTS_UPDATED", AHPanel.OnSellSearch)
 Replicate.OnBook(function() if ui and ui.frame:IsShown() then AHPanel.Render() end end)
 Replicate.OnProgress(function() if ui and ui.frame:IsShown() then AHPanel.ShowScan() end end)
 -- A post (or a buy) changes the bags; redraw once they have been read again (A31).
 AHProfit.Capture.Inventory.OnChange(function() if ui and ui.frame:IsShown() then AHPanel.Render() end end)
 AHProfit.RowMenu.OnChange(function() if ui and ui.frame:IsShown() then AHPanel.Render() end end)
+-- A confirmed purchase lowers Shopping's quantity (A39).
+AHProfit.Capture.Purchases.OnChange(function() if ui and ui.frame:IsShown() then AHPanel.Render() end end)
