@@ -14,6 +14,7 @@ import logging
 from dataclasses import dataclass, field
 
 from ahsync.analysis.market import analyze_market, with_scan
+from ahsync.collect.local_scans import recompute_stale_volume
 from ahsync.config import Config, market_settings
 from ahsync.db.sqlite import Database
 from ahsync.engine.characters_view import CharacterSheet, characters_view
@@ -169,6 +170,13 @@ def refresh_all(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0) -> R
     try:
         db.drop_staging()
         for market in cfg.markets:
+            with db.transaction():                     # estimates from an older method first (V24)
+                old = recompute_stale_volume(db, market)
+                if old:
+                    db.set_status(f"volume_method:{market}", "info", "volume_method_old", {"market": market, "days": old},
+                                  now_ms)
+                else:
+                    db.clear_status(f"volume_method:{market}")
             refresh_market(db, market, now_ms, cfg, result, offset_ms)
         db.publish_refresh(list(cfg.markets))
     except Exception as error:                         # noqa: BLE001  keep the last good numbers (SPEC §5.2 rule 4)

@@ -135,3 +135,24 @@ def test_sales_hours_of_books_far_apart_are_recomputed_separately(db):
     with db.transaction():
         recompute_sales_hours(db, M, [ten + 10 * HOUR, ten, ten + HOUR, ten + 9 * HOUR])
     assert sales(db) == [(LINEN, ten, 20.0), (LINEN, ten + 9 * HOUR, 20.0)]
+
+
+def test_V24_a_new_method_recomputes_estimates_with_stored_books_and_counts_the_rest(db, monkeypatch):
+    from ahsync.collect import local_scans
+    first = scan(db, "s1", D * DAY + 10 * HOUR, [(LINEN, 50, 20, LONG, 5)])
+    second = scan(db, "s2", D * DAY + 12 * HOUR, [(LINEN, 50, 20, LONG, 3)])
+    with db.transaction():
+        derive_from_scans(db, [first, second])                       # version 1 rows for day D
+        db.replace_volume_day(M, D - 40, "books", {BAR: (9.0, 0.0, 0.0)}, 1)    # scans long pruned
+        db.replace_volume_day(M, D, "ahf", {LINEN: (33.0, 0.0, 0.0)})            # a confirmed source
+    stamps = lambda: db.conn.execute("SELECT day, src, method FROM volume_d1 ORDER BY day, src").fetchall()  # noqa: E731
+    assert stamps() == [(D - 40, "books", 1), (D, "ahf", None), (D, "books", 1)]
+    monkeypatch.setattr(local_scans, "VOLUME_METHOD_VERSION", 2)
+    with db.transaction():
+        assert local_scans.recompute_stale_volume(db, M) == 1             # day D - 40 can't be recomputed
+    assert stamps() == [(D - 40, "books", 1), (D, "ahf", None), (D, "books", 2)]
+    assert volume(db, D) == [(LINEN, 40.0, 0.0, 0.0)]
+    assert db.conn.execute("SELECT sold FROM volume_d1 WHERE src = 'ahf'").fetchall() == [(33.0,)]    # untouched
+    monkeypatch.setattr(local_scans, "VOLUME_METHOD_VERSION", 1)
+    with db.transaction():
+        assert local_scans.recompute_stale_volume(db, M) == 0             # nothing older than the current method

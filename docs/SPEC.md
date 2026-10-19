@@ -624,7 +624,7 @@ Missing observation periods never count as zero sales or zero supply; they are l
 
 **Three selling answers, kept apart** (item detail and Inventory): the hour with the **highest expected price** (max `how`), the hour with the **highest estimated activity** (max `sales_how`), and the **best risk-adjusted** window (max `sell_score`, §3.3.4), which is the one the plan uses.
 
-**Method version.** `VOLUME_METHOD_VERSION` (an integer in `engine/volume.py`) is stored with every `volume_d1` row and every `item_stats` row. When it changes, the next full refresh recomputes `books` volume from the stored order books (kept 30 days, §3.2) and marks older rows as from an earlier method on the Status page; AHF and mail rows are kept as they are.
+**Method version.** `VOLUME_METHOD_VERSION` (an integer in `engine/volume.py`) is stored with every `volume_d1` row and every `item_stats` row. When it changes, the next full refresh recomputes `books` volume from the stored order books (kept 30 days, §3.2) and marks older rows as from an earlier method on the Status page; AHF and mail rows are kept as they are. **Built** (V24): `volume_d1.method` holds the version of an estimated row (NULL for confirmed sources and rows from before versions were stored, which count as version 1); `collect.local_scans.recompute_stale_volume` runs at the start of each market's full refresh.
 
 #### 3.3.5 Confidence percentage
 

@@ -35,7 +35,8 @@ class HistoryWrites:
             [(market, key, t, rate) for key, by_hour in sorted(rates.items())
              for t, rate in sorted(by_hour.items()) if from_ms <= t <= to_ms])
 
-    def replace_volume_day(self, market: str, day: int, src: str, rows: dict[int, tuple[float, float, float]]) -> None:
+    def replace_volume_day(self, market: str, day: int, src: str, rows: dict[int, tuple[float, float, float]],
+                           method: int | None = None) -> None:
         """Write one day's volume for one source whole (idempotent: recomputed, never added to).
 
         Args:
@@ -43,9 +44,26 @@ class HistoryWrites:
             day: Day number.
             src: Volume source, e.g. "books".
             rows: key -> (sold, expired, listed).
+            method: The estimation method's version for an estimated source (V24); None for a confirmed one.
         """
         self.conn.execute("DELETE FROM volume_d1 WHERE market = ? AND day = ? AND src = ?", (market, day, src))
         self.conn.executemany(
-            "INSERT INTO volume_d1(market, key, day, listed, sold, expired, src, conf) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            [(market, key, day, listed, sold, expired, src, "medium")
+            "INSERT INTO volume_d1(market, key, day, listed, sold, expired, src, conf, method) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [(market, key, day, listed, sold, expired, src, "medium", method)
              for key, (sold, expired, listed) in sorted(rows.items())])
+
+    def stale_volume_days(self, market: str, src: str, method: int) -> list[int]:
+        """Days whose rows of an estimated source come from an older method (V24).
+
+        Args:
+            market: Market id.
+            src: The estimated source, e.g. "books".
+            method: The current method version.
+
+        Returns:
+            Day numbers, ascending; a row without a version counts as version 1.
+        """
+        return [d for (d,) in self.conn.execute(
+            "SELECT DISTINCT day FROM volume_d1 WHERE market = ? AND src = ? AND COALESCE(method, 1) < ? ORDER BY day",
+            (market, src, method))]

@@ -103,6 +103,7 @@ def test_D36_premium_shows_on_the_api_card_and_warns_near_its_end():
     ("addon_file_blocked", {"file": "MarketIntelligence.lua"}, "Addon file not written", "after 3 tries"),
     ("addon_file_large", {"file": "MarketIntelligence.lua", "bytes": 2_500_000, "limit": 2_097_152},
      "Addon file over budget", "2441 KB, over its 2048 KB"),
+    ("volume_method_old", {"market": "m", "days": 5}, "Older sales estimates", "m: 5 days of sales estimates"),
     ("something_new", {}, "something_new", ""),
 ])
 def test_every_stored_kind_reads_as_a_sentence(kind, data, title, phrase):

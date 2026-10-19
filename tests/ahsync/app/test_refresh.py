@@ -339,3 +339,16 @@ def test_IU6_your_newer_in_game_scan_reaches_the_plan_and_pages_on_the_next_re_p
     [rod] = db.view("craft", M)[0]["rows"]
     assert rod["mats_each"] == "10s"                            # the scan's 5s bars
     assert db.read_intel(M).items[BAR].cur == 1000              # the stored intelligence is analysis' own
+
+
+def test_V24_a_refresh_reports_estimates_left_on_an_older_method_and_clears_it_after(db, monkeypatch):
+    from ahsync.collect import local_scans
+    rows(db, "INSERT INTO volume_d1(market, key, day, listed, sold, expired, src) VALUES (?, ?, ?, ?, ?, ?, ?)",
+         (M, BAR, NOW // DAY - 40, 1, 1, 0, "books"))                 # no version stored, its scans long gone
+    monkeypatch.setattr(local_scans, "VOLUME_METHOD_VERSION", 2)
+    refresh.refresh_all(db, NOW, CFG)
+    line = db.status(f"volume_method:{M}")
+    assert (line.kind, line.data) == ("volume_method_old", {"market": M, "days": 1})
+    monkeypatch.setattr(local_scans, "VOLUME_METHOD_VERSION", 1)
+    refresh.refresh_all(db, NOW, CFG)
+    assert db.status(f"volume_method:{M}") is None

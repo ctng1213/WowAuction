@@ -25,7 +25,7 @@ from ahsync.recommend.store import RecommendStore
 from ahsync.state.journal import JournalReads
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
@@ -82,6 +82,10 @@ MIGRATIONS: dict[int, str] = {
     # 9: the deposit a sold mail's invoice reports, so a payout realizes without its post (T17).
     9: """
         ALTER TABLE payouts ADD COLUMN deposit INTEGER
+    """,
+    # 10: the method version of each estimated volume row, so a new method recomputes them (V24).
+    10: """
+        ALTER TABLE volume_d1 ADD COLUMN method INTEGER
     """,
 }
 BACKUP_KEEP = 3

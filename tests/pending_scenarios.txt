@@ -27,7 +27,7 @@
 
 
 # Market activity amendment (SPEC §3.3.6, §3.4 capacity, §8.8 volume backtest)
-V24 K4
+K4
 
 # Architecture amendment (SPEC §5.0)
 

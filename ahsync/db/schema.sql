@@ -31,6 +31,7 @@ CREATE INDEX IF NOT EXISTS candles_d1_market_t ON candles_d1(market, t);
 CREATE TABLE IF NOT EXISTS volume_d1(
     market TEXT NOT NULL, key INTEGER NOT NULL, day INTEGER NOT NULL,
     listed REAL, sold REAL, expired REAL, src TEXT NOT NULL, conf TEXT,
+    method INTEGER,                      -- VOLUME_METHOD_VERSION of an estimated row (V24); NULL = 1 or confirmed
     PRIMARY KEY(market, key, day, src)
 );
 

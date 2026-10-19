@@ -217,6 +217,9 @@ def message(row: StatusRow, offset_ms: int) -> tuple[str, str]:
                                                          f"previous one; the next refresh tries again."),
         "addon_file_large": ("Addon file over budget", f"{d.get('file', '?')} is {d.get('bytes', 0) // 1024} KB, over "
                                                        f"its {d.get('limit', 0) // 1024} KB budget; WoW may load slowly."),
+        "volume_method_old": ("Older sales estimates", f"{market}: {d.get('days', 0)} days of sales estimates are "
+                                                       f"from an older method; their scans are gone, so they can't be "
+                                                       f"recomputed. They age out with the 90-day history."),
         "restored": ("Database restored", f"The database was damaged and was restored from "
                                           f"{d.get('backup') or 'nothing (started empty)'}."),
     }

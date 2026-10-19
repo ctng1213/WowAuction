@@ -7,7 +7,7 @@ and an hour's sales rate are recomputed whole from the stored books.
 """
 from __future__ import annotations
 
-from ahsync.engine.volume import MAX_GAP_MS, SALES_PAIR_MAX_GAP_MS, Book, BookEntry, estimate_volume, hourly_sales
+from ahsync.engine.volume import Book, BookEntry, MAX_GAP_MS, SALES_PAIR_MAX_GAP_MS, VOLUME_METHOD_VERSION, estimate_volume, hourly_sales
 from ahsync.db.sqlite import Database
 
 HOUR_MS = 3_600_000
@@ -94,8 +94,27 @@ def recompute_book_volume(db: Database, market: str, day: int) -> dict[int, tupl
             row[1] += v.expired
             row[2] += v.listed
     rows = {key: (sold, expired, listed) for key, (sold, expired, listed) in sorted(totals.items())}
-    db.replace_volume_day(market, day, "books", rows)
+    db.replace_volume_day(market, day, "books", rows, VOLUME_METHOD_VERSION)
     return rows
+
+
+def recompute_stale_volume(db: Database, market: str) -> int:
+    """Recompute `books` volume from an older method where its order books are still stored (SPEC §3.3.6, V24).
+
+    Args:
+        db: Database, inside the caller's transaction.
+        market: Market id.
+
+    Returns:
+        Days left on an older method, because their books were pruned; Status reports them.
+    """
+    left = 0
+    for day in db.stale_volume_days(market, "books", VOLUME_METHOD_VERSION):
+        if db.local_full_scans(market, day * DAY_MS - MAX_GAP_MS, (day + 1) * DAY_MS - 1):
+            recompute_book_volume(db, market, day)
+        else:
+            left += 1
+    return left
 
 
 def _hour_ranges(times_ms: list[int]) -> list[tuple[int, int]]:
