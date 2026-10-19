@@ -175,4 +175,11 @@ describe("Options", function()
                                                   C = { Mining = { skill = 300 } } } }, "Enchanting"), 150)
     assert_eq(Options.BestSkill({}, "Enchanting"), nil)
   end)
+  it("A57 with no current supply the craft cap uses the typical daily supply; with neither there is no cap", function()
+    local Options = Boot()
+    local rod = { yieldMin = 1, yieldMax = 1 }
+    assert_eq(Options.CraftCap(rod, { refStack = 1, typicalSupply = 6 }), 3)             -- max(1, floor(0.5 × 6))
+    assert_eq(Options.CraftCap(rod, { refStack = 1, supply = 2, typicalSupply = 6 }), 1)  -- listed now wins
+    assert_eq(Options.CraftCap(rod, { refStack = 1 }), nil)
+  end)
 end)

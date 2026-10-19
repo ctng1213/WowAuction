@@ -155,10 +155,12 @@ end
 ---@param recipe table      { yieldMin, yieldMax }
 ---@param item table|nil    The product's market item (supply, refStack)
 ---@param held number|nil   Units of the product you hold
----@return number|nil       Crafts, 0 when what you hold fills the cap; nil (no cap) when the product's supply is unknown
+---@return number|nil       Crafts, 0 when what you hold fills the cap; nil (no cap) when neither the current nor
+---                          the typical supply is known
 function Options.CraftCap(recipe, item, held)
-  if not (item and item.supply) then return nil end
-  local units = math.max(item.refStack or 1, math.floor(Options.MAX_SUPPLY_SHARE * item.supply)) - (held or 0)
+  local supply = item and (item.supply or item.typicalSupply)          -- typical daily supply as a fallback (A57)
+  if not supply then return nil end
+  local units = math.max(item.refStack or 1, math.floor(Options.MAX_SUPPLY_SHARE * supply)) - (held or 0)
   if units <= 0 then return 0 end
   return math.max(1, math.floor(units / ((recipe.yieldMin + recipe.yieldMax) / 2)))
 end

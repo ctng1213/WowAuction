@@ -30,11 +30,11 @@ def intel(*items: ItemIntel) -> MarketIntelligence:
 def test_EX2_the_file_holds_compact_item_strings_curves_and_a_checked_header():
     text = market_lua.market_lua([intel(LINEN_INTEL, EMPTY, replace(EMPTY, key=OTHER))], {M: {SHORT}},
                                  {"Amaya-Grommash": M}, BUILT)
-    assert f'I[{LINEN}]="45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900;138:4:139:1120:7;"' in text
-    assert f'I[{SHORT}]=",,,,,,,0,,,,6,,,1,,1,250;;"' in text and f"I[{OTHER}]" not in text
+    assert f'I[{LINEN}]="45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900,;138:4:139:1120:7;"' in text
+    assert f'I[{SHORT}]=",,,,,,,0,,,,6,,,1,,1,250,;;"' in text and f"I[{OTHER}]" not in text
     linen_curve = market_lua.trim_curve(CURVE, False)
     assert f'C[{LINEN}]="{linen_curve}"' in text and f"C[{SHORT}]" not in text
-    strings = len("45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900;138:4:139:1120:7;") + 72 + len(",,,,,,,0,,,,6,,,1,,1,250;;")
+    strings = len("45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900,;138:4:139:1120:7;") + 72 + len(",,,,,,,0,,,,6,,,1,,1,250,;;")
     assert f'checksum = "3:{strings}"' in text and "schemaVersion = 1," in text and f"generatedAt = {BUILT}," in text
     assert f'charMarkets = {{ ["Amaya-Grommash"] = "{M}" }}' in text
     assert f'["{M}"] = {{ observationsUntil = {BUILT - HOUR}, curveHour = {BUILT // HOUR}, I = I1, C = C1, D = D1 }},' in text
@@ -68,7 +68,7 @@ def test_A23_disenchantable_exported_items_carry_their_skill_and_kind_and_count_
     text = market_lua.market_lua([intel(LINEN_INTEL, replace(EMPTY, key=OTHER))], {}, {}, BUILT,
                                  {LINEN: "1,2,18,a", OTHER: "1,2,18,w"})
     assert f'D[{LINEN}]="1,2,18,a"' in text and f"D[{OTHER}]" not in text               # OTHER isn't exported
-    strings = len("45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900;138:4:139:1120:7;") + 72 + len("1,2,18,a")
+    strings = len("45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900,;138:4:139:1120:7;") + 72 + len("1,2,18,a")
     assert f'checksum = "3:{strings}"' in text
 
 
@@ -85,3 +85,15 @@ def test_EX6_vendor_prices_are_exported_sorted_by_key_outside_the_checksum():
     assert "  vendor = { [2320] = 10, [4470] = 38 }," in text and "  vendor = {  }," in plain
     assert plain.split("checksum = ")[1].split(",")[0] == text.split("checksum = ")[1].split(",")[0]
 
+
+
+def test_EX10_each_item_ends_in_its_typical_daily_supply():
+    from dataclasses import replace
+
+    from ahsync.export.market_lua import item_text
+    linen = ItemIntel(LINEN, 45, 20, 3_600_000, 49, 49, 40, 60, 0.0, 48.0, 0.0, 48.0, "ahf", {"ahf": 7}, 45, 20, 0.9,
+                      False, 42.0, 86, 93, None, ())
+    assert item_text(replace(linen, median_daily_supply=70)).split(";")[0].endswith(",93,86,,45,20,42,0,900,70")
+    unseen = item_text(replace(linen, units_on_ah=None, median_daily_supply=40)).split(";")[0].split(",")
+    assert (unseen[10], unseen[-1], len(unseen)) == ("", "40", 19)
+    assert item_text(linen).split(";")[0].endswith(",")
