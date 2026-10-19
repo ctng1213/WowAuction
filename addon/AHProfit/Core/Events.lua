@@ -17,6 +17,7 @@ local timers = {}           -- debounce key -> the one closure passed to the tim
 local combatQueue = {}      -- key -> function to run when combat ends
 local combatOrder = {}      -- keys in the order they were first queued
 local errors = {}           -- most recent handler errors, oldest first
+local traces = {}           -- most recent capture decisions, oldest first (diagnostics, §6)
 local inCombat = Adapter.InCombat()
 local frame = Adapter.CreateEventFrame()
 
@@ -140,6 +141,26 @@ end
 ---@return boolean  true between PLAYER_REGEN_DISABLED and PLAYER_REGEN_ENABLED
 function Events.InCombat()
   return inCombat
+end
+
+--- Run a function protected; an error is kept for the diagnostics instead of raised (§6).
+---@param fn function  Function to run
+---@return boolean     true when it ran without error
+function Events.Protected(fn, ...)
+  return SafeCall(fn, ...)
+end
+
+--- Keep a short note of a capture decision for the diagnostics (§6, A54, A55); the last 10 are kept.
+---@param text string
+function Events.Trace(text)
+  if #traces >= MAX_ERRORS then table.remove(traces, 1) end
+  traces[#traces + 1] = text
+end
+
+--- The capture decisions noted this session, oldest first (at most 10).
+---@return string[]
+function Events.Traces()
+  return traces
 end
 
 --- Errors caught from handlers and queued work, oldest first (at most 10).

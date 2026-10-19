@@ -82,7 +82,9 @@ function Mail.OnTakeMoney(index)
   local db = DB.Get()
   if not db then return end
   local m = Adapter.ReadSoldMailMoney(index, function(name) return Mail.KeyByName(db, name) end)
-  if m then Mail.RecordPayout(db, m, Adapter.NowMs()) end
+  local added = m and Mail.RecordPayout(db, m, Adapter.NowMs())
+  Events.Trace("take " .. tostring(index) .. " " .. Adapter.DescribeMail(index) .. " -> "
+               .. (added and "payout" or m and "seen before" or "not a sold mail"))
 end
 
 --- Read the mailbox's auction mail into events.
@@ -104,9 +106,10 @@ local function OnMailFrame(event)
   else Events.Unregister("MAIL_INBOX_UPDATE", OnInbox) end
 end
 
---- PLAYER_LOGIN: hook the money takes; a failure only loses payouts (shown in the diagnostics).
+--- PLAYER_LOGIN: hook the money takes; a failure only loses payouts and shows in the diagnostics.
 local function OnLogin()
-  pcall(Adapter.HookTakeMoney, function(index) pcall(Mail.OnTakeMoney, index) end)
+  local hooked = Events.Protected(Adapter.HookTakeMoney, function(index) Events.Protected(Mail.OnTakeMoney, index) end)
+  if not hooked then Events.Trace("take: not hooked") end
 end
 
 Events.Register("PLAYER_LOGIN", OnLogin)

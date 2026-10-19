@@ -35,5 +35,6 @@ describe("Crafts", function()
     local events = {}
     for _, e in ipairs(AHProfitDB.events) do events[#events + 1] = e.type .. " " .. e.key .. " " .. e.results end
     assert_eq(events, { "disenchant 4570 10938,1;10940,3" })
+    assert_eq(AHProfit.Events.Traces(), { "de start 4570", "de stopped", "de start 4570", "de loot 2 -> disenchant" })
   end)
 end)

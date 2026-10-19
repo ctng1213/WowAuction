@@ -21,6 +21,7 @@ local disenchanting               -- { key, cast } from a Disenchant's start unt
 function Crafts.OnCastStart(_, unit, _guid, spellId)
   if unit == "player" and spellId == Crafts.DISENCHANT then
     disenchanting = { key = Adapter.LockedBagItem(), cast = false }
+    Events.Trace("de start " .. tostring(disenchanting.key))
   end
 end
 
@@ -30,7 +31,10 @@ end
 ---@param _guid string
 ---@param spellId number
 function Crafts.OnCastStopped(_, unit, _guid, spellId)
-  if unit == "player" and spellId == Crafts.DISENCHANT then disenchanting = nil end
+  if unit == "player" and spellId == Crafts.DISENCHANT and disenchanting then
+    disenchanting = nil
+    Events.Trace("de stopped")
+  end
 end
 
 --- Loot as a disenchant's results.
@@ -55,9 +59,10 @@ end
 function Crafts.OnLoot()
   local de, db = disenchanting, DB.Get()
   disenchanting = nil
-  if not (de and de.cast and de.key and db) then return end
+  if not (de and de.cast and db) then return end
   local loot = Adapter.ReadLoot()
-  if #loot == 0 then return end
+  Events.Trace("de loot " .. #loot .. " -> " .. ((de.key and #loot > 0) and "disenchant" or "none"))
+  if not de.key or #loot == 0 then return end
   DB.AppendEvent(db, { type = "disenchant", char = Characters.CurrentId(), at = Adapter.NowMs(), key = de.key,
                        results = Crafts.EncodeResults(loot) })
 end

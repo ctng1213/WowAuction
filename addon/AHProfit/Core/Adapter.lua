@@ -758,6 +758,16 @@ function Adapter.ReadSoldMailMoney(index, nameToKey)
   return { key = key, qty = count or 1, money = money, daysLeft = daysLeft or 30 }
 end
 
+--- A mail's money, invoice type and item, for the diagnostics trace (A54).
+---@param index number  Inbox index
+---@return string       "money=..|invoice=..|item=.." ("nil" for what isn't there)
+function Adapter.DescribeMail(index)
+  local money = GetInboxHeaderInfo and select(5, GetInboxHeaderInfo(index))
+  local invoice, item
+  if GetInboxInvoiceInfo then invoice, item = GetInboxInvoiceInfo(index) end
+  return "money=" .. tostring(money) .. " invoice=" .. tostring(invoice) .. " item=" .. tostring(item)
+end
+
 --- UNVERIFIED: GetInboxHeaderInfo(i) (subject 4th, daysLeft 7th), GetInboxInvoiceInfo(i) returning
 --- invoiceType ("seller" | "buyer"), itemName, playerName, bid, buyout, deposit, consignment, moneyDelay,
 --- etaHour, etaMin, count, and the subjects AUCTION_EXPIRED_MAIL_SUBJECT, AUCTION_REMOVED_MAIL_SUBJECT and

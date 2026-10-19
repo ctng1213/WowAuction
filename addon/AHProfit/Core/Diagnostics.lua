@@ -56,7 +56,8 @@ local lastMerchant = nil   -- DescribeMerchant() text from the last merchant thi
 local lastTradeSkill = nil -- DescribeTradeSkill() text from the last trade skill window this session
 
 --- Build the diagnostics table from the current session.
----@return table  { at, client, apis, errors, skillLines, merchant, tradeSkill, namespaces, professions, setupError, scan } (SPEC §2.2.1)
+---@return table  { at, client, apis, errors, skillLines, merchant, tradeSkill, namespaces, professions, setupError, scan,
+---                traces } (SPEC §2.2.1)
 function Diagnostics.Build()
   local errors = {}
   for i, message in ipairs(Events.Errors()) do errors[i] = message end
@@ -72,6 +73,7 @@ function Diagnostics.Build()
     professions = Adapter.DescribeProfessions(),
     setupError = DB.SetupError(),
     scan = AHProfit.Scan.Replicate.Describe(),
+    traces = table.concat(Events.Traces(), ";"),
   }
 end
 

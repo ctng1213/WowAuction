@@ -86,5 +86,8 @@ describe("Mail", function()
       if e.type == "payout" then payouts[#payouts + 1] = table.concat({ e.key, e.qty, e.money, e.at - e.sentAt }, " ") end
     end
     assert_eq(payouts, { "6217 1 970 " .. DAY })                   -- 29 of 30 days left: sent a day ago
+    assert_eq(AHProfit.Events.Traces(), {
+      "take 1 money=970 invoice=seller item=Copper Rod -> payout", "take 1 money=970 invoice=seller item=Copper Rod -> seen before",
+      "take 2 money=500 invoice=nil item=nil -> not a sold mail" })
   end)
 end)
