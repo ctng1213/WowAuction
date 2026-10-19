@@ -68,8 +68,14 @@ local function Targets(charId)
   local actions = Plan.CharacterActions(charId)
   for _, a in ipairs(actions) do
     -- a.qty is already less what your confirmed purchases since the plan bought (A39, FM18)
-    if a.kind == "buy" and a.price and not a.vendor and not seen[a.key] then   -- vendor buys: not the AH (A32)
-      out[#out + 1], seen[a.key] = { key = a.key, qty = a.qty, price = a.price, why = VM.BuyReason(a, actions) }, true
+    if a.kind == "buy" and a.price and not a.vendor then                         -- vendor buys: not the AH (A32)
+      local row = seen[a.key]
+      if row then                                                                -- every planned buy of it (A65)
+        row.qty, row.price = row.qty + a.qty, math.min(row.price, a.price)
+      else
+        row = { key = a.key, qty = a.qty, price = a.price, why = VM.BuyReason(a, actions) }
+        out[#out + 1], seen[a.key] = row, row
+      end
     end
   end
   local best = Options.BestSkill(DB.Get() or {}, "Enchanting")

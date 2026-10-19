@@ -8,6 +8,15 @@ local Prices = AHProfit.Engine.Prices
 ViewModel.MIN_FLIP_MARGIN = 0.2        -- config min_flip_margin (SPEC §3.6)
 local DAY_MS = 86400000
 
+--- A planned flip whose buy is gone from the AH, kept on the Flip tab greyed out (A66).
+---@param row table  A ViewModel.FlipRows row
+---@return table     The same row, marked gone
+function ViewModel.GoneFlip(row)
+  row.gone, row.netColor, row.riskAmber = true, "muted", false
+  row.note = "gone: nothing on the AH at or below " .. row.buy .. " now"
+  return row
+end
+
 --- The most to pay each for one of the market file's flip offers: expected ÷ (1 + margin) (flips.pays, A59).
 ---@param expected number  Expected value per unit, copper
 ---@return number          Copper, rounded down

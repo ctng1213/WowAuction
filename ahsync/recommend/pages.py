@@ -7,10 +7,13 @@ fallback is the vendor price only.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 
 from ahsync.config import Config, market_settings
 from ahsync.engine import capacity, craft, disenchant, fees, profile, sellprob, views
 from ahsync.engine.de_table import DE_TABLE
+from ahsync.engine.plan import PlanAction
+from ahsync.engine.planned_crafts import chain_lines, craft_chains
 from ahsync.engine.sellprob import Supply
 from ahsync.history.reads import ItemInfo
 from ahsync.intel.contract import ItemIntel, supply_level
@@ -234,8 +237,41 @@ def _places(state: StateReader, char_ids: list[str], now_ms: int) -> dict[int, l
     return out
 
 
+def _chain_rows(state: StateReader, recipes: list[RecipeRow], planned: Sequence[PlanAction],
+                stats: dict[int, ItemIntel], items: dict[int, ItemInfo], total_gold: int, offset_ms: int) -> list[dict]:
+    """The plan's craft chains as Craft page rows (D56).
+
+    Args:
+        state: Character state (skills).
+        recipes: Known recipes (the product's profession).
+        planned: The plan's actions.
+        stats: Item key -> intelligence.
+        items: Item metadata (names).
+        total_gold: All your characters' gold, for risk.
+        offset_ms: Local time minus UTC.
+
+    Returns:
+        Rows as views.craft_row makes them, best net first.
+    """
+    names = {k: i.name for k, i in items.items()}
+    profession = {r.product: r.profession for r in recipes}
+    out = []
+    for c in craft_chains(planned):
+        f = c.final
+        trade = profession.get(f.key, "")
+        skill = state.skill_of(f.char_id, trade) if trade else None
+        product = items.get(f.key)
+        out.append(views.craft_row(views.CraftInput(
+            0, product.name if product else str(f.key), (product.quality or 1) if product else 1, trade,
+            f"{f.char_id.split('-')[0]} ({trade} {skill})" if skill is not None else f.char_id.split("-")[0],
+            "Plan", f.qty, views.craft_money(f.qty, c.mat_gold, {}, names), c.mat_gold,
+            c.sale.price if c.sale and c.sale.kind == "post" else None, c.net, _market(stats.get(f.key)), "", "",
+            chain_lines(c, names, offset_ms)), total_gold))
+    return out
+
+
 def craft_page(state: StateReader, char_ids: list[str], stats: dict[int, ItemIntel], items: dict[int, ItemInfo],
-               total_gold: int, now_ms: int, cfg: Config) -> dict:
+               total_gold: int, now_ms: int, cfg: Config, planned: Sequence[PlanAction] = (), offset_ms: int = 0) -> dict:
     """The Craft page payload (SPEC §3.4B, §3.5): the known recipes worth crafting now (D46).
 
     Args:
@@ -246,10 +282,12 @@ def craft_page(state: StateReader, char_ids: list[str], stats: dict[int, ItemInt
         total_gold: All your characters' gold.
         now_ms: Now.
         cfg: Config.
+        planned: The plan's actions: its craft chains are rows first, and their products get no own row (D56).
+        offset_ms: Local time minus UTC, for the chains' sale times.
 
     Returns:
-        {"rows": [...], "hidden": recipes not shown, "footer": text, "help": header -> tooltip}, profit highest
-        first (ties: spell id).
+        {"rows": [...], "hidden": recipes not shown, "footer": text, "help": header -> tooltip}: the plan's chains
+        best net first, then the page's own ideas, profit highest first (ties: spell id).
     """
     recipes = [r for r in state.known_recipes(char_ids) if r.product is not None]
     engine_recipes = {r.spell: craft.Recipe(r.spell, r.product, r.yield_min, r.yield_max, r.reagents, r.crafters,
@@ -263,7 +301,8 @@ def craft_page(state: StateReader, char_ids: list[str], stats: dict[int, ItemInt
     places = _places(state, char_ids, now_ms)
     have = _held_and_listed(state, char_ids)
     rows, skipped = [], {}
-    for r in recipes:
+    chain_products = {c.final.key for c in craft_chains(planned)}
+    for r in [r for r in recipes if r.product not in chain_products]:
         left = _craft_room(r, stats, have, now_ms, cfg)
         net = _product_net(stats.get(r.product), r, items, now_ms, cfg)
         option = craft.craft_option(engine_recipes[r.spell], market, by_product, net,
@@ -291,5 +330,6 @@ def craft_page(state: StateReader, char_ids: list[str], stats: dict[int, ItemInt
             value_each, option.profit, _market(stats.get(r.product)), "",
             views.stale_note([p for key in option.owned_used for p in places.get(key, ())]), lines), total_gold)))
     rows.sort(key=lambda row: (-row[0], row[1]))
-    return {"rows": [row for _, _, row in rows], "hidden": sum(skipped.values()),
-            "footer": views.craft_footer(len(rows), skipped), "help": views.COLUMN_HELP}
+    chains = _chain_rows(state, recipes, planned, stats, items, total_gold, offset_ms)
+    return {"rows": chains + [row for _, _, row in rows], "hidden": sum(skipped.values()),
+            "footer": views.craft_footer(len(rows), skipped, len(chains)), "help": views.COLUMN_HELP}

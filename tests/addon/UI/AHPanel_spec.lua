@@ -109,6 +109,23 @@ describe("AHPanel", function()
     assert_eq({ ui.shop[2].item:GetText(), ui.checked:GetText():match("of (%d+)") }, { "Silk Cloth", "2" })   -- bars all bought
   end)
 
+  it("A65 Shopping has one row per item, totalling every planned buy of it at the lower cap", function()
+    Stubs.Reset()
+    UIWorld.Market({ [2771] = UIWorld.Item(275, 80, 60), [3576] = UIWorld.Item(400, 80, 40), [2841] = UIWorld.Item(800, 80, 40) },
+                   NOW - 3600000)
+    UIWorld.Plan({ { id = "t1", kind = "buy", key = 2771, qty = 40, price = 279, at = NOW, net = -11160 },
+                   { id = "t2", kind = "craft", key = 3576, qty = 40, at = NOW, net = 0, parent = "t1" },
+                   { id = "b1", kind = "buy", key = 2771, qty = 22, price = 275, at = NOW, net = -6050 },
+                   { id = "b2", kind = "craft", key = 2841, qty = 44, at = NOW, net = 0, parent = "b1" } })
+    Stubs.Define("C_AuctionHouse", Stubs.ReplicateHouse({ auctions = {} }))
+    Stubs.Login()
+    AHWorld.Install()
+    Stubs.FireEvent("AUCTION_HOUSE_SHOW")
+    local ui = AHProfit.AHPanel.Frames()
+    assert_eq({ ui.shop[1].qty:GetText(), ui.shop[1].colB:GetText(), ui.shop[2]:IsShown(), ui.checked:GetText() },
+              { "×62", AHProfit.ViewModel.WithCoins("2s 75c"), false, "0 of 1" })
+  end)
+
   it("A24 Full scan asks for a ReplicateItems scan at most every 20 minutes", function()
     local ui = OpenAH()
     ui.scan:Click()

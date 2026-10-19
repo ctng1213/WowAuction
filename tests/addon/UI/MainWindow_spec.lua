@@ -199,9 +199,28 @@ describe("MainWindow", function()
     local row = FirstRow("flip")
     assert_eq({ row.item, row.qty, row.buy, row.sell, row.when, row.profit, row.chance:match("^%d+%%"), row.risk },
               { "Linen Cloth", "×20", VM.WithCoins("40c"), VM.WithCoins("55c"), "Sat 18:00", VM.WithCoins("+2s 10c"), "88%", "8.0%" })
-    assert_eq({ ui.rows[2].note:GetText(), ui.rows[3]:IsShown() },
-              { "post Sat 10:00, for the 18:00 peak · on the AH now from 38c", false })
+    assert_eq(ui.rows[2].note:GetText(), "post Sat 10:00, for the 18:00 peak · on the AH now from 38c")
     assert_eq(ui.footer:GetText(), VM.WithCoins("1 flip · capital needed 8s · 1 gone"))
+  end)
+
+  it("A66 a gone flip stays on the Flip tab, greyed below the others, and costs no capital", function()
+    Stubs.Reset()
+    Stubs.world.money = 10000
+    UIWorld.Market({ [4306] = UIWorld.Item(50, 86, 48), [2589] = UIWorld.Item(10, 80, 60) }, NOW - UIWorld.HOUR)
+    UIWorld.Plan({ { id = "s1", kind = "buy", key = 4306, qty = 5, price = 50, at = NOW, net = -250 },
+                   { id = "s2", kind = "post", key = 4306, qty = 5, price = 90, at = NOW, net = 400, parent = "s1", chance = 80 },
+                   { id = "l1", kind = "buy", key = 2589, qty = 4, price = 10, at = NOW, net = -40 },
+                   { id = "l2", kind = "post", key = 2589, qty = 4, price = 20, at = NOW, net = 60, parent = "l1", chance = 80 } })
+    Stubs.Login()
+    AHProfit.Scan.Replicate.LastBook = function()
+      return { at = NOW + 60000, book = { [4306] = { [60] = { [26] = 1 } }, [2589] = { [9] = { [21] = 1 } } } }
+    end
+    Stubs.Slash("/ahp")
+    AHProfit.MainWindow.ShowTab("flip")
+    local ui, VM = AHProfit.MainWindow.Frames(), AHProfit.ViewModel
+    assert_eq({ ui.rows[1].cells.flip.item:GetText(), ui.rows[3].cells.flip.item:GetText() }, { "Linen Cloth", "Silk Cloth" })
+    assert_eq(ui.rows[4].note:GetText(), "gone: nothing on the AH at or below 50c now")
+    assert_eq(ui.footer:GetText(), VM.WithCoins("1 flip · capital needed 40c · 1 gone"))
   end)
 
   it("A30 the Craft tab buys mats from a vendor and says so, up to the product's liquidity cap", function()

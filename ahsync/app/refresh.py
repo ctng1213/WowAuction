@@ -42,7 +42,7 @@ class RefreshResult:
 
 
 def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], intel_items: dict, items: dict,
-                now_ms: int, offset_ms: int, cfg: Config) -> None:
+                now_ms: int, offset_ms: int, cfg: Config) -> list:
     """Plan the market's characters and stage the plan and its Today, Week, Flip and Inventory pages (SPEC §3.4C, §3.5).
 
     Args:
@@ -54,6 +54,9 @@ def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], in
         now_ms: Now.
         offset_ms: Local time minus UTC, for the pages' days and times.
         cfg: Config.
+
+    Returns:
+        The planned actions (engine.plan.PlanAction), for the Craft page's chains (D56).
     """
     records = sell_records(db, [c for c, _ in characters], market, now_ms, cfg)      # SPEC §3.3.3
     db.store_sell_records(market, records)                                           # for the status pass (M8)
@@ -69,6 +72,7 @@ def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], in
                                         intel_items, items, offset_ms)
     for page, body in pages.items():
         db.stage_view(page, market, body, now_ms)
+    return actions
 
 
 def refresh_market(db: Database, market: str, now_ms: int, cfg: Config, result: RefreshResult,
@@ -109,14 +113,15 @@ def _stage_recommendations(db: Database, market: str, stats: dict, now_ms: int, 
     char_ids = [c for c, _ in characters]
     total_gold = sum(g for _, g in characters)
     db.stage_view("disenchant", market, disenchant_page(db, char_ids, stats, items, total_gold, now_ms, cfg), now_ms)
-    db.stage_view("craft", market, craft_page(db, char_ids, stats, items, total_gold, now_ms, cfg), now_ms)
+    planned = _stage_plan(db, market, characters, stats, items, now_ms, offset_ms, cfg)
+    db.stage_view("craft", market, craft_page(db, char_ids, stats, items, total_gold, now_ms, cfg, planned, offset_ms),
+                  now_ms)                                                                       # D56
     db.stage_view("on_ah", market, on_ah_page(db, char_ids, stats, items, now_ms, cfg), now_ms)   # D18, D53
     db.stage_view("history", market, history_page(db, char_ids, stats, items, now_ms, offset_ms), now_ms)   # D47
     sheets = [CharacterSheet(c, cls, level, faction, m, gold, cfg.budgets.get(c), recipes, updated, profs)
               for c, cls, level, faction, m, gold, recipes, updated, profs in db.character_sheets(char_ids)]
     db.stage_view("characters", market, characters_view(sheets, now_ms), now_ms)                      # D49
     db.stage_view("rules", market, rules_page(db, char_ids, market, stats, items, now_ms, offset_ms, cfg), now_ms)   # D50
-    _stage_plan(db, market, characters, stats, items, now_ms, offset_ms, cfg)
 
 
 def replan_all(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0) -> list[str]:

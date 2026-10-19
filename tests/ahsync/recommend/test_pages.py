@@ -127,3 +127,18 @@ def test_V23_with_no_current_supply_the_craft_cap_uses_the_median_daily_supply(s
     typical = {**STATS, ROD: replace(STATS[ROD], units_on_ah=None, median_daily_supply=4)}
     [rod] = craft_page(state, ["Amaya-G", "Brugan-G"], typical, ITEMS, 500_000, NOW, cfg)["rows"]
     assert rod["crafts"] == 2                                    # half of the usual 4 listed
+
+
+def test_D56_the_plans_craft_chains_come_first_and_their_products_get_no_own_row(state):
+    from ahsync.engine.plan import PlanAction
+    chain = [PlanAction("buy", "Brugan-G", BAR, 2, 1000, NOW, None, None, None, None, 0.0, -2000.0, chain="craft:2663",
+                        source="ah"),
+             PlanAction("craft", "Brugan-G", ROD, 1, None, NOW, None, None, None, None, 0.0, 0.0, chain="craft:2663"),
+             PlanAction("post", "Brugan-G", ROD, 1, 4000, NOW, None, None, None, 0.9, 3600.0, 3600.0,
+                        chain="craft:2663")]
+    page = craft_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 500_000, NOW, Config(markets=(M,)), chain, 0)
+    [rod] = page["rows"]                                          # the plan's: no own Copper Rod row besides it
+    assert (rod["product"], rod["source"], rod["crafter"], rod["profit"]) == (
+        "Copper Rod", "Plan", "Brugan (Blacksmithing 112)", "+16s")
+    assert rod["lines"] == ["buy 2 Copper Bar on the AH · 20s", "post Fri 00:00"]   # day 20000 is a Friday
+    assert page["footer"] == "1 planned · 0 recipes worth crafting"

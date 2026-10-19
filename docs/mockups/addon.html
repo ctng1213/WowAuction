@@ -388,9 +388,10 @@ const VIEWS = {
   },
   Craft: {
     ctl: '',
-    footer: `<span>3 of 5 known recipes pay now</span><span>Budget ${money(314000)}</span>`,
-    note: `<b>Craft</b>: the recipes the character you're playing knows that pay right now (SPEC §4.3, A27). Each is costed on its own against what you carry (less what you keep for yourself); Today shares the mats out, best craft first. <b>Source</b>: <b>Owned</b> (all from your bags), <b>AH</b> (all bought) or <b>Mixed</b>. <b>Mats</b> = gold for the mats to buy at the AH's current prices, "—" when you own them all. Profit counts owned mats at their hold value; crafts stop where one more would lose money. The dashboard's Craft page adds who knows it, crafted reagents (chains) and cooldowns across characters.`,
+    footer: `<span>1 planned · 3 of 4 known recipes pay now</span><span>Budget ${money(314000)}</span>`,
+    note: `<b>Craft</b>: the recipes the character you're playing knows that pay right now (SPEC §4.3, A27). AHSync's planned crafts come first (source <b>Plan</b>, A63): one row per chain for its final product, with every mat buy and intermediate craft, so each CRAFT buy on the AH panel's Shopping list is under one of them (Shopping totals an item's buys across chains, A65). The addon's own options follow. Each is costed on its own against what you carry (less what you keep for yourself); Today shares the mats out, best craft first. <b>Source</b>: <b>Owned</b> (all from your bags), <b>AH</b> (all bought) or <b>Mixed</b>. <b>Mats</b> = gold for the mats to buy at the AH's current prices, "—" when you own them all. Profit counts owned mats at their hold value; crafts stop where one more would lose money. The dashboard's Craft page adds who knows it, crafted reagents (chains) and cooldowns across characters.`,
     html: () => `<table>${head([['Product'], ['Source'], ['×', 1], ['Mats', 1], ['Profit', 1], ...PAIR, ['Risk', 1]])}
+      ${cr('Bronze Bar', 1, 'Plan', 44, 11132, 3868, 'buy 22 Copper Ore on the AH · 50s 82c<br>buy 22 Tin Ore on the AH · 60s 50c<br>craft 22 Copper Bar first<br>craft 22 Tin Bar first<br>post Sun 23:56, for the 19:00 peak')}
       ${cr('Copper Rod', 1, 'Mixed', 3, 2000, 5600, 'use 4 owned Copper Bar<br>buy 2 Copper Bar on the AH · 20s')}
       ${cr('Heavy Grinding Stone', 1, 'Owned', 4, null, 134, 'use 8 owned Heavy Stone')}
       ${cr('Linen Belt', 1, 'Mixed', 2, 150, 28, 'use 10 owned Linen Cloth<br>buy 2 Coarse Thread from a vendor · 20c')}
@@ -399,11 +400,12 @@ const VIEWS = {
   Flip: {
     ctl: '',
     footer: `<span>3 flips · capital needed ${money(36300)} · 1 gone</span><span>Budget ${money(314000)}</span>`,
-    note: `<b>Flip</b>: buy now, sell at a later peak (SPEC §3.4C.2). These are the flips AHSync's plan has for the character you're playing: it sizes them with its queue simulation, which the addon never runs (SPEC §4.0). <b>Buy</b> is the most to pay each; <b>When</b> is the peak the post is for (post 8 h before). A live scan drops a flip that is gone or now costs more, and the footer counts it. Risk above 25% of your gold is amber. The dashboard adds Seasonality Strength and Expected ROI columns.`,
+    note: `<b>Flip</b>: buy now, sell at a later peak (SPEC §3.4C.2). These are the flips AHSync's plan has for the character you're playing: it sizes them with its queue simulation, which the addon never runs (SPEC §4.0). <b>Buy</b> is the most to pay each; <b>When</b> is the peak the post is for (post 8 h before). A live scan greys a flip that is gone or now costs more and moves it to the bottom, so every FLIP buy on Shopping is still here (A66); it needs no capital and the footer counts it. Risk above 25% of your gold is amber. The dashboard adds Seasonality Strength and Expected ROI columns.`,
     html: () => `<table>${head([['Item'], ['Qty', 1], ['Buy', 1], ['Sell', 1], ['When'], ['Profit', 1], ['Chance', 1], ['Risk', 1]])}
       ${fl('Mithril Spurs', 3, 1, 30000, 45000, 'Sat 18:00', 7342, 'post Sat 10:00, for the 18:00 peak · on the AH now from 2g 95s')}
       ${fl('Silk Cloth', 1, 40, 70, 105, 'Sat 19:00', 730, 'post Sat 11:00, for the 19:00 peak')}
       ${fl('Elixir of Agility', 1, 5, 700, 1300, 'Wed 20:00', 958, 'post Wed 12:00, for the 20:00 peak')}
+      <tr class="row gone"><td>${item('Lesser Healing Potion', 1)}</td><td colspan="7" class="muted">gone: nothing on the AH at or below 50c now</td></tr>
     </table>`
   },
   Inventory: {

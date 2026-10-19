@@ -281,17 +281,18 @@ CRAFT_SKIPS = (("pay", "doesn't pay now", "don't pay now"), ("mats", "lacks mats
                ("held", "already held or listed", "already held or listed"))
 
 
-def craft_footer(shown: int, skipped: dict[str, int]) -> str:
-    """The Craft page's footer: what is shown and why the other recipes are not (D46).
+def craft_footer(shown: int, skipped: dict[str, int], planned: int = 0) -> str:
+    """The Craft page's footer: the plan's chains, what else is shown and why the other recipes are not (D46, D56).
 
     Args:
-        shown: Rows shown.
+        shown: The page's own rows shown.
         skipped: Reason ("pay", "mats", "risk", "held") -> recipes not shown for it.
+        planned: The plan's craft chains shown above them.
 
     Returns:
-        E.g. "1 recipe worth crafting · 4 not shown: 1 doesn't pay now · 1 lacks mats · …".
+        E.g. "2 planned · 1 recipe worth crafting · 4 not shown: 1 doesn't pay now · 1 lacks mats · …".
     """
-    text = f"{shown} recipe{'' if shown == 1 else 's'} worth crafting"
+    text = (f"{planned} planned · " if planned else "") + f"{shown} recipe{'' if shown == 1 else 's'} worth crafting"
     hidden = sum(skipped.values())
     if hidden:
         parts = [f"{skipped[k]} {one if skipped[k] == 1 else many}" for k, one, many in CRAFT_SKIPS if skipped.get(k)]

@@ -72,7 +72,7 @@ def test_a_full_refresh_publishes_intelligence_and_both_pages(db):
     craft, built = db.view("craft", M)
     assert built == NOW
     [rod] = craft["rows"]                                   # the enchant makes no item: not on the Craft tab
-    assert (rod["product"], rod["crafter"], rod["source"]) == ("Copper Rod", "Brugan (Blacksmithing 112)", "AH")
+    assert (rod["product"], rod["crafter"], rod["source"]) == ("Copper Rod", "Brugan (Blacksmithing 112)", "Plan")
     assert rod["crafts"] >= 1 and rod["mats_each"] == "20s" and rod["profit_class"] == "pos"
     disenchant, _ = db.view("disenchant", M)
     [gloves] = disenchant["rows"]
