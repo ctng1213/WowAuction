@@ -150,7 +150,7 @@ end
 -- ------------------------------------------------------------------ purchases (SPEC §4.3, A39)
 
 local purchasesHooked, postsHooked = false, false
--- UNVERIFIED: the AH's duration 1/2/3 as Classic's 2/8/24 h, the engine's durations (Engine/Fees, SPEC §6 item 4).
+-- The AH's duration 1/2/3 is 2/8/24 h, the engine's durations (verified on Forever 2026-10-18; SPEC §6 item 4).
 local DURATION_HOURS = { 2, 8, 24 }
 
 --- Watch AH posts without changing them (A44).

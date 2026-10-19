@@ -216,7 +216,7 @@ AHProfitDB = {
 - **Professions and known recipes follow the file.** The addon writes a character's professions whole and only ever adds known recipes. AHSync replaces that character's professions and known recipes with the file's when the file's `characters[id].updated` is at least the stored one; an older file changes nothing. So an unlearned profession disappears, and a relearned one starts again at its new skill.
 - `confirmed` starts `false` when the hook fires and turns `true` when the action is confirmed (§5.2). The same row is updated in place.
 - **How the addon captures them** (A44–A47; every call UNVERIFIED on Forever and probed in the diagnostics):
-  - `post`: hooks that only observe `C_AuctionHouse.PostCommodity(location, duration, quantity, unitPrice)` and `PostItem(location, duration, quantity, bid, buyout)`. The item is read from the bag snapshot taken before the post (the slot is empty when the hook runs); `durationH` maps the duration 1/2/3 to Classic's 2/8/24 h, the engine's durations (UNVERIFIED); the deposit is `Engine/Fees`' formula, as AHSync computes it. `AUCTION_HOUSE_AUCTION_CREATED` confirms the oldest unconfirmed post.
+  - `post`: hooks that only observe `C_AuctionHouse.PostCommodity(location, duration, quantity, unitPrice)` and `PostItem(location, duration, quantity, bid, buyout)`. The item is read from the bag snapshot taken before the post (the slot is empty when the hook runs); `durationH` maps the duration 1/2/3 to 2/8/24 h, the engine's durations (verified on Forever 2026-10-18); the deposit is `Engine/Fees`' formula, as AHSync computes it. `AUCTION_HOUSE_AUCTION_CREATED` confirms the oldest unconfirmed post.
   - `purchase` on the AH: a commodity purchase uses the unit price the AH quoted (`COMMODITY_PRICE_UPDATED` after `StartCommoditiesPurchase`), is added on `ConfirmCommoditiesPurchase` and confirmed on `COMMODITY_PURCHASE_SUCCEEDED`; a buyout (`PlaceBid` at the buyout, read with `GetAuctionInfoByID`) is confirmed on `AUCTION_HOUSE_PURCHASE_COMPLETED`. A bid below the buyout is not a purchase.
   - `purchase` from a merchant: `BuyMerchantItem(index, quantity)`, at the merchant's price per unit; confirmed at once.
   - `craft`: `UNIT_SPELLCAST_SUCCEEDED` for the player with a spell among the character's known recipes; one event per cast, `count` 1.
@@ -646,7 +646,7 @@ Missing observation periods never count as zero sales or zero supply; they are l
 
 All money is net of fees. Estimates come with a confidence level.
 
-- **Fees** (`engine/fees`): the AH cut is 5% at the faction AH. The deposit is `floor(vendor_sell × q × rate(duration))`, and it is refunded on sale (§3.3.2). The rates and durations are seeded in `fees.py` with Classic Era values (durations 2, 8 and 24 h) and must be verified in game (§6). The neutral AH (15% cut) is not planned in v1.
+- **Fees** (`engine/fees`): the AH cut is 5% at the faction AH. The deposit is `floor(vendor_sell × q × rate(duration))`, and it is refunded on sale (§3.3.2). The durations are 2, 8 and 24 h, as in Classic Era (verified on Forever 2026-10-18). The deposit rates are seeded in `fees.py` with Classic Era values and must still be verified in game (§6). The neutral AH (15% cut) is not planned in v1.
 - **Post price** `p` = `min(curOthers − 1, med7)` in copper. If one of them is nil, it uses the other. If both are nil, the item has no price: it is skipped and flagged "no price". `curOthers` leaves out your own auctions, so you never undercut yourself.
 - **Sell value** per unit, for things you don't hold yet (DE results, a craft's mats you'd buy) = `E_post(q, p) / q`, using the posting-now window (the next 8 hours).
   - `q` is the item's **reference stack**: the most common stack size in the newest book, with ties going to the smaller one. It is 1 when there is no book.
@@ -1381,7 +1381,7 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `MarketIntellig
    - The recipe reader was checked in game on 2026-10-16: Cooking 132 and First Aid 32 recipes defined, the 6 learned ones marked known, a Herbalism window (3 Forever recipes, none learned) defined only, no errors.
    - Still to check: the tooltip hook (M5), and the AH scan and the post, buy and mail hooks (M6, M6b).
 3. **Disenchant tables and skill brackets** on Forever.
-4. **AH fees and auction durations**: deposit rate per duration, 5% / 15% cut, and the available durations.
+4. **AH fees and auction durations**: deposit rate per duration and the 5% / 15% cut. The durations are verified: 2, 8 and 24 h (2026-10-18).
 5. **Time-left bands**: the bounds of short / medium / long / very long (§3.3.1).
 6. **AH search limits**: whether searches are throttled, and whether each one needs a hardware click (§4.0).
 7. **Recipe cooldown API** for transmutes and similar recipes.

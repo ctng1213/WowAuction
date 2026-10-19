@@ -2,14 +2,14 @@
 
 Ported to addon/AHProfit/Engine/Fees.lua; keep the two identical.
 
-The deposit rates and durations are seeded with Classic Era values and are
-UNVERIFIED for Forever (SPEC §6 item 4). Forever's client has
+The durations are Forever's (2, 8 and 24 h, verified 2026-10-18). The deposit rates are
+seeded with Classic Era values and are UNVERIFIED for Forever (SPEC §6 item 4). Forever's client has
 C_AuctionHouse.CalculateItemDeposit, which can confirm them in game.
 """
 from __future__ import annotations
 
 AH_CUT = 0.05                      # faction AH cut on a sale (SPEC §3.4)
-DURATIONS_H = (2, 8, 24)           # UNVERIFIED: Classic Era auction durations, shortest first
+DURATIONS_H = (2, 8, 24)           # Forever's auction durations, shortest first (verified 2026-10-18)
 # UNVERIFIED: deposit as basis points of vendor sell price × quantity, per duration.
 # Seeded as 15% per 24 h, pro rata. Integer basis points keep the floor exact in both languages.
 DEPOSIT_BP = {2: 125, 8: 500, 24: 1500}

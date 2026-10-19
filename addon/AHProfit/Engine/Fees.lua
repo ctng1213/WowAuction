@@ -1,6 +1,6 @@
 -- Engine/Fees.lua: the AH cut, deposits and auction durations (SPEC §3.4 Fees).
 -- Port of ahsync/engine/fees.py; keep the two formula-for-formula identical (CLAUDE.md).
--- UNVERIFIED for Forever (SPEC §6 item 4): rates and durations are Classic Era seeds.
+-- Forever's durations are 2, 8 and 24 h (verified 2026-10-18). UNVERIFIED (SPEC §6 item 4): the deposit rates are Classic Era seeds.
 
 local AHProfit = AHProfit
 AHProfit.Engine = AHProfit.Engine or {}
