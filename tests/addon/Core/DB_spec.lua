@@ -168,6 +168,17 @@ describe("DB.Prune", function()
     DB.Prune(db, { [A] = T }, T + HOUR)
     assert_eq(db.events, {})
   end)
+
+  it("FM20 a buy whose hook fired but that failed (not enough gold) stays an attempt and expires after 1 h", function()
+    local DB = Boot(nil)
+    local db = DB.NewDB()
+    db.events = { { id = "b", char = A, type = "purchase", at = T, key = 2589, qty = 20, price = 40, source = "ah",
+                    confirmed = false } }                    -- COMMODITY_PURCHASE_SUCCEEDED never came
+    DB.Prune(db, { [A] = T }, T + HOUR - 1)
+    assert_eq(#db.events, 1)
+    DB.Prune(db, { [A] = T }, T + HOUR)
+    assert_eq(db.events, {})
+  end)
 end)
 
 describe("DB codecs", function()

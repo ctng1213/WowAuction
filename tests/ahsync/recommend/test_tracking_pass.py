@@ -154,3 +154,13 @@ def test_K5_a_matched_post_keeps_the_chance_it_was_planned_with(db):
                             "VALUES (?, ?, ?, ?, 20, 55, ?, 1)", [("p", "p", AMAYA, LINEN, T + DAY), ("q", "q", AMAYA, ROD, T)])
     tracking_pass(db)
     assert rows(db, "SELECT post_id, p_at_post FROM posts ORDER BY post_id") == [("p", 0.62), ("q", None)]
+
+
+def test_FM20_a_failed_buy_attempt_matches_nothing_and_changes_no_cost_basis(db):
+    with db.transaction():
+        db.conn.execute("INSERT INTO purchases(event_id, char_id, key, qty, price, source, at, confirmed) "
+                        "VALUES ('try', ?, ?, 20, 40, 'ah', ?, 0)", (AMAYA, LINEN, T + HOUR))     # never confirmed
+        db.conn.execute("INSERT INTO inventory(char_id, location, key, qty, bound) VALUES (?, 'bags', ?, 20, 0)", (AMAYA, LINEN))
+    assert tracking_pass(db)["matched"] == 0
+    assert db.cost_basis() == {}                                                # the 20 Linen still cost "before tracking"
+    assert rows(db, "SELECT status FROM actions WHERE action_id = 'buy'") == [("pending",)]
