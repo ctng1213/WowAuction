@@ -140,7 +140,7 @@ Reading rules:
 
 #### 2.2.1 SavedVariables layout (format version 1)
 
-The addon has one account-wide global, `AHProfitDB` (`## SavedVariables: AHProfitDB`). This layout is the contract between `Capture/*`, which writes it, and `ingest/savedvars.py`, which reads it. A1 round-trips it. A change to it bumps `formatVersion` and adds a migration on both sides (FM13, FM23).
+The addon has one account-wide global, `AHProfitDB` (`## SavedVariables: AHProfitDB`). This layout is the contract between `Capture/*`, which writes it, and `state/savedvars.py`, which reads it. A1 round-trips it. A change to it bumps `formatVersion` and adds a migration on both sides (FM13, FM23).
 
 Field rules:
 - Money is integer copper; prices are per unit.
@@ -276,7 +276,7 @@ All the heavy lifting happens in AHSync, and only in a **full refresh**. Everyth
 - A new in-game scan updates `cur`, `curQty`, the book and the current supply for the scanned items only (`analysis.market.with_scan`, IU6): the re-plan applies your scans made after the intelligence was built to the items they priced, in memory, for the plan and the pages; the stored intelligence stays as analysis built it.
 - Hourly and live AHF data are **stored but not applied** until the next full refresh, so the numbers stay stable through the day. The exception is items you scanned in game, whose prices update immediately. The dashboard shows "prices newer than numbers · Refresh now" when newer data is waiting: each `/api/views` response carries `prices_newer`, true when the newest stored AHF price is newer than the published intelligence (IU2).
 
-**Status pass** (`plan.status_pass`, run by `sync/scheduler`). Time passing changes the plan even when no data does, so AHSync runs this once an hour at :00. It runs on precomputed options only, with no history reads and no simulation:
+**Status pass** (`recommend/status_pass.py`, run by `app/scheduler.py`). Time passing changes the plan even when no data does, so AHSync runs this once an hour at :00. It runs on precomputed options only, with no history reads and no simulation:
 - It moves `pending` actions to `late` or `missed` by the rules in §3.4.1.
 - For each post that just became `missed`, it runs the missed-peak re-plan (§3.4.0), which only compares the item's precomputed windows.
 - It re-runs the cheap budget allocation and rewrites the views and `PortfolioPlan.lua` if anything changed.
@@ -328,7 +328,7 @@ Storage rules:
 - backup = copy the file
 - handles tens of millions of rows
 
-All DB access lives in `store/` (`db.py`, plus modules split off it by responsibility, such as the SavedVariables ingest writes). Moving to Postgres would only mean replacing that package, if this ever becomes multi-user or hosted.
+All SQL lives in `db/sqlite.py` and the store modules mixed into its `Database` (`history/reads.py`, `history/writes.py`, `state/reads.py`, `state/writes.py`, `state/journal.py`, `intel/store.py`, `recommend/store.py`), each behind a reader protocol. Moving to Postgres would only mean replacing that package, if this ever becomes multi-user or hosted.
 
 ```
 items(key PK, item_id, name, quality, ilvl, class, subclass, vendor_buy, vendor_sell, stack, updated)
@@ -338,8 +338,8 @@ volume_d1(market, key, day, listed, sold, expired, src, conf, method, PK(market,
 volume_cover(market, day, src, kind, covered,                PK(market,day,src))      WITHOUT ROWID   -- how a source observed a day (§3.3.1)
 sales_h1(market, key, t, sold_per_hour,                      PK(market,key,t))        -- book-pair sales rate per hour start t (§3.3 sales_how)
 current(market, key, price, qty, at, src,                    PK(market,key,src))
-scans(scan_id PK, market, src, char_id, at, kind)            -- src: local (your scan) | ahf (Premium books); char_id null for ahf
-book_entries(scan_id, key, price, stack, band, count,        PK(scan_id,key,price,stack,band))
+scans(sid PK, scan_id UNIQUE, market, src, char_id, at, kind, coverage)   -- src: local (your scan) | ahf (Premium books) | a provider; char_id null unless local
+book_entries(sid, key, price, stack, band, count,            PK(sid,key,price,stack,band))   WITHOUT ROWID   -- sid: the scan's integer id (V38)
 auction_mail(event_id PK, char_id, key, qty, price, outcome, at)   -- index (char_id,key,at,outcome)
 payouts(event_id PK, char_id, key, qty, money, at, mail_id, realized, deposit)   -- gold taken from a sold mail; realized copper, set once (T17)
 disenchants(event_id PK, char_id, key, results, at, action_id)   -- results "key,qty;..." by key (T18)
@@ -610,7 +610,7 @@ Numbers, not labels: the engine never classifies an item as "high" or "low" liqu
 | `supply_to_volume_ratio` | `current_listed_supply ÷ estimated_sales_per_day`, in days of supply (§3.3.2 market facts). Not a time-to-sell guarantee | either input unavailable, or sales per day is 0 |
 | `volume_confidence` | 0–1: the confidence component for volume (§3.3.5 "Volume source") | — (0 without a source) |
 | `volume_observation_coverage` | 0–1: share of the last 7 days that have a sales source | — |
-| `observed_listing_turnover` | units per day that left the AH between consecutive AHF quantity observations (§3.3.1 item 4). Informational only: never used as sales | fewer than two observations a few hours apart |
+| `observed_listing_turnover` | units per day that left the AH between consecutive quantity observations at most 6 h apart over the last 7 days (§3.3.1 item 4): the units that left ÷ the hours those pairs span × 24 (`engine.volume.observed_turnover`, V37). Informational only: never used as sales. The item detail shows it apart from newly listed units per day, a different number | fewer than two observations at most 6 h apart |
 | `estimated_time_to_sell(q)` | optional: hours until the queue simulation (§3.3.2) has sold q units, posting now | sales per day unavailable, or q not sold within 48 h |
 
 **Weekly distribution.** Each of the 168 hour-of-week slots (§3.3.4) carries, over the rolling 90 days and recency-weighted like `how`:
@@ -1178,7 +1178,7 @@ The system is built as separate components that talk only through versioned cont
                                    │                               │
                                    ▼                               ▼
                        ADDON (state, own recommendations,  PORTFOLIO OPTIMIZER ──► DASHBOARD (web/)
-                       transaction journal)                 portfolio/            └► PortfolioPlan.lua (optional advice)
+                       transaction journal)                 recommend/plan.py     └► PortfolioPlan.lua (optional advice)
 ```
 
 | Component | Folder | Owns | Does not own |
@@ -1190,7 +1190,7 @@ The system is built as separate components that talk only through versioned cont
 | Export | `export/` | `MarketIntelligence.lua` (the intelligence, trimmed to the shortlist) and `PortfolioPlan.lua` (§3.5) | analysis, recommendations |
 | State Importer | `state/` | reading SavedVariables, idempotent import, character snapshots and the transaction journal, freshness per character | recommendations |
 | Desktop Recommendations | `recommend/` | per-character Disenchant, Craft, Flip, Sell options from intelligence + state | collection, history |
-| Portfolio Optimizer | `portfolio/` | the cross-character plan: capital, shared market capacity, transfers (§3.4C) | raw collection |
+| Portfolio Optimizer | `recommend/plan.py` (formulas in `engine/plan.py`, `engine/craft_plan.py`, `engine/week.py`) | the cross-character plan: capital, shared market capacity, transfers (§3.4C) | raw collection |
 | Dashboard | `web/` | showing results; writes only through its secured endpoints (§3.5) | any calculation |
 | Engine | `engine/` | the pure formulas every component above uses (§3.3, §3.4) | I/O of any kind |
 | Lifecycle | `app/` | the scheduler and the order of a refresh: analysis → recommendations → publish | formulas |
@@ -1259,24 +1259,28 @@ ahsync/
   analysis/   market.py (history → MarketIntelligence, §3.3)
   intel/      contract.py (MarketIntelligence, ItemIntel, INTEL_SCHEMA_VERSION), store.py (IntelReader/IntelWriter + SQLite)
   state/      luadata.py (WoW SavedVariables Lua parser), savedvars.py (AHProfitDB → records, §2.2.1) with savedvars_fields.py (its field converters), importer.py (records → store),
-              writes.py, reads.py (StateReader + SQLite)
-  recommend/  pages.py (Disenchant and Craft options and pages), later flips and sells
-  portfolio/  plan.py (cross-character plan, §3.4C; M4)
+              writes.py, reads.py (StateReader + SQLite), journal.py (History's rows), diagnostics.py, untracked.py
+  recommend/  pages.py (Disenchant and Craft pages), plan.py (the cross-character plan, §3.4C; M4), plan_pages.py,
+              inventory_page.py, on_ah_page.py, history_page.py, rules_page.py, status_pass.py (hourly, §3.1.1),
+              tracking_pass.py (events → plan actions), store.py (plan and page staging)
   db/         sqlite.py (the local Database: connection, migrations, backups, and every store's SQLite implementation), schema.sql
   engine/     fees.py, prices.py, profile.py (hour-of-week), volume.py, sellprob.py (incl. the P' blend), de_table.py (disenchant table, §4.5),
-              record.py (own sell record + calibration), tracking.py (event → action matching), rules.py,
+              sell_record.py (own sell record + sell-probability calibration), tracking.py (event → action matching),
               patterns.py (weekly patterns, best selling windows), confidence.py (conf %), disenchant.py, craft.py,
-              capacity.py (liquidity caps, shared market capacity, §3.4), plan.py, views.py (tab totals, sorting, filters, tooltip deltas),
-              item_key.py (item keys from bonus lists)
+              craft_plan.py (planned craft chains), flips.py, capacity.py (liquidity caps, shared market capacity, §3.4),
+              plan.py, week.py (the week's allocation), missed.py (missed peaks), cost_basis.py, untracked.py,
+              item_key.py (item keys from bonus lists), and the page builders: views.py (tab totals, sorting, filters,
+              tooltip deltas), plan_views.py, planned_crafts.py, inventory_view.py, item_detail.py, on_ah_view.py,
+              history_view.py, rules_view.py, characters_view.py, status_view.py
   export/     market_lua.py (MarketIntelligence.lua), plan_lua.py (PortfolioPlan.lua), addon_files.py (atomic writes, the shortlist)
   web/        server.py, static/
 addon/AHProfit/
-  Core/       Adapter.lua (every game API call) and AdapterAH.lua (its auction house half: panel, Sell tab, replicate scan), Events.lua, DB.lua (AHProfitDB setup, migrations, pruning; §2.2.1), Diagnostics.lua (§2.2.1), Market.lua (reads MarketIntelligence.lua: checks, lazy decode), Plan.lua (reads PortfolioPlan.lua; prunes at login)
+  Core/       Adapter.lua (every game API call) with AdapterAH.lua (its auction house half: panel, Sell tab, replicate scan) and AdapterDiagnostics.lua (its diagnostics), Events.lua, DB.lua (AHProfitDB setup, migrations, pruning; §2.2.1), Diagnostics.lua (§2.2.1), Market.lua (reads MarketIntelligence.lua: checks, lazy decode), Plan.lua (reads PortfolioPlan.lua; prunes at login)
   Capture/    Characters.lua, Professions.lua, Inventory.lua, Auctions.lua (your own auctions, A41), Mail.lua, Posts.lua, Purchases.lua, Crafts.lua
   Scan/       Search.lua, Replicate.lua
   Engine/     Fees.lua, SellProb.lua, Disenchant.lua, Craft.lua, Prices.lua   (ports of ahsync/engine)
   Recommend/  Options.lua (the addon's own Disenchant / Craft / Flip / Sell options for the shortlist, §4.0), Live.lua (listings from the last in-game scan)
-  UI/         ViewModel.lua, CraftView.lua (the Craft tab's rows), RowMenu.lua, MainWindow.lua, Tooltip.lua, AHPanel.lua, Demo.lua
+  UI/         ViewModel.lua, CraftView.lua (the Craft tab's rows), FlipView.lua (own flips), InventoryView.lua (Inventory and Reservations rows), RowMenu.lua, MainWindow.lua, Tooltip.lua, AHPanel.lua, Demo.lua
   Data/       Disenchant.lua (generated from engine/de_table.py), BonusSuffixes.lua (generated: bonus ID → suffix id, §6 item 11)
 addon/AHProfit_Data/   AHProfit_Data.toc, MarketIntelligence.lua, PortfolioPlan.lua (placeholders; AHSync generates the real ones)
 tests/
@@ -1507,9 +1511,9 @@ Each number a tab shows comes from a pure function in `ahsync/engine/`. The dash
 | Flip | `plan.flips` | R8, R13, D3, D5 |
 | Inventory | `inventory_view.inventory_view` (worth, plan cell, tiles), `item_detail.item_detail` (heatmaps, windows, the three answers), `tracking.cost_basis` | R7, R10, T7, T12, D25–D31, W9 |
 | History | `tracking.match` | T1–T8, T14–T16 |
-| Rules | `record.sell_record`, `rules.apply` | O1–O18 |
+| Rules | `sell_record.sell_record`, the rule filters in `flips`, `craft_plan`, `week` and `inventory_view` | O1–O18 |
 | Tooltip | `views.tooltip` | TT1–TT5 |
-| Status | `status_view.status_view` (alerts, cards), `sync.*`, `record.calibration` | S1–S10, D32–D36, K1–K3 |
+| Status | `status_view.status_view` (alerts, cards), `collect.catchup`, `sell_record.calibration` | S1–S10, D32–D36, K1–K3 |
 | Weekly patterns, best windows | `patterns.sell_windows`, `patterns.weighted_median` | W1–W7 |
 | Confidence % | `confidence.score` | CF1–CF4 |
 | Refresh and incremental updates | `refresh.refresh_all`, `refresh.update_items`, `plan.status_pass`, `sellprob.from_curve` | IU1–IU11 |
@@ -1544,7 +1548,7 @@ The invariants (PI1–PI17, VI1–VI3, CI1–CI3, PL1–PL3, VW1, LP1, FI1–FI2
 
 **Volume backtest.** Where both exist for the same item and day, book-estimated sales, scaled to a whole day by the hours observed, are compared with id-diff volume: the Status page reports the median ratio and the share of days within ±25%, per source, over the last 30 days (K4). A ratio far from 1 shows up before it misleads the plan. **Built** (K4): `books` is compared with every source whose cover kind is `ids` (none until a Blizzard API job exists), by `engine.volume.backtest`, on each market's Status card. Your mail is not a comparison: it sees only your own auctions.
 
-The invariants prove the formula is sensible. Only your real sales can show whether it is *right*. Every post therefore records the `P'` it was planned with (`posts.p_at_post`). `record.calibration` compares that with what actually happened:
+The invariants prove the formula is sensible. Only your real sales can show whether it is *right*. Every post therefore records the `P'` it was planned with (`posts.p_at_post`). `sell_record.calibration` compares that with what actually happened:
 
 - It groups resolved posts into buckets by predicted chance: `[0, 0.2)`, `[0.2, 0.4)`, `[0.4, 0.6)`, `[0.6, 0.8)` and `[0.8, 1]`. Each bucket includes its lower edge, and the last one also includes 1. It shows each bucket's predicted versus actual sell rate.
 - It reports the **Brier score**, the mean of `(P' − outcome)²` where outcome is 1 for sold and 0 for expired. Lower is better. Always guessing 50% scores 0.25.

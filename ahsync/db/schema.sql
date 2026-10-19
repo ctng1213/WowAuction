@@ -56,16 +56,17 @@ CREATE TABLE IF NOT EXISTS current(
 
 -- src: 'local' (your scan) | 'ahf' (Premium books); char_id NULL for ahf. kind: 'full' | 'partial'.
 -- Only kind = 'full' with coverage 1 feeds volume diffs (§5.2).
+-- sid: the integer id book_entries rows carry, so a text id isn't repeated on every row (V38).
 CREATE TABLE IF NOT EXISTS scans(
-    scan_id TEXT PRIMARY KEY, market TEXT NOT NULL, src TEXT NOT NULL, char_id TEXT,
+    sid INTEGER PRIMARY KEY, scan_id TEXT NOT NULL UNIQUE, market TEXT NOT NULL, src TEXT NOT NULL, char_id TEXT,
     at INTEGER NOT NULL, kind TEXT NOT NULL, coverage REAL NOT NULL DEFAULT 1.0
 );
 CREATE INDEX IF NOT EXISTS scans_at ON scans(at);
 
 CREATE TABLE IF NOT EXISTS book_entries(
-    scan_id TEXT NOT NULL, key INTEGER NOT NULL, price INTEGER NOT NULL, stack INTEGER NOT NULL,
+    sid INTEGER NOT NULL, key INTEGER NOT NULL, price INTEGER NOT NULL, stack INTEGER NOT NULL,
     band INTEGER NOT NULL, count INTEGER NOT NULL,
-    PRIMARY KEY(scan_id, key, price, stack, band)
+    PRIMARY KEY(sid, key, price, stack, band)
 ) WITHOUT ROWID;
 
 -- Event tables carry the addon's unique event_id (charId:timeMs:seq); ingest upserts on it (§5.2).

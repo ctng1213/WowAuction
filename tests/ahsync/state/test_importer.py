@@ -67,10 +67,16 @@ def set_age(path: Path, clock: FakeClock, age_ms: int) -> None:
     os.utime(path, ns=(mtime_ns, mtime_ns))
 
 
+# The integer scan id is a surrogate that depends on insert order (V38): compare books by their text scan id.
+_BY_SCAN_ID = {"scans": "SELECT scan_id, market, src, char_id, at, kind, coverage FROM scans",
+               "book_entries": "SELECT s.scan_id, b.key, b.price, b.stack, b.band, b.count FROM book_entries b "
+                               "JOIN scans s ON s.sid = b.sid"}
+
+
 def dump(db: Database) -> dict[str, list[tuple]]:
     """Every table's rows, sorted, for whole-database comparisons."""
     tables = [r[0] for r in rows(db, "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")]
-    return {t: sorted(rows(db, f"SELECT * FROM {t}"), key=repr) for t in tables}
+    return {t: sorted(rows(db, _BY_SCAN_ID.get(t, f"SELECT * FROM {t}")), key=repr) for t in tables}
 
 
 def event(event_id: str, kind: str, at: int, char: str = AMAYA, **fields) -> dict:

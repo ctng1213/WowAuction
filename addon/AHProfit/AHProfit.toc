@@ -6,6 +6,7 @@
 
 Core\Adapter.lua
 Core\AdapterAH.lua
+Core\AdapterDiagnostics.lua
 Data\BonusSuffixes.lua
 Data\Disenchant.lua
 Core\Events.lua
@@ -33,6 +34,7 @@ Recommend\Reserves.lua
 UI\ViewModel.lua
 UI\CraftView.lua
 UI\FlipView.lua
+UI\InventoryView.lua
 UI\RowMenu.lua
 UI\MainWindow.lua
 UI\Tooltip.lua

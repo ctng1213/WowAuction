@@ -105,7 +105,8 @@ def sqlite_history(tmp_path) -> Database:
         for key, (at, rows) in BOOK.items():
             db.conn.execute("INSERT INTO scans(scan_id, market, src, at, kind, coverage) VALUES (?, ?, 'local', ?, 'full', 1)",
                             (f"b{key}", M, at))
-            db.conn.executemany("INSERT INTO book_entries(scan_id, key, price, stack, band, count) VALUES (?, ?, ?, ?, ?, ?)",
+            db.conn.executemany("INSERT INTO book_entries(sid, key, price, stack, band, count) "
+            "VALUES ((SELECT sid FROM scans WHERE scan_id = ?), ?, ?, ?, ?, ?)",
                                 [(f"b{key}", key, *row) for row in rows])
     return db
 

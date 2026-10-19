@@ -5,7 +5,7 @@ import pytest
 
 from ahsync.engine.volume import (
     Auction, Book, BookEntry, Cover, IdBook, Volume, calibration_factor, covered_seconds, daily_volume, day_shares,
-    estimate_volume, estimate_volume_ids, expiring_fraction, group_book, hourly_sales, listing_turnover, supply_to_volume,
+    estimate_volume, estimate_volume_ids, expiring_fraction, group_book, hourly_sales, observed_turnover, listing_turnover, supply_to_volume,
 )
 from tests.support.gen import cases
 
@@ -386,3 +386,11 @@ def test_K4_backtest_median_ratio_and_days_within_25_percent():
 def test_V36_a_snapshot_groups_into_an_order_book():
     snapshot = IdBook(5, (Auction(1, LINEN, 20, 50, LONG), Auction(2, LINEN, 20, 50, LONG), Auction(3, ORE, 7, 9, SHORT)))
     assert group_book(snapshot) == Book(5, (BookEntry(LINEN, 50, 20, LONG, 2), BookEntry(ORE, 9, 7, SHORT, 1)))
+
+
+def test_V37_observed_listing_turnover_is_units_that_left_per_day_observed_never_sales():
+    ten = 10 * HOUR_MS
+    supply = [(ten + 10 * HOUR_MS, 50), (ten, 120), (ten + 2 * HOUR_MS, 80), (ten + 3 * HOUR_MS, 90)]
+    # 120 → 80 (40 left), 80 → 90 (none), 90 → 50 is 7 h later (not a pair): 40 units over 3 h → 320 a day
+    assert observed_turnover(supply, ten + 11 * HOUR_MS) == pytest.approx(320)
+    assert observed_turnover(supply, ten + 30 * 86_400_000) is None and observed_turnover([], 0) is None

@@ -144,11 +144,11 @@ class HistoryReads:
         # The recent complete scans first (newest first, ties: scan id), then only their entries:
         # a join over every stored book would read and sort all of them.
         scans = self.conn.execute(
-            "SELECT scan_id, at FROM scans WHERE market = ? AND at >= ? AND kind = 'full' AND coverage >= 1 "
+            "SELECT sid, at FROM scans WHERE market = ? AND at >= ? AND kind = 'full' AND coverage >= 1 "
             "ORDER BY at DESC, scan_id", (market, window.book_since_ms)).fetchall()
-        rank = {scan_id: (i, at) for i, (scan_id, at) in enumerate(scans)}
+        rank = {sid: (i, at) for i, (sid, at) in enumerate(scans)}
         books = _Groups(self.conn.execute(
-            f"SELECT key, scan_id, price, stack, band, count FROM book_entries WHERE scan_id IN "
+            f"SELECT key, sid, price, stack, band, count FROM book_entries WHERE sid IN "
             f"({','.join('?' * len(scans))}) ORDER BY key, price, stack, band", [s for s, _ in scans]))
         ranked = {src: i for i, src in enumerate(window.source_rank)}
         for key in keys:
@@ -319,13 +319,13 @@ class HistoryReads:
             (scan time ms, [(price, stack, band, count), ...] sorted by price), or None.
         """
         row = self.conn.execute(
-            "SELECT s.scan_id, s.at FROM scans s JOIN book_entries b ON b.scan_id = s.scan_id "
+            "SELECT s.sid, s.at FROM scans s JOIN book_entries b ON b.sid = s.sid "
             "WHERE s.market = ? AND b.key = ? AND s.at >= ? AND s.kind = 'full' AND s.coverage >= 1 "
             "ORDER BY s.at DESC, s.scan_id LIMIT 1", (market, key, since_ms)).fetchone()
         if row is None:
             return None
         entries = self.conn.execute(
-            "SELECT price, stack, band, count FROM book_entries WHERE scan_id = ? AND key = ? "
+            "SELECT price, stack, band, count FROM book_entries WHERE sid = ? AND key = ? "
             "ORDER BY price, stack, band", (row[0], key)).fetchall()
         return row[1], [tuple(e) for e in entries]
 
@@ -345,12 +345,12 @@ class HistoryReads:
             "SELECT key, price, qty, at FROM current WHERE market = ? AND src = 'local' AND at > ? "
             "AND price IS NOT NULL ORDER BY key", (market, since_ms))}
         newest = self.conn.execute(
-            "SELECT scan_id, at FROM scans WHERE market = ? AND src = 'local' AND kind = 'full' AND coverage >= 1 "
+            "SELECT sid, at FROM scans WHERE market = ? AND src = 'local' AND kind = 'full' AND coverage >= 1 "
             "AND at > ? ORDER BY at DESC, scan_id LIMIT 1", (market, since_ms)).fetchone()
         books: dict[int, tuple[int, list[tuple[int, int, int, int]]]] = {}
         if newest:
             for key, price, stack, band, count in self.conn.execute(
-                    "SELECT key, price, stack, band, count FROM book_entries WHERE scan_id = ? "
+                    "SELECT key, price, stack, band, count FROM book_entries WHERE sid = ? "
                     "ORDER BY key, price, stack, band", (newest[0],)):
                 books.setdefault(key, (newest[1], []))[1].append((price, stack, band, count))
         return prices, books
@@ -380,8 +380,8 @@ class HistoryReads:
             (key, unit price, stack, band, count), sorted.
         """
         return [tuple(r) for r in self.conn.execute(
-            "SELECT key, price, stack, band, count FROM book_entries WHERE scan_id = ? ORDER BY key, price, stack, band",
-            (scan_id,))]
+            "SELECT b.key, b.price, b.stack, b.band, b.count FROM book_entries b JOIN scans s ON s.sid = b.sid "
+            "WHERE s.scan_id = ? ORDER BY b.key, b.price, b.stack, b.band", (scan_id,))]
 
 
 class _Groups:
@@ -454,13 +454,13 @@ def _newest_book(rows: list[tuple], rank: dict[str, tuple[int, int]]) -> tuple[i
     """The newest complete book among an item's book rows.
 
     Args:
-        rows: (scan_id, price, stack, band, count) from the recent complete scans, ordered by price, stack, band.
-        rank: scan_id -> (position, at ms), position 0 for the newest scan (ties: scan id).
+        rows: (sid, price, stack, band, count) from the recent complete scans, ordered by price, stack, band.
+        rank: sid -> (position, at ms), position 0 for the newest scan (ties: scan id).
 
     Returns:
         (at ms, [(price, stack, band, count), ...]) of the newest scan listing the item; None without rows.
     """
     if not rows:
         return None
-    newest = min((row[0] for row in rows), key=lambda scan_id: rank[scan_id][0])
+    newest = min((row[0] for row in rows), key=lambda sid: rank[sid][0])
     return rank[newest][1], [(p, s, b, c) for sid, p, s, b, c in rows if sid == newest]

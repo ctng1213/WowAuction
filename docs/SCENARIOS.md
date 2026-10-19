@@ -65,9 +65,11 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | SRC4 | config `[sources."forever.pvp.horde.us"]` with primary "blizzard", rank ["blizzard", "ahf"] and a blizzard address; then bad tables | read as written, AHF's address defaulting to the market id; a bad market id, an unknown key, a rank that isn't a list, an empty primary, a non-string address or a non-table refuse to start, naming the table | sources are configured, validated |
 | V36 | a "blizzard" snapshot with auction ids at 18:00 (Linen ids 1 and 3, ×20 long; Copper Ore id 2, 200 units) and one at 19:00 (Linen id 1 gone, id 4 ×10 new at 48c; Ore 150 units); the 19:00 one delivered again | each is a gzipped file under data/snapshots/<market>/blizzard/ listed in its index, and a grouped order book (src blizzard); `current` blizzard: Linen 48c ×10, Ore 30c ×150; volume `blizzard` (kind ids): Linen 20 sold, 10 listed; Ore 50 sold; volume `books` (groups, the same two books): Linen 20 sold, 10 listed; Ore 200 sold and 150 listed (the partial buy looks like one gone, one new); hour 18 observed; delivering it again changes nothing | a provider's snapshots feed every source kind they can |
 | SRC5 | a provider names an item by id 15210 with bonus IDs 1 and 12742 (bonus 12742 is suffix 14322, "of Frost Protection"); Copper Bar 2840 with none; an item with only unknown bonus IDs | keys 15210 + 2^31 × 28644, 2840 and −15210, as the addon's Adapter.ItemKey; the Python table (ahsync/data/bonus_suffixes.json) is the addon's, pair for pair | providers key items as AHF does |
+| V37 | an item listed 120 at 10:00, 80 at 12:00, 90 at 13:00 and 50 at 20:00, with 61 newly listed per day | observed listing turnover 40 units over 3 h observed = 320/day (the 7 h gap is no pair); the item detail shows "Newly listed per day 61/day" and "Listing turnover (info only, not sales) 320/day" as two lines; neither is sales | turnover and new listings are different numbers |
+| V38 | a database with two stored books (early, late) whose rows carry their text scan id; AHSync starts | the migration gives each scan an integer id in time order and moves every book row to it; both books read back the same; storing a book again under its scan id replaces its rows in place | book rows carry a small integer, not a text id |
 | V21 | a local scan at 14:20 lists Linen at 45c (×20, ×2) and 50c (×20, ×1) | `current` local: 45c, qty 40; `candles_h1` local for 14:00: close 45c, qty 60 | a scan becomes local prices |
 
-**Sync and storage** (`sync/catchup`, `store/prune`):
+**Sync and storage** (`collect/catchup`, `history/prune`):
 
 | # | Scenario | Then |
 |---|---|---|
@@ -221,7 +223,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | R15 | three disenchantable greens each yield 2.5 Strange Dust; others list 2 dust, so its cap is max(1 stack of 1, floor(0.5 × 2) = 1) = 1; the buys are profitable | only the best-profit green is recommended (its 2.5 dust already exceeds the cap; the others would add more unsellable dust) |
 | R16 | Main and Alt could each flip 20 Linen, cap 20 per window | the plan buys 20 in total, for one character; never 20 each |
 
-**Own sell record and rules** (`engine/record`, `sellprob`, `rules`), with `k` = 4 and `struggle_streak` = 3:
+**Own sell record and rules** (`engine/sell_record`, `sellprob`, the plan's rule filters), with `k` = 4 and `struggle_streak` = 3:
 
 | # | Scenario | Then |
 |---|---|---|
@@ -425,7 +427,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 
 | # | Scenario | Then |
 |---|---|---|
-| A1 | `Capture/*` writes a SavedVariables file with characters, recipes, inventory and events | `ingest/savedvars` parses it back to the same records (round-trip) |
+| A1 | `Capture/*` writes a SavedVariables file with characters, recipes, inventory and events | `state/savedvars` parses it back to the same records (round-trip) |
 | A2 | at the AH, a full scan shows a planned flip's item cheapest at 45 c while the plan buys at or below 38 c; another flip's item is no longer listed | both buy rows are dropped from Today and the footer says "2 gone"; the rest re-sort |
 | A3 | a `MarketIntelligence.lua` with 20k items | loads in Lua 5.1 without hitting the constant limit |
 | A4 | `PortfolioPlan.lua` with `ingestedUntil` = T for Amaya and nothing for Brugan, read at login | Amaya's scans, posts, purchases, crafts and mail at or before T are removed from SavedVariables, later ones kept (unconfirmed attempts younger than 1 h stay); Brugan's rows are all kept, since his file may not have been read |

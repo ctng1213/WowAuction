@@ -63,8 +63,8 @@ def build_world(db: Database, n_items: int, hours: int) -> None:
              for k in keys for d in range(7)))
         db.conn.execute("INSERT INTO scans(scan_id, market, src, at, kind, coverage) VALUES (?,?,?,?,?,?)",
                         ("bench", M, "local", NOW - 2 * HOUR, "full", 1.0))
-        db.conn.executemany("INSERT OR IGNORE INTO book_entries(scan_id, key, price, stack, band, count) "
-                            "VALUES (?,?,?,?,?,?)",
+        db.conn.executemany("INSERT OR IGNORE INTO book_entries(sid, key, price, stack, band, count) "
+                            "VALUES ((SELECT sid FROM scans WHERE scan_id = ?),?,?,?,?,?)",
                             (("bench", k, rng.randint(10, 50_000), rng.choice([1, 5, 20]), rng.randint(1, 4),
                               rng.randint(1, 5)) for k in keys for _ in range(3)))
         db.conn.executemany("INSERT INTO characters(id, market, gold) VALUES (?,?,?)",

@@ -331,7 +331,8 @@ def test_IU6_your_newer_in_game_scan_reaches_the_plan_and_pages_on_the_next_re_p
     assert rod["mats_each"] == "20s"                            # 2 bars at 10s
     rows(db, "INSERT INTO scans(scan_id, market, src, char_id, at, kind, coverage) VALUES (?, ?, ?, ?, ?, ?, ?)",
          ("scan", M, "local", AMAYA, NOW + HOUR, "full", 1.0))
-    rows(db, "INSERT INTO book_entries(scan_id, key, price, stack, band, count) VALUES (?, ?, ?, ?, ?, ?)",
+    rows(db, "INSERT INTO book_entries(sid, key, price, stack, band, count) "
+            "VALUES ((SELECT sid FROM scans WHERE scan_id = ?), ?, ?, ?, ?, ?)",
          ("scan", BAR, 500, 1, 4, 6))
     rows(db, "INSERT INTO current(market, key, price, qty, at, src) VALUES (?, ?, ?, ?, ?, ?)",
          (M, BAR, 500, 6, NOW + HOUR, "local"))

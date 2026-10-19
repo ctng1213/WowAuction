@@ -271,6 +271,28 @@ def listing_turnover(prev_qty: int, next_qty: int, gap_ms: int, max_gap_ms: int 
     return max(0, prev_qty - next_qty)
 
 
+def observed_turnover(hourly_supply: Sequence[tuple[int, int]], now_ms: int, days: int = 7) -> float | None:
+    """Units per day that left the AH between consecutive quantity observations (SPEC §3.3.6, V37). Info only.
+
+    Args:
+        hourly_supply: (hour start ms, units listed) observations, any order.
+        now_ms: Now; observations in (now − days, now] count.
+        days: How many days back.
+
+    Returns:
+        The units that left (listing_turnover of each pair at most 6 h apart) ÷ the hours those pairs span × 24;
+        None without such a pair. Sold, expired and cancelled can't be told apart: never sales.
+    """
+    seen = sorted((t, units) for t, units in hourly_supply if now_ms - days * 86_400_000 < t <= now_ms)
+    left = gap_ms = 0
+    for (t0, q0), (t1, q1) in zip(seen, seen[1:]):
+        units = listing_turnover(q0, q1, t1 - t0)
+        if units is not None and t1 > t0:
+            left += units
+            gap_ms += t1 - t0
+    return left * 86_400_000 / gap_ms if gap_ms else None
+
+
 def supply_to_volume(current_supply: int | None, sales_per_day: float | None) -> float | None:
     """Days of supply: units listed now ÷ estimated sales per day (SPEC §3.3.6, V22).
 

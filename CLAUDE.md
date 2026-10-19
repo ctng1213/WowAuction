@@ -27,8 +27,8 @@ The source layout is in SPEC §5. It is not repeated here, so it can't drift.
 - **Tests mirror source one-to-one.** `ahsync/engine/volume.py` ↔ `tests/ahsync/engine/test_volume.py`; `addon/AHProfit/Engine/SellProb.lua` ↔ `tests/addon/Engine/SellProb_spec.lua`. A new module gets its test file in the same change.
 - **`ahsync/engine/` is pure.** No I/O, no clock, no network: data in, numbers out.
 - **`addon/AHProfit/Engine/` ports a subset of it** (the modules listed in SPEC §5). Those must stay formula-for-formula identical, including the numeric rules in SPEC §3.3: rounding, even-count medians, percentiles and weekday. A change to a ported Python module changes its Lua twin in the same change.
-- **I/O lives at the edges**: `api/`, `store/`, `ingest/`, `export/`, `web/`. They take a `transport`, `clock`, or `db` argument so tests can inject fakes.
-- **Every WoW API call goes through `addon/AHProfit/Core/Adapter.lua`** (or `Core/AdapterAH.lua`, its auction house half, split off for size). Forever's API is partly unverified, so this keeps fixes in one place. Mark guesses with `-- UNVERIFIED:`.
+- **I/O lives at the edges**: `collect/`, `db/`, `history/`, `state/`, `intel/store.py`, `export/`, `web/`. They take a `transport`, `clock`, `db` or folder argument so tests can inject fakes.
+- **Every WoW API call goes through `addon/AHProfit/Core/Adapter.lua`** (or `Core/AdapterAH.lua`, its auction house half, and `Core/AdapterDiagnostics.lua`, its diagnostics, split off for size). Forever's API is partly unverified, so this keeps fixes in one place. Mark guesses with `-- UNVERIFIED:`.
 
 ## Size limits
 
@@ -42,7 +42,7 @@ Enforced by `tests/test_conventions.py`, which fails on a missing docstring, a f
 
 Exempt from the convention checks:
 
-- **Mirroring**: `__init__.py`, `__main__.py`, `store/schema.sql`, `web/static/*`, `UI/Demo.lua`, and `tests/visual/` (scenario-based, like `tests/scenarios/`).
+- **Mirroring**: `__init__.py`, `__main__.py`, `db/schema.sql`, `data/*`, `web/static/*`, `UI/Demo.lua`, and `tests/visual/` (scenario-based, like `tests/scenarios/`).
 - **Mirroring and size**: data files `addon/AHProfit/Data/*` and the generated `addon/AHProfit_Data/*.lua` (`MarketIntelligence.lua`, `PortfolioPlan.lua`).
 - **Docstrings**: anonymous Lua functions passed inline (`frame:SetScript("OnEvent", function(...) ... end)`). Keep them a few lines long and have them call a named, documented function.
 

@@ -453,7 +453,7 @@ class StateReads:
             Item keys.
         """
         return {key for (key,) in self.conn.execute(
-            "SELECT DISTINCT e.key FROM book_entries e JOIN scans s ON s.scan_id = e.scan_id "
+            "SELECT DISTINCT e.key FROM book_entries e JOIN scans s ON s.sid = e.sid "
             "WHERE s.market = ? AND s.src = 'local' AND s.kind = 'partial' AND s.at >= ?", (market, since_ms))}
 
     def search_items(self, text: str, limit: int = 20) -> list[tuple[int, str, int]]:

@@ -74,7 +74,9 @@ def test_the_summary_and_market_activity_lines():
     assert detail["activity"] == [
         ["Est. sales per day", "48 AHF · 7 of 7 days covered"], ["Current supply", "93 units"],
         ["Supply/volume", "1.9 days"], ["Volume confidence", "90%"], ["Seasonality strength", "78"],
-        ["Listing turnover (info only, not sales)", "61/day"]]
+        ["Newly listed per day", "61/day"], ["Listing turnover (info only, not sales)", "—"]]
+    turnover = item_detail.item_detail(facts(turnover_per_day=320.0), 0)["activity"]
+    assert turnover[-1] == ["Listing turnover (info only, not sales)", "320/day"]      # V37
 
 
 def test_an_item_without_data_shows_dashes_never_zero():
@@ -84,7 +86,7 @@ def test_an_item_without_data_shows_dashes_never_zero():
                                            supply=empty), 0)
     assert detail["summary"] == "med30 — · trend −1.2%/day · no weekly data yet"     # −12.5 tenths, half up
     assert detail["answers"] == {"price": "—", "sales": "—", "best": "—"}
-    assert [value for _, value in detail["activity"]] == ["—", "—", "—", "—", "— · too little evidence", "—"]
+    assert [value for _, value in detail["activity"]] == ["—", "—", "—", "—", "— · too little evidence", "—", "—"]
     assert {c["level"] for r in detail["heat"]["price"] for c in r["cells"]} == {None}
 
 

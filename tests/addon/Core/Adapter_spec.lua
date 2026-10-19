@@ -13,9 +13,9 @@ end
 describe("Adapter", function()
   it("the .toc lists the Core and Capture files in load order", function()
     Stubs.Reset()
-    assert_eq(Stubs.TocFiles(), { "Core/Adapter.lua", "Core/AdapterAH.lua", "Data/BonusSuffixes.lua", "Data/Disenchant.lua", "Core/Events.lua", "Core/DB.lua",
+    assert_eq(Stubs.TocFiles(), { "Core/Adapter.lua", "Core/AdapterAH.lua", "Core/AdapterDiagnostics.lua", "Data/BonusSuffixes.lua", "Data/Disenchant.lua", "Core/Events.lua", "Core/DB.lua",
       "Capture/Characters.lua", "Capture/Professions.lua", "Capture/Inventory.lua", "Capture/Auctions.lua", "Capture/Mail.lua", "Scan/Replicate.lua", "Core/Diagnostics.lua",
-      "Engine/Fees.lua", "Engine/SellProb.lua", "Engine/Disenchant.lua", "Engine/Craft.lua", "Engine/Prices.lua", "Capture/Posts.lua", "Capture/Crafts.lua", "Core/Market.lua", "Core/Plan.lua", "Recommend/Live.lua", "Capture/Purchases.lua", "Recommend/Options.lua", "Recommend/Reserves.lua", "UI/ViewModel.lua", "UI/CraftView.lua", "UI/FlipView.lua", "UI/RowMenu.lua", "UI/MainWindow.lua", "UI/Tooltip.lua", "UI/AHPanel.lua" })
+      "Engine/Fees.lua", "Engine/SellProb.lua", "Engine/Disenchant.lua", "Engine/Craft.lua", "Engine/Prices.lua", "Capture/Posts.lua", "Capture/Crafts.lua", "Core/Market.lua", "Core/Plan.lua", "Recommend/Live.lua", "Capture/Purchases.lua", "Recommend/Options.lua", "Recommend/Reserves.lua", "UI/ViewModel.lua", "UI/CraftView.lua", "UI/FlipView.lua", "UI/InventoryView.lua", "UI/RowMenu.lua", "UI/MainWindow.lua", "UI/Tooltip.lua", "UI/AHPanel.lua" })
   end)
 
   it("item key of a plain item link is its item id", function()
@@ -190,16 +190,4 @@ describe("Adapter", function()
     assert_eq(Adapter.LoadSaved("AHProfitDB"), { formatVersion = 1 })
   end)
 
-  it("lists the functions inside API namespaces, sorted, and nil for a missing namespace", function()
-    local Adapter = Boot()
-    Stubs.Define("C_Fake", { Zeta = function() end, Alpha = function() end, value = 3 })
-    assert_eq(Adapter.DescribeNamespaces({ "C_Fake", "C_Missing" }), "C_Fake=Alpha Zeta;C_Missing=nil")
-  end)
-
-  it("describes the raw GetProfessions slots, keeping empty ones", function()
-    local Adapter = Boot()
-    Stubs.Define("GetProfessions", function() return 3, nil end)
-    Stubs.Define("GetProfessionInfo", function() return "Herbalism", "icon", 15, 75 end)
-    assert_eq(Adapter.DescribeProfessions(), "1|3|Herbalism|15|75;2|nil|nil|nil|nil")
-  end)
 end)

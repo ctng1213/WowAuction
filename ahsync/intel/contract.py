@@ -12,8 +12,8 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 
-INTEL_SCHEMA_VERSION = 5       # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
-                               # 5: median_daily_supply (V23)
+INTEL_SCHEMA_VERSION = 6       # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
+                               # 5: median_daily_supply (V23); 6: observed_listing_turnover (V37)
 
 
 class IntelVersionError(ValueError):
@@ -74,6 +74,7 @@ class ItemIntel:
     curve_hour: int | None = None         # hour number floor(ms / 3600000) of the curve's first row
     cur_suspect: bool = False             # cur is out of the usual range and unconfirmed: never bought from (FM5)
     median_daily_supply: int | None = None   # typical listed units, 30 days (V23); None without observations
+    observed_listing_turnover: float | None = None   # units/day that left the AH, 7 days (V37); info only, never sales
 
 
 @dataclass(frozen=True)

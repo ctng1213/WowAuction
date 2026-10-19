@@ -30,13 +30,14 @@ class DetailFacts:
     source: str | None                # main volume source: "ahf", "books", "mail"
     days_covered: int                 # days of the last 7 with any volume source
     units_on_ah: int | None
-    listed_per_day: float | None      # listing turnover: info only, never sales
+    listed_per_day: float | None      # newly listed units per day (§3.3.1)
     conf: int | None                  # confidence %
     seasonality: int | None           # 0-100; None = too little evidence
     how: Profile
     sales: Profile
     supply: Profile
     sell_windows: tuple[Window, ...] = ()     # best first
+    turnover_per_day: float | None = None   # observed listing turnover: info only, never sales (§3.3.6, V37)
 
 
 def local_slot(slot: int, offset_ms: int) -> int:
@@ -208,13 +209,15 @@ def _activity_lines(f: DetailFacts) -> list[tuple[str, str]]:
     """
     m = market_activity(None, f.conf, f.sold_per_day, f.source, f.units_on_ah)
     sales = m.sales if f.sold_per_day is None else f"{m.sales} · {f.days_covered} of 7 days covered"
-    turnover = "—" if f.listed_per_day is None else f"{round_half_up(f.listed_per_day)}/day"
+    listed = "—" if f.listed_per_day is None else f"{round_half_up(f.listed_per_day)}/day"
+    turnover = "—" if f.turnover_per_day is None else f"{round_half_up(f.turnover_per_day)}/day"
     return [
         ("Est. sales per day", sales),
         ("Current supply", "—" if f.units_on_ah is None else f"{f.units_on_ah} units"),
         ("Supply/volume", m.days),
         ("Volume confidence", "—" if f.conf is None else f"{f.conf}%"),
         ("Seasonality strength", "— · too little evidence" if f.seasonality is None else str(f.seasonality)),
+        ("Newly listed per day", listed),
         ("Listing turnover (info only, not sales)", turnover),
     ]
 

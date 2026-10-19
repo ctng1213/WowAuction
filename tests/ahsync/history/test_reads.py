@@ -51,7 +51,8 @@ def test_newest_complete_book_listing_the_item(db):
     sql(db, "INSERT INTO scans(scan_id, market, src, at, kind, coverage) VALUES (?, ?, ?, ?, ?, ?)",
         ("old", M, "local", 1 * DAY, "full", 1.0), ("new", M, "local", 2 * DAY, "full", 1.0),
         ("part", M, "local", 3 * DAY, "partial", 0.4))
-    sql(db, "INSERT INTO book_entries(scan_id, key, price, stack, band, count) VALUES (?, ?, ?, ?, ?, ?)",
+    sql(db, "INSERT INTO book_entries(sid, key, price, stack, band, count) "
+            "VALUES ((SELECT sid FROM scans WHERE scan_id = ?), ?, ?, ?, ?, ?)",
         ("old", 1, 50, 20, 3, 1), ("new", 1, 55, 20, 4, 2), ("new", 1, 45, 5, 3, 1), ("part", 1, 40, 1, 3, 1))
     assert db.newest_book(M, 1, 0) == (2 * DAY, [(45, 5, 3, 1), (55, 20, 4, 2)])
     assert db.newest_book(M, 2, 0) is None
@@ -90,7 +91,8 @@ def test_market_history_streams_the_same_values_as_the_per_item_reads(db):
         (M, 1, 0, 5, 4, None, "books"), (M, 3, 0, 1, 1, 0, "ahf"))
     sql(db, "INSERT INTO scans(scan_id, market, src, at, kind, coverage) VALUES (?, ?, ?, ?, ?, ?)",
         ("b", M, "local", HOUR, "full", 1.0), ("a", M, "ahf", HOUR, "full", 1.0), ("old", M, "local", 0, "full", 1.0))
-    sql(db, "INSERT INTO book_entries(scan_id, key, price, stack, band, count) VALUES (?, ?, ?, ?, ?, ?)",
+    sql(db, "INSERT INTO book_entries(sid, key, price, stack, band, count) "
+            "VALUES ((SELECT sid FROM scans WHERE scan_id = ?), ?, ?, ?, ?, ?)",
         ("a", 1, 47, 1, 2, 1), ("b", 1, 46, 1, 2, 1), ("old", 1, 40, 1, 1, 1), ("old", 3, 70, 1, 4, 1))
     window = HistoryWindow(0, 2 * DAY, 0, 0)
     bulk = list(db.market_history(M, window))
@@ -109,7 +111,8 @@ def test_IU6_scans_since_reads_your_newer_scan_prices_and_the_newest_complete_bo
     sql(db, "INSERT INTO scans(scan_id, market, src, at, kind, coverage) VALUES (?, ?, ?, ?, ?, ?)",
         ("old", M, "local", 1 * DAY, "full", 1.0), ("new", M, "local", 3 * DAY, "full", 1.0),
         ("part", M, "local", 4 * DAY, "partial", 0.4), ("ahf", M, "ahf", 5 * DAY, "full", 1.0))
-    sql(db, "INSERT INTO book_entries(scan_id, key, price, stack, band, count) VALUES (?, ?, ?, ?, ?, ?)",
+    sql(db, "INSERT INTO book_entries(sid, key, price, stack, band, count) "
+            "VALUES ((SELECT sid FROM scans WHERE scan_id = ?), ?, ?, ?, ?, ?)",
         ("old", 1, 50, 20, 3, 1), ("new", 1, 55, 20, 4, 2), ("new", 1, 45, 5, 3, 1), ("ahf", 1, 40, 1, 3, 1))
     sql(db, "INSERT INTO current(market, key, price, qty, at, src) VALUES (?, ?, ?, ?, ?, ?)",
         (M, 1, 45, 5, 4 * DAY, "local"), (M, 2, 9, 1, 1 * DAY, "local"), (M, 3, 7, 1, 5 * DAY, "ahf"))

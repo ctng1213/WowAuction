@@ -25,7 +25,7 @@ from ahsync.recommend.store import RecommendStore
 from ahsync.state.journal import JournalReads
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
@@ -116,6 +116,27 @@ MIGRATIONS: dict[int, str] = {
             PRIMARY KEY(market, day, src)
         ) WITHOUT ROWID;
         DROP TABLE IF EXISTS calibration
+    """,
+    # 17: book rows carry the scan's integer id, not its text id (V38): about a third smaller with hourly books.
+    17: """
+        CREATE TABLE scans_v17(
+            sid INTEGER PRIMARY KEY, scan_id TEXT NOT NULL UNIQUE, market TEXT NOT NULL, src TEXT NOT NULL, char_id TEXT,
+            at INTEGER NOT NULL, kind TEXT NOT NULL, coverage REAL NOT NULL DEFAULT 1.0
+        );
+        INSERT INTO scans_v17(scan_id, market, src, char_id, at, kind, coverage)
+            SELECT scan_id, market, src, char_id, at, kind, coverage FROM scans ORDER BY at, scan_id;
+        CREATE TABLE book_entries_v17(
+            sid INTEGER NOT NULL, key INTEGER NOT NULL, price INTEGER NOT NULL, stack INTEGER NOT NULL,
+            band INTEGER NOT NULL, count INTEGER NOT NULL,
+            PRIMARY KEY(sid, key, price, stack, band)
+        ) WITHOUT ROWID;
+        INSERT INTO book_entries_v17(sid, key, price, stack, band, count)
+            SELECT s.sid, b.key, b.price, b.stack, b.band, b.count FROM book_entries b JOIN scans_v17 s ON s.scan_id = b.scan_id;
+        DROP TABLE book_entries;
+        DROP TABLE scans;
+        ALTER TABLE scans_v17 RENAME TO scans;
+        ALTER TABLE book_entries_v17 RENAME TO book_entries;
+        CREATE INDEX IF NOT EXISTS scans_at ON scans(at)
     """,
     # 14: sell records, stored for the hourly status pass (M8).
     14: """
@@ -657,15 +678,16 @@ class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, JournalRea
         Returns:
             Number of entries written.
         """
-        data = [(scan.scan_id, *entry) for entry in entries]
         with self.transaction():
             self.conn.execute("INSERT INTO scans(scan_id, market, src, char_id, at, kind, coverage) "
                               "VALUES(?, ?, ?, ?, ?, ?, ?) ON CONFLICT(scan_id) DO UPDATE SET market = excluded.market, "
                               "src = excluded.src, char_id = excluded.char_id, at = excluded.at, kind = excluded.kind, "
                               "coverage = excluded.coverage",
                               (scan.scan_id, scan.market, scan.src, scan.char_id, scan.at, scan.kind, scan.coverage))
-            self.conn.execute("DELETE FROM book_entries WHERE scan_id = ?", (scan.scan_id,))
-            self.conn.executemany("INSERT INTO book_entries(scan_id, key, price, stack, band, count) "
+            sid = self.conn.execute("SELECT sid FROM scans WHERE scan_id = ?", (scan.scan_id,)).fetchone()[0]
+            data = [(sid, *entry) for entry in entries]
+            self.conn.execute("DELETE FROM book_entries WHERE sid = ?", (sid,))
+            self.conn.executemany("INSERT INTO book_entries(sid, key, price, stack, band, count) "
                                   "VALUES(?, ?, ?, ?, ?, ?)", data)
         return len(data)
 
@@ -710,7 +732,7 @@ class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, JournalRea
             Scans deleted.
         """
         with self.transaction():
-            self.conn.execute("DELETE FROM book_entries WHERE scan_id IN (SELECT scan_id FROM scans WHERE at < ?)",
+            self.conn.execute("DELETE FROM book_entries WHERE sid IN (SELECT sid FROM scans WHERE at < ?)",
                               (cutoff_ms,))
             return self.conn.execute("DELETE FROM scans WHERE at < ?", (cutoff_ms,)).rowcount
 

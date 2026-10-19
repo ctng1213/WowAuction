@@ -14,7 +14,8 @@ from dataclasses import replace
 from ahsync.engine import confidence, fees, patterns, prices, profile, sellprob
 from ahsync.engine.profile import Profile
 from ahsync.engine.sellprob import MarketSettings, Supply
-from ahsync.engine.volume import VOLUME_METHOD_VERSION, Cover, DailyVolume, Volume, daily_volume, median_daily_supply
+from ahsync.engine.volume import (VOLUME_METHOD_VERSION, Cover, DailyVolume, Volume, daily_volume, median_daily_supply,
+                                  observed_turnover)
 from ahsync.history.reads import HistoryReader, HistoryWindow, ItemHistory, ItemInfo
 from ahsync.intel.contract import IntelWindow, ItemIntel, MarketIntelligence
 
@@ -209,7 +210,8 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
         book_age, tuple(book or ()),
         **weekly_fields(item, med30, volume, ref, now_ms, settings, sales),
         cur_suspect=prices.suspect_price(cur.price if cur else None, p10, p90, recent),
-        median_daily_supply=median_daily_supply(item.hourly_supply, now_ms))
+        median_daily_supply=median_daily_supply(item.hourly_supply, now_ms),
+        observed_listing_turnover=observed_turnover(item.hourly_supply, now_ms))
 
 
 def with_scan(intel: MarketIntelligence, prices: dict[int, tuple[int, int, int]],

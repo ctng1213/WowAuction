@@ -231,3 +231,21 @@ def test_a_version_1_database_migrates_to_exactly_the_current_schema_and_keeps_i
     assert migrated.count("candles_h1") == 1
     migrated.close()
     fresh.close()
+
+def test_V38_book_rows_move_to_integer_scan_ids_and_read_the_same(tmp_path):
+    old = sqlite3.connect(tmp_path / "old.db")
+    old.executescript((ROOT / "tests" / "fixtures" / "schema_v1.sql").read_text(encoding="utf-8"))
+    old.execute("INSERT OR REPLACE INTO meta(name, value) VALUES ('schema_version', '1')")
+    old.executemany("INSERT INTO scans(scan_id, market, src, at, kind, coverage) VALUES (?, 'm', 'local', ?, 'full', 1)",
+                    [("late", 2000), ("early", 1000)])
+    old.executemany("INSERT INTO book_entries(scan_id, key, price, stack, band, count) VALUES (?, ?, ?, ?, ?, ?)",
+                    [("late", 2589, 50, 20, 3, 2), ("early", 2589, 45, 20, 4, 1), ("early", 2840, 500, 5, 2, 3)])
+    old.commit()
+    old.close()
+    db = Database.open(tmp_path / "old.db", T0, None)
+    assert db.conn.execute("SELECT sid, scan_id FROM scans ORDER BY sid").fetchall() == [(1, "early"), (2, "late")]
+    assert db.scan_entries("early") == [(2589, 45, 20, 4, 1), (2840, 500, 5, 2, 3)]
+    assert db.scan_entries("late") == [(2589, 50, 20, 3, 2)]
+    db.store_book(BookScan("late", "m", "local", None, 2000), [(2589, 49, 20, 3, 1)])   # a re-read replaces in place
+    assert db.scan_entries("late") == [(2589, 49, 20, 3, 1)] and db.count("scans") == 2
+    db.close()
