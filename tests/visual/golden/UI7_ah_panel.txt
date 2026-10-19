@@ -77,4 +77,5 @@ Frame AHProfitPanel 902,100 300x500
   Button AHProfitPanelRow15 910,500 284x20 (hidden)
   Button AHProfitPanelScan 1082,544 110x22 "Full scan"
   FontString - 912,578 198x10 "2 found · budget left 31   24   40  "
-  FontString - 912,528 50x10 "scanning…"
+  FontString - 912,528 187x10 "full scan: waiting for the server…"
+  Texture - 912,538 280x4

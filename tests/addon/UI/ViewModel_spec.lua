@@ -210,6 +210,18 @@ describe("ViewModel", function()
     LOOKS[6585], LOOKS[10940], LOOKS[10939], LOOKS[10978] = nil, nil, nil, nil
   end)
 
+  it("A43 the Full scan status and bar for each step of a scan", function()
+    local VM = Boot()
+    local function S(p) local s = VM.ScanStatus(p, 200); return (s.text or "-") .. " " .. tostring(s.shown) .. " " .. s.px end
+    assert_eq({ S(nil), S({ state = "read", done = 23400, total = 47667 }), S({ state = "read", done = 0, total = 0 }),
+                S({ state = "sort" }), S({ state = "encode", done = 1, total = 2 }), S({ state = "encode", done = 0, total = 0 }),
+                S({ state = "save" }), S({ state = "done", auctions = 47667, complete = false }) },
+              { "- false 0", "full scan: reading 23,400 of 47,667 true 83", "full scan: reading 0 of 0 true 0",
+                "full scan: saving true 170", "full scan: saving true 185", "full scan: saving true 200",
+                "full scan: saving true 200", "full scan done · 47,667 auctions (partial) false 0" })
+    assert_eq({ VM.Thousands(7), VM.Thousands(1234567) }, { "7", "1,234,567" })
+  end)
+
   it("flip rows: best profit first (ties: id), no live note without a scan, a post without a peak uses its own time", function()
     local VM = Boot()
     local lookOf = function() return { name = "Linen Cloth", quality = 1 } end

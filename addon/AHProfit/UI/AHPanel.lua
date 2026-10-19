@@ -41,6 +41,7 @@ local current = nil               -- the panel's last view
 local lastSearch = nil            -- the key the last search was for, until its results arrive (A38)
 local pendingSell = nil           -- { price, untilMs }: put the price back once after the AH's own (A29)
 AHPanel.REFILL_MS = 10000
+AHPanel.BAR_WIDTH = 280             -- the Full scan bar, px (A43)
 
 --- An item's look (name, quality, market activity), as the window builds it.
 ---@param key number
@@ -237,6 +238,19 @@ local function Build(anchor)
   -- The status line has a row of its own, above the buttons, so it never runs into the footer.
   ui.status = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   ui.status:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 10, 62)
+  -- The Full scan progress bar, under the status line (A43).
+  ui.bar = frame:CreateTexture(nil, "BORDER")
+  ui.bar:SetTexture(FLAT)
+  ui.bar:SetVertexColor(0.1, 0.1, 0.1)
+  ui.bar:SetSize(AHPanel.BAR_WIDTH, 4)
+  ui.bar:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 10, 58)
+  ui.fill = frame:CreateTexture(nil, "ARTWORK")
+  ui.fill:SetTexture(FLAT)
+  ui.fill:SetVertexColor(GOLD[1], GOLD[2], GOLD[3])
+  ui.fill:SetHeight(4)
+  ui.fill:SetPoint("BOTTOMLEFT", ui.bar, "BOTTOMLEFT", 0, 0)
+  ui.bar:Hide()
+  ui.fill:Hide()
   ui.empty = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   ui.empty:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -(shopTop + 44))
   ui.empty:SetSize(AHPanel.WIDTH - 24, 26)          -- wraps onto a second line inside the panel
@@ -336,11 +350,20 @@ end
 
 --- Full scan: ask for a whole-AH scan, at most every 20 minutes.
 function AHPanel.FullScan()
-  local asked, waitMinutes = Replicate.RequestScan()
+  local _, waitMinutes = Replicate.RequestScan()
   if not ui then return end
-  if asked then ui.status:SetText("scanning…")
-  elseif waitMinutes then ui.status:SetText("next scan in " .. waitMinutes .. " min")
-  else ui.status:SetText("scan already running") end
+  if waitMinutes then return ui.status:SetText("next scan in " .. waitMinutes .. " min") end
+  AHPanel.ShowScan()
+end
+
+--- Show where the Full scan is: the status text and the bar (A43).
+function AHPanel.ShowScan()
+  if not ui then return end
+  local s = VM.ScanStatus(Replicate.Progress(), AHPanel.BAR_WIDTH)
+  if s.text then ui.status:SetText(s.text) end
+  ui.bar:SetShown(s.shown)
+  ui.fill:SetShown(s.shown and s.px > 0)
+  if s.px > 0 then ui.fill:SetWidth(s.px) end
 end
 
 --- A purchase seen by the hooks (A39): note it and redraw.
@@ -406,6 +429,7 @@ Events.Register("COMMODITY_PURCHASE_SUCCEEDED", AHPanel.OnCommodityPurchase)
 Events.Register("COMMODITY_PURCHASE_FAILED", AHPanel.OnCommodityPurchase)
 Events.Register("ITEM_SEARCH_RESULTS_UPDATED", AHPanel.OnSellSearch)
 Replicate.OnBook(function() if ui and ui.frame:IsShown() then AHPanel.Render() end end)
+Replicate.OnProgress(function() if ui and ui.frame:IsShown() then AHPanel.ShowScan() end end)
 -- A post (or a buy) changes the bags; redraw once they have been read again (A31).
 AHProfit.Capture.Inventory.OnChange(function() if ui and ui.frame:IsShown() then AHPanel.Render() end end)
 AHProfit.RowMenu.OnChange(function() if ui and ui.frame:IsShown() then AHPanel.Render() end end)

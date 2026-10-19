@@ -110,7 +110,7 @@ describe("AHPanel", function()
   it("A24 Full scan asks for a ReplicateItems scan at most every 20 minutes", function()
     local ui = OpenAH()
     ui.scan:Click()
-    assert_eq(ui.status:GetText(), "scanning…")
+    assert_eq({ ui.status:GetText(), ui.bar:IsShown(), ui.fill:IsShown() }, { "full scan: waiting for the server…", true, false })
     ui.scan:Click()
     assert_eq(ui.status:GetText():match("^next scan in %d+ min$") ~= nil, true)
   end)
@@ -259,6 +259,31 @@ describe("AHPanel", function()
     local ui, why = AHProfit.AHPanel.Frames(), {}
     for i = 1, 3 do why[i] = ui.shop[i].item:GetText() .. " " .. ui.shop[i].why:GetText() end
     assert_eq(why, { "Copper Bar CRAFT", "Silk Cloth FLIP", Stubs.ITEM_NAMES[6585] .. " DE" })
+  end)
+
+  it("A43 Full scan shows its progress: waiting, reading n of total, saving, done; or no answer", function()
+    Stubs.Reset()
+    local auctions = {}
+    for i = 1, 400 do auctions[i] = Stubs.Auction(2589, 40 + i % 5, 20, 3) end
+    local house = { auctions = auctions, costMs = 0.5, answers = false }    -- slow rows: a couple per step
+    Stubs.Define("C_AuctionHouse", Stubs.ReplicateHouse(house))
+    UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48) }, NOW - 3600000)
+    Stubs.Login()
+    AHWorld.Install()
+    Stubs.FireEvent("AUCTION_HOUSE_SHOW")
+    local ui = AHProfit.AHPanel.Frames()
+    ui.scan:Click()                                               -- the server doesn't answer
+    assert_eq(ui.status:GetText(), "full scan: waiting for the server…")
+    Stubs.Advance(61)
+    assert_eq({ ui.status:GetText(), ui.bar:IsShown() }, { "no answer: another addon may have scanned recently", false })
+    Stubs.FireEvent("REPLICATE_ITEM_LIST_UPDATE")                 -- another addon's scan arrives
+    local done, total = ui.status:GetText():match("^full scan: reading (%d+) of (%d+)$")
+    assert_eq({ total, ui.bar:IsShown() }, { "400", true })
+    for _ = 1, 10 do Stubs.RunDueTimers() end                      -- ten more steps: one progress update
+    local later = ui.status:GetText():match("^full scan: reading (%d+) of 400$")
+    assert_eq(tonumber(later) > tonumber(done) and ui.fill:IsShown(), true)
+    Stubs.Advance(5)
+    assert_eq({ ui.status:GetText(), ui.bar:IsShown() }, { "full scan done · 400 auctions", false })
   end)
 end)
 

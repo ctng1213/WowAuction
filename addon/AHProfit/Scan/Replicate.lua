@@ -20,6 +20,8 @@ Replicate.MIN_CALL_GAP_S = 1200      -- SPEC §4.2: at most one own call per 20 
 Replicate.MAX_CALL_GAP_S = 7200      -- an unanswered call doubles the gap, up to 2 h
 Replicate.MIN_RUN_GAP_S = 60         -- a repeated update for the same answer starts no second scan
 Replicate.MAX_FULL_SCANS = 4         -- SPEC §5.1, FM22: un-ingested full scans kept
+Replicate.ANSWER_WAIT_S = 60         -- A43: an own request with no answer this long says so
+Replicate.PROGRESS_EVERY = 10        -- A43: steps between progress updates, a few a second
 
 local ahOpen = false
 local openId = 0               -- counts AH openings, so a timer from an earlier one does nothing
@@ -33,6 +35,11 @@ local stats = { calls = 0 }    -- last run's numbers, for diagnostics and /ahp p
 local warning = nil            -- status line text after dropping scans (FM22)
 local lastBook = nil           -- the last complete scan's book, kept for live prices (SPEC §4.0)
 local listeners = {}           -- called when a complete book arrives
+local progressListeners = {}   -- called when the scan's progress moves on (A43)
+local waitingSince = nil       -- our own request's time, until an answer starts a run or ANSWER_WAIT_S passes
+local timedOut = false         -- our last request got no answer
+local finishedRun = nil        -- { auctions, complete } of the last run this session
+local NotifyProgress           -- tells the progress listeners; defined with them below
 
 -- ------------------------------------------------------------------ order book
 
@@ -122,6 +129,8 @@ local function SavePhase()
     lastBook = { at = finished.at, book = finished.book }
     for _, fn in ipairs(listeners) do fn() end
   end
+  finishedRun = { auctions = finished.n, complete = finished.complete }
+  NotifyProgress()
 end
 
 --- The last complete scan's order book this session (SPEC §4.0 live prices).
@@ -134,6 +143,33 @@ end
 ---@param fn function
 function Replicate.OnBook(fn)
   listeners[#listeners + 1] = fn
+end
+
+--- Call a function when the scan's progress moves on: a run starts, every PROGRESS_EVERY steps, a
+--- phase ends, a run is saved, or a request goes unanswered (A43).
+---@param fn function
+function Replicate.OnProgress(fn)
+  progressListeners[#progressListeners + 1] = fn
+end
+
+--- Tell the progress listeners.
+NotifyProgress = function()
+  for _, fn in ipairs(progressListeners) do fn() end
+end
+
+--- Where the scan is, for the panel's progress bar (A43).
+---@return table|nil  { state = "waiting" | "read" | "sort" | "encode" | "save" | "done" | "timeout", done, total,
+---                   auctions, complete }; nil before any scan or request this session
+function Replicate.Progress()
+  if run then
+    if run.phase == "read" then return { state = "read", done = run.i, total = run.n } end
+    if run.phase == "encode" then return { state = "encode", done = run.next - 1, total = #run.items } end
+    return { state = run.phase }
+  end
+  if waitingSince then return { state = "waiting" } end
+  if timedOut then return { state = "timeout" } end
+  if finishedRun then return { state = "done", auctions = finishedRun.auctions, complete = finishedRun.complete } end
+  return nil
 end
 
 -- ------------------------------------------------------------------ reading and encoding
@@ -223,6 +259,7 @@ local function Step()
   stats.steps = stats.steps + 1
   if spent > stats.maxStepMs then stats.maxStepMs = spent end
   if spent > stats.phaseMs[phase] then stats.phaseMs[phase] = spent end
+  if run and (run.phase ~= phase or stats.steps % Replicate.PROGRESS_EVERY == 0) then NotifyProgress() end   -- A43
   if run then Adapter.After(0, ScheduleStep) end
 end
 
@@ -237,7 +274,11 @@ end
 local function OnReplicateUpdate()
   if not ahOpen or run or not DB.Get() then return end
   local now = Adapter.NowMs()
-  if lastRunStartMs and now - lastRunStartMs < Replicate.MIN_RUN_GAP_S * 1000 then return end
+  if lastRunStartMs and now - lastRunStartMs < Replicate.MIN_RUN_GAP_S * 1000 then
+    -- A scan started under a minute ago already answers our request (A43).
+    if waitingSince then waitingSince = nil; NotifyProgress() end
+    return
+  end
   local n = Adapter.NumReplicateItems()
   if n < 1 then return end   -- not yet; a later update carries the auctions
   answeredOpenId, callUnanswered, callGapS = openId, false, Replicate.MIN_CALL_GAP_S
@@ -245,6 +286,8 @@ local function OnReplicateUpdate()
   run = { n = n, i = 0, at = now, charId = Characters.CurrentId(), phase = "read", book = {}, keyCache = {} }
   stats = { calls = stats.calls, n = n, skipped = 0, skip = {}, left = {}, byId = 0, steps = 0, maxStepMs = 0, dropped = 0,
             phaseMs = { read = 0, sort = 0, encode = 0, save = 0 } }
+  waitingSince, timedOut = nil, false
+  NotifyProgress()
   Events.RunWhenSafe("scan.replicate", Step)
 end
 
@@ -276,7 +319,20 @@ function Replicate.RequestScan()
   lastCallMs, callUnanswered = now, true
   stats.calls = stats.calls + 1
   if not Adapter.RequestReplicate() then callUnanswered = false end
+  if not run then
+    waitingSince, timedOut = now, false
+    Adapter.After(Replicate.ANSWER_WAIT_S, function() Replicate.AnswerCheck(now) end)
+    NotifyProgress()
+  end
   return true, nil
+end
+
+--- ANSWER_WAIT_S after our request: no answer has started a run, so say so (A43).
+---@param since number  The request's time, ms; a later request has its own check
+function Replicate.AnswerCheck(since)
+  if waitingSince ~= since then return end
+  waitingSince, timedOut = nil, true
+  NotifyProgress()
 end
 
 --- Whether the AH window is open right now.

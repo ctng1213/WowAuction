@@ -835,6 +835,39 @@ function ViewModel.PostableRows(rows, held, limit)
 end
 
 ViewModel.WHY_LABELS = { craft = "CRAFT", flip = "FLIP", de = "DE" }
+ViewModel.READ_SHARE = 0.85            -- A43: reading fills this much of the scan bar; saving the rest
+
+--- A count with thousands separators.
+---@param n number  A whole number
+---@return string   e.g. "47,667"
+function ViewModel.Thousands(n)
+  local text = tostring(math.floor(n))
+  local out = text:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+  return (out:gsub("^,", ""))
+end
+
+--- The panel's Full scan status and bar (A43).
+---@param p table|nil   Replicate.Progress()
+---@param width number  The bar's full width, px
+---@return table        { text (nil: leave the status line alone), shown (the bar), px (its fill, 0 = none) }
+function ViewModel.ScanStatus(p, width)
+  if not p then return { shown = false, px = 0 } end
+  local read = math.floor(width * ViewModel.READ_SHARE)
+  if p.state == "waiting" then return { text = "full scan: waiting for the server…", shown = true, px = 0 } end
+  if p.state == "read" then
+    return { text = "full scan: reading " .. ViewModel.Thousands(p.done) .. " of " .. ViewModel.Thousands(p.total),
+             shown = true, px = p.total > 0 and math.floor(read * p.done / p.total) or 0 }
+  end
+  if p.state == "sort" then return { text = "full scan: saving", shown = true, px = read } end
+  if p.state == "encode" then
+    local share = p.total > 0 and p.done / p.total or 1
+    return { text = "full scan: saving", shown = true, px = read + math.floor((width - read) * share) }
+  end
+  if p.state == "save" then return { text = "full scan: saving", shown = true, px = width } end
+  if p.state == "timeout" then return { text = "no answer: another addon may have scanned recently", shown = false, px = 0 } end
+  return { text = "full scan done · " .. ViewModel.Thousands(p.auctions) .. " auctions" .. (p.complete and "" or " (partial)"),
+           shown = false, px = 0 }
+end
 
 --- Why a planned buy is made, from what follows it in its chain (A40).
 ---@param a table         The buy
