@@ -1,6 +1,7 @@
 -- UI/RowMenu.lua: the menu a right-click on an item row opens (SPEC §4.3): keep the item for
--- yourself, keep at least some, or sell it normally again (A25). A small frame of its own, so it
--- needs neither of the client's dropdown APIs.
+-- yourself, keep at least some, or sell it normally again (A25); and the item rules: don't buy or
+-- craft it, ignore it, or keep selling it with a fresh record (A53, SPEC §3.4.2). A small frame of
+-- its own, so it needs neither of the client's dropdown APIs.
 
 local AHProfit = AHProfit
 local Adapter = AHProfit.Adapter
@@ -38,7 +39,7 @@ end
 --- Build the menu the first time it opens.
 local function Build()
   local frame = Adapter.CreateFrame("Frame", "AHProfitRowMenu", UIParent, "BackdropTemplate")
-  frame:SetSize(RowMenu.WIDTH, 150)
+  frame:SetSize(RowMenu.WIDTH, 220)
   frame:SetFrameStrata("DIALOG")
   frame:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1 })
   frame:SetBackdropColor(0.03, 0.04, 0.09, 0.96)
@@ -63,7 +64,11 @@ local function Build()
   ui.ok:SetSize(50, 20)
   ui.ok:SetPoint("TOPLEFT", frame, "TOPLEFT", 84, -74)
   ui.sell = Entry(frame, "AHProfitRowMenuSell", 100, "Sell normally", function() RowMenu.Keep(nil) end)
-  ui.cancel = Entry(frame, "AHProfitRowMenuCancel", 122, "Cancel", function() RowMenu.Close() end)
+  ui.noBuy = Entry(frame, "AHProfitRowMenuNoBuy", 126, "Don't buy or craft it", function() RowMenu.SetRule("no_buy") end)
+  ui.ignore = Entry(frame, "AHProfitRowMenuIgnore", 148, "Ignore it completely", function() RowMenu.SetRule("ignore") end)
+  ui.keepSelling = Entry(frame, "AHProfitRowMenuKeepSelling", 170, "Keep selling it (start fresh)",
+                         function() RowMenu.SetRule("keep") end)
+  ui.cancel = Entry(frame, "AHProfitRowMenuCancel", 194, "Cancel", function() RowMenu.Close() end)
   frame:Hide()
   Adapter.CloseWithEscape("AHProfitRowMenu")
 end
@@ -103,13 +108,25 @@ function RowMenu.Keep(qty)
   RowMenu.Close()
 end
 
+--- Set an item rule for the menu's item, for AHSync to read (SPEC §3.4.2, A53), and close.
+---@param rule string  "no_buy", "ignore" or "keep"
+function RowMenu.SetRule(rule)
+  local db = DB.Get()
+  if db and target then
+    db.rules = db.rules or {}
+    db.rules[target.key] = { rule = rule, setAt = Adapter.NowMs() }
+    for _, fn in ipairs(listeners) do fn() end
+  end
+  RowMenu.Close()
+end
+
 --- Close the menu.
 function RowMenu.Close()
   if ui then ui.frame:Hide() end
   target = nil
 end
 
---- Call a function after a reserve changes (the window and the panel redraw).
+--- Call a function after a reserve or a rule changes (the window and the panel redraw).
 ---@param fn function
 function RowMenu.OnChange(fn)
   listeners[#listeners + 1] = fn

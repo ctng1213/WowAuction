@@ -178,7 +178,7 @@ def _activity(look: ItemLook, p: float | None) -> MarketActivity:
     return market_activity(p, look.conf, look.sold_per_day, look.source, look.units_on_ah)
 
 
-QTY_FRACTIONS = {1: "½", 2: "¼", 3: "⅛"}
+QTY_FRACTIONS = {1: "½", 2: "¼"}            # Latin-1 only: WoW's fonts lack ⅛ (shown "1/8")
 RECORD_WEIGHT, REPRICE_STEP = 4, 0.05       # config own_record_weight and reprice_step defaults (SPEC §3.6)
 
 

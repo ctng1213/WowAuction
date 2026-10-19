@@ -399,6 +399,37 @@ describe("MainWindow", function()
     Stubs.ITEM_NAMES[4471] = nil
   end)
 
+  it("A52 record lines under each row and a Needs a decision section for items not selling", function()
+    Stubs.Reset()
+    Stubs.ITEM_NAMES[2318] = "Heavy Leather"
+    UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48), [2318] = UIWorld.Item(50, 70, 10) }, NOW)
+    UIWorld.Plan({ { id = "l", kind = "post", key = 2589, qty = 20, price = 55, at = NOW, net = 1000, chance = 92 },
+                   { id = "h", kind = "post", key = 2318, qty = 5, price = 47, at = NOW, net = 100, chance = 60 } })
+    AHProfitPlan.records = { [2318] = "1;Your record (30 d): 0 of 3 sold · expired 3× while cheapest",
+                             [2589] = "0;Your record (30 d): 2 of 2 sold" }
+    Stubs.Login()
+    Stubs.Slash("/ahp")
+    local ui, texts = AHProfit.MainWindow.Frames(), {}
+    for _, r in ipairs(ui.rows) do
+      if r:IsShown() then
+        if r.note:IsShown() then texts[#texts + 1] = "note: " .. r.note:GetText()
+        elseif r.dayLabel:IsShown() then texts[#texts + 1] = "header: " .. r.dayLabel:GetText()
+        else texts[#texts + 1] = r.cells.today.action:GetText() .. " " .. r.cells.today.item:GetText() end
+      end
+    end
+    assert_eq(texts, { "POST Linen Cloth", "note: Your record (30 d): 2 of 2 sold",
+                       "POST Heavy Leather", "note: Your record (30 d): 0 of 3 sold · expired 3× while cheapest",
+                       "header: Needs a decision", "DECIDE Heavy Leather",
+                       "note: Your record (30 d): 0 of 3 sold · expired 3× while cheapest", "note: right-click: Blacklist or Keep" })
+    AHProfit.MainWindow.ShowTab("week")
+    local weekNotes = {}
+    for _, r in ipairs(ui.rows) do
+      if r:IsShown() and r.note:IsShown() and r.note:GetText():match("^Your record") then weekNotes[#weekNotes + 1] = r.note:GetText() end
+    end
+    assert_eq(#weekNotes, 2)
+    Stubs.ITEM_NAMES[2318] = nil
+  end)
+
   it("A22 the Inventory tab lists what this character holds with its worth and plan", function()
     Stubs.Reset()
     _G.AHProfitPlan = nil

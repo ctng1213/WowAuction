@@ -43,6 +43,16 @@ describe("Plan", function()
     assert_eq(Ids(AHProfitDB.events), { "e2" })
   end)
 
+  it("EX8 reads your sell records and the items flagged not selling; a file without them has none", function()
+    local Plan = LoginWithRows()
+    AHProfitPlan.records = { [2318] = "1;Your record (30 d): 0 of 3 sold", [2589] = "0;Your record (30 d): 2 of 2 sold",
+                             [9] = "junk" }
+    assert_eq({ Plan.Record(2318), Plan.Record(2589).notSelling, Plan.Record(9), Plan.Record(7), Plan.NotSelling() },
+              { { notSelling = true, line = "Your record (30 d): 0 of 3 sold" }, false, nil, nil, { 2318 } })
+    AHProfitPlan.records = nil
+    assert_eq(Plan.NotSelling(), {})
+  end)
+
   it("EX7 a vendor buy decodes as vendor; an AH buy and an older 12-field string do not", function()
     local Plan = LoginWithRows()
     assert_eq({ Plan.DecodeAction("w;buy;4470;7;38;1;0;;;pending;;;v").vendor, Plan.DecodeAction("l;buy;2589;20;45;1;0;;;pending;;;").vendor,

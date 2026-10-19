@@ -1,0 +1,11 @@
+Frame AHProfitRowMenu 690,442 190x220
+  FontString - 698,450 174x12 "Heavy Leather"
+  Button AHProfitRowMenuKeepAll 696,470 178x20 "Keep all for myself"
+  Button AHProfitRowMenuKeepSome 696,492 178x20 "Keep at least…"
+  EditBox AHProfitRowMenuAmount 704,516 60x20 (hidden)
+  Button AHProfitRowMenuOK 774,516 50x20 "OK" (hidden)
+  Button AHProfitRowMenuSell 696,542 178x20 "Sell normally"
+  Button AHProfitRowMenuNoBuy 696,568 178x20 "Don't buy or craft it"
+  Button AHProfitRowMenuIgnore 696,590 178x20 "Ignore it completely"
+  Button AHProfitRowMenuKeepSelling 696,612 178x20 "Keep selling it (start fresh)"
+  Button AHProfitRowMenuCancel 696,636 178x20 "Cancel"

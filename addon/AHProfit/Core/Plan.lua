@@ -125,6 +125,29 @@ function Plan.Rule(key)
   return rule, tonumber(setAt)
 end
 
+--- Your sell record of an item, as AHSync wrote it (SPEC §3.3.3, EX8).
+---@param key number
+---@return table|nil  { notSelling = bool, line = "Your record (30 d): …" }; nil without one
+function Plan.Record(key)
+  local s = State()
+  local text = s.status == "ok" and (s.file.records or {})[key]
+  if not text then return nil end
+  local flag, line = text:match("^([01]);(.*)$")
+  if not flag then return nil end
+  return { notSelling = flag == "1", line = line }
+end
+
+--- Every item AHSync flagged not selling (SPEC §3.3.3, A52).
+---@return number[]  Item keys, ascending
+function Plan.NotSelling()
+  local s, out = State(), {}
+  for key, text in pairs(s.status == "ok" and s.file.records or {}) do
+    if text:sub(1, 2) == "1;" then out[#out + 1] = key end
+  end
+  table.sort(out)
+  return out
+end
+
 --- PLAYER_LOGIN: every addon is loaded, so check the plan and prune what AHSync committed (A4).
 function Plan.OnLogin()
   local s = State()

@@ -200,7 +200,7 @@ def test_D42_the_record_line_shows_the_record_and_works_p_back_from_p_prime():
     from ahsync.engine.sell_record import Record
     stuck = Record(0, 3, 3, 3, False, True)
     assert plan_views.record_line(stuck, 4 * 0.8 / 7) == \
-        "Your record (30 d): 0 of 3 sold · expired 3× while cheapest · P 80% → 46% · price −14% · qty ⅛"
+        "Your record (30 d): 0 of 3 sold · expired 3× while cheapest · P 80% → 46% · price −14% · qty 1/8"
     assert plan_views.record_line(Record(2, 0, 0, 0, False, False)) == "Your record (30 d): 2 of 2 sold"
     assert plan_views.record_line(Record(0, 5, 5, 5, False, True)).endswith("qty 1/32")
     looks = {**LOOKS, BAR: replace(LOOKS[BAR], record=stuck)}

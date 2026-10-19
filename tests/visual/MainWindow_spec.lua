@@ -1,4 +1,4 @@
--- Layout snapshots of the /ahp window (SPEC §8.4 layer 2, UI1-UI4, UI9, UI11-UI14). Each scenario draws the
+-- Layout snapshots of the /ahp window (SPEC §8.4 layer 2, UI1-UI4, UI6, UI9, UI10, UI11-UI14). Each scenario draws the
 -- window with the stub frames, runs the automatic layout checks and compares the frame tree with
 -- tests/visual/golden/<scenario>.txt. `python tools/visual.py --update` accepts a change, and
 -- `--html` draws it for comparison with docs/mockups/addon.html.
@@ -139,6 +139,38 @@ describe("MainWindow layout", function()
     -- The last tab ends at x 1090, before the Min chance box at 1100.
     assert_eq(snapshot:find("AHProfitWindowTabReservations 1012,396 78x22", 1, true) ~= nil, true)
     assert_eq(ui.rows[1].cells.flip.item:GetText(), "Linen Cloth")
+  end)
+
+  it("UI10 Today with a row below Min chance and an item not selling: Needs a decision at the bottom", function()
+    Stubs.Reset()
+    Stubs.ITEM_NAMES[2318] = "Heavy Leather"
+    UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48), [2840] = UIWorld.Item(500, 60, 40), [2318] = UIWorld.Item(50, 70, 10) },
+                   NOW - UIWorld.HOUR)
+    UIWorld.Plan({ { id = "l", kind = "post", key = 2589, qty = 20, price = 55, at = NOW, net = 1000, chance = 92 },
+                   { id = "b", kind = "post", key = 2840, qty = 6, price = 500, at = NOW, net = 300, chance = 30 } })
+    AHProfitPlan.records = { [2318] = "1;Your record (30 d): 0 of 3 sold · expired 3× while cheapest · price −14% · qty 1/8" }
+    Stubs.Login()
+    Stubs.Slash("/ahp")
+    local ui = AHProfit.MainWindow.Frames()
+    Layout.Golden("UI10_decisions", ui.frame)
+    assert_eq(ui.footer:GetText():match("1 hidden") ~= nil, true)
+    Stubs.ITEM_NAMES[2318] = nil
+  end)
+
+  it("UI6 a not-selling row right-clicked: the menu with the rules fits", function()
+    Stubs.Reset()
+    Stubs.ITEM_NAMES[2318] = "Heavy Leather"
+    UIWorld.Market({ [2318] = UIWorld.Item(50, 70, 10) }, NOW - UIWorld.HOUR)
+    UIWorld.Plan({})
+    AHProfitPlan.records = { [2318] = "1;Your record (30 d): 0 of 3 sold" }
+    Stubs.Login()
+    Stubs.Slash("/ahp")
+    local ui = AHProfit.MainWindow.Frames()
+    local row = ui.rows[2]                                        -- the header, then the DECIDE row
+    row:GetScript("OnMouseUp")(row, "RightButton")
+    Layout.Golden("UI6_row_menu", AHProfit.RowMenu.Frames().frame)
+    assert_eq(row.cells.today.action:GetText(), "DECIDE")
+    Stubs.ITEM_NAMES[2318] = nil
   end)
 
   it("UI12 the Reservations tab at the minimum size: five tabs fit beside the Min chance box", function()

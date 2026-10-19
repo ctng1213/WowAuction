@@ -353,6 +353,44 @@ function ViewModel.Today(actions, nowMs, offsetMs, minChance, lookOf, totalGold)
   return { rows = rows, hidden = hidden, total = ViewModel.SignedMoney(total), count = #rows }
 end
 
+--- Add each row's sell record line as a note line of its own (A52).
+---@param rows table[]       Today or Week rows (each with key)
+---@param recordOf function  key -> { line } or nil (Plan.Record)
+---@return table[]           The same rows
+function ViewModel.AddRecords(rows, recordOf)
+  for _, row in ipairs(rows) do
+    local record = row.key and recordOf(row.key)
+    if record then
+      row.notes = row.notes or {}
+      row.notes[#row.notes + 1] = record.line
+    end
+  end
+  return rows
+end
+
+--- Today's Needs a decision section (A52, UI10): a header, then a DECIDE row per item AHSync
+--- flagged not selling and you haven't decided on in game since.
+---@param keys number[]      Plan.NotSelling()
+---@param recordOf function  key -> { line }
+---@param lookOf function    key -> look
+---@param decided table      key -> true when you set a rule for it in game (A53)
+---@return table[]           Lines; empty without a flagged item
+function ViewModel.Decisions(keys, recordOf, lookOf, decided)
+  local lines = {}
+  for _, key in ipairs(keys) do
+    if not decided[key] then
+      local look = lookOf(key)
+      lines[#lines + 1] = { key = key, kind = "decide", action = "DECIDE", item = look.name, quality = look.quality,
+                            qty = "", each = "—", total = "—", net = "—", netColor = "muted", chance = "—", volume = "—",
+                            risk = "", riskAmber = false,
+                            notes = { recordOf(key).line, "right-click: Blacklist or Keep" } }
+    end
+  end
+  if #lines == 0 then return lines end
+  table.insert(lines, 1, { header = true, label = "Needs a decision", total = "", netColor = "muted" })
+  return lines
+end
+
 --- The Week tab: a rolling 7 days from today's local midnight, by day (D11, D17).
 ---@param actions table[]  Plan actions
 ---@param nowMs number

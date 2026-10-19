@@ -66,7 +66,8 @@ local COLORS = { pos = { 0.24, 0.86, 0.31 }, neg = { 1, 0.29, 0.24 }, muted = { 
 local QUALITY = { [0] = { 0.62, 0.62, 0.62 }, [1] = { 1, 1, 1 }, [2] = { 0.12, 1, 0 }, [3] = { 0, 0.44, 0.87 },
                   [4] = { 0.64, 0.21, 0.93 }, [5] = { 1, 0.5, 0 } }
 local BADGES = { buy = { 0.37, 0.71, 1 }, post = { 1, 0.82, 0 }, de = { 0.7, 0.48, 1 }, craft = { 1, 0.6, 0.24 },
-                 vendor = { 0.67, 0.67, 0.67 }, mail = { 0.56, 0.83, 1 }, hold = { 1, 0.69, 0.18 } }
+                 vendor = { 0.67, 0.67, 0.67 }, mail = { 0.56, 0.83, 1 }, hold = { 1, 0.69, 0.18 },
+                 decide = { 1, 0.29, 0.24 } }
 local DOTS = { high = COLORS.pos, medium = COLORS.amber, low = COLORS.muted }
 local FLAT = "Interface\\Buttons\\WHITE8X8"
 -- The Min chance box's arrow: the chat frame's scroll-down icon, which every client has.
@@ -618,9 +619,18 @@ local function Lines(nowMs, gold)
   if view.tab == "today" then actions, gone = CharacterActions(charId, nowMs) end
   if view.tab == "today" then
     local today = VM.Today(actions, nowMs, offset, view.minChance, LookOf, gold)
-    return VM.WithNotes(today.rows), VM.TodayFooter(today, view.minChance, gone), "Nothing to do in the next hour."
+    local lines = VM.WithNotes(VM.AddRecords(today.rows, Plan.Record))
+    local decided = {}
+    for key, r in pairs((DB.Get() or {}).rules or {}) do
+      if type(r) == "table" and r.rule ~= "none" then decided[key] = true end
+    end
+    for _, line in ipairs(VM.WithNotes(VM.Decisions(Plan.NotSelling(), Plan.Record, LookOf, decided))) do
+      lines[#lines + 1] = line                                     -- Needs a decision, below the rows (A52)
+    end
+    return lines, VM.TodayFooter(today, view.minChance, gone), "Nothing to do in the next hour."
   end
   local week = VM.Week(actions, nowMs, offset, LookOf, gold)
+  for _, day in ipairs(week.days or {}) do VM.AddRecords(day.rows or {}, Plan.Record) end
   return VM.WithNotes(VM.WeekLines(week)), "Week total " .. week.total, "Nothing planned this week."
 end
 

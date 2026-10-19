@@ -75,4 +75,32 @@ describe("RowMenu", function()
     assert_eq({ menu.frame:IsShown(), AHProfitDB.reserves["Amaya-Grommash"] }, { false, nil })
     Stubs.ITEM_NAMES[WATER] = nil
   end)
+
+  it("A53 the menu sets an item rule for AHSync, and the decision row goes", function()
+    local panel = Boot()
+    UIWorld.Plan({})
+    AHProfitPlan.records = { [WATER] = "1;Your record (30 d): 0 of 3 sold" }
+    AHProfit.Plan.Reset()
+    Stubs.Slash("/ahp")
+    local ui = AHProfit.MainWindow.Frames()
+    --- The shown DECIDE row, if any.
+    local function DecideRow()
+      for _, r in ipairs(ui.rows) do
+        if r:IsShown() and r.cells.today.action:IsShown() and r.cells.today.action:GetText() == "DECIDE" then return r end
+      end
+    end
+    local row = DecideRow()
+    row:GetScript("OnMouseUp")(row, "RightButton")
+    local menu = AHProfit.RowMenu.Frames()
+    menu.noBuy:Click()
+    assert_eq({ AHProfitDB.rules[WATER].rule, AHProfitDB.rules[WATER].setAt ~= nil, menu.frame:IsShown(), DecideRow() },
+              { "no_buy", true, false, nil })
+    panel.post[1]:Click("RightButton")
+    menu.keepSelling:Click()
+    assert_eq(AHProfitDB.rules[WATER].rule, "keep")
+    menu.ignore:GetScript("OnClick")()                            -- the menu is closed: no item, nothing set
+    assert_eq(AHProfitDB.rules[WATER].rule, "keep")
+    Stubs.ITEM_NAMES[WATER] = nil
+  end)
 end)
+
