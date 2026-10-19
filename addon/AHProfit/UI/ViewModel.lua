@@ -282,7 +282,7 @@ end
 ---@param a table          The action
 ---@param counted table    { net, note } from Counted
 ---@param chance number|nil Percent shown
----@param look table       { name, quality, conf, soldPerDay } for its item
+---@param look table       { name, quality, conf, soldPerDay, volumeUnknown } for its item
 ---@param totalGold number All your gold, copper
 ---@param offsetMs number
 ---@return table           Row of text and flags
@@ -302,6 +302,7 @@ local function Row(a, counted, chance, look, totalGold, offsetMs)
     chance = chance and (chance .. "%") or "—", dot = chance and ViewModel.Level(look.conf) or nil,
     confidence = chance and look.conf or nil,
     volume = (chance and look.soldPerDay) and (ViewModel.RoundHalfUp(look.soldPerDay) .. "/day") or "—",
+    volumeUnknown = (chance and look.volumeUnknown) or nil,        -- "—" volume: the chance is a default (A68)
     risk = risk, riskAmber = amber, who = a.char:match("^([^-]+)") or a.char, day = day, time = hour,
     price = a.price, units = a.qty, postNetCopper = a.net or 0,   -- numbers, for the AH panel (A29, A31)
     durationH = a.duration,                                         -- the auction duration to set (A56)
@@ -311,12 +312,13 @@ end
 
 --- The Today tab: open actions due within the next hour, best expected net first (D1, D2, D16).
 --- Ties go to the higher chance, then the item name, then the character. Rows whose chance is
---- below minChance are hidden and counted; rows with nothing to sell never are.
+--- below minChance are hidden and counted; rows with nothing to sell, and rows of items whose volume is
+--- unknown (their chance is a default, A68), never are.
 ---@param actions table[]  Plan actions, each with char (the character id)
 ---@param nowMs number
 ---@param offsetMs number  Local time minus UTC
 ---@param minChance number Percent, 0-100
----@param lookOf function  key -> { name, quality, conf, soldPerDay }
+---@param lookOf function  key -> { name, quality, conf, soldPerDay, volumeUnknown }
 ---@param totalGold number All your gold, copper
 ---@return table           { rows, hidden, total (signed money), count }
 function ViewModel.Today(actions, nowMs, offsetMs, minChance, lookOf, totalGold)
@@ -332,14 +334,13 @@ function ViewModel.Today(actions, nowMs, offsetMs, minChance, lookOf, totalGold)
   local posts, crafts = ChainPosts(actions), ChainCrafts(actions, lookOf)
   local rows, hidden, total = {}, 0, 0
   for _, a in ipairs(due) do
-    local chance = ChanceOf(a, chains)
-    if chance ~= nil and chance < minChance then
+    local chance, look = ChanceOf(a, chains), lookOf(a.key)
+    if chance ~= nil and chance < minChance and not look.volumeUnknown then
       hidden = hidden + 1
     else
       local counted = nets[a.id]
       local note = a.ownNote or ViewModel.OwnCraftNote(a) or ViewModel.NoteOf(a, counted.note, posts, crafts, offsetMs)
-      local row = Row(a, { net = counted.net, note = note }, chance,
-                      lookOf(a.key), totalGold, offsetMs)
+      local row = Row(a, { net = counted.net, note = note }, chance, look, totalGold, offsetMs)
       row.sortChance, row.sortChar = chance or -1, a.char
       rows[#rows + 1] = row
       total = total + row.netCopper
@@ -473,12 +474,13 @@ end
 ---@param saved string|nil     AHProfitDB.itemNames[key], "quality,name"
 ---@param cachedName string|nil   Adapter.ItemInfo name
 ---@param cachedQuality number|nil Adapter.ItemInfo quality
----@return table               { name, quality, conf, soldPerDay }
+---@return table               { name, quality, conf, soldPerDay, volumeUnknown }
 function ViewModel.Look(key, item, saved, cachedName, cachedQuality)
   local quality, name = (saved or ""):match("^(%d),(.+)$")
   name = name or cachedName or ("Item " .. key)
   quality = tonumber(quality) or cachedQuality or 1
-  return { name = name, quality = quality, conf = item and item.conf, soldPerDay = item and item.soldPerDay }
+  return { name = name, quality = quality, conf = item and item.conf, soldPerDay = item and item.soldPerDay,
+           volumeUnknown = (item and item.volumeUnknown) or false }
 end
 
 --- The lines a list shows from a scroll offset, and where its scroll bar's thumb sits (UI2).

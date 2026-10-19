@@ -134,3 +134,17 @@ def test_EX11_flip_offers_cover_candidates_only_and_never_vendor_sold_or_suspect
     assert int(price) >= 4000 and int(expected) > 2500 * 1.2 and 0 <= int(slot) < 168
     assert plan.flip_offers(cheap, ITEMS, {ROD}, NOW, cfg) == {}                                         # vendor-sold
     assert plan.flip_offers({ROD: replace(cheap[ROD], cur_suspect=True)}, ITEMS, set(), NOW, cfg) == {}  # FM5
+
+
+def test_R24_a_stack_dumped_below_the_next_price_level_is_a_flip_candidate_without_a_window():
+    dumped = replace(intel(2589, 10), book=((10, 20, 4, 1), (50, 20, 4, 5)), chance=0.9)
+    assert plan.now_candidate(dumped, 0.2) and plan.flip_candidate(dumped, 0.2)     # 49 × 0.95 × 0.9 = 41.9 ≥ 12
+    assert not plan.window_candidate(dumped, 0.2)                                   # no selling window
+    assert plan.sell_facts(dumped, None, None).p90 == 10 and plan.sell_facts(dumped, None, None).med7 == 10
+
+
+def test_R25_the_second_level_too_close_is_no_candidate():
+    close = replace(intel(2589, 45), book=((45, 20, 4, 1), (50, 20, 4, 5)), chance=0.9)
+    assert not plan.now_candidate(close, 0.2)                                       # 41.9 < 1.2 × 45 = 54
+    assert not plan.now_candidate(replace(close, book=((10, 20, 4, 1),), cur=10), 0.2)   # one level only
+    assert not plan.now_candidate(replace(close, cur=10, cur_suspect=True), 0.2)    # FM5

@@ -33,6 +33,17 @@ function SellProb.TierOf(price, curOthers)
   return 4
 end
 
+--- P when sales volume is unknown, by where the post would stand (SPEC §3.3.2 fallbacks, PD1).
+---@param price number|nil         Your unit price, copper; nil when unknown
+---@param curOthers number|nil     Cheapest competing buyout, copper; nil when nobody else lists it
+---@param defaultP number          P when someone else is cheaper (config default_sell_prob)
+---@param defaultCheapest number   P when you'd be the cheapest seller (config default_sell_prob_cheapest)
+---@return number                  defaultCheapest with no competitor or price ≤ curOthers; else defaultP
+function SellProb.DefaultChance(price, curOthers, defaultP, defaultCheapest)
+  if curOthers == nil or (price ~= nil and price <= curOthers) then return defaultCheapest end
+  return defaultP
+end
+
 --- Blend the simulation with the tier's history (SPEC §3.3.2 step 3).
 ---@param pQueue number                 Queue simulation result
 ---@param tierSellThrough number|nil    ST_tier; nil without history

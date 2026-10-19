@@ -3,7 +3,7 @@
 `simulate` (the queue simulation) and `build_curve` run only in AHSync's full refresh.
 The rest is ported to addon/AHProfit/Engine/SellProb.lua and must stay identical:
 `tier_of`, `blend`, `with_record`, `expected_post`, `curve_row`, `from_curve`,
-`quantize`, `encode_curve`, `decode_curve`.
+`quantize`, `encode_curve`, `decode_curve`, `default_chance`.
 """
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from ahsync.engine.fees import AH_CUT
+from ahsync.engine.volume import VolumePrior
 
 HOUR_MS = 3_600_000
 # Band midpoints in hours: a competitor is available during window hour k only while k < m
@@ -26,6 +27,7 @@ CURVE_AHEAD_TOOLTIP = (0, 5, 20)                 # units ahead for tooltip-only 
 CURVE_ROWS = 24
 CURVE_STEPS = 50                        # P quantized to 2% steps (SPEC §3.1.1, IU11)
 CURVE_CHAR_BASE = 35                    # codes 35-85: no '"' and no '\\'
+FLAT_HOW = (1.0,) * 168                 # a flat hourly sales profile
 
 
 @dataclass(frozen=True)
@@ -467,6 +469,39 @@ def lookup(curve: Sequence[Sequence[float]], refresh_ms: int, now_ms: int, ahead
     return from_curve(curve[curve_row(refresh_ms, now_ms)], ahead, ahead_points)
 
 
+def default_chance(price: int | None, cur_others: int | None, default_sell_prob: float = 0.25,
+                   default_sell_prob_cheapest: float = 0.5) -> float:
+    """P when sales volume is unknown, by where the post would stand (SPEC §3.3.2 fallbacks, PD1).
+
+    Args:
+        price: Your unit price, copper; None when unknown.
+        cur_others: The cheapest competing buyout, copper; None when nobody else lists it.
+        default_sell_prob: P when someone else is cheaper (config default_sell_prob).
+        default_sell_prob_cheapest: P when you would be the cheapest seller (config default_sell_prob_cheapest).
+
+    Returns:
+        default_sell_prob_cheapest when there is no competitor or price ≤ cur_others; else default_sell_prob.
+    """
+    if cur_others is None or (price is not None and price <= cur_others):
+        return default_sell_prob_cheapest
+    return default_sell_prob
+
+
+def cheapest_other(book: Sequence[tuple[int, int, int, int]] | None, cur: int | None) -> int | None:
+    """The cheapest competing price a post faces: the book's lowest price, else the lowest buyout.
+
+    Args:
+        book: (price, stack, band, count) rows of other sellers, or None without a book.
+        cur: Lowest buyout, used without a book.
+
+    Returns:
+        Copper; None when nothing else is listed.
+    """
+    if book:
+        return min(price for price, _, _, _ in book)
+    return cur if book is None else None
+
+
 def chance(queue: QueueInputs | None, tier_sell_through: float | None, tier_n: int, sold: int, expired: int,
            default_sell_prob: float = 0.25, record_weight: float = 4) -> tuple[float, bool]:
     """P' for one post: simulation, tier blend and own record, or the default without volume (SPEC §3.3.2-3).
@@ -477,7 +512,7 @@ def chance(queue: QueueInputs | None, tier_sell_through: float | None, tier_n: i
         tier_n: Auctions behind ST_tier.
         sold: Your sold posts of the item in the record window.
         expired: Your expired posts.
-        default_sell_prob: P when there is no volume data.
+        default_sell_prob: P when there is no volume data (default_chance, from the post's position).
         record_weight: own_record_weight.
 
     Returns:
@@ -501,6 +536,8 @@ class MarketSettings:
     sell_window_hours: int = 8
     pattern_half_life_weeks: float = 4      # recency half-life of the weekly patterns (SPEC §3.3.4)
     window_threshold: float = 0.90          # share of the best slot a window slot needs (SPEC §3.3.4)
+    default_sell_prob_cheapest: float = 0.5 # P without volume when you'd be the cheapest seller (SPEC §3.3.2, PD1)
+    volume_prior: VolumePrior = VolumePrior()   # the sales-rate prior (SPEC §3.3.1, V41)
 
 
 @dataclass(frozen=True)
@@ -515,7 +552,7 @@ class Supply:
 
 
 def posting_chance(supply: Supply, price: int | None, qty: int, now_ms: int,
-                   settings: MarketSettings) -> tuple[float, bool]:
+                   settings: MarketSettings, sales_how: Sequence[float] | None = None) -> tuple[float, bool]:
     """P for posting qty units now at price, from market data only (no own record, SPEC §3.3.2).
 
     Args:
@@ -524,16 +561,19 @@ def posting_chance(supply: Supply, price: int | None, qty: int, now_ms: int,
         qty: Units posted.
         now_ms: Now, UTC ms.
         settings: Defaults and the posting-now window.
+        sales_how: The item's 168-slot hourly sales profile, the window's demand (P26); None for flat.
 
     Returns:
-        (P, volume_unknown); the default chance when sales or the price are unknown.
+        (P, volume_unknown); without sales or a price, the default chance for the post's position (default_chance).
     """
     if supply.sold_per_day is None or price is None:
-        return chance(None, None, 0, 0, 0, settings.default_sell_prob, settings.own_record_weight)
+        p = default_chance(price, cheapest_other(supply.book, supply.cur_price), settings.default_sell_prob,
+                           settings.default_sell_prob_cheapest)
+        return chance(None, None, 0, 0, 0, p, settings.own_record_weight)
     competitors = None if supply.book is None else [(p, float(stack * count), band)
                                                     for p, stack, band, count in supply.book]
     ahead = ahead_of(competitors, price, supply.cur_price, supply.cur_qty)
-    demand = demand_for(posting_now_window(now_ms, settings.sell_window_hours), [1.0] * 168)
+    demand = demand_for(posting_now_window(now_ms, settings.sell_window_hours), sales_how or FLAT_HOW)
     queue = QueueInputs(supply.sold_per_day, supply.listed_per_day or 0.0, settings.default_undercut_share,
                         demand, qty, ahead)
     return chance(queue, None, 0, 0, 0, settings.default_sell_prob, settings.own_record_weight)

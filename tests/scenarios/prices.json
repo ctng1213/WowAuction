@@ -5,7 +5,8 @@
   "call": "post_price",
   "args": {
    "cur_others": 55,
-   "med7": 60
+   "med7": 60,
+   "p90": null
   },
   "expect": 54,
   "why": "55c - 1c = 54c, below the 60c median"
@@ -16,7 +17,8 @@
   "call": "post_price",
   "args": {
    "cur_others": 70,
-   "med7": 60
+   "med7": 60,
+   "p90": null
   },
   "expect": 60,
   "why": "70c - 1c = 69c is above the 60c median"
@@ -27,7 +29,8 @@
   "call": "post_price",
   "args": {
    "cur_others": null,
-   "med7": 60
+   "med7": 60,
+   "p90": null
   },
   "expect": 60,
   "why": "nothing else listed"
@@ -38,7 +41,8 @@
   "call": "post_price",
   "args": {
    "cur_others": 55,
-   "med7": null
+   "med7": null,
+   "p90": null
   },
   "expect": 54,
   "why": "no history yet"
@@ -49,9 +53,106 @@
   "call": "post_price",
   "args": {
    "cur_others": null,
-   "med7": null
+   "med7": null,
+   "p90": null
   },
   "expect": null,
   "why": "nothing to go by: flagged no price"
+ },
+ {
+  "id": "PP2",
+  "name": "post price undercuts up to the 30-day p90 above the median",
+  "call": "post_price",
+  "args": {
+   "cur_others": 100,
+   "med7": 50,
+   "p90": 80
+  },
+  "expect": 80,
+  "why": "min(1g - 1c, max(50s, 80s)) = 80s: the market traded at 80s lately, so it isn't posted at half the going rate"
+ },
+ {
+  "id": "PP2",
+  "name": "post price undercuts when that is below the cap",
+  "call": "post_price",
+  "args": {
+   "cur_others": 100,
+   "med7": 50,
+   "p90": 200
+  },
+  "expect": 99,
+  "why": "min(99c, max(50c, 2g)) = 99c: the undercut is the lower"
+ },
+ {
+  "id": "PP2",
+  "name": "post price without competition is still the median",
+  "call": "post_price",
+  "args": {
+   "cur_others": null,
+   "med7": 50,
+   "p90": 80
+  },
+  "expect": 50,
+  "why": "nobody else lists it: med7, never the p90"
+ },
+ {
+  "id": "PP2",
+  "name": "post price without competition or a median is the p90",
+  "call": "post_price",
+  "args": {
+   "cur_others": null,
+   "med7": null,
+   "p90": 80
+  },
+  "expect": 80,
+  "why": "the one price known"
+ },
+ {
+  "id": "FN1",
+  "name": "a dumped stack relisted now under the next level pays",
+  "call": "flip_now_offer",
+  "args": {
+   "p": 0.9,
+   "units": 20,
+   "cheapest": 10,
+   "relist": 49,
+   "fallback": 10,
+   "deposit": 10,
+   "min_flip_margin": 0.2
+  },
+  "expect": 856.9,
+  "why": "0.9 x 20 x 49 x 0.95 + 0.1 x (20 x 10 - 10) = 837.9 + 19 = 856.9; profit 656.9 >= 20% x 200"
+ },
+ {
+  "id": "FN1",
+  "name": "relisting 45c units at 49c does not pay the margin",
+  "call": "flip_now_offer",
+  "args": {
+   "p": 0.9,
+   "units": 20,
+   "cheapest": 45,
+   "relist": 49,
+   "fallback": 10,
+   "deposit": 10,
+   "min_flip_margin": 0.2
+  },
+  "expect": null,
+  "why": "856.9 < 1.2 x 900"
+ },
+ {
+  "id": "FN1",
+  "name": "volume unknown: the cheapest position's default chance",
+  "call": "flip_now_offer",
+  "args": {
+   "p": 0.5,
+   "units": 20,
+   "cheapest": 10,
+   "relist": 49,
+   "fallback": 10,
+   "deposit": 10,
+   "min_flip_margin": 0.2
+  },
+  "expect": 560.5,
+  "why": "0.5 x 20 x 49 x 0.95 + 0.5 x (200 - 10) = 465.5 + 95 = 560.5 >= 1.2 x 200"
  }
 ]

@@ -207,17 +207,25 @@ def drop_suspect(closes: Sequence[tuple[int, int]], p10: int | None, p90: int | 
     return [(t, c) for t, c in closes if t not in lone]
 
 
-def post_price(cur_others_copper: int | None, med7: int | None) -> int | None:
-    """Post price p = min(curOthers − 1, med7) (SPEC §3.4).
+def post_price(cur_others_copper: int | None, med7: int | None, p90: int | None = None) -> int | None:
+    """Post price p = min(curOthers − 1, max(med7, p90_30)) (SPEC §3.4, PP1, PP2).
+
+    You undercut the cheapest competitor, up to the highest price the market traded at recently, and never post
+    above a price the last 30 days never saw.
 
     Args:
         cur_others_copper: Lowest competing buyout in copper, or None.
         med7: 7-day median in copper, or None.
+        p90: 30-day nearest-rank 90th percentile of hourly closes in copper, or None.
 
     Returns:
-        The unit price in copper; the available one when the other is None; None
-        when both are None (the item is flagged "no price").
+        The unit price in copper: with a competitor, the undercut capped at the larger of med7 and p90 (the
+        available one when the other is None; uncapped when both are); without one, med7, else p90; None when
+        nothing is known (the item is flagged "no price").
     """
-    undercut = None if cur_others_copper is None else cur_others_copper - 1
-    candidates = [v for v in (undercut, med7) if v is not None]
-    return min(candidates) if candidates else None
+    known = [v for v in (med7, p90) if v is not None]
+    cap = max(known) if known else None
+    if cur_others_copper is None:
+        return med7 if med7 is not None else p90
+    undercut = cur_others_copper - 1
+    return undercut if cap is None else min(undercut, cap)

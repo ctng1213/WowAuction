@@ -183,14 +183,14 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
     last30 = [c for t, c in hourly if t > now_ms - 30 * DAY_MS]
     week = range((now_ms - 7 * DAY_MS) // DAY_MS + 1, now_ms // DAY_MS + 1)
     sales = sales_fields(item, now_ms, settings)
-    volume = daily_volume(_volumes(item), week, _covers(item), sales[0].values)       # V30-V32
+    volume = daily_volume(_volumes(item), week, _covers(item), sales[0].values, settings.volume_prior)   # V30-V32, V41
     newest = item.book
     book = newest[1] if newest else None
     ref = ref_stack(book or [])
-    price = prices.post_price(cur.price if cur and cur.price is not None else None, med7)
+    price = prices.post_price(cur.price if cur and cur.price is not None else None, med7, p90)        # PP2
     supply = Supply(volume.sold_per_day, volume.listed_per_day, tuple(book) if book is not None else None,
                     cur.price if cur else None, cur.qty if cur else None)
-    chance, unknown = sellprob.posting_chance(supply, price, ref, now_ms, settings)
+    chance, unknown = sellprob.posting_chance(supply, price, ref, now_ms, settings, sales[0].values)   # P26
     vendor_sell = (info.vendor_sell if info else None) or 0
     sell_value = None
     if price is not None:

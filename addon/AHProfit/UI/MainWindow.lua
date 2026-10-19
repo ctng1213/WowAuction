@@ -604,8 +604,10 @@ local function FlipLines(charId, nowMs, offset, gold)
   for _, r in ipairs(gone) do rows[#rows + 1] = r end
   local flipped = {}
   for _, a in ipairs(planned) do if a.kind == "buy" then flipped[a.key] = true end end
+  local _, newest = Market.Times()
   local own = VM.OwnFlipRows(Market.FlipOffers(), { itemOf = LiveItem, levelsOf = LevelsOf, lookOf = LookOf,
-    skip = FlipSkip(flipped), nowMs = nowMs, offsetMs = offset, totalGold = gold })
+    skip = FlipSkip(flipped), nowMs = nowMs, offsetMs = offset, totalGold = gold, curveOf = Market.Curve,
+    vendorOf = VendorOf, nowCandidates = Live.FlipCandidates(newest, VM.MIN_FLIP_MARGIN) })     -- A69
   for _, row in ipairs(own) do rows[#rows + 1] = row end
   if #own > 0 then footer = footer .. " · " .. #own .. (#own == 1 and " own idea" or " own ideas") .. " (one stack each)" end
   return VM.WithNotes(rows), footer, "No flips right now: none in AHSync's plan, and no market offer under its buy price."

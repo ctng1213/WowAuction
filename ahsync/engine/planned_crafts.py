@@ -1,8 +1,8 @@
 """The plan's craft chains, for the Craft pages (SPEC §3.5 Craft, §4.3, D56, A63).
 
 A chain (a plan action's `chain`) with a craft is one row for its final product: the last craft. It lists
-every mat buy, then the intermediate crafts made first, then when to sell; its profit is the chain's whole
-net, counted once. Pure.
+every mat buy, then the intermediate crafts made first, then when to sell; its profit is counted once, on the
+action that carries it (chain_net, the Today and Week rule of plan_views.counted, D59). Pure.
 """
 from __future__ import annotations
 
@@ -35,6 +35,23 @@ class CraftChain:
         return sum((b.price or 0) * b.qty for b in self.buys)
 
 
+def chain_net(members: Sequence[PlanAction]) -> float:
+    """A chain's profit, counted once (SPEC §3.4 expected net, VW1, D59), as plan_views.counted counts it.
+
+    The chain's profit step (any action but a post that has a net: the final craft) carries the profit; its posts
+    carry their own net against their cost only for when that step has left the view, so they add nothing while
+    it is there. A chain with no such step (every craft net 0) counts its posts' own nets.
+
+    Args:
+        members: The chain's actions.
+
+    Returns:
+        Float copper.
+    """
+    steps = [a.net for a in members if a.kind != "post" and a.net]
+    return sum(steps) if steps else sum(a.net for a in members if a.kind == "post")
+
+
 def craft_chains(actions: Sequence[PlanAction]) -> list[CraftChain]:
     """The plan's craft chains, best net first (ties: chain id) (D56).
 
@@ -56,7 +73,7 @@ def craft_chains(actions: Sequence[PlanAction]) -> list[CraftChain]:
         final = max(crafts, key=lambda a: (a.at_ms, members.index(a)))
         sale = next((a for a in members if a.kind not in ("buy", "craft", "mail") and a.key == final.key), None)
         out.append(CraftChain(chain, final, tuple(a for a in members if a.kind == "buy"),
-                              tuple(a for a in crafts if a is not final), sale, sum(a.net for a in members)))
+                              tuple(a for a in crafts if a is not final), sale, chain_net(members)))
     out.sort(key=lambda c: (-c.net, c.chain))
     return out
 

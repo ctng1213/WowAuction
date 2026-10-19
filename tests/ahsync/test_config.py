@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import pytest
 
-from ahsync.config import Config, ConfigError, load_config, parse_config, resolve_api_key, setting_line
+from ahsync.config import (Config, ConfigError, load_config, market_settings, parse_config, plan_settings,
+                           resolve_api_key, setting_line)
 
 EXAMPLE = '''api_key = ""
 markets = ["forever.pvp.horde.us"]
@@ -107,3 +108,18 @@ def test_SRC4_sources_map_a_market_to_its_providers_and_bad_tables_are_refused(t
         assert message in str(error.value), bad
     with pytest.raises(ConfigError, match="must be a table"):
         parse_config('[sources]\n"forever.pvp.horde.us" = 3\n', {}, tmp_path)
+
+
+def test_the_volume_prior_and_the_cheapest_default_are_settings(tmp_path):
+    config = parse_config("default_sell_prob_cheapest = 0.6\nvolume_prior_per_day = 2\nvolume_prior_hours = 4\n", {},
+                          tmp_path)
+    market = market_settings(config)
+    assert (market.default_sell_prob_cheapest, market.volume_prior.per_day, market.volume_prior.hours) == (0.6, 2, 4)
+    assert plan_settings(config).default_sell_prob_cheapest == 0.6
+    defaults = market_settings(Config())
+    assert (defaults.default_sell_prob_cheapest, defaults.volume_prior.per_day, defaults.volume_prior.hours) == (0.5, 1.0, 2)
+    for text, message in (("default_sell_prob_cheapest = 1.5\n", "must be between 0 and 1"),
+                          ("volume_prior_hours = -1\n", "must be 0 or more")):
+        with pytest.raises(ConfigError) as error:
+            parse_config(text, {}, tmp_path)
+        assert str(error.value).endswith(message)

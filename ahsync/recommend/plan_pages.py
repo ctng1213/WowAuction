@@ -60,7 +60,7 @@ def item_looks(keys: set[int], stats: dict[int, ItemIntel], items: dict[int, Ite
         record = (records or {}).get(key)
         out[key] = ItemLook(name, quality, s.conf if s else None, s.sold_per_day if s else None,
                             s.volume_source if s else None, s.units_on_ah if s else None, price_level(s) if s else None,
-                            s.seasonality if s else None, paid_each, record, s.volume_kind) if s else \
+                            s.seasonality if s else None, paid_each, record, s.volume_kind, s.volume_unknown) if s else \
             ItemLook(name, quality, paid_each=paid_each, record=record)
     return out
 

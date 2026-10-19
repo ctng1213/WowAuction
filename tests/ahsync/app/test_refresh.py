@@ -84,7 +84,9 @@ def test_stats_use_the_engine_rules(db):
     refresh.refresh_all(db, NOW, CFG)
     s = db.read_intel(M).items[ROD]
     assert (s.med7, s.post_price, s.ref_stack, s.volume_source) == (4000, 4000, 1, "ahf")
-    assert s.sold_per_day == 60 and s.days_by_source == {"ahf": 7} and not s.volume_unknown
+    # 7 days at 60 a day with the default prior (V41): (420 + 1/12) ÷ (7 + 1/12) ≈ 59.3
+    assert s.sold_per_day == pytest.approx((420 + 1 / 12) / (7 + 1 / 12)) and s.days_by_source == {"ahf": 7}
+    assert not s.volume_unknown
     assert 0 < s.chance <= 1 and s.sell_value is not None
 
 

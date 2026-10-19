@@ -3,8 +3,11 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+import pytest
+
 from ahsync.engine import plan, sellprob
 from ahsync.engine.plan import Lot, PlanSettings, PlanWindow, SellFacts
+from ahsync.engine.sell_record import Record
 from tests.support.gen import cases
 
 HOUR, DAY = 3_600_000, 86_400_000
@@ -93,7 +96,7 @@ def test_window_occurrences_and_prices():
 
 def test_without_sales_or_a_price_the_plan_falls_back():
     unknown = linen(sold_per_day=None, level=None)
-    assert plan.post_chance(unknown, 45, 20, [1, 2], 0, S) == S.default_sell_prob
+    assert plan.post_chance(unknown, 45, 20, [1, 2], 0, S) == S.default_sell_prob_cheapest   # nobody else listed
     [only] = plan.post_options(unknown, NOW, S)                       # no level: posting now only
     assert only.window is None and only.cap == 46
     nothing = linen(post_price=None, level=None, vendor_sell=0)
@@ -168,3 +171,12 @@ def test_O13_O11_the_price_never_drops_below_the_vendor_floor_and_an_undercut_ca
 def test_TT6_price_at_best_time_includes_the_clamped_trend():
     assert plan.slot_price(49, 1.12, 2.0, 2) == 57                      # floor(49 × 1.12 × 1.04 + 0.5)
     assert plan.slot_price(49, 1.12, 9.0, 2) == 60                      # clamped to 5%: floor(49 × 1.12 × 1.1 + 0.5)
+
+
+def test_P25_without_volume_the_chance_follows_where_the_post_would_stand():
+    unknown = linen(sold_per_day=None, book=((45, 20, 4, 2),), cur=45)
+    hours = sellprob.posting_now_window(NOW)
+    assert plan.post_chance(unknown, 44, 20, hours, 0, S) == 0.5              # you'd be the cheapest
+    assert plan.post_chance(unknown, 55, 20, hours, 0, S) == 0.25             # 45c is cheaper
+    struggling = replace(unknown, record=Record(0, 2, 2, 2, False, False))
+    assert plan.post_chance(struggling, 44, 20, hours, 0, S) == pytest.approx((4 * 0.5 + 0) / (4 + 0 + 2))   # 0.333

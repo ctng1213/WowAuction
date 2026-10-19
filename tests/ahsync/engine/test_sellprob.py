@@ -322,3 +322,27 @@ def test_LP1_committed_property_cases_match_python():
     seed, fresh = gen.build()["sellprob"]
     assert committed == json.loads(json.dumps({"seed": seed, "cases": fresh})), \
         "tests/properties/sellprob.json is stale: run python tools/gen_properties.py"
+
+
+def test_P26_posting_now_follows_the_items_hourly_sales_profile():
+    fri_18 = (20_000 * 24 + 18) * HOUR_MS                  # day 20000 is a Friday
+    supply = sp.Supply(24.0, 0.0, (), None, None)
+    settings = sp.MarketSettings(default_undercut_share=0.0)
+    flat, unknown = sp.posting_chance(supply, 50, 30, fri_18, settings)
+    assert (flat, unknown) == (pytest.approx(8 / 30), False)                       # demand 8 of 30 units
+    assert sp.posting_chance(supply, 50, 30, fri_18, settings, sp.FLAT_HOW)[0] == flat
+    busy = [1.0] * 168
+    for hour in range(8):                                                          # Fri 18:00 - Sat 01:59
+        slot = (4 * 24 + 18 + hour) % 168
+        busy[slot] = 3.0
+    assert sp.posting_chance(supply, 50, 30, fri_18, settings, busy)[0] == pytest.approx(24 / 30)   # 0.80
+
+
+def test_P25_posting_now_without_volume_uses_the_default_for_its_position():
+    settings = sp.MarketSettings()
+    book = ((45, 20, 4, 1), (50, 20, 4, 1))
+    assert sp.posting_chance(sp.Supply(None, None, book, 45, 20), 44, 20, 0, settings) == (0.5, True)
+    assert sp.posting_chance(sp.Supply(None, None, book, 45, 20), 55, 20, 0, settings) == (0.25, True)
+    assert sp.posting_chance(sp.Supply(None, None, None, 45, 20), 46, 20, 0, settings) == (0.25, True)   # no book: cur
+    assert sp.posting_chance(sp.Supply(None, None, (), None, None), None, 20, 0, settings) == (0.5, True)
+    assert sp.cheapest_other(book, 99) == 45 and sp.cheapest_other(None, 45) == 45 and sp.cheapest_other((), 45) is None

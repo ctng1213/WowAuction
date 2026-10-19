@@ -37,6 +37,7 @@ class PlanSettings:
     default_sell_prob: float = 0.25
     reprice_step: float = 0.05         # config reprice_step: price cut per lowest expiry (SPEC §3.3.3)
     own_record_weight: float = 4       # config own_record_weight: the model's worth in posts
+    default_sell_prob_cheapest: float = 0.5   # config default_sell_prob_cheapest: P without volume when cheapest
 
 
 @dataclass(frozen=True)
@@ -83,6 +84,8 @@ class SellFacts:
     gear: bool = False                             # a weapon or armor: the lenient gear cap (SPEC §3.4 Liquidity)
     conf: int = 0                                  # confidence % of the item's numbers (SPEC §3.3.5)
     record: Record | None = None                   # your own sell record (SPEC §3.3.3); None without one
+    med7: int | None = None                        # 7-day median, copper: the post price's cap (SPEC §3.4, R24)
+    p90: int | None = None                         # 30-day 90th percentile, copper: likewise
 
 
 @dataclass(frozen=True)
@@ -173,14 +176,14 @@ def post_options(f: SellFacts, now_ms: int, s: PlanSettings) -> list[PostOption]
     out = []
     if f.post_price is not None:
         hours = tuple(sellprob.posting_now_window(now_ms, s.sell_window_hours))
-        out.append(PostOption(now_ms, hours, _record_price(f, f.post_price, s), None, _cap(f, hours, now_ms, s),
+        out.append(PostOption(now_ms, hours, record_price(f, f.post_price, s), None, _cap(f, hours, now_ms, s),
                            fees.shortest_duration_covering(s.sell_window_hours)))
     if f.level is None:
         return out
     for start, end, best in occurrences(f.windows, now_ms, s.horizon_days):
         post = max(best - s.post_lead_hours * HOUR_MS, now_ms)
         hours = tuple(sellprob.planned_window(post, end, now_ms))    # never empty: occurrences haven't ended
-        price = _record_price(f, slot_price(f.level, f.how[slot_of(best // HOUR_MS)], f.trend7, (best - now_ms) / DAY_MS),
+        price = record_price(f, slot_price(f.level, f.how[slot_of(best // HOUR_MS)], f.trend7, (best - now_ms) / DAY_MS),
                               s)
         covering = -(-(best + HOUR_MS - post) // HOUR_MS)      # the listing stays up through the best hour
         out.append(PostOption(post, hours, price, (start, end, best), _cap(f, hours, now_ms, s),
@@ -223,11 +226,13 @@ def post_chance(f: SellFacts, price: int, qty: int, hours: Sequence[int], own_ah
         s: Settings.
 
     Returns:
-        P' in [0, 1]: the simulation (default_sell_prob when sales are unknown) blended with your
-        own record when there is one (SPEC §3.3.3, O1, O2).
+        P' in [0, 1]: the simulation (when sales are unknown, the default chance for the post's position,
+        sellprob.default_chance, P25) blended with your own record when there is one (SPEC §3.3.3, O1, O2).
     """
     if f.sold_per_day is None:
-        return _with_record(f, s.default_sell_prob, s)
+        p = sellprob.default_chance(price, sellprob.cheapest_other(f.book, f.cur), s.default_sell_prob,
+                                    s.default_sell_prob_cheapest)
+        return _with_record(f, p, s)
     competitors = None if f.book is None else [(p, float(stack * count), band) for p, stack, band, count in f.book]
     ahead = sellprob.ahead_of(competitors, price, f.cur, f.cur_qty)
     if own_ahead:
@@ -253,7 +258,7 @@ def _with_record(f: SellFacts, p: float, s: PlanSettings) -> float:
     return sellprob.with_record(p, f.record.sold, f.record.expired, s.own_record_weight)
 
 
-def _record_price(f: SellFacts, price: int, s: PlanSettings) -> int:
+def record_price(f: SellFacts, price: int, s: PlanSettings) -> int:
     """A planned price after the item's record (SPEC §3.3.3 price, O11-O13).
 
     Args:

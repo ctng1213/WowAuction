@@ -325,7 +325,7 @@ const VIEWS = {
       <ul><li><b>Each</b> is per unit and <b>Total</b> is each × quantity. For a craft, it's the gold for mats you still need to buy; "—" means you own them all.</li>
       <li><b>Chance</b> is the chance to sell (P') with a confidence dot. Rows below the <b>Min chance</b> filter are hidden (here, Iron Ore at 30%), and the footer counts them.</li>
       <li><b>Every column header has a tooltip</b> on hover saying what it means (the dashboard uses the same texts).</li>
-      <li><b>Volume</b> is units sold per day. Hover it for the units on the AH now and the days of supply. "—" means volume unknown: the chance is then the 25% default.</li>
+      <li><b>Volume</b> is units sold per day. Hover it for the units on the AH now and the days of supply. "—" means volume unknown: the chance is then a default, 50% when you'd be the cheapest seller and 25% otherwise, and the row is never hidden by Min chance.</li>
       <li>Rows come from the desktop plan (<code>PortfolioPlan.lua</code>: which character acts, mail between characters) merged with the addon's own options, which it re-ranks live as prices, bags and gold change.</li>
       <li><b>Risk</b> = gold this action spends ÷ all your gold. For a post, that's the deposit. It turns amber above 25%.</li>
       <li>"Not selling" items wait in <b>Needs a decision</b>. Keep starts the item's record fresh, and one more expiry while cheapest asks again.</li></ul>`,

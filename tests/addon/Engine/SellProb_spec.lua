@@ -21,6 +21,7 @@ local CALLS = {
   curve_row = { "CurveRow", { "refresh_ms", "now_ms" } },
   quantize = { "Quantize", { "p" } },
   tier_of = { "TierOf", { "price", "cur_others" } },
+  default_chance = { "DefaultChance", { "price", "cur_others", "default_sell_prob", "default_sell_prob_cheapest" } },
 }
 
 --- Call a ported function with a scenario's named arguments.

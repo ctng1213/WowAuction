@@ -18,6 +18,7 @@ from ahsync.engine.flips import FlipSettings
 from ahsync.engine.plan import PlanSettings
 from ahsync.engine.sell_record import RecordSettings
 from ahsync.engine.sellprob import MarketSettings
+from ahsync.engine.volume import VolumePrior
 
 API_KEY_ENV = "AUCTIONHOUSE_APIKEY"
 MARKET_PATTERN = re.compile(r"^forever\.(normal|pvp|rp)\.(alliance|horde)\.us$")
@@ -49,6 +50,9 @@ class Config:
     live_refresh_minutes: int = 15
     min_flip_margin: float = 0.20
     default_sell_prob: float = 0.25
+    default_sell_prob_cheapest: float = 0.5
+    volume_prior_per_day: float = 1.0
+    volume_prior_hours: float = 2
     default_undercut_share: float = 0.5
     own_record_days: int = 30
     own_record_weight: float = 4
@@ -95,7 +99,8 @@ for _name in ("retention_days", "dashboard_port", "live_refresh_minutes", "own_r
               "struggle_streak", "keep_retry_streak", "post_lead_hours", "sell_window_hours",
               "max_craft_depth", "max_actions_per_day", "min_gear_units"):
     _TYPES[_name] = _INT
-for _name in ("min_flip_margin", "default_sell_prob", "default_undercut_share", "own_record_weight",
+for _name in ("min_flip_margin", "default_sell_prob", "default_sell_prob_cheapest", "volume_prior_per_day",
+              "volume_prior_hours", "default_undercut_share", "own_record_weight",
               "reprice_step", "min_sell_prob", "high_risk_pct", "pattern_half_life_weeks",
               "window_threshold", "peak_tolerance", "max_supply_share", "max_supply_share_gear", "max_risk_pct"):
     _TYPES[_name] = _NUMBER
@@ -177,6 +182,12 @@ def _check_values(text: str, values: dict) -> None:
     for name in ("retention_days", "dashboard_port", "live_refresh_minutes", "post_lead_hours", "sell_window_hours"):
         if name in values and values[name] <= 0:
             raise _fail(text, name, "must be greater than 0")
+    for name in ("default_sell_prob", "default_sell_prob_cheapest"):
+        if name in values and not 0 <= values[name] <= 1:
+            raise _fail(text, name, "must be between 0 and 1")
+    for name in ("volume_prior_per_day", "volume_prior_hours"):
+        if name in values and values[name] < 0:
+            raise _fail(text, name, "must be 0 or more")
     if "daily_refresh_time" in values and not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", values["daily_refresh_time"]):
         raise _fail(text, "daily_refresh_time", 'must be a time like "06:00"')
     if "week_start" in values and values["week_start"] not in WEEKDAYS:
@@ -321,7 +332,9 @@ def market_settings(config: Config) -> MarketSettings:
         The engine's MarketSettings.
     """
     return MarketSettings(config.default_sell_prob, config.own_record_weight, config.default_undercut_share,
-                          config.sell_window_hours, config.pattern_half_life_weeks, config.window_threshold)
+                          config.sell_window_hours, config.pattern_half_life_weeks, config.window_threshold,
+                          config.default_sell_prob_cheapest,
+                          VolumePrior(config.volume_prior_per_day, config.volume_prior_hours))
 
 
 
@@ -336,7 +349,8 @@ def plan_settings(config: Config) -> PlanSettings:
     """
     return PlanSettings(config.post_lead_hours, config.max_supply_share, config.max_supply_share_gear,
                         config.min_gear_units, config.sell_window_hours, 7, config.default_undercut_share,
-                        config.default_sell_prob, config.reprice_step, config.own_record_weight)
+                        config.default_sell_prob, config.reprice_step, config.own_record_weight,
+                        config.default_sell_prob_cheapest)
 
 
 def record_settings(config: Config) -> RecordSettings:

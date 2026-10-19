@@ -173,12 +173,25 @@ def _product_net(stats: ItemIntel | None, recipe: RecipeRow, items: dict[int, It
                 cache[n] = units * float(vendor_sell)
             else:
                 supply = Supply(stats.sold_per_day, stats.listed_per_day, stats.book or None, stats.cur, stats.cur_qty)
-                p, _ = sellprob.posting_chance(supply, stats.post_price, units, now_ms, market_settings(cfg))
+                p, _ = sellprob.posting_chance(supply, stats.post_price, units, now_ms, market_settings(cfg),
+                                               sales_pattern(stats))
                 duration = fees.shortest_duration_covering(cfg.sell_window_hours)
                 cache[n] = sellprob.expected_post(p, units, stats.post_price, float(vendor_sell),
                                                   fees.deposit_copper(vendor_sell, units, duration))
         return cache[n]
     return net
+
+
+def sales_pattern(stats: ItemIntel) -> tuple[float, ...] | None:
+    """An item's hourly sales profile, the demand of its posting-now chance (SPEC §3.3.2, P26).
+
+    Args:
+        stats: The item's intelligence.
+
+    Returns:
+        168 ratios; None when it has none (flat).
+    """
+    return tuple(profile.unpack(stats.sales_how, stats.sales_weeks).values) if stats.sales_how else None
 
 
 def _held_and_listed(state: StateReader, char_ids: list[str]) -> dict[int, int]:

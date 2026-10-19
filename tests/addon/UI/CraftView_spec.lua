@@ -80,6 +80,17 @@ describe("CraftView", function()
     assert_eq(VM.CraftFooter({ r, { made = false }, { made = true } }, 3), "1 planned · 1 of 2 known recipes pay now · 1 made")
   end)
 
+  it("D59 a planned chain's profit counts once on the Craft tab: the craft's, not the craft's plus its post's", function()
+    local VM = Boot()
+    local actions = {
+      { id = "b", kind = "buy", key = 2840, qty = 2, price = 500, at = NOW, net = 0 },
+      { id = "c", kind = "craft", key = 6217, qty = 1, at = NOW + MINUTE, parent = "b", net = 971 },
+      { id = "p", kind = "post", key = 6217, qty = 1, price = 4099, at = NOW + 2 * MINUTE, parent = "b", net = 971,
+        chance = 50 } }
+    local rows = VM.PlannedCraftRows(actions, function(key) return { name = tostring(key), quality = 1 } end, GOLD, NOW, 0)
+    assert_eq({ rows[1].profit, rows[1].netCopper }, { "+9s 71c", 971 })        -- never +19s 42c
+  end)
+
   it("A64 an own craft's mats stay within 25% of your gold", function()
     Boot()
     local Options = AHProfit.Options

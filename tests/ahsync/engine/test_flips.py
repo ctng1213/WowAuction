@@ -1,7 +1,11 @@
 """Tests for ahsync/engine/flips.py: buy to flip (SPEC §3.4C.2), invariant PL4."""
 from __future__ import annotations
 
+import json
 from dataclasses import replace
+from pathlib import Path
+
+import pytest
 
 from ahsync.engine import flips, plan, sellprob
 from ahsync.engine.flips import FlipSettings
@@ -131,3 +135,51 @@ def test_EX11_a_market_wide_flip_offer_for_one_reference_stack():
     expected, price = flips.flip_offer(49, 1.25, 0.0, 2, 0.9, 10.0, 10, 20)
     assert price == 61                                              # floor(49 × 1.25 + 0.5)
     assert abs(expected - 53.105) < 1e-9                            # 0.9 × 61 × 0.95 + 0.1 × (10 − 10 ÷ 20)
+
+
+SHARED = json.loads((Path(__file__).resolve().parents[3] / "tests" / "scenarios" / "prices.json").read_text(encoding="utf-8"))
+
+
+def dumped_linen(**changes) -> SellFacts:
+    """Linen (R24): 1 × 20 at 10c dumped below 5 × 20 at 50c; med7 48c, p90 55c; 54 sold a day, so 18 in 8 h."""
+    base = SellFacts(LINEN, level=48, trend7=0.0, post_price=9, sold_per_day=54.0, listed_per_day=0.0, ref_stack=20,
+                     how=tuple([1.0] * 168), sales_how=tuple([1.0] * 168), windows=(),
+                     book=((10, 20, 4, 1), (50, 20, 4, 5)), cur=10, cur_qty=20, vendor_sell=10, supply_now=120,
+                     conf=80, med7=48, p90=55)
+    return replace(base, **changes)
+
+
+def test_R24_a_dumped_stack_is_bought_and_relisted_now_under_the_next_level():
+    s = replace(S, default_undercut_share=0.0)
+    buy, post = flips.flip_plan({LINEN: dumped_linen()}, {"Amaya-G": RICH}, RICH, NOW, s, FS, {})
+    expected = 0.9 * 20 * 49 * 0.95 + 0.1 * (20 * 10 - 10)                 # 837.9 + 19 = 856.9
+    assert (buy.kind, buy.qty, buy.price, buy.chain) == ("buy", 20, 10, "flip:2589")
+    assert buy.expected == pytest.approx(expected) and buy.net == pytest.approx(expected - 200)
+    assert (post.kind, post.qty, post.price, post.at_ms, post.window_start_ms, post.peak_ms, post.duration_h) == \
+        ("post", 20, 49, NOW, None, None, 8)                                # min(50 − 1, max(48, 55)), due now, 8 h
+    assert (post.p, post.chain) == (pytest.approx(0.9), "flip:2589")
+    sat = dumped_linen(windows=(PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18),), book=((10, 20, 4, 1), (50, 20, 1, 5)),
+                       how=tuple(1.5 if h == SAT * 24 + 18 else 1.0 for h in range(168)))
+    buy, post = flips.flip_plan({LINEN: sat}, {"Amaya-G": RICH}, RICH, NOW, s, FS, {})
+    assert (post.price, post.peak_ms, buy.expected) == (72, MONDAY + SAT * DAY + 18 * HOUR, pytest.approx(1368))
+
+
+def test_R25_no_flip_when_the_next_level_is_too_close():
+    close = dumped_linen(book=((45, 20, 4, 1), (50, 20, 4, 5)), cur=45)
+    assert flips.flip_plan({LINEN: close}, {"Amaya-G": RICH}, RICH, NOW, replace(S, default_undercut_share=0.0), FS,
+                           {}) == []                                        # 856.9 < 1.2 × 900
+
+
+def test_relisting_needs_something_to_price_by():
+    alone = dumped_linen(book=((10, 20, 4, 1),), med7=None, p90=None)       # nothing left after the buy
+    [now] = flips.relisted(flips._remaining_book(alone, 1), plan.post_options(alone, NOW, S), S)
+    assert now.cap == 0
+    assert flips.flip_plan({LINEN: alone}, {"Amaya-G": RICH}, RICH, NOW, S, FS, {}) == []
+
+
+@pytest.mark.parametrize("s", [s for s in SHARED if s["call"] == "flip_now_offer"], ids=lambda s: s["name"])
+def test_FN1_a_flip_seen_in_a_live_book_shared_with_the_addon(s):
+    result = flips.flip_now_offer(**s["args"])
+    assert (result is None) == (s["expect"] is None), s["why"]
+    if result is not None:
+        assert result == pytest.approx(s["expect"]), s["why"]

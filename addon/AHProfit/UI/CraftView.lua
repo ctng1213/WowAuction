@@ -123,6 +123,22 @@ function ViewModel.CraftRows(options, lookOf, totalGold, actions, nowMs, offsetM
   return rows
 end
 
+--- A chain's profit, counted once (SPEC §3.4 expected net, D59; planned_crafts.chain_net): the actions other than
+--- posts that have a net (the final craft) carry it; its posts count their own net only when no such action does.
+---@param chain table[]  Every action of the chain
+---@return number        Copper (float)
+function ViewModel.ChainNet(chain)
+  local steps, posts, carried = 0, 0, false
+  for _, a in ipairs(chain) do
+    if a.kind == "post" then
+      posts = posts + (a.net or 0)
+    elseif a.net and a.net ~= 0 then
+      steps, carried = steps + a.net, true
+    end
+  end
+  return carried and steps or posts
+end
+
 --- One planned craft chain as a Craft tab row for its final product: every mat buy, the intermediate crafts
 --- made first, the chain's profit and when to sell (A63).
 ---@param craft table      The chain's last craft (its final product)
@@ -133,9 +149,9 @@ end
 ---@param offsetMs number
 ---@return table           Row of text
 local function PlannedRow(craft, chain, lookOf, totalGold, nowMs, offsetMs)
-  local look, notes, mats, net, post = lookOf(craft.key), {}, 0, 0, nil
+  local look, notes, mats, post = lookOf(craft.key), {}, 0, nil
+  local net = ViewModel.ChainNet(chain)                                -- counted once (D59)
   for _, a in ipairs(chain) do
-    net = net + (a.net or 0)
     if a.kind == "buy" then
       local cost = (a.price or 0) * a.qty
       mats = mats + cost

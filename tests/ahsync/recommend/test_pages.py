@@ -131,9 +131,10 @@ def test_V23_with_no_current_supply_the_craft_cap_uses_the_median_daily_supply(s
 
 def test_D56_the_plans_craft_chains_come_first_and_their_products_get_no_own_row(state):
     from ahsync.engine.plan import PlanAction
-    chain = [PlanAction("buy", "Brugan-G", BAR, 2, 1000, NOW, None, None, None, None, 0.0, -2000.0, chain="craft:2663",
+    chain = [PlanAction("buy", "Brugan-G", BAR, 2, 1000, NOW, None, None, None, None, 0.0, 0.0, chain="craft:2663",
                         source="ah"),
-             PlanAction("craft", "Brugan-G", ROD, 1, None, NOW, None, None, None, None, 0.0, 0.0, chain="craft:2663"),
+             PlanAction("craft", "Brugan-G", ROD, 1, None, NOW, None, None, None, None, 3600.0, 1600.0,
+                            chain="craft:2663"),                   # carries the profit: 36s - 20s (D59)
              PlanAction("post", "Brugan-G", ROD, 1, 4000, NOW, None, None, None, 0.9, 3600.0, 3600.0,
                         chain="craft:2663")]
     page = craft_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 500_000, NOW, Config(markets=(M,)), chain, 0)

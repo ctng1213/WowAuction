@@ -70,6 +70,19 @@ describe("ViewModel", function()
     assert_eq(VM.TodayFooter(VM.Today({ Act("a", "post", 500, NOW, 90) }, NOW, 0, 50, Look, GOLD), 50), "1 action · expected +5s")
   end)
 
+  it("A68 rows with volume unknown are shown with the marker, never hidden by Min chance", function()
+    local VM = Boot()
+    local looks = { [2589] = LOOKS[2589], [2840] = { name = "Copper Bar", quality = 1, conf = 30, volumeUnknown = true } }
+    local actions = { Act("a", "post", 500, NOW, 80), Act("b", "post", 2000, NOW, 30),
+                      Act("c", "post", 1000, NOW, 30, { key = 2840 }) }
+    local today = VM.Today(actions, NOW, 0, 50, function(key) return looks[key] end, GOLD)
+    assert_eq({ today.rows[1].id, today.rows[1].chance, today.rows[1].volume, today.rows[1].volumeUnknown,
+                today.rows[2].id, today.rows[2].volumeUnknown }, { "c", "30%", "—", true, "a", nil })
+    assert_eq(VM.TodayFooter(today, 50), "2 actions · expected +15s · 1 hidden (chance < 50%)")
+    assert_eq(VM.Look(2840, { volumeUnknown = true }).volumeUnknown, true)
+    assert_eq(VM.Look(2840, nil).volumeUnknown, false)
+  end)
+
   it("VW1 a flip's profit counts once: on its buy, not on its follow-up post", function()
     local VM = Boot()
     local buy = Act("buy", "buy", 290, NOW, nil, { qty = 20, price = 38 })

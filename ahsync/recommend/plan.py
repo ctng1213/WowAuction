@@ -112,13 +112,11 @@ def sell_facts(i: ItemIntel, info: ItemInfo | None, de: tuple[float, str] | None
         tuple(PlanWindow(w.start_slot, w.hours, w.best_slot) for w in i.sell_windows), i.book or None, i.cur,
         i.cur_qty, (info.vendor_sell if info else None) or 0, de[0] if de else None, de[1] if de else None, 0.0,
         supply_level(i), _pattern(i.supply_how, i.supply_weeks, ()),                        # V23
-        bool(info and info.item_class in GEAR_CLASSES), i.conf, record)
+        bool(info and info.item_class in GEAR_CLASSES), i.conf, record, i.med7, i.p90_30)
 
 
-def flip_candidate(i: ItemIntel, min_flip_margin: float) -> bool:
-    """Whether an item could flip at all: its best window could beat its cheapest auction by the margin.
-
-    A cheap filter so the flip search runs on a few items, not the whole market.
+def window_candidate(i: ItemIntel, min_flip_margin: float) -> bool:
+    """Whether an item's best window could beat its cheapest auction by the margin (SPEC §3.4C.2).
 
     Args:
         i: The item's intelligence.
@@ -135,6 +133,36 @@ def flip_candidate(i: ItemIntel, min_flip_margin: float) -> bool:
     best = max(how[w.best_slot] for w in i.sell_windows)
     trend = 1 + max(0.0, min(TREND_CLAMP_PCT, i.trend7)) / 100 * 7
     return level * best * trend * (1 - fees.AH_CUT) >= (1 + min_flip_margin) * i.cur
+
+
+def now_candidate(i: ItemIntel, min_flip_margin: float) -> bool:
+    """Whether relisting now just under the book's second price level could beat its cheapest auction (R24, R25).
+
+    Args:
+        i: The item's intelligence (its book, cur and posting-now chance).
+        min_flip_margin: Config min_flip_margin.
+
+    Returns:
+        True when (p2 − 1) × (1 − cut) × chance ≥ (1 + margin) × cur, p2 being the book's second-lowest price;
+        never without two price levels or for a suspect cur (FM5).
+    """
+    levels = sorted({price for price, _, _, _ in i.book})
+    if not i.cur or i.cur_suspect or len(levels) < 2:
+        return False
+    return (levels[1] - 1) * (1 - fees.AH_CUT) * i.chance >= (1 + min_flip_margin) * i.cur
+
+
+def flip_candidate(i: ItemIntel, min_flip_margin: float) -> bool:
+    """Whether an item could flip at all: a cheap filter so the flip search runs on a few items, not the market.
+
+    Args:
+        i: The item's intelligence.
+        min_flip_margin: Config min_flip_margin.
+
+    Returns:
+        True when its best window (window_candidate) or relisting now (now_candidate) could pay the margin.
+    """
+    return window_candidate(i, min_flip_margin) or now_candidate(i, min_flip_margin)
 
 
 def flip_offers(stats: dict[int, ItemIntel], items: dict[int, ItemInfo], vendor_sold: set[int], now_ms: int,
@@ -155,7 +183,7 @@ def flip_offers(stats: dict[int, ItemIntel], items: dict[int, ItemInfo], vendor_
     duration = fees.shortest_duration_covering(cfg.sell_window_hours)
     for key in sorted(stats):
         i = stats[key]
-        if key in vendor_sold or i.cur_suspect or not flip_candidate(i, cfg.min_flip_margin):
+        if key in vendor_sold or i.cur_suspect or not window_candidate(i, cfg.min_flip_margin):
             continue
         how = _pattern(i.how, i.how_weeks, FLAT)
         best = max(i.sell_windows, key=lambda w: (how[w.best_slot], -w.best_slot)).best_slot

@@ -15,6 +15,8 @@ local Craft = AHProfit.Engine.Craft
 local Options = {}
 Options.SELL_WINDOW_HOURS = 8      -- config sell_window_hours (SPEC §3.6): the posting-now window
 Options.MAX_SUPPLY_SHARE = 0.5     -- config max_supply_share (SPEC §3.4 Liquidity)
+Options.DEFAULT_SELL_PROB = 0.25   -- config default_sell_prob (SPEC §3.3.2 fallbacks)
+Options.DEFAULT_SELL_PROB_CHEAPEST = 0.5   -- config default_sell_prob_cheapest: volume unknown, you'd be cheapest
 AHProfit.Options = Options
 
 --- Total units per item of the unbound stacks in a list of bag rows.
@@ -28,9 +30,10 @@ function Options.Units(bags)
   return units
 end
 
---- An item's sell option re-priced from live listings (A19), as analysis prices it (market.analyze_item):
---- post at min(cheapest − 1, med7), P from the curve row for this hour at the units ahead, and
---- E_post per unit with the vendor price as the fallback and the deposit for the window.
+--- An item's sell option re-priced from live listings (A19, A67), as analysis prices it (market.analyze_item):
+--- post at min(cheapest − 1, max(med7, p90)), P from the curve row for this hour at the units ahead (with volume
+--- unknown and no curve, the default chance for the post's position in the live book), and E_post per unit with
+--- the vendor price as the fallback and the deposit for the window.
 ---@param item table          Market.Item(key)
 ---@param levels table[]      Live.Levels for the item
 ---@param curve table|nil     Market.Curve(key)
@@ -40,11 +43,16 @@ end
 function Options.Reprice(item, levels, curve, vendorEach, nowMs)
   local live = {}
   for k, v in pairs(item) do live[k] = v end
-  local price = Prices.PostPrice(levels[1] and levels[1].price, item.med7)
+  local cheapest = levels[1] and levels[1].price
+  local price = Prices.PostPrice(cheapest, item.med7, item.p90)
   if not price then return live end
   local ref = item.refStack or 1
   local p = item.chance or 0
-  if curve then p = SellProb.Lookup(curve.rows, curve.refreshMs, nowMs, Live.Ahead(levels, price), curve.aheadPoints) end
+  if curve then
+    p = SellProb.Lookup(curve.rows, curve.refreshMs, nowMs, Live.Ahead(levels, price), curve.aheadPoints)
+  elseif item.volumeUnknown then
+    p = SellProb.DefaultChance(price, cheapest, Options.DEFAULT_SELL_PROB, Options.DEFAULT_SELL_PROB_CHEAPEST)   -- A67
+  end
   local deposit = Fees.DepositCopper(vendorEach, ref, Fees.ShortestDurationCovering(Options.SELL_WINDOW_HOURS))
   live.postPrice, live.chance = price, p
   live.sellValue = SellProb.ExpectedPost(p, ref, price, vendorEach, deposit) / ref

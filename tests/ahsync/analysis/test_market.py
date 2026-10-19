@@ -119,7 +119,8 @@ def test_AR1_analysis_gives_identical_intelligence_from_sqlite_and_from_memory(t
     assert failed_sqlite == failed_memory == {}
     assert to_json(from_sqlite) == to_json(from_memory)
     rod = from_memory.items[6217]
-    assert (rod.sold_per_day, rod.volume_source, rod.units_on_ah, rod.ref_stack) == (6.0, "books", 7, 1)
+    # 7 whole days at 6 a day with the default prior (V41): (42 + 1 × 1/12) ÷ (7 + 1/12)
+    assert (rod.sold_per_day, rod.volume_source, rod.units_on_ah, rod.ref_stack) ==         (pytest.approx((42 + 1 / 12) / (7 + 1 / 12)), "books", 7, 1)
     assert all(len(unpack(v, w).values) == 168 for v, w in ((rod.how, rod.how_weeks), (rod.sales_how, rod.sales_weeks),
                                                               (rod.supply_how, rod.supply_weeks)))
     assert rod.how and len(rod.curve) == 24 * 8

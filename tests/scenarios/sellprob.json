@@ -28,5 +28,20 @@
   "why": "refresh Fri 06:00, now Sat 08:00 = 26 hours later; 26 mod 24 = row 2, the 08:00 row"},
  {"id": "IU11", "name": "exported probabilities are 2% steps", "call": "quantize",
   "args": {"p": 0.853}, "expect": 43,
-  "why": "floor(0.853 x 50 + 0.5) = floor(43.15) = 43 -> 43 / 50 = 0.86, stored as char 35 + 43 = 'N'"}
+  "why": "floor(0.853 x 50 + 0.5) = floor(43.15) = 43 -> 43 / 50 = 0.86, stored as char 35 + 43 = 'N'"},
+ {"id": "PD1", "name": "cheaper than the cheapest other listing gets the cheapest default", "call": "default_chance",
+  "args": {"price": 49, "cur_others": 50, "default_sell_prob": 0.25, "default_sell_prob_cheapest": 0.5}, "expect": 0.5,
+  "why": "volume unknown, 49c <= 50c: you'd be the cheapest -> default_sell_prob_cheapest 0.5"},
+ {"id": "PD1", "name": "a tie with the cheapest counts as cheapest", "call": "default_chance",
+  "args": {"price": 50, "cur_others": 50, "default_sell_prob": 0.25, "default_sell_prob_cheapest": 0.5}, "expect": 0.5,
+  "why": "50c <= 50c"},
+ {"id": "PD1", "name": "someone cheaper gets the plain default", "call": "default_chance",
+  "args": {"price": 51, "cur_others": 50, "default_sell_prob": 0.25, "default_sell_prob_cheapest": 0.5}, "expect": 0.25,
+  "why": "51c > 50c -> default_sell_prob 0.25"},
+ {"id": "PD1", "name": "nobody else listing it is the cheapest", "call": "default_chance",
+  "args": {"price": 49, "cur_others": null, "default_sell_prob": 0.25, "default_sell_prob_cheapest": 0.5}, "expect": 0.5,
+  "why": "no competitor"},
+ {"id": "PD1", "name": "an unknown price with nobody else listing it", "call": "default_chance",
+  "args": {"price": null, "cur_others": null, "default_sell_prob": 0.25, "default_sell_prob_cheapest": 0.5}, "expect": 0.5,
+  "why": "no competitor"}
 ]

@@ -1,8 +1,9 @@
 """The weekly plan, part 2: buy to flip (SPEC §3.4C.2).
 
-A flip buys auctions now, cheapest first, and posts them for an upcoming selling
-window. It is planned only when its expected profit, after fees and the chance to
-sell, is at least min_flip_margin × its cost, and flips are taken best expected
+A flip buys auctions now, cheapest first, and posts them now, just under the listings
+left after the buy, or for an upcoming selling window, whichever pays more (R24). It is
+planned only when its expected profit, after fees and the chance to sell, is at least
+min_flip_margin × its cost, and flips are taken best expected
 profit × confidence first. Every flip stays within:
 - its character's budget (SPEC §3.4C.4, R9);
 - max_risk_pct of all your gold, so a buy may be smaller than a stack (§3.4 Risk, R19);
@@ -17,7 +18,8 @@ from dataclasses import dataclass, replace
 
 from ahsync.engine import fees, sellprob
 from ahsync.engine.plan import PlanAction, PlanSettings, PostOption, SellFacts, alternative, post_chance, \
-    post_options, slot_price, window_id
+    post_options, record_price, slot_price, window_id
+from ahsync.engine.prices import post_price
 
 
 @dataclass(frozen=True)
@@ -36,7 +38,7 @@ class _Stage:
     expected: float                    # expected value of the posts, float copper
     units: int
     top_price: int                     # the highest unit price paid ("buy at or below")
-    posts: dict[int, list]             # option index -> [units, expected value, expected units sold, cost]
+    posts: dict[tuple[int, int], list]  # (option index, unit price) -> [units, expected, expected units sold, cost]
 
 
 def pays(expected: float, cost: int, min_flip_margin: float) -> bool:
@@ -88,24 +90,46 @@ def _remaining_book(f: SellFacts, bought: int) -> SellFacts:
     return replace(f, book=tuple((p, s, b, n) for (p, s, b), n in sorted(left.items())))
 
 
+def relisted(f_left: SellFacts, opts: list[PostOption], s: PlanSettings) -> list[PostOption]:
+    """The options with posting now re-priced for the book left after the buy (SPEC §3.4C.2, R24).
+
+    Args:
+        f_left: The item, with the bought auctions out of its book.
+        opts: post_options of the item (posting now included).
+        s: Settings.
+
+    Returns:
+        The same options in order; posting now is post_price(the cheapest listing left, med7, p90) after your
+        record, and has no room (cap 0) when nothing is left to price it by.
+    """
+    price = post_price(sellprob.cheapest_other(f_left.book, f_left.cur), f_left.med7, f_left.p90)
+    out = []
+    for o in opts:
+        if o.window is None:
+            o = replace(o, cap=0) if price is None else replace(o, price=record_price(f_left, price, s))
+        out.append(o)
+    return out
+
+
 def _best_window(f: SellFacts, opts: list[PostOption], used: list[float], stage: _Stage, qty: int,
                  s: PlanSettings) -> tuple[int, float, float] | None:
-    """The best selling window for one more auction's units, within the windows' capacity.
+    """The best way to sell one more auction's units, posting now or for a window, within capacity.
 
     Args:
         f: The item, with the bought auctions out of its book.
-        opts: The selling-window options (no posting now: a flip sells later).
+        opts: The options, posting now re-priced for that book (relisted).
         used: Units already planned per option by anyone (the ledger).
         stage: The flip so far.
         qty: Units of the auction.
         s: Settings.
 
     Returns:
-        (option index, expected value, P), highest value first; None when no window has room.
+        (option index, expected value, P), highest value first (ties: the earlier option); None when no option
+        has room.
     """
     best = None
     for i, o in enumerate(opts):
-        mine = stage.posts.get(i, [0])[0]
+        mine = sum(slot[0] for (j, _), slot in stage.posts.items() if j == i)
         if used[i] + mine + qty > o.cap:
             continue
         p = post_chance(f, o.price, qty, o.hours, used[i] + mine, s)
@@ -119,9 +143,9 @@ def _best_window(f: SellFacts, opts: list[PostOption], used: list[float], stage:
 def build_flip(f: SellFacts, now_ms: int, s: PlanSettings, fs: FlipSettings, ledger: dict, spend_limit: int) -> _Stage | None:
     """The flip worth making for one item: auctions bought cheapest first while each still pays.
 
-    An auction is added while it fits the spend limit and a selling window with room,
-    and while its own expected profit is at least min_flip_margin × its cost; prices only
-    rise along the book, so the first one that fails ends the flip.
+    An auction is added while it fits the spend limit and an option with room (posting now, under what is left
+    after the buy, or a selling window), and while its own expected profit is at least min_flip_margin × its
+    cost; prices only rise along the book, so the first one that fails ends the flip.
 
     Args:
         f: The item.
@@ -134,18 +158,20 @@ def build_flip(f: SellFacts, now_ms: int, s: PlanSettings, fs: FlipSettings, led
     Returns:
         The flip; None when not even one auction is worth it.
     """
-    opts = [o for o in post_options(f, now_ms, s) if o.window is not None]
+    opts = post_options(f, now_ms, s)
     used = [ledger.get((f.key, window_id(o)), 0.0) for o in opts]
     stage = _Stage(0, 0.0, 0, 0, {})
     for n, (price, stack, _) in enumerate(auctions(f.book, f.cur, f.cur_qty)):
         cost = price * stack
         if stage.cost + cost > spend_limit:
             break
-        best = _best_window(_remaining_book(f, n + 1), opts, used, stage, stack, s)
+        left = _remaining_book(f, n + 1)
+        here = relisted(left, opts, s)
+        best = _best_window(left, here, used, stage, stack, s)
         if best is None or not pays(best[1], cost, fs.min_flip_margin):
             break
         i, e, p = best
-        slot = stage.posts.setdefault(i, [0, 0.0, 0.0, 0])
+        slot = stage.posts.setdefault((i, here[i].price), [0, 0.0, 0.0, 0])
         slot[0], slot[1], slot[2], slot[3] = slot[0] + stack, slot[1] + e, slot[2] + p * stack, slot[3] + cost
         stage = replace(stage, cost=stage.cost + cost, expected=stage.expected + e, units=stage.units + stack,
                         top_price=price)
@@ -157,6 +183,7 @@ def _flip_actions(f: SellFacts, stage: _Stage, char_id: str, now_ms: int, s: Pla
 
     The buy carries the chain's expected profit; each post carries its own net against
     what its units cost, which views use once the buy has left the view (SPEC §3.4 expected net).
+    A post for now has no window: it is due now, for the posting-now window's duration (R24).
 
     Args:
         f: The item.
@@ -166,19 +193,19 @@ def _flip_actions(f: SellFacts, stage: _Stage, char_id: str, now_ms: int, s: Pla
         s: Settings.
 
     Returns:
-        [buy, posts by time].
+        [buy, posts by time (ties: price)].
     """
     chain = f"flip:{f.key}"
-    opts = [o for o in post_options(f, now_ms, s) if o.window is not None]
+    opts = post_options(f, now_ms, s)
     buy = PlanAction("buy", char_id, f.key, stage.units, stage.top_price, now_ms, None, None, None, None,
                      stage.expected, stage.expected - stage.cost, chain=chain, source="ah")
     posts = []
-    for i, (units, expected, sold, cost) in sorted(stage.posts.items()):
+    for (i, price), (units, expected, sold, cost) in sorted(stage.posts.items()):
         o = opts[i]
-        start, end, best = o.window
-        posts.append(PlanAction("post", char_id, f.key, units, o.price, o.at_ms, start, end, best, sold / units,
+        start, end, best = o.window if o.window else (None, None, None)
+        posts.append(PlanAction("post", char_id, f.key, units, price, o.at_ms, start, end, best, sold / units,
                                 expected, expected - cost, o.duration_h, chain))
-    return [buy] + sorted(posts, key=lambda a: a.at_ms)
+    return [buy] + sorted(posts, key=lambda a: (a.at_ms, a.price))
 
 
 def flip_plan(facts: dict[int, SellFacts], budgets: dict[str, int], total_gold: int, now_ms: int, s: PlanSettings,
@@ -217,8 +244,8 @@ def flip_plan(facts: dict[int, SellFacts], budgets: dict[str, int], total_gold: 
         if stage is None:
             continue
         budgets[char_id] -= stage.cost
-        opts = [o for o in post_options(facts[key], now_ms, s) if o.window is not None]
-        for i, (units, *_rest) in stage.posts.items():
+        opts = post_options(facts[key], now_ms, s)
+        for (i, _), (units, *_rest) in sorted(stage.posts.items()):
             ledger[(key, window_id(opts[i]))] = ledger.get((key, window_id(opts[i])), 0.0) + units
         actions.extend(_flip_actions(facts[key], stage, char_id, now_ms, s))
     return actions
@@ -244,3 +271,26 @@ def flip_offer(level: int, how_best: float, trend7: float, days_ahead: float, p:
     price = slot_price(level, how_best, trend7, days_ahead)
     return sellprob.expected_post(p, ref, price, fallback, deposit) / ref, price
 
+
+def flip_now_offer(p: float, units: int, cheapest: int, relist: int, fallback: float, deposit: int,
+                   min_flip_margin: float) -> float | None:
+    """A flip seen in a live book: buy the cheapest level, relist now under the next one (SPEC §4.0, FN1).
+
+    The addon's Prices.FlipNow is its twin; both use post_price for relist.
+
+    Args:
+        p: Chance the units sell posted now at relist with nothing ahead (the curve at 0 ahead, or
+            default_chance for the cheapest position when volume is unknown).
+        units: Units bought: the cheapest level's, at most one reference stack.
+        cheapest: The cheapest level's unit price, copper.
+        relist: The relist unit price, post_price(second level, med7, p90), copper.
+        fallback: Value per unsold unit, float copper.
+        deposit: Deposit for the posting-now window, copper.
+        min_flip_margin: Config min_flip_margin.
+
+    Returns:
+        E_post(p, units, relist, fallback, deposit), float copper, when its profit over the cost cheapest × units
+        is at least the margin (pays); None otherwise.
+    """
+    expected = sellprob.expected_post(p, units, relist, fallback, deposit)
+    return expected if pays(expected, cheapest * units, min_flip_margin) else None

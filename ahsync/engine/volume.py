@@ -66,6 +66,44 @@ class Cover:
 
 
 @dataclass(frozen=True)
+class VolumePrior:
+    """A Gamma-Poisson prior on an item's sales rate (SPEC §3.3.1 "A short sample", V41).
+
+    It counts as `hours` of observation that saw `per_day` units sold per day, so two hours with no sales give a
+    small rate, not 0, and two hours with one sale don't give 12/day.
+    """
+
+    per_day: float = 1.0       # config volume_prior_per_day: units per day the prior believes in
+    hours: float = 2           # config volume_prior_hours: how many hours of observation it is worth
+
+    @property
+    def days(self) -> float:
+        """The prior's weight in day-equivalents.
+
+        Returns:
+            hours ÷ 24.
+        """
+        return self.hours / 24
+
+
+NO_PRIOR = VolumePrior(0.0, 0)    # the raw estimate: sold ÷ day-equivalents observed
+
+
+def posterior_rate(units: float, days: float, prior: VolumePrior) -> float:
+    """Posterior mean of a daily rate: (units + prior per day × prior days) ÷ (days + prior days) (SPEC §3.3.1).
+
+    Args:
+        units: Units seen over the observed time.
+        days: Day-equivalents observed (> 0).
+        prior: The prior; NO_PRIOR gives the raw units ÷ days.
+
+    Returns:
+        Units per day.
+    """
+    return (units + prior.per_day * prior.days) / (days + prior.days)
+
+
+@dataclass(frozen=True)
 class DailyVolume:
     """Per-day average volume over a window, and which source each day used."""
 
@@ -460,7 +498,7 @@ def ids_factor(rows: dict[int, dict[str, Volume]], cover: dict[int, dict[str, Co
 
 def daily_volume(rows: dict[int, dict[str, Volume]], days: Sequence[int],
                  cover: dict[int, dict[str, Cover]] | None = None,
-                 sales_how: Sequence[float] | None = None) -> DailyVolume:
+                 sales_how: Sequence[float] | None = None, prior: VolumePrior = NO_PRIOR) -> DailyVolume:
     """Sold, expired and listed per day over a window, from each day's best source (SPEC §3.3.1).
 
     Args:
@@ -469,10 +507,13 @@ def daily_volume(rows: dict[int, dict[str, Volume]], days: Sequence[int],
         days: The window's day numbers (floor(ms / 86400000)).
         cover: day -> src -> Cover; a row without one is an older stored row (LEGACY_KIND, whole day).
         sales_how: The item's 168-slot hourly sales profile, to weight partly observed days; None for flat.
+        prior: The sales-rate prior (V41); NO_PRIOR, the default, gives the raw rates.
 
     Returns:
-        Sold per day = the window's sold units ÷ the day-equivalents of sales observed (a 2 h sample is 2/24
-        of a day when sales are flat); expired and listed per day likewise by hours observed. Group diffs are
+        Sold per day = (the window's sold units + prior per day × prior days) ÷ (the day-equivalents of sales
+        observed + prior days): a 2 h sample is 2/24 of a day when sales are flat; listed per day likewise by
+        hours observed; expired per day is the plain mean by hours observed (it only feeds the informational
+        sell-through). Group diffs are
         multiplied by the id calibration, and never fall below your own mail's sold units for the part of the
         day observed. All None when no day has a source. main_source / main_kind name the source used on most
         days and its kind, for the label shown with sales (D57).
@@ -504,7 +545,8 @@ def daily_volume(rows: dict[int, dict[str, Volume]], days: Sequence[int],
     if not used:
         return DailyVolume(None, None, None, {})
     main = max(used, key=lambda s: (used[s], s))
-    return DailyVolume(sold / shares, expired / time_shares, listed / time_shares, used,
+    return DailyVolume(posterior_rate(sold, shares, prior), expired / time_shares,
+                       posterior_rate(listed, time_shares, prior), used,
                        min(1.0, score / max(1, len(days))), main, kinds[main])
 
 

@@ -218,3 +218,23 @@ def test_D43_needs_a_decision_lists_the_items_flagged_not_selling():
     today = plan_views.today_view([], NOW, 0, 0.0, looks, GOLD)
     assert [(d["key"], d["item"]) for d in today["decisions"]] == [(str(BAR), "Copper Bar")]
     assert today["decisions"][0]["record"].startswith("Your record (30 d): 0 of 3 sold")
+
+
+def test_D58_rows_with_volume_unknown_are_shown_with_the_marker_never_hidden():
+    looks = {**LOOKS, BAR: ItemLook("Copper Bar", 1, 30, None, None, None, volume_unknown=True)}
+    rows = [act("a", "post", 500, NOW, 0.8), act("b", "post", 2000, NOW, 0.3),
+            act("c", "post", 1000, NOW, 0.3, key=BAR)]
+    for step in (0.25, 0.5, 0.75):
+        view = plan_views.today_view(rows, NOW, 0, step, looks, GOLD)
+        assert [r["id"] for r in view["rows"] if r["item"] == "Copper Bar"] == ["c"]
+    view = plan_views.today_view(rows, NOW, 0, 0.5, looks, GOLD)
+    assert [(r["net"], r["chance"], r["chance_note"]) for r in view["rows"]] == \
+        [("+10s", "30%", "volume unknown"), ("+5s", "80%", "")]
+    assert (view["hidden"], view["total"]) == (1, "+15s")
+
+
+def test_R24_a_flip_relisted_now_says_so_on_the_flip_tab():
+    buy = act("f", "buy", 657, NOW, in_chain=True, qty=20, price=10, expected=857)
+    post = act("g", "post", 657, NOW, 0.9, parent_id="f", in_chain=True, qty=20, price=49)
+    [row] = plan_views.flip_view([buy, post], 0, LOOKS, GOLD)["rows"]
+    assert (row["sell_each"], row["sell_slot"], row["why"]) == ("49c", "Fri 14:30", "relist now, under the listings left")

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from ahsync.engine.volume import (
+from ahsync.engine.volume import (NO_PRIOR, VolumePrior, posterior_rate,
     MAX_GAP_MS, Auction, Book, BookEntry, Cover, IdBook, Volume, book_pairs, calibration_factor, covered_seconds, daily_volume, day_shares,
     estimate_volume, estimate_volume_ids, expiring_fraction, group_book, hourly_sales, observed_turnover, listing_turnover, supply_to_volume,
 )
@@ -404,3 +404,46 @@ def test_V37_observed_listing_turnover_is_units_that_left_per_day_observed_never
     # 120 → 80 (40 left), 80 → 90 (none), 90 → 50 is 7 h later (not a pair): 40 units over 3 h → 320 a day
     assert observed_turnover(supply, ten + 11 * HOUR_MS) == pytest.approx(320)
     assert observed_turnover(supply, ten + 30 * 86_400_000) is None and observed_turnover([], 0) is None
+
+
+PRIOR = VolumePrior()            # 1 a day, worth 2 h = 1/12 of a day
+SEED_VI4 = 20261021
+
+
+def test_V41_a_short_sample_is_pulled_toward_the_prior():
+    two_hours = {D: {"books": Cover("groups", TEN_TO_NOON)}}
+    none_sold = daily_volume({D: {"books": Volume(0, 4, 4)}}, [D], two_hours, FLAT, PRIOR)
+    assert none_sold.sold_per_day == pytest.approx((0 + 1 / 12) / (1 / 12 + 1 / 12))           # 0.5, not 0
+    assert none_sold.listed_per_day == pytest.approx((4 + 1 / 12) / (2 / 12))                  # 24.5
+    assert none_sold.expired_per_day == pytest.approx(48)                                      # no prior: 4 ÷ 1/12
+    forty = daily_volume({D: {"books": Volume(40, 0, 0)}}, [D], two_hours, FLAT, PRIOR)
+    assert forty.sold_per_day == pytest.approx(240.5)                                          # not 480 (V30)
+    week = daily_volume({d: {"ahf": Volume(40, 0, 0)} for d in range(7)}, range(7), prior=PRIOR)
+    assert week.sold_per_day == pytest.approx((280 + 1 / 12) / (7 + 1 / 12))                  # ≈ 39.5
+    assert daily_volume({}, range(7), prior=PRIOR).sold_per_day is None                        # unknown stays unknown
+    assert PRIOR.days == pytest.approx(1 / 12) and NO_PRIOR.days == 0
+
+
+def random_sample(rng) -> tuple[float, float, float, float]:
+    """Sold units, day-equivalents observed and a prior.
+
+    Args:
+        rng: The shared Random.
+
+    Returns:
+        (sold, days observed, prior per day, prior hours).
+    """
+    return rng.uniform(0, 500), rng.uniform(0.01, 30), rng.uniform(0, 50), rng.uniform(0, 48)
+
+
+def test_VI4_the_prior_rate_is_monotonic_bounded_and_fades_with_more_data():
+    for i, (sold, days, per_day, prior_hours) in enumerate(cases(SEED_VI4, random_sample)):
+        context = f"seed {SEED_VI4} case {i}"
+        prior = VolumePrior(per_day, prior_hours)
+        rate = posterior_rate(sold, days, prior)
+        raw = sold / days
+        assert posterior_rate(sold + 1, days, prior) >= rate, context
+        assert min(raw, per_day) - 1e-9 <= rate <= max(raw, per_day) + 1e-9, context
+        far = posterior_rate(raw * 10_000, 10_000, prior)                    # the same rate over 10,000 days
+        assert abs(far - raw) <= abs(rate - raw) + 1e-9, context
+        assert far == pytest.approx(raw, rel=0.01, abs=0.05), context

@@ -108,9 +108,17 @@ def test_post_price_with_missing_inputs():
     assert post_price(None, None) is None
 
 
-@pytest.mark.parametrize("s", SHARED, ids=[s["name"] for s in SHARED])
+POST_PRICE = [s for s in SHARED if s["call"] == "post_price"]
+
+
+@pytest.mark.parametrize("s", [s for s in POST_PRICE if s["id"] == "PP1"], ids=lambda s: s["name"])
 def test_PP1_post_price_shared_with_the_addon(s):
-    assert post_price(s["args"]["cur_others"], s["args"]["med7"]) == s["expect"], s["why"]
+    assert post_price(s["args"]["cur_others"], s["args"]["med7"], s["args"]["p90"]) == s["expect"], s["why"]
+
+
+@pytest.mark.parametrize("s", [s for s in POST_PRICE if s["id"] == "PP2"], ids=lambda s: s["name"])
+def test_PP2_post_price_undercuts_up_to_the_30_day_p90(s):
+    assert post_price(s["args"]["cur_others"], s["args"]["med7"], s["args"]["p90"]) == s["expect"], s["why"]
 
 
 def test_FM5_a_price_far_out_of_range_is_suspect_until_a_second_hour_confirms_it():

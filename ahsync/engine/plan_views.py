@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from ahsync.engine.views import MarketActivity, market_activity, money, risk, round_half_up, signed_money
 from ahsync.engine.sell_record import Record
@@ -164,6 +164,7 @@ class ItemLook:
     paid_each: int | None = None            # what you paid per unit, copper; None before tracking (T7)
     record: Record | None = None            # your own sell record (SPEC §3.3.3)
     kind: str | None = None                 # the main volume source's kind: "ids" | "groups" | "own" (D57)
+    volume_unknown: bool = False            # the intelligence's chance is the default: never hidden by Min chance (D58)
 
 
 def _activity(look: ItemLook, p: float | None) -> MarketActivity:
@@ -174,9 +175,10 @@ def _activity(look: ItemLook, p: float | None) -> MarketActivity:
         p: The row's chance, or None.
 
     Returns:
-        views.market_activity's cells.
+        views.market_activity's cells; the chance carries "volume unknown" when the intelligence says so (D58).
     """
-    return market_activity(p, look.conf, look.sold_per_day, look.source, look.units_on_ah, look.kind)
+    m = market_activity(p, look.conf, look.sold_per_day, look.source, look.units_on_ah, look.kind)
+    return replace(m, chance_note="volume unknown") if look.volume_unknown and p is not None else m
 
 
 QTY_FRACTIONS = {1: "½", 2: "¼"}            # Latin-1 only: WoW's fonts lack ⅛ (shown "1/8")
@@ -248,7 +250,8 @@ def today_view(actions: Sequence[ViewAction], now_ms: int, offset_ms: int, min_s
 
     "Now" is any open action due within the next hour. Ties go to the higher chance, then
     the item name, then the character, so the order is always the same (§8.6). Rows whose
-    chance is below min_sell_prob are hidden and counted; rows with nothing to sell never are.
+    chance is below min_sell_prob are hidden and counted; rows with nothing to sell, and rows of
+    items whose volume is unknown (their chance is a default, D58), never are.
 
     Args:
         actions: The plan, with history.
@@ -267,7 +270,7 @@ def today_view(actions: Sequence[ViewAction], now_ms: int, offset_ms: int, min_s
     rows, hidden = [], 0
     for a in due:
         p = chance_of(a, chains)
-        if p is not None and p < min_sell_prob:
+        if p is not None and p < min_sell_prob and not looks[a.key].volume_unknown:
             hidden += 1
             continue
         net, note = nets[a.action_id]
@@ -488,7 +491,8 @@ def _flip_row(buy: ViewAction, posts: list[ViewAction], look: ItemLook, total_go
     return {
         "id": buy.action_id, "item": look.name, "quality": look.quality, "qty": buy.qty, "buy_each": money(buy.price),
         "buy_total": money(cost), "sell_each": money(first.price), "sell_slot": f"{day} {hour}",
-        "why": f"{day} peak {uplift:+d}% over its recent median" if uplift is not None else "",
+        "why": "relist now, under the listings left" if first.peak_ms is None else
+               f"{day} peak {uplift:+d}% over its recent median" if uplift is not None else "",
         "profit": signed_money(buy.net), "seasonality": "—" if look.seasonality is None else str(look.seasonality),
         "roi": f"{roi}%", "chance": m.chance, "chance_note": m.chance_note, "confidence": m.confidence, "dot": m.dot,
         "sales": m.sales, "supply": m.supply, "days": m.days, "risk": risk_text, "risk_amber": amber,
