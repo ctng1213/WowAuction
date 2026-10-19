@@ -76,15 +76,77 @@ function Plan.DecodeAction(text)
            status = f[10], chance = tonumber(f[11]), peak = tonumber(f[12]), vendor = f[13] == "v" }
 end
 
---- A character's open plan actions, in time order.
+--- A recipe's product, from the recipes the addon has seen.
+---@param db table
+---@param spell number
+---@return number|nil  Item key; nil when unknown
+local function ProductOf(db, spell)
+  for _, definitions in pairs(db.recipes or {}) do
+    local r = definitions[spell]
+    if r and r.product then return r.product end
+  end
+  return nil
+end
+
+--- What one of your events did, as the plan action it would match.
+---@param db table
+---@param e table   An event
+---@return string|nil, number|nil, number|nil  Action kind, item key, units; nil for anything else
+local function EventDid(db, e)
+  if e.confirmed == false then return nil end              -- an attempt is not a done action (FM20)
+  if e.type == "purchase" then return "buy", e.key, e.qty end
+  if e.type == "post" then return "post", e.key, e.stack end
+  if e.type == "craft" then return "craft", ProductOf(db, e.spell), e.count end
+  return nil
+end
+
+--- Mark the actions your events after the plan already did, locally and provisionally (SPEC §5.2, FM18):
+--- each confirmed purchase, post or craft newer than the character's ingestedUntil takes its units off
+--- the earliest open action of the same kind and item; an action with nothing left goes.
+---@param charId string
+---@param actions table[]   The character's decoded actions, in time order (their qty is lowered)
+---@param since number|nil  The character's ingestedUntil, ms; nil = AHSync has read none of its events
+---@return table[], number  The actions left, and the events applied
+function Plan.DoneLocally(charId, actions, since)
+  local db, applied = AHProfit.DB.Get() or {}, 0
+  for _, e in ipairs(db.events or {}) do
+    local kind, key, units = EventDid(db, e)
+    if kind and key and e.char == charId and e.at > (since or 0) then
+      for _, a in ipairs(actions) do
+        if a.kind == kind and a.key == key and a.qty > 0 and (units or 0) > 0 then
+          local take = math.min(a.qty, units)
+          a.qty, units = a.qty - take, units - take
+          applied = applied + 1
+          break
+        end
+      end
+    end
+  end
+  local left = {}
+  for _, a in ipairs(actions) do
+    if a.qty > 0 then left[#left + 1] = a end
+  end
+  return left, applied
+end
+
+--- A character's open plan actions, in time order, less what your newer events already did (FM18).
 ---@param charId string  "Name-Realm"
 ---@return table[]       As Plan.DecodeAction; empty without a usable plan
+---@return number        Events applied locally: > 0 means the plan is provisional
 function Plan.Actions(charId)
   local s = State()
-  if s.status ~= "ok" then return {} end
+  if s.status ~= "ok" then return {}, 0 end
   local out = {}
   for i, text in ipairs((s.file.actions or {})[charId] or {}) do out[i] = Plan.DecodeAction(text) end
-  return out
+  return Plan.DoneLocally(charId, out, (s.file.ingestedUntil or {})[charId])
+end
+
+--- How many of your events the plan doesn't include yet but were applied to it locally (FM18).
+---@param charId string
+---@return number  0 when the plan is up to date
+function Plan.Provisional(charId)
+  local _, applied = Plan.Actions(charId)
+  return applied
 end
 
 --- Every character's open plan actions, each with its character id.
@@ -96,7 +158,7 @@ function Plan.AllActions()
   for charId in pairs(s.file.actions or {}) do chars[#chars + 1] = charId end
   table.sort(chars)
   for _, charId in ipairs(chars) do
-    for _, a in ipairs(Plan.Actions(charId)) do
+    for _, a in ipairs((Plan.Actions(charId))) do
       a.char = charId
       out[#out + 1] = a
     end

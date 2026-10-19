@@ -37,6 +37,29 @@ local function Ids(rows)
 end
 
 describe("Plan", function()
+  it("FM18 your events after the plan mark its actions done locally, and the plan is provisional", function()
+    Stubs.Reset()
+    _G.AHProfitPlan = nil
+    Stubs.Login()
+    AHProfitDB.recipes = { Blacksmithing = { [2663] = { product = 6217 } } }
+    AHProfitDB.events = {
+      { id = "old", char = A, type = "purchase", at = T, key = 2589, qty = 20, confirmed = true },      -- AHSync has it
+      { id = "b", char = A, type = "purchase", at = T + HOUR, key = 2589, qty = 20, confirmed = true },
+      { id = "try", char = A, type = "purchase", at = T + HOUR, key = 2840, qty = 6, confirmed = false }, -- an attempt
+      { id = "p", char = A, type = "post", at = T + HOUR, key = 2840, stack = 5, confirmed = true },
+      { id = "c", char = A, type = "craft", at = T + HOUR, spell = 2663, count = 1 },
+      { id = "other", char = B, type = "purchase", at = T + HOUR, key = 2840, qty = 6, confirmed = true } }
+    local actions = { { kind = "buy", key = 2589, qty = 20 }, { kind = "buy", key = 2840, qty = 6 },
+                      { kind = "post", key = 2840, qty = 10 }, { kind = "craft", key = 6217, qty = 1 } }
+    local left, applied = AHProfit.Plan.DoneLocally(A, actions, T)
+    local out = {}
+    for i, a in ipairs(left) do out[i] = a.kind .. " " .. a.key .. " " .. a.qty end
+    assert_eq(out, { "buy 2840 6", "post 2840 5" })
+    assert_eq(applied, 3)
+    assert_eq(AHProfit.ViewModel.Provisional(applied), "provisional: 3 done in game since AHSync's plan · ")
+    assert_eq(AHProfit.ViewModel.Provisional(0), "")
+  end)
+
   it("A4 at login, rows AHSync committed are pruned per character", function()
     LoginWithRows()
     assert_eq(Ids(AHProfitDB.scans), { "s2", "s3" })      -- Amaya's scan at T goes; Brugan was never ingested

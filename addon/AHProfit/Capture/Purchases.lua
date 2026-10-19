@@ -71,10 +71,7 @@ end
 function Purchases.OnCommoditySettled(event)
   local succeeded = event == "COMMODITY_PURCHASE_SUCCEEDED"
   for _, e in ipairs(pendingCommodity) do
-    if succeeded then
-      e.confirmed = true
-      Live.NoteBought(e.key, e.qty)
-    end
+    if succeeded then e.confirmed = true end
   end
   pendingCommodity = {}
   Changed()
@@ -99,7 +96,6 @@ function Purchases.OnBuyoutCompleted(_, auctionId)
   pendingItems[auctionId or 0] = nil
   if not event then return end
   event.confirmed = true
-  Live.NoteBought(event.key, event.qty)
   Changed()
 end
 

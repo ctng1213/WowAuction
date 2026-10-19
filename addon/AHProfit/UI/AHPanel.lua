@@ -67,9 +67,9 @@ local function Targets(charId)
   local out, seen = {}, {}
   local actions = Plan.CharacterActions(charId)
   for _, a in ipairs(actions) do
-    local left = a.kind == "buy" and a.qty - Live.Bought(a.key) or 0           -- buyouts this session (A39)
-    if a.kind == "buy" and a.price and not a.vendor and not seen[a.key] and left > 0 then   -- vendor buys: not the AH (A32)
-      out[#out + 1], seen[a.key] = { key = a.key, qty = left, price = a.price, why = VM.BuyReason(a, actions) }, true
+    -- a.qty is already less what your confirmed purchases since the plan bought (A39, FM18)
+    if a.kind == "buy" and a.price and not a.vendor and not seen[a.key] then   -- vendor buys: not the AH (A32)
+      out[#out + 1], seen[a.key] = { key = a.key, qty = a.qty, price = a.price, why = VM.BuyReason(a, actions) }, true
     end
   end
   local best = Options.BestSkill(DB.Get() or {}, "Enchanting")

@@ -41,7 +41,6 @@ describe("Purchases", function()
     Stubs.FireEvent("AUCTION_HOUSE_PURCHASE_COMPLETED", 8)
     Stubs.FireEvent("AUCTION_HOUSE_PURCHASE_COMPLETED", 99)    -- not ours
     assert_eq(Purchases(), { "3239 4 10 ah true", "3239 3 10 ah false", "4240 1 200 ah true" })
-    assert_eq({ AHProfit.Live.Bought(3239), AHProfit.Live.Bought(4240) }, { 4, 1 })
   end)
 
   it("A46 a merchant purchase is a confirmed vendor purchase at the price per unit", function()

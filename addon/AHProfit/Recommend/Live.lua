@@ -9,7 +9,6 @@ local Live = {}
 AHProfit.Live = Live
 
 local searched = {}            -- item id -> { price, units, at } from AH search results this session (A24)
-local bought = {}              -- item id -> units bought on the AH this session, confirmed (A39)
 
 --- The units listed per unit price for an item, cheapest first, from a book.
 ---@param prices table|nil  unit price -> stack * 5 + band -> count
@@ -60,24 +59,9 @@ function Live.NoteSearch(itemId, price, units, atMs)
   searched[itemId] = { price = price, units = units, at = atMs }
 end
 
---- Note a confirmed AH purchase (A39); Capture/Purchases calls it.
----@param key number    Item key; a random-suffix key counts by its item id
----@param units number
-function Live.NoteBought(key, units)
-  local itemId = key < 0 and -key or key % 2147483648
-  bought[itemId] = (bought[itemId] or 0) + units
-end
-
---- Units of an item bought on the AH this session.
----@param key number  Item key; a random-suffix key counts by its item id
----@return number
-function Live.Bought(key)
-  return bought[key < 0 and -key or key % 2147483648] or 0
-end
-
---- Forget search results and purchases (tests).
+--- Forget search results (tests).
 function Live.Reset()
-  searched, bought = {}, {}
+  searched = {}
 end
 
 --- Units listed at or below a price.

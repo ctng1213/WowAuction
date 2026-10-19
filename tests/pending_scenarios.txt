@@ -3,7 +3,7 @@
 # Tokens: an ID (P12) or a same-prefix range (V1-V18). '#' starts a comment.
 
 # M1 sync and storage
-FM18 FM21 FM23
+FM21 FM23
 FI1
 
 # M3-M4 engine

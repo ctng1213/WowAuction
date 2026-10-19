@@ -94,7 +94,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | FM15 | second AHSync start | exits: "AHSync is already running" |
 | FM16 | `config.toml` has `retention_days = "ninety"` | refuses to start: "config.toml line 4: retention_days must be a number" |
 | FM17 | `MarketIntelligence.lua` schema version differs from the addon's | empty state plus "versions differ"; no Lua error |
-| FM18 | `basedOnUntil` is older than your last buy | that buy's action shows done locally; plan labelled provisional |
+| FM18 | the plan's `ingestedUntil` for Amaya is older than her confirmed buy of 20 Linen, her confirmed post of 5 Copper Bar (plan: post 10) and a craft of Copper Rod; an unconfirmed buy attempt; an older buy AHSync already read | the Linen buy is gone (done), the bar post shows 5 left, the rod craft is gone; the attempt and the older buy change nothing; Today's and Week's footers start "provisional: 3 done in game since AHSync's plan · "; after /reload the same (the events are saved) until AHSync writes a newer plan |
 | FM19 | AH closed at 40% of a full scan | saved as partial (coverage 40%); excluded from volume diffs |
 | FM20 | buy hook fires, then "not enough gold" | an attempt only; it expires after 1 h; no cost basis change |
 | FM21 | crash before logout; at the next login 20 Linen are missing from bags | recorded as an untracked change; no invented sale or cost |

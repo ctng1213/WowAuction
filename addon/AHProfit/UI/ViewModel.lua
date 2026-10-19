@@ -353,6 +353,14 @@ function ViewModel.Today(actions, nowMs, offsetMs, minChance, lookOf, totalGold)
   return { rows = rows, hidden = hidden, total = ViewModel.SignedMoney(total), count = #rows }
 end
 
+--- The footer's provisional label when your newer events were applied to an older plan (FM18).
+---@param applied number  Events applied locally
+---@return string         "provisional: 3 done in game since AHSync's plan · ", or "" when none
+function ViewModel.Provisional(applied)
+  if applied <= 0 then return "" end
+  return "provisional: " .. applied .. " done in game since AHSync's plan · "
+end
+
 --- Add each row's sell record line as a note line of its own (A52).
 ---@param rows table[]       Today or Week rows (each with key)
 ---@param recordOf function  key -> { line } or nil (Plan.Record)

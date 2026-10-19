@@ -628,11 +628,13 @@ local function Lines(nowMs, gold)
     for _, line in ipairs(VM.WithNotes(VM.Decisions(Plan.NotSelling(), Plan.Record, LookOf, decided))) do
       lines[#lines + 1] = line                                     -- Needs a decision, below the rows (A52)
     end
-    return lines, VM.TodayFooter(today, view.minChance, gone), "Nothing to do in the next hour."
+    return lines, VM.Provisional(Plan.Provisional(charId)) .. VM.TodayFooter(today, view.minChance, gone),
+      "Nothing to do in the next hour."
   end
   local week = VM.Week(actions, nowMs, offset, LookOf, gold)
   for _, day in ipairs(week.days or {}) do VM.AddRecords(day.rows or {}, Plan.Record) end
-  return VM.WithNotes(VM.WeekLines(week)), "Week total " .. week.total, "Nothing planned this week."
+  return VM.WithNotes(VM.WeekLines(week)), VM.Provisional(Plan.Provisional(charId)) .. "Week total " .. week.total,
+    "Nothing planned this week."
 end
 
 --- Draw the title, tabs and Min chance box for the current state.
