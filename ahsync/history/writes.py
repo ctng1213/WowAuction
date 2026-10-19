@@ -36,8 +36,8 @@ class HistoryWrites:
              for t, rate in sorted(by_hour.items()) if from_ms <= t <= to_ms])
 
     def replace_volume_day(self, market: str, day: int, src: str, rows: dict[int, tuple[float, float, float]],
-                           method: int | None = None) -> None:
-        """Write one day's volume for one source whole (idempotent: recomputed, never added to).
+                           method: int | None = None, cover: tuple[str, tuple[int, ...] | None] | None = None) -> None:
+        """Write one day's volume for one source whole, with how it observed the day (idempotent; SPEC §3.3.1).
 
         Args:
             market: Market id.
@@ -45,8 +45,15 @@ class HistoryWrites:
             src: Volume source, e.g. "books".
             rows: key -> (sold, expired, listed).
             method: The estimation method's version for an estimated source (V24); None for a confirmed one.
+            cover: (kind, seconds observed per UTC hour or None for the whole day); None leaves no cover row
+                (the source's legacy kind then applies).
         """
         self.conn.execute("DELETE FROM volume_d1 WHERE market = ? AND day = ? AND src = ?", (market, day, src))
+        self.conn.execute("DELETE FROM volume_cover WHERE market = ? AND day = ? AND src = ?", (market, day, src))
+        if cover is not None:
+            self.conn.execute(
+                "INSERT INTO volume_cover(market, day, src, kind, covered) VALUES (?, ?, ?, ?, ?)",
+                (market, day, src, cover[0], None if cover[1] is None else ",".join(map(str, cover[1]))))
         self.conn.executemany(
             "INSERT INTO volume_d1(market, key, day, listed, sold, expired, src, conf, method) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",

@@ -139,6 +139,7 @@ def test_sales_hours_of_books_far_apart_are_recomputed_separately(db):
 
 def test_V24_a_new_method_recomputes_estimates_with_stored_books_and_counts_the_rest(db, monkeypatch):
     from ahsync.collect import local_scans
+    monkeypatch.setattr(local_scans, "VOLUME_METHOD_VERSION", 1)
     first = scan(db, "s1", D * DAY + 10 * HOUR, [(LINEN, 50, 20, LONG, 5)])
     second = scan(db, "s2", D * DAY + 12 * HOUR, [(LINEN, 50, 20, LONG, 3)])
     with db.transaction():
@@ -156,3 +157,34 @@ def test_V24_a_new_method_recomputes_estimates_with_stored_books_and_counts_the_
     monkeypatch.setattr(local_scans, "VOLUME_METHOD_VERSION", 1)
     with db.transaction():
         assert local_scans.recompute_stale_volume(db, M) == 0             # nothing older than the current method
+
+
+def cover(db: Database, day: int) -> list[tuple]:
+    """Stored books cover for a day."""
+    return db.conn.execute("SELECT kind, covered FROM volume_cover WHERE market = ? AND day = ? AND src = 'books'",
+                           (M, day)).fetchall()
+
+
+def test_V29_books_of_every_source_pair_for_daily_volume_and_record_the_hours_observed(db):
+    from ahsync.collect.local_scans import book_days
+    eighteen = D * DAY + 18 * HOUR
+    db.store_book(BookScan("ahf1", M, "ahf", None, eighteen, "full", 1.0), [(LINEN, 50, 20, LONG, 5)])
+    mine = scan(db, "s1", eighteen + 40 * 60_000, [(LINEN, 50, 20, LONG, 4)])
+    with db.transaction():
+        derive_from_scans(db, [mine])
+    assert volume(db, D) == [(LINEN, 20.0, 0.0, 0.0)]
+    db.store_book(BookScan("ahf2", M, "ahf", None, eighteen + HOUR, "full", 1.0), [(LINEN, 50, 20, LONG, 3)])
+    with db.transaction():
+        for day in sorted(book_days(db, M, [eighteen + HOUR])):          # as catch-up does for AHF books
+            recompute_book_volume(db, M, day)
+    assert volume(db, D) == [(LINEN, 40.0, 0.0, 0.0)]
+    expected = ",".join("3600" if h == 18 else "0" for h in range(24))
+    assert cover(db, D) == [("groups", expected)]
+    assert book_days(db, M, [eighteen]) == {D}
+
+
+def test_a_day_without_pairs_has_no_cover(db):
+    lone = scan(db, "s1", D * DAY + 10 * HOUR, [(LINEN, 50, 20, LONG, 5)])
+    with db.transaction():
+        derive_from_scans(db, [lone])
+    assert (volume(db, D), cover(db, D)) == ([], [])

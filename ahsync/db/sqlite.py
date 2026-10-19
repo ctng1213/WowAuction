@@ -25,7 +25,7 @@ from ahsync.recommend.store import RecommendStore
 from ahsync.state.journal import JournalReads
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
@@ -108,6 +108,15 @@ MIGRATIONS: dict[int, str] = {
     15: """
         ALTER TABLE own_auctions ADD COLUMN end_ms INTEGER
     """,
+    # 16: how each volume source observed a day (V29-V32); the calibration table was never written: id
+    # calibration is computed from the stored rows (V16).
+    16: """
+        CREATE TABLE IF NOT EXISTS volume_cover(
+            market TEXT NOT NULL, day INTEGER NOT NULL, src TEXT NOT NULL, kind TEXT NOT NULL, covered TEXT,
+            PRIMARY KEY(market, day, src)
+        ) WITHOUT ROWID;
+        DROP TABLE IF EXISTS calibration
+    """,
     # 14: sell records, stored for the hourly status pass (M8).
     14: """
         CREATE TABLE IF NOT EXISTS sell_records(
@@ -123,7 +132,7 @@ STAGING_TABLES = ("intel_new", "plan_new", "views_new")
 CANDLE_TABLES = ("candles_h1", "candles_d1")
 # Tables and time columns prune may delete from (SPEC §3.2 retention). Guards the SQL built in delete_before.
 PRUNABLE = {
-    "candles_h1": "t", "candles_d1": "t", "sales_h1": "t", "volume_d1": "day", "posts": "at", "purchases": "at",
+    "candles_h1": "t", "candles_d1": "t", "sales_h1": "t", "volume_d1": "day", "volume_cover": "day", "posts": "at", "purchases": "at",
     "crafts": "at", "disenchants": "at", "auction_mail": "at", "payouts": "at", "untracked": "at", "mail_sent": "at", "skips": "at", "actions": "run_at",
     "fetch_failures": "hour",
 }

@@ -63,11 +63,16 @@ def test_K4_backtests_pair_your_scan_estimates_with_confirmed_rows_of_the_same_i
         today = now // DAY
         with db.transaction():
             db.conn.executemany("INSERT INTO volume_d1(market, key, day, listed, sold, expired, src) VALUES (?, ?, ?, 0, ?, 0, ?)",
-                                [(M, 1, today, 8.0, "books"), (M, 1, today, 10.0, "ahf"),      # 0.8
-                                 (M, 2, today, 5.0, "books"), (M, 2, today, 0.0, "ahf"),       # confirmed 0: no ratio
-                                 (M, 3, today - 40, 9.0, "books"), (M, 3, today - 40, 9.0, "ahf"),   # too old
-                                 (M, 4, today, 4.0, "books")])                                  # nothing to compare
+                                [(M, 1, today, 8.0, "books"), (M, 1, today, 10.0, "blizzard"),   # 0.8
+                                 (M, 2, today, 5.0, "books"), (M, 2, today, 0.0, "blizzard"),    # confirmed 0: no ratio
+                                 (M, 3, today - 40, 9.0, "books"), (M, 3, today - 40, 9.0, "blizzard"),   # too old
+                                 (M, 4, today, 4.0, "books"), (M, 4, today, 9.0, "mail"),        # mail: no comparison
+                                 (M, 5, today - 1, 1.0, "books"), (M, 5, today - 1, 12.0, "blizzard")])   # 2 h of 24
+            db.conn.executemany("INSERT INTO volume_cover(market, day, src, kind, covered) VALUES (?, ?, ?, ?, ?)",
+                                [(M, d, "blizzard", "ids", None) for d in (today - 40, today - 1, today)]
+                                + [(M, today, "mail", "own", None),
+                                   (M, today - 1, "books", "groups", ",".join(["3600"] * 2 + ["0"] * 22))])
         [(src, b)] = status_page.status_facts(db, Config(markets=(M,)), now).markets[0].backtests
-        assert (src, b.days, b.median_ratio, b.within) == ("ahf", 1, 0.8, 1)
+        assert (src, b.days, b.median_ratio, b.within) == ("blizzard", 2, 0.9, 2)   # 0.8 and 1 × 12 ÷ 12 = 1.0, both within ±25%
     finally:
         db.close()

@@ -7,7 +7,8 @@ and an hour's sales rate are recomputed whole from the stored books.
 """
 from __future__ import annotations
 
-from ahsync.engine.volume import Book, BookEntry, MAX_GAP_MS, SALES_PAIR_MAX_GAP_MS, VOLUME_METHOD_VERSION, estimate_volume, hourly_sales
+from ahsync.engine.volume import (Book, BookEntry, MAX_GAP_MS, SALES_PAIR_MAX_GAP_MS, VOLUME_METHOD_VERSION,
+                                  covered_seconds, estimate_volume, hourly_sales)
 from ahsync.db.sqlite import Database
 
 HOUR_MS = 3_600_000
@@ -70,9 +71,10 @@ def _book(db: Database, scan_id: str, at_ms: int) -> Book:
 
 
 def recompute_book_volume(db: Database, market: str, day: int) -> dict[int, tuple[float, float, float]]:
-    """A day's `books` volume from consecutive complete local scans at most 6 h apart (V19, V20).
+    """A day's `books` volume from consecutive complete books of any source at most 6 h apart (V19, V20, V29).
 
-    A pair counts for the day of its later scan. Partial scans are never part of a pair.
+    A pair counts for the day of its later book. Partial scans are never part of a pair. The day's cover
+    records the hours its pairs observed, so a partly observed day is scaled, not taken as a whole day (V30).
 
     Args:
         db: Database, inside the caller's transaction.
@@ -82,20 +84,44 @@ def recompute_book_volume(db: Database, market: str, day: int) -> dict[int, tupl
     Returns:
         key -> (sold, expired, listed) written for that day (the day's rows are replaced whole).
     """
-    scans = db.local_full_scans(market, day * DAY_MS - MAX_GAP_MS, (day + 1) * DAY_MS - 1)
+    scans = db.complete_scans(market, day * DAY_MS - MAX_GAP_MS, (day + 1) * DAY_MS - 1)
     totals: dict[int, list[float]] = {}
+    pairs: list[tuple[int, int]] = []
     for (prev_id, prev_at), (next_id, next_at) in zip(scans, scans[1:]):
-        if next_at // DAY_MS != day:
+        if next_at // DAY_MS != day or next_at == prev_at:
             continue
         volume = estimate_volume(_book(db, prev_id, prev_at), _book(db, next_id, next_at))
+        if volume is not None:
+            pairs.append((prev_at, next_at))
         for key, v in (volume or {}).items():
             row = totals.setdefault(key, [0.0, 0.0, 0.0])
             row[0] += v.sold
             row[1] += v.expired
             row[2] += v.listed
     rows = {key: (sold, expired, listed) for key, (sold, expired, listed) in sorted(totals.items())}
-    db.replace_volume_day(market, day, "books", rows, VOLUME_METHOD_VERSION)
+    db.replace_volume_day(market, day, "books", rows, VOLUME_METHOD_VERSION,
+                          ("groups", covered_seconds(pairs)) if pairs else None)
     return rows
+
+
+def book_days(db: Database, market: str, times_ms: list[int]) -> set[int]:
+    """The days whose `books` volume newly stored complete books change (V29).
+
+    Args:
+        db: Database.
+        market: Market id.
+        times_ms: Times of the newly stored complete books.
+
+    Returns:
+        Each book's day, and the day of the next complete book after it (an older book read late pairs with it).
+    """
+    days = set()
+    for at_ms in times_ms:
+        days.add(at_ms // DAY_MS)
+        later = db.complete_scans(market, at_ms + 1, at_ms + MAX_GAP_MS)
+        if later:
+            days.add(later[0][1] // DAY_MS)
+    return days
 
 
 def recompute_stale_volume(db: Database, market: str) -> int:
@@ -110,7 +136,7 @@ def recompute_stale_volume(db: Database, market: str) -> int:
     """
     left = 0
     for day in db.stale_volume_days(market, "books", VOLUME_METHOD_VERSION):
-        if db.local_full_scans(market, day * DAY_MS - MAX_GAP_MS, (day + 1) * DAY_MS - 1):
+        if db.complete_scans(market, day * DAY_MS - MAX_GAP_MS, (day + 1) * DAY_MS - 1):
             recompute_book_volume(db, market, day)
         else:
             left += 1
@@ -167,18 +193,13 @@ def derive_from_scans(db: Database, new_scans: list[tuple[str, str, int, bool]])
         The item keys whose prices or volume changed.
     """
     dirty: set[int] = set()
-    days: set[tuple[str, int]] = set()
     complete_times: dict[str, list[int]] = {}
     for market, scan_id, at_ms, complete in new_scans:
         dirty |= store_scan_prices(db, market, scan_id, at_ms)
         if complete:
             complete_times.setdefault(market, []).append(at_ms)
-            days.add((market, at_ms // DAY_MS))
-            later = db.local_full_scans(market, at_ms + 1, at_ms + MAX_GAP_MS)
-            if later:
-                days.add((market, later[0][1] // DAY_MS))     # an older file read late pairs with the next scan
-    for market, day in sorted(days):
-        dirty |= set(recompute_book_volume(db, market, day))
     for market, times in sorted(complete_times.items()):
+        for day in sorted(book_days(db, market, times)):
+            dirty |= set(recompute_book_volume(db, market, day))
         recompute_sales_hours(db, market, times)
     return dirty

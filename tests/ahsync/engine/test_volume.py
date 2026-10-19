@@ -4,15 +4,33 @@ from __future__ import annotations
 import pytest
 
 from ahsync.engine.volume import (
-    Book, BookEntry, Volume, calibration_factor, daily_volume, estimate_volume, expiring_fraction, hourly_sales,
-    listing_turnover,
-    supply_to_volume,
+    Auction, Book, BookEntry, Cover, IdBook, Volume, calibration_factor, covered_seconds, daily_volume, day_shares,
+    estimate_volume, estimate_volume_ids, expiring_fraction, hourly_sales, listing_turnover, supply_to_volume,
 )
 from tests.support.gen import cases
 
 HOUR_MS = 3_600_000
 LINEN = 2589
 SHORT, MEDIUM, LONG, VERY_LONG = 1, 2, 3, 4
+ORE = 2770
+D = 20_000                     # a Friday: (20000 + 3) mod 7 = 4
+FLAT = [1.0] * 168
+
+
+def hours(first: int, last: int) -> tuple[int, ...]:
+    """A cover's seconds for whole hours first ≤ h < last.
+
+    Args:
+        first: First hour observed.
+        last: Hour after the last one observed.
+
+    Returns:
+        24 values in seconds.
+    """
+    return tuple(3600 if first <= h < last else 0 for h in range(24))
+
+
+TEN_TO_NOON = hours(10, 12)
 
 
 def books(prev: list[tuple], next_: list[tuple], hours: float = 2) -> tuple[Book, Book]:
@@ -80,10 +98,6 @@ def test_V8_books_more_than_six_hours_apart_give_no_estimate():
     assert estimate_volume(*books([(50, 20, LONG, 1)], [], hours=7)) is None
 
 
-def test_V9_own_sold_mail_calibrates_the_book_estimate():
-    assert calibration_factor(confirmed_sold=3, estimated_sold=5) == 0.6
-
-
 def test_V10_a_quantity_drop_is_listing_turnover_and_never_sales():
     assert listing_turnover(120, 80, 2 * HOUR_MS) == 40
     assert listing_turnover(80, 120, 2 * HOUR_MS) == 0
@@ -92,11 +106,11 @@ def test_V10_a_quantity_drop_is_listing_turnover_and_never_sales():
     assert only_turnover.sold_per_day is None and only_turnover.days_by_source == {}
 
 
-def test_V11_premium_volume_is_preferred_over_an_estimate():
+def test_V11_a_whole_day_beats_a_partly_observed_one_of_the_same_kind():
     rows = {1: {"ahf": Volume(50, 5, 60), "books": Volume(40, 5, 60)}}
-    result = daily_volume(rows, [1])
-    assert result.days_by_source == {"ahf": 1}
-    assert result.sold_per_day == 50
+    two_hours = {1: {"books": Cover("groups", TEN_TO_NOON)}}
+    result = daily_volume(rows, [1], two_hours)
+    assert (result.days_by_source, result.sold_per_day) == ({"ahf": 1}, 50)
 
 
 def test_V12_medium_auctions_have_all_run_out_after_two_hours():
@@ -122,32 +136,88 @@ def test_V15_each_day_uses_its_best_source():
     assert result.days_by_source == {"ahf": 20, "books": 10}
 
 
-def test_V16_ahf_volume_calibrates_estimate_only_days():
-    rows = {d: {"ahf": Volume(50, 0, 0), "books": Volume(40, 0, 0)} for d in range(10)}
+def test_V16_id_diffs_calibrate_estimate_only_days():
+    rows = {d: {"ids": Volume(50, 0, 0), "books": Volume(40, 0, 0)} for d in range(10)}
     rows.update({d: {"books": Volume(40, 0, 0)} for d in range(10, 20)})
+    cover = {d: {"ids": Cover("ids")} for d in range(10)}
     # factor 500 / 400 = 1.25 from the overlap days, applied to estimate-only days
-    # even in a window that has no AHF days of its own (e.g. after Premium lapsed)
-    assert daily_volume(rows, range(10, 20)).sold_per_day == pytest.approx(50.0)
-    assert daily_volume(rows, range(20)).sold_per_day == pytest.approx(50.0)
+    # even in a window that has no id days of its own
+    assert daily_volume(rows, range(10, 20), cover).sold_per_day == pytest.approx(50.0)
+    assert daily_volume(rows, range(20), cover).sold_per_day == pytest.approx(50.0)
 
 
-def test_V17_both_present_uses_ahf_and_the_estimate_is_kept():
-    rows = {1: {"ahf": Volume(50, 0, 0), "books": Volume(40, 0, 0)}}
-    assert daily_volume(rows, [1]).days_by_source == {"ahf": 1}
+def test_V17_both_present_uses_the_id_diffs_and_the_estimate_is_kept():
+    rows = {1: {"ids": Volume(50, 0, 0), "books": Volume(40, 0, 0)}}
+    assert daily_volume(rows, [1], {1: {"ids": Cover("ids")}}).days_by_source == {"ids": 1}
     assert rows[1]["books"] == Volume(40, 0, 0)       # nothing consumed or dropped
 
 
-def test_V18_one_calibration_with_ahf_preferred_over_mail():
-    rows = {0: {"ahf": Volume(50, 0, 0), "books": Volume(40, 0, 0)}, 1: {"books": Volume(40, 0, 0)}}
-    result = daily_volume(rows, [0, 1], mail_factor=0.6)
-    assert result.sold_per_day == pytest.approx((50 + 40 * 1.25) / 2)
+def test_V18_mail_never_calibrates_the_market_estimate():
+    rows = {0: {"books": Volume(40, 0, 0), "mail": Volume(3, 0, 0)}, 1: {"books": Volume(40, 0, 0)}}
+    assert daily_volume(rows, [0, 1]).sold_per_day == 40
 
 
-def test_mail_factor_applies_without_ahf_overlap_and_lesser_sources_follow():
-    rows = {0: {"books": Volume(40, 0, 0)}, 1: {"mail": Volume(3, 1, 0)}, 2: {"qty_drop": Volume(9, 0, 0)}}
-    result = daily_volume(rows, [0, 1, 2, 3], mail_factor=0.5)
-    assert result.sold_per_day == pytest.approx((20 + 3) / 2)          # the turnover day is not a sales day
-    assert result.days_by_source == {"books": 1, "mail": 1}
+def test_V30_a_partly_observed_day_is_scaled_to_a_whole_day():
+    rows = {D: {"books": Volume(40, 2, 12)}}
+    result = daily_volume(rows, [D], {D: {"books": Cover("groups", TEN_TO_NOON)}}, FLAT)
+    assert result.sold_per_day == pytest.approx(480)          # 40 ÷ (2/24)
+    assert (result.expired_per_day, result.listed_per_day) == (pytest.approx(24), pytest.approx(144))
+    assert result.volume_score == pytest.approx(0.3 + 0.5 * 2 / 24)
+    assert daily_volume(rows, [D], {D: {"books": Cover("groups", TEN_TO_NOON)}}).sold_per_day == pytest.approx(480)
+
+
+def test_V31_the_sales_pattern_weights_the_hours_observed():
+    friday = [0.0] * 168
+    first = (D + 3) % 7 * 24
+    assert first == 4 * 24                                     # day D is a Friday
+    for h in range(24):
+        friday[first + h] = 1.0
+    friday[first + 10] = friday[first + 11] = 30 / 2 * 22 / 70    # 10:00-12:00 hold 30% of the day's sales
+    share, time_share = day_shares(Cover("groups", TEN_TO_NOON), D, friday)
+    assert (share, time_share) == (pytest.approx(0.3), pytest.approx(2 / 24))
+    rows = {D: {"books": Volume(40, 0, 0)}}
+    assert daily_volume(rows, [D], {D: {"books": Cover("groups", TEN_TO_NOON)}}, friday).sold_per_day == \
+        pytest.approx(40 / 0.3)
+    zero = [0.0] * 168                                         # no pattern on that day: by hours observed
+    assert day_shares(Cover("groups", TEN_TO_NOON), D, zero) == (pytest.approx(2 / 24), pytest.approx(2 / 24))
+
+
+def test_V32_sources_rank_by_kind_then_hours_observed_not_by_name():
+    rows = {0: {"mail": Volume(3, 0, 0), "books": Volume(40, 0, 0), "blizzard": Volume(50, 0, 0)},
+            1: {"a": Volume(10, 0, 0), "b": Volume(30, 0, 0)},
+            2: {"qty_drop": Volume(9, 0, 0)}}
+    cover = {0: {"blizzard": Cover("ids")},
+             1: {"a": Cover("groups", hours(10, 12)), "b": Cover("groups", hours(10, 16))}}
+    result = daily_volume(rows, [0, 1, 2], cover)
+    assert result.days_by_source == {"blizzard": 1, "b": 1}
+    assert result.sold_per_day == pytest.approx((50 + 30 * 50 / 40) / (1 + 6 / 24))   # day 0 calibrates the books
+    nothing = daily_volume({0: {"x": Volume(9, 0, 0)}}, [0], {0: {"x": Cover("groups", hours(0, 0))}})
+    assert nothing.sold_per_day is None                        # observed no time: no source
+
+
+def test_V33_auction_ids_tell_partial_buys_and_expiries_apart():
+    prev = IdBook(0, (Auction(1, LINEN, 20, 50, LONG), Auction(2, ORE, 200, 30, VERY_LONG), Auction(3, LINEN, 5, 50, SHORT)))
+    next_ = IdBook(HOUR_MS, (Auction(2, ORE, 150, 30, VERY_LONG), Auction(4, LINEN, 10, 48, VERY_LONG)))
+    assert estimate_volume_ids(prev, next_) == {LINEN: Volume(20, 5, 10), ORE: Volume(50, 0, 0)}
+    assert estimate_volume_ids(prev, IdBook(7 * HOUR_MS, ())) is None
+
+
+def test_V34_estimates_never_fall_below_your_own_sales():
+    rows = {0: {"books": Volume(0, 0, 0), "mail": Volume(6, 0, 0)}}
+    assert daily_volume(rows, [0]).sold_per_day == 6
+    partial = daily_volume(rows, [0], {0: {"books": Cover("groups", TEN_TO_NOON)}})
+    assert partial.sold_per_day == pytest.approx(6)            # 6 × 2/24 observed, scaled back to a day
+
+
+def test_V35_mail_alone_is_the_last_resort_source():
+    result = daily_volume({d: {"mail": Volume(3, 1, 0)} for d in range(7)}, range(7))
+    assert (result.sold_per_day, result.days_by_source, result.volume_score) == (3, {"mail": 7}, pytest.approx(0.4))
+
+
+def test_covered_seconds_splits_pairs_by_clock_hour_and_folds_the_day_before():
+    assert covered_seconds([(10 * HOUR_MS, 12 * HOUR_MS)]) == hours(10, 12)
+    folded = covered_seconds([(-HOUR_MS // 2, HOUR_MS // 2)])  # 23:30 the day before → 00:30
+    assert (folded[23], folded[0], sum(folded)) == (1800, 1800, 3600)
 
 
 def test_no_data_in_the_window_is_unknown_volume():
@@ -189,6 +259,77 @@ def test_VI1_volume_splits_exactly_what_is_gone_into_sold_and_expired():
             assert v.sold >= 0 and v.expired >= 0 and v.listed >= 0, context
             assert v.expired <= expiring + 1e-9, context
             assert v.sold + v.expired - v.listed == pytest.approx(group_prev - group_next), context
+
+
+SEED_VI2, SEED_VI3 = 20261019, 20261020
+
+
+def random_id_books(rng) -> tuple[IdBook, IdBook]:
+    """Two snapshots with ids: some auctions stay (maybe partly bought), some go, some are new.
+
+    Args:
+        rng: The shared Random.
+
+    Returns:
+        (prev, next).
+    """
+    prev, later, next_id = [], [], 100
+    for i in range(rng.randint(0, 8)):
+        a = Auction(i, rng.choice((LINEN, ORE)), rng.randint(1, 200), rng.randint(1, 99), rng.randint(1, 4))
+        prev.append(a)
+        fate = rng.random()
+        if fate < 0.4:
+            later.append(Auction(a.id, a.key, rng.randint(1, a.qty), a.price, max(1, a.band - rng.randint(0, 1))))
+    for _ in range(rng.randint(0, 4)):
+        later.append(Auction(next_id, rng.choice((LINEN, ORE)), rng.randint(1, 50), rng.randint(1, 99), 4))
+        next_id += 1
+    gap = rng.randint(0, 6 * HOUR_MS)
+    return IdBook(0, tuple(prev)), IdBook(gap, tuple(later))
+
+
+def test_VI2_id_diffs_split_exactly_the_units_that_left_into_sold_and_expired():
+    for i, (prev, next_) in enumerate(cases(SEED_VI2, random_id_books)):
+        result = estimate_volume_ids(prev, next_)
+        after = {a.id: a for a in next_.auctions}
+        for key in (LINEN, ORE):
+            left = sum(a.qty - after[a.id].qty if a.id in after else a.qty for a in prev.auctions if a.key == key)
+            new = sum(b.qty for b in next_.auctions if b.key == key and b.id not in {a.id for a in prev.auctions})
+            v = result.get(key, Volume(0, 0, 0))
+            context = f"seed {SEED_VI2} case {i}: {prev} -> {next_}"
+            assert v.sold >= 0 and v.expired >= 0 and v.listed >= 0, context
+            assert (v.sold + v.expired, v.listed) == (pytest.approx(left), new), context
+            assert v.expired <= sum(a.qty for a in prev.auctions if a.key == key and a.id not in after) + 1e-9, context
+
+
+def random_partial_week(rng) -> tuple[dict, dict, list[float]]:
+    """A week of book rows, each day observed for some whole hours, and a random sales pattern.
+
+    Args:
+        rng: The shared Random.
+
+    Returns:
+        (rows, covers, sales_how).
+    """
+    rows, covers = {}, {}
+    for day in range(D, D + 7):
+        first = rng.randint(0, 22)
+        last = rng.randint(first + 1, 24)
+        rows[day] = {"books": Volume(rng.randint(0, 100), rng.randint(0, 20), rng.randint(0, 50))}
+        covers[day] = {"books": Cover("groups", hours(first, last))}
+    return rows, covers, [rng.uniform(0.0, 3.0) for _ in range(168)]
+
+
+def test_VI3_coverage_scaling_is_a_rate_never_negative_and_whole_days_are_the_mean():
+    for i, (rows, covers, how) in enumerate(cases(SEED_VI3, random_partial_week)):
+        days = range(D, D + 7)
+        context = f"seed {SEED_VI3} case {i}"
+        result = daily_volume(rows, days, covers, how)
+        assert result.sold_per_day >= 0 and 0 < result.volume_score <= 0.8, context
+        doubled = {d: {"books": Volume(2 * v.sold, 2 * v.expired, 2 * v.listed) for v in rows[d].values()} for d in days}
+        twice = {d: {"books": Cover("groups", tuple(2 * s for s in c["books"].covered_s))} for d, c in covers.items()}
+        assert daily_volume(doubled, days, twice, how).sold_per_day == pytest.approx(result.sold_per_day), context
+        whole = daily_volume(rows, days)
+        assert whole.sold_per_day == pytest.approx(sum(r["books"].sold for r in rows.values()) / 7), context
 
 
 def test_V22_supply_to_volume_is_never_made_up():

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 
@@ -58,6 +58,8 @@ class ItemHistory:
     current: CurrentPrice | None                  # the newest lowest buyout
     volume: dict[int, dict[str, tuple[float, float, float]]]   # day -> source -> (sold, expired, listed)
     book: tuple[int, list[tuple[int, int, int, int]]] | None   # newest complete book: (at ms, [(price, stack, band, count)])
+    # day -> source -> (kind, seconds observed per UTC hour or None for the whole day); market-wide, shared
+    volume_cover: dict[int, dict[str, tuple[str, tuple[int, ...] | None]]] = field(default_factory=dict)
 
 
 class HistoryReader(Protocol):
@@ -135,6 +137,7 @@ class HistoryReads:
         vol = _Groups(self.conn.execute(
             "SELECT key, day, src, sold, expired, listed FROM volume_d1 WHERE market = ? AND day >= ? "
             "ORDER BY key, day, src", (market, window.volume_from_day)))
+        cover = self.volume_cover(market, window.volume_from_day)
         # The recent complete scans first (newest first, ties: scan id), then only their entries:
         # a join over every stored book would read and sort all of them.
         scans = self.conn.execute(
@@ -152,7 +155,7 @@ class HistoryReads:
                 _local_first_per_time([(t, q or 0, src) for t, _, q, src in candles]),
                 [tuple(r) for r in sales.take(key)], _local_first_per_time(d1.take(key)),
                 CurrentPrice(*current[0]) if current else None, _volume_by_day(vol.take(key)),
-                _newest_book(books.take(key), rank))
+                _newest_book(books.take(key), rank), cover)
 
     def priced_keys(self, market: str, since_ms: int) -> list[int]:
         """Item keys with any price data in a market since a time.
@@ -283,6 +286,23 @@ class HistoryReads:
             out.setdefault(day, {})[src] = (sold or 0.0, expired or 0.0, listed or 0.0)
         return out
 
+    def volume_cover(self, market: str, from_day: int) -> dict[int, dict[str, tuple[str, tuple[int, ...] | None]]]:
+        """How each volume source observed each day of a market (SPEC §3.3.1).
+
+        Args:
+            market: Market id.
+            from_day: Oldest day number to read.
+
+        Returns:
+            day -> source -> (kind, seconds observed per UTC hour, or None for the whole day).
+        """
+        out: dict[int, dict[str, tuple[str, tuple[int, ...] | None]]] = {}
+        for day, src, kind, covered in self.conn.execute(
+                "SELECT day, src, kind, covered FROM volume_cover WHERE market = ? AND day >= ? ORDER BY day, src",
+                (market, from_day)):
+            out.setdefault(day, {})[src] = (kind, tuple(int(s) for s in covered.split(",")) if covered else None)
+        return out
+
     def newest_book(self, market: str, key: int, since_ms: int) -> tuple[int, list[tuple[int, int, int, int]]] | None:
         """The newest complete order book that lists the item (SPEC §3.3.2 book).
 
@@ -330,21 +350,6 @@ class HistoryReads:
                     "ORDER BY key, price, stack, band", (newest[0],)):
                 books.setdefault(key, (newest[1], []))[1].append((price, stack, band, count))
         return prices, books
-
-    def local_full_scans(self, market: str, from_ms: int, to_ms: int) -> list[tuple[str, int]]:
-        """Complete local scans of a market in a time range.
-
-        Args:
-            market: Market id.
-            from_ms: Start, inclusive.
-            to_ms: End, inclusive.
-
-        Returns:
-            (scan id, time ms), oldest first (ties: scan id).
-        """
-        return [tuple(r) for r in self.conn.execute(
-            "SELECT scan_id, at FROM scans WHERE market = ? AND src = 'local' AND kind = 'full' AND coverage >= 1 "
-            "AND at BETWEEN ? AND ? ORDER BY at, scan_id", (market, from_ms, to_ms))]
 
     def complete_scans(self, market: str, from_ms: int, to_ms: int) -> list[tuple[str, int]]:
         """Complete books of a market from either source (local scans and AHF books) in a time range.

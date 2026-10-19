@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 
 from ahsync.collect.ahf import FEATURE_BOOKS, FEATURE_DEPTH, FEATURE_LIVE, AhfApi, Capabilities, FileIndex, FormatChanged
 from ahsync.collect.client import ApiError, FeatureUnavailable, RateLimited, RetriesExhausted
-from ahsync.collect.local_scans import recompute_sales_hours
+from ahsync.collect.local_scans import book_days, recompute_book_volume, recompute_sales_hours
 from ahsync.clock import DAY_MS, HOUR_MS, Clock
 from ahsync.db.sqlite import BookScan, Database, SyncState
 
@@ -517,9 +517,10 @@ class MarketSync:
         self._recompute_sales(stored)
 
     def _recompute_sales(self, stored: list[int]) -> None:
-        """Recompute hourly sales rates around newly stored AHF books (SPEC §3.3 sales_h1).
+        """Recompute hourly sales rates and daily book volume around newly stored AHF books (SPEC §3.3.1, V29).
 
-        A crash before this runs only leaves those hours unobserved, never wrong (missing is not zero).
+        A crash before this runs only leaves those hours and days unobserved, never wrong (missing is not
+        zero); the next stored book or the method check recomputes them.
 
         Args:
             stored: Times of the complete books just stored.
@@ -527,6 +528,8 @@ class MarketSync:
         if stored:
             with self.db.transaction():
                 recompute_sales_hours(self.db, self.market, stored)
+                for day in sorted(book_days(self.db, self.market, stored)):
+                    recompute_book_volume(self.db, self.market, day)
 
     def _fetch_books(self, now: int, stored: list[int]) -> None:
         """Fetch and store the missing complete AHF books.

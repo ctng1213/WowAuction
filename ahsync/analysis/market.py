@@ -14,7 +14,7 @@ from dataclasses import replace
 from ahsync.engine import confidence, fees, patterns, prices, profile, sellprob
 from ahsync.engine.profile import Profile
 from ahsync.engine.sellprob import MarketSettings, Supply
-from ahsync.engine.volume import VOLUME_METHOD_VERSION, DailyVolume, Volume, daily_volume, median_daily_supply
+from ahsync.engine.volume import VOLUME_METHOD_VERSION, Cover, DailyVolume, Volume, daily_volume, median_daily_supply
 from ahsync.history.reads import HistoryReader, HistoryWindow, ItemHistory, ItemInfo
 from ahsync.intel.contract import IntelWindow, ItemIntel, MarketIntelligence
 
@@ -34,6 +34,19 @@ def _volumes(item: ItemHistory) -> dict[int, dict[str, Volume]]:
         day -> source -> Volume over the history window.
     """
     return {day: {src: Volume(*v) for src, v in sources.items()} for day, sources in item.volume.items()}
+
+
+def _covers(item: ItemHistory) -> dict[int, dict[str, Cover]]:
+    """Stored volume covers as engine Covers.
+
+    Args:
+        item: The item's history.
+
+    Returns:
+        day -> source -> Cover.
+    """
+    return {day: {src: Cover(kind, covered) for src, (kind, covered) in sources.items()}
+            for day, sources in item.volume_cover.items()}
 
 
 def history_window(now_ms: int) -> HistoryWindow:
@@ -93,36 +106,54 @@ def _windows(windows: list[patterns.Window]) -> tuple[IntelWindow, ...]:
     return tuple(IntelWindow(w.start_slot, w.hours, w.best_slot, w.how_avg, w.weeks) for w in windows)
 
 
+def sales_fields(item: ItemHistory, now_ms: int, settings: MarketSettings) -> tuple[Profile, dict]:
+    """An item's hourly sales profile, packed: volume weights partly observed days by it (SPEC §3.3.1, V31).
+
+    Args:
+        item: The item's history (hourly sales).
+        now_ms: Now.
+        settings: Pattern half-life.
+
+    Returns:
+        (the profile as stored, its contract fields by name).
+    """
+    fields: dict = {}
+    sales = _packed("sales", profile.sales_profile(item.hourly_sales, now_ms, settings.pattern_half_life_weeks), fields)
+    return sales, fields
+
+
 def weekly_fields(item: ItemHistory, med30: int | None, volume: DailyVolume, ref: int, now_ms: int,
-                  settings: MarketSettings) -> dict:
+                  settings: MarketSettings, sales: tuple[Profile, dict]) -> dict:
     """An item's weekly patterns, windows, seasonality strength and curve (SPEC §3.3.4, §3.3.6, §3.1.1).
 
     Args:
-        item: The item's history (hourly closes, sales and supply over the history window).
+        item: The item's history (hourly closes and supply over the history window).
         med30: Its 30-day median, copper.
         volume: Its daily volume over the last 7 days.
         ref: Its reference stack, units.
         now_ms: Now; the curve's first row is this hour.
         settings: Pattern half-life, window threshold and the posting-now window.
+        sales: From sales_fields.
 
     Returns:
         The ItemIntel pattern fields by name.
     """
     hourly = item.hourly_closes
     half_life = settings.pattern_half_life_weeks
-    fields: dict = {}
+    fields: dict = dict(sales[1])
+    sales_profile = sales[0]
     how = _packed("how", profile.price_profile(hourly, med30, now_ms, half_life), fields)
-    sales = _packed("sales", profile.sales_profile(item.hourly_sales, now_ms, half_life), fields)
     _packed("supply", profile.supply_profile(item.hourly_supply, now_ms, half_life), fields)
     curve, curve_hour = "", None
     if volume.sold_per_day is not None:
         grid = sellprob.build_curve(volume.sold_per_day, volume.listed_per_day or 0.0, settings.default_undercut_share,
-                                    sales.values, now_ms, ref, hours=settings.sell_window_hours)
+                                    sales_profile.values, now_ms, ref, hours=settings.sell_window_hours)
         curve, curve_hour = sellprob.encode_curve(grid), now_ms // HOUR_MS
     return {
         **fields,
         "seasonality": profile.seasonality_strength(hourly, med30, now_ms, half_life),
-        "sell_windows": _windows(patterns.sell_windows(how.values, sales.values, how.weeks, settings.window_threshold)),
+        "sell_windows": _windows(patterns.sell_windows(how.values, sales_profile.values, how.weeks,
+                                                       settings.window_threshold)),
         "buy_windows": _windows(patterns.buy_windows(how.values, how.weeks, settings.window_threshold)),
         "curve": curve, "curve_hour": curve_hour,
     }
@@ -149,7 +180,8 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
     med30 = prices.window_median(hourly, daily, now_ms, 30)
     last30 = [c for t, c in hourly if t > now_ms - 30 * DAY_MS]
     week = range((now_ms - 7 * DAY_MS) // DAY_MS + 1, now_ms // DAY_MS + 1)
-    volume = daily_volume(_volumes(item), week)
+    sales = sales_fields(item, now_ms, settings)
+    volume = daily_volume(_volumes(item), week, _covers(item), sales[0].values)       # V30-V32
     newest = item.book
     book = newest[1] if newest else None
     ref = ref_stack(book or [])
@@ -164,7 +196,7 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
         sell_value = sellprob.expected_post(chance, ref, price, float(vendor_sell), deposit) / ref
     book_age = now_ms - newest[0] if newest else None
     recent = [c for t, c in raw if t > now_ms - DAY_MS]
-    conf = confidence.percent(confidence.score(len(last30), volume.days_by_source, book_age, None, 0))
+    conf = confidence.percent(confidence.score(len(last30), volume.volume_score, book_age, None, 0))
     main_source = max(volume.days_by_source, key=lambda s: (volume.days_by_source[s], s)) \
         if volume.days_by_source else None
     return ItemIntel(
@@ -174,7 +206,7 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
         main_source, volume.days_by_source, price, ref, chance, unknown, sell_value, conf,
         sum(stack * count for _, stack, _, count in book) if book else (cur.qty if cur else None),
         book_age, tuple(book or ()),
-        **weekly_fields(item, med30, volume, ref, now_ms, settings),
+        **weekly_fields(item, med30, volume, ref, now_ms, settings, sales),
         cur_suspect=prices.suspect_price(cur.price if cur else None, p10, p90, recent),
         median_daily_supply=median_daily_supply(item.hourly_supply, now_ms))
 

@@ -33,25 +33,32 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | V6 | 50c ×20 long ×2 → 50c ×20 medium ×2 | sold 0 | time left ticking down is not a sale (band is not in the group key) |
 | V7 | two stack sizes, 50c ×20 ×2 → ×1 and 50c ×5 ×4 → ×2 | sold 20 + 10 = 30 | units = auctions × stack, summed per item |
 | V8 | books 7h apart | no estimate | gap must be ≤ 6h |
-| V9 | mail: 3 "sold", 1 "expired" for an item estimated 5 sold | calibration factor 0.6 recorded | ground truth from own sales |
+| V9 | your auction mail on a day: Linen sold in a mail of 2 and a mail of 1, and 1 expired; then read again | `mail` volume for that day: sold 3, expired 1, cover kind `own`; reading again leaves it so; a day without mail has no `mail` row | your own sales are stored as a source |
 | V10 | AHF quantity 120 → 80 within 2h, no books | listing turnover 40 recorded; sales per day **unavailable**; chance = default 25%, "volume unknown" | totals alone never become sales |
-| V11 | Premium volume present + own estimate | Premium used, source = `ahf` | source priority |
+| V11 | AHF volume for a whole day and your 2 h book estimate on the same day (both group diffs) | AHF used: it observed more of the day | within a kind, more of the day observed wins |
 | V12 | 50c ×20 **medium** ×2 → ×0, 2 h apart | expired 40, sold 0 | medium (30 min–2 h) auctions have all run out after 2 h |
 | V13 | 50c ×20 long ×3 → ×0, **5 h** apart | expiring 3 × (5−2)/(8−2) = 1.5 → expired 30, sold 30 | long auctions expire in proportion to the gap |
 | V14 | no key: book estimates only, 40 sold/day for 7 days | sold/day 40, source "estimated" | free path works on its own |
 | V15 | AHF volume 50/day on days 1–20, Premium lapses, estimates 40/day on days 21–30 | 30-day sold/day = (20 × 50 + 10 × 40) ÷ 30 ≈ 46.7; source "20 days AHF, 10 days estimated" | per-day best source |
-| V16 | days with both: AHF 50, estimate 40 (×10 days); then estimate-only days at 40 | factor 1.25; those estimate days count as 50 | AHF calibrates the estimates |
-| V17 | AHF and estimate both present on a day | AHF used for that day; the estimate is still stored | estimates never stop |
-| V18 | item has an AHF factor 1.25 and a mail factor 0.6 | estimate days use 1.25 only | one calibration, AHF preferred |
+| V16 | 10 days with both id diffs (50 sold) and whole-day book estimates (40); then 10 book-only days at 40 | factor 50 ÷ 40 = 1.25 from the id days; the book-only days count as 50, even in a window with no id day | id diffs calibrate the group estimates |
+| V17 | id diffs and a book estimate on one day | the id diffs are used for that day; the estimate is still stored | estimates never stop |
+| V18 | a day with a book estimate of 40 and your mail with 3 sold, and no day with id diffs | no factor: the day counts 40 (mail sees only your auctions, so it never calibrates the market estimate) | mail is a floor, not a calibration |
 | V19 | two complete local scans 2 h apart on the same day: Linen 50c ×20 long ×5 → ×3 (long auctions cannot have run out in 2 h) | `books` volume for that day: sold 40; reading the same files again leaves it at 40 | scans feed volume, idempotently |
 | V20 | a complete scan at 10:00 and a partial scan (coverage 0.6) at 12:00 | no `books` volume from that pair | partial books never feed volume |
 | V22 | sales 50/day, 93 units listed now; another item with sales unavailable; a third with sales 0 | supply/volume 1.86 days; "—"; "—" | the ratio is never made up |
 | V23 | median daily supply over 30 days of observations 80, 100, 120 units, and 10 days without any observation | median 100; the empty days are left out, not counted as 0; a day's value is the median of its observations (90 and 110 on one day count as 100); with no current supply the liquidity cap uses it (`supply_level`) | missing data is not zero |
-| V24 | `VOLUME_METHOD_VERSION` goes from 1 to 2 with 20 days of stored books, and 5 older days of `books` rows whose scans are pruned | the next full refresh recomputes those 20 days' `books` volume, stamps them version 2, and leaves AHF and mail rows unchanged; the 5 days keep their version-1 rows and Status says "5 days of sales estimates are from an older method"; a refresh with nothing stale changes nothing and clears that line | estimates can be recomputed |
+| V24 | `VOLUME_METHOD_VERSION` goes from 1 to 2 with 20 days of stored books, and 5 older days of `books` rows whose scans are pruned | the next full refresh recomputes those 20 days' `books` volume and its cover, stamps them version 2, and leaves AHF and mail rows unchanged; the 5 days keep their version-1 rows (a whole day each, as before) and Status says "5 days of sales estimates are from an older method"; a refresh with nothing stale changes nothing and clears that line | estimates can be recomputed |
 | V25 | Linen 50c ×20 long ×5 at 10:00 → ×3 at 11:00 → ×2 at 14:00 | `sales_h1` 10:00: 40 per hour (40 sold ÷ 1 h); no row from the 11:00 → 14:00 pair (3 h apart) | hourly rates need books at most 2 h apart |
 | V26 | Linen ×20 long ×5 at 10:00 → ×4 at 10:30 → ×2 at 11:00 | both pairs start in the 10:00 hour: (20 + 40) sold ÷ (0.5 + 0.5) h = 60 per hour | several pairs in one hour pool their sold and gap |
 | V28 | an AHF book with bands 0 ×7, 2 ×1, 3 ×2, 4 ×3 and no band 1 (AuctionHouseFYI's addon uploads Forever's 1–4 time left + 1, and very long as 0) | read as very long ×7, short ×1, medium ×2, long ×3; a book that has band 1 is read as WoW's codes, with 0 as very long | volume needs the true bands |
 | V27 | an AHF Premium book at 10:00, a partial local scan (coverage 0.6) at 10:20, a complete local scan at 11:00; the same files are read again | one pair, AHF 10:00 → local 11:00; the partial scan is skipped; reading again leaves `sales_h1` unchanged | either source pairs; partial books never do; idempotent |
+| V29 | an AHF book at 18:00, your complete scan at 18:40 and an AHF book at 19:00: Linen 50c ×20 long ×5 → ×4 → ×3 | the day's `books` volume: 40 sold from both pairs; its cover: kind `groups`, 3600 s observed in hour 18 and none elsewhere; storing the AHF books after your scan gives the same | books of every source pair for daily volume |
+| V30 | two complete scans 10:00 → 12:00 show Linen 40 sold; the sales pattern is flat | sold/day 40 ÷ (2/24) = 480, not 40; that day's volume confidence 0.3 + 0.5 × 2/24 ≈ 0.34 | a partly observed day is scaled to a day, not taken as one |
+| V31 | the same 2 h sample on a Friday, whose sales pattern puts 30% of the day's sales in 10:00–12:00 | sold/day 40 ÷ 0.3 ≈ 133 | weighted by the hourly pattern, so a busy-hour sample isn't spread flat over the night |
+| V32 | a day with your mail (3 sold), a whole-day book estimate (40) and a source "blizzard" whose cover is kind `ids` (50); another day with two group sources, one observing 2 h and one 6 h; a day with only listing turnover | the first day uses "blizzard" (50: no code names it, its kind does); the second uses the 6 h one; the third has no sales source | sources rank by method and coverage, not by provider |
+| V33 | two snapshots with auction ids, 1 h apart: Linen id 1 (×20, long) gone; Linen id 3 (×5, short) gone; Linen id 4 (×10) new; Copper Ore id 2 (a commodity) 200 → 150 units | Linen sold 20 (a long auction can't run out in 1 h), expired 5 (a short one surely has), listed 10; Copper Ore sold 50 (a partial buy, measured exactly), nothing new | auction ids tell partial buys and expiries apart |
+| V34 | a whole-day book estimate of 0 Linen sold, and your mail says you sold 6 that day | the day counts 6 | the market never sold less than you did |
+| V35 | 7 days that only your mail observed, 3 Linen sold each day | sold/day 3 from `mail`; the volume confidence component 0.4 | your mail is the last-resort source, trusted least |
 | V21 | a local scan at 14:20 lists Linen at 45c (×20, ×2) and 50c (×20, ×1) | `current` local: 45c, qty 40; `candles_h1` local for 14:00: close 45c, qty 60 | a scan becomes local prices |
 
 **Sync and storage** (`sync/catchup`, `store/prune`):
@@ -350,10 +357,10 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 
 | # | Scenario | Then |
 |---|---|---|
-| CF1 | n = 60, 7 days of AHF volume, book 1 h old, pattern 7 weeks, tier n = 30 (planned post) | every component 1.0 → 100% |
-| CF2 | n = 15, estimated volume, book 12 h old, pattern 0 weeks, no tier history (planned post) | 0.25×0.25 + 0.30×0.7 + 0.15×0.5 + 0 + 0 = 0.3475 ÷ 1.00 → 35% (low) |
-| CF3 | the CF2 inputs when posting now (no pattern component) | 0.3475 ÷ 0.85 = 0.409 → 41% (low) |
-| CF4 | 4 days of AHF volume + 3 days estimated, other components 1.0, posting now | volume (4 × 1.0 + 3 × 0.7) ÷ 7 = 0.871; conf = (0.25 + 0.30 × 0.871 + 0.15 + 0.15) ÷ 0.85 = 0.955 → 95% (high) |
+| CF1 | n = 60, 7 days of id-diff volume, book 1 h old, pattern 7 weeks, tier n = 30 (planned post) | every component 1.0 → 100% |
+| CF2 | n = 15, whole-day book estimates, book 12 h old, pattern 0 weeks, no tier history (planned post) | 0.25×0.25 + 0.30×0.8 + 0.15×0.5 + 0 + 0 = 0.3775 ÷ 1.00 → 38% (low) |
+| CF3 | the CF2 inputs when posting now (no pattern component) | 0.3775 ÷ 0.85 = 0.444 → 44% (low) |
+| CF4 | 4 days of id-diff volume + 3 whole days of book estimates, other components 1.0, posting now | volume (4 × 1.0 + 3 × 0.8) ÷ 7 = 0.914; conf = (0.25 + 0.30 × 0.914 + 0.15 + 0.15) ÷ 0.85 = 0.970 → 97% (high) |
 
 **Tracking** (`engine/tracking`):
 
@@ -526,7 +533,7 @@ Rules: SPEC §8.8.
 | K3 | 5 posts predicted 0.5, 0 sold | no warning (fewer than 20 posts) |
 | K5 | a post matched to its plan action, which planned P' 0.62; it sells | the post's `p_at_post` is 0.62 (the action's `conf`), so it counts in the 60–80% bucket as sold; a post that matched no action has no `p_at_post` and is left out |
 | K6 | Status with K1's and K2's posts | a "Sell-probability calibration" section: "Predicted vs actual (last 90 days, 35 resolved posts)", "Brier score 0.22 · always guessing 50% would score 0.25" ((1.6 + 6.25) ÷ 35), rows 40–60% (25 posts, predicted 50%, sold 28%, −22 pts, off) and 80–100% (10, 80%, 80%, 0 pts); the warning "Posts predicted 40–60% actually sold 28% (25 posts). Chances in that range are too optimistic."; with no resolved posts the section says it appears once posts are tracked |
-| K4 | 10 item-days with both AHF and book volume in the last 30 days: book ÷ AHF ratios 0.8 ×4, 1.0 ×4, 1.5 ×2 | Status, on the market's card: "Your scans vs ahf (30 d)" "median 1.0 · 8 of 10 item-days (80%) within ±25%"; a source with no overlap shows nothing, and with no confirmed source at all the card says "no confirmed sales to compare with yet"; days with a confirmed 0 sold are left out (no ratio) |
+| K4 | 10 item-days with both id-diff and book volume in the last 30 days: book ÷ id ratios 0.8 ×4, 1.0 ×4, 1.5 ×2 (a book day observed for 2 h counts 12 × its sold, V30) | Status, on the market's card: "Your scans vs blizzard (30 d)" "median 1.0 · 8 of 10 item-days (80%) within ±25%"; a source with no overlap shows nothing; your mail is never a comparison (it sees only your auctions); with no id-diff source at all the card says "no confirmed sales to compare with yet"; days with a confirmed 0 sold are left out (no ratio) |
 
 ## 5. Invariants (SPEC §8.7)
 
@@ -559,6 +566,8 @@ How cases are generated, and how many: SPEC §8.7.
 | # | Invariant |
 |---|---|
 | VI1 | Volume: `sold + expired = gone`, all ≥ 0, and `expired ≤ expiring` |
+| VI2 | Id diffs: `sold + expired` = the units that left (gone auctions plus partial buys), `listed` = the units of new ids, all ≥ 0, and `expired` ≤ the units of gone auctions |
+| VI3 | Coverage scaling: sold/day ≥ 0; observing twice the hours and twice the sales gives the same rate; whole days give the plain mean; a book-only week's volume score is in (0, 0.8] |
 | CI1 | Craft: the chosen source for a reagent costs no more than any other available source |
 | CI2 | Craft: each added craft has a positive marginal profit; the next one would not |
 | CI3 | Chains: profit is counted once, so the chain's total equals the final product's profit |

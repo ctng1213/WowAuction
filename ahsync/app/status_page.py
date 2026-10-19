@@ -45,14 +45,21 @@ def _backtests(db: Database, market: str, now_ms: int) -> tuple:
         now_ms: Now.
 
     Returns:
-        (source, Backtest) per confirmed source with a row in the window, by source.
+        (source, Backtest) per id-diff source (cover kind "ids") with a row in the window, by source. The book
+        estimate is scaled to a whole day by the hours it observed (V30); your mail is no comparison, since it
+        sees only your own auctions.
     """
     ratios: dict[str, list[float]] = {}
-    for src, estimated, confirmed in db.conn.execute(
-            "SELECT c.src, e.sold, c.sold FROM volume_d1 e JOIN volume_d1 c ON c.market = e.market AND c.key = e.key "
-            "AND c.day = e.day AND c.src NOT IN ('books') WHERE e.market = ? AND e.src = 'books' AND e.day >= ? "
-            "AND e.sold IS NOT NULL AND c.sold > 0 ORDER BY c.src", (market, (now_ms - BACKTEST_DAYS * DAY_MS) // DAY_MS)):
-        ratios.setdefault(src, []).append(estimated / confirmed)
+    for src, estimated, covered, confirmed in db.conn.execute(
+            "SELECT c.src, e.sold, ec.covered, c.sold FROM volume_d1 e "
+            "JOIN volume_d1 c ON c.market = e.market AND c.key = e.key AND c.day = e.day "
+            "JOIN volume_cover cc ON cc.market = c.market AND cc.day = c.day AND cc.src = c.src AND cc.kind = 'ids' "
+            "LEFT JOIN volume_cover ec ON ec.market = e.market AND ec.day = e.day AND ec.src = e.src "
+            "WHERE e.market = ? AND e.src = 'books' AND e.day >= ? AND e.sold IS NOT NULL AND c.sold > 0 "
+            "ORDER BY c.src, e.key, e.day", (market, (now_ms - BACKTEST_DAYS * DAY_MS) // DAY_MS)):
+        share = sum(int(s) for s in covered.split(",")) / 86_400 if covered else 1.0
+        if share > 0:
+            ratios.setdefault(src, []).append(estimated / share / confirmed)
     return tuple((src, backtest(r)) for src, r in sorted(ratios.items()))
 
 

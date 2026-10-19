@@ -334,9 +334,9 @@ All DB access lives in `store/` (`db.py`, plus modules split off it by responsib
 items(key PK, item_id, name, quality, ilvl, class, subclass, vendor_buy, vendor_sell, stack, updated)
 candles_h1(market, key, t, open, high, low, close, qty, src,   PK(market,key,t,src))   WITHOUT ROWID
 candles_d1(market, key, t, open, high, low, close, qty, src,   PK(market,key,t,src))   WITHOUT ROWID
-volume_d1(market, key, day, listed, sold, expired, src, conf, PK(market,key,day,src))
+volume_d1(market, key, day, listed, sold, expired, src, conf, method, PK(market,key,day,src))
+volume_cover(market, day, src, kind, covered,                PK(market,day,src))      WITHOUT ROWID   -- how a source observed a day (§3.3.1)
 sales_h1(market, key, t, sold_per_hour,                      PK(market,key,t))        -- book-pair sales rate per hour start t (§3.3 sales_how)
-calibration(market, key, source, factor, samples, updated,   PK(market,key,source))   -- source: ahf | mail
 current(market, key, price, qty, at, src,                    PK(market,key,src))
 scans(scan_id PK, market, src, char_id, at, kind)            -- src: local (your scan) | ahf (Premium books); char_id null for ahf
 book_entries(scan_id, key, price, stack, band, count,        PK(scan_id,key,price,stack,band))
@@ -433,27 +433,39 @@ Scale linearly per extra market.
 
 The free API gives only the **quantity listed**, not sales. Sales volume is the main input for the probability that something sells, so it comes from the best source available. Each value carries its source.
 
-1. **AHF Premium `depth`** (best): daily `listed / sold / expired`, worked out by comparing consecutive complete order books.
-2. **Own order-book diffs** (same method, our data): the addon stores the full order book from each full scan. It records each auction's item, unit price, stack size and time-left band; `ReplicateItems` gives this. For two scans at most 6 hours apart, per `(item, price, stack)` group:
+Every daily row (`volume_d1`) has a source name (`src`) and a **cover** (`volume_cover`, one per market, day and source): its **kind**, by method, and the seconds it observed in each UTC hour of the day (`covered`, 24 values; NULL = the whole day). The engine ranks rows by kind and coverage, never by provider name, so a new source (a Blizzard API job, say) is used as soon as its rows carry a kind (V32).
+
+**Kinds, most trusted first:**
+
+1. **Auction-id diffs (`ids`)**: snapshots with auction ids (a retail-shaped API, §5.0). Between two snapshots at most 6 h apart (`engine.volume.estimate_volume_ids`, V33):
+   - an id still listed with fewer units sold the difference (a partial commodity buy, measured exactly);
+   - an id that is gone expired with its band's chance of running out in the gap (as below), else it sold;
+   - an id not seen before is newly listed.
+   - Known error: a cancel still counts as sold, since cancels and buys both remove an id. A repost at a new price is a cancel plus a new id, so it counts as a sale only through that cancel.
+2. **Group diffs of order books (`groups`)**: every complete book of a market, whatever its source (your full scans, AHF Premium `books`), pairs with the next complete one, at most 6 hours apart (V29). A Blizzard snapshot at 18:00 pairs with your scan at 18:40, and that scan with the 19:00 snapshot. AHF's Premium `depth` volume file is this kind too, for a whole day (its row format is still unknown, §6 item 1, so nothing stores it yet). Per `(item, price, stack)` group:
    - Time left is **not** part of the group. Otherwise an auction whose band ticks from long to medium would count as gone plus new.
    - `prev` and `next` = auction counts in the two books; `g` = time between them.
    - Each time-left band covers `[lo, hi)`: short 0–30 min, medium 30 min–2 h, long 2–8 h, very long 8 h to the longest duration. These are the Classic bands and must be verified for Forever (§6). An auction is assumed to sit anywhere in its band with equal chance. So the expected number of the old book's auctions that ran out during the gap is `expiring = Σ count_band × clamp((g − lo) / (hi − lo), 0, 1)`.
    - `gone = max(0, prev − next)` and `new = max(0, next − prev)`
    - `expired = min(gone, expiring)` and `sold = gone − expired`. Both can be fractional.
    - Units = counts × stack. Item totals sum their groups.
-   - Known errors: a cancelled auction counts as sold, and a repost at a new price counts as sold plus new.
-   - Scanning at the start and end of a play session gives one sample.
-3. **Your own sales**: "auction successful" and "auction expired" mail is real ground truth for your own items. It also calibrates source 2: `factor = mail-confirmed sold ÷ book-estimated sold` for your auctions of that item, stored in `calibration` and multiplied into book-based `sold/day`.
-4. **Listing turnover, not sales.** `max(0, qty_prev − qty_next)` between consecutive AHF quantity observations a few hours apart counts units that left the AH: sold, expired or cancelled, which totals alone can't tell apart. It is stored as `observed_listing_turnover` (§3.3.6) and shown for information, but it is **never used as sales**. An item whose only data is quantities has sales volume **unavailable**, and its chance uses `default_sell_prob`, marked "volume unknown" (§3.3.2).
+   - Known errors: a cancelled auction counts as sold, and a repost at a new price counts as sold plus new. On a retail-style AH (Forever's is: the addon posts commodities), a partial buy of a commodity auction looks like one auction gone plus one new at the same price, so it counts the whole auction as sold and the rest as new.
+   - A pair counts for the day of its later book; the day's cover adds up the time each pair spans, per clock hour (a pair that starts the day before folds into the same hours, `engine.volume.covered_seconds`).
+3. **Your own sales (`own`)**: "auction successful" and "auction expired" mail, per item and day (`collect.own_mail`, V9). It is ground truth for your own auctions only, so it is a **lower bound** on the market: the last-resort source for a day nothing else observed (V35), and a floor under the others (V34). It never calibrates them, because a ratio of your sales to the market's is not a correction (V18).
+4. **Listing turnover, not sales.** `max(0, qty_prev − qty_next)` between consecutive AHF quantity observations a few hours apart counts units that left the AH: sold, expired or cancelled, which totals alone can't tell apart. It is stored as `observed_listing_turnover` (§3.3.6) and shown for information, but it has no kind and is **never used as sales**. An item whose only data is quantities has sales volume **unavailable**, and its chance uses `default_sell_prob`, marked "volume unknown" (§3.3.2).
 
-Order-book diffs (source 2) are an explicit estimate, not confirmed sales: without auction ids a cancellation can't be told from a sale, so they are labelled "est.", carry a lower confidence (§3.3.5), and are corrected by AHF and mail calibration (below).
+Group diffs are an explicit estimate, not confirmed sales: they are labelled "est." and carry a lower confidence (§3.3.5).
+
+**A partly observed day.** Two scans 2 hours apart that saw 40 sold did not see a day of sales. Each day counts as the share of a day's sales its source observed: `share = Σ_h sales_how[weekday, h] × hours observed in h ÷ Σ_h sales_how[weekday, h]` (`engine.volume.day_shares`), so a sample from the busy evening hours isn't stretched flat across the night (V31). With a flat or missing pattern for the day, the share is hours observed ÷ 24 (V30). A whole-day source has share 1.
 
 **Choosing the source, per item and per day:**
-- **All available sources are always computed and stored** in `volume_d1`, one row per source. The estimates (2–3) keep running even while Premium is active, so there is no gap when it lapses.
-- `sold/day` uses, for each day, the best source that has a row for that day, in the order 1 → 3. A 30-day `sold/day` can therefore mix days of real AHF volume with days of estimates, for example when Premium lapsed halfway through the month.
-- AHF volume already stored is history and stays valid after Premium lapses.
-- **AHF volume calibrates the estimates.** On days where both AHF volume and an order-book estimate exist for an item, `factor = AHF sold ÷ estimated sold` is stored in `calibration`, the same table the mail calibration uses. It is applied to that item's estimates on days without AHF data. The more weeks of Premium you have had, the better the estimates are afterwards. With no overlap, the factor is 1. When an item has both an AHF factor and a mail factor, only the AHF one is applied: it covers the whole market, not just your own auctions. The two are never multiplied together.
+- **All available sources are always computed and stored**, one row per source. The estimates keep running whatever else is available, so there is no gap when a source lapses.
+- Each day uses its best row: the most trusted kind, then the most of the day observed (sales share), then the source name (V11, V32). A 30-day `sold/day` can mix days of different kinds.
+- `sold/day = Σ sold ÷ Σ share` over the window's days that have a source: the sold units seen, per day-equivalent observed. Expired and listed per day divide by the hours observed instead. Days without a source are left out, never counted as zero.
+- **Id diffs calibrate the group diffs.** On days with both, `factor = Σ id sold ÷ Σ group sold scaled to whole days` (each kind's best row of the day), computed from the stored rows of the item's whole history and applied to its group-diff days (V16). With no such day, the factor is 1.
+- **Your sales are a floor.** On a day whose chosen row is not your mail, its sold units are at least your mail's sold units × that day's share (V34).
 - Every `sold/day` shows its source mix on the item detail and in the Status page, e.g. "sold/day 38 · 22 days AHF, 8 days estimated".
+- Rows stored before covers existed have none: `ahf` and `books` count as group diffs for a whole day and `mail` as your own (`engine.volume.LEGACY_KIND`).
 
 #### 3.3.2 Sell probability and expected value
 
@@ -590,7 +602,7 @@ Numbers, not labels: the engine never classifies an item as "high" or "low" liqu
 
 | Field | Meaning (unit, window) | Unavailable when |
 |---|---|---|
-| `estimated_sales_per_day` | `sold/day` (§3.3.1): units per day, averaged over the days of the last 7 that have a sales source | no day has AHF, book or mail volume |
+| `estimated_sales_per_day` | `sold/day` (§3.3.1): units per day, sold units ÷ the day-equivalents observed over the days of the last 7 that have a sales source | no day has a sales source |
 | `estimated_sales_per_hour_of_week` | 168 values: `estimated_sales_per_day ÷ 24 × sales_how[slot]` (units per hour) | sales per day unavailable |
 | `current_listed_supply` | units on the AH in the newest valid observation (local scan or AHF) | never seen |
 | `median_daily_supply` | median of each day's listed units over the last 30 days (a day's value: the median of its observations; days without one are left out, V23). The liquidity cap uses it when the current supply is unknown (`intel.contract.supply_level`) | no observation in 30 days |
@@ -624,7 +636,7 @@ Missing observation periods never count as zero sales or zero supply; they are l
 
 **Three selling answers, kept apart** (item detail and Inventory): the hour with the **highest expected price** (max `how`), the hour with the **highest estimated activity** (max `sales_how`), and the **best risk-adjusted** window (max `sell_score`, §3.3.4), which is the one the plan uses.
 
-**Method version.** `VOLUME_METHOD_VERSION` (an integer in `engine/volume.py`) is stored with every `volume_d1` row and every `item_stats` row. When it changes, the next full refresh recomputes `books` volume from the stored order books (kept 30 days, §3.2) and marks older rows as from an earlier method on the Status page; AHF and mail rows are kept as they are. **Built** (V24): `volume_d1.method` holds the version of an estimated row (NULL for confirmed sources and rows from before versions were stored, which count as version 1); `collect.local_scans.recompute_stale_volume` runs at the start of each market's full refresh.
+**Method version.** `VOLUME_METHOD_VERSION` (an integer in `engine/volume.py`) is stored with every `volume_d1` row and every `item_stats` row. When it changes, the next full refresh recomputes `books` volume and its cover from the stored order books (kept 30 days, §3.2) and marks older rows as from an earlier method on the Status page; AHF and mail rows are kept as they are. Version 2 (2026-10-19) pairs books of every source and stores covers. **Built** (V24): `volume_d1.method` holds the version of an estimated row (NULL for confirmed sources and rows from before versions were stored, which count as version 1); `collect.local_scans.recompute_stale_volume` runs at the start of each market's full refresh.
 
 #### 3.3.5 Confidence percentage
 
@@ -633,7 +645,7 @@ Missing observation periods never count as zero sales or zero supply; they are l
 | Component | Score (0–1) | Weight |
 |---|---|---|
 | Price history | `min(1, n ÷ 60)`, hourly closes in the last 30 days | 0.25 |
-| Volume source | the share of the 7 days by source: AHF real 1.0 · order-book estimate 0.7 · mail only 0.6 · listing turnover only 0 (not sales) · none 0 | 0.30 |
+| Volume source | the mean over the 7 days of each day's score by how its chosen row observed it (`engine.volume.day_score`): id diffs 1.0 · group diffs 0.3 + 0.5 × min(1, hours observed ÷ 24) (a whole day 0.8, a 2 h sample 0.34) · your mail only 0.4 · listing turnover only or none 0 | 0.30 |
 | Order book freshness | ≤ 2 h old 1.0 · ≤ 24 h old 0.5 · older or none 0.3 | 0.15 |
 | Weekly pattern | `min(1, weeks of data ÷ 6)` for the window used. **Only for planned posts**; posting now leaves it out | 0.15 |
 | Tier history | `min(1, n_tier ÷ 30)` | 0.15 |
@@ -1489,7 +1501,7 @@ Each number a tab shows comes from a pure function in `ahsync/engine/`. The dash
 | Failure handling | `sync.*`, `ingest.*`, `export.*`, `refresh.*`, addon `Core/*` | FM1–FM24, FI1–FI2 |
 | Dashboard security (not engine; `web/server`) | request checks | SEC1–SEC7 |
 | Sell probability, expected value | `sellprob.simulate`, `sellprob.blend`, `sellprob.expected` | P5–P9, P12–P24, PI1–PI17, K1–K3 |
-| Volume | `volume.*` (incl. the per-day source choice and calibration) | V1–V18, S11, the invariants below |
+| Volume | `volume.*` (incl. the per-day source choice, coverage scaling and calibration) | V1–V35, S11, the invariants below |
 
 `tests/test_conventions.py` fails if a view field has no scenario that checks it. Branch coverage of `ahsync/engine/` must be 100% (`coverage.py`, dev-only).
 
@@ -1511,11 +1523,11 @@ Single scenarios check one example. Invariants check that a formula behaves sens
 - **How cases are made.** `tests/support/gen.py` makes cases from a fixed seed with `random.Random(seed)`. A failure prints the seed and the inputs, so it can be reproduced. The generated cases are saved to `tests/properties/*.json`, so the Lua port is checked against exactly the same cases.
 - **Scale.** At least 1,000 cases per invariant.
 
-The invariants (PI1–PI17, VI1, CI1–CI3, PL1–PL3, VW1, LP1, FI1–FI2) are listed in [SCENARIOS.md §5](SCENARIOS.md#5-invariants-spec-87), with the other test IDs, so the convention test (§8.1) sees one list.
+The invariants (PI1–PI17, VI1–VI3, CI1–CI3, PL1–PL3, VW1, LP1, FI1–FI2) are listed in [SCENARIOS.md §5](SCENARIOS.md#5-invariants-spec-87), with the other test IDs, so the convention test (§8.1) sees one list.
 
 ### 8.8 Calibration: does the chance to sell match reality?
 
-**Volume backtest.** Where both exist for the same item and day, book-estimated sales are compared with AHF volume and with your mail-confirmed sales: the Status page reports the median ratio and the share of days within ±25%, per source, over the last 30 days (K4). A ratio far from 1 shows up before it misleads the plan. **Built** (K4): every estimated source (`books`) is compared with every confirmed source in `volume_d1` (AHF today; any later one, such as a Blizzard API job, without changes), by `engine.volume.backtest`, on each market's Status card.
+**Volume backtest.** Where both exist for the same item and day, book-estimated sales, scaled to a whole day by the hours observed, are compared with id-diff volume: the Status page reports the median ratio and the share of days within ±25%, per source, over the last 30 days (K4). A ratio far from 1 shows up before it misleads the plan. **Built** (K4): `books` is compared with every source whose cover kind is `ids` (none until a Blizzard API job exists), by `engine.volume.backtest`, on each market's Status card. Your mail is not a comparison: it sees only your own auctions.
 
 The invariants prove the formula is sensible. Only your real sales can show whether it is *right*. Every post therefore records the `P'` it was planned with (`posts.p_at_post`). `record.calibration` compares that with what actually happened:
 

@@ -13,7 +13,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from ahsync.analysis.market import analyze_market, with_scan
+from ahsync.analysis.market import HISTORY_DAYS, analyze_market, with_scan
+from ahsync.collect.own_mail import recompute_mail_volume
 from ahsync.collect.local_scans import recompute_stale_volume
 from ahsync.config import Config, market_settings
 from ahsync.db.sqlite import Database
@@ -183,6 +184,8 @@ def refresh_all(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0) -> R
                                   now_ms)
                 else:
                     db.clear_status(f"volume_method:{market}")
+                recompute_mail_volume(db, market, [c for c, _ in db.characters_in(market)],   # V35
+                                      (now_ms - HISTORY_DAYS * DAY_MS) // DAY_MS, now_ms // DAY_MS)
             refresh_market(db, market, now_ms, cfg, result, offset_ms)
         db.publish_refresh(list(cfg.markets))
     except Exception as error:                         # noqa: BLE001  keep the last good numbers (SPEC §5.2 rule 4)

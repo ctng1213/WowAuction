@@ -1,9 +1,11 @@
 """Sales volume: units sold, expired and listed per day, from the best source per day (SPEC §3.3.1).
 
-Sources, best first: AHF Premium volume ("ahf"), own order-book diffs ("books"),
-and own auction mail ("mail"). AHF quantity drops ("qty_drop") are listing turnover,
-never sales (SPEC §3.3.1 item 4, §3.3.6): `daily_volume` ignores them.
-All are computed and stored; `daily_volume` picks the best one per day.
+Every daily row has a source (`src`, e.g. "books", "ids", "mail") and a `Cover`: its kind (by method) and the
+hours of the day it observed. Kinds, best first: auction-id diffs ("ids"), group diffs of order books ("groups":
+your scans, AHF books, AHF's volume file) and your own auction mail ("own", a lower bound on the market). Within
+a kind the source that observed more of the day wins. A partly observed day counts as the share of a day's sales
+it saw, weighted by the hourly sales pattern. Quantity drops ("qty_drop") are listing turnover, never sales
+(SPEC §3.3.1 item 4, §3.3.6): they have no kind, so `daily_volume` ignores them.
 """
 from __future__ import annotations
 
@@ -16,8 +18,9 @@ HOUR_MS = 3_600_000
 SUPPLY_DAYS = 30            # median_daily_supply looks back this far (SPEC §3.3.6)
 MAX_GAP_MS = 6 * HOUR_MS
 SALES_PAIR_MAX_GAP_MS = 2 * HOUR_MS     # hourly sales rates need books this close (SPEC §3.3 sales_how)
-VOLUME_METHOD_VERSION = 1     # bump when the estimation changes; stored data is then recomputed (SPEC §3.3.6)
-SOURCES = ("ahf", "books", "mail")     # sales sources in trust order (SPEC §3.3.1); "qty_drop" is not one
+VOLUME_METHOD_VERSION = 2     # bump when the estimation changes; stored data is then recomputed (SPEC §3.3.6)
+KINDS = ("ids", "groups", "own")       # volume kinds in trust order (SPEC §3.3.1)
+LEGACY_KIND = {"ahf": "groups", "books": "groups", "mail": "own"}   # rows stored without a cover (V24)
 # Time-left bands [lo, hi) in hours, by WoW band code (SPEC §3.3.1). UNVERIFIED for Forever (§6 item 5).
 # Very long ends at the longest auction duration (fees.DURATIONS_H; 24 h on Classic Era).
 BAND_HOURS = {1: (0.0, 0.5), 2: (0.5, 2.0), 3: (2.0, 8.0), 4: (8.0, 24.0)}
@@ -52,6 +55,15 @@ class Volume:
 
 
 @dataclass(frozen=True)
+class Cover:
+    """How one volume source observed one day (SPEC §3.3.1)."""
+
+    kind: str                                   # "ids" | "groups" | "own"
+    covered_s: tuple[int, ...] | None = None    # seconds observed per UTC hour of the day (24 values; a pair
+                                                # crossing midnight folds into the same hours); None = the whole day
+
+
+@dataclass(frozen=True)
 class DailyVolume:
     """Per-day average volume over a window, and which source each day used."""
 
@@ -59,6 +71,7 @@ class DailyVolume:
     expired_per_day: float | None
     listed_per_day: float | None
     days_by_source: dict[str, int] = field(default_factory=dict)
+    volume_score: float = 0.0         # the confidence component for volume, 0-1 (SPEC §3.3.5)
 
 
 def expiring_fraction(band: int, gap_hours: float) -> float:
@@ -113,6 +126,83 @@ def estimate_volume(prev: Book, next_: Book, max_gap_ms: int = MAX_GAP_MS) -> di
         total[1] += expired * stack
         total[2] += new * stack
     return {key: Volume(sold, expired, listed) for key, (sold, expired, listed) in sorted(totals.items())}
+
+
+@dataclass(frozen=True)
+class Auction:
+    """One auction of a snapshot that has auction ids (a retail-shaped API, SPEC §3.3.1 kind "ids")."""
+
+    id: int           # the auction's id, unique within the market while it is listed
+    key: int          # item key
+    qty: int          # units left in it (a commodity auction shrinks as it partly sells)
+    price: int        # unit buyout, copper
+    band: int         # time-left code 1-4
+
+
+@dataclass(frozen=True)
+class IdBook:
+    """A complete snapshot with auction ids."""
+
+    at_ms: int
+    auctions: tuple[Auction, ...]
+
+
+def estimate_volume_ids(prev: IdBook, next_: IdBook, max_gap_ms: int = MAX_GAP_MS) -> dict[int, Volume] | None:
+    """Units sold, expired and newly listed between two snapshots with auction ids (SPEC §3.3.1, V33).
+
+    An id still listed with fewer units sold the difference (a partial commodity buy). An id that is gone
+    expired with its band's chance of running out in the gap, else it sold. An id not seen before is new.
+
+    Args:
+        prev: The earlier snapshot.
+        next_: The later snapshot of the same market.
+        max_gap_ms: Largest allowed time between them, in ms.
+
+    Returns:
+        Item key -> Volume(sold, expired, listed) in units, or None when they are too far apart. Known error: a
+        cancelled auction still counts as sold, since cancels and buys both remove an id.
+    """
+    gap_ms = next_.at_ms - prev.at_ms
+    if gap_ms > max_gap_ms:
+        return None
+    gap_hours = gap_ms / HOUR_MS
+    later = {a.id: a for a in next_.auctions}
+    earlier = {a.id for a in prev.auctions}
+    totals: dict[int, list[float]] = {}
+    for a in sorted(prev.auctions, key=lambda a: a.id):
+        total = totals.setdefault(a.key, [0.0, 0.0, 0.0])
+        b = later.get(a.id)
+        if b is not None:
+            total[0] += max(0, a.qty - b.qty)
+            continue
+        expired = a.qty * expiring_fraction(a.band, gap_hours)
+        total[0] += a.qty - expired
+        total[1] += expired
+    for b in sorted(next_.auctions, key=lambda b: b.id):
+        total = totals.setdefault(b.key, [0.0, 0.0, 0.0])
+        if b.id not in earlier:
+            total[2] += b.qty
+    return {key: Volume(sold, expired, listed) for key, (sold, expired, listed) in sorted(totals.items())}
+
+
+def covered_seconds(pairs: Sequence[tuple[int, int]]) -> tuple[int, ...]:
+    """The seconds a day's book pairs observed in each UTC hour of the day (SPEC §3.3.1, V29).
+
+    Args:
+        pairs: (earlier book ms, later book ms) of each pair counted for the day.
+
+    Returns:
+        24 values, hour 0 first; a pair that starts the day before folds its hours into the same hours of
+        the day (the weekday pattern of its day is used for them).
+    """
+    covered_ms = [0] * 24
+    for start, end in pairs:
+        t = start
+        while t < end:
+            step = min(end, (t // HOUR_MS + 1) * HOUR_MS) - t
+            covered_ms[t // HOUR_MS % 24] += step
+            t += step
+    return tuple(ms // 1000 for ms in covered_ms)
 
 
 def hourly_sales(books: Sequence[Book], max_gap_ms: int = SALES_PAIR_MAX_GAP_MS) -> dict[int, dict[int, float]]:
@@ -196,46 +286,153 @@ def calibration_factor(confirmed_sold: float, estimated_sold: float) -> float | 
     return confirmed_sold / estimated_sold
 
 
-def daily_volume(rows: dict[int, dict[str, Volume]], days: Sequence[int],
-                 mail_factor: float | None = None) -> DailyVolume:
-    """Average daily volume over a window, using each day's best source (SPEC §3.3.1).
+def cover_of(src: str, covers: dict[str, Cover]) -> Cover | None:
+    """A stored row's cover: its own, else its source's legacy kind for a whole day.
 
     Args:
-        rows: day -> source -> Volume for the item's whole stored history (all sources);
-            every day with both AHF and book volume calibrates the estimates, even
-            outside the window (the factor is stored, SPEC §3.3.1).
-        days: The window's day numbers (floor(ms / 86400000)).
-        mail_factor: Calibration from your own sold mail, used only when there is
-            no AHF overlap to calibrate with (the two are never multiplied).
+        src: The row's source.
+        covers: src -> Cover on its day.
 
     Returns:
-        The averages over the days that have any source, with the "books" estimate's
-        sold units multiplied by the calibration factor; all None when no day has data.
+        The Cover; None for a source with no kind (listing turnover).
     """
-    overlap = [d for d in sorted(rows) if {"ahf", "books"} <= rows[d].keys()]
-    overlap_ahf = sum(rows[d]["ahf"].sold for d in overlap)
-    overlap_books = sum(rows[d]["books"].sold for d in overlap)
-    ahf_factor = calibration_factor(overlap_ahf, overlap_books)
-    if ahf_factor is not None:
-        factor = ahf_factor               # AHF covers the whole market: preferred (V18)
-    else:
-        factor = mail_factor if mail_factor is not None else 1.0
-    sold = expired = listed = 0.0
+    return covers.get(src) or (Cover(LEGACY_KIND[src]) if src in LEGACY_KIND else None)
+
+
+def day_shares(cover: Cover, day: int, sales_how: Sequence[float] | None) -> tuple[float, float]:
+    """The share of a day's sales, and of its hours, that a source observed (SPEC §3.3.1, V30-V31).
+
+    Args:
+        cover: The source's cover for the day.
+        day: Day number (its weekday picks the pattern's slots).
+        sales_how: The item's 168-slot hourly sales profile (Monday 00:00 UTC first), or None for flat.
+
+    Returns:
+        (sales share, time share): each 1.0 for a whole day; the sales share weights each hour by the pattern,
+        falling back to the time share when the day's slots are all 0. Both can pass 1.0 when pairs overlap
+        across midnight: they are day-equivalents observed, not probabilities.
+    """
+    if cover.covered_s is None:
+        return 1.0, 1.0
+    hours = [s / 3600 for s in cover.covered_s]
+    time_share = sum(hours) / 24
+    first = (day + 3) % 7 * 24
+    weights = sales_how[first:first + 24] if sales_how is not None else []
+    total = sum(weights)
+    if total <= 0:
+        return time_share, time_share
+    return sum(w * h for w, h in zip(weights, hours)) / total, time_share
+
+
+def _ranked(sources: dict[str, Volume], covers: dict[str, Cover], day: int,
+            sales_how: Sequence[float] | None) -> list[tuple]:
+    """A day's sources with a kind and something observed, best first: kind, then most observed, then name (V32).
+
+    Args:
+        sources: src -> Volume on the day.
+        covers: src -> Cover on the day.
+        day: Day number.
+        sales_how: The hourly sales profile, or None.
+
+    Returns:
+        (kind rank, −sales share, src, cover, sales share, time share) tuples, best first.
+    """
+    ranked = []
+    for src in sorted(sources):
+        cover = cover_of(src, covers)
+        if cover is None or cover.kind not in KINDS:
+            continue
+        share, time_share = day_shares(cover, day, sales_how)
+        if share > 0:
+            ranked.append((KINDS.index(cover.kind), -share, src, cover, share, time_share))
+    return sorted(ranked, key=lambda r: r[:3])
+
+
+def day_score(cover: Cover, time_share: float) -> float:
+    """A day's volume confidence by how it was observed (SPEC §3.3.5).
+
+    Args:
+        cover: The day's chosen source.
+        time_share: The share of the day's hours it observed.
+
+    Returns:
+        ids 1.0; groups 0.3 + 0.5 × min(1, time share) (a whole day 0.8); own mail 0.4 (a lower bound).
+    """
+    if cover.kind == "ids":
+        return 1.0
+    if cover.kind == "groups":
+        return 0.3 + 0.5 * min(1.0, time_share)
+    return 0.4
+
+
+def ids_factor(rows: dict[int, dict[str, Volume]], cover: dict[int, dict[str, Cover]],
+               sales_how: Sequence[float] | None) -> float | None:
+    """Calibration of group diffs from days that also have id diffs (SPEC §3.3.1, V16).
+
+    Args:
+        rows: day -> src -> Volume, the item's whole stored history.
+        cover: day -> src -> Cover.
+        sales_how: The hourly sales profile, or None.
+
+    Returns:
+        id-diff sold ÷ group-diff sold (each source's best of the day, scaled to a whole day) over those days;
+        None without such a day.
+    """
+    confirmed = estimated = 0.0
+    for day in sorted(rows):
+        best: dict[str, tuple] = {}
+        for r in _ranked(rows[day], cover.get(day, {}), day, sales_how):
+            best.setdefault(r[3].kind, r)
+        if "ids" in best and "groups" in best:
+            confirmed += rows[day][best["ids"][2]].sold / best["ids"][4]
+            estimated += rows[day][best["groups"][2]].sold / best["groups"][4]
+    return calibration_factor(confirmed, estimated)
+
+
+def daily_volume(rows: dict[int, dict[str, Volume]], days: Sequence[int],
+                 cover: dict[int, dict[str, Cover]] | None = None,
+                 sales_how: Sequence[float] | None = None) -> DailyVolume:
+    """Sold, expired and listed per day over a window, from each day's best source (SPEC §3.3.1).
+
+    Args:
+        rows: day -> src -> Volume for the item's whole stored history; days with both id diffs and group
+            diffs calibrate the group diffs, even outside the window.
+        days: The window's day numbers (floor(ms / 86400000)).
+        cover: day -> src -> Cover; a row without one is an older stored row (LEGACY_KIND, whole day).
+        sales_how: The item's 168-slot hourly sales profile, to weight partly observed days; None for flat.
+
+    Returns:
+        Sold per day = the window's sold units ÷ the day-equivalents of sales observed (a 2 h sample is 2/24
+        of a day when sales are flat); expired and listed per day likewise by hours observed. Group diffs are
+        multiplied by the id calibration, and never fall below your own mail's sold units for the part of the
+        day observed. All None when no day has a source.
+    """
+    cover = cover or {}
+    factor = ids_factor(rows, cover, sales_how) or 1.0
+    sold = expired = listed = shares = time_shares = score = 0.0
     used: dict[str, int] = {}
     for day in days:
         sources = rows.get(day, {})
-        source = next((s for s in SOURCES if s in sources), None)
-        if source is None:
+        ranked = _ranked(sources, cover.get(day, {}), day, sales_how)
+        if not ranked:
             continue
-        v = sources[source]
-        sold += v.sold * (factor if source == "books" else 1.0)
+        _, _, src, c, share, time_share = ranked[0]
+        v = sources[src]
+        day_sold = v.sold * (factor if c.kind == "groups" else 1.0)
+        own = [sources[r[2]].sold for r in ranked if r[3].kind == "own"]
+        if c.kind != "own" and own:
+            day_sold = max(day_sold, max(own) * share)          # your own sales are a floor (V34)
+        sold += day_sold
         expired += v.expired
         listed += v.listed
-        used[source] = used.get(source, 0) + 1
-    n = sum(used.values())
-    if n == 0:
+        shares += share
+        time_shares += time_share
+        score += day_score(c, time_share)
+        used[src] = used.get(src, 0) + 1
+    if not used:
         return DailyVolume(None, None, None, {})
-    return DailyVolume(sold / n, expired / n, listed / n, used)
+    return DailyVolume(sold / shares, expired / time_shares, listed / time_shares, used,
+                       min(1.0, score / max(1, len(days))))
 
 
 def median_daily_supply(hourly_supply: Sequence[tuple[int, int]], now_ms: int, days: int = SUPPLY_DAYS) -> int | None:

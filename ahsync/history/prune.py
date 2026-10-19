@@ -50,6 +50,7 @@ def prune(db: Database, now_ms: int, retention_days: int = 90, book_days: int = 
     cutoff_ms = now_ms - retention_days * DAY_MS
     deleted = {table: db.delete_before(table, cutoff_ms) for table in MS_TABLES}
     deleted["volume_d1"] = db.delete_before("volume_d1", cutoff_ms // DAY_MS)
+    deleted["volume_cover"] = db.delete_before("volume_cover", cutoff_ms // DAY_MS)
     deleted["fetch_failures"] = db.delete_before("fetch_failures", cutoff_ms // HOUR_MS)
     deleted["scans"] = db.delete_scans_before(now_ms - book_days * DAY_MS)
     deleted["item_rules"] = db.delete_rule_tombstones_before(cutoff_ms)

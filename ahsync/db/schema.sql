@@ -42,11 +42,12 @@ CREATE TABLE IF NOT EXISTS sales_h1(
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS sales_h1_market_t ON sales_h1(market, t);
 
-CREATE TABLE IF NOT EXISTS calibration(
-    market TEXT NOT NULL, key INTEGER NOT NULL, source TEXT NOT NULL,   -- source: 'ahf' | 'mail'
-    factor REAL, samples INTEGER, updated INTEGER,
-    PRIMARY KEY(market, key, source)
-);
+-- How each volume source observed a day, market-wide (SPEC §3.3.1): its kind ('ids' | 'groups' | 'own') and the
+-- seconds it observed per UTC hour of the day (24 comma-separated values; NULL = the whole day).
+CREATE TABLE IF NOT EXISTS volume_cover(
+    market TEXT NOT NULL, day INTEGER NOT NULL, src TEXT NOT NULL, kind TEXT NOT NULL, covered TEXT,
+    PRIMARY KEY(market, day, src)
+) WITHOUT ROWID;
 
 CREATE TABLE IF NOT EXISTS current(
     market TEXT NOT NULL, key INTEGER NOT NULL, price INTEGER, qty INTEGER, at INTEGER NOT NULL, src TEXT NOT NULL,
