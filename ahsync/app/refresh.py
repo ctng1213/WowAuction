@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from ahsync.analysis.market import analyze_market, with_scan
 from ahsync.config import Config, market_settings
 from ahsync.db.sqlite import Database
+from ahsync.recommend.history_page import history_page
 from ahsync.recommend.inventory_page import inventory_page
 from ahsync.recommend.on_ah_page import on_ah_page
 from ahsync.recommend.pages import craft_page, disenchant_page
@@ -106,6 +107,7 @@ def _stage_recommendations(db: Database, market: str, stats: dict, now_ms: int, 
     db.stage_view("disenchant", market, disenchant_page(db, char_ids, stats, items, total_gold, now_ms, cfg), now_ms)
     db.stage_view("craft", market, craft_page(db, char_ids, stats, items, total_gold, now_ms, cfg), now_ms)
     db.stage_view("on_ah", market, on_ah_page(db, char_ids, stats, items), now_ms)          # D18
+    db.stage_view("history", market, history_page(db, char_ids, stats, items, now_ms, offset_ms), now_ms)   # D47
     _stage_plan(db, market, characters, stats, items, now_ms, offset_ms, cfg)
 
 

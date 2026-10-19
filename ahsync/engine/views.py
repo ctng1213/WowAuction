@@ -105,6 +105,12 @@ COLUMN_HELP = {
                             'profitable it is. "—" = too little evidence',
     "Expected ROI": "Expected profit ÷ buy cost. Flips need at least 20%",
     "Where": "Bags, bank or mail. Auctions you have up are on On the AH",
+    "When": "When it happened, in your local time",
+    "Event": "What happened: posted, sold, expired, paid out, bought, crafted, disenchanted, mailed. \"—\" is a plan action "
+             "with no event",
+    "Price": "Each, copper as the AH or vendor charged it; for Paid out, the gold taken from the mailbox",
+    "Plan action": "The plan action this event completed: done, partial, or missed and skipped ones",
+    "Detail": "The deposit, the post it resolved, what it cost or realized, or why the plan action was missed",
     "Listed each": "Your buyout per unit",
     "Listed total": "Listed each × quantity",
     "Cost each": "What it cost you per unit: what you paid, or the mats for a craft; 0 for items you found or held "

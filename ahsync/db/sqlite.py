@@ -22,6 +22,7 @@ from ahsync.history.reads import CurrentPrice, HistoryReads  # noqa: F401  (Curr
 from ahsync.history.writes import HistoryWrites
 from ahsync.intel.store import IntelStore
 from ahsync.recommend.store import RecommendStore
+from ahsync.state.journal import JournalReads
 from ahsync.state.reads import StateReads
 
 SCHEMA_VERSION = 9
@@ -221,7 +222,7 @@ def restore_newest_backup(path: Path, backup_dir: Path, now_ms: int) -> Path | N
     return None
 
 
-class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, IntelStore, RecommendStore):
+class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, JournalReads, IntelStore, RecommendStore):
     """A connection to data/ahsync.db with AHSync's queries and upserts."""
 
     def __init__(self, conn: sqlite3.Connection, path: Path) -> None:

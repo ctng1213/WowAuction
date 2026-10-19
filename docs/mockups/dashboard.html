@@ -464,7 +464,7 @@ const PAGES = {
 
   History: { count: null, html: () => `
     <h1>History</h1><p class="lede">The journal: everything the addon recorded and how it matched your plan (SPEC §3.4.1). You never type any of this in. In game, the addon appends every post, purchase, craft, disenchant, mail and payout to its journal as it happens; WoW writes the journal to disk at each <code>/reload</code>, logout or disconnect, and AHSync picks it up then. A sale is three separate events: posted, sold and paid out. Anything the journal missed (a crash before the write) shows up as <span class="amber">Untracked</span> when the next bag snapshot differs, with cost 0, so nothing is invented.</p>
-    ${tiles([['Sold (30 d)', '23 posts', `<span class="pos">${money(286000)}</span> after cut`], ['Expired (30 d)', '6 posts', '4 while cheapest · 2 undercut'], ['Deposits lost', `<span class="neg">${money(1840)}</span>`, '30 days'], ['Plan actions', '41 done', '3 missed · 2 skipped']])}
+    ${tiles([['Sold (30 d)', '23 posts', `<span class="pos">${money(286000)}</span> after cut`], ['Expired (30 d)', '6 posts', '4 while cheapest · 2 undercut'], ['Deposits lost', `<span class="neg">${money(1840)}</span>`, '30 days'], ['Plan actions', '41 done', '3 missed · 2 skipped'], ['Realized profit', `<span class="pos">+${money(98400)}</span>`, '21 payouts · after cost and deposit']])}
     <div class="card">${filters('<span class="select">Event: All ▾</span><span class="select">Last 7 days ▾</span>')}
     ${table([['When'], ['Character'], ['Event'], ['Item'], ['Qty', 1], ['Price', 1], ['Plan action'], ['Detail']], [
       hRow('Fri 14:10', 'Amaya', 'Bought', 'Linen Cloth', 1, 20, 38, '<span class="status-done">✓ done</span>', 'matched "buy ≤ 45c"'),

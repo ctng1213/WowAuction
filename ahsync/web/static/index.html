@@ -295,6 +295,22 @@ const LIVE = {
       { id: 'position', label: 'Position', options: [['', 'All'], ['pos', 'Cheapest'], ['neg', 'Undercut']], test: (r, v) => v === '' || r.position_class === v },
     ],
   },
+  history: {
+    lede: 'The journal: everything the addon recorded in the last 30 days and how it matched your plan (SPEC §3.4.1). You never type any of this in: the addon records every post, purchase, craft, disenchant, mail and payout as it happens, and AHSync reads it at each <code>/reload</code> or logout. A sale is three events: posted, sold and paid out; <b>Realized profit</b> counts once, when you take the gold.',
+    above: d => tilesHtml(d.tiles),
+    cols: [['When', 0, 'at'], ['Character', 0, null], ['Event', 0, null], ['Item', 0, null], ['Qty', 1, null], ['Price', 1, null],
+           ['Plan action', 0, null], ['Detail', 0, null]],
+    row: r => `<tr><td class="muted">${esc(r.when)}</td><td>${esc(r.character)}</td><td class="${['pos', 'neg', 'muted', 'amber'].includes(r.event_class) ? r.event_class : ''}">${esc(r.event)}</td>` +
+              `<td>${item(r.item, r.quality)}</td><td class="num">${esc(r.qty)}</td><td class="num">${dash(r.price)}</td>` +
+              `<td class="${['pos', 'neg', 'muted', 'amber'].includes(r.plan_class) ? r.plan_class : ''}">${esc(r.plan)}</td><td class="muted">${esc(r.detail)}</td></tr>`,
+    filters: [
+      { id: 'search', label: null, kind: 'search', placeholder: 'Search items…', test: (r, v) => !v || String(r.item).toLowerCase().includes(v.toLowerCase()) },
+      { id: 'character', label: 'Character', fromRows: 'character', test: (r, v) => v === '' || r.character === v },
+      { id: 'event', label: 'Event', options: [['', 'All'], ['posted', 'Posted'], ['sold', 'Sold'], ['expired', 'Expired'], ['paid_out', 'Paid out'], ['bought', 'Bought'], ['crafted', 'Crafted'], ['disenchanted', 'Disenchanted'], ['mailed', 'Mailed'], ['missed', 'Missed'], ['skipped', 'Skipped']],
+        test: (r, v) => v === '' || r.kind === v || (v === 'bought' && r.kind === 'bought_vendor') },
+      { id: 'days', label: 'When', options: [['', 'Last 30 days'], ['7', 'Last 7 days'], ['1', 'Today and yesterday']], test: (r, v) => v === '' || r.sort.age_days < Number(v) },
+    ],
+  },
   inventory: {
     lede: 'What you own on every character: bags, bank and mail (auctions you have up are on <b>On the AH</b>). <b>Paid</b> is what you paid (0 for items you found or held before tracking started); <b>Worth</b> is what the item is expected to bring under its plan. <b>Click a row</b> to see when it sells best and why.',
     above: d => tilesHtml(d.tiles),
