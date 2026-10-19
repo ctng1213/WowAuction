@@ -232,7 +232,7 @@ class DashboardApp:
             market: Market id; "" means the first configured market.
 
         Returns:
-            200 {"built": ms, "data": payload}; 404 {"error": "no_refresh_yet"} before the
+            200 {"built": ms, "prices_newer": bool (IU2), "data": payload}; 404 {"error": "no_refresh_yet"} before the
             first refresh; 404 {"error": "unknown_market"} for a market not in the config;
             503 {"error": "database_busy"} when the database can't be read right now;
             503 {"error": "bad_view"} when the stored payload can't be decoded.
@@ -245,6 +245,7 @@ class DashboardApp:
         try:
             with self._lock:
                 stored = self.db.view(page, market)
+                newer = self.db.prices_newer_than_intel(market)
         except sqlite3.Error as error:
             log.warning("reading the %s view failed: %s", page, error)
             return json_response(503, {"error": "database_busy"})
@@ -254,7 +255,7 @@ class DashboardApp:
         if stored is None:
             return json_response(404, {"error": "no_refresh_yet"})
         payload, built_ms = stored
-        return json_response(200, {"built": built_ms, "data": payload})
+        return json_response(200, {"built": built_ms, "prices_newer": newer, "data": payload})
 
     def get_status(self) -> Response:
         """Build and serve the Status page now (SPEC §3.5 Status): it changes between refreshes.

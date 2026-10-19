@@ -412,7 +412,7 @@ async function load(id) {
   }
   if (!res.ok) return renderMessage(id, `Couldn't load this page (${esc(body.error || res.status)}).`);
   state.data[id] = body.data;
-  setBuilt(body.built);
+  setBuilt(body.built, body.prices_newer);
   render(id);
 }
 
@@ -422,10 +422,12 @@ function renderMessage(id, text) {
   if (card) card.innerHTML = `<div class="empty">${text}</div>`;
 }
 
-function setBuilt(builtMs) {
+function setBuilt(builtMs, pricesNewer) {
   const pill = document.getElementById('built');
   pill.hidden = builtMs === null || builtMs === undefined;
-  if (!pill.hidden) pill.textContent = 'numbers from ' + new Date(builtMs).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+  pill.classList.toggle('amber', !!pricesNewer);
+  if (!pill.hidden) pill.textContent = 'numbers from ' + new Date(builtMs).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' }) +
+    (pricesNewer ? ' · prices newer than numbers · Refresh now' : '');      // IU2
 }
 
 // ---------- table ----------

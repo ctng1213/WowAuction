@@ -274,7 +274,7 @@ All the heavy lifting happens in AHSync, and only in a **full refresh**. Everyth
 - The plan is re-planned whole rather than item by item, because budgets and each selling window's capacity are shared across items (§3.4C.4); a per-item update would let two items spend the same gold.
 - It is published like a full refresh (staged, then swapped in), keeping the live intelligence; a failure leaves the previous plan and pages live.
 - A new in-game scan updates `cur`, `curQty` and the book for the scanned items only.
-- Hourly and live AHF data are **stored but not applied** until the next full refresh, so the numbers stay stable through the day. The exception is items you scanned in game, whose prices update immediately. The dashboard shows "prices newer than numbers · Refresh now" when newer data is waiting.
+- Hourly and live AHF data are **stored but not applied** until the next full refresh, so the numbers stay stable through the day. The exception is items you scanned in game, whose prices update immediately. The dashboard shows "prices newer than numbers · Refresh now" when newer data is waiting: each `/api/views` response carries `prices_newer`, true when the newest stored AHF price is newer than the published intelligence (IU2).
 
 **Status pass** (`plan.status_pass`, run by `sync/scheduler`). Time passing changes the plan even when no data does, so AHSync runs this once an hour at :00. It runs on precomputed options only, with no history reads and no simulation:
 - It moves `pending` actions to `late` or `missed` by the rules in §3.4.1.

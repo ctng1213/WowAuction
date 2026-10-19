@@ -317,7 +317,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | # | Scenario | Then |
 |---|---|---|
 | IU1 | you buy 20 Linen Cloth (SavedVariables changes) | only Linen is dirty; its options and plan rows are recomputed; other items' rows are untouched; history reads = 0 (counted by a fake `db`) |
-| IU2 | a new hourly AHF file arrives | stored; market intelligence, plan and the addon files unchanged; "prices newer than numbers" flag set |
+| IU2 | a new hourly AHF file arrives | stored; market intelligence, plan and the addon files unchanged; "prices newer than numbers" flag set: every page response carries `prices_newer: true` (an AHF price observed after the published intelligence was built), and the dashboard's pill reads "numbers from … · prices newer than numbers · Refresh now"; false before any newer price and before the first refresh |
 | IU3 | `daily_refresh_time` 06:00 passes while AHSync runs | one full refresh on the next timer tick; none again until the next day |
 | IU4 | "Refresh now" pressed twice within a second | one full refresh (the second request is merged in) |
 | IU5 | the curve row for the current hour has P(2 ahead) = 0.90 and P(5 ahead) = 0.78; 3 units are now ahead | P = 0.90 − 0.12 × (1 ÷ 3) = 0.86, in both Python and Lua |

@@ -309,7 +309,7 @@ def test_views_serve_the_stored_payload_as_is(app, db):
     publish(db, "disenchant", M, rows)
     reply = app.handle("GET", f"/api/views/disenchant?market={M}", GOOD)
     assert reply.status == 200
-    assert json.loads(reply.body) == {"built": BUILT, "data": json.loads(json.dumps(rows))}
+    assert json.loads(reply.body) == {"built": BUILT, "prices_newer": False, "data": json.loads(json.dumps(rows))}
     row = json.loads(reply.body)["data"]["rows"][0]
     assert row["chance"] == "92%" and row["dot"] == "high" and row["sort"]["profit"] == 612
 
@@ -504,3 +504,18 @@ def test_every_table_row_is_its_own_tr():
         row = re.search(r"row: r => `(.*?)`", body, re.S)
         if row and "selectKey" not in body:
             assert row.group(1).startswith("<tr") and "</tr>`" in body, name
+
+
+def test_IU2_an_ahf_price_newer_than_the_intelligence_flags_every_page(app, db):
+    from ahsync.intel.contract import MarketIntelligence
+    publish(db, "today", M, {"rows": []})
+    assert json.loads(app.handle("GET", f"/api/views/today?market={M}", GOOD).body)["prices_newer"] is False
+    with db.transaction():
+        db.stage_intel(MarketIntelligence(M, BUILT, BUILT, 1, {}))
+        db.stage_view("today", M, {"rows": []}, BUILT)
+    db.publish_refresh([M])
+    db.upsert_current(M, "ahf", [(2589, 45, 20, BUILT - 3_600_000)])                   # older than the numbers
+    assert json.loads(app.handle("GET", f"/api/views/today?market={M}", GOOD).body)["prices_newer"] is False
+    db.upsert_current(M, "ahf", [(2589, 44, 20, BUILT + 3_600_000)])                   # an hourly file after the refresh
+    reply = json.loads(app.handle("GET", f"/api/views/today?market={M}", GOOD).body)
+    assert reply["prices_newer"] is True and reply["data"] == {"rows": []}        # numbers unchanged
