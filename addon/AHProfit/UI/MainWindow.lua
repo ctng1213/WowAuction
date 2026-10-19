@@ -499,6 +499,17 @@ local function Listed(charId, nowMs)
   return AHProfit.Capture.Auctions.Listed(((DB.Get() or {}).ownAuctions or {})[charId], nowMs)
 end
 
+--- Everything this character holds unbound, every place together (A49).
+---@param charId string
+---@return table  key -> units in bags, bank and mail
+local function HeldEverywhere(charId)
+  local inventory, units = ((DB.Get() or {}).inventory or {})[charId] or {}, {}
+  for _, where in ipairs(VM.PLACES) do
+    for key, qty in pairs(Options.Units(Inventory.Decode(inventory[where]))) do units[key] = (units[key] or 0) + qty end
+  end
+  return units
+end
+
 --- This character's actions: AHSync's plan, without buys a live scan shows gone (A2), plus the
 --- addon's own options where the plan is silent (SPEC §4.0): crafts first, then the rest of what
 --- you carry, so a mat is never both crafted and sold (A20).
@@ -510,7 +521,7 @@ local function CharacterActions(charId, nowMs)
   local reserves = Reserves.Get(db, charId)
   local held = Options.Units(Inventory.Decode(((db.inventory or {})[charId] or {}).bags))
   local actions, gone = Options.WithoutGoneBuys(Plan.CharacterActions(charId), LevelsOf)
-  actions = Reserves.Trim(actions, reserves, held)          -- what you keep is never sold (A25)
+  actions = Reserves.Trim(actions, reserves, HeldEverywhere(charId))   -- never more than you hold and don't keep (A25, A49)
   local planned, crafted, recipes = {}, {}, {}
   for _, a in ipairs(actions) do
     planned[a.key] = true
@@ -541,12 +552,19 @@ end
 
 --- Everything this character holds, place by place (bags, bank, mail).
 ---@param charId string
----@return table[]  { where, key, qty, bound }
-local function Holdings(charId)
-  local inventory, out = ((DB.Get() or {}).inventory or {})[charId] or {}, {}
+---@param nowMs number|nil  With it, your active auctions too, as where "AH" (A50)
+---@return table[]  { where, key, qty, bound, price, endsAt }
+local function Holdings(charId, nowMs)
+  local db = DB.Get() or {}
+  local inventory, out = (db.inventory or {})[charId] or {}, {}
   for _, where in ipairs(VM.PLACES) do
     for _, row in ipairs(Inventory.Decode(inventory[where])) do
       out[#out + 1] = { where = where, key = row.key, qty = row.qty, bound = row.bound }
+    end
+  end
+  if nowMs then
+    for _, a in ipairs(AHProfit.Capture.Auctions.Active((db.ownAuctions or {})[charId], nowMs)) do
+      out[#out + 1] = { where = "AH", key = a.key, qty = a.units, bound = false, price = a.price, endsAt = a.endsAt }
     end
   end
   return out
@@ -592,7 +610,8 @@ local function Lines(nowMs, gold)
   end
   if view.tab == "inventory" then
     local actions = CharacterActions(charId, nowMs)
-    local rows = VM.Inventory(Holdings(charId), actions, LookOf, LiveItem, offset, Reserves.Get(DB.Get() or {}, charId))
+    local rows = VM.Inventory(Holdings(charId, nowMs), actions, LookOf, LiveItem, offset, Reserves.Get(DB.Get() or {}, charId),
+                              nowMs)
     return VM.WithNotes(rows), VM.InventoryFooter(rows), "Nothing in your bags, bank or mail yet."
   end
   local actions, gone = Plan.CharacterActions(charId), 0

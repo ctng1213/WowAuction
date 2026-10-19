@@ -609,6 +609,19 @@ function ViewModel.KeptNote(kept, plan)
   return "Keeping " .. kept .. " for yourself · " .. plan
 end
 
+--- One of your auctions as an Inventory row (A50): its worth is what it brings if it sells.
+---@param h table      { key, qty, price, endsAt }
+---@param look table
+---@param nowMs number
+---@return table       Row of text
+local function ListedRow(h, look, nowMs)
+  local worth = h.price and h.price * h.qty * (1 - AHProfit.Engine.Fees.AH_CUT) or nil
+  local note = (h.price and ("listed at " .. ViewModel.Money(h.price) .. " each · ") or "") .. ViewModel.EndsIn(h.endsAt, nowMs)
+  return { key = h.key, item = look.name, quality = look.quality, where = "AH", qty = "×" .. h.qty, kind = "inventory",
+           worth = worth and ViewModel.Money(worth) or "—", chance = "—", volume = "—", note = note,
+           sortWorth = worth and ViewModel.RoundHalfUp(worth) or -1, netColor = "muted", riskAmber = false }
+end
+
 --- The Inventory tab: what this character holds, best worth first (A22). Worth is what its plan
 --- expects (the action's net per unit), else its sell value; bound items have none.
 ---@param holdings table[]  { where, key, qty, bound }
@@ -617,8 +630,9 @@ end
 ---@param itemOf function   key -> market item or nil
 ---@param offsetMs number
 ---@param reserves table|nil key -> units you keep (A25)
+---@param nowMs number|nil  For when your auctions end (A50)
 ---@return table[]          Rows { item, quality, where, qty, worth, chance, dot, volume, note, sortWorth }
-function ViewModel.Inventory(holdings, actions, lookOf, itemOf, offsetMs, reserves)
+function ViewModel.Inventory(holdings, actions, lookOf, itemOf, offsetMs, reserves, nowMs)
   local sale, craftedInto = {}, {}
   local sorted = {}
   for i, a in ipairs(actions) do sorted[i] = a end
@@ -630,8 +644,11 @@ function ViewModel.Inventory(holdings, actions, lookOf, itemOf, offsetMs, reserv
     end
     for key in pairs(a.uses or {}) do craftedInto[key] = craftedInto[key] or lookOf(a.key).name end
   end
-  local rows = {}
+  local rows, stock = {}, {}
   for _, h in ipairs(holdings) do
+    if h.where == "AH" then rows[#rows + 1] = ListedRow(h, lookOf(h.key), nowMs or 0) else stock[#stock + 1] = h end
+  end
+  for _, h in ipairs(stock) do
     local look, a, item = lookOf(h.key), sale[h.key], itemOf(h.key)
     local each
     if not h.bound and not craftedInto[h.key] then

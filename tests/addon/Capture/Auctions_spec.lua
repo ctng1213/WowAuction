@@ -34,14 +34,15 @@ describe("Auctions", function()
     local at = snap.at                                            -- read once the debounce fires
     assert_eq(at >= NOW, true)
     assert_eq(snap, { at = at, rows = "2840,950,5,1,1;4471,80,1,3,1",
-                      ends = "2840,5," .. (at + 1200000) .. ";4471,1," .. (at + 11 * 3600000) })
+                      ends = "2840,5," .. (at + 1200000) .. ",950;4471,1," .. (at + 11 * 3600000) .. ",80" })
   end)
 
   it("bands follow Classic's time left; ended auctions stop counting; no API stores nothing", function()
     local A = (Boot({}) and AHProfit.Capture.Auctions)
     assert_eq({ A.Band(1799), A.Band(1800), A.Band(7199), A.Band(43199), A.Band(43200) }, { 1, 2, 2, 3, 4 })
-    local entry = { ends = "4471,1,5000;4471,2,9000;2840,5,3000" }
+    local entry = { ends = "4471,1,5000,80;4471,2,9000;2840,5,3000,9" }        -- an older row has no price
     assert_eq(A.Listed(entry, 4000), { [4471] = { units = 3, endsAt = 5000 } })
+    assert_eq(A.Active(entry, 4000), { { key = 4471, units = 1, endsAt = 5000, price = 80 }, { key = 4471, units = 2, endsAt = 9000 } })
     assert_eq(A.Listed(nil, 0), {})
     C_AuctionHouse.GetOwnedAuctionInfo = nil
     Stubs.FireEvent("OWNED_AUCTIONS_UPDATED")

@@ -33,8 +33,12 @@ function UIWorld.Item(cur, conf, sold, sell)
 end
 
 --- Install AHProfitPlan with these actions for Amaya (and any other characters named in them).
+--- AHSync only plans sales of stock you hold, so when the test set no bags, Amaya's posts, vendor sales
+--- and disenchants that start no chain (no parent) put their units in her bags (A49).
 ---@param actions table[]  { id, kind, key, qty, price, at, net, parent, chance, peak, char, vendor }
 function UIWorld.Plan(actions)
+  local Stubs = require("wow_stubs")
+  if next(Stubs.world.containers) == nil then UIWorld.StockFor(actions) end
   local byChar, count, length = {}, 0, 0
   for _, a in ipairs(actions) do
     local text = table.concat({ a.id, a.kind, a.key, a.qty, a.price or "", a.at, a.net or "", a.parent or "", "",
@@ -46,6 +50,25 @@ function UIWorld.Plan(actions)
   end
   _G.AHProfitPlan = { schemaVersion = 1, generatedAt = 0, checksum = count .. ":" .. length, ingestedUntil = {},
                       actions = byChar, rules = {} }
+end
+
+--- Put the units of Amaya's planned sales (no parent) in her bags, one stack per item.
+---@param actions table[]  As UIWorld.Plan
+function UIWorld.StockFor(actions)
+  local Stubs = require("wow_stubs")
+  local units, keys = {}, {}
+  for _, a in ipairs(actions) do
+    local mine = (a.char or "Amaya-Grommash") == "Amaya-Grommash"
+    if mine and not a.parent and (a.kind == "post" or a.kind == "vendor" or a.kind == "de") and a.key > 0
+       and a.key < 2147483648 then
+      if not units[a.key] then keys[#keys + 1] = a.key end
+      units[a.key] = (units[a.key] or 0) + a.qty
+    end
+  end
+  table.sort(keys)
+  local slots = {}
+  for i, key in ipairs(keys) do slots[i] = { id = key, count = units[key] } end
+  if #slots > 0 then Stubs.world.containers[0] = { size = math.max(16, #slots), slots = slots } end
 end
 
 return UIWorld

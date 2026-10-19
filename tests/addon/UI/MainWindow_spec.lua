@@ -130,6 +130,7 @@ describe("MainWindow", function()
     Stubs.Slash("/ahp")
     AHProfit.Scan.Replicate.LastBook = function() return { at = NOW + 60000, book = { [2840] = {} } } end
     UIWorld.Plan({ { id = "b", kind = "buy", key = 2840, qty = 6, price = 500, at = NOW, net = 300 } })
+    AHProfitDB.inventory["Amaya-Grommash"] = nil                    -- nothing carried: only the flip's buy
     AHProfit.Plan.Reset()
     MainWindow.Refresh()
     assert_eq(MainWindow.Frames().footer:GetText(), AHProfit.ViewModel.WithCoins("0 actions · expected 0c · 1 gone"))
@@ -349,6 +350,53 @@ describe("MainWindow", function()
     AHProfit.MainWindow.Refresh()
     assert_eq({ FirstRow("craft").source, ui.rows[2].note:GetText() }, { "Vendor", "buy 1 Simple Wood from a vendor · 38c" })
     Stubs.ITEM_NAMES[4471], Stubs.ITEM_NAMES[4470] = nil, nil
+  end)
+
+  it("A49 a plan post of an item you no longer hold leaves Today; bank units count; a chain's post stays", function()
+    Stubs.Reset()
+    Stubs.ITEM_NAMES[1529], Stubs.ITEM_NAMES[4471], Stubs.ITEM_NAMES[4470] = "Tiger's Eye", "Basic Campfire Kit", "Simple Wood"
+    Stubs.world.containers = { [0] = { size = 4, slots = { [1] = { id = 1529, count = 1 }, [2] = { id = 2589, count = 15 } } } }
+    UIWorld.Market({ [1529] = UIWorld.Item(900, 80, 5), [2589] = UIWorld.Item(45, 86, 48), [4471] = UIWorld.Item(99, 80, 10) }, NOW)
+    UIWorld.Plan({ { id = "t", kind = "post", key = 1529, qty = 1, price = 900, at = NOW, net = 800, chance = 80 },
+                   { id = "l", kind = "post", key = 2589, qty = 20, price = 55, at = NOW, net = 1000, chance = 90 },
+                   { id = "w", kind = "buy", key = 4470, qty = 7, price = 38, at = NOW, net = 0, vendor = true },
+                   { id = "k", kind = "post", key = 4471, qty = 7, price = 99, at = NOW, net = 392, parent = "w", chance = 100 } })
+    Stubs.Login()
+    AHProfitDB.inventory["Amaya-Grommash"].bank = "2589,5,0"
+    Stubs.Slash("/ahp")
+    local ui = AHProfit.MainWindow.Frames()
+    --- The Today rows as "item ×qty".
+    local function Rows()
+      local out = {}
+      for _, r in ipairs(ui.rows) do
+        local c = r.cells.today
+        if r:IsShown() and c.item:IsShown() then out[#out + 1] = c.item:GetText() .. " " .. c.qty:GetText() end
+      end
+      table.sort(out)
+      return out
+    end
+    assert_eq(Rows(), { "Basic Campfire Kit ×7", "Linen Cloth ×20", "Simple Wood ×7", "Tiger's Eye ×1" })
+    Stubs.world.containers[0].slots[1] = nil                       -- the Tiger's Eye is on the AH now
+    Stubs.FireEvent("BAG_UPDATE_DELAYED")
+    Stubs.Advance(2)
+    assert_eq(Rows(), { "Basic Campfire Kit ×7", "Linen Cloth ×20", "Simple Wood ×7" })
+    Stubs.ITEM_NAMES[1529], Stubs.ITEM_NAMES[4471], Stubs.ITEM_NAMES[4470] = nil, nil, nil
+  end)
+
+  it("A50 the Inventory tab lists your auctions with what they bring and when they end", function()
+    Stubs.Reset()
+    Stubs.ITEM_NAMES[4471] = "Basic Campfire Kit"
+    UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48) }, NOW)
+    UIWorld.Plan({})
+    Stubs.Login()
+    AHProfitDB.ownAuctions["Amaya-Grommash"] = { at = NOW, rows = "4471,80,1,3,1",
+      ends = "4471,1," .. (NOW + 11 * 3600000 + 60000) .. ",80;2447,2," .. (NOW - 60000) .. ",48" }   -- the Peacebloom has ended
+    Stubs.Slash("/ahp")
+    AHProfit.MainWindow.ShowTab("inventory")
+    local ui, row = AHProfit.MainWindow.Frames(), FirstRow("inventory")
+    assert_eq({ row.item, row.where, row.qty, row.worth }, { "Basic Campfire Kit", "AH", "×1", AHProfit.ViewModel.WithCoins("76c") })
+    assert_eq({ ui.rows[2].note:GetText(), ui.rows[3]:IsShown() }, { "listed at 80c each · ends in 11 h", false })
+    Stubs.ITEM_NAMES[4471] = nil
   end)
 
   it("A22 the Inventory tab lists what this character holds with its worth and plan", function()

@@ -59,17 +59,19 @@ function Reserves.Apply(units, reserves)
   return out
 end
 
---- AHSync's sale actions trimmed to what you hold above the reserve (until AHSync's next plan
---- knows the reserve): a post or vendor sale of more is cut down, its net scaled to match.
+--- AHSync's sale actions trimmed to what you hold now above the reserve (A25, A49): until AHSync's
+--- next plan knows, a post, vendor sale or disenchant of more is cut down, its net scaled to match,
+--- and one of an item you no longer hold (you just posted it) is gone. A chain's later step (an
+--- action with a parent) is for units still to be bought or made, so it stays.
 ---@param actions table[]  Plan actions
 ---@param reserves table   key -> units kept
----@param held table       key -> units held
+---@param held table       key -> units held, bags, bank and mail
 ---@return table[]         The actions; dropped ones are gone, trimmed ones are copies
 function Reserves.Trim(actions, reserves, held)
   local out, left = {}, {}
   for _, a in ipairs(actions) do
     local kept = reserves[a.key]
-    if kept == nil or not (a.kind == "post" or a.kind == "vendor" or a.kind == "de") then
+    if a.parent or not (a.kind == "post" or a.kind == "vendor" or a.kind == "de") then
       out[#out + 1] = a
     else
       if left[a.key] == nil then left[a.key] = Reserves.Free(held[a.key] or 0, kept) end

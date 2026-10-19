@@ -26,7 +26,7 @@ end
 ---@param auctions table[]  { key, price, qty, leftSeconds } from Adapter.ReadOwnedAuctions
 ---@param nowMs number
 ---@return string  rows "key,price,stack,band,count", grouped, ascending
----@return string  ends "key,units,end ms", one per auction, ascending
+---@return string  ends "key,units,end ms,unit price", one per auction, ascending
 function Auctions.Encode(auctions, nowMs)
   local groups, ends = {}, {}
   for _, a in ipairs(auctions) do
@@ -34,7 +34,7 @@ function Auctions.Encode(auctions, nowMs)
     local id = table.concat(group, ",")
     groups[id] = groups[id] or { fields = group, count = 0 }
     groups[id].count = groups[id].count + 1
-    ends[#ends + 1] = { a.key, a.qty, nowMs + a.leftSeconds * 1000 }
+    ends[#ends + 1] = { a.key, a.qty, nowMs + a.leftSeconds * 1000, a.price }
   end
   local rows = {}
   for _, g in pairs(groups) do rows[#rows + 1] = { g.fields[1], g.fields[2], g.fields[3], g.fields[4], g.count } end
@@ -54,12 +54,24 @@ end
 ---@return table           key -> { units, endsAt = the soonest end, ms }
 function Auctions.Listed(entry, nowMs)
   local out = {}
-  for key, units, endsAt in ((entry or {}).ends or ""):gmatch("(%-?%d+),(%d+),(%d+)") do
-    key, units, endsAt = tonumber(key), tonumber(units), tonumber(endsAt)
-    if endsAt > nowMs then
-      local listed = out[key] or { units = 0, endsAt = endsAt }
-      listed.units, listed.endsAt = listed.units + units, math.min(listed.endsAt, endsAt)
-      out[key] = listed
+  for _, a in ipairs(Auctions.Active(entry, nowMs)) do
+    local listed = out[a.key] or { units = 0, endsAt = a.endsAt }
+    listed.units, listed.endsAt = listed.units + a.units, math.min(listed.endsAt, a.endsAt)
+    out[a.key] = listed
+  end
+  return out
+end
+
+--- Your auctions one by one, from a snapshot; those whose end has passed are left out (A50).
+---@param entry table|nil  ownAuctions[charId]
+---@param nowMs number
+---@return table[]         { key, units, endsAt (ms), price (copper each, nil in an older snapshot) }, as stored
+function Auctions.Active(entry, nowMs)
+  local out = {}
+  for row in (((entry or {}).ends or "") .. ";"):gmatch("([^;]*);") do
+    local key, units, endsAt, price = row:match("^(%-?%d+),(%d+),(%d+),?(%d*)$")
+    if key and tonumber(endsAt) > nowMs then
+      out[#out + 1] = { key = tonumber(key), units = tonumber(units), endsAt = tonumber(endsAt), price = tonumber(price) }
     end
   end
   return out
