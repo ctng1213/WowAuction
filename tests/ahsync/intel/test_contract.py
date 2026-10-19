@@ -57,3 +57,14 @@ def test_a_version_2_document_drops_its_unpacked_profiles():
     body["items"]["2589"].update(how=[1.0] * 168, how_weeks=[7] * 168)
     item = from_json(json.dumps(body)).items[2589]
     assert (item.how, item.how_weeks) == ("", "")
+
+
+def test_V23_supply_level_is_listed_now_else_the_median_daily_supply():
+    from dataclasses import replace
+
+    from ahsync.intel.contract import supply_level
+    linen = ItemIntel(2589, 45, 20, 3_600_000, 49, 49, 40, 60, 0.0, 48.0, 0.0, 61.0, "ahf", {"ahf": 7}, 45, 20, 0.9,
+                      False, 42.0, 86, 93, None, ())
+    assert supply_level(linen) == 93
+    assert supply_level(replace(linen, units_on_ah=None, median_daily_supply=70)) == 70
+    assert supply_level(replace(linen, units_on_ah=None)) is None

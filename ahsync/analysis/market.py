@@ -13,7 +13,7 @@ from collections import Counter
 from ahsync.engine import confidence, fees, patterns, prices, profile, sellprob
 from ahsync.engine.profile import Profile
 from ahsync.engine.sellprob import MarketSettings, Supply
-from ahsync.engine.volume import VOLUME_METHOD_VERSION, DailyVolume, Volume, daily_volume
+from ahsync.engine.volume import VOLUME_METHOD_VERSION, DailyVolume, Volume, daily_volume, median_daily_supply
 from ahsync.history.reads import HistoryReader, HistoryWindow, ItemHistory, ItemInfo
 from ahsync.intel.contract import IntelWindow, ItemIntel, MarketIntelligence
 
@@ -171,7 +171,8 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
         sum(stack * count for _, stack, _, count in book) if book else (cur.qty if cur else None),
         book_age, tuple(book or ()),
         **weekly_fields(item, med30, volume, ref, now_ms, settings),
-        cur_suspect=prices.suspect_price(cur.price if cur else None, p10, p90, recent))
+        cur_suspect=prices.suspect_price(cur.price if cur else None, p10, p90, recent),
+        median_daily_supply=median_daily_supply(item.hourly_supply, now_ms))
 
 
 def analyze_market(history: HistoryReader, market: str, now_ms: int,

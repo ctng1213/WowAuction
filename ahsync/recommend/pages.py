@@ -13,7 +13,7 @@ from ahsync.engine import capacity, craft, disenchant, fees, profile, sellprob, 
 from ahsync.engine.de_table import DE_TABLE
 from ahsync.engine.sellprob import Supply
 from ahsync.history.reads import ItemInfo
-from ahsync.intel.contract import ItemIntel
+from ahsync.intel.contract import ItemIntel, supply_level
 from ahsync.state.reads import RecipeRow, StateReader
 
 DE_KIND = {2: "weapon", 4: "armor"}     # WoW item class -> DE table kind
@@ -54,7 +54,7 @@ def _mat_caps(mat_keys: set[int], stats: dict[int, ItemIntel], now_ms: int, cfg:
             caps[key] = 1
             continue
         pattern = profile.unpack(s.supply_how, s.supply_weeks).values if s.supply_how else ()
-        listed = capacity.window_supply(s.units_on_ah, pattern, now_ms // HOUR_MS, hours)
+        listed = capacity.window_supply(supply_level(s), pattern, now_ms // HOUR_MS, hours)   # V23
         caps[key] = capacity.liquidity_cap(listed, cfg.max_supply_share, s.ref_stack)
     return caps
 

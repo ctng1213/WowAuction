@@ -593,7 +593,7 @@ Numbers, not labels: the engine never classifies an item as "high" or "low" liqu
 | `estimated_sales_per_day` | `sold/day` (§3.3.1): units per day, averaged over the days of the last 7 that have a sales source | no day has AHF, book or mail volume |
 | `estimated_sales_per_hour_of_week` | 168 values: `estimated_sales_per_day ÷ 24 × sales_how[slot]` (units per hour) | sales per day unavailable |
 | `current_listed_supply` | units on the AH in the newest valid observation (local scan or AHF) | never seen |
-| `median_daily_supply` | median of each day's listed units over the last 30 days | no observation in 30 days |
+| `median_daily_supply` | median of each day's listed units over the last 30 days (a day's value: the median of its observations; days without one are left out, V23). The liquidity cap uses it when the current supply is unknown (`intel.contract.supply_level`) | no observation in 30 days |
 | `supply_to_volume_ratio` | `current_listed_supply ÷ estimated_sales_per_day`, in days of supply (§3.3.2 market facts). Not a time-to-sell guarantee | either input unavailable, or sales per day is 0 |
 | `volume_confidence` | 0–1: the confidence component for volume (§3.3.5 "Volume source") | — (0 without a source) |
 | `volume_observation_coverage` | 0–1: share of the last 7 days that have a sales source | — |

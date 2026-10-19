@@ -12,7 +12,8 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 
-INTEL_SCHEMA_VERSION = 4       # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5)
+INTEL_SCHEMA_VERSION = 5       # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
+                               # 5: median_daily_supply (V23)
 
 
 class IntelVersionError(ValueError):
@@ -72,6 +73,7 @@ class ItemIntel:
     curve: str = ""                       # 24 × 8 encoded P grid (SPEC §3.1.1); "" when sales are unknown
     curve_hour: int | None = None         # hour number floor(ms / 3600000) of the curve's first row
     cur_suspect: bool = False             # cur is out of the usual range and unconfirmed: never bought from (FM5)
+    median_daily_supply: int | None = None   # typical listed units, 30 days (V23); None without observations
 
 
 @dataclass(frozen=True)
@@ -96,6 +98,18 @@ def price_level(i: ItemIntel) -> int | None:
         Copper; None when neither median is known.
     """
     return i.med7 if i.med7 is not None else i.med30
+
+
+def supply_level(i: ItemIntel) -> int | None:
+    """The supply the liquidity cap starts from: listed now, else the 30-day median daily supply (V23).
+
+    Args:
+        i: The item's intelligence.
+
+    Returns:
+        Units; None when neither is known.
+    """
+    return i.units_on_ah if i.units_on_ah is not None else i.median_daily_supply
 
 
 def to_json(intel: MarketIntelligence) -> str:

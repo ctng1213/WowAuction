@@ -225,3 +225,12 @@ def test_hourly_sales_of_nothing_sold_is_an_observed_zero():
     assert hourly_sales([linen_book(10, 5), linen_book(11, 5)]) == {LINEN: {10 * HOUR_MS: 0.0}}
     assert hourly_sales([linen_book(10, 5), linen_book(10, 4)]) == {}          # same time: no gap, no pair
     assert hourly_sales([linen_book(10, 5)]) == {}
+
+
+def test_V23_median_daily_supply_leaves_days_without_observations_out():
+    from ahsync.engine.volume import median_daily_supply
+    day, now = 86_400_000, 1_760_000_000_000
+    obs = [(now - 2 * day, 80), (now - 5 * day, 100), (now - 9 * day, 120)]   # 3 days seen, the rest of 30 not
+    assert median_daily_supply(obs, now) == 100                                # not dragged to 0 by the empty days
+    assert median_daily_supply([(now - day, 90), (now - day + 3_600_000, 110)], now) == 100   # one day: its median
+    assert median_daily_supply([(now - 31 * day, 50)], now) is None and median_daily_supply([], now) is None

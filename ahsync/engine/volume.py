@@ -10,7 +10,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
+from ahsync.engine.prices import median
+
 HOUR_MS = 3_600_000
+SUPPLY_DAYS = 30            # median_daily_supply looks back this far (SPEC §3.3.6)
 MAX_GAP_MS = 6 * HOUR_MS
 SALES_PAIR_MAX_GAP_MS = 2 * HOUR_MS     # hourly sales rates need books this close (SPEC §3.3 sales_how)
 VOLUME_METHOD_VERSION = 1     # bump when the estimation changes; stored data is then recomputed (SPEC §3.3.6)
@@ -233,3 +236,21 @@ def daily_volume(rows: dict[int, dict[str, Volume]], days: Sequence[int],
     if n == 0:
         return DailyVolume(None, None, None, {})
     return DailyVolume(sold / n, expired / n, listed / n, used)
+
+
+def median_daily_supply(hourly_supply: Sequence[tuple[int, int]], now_ms: int, days: int = SUPPLY_DAYS) -> int | None:
+    """The item's typical listed supply: the median over days of each day's median observation (SPEC §3.3.6, V23).
+
+    Args:
+        hourly_supply: (hour start ms, units listed) observations, any order.
+        now_ms: Now; days in (now − days, now] count.
+        days: How many days back.
+
+    Returns:
+        Units; None without an observation. Days without one are left out, never counted as 0.
+    """
+    by_day: dict[int, list[int]] = {}
+    for t, units in hourly_supply:
+        if now_ms - days * 86_400_000 < t <= now_ms:
+            by_day.setdefault(t // 86_400_000, []).append(units)
+    return median([median(units) for _, units in sorted(by_day.items())])

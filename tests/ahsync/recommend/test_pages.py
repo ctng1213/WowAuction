@@ -117,3 +117,13 @@ def test_D24_a_craft_row_using_mats_from_old_bags_says_how_old(state):
         state.conn.execute("UPDATE snapshots SET at = ?", (NOW - 3_600_000,))
     [rod] = craft_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 500_000, NOW, Config(markets=(M,)))["rows"]
     assert rod["note"] == ""
+
+
+def test_V23_with_no_current_supply_the_craft_cap_uses_the_median_daily_supply(state):
+    cfg = Config(markets=(M,))
+    unseen = {**STATS, ROD: replace(STATS[ROD], units_on_ah=None)}
+    [rod] = craft_page(state, ["Amaya-G", "Brugan-G"], unseen, ITEMS, 500_000, NOW, cfg)["rows"]
+    assert rod["crafts"] == 1                                    # no supply known: one stack
+    typical = {**STATS, ROD: replace(STATS[ROD], units_on_ah=None, median_daily_supply=4)}
+    [rod] = craft_page(state, ["Amaya-G", "Brugan-G"], typical, ITEMS, 500_000, NOW, cfg)["rows"]
+    assert rod["crafts"] == 2                                    # half of the usual 4 listed

@@ -17,7 +17,7 @@ from ahsync.engine.plan import TREND_CLAMP_PCT, Lot, PlanAction, PlanWindow, Sel
 from ahsync.engine.sell_record import Record, ResolvedPost, sell_record
 from ahsync.engine.week import WeekInputs, week_plan
 from ahsync.history.reads import ItemInfo
-from ahsync.intel.contract import ItemIntel, price_level
+from ahsync.intel.contract import ItemIntel, price_level, supply_level
 from ahsync.recommend.pages import DE_KIND, craft_market
 from ahsync.state.reads import StateReader
 
@@ -109,7 +109,7 @@ def sell_facts(i: ItemIntel, info: ItemInfo | None, de: tuple[float, str] | None
         _pattern(i.how, i.how_weeks, FLAT), _pattern(i.sales_how, i.sales_weeks, FLAT),
         tuple(PlanWindow(w.start_slot, w.hours, w.best_slot) for w in i.sell_windows), i.book or None, i.cur,
         i.cur_qty, (info.vendor_sell if info else None) or 0, de[0] if de else None, de[1] if de else None, 0.0,
-        i.units_on_ah, _pattern(i.supply_how, i.supply_weeks, ()),
+        supply_level(i), _pattern(i.supply_how, i.supply_weeks, ()),                        # V23
         bool(info and info.item_class in GEAR_CLASSES), i.conf, record)
 
 
