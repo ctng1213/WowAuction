@@ -189,6 +189,25 @@ def test_K5_a_matched_post_keeps_the_chance_it_was_planned_with(db):
     assert rows(db, "SELECT post_id, p_at_post FROM posts ORDER BY post_id") == [("p", 0.62), ("q", None)]
 
 
+def test_T23_a_matched_event_keeps_its_share_of_the_plans_expected_net(db):
+    with db.transaction():
+        db.conn.executemany("UPDATE actions SET expected_net = ? WHERE action_id = ?",
+                            [(447.0, "post"), (971.0, "craft"), (210.0, "buy")])
+        db.conn.executemany("INSERT INTO posts(post_id, event_id, char_id, key, stack, price, at, confirmed) "
+                            "VALUES (?, ?, ?, ?, 20, 55, ?, 1)", [("p", "p", AMAYA, LINEN, T + DAY), ("q", "q", AMAYA, ROD, T)])
+        db.conn.execute("INSERT INTO crafts(event_id, char_id, spell_id, count, at) VALUES ('k', ?, 2663, 3, ?)", (AMAYA, T))
+        db.conn.executemany("INSERT INTO purchases(event_id, char_id, key, qty, price, source, at, confirmed) "
+                            "VALUES (?, ?, ?, 10, 40, 'ah', ?, 1)", [("b1", AMAYA, LINEN, T), ("b2", AMAYA, LINEN, T + 1)])
+    tracking_pass(db)
+    assert rows(db, "SELECT post_id, expected_net FROM posts ORDER BY post_id") == [("p", 447.0), ("q", None)]
+    assert rows(db, "SELECT expected_net FROM crafts") == [(971.0,)]                    # the chain's, on its carrier
+    assert rows(db, "SELECT event_id, expected_net FROM purchases ORDER BY event_id") == [("b1", 105.0), ("b2", 105.0)]
+    with db.transaction():
+        db.conn.execute("UPDATE actions SET expected_net = 999 WHERE action_id = 'post'")    # a later re-plan
+    tracking_pass(db)
+    assert rows(db, "SELECT expected_net FROM posts WHERE post_id = 'p'") == [(447.0,)]   # copied once, at match time
+
+
 def test_FM20_a_failed_buy_attempt_matches_nothing_and_changes_no_cost_basis(db):
     with db.transaction():
         db.conn.execute("INSERT INTO purchases(event_id, char_id, key, qty, price, source, at, confirmed) "

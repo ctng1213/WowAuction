@@ -82,7 +82,8 @@ CREATE INDEX IF NOT EXISTS auction_mail_char_key_at ON auction_mail(char_id, key
 -- A disenchant and what it gave, "key,qty;..." by key (SPEC §2.2.1 disenchant, T18).
 CREATE TABLE IF NOT EXISTS disenchants(
     event_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, key INTEGER NOT NULL, results TEXT NOT NULL,
-    at INTEGER NOT NULL, action_id TEXT
+    at INTEGER NOT NULL, action_id TEXT,
+    expected_net REAL                    -- the matched action's expected net, copied at match time (T23); NULL = none
 );
 
 -- What holdings did that no event explains, per bag snapshot (SPEC §2.2.1, FM21, D51): delta units, + gained.
@@ -108,18 +109,21 @@ CREATE TABLE IF NOT EXISTS payouts(
 CREATE TABLE IF NOT EXISTS posts(
     post_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, market TEXT, key INTEGER NOT NULL, stack INTEGER,
     price INTEGER, cost_each REAL, p_at_post REAL, duration_h INTEGER, deposit INTEGER, at INTEGER NOT NULL,
-    outcome TEXT, resolved_at INTEGER, action_id TEXT, event_id TEXT UNIQUE, confirmed INTEGER NOT NULL DEFAULT 0
+    outcome TEXT, resolved_at INTEGER, action_id TEXT, event_id TEXT UNIQUE, confirmed INTEGER NOT NULL DEFAULT 0,
+    expected_net REAL                    -- the matched action's expected net, copied at match time (T23); NULL = none
 );
 
 CREATE TABLE IF NOT EXISTS purchases(
     event_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, key INTEGER NOT NULL, qty INTEGER, price INTEGER, source TEXT,
-    at INTEGER NOT NULL, action_id TEXT, confirmed INTEGER NOT NULL DEFAULT 0
+    at INTEGER NOT NULL, action_id TEXT, confirmed INTEGER NOT NULL DEFAULT 0,
+    expected_net REAL                    -- the matched action's expected net, copied at match time (T23); NULL = none
 );
 CREATE INDEX IF NOT EXISTS purchases_char_key_at ON purchases(char_id, key, at);
 
 CREATE TABLE IF NOT EXISTS crafts(
     event_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, spell_id INTEGER NOT NULL, count INTEGER, cost_each REAL,
-    at INTEGER NOT NULL, action_id TEXT
+    at INTEGER NOT NULL, action_id TEXT,
+    expected_net REAL                    -- the matched action's expected net, copied at match time (T23); NULL = none
 );
 CREATE INDEX IF NOT EXISTS crafts_char_spell_at ON crafts(char_id, spell_id, at);
 

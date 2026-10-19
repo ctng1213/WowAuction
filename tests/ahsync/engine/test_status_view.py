@@ -159,6 +159,19 @@ def test_K6_status_shows_calibration_and_its_warnings():
     assert high["rows"][0]["off"] == "+90 pts" and high["warnings"][0].endswith("too pessimistic.")
 
 
+def test_K7_status_sets_the_plans_expected_profit_against_what_it_realized():
+    from ahsync.engine.sell_record import calibration
+    from ahsync.engine.tracking import ProfitSums
+    sums = ProfitSums(567.0, 407.0, 2, 1, 2)                                        # D70's resolved events
+    c = calibration([(0.8, True)] * 8 + [(0.8, False)] * 2)
+    section = status_view.status_view([], facts(calibration=c, profit=sums), NOW, 0)["calibration"]
+    assert section["profit"] == "Expected vs realized profit (last 90 days): realized +4s 7c of expected +5s 67c (72%)"
+    alone = status_view.status_view([], facts(profit=sums), NOW, 0)["calibration"]
+    assert alone == {"title": "", "brier": "", "warnings": [], "rows": [], "profit": section["profit"]}
+    assert status_view.status_view([], facts(profit=ProfitSums(0.0, 0.0, 0, 3, 0)), NOW, 0)["calibration"] is None
+    assert status_view.calibration_view(c)["profit"] == ""
+
+
 def test_SRC2_status_names_the_markets_primary_source():
     card = status_view.status_view([], facts(market(primary="blizzard", primary_books_7d=2)), NOW, 0)["cards"][0]
     labels = [line[0] for line in card["lines"]]

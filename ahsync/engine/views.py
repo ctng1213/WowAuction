@@ -196,6 +196,10 @@ COLUMN_HELP = {
     "Price": "Each, copper as the AH or vendor charged it; for Paid out, the gold taken from the mailbox",
     "Plan action": "The plan action this event completed: done, partial, or missed and skipped ones",
     "Detail": "The deposit, the post it resolved, what it cost or realized, or why the plan action was missed",
+    "Expected": "The plan's expected net for this event, copied when it matched its plan action (its share of it). "
+                "A flip's buy or a craft carries its chain's profit. \"—\" = it matched no plan action",
+    "Realized": "What it actually made: a post its payout after cost and deposit, the deposit lost when it expired; "
+                "a chain's buy or craft what its posts made so far. Green at or above Expected, amber below",
     "Listed each": "Your buyout per unit",
     "Listed total": "Listed each × quantity",
     "Cost each": "What it cost you per unit: what you paid, or the mats for a craft; 0 for items you found or held "

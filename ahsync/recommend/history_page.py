@@ -6,6 +6,7 @@ makes every text.
 from __future__ import annotations
 
 from ahsync.engine.history_view import history_view
+from ahsync.engine.views import COLUMN_HELP
 from ahsync.history.reads import ItemInfo
 from ahsync.intel.contract import ItemIntel
 from ahsync.recommend.plan_pages import item_looks
@@ -28,7 +29,7 @@ def history_page(db: JournalReads, char_ids: list[str], stats: dict[int, ItemInt
         offset_ms: Local time minus UTC, ms.
 
     Returns:
-        {"rows", "tiles"}: the last 30 days, newest first.
+        {"rows", "tiles", "open", "help"}: the last 30 days, newest first, with the column help texts.
     """
     rows = db.journal(char_ids, now_ms - HISTORY_DAYS * DAY_MS)
     keys = {r[3] for r in rows}
@@ -36,4 +37,5 @@ def history_page(db: JournalReads, char_ids: list[str], stats: dict[int, ItemInt
         if r[2] == "disenchanted":
             keys |= {int(part.split(",")[0]) for part in str(r[7]).split(";") if part}
     looks = item_looks(keys, stats, items)
-    return history_view(rows, looks, {k: look.name for k, look in looks.items()}, now_ms, offset_ms)
+    view = history_view(rows, looks, {k: look.name for k, look in looks.items()}, now_ms, offset_ms)
+    return {**view, "help": COLUMN_HELP}

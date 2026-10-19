@@ -1,4 +1,5 @@
-"""The History page: the journal of what you did and how it matched your plan, with 30-day tiles (SPEC §3.5, D47, D48).
+"""The History page: the journal of what you did and how it matched your plan, with 30-day tiles (SPEC §3.5, D47, D48),
+and the plan's expected profit next to the profit realized (D68-D70).
 
 Every text is made here; the dashboard only draws it. Pure.
 """
@@ -9,7 +10,8 @@ from collections.abc import Sequence
 
 from ahsync.engine import fees
 from ahsync.engine.plan_views import ItemLook
-from ahsync.engine.views import money, signed_money
+from ahsync.engine.tracking import Judged, ProfitSums, judge, profit_sums
+from ahsync.engine.views import money, round_half_up, signed_money
 
 DAY_MS = 86_400_000
 RECENT_DAYS = 6                 # within this many days the time shows its weekday, else its date
@@ -69,7 +71,7 @@ def _detail(row: tuple, names: dict[int, str], now_ms: int, offset_ms: int) -> s
     Returns:
         The text.
     """
-    _, _, kind, _, qty, price, _, a, b = row
+    _, _, kind, _, qty, price, _, a, b = row[:9]
     if kind == "posted":
         return f"{a} h · deposit {money(b)}"
     if kind in ("sold", "expired", "cancelled"):
@@ -93,11 +95,42 @@ def _detail(row: tuple, names: dict[int, str], now_ms: int, offset_ms: int) -> s
     return ""
 
 
-def _tiles(rows: Sequence[tuple]) -> list[list[str]]:
-    """The 30-day tiles: sold, expired, deposits lost, plan actions, realized profit (D48).
+def ratio_text(sums: ProfitSums) -> str:
+    """Realized ÷ expected as a whole percent (D70, K7).
+
+    Args:
+        sums: The resolved rows' sums.
+
+    Returns:
+        "87%" (half up; "−12%" below zero), or "—" when nothing is resolved or Σ expected is not above 0.
+    """
+    if not sums.resolved or sums.expected <= 0:
+        return "—"
+    pct = round_half_up(sums.realized / sums.expected * 100)
+    return f"{'−' if pct < 0 else ''}{abs(pct)}%"
+
+
+def open_text(sums: ProfitSums) -> str:
+    """The line under the tiles: what is still open and so counted in neither sum (D70).
+
+    Args:
+        sums: The sums.
+
+    Returns:
+        "1 post open · 2 chains in progress (counted once resolved)", either part alone, or "nothing open".
+    """
+    parts = ([f"{sums.open_posts} post{'s' * (sums.open_posts != 1)} open"] * bool(sums.open_posts) +
+             [f"{sums.open_chains} chain{'s' * (sums.open_chains != 1)} in progress"] * bool(sums.open_chains))
+    return " · ".join(parts) + " (counted once resolved)" if parts else "nothing open"
+
+
+def _tiles(rows: Sequence[tuple], sums: ProfitSums) -> list[list[str]]:
+    """The 30-day tiles: sold, expired, deposits lost, plan actions, realized profit (D48), and expected against
+    realized over the resolved plan events (D70).
 
     Args:
         rows: Journal rows of the last 30 days.
+        sums: Expected and realized over the rows' resolved plan events.
 
     Returns:
         [[label, value, note]].
@@ -121,12 +154,34 @@ def _tiles(rows: Sequence[tuple]) -> list[list[str]]:
             ["Expired (30 d)", f"{len(expired)} auctions", f"{len(of('cancelled'))} cancelled"],
             ["Deposits lost", money(lost), "30 days"],
             ["Plan actions", f"{len(done)} done", f"{len(of('missed'))} missed · {len(of('skipped'))} skipped"],
-            ["Realized profit", signed_money(sum(realized)), f"{len(realized)} payouts · after cost and deposit"]]
+            ["Realized profit", signed_money(sum(realized)), f"{len(realized)} payouts · after cost and deposit"],
+            ["Expected (resolved)", signed_money(sums.expected), f"{sums.resolved} resolved plan events"],
+            ["Realized", signed_money(sums.realized), "the same events"],
+            ["Realized ÷ expected", ratio_text(sums), "how the plan's estimates held up"]]
+
+
+def _cells(j: Judged | None) -> dict:
+    """A row's Expected and Realized cells (D68, D69).
+
+    Args:
+        j: The row's judgement, or None for a row that gets none.
+
+    Returns:
+        {"expected", "realized", "realized_class", "realized_note"}: realized "pos" when it is at least the expected
+        (in whole copper), "amber" below it, "muted" while unknown; empty texts for a row without cells.
+    """
+    if j is None:
+        return {"expected": "", "realized": "", "realized_class": "", "realized_note": ""}
+    expected = "—" if j.expected is None else signed_money(j.expected)
+    if j.realized is None:
+        return {"expected": expected, "realized": "—", "realized_class": "muted", "realized_note": j.note}
+    cls = "" if j.expected is None else "pos" if round_half_up(j.realized) >= round_half_up(j.expected) else "amber"
+    return {"expected": expected, "realized": signed_money(j.realized), "realized_class": cls, "realized_note": j.note}
 
 
 def history_view(rows: Sequence[tuple], looks: dict[int, ItemLook], names: dict[int, str], now_ms: int,
                  offset_ms: int) -> dict:
-    """The History page (SPEC §3.5, D47, D48).
+    """The History page (SPEC §3.5, D47, D48, D68-D70).
 
     Args:
         rows: Journal rows of the last 30 days, newest first (state.journal).
@@ -137,18 +192,23 @@ def history_view(rows: Sequence[tuple], looks: dict[int, ItemLook], names: dict[
 
     Returns:
         {"rows": [{"when", "character", "event", "event_class", "kind", "item", "quality", "qty", "price", "plan",
-        "plan_class", "detail", "sort": {"at", "age_days"}}], "tiles": [[label, value, note]]}.
+        "plan_class", "detail", "expected", "realized", "realized_class", "realized_note", "sort": {"at",
+        "age_days"}}], "tiles": [[label, value, note]], "open": the line under the tiles}.
     """
-    out = []
+    out, judged = [], []
     for row in rows:
         at, char_id, kind, key, qty, price = row[:6]
         label, cls = EVENTS.get(kind, (kind, "muted"))
         plan, plan_class = _plan(row[6])
         look = looks[key]
         shown_price = row[7] if kind == "paid_out" else price
+        j = judge(kind, row[9], row[10])
+        if j is not None:
+            judged.append(j)
         out.append({"when": short_when(at, now_ms, offset_ms), "character": char_id.split("-")[0], "event": label,
                     "event_class": cls, "kind": kind, "item": look.name, "quality": look.quality, "qty": qty,
                     "price": money(shown_price), "plan": plan, "plan_class": plan_class,
-                    "detail": _detail(row, names, now_ms, offset_ms),
+                    "detail": _detail(row, names, now_ms, offset_ms), **_cells(j),
                     "sort": {"at": at, "age_days": (now_ms - at) // DAY_MS}})
-    return {"rows": out, "tiles": _tiles(rows)}
+    sums = profit_sums(judged)
+    return {"rows": out, "tiles": _tiles(rows, sums), "open": open_text(sums)}

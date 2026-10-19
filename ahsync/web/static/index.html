@@ -233,12 +233,13 @@ const calBar = (pct, color) => `<div class="bar" style="width:160px"><i style="w
 const calibrationHtml = c => !c ? '<div class="empty">Sell-probability calibration appears here once your posts are tracked to their outcome.</div>' :
   `<h3 style="padding:0 12px">Sell-probability calibration</h3><div style="padding:0 12px">` +
   c.warnings.map(w => `<div class="alert warn"><b>Off target</b><span class="grow">${esc(w)}</span></div>`).join('') +
-  `<div class="card"><div class="card-h"><b>${esc(c.title)}</b><span class="muted">${esc(c.brier)}</span></div><table><thead><tr>` +
+  (!c.rows.length ? '' : `<div class="card"><div class="card-h"><b>${esc(c.title)}</b><span class="muted">${esc(c.brier)}</span></div><table><thead><tr>` +
   `<th>Predicted chance</th><th class="num">Posts</th><th class="num">Predicted</th><th class="num">Actually sold</th><th class="num">Off by</th><th></th></tr></thead><tbody>` +
   c.rows.map(r => `<tr><td>${esc(r.bucket)}</td><td class="num">${esc(r.posts)}</td><td class="num">${esc(r.predicted)}</td>` +
     `<td class="num ${r.bad ? 'neg' : ''}">${esc(r.actual)}</td><td class="num ${r.bad ? 'neg' : 'muted'}">${esc(r.off)}</td>` +
     `<td>${calBar(r.predicted_pct, 'var(--muted)')}${calBar(r.actual_pct, r.bad ? 'var(--neg)' : 'var(--pos)')}</td></tr>`).join('') +
-  `</tbody></table></div></div>`;
+  `</tbody></table></div>`) +
+  (c.profit ? `<div class="card" style="padding:8px 12px">${esc(c.profit)}</div>` : '') + `</div>`;
 const totalsList = obj => Object.entries(obj || {}).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${signed(v)}</dd>`).join('');
 
 // ---------- live pages (SPEC §3.5 dashboard data) ----------
@@ -303,13 +304,15 @@ const LIVE = {
     ],
   },
   history: {
-    lede: 'The journal: everything the addon recorded in the last 30 days and how it matched your plan (SPEC §3.4.1). You never type any of this in: the addon records every post, purchase, craft, disenchant, mail and payout as it happens, and AHSync reads it at each <code>/reload</code> or logout. A sale is three events: posted, sold and paid out; <b>Realized profit</b> counts once, when you take the gold.',
-    above: d => tilesHtml(d.tiles),
+    lede: 'The journal: everything the addon recorded in the last 30 days and how it matched your plan (SPEC §3.4.1). You never type any of this in: the addon records every post, purchase, craft, disenchant, mail and payout as it happens, and AHSync reads it at each <code>/reload</code> or logout. A sale is three events: posted, sold and paid out; <b>Realized profit</b> counts once, when you take the gold. <b>Expected</b> is what the plan expected an event to make, copied when it matched its plan action; <b>Realized</b> is what it made: a post its payout, a craft or flip what its posts made so far (the tiles compare them over resolved events, a chain once).',
+    above: d => tilesHtml(d.tiles) + (d.open ? `<div class="muted" style="padding:0 12px 8px;font-size:12px">${esc(d.open)}</div>` : ''),
     cols: [['When', 0, 'at'], ['Character', 0, null], ['Event', 0, null], ['Item', 0, null], ['Qty', 1, null], ['Price', 1, null],
-           ['Plan action', 0, null], ['Detail', 0, null]],
+           ['Plan action', 0, null], ['Expected', 1, null], ['Realized', 1, null], ['Detail', 0, null]],
     row: r => `<tr><td class="muted">${esc(r.when)}</td><td>${esc(r.character)}</td><td class="${['pos', 'neg', 'muted', 'amber'].includes(r.event_class) ? r.event_class : ''}">${esc(r.event)}</td>` +
               `<td>${item(r.item, r.quality)}</td><td class="num">${esc(r.qty)}</td><td class="num">${dash(r.price)}</td>` +
-              `<td class="${['pos', 'neg', 'muted', 'amber'].includes(r.plan_class) ? r.plan_class : ''}">${esc(r.plan)}</td><td class="muted">${esc(r.detail)}</td></tr>`,
+              `<td class="${['pos', 'neg', 'muted', 'amber'].includes(r.plan_class) ? r.plan_class : ''}">${esc(r.plan)}</td>` +
+              `<td class="num">${esc(r.expected)}</td><td class="num ${['pos', 'muted', 'amber'].includes(r.realized_class) ? r.realized_class : ''}">${esc(r.realized)}` +
+              `${r.realized_note ? `<span class="sub">${esc(r.realized_note)}</span>` : ''}</td><td class="muted">${esc(r.detail)}</td></tr>`,
     filters: [
       { id: 'search', label: null, kind: 'search', placeholder: 'Search items…', test: (r, v) => !v || String(r.item).toLowerCase().includes(v.toLowerCase()) },
       { id: 'character', label: 'Character', fromRows: 'character', test: (r, v) => v === '' || r.character === v },

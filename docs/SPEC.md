@@ -348,10 +348,13 @@ scans(sid PK, scan_id UNIQUE, market, src, char_id, at, kind, coverage)   -- src
 book_entries(sid, key, price, stack, band, count,            PK(sid,key,price,stack,band))   WITHOUT ROWID   -- sid: the scan's integer id (V38)
 auction_mail(event_id PK, char_id, key, qty, price, outcome, at)   -- index (char_id,key,at,outcome)
 payouts(event_id PK, char_id, key, qty, money, at, mail_id, realized, deposit)   -- gold taken from a sold mail; realized copper, set once (T17)
-disenchants(event_id PK, char_id, key, results, at, action_id)   -- results "key,qty;..." by key (T18)
-posts(post_id PK, char_id, market, key, stack, price, cost_each, p_at_post, duration_h, deposit, at, outcome, resolved_at, action_id)
-purchases(event_id PK, char_id, key, qty, price, source, at, action_id, confirmed)   -- index (char_id,key,at)
-crafts(event_id PK, char_id, spell_id, count, cost_each, at, action_id)   -- index (char_id,spell_id,at)
+disenchants(event_id PK, char_id, key, results, at, action_id, expected_net)   -- results "key,qty;..." by key (T18)
+posts(post_id PK, char_id, market, key, stack, price, cost_each, p_at_post, duration_h, deposit, at, outcome, resolved_at, action_id,
+      event_id, confirmed, expected_net)
+purchases(event_id PK, char_id, key, qty, price, source, at, action_id, confirmed, expected_net)   -- index (char_id,key,at)
+crafts(event_id PK, char_id, spell_id, count, cost_each, at, action_id, expected_net)   -- index (char_id,spell_id,at)
+-- expected_net on posts, purchases, crafts, disenchants: the matched action's expected net × matched units ÷ its units,
+-- copied by the tracking pass when the event matches (REAL copper; NULL = matched no action; T23, schema 19)
 cost_basis(key PK, qty, total_cost, untracked_qty)
 actions(action_id PK, run_at, slot_ms, char_id, kind, key, qty, price, expected_net, conf, status, done_qty, done_at, parent_id,
         window_start_ms, window_end_ms, anchor_net, anchor_window_ms, replaces_id, week_start_ms, peak_ms,
@@ -835,6 +838,11 @@ Captured events (§2.2) are matched to plan actions automatically, by the tracki
   - A sold invoice resolves the oldest pending post with the same character, item, stack and price.
   - An expired or cancelled mail has no price, so it resolves the oldest pending post with the same character, item and stack.
   - Each outcome updates your sell record (§3.3.3).
+- **Expected and realized** (T23, D68–D70). When an event matches an action, the tracking pass copies the action's `expected_net` into the event (`posts`, `purchases`, `crafts`, `disenchants`.`expected_net`, float copper), the same way a post keeps its `p_at_post` (K5): its share, `expected_net × matched units ÷ the action's units`, so five purchases filling one buy never count it five times. It is copied once, at match time; a later re-plan doesn't change it. An event that matched no action stores NULL. Which net an action carries follows §3.4 "Expected net": a chain's carrier (a flip's buy, a craft chain's craft) carries the chain's profit, and a chain's follow-up post carries its own net against its cost, so that is what its post event copies. What the event **realized** (`engine/tracking.judge`, pure):
+  - **A post**: its payout's `realized` (T17) once paid; "not sold yet" while it is up and "sold · not paid out yet" before the gold is taken (both open); `−deposit` when it expired ("expired"; 0 when the deposit wasn't captured); 0 when cancelled ("cancelled").
+  - **A chain carrier** (a buy or craft whose action is in a chain and carries a net; mat buys and intermediate crafts carry none): the sum of what the chain's posts realized so far, as above, times the event's share; "N of M posts paid"; "nothing sold yet" while no post has resolved. The chain's posts are the confirmed posts matched to post actions with the carrier's chain id (`COALESCE(parent_id, action_id)`). It is open until every one of those posts has resolved and none of the chain's post actions is still pending or late. A chain that plans a disenchant and no post shows "mats sold separately".
+  - **A disenchant**: not tracked, "mats sold separately": its mats are sold later as posts of their own.
+  - Other rows (sold, expired and cancelled mail, payouts, vendor buys, mat buys, mail, missed and skipped actions, untracked changes) are not judged. A craft that carries no chain shows "—" for both.
 - **Stale state.** Every recommendation records the age of the character snapshot it used (§2.2.1 per-location times). One built on a snapshot older than 24 h says so, e.g. "based on Amaya's bags from 3 d ago" (D24): on the Craft page, for every place (bags, bank, mail) of a character that holds an owned mat the row uses. The addon uses its live state instead.
 - **Re-planning.** Each engine run replaces `pending` and `late` actions. `done`, `partial`, `missed` and `skipped` actions are kept as history.
 
@@ -880,9 +888,10 @@ Some items you hold are for your own use: food, potions, mats for your own gear.
      - **Worth** is counted once per item across all its rows, then split by quantity: the expected value of its planned posts, disenchants and vendor sales, plus its other units (held for a later week, or used by a planned craft, "6 for crafting Copper Rod") at their hold value. A disenchant planned for another character shows who ("Disenchant (Brugan)"). Bound and ignored items say "not planned" and have no worth (D25–D28).
      - **Paid** is the account-wide cost basis per unit; with none it is 0, "before tracking" (D29).
    - **History**: your posts and their outcomes, purchases, crafts, plan actions (done, missed, skipped), and deposits lost (**built**, D47, D48: `state.journal`, `engine/history_view`, `recommend/history_page`; the last 30 days of posts, sold / expired / cancelled / won mail, AH and vendor purchases, crafts, disenchants, payouts with their realized profit, mail sent, and missed or skipped plan actions, each with the plan action it matched; tiles for sold after the cut, expired, deposits lost, plan actions and realized profit. untracked changes are listed too, D51)
+     - **Expected next to realized** (D68–D70, §3.4.1 "Expected and realized"): every post, chain-carrying purchase, craft and disenchant row has an **Expected** cell (the copied expected net, "—" when the event matched no action) and a **Realized** cell with its note ("expired", "not sold yet", "2 of 3 posts paid", "mats sold separately"), green when realized ≥ expected in whole copper, amber below, muted while unknown. Three more tiles (`engine/tracking.profit_sums`, `history_view`): **Expected (resolved)** = Σ expected and **Realized** = Σ realized over the rows that matched an action and whose realized is known, and **Realized ÷ expected** as a whole percent, half up ("—" when nothing is resolved or Σ expected ≤ 0). A chain's profit counts once: a follow-up post whose chain's carrier is among the rows counts on the carrier, not on its own. Open rows count in neither sum; the line under the tiles says how many ("1 post open · 2 chains in progress (counted once resolved)", or "nothing open").
    - **Rules**: blacklisted items, and items flagged "not selling" waiting for a decision (**built**, D50: `engine/rules_view`, `recommend/rules_page`; Waiting for a decision with Blacklist and Keep, Kept on a fresh start with what sold since, and the Blacklist; Undo clears a rule through `POST /api/rule` with `none`. The Blacklist card has an item search (D54): `GET /api/items?q=…` answers up to 20 items whose name contains the text, those starting with it first (then by name and key), unknown-suffix items left out; each result offers "Don't buy or craft" and "Ignore completely", stored through `POST /api/rule`. The search only reads (SEC10).)
    - **Characters**: professions, skill and gold (**built**, D49: `engine/characters_view`; one card per character: class and level, faction, realm and ruleset, market, gold or the `[budgets]` override, known recipes, last seen, and a bar per profession)
-   - **Status**: sync state, data age, missed-hours warnings, the API tier (with the contributor expiry date and a warning 2 days before), and **sell-probability calibration** (predicted against actual sell rate per bucket, plus the Brier score; §8.8)
+   - **Status**: sync state, data age, missed-hours warnings, the API tier (with the contributor expiry date and a warning 2 days before), and **sell-probability calibration** (predicted against actual sell rate per bucket, plus the Brier score; §8.8), ending with one line setting the plan's expected profit against what it realized over the last 90 days (K7)
      - **Alerts** turn every stored Status line into a sentence in local time, most serious first. The per-hour "bad file" lines become one alert per market (D32). One alert is derived, not stored: **AHF data is old** when a market's newest price from its primary source (`[sources]` primary, AHF by default, named in the alert, SRC2) is more than 6 h old, because then prices, sales and windows rest on stale data and your own scans are the fresh source (D33). An unmapped realm says how to fix `[realms]` (D34).
      - **Cards**: one per market (last sync run, hours handled, newest AHF price and its age, items with prices, hourly history stored, your scans and AHF order books in 7 days), API (key set, Premium), Characters (each with its market, or "no market") and Storage (database size, retention).
 
@@ -1296,7 +1305,7 @@ ahsync/
               tracking_pass.py (events → plan actions), store.py (plan and page staging)
   db/         sqlite.py (the local Database: connection, migrations, backups, and every store's SQLite implementation), schema.sql
   engine/     fees.py, prices.py, profile.py (hour-of-week), volume.py, sellprob.py (incl. the P' blend), de_table.py (disenchant table, §4.5),
-              sell_record.py (own sell record + sell-probability calibration), tracking.py (event → action matching),
+              sell_record.py (own sell record + sell-probability calibration), tracking.py (event → action matching, expected against realized),
               patterns.py (weekly patterns, best selling windows), confidence.py (conf %), disenchant.py, craft.py,
               craft_plan.py (planned craft chains), flips.py, capacity.py (liquidity caps, shared market capacity, §3.4),
               plan.py, week.py (the week's allocation), missed.py (missed peaks), cost_basis.py, untracked.py,
@@ -1549,10 +1558,10 @@ Each number a tab shows comes from a pure function in `ahsync/engine/`. The dash
 | Craft | `craft.options` (sourcing, chains, crafts count, hold value) | R3–R5, C1–C16, D6–D8 |
 | Flip | `plan.flips` | R8, R13, D3, D5 |
 | Inventory | `inventory_view.inventory_view` (worth, plan cell, tiles), `item_detail.item_detail` (heatmaps, windows, the three answers), `tracking.cost_basis` | R7, R10, T7, T12, D25–D31, W9 |
-| History | `tracking.match` | T1–T8, T14–T16 |
+| History | `tracking.match`, `tracking.judge` and `tracking.profit_sums` (expected next to realized, the three tiles), `history_view` | T1–T8, T14–T16, T23, D47, D48, D68–D70 |
 | Rules | `sell_record.sell_record`, the rule filters in `flips`, `craft_plan`, `week` and `inventory_view` | O1–O18 |
 | Tooltip | `views.tooltip` | TT1–TT5 |
-| Status | `status_view.status_view` (alerts, cards), `collect.catchup`, `sell_record.calibration` | S1–S10, D32–D36, K1–K3 |
+| Status | `status_view.status_view` (alerts, cards), `collect.catchup`, `sell_record.calibration`, `tracking.profit_sums` (the profit line) | S1–S10, D32–D36, K1–K3, K6, K7 |
 | Weekly patterns, best windows | `patterns.sell_windows`, `patterns.weighted_median` | W1–W7 |
 | Confidence % | `confidence.score` | CF1–CF4 |
 | Refresh and incremental updates | `refresh.refresh_all`, `refresh.update_items`, `plan.status_pass`, `sellprob.from_curve` | IU1–IU11 |
@@ -1593,9 +1602,11 @@ The invariants prove the formula is sensible. Only your real sales can show whet
 - It reports the **Brier score**, the mean of `(P' − outcome)²` where outcome is 1 for sold and 0 for expired. Lower is better. Always guessing 50% scores 0.25.
 - The **Status** page shows both. A bucket that is off by more than 15 points, with at least 20 posts in it, raises a warning, e.g. "40–60% predictions actually sold 28%". That suggests `default_sell_prob`, `own_record_weight` or the volume source needs adjusting.
 
+**Expected against realized profit** (K7). The chance to sell is one estimate; the expected net is the one the plan is judged by. The calibration section ends with one line, "Expected vs realized profit (last 90 days): realized +4s 7c of expected +5s 67c (72%)", from the same sums as History's tiles (§3.5, `tracking.profit_sums`) over every character's events of the last 90 days. The Status page recomputes them from the journal on request (`app/status_page`), since the stored History view covers only 30 days; the read is the journal's small tables, like the calibration's. With nothing resolved there is no line.
+
 **Built** (K1–K3, K5, K6): `engine/sell_record.calibration` over the last 90 days of sold and expired posts with a `p_at_post`, which the tracking pass copies from the matched action's planned `P'` (`actions.conf`); a post that matched no action, such as one the addon suggested on its own, is left out. The Status page shows it below the cards (`engine/status_view.calibration_view`), with the bucket warnings as alerts in that section.
 
-Scenarios K1–K4: [SCENARIOS.md §4](SCENARIOS.md#4-calibration-k1k3).
+Scenarios K1–K7: [SCENARIOS.md §4](SCENARIOS.md#4-calibration-k1k3).
 
 ### 8.9 Definition of done for any feature
 

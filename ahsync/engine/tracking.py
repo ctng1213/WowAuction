@@ -10,6 +10,8 @@
   expired or cancelled mail, the oldest with the same character, item and stack.
 - A payout pays the oldest unpaid sold mail with the same character, item and quantity, and
   realizes its profit once: money − units × cost each − the deposit coming back with it (T17).
+- History sets each event's expected net (copied when it matched) against what it realized: a post its payout's
+  profit, −deposit when it expired; a chain's buy or craft what the chain's posts realized so far (D68-D70).
 Pure: data in, decisions out.
 """
 from __future__ import annotations
@@ -239,3 +241,158 @@ def resolve_posts(posts: Sequence[OpenPost], mails: Sequence[AuctionMail]) -> li
             open_posts.remove(fits[0])
             out.append(Resolution(m.event_id, fits[0].post_id, m.outcome, m.at_ms))
     return out
+
+
+# ---- Expected against realized profit, per History row (SPEC §3.4.1 "Expected and realized", D68-D70) ----
+
+OPEN_POST, OPEN_CHAIN = "post", "chain"          # Judged.open: what is still open
+
+
+@dataclass(frozen=True)
+class PostResult:
+    """What became of one post, as far as is known."""
+
+    outcome: str | None            # sold | expired | cancelled; None while it is up
+    realized: float | None         # its payout's realized profit, copper (T17); None until paid
+    deposit: int | None            # copper; None when not captured
+    chain_id: str | None = None    # the chain of the action it matched, when that action is a chain's follow-up
+
+
+@dataclass(frozen=True)
+class ChainFacts:
+    """A chain carrier's event (a flip's buy, a craft chain's craft) and the chain's posts so far."""
+
+    chain_id: str
+    posts: tuple[PostResult, ...]  # the post events matched to the chain's post actions
+    open_posts: int = 0            # the chain's post actions still pending or late
+    disenchants: bool = False      # the chain plans a disenchant and no post: its mats are sold as posts of their own
+    share: float = 1.0             # this event's part of its action: matched units ÷ the action's units
+
+
+@dataclass(frozen=True)
+class Judged:
+    """A History row's expected and realized profit."""
+
+    expected: float | None         # the plan's expected net copied at match time, copper; None = matched no action
+    realized: float | None         # copper; None while open or when not tracked
+    note: str                      # "not sold yet", "expired", "2 of 3 posts paid", "mats sold separately", ...
+    open: str | None = None        # OPEN_POST or OPEN_CHAIN while the realized profit is still to come
+    chain_id: str | None = None    # a carrier's chain, or a follow-up post's chain
+    carrier: bool = False          # carries its chain's profit
+
+
+def post_value(p: PostResult) -> float | None:
+    """The profit one post realized (SPEC §3.4.1, D68).
+
+    Args:
+        p: The post.
+
+    Returns:
+        Copper: its payout's realized profit once paid, −deposit when it expired (0 when the deposit is unknown),
+        0 when cancelled; None while it is up or sold but not paid out.
+    """
+    if p.outcome == "expired":
+        return -float(p.deposit or 0)
+    if p.outcome == "cancelled":
+        return 0.0
+    return p.realized if p.outcome == "sold" else None
+
+
+def _judge_post(expected: float | None, p: PostResult) -> Judged:
+    """A post row's realized profit (D68).
+
+    Args:
+        expected: Its copied expected net, copper, or None.
+        p: What became of it.
+
+    Returns:
+        Judged: paid, expired ("expired") and cancelled ("cancelled") are resolved; up ("not sold yet") and sold
+        but not taken from the mailbox ("sold · not paid out yet") are open.
+    """
+    value = post_value(p)
+    if value is None:
+        note = "sold · not paid out yet" if p.outcome == "sold" else "not sold yet"
+        return Judged(expected, None, note, OPEN_POST, p.chain_id)
+    note = p.outcome if p.outcome in ("expired", "cancelled") else ""
+    return Judged(expected, value, note, None, p.chain_id)
+
+
+def _judge_chain(expected: float | None, c: ChainFacts) -> Judged:
+    """A chain carrier's realized profit: what its chain's posts realized so far, its share of it (D69).
+
+    Args:
+        expected: Its copied expected net (the chain's, for its share), copper.
+        c: The chain.
+
+    Returns:
+        Judged: "mats sold separately" (not tracked) for a disenchant chain; "nothing sold yet" while no post is
+        resolved; else Σ post_value of its resolved posts × share, "N of M posts paid", open until every post is
+        resolved and no post action is open.
+    """
+    if c.disenchants and not c.posts:
+        return Judged(expected, None, "mats sold separately", None, c.chain_id, True)
+    values = [v for v in (post_value(p) for p in c.posts) if v is not None]
+    still = len(values) < len(c.posts) or c.open_posts > 0 or not c.posts
+    if not values:
+        return Judged(expected, None, "nothing sold yet", OPEN_CHAIN, c.chain_id, True)
+    paid = sum(1 for p in c.posts if p.outcome == "sold" and p.realized is not None)
+    return Judged(expected, sum(values) * c.share, f"{paid} of {len(c.posts)} posts paid",
+                  OPEN_CHAIN if still else None, c.chain_id, True)
+
+
+def judge(kind: str, expected: float | None, facts: PostResult | ChainFacts | None) -> Judged | None:
+    """A History row's expected and realized profit (SPEC §3.4.1, D68, D69).
+
+    Args:
+        kind: The row's kind ("posted", "bought", "crafted", "disenchanted", ...).
+        expected: The expected net copied when it matched an action, copper; None when it matched none.
+        facts: A post's PostResult, a chain carrier's ChainFacts, or None.
+
+    Returns:
+        Judged for a post, a chain carrier, any craft and a disenchant ("mats sold separately": not tracked);
+        None for every other row (no cells). A craft that carries no chain shows no expected or realized profit.
+    """
+    if isinstance(facts, PostResult):
+        return _judge_post(expected, facts)
+    if isinstance(facts, ChainFacts):
+        return _judge_chain(expected, facts)
+    if kind == "disenchanted":
+        return Judged(expected, None, "mats sold separately")
+    return Judged(None, None, "") if kind == "crafted" else None
+
+
+@dataclass(frozen=True)
+class ProfitSums:
+    """Expected against realized over the rows whose realized profit is known (D70, K7)."""
+
+    expected: float                # copper
+    realized: float                # copper
+    resolved: int                  # rows counted
+    open_posts: int                # rows still open, not counted
+    open_chains: int
+
+
+def profit_sums(rows: Sequence[Judged]) -> ProfitSums:
+    """Σ expected and Σ realized over the resolved rows that matched a plan action (SPEC §3.5 History, D70).
+
+    A chain's profit counts once: a follow-up post whose chain's carrier is among the rows counts on that carrier,
+    not on its own. Rows that matched no action, and disenchants (not tracked), count nowhere.
+
+    Args:
+        rows: Judged rows (None-free).
+
+    Returns:
+        ProfitSums: the sums over resolved rows, and how many counted rows are still open (posts, chains).
+    """
+    carried = {r.chain_id for r in rows if r.carrier}
+    expected = realized = 0.0
+    resolved = open_posts = open_chains = 0
+    for r in rows:
+        if r.expected is None or (not r.carrier and r.chain_id in carried):
+            continue
+        if r.open is not None:
+            open_posts += r.open == OPEN_POST
+            open_chains += r.open == OPEN_CHAIN
+        elif r.realized is not None:
+            expected, realized, resolved = expected + r.expected, realized + r.realized, resolved + 1
+    return ProfitSums(expected, realized, resolved, open_posts, open_chains)

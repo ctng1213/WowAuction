@@ -26,6 +26,7 @@ _EVENTS = {
 }
 _ID_COLUMN = {"purchases": "event_id", "posts": "post_id", "crafts": "event_id", "mail_sent": "event_id",
               "disenchants": "event_id"}
+_EXPECTED = ("purchases", "posts", "crafts", "disenchants")   # tables that keep the matched action's expected net
 
 
 def _open_actions(db: Database) -> list[OpenAction]:
@@ -80,6 +81,10 @@ def _match(db: Database) -> int:
         if table == "posts":           # the P' it was planned with, for calibration (SPEC §8.8, K5)
             db.conn.execute("UPDATE posts SET p_at_post = (SELECT conf FROM actions WHERE action_id = ?) "
                             "WHERE post_id = ?", (m.action_id, m.event_id))
+        if table in _EXPECTED:         # its part of the plan's expected net, for History (SPEC §3.4.1, T23)
+            db.conn.execute(f"UPDATE {table} SET expected_net = (SELECT expected_net * ? / qty FROM actions "
+                            f"WHERE action_id = ? AND qty > 0) WHERE {_ID_COLUMN[table]} = ?",
+                            (m.qty, m.action_id, m.event_id))
         last[m.action_id] = max(last.get(m.action_id, 0), at[m.event_id])
     for action_id, (done_qty, state) in status.items():
         db.conn.execute("UPDATE actions SET done_qty = ?, status = ?, done_at = ? WHERE action_id = ?",
@@ -212,7 +217,8 @@ def tracking_pass(db: Database) -> dict[str, int]:
         {"matched": n, "resolved": n, "costed": items with a basis, "paid": payouts realized}.
 
     Side effects:
-        Sets action_id on matched events, done_qty, status and done_at on their actions, outcome
+        Sets action_id and expected_net (the action's expected net × matched units ÷ its units) on matched
+        events, done_qty, status and done_at on their actions, outcome
         and resolved_at on resolved posts (with the mail's post_id), replaces cost_basis, and sets mail_id
         and realized on new payouts.
     """

@@ -3,13 +3,16 @@
 Unlike the other pages it is not staged by the full refresh: sync runs, SavedVariables
 reads and failures change it between refreshes. It reads only small tables (status
 lines, sync state, current prices, scans, characters, resolved posts) and the database file's size,
-never history or the intelligence; engine.status_view makes every text.
+never history or the intelligence; engine.status_view makes every text. The expected-against-realized sums (K7)
+are recomputed from the journal over 90 days (the stored History view covers only 30), by the same
+engine.tracking.profit_sums the History page uses.
 """
 from __future__ import annotations
 
 from ahsync.config import Config, market_sources
 from ahsync.db.sqlite import Database
 from ahsync.engine.sell_record import calibration
+from ahsync.engine.tracking import ProfitSums, judge, profit_sums
 from ahsync.engine.volume import backtest
 from ahsync.engine.status_view import CharacterFacts, MarketFacts, StatusFacts, StatusRow, status_view
 
@@ -63,6 +66,20 @@ def _backtests(db: Database, market: str, now_ms: int) -> tuple:
     return tuple((src, backtest(r)) for src, r in sorted(ratios.items()))
 
 
+def _profit(db: Database, now_ms: int) -> ProfitSums:
+    """Expected against realized profit over the last 90 days of every character's events (SPEC §8.8, K7).
+
+    Args:
+        db: Database.
+        now_ms: Now.
+
+    Returns:
+        The sums, as the History page builds them (engine.tracking.profit_sums over the journal's judged rows).
+    """
+    rows = db.journal([row[0] for row in db.characters()], now_ms - CALIBRATION_DAYS * DAY_MS)
+    return profit_sums([j for j in (judge(r[2], r[9], r[10]) for r in rows) if j is not None])
+
+
 def status_facts(db: Database, cfg: Config, now_ms: int) -> StatusFacts:
     """Gather the Status page's facts.
 
@@ -86,7 +103,7 @@ def status_facts(db: Database, cfg: Config, now_ms: int) -> StatusFacts:
         "SELECT p_at_post, outcome FROM posts WHERE outcome IN ('sold', 'expired') AND p_at_post IS NOT NULL "
         "AND at >= ? ORDER BY post_id", (now_ms - CALIBRATION_DAYS * DAY_MS,))]
     return StatusFacts(tuple(markets), characters, bool(cfg.api_key), _db_bytes(db), cfg.retention_days,
-                       calibration(results))
+                       calibration(results), _profit(db, now_ms))
 
 
 def status_page(db: Database, cfg: Config, now_ms: int, offset_ms: int) -> dict:

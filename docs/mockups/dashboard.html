@@ -465,22 +465,25 @@ const PAGES = {
     </div></div>` },
 
   History: { count: null, html: () => `
-    <h1>History</h1><p class="lede">The journal: everything the addon recorded and how it matched your plan (SPEC §3.4.1). You never type any of this in. In game, the addon appends every post, purchase, craft, disenchant, mail and payout to its journal as it happens; WoW writes the journal to disk at each <code>/reload</code>, logout or disconnect, and AHSync picks it up then. A sale is three separate events: posted, sold and paid out. Anything the journal missed (a crash before the write) shows up as <span class="amber">Untracked</span> when the next bag snapshot differs, with cost 0, so nothing is invented.</p>
-    ${tiles([['Sold (30 d)', '23 posts', `<span class="pos">${money(286000)}</span> after cut`], ['Expired (30 d)', '6 posts', '4 while cheapest · 2 undercut'], ['Deposits lost', `<span class="neg">${money(1840)}</span>`, '30 days'], ['Plan actions', '41 done', '3 missed · 2 skipped'], ['Realized profit', `<span class="pos">+${money(98400)}</span>`, '21 payouts · after cost and deposit']])}
+    <h1>History</h1><p class="lede">The journal: everything the addon recorded and how it matched your plan (SPEC §3.4.1). You never type any of this in. In game, the addon appends every post, purchase, craft, disenchant, mail and payout to its journal as it happens; WoW writes the journal to disk at each <code>/reload</code>, logout or disconnect, and AHSync picks it up then. A sale is three separate events: posted, sold and paid out. Anything the journal missed (a crash before the write) shows up as <span class="amber">Untracked</span> when the next bag snapshot differs, with cost 0, so nothing is invented. <b>Expected</b> is what the plan expected an event to make, copied when it matched its plan action; <b>Realized</b> is what it made: a post its payout, a craft or flip what its posts made so far (the tiles compare them over resolved events, a chain once).</p>
+    ${tiles([['Sold (30 d)', '23 posts', `<span class="pos">${money(286000)}</span> after cut`], ['Expired (30 d)', '6 posts', '4 while cheapest · 2 undercut'], ['Deposits lost', `<span class="neg">${money(1840)}</span>`, '30 days'], ['Plan actions', '41 done', '3 missed · 2 skipped'], ['Realized profit', `<span class="pos">+${money(98400)}</span>`, '21 payouts · after cost and deposit'], ['Expected (resolved)', `+${money(61250)}`, '18 resolved plan events'], ['Realized', `<span class="pos">+${money(53300)}</span>`, 'the same events'], ['Realized ÷ expected', '87%', "how the plan's estimates held up"]])}
+    <div class="muted" style="padding:0 12px 8px;font-size:12px">4 posts open · 1 chain in progress (counted once resolved)</div>
     <div class="card">${filters('<span class="select">Event: All ▾</span><span class="select">Last 7 days ▾</span>')}
-    ${table([['When'], ['Character'], ['Event'], ['Item'], ['Qty', 1], ['Price', 1], ['Plan action'], ['Detail']], [
-      hRow('Fri 14:10', 'Amaya', 'Bought', 'Linen Cloth', 1, 20, 38, '<span class="status-done">✓ done</span>', 'matched "buy ≤ 45c"'),
+    ${table([['When'], ['Character'], ['Event'], ['Item'], ['Qty', 1], ['Price', 1], ['Plan action'], ['Expected', 1], ['Realized', 1], ['Detail']], [
+      hRow('Fri 14:10', 'Amaya', 'Bought', 'Linen Cloth', 1, 20, 38, '<span class="status-done">✓ done</span>', 'matched "buy ≤ 45c"', ['+2s 10c', '—', 'muted', 'nothing sold yet']),
       hRow('Fri 13:40', 'Brugan', 'Untracked', 'Iron Ore', 1, 4, null, '—', 'bags grew with no event (session crashed before /reload) · cost 0 · nothing to do, plans carry on'),
       hRow('Fri 09:30', 'Brugan', 'Expired', 'Heavy Leather', 1, 10, 47, '—', 'while cheapest · streak 3'),
+      hRow('Fri 08:10', 'Amaya', 'Posted', 'Silk Cloth', 1, 20, 60, '<span class="status-done">✓ done</span>', '12 h · deposit 5c', ['+2s 50c', '—', 'muted', 'not sold yet']),
       hRow('Fri 09:20', 'Brugan', 'Bought (vendor)', 'Coarse Thread', 1, 4, 10, '—', 'cost basis +40c'),
       hRow('Thu 22:40', 'Brugan', 'Paid out', 'Mithril Spurs', 3, 1, 41800, '—', 'gold taken from the mailbox · 4g 18s after the 5% cut'),
       hRow('Thu 22:05', 'Brugan', 'Sold', 'Mithril Spurs', 3, 1, 44000, '<span class="status-done">✓ done</span>', 'post Thu 18:00 resolved'),
-      hRow('Thu 19:05', 'Amaya', 'Disenchanted', 'Bandit Cinch', 2, 1, null, '<span class="status-done">✓ done</span>', 'gave 2 Strange Dust · matched "DE Bandit Cinch"'),
-      hRow('Thu 18:02', 'Brugan', 'Posted', 'Mithril Spurs', 3, 1, 44000, '<span class="status-done">✓ done</span>', '24 h · deposit 1s 20c'),
+      hRow('Thu 19:05', 'Amaya', 'Disenchanted', 'Bandit Cinch', 2, 1, null, '<span class="status-done">✓ done</span>', 'gave 2 Strange Dust · matched "DE Bandit Cinch"', ['+1s 50c', '—', 'muted', 'mats sold separately']),
+      hRow('Thu 18:02', 'Brugan', 'Posted', 'Mithril Spurs', 3, 1, 44000, '<span class="status-done">✓ done</span>', '24 h · deposit 1s 20c', ['+1g 2s', '+1g 8s 40c', 'pos', '']),
+      hRow('Thu 12:40', 'Brugan', 'Posted', 'Copper Rod', 1, 1, 4100, '<span class="status-done">✓ done</span>', '24 h · deposit 20c', ['+4s 47c', '+4s 10c', 'amber', '']),
       hRow('Thu 12:40', 'Brugan', 'Expired', 'Copper Rod', 1, 5, 4500, '—', 'undercut (scan showed 42s)'),
       hRow('Wed 20:00', 'Amaya', '—', 'Silk Cloth', 1, 40, 2800, '<span class="status-missed">missed</span>', 'buy slot passed, no purchase'),
       hRow('Wed 19:15', 'Brugan', 'Bought', 'Iron Ore', 1, 6, 52, '<span class="status-partial">partial 6/10</span>', 'only 6 listed under target'),
-      hRow('Wed 18:30', 'Brugan', 'Crafted', 'Copper Rod', 1, 5, null, '<span class="status-done">✓ done</span>', 'cost 50s (mats)'),
+      hRow('Wed 18:30', 'Brugan', 'Crafted', 'Copper Rod', 1, 5, null, '<span class="status-done">✓ done</span>', 'cost 50s (mats)', ['+9s 71c', '+6s 50c', 'amber', '2 of 3 posts paid']),
     ], null)}</div>` },
 
   Rules: { count: 4, html: () => `
@@ -542,7 +545,8 @@ const PAGES = {
     ${table([['Predicted chance'], ['Posts', 1], ['Predicted', 1], ['Actually sold', 1], ['Off by', 1], ['']], [
       calRow('0–20%', 10, 12, 10), calRow('20–40%', 15, 31, 33), calRow('40–60%', 25, 50, 28),
       calRow('60–80%', 22, 71, 68), calRow('80–100%', 34, 89, 91),
-    ], null)}</div>` },
+    ], null)}</div>
+    <div class="card" style="padding:8px 12px">Expected vs realized profit (last 90 days): realized +14g 2s of expected +16g 11s 30c (87%)</div>` },
 };
 
 function tr(a, n, q, qty, each, e, P, c, ch, spend, note) {
@@ -572,9 +576,11 @@ function invRow(n, q, who, where, qty, paidEach, worth, plan, P, windows, sel) {
 function windowRow(rank, when, uplift, strength) {
   return `<div class="window"><span class="rank">${rank}</span><b>${when}</b><span class="pos">+${uplift}% price</span><span class="muted">${strength}</span></div>`;
 }
-function hRow(when, who, ev, n, q, qty, price, action, detail) {
+function hRow(when, who, ev, n, q, qty, price, action, detail, plan) {
   const cls = { Sold: 'pos', 'Paid out': 'pos', Expired: 'neg', Untracked: 'amber', Bought: '', Posted: '', Crafted: '', Disenchanted: '' }[ev] ?? 'muted';
-  return `<tr><td class="muted">${when}</td><td>${who}</td><td class="${cls}">${ev}</td><td>${item(n, q)}</td><td class="num">${qty}</td><td class="num">${money(price)}</td><td>${action}</td><td class="muted">${detail}</td></tr>`;
+  const [expected, realized, rcls, note] = plan || ['', '', '', ''];   // D68, D69: expected next to realized
+  return `<tr><td class="muted">${when}</td><td>${who}</td><td class="${cls}">${ev}</td><td>${item(n, q)}</td><td class="num">${qty}</td><td class="num">${money(price)}</td><td>${action}</td>` +
+    `<td class="num">${expected}</td><td class="num ${rcls}">${realized}${note ? `<span class="sub">${note}</span>` : ''}</td><td class="muted">${detail}</td></tr>`;
 }
 function calRow(bucket, n, predicted, actual) {
   const off = actual - predicted, bad = Math.abs(off) > 15 && n >= 20;

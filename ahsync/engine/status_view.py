@@ -11,9 +11,11 @@ import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from ahsync.engine.history_view import ratio_text
 from ahsync.engine.sell_record import Calibration
+from ahsync.engine.tracking import ProfitSums
 from ahsync.engine.volume import Backtest
-from ahsync.engine.views import age_text, round_half_up, source_label
+from ahsync.engine.views import age_text, round_half_up, signed_money, source_label
 
 HOUR_MS = 3_600_000
 DAY_MS = 86_400_000
@@ -70,6 +72,7 @@ class StatusFacts:
     db_bytes: int
     retention_days: int
     calibration: Calibration | None = None   # resolved posts with their planned chance (SPEC §8.8)
+    profit: ProfitSums | None = None         # expected against realized profit, last 90 days (SPEC §8.8, K7)
 
 
 def when(ms: int, offset_ms: int) -> str:
@@ -403,18 +406,37 @@ def _pct(x: float) -> int:
     return round_half_up(x * 100)
 
 
-def calibration_view(c: Calibration | None) -> dict | None:
-    """The Status page's sell-probability calibration section (SPEC §8.8, K6).
+def profit_line(sums: ProfitSums | None) -> str:
+    """The calibration section's profit line: how the plan's expected profit held up (SPEC §8.8, K7).
+
+    Args:
+        sums: Expected and realized over the last 90 days' resolved plan events, or None.
+
+    Returns:
+        "Expected vs realized profit (last 90 days): realized +3s 50c of expected +4s (88%)"; "" when nothing
+        is resolved.
+    """
+    if sums is None or not sums.resolved:
+        return ""
+    return (f"Expected vs realized profit (last 90 days): realized {signed_money(sums.realized)} of expected "
+            f"{signed_money(sums.expected)} ({ratio_text(sums)})")
+
+
+def calibration_view(c: Calibration | None, profit: ProfitSums | None = None) -> dict | None:
+    """The Status page's calibration section: sell probability (SPEC §8.8, K6) and expected profit (K7).
 
     Args:
         c: The calibration, or None.
+        profit: Expected against realized profit, or None.
 
     Returns:
         {"title", "brier", "warnings": [text], "rows": [{"bucket", "posts", "predicted", "actual", "off", "bad",
-        "predicted_pct", "actual_pct"}]}; None without resolved posts.
+        "predicted_pct", "actual_pct"}], "profit": line or ""}; title, brier and rows empty without resolved posts;
+        None when there is neither.
     """
+    line = profit_line(profit)
     if c is None or not c.posts:
-        return None
+        return {"title": "", "brier": "", "warnings": [], "rows": [], "profit": line} if line else None
     rows, warnings = [], []
     for b in c.buckets:
         name = f"{_pct(b.low)}–{_pct(b.high)}%"
@@ -428,7 +450,7 @@ def calibration_view(c: Calibration | None) -> dict | None:
     brier = round_half_up(c.brier * 100)
     return {"title": f"Predicted vs actual (last 90 days, {c.posts} resolved posts)",
             "brier": f"Brier score {brier // 100}.{brier % 100:02d} · always guessing 50% would score 0.25",
-            "warnings": warnings, "rows": rows}
+            "warnings": warnings, "rows": rows, "profit": line}
 
 
 def status_view(rows: Sequence[StatusRow], facts: StatusFacts, now_ms: int, offset_ms: int) -> dict:
@@ -451,4 +473,4 @@ def status_view(rows: Sequence[StatusRow], facts: StatusFacts, now_ms: int, offs
     cards = [_market_card(m, now_ms, offset_ms) for m in facts.markets]
     cards += [_api_card(rows, facts, offset_ms), _characters_card(facts, now_ms), storage]
     return {"alerts": alerts(rows, facts, now_ms, offset_ms), "cards": cards,
-            "calibration": calibration_view(facts.calibration)}
+            "calibration": calibration_view(facts.calibration, facts.profit)}

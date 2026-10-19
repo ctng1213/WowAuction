@@ -186,6 +186,20 @@ def summary(text: str) -> str:
     return "\n".join(lines)
 
 
+def utf8_console(*streams: object) -> None:
+    """Make text streams write UTF-8, replacing what they can't encode, so "≥" or "—" never crash a cp1252 console.
+
+    Args:
+        streams: Text streams (sys.stdout, sys.stderr); one without reconfigure (a replaced stream) is left as it is.
+
+    Side effects:
+        Reconfigures each stream that supports it.
+    """
+    for stream in streams:
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
 def main(argv: list[str]) -> int:
     """Print the snapshot's summary; with --update rewrite w1.expected.json and print a diff summary.
 
@@ -195,6 +209,7 @@ def main(argv: list[str]) -> int:
     Returns:
         0 when it matches (or was updated); 1 when it differs.
     """
+    utf8_console(sys.stdout, sys.stderr)
     text = snapshot()
     old = EXPECTED.read_text(encoding="utf-8") if EXPECTED.exists() else ""
     print(summary(text))

@@ -25,7 +25,7 @@ from ahsync.recommend.store import RecommendStore
 from ahsync.state.journal import JournalReads
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 19
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
@@ -144,6 +144,14 @@ MIGRATIONS: dict[int, str] = {
         ALTER TABLE actions ADD COLUMN to_char TEXT;
         ALTER TABLE plan_new ADD COLUMN to_char TEXT;
         ALTER TABLE mail_sent ADD COLUMN confirmed INTEGER NOT NULL DEFAULT 1
+    """,
+    # 19: the expected net of the action an event matched, copied when it matches, so History can set it against
+    # the realized profit (T23, D68).
+    19: """
+        ALTER TABLE posts ADD COLUMN expected_net REAL;
+        ALTER TABLE purchases ADD COLUMN expected_net REAL;
+        ALTER TABLE crafts ADD COLUMN expected_net REAL;
+        ALTER TABLE disenchants ADD COLUMN expected_net REAL
     """,
     # 14: sell records, stored for the hourly status pass (M8).
     14: """

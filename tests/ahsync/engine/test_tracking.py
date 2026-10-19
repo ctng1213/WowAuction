@@ -1,8 +1,9 @@
 """Tests for ahsync/engine/tracking.py: events matched to actions, posts resolved by mail (SPEC §3.4.1)."""
 from __future__ import annotations
 
-from ahsync.engine.tracking import (AuctionMail, DoneEvent, OpenAction, OpenPost, Payout, SoldMail, match, realize,
-                                    resolve_posts)
+from ahsync.engine.tracking import (OPEN_CHAIN, OPEN_POST, AuctionMail, ChainFacts, DoneEvent, Judged, OpenAction,
+                                    OpenPost, Payout, PostResult, ProfitSums, SoldMail, judge, match, post_value,
+                                    profit_sums, realize, resolve_posts)
 
 HOUR, DAY = 3_600_000, 86_400_000
 T = 1_760_000_000_000
@@ -120,3 +121,46 @@ def test_T17_a_payout_without_its_sold_mail_realizes_without_a_deposit():
     other = [SoldMail("five", AMAYA, ROD, 5, T, 20.0), SoldMail("brugan", "Brugan-G", ROD, 1, T, 20.0)]
     paid = realize([Payout("pay", AMAYA, ROD, 1, 970, T + HOUR), Payout("loot", AMAYA, LINEN, 2, 90, T)], other, {ROD: 400.0})
     assert [(r.payout_id, r.mail_id, r.profit) for r in paid] == [("loot", None, 90.0), ("pay", None, 570.0)]
+
+
+# ---- Expected against realized (D68-D70) ----
+
+def test_D68_a_post_is_judged_by_its_payout_its_lost_deposit_or_not_at_all_while_open():
+    paid = judge("posted", 447.0, PostResult("sold", 410.0, 3))
+    assert paid == Judged(447.0, 410.0, "", None, None)
+    assert judge("posted", 120.0, PostResult("expired", None, 3)) == Judged(120.0, -3.0, "expired")
+    assert judge("posted", 250.0, PostResult(None, None, 5)) == Judged(250.0, None, "not sold yet", OPEN_POST)
+    assert judge("posted", 250.0, PostResult("sold", None, 5)).note == "sold · not paid out yet"   # gold still in the mailbox
+    assert judge("posted", None, PostResult("cancelled", None, 5)) == Judged(None, 0.0, "cancelled")
+    assert post_value(PostResult("expired", None, None)) == 0.0                                    # deposit not captured
+    assert judge("disenchanted", 150.0, None) == Judged(150.0, None, "mats sold separately")
+    assert judge("crafted", None, None) == Judged(None, None, "")                                # no chain: no numbers
+    assert [judge(k, None, None) for k in ("bought", "bought_vendor", "paid_out", "mailed")] == [None] * 4
+
+
+def test_D69_a_chain_carrier_realizes_what_its_posts_made_so_far():
+    posts = (PostResult("sold", 300.0, 2, "c"), PostResult("sold", 350.0, 2, "c"), PostResult(None, None, 2, "c"))
+    craft = judge("crafted", 971.0, ChainFacts("c", posts))
+    assert craft == Judged(971.0, 650.0, "2 of 3 posts paid", OPEN_CHAIN, "c", True)
+    done = judge("crafted", 971.0, ChainFacts("c", posts[:2] + (PostResult("sold", 321.0, 2, "c"),)))
+    assert (done.realized, done.open, done.note) == (971.0, None, "3 of 3 posts paid")
+    waiting = judge("crafted", 971.0, ChainFacts("c", posts[:2], open_posts=1))           # a post action still to come
+    assert (waiting.realized, waiting.open) == (650.0, OPEN_CHAIN)
+    expired = judge("bought", 400.0, ChainFacts("f", (PostResult("expired", None, 4, "f"),)))
+    assert (expired.realized, expired.note, expired.open) == (-4.0, "0 of 1 posts paid", None)
+    assert judge("bought", 210.0, ChainFacts("f", ())) == Judged(210.0, None, "nothing sold yet", OPEN_CHAIN, "f", True)
+    assert judge("bought", 500.0, ChainFacts("d", (), disenchants=True)) == Judged(500.0, None, "mats sold separately",
+                                                                                  None, "d", True)
+    half = judge("bought", 105.0, ChainFacts("f", (PostResult("sold", 300.0, 0, "f"),), share=0.5))
+    assert half.realized == 150.0                                                          # one of two buys: half of it
+
+
+def test_D70_the_sums_count_resolved_plan_events_once():
+    rows = [Judged(447.0, 410.0, ""), Judged(120.0, -3.0, "expired"), Judged(250.0, None, "not sold yet", OPEN_POST),
+            Judged(None, 80.0, ""), Judged(150.0, None, "mats sold separately"),
+            Judged(971.0, 650.0, "2 of 3 posts paid", OPEN_CHAIN, "c", True),
+            Judged(300.0, 300.0, "", None, "c"), Judged(250.0, None, "not sold yet", OPEN_POST, "c"),   # its follow-ups
+            Judged(210.0, None, "nothing sold yet", OPEN_CHAIN, "f", True),
+            Judged(90.0, 95.0, "", None, "gone")]                    # a follow-up whose carrier is not among the rows
+    assert profit_sums(rows) == ProfitSums(657.0, 502.0, 3, 1, 2)
+    assert profit_sums([]) == ProfitSums(0.0, 0.0, 0, 0, 0)

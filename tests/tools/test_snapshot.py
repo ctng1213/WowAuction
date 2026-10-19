@@ -1,6 +1,7 @@
 """Tests for tools/snapshot.py: the whole-plan snapshot (SPEC §8.6, WP1)."""
 from __future__ import annotations
 
+import io
 import json
 
 import tools.snapshot as snapshot
@@ -29,3 +30,12 @@ def test_heat_map_cells_are_digested_and_long_files_trimmed():
     assert snapshot.trimmed("a\nb", keep=2) == "a\nb"
     assert snapshot.render({"b": [1, 2], "a": {"c": [{"d": None}]}}) == \
         '{\n "a": {\n  "c": [\n   {\n    "d": null\n   }\n  ]\n },\n "b": [1, 2]\n}'
+
+
+def test_the_summary_prints_on_a_console_that_cannot_encode_it():
+    raw = io.BytesIO()
+    console = io.TextIOWrapper(raw, encoding="cp1252")                   # a Windows console without PYTHONIOENCODING
+    snapshot.utf8_console(console, object())                            # a stream without reconfigure is skipped
+    print("help: \"Best selling windows\" ≥ 75%", file=console)
+    console.flush()
+    assert "≥".encode("utf-8") in raw.getvalue()

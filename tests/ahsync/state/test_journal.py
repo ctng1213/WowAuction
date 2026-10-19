@@ -4,6 +4,7 @@ from __future__ import annotations
 import pytest
 
 from ahsync.db.sqlite import Database
+from ahsync.engine.tracking import ChainFacts, PostResult
 from tests.support.fake_clock import FakeClock
 
 HOUR, DAY = 3_600_000, 86_400_000
@@ -54,11 +55,51 @@ def test_D47_the_journal_reads_every_kind_of_event_with_the_plan_action_it_match
         ("disenchanted", CINCH), ("mailed", LINEN), ("untracked", LINEN), ("missed", SILK), ("skipped", SILK),
         ("posted", ROD)]
     by_kind = {r[2]: r for r in rows}
-    assert by_kind["paid_out"][7:] == (3915, 1915.0)
-    assert by_kind["sold"][7:] == (NOW - 3 * DAY, 20)                       # the post it resolved
+    assert by_kind["paid_out"][7:9] == (3915, 1915.0)
+    assert by_kind["sold"][7:9] == (NOW - 3 * DAY, 20)                       # the post it resolved
     assert by_kind["bought"][6] == ("done", 20, 20)
     assert by_kind["missed"][6:8] == (("missed", 0, 40), "buy")
-    assert by_kind["posted"][5:] == (4100, None, 24, 20)
+    assert by_kind["posted"][5:9] == (4100, None, 24, 20)
     assert by_kind["mailed"][7] == B and by_kind["disenchanted"][7] == f"{DUST},2"
     assert by_kind["untracked"][4:8] == (3, None, None, -3)
     assert db.journal([], NOW) == []
+    assert by_kind["posted"][9:] == (None, PostResult(None, None, 20, None))   # matched no action, still up
+
+
+def test_D69_the_journal_gives_each_event_its_plan_facts(tmp_path):
+    db = Database.open(tmp_path / "c.db", FakeClock().now_ms(), None)
+    with db.transaction():
+        c = db.conn
+        c.execute("INSERT INTO recipes(profession, spell_id, product_key, yield_min, yield_max) "
+                  "VALUES ('Blacksmithing', 2663, ?, 1, 1)", (ROD,))
+        c.executemany("INSERT INTO actions(action_id, parent_id, char_id, kind, key, qty, expected_net, status) "
+                      "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                      [("bars", None, A, "buy", 2840, 14, 0.0, "done"), ("craft", "bars", A, "craft", ROD, 7, 971.0, "done"),
+                       ("p1", "bars", A, "post", ROD, 3, 300.0, "done"), ("p2", "bars", A, "post", ROD, 3, 350.0, "done"),
+                       ("p3", "bars", A, "post", ROD, 1, 321.0, "pending"),
+                       ("flip", None, A, "buy", LINEN, 20, 210.0, "partial"), ("fpost", "flip", A, "post", LINEN, 20, 0.0, "pending"),
+                       ("debuy", None, A, "buy", CINCH, 1, 500.0, "done"), ("de", "debuy", A, "de", CINCH, 1, 0.0, "pending")])
+        c.executemany("INSERT INTO posts(post_id, char_id, key, stack, price, deposit, at, outcome, action_id, expected_net, "
+                      "confirmed) VALUES (?, ?, ?, ?, 4100, 2, ?, ?, ?, ?, 1)",
+                      [("q1", A, ROD, 3, NOW - 5 * HOUR, "sold", "p1", 300.0), ("q2", A, ROD, 3, NOW - 4 * HOUR, "sold", "p2", 350.0),
+                       ("q3", A, ROD, 1, NOW - 3 * HOUR, None, "p2", None)])
+        c.executemany("INSERT INTO auction_mail(event_id, char_id, key, qty, price, outcome, at, post_id) "
+                      "VALUES (?, ?, ?, 3, 4100, 'sold', ?, ?)", [("m1", A, ROD, NOW - 2 * HOUR, "q1"), ("m2", A, ROD, NOW - HOUR, "q2")])
+        c.executemany("INSERT INTO payouts(event_id, char_id, key, qty, money, at, mail_id, realized) VALUES (?, ?, ?, 3, 0, ?, ?, ?)",
+                      [("o1", A, ROD, NOW - HOUR, "m1", 300.0), ("o2", A, ROD, NOW, "m2", 350.0)])
+        c.execute("INSERT INTO crafts(event_id, char_id, spell_id, count, at, action_id, expected_net) "
+                  "VALUES ('c', ?, 2663, 7, ?, 'craft', 971.0)", (A, NOW - 6 * HOUR))
+        c.executemany("INSERT INTO purchases(event_id, char_id, key, qty, price, source, at, action_id, expected_net, confirmed) "
+                      "VALUES (?, ?, ?, ?, 38, 'ah', ?, ?, ?, 1)",
+                      [("u1", A, LINEN, 10, NOW - 7 * HOUR, "flip", 105.0), ("u2", A, CINCH, 1, NOW - 8 * HOUR, "debuy", 500.0),
+                       ("u3", A, 2840, 14, NOW - 9 * HOUR, "bars", 0.0)])
+    facts = {r[2] + str(r[3]) + str(r[0]): r[9:] for r in db.journal([A], NOW - 30 * DAY)}
+    paid, up = PostResult("sold", 300.0, 2, "bars"), PostResult(None, None, 2, "bars")
+    chain = ChainFacts("bars", (paid, PostResult("sold", 350.0, 2, "bars"), up), 1)            # p3 is still to come
+    assert facts[f"crafted{ROD}{NOW - 6 * HOUR}"] == (971.0, chain)
+    assert facts[f"posted{ROD}{NOW - 5 * HOUR}"] == (300.0, paid)
+    assert facts[f"posted{ROD}{NOW - 3 * HOUR}"] == (None, up)
+    assert facts[f"bought{LINEN}{NOW - 7 * HOUR}"] == (105.0, ChainFacts("flip", (), 1, False, 0.5))   # half the buy
+    assert facts[f"bought{CINCH}{NOW - 8 * HOUR}"] == (500.0, ChainFacts("debuy", (), 0, True))
+    assert facts[f"bought2840{NOW - 9 * HOUR}"] == (0.0, None)                                  # a mat buy carries nothing
+    db.close()

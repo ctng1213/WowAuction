@@ -56,6 +56,28 @@ def test_calibration_reads_resolved_posts_of_the_last_90_days_with_a_planned_cha
         db.close()
 
 
+def test_K7_the_profit_line_sums_the_last_90_days_of_every_characters_plan_events(tmp_path):
+    now = FakeClock().now_ms()
+    db = Database.open(tmp_path / "ahsync.db", now, None)
+    try:
+        with db.transaction():
+            db.conn.executemany("INSERT INTO characters(id, realm, faction, market) VALUES (?, 'R', 'Horde', ?)",
+                                [("A-R", M), ("B-R", None)])
+            db.conn.executemany(
+                "INSERT INTO posts(post_id, char_id, key, stack, price, deposit, at, outcome, expected_net, confirmed) "
+                "VALUES (?, ?, 1, 1, 1, 3, ?, ?, ?, 1)",
+                [("paid", "A-R", now - DAY, "sold", 447.0), ("gone", "B-R", now - DAY, "expired", 120.0),
+                 ("old", "A-R", now - 91 * DAY, "expired", 500.0), ("up", "A-R", now - DAY, None, 250.0)])
+            db.conn.execute("INSERT INTO auction_mail(event_id, char_id, key, qty, price, outcome, at, post_id) "
+                            "VALUES ('m', 'A-R', 1, 1, 1, 'sold', ?, 'paid')", (now - DAY,))
+            db.conn.execute("INSERT INTO payouts(event_id, char_id, key, qty, money, at, mail_id, realized) "
+                            "VALUES ('o', 'A-R', 1, 1, 0, ?, 'm', 410.0)", (now - DAY,))
+        sums = status_page.status_facts(db, Config(markets=(M,)), now).profit
+        assert (sums.expected, sums.realized, sums.resolved, sums.open_posts) == (567.0, 407.0, 2, 1)
+    finally:
+        db.close()
+
+
 def test_K4_backtests_pair_your_scan_estimates_with_confirmed_rows_of_the_same_item_and_day(tmp_path):
     now = FakeClock().now_ms()
     db = Database.open(tmp_path / "ahsync.db", now, None)
