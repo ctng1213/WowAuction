@@ -72,7 +72,7 @@ function Mail.RecordPayout(db, m, nowMs)
   if db.mailSeen[fp] then return false end
   db.mailSeen[fp] = sentAt + Mail.SEEN_DAYS * DAY_MS
   DB.AppendEvent(db, { type = "payout", char = Characters.CurrentId(), at = nowMs, key = m.key, qty = m.qty,
-                       money = m.money, sentAt = sentAt })
+                       money = m.money, deposit = m.deposit, sentAt = sentAt })
   return true
 end
 

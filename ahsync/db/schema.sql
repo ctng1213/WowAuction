@@ -86,7 +86,7 @@ CREATE TABLE IF NOT EXISTS disenchants(
 -- set once by the tracking pass (copper; NULL until then).
 CREATE TABLE IF NOT EXISTS payouts(
     event_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, key INTEGER NOT NULL, qty INTEGER, money INTEGER,
-    at INTEGER NOT NULL, mail_id TEXT, realized REAL
+    at INTEGER NOT NULL, mail_id TEXT, realized REAL, deposit INTEGER   -- the invoice's deposit, when captured
 );
 
 CREATE TABLE IF NOT EXISTS posts(

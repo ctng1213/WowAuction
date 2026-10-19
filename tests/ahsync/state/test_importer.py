@@ -405,7 +405,7 @@ def test_each_event_type_is_stored_in_its_table(db):
         event(f"{AMAYA}:{T + 3000}:0", "auction_mail", T + 3000, outcome="sold", key=6217, qty=5, price=4100),
         event(f"{AMAYA}:{T + 3000}:1", "auction_mail", T + 3000, outcome="sold", key=6217, qty=5, price=4100),
         event(f"{AMAYA}:{T + 4000}:0", "auction_mail", T + 4000, outcome="expired", key=-6585, qty=1),
-        event(f"{AMAYA}:{T + 4000}:1", "payout", T + 4000, key=6217, qty=5, money=19475),
+        event(f"{AMAYA}:{T + 4000}:1", "payout", T + 4000, key=6217, qty=5, money=19475, deposit=60),
         event(f"{AMAYA}:{T + 4000}:2", "disenchant", T + 4000, key=4570, results="10940,3;10938,1"),
     ]
     recipe = {"Blacksmithing": {2663: {"product": 6217, "yieldMin": 1, "yieldMax": 1, "reagents": "2840,2"}}}
@@ -419,7 +419,7 @@ def test_each_event_type_is_stored_in_its_table(db):
     assert rows(db, "SELECT char_id, to_char, key, qty FROM mail_sent") == [(AMAYA, BRUGAN, 2592, 3)]
     assert rows(db, "SELECT key, qty, price, outcome FROM auction_mail ORDER BY event_id") == [
         (6217, 5, 4100, "sold"), (6217, 5, 4100, "sold"), (-6585, 1, None, "expired")]
-    assert rows(db, "SELECT key, qty, money, mail_id, realized FROM payouts") == [(6217, 5, 19475, None, None)]
+    assert rows(db, "SELECT key, qty, money, deposit, mail_id, realized FROM payouts") == [(6217, 5, 19475, 60, None, None)]
     assert rows(db, "SELECT key, results FROM disenchants") == [(4570, "10938,1;10940,3")]      # by key
     assert result.dirty_keys == {2589, 6217, 2840, 2592, 4570}
     assert result.ingested_until == {AMAYA: T + 4000} == ingested_until(db)

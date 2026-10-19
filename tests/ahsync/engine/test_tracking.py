@@ -97,6 +97,12 @@ def test_T17_a_payout_realizes_its_profit_once_from_the_sold_mail_it_pays():
     assert [(r.payout_id, r.mail_id, r.profit) for r in paid] == [("pay", "sold", 550.0)]
 
 
+def test_T17_a_payout_with_its_invoices_deposit_uses_it_even_without_the_post():
+    sold = [SoldMail("sold", AMAYA, ROD, 1, T, 0.0)]                         # its post was never captured
+    paid = realize([Payout("pay", AMAYA, ROD, 1, 195, T + HOUR, 100)], sold, {})
+    assert [(r.mail_id, r.profit) for r in paid] == [("sold", 95.0)]         # 1s − 5c cut; the 1s deposit came back
+
+
 def test_T17_a_payout_without_its_sold_mail_realizes_without_a_deposit():
     other = [SoldMail("five", AMAYA, ROD, 5, T, 20.0), SoldMail("brugan", "Brugan-G", ROD, 1, T, 20.0)]
     paid = realize([Payout("pay", AMAYA, ROD, 1, 970, T + HOUR), Payout("loot", AMAYA, LINEN, 2, 90, T)], other, {ROD: 400.0})

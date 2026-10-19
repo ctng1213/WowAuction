@@ -83,9 +83,9 @@ describe("Mail", function()
     TakeInboxMoney(2)                                              -- a letter's gold isn't a payout
     local payouts = {}
     for _, e in ipairs(AHProfitDB.events) do
-      if e.type == "payout" then payouts[#payouts + 1] = table.concat({ e.key, e.qty, e.money, e.at - e.sentAt }, " ") end
+      if e.type == "payout" then payouts[#payouts + 1] = table.concat({ e.key, e.qty, e.money, e.deposit, e.at - e.sentAt }, " ") end
     end
-    assert_eq(payouts, { "6217 1 970 " .. DAY })                   -- 29 of 30 days left: sent a day ago
+    assert_eq(payouts, { "6217 1 970 20 " .. DAY })                   -- 29 of 30 days left: sent a day ago
     assert_eq(AHProfit.Events.Traces(), {
       "take 1 money=970 invoice=seller item=Copper Rod -> payout", "take 1 money=970 invoice=seller item=Copper Rod -> seen before",
       "take 2 money=500 invoice=nil item=nil -> not a sold mail" })

@@ -175,7 +175,7 @@ def _realize(db: Database) -> int:
         Payouts realized.
     """
     payouts = [Payout(*r) for r in db.conn.execute(
-        "SELECT event_id, char_id, key, qty, money, at FROM payouts WHERE realized IS NULL AND qty > 0")]
+        "SELECT event_id, char_id, key, qty, money, at, deposit FROM payouts WHERE realized IS NULL AND qty > 0")]
     if not payouts:
         return 0
     sold = [SoldMail(*r) for r in db.conn.execute(

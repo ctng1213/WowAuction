@@ -748,14 +748,15 @@ end
 --- UNVERIFIED: GetInboxHeaderInfo(i) money 5th, still shown until the server answers the take.
 ---@param index number         Inbox index
 ---@param nameToKey function   item name -> key (a sold invoice has no attachment)
----@return table|nil           { key, qty, money (copper), daysLeft }; nil for any other mail or no money
+---@return table|nil           { key, qty, money (copper), deposit (the invoice's, copper, or nil), daysLeft };
+---                            nil for any other mail or no money
 function Adapter.ReadSoldMailMoney(index, nameToKey)
   if not (GetInboxHeaderInfo and GetInboxInvoiceInfo) then return nil end
   local _, _, _, _, money, _, daysLeft = GetInboxHeaderInfo(index)
-  local invoice, itemName, _, _, _, _, _, _, _, _, count = GetInboxInvoiceInfo(index)
+  local invoice, itemName, _, _, _, deposit, _, _, _, _, count = GetInboxInvoiceInfo(index)
   local key = invoice == "seller" and (money or 0) > 0 and nameToKey(itemName)
   if not key then return nil end
-  return { key = key, qty = count or 1, money = money, daysLeft = daysLeft or 30 }
+  return { key = key, qty = count or 1, money = money, deposit = deposit, daysLeft = daysLeft or 30 }
 end
 
 --- A mail's money, invoice type and item, for the diagnostics trace (A54).

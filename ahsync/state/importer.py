@@ -401,7 +401,7 @@ def _event_row(e: sv.Event, market: str | None) -> tuple[str, dict[str, object]]
     if e.type == "disenchant":
         return "disenchants", base | {"key": e.key, "results": ";".join(f"{k},{n}" for k, n in e.results)}
     if e.type == "payout":
-        return "payouts", base | {"key": e.key, "qty": e.qty, "money": e.money_copper}
+        return "payouts", base | {"key": e.key, "qty": e.qty, "money": e.money_copper, "deposit": e.deposit_copper}
     return "auction_mail", base | {"key": e.key, "qty": e.qty, "price": e.price_copper, "outcome": e.outcome}
 
 

@@ -8,7 +8,7 @@
 - A sold mail resolves the oldest open post with the same character, item, stack and price; an
   expired or cancelled mail, the oldest with the same character, item and stack.
 - A payout pays the oldest unpaid sold mail with the same character, item and quantity, and
-  realizes its profit once: money − units × cost each − the deposit for those units (T17).
+  realizes its profit once: money − units × cost each − the deposit coming back with it (T17).
 Pure: data in, decisions out.
 """
 from __future__ import annotations
@@ -163,6 +163,7 @@ class Payout:
     qty: int
     money: int                     # copper taken
     at_ms: int
+    deposit: int | None = None     # the invoice's deposit, copper; None when not captured
 
 
 @dataclass(frozen=True)
@@ -196,7 +197,8 @@ def realize(payouts: Sequence[Payout], sold: Sequence[SoldMail], cost_each: dict
 
     Returns:
         One Realized per payout, oldest first: it pays the oldest sold mail with the same character, item and
-        quantity, and realizes money − qty × cost each − that mail's deposit (no deposit without a mail).
+        quantity, and realizes money − qty × cost each − the deposit: the payout's own (its invoice's), else
+        that mail's post's, else none.
     """
     unpaid = sorted(sold, key=lambda m: (m.at_ms, m.event_id))
     out = []
@@ -205,8 +207,8 @@ def realize(payouts: Sequence[Payout], sold: Sequence[SoldMail], cost_each: dict
         mail = fits[0] if fits else None
         if mail:
             unpaid.remove(mail)
-        out.append(Realized(p.event_id, mail.event_id if mail else None,
-                            p.money - p.qty * cost_each.get(p.key, 0.0) - (mail.deposit if mail else 0.0)))
+        deposit = p.deposit if p.deposit is not None else mail.deposit if mail else 0.0
+        out.append(Realized(p.event_id, mail.event_id if mail else None, p.money - p.qty * cost_each.get(p.key, 0.0) - deposit))
     return out
 
 

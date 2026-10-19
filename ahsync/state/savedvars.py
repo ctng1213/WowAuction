@@ -506,7 +506,7 @@ _EVENT_TYPES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "mail_sent": (("to", "key", "qty"), ()),
     "auction_mail": (("outcome", "key", "qty"), ("price",)),
     "skip": (("action",), ()),
-    "payout": (("key", "qty", "money"), ()),
+    "payout": (("key", "qty", "money"), ("deposit",)),
     "disenchant": (("key", "results"), ()),
 }
 
