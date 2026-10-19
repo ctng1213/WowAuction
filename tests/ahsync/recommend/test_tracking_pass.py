@@ -43,7 +43,7 @@ def test_T8_a_purchase_from_the_saved_variables_is_matched_like_any_other(db):
     purchase = {"id": f"{AMAYA}:{T + HOUR}:0", "type": "purchase", "char": AMAYA, "at": T + HOUR, "key": LINEN,
                 "qty": 20, "price": 40, "source": "ah", "confirmed": True}
     apply_data(db, read_ahprofit(savedvars_text({"characters": {AMAYA: character}, "events": [purchase]})), REALMS, T)
-    assert tracking_pass(db) == {"matched": 1, "resolved": 0, "costed": 0}       # bags not read yet: nothing held
+    assert tracking_pass(db) == {"matched": 1, "resolved": 0, "costed": 0, "paid": 0}     # bags not read yet: nothing held
     assert rows(db, "SELECT status, done_qty, done_at FROM actions WHERE action_id = 'buy'") == [("done", 20, T + HOUR)]
     assert rows(db, "SELECT action_id FROM purchases") == [("buy",)]
     assert tracking_pass(db)["matched"] == 0                                    # nothing twice
@@ -54,7 +54,7 @@ def test_T1_the_matched_buy_also_sets_what_you_paid(db):
         db.conn.execute("INSERT INTO purchases(event_id, char_id, key, qty, price, source, at, confirmed) "
                         "VALUES ('p', ?, ?, 20, 40, 'ah', ?, 1)", (AMAYA, LINEN, T + HOUR))
         db.conn.execute("INSERT INTO inventory(char_id, location, key, qty, bound) VALUES (?, 'bags', ?, 20, 0)", (AMAYA, LINEN))
-    assert tracking_pass(db) == {"matched": 1, "resolved": 0, "costed": 1}
+    assert tracking_pass(db) == {"matched": 1, "resolved": 0, "costed": 1, "paid": 0}
     assert db.cost_basis() == {LINEN: (20, 800)}                                 # 20 × 40c = 8s
     assert rows(db, "SELECT status FROM actions WHERE action_id = 'post'") == [("pending",)]   # its sell stays planned
 
@@ -102,3 +102,23 @@ def test_T4_T5_auction_mail_resolves_posts_once(db):
         [("mon", "expired", T + 3 * DAY), ("tue", "sold", T + 2 * DAY)]
     assert rows(db, "SELECT event_id, post_id FROM auction_mail ORDER BY at") == [("sold", "tue"), ("gone", "mon")]
     assert tracking_pass(db)["resolved"] == 0
+
+
+def test_T17_posted_sold_and_paid_out_are_three_events_and_profit_is_realized_once(db):
+    with db.transaction():
+        db.conn.execute("INSERT INTO purchases(event_id, char_id, key, qty, price, source, at, confirmed) "
+                        "VALUES ('rods', ?, ?, 2, 400, 'ah', ?, 1)", (AMAYA, ROD, T))
+        db.conn.execute("INSERT INTO inventory(char_id, location, key, qty, bound) VALUES (?, 'bags', ?, 1, 0)", (AMAYA, ROD))
+        db.conn.execute("INSERT INTO posts(post_id, event_id, char_id, key, stack, price, deposit, at, confirmed) "
+                        "VALUES ('post', 'post', ?, ?, 1, 1000, 20, ?, 1)", (AMAYA, ROD, T + HOUR))
+        db.conn.execute("INSERT INTO auction_mail(event_id, char_id, key, qty, price, outcome, at) "
+                        "VALUES ('sold', ?, ?, 1, 1000, 'sold', ?)", (AMAYA, ROD, T + DAY))
+    assert tracking_pass(db)["paid"] == 0                                       # sold, not paid out yet
+    with db.transaction():
+        db.conn.execute("INSERT INTO payouts(event_id, char_id, key, qty, money, at) VALUES ('pay', ?, ?, 1, 970, ?)",
+                        (AMAYA, ROD, T + DAY + HOUR))
+    assert tracking_pass(db)["paid"] == 1
+    # 9s 70c − 4s (the cost basis) − the post's 20c deposit = 5s 50c
+    assert rows(db, "SELECT mail_id, realized FROM payouts") == [("sold", 550.0)]
+    assert rows(db, "SELECT m.post_id FROM auction_mail m") == [("post",)]
+    assert tracking_pass(db)["paid"] == 0                                       # counted once

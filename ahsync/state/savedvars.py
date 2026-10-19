@@ -175,6 +175,7 @@ class Event:
     to_char_id: str | None = None
     outcome: str | None = None
     action_id: str | None = None
+    money_copper: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -706,6 +707,7 @@ _EVENT_FIELDS: dict[str, tuple[str, Callable[[object, str], object]]] = {
     "to": ("to_char_id", _str),
     "outcome": ("outcome", _one_of(MAIL_OUTCOMES)),
     "action": ("action_id", _action_id),
+    "money": ("money_copper", _int),
 }
 
 # Event type -> (required fields, optional fields).
@@ -716,6 +718,7 @@ _EVENT_TYPES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "mail_sent": (("to", "key", "qty"), ()),
     "auction_mail": (("outcome", "key", "qty"), ("price",)),
     "skip": (("action",), ()),
+    "payout": (("key", "qty", "money"), ()),
 }
 
 

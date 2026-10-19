@@ -66,4 +66,25 @@ describe("Mail", function()
     assert_eq(Mails()[1]:match("^sold") == nil, true)               -- the sold invoice can't be named
     Stubs.ITEM_NAMES[4240] = nil
   end)
+
+  it("A54 taking a sold mail's money is one payout; a repeat take and a letter's money add none", function()
+    Stubs.Reset()
+    Stubs.world.inbox = { {}, {} }
+    local money = { 970, 500 }
+    Stubs.Define("GetInboxHeaderInfo", function(i) return nil, nil, "Sender", "Mail " .. i, money[i], 0, 29 end)
+    Stubs.Define("GetInboxInvoiceInfo", function(i)
+      if i == 1 then return "seller", "Copper Rod", "Buyer", 1000, 1000, 20, 50, 0, 0, 0, 1 end
+    end)
+    Stubs.Define("TakeInboxMoney", function() end)
+    Stubs.Login()
+    AHProfitDB.itemNames[6217] = "1,Copper Rod"
+    TakeInboxMoney(1)
+    TakeInboxMoney(1)                                              -- fired again before the mail went
+    TakeInboxMoney(2)                                              -- a letter's gold isn't a payout
+    local payouts = {}
+    for _, e in ipairs(AHProfitDB.events) do
+      if e.type == "payout" then payouts[#payouts + 1] = table.concat({ e.key, e.qty, e.money, e.at - e.sentAt }, " ") end
+    end
+    assert_eq(payouts, { "6217 1 970 " .. DAY })                   -- 29 of 30 days left: sent a day ago
+  end)
 end)

@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from ahsync.db.sqlite import Database
 from ahsync.engine.cost_basis import Bought, Made, cost_basis
-from ahsync.engine.tracking import AuctionMail, DoneEvent, OpenAction, OpenPost, match, resolve_posts
+from ahsync.engine.tracking import (AuctionMail, DoneEvent, OpenAction, OpenPost, Payout, SoldMail, match, realize,
+                                    resolve_posts)
 
 # event table -> (action kind, SQL for its unmatched rows as event_id, char_id, key, qty, price, at)
 _EVENTS = {
@@ -146,6 +147,30 @@ def _cost_basis(db: Database) -> int:
     return len(basis)
 
 
+def _realize(db: Database) -> int:
+    """Link new payouts to their sold mail and store the profit each realized (SPEC §3.4.1, T17).
+
+    Args:
+        db: Database (inside a transaction, after the cost basis is rebuilt).
+
+    Returns:
+        Payouts realized.
+    """
+    payouts = [Payout(*r) for r in db.conn.execute(
+        "SELECT event_id, char_id, key, qty, money, at FROM payouts WHERE realized IS NULL AND qty > 0")]
+    if not payouts:
+        return 0
+    sold = [SoldMail(*r) for r in db.conn.execute(
+        "SELECT m.event_id, m.char_id, m.key, m.qty, m.at, COALESCE(p.deposit * 1.0 * m.qty / NULLIF(p.stack, 0), 0) "
+        "FROM auction_mail m LEFT JOIN posts p ON p.post_id = m.post_id WHERE m.outcome = 'sold' "
+        "AND m.event_id NOT IN (SELECT mail_id FROM payouts WHERE mail_id IS NOT NULL)")]
+    cost_each = {key: total / qty for key, qty, total in db.conn.execute("SELECT key, qty, total_cost FROM cost_basis WHERE qty > 0")}
+    done = realize(payouts, sold, cost_each)
+    db.conn.executemany("UPDATE payouts SET mail_id = ?, realized = ? WHERE event_id = ?",
+                        [(r.mail_id, r.profit, r.payout_id) for r in done])
+    return len(done)
+
+
 def tracking_pass(db: Database) -> dict[str, int]:
     """Match events to actions, resolve posts and rebuild the cost basis, in one transaction (SPEC §3.4.1, §3.2).
 
@@ -153,11 +178,12 @@ def tracking_pass(db: Database) -> dict[str, int]:
         db: Database (not inside a transaction).
 
     Returns:
-        {"matched": n, "resolved": n, "costed": items with a basis}.
+        {"matched": n, "resolved": n, "costed": items with a basis, "paid": payouts realized}.
 
     Side effects:
         Sets action_id on matched events, done_qty, status and done_at on their actions, outcome
-        and resolved_at on resolved posts (with the mail's post_id), and replaces cost_basis.
+        and resolved_at on resolved posts (with the mail's post_id), replaces cost_basis, and sets mail_id
+        and realized on new payouts.
     """
     with db.transaction():
-        return {"matched": _match(db), "resolved": _resolve(db), "costed": _cost_basis(db)}
+        return {"matched": _match(db), "resolved": _resolve(db), "costed": _cost_basis(db), "paid": _realize(db)}

@@ -7,6 +7,8 @@
 - Matching the full quantity makes an action done; part of it, partial.
 - A sold mail resolves the oldest open post with the same character, item, stack and price; an
   expired or cancelled mail, the oldest with the same character, item and stack.
+- A payout pays the oldest unpaid sold mail with the same character, item and quantity, and
+  realizes its profit once: money − units × cost each − the deposit for those units (T17).
 Pure: data in, decisions out.
 """
 from __future__ import annotations
@@ -149,6 +151,63 @@ def match(events: Sequence[DoneEvent], actions: Sequence[OpenAction]) -> tuple[l
     changed = {m.action_id for m in matches}
     status = {aid: (done[aid], "done" if done[aid] >= by_id[aid].qty else "partial") for aid in sorted(changed)}
     return matches, status
+
+
+@dataclass(frozen=True)
+class Payout:
+    """Gold taken from a sold mail, not yet realized (SPEC §2.2.1 payout)."""
+
+    event_id: str
+    char_id: str
+    key: int
+    qty: int
+    money: int                     # copper taken
+    at_ms: int
+
+
+@dataclass(frozen=True)
+class SoldMail:
+    """A sold mail no payout has paid yet."""
+
+    event_id: str
+    char_id: str
+    key: int
+    qty: int
+    at_ms: int
+    deposit: float                 # its post's deposit for these units, copper; 0 when its post is unknown
+
+
+@dataclass(frozen=True)
+class Realized:
+    """A payout, the sold mail it paid and the profit it realized."""
+
+    payout_id: str
+    mail_id: str | None            # None when its sold mail was never captured
+    profit: float                  # copper
+
+
+def realize(payouts: Sequence[Payout], sold: Sequence[SoldMail], cost_each: dict[int, float]) -> list[Realized]:
+    """Link payouts to sold mail and realize their profit, once each (SPEC §3.4.1, T17).
+
+    Args:
+        payouts: Payouts not yet realized.
+        sold: Sold mails not yet paid.
+        cost_each: Item key -> what a unit cost you, copper (the cost basis); missing counts 0.
+
+    Returns:
+        One Realized per payout, oldest first: it pays the oldest sold mail with the same character, item and
+        quantity, and realizes money − qty × cost each − that mail's deposit (no deposit without a mail).
+    """
+    unpaid = sorted(sold, key=lambda m: (m.at_ms, m.event_id))
+    out = []
+    for p in sorted(payouts, key=lambda p: (p.at_ms, p.event_id)):
+        fits = [m for m in unpaid if (m.char_id, m.key, m.qty) == (p.char_id, p.key, p.qty)]
+        mail = fits[0] if fits else None
+        if mail:
+            unpaid.remove(mail)
+        out.append(Realized(p.event_id, mail.event_id if mail else None,
+                            p.money - p.qty * cost_each.get(p.key, 0.0) - (mail.deposit if mail else 0.0)))
+    return out
 
 
 def resolve_posts(posts: Sequence[OpenPost], mails: Sequence[AuctionMail]) -> list[Resolution]:

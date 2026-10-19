@@ -157,6 +157,7 @@ def test_scans_events_rules_and_own_auctions_from_the_spec_example():
       { id = "A:1:4", type = "auction_mail", char = "A", at = 1000, outcome = "sold", key = 6217, qty = 5,
         price = 4100 },
       { id = "A:1:5", type = "skip", char = "A", at = 1000, action = 17 },
+      { id = "A:1:6", type = "payout", char = "A", at = 1000, key = 6217, qty = 5, money = 19475, sentAt = 900 },
     },
     rules = { [2589] = { rule = "no_buy", setAt = 1760000000000 }, [2592] = { rule = "none", setAt = 5 } },
     '''
@@ -172,6 +173,7 @@ def test_scans_events_rules_and_own_auctions_from_the_spec_example():
         Event("A:1:3", "auction_mail", "A", 1000, outcome="expired", key=6217, qty=5),
         Event("A:1:4", "auction_mail", "A", 1000, outcome="sold", key=6217, qty=5, price_copper=4100),
         Event("A:1:5", "skip", "A", 1000, action_id="17"),
+        Event("A:1:6", "payout", "A", 1000, key=6217, qty=5, money_copper=19475),
     )
     assert data.rules == (ItemRule(2589, "no_buy", 1760000000000), ItemRule(2592, "none", 5))
 

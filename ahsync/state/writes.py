@@ -211,7 +211,7 @@ class IngestWrites:
         with that copy's fields; a confirmed row is never downgraded. Other events never change once stored.
 
         Args:
-            table: 'posts', 'purchases', 'crafts', 'auction_mail' or 'mail_sent'.
+            table: 'posts', 'purchases', 'crafts', 'auction_mail', 'payouts' or 'mail_sent'.
             row: The table's columns, including event_id (and post_id for posts).
 
         Returns:
@@ -220,7 +220,7 @@ class IngestWrites:
         Raises:
             ValueError: Not an event table.
         """
-        if table not in ("posts", "purchases", "crafts", "auction_mail", "mail_sent"):
+        if table not in ("posts", "purchases", "crafts", "auction_mail", "payouts", "mail_sent"):
             raise ValueError(f"not an event table: {table}")
         key = ("post_id",) if table == "posts" else ("event_id",)
         merge = {c: f"excluded.{c}" for c in row if c not in key} if "confirmed" in row else {}

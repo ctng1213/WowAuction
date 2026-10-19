@@ -76,6 +76,13 @@ CREATE TABLE IF NOT EXISTS auction_mail(
 );
 CREATE INDEX IF NOT EXISTS auction_mail_char_key_at ON auction_mail(char_id, key, at, outcome);
 
+-- Gold taken from a sold mail (SPEC §2.2.1 payout, T17): the sold mail it paid and the profit it realized,
+-- set once by the tracking pass (copper; NULL until then).
+CREATE TABLE IF NOT EXISTS payouts(
+    event_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, key INTEGER NOT NULL, qty INTEGER, money INTEGER,
+    at INTEGER NOT NULL, mail_id TEXT, realized REAL
+);
+
 CREATE TABLE IF NOT EXISTS posts(
     post_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, market TEXT, key INTEGER NOT NULL, stack INTEGER,
     price INTEGER, cost_each REAL, p_at_post REAL, duration_h INTEGER, deposit INTEGER, at INTEGER NOT NULL,

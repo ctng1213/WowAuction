@@ -1,5 +1,6 @@
 -- Capture/Mail.lua: an `auction_mail` event for each sold, expired, cancelled or won mail in the
--- mailbox, once per mail (SPEC §2.2.1 events, A48). AHSync resolves your posts with them.
+-- mailbox, once per mail (SPEC §2.2.1 events, A48), and a `payout` when you take a sold mail's
+-- gold (A54). AHSync resolves your posts with them and realizes their profit (T17).
 
 local AHProfit = AHProfit
 local Adapter = AHProfit.Adapter
@@ -59,6 +60,31 @@ function Mail.Record(db, mails, nowMs)
   return added
 end
 
+--- Add a payout event for gold taken from a sold mail, once per mail (A54).
+---@param db table
+---@param m table       From Adapter.ReadSoldMailMoney
+---@param nowMs number
+---@return boolean      true when an event was added
+function Mail.RecordPayout(db, m, nowMs)
+  db.mailSeen = db.mailSeen or {}
+  local sentAt = nowMs - math.floor((Mail.KEEP_DAYS - m.daysLeft) * DAY_MS)
+  local fp = table.concat({ "paid", m.key, m.qty, m.money, math.floor(sentAt / 60000) * 60000 }, ":")
+  if db.mailSeen[fp] then return false end
+  db.mailSeen[fp] = sentAt + Mail.SEEN_DAYS * DAY_MS
+  DB.AppendEvent(db, { type = "payout", char = Characters.CurrentId(), at = nowMs, key = m.key, qty = m.qty,
+                       money = m.money, sentAt = sentAt })
+  return true
+end
+
+--- After a take of a mail's money: record it when it was a sold mail's.
+---@param index number  Inbox index
+function Mail.OnTakeMoney(index)
+  local db = DB.Get()
+  if not db then return end
+  local m = Adapter.ReadSoldMailMoney(index, function(name) return Mail.KeyByName(db, name) end)
+  if m then Mail.RecordPayout(db, m, Adapter.NowMs()) end
+end
+
 --- Read the mailbox's auction mail into events.
 local function CaptureLive()
   local db = DB.Get()
@@ -78,5 +104,11 @@ local function OnMailFrame(event)
   else Events.Unregister("MAIL_INBOX_UPDATE", OnInbox) end
 end
 
+--- PLAYER_LOGIN: hook the money takes; a failure only loses payouts (shown in the diagnostics).
+local function OnLogin()
+  pcall(Adapter.HookTakeMoney, function(index) pcall(Mail.OnTakeMoney, index) end)
+end
+
+Events.Register("PLAYER_LOGIN", OnLogin)
 Events.Register("MAIL_SHOW", OnMailFrame)
 Events.Register("MAIL_CLOSED", OnMailFrame)

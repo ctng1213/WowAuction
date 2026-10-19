@@ -380,7 +380,7 @@ def _event_row(e: sv.Event, market: str | None) -> tuple[str, dict[str, object]]
     """Map an event to its table and columns (SPEC §2.2.1 event table, §3.2).
 
     Args:
-        e: A post, purchase, craft, mail_sent or auction_mail event.
+        e: A post, purchase, craft, mail_sent, auction_mail or payout event.
         market: The character's market, for posts; None when unknown.
 
     Returns:
@@ -398,6 +398,8 @@ def _event_row(e: sv.Event, market: str | None) -> tuple[str, dict[str, object]]
         return "crafts", base | {"spell_id": e.spell_id, "count": e.count}
     if e.type == "mail_sent":
         return "mail_sent", base | {"to_char": e.to_char_id, "key": e.key, "qty": e.qty}
+    if e.type == "payout":
+        return "payouts", base | {"key": e.key, "qty": e.qty, "money": e.money_copper}
     return "auction_mail", base | {"key": e.key, "qty": e.qty, "price": e.price_copper, "outcome": e.outcome}
 
 

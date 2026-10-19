@@ -44,7 +44,7 @@ Diagnostics.APIS = {
   "ItemLocation.GetBagAndSlot", "BuyMerchantItem", "C_MerchantFrame.GetItemInfo",
   -- auction mail (A48)
   "GetInboxHeaderInfo", "GetInboxInvoiceInfo", "AUCTION_EXPIRED_MAIL_SUBJECT", "AUCTION_REMOVED_MAIL_SUBJECT",
-  "AUCTION_WON_MAIL_SUBJECT",
+  "AUCTION_WON_MAIL_SUBJECT", "TakeInboxMoney", "AutoLootMailItem",
 }
 
 -- Namespaces whose function lists we need to write the modern readers (SPEC §6).

@@ -12,8 +12,8 @@ from ahsync.clock import DAY_MS, HOUR_MS
 from ahsync.db.sqlite import Database
 
 BOOK_RETENTION_DAYS = 30
-MS_TABLES = ("candles_h1", "candles_d1", "sales_h1", "posts", "purchases", "crafts", "auction_mail", "mail_sent", "skips",
-             "actions")
+MS_TABLES = ("candles_h1", "candles_d1", "sales_h1", "posts", "purchases", "crafts", "auction_mail", "payouts", "mail_sent",
+             "skips", "actions")
 
 
 @dataclass(frozen=True)

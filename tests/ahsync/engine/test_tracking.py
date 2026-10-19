@@ -1,7 +1,8 @@
 """Tests for ahsync/engine/tracking.py: events matched to actions, posts resolved by mail (SPEC §3.4.1)."""
 from __future__ import annotations
 
-from ahsync.engine.tracking import AuctionMail, DoneEvent, OpenAction, OpenPost, match, resolve_posts
+from ahsync.engine.tracking import (AuctionMail, DoneEvent, OpenAction, OpenPost, Payout, SoldMail, match, realize,
+                                    resolve_posts)
 
 HOUR, DAY = 3_600_000, 86_400_000
 T = 1_760_000_000_000
@@ -86,3 +87,17 @@ def test_won_mail_resolves_no_post_and_each_mail_resolves_one():
     out = resolve_posts([post("mon", T), post("tue", T + DAY)],
                         [mail("expired", event_id="a"), mail("expired", event_id="b", at=T + 4 * DAY)])
     assert [(r.mail_id, r.post_id) for r in out] == [("a", "mon"), ("b", "tue")]
+
+
+def test_T17_a_payout_realizes_its_profit_once_from_the_sold_mail_it_pays():
+    sold = [SoldMail("sold", AMAYA, ROD, 1, T + DAY, 20.0), SoldMail("sold2", AMAYA, ROD, 1, T + 2 * DAY, 20.0)]
+    assert realize([], sold, {ROD: 400.0}) == []                       # sold, not paid out: nothing realized
+    paid = realize([Payout("pay", AMAYA, ROD, 1, 970, T + 3 * DAY)], sold, {ROD: 400.0})
+    # 9s 70c taken − 4s cost − its 20c deposit = 5s 50c; it pays the oldest sold mail
+    assert [(r.payout_id, r.mail_id, r.profit) for r in paid] == [("pay", "sold", 550.0)]
+
+
+def test_T17_a_payout_without_its_sold_mail_realizes_without_a_deposit():
+    other = [SoldMail("five", AMAYA, ROD, 5, T, 20.0), SoldMail("brugan", "Brugan-G", ROD, 1, T, 20.0)]
+    paid = realize([Payout("pay", AMAYA, ROD, 1, 970, T + HOUR), Payout("loot", AMAYA, LINEN, 2, 90, T)], other, {ROD: 400.0})
+    assert [(r.payout_id, r.mail_id, r.profit) for r in paid] == [("loot", None, 90.0), ("pay", None, 570.0)]
