@@ -168,6 +168,19 @@ function Market.VendorPrice(key)
   return (s.file.vendor or {})[key]
 end
 
+--- The market's flip offers for the addon's own one-stack flips (EX11, A59).
+---@return table  key -> { expected (copper a unit), price (at the best window, copper), slot (0-167) }; empty without
+function Market.FlipOffers()
+  local s = State()
+  if s.status ~= "ok" then return {} end
+  local out = {}
+  for key, text in pairs(s.market.F or {}) do
+    local expected, price, slot = text:match("^(%d+),(%d+),(%d+)$")
+    if expected then out[key] = { expected = tonumber(expected), price = tonumber(price), slot = tonumber(slot) } end
+  end
+  return out
+end
+
 --- Items one could disenchant, with what that takes (A23).
 ---@return table  key -> { skill, quality, ilvl, kind = "armor" | "weapon" }; empty without usable data
 function Market.Disenchantable()

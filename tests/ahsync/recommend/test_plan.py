@@ -123,3 +123,14 @@ def test_sell_records_come_from_your_resolved_posts_the_closes_during_them_and_k
                            (ROD, NOW - DAY))
     assert plan.sell_records(state, ["Brugan-G"], M, NOW, Config(markets=(M,))) == {}      # Keep: a fresh start
     assert plan.sell_records(state, [], M, NOW, Config(markets=(M,))) == {}
+
+
+def test_EX11_flip_offers_cover_candidates_only_and_never_vendor_sold_or_suspect_items():
+    cfg = Config(markets=(M,))
+    cheap = {**STATS, ROD: replace(STATS[ROD], cur=2500)}
+    offers = plan.flip_offers(cheap, ITEMS, set(), NOW, cfg)
+    assert list(offers) == [ROD]                                    # bars and dust have no window that beats them
+    expected, price, slot = offers[ROD].split(",")
+    assert int(price) >= 4000 and int(expected) > 2500 * 1.2 and 0 <= int(slot) < 168
+    assert plan.flip_offers(cheap, ITEMS, {ROD}, NOW, cfg) == {}                                         # vendor-sold
+    assert plan.flip_offers({ROD: replace(cheap[ROD], cur_suspect=True)}, ITEMS, set(), NOW, cfg) == {}  # FM5

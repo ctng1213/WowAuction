@@ -195,7 +195,8 @@ def checksum(markets: Iterable[list[tuple[int, str, str]]], des: Iterable[Mappin
 
 def market_lua(intels: Sequence[MarketIntelligence], shortlists: Mapping[str, set[int]],
                char_markets: Mapping[str, str], generated_ms: int,
-               disenchantable: Mapping[int, str] | None = None, vendor: Mapping[int, int] | None = None) -> str:
+               disenchantable: Mapping[int, str] | None = None, vendor: Mapping[int, int] | None = None,
+               flips: Mapping[str, Mapping[int, str]] | None = None) -> str:
     """The whole MarketIntelligence.lua (SPEC §3.5, EX2).
 
     Args:
@@ -205,6 +206,8 @@ def market_lua(intels: Sequence[MarketIntelligence], shortlists: Mapping[str, se
         generated_ms: Now, UTC ms; item ages count back from it.
         disenchantable: Item key -> "skill,quality,ilvl,kind" (A23); exported for exported items only.
         vendor: Item key -> vendor buy price in copper, for vendor-sold items (EX6).
+        flips: Market -> item key -> "expected,price,slot" flip offers (EX11); exported items only, outside the
+            checksum.
 
     Returns:
         Lua source defining the global AHProfitMarket.
@@ -216,8 +219,11 @@ def market_lua(intels: Sequence[MarketIntelligence], shortlists: Mapping[str, se
     for n, (intel, items, de) in enumerate(zip(intels, blocks, des), start=1):
         lines += _market_block(str(n), items, de)
         until = _num(intel.observations_until_ms) or "nil"
+        exported = {key for key, _, _ in items}
+        offers = ", ".join(f"[{key}] = {lua_string(text)}" for key, text in sorted((flips or {}).get(intel.market, {}).items())
+                           if key in exported)
         entries.append(f"  [{lua_string(intel.market)}] = {{ observationsUntil = {until}, "
-                       f"curveHour = {intel.built_ms // HOUR_MS}, I = I{n}, C = C{n}, D = D{n} }},")
+                       f"curveHour = {intel.built_ms // HOUR_MS}, I = I{n}, C = C{n}, D = D{n}, F = {{ {offers} }} }},")
     chars = ", ".join(f"[{lua_string(c)}] = {lua_string(m)}" for c, m in sorted(char_markets.items()))
     vendors = ", ".join(f"[{key}] = {price}" for key, price in sorted((vendor or {}).items()))
     lines += ["AHProfitMarket = {", f"  schemaVersion = {MARKET_SCHEMA_VERSION},", f"  generatedAt = {generated_ms},",

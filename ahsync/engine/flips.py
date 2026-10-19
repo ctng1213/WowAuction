@@ -17,7 +17,7 @@ from dataclasses import dataclass, replace
 
 from ahsync.engine import fees, sellprob
 from ahsync.engine.plan import PlanAction, PlanSettings, PostOption, SellFacts, alternative, post_chance, \
-    post_options, window_id
+    post_options, slot_price, window_id
 
 
 @dataclass(frozen=True)
@@ -222,3 +222,25 @@ def flip_plan(facts: dict[int, SellFacts], budgets: dict[str, int], total_gold: 
             ledger[(key, window_id(opts[i]))] = ledger.get((key, window_id(opts[i])), 0.0) + units
         actions.extend(_flip_actions(facts[key], stage, char_id, now_ms, s))
     return actions
+
+
+def flip_offer(level: int, how_best: float, trend7: float, days_ahead: float, p: float, fallback: float, deposit: int,
+               ref: int) -> tuple[float, int]:
+    """What one reference stack bought now could fetch at the item's best window, market-wide (SPEC §4.3, EX11).
+
+    Args:
+        level: Price level (med7, else med30), copper.
+        how_best: The best window's best-hour price ratio.
+        trend7: Trend, % per day (clamped by slot_price).
+        days_ahead: Days until that hour.
+        p: Chance a reference stack sells (the posting-now chance).
+        fallback: Value per unsold unit, float copper.
+        deposit: Deposit for the stack, copper.
+        ref: Reference stack, units.
+
+    Returns:
+        (expected value per unit after fees, float copper; the window's unit price, copper).
+    """
+    price = slot_price(level, how_best, trend7, days_ahead)
+    return sellprob.expected_post(p, ref, price, fallback, deposit) / ref, price
+

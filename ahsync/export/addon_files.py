@@ -20,7 +20,7 @@ from ahsync.engine.de_table import DE_TABLE
 from ahsync.engine.plan_views import record_line
 from ahsync.export.market_lua import market_lua
 from ahsync.export.plan_lua import plan_lua
-from ahsync.recommend.plan import sell_records
+from ahsync.recommend.plan import flip_offers, sell_records
 from ahsync.state.importer import ingested_until
 
 DATA_FOLDER = ("Interface", "AddOns", "AHProfit_Data")
@@ -165,7 +165,10 @@ def export_market(db: Database, cfg: Config, now_ms: int, sleep: Callable[[float
         return False
     shortlists = {i.market: shortlist(db, i.market, now_ms) for i in intels}
     char_markets = {c: m for c, _, _, m, _ in db.characters() if m is not None}
-    text = market_lua(intels, shortlists, char_markets, now_ms, disenchantable(db), vendor_prices(db))
+    vendor = vendor_prices(db)
+    items = db.items()
+    flips = {i.market: flip_offers(i.items, items, set(vendor), now_ms, cfg) for i in intels}       # EX11
+    text = market_lua(intels, shortlists, char_markets, now_ms, disenchantable(db), vendor, flips)
     return _write(db, folder / MARKET_FILE, text, MAX_MARKET_BYTES, now_ms, sleep, replace)
 
 

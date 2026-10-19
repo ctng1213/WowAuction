@@ -125,3 +125,9 @@ def test_the_best_window_wins_and_a_spent_budget_ends_later_flips():
     budgets = {"A": 1200}                                                    # one auction of 20 at 60c
     actions = flips.flip_plan({SILK: silk(), LINEN: silk(key=LINEN)}, budgets, RICH, NOW, S, FS, {})
     assert [a.key for a in actions if a.kind == "buy"] == [LINEN] and budgets == {"A": 0}
+
+
+def test_EX11_a_market_wide_flip_offer_for_one_reference_stack():
+    expected, price = flips.flip_offer(49, 1.25, 0.0, 2, 0.9, 10.0, 10, 20)
+    assert price == 61                                              # floor(49 × 1.25 + 0.5)
+    assert abs(expected - 53.105) < 1e-9                            # 0.9 × 61 × 0.95 + 0.1 × (10 − 10 ÷ 20)

@@ -12,9 +12,11 @@ from ahsync.db.sqlite import Database
 from ahsync.engine import craft, disenchant, fees, profile
 from ahsync.engine.capacity import slot_of
 from ahsync.engine.craft_plan import CraftWorld
+from ahsync.engine.flips import flip_offer
 from ahsync.engine.de_table import DE_TABLE
 from ahsync.engine.plan import TREND_CLAMP_PCT, Lot, PlanAction, PlanWindow, SellFacts
 from ahsync.engine.sell_record import Record, ResolvedPost, sell_record
+from ahsync.engine.views import round_half_up
 from ahsync.engine.week import WeekInputs, week_plan
 from ahsync.history.reads import ItemInfo
 from ahsync.intel.contract import ItemIntel, price_level, supply_level
@@ -133,6 +135,37 @@ def flip_candidate(i: ItemIntel, min_flip_margin: float) -> bool:
     best = max(how[w.best_slot] for w in i.sell_windows)
     trend = 1 + max(0.0, min(TREND_CLAMP_PCT, i.trend7)) / 100 * 7
     return level * best * trend * (1 - fees.AH_CUT) >= (1 + min_flip_margin) * i.cur
+
+
+def flip_offers(stats: dict[int, ItemIntel], items: dict[int, ItemInfo], vendor_sold: set[int], now_ms: int,
+                cfg: Config) -> dict[int, str]:
+    """Market-wide flip offers for the addon's own one-stack flips (SPEC §4.3, EX11).
+
+    Args:
+        stats: Item key -> intelligence.
+        items: Item metadata (what a merchant pays).
+        vendor_sold: Items a vendor sells in unlimited supply (never flipped, R22).
+        now_ms: Now.
+        cfg: Config (min_flip_margin, sell_window_hours).
+
+    Returns:
+        Item key -> "expected per unit,window price,best slot" for flip candidates, by key.
+    """
+    out = {}
+    duration = fees.shortest_duration_covering(cfg.sell_window_hours)
+    for key in sorted(stats):
+        i = stats[key]
+        if key in vendor_sold or i.cur_suspect or not flip_candidate(i, cfg.min_flip_margin):
+            continue
+        how = _pattern(i.how, i.how_weeks, FLAT)
+        best = max(i.sell_windows, key=lambda w: (how[w.best_slot], -w.best_slot)).best_slot
+        days = ((best - slot_of(now_ms // HOUR_MS)) % 168 * HOUR_MS - now_ms % HOUR_MS) / DAY_MS
+        vendor_sell = (items[key].vendor_sell if key in items else None) or 0
+        expected, price = flip_offer(price_level(i), how[best], i.trend7, max(0.0, days), i.chance, float(vendor_sell),
+                                     fees.deposit_copper(vendor_sell, i.ref_stack, duration), i.ref_stack)
+        if expected > 0:
+            out[key] = f"{round_half_up(expected)},{price},{best}"
+    return out
 
 
 def week_inputs(state: StateReader, characters: list[tuple[str, int]], stats: dict[int, ItemIntel],

@@ -572,6 +572,38 @@ local function Holdings(charId, nowMs)
   return out
 end
 
+--- Whether the addon may suggest its own flip of an item: no planned flip of it, and no rule or flag against it (A59).
+---@param planned table  key -> true for items AHSync's plan flips
+---@return function      key -> true to skip
+local function FlipSkip(planned)
+  local rules = (DB.Get() or {}).rules or {}
+  return function(key)
+    local inGame = type(rules[key]) == "table" and rules[key].rule or nil
+    local rule = inGame or Plan.Rule(key)
+    local record = Plan.Record(key)
+    return planned[key] or rule == "no_buy" or rule == "ignore" or (record ~= nil and record.notSelling)
+  end
+end
+
+--- The Flip tab: AHSync's flips, then the addon's own one-stack ideas for the rest (A28, A59).
+---@param charId string
+---@param nowMs number
+---@param offset number  Local time minus UTC, ms
+---@param gold number    All your gold, copper
+---@return table[], string, string  Lines, footer, empty text
+local function FlipLines(charId, nowMs, offset, gold)
+  local planned = Plan.CharacterActions(charId)
+  local rows = VM.FlipRows(Options.WithoutGoneBuys(planned, LevelsOf), LookOf, LevelsOf, gold, offset)
+  local footer = VM.FlipFooter(rows, VM.FlipRows(planned, LookOf, LevelsOf, gold, offset))
+  local flipped = {}
+  for _, a in ipairs(planned) do if a.kind == "buy" then flipped[a.key] = true end end
+  local own = VM.OwnFlipRows(Market.FlipOffers(), { itemOf = LiveItem, levelsOf = LevelsOf, lookOf = LookOf,
+    skip = FlipSkip(flipped), nowMs = nowMs, offsetMs = offset, totalGold = gold })
+  for _, row in ipairs(own) do rows[#rows + 1] = row end
+  if #own > 0 then footer = footer .. " · " .. #own .. (#own == 1 and " own idea" or " own ideas") .. " (one stack each)" end
+  return VM.WithNotes(rows), footer, "No flips right now: none in AHSync's plan, and no market offer under its buy price."
+end
+
 --- The lines the current tab shows, its footer and its empty-state text.
 ---@param nowMs number
 ---@param gold number  All your gold, copper
@@ -599,12 +631,7 @@ local function Lines(nowMs, gold)
       or "None of your recipes pays right now."
     return VM.WithNotes(rows), VM.CraftFooter(rows, #recipes), empty
   end
-  if view.tab == "flip" then
-    local planned = Plan.CharacterActions(charId)
-    local rows = VM.FlipRows(Options.WithoutGoneBuys(planned, LevelsOf), LookOf, LevelsOf, gold, offset)
-    local footer = VM.FlipFooter(rows, VM.FlipRows(planned, LookOf, LevelsOf, gold, offset))
-    return VM.WithNotes(rows), footer, "No flips in AHSync's plan for this character right now."
-  end
+  if view.tab == "flip" then return FlipLines(charId, nowMs, offset, gold) end
   if view.tab == "reservations" then
     local rows = VM.Reservations(Reserves.Get(DB.Get() or {}, charId), Holdings(charId), LookOf)
     return rows, VM.ReservationsFooter(rows),

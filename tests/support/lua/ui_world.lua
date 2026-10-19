@@ -9,12 +9,14 @@ UIWorld.HOUR = 3600000
 --- Install AHProfitMarket with these items.
 ---@param items table   key -> item string ("numbers;sellWindows;buyWindows")
 ---@param generatedAt number  ms
-function UIWorld.Market(items, generatedAt)
+---@param flips table|nil     key -> "expected,price,slot" flip offers (EX11); default none
+function UIWorld.Market(items, generatedAt, flips)
   local count, length = 0, 0
   for _, text in pairs(items) do count, length = count + 1, length + #text end
   _G.AHProfitMarket = { schemaVersion = 1, generatedAt = generatedAt, checksum = count .. ":" .. length,
                         charMarkets = { ["Amaya-Grommash"] = UIWorld.MARKET },
-                        markets = { [UIWorld.MARKET] = { observationsUntil = generatedAt, curveHour = 0, I = items, C = {} } } }
+                        markets = { [UIWorld.MARKET] = { observationsUntil = generatedAt, curveHour = 0, I = items, C = {},
+                                                         F = flips or {} } } }
 end
 
 --- An item string with a price, confidence and sales per day, and optionally its sell options.
