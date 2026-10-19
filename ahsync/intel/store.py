@@ -24,20 +24,21 @@ class IntelStore:
         self.conn.execute("INSERT OR REPLACE INTO intel_new(market, schema_version, body, built) VALUES (?, ?, ?, ?)",
                           (intel.market, intel.schema_version, to_json(intel), intel.built_ms))
 
-    def prices_newer_than_intel(self, market: str) -> bool:
-        """Whether AHF prices arrived after the published intelligence was built (SPEC §3.1.1, IU2).
+    def prices_newer_than_intel(self, market: str, src: str = "ahf") -> bool:
+        """Whether the primary source's prices arrived after the published intelligence was built (IU2, SRC2).
 
         Two indexed lookups, so every page request can ask.
 
         Args:
             market: Market id.
+            src: The market's primary remote source (config [sources]).
 
         Returns:
-            True when the newest stored AHF price is newer than the intelligence; False without either.
+            True when its newest stored price is newer than the intelligence; False without either.
         """
         row = self.conn.execute(
-            "SELECT (SELECT MAX(at) FROM current WHERE market = ? AND src = 'ahf'), "
-            "(SELECT built FROM intel WHERE market = ?)", (market, market)).fetchone()
+            "SELECT (SELECT MAX(at) FROM current WHERE market = ? AND src = ?), "
+            "(SELECT built FROM intel WHERE market = ?)", (market, src, market)).fetchone()
         return row[0] is not None and row[1] is not None and row[0] > row[1]
 
     def read_intel(self, market: str) -> MarketIntelligence | None:

@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from ahsync.analysis.market import HISTORY_DAYS, analyze_market, with_scan
 from ahsync.collect.own_mail import recompute_mail_volume
 from ahsync.collect.local_scans import recompute_stale_volume
-from ahsync.config import Config, market_settings
+from ahsync.config import Config, market_settings, market_sources
 from ahsync.db.sqlite import Database
 from ahsync.engine.characters_view import CharacterSheet, characters_view
 from ahsync.recommend.history_page import history_page
@@ -88,7 +88,8 @@ def refresh_market(db: Database, market: str, now_ms: int, cfg: Config, result: 
         result: Collects the item count and failures.
         offset_ms: Local time minus UTC (the clock's), for the plan pages.
     """
-    intel, failed = analyze_market(db, market, now_ms, market_settings(cfg))
+    intel, failed = analyze_market(db, market, now_ms, market_settings(cfg),
+                                   ("local", *market_sources(cfg, market).rank))                 # SRC3
     for key, error in sorted(failed.items()):
         result.failed[f"{market}:{key}"] = error
         log.warning("refresh: item %s on %s failed: %s", key, market, error)

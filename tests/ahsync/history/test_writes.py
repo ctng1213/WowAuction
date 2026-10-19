@@ -28,8 +28,8 @@ def sql(db: Database, statement: str, *rows: tuple) -> None:
 
 def test_local_current_moves_only_forward_in_time(db):
     with db.transaction():
-        db.upsert_local_current(M, [(1, 50, 4, 200)])
-        db.upsert_local_current(M, [(1, 40, 9, 100)])          # an older scan read late
+        db.upsert_newer_current(M, [(1, 50, 4, 200)])
+        db.upsert_newer_current(M, [(1, 40, 9, 100)])          # an older scan read late
     assert db.conn.execute("SELECT price, qty, at FROM current WHERE key = 1").fetchone() == (50, 4, 200)
 
 

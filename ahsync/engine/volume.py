@@ -185,6 +185,24 @@ def estimate_volume_ids(prev: IdBook, next_: IdBook, max_gap_ms: int = MAX_GAP_M
     return {key: Volume(sold, expired, listed) for key, (sold, expired, listed) in sorted(totals.items())}
 
 
+def group_book(snapshot: IdBook) -> Book:
+    """A snapshot with ids as an order book: its auctions counted per item, price, stack and band (SPEC §3.3.1).
+
+    The grouped book feeds prices, hourly sales and group diffs like any other complete book.
+
+    Args:
+        snapshot: The snapshot.
+
+    Returns:
+        The Book, entries sorted by key, price, stack and band.
+    """
+    counts: dict[tuple[int, int, int, int], int] = {}
+    for a in snapshot.auctions:
+        group = (a.key, a.price, a.qty, a.band)
+        counts[group] = counts.get(group, 0) + 1
+    return Book(snapshot.at_ms, tuple(BookEntry(*group, count) for group, count in sorted(counts.items())))
+
+
 def covered_seconds(pairs: Sequence[tuple[int, int]]) -> tuple[int, ...]:
     """The seconds a day's book pairs observed in each UTC hour of the day (SPEC §3.3.1, V29).
 

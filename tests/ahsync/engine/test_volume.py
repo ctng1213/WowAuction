@@ -5,7 +5,7 @@ import pytest
 
 from ahsync.engine.volume import (
     Auction, Book, BookEntry, Cover, IdBook, Volume, calibration_factor, covered_seconds, daily_volume, day_shares,
-    estimate_volume, estimate_volume_ids, expiring_fraction, hourly_sales, listing_turnover, supply_to_volume,
+    estimate_volume, estimate_volume_ids, expiring_fraction, group_book, hourly_sales, listing_turnover, supply_to_volume,
 )
 from tests.support.gen import cases
 
@@ -381,3 +381,8 @@ def test_K4_backtest_median_ratio_and_days_within_25_percent():
     from ahsync.engine.volume import Backtest, backtest
     assert backtest([0.8] * 4 + [1.0] * 4 + [1.5] * 2) == Backtest(10, 1.0, 8)     # 1.25 would count; 1.5 doesn't
     assert backtest([0.75, 1.25, 1.3]) == Backtest(3, 1.25, 2) and backtest([]) == Backtest(0, None, 0)
+
+
+def test_V36_a_snapshot_groups_into_an_order_book():
+    snapshot = IdBook(5, (Auction(1, LINEN, 20, 50, LONG), Auction(2, LINEN, 20, 50, LONG), Auction(3, ORE, 7, 9, SHORT)))
+    assert group_book(snapshot) == Book(5, (BookEntry(LINEN, 50, 20, LONG, 2), BookEntry(ORE, 9, 7, SHORT, 1)))

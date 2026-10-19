@@ -392,7 +392,7 @@ fetch_failures(market, hour, failures, last_error, last_at,  PK(market,hour))   
   - **Status lines.** `status` stores a topic, a level and **structured fields** (ms ranges, counts, hour numbers) as JSON, never pre-formatted text, so the dashboard can show them in local time (§3.3) through `views` (§8.5). A line is deleted when its condition clears (Premium back, the hour recovered, the endpoint working again). Log lines may carry English text; they never carry secrets.
   - **Placeholders until M3.** `item_stats` and `item_stats_new` hold `(market, key, stats JSON, updated)` until the engine defines their columns.
 
-**Retention: 90 days**, matching AHF's longest window, for candles, volume, posts, purchases, crafts, mail and actions. `cost_basis` and `item_rules` are kept until they no longer apply. Order books (`scans`, `book_entries`, both sources) are kept **30 days**, which is what the undercut share and the price-tier sell-through need (§3.3.2). Hourly AHF books for about 9k items are the largest table; the size estimate below assumes them.
+**Retention: 90 days**, matching AHF's longest window, for candles, volume, posts, purchases, crafts, mail and actions. `cost_basis` and `item_rules` are kept until they no longer apply. Order books (`scans`, `book_entries`, every source) are kept **30 days**, which is what the undercut share and the price-tier sell-through need (§3.3.2). Hourly AHF books for about 9k items are the largest table; the size estimate below assumes them.
 
 **Size estimate** for one market of about 9k items, at about 40–60 bytes per hour row:
 
@@ -402,6 +402,7 @@ fetch_failures(market, hour, failures, last_error, last_at,  PK(market,hour))   
 | About 5 scans a day (likely post-launch) | about 20 MB | about 250 MB |
 | Every item every hour (worst case) | about 90 MB | about 1.2 GB |
 | Hourly AHF order books (Premium), kept 30 days | about 250 MB | about 1 GB at 30 days (about 5 price groups per item, about 30 bytes per row) |
+| Raw snapshots with auction ids (a future provider, hourly), kept 30 days | on disk, not in SQLite | about 68M auction rows; one gzipped JSON file per snapshot under `data/snapshots/<market>/<src>/` with an `index.json` (`collect/snapshots.py`, V36). Only their grouped books go into `book_entries` |
 
 Scale linearly per extra market.
 
@@ -861,7 +862,7 @@ Some items you hold are for your own use: food, potions, mats for your own gear.
    - **Rules**: blacklisted items, and items flagged "not selling" waiting for a decision (**built**, D50: `engine/rules_view`, `recommend/rules_page`; Waiting for a decision with Blacklist and Keep, Kept on a fresh start with what sold since, and the Blacklist; Undo clears a rule through `POST /api/rule` with `none`. The Blacklist card has an item search (D54): `GET /api/items?q=…` answers up to 20 items whose name contains the text, those starting with it first (then by name and key), unknown-suffix items left out; each result offers "Don't buy or craft" and "Ignore completely", stored through `POST /api/rule`. The search only reads (SEC10).)
    - **Characters**: professions, skill and gold (**built**, D49: `engine/characters_view`; one card per character: class and level, faction, realm and ruleset, market, gold or the `[budgets]` override, known recipes, last seen, and a bar per profession)
    - **Status**: sync state, data age, missed-hours warnings, the API tier (with the contributor expiry date and a warning 2 days before), and **sell-probability calibration** (predicted against actual sell rate per bucket, plus the Brier score; §8.8)
-     - **Alerts** turn every stored Status line into a sentence in local time, most serious first. The per-hour "bad file" lines become one alert per market (D32). One alert is derived, not stored: **AHF data is old** when a market's newest AHF price is more than 6 h old, because then prices, sales and windows rest on stale data and your own scans are the fresh source (D33). An unmapped realm says how to fix `[realms]` (D34).
+     - **Alerts** turn every stored Status line into a sentence in local time, most serious first. The per-hour "bad file" lines become one alert per market (D32). One alert is derived, not stored: **AHF data is old** when a market's newest price from its primary source (`[sources]` primary, AHF by default, named in the alert, SRC2) is more than 6 h old, because then prices, sales and windows rest on stale data and your own scans are the fresh source (D33). An unmapped realm says how to fix `[realms]` (D34).
      - **Cards**: one per market (last sync run, hours handled, newest AHF price and its age, items with prices, hourly history stored, your scans and AHF order books in 7 days), API (key set, Premium), Characters (each with its market, or "no market") and Storage (database size, retention).
 
    Item names link to auctionhouse.fyi.
@@ -971,7 +972,16 @@ launch_wow_after_catchup = false
 
 [budgets]                                     # optional per-character budget in copper; default is the character's gold
 # "Amaya-RealmName" = 150000
+
+[sources."forever.pvp.horde.us"]              # optional: where this market's data comes from (SRC1-SRC4)
+primary = "ahf"                               # the remote source Status and "newer prices" follow (default ahf)
+rank = ["ahf"]                                # remote price sources, most trusted first; your scans always come first
+[sources."forever.pvp.horde.us".addresses]    # provider -> this market's id there; AHF defaults to the market id
+# ahf = ""                                    # "" = this market takes nothing from AHF
+# blizzard = "us/4728/2"                      # a future provider's address (§5.0)
 ```
+
+The market id (`forever.<ruleset>.<faction>.us`) is AHSync's own key in every table, whatever the source. `[sources]` maps it to each provider's address, so a provider that names markets differently changes the config, not the stored data.
 
 ## 4. AHProfit (addon)
 
@@ -1190,7 +1200,7 @@ The system is built as separate components that talk only through versioned cont
 
 | Producer → consumer | Contract |
 |---|---|
-| Collector → Historical Store | normalized observations (`collect/provider.py`: `Observation`, `BookObservation`), with source, observation time and completeness |
+| Collector → Historical Store | normalized observations with source and observation time: `collect/provider.py` `SnapshotObservation` (snapshots with auction ids, checked whole by `snapshot_problems`), stored by `collect/observations.ingest_snapshot`. AHF's adapter predates the contract and writes through `collect/catchup.py`; your scans through `collect/local_scans.py` |
 | Historical Store → Analysis | `history.reads.HistoryReader` (a protocol: closes, current, books, volume, items), read **in bulk per market** (below) |
 | Analysis → Intelligence | `intel.contract.MarketIntelligence` (`INTEL_SCHEMA_VERSION`, method versions, `built_ms`, `observations_until_ms`, one `ItemIntel` per item; contents below), JSON-serializable |
 | Intelligence → Export / Recommendations | `intel.store.IntelReader` |
@@ -1220,7 +1230,9 @@ Analysis computes these the same way for every item. It never chooses by your li
 
 **Bulk reads.** Analysis reads history **per market, not per item**: `HistoryReader` offers one read that streams every item's closes, books and volume rows for a market in key order. Against local SQLite this is one query per table, each walking the table's primary key `(market, key, …)` so its rows arrive in key order without a sort (a whole-market sort of the hourly tables costs about 10 s per 2M rows), merged by key with one item in memory at a time. Against a remote store it keeps a market to a few round trips instead of several per item (about 40k for 9k items) (AR7).
 
-**Cloud boundary.** The Collector (remote providers), the Historical Store and the Analysis can run elsewhere, for example as a scheduled AWS Lambda, and publish `MarketIntelligence` as versioned JSON. The desktop then:
+**Cloud boundary.** The first step is smaller than moving analysis: when a provider with hourly snapshots appears (a Blizzard API, retail-shaped: every auction with an id, quantity, price and time-left band, commodities possibly region-wide), a tiny hourly collector mirrors each raw snapshot to object storage with an index file, a copy of the provider shaped like the snapshot store (`collect/snapshots.py`). AHSync keeps its catch-up model against that mirror, analysis stays local and testable with the same fakes, and no versioned intelligence crosses the network. Before the mirror exists, AHSync can poll the provider itself while it runs and accept the gaps, as it does for AHF public hours. **Built** (2026-10-19, the seams only, no provider yet): the snapshot contract and its checks (`collect/provider.py`: `SnapshotObservation`, `SnapshotProvider`, FM33), the store (V36, FM32), the ingest (`collect/observations.py`: raw file, grouped book, prices, hourly sales, group diffs and id diffs, V36), item keys from bonus lists (`engine/item_key.py`, SRC5), and per-market addresses, primary source and ranking (`[sources]`, SRC1-SRC4). SPEC GAP: the scheduler, pruning and the method-version recompute don't reach the snapshot store yet; they need a provider to run.
+
+Later, the Collector, the Historical Store and the Analysis can run elsewhere, for example as a scheduled AWS Lambda, and publish `MarketIntelligence` as versioned JSON. The desktop then:
 - fetches the newest intelligence and checks its version (AR2) and age; when it is missing or too new, it keeps the last good one and shows its age (§5.2);
 - runs recommendations, the portfolio and the dashboard from it, with no history store;
 - builds `MarketIntelligence.lua` itself, because the trimming needs the shortlist (character state) and the file must land in the local AddOns folder.
@@ -1239,8 +1251,10 @@ ahsync/
   config.py
   clock.py    Clock protocol + SystemClock (injected everywhere; tests use FakeClock)
   app/        scheduler.py (timers, daily refresh, file-change watch), refresh.py (analysis → recommendations → publish, §3.1.1)
-  collect/    provider.py (provider adapter protocol, normalized observations), client.py (HTTP, retry, 429), ahf.py (AHF adapter),
-              catchup.py, local_scans.py (own scans → local observations, §4.2)
+  collect/    provider.py (provider adapter protocol, normalized snapshots, the bonus table), client.py (HTTP, retry, 429), ahf.py (AHF adapter),
+              catchup.py, local_scans.py (own scans → local observations, §4.2), own_mail.py (your mail as volume),
+              snapshots.py (raw snapshots on disk), observations.py (snapshot ingest)
+  data/       bonus_suffixes.json (generated: bonus ID → suffix id, as Data/BonusSuffixes.lua)
   history/    reads.py (HistoryReader protocol + SQLite reads), writes.py, prune.py
   analysis/   market.py (history → MarketIntelligence, §3.3)
   intel/      contract.py (MarketIntelligence, ItemIntel, INTEL_SCHEMA_VERSION), store.py (IntelReader/IntelWriter + SQLite)
@@ -1252,7 +1266,8 @@ ahsync/
   engine/     fees.py, prices.py, profile.py (hour-of-week), volume.py, sellprob.py (incl. the P' blend), de_table.py (disenchant table, §4.5),
               record.py (own sell record + calibration), tracking.py (event → action matching), rules.py,
               patterns.py (weekly patterns, best selling windows), confidence.py (conf %), disenchant.py, craft.py,
-              capacity.py (liquidity caps, shared market capacity, §3.4), plan.py, views.py (tab totals, sorting, filters, tooltip deltas)
+              capacity.py (liquidity caps, shared market capacity, §3.4), plan.py, views.py (tab totals, sorting, filters, tooltip deltas),
+              item_key.py (item keys from bonus lists)
   export/     market_lua.py (MarketIntelligence.lua), plan_lua.py (PortfolioPlan.lua), addon_files.py (atomic writes, the shortlist)
   web/        server.py, static/
 addon/AHProfit/

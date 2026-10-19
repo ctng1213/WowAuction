@@ -125,7 +125,7 @@ def test_no_prices_no_history_no_characters_and_a_premium_that_ended():
 
 
 def test_a_fresh_market_card():
-    card = status_view.status_view([], facts(market(ahf_books_7d=3)), NOW, 0)["cards"][0]
+    card = status_view.status_view([], facts(market(primary_books_7d=3)), NOW, 0)["cards"][0]
     assert card["lines"] == [
         ["Last sync run", "Sat 17 Oct 22:05", ""], ["Hours handled up to", "Sat 17 Oct 22:00", ""],
         ["Newest AHF price", "Sat 17 Oct 21:30 · 1 h ago", ""], ["Items with prices", "8,929", ""],
@@ -157,3 +157,14 @@ def test_K6_status_shows_calibration_and_its_warnings():
     assert status_view.status_view([], facts(), NOW, 0)["calibration"] is None
     high = status_view.calibration_view(calibration([(0.1, True)] * 20))
     assert high["rows"][0]["off"] == "+90 pts" and high["warnings"][0].endswith("too pessimistic.")
+
+
+def test_SRC2_status_names_the_markets_primary_source():
+    card = status_view.status_view([], facts(market(primary="blizzard", primary_books_7d=2)), NOW, 0)["cards"][0]
+    labels = [line[0] for line in card["lines"]]
+    assert "Newest blizzard price" in labels and "blizzard order books (7 d)" in labels
+    stale = market(primary="blizzard", newest_price_ms=NOW - 7 * HOUR)
+    [alert] = [a for a in status_view.status_view([], facts(stale), NOW, 0)["alerts"] if "data is old" in a["title"]]
+    assert alert["title"] == "blizzard data is old" and "until blizzard has new data" in alert["text"]
+    none = market(primary="blizzard", newest_price_ms=None)
+    assert [a["title"] for a in status_view.status_view([], facts(none), NOW, 0)["alerts"]] == ["No blizzard prices yet"]

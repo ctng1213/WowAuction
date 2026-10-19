@@ -117,3 +117,20 @@ def test_IU6_scans_since_reads_your_newer_scan_prices_and_the_newest_complete_bo
     assert prices == {1: (45, 5, 4 * DAY)}                                   # item 2's scan is older; AHF never counts
     assert books == {1: (3 * DAY, [(45, 5, 3, 1), (55, 20, 4, 2)])}          # the newest complete local book
     assert db.scans_since(M, 5 * DAY) == ({}, {})
+
+
+def test_SRC3_remote_sources_rank_as_configured_after_your_own_scans(db):
+    from ahsync.analysis.market import history_window
+    t = 5 * DAY
+    sql(db, "INSERT INTO candles_h1(market, key, t, close, qty, src) VALUES (?, ?, ?, ?, ?, ?)",
+        (M, 1, t, 100, 5, "ahf"), (M, 1, t, 90, 6, "blizzard"), (M, 1, t + HOUR, 80, 7, "ahf"),
+        (M, 1, t + HOUR, 70, 8, "blizzard"), (M, 1, t + HOUR, 75, 9, "local"), (M, 1, t + 2 * HOUR, 60, 1, "zeta"),
+        (M, 1, t + 2 * HOUR, 65, 1, "omega"))
+    sql(db, "INSERT INTO current(market, key, price, qty, at, src) VALUES (?, ?, ?, ?, ?, ?)",
+        (M, 1, 100, 5, t, "ahf"), (M, 1, 90, 6, t, "blizzard"))
+    window = history_window(t + 3 * HOUR, ("local", "blizzard", "ahf"))
+    [item] = db.market_history(M, window)
+    assert item.hourly_closes == [(t, 90), (t + HOUR, 75), (t + 2 * HOUR, 65)]   # unranked: by name
+    assert item.current.src == "blizzard"
+    [default] = db.market_history(M, history_window(t + 3 * HOUR))
+    assert default.hourly_closes[0] == (t, 100) and default.current.src == "ahf"

@@ -7,7 +7,7 @@ never history or the intelligence; engine.status_view makes every text.
 """
 from __future__ import annotations
 
-from ahsync.config import Config
+from ahsync.config import Config, market_sources
 from ahsync.db.sqlite import Database
 from ahsync.engine.sell_record import calibration
 from ahsync.engine.volume import backtest
@@ -77,9 +77,10 @@ def status_facts(db: Database, cfg: Config, now_ms: int) -> StatusFacts:
     markets = []
     for market in cfg.markets:
         state = db.get_sync_state(market)
-        newest, priced, oldest, latest, local, books = db.sync_facts(market, now_ms - 7 * DAY_MS)
+        primary = market_sources(cfg, market).primary                                     # SRC2
+        newest, priced, oldest, latest, local, books = db.sync_facts(market, now_ms - 7 * DAY_MS, primary)
         markets.append(MarketFacts(market, state.last_hour, state.last_run, newest, priced, oldest, latest, local, books,
-                                   _backtests(db, market, now_ms)))
+                                   _backtests(db, market, now_ms), primary))
     characters = tuple(CharacterFacts(*row) for row in db.characters())
     results = [(p, outcome == "sold") for p, outcome in db.conn.execute(
         "SELECT p_at_post, outcome FROM posts WHERE outcome IN ('sold', 'expired') AND p_at_post IS NOT NULL "

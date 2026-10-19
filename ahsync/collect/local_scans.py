@@ -36,23 +36,24 @@ def prices_from_book(entries: list[tuple[int, int, int, int, int]]) -> dict[int,
     return {key: (low, at_low, total) for key, (low, at_low, total) in sorted(out.items())}
 
 
-def store_scan_prices(db: Database, market: str, scan_id: str, at_ms: int) -> set[int]:
-    """Write a scan as local `current` rows and local hourly closes (V21).
+def store_scan_prices(db: Database, market: str, scan_id: str, at_ms: int, src: str = "local") -> set[int]:
+    """Write a stored book as `current` rows and hourly closes of its source (V21, V36).
 
     Args:
         db: Database, inside the caller's transaction.
         market: Market id.
-        scan_id: The stored scan.
+        scan_id: The stored book.
         at_ms: Its time.
+        src: Its source: "local" for your scans, or a provider's name.
 
     Returns:
         The item keys it priced.
     """
     prices = prices_from_book(db.scan_entries(scan_id))
-    db.upsert_local_current(market, [(key, low, at_low, at_ms) for key, (low, at_low, _) in prices.items()])
+    db.upsert_newer_current(market, [(key, low, at_low, at_ms) for key, (low, at_low, _) in prices.items()], src)
     hour = at_ms // HOUR_MS * HOUR_MS
     db.upsert_candles("candles_h1", market, [(key, hour, low, low, low, low, total)
-                                             for key, (low, _, total) in prices.items()], "local")
+                                             for key, (low, _, total) in prices.items()], src)
     return set(prices)
 
 

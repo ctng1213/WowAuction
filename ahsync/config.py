@@ -25,6 +25,15 @@ RULESETS = ("normal", "pvp", "rp")
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 
+@dataclass(frozen=True)
+class MarketSources:
+    """Where a market's data comes from (SPEC §3.6 [sources], §5.0): the market id stays AHSync's own key."""
+
+    primary: str = "ahf"                       # the remote source Status and freshness follow
+    rank: tuple[str, ...] = ("ahf",)           # remote sources for prices, most trusted first (your scans come first)
+    addresses: Mapping[str, str] = field(default_factory=dict)   # provider -> this market's id there ("" = not used)
+
+
 class ConfigError(Exception):
     """A config.toml problem, worded for the user: "config.toml line 4: retention_days must be a number"."""
 
@@ -64,6 +73,7 @@ class Config:
     launch_wow_after_catchup: bool = False
     realms: Mapping[str, str] = field(default_factory=dict)
     budgets: Mapping[str, int] = field(default_factory=dict)
+    sources: Mapping[str, MarketSources] = field(default_factory=dict)   # market id -> its sources (SRC1-SRC4)
     api_key: str = field(default="", repr=False)   # resolved key; never printed
 
 
@@ -79,6 +89,7 @@ _TYPES: dict[str, tuple[tuple[type, ...], str]] = {
     "launch_wow_after_catchup": ((bool,), "true or false"),
     "realms": ((dict,), "a table"),
     "budgets": ((dict,), "a table"),
+    "sources": ((dict,), "a table"),
 }
 for _name in ("retention_days", "dashboard_port", "live_refresh_minutes", "own_record_days",
               "struggle_streak", "keep_retry_streak", "post_lead_hours", "sell_window_hours",
@@ -176,6 +187,34 @@ def _check_values(text: str, values: dict) -> None:
     for char_id, budget in values.get("budgets", {}).items():
         if isinstance(budget, bool) or not isinstance(budget, int) or budget < 0:
             raise ConfigError(f"config.toml [budgets]: {char_id} must be a whole number of copper, 0 or more")
+    for market, table in values.get("sources", {}).items():
+        _check_sources(market, table)
+
+
+def _check_sources(market: str, table: object) -> None:
+    """Check one market's [sources] table (SRC4).
+
+    Args:
+        market: The table's market id.
+        table: Its parsed value.
+
+    Raises:
+        ConfigError: A bad market id, an unknown key, or a value of the wrong type.
+    """
+    where = f"config.toml [sources.\"{market}\"]"
+    if not MARKET_PATTERN.match(market):
+        raise ConfigError(f"{where}: expected a market id like forever.pvp.horde.us")
+    if not isinstance(table, dict):
+        raise ConfigError(f"{where}: must be a table")
+    for name, value in table.items():
+        ok = {"primary": lambda v: isinstance(v, str) and v,
+              "rank": lambda v: isinstance(v, list) and all(isinstance(s, str) and s for s in v),
+              "addresses": lambda v: isinstance(v, dict) and all(isinstance(s, str) for s in v.values())}.get(name)
+        if ok is None:
+            raise ConfigError(f"{where}: {name} is not a known setting (primary, rank, addresses)")
+        if not ok(value):
+            raise ConfigError(f"{where}: {name} must be " + {"primary": "a source name", "rank": "a list of source names",
+                                                             "addresses": "a table of strings"}[name])
 
 
 def resolve_api_key(env: Mapping[str, str], home: Path, config_value: str) -> str:
@@ -228,6 +267,9 @@ def parse_config(text: str, env: Mapping[str, str], home: Path) -> Config:
     settings = {k: v for k, v in values.items() if k != "api_key"}
     if "markets" in settings:
         settings["markets"] = tuple(settings["markets"])
+    if "sources" in settings:
+        settings["sources"] = {market: MarketSources(**{k: tuple(v) if k == "rank" else v for k, v in table.items()})
+                               for market, table in settings["sources"].items()}
     api_key = resolve_api_key(env, home, values.get("api_key", ""))
     return dataclasses.replace(Config(), **settings, api_key=api_key)
 
@@ -253,6 +295,20 @@ def load_config(path: Path, env: Mapping[str, str], home: Path) -> Config:
     except UnicodeDecodeError:
         raise ConfigError("config.toml: the file must be saved as UTF-8") from None
     return parse_config(text, env, home)
+
+
+def market_sources(config: Config, market: str) -> MarketSources:
+    """A market's sources, with defaults: AHF under the market's own id, primary and only remote source (SRC1).
+
+    Args:
+        config: The config.
+        market: Market id.
+
+    Returns:
+        Its MarketSources; `addresses` always says where AHF is ("" when this market doesn't use it).
+    """
+    own = config.sources.get(market, MarketSources())
+    return dataclasses.replace(own, addresses={"ahf": market, **own.addresses})
 
 
 def market_settings(config: Config) -> MarketSettings:

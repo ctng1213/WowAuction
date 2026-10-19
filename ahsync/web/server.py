@@ -31,7 +31,7 @@ from urllib.parse import parse_qs, urlsplit
 from ahsync.app.refresh import replan_all
 from ahsync.app.status_page import status_page
 from ahsync.clock import Clock
-from ahsync.config import Config
+from ahsync.config import Config, market_sources
 from ahsync.db.sqlite import Database
 from ahsync.export.addon_files import export_plan
 
@@ -264,7 +264,7 @@ class DashboardApp:
         try:
             with self._lock:
                 stored = self.db.view(page, market)
-                newer = self.db.prices_newer_than_intel(market)
+                newer = self.db.prices_newer_than_intel(market, market_sources(self.config, market).primary)
         except sqlite3.Error as error:
             log.warning("reading the %s view failed: %s", page, error)
             return json_response(503, {"error": "database_busy"})

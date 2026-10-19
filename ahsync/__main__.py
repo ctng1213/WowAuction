@@ -23,7 +23,7 @@ from typing import IO
 from ahsync.collect.ahf import AhfApi
 from ahsync.collect.client import ApiClient, RedactingFilter, Redactor, Transport, UrllibTransport
 from ahsync.clock import Clock, SystemClock
-from ahsync.config import Config, ConfigError, load_config
+from ahsync.config import Config, ConfigError, load_config, market_sources
 from ahsync.state.importer import ingest_file
 from ahsync.db.sqlite import Database, DatabaseError
 from ahsync.history.prune import prune
@@ -349,13 +349,14 @@ def _run_configured(data_dir: Path, config: Config, runtime: Runtime) -> int:
         watcher = SavedVarsWatcher(lambda: find_savedvars(Path(config.wow_path)), file_mtime_ms)
         read_savedvars_at_start(db, clock, config, watcher)
         api = AhfApi(ApiClient(runtime.transport, clock, config.api_key, redactor=redactor))
-        result = run_catchup(api, db, clock, config.markets, config.retention_days)
+        addresses = {m: market_sources(config, m).addresses["ahf"] for m in config.markets}   # SRC1
+        result = run_catchup(api, db, clock, config.markets, config.retention_days, addresses)
         prune(db, clock.now_ms(), config.retention_days)
         full_refresh(db, clock, config)          # SPEC §3.1: FULL REFRESH, then serve the dashboard
         refresh_requests = RefreshRequests()
         if runtime.serve_dashboard:
             dashboard = serve_dashboard(data_dir, config, clock, refresh_requests, runtime.out)
-        ctx = SyncContext(api, db, clock, result.caps, config.retention_days)
+        ctx = SyncContext(api, db, clock, result.caps, config.retention_days, addresses)
         scheduler = Scheduler(clock, build_hooks(ctx, config, backup_dir, refresh_requests.take), watcher,
                               config.daily_refresh_time, config.live_refresh_minutes)
         scheduler.run(runtime.should_stop)

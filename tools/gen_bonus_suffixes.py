@@ -6,7 +6,9 @@ Forever's item links carry a random suffix as a bonus ID. AHF's /items maps
 each bonus ID to its suffix id (`bonusLists`), and AHF keys a suffixed item as
 item + 2^31 × (2 × suffix id). The addon needs the bonus -> suffix part to
 compute those keys, so this writes it to addon/AHProfit/Data/BonusSuffixes.lua
-as one compact string. /items is public: no API key is used.
+as one compact string, and the same table to ahsync/data/bonus_suffixes.json
+for providers that give bonus lists (engine/item_key.py). /items is public: no
+API key is used.
 """
 from __future__ import annotations
 
@@ -18,6 +20,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "addon" / "AHProfit" / "Data" / "BonusSuffixes.lua"
+OUT_JSON = ROOT / "ahsync" / "data" / "bonus_suffixes.json"
 ITEMS_URL = "https://auctionhouse.fyi/api/v1/items"
 
 
@@ -68,6 +71,19 @@ def render(pairs: list[tuple[int, int]], build: str) -> str:
     )
 
 
+def render_json(pairs: list[tuple[int, int]], build: str) -> str:
+    """Render the Python data file.
+
+    Args:
+        pairs: From bonus_suffixes.
+        build: The client build AHF's tables come from.
+
+    Returns:
+        JSON: {"build", "suffixes": {bonus ID: suffix id}}, bonus IDs ascending.
+    """
+    return json.dumps({"build": build, "suffixes": {str(b): s for b, s in pairs}}, separators=(",", ":")) + "\n"
+
+
 def main() -> int:
     """Fetch, render and write the data file.
 
@@ -78,7 +94,9 @@ def main() -> int:
     pairs = bonus_suffixes(items)
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(render(pairs, items.get("build", "unknown")), encoding="utf-8", newline="\n")
-    print(f"gen_bonus_suffixes: {len(pairs)} bonus IDs -> {OUT.relative_to(ROOT).as_posix()}")
+    OUT_JSON.write_text(render_json(pairs, items.get("build", "unknown")), encoding="utf-8", newline="\n")
+    print(f"gen_bonus_suffixes: {len(pairs)} bonus IDs -> {OUT.relative_to(ROOT).as_posix()}, "
+          f"{OUT_JSON.relative_to(ROOT).as_posix()}")
     return 0
 
 

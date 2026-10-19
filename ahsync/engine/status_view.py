@@ -17,7 +17,8 @@ from ahsync.engine.views import age_text, round_half_up
 
 HOUR_MS = 3_600_000
 DAY_MS = 86_400_000
-STALE_MS = 6 * HOUR_MS          # newest AHF price older than this: the data has stopped arriving (D33)
+STALE_MS = 6 * HOUR_MS          # newest primary-source price older than this: the data has stopped arriving (D33)
+SOURCE_LABELS = {"ahf": "AHF"}
 LEVEL_ORDER = {"error": 0, "warn": 1, "info": 2}
 
 
@@ -39,13 +40,14 @@ class MarketFacts:
     market: str
     last_hour: int | None         # newest hour handled, floor(ms / 3600000)
     last_run_ms: int | None
-    newest_price_ms: int | None   # newest AHF current-price observation
+    newest_price_ms: int | None   # newest current-price observation of the primary source
     items_priced: int
     oldest_candle_ms: int | None  # hourly history in the database
     newest_candle_ms: int | None
     local_scans_7d: int           # your full or partial scans in the last 7 days
-    ahf_books_7d: int             # AHF order books in the last 7 days
+    primary_books_7d: int         # the primary source's order books in the last 7 days
     backtests: tuple[tuple[str, Backtest], ...] = ()   # (confirmed source, estimates against it), by source (K4)
+    primary: str = "ahf"          # the market's primary remote source (config [sources], SRC2)
 
 
 @dataclass(frozen=True)
@@ -253,8 +255,20 @@ def _bad_files(rows: Sequence[StatusRow], offset_ms: int) -> list[tuple[StatusRo
     return out
 
 
+def source_label(src: str) -> str:
+    """How the Status page names a remote source.
+
+    Args:
+        src: Source name, e.g. "ahf".
+
+    Returns:
+        "AHF" for AuctionHouseFYI, else the name as configured.
+    """
+    return SOURCE_LABELS.get(src, src)
+
+
 def _stale(m: MarketFacts, now_ms: int, offset_ms: int) -> tuple[str, str] | None:
-    """The alert for AHF data that has stopped arriving (D33).
+    """The alert for primary-source data that has stopped arriving (D33, SRC2).
 
     Args:
         m: The market.
@@ -264,14 +278,15 @@ def _stale(m: MarketFacts, now_ms: int, offset_ms: int) -> tuple[str, str] | Non
     Returns:
         (title, text), or None while the newest price is at most 6 h old.
     """
+    name = source_label(m.primary)
     if m.newest_price_ms is None:
-        return "No AHF prices yet", f"{m.market}: AHSync has no prices for this market yet."
+        return f"No {name} prices yet", f"{m.market}: AHSync has no prices for this market yet."
     if now_ms - m.newest_price_ms <= STALE_MS:
         return None
-    return ("AHF data is old",
-            f"{m.market}: AHF's newest price is from {when(m.newest_price_ms, offset_ms)} "
+    return (f"{name} data is old",
+            f"{m.market}: {name}'s newest price is from {when(m.newest_price_ms, offset_ms)} "
             f"({age_text(now_ms - m.newest_price_ms)} ago). Prices, sales and windows rest on that; your own AH scans "
-            f"are the fresh source until AHF has new data.")
+            f"are the fresh source until {name} has new data.")
 
 
 def alerts(rows: Sequence[StatusRow], facts: StatusFacts, now_ms: int, offset_ms: int) -> list[dict]:
@@ -318,11 +333,11 @@ def _market_card(m: MarketFacts, now_ms: int, offset_ms: int) -> dict:
     return {"title": m.market, "badge": badge, "badge_class": "ok" if fresh else "warn", "lines": [
         ["Last sync run", "—" if m.last_run_ms is None else when(m.last_run_ms, offset_ms), ""],
         ["Hours handled up to", "—" if m.last_hour is None else when(m.last_hour * HOUR_MS, offset_ms), ""],
-        ["Newest AHF price", price, "" if fresh else "amber"],
+        [f"Newest {source_label(m.primary)} price", price, "" if fresh else "amber"],
         ["Items with prices", f"{m.items_priced:,}", ""],
         ["Hourly history stored", history, ""],
         ["Your scans (7 d)", str(m.local_scans_7d), ""],
-        ["AHF order books (7 d)", str(m.ahf_books_7d), "" if m.ahf_books_7d else "muted"],
+        [f"{source_label(m.primary)} order books (7 d)", str(m.primary_books_7d), "" if m.primary_books_7d else "muted"],
         *_backtest_lines(m.backtests),
     ]}
 

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from ahsync.collect.ahf import FEATURE_BOOKS, FEATURE_DEPTH, FEATURE_LIVE, AhfApi, Capabilities, FileIndex, FormatChanged
@@ -90,6 +91,7 @@ class SyncContext:
     clock: Clock
     caps: Capabilities
     retention_days: int = 90
+    addresses: Mapping[str, str] = field(default_factory=dict)   # market id -> its id at AHF; "" = no AHF (SRC1)
 
 
 def format_day(ms: int) -> str:
@@ -224,6 +226,7 @@ class MarketSync:
         """
         self.ctx, self.api, self.db, self.clock, self.caps = ctx, ctx.api, ctx.db, ctx.clock, ctx.caps
         self.market = market
+        self.address = ctx.addresses.get(market, market)       # what AHF calls it (SRC1); rows keep the market id
         self.report = SyncReport(market)
         self.disabled: set[str] = set()
         self.lost_hours: list[int] = []
@@ -242,7 +245,7 @@ class MarketSync:
             ApiError: /files failed; the caller skips the market.
         """
         state = self.db.get_sync_state(self.market)
-        files = self.files = self.api.files(self.market)
+        files = self.files = self.api.files(self.address)
         self.now_hour = self.clock.now_ms() // HOUR_MS
         plan = plan_hours(state.last_hour, files, self.caps, self.now_hour, self.ctx.retention_days)
         self.lost_hours = [h for a, b in plan.lost for h in range(a, b + 1)]
@@ -314,7 +317,7 @@ class MarketSync:
         """
         endpoint = "h1c" if token else "h1"
         try:
-            rows = self.api.hour_candles(self.market, hour, token)
+            rows = self.api.hour_candles(self.address, hour, token)
         except FeatureUnavailable as error:
             if token is None:                  # a public file shouldn't need a feature: treat as a bad file
                 self._record_bad_hour(hour, str(error), advance)
@@ -734,6 +737,8 @@ def sync_markets(ctx: SyncContext, markets: tuple[str, ...]) -> CatchupResult:
     result = CatchupResult(ctx.caps)
     db = ctx.db
     for market in markets:
+        if ctx.addresses.get(market, market) == "":
+            continue                     # this market takes no data from AHF (SRC1)
         warn_long_gap(db, market, ctx.clock.now_ms())
         sync = MarketSync(ctx, market)
         result.reports.append(sync.report)
@@ -758,7 +763,7 @@ def sync_markets(ctx: SyncContext, markets: tuple[str, ...]) -> CatchupResult:
 
 
 def run_catchup(api: AhfApi, db: Database, clock: Clock, markets: tuple[str, ...],
-                retention_days: int = 90) -> CatchupResult:
+                retention_days: int = 90, addresses: Mapping[str, str] | None = None) -> CatchupResult:
     """The start-of-run CATCH-UP: /me, item metadata, then every market (SPEC §3.1).
 
     Args:
@@ -767,6 +772,7 @@ def run_catchup(api: AhfApi, db: Database, clock: Clock, markets: tuple[str, ...
         clock: Time source.
         markets: AHF market ids.
         retention_days: History window, days.
+        addresses: Market id -> its id at AHF ("" = not synced from AHF); a market not in it uses its own id.
 
     Returns:
         The capabilities used and one report per market.
@@ -782,4 +788,4 @@ def run_catchup(api: AhfApi, db: Database, clock: Clock, markets: tuple[str, ...
     except RetriesExhausted as error:
         _unreachable(db, error, now)
         return CatchupResult(caps, aborted=str(error))
-    return sync_markets(SyncContext(api, db, clock, caps, retention_days), markets)
+    return sync_markets(SyncContext(api, db, clock, caps, retention_days, dict(addresses or {})), markets)

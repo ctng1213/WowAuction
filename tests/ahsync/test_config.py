@@ -86,3 +86,24 @@ def test_key_never_in_repr_or_errors(tmp_path):
 def test_setting_line_ignores_tables():
     assert setting_line('a = 1\n[realms]\nretention_days = 2\n', "retention_days") is None
     assert setting_line('a = 1\nretention_days = 2\n', "retention_days") == 2
+
+
+def test_SRC4_sources_map_a_market_to_its_providers_and_bad_tables_are_refused(tmp_path):
+    from ahsync.config import MarketSources, market_sources
+    text = ('markets = ["forever.pvp.horde.us"]\n[sources."forever.pvp.horde.us"]\nprimary = "blizzard"\n'
+            'rank = ["blizzard", "ahf"]\n[sources."forever.pvp.horde.us".addresses]\nblizzard = "us/4728/2"\n')
+    config = parse_config(text, {}, tmp_path)
+    assert market_sources(config, "forever.pvp.horde.us") == MarketSources(
+        "blizzard", ("blizzard", "ahf"), {"ahf": "forever.pvp.horde.us", "blizzard": "us/4728/2"})
+    assert market_sources(Config(), "forever.pvp.horde.us") == MarketSources(addresses={"ahf": "forever.pvp.horde.us"})
+    for bad, message in (('[sources."eu-x"]\nprimary = "a"\n', "expected a market id"),
+                         ('[sources."forever.pvp.horde.us"]\nmain = "a"\n', "main is not a known setting"),
+                         ('[sources."forever.pvp.horde.us"]\nrank = "ahf"\n', "rank must be a list of source names"),
+                         ('[sources."forever.pvp.horde.us"]\nprimary = ""\n', "primary must be a source name"),
+                         ('[sources."forever.pvp.horde.us".addresses]\nahf = 3\n', "addresses must be a table of strings"),
+                         ('sources = 3\n', "config.toml line 1: sources must be a table")):
+        with pytest.raises(ConfigError) as error:
+            parse_config(bad, {}, tmp_path)
+        assert message in str(error.value), bad
+    with pytest.raises(ConfigError, match="must be a table"):
+        parse_config('[sources]\n"forever.pvp.horde.us" = 3\n', {}, tmp_path)

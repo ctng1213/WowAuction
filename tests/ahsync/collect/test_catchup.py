@@ -622,3 +622,16 @@ def test_database_is_plain_sqlite(tmp_path):
     db = open_db(tmp_path, clock)
     db.close()
     assert sqlite3.connect(tmp_path / "ahsync.db").execute("PRAGMA journal_mode").fetchone() == ("wal",)
+
+
+def test_SRC1_a_market_reads_ahf_under_its_configured_address_and_keeps_its_own_id(tmp_path):
+    clock = FakeClock()
+    world = AhfWorld(clock)
+    db = open_db(tmp_path, clock)
+    ours = "forever.pvp.alliance.us"
+    run_catchup(api_for(world), db, clock, (ours,), addresses={ours: MARKET})
+    markets = {m for (m,) in db.conn.execute("SELECT DISTINCT market FROM candles_h1")}
+    assert markets == {ours} and h1_hours(world)                 # AHF's files for MARKET, stored as ours
+    before = len(world.transport.paths())
+    run_catchup(api_for(world), db, clock, (ours,), addresses={ours: ""})
+    assert not [p for p in world.transport.paths()[before:] if "/ah/" in p]   # "" = no AHF for this market

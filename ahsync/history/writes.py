@@ -8,17 +8,18 @@ class HistoryWrites:
 
     conn: sqlite3.Connection
 
-    def upsert_local_current(self, market: str, rows: list[tuple[int, int, int, int]]) -> None:
-        """Local `cur` from a scan; a row only replaces an older one (an old file read late changes nothing).
+    def upsert_newer_current(self, market: str, rows: list[tuple[int, int, int, int]], src: str = "local") -> None:
+        """`cur` from a book; a row only replaces an older one (an old file read late changes nothing).
 
         Args:
             market: Market id.
-            rows: (key, lowest unit price, units at it, scan time ms).
+            rows: (key, lowest unit price, units at it, book time ms).
+            src: The book's source: "local" for your scans, or a provider's name.
         """
         self.conn.executemany(
-            "INSERT INTO current(market, key, price, qty, at, src) VALUES (?, ?, ?, ?, ?, 'local') "
+            "INSERT INTO current(market, key, price, qty, at, src) VALUES (?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(market, key, src) DO UPDATE SET price = excluded.price, qty = excluded.qty, "
-            "at = excluded.at WHERE excluded.at >= current.at", [(market, *row) for row in rows])
+            "at = excluded.at WHERE excluded.at >= current.at", [(market, *row, src) for row in rows])
 
     def replace_sales_hours(self, market: str, from_ms: int, to_ms: int, rates: dict[int, dict[int, float]]) -> None:
         """Write a range of hours' sales rates whole (idempotent: recomputed, never added to; SPEC §3.3 sales_h1).

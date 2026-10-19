@@ -741,24 +741,26 @@ class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, JournalRea
         sql = f"SELECT COUNT(*) FROM {table}" + (f" WHERE {where}" if where else "")
         return self.conn.execute(sql, params).fetchone()[0]
 
-    def sync_facts(self, market: str, since_ms: int) -> tuple[int | None, int, int | None, int | None, int, int]:
-        """What the Status page shows about a market's stored data (SPEC §3.5 Status).
+    def sync_facts(self, market: str, since_ms: int,
+                   src: str = "ahf") -> tuple[int | None, int, int | None, int | None, int, int]:
+        """What the Status page shows about a market's stored data (SPEC §3.5 Status, SRC2).
 
         Args:
-            market: AHF market id.
+            market: Market id.
             since_ms: Start of the scan-count window, ms.
+            src: The market's primary remote source.
 
         Returns:
-            (newest AHF current-price time ms or None, items with a price, oldest and newest
-            hourly candle hour start ms or None, your scans since, AHF order books since).
+            (its newest current-price time ms or None, items with a price, oldest and newest
+            hourly candle hour start ms or None, your scans since, its order books since).
         """
-        newest = self.conn.execute("SELECT MAX(at) FROM current WHERE market = ? AND src = 'ahf'", (market,)).fetchone()[0]
+        newest = self.conn.execute("SELECT MAX(at) FROM current WHERE market = ? AND src = ?", (market, src)).fetchone()[0]
         priced = self.conn.execute("SELECT COUNT(DISTINCT key) FROM current WHERE market = ? AND price IS NOT NULL",
                                    (market,)).fetchone()[0]
         oldest, latest = self.conn.execute("SELECT MIN(t), MAX(t) FROM candles_h1 WHERE market = ?", (market,)).fetchone()
         scans = dict(self.conn.execute("SELECT src, COUNT(*) FROM scans WHERE market = ? AND at >= ? GROUP BY src",
                                        (market, since_ms)).fetchall())
-        return newest, priced, oldest, latest, scans.get("local", 0), scans.get("ahf", 0)
+        return newest, priced, oldest, latest, scans.get("local", 0), scans.get(src, 0)
 
     def publish_refresh(self, markets: list[str], with_intel: bool = True) -> None:
         """Swap the staged intelligence, pages and plan in for these markets, in one transaction (SPEC §5.2 rule 3).

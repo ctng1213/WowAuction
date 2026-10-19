@@ -44,6 +44,7 @@ class HistoryWindow:
     to_ms: int              # newest hour start to include
     volume_from_day: int    # oldest volume day number
     book_since_ms: int      # oldest complete book to accept
+    source_rank: tuple[str, ...] = ("local", "ahf")   # price sources, most trusted first; others after, by name (SRC3)
 
 
 @dataclass(frozen=True)
@@ -131,9 +132,11 @@ class HistoryReads:
         d1 = _Groups(self.conn.execute(
             "SELECT key, t, close, src FROM candles_d1 WHERE market = ? AND +t BETWEEN ? AND ? AND close IS NOT NULL "
             "ORDER BY key, t, src", w))
+        rank = " ".join(f"WHEN ? THEN {i}" for i in range(len(window.source_rank)))
         cur = _Groups(self.conn.execute(
             "SELECT key, key, price, qty, at, src FROM current WHERE market = ? "
-            "ORDER BY key, at DESC, CASE src WHEN 'local' THEN 0 ELSE 1 END, src", (market,)))
+            f"ORDER BY key, at DESC, CASE src {rank} ELSE {len(window.source_rank)} END, src",
+            (market, *window.source_rank)))
         vol = _Groups(self.conn.execute(
             "SELECT key, day, src, sold, expired, listed FROM volume_d1 WHERE market = ? AND day >= ? "
             "ORDER BY key, day, src", (market, window.volume_from_day)))
@@ -147,13 +150,14 @@ class HistoryReads:
         books = _Groups(self.conn.execute(
             f"SELECT key, scan_id, price, stack, band, count FROM book_entries WHERE scan_id IN "
             f"({','.join('?' * len(scans))}) ORDER BY key, price, stack, band", [s for s, _ in scans]))
+        ranked = {src: i for i, src in enumerate(window.source_rank)}
         for key in keys:
             candles = h1.take(key)
             current = cur.take(key)
             yield ItemHistory(
-                key, _local_first_per_time([(t, c, src) for t, c, _, src in candles if c is not None]),
-                _local_first_per_time([(t, q or 0, src) for t, _, q, src in candles]),
-                [tuple(r) for r in sales.take(key)], _local_first_per_time(d1.take(key)),
+                key, _best_per_time([(t, c, src) for t, c, _, src in candles if c is not None], ranked),
+                _best_per_time([(t, q or 0, src) for t, _, q, src in candles], ranked),
+                [tuple(r) for r in sales.take(key)], _best_per_time(d1.take(key), ranked),
                 CurrentPrice(*current[0]) if current else None, _volume_by_day(vol.take(key)),
                 _newest_book(books.take(key), rank), cover)
 
@@ -410,24 +414,25 @@ class _Groups:
         return out
 
 
-def _local_first_per_time(rows: list[tuple]) -> list[tuple]:
-    """One value per time: the local source's when there is one, else the first other (SPEC §2.2, S9).
-
-    The same choice as the per-item reads' ORDER BY t, local first, then src.
+def _best_per_time(rows: list[tuple], ranked: dict[str, int]) -> list[tuple]:
+    """One value per time: the most trusted source's (SPEC §2.2, S9, SRC3).
 
     Args:
         rows: (time ms, value, src) rows ordered by time, then src.
+        ranked: src -> rank, 0 most trusted ("local" first by default); an unranked source comes after every
+            ranked one, by name.
 
     Returns:
         One (time, value) per time, ascending.
     """
-    out: list[tuple] = []
+    best: list[tuple] = []
     for t, value, src in rows:
-        if not out or out[-1][0] != t:
-            out.append((t, value))
-        elif src == "local":
-            out[-1] = (t, value)
-    return out
+        order = (ranked.get(src, len(ranked)), src)
+        if not best or best[-1][0] != t:
+            best.append((t, value, order))
+        elif order < best[-1][2]:
+            best[-1] = (t, value, order)
+    return [(t, value) for t, value, _ in best]
 
 
 def _volume_by_day(rows: list[tuple]) -> dict[int, dict[str, tuple[float, float, float]]]:

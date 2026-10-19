@@ -34,3 +34,10 @@ def test_staged_intelligence_is_not_live_until_published(db):
     assert db.read_intel(M) is None and db.count("intel_new") == 1
     db.publish_refresh([M])
     assert db.read_intel(M) == intel and db.count("intel_new") == 0
+
+
+def test_SRC2_newer_prices_follow_the_primary_source(db):
+    sql(db, "INSERT INTO intel(market, schema_version, body, built) VALUES (?, ?, ?, ?)", (M, 1, "{}", 5 * DAY))
+    sql(db, "INSERT INTO current(market, key, price, qty, at, src) VALUES (?, ?, ?, ?, ?, ?)",
+        (M, 1, 100, 1, 6 * DAY, "blizzard"), (M, 1, 100, 1, 4 * DAY, "ahf"))
+    assert (db.prices_newer_than_intel(M, "blizzard"), db.prices_newer_than_intel(M)) == (True, False)

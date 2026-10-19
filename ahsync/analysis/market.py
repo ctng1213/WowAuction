@@ -49,17 +49,18 @@ def _covers(item: ItemHistory) -> dict[int, dict[str, Cover]]:
             for day, sources in item.volume_cover.items()}
 
 
-def history_window(now_ms: int) -> HistoryWindow:
+def history_window(now_ms: int, source_rank: tuple[str, ...] = ("local", "ahf")) -> HistoryWindow:
     """What analysis reads for a refresh at now_ms (SPEC §3.3): 90 days, books under 24 h old.
 
     Args:
         now_ms: Now.
+        source_rank: Price sources, most trusted first (SRC3).
 
     Returns:
         The window.
     """
     start = now_ms - HISTORY_DAYS * DAY_MS
-    return HistoryWindow(start, now_ms, start // DAY_MS, now_ms - BOOK_MAX_AGE_MS)
+    return HistoryWindow(start, now_ms, start // DAY_MS, now_ms - BOOK_MAX_AGE_MS, source_rank)
 
 
 def ref_stack(book: list[tuple[int, int, int, int]]) -> int:
@@ -249,8 +250,8 @@ def prices_suspect(price: int, p10: int | None, p90: int | None) -> bool:
     return prices.suspect_price(price, p10, p90, [])
 
 
-def analyze_market(history: HistoryReader, market: str, now_ms: int,
-                   settings: MarketSettings) -> tuple[MarketIntelligence, dict[int, str]]:
+def analyze_market(history: HistoryReader, market: str, now_ms: int, settings: MarketSettings,
+                   source_rank: tuple[str, ...] = ("local", "ahf")) -> tuple[MarketIntelligence, dict[int, str]]:
     """The market's intelligence for every item with price data, except unknown-suffix keys (SPEC §3.1.1 step 1).
 
     Args:
@@ -258,6 +259,7 @@ def analyze_market(history: HistoryReader, market: str, now_ms: int,
         market: Market id.
         now_ms: Now.
         settings: Market-wide defaults.
+        source_rank: Price sources, most trusted first: your scans, then the configured remote ranking (SRC3).
 
     Returns:
         (the intelligence, item key -> error for items set aside).
@@ -265,7 +267,7 @@ def analyze_market(history: HistoryReader, market: str, now_ms: int,
     items = history.items()
     out: dict[int, ItemIntel] = {}
     failed: dict[int, str] = {}
-    for item in history.market_history(market, history_window(now_ms)):   # one bulk read per market (AR7)
+    for item in history.market_history(market, history_window(now_ms, source_rank)):   # one bulk read per market (AR7)
         if item.key < 0:          # some suffix of the item, which one unknown: stored, never valued (SPEC §2.2.1, AR8)
             continue
         try:
