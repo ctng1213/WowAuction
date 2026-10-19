@@ -173,7 +173,7 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
 
 def analyze_market(history: HistoryReader, market: str, now_ms: int,
                    settings: MarketSettings) -> tuple[MarketIntelligence, dict[int, str]]:
-    """The market's intelligence for every item with price data (SPEC §3.1.1 step 1).
+    """The market's intelligence for every item with price data, except unknown-suffix keys (SPEC §3.1.1 step 1).
 
     Args:
         history: The history.
@@ -188,6 +188,8 @@ def analyze_market(history: HistoryReader, market: str, now_ms: int,
     out: dict[int, ItemIntel] = {}
     failed: dict[int, str] = {}
     for item in history.market_history(market, history_window(now_ms)):   # one bulk read per market (AR7)
+        if item.key < 0:          # some suffix of the item, which one unknown: stored, never valued (SPEC §2.2.1, AR8)
+            continue
         try:
             out[item.key] = analyze_item(item, items.get(item.key), now_ms, settings)
         except Exception as error:                 # noqa: BLE001  one bad item never stops the analysis (FM8)

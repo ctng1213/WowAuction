@@ -52,8 +52,8 @@ def item_looks(keys: set[int], stats: dict[int, ItemIntel], items: dict[int, Ite
     """
     out = {}
     for key in sorted(keys):
-        info, s = items.get(key), stats.get(key)
-        name = info.name if info else str(key)
+        info, s = items.get(key) or (items.get(-key) if key < 0 else None), stats.get(key)
+        name = (info.name + (" (unknown suffix)" if key < 0 else "")) if info else str(key)   # SPEC §2.2.1: −itemId
         quality = (info.quality or 1) if info else 1
         basis = (paid or {}).get(key)
         paid_each = round_half_up(basis[1] / basis[0]) if basis and basis[0] else None

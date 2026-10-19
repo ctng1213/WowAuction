@@ -250,3 +250,18 @@ def test_an_item_without_metadata_still_gets_intelligence():
     intel, _ = market.analyze_market(NoMeta(), M, NOW, MarketSettings())
     rod = intel.items[6217]
     assert rod.sell_value is not None and rod.sell_value <= rod.post_price * 0.95      # no vendor value: fallback 0
+
+
+def test_AR8_an_unknown_suffix_key_gets_no_intelligence():
+    class WithUnknownSuffix(MemoryHistory):
+        """The Copper Rod, and the same closes under the unknown-suffix key -2644."""
+
+        def priced_keys(self, market_id: str, since_ms: int) -> list[int]:
+            """Both keys."""
+            return [-2644, 6217]
+
+        def hourly_closes(self, market_id: str, key: int, from_ms: int, to_ms: int) -> list[tuple[int, int]]:
+            """The Copper Rod's closes for either key."""
+            return super().hourly_closes(market_id, 6217, from_ms, to_ms)
+    intel, failed = market.analyze_market(WithUnknownSuffix(), M, NOW, MarketSettings())
+    assert (set(intel.items), failed) == ({6217}, {})

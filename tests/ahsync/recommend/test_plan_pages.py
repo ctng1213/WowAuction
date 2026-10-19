@@ -43,3 +43,7 @@ def test_pages_today_by_filter_step_week_and_flip():
     assert pages["week"]["total"] == "+2s 90c" and pages["flip"]["rows"][0]["roi"] == "38%"     # 290 ÷ 760
     unknown = plan_pages.item_looks({7}, {}, {})
     assert (unknown[7].name, unknown[7].conf) == ("7", None)
+
+def test_an_unknown_suffix_key_is_named_after_its_base_item():
+    looks = plan_pages.item_looks({-LINEN, LINEN, 99}, {}, ITEMS)
+    assert [looks[k].name for k in (-LINEN, LINEN, 99)] == ["Linen Cloth (unknown suffix)", "Linen Cloth", "99"]
