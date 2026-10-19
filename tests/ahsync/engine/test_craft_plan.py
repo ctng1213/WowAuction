@@ -165,3 +165,24 @@ def test_an_intermediate_from_your_own_stock_buys_nothing_and_a_spent_budget_end
     actions, _ = craft_plan.craft_plan(world(two, products={ROD: product(ROD, 4000), RUNED: product(RUNED, 9000)}),
                                        budgets, RICH, NOW, S, 25, {})
     assert [a.key for a in actions if a.kind == "craft"] == [RUNED] and budgets == {"Brugan-G": 0}
+
+
+def test_C8_a_mat_buy_that_got_half_its_units_re_plans_the_craft_for_what_you_have():
+    first, _ = craft_plan.craft_plan(world(books={BAR: [(1000, 4.0)]}), {"Brugan-G": RICH}, RICH, NOW, S, 25, {})
+    assert [(a.kind, a.qty) for a in first if a.kind in ("buy", "craft")] == [("buy", 4), ("craft", 2)]
+    # Only 2 of the 4 bars could be bought: you own 2 and the AH has none left.
+    half = replace(world(books={BAR: []}), market=craft.Market({BAR: []}, {}, {BAR: 2.0}, {BAR: 0.0}))
+    again, _ = craft_plan.craft_plan(half, {"Brugan-G": RICH}, RICH, NOW + HOUR, S, 25, {})
+    assert [(a.kind, a.qty) for a in again if a.kind in ("buy", "craft")] == [("craft", 1)]
+
+
+def test_C14_a_rod_crafted_but_not_mailed_is_owned_stock_and_only_the_final_craft_is_re_planned():
+    # Brugan crafted the rod; the mail to Amaya never happened. The rod is owned stock (account-wide).
+    market = craft.Market({BAR: [(1000, 40.0)], DUST: [(700, 1.0)]}, {}, {ROD: 1.0}, {ROD: 0.0})   # 1 dust: 1 craft
+    products = {RUNED: product(RUNED, 9000), ROD: product(ROD, 4000)}
+    w = replace(world(recipes=(ROD_RECIPE, RUNED_RECIPE), products=products), market=market)
+    actions, _ = craft_plan.craft_plan(w, {"Brugan-G": RICH, "Amaya-G": RICH}, RICH, NOW, S, 25, {})
+    runed = [a for a in actions if a.chain == "craft:7421"]
+    assert [(a.kind, a.key, a.char_id) for a in runed if a.kind != "post"][:2] == [("buy", DUST, "Amaya-G"),
+                                                                                   ("craft", RUNED, "Amaya-G")]
+    assert not [a for a in runed if a.kind == "craft" and a.key == ROD]           # the rod is not crafted again

@@ -297,7 +297,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | C11 | Amaya also knew Blacksmithing | no mail step; Amaya does both crafts |
 | C12 | a chain 4 steps deep; `max_craft_depth` 3 | the 4th level is not crafted; that reagent comes from owned / AH / vendor or the recipe is not craftable |
 | C13 | recipe A uses B and recipe B uses A | the loop is not followed; each is sourced without the other |
-| C14 | Brugan crafted the Copper Rod but the mail step was missed | the rod is owned stock on Brugan; the next run re-plans "mail to Amaya" and the final craft |
+| C14 | Brugan crafted the Copper Rod but the mail step was missed | the rod is owned stock on Brugan; the next run re-plans only the final craft (Amaya buys the dust and crafts the Runed Copper Rod), crafting no second rod; the plan has no mail action for owned stock (your choice, 2026-10-18): the Craft pages say "use 1 owned Copper Rod · mail 1 from Brugan" (D44) |
 | C15 | the Copper Rod cost 20 s to craft; the Runed Copper Rod sells for 59 s, with 7 s Strange Dust and 10 s Essence | profit is counted once on the final product: 59 × 0.95 − (20 + 7 + 10) = 19 s 5 c |
 
 **Missed peaks** (`plan.replan_missed`). Item windows: Tue, Wed and Thu 20:00–23:00. Original peak Tue with `E_orig` = 10 s. `min_sell_prob` 0.5, tolerance 10%, week starts Mon:
