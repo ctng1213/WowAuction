@@ -338,8 +338,8 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 | T1 | pending action: buy 20 Linen at ≤ 45 c; you buy 20 at 40 c | action done; cost basis 20 × 40 c = 8 s; its sell action stays planned |
 | T2 | the same action; you buy 10 | partial, done_qty 10 |
 | T3 | the same action; you buy 20 at 50 c | no match (above the planned price); purchase recorded, cost basis updated |
-| T4 | two pending posts of 20 Linen (Mon, Tue); one "expired" mail for 20 Linen | Monday's post resolves as expired; streak +1 |
-| T5 | a sold invoice for 20 Linen at 48 c | the oldest pending post at 48 c ×20 resolves as sold; streak 0 |
+| T4 | two pending posts of 20 Linen (Mon, Tue); one "expired" mail for 20 Linen | Monday's post resolves as expired, and the mail resolves no other post |
+| T5 | a sold invoice for 20 Linen at 48 c; open posts of 20 at 50 c (Mon) and 20 at 48 c (Tue) | Tuesday's post resolves as sold: a sale must match the price, an expiry only the stack |
 | T6 | a buy action 25 h past its slot with no match | missed |
 | T7 | you hold 20 Linen bought at 40 c; best option now is posting at 35 c | the plan says post at 35 c, flagged "below what you paid" |
 | T8 | you bought through the default AH UI, not AHProfit | still captured by the hook and matched like any other buy |

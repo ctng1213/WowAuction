@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS book_entries(
 -- is their primary key instead, with the §3.2 natural key kept as an index.
 CREATE TABLE IF NOT EXISTS auction_mail(
     event_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, key INTEGER NOT NULL, qty INTEGER, price INTEGER,
-    outcome TEXT NOT NULL, at INTEGER NOT NULL
+    outcome TEXT NOT NULL, at INTEGER NOT NULL, post_id TEXT   -- the post it resolved (SPEC §3.4.1)
 );
 CREATE INDEX IF NOT EXISTS auction_mail_char_key_at ON auction_mail(char_id, key, at, outcome);
 

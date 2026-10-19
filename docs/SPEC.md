@@ -773,7 +773,7 @@ An item usually has several peaks a week, for example raid nights on Tue, Wed an
 
 #### 3.4.1 Tracking what you did
 
-Captured events (§2.2) are matched to plan actions automatically:
+Captured events (§2.2) are matched to plan actions automatically, by the tracking pass (`engine/tracking`, `recommend/tracking_pass`), which runs after every SavedVariables read and before the hourly status pass. Only confirmed purchases and posts match; an attempt waits for its confirmation. A craft event matches by its recipe's product, and each auction mail resolves at most one post (`auction_mail.post_id`):
 
 - **Matching.** An event matches the earliest `pending`, `late` or `partial` action with the same character, kind and item that is still open for matching:
   - a buy, craft or mail: its slot is within 24 h of the event;

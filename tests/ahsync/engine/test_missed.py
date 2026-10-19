@@ -114,3 +114,16 @@ def test_PL3_a_replacement_is_close_to_the_original_likely_to_sell_and_this_week
             assert r.net >= 0.9 * anchor and r.p >= 0.5 and at(TUE, 23) <= r.window[0] < WEEK_END, (SEED_PL3, i)
         else:
             assert r.tried == () or all(t.failed for t in r.tried), (SEED_PL3, i)
+
+
+def test_T6_a_buy_still_unmatched_25_hours_after_its_slot_is_missed():
+    assert missed.status_now("buy", 0, None, 25 * 3_600_000) == "missed"
+    assert missed.status_now("buy", 0, None, 23 * 3_600_000) == "pending"
+
+
+def test_T14_a_post_whose_post_time_passed_is_late_while_its_window_hasnt_ended():
+    assert missed.status_now("post", at(TUE, 12), at(TUE, 23), at(TUE, 18)) == "late"    # "post now (late)"
+
+
+def test_T15_the_same_post_is_missed_once_its_window_ends():
+    assert missed.status_now("post", at(TUE, 12), at(TUE, 23), at(WED, 0)) == "missed"

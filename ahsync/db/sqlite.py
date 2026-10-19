@@ -24,7 +24,7 @@ from ahsync.intel.store import IntelStore
 from ahsync.recommend.store import RecommendStore
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
@@ -59,6 +59,10 @@ MIGRATIONS: dict[int, str] = {
     5: """
         ALTER TABLE actions ADD COLUMN source TEXT;
         ALTER TABLE plan_new ADD COLUMN source TEXT
+    """,
+    # 6: which post each auction mail resolved, so a mail resolves one post only (SPEC §3.4.1, T4, T5).
+    6: """
+        ALTER TABLE auction_mail ADD COLUMN post_id TEXT
     """,
 }
 BACKUP_KEEP = 3
