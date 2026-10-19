@@ -598,3 +598,31 @@ def test_S16_each_own_auction_group_keeps_its_soonest_end(db):
                                                                                    (6217, 3, T + 5 * HOUR)]
     apply_db(db, {"characters": CHAR, "ownAuctions": {AMAYA: {"at": T + HOUR, "rows": "6217,4100,1,3,2"}}})
     assert rows(db, "SELECT key, end_ms FROM own_auctions") == [(6217, None)]     # an older addon: no ends
+
+
+def test_S17_every_read_is_logged_with_what_it_stored_or_why_it_was_skipped(tmp_path, db, clock, caplog):
+    path = write_savedvars(tmp_path, A1_TEXT, clock)
+
+    def info_lines() -> list[str]:
+        """The INFO lines logged since the last call."""
+        lines = [r.getMessage() for r in caplog.records if r.levelname == "INFO"]
+        caplog.clear()
+        return lines
+
+    with caplog.at_level("INFO", logger="ahsync.state"):
+        ingest_file(path, db, clock, REALMS)
+        assert info_lines() == ["read AHProfit.lua: 0 scans, 1 events stored; ingestedUntil moved: "
+                                "Brugan-Grommash 1760003660000; 0 rows set aside"]
+        path.write_text(A1_TEXT[: len(A1_TEXT) // 2], encoding="utf-8")
+        path.with_name("AHProfit.lua.bak").write_text(A1_TEXT, encoding="utf-8")
+        set_age(path, clock, 10_000)
+        ingest_file(path, db, clock, REALMS)
+        assert info_lines() == ["read AHProfit.lua (from the .bak): 0 scans, 1 events stored; ingestedUntil moved: "
+                                "none; 0 rows set aside"]
+        path.with_name("AHProfit.lua.bak").write_text("AHProfitDB = {", encoding="utf-8")
+        ingest_file(path, db, clock, REALMS)
+        assert info_lines() == []                              # the warnings already say it
+        set_age(path, clock, 1_000)
+        ingest_file(path, db, clock, REALMS)
+        ingest_file(tmp_path / "AHProfit.lua", db, clock, REALMS)
+        assert info_lines() == ["AHProfit.lua not read: unstable", "AHProfit.lua not read: missing"]

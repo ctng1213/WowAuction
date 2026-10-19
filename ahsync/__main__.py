@@ -5,6 +5,10 @@ restore, migrate) → daily backup → read SavedVariables → CATCH-UP → prun
 dashboard (http://localhost:<dashboard_port>, on its own thread) → steady-state loop,
 which re-reads SavedVariables when WoW rewrites them. The full refresh and status
 pass are scheduler hooks to be wired by later milestones.
+
+A file data/ahsync.stop ends the loop at the next tick (`tools/deploy.py --restart`, FM36).
+The instance that takes the lock deletes it at start and again on exit, so a stale one never stops a
+start, and a second start that fails on the lock never clears a pending request.
 """
 from __future__ import annotations
 
@@ -16,7 +20,7 @@ import sqlite3
 import sys
 import threading
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import IO
 
@@ -38,6 +42,8 @@ from ahsync.web.server import DashboardApp, DashboardServer, new_token, open_ser
 LOG_BYTES = 1_000_000
 LOG_BACKUPS = 3
 ALREADY_RUNNING = "AHSync is already running"
+STOP_FILE = "ahsync.stop"          # in data/: its presence asks the running AHSync to stop (FM36)
+LOCK_FILE = "ahsync.lock"
 
 
 class InstanceLock:
@@ -120,7 +126,7 @@ class Runtime:
     home: Path                          # the user's home folder (for the key file)
     transport: Transport                # UrllibTransport in the app, FakeTransport in tests
     clock: Clock
-    should_stop: Callable[[], bool]     # polled by the steady-state loop
+    should_stop: Callable[[], bool]     # polled by the steady-state loop; run() adds data/ahsync.stop (FM36)
     out: IO[str]                        # user-facing start-up messages (stderr in the app)
     serve_dashboard: bool = True        # False in tests that don't exercise the dashboard
 
@@ -194,7 +200,9 @@ def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path,
         if result.ingested:                       # ingestedUntil may have moved: the addon may prune (SPEC §2.2)
             tracking_pass(ctx.db)                 # a buy or post marks its action done (SPEC §3.4.1)
             now = ctx.clock.now_ms()
-            replan_all(ctx.db, now, config, ctx.clock.local_offset_ms(now))   # the dashboard follows the game (IU13)
+            markets = replan_all(ctx.db, now, config, ctx.clock.local_offset_ms(now))   # the dashboard follows (IU13)
+            logging.getLogger("ahsync").info("re-planned after reading %s: %s", path.name,
+                                             ", ".join(markets) or "nothing (no published intelligence, or it failed)")
             export_plan(ctx.db, config, ctx.clock.now_ms(), ctx.clock.sleep)
 
     def hourly_status() -> None:
@@ -294,7 +302,7 @@ def serve_dashboard(data_dir: Path, config: Config, clock: Clock, refresh: Refre
 
 
 def run(data_dir: Path, config_path: Path, runtime: Runtime) -> int:
-    """Start AHSync and run until runtime.should_stop() is True.
+    """Start AHSync and run until runtime.should_stop() is True or data/ahsync.stop exists (FM36).
 
     Args:
         data_dir: data/ (database, backups, log, lock).
@@ -303,20 +311,41 @@ def run(data_dir: Path, config_path: Path, runtime: Runtime) -> int:
 
     Returns:
         Exit code: 0 after a normal stop, 1 when already running, 2 for a bad config or database.
+
+    Side effects:
+        Deletes data/ahsync.stop once the lock is taken, and on exit; a start that finds the lock held leaves
+        it alone, so a pending stop request still reaches the running AHSync.
     """
-    lock = InstanceLock(data_dir / "ahsync.lock")
+    stop_file = data_dir / STOP_FILE
+    lock = InstanceLock(data_dir / LOCK_FILE)
     if not lock.acquire():
         print(ALREADY_RUNNING, file=runtime.out)
         return 1
     try:
+        remove_stop_file(stop_file)                # only the lock's owner clears a stale request (FM36)
         try:
             config = load_config(config_path, runtime.env, runtime.home)
         except ConfigError as error:
             print(f"AHSync can't start: {error}", file=runtime.out)
             return 2
-        return _run_configured(data_dir, config, runtime)
+        outer_stop = runtime.should_stop
+        stoppable = replace(runtime, should_stop=lambda: outer_stop() or stop_file.exists())
+        return _run_configured(data_dir, config, stoppable)
     finally:
+        remove_stop_file(stop_file)
         lock.release()
+
+
+def remove_stop_file(path: Path) -> None:
+    """Delete data/ahsync.stop if it is there (FM36); a failure is ignored (the next start tries again).
+
+    Args:
+        path: The stop file.
+    """
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def _run_configured(data_dir: Path, config: Config, runtime: Runtime) -> int:

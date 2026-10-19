@@ -1,6 +1,6 @@
 """Install the addon into the WoW client's AddOns folder (SPEC §3.5, §5).
 
-Usage: python tools/deploy.py [--wow-path PATH] [--dry-run]
+Usage: python tools/deploy.py [--wow-path PATH] [--dry-run] [--restart]
 
 - `addon/AHProfit` is mirrored into `<wow>/Interface/AddOns/AHProfit`: changed
   files are copied, and files no longer in the repo are removed (only inside
@@ -11,6 +11,12 @@ Usage: python tools/deploy.py [--wow-path PATH] [--dry-run]
 - WoW only loads addon files that existed when the client started. When a file
   is new to the client, the script says to restart WoW; otherwise /reload is enough.
 
+- `--restart` (FM37): after the copy, a running AHSync is asked to stop (it holds
+  `data/ahsync.lock`; the script writes `data/ahsync.stop` and waits for the lock), a
+  new one is started detached from this console, and the script waits until both
+  generated files are newer than that start, then says to /reload. So the addon
+  never reads files written by an older AHSync (SPEC §3.5).
+
 The WoW path comes from --wow-path, else `wow_path` in config.toml, else the
 SPEC §3.6 default.
 """
@@ -20,17 +26,27 @@ import argparse
 import filecmp
 import os
 import shutil
+import subprocess
 import sys
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from ahsync.config import Config, load_config  # noqa: E402  (needs ROOT on sys.path)
+from ahsync.__main__ import LOCK_FILE, STOP_FILE, InstanceLock  # noqa: E402  (needs ROOT on sys.path)
+from ahsync.config import Config, load_config  # noqa: E402
 
 ADDON = ROOT / "addon" / "AHProfit"
 DATA_ADDON = ROOT / "addon" / "AHProfit_Data"
 GENERATED = ("MarketIntelligence.lua", "PortfolioPlan.lua")   # written by AHSync
+DATA_DIR = ROOT / "data"           # AHSync's default --data folder: lock and stop files
+LOCK_POLL_S = 0.5
+LOCK_WAIT_S = 60                   # a running AHSync stops at its next tick, unless mid full refresh
+FILES_POLL_S = 1
+FILES_PROGRESS_S = 10
+FILES_WAIT_S = 15 * 60             # catch-up plus the first full refresh
 
 
 @dataclass
@@ -122,23 +138,144 @@ def apply(plan: Plan) -> None:
             parent = parent.parent
 
 
-def main() -> int:
-    """Parse arguments, show what changes, apply it unless --dry-run, and say whether to restart WoW.
+@dataclass
+class Restart:
+    """What `--restart` needs from the outside world, so a test can run it without starting anything (FM37)."""
+
+    lock_free: Callable[[], bool]          # True when data/ahsync.lock can be taken, i.e. no AHSync runs
+    start: Callable[[], None]              # starts `<this python> -m ahsync` detached
+    now: Callable[[], float]               # seconds, the same clock as file modification times
+    sleep: Callable[[float], None]         # waits this many seconds
+    mtime: Callable[[Path], float | None]  # a file's modification time in seconds; None when missing
+    out: Callable[[str], None] = print
+
+
+def lock_is_free(lock_path: Path) -> bool:
+    """Whether no AHSync holds its instance lock: take it and let it go at once.
+
+    Args:
+        lock_path: data/ahsync.lock.
 
     Returns:
-        Process exit code: 0 on success, 1 when the WoW folder is wrong or not writable.
+        True when the lock could be taken (no AHSync is running).
     """
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--wow-path", help="WoW client folder, e.g. ...\\World of Warcraft\\_classic_beta_")
-    parser.add_argument("--dry-run", action="store_true", help="show the changes without making them")
-    args = parser.parse_args()
+    lock = InstanceLock(lock_path)
+    if not lock.acquire():
+        return False
+    lock.release()
+    return True
 
-    wow = wow_path_from_config(args.wow_path)
-    addons = wow / "Interface" / "AddOns"
-    if not addons.is_dir():
-        print(f"deploy: no Interface/AddOns under {wow}. Pass --wow-path or set wow_path in config.toml.")
+
+def start_ahsync() -> None:
+    """Start `<this python> -m ahsync` in the repo root, detached, so closing this console doesn't stop it.
+
+    Side effects:
+        A new process with no inherited stdio; on Windows its own process group and no console.
+    """
+    flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
+    subprocess.Popen([sys.executable, "-m", "ahsync"], cwd=ROOT, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL, close_fds=True, creationflags=flags, start_new_session=os.name != "nt")
+
+
+def file_mtime(path: Path) -> float | None:
+    """A file's modification time.
+
+    Args:
+        path: The file.
+
+    Returns:
+        Seconds since the epoch; None when it doesn't exist.
+    """
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return None
+
+
+def stop_running(data_dir: Path, env: Restart) -> bool:
+    """Ask a running AHSync to stop: write data/ahsync.stop and wait until its lock is free (FM36, FM37).
+
+    Args:
+        data_dir: AHSync's data folder.
+        env: Clock, lock check and output.
+
+    Returns:
+        True when no AHSync runs (any more); False after LOCK_WAIT_S, with the stop file removed again so the
+        running one carries on.
+    """
+    if env.lock_free():
+        return True
+    stop = data_dir / STOP_FILE
+    stop.write_text("stop requested by tools/deploy.py --restart\n", encoding="utf-8")
+    env.out("deploy: asking the running AHSync to stop...")
+    deadline = env.now() + LOCK_WAIT_S
+    while not env.lock_free():
+        if env.now() >= deadline:
+            stop.unlink(missing_ok=True)
+            env.out(f"deploy: AHSync did not stop within {LOCK_WAIT_S} s (busy with a full refresh?). "
+                    "Wait for it, or stop it by hand, then run deploy.py --restart again.")
+            return False
+        env.sleep(LOCK_POLL_S)
+    return True
+
+
+def wait_for_files(folder: Path, since: float, env: Restart) -> bool:
+    """Wait until AHSync has rewritten both generated files after it started (FM37).
+
+    Args:
+        folder: Interface/AddOns/AHProfit_Data.
+        since: When AHSync was started, seconds (env.now's clock).
+        env: Clock, file times and output.
+
+    Returns:
+        True once both files are newer than since; False after FILES_WAIT_S.
+    """
+    deadline, next_progress = since + FILES_WAIT_S, since + FILES_PROGRESS_S
+    while not all((env.mtime(folder / name) or 0) > since for name in GENERATED):
+        now = env.now()
+        if now >= deadline:
+            env.out(f"deploy: AHSync has not written both addon files after {FILES_WAIT_S // 60} minutes. "
+                    "Check data/ahsync.log and the dashboard's Status page.")
+            return False
+        if now >= next_progress:
+            env.out("deploy: waiting for AHSync's full refresh...")
+            next_progress += FILES_PROGRESS_S
+        env.sleep(FILES_POLL_S)
+    return True
+
+
+def restart(data_dir: Path, folder: Path, env: Restart) -> int:
+    """`--restart`: stop a running AHSync, start a new one and wait for its addon files (SPEC §3.5, FM37).
+
+    Args:
+        data_dir: AHSync's data folder (lock and stop files).
+        folder: Interface/AddOns/AHProfit_Data.
+        env: The outside world.
+
+    Returns:
+        0 when the new AHSync has written both files; 1 when the old one didn't stop or the files didn't come.
+    """
+    if not stop_running(data_dir, env):
         return 1
+    since = env.now()
+    env.start()
+    env.out("deploy: AHSync started (its log: data/ahsync.log)")
+    if not wait_for_files(folder, since, env):
+        return 1
+    env.out("ready: /reload in game now")
+    return 0
 
+
+def deploy(addons: Path, dry_run: bool) -> int:
+    """Show what changes in the AddOns folder and apply it unless dry_run; say whether to restart WoW.
+
+    Args:
+        addons: <wow>/Interface/AddOns.
+        dry_run: Only show the changes.
+
+    Returns:
+        0 on success (or nothing to do), 1 when the folder isn't writable.
+    """
     plan = Plan()
     plan_mirror(ADDON, addons / ADDON.name, plan)
     plan_data_addon(DATA_ADDON, addons / DATA_ADDON.name, plan)
@@ -152,7 +289,7 @@ def main() -> int:
     if not plan.copy and not plan.remove:
         print(f"deploy: already up to date in {addons}")
         return 0
-    if args.dry_run:
+    if dry_run:
         print("deploy: dry run, nothing changed")
         return 0
 
@@ -168,6 +305,34 @@ def main() -> int:
     else:
         print(f"deploy: {changed} change(s). Type /reload in game.")
     return 0
+
+
+def main() -> int:
+    """Parse arguments, deploy, and with --restart restart AHSync and wait for its files.
+
+    Returns:
+        Process exit code: 0 on success, 1 when the WoW folder is wrong or not writable, or the restart failed.
+    """
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--wow-path", help="WoW client folder, e.g. ...\\World of Warcraft\\_classic_beta_")
+    parser.add_argument("--dry-run", action="store_true", help="show the changes without making them")
+    parser.add_argument("--restart", action="store_true",
+                        help="then restart AHSync and wait until it has written both addon files")
+    args = parser.parse_args()
+
+    wow = wow_path_from_config(args.wow_path)
+    addons = wow / "Interface" / "AddOns"
+    if not addons.is_dir():
+        print(f"deploy: no Interface/AddOns under {wow}. Pass --wow-path or set wow_path in config.toml.")
+        return 1
+    code = deploy(addons, args.dry_run)
+    if code or not args.restart:
+        return code
+    if args.dry_run:
+        print("deploy: dry run, AHSync not restarted")
+        return 0
+    env = Restart(lambda: lock_is_free(DATA_DIR / LOCK_FILE), start_ahsync, time.time, time.sleep, file_mtime)
+    return restart(DATA_DIR, addons / DATA_ADDON.name, env)
 
 
 if __name__ == "__main__":

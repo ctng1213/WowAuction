@@ -13,7 +13,7 @@ UIWorld.HOUR = 3600000
 function UIWorld.Market(items, generatedAt, flips)
   local count, length = 0, 0
   for _, text in pairs(items) do count, length = count + 1, length + #text end
-  _G.AHProfitMarket = { schemaVersion = 1, generatedAt = generatedAt, checksum = count .. ":" .. length,
+  _G.AHProfitMarket = { schemaVersion = 1, exportVersion = 1, generatedAt = generatedAt, checksum = count .. ":" .. length,
                         charMarkets = { ["Amaya-Grommash"] = UIWorld.MARKET },
                         markets = { [UIWorld.MARKET] = { observationsUntil = generatedAt, curveHour = 0, I = items, C = {},
                                                          F = flips or {} } } }
@@ -51,8 +51,8 @@ function UIWorld.Plan(actions)
     table.insert(byChar[char], text)
     count, length = count + 1, length + #text
   end
-  _G.AHProfitPlan = { schemaVersion = 1, generatedAt = 0, checksum = count .. ":" .. length, ingestedUntil = {},
-                      actions = byChar, rules = {} }
+  _G.AHProfitPlan = { schemaVersion = 1, exportVersion = 1, generatedAt = 0, checksum = count .. ":" .. length,
+                      ingestedUntil = {}, actions = byChar, rules = {} }
 end
 
 --- Put the units of Amaya's planned sales (no parent) in her bags, one stack per item.

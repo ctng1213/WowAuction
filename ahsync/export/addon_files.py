@@ -4,7 +4,8 @@ Every write is atomic: the text goes to a temp file, is read back and checked, t
 renamed over the old file. A blocked rename (file locked, antivirus) is retried 3 times
 over 10 s; if it still fails the old file stays and Status warns (FM14). AHSync only
 ever replaces these files and never deletes them, because WoW sees only files that
-existed when the client started (SPEC §3.5).
+existed when the client started (SPEC §3.5). Each successful write is logged at INFO with
+its size, generatedAt and what it holds (EX15). Both files carry EXPORT_VERSION (EX14).
 """
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ from ahsync.db.sqlite import Database
 from ahsync.engine import disenchant
 from ahsync.engine.de_table import DE_TABLE
 from ahsync.engine.plan_views import record_line
-from ahsync.export.market_lua import market_lua
+from ahsync.export.market_lua import EXPORT_VERSION, item_count, market_lua
 from ahsync.export.plan_lua import plan_lua
 from ahsync.recommend.plan import flip_offers, sell_records
 from ahsync.state.importer import ingested_until
@@ -169,7 +170,23 @@ def export_market(db: Database, cfg: Config, now_ms: int, sleep: Callable[[float
     items = db.items()
     flips = {i.market: flip_offers(i.items, items, set(vendor), now_ms, cfg) for i in intels}       # EX11
     text = market_lua(intels, shortlists, char_markets, now_ms, disenchantable(db), vendor, flips, cfg.sell_window_hours)
-    return _write(db, folder / MARKET_FILE, text, MAX_MARKET_BYTES, now_ms, sleep, replace)
+    ok = _write(db, folder / MARKET_FILE, text, MAX_MARKET_BYTES, now_ms, sleep, replace)
+    if ok:
+        _log_written(MARKET_FILE, text, now_ms, f"{item_count(text)} items")
+    return ok
+
+
+def _log_written(name: str, text: str, now_ms: int, holds: str) -> None:
+    """One INFO line for a written addon file, so the data flow can be followed in the log (EX15).
+
+    Args:
+        name: The file name.
+        text: What was written.
+        now_ms: Its generatedAt, UTC ms.
+        holds: What it holds, e.g. "312 items" or "4 open actions".
+    """
+    log.info("wrote %s: %d bytes, generatedAt %d, exportVersion %d, %s", name, len(text.encode("utf-8")), now_ms,
+             EXPORT_VERSION, holds)
 
 
 def _write(db: Database, path: Path, text: str, limit: int, now_ms: int, sleep: Callable[[float], None],
@@ -228,6 +245,9 @@ def export_plan(db: Database, cfg: Config, now_ms: int, sleep: Callable[[float],
     for market in cfg.markets:
         for key, r in sell_records(db, [c for c, _ in db.characters_in(market)], market, now_ms, cfg).items():
             records[key] = f"{1 if r.not_selling else 0};{record_line(r)}"             # EX8
-    text = plan_lua(db.addon_actions(char_ids), db.rule_rows(), ingested_until(db), now_ms, records,
-                    db.timed_reserves(char_ids))                                                  # EX12
-    return _write(db, folder / PLAN_FILE, text, MAX_PLAN_BYTES, now_ms, sleep, replace)
+    actions = db.addon_actions(char_ids)
+    text = plan_lua(actions, db.rule_rows(), ingested_until(db), now_ms, records, db.timed_reserves(char_ids))   # EX12
+    ok = _write(db, folder / PLAN_FILE, text, MAX_PLAN_BYTES, now_ms, sleep, replace)
+    if ok:
+        _log_written(PLAN_FILE, text, now_ms, f"{len(actions)} open actions")
+    return ok

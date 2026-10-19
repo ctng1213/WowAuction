@@ -730,8 +730,7 @@ function MainWindow.Render()
   if not waitingForNames then Events.Unregister("GET_ITEM_INFO_RECEIVED", MainWindow.OnItemInfo) end
   ui.empty:SetShown(#lines == 0)
   ui.empty:SetText(emptyText)
-  local broken = DB.SetupError()             -- capture is off (FM23): say why before anything else
-  ui.footer:SetText(broken and ("not recording: " .. broken) or Plan.Problem() or VM.WithCoins(footer))
+  ui.footer:SetText(VM.FooterText(DB.SetupError(), Market.Problem(), Plan.Problem(), footer))
   ui.budget:SetText("Budget " .. VM.WithCoins(VM.Money(gold)))
   ui.track:SetShown(page.scrollable)
   ui.thumb:SetShown(page.scrollable)

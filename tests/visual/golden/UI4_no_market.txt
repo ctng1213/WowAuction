@@ -55,5 +55,5 @@ Frame AHProfitWindow 640,320 640x440
     Frame AHProfitWindowRow12 650,622 606x20 (hidden)
     FontString - 812,516 297x12 "No market data yet. Run AHSync, then /reload."
   Texture - 642,731 636x1
-  FontString - 652,740 0x10
+  FontString - 652,740 248x10 "No market data yet. Run AHSync, then /reload."
   FontString - 1180,740 88x10 "Budget 10   40  "

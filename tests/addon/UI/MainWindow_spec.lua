@@ -475,7 +475,7 @@ describe("MainWindow", function()
   it("A23 the Disenchant tab is always there, even with no enchanter on the account", function()
     Stubs.Reset()
     local gloves, dust = "800,1,30,1100,1100,,,0,,,1,50,,,1,,0,500;;", "600,20,30,600,600,,,0,2100,,90,80,,,20,600,0,800;;"
-    _G.AHProfitMarket = { schemaVersion = 1, generatedAt = NOW, charMarkets = {},
+    _G.AHProfitMarket = { schemaVersion = 1, exportVersion = 1, generatedAt = NOW, charMarkets = {},
       markets = { [UIWorld.MARKET] = { observationsUntil = NOW, curveHour = 0, I = { [6585] = gloves, [10940] = dust }, C = {},
                                        D = { [6585] = "1,2,18,a" } } } }
     AHProfitMarket.checksum = "3:" .. (#gloves + #dust + #"1,2,18,a")
@@ -595,5 +595,37 @@ describe("MainWindow", function()
     assert_eq(MainWindow.Frames().footer:GetText(), "couldn't update: boom (showing the last good list)")
     MainWindow.Refresh()
     assert_eq(MainWindow.Frames().footer:GetText():find("couldn't", 1, true), nil)
+  end)
+
+  it("FM34 files from an older AHSync leave the tabs empty and the footer says to restart AHSync", function()
+    --- Log in with a Linen market and plan, their export versions changed, and open the window.
+    ---@param market number|nil  The market file's exportVersion
+    ---@param plan number|nil    The plan file's exportVersion
+    ---@return table             The window's frames
+    local function Open(market, plan)
+      Stubs.Reset()
+      UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48) }, NOW - UIWorld.HOUR)
+      UIWorld.Plan({ { id = "p", kind = "post", key = 2589, qty = 20, price = 55, at = NOW, net = 1046, chance = 92 } })
+      AHProfitMarket.exportVersion, AHProfitPlan.exportVersion = market, plan
+      Stubs.Login()
+      Stubs.Slash("/ahp")
+      return AHProfit.MainWindow.Frames()
+    end
+    local ui = Open(0, nil)                                     -- both stale: the market's problem shows
+    assert_eq({ ui.rows[1]:IsShown(), ui.empty:GetText(), ui.footer:GetText() }, { false, "AHSync is older than this addon: restart AHSync, then /reload", "AHSync is older than this addon: restart AHSync, then /reload" })
+    AHProfit.MainWindow.ShowTab("week")
+    assert_eq({ ui.rows[1]:IsShown(), ui.footer:GetText() }, { false, "AHSync is older than this addon: restart AHSync, then /reload" })
+    ui = Open(1, 0)                                             -- only the plan is stale: its rows are gone, and why
+    assert_eq({ ui.footer:GetText(), #AHProfit.Plan.Actions("Amaya-Grommash") }, { "AHSync is older than this addon: restart AHSync, then /reload", 0 })
+  end)
+
+  it("FM35 files from a newer AHSync say to deploy the addon in the footer", function()
+    Stubs.Reset()
+    UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48) }, NOW - UIWorld.HOUR)
+    UIWorld.Plan({})
+    AHProfitMarket.exportVersion, AHProfitPlan.exportVersion = 2, 2
+    Stubs.Login()
+    Stubs.Slash("/ahp")
+    assert_eq(AHProfit.MainWindow.Frames().footer:GetText(), "This addon is older than AHSync's files: run tools/deploy.py, then /reload")
   end)
 end)

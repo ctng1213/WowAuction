@@ -1,5 +1,5 @@
 -- Core/Market.lua: reads MarketIntelligence.lua, written by AHSync (SPEC §3.5, §5.1, §5.2).
--- The file is checked once (schema version and checksum) the first time anything asks, and
+-- The file is checked once (schema version, export version and checksum) the first time anything asks, and
 -- items stay compact strings until one is needed; decoded items sit in a small cache, so
 -- login never builds 9k tables (SPEC §5.1 lazy data decode). Format: ahsync/export/market_lua.py.
 
@@ -10,6 +10,9 @@ local Market = {}
 AHProfit.Market = Market
 
 Market.SCHEMA_VERSION = 1          -- must equal ahsync/export/market_lua.py MARKET_SCHEMA_VERSION (FM17)
+-- The build of both generated files' format; must equal ahsync/export/market_lua.py EXPORT_VERSION. A file of
+-- another build says which side is stale (FM34, FM35). Core/Plan.lua, which loads after this file, reads it too.
+AHProfit.EXPORT_VERSION = 1
 Market.CACHE_LIMIT = 500           -- decoded items kept before the cache starts again
 Market.FIELDS = { "cur", "curQty", "curAgeMin", "med7", "med30", "p10", "p90", "trend10", "sold10", "listed10",
                   "supply", "conf", "seasonality", "postPrice", "refStack", "sellValue", "volumeUnknown",
@@ -47,14 +50,28 @@ local function MarketOf(file, charId, faction)
   return count == 1 and found or nil
 end
 
---- Check a MarketIntelligence.lua table (FM17).
+--- Compare a generated file's export version with this addon's (FM34, FM35); shared with Core/Plan.lua.
+---@param file table  AHProfitMarket or AHProfitPlan
+---@return string|nil  "older" when AHSync wrote an older format (a missing field counts as 0), "newer" when a
+---                    newer one; nil when they match
+function Market.ExportStatus(file)
+  local version = tonumber(file.exportVersion) or 0
+  if version < AHProfit.EXPORT_VERSION then return "older" end
+  if version > AHProfit.EXPORT_VERSION then return "newer" end
+  return nil
+end
+
+--- Check a MarketIntelligence.lua table: schema, then export version, then checksum (FM17, FM34, FM35).
 ---@param file table|nil  The AHProfitMarket global
 ---@param charId string   This character
 ---@param faction string  Its faction
----@return table          { status = "ok" | "missing" | "version" | "checksum" | "market", market, file }
+---@return table          { status = "ok" | "missing" | "version" | "older" | "newer" | "checksum" | "market", market,
+---                       file }
 function Market.Check(file, charId, faction)
   if type(file) ~= "table" or type(file.markets) ~= "table" then return { status = "missing" } end
   if file.schemaVersion ~= Market.SCHEMA_VERSION then return { status = "version" } end
+  local stale = Market.ExportStatus(file)
+  if stale then return { status = stale } end
   if file.checksum ~= Checksum(file.markets) then return { status = "checksum" } end
   local id = MarketOf(file, charId, faction)
   if not id then return { status = "market" } end
@@ -71,12 +88,18 @@ local function State()
   return state
 end
 
---- Why there is no market data, for the UI's status line (UI4, FM17).
+-- What the player should do about a file of another build (FM34, FM35); Core/Plan.lua shows the same texts.
+Market.STALE = {
+  older = "AHSync is older than this addon: restart AHSync, then /reload",
+  newer = "This addon is older than AHSync's files: run tools/deploy.py, then /reload",
+}
+
+--- Why there is no market data, for the UI's status line (UI4, FM17, FM34, FM35).
 ---@return string|nil  nil when the data is usable; otherwise a message for the player
 function Market.Problem()
   local status = State().status
   if status == "ok" then return nil end
-  return ({
+  return Market.STALE[status] or ({
     missing = "No market data yet. Run AHSync, then /reload.",
     version = "Market data and addon versions differ. Update AHProfit or AHSync, then /reload.",
     checksum = "Market data is damaged. Let AHSync write it again, then /reload.",

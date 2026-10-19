@@ -538,6 +538,18 @@ function ViewModel.WithCoins(text)
   return (tostring(text):gsub("(%d+)([gsc])", function(n, unit) return n .. ViewModel.COINS[unit] end))
 end
 
+--- The footer's text: the most urgent problem first, so a blank tab is never silent (FM23, FM34, FM35, EX4).
+---@param setupError string|nil     Why capture is off (DB.SetupError), or nil
+---@param marketProblem string|nil  Market.Problem(), or nil
+---@param planProblem string|nil    Plan.Problem(), or nil
+---@param footer string             The tab's own footer, money as text
+---@return string                   "not recording: …", else the market's problem, else the plan's, else the footer
+---                                 with coin icons
+function ViewModel.FooterText(setupError, marketProblem, planProblem, footer)
+  if setupError then return "not recording: " .. setupError end
+  return marketProblem or planProblem or ViewModel.WithCoins(footer)
+end
+
 --- The list's lines: each row, followed by its note as a line of its own when it has one.
 ---@param rows table[]  View rows (or Week lines)
 ---@return table[]      Rows, day headers and { noteLine = true, text } lines

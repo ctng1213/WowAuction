@@ -10,6 +10,8 @@
   for 2 s, falling back to WoW's ``AHProfit.lua.bak`` when it won't parse (FM11),
   refusing a newer format (FM13), and writing each character's ingestedUntil
   (``meta.savedvars_ingested_until:<charId>``) only after the commit (§2.2, §5.2 rule 5).
+  Every read is logged at INFO: what was stored and whose ingestedUntil moved, or why
+  the file wasn't read (S17).
 
 Not here: cost basis, matching events to actions (engine/tracking), untracked
 changes (FM21), and the incremental update itself (``incremental_update`` is
@@ -46,6 +48,8 @@ class ApplyResult:
     dirty_keys: frozenset[int]        # item keys whose data changed (unknown-suffix keys left out)
     problems: tuple[str, ...]         # rows set aside, from parsing and from storing
     ingested_until: dict[str, int]    # characters whose ingestedUntil this file moved -> new value, ms
+    scans_stored: int = 0             # scans stored (or already stored) from this file
+    events_stored: int = 0            # events stored (or already stored) from this file
 
 
 @dataclass(frozen=True)
@@ -61,6 +65,9 @@ class IngestResult:
     problems: tuple[str, ...] = ()
     ingested_until: dict[str, int] | None = None      # every character's ingestedUntil after this read, ms
     refresh_requested_at_ms: int | None = None        # /ahp refresh request in the file (SPEC §3.1.1)
+    moved_until: dict[str, int] | None = None         # characters whose ingestedUntil this read moved -> ms
+    scans_stored: int = 0
+    events_stored: int = 0
 
 
 # ---------------------------------------------------------------- markets
@@ -158,6 +165,7 @@ class _Apply:
         self.pruning = _Pruning()
         self.follows: set[str] = set()     # characters whose professions and known recipes follow this file
         self.new_scans: list[tuple[str, str, int, bool]] = []   # (market, scan id, at, complete) stored now
+        self.scans_stored = self.events_stored = 0              # for the read's log line (S17)
 
     def guarded(self, what: str, write: Callable[[], None]) -> bool:
         """Run one row's writes; a failure undoes only that row and is recorded (SPEC §5.2 rule 6).
@@ -295,6 +303,7 @@ class _Apply:
         for scan in scans:
             if self.guarded(f"scans[{scan.scan_id!r}]", lambda s=scan: self._scan(s)):
                 self.pruning.stored(scan.char_id, scan.at_ms)
+                self.scans_stored += 1
             else:
                 self.pruning.set_aside(scan.char_id, scan.at_ms)
 
@@ -328,6 +337,7 @@ class _Apply:
         for e in events:
             if self.guarded(f"events[{e.event_id!r}]", lambda e=e: self._event(e)):
                 self.pruning.stored(e.char_id, e.at_ms)
+                self.events_stored += 1
             else:
                 self.pruning.set_aside(e.char_id, e.at_ms)
 
@@ -493,7 +503,8 @@ def apply_data(db: Database, data: sv.AHProfitData, realms: Mapping[str, str], n
         work.reserves(data)
         db.add_item_names((n.key, sv.base_item_id(n.key), n.name, n.quality) for n in data.item_names)
     advanced = _advance_ingested_until(db, work.pruning.candidates())
-    return ApplyResult(frozenset(work.dirty), data.problems + tuple(work.problems), advanced)
+    return ApplyResult(frozenset(work.dirty), data.problems + tuple(work.problems), advanced, work.scans_stored,
+                       work.events_stored)
 
 
 def ingested_until(db: Database) -> dict[str, int]:
@@ -627,9 +638,27 @@ def read_and_apply(path: Path, db: Database, clock: Clock, realms: Mapping[str, 
     else:
         applied = apply_data(db, data, realms, now, markets)
         result = IngestResult(path, True, None, read_from, mtime, applied.dirty_keys, applied.problems,
-                              ingested_until(db), data.refresh_requested_at_ms)
+                              ingested_until(db), data.refresh_requested_at_ms, applied.ingested_until,
+                              applied.scans_stored, applied.events_stored)
     _report(db, path, result, now)
     return result
+
+
+def _log_read(result: IngestResult) -> None:
+    """One INFO line per read, so the data flow can be followed in the log (S17). File names and character ids
+    only: never the file's contents.
+
+    Args:
+        result: The read's outcome. A refused or unparsable file already has its warning, so it gets no line.
+    """
+    name = result.path.name
+    if result.ingested:
+        moved = ", ".join(f"{c} {ms}" for c, ms in sorted((result.moved_until or {}).items())) or "none"
+        source = " (from the .bak)" if result.read_from != result.path else ""
+        log.info("read %s%s: %d scans, %d events stored; ingestedUntil moved: %s; %d rows set aside", name, source,
+                 result.scans_stored, result.events_stored, moved, len(result.problems))
+    elif result.reason in ("missing", "unstable"):
+        log.info("%s not read: %s", name, result.reason)
 
 
 def incremental_update(db: Database, dirty_keys: frozenset[int], now_ms: int) -> None:
@@ -648,7 +677,7 @@ def incremental_update(db: Database, dirty_keys: frozenset[int], now_ms: int) ->
 def ingest_file(path: Path, db: Database, clock: Clock, realms: Mapping[str, str],
                 stat_mtime_ms: Callable[[Path], int | None] = file_mtime_ms,
                 markets: Sequence[str] = ()) -> IngestResult:
-    """Read one SavedVariables file, store it, and run the incremental update on what changed.
+    """Read one SavedVariables file, store it, log the read (S17) and run the incremental update on what changed.
 
     Args:
         path: AHProfit.lua of one account.
@@ -662,6 +691,7 @@ def ingest_file(path: Path, db: Database, clock: Clock, realms: Mapping[str, str
         The outcome, as read_and_apply.
     """
     result = read_and_apply(path, db, clock, realms, stat_mtime_ms, markets)
+    _log_read(result)
     if result.dirty_keys:
         incremental_update(db, result.dirty_keys, clock.now_ms())
     return result

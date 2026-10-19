@@ -1,5 +1,5 @@
 -- Core/Plan.lua: reads PortfolioPlan.lua, written by AHSync (SPEC §3.5, §2.2, §5.2).
--- At login, once both addons are loaded, the file is checked (schema version and checksum)
+-- At login, once both addons are loaded, the file is checked (schema version, export version, checksum)
 -- and SavedVariables rows AHSync has committed are pruned per character (A4). A file that
 -- fails its checks prunes nothing and shows no plan (EX4). Format: ahsync/export/plan_lua.py.
 
@@ -27,12 +27,14 @@ local function Checksum(file)
   return count .. ":" .. length
 end
 
---- Check a PortfolioPlan.lua table (EX4).
+--- Check a PortfolioPlan.lua table: schema, then export version, then checksum (EX4, FM34, FM35).
 ---@param file table|nil  The AHProfitPlan global
----@return table          { status = "ok" | "missing" | "version" | "checksum", file }
+---@return table          { status = "ok" | "missing" | "version" | "older" | "newer" | "checksum", file }
 function Plan.Check(file)
   if type(file) ~= "table" or type(file.ingestedUntil) ~= "table" then return { status = "missing" } end
   if file.schemaVersion ~= Plan.SCHEMA_VERSION then return { status = "version" } end
+  local stale = AHProfit.Market.ExportStatus(file)
+  if stale then return { status = stale } end
   if file.checksum ~= Checksum(file) then return { status = "checksum" } end
   return { status = "ok", file = file }
 end
@@ -48,10 +50,11 @@ end
 --- own recommendations work without it (SPEC §5.2).
 ---@return string|nil  nil when the plan is usable or simply absent; otherwise a message
 function Plan.Problem()
-  return ({
+  local status = State().status
+  return AHProfit.Market.STALE[status] or ({
     version = "AHSync's plan and the addon versions differ; plan rows are hidden. Update AHProfit or AHSync.",
     checksum = "AHSync's plan file is damaged; plan rows are hidden until AHSync writes it again.",
-  })[State().status]
+  })[status]
 end
 
 --- An optional text field: nil when empty.

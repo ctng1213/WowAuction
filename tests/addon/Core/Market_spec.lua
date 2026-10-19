@@ -62,6 +62,26 @@ describe("Market", function()
     assert_eq(Market.Item(2589), nil)
   end)
 
+  it("FM34 a file from an older AHSync (export version 0 or none) has no items and says restart AHSync", function()
+    for _, version in ipairs({ 0, false }) do
+      local Market = Boot(EX2, function(file) file.exportVersion = version or nil end)
+      assert_eq(Market.Problem(), "AHSync is older than this addon: restart AHSync, then /reload")
+      assert_eq({ Market.Item(2589), Market.Curve(2589), Market.Times() }, {})
+      assert_eq({ Market.Disenchantable(), Market.FlipOffers() }, { {}, {} })
+    end
+    local Market = Boot(EX2, function(file) file.exportVersion, file.schemaVersion = 0, 2 end)        -- schema first
+    assert_eq(Market.Problem(), "Market data and addon versions differ. Update AHProfit or AHSync, then /reload.")
+    Market = Boot(EX2, function(file)
+      file.exportVersion, file.markets["forever.pvp.horde.us"].I[2589] = 0, "45;;"                   -- checksum last
+    end)
+    assert_eq(Market.Problem(), "AHSync is older than this addon: restart AHSync, then /reload")
+  end)
+
+  it("FM35 a file from a newer AHSync says to deploy the addon", function()
+    local Market = Boot(EX2, function(file) file.exportVersion = 2 end)
+    assert_eq({ Market.Problem(), Market.Item(2589) }, { "This addon is older than AHSync's files: run tools/deploy.py, then /reload", nil })
+  end)
+
   it("a damaged file fails its checksum", function()
     local Market = Boot(EX2, function(file) file.markets["forever.pvp.horde.us"].I[2589] = "45;;" end)
     assert_eq(Market.Problem(), "Market data is damaged. Let AHSync write it again, then /reload.")

@@ -6,6 +6,7 @@ import pytest
 from ahsync.config import Config
 from ahsync.db.sqlite import BookScan, Database
 from ahsync.export import addon_files
+from ahsync.export import market_lua as market_module
 from ahsync.intel.contract import ItemIntel, MarketIntelligence
 from tests.support.fake_clock import FakeClock
 
@@ -146,3 +147,54 @@ def test_EX6_vendor_prices_of_vendor_sold_items_only(db):
             db.add_vendor_reagent(key)
     assert addon_files.vendor_prices(db) == {2320: 10, 4470: 38}
 
+
+
+def plan_with_one_action(db: Database, tmp_path, now: int):
+    """A WoW folder and a database with Linen published and Brugan's one open post; returns (cfg, folder)."""
+    folder = tmp_path / "Interface" / "AddOns" / "AHProfit_Data"
+    folder.mkdir(parents=True)
+    publish(db, now, LINEN)
+    sql(db, "INSERT INTO characters(id, market, gold) VALUES (?, ?, ?)", ("Brugan-G", M, 100))
+    sql(db, "INSERT INTO actions(action_id, char_id, kind, key, qty, price, slot_ms, expected_net, status, conf) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", ("a1", "Brugan-G", "post", LINEN, 20, 55, now, 1045.5, "pending", 0.8))
+    return Config(markets=(M,), wow_path=str(tmp_path)), folder
+
+
+def test_EX14_both_addon_files_carry_export_version_1_after_schema_version_outside_the_checksum(db, tmp_path):
+    now = FakeClock().now_ms()
+    cfg, folder = plan_with_one_action(db, tmp_path, now)
+    assert addon_files.export_market(db, cfg, now, lambda s: None) and addon_files.export_plan(db, cfg, now, lambda s: None)
+    assert addon_files.EXPORT_VERSION == 1
+    for name in ("MarketIntelligence.lua", "PortfolioPlan.lua"):
+        header = (folder / name).read_text(encoding="utf-8").splitlines()
+        at = header.index("  schemaVersion = 1,")
+        assert header[at + 1] == "  exportVersion = 1,"
+    plan = (folder / "PortfolioPlan.lua").read_text(encoding="utf-8")
+    action = f"a1;post;{LINEN};20;55;{now};1046;;;pending;80;;;"
+    assert f'checksum = "1:{len(action)}"' in plan                       # the action string only
+    market = (folder / "MarketIntelligence.lua").read_text(encoding="utf-8")
+    linen = market_module.item_text(item(LINEN))
+    assert f'checksum = "1:{len(linen)}"' in market                       # Linen's item string only
+
+
+def test_EX15_each_written_addon_file_is_logged_with_its_size_time_and_contents(db, tmp_path, caplog):
+    now = FakeClock().now_ms()
+    cfg, folder = plan_with_one_action(db, tmp_path, now)
+    with caplog.at_level("INFO", logger="ahsync.export"):
+        addon_files.export_market(db, cfg, now, lambda s: None)
+        addon_files.export_plan(db, cfg, now, lambda s: None)
+    market_bytes = (folder / "MarketIntelligence.lua").stat().st_size
+    plan_bytes = (folder / "PortfolioPlan.lua").stat().st_size
+    assert [r.getMessage() for r in caplog.records if r.levelname == "INFO"] == [
+        f"wrote MarketIntelligence.lua: {market_bytes} bytes, generatedAt {now}, exportVersion 1, 1 items",
+        f"wrote PortfolioPlan.lua: {plan_bytes} bytes, generatedAt {now}, exportVersion 1, 1 open actions"]
+
+    caplog.clear()
+
+    def locked(src, dst):
+        """A rename that antivirus blocks."""
+        raise PermissionError("locked")
+
+    with caplog.at_level("INFO", logger="ahsync.export"):
+        assert addon_files.export_market(db, cfg, now, lambda s: None, locked) is False
+    assert [r.levelname for r in caplog.records] == ["WARNING"] * 3

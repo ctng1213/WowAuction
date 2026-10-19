@@ -23,6 +23,7 @@ needs an item (SPEC §5.1 lazy decode):
   so the addon's crafts can buy mats from a vendor (EX6). Not in the checksum.
 - The checksum is "<item and D strings>:<their total length>": cheap for the addon to check
   at login, and a truncated or mixed-up file fails it.
+- exportVersion (EX14) is outside the checksum: the build of the format, shared with PortfolioPlan.lua.
 """
 from __future__ import annotations
 
@@ -34,6 +35,9 @@ from ahsync.engine.views import round_half_up
 from ahsync.intel.contract import IntelWindow, ItemIntel, MarketIntelligence
 
 MARKET_SCHEMA_VERSION = 1      # the addon refuses any other (FM17)
+# Bumped on ANY change to either addon file's format, additive or not, so an addon and an AHSync of
+# different builds say which side is stale (SPEC §3.5, FM34, FM35). Equals AHProfit.EXPORT_VERSION (Core/Market.lua).
+EXPORT_VERSION = 1
 HOUR_MS = 3_600_000
 MINUTE_MS = 60_000
 STALE_PRICE_MS = 7 * 86_400_000   # older prices are left out unless shortlisted (EX5: the 2 MB budget)
@@ -52,6 +56,18 @@ def lua_string(text: str) -> str:
     """
     escaped = text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
     return f'"{escaped}"'
+
+
+def item_count(text: str) -> int:
+    """How many items a MarketIntelligence.lua holds, for the write's log line (EX15).
+
+    Args:
+        text: The file, as market_lua made it (one item per line, each starting "I[").
+
+    Returns:
+        The number of item strings, over every market.
+    """
+    return sum(1 for line in text.splitlines() if line.startswith("I["))
 
 
 def _num(value: int | None) -> str:
@@ -251,7 +267,8 @@ def market_lua(intels: Sequence[MarketIntelligence], shortlists: Mapping[str, se
                        f"S = {{ {rows} }} }},")
     chars = ", ".join(f"[{lua_string(c)}] = {lua_string(m)}" for c, m in sorted(char_markets.items()))
     vendors = ", ".join(f"[{key}] = {price}" for key, price in sorted((vendor or {}).items()))
-    lines += ["AHProfitMarket = {", f"  schemaVersion = {MARKET_SCHEMA_VERSION},", f"  generatedAt = {generated_ms},",
+    lines += ["AHProfitMarket = {", f"  schemaVersion = {MARKET_SCHEMA_VERSION},",
+              f"  exportVersion = {EXPORT_VERSION},", f"  generatedAt = {generated_ms},",
               f"  checksum = {lua_string(checksum(blocks, des))},", f"  charMarkets = {{ {chars} }},", f"  vendor = {{ {vendors} }},", "  markets = {",
               *entries, "  },", "}", ""]
     return "\n".join(lines)

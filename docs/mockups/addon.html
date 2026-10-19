@@ -180,11 +180,12 @@
 </table>
 
 <h2>4. States</h2>
-<p class="note">Left: no <code>MarketIntelligence.lua</code> yet (UI4). Middle: data more than 24 h old, so the badge turns amber (UI5). Right: no <code>PortfolioPlan.lua</code> (or one from another version). The addon's own options still work, and only the desktop's cross-character advice is hidden (SPEC §5.2).</p>
+<p class="note">Left: no <code>MarketIntelligence.lua</code> yet (UI4). Middle: data more than 24 h old, so the badge turns amber (UI5). Right: no <code>PortfolioPlan.lua</code> (or one from another version). The addon's own options still work, and only the desktop's cross-character advice is hidden (SPEC §5.2). Below: files written by an AHSync older than the addon (FM34; FM35 is the reverse and says to run <code>tools/deploy.py</code>). The footer always carries the market file's problem first, then the plan file's, so a blank tab is never silent.</p>
 <div class="stage">
   <div class="frame" style="width:300px">
     <div class="titlebar"><span class="name">AHProfit</span><span class="sub"></span><span class="close">✕</span></div>
     <div class="empty"><b>No data yet</b>Run AHSync, then /reload</div>
+    <div class="footer"><span>No market data yet. Run AHSync, then /reload.</span></div>
   </div>
   <div class="frame" style="width:300px">
     <div class="titlebar"><span class="name">AHProfit</span><span class="sub">Grommash · Horde PvP</span><span class="badge stale">data 30 h old</span></div>
@@ -197,6 +198,11 @@
       <tr class="row"><td><span class="act buy">BUY</span></td><td><span class="item q1" style="max-width:120px">Silk Cloth</span></td><td class="num pos">+7s 30c</td><td class="num">88% <span class="pos">●</span></td></tr>
     </table>
     <div class="footer"><span>Own options only · no desktop plan</span><span class="amber">run AHSync for transfers</span></div>
+  </div>
+  <div class="frame" style="width:300px">
+    <div class="titlebar"><span class="name">AHProfit</span><span class="sub">Grommash · Horde PvP</span></div>
+    <div class="empty"><b>AHSync is older than this addon</b>restart AHSync, then /reload</div>
+    <div class="footer"><span class="amber">AHSync is older than this addon: restart AHSync, then /reload</span></div>
   </div>
 </div>
 

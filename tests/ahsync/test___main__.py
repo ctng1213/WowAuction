@@ -333,3 +333,49 @@ def test_refresh_requests_merge_and_a_take_consumes_exactly_one():
     for w in workers:
         w.join()
     assert requests.take() is True and requests.take() is False
+
+
+def test_S17_a_rewritten_savedvariables_file_logs_its_read_and_the_re_plan(tmp_path, caplog):
+    clock = FakeClock()
+    path = write_savedvars(tmp_path, clock, age_ms=60_000)
+    db = Database.open(tmp_path / "ahsync.db", clock.now_ms(), None)
+    ctx = SyncContext(None, db, clock, None)
+    with caplog.at_level(logging.INFO, logger="ahsync"):
+        build_hooks(ctx, Config(realms={"Grommash": "pvp"}), tmp_path / "backups").savedvars_changed(path)
+    db.close()
+    lines = [r.getMessage() for r in caplog.records if r.levelname == "INFO"]
+    assert lines[0].startswith("read AHProfit.lua: 0 scans, 1 events stored")
+    assert lines[1] == "re-planned after reading AHProfit.lua: nothing (no published intelligence, or it failed)"
+
+
+def test_FM36_a_stop_file_ends_the_loop_and_a_stale_one_never_stops_a_start(tmp_path):
+    stop = tmp_path / "data" / "ahsync.stop"
+    calls = {"n": 0}
+
+    def appears_on_second_check() -> bool:
+        calls["n"] += 1
+        if calls["n"] == 2:
+            stop.write_text("stop", encoding="utf-8")         # the deploy script asks AHSync to stop
+        return calls["n"] > 10
+
+    code, _ = start(tmp_path, AhfWorld(FakeClock()), should_stop=appears_on_second_check)
+    assert (code, calls["n"], stop.exists()) == (0, 2, False)
+
+    stop.write_text("stale", encoding="utf-8")                  # left by a crash: must not stop the next start
+    calls["n"] = 0
+
+    def after_three_checks() -> bool:
+        calls["n"] += 1
+        return calls["n"] > 3
+
+    code, _ = start(tmp_path, AhfWorld(FakeClock()), should_stop=after_three_checks)
+    assert (code, calls["n"], stop.exists()) == (0, 4, False)
+
+    running = InstanceLock(tmp_path / "data" / "ahsync.lock")   # another AHSync runs, and deploy asked it to stop
+    assert running.acquire()
+    stop.write_text("stop", encoding="utf-8")
+    try:
+        code, printed = start(tmp_path, AhfWorld(FakeClock()))
+    finally:
+        running.release()
+    assert (code, printed.strip(), stop.exists()) == (1, ALREADY_RUNNING, True)   # the request still stands

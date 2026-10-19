@@ -156,6 +156,13 @@ describe("ViewModel", function()
                        { id = "b", note = "" }, { header = true } })
   end)
 
+  it("the footer shows capture off first, then the market file's problem, then the plan's, else the tab's own", function()
+    local VM = Boot()
+    assert_eq(VM.FooterText("broken", "market", "plan", "1g"), "not recording: broken")
+    assert_eq({ VM.FooterText(nil, "market", "plan", "1g"), VM.FooterText(nil, nil, "plan", "1g") }, { "market", "plan" })
+    assert_eq(VM.FooterText(nil, nil, nil, "1g"), VM.WithCoins("1g"))
+  end)
+
   it("UI5 the age badge turns amber once the data is more than 24 h old", function()
     local VM = Boot()
     assert_eq(VM.Age(NOW - 30 * HOUR, NOW), { text = "data 1 d old", amber = true })

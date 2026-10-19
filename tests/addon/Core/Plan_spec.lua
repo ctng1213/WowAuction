@@ -106,6 +106,26 @@ describe("Plan", function()
     assert_eq({ Plan.Rule(2589) }, {})
   end)
 
+  it("FM34 a plan from an older AHSync (export version 0 or none) prunes nothing, shows no rows and says restart AHSync", function()
+    for _, version in ipairs({ 0, false }) do
+      local Plan = LoginWithRows(function(plan) plan.exportVersion = version or nil end)
+      assert_eq({ #AHProfitDB.scans, #AHProfitDB.events }, { 3, 2 })
+      assert_eq(Plan.Actions(A), {})
+      assert_eq({ Plan.Rule(2589) }, {})
+      assert_eq(Plan.Problem(), "AHSync is older than this addon: restart AHSync, then /reload")
+    end
+    local Plan = LoginWithRows(function(plan) plan.exportVersion, plan.schemaVersion = 0, 2 end)   -- schema first
+    assert_eq(Plan.Problem(), "AHSync's plan and the addon versions differ; plan rows are hidden. Update AHProfit or AHSync.")
+    Plan = LoginWithRows(function(plan) plan.exportVersion, plan.actions[A][1] = 0, "tampered" end)  -- checksum last
+    assert_eq(Plan.Problem(), "AHSync is older than this addon: restart AHSync, then /reload")
+  end)
+
+  it("FM35 a plan from a newer AHSync says to deploy the addon", function()
+    local Plan = LoginWithRows(function(plan) plan.exportVersion = 2 end)
+    assert_eq({ Plan.Actions(A), #AHProfitDB.scans }, { {}, 3 })
+    assert_eq(Plan.Problem(), "This addon is older than AHSync's files: run tools/deploy.py, then /reload")
+  end)
+
   it("without a plan the addon carries on: nothing pruned, no problem shown", function()
     Stubs.Reset()
     _G.AHProfitPlan = nil
