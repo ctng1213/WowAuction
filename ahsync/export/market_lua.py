@@ -4,7 +4,7 @@ One compact string per item (Lua constant limits), decoded by the addon only whe
 needs an item (SPEC §5.1 lazy decode):
 
     I[key] = "cur,curQty,curAgeMin,med7,med30,p10,p90,trend10,sold10,listed10,supply,conf,
-              seasonality,postPrice,refStack,sellValue,volumeUnknown,chance1000;sellWindows;buyWindows"
+              seasonality,postPrice,refStack,sellValue,volumeUnknown,chance1000,typicalSupply,suspect,closes30;sellWindows;buyWindows"
     C[key] = the sell-probability curve, one character per point (SPEC §3.1.1)
 
 - Numbers are integers; an empty field is unavailable, never 0. Money is copper,
@@ -37,7 +37,7 @@ from ahsync.intel.contract import IntelWindow, ItemIntel, MarketIntelligence
 MARKET_SCHEMA_VERSION = 1      # the addon refuses any other (FM17)
 # Bumped on ANY change to either addon file's format, additive or not, so an addon and an AHSync of
 # different builds say which side is stale (SPEC §3.5, FM34, FM35). Equals AHProfit.EXPORT_VERSION (Core/Market.lua).
-EXPORT_VERSION = 2
+EXPORT_VERSION = 3              # 3: market items end in closes30 (TT23, PP4); 2: a mail's recipient (EX16)
 HOUR_MS = 3_600_000
 MINUTE_MS = 60_000
 STALE_PRICE_MS = 7 * 86_400_000   # older prices are left out unless shortlisted (EX5: the 2 MB budget)
@@ -122,7 +122,7 @@ def item_text(s: ItemIntel) -> str:
               _num(s.seasonality), _num(s.post_price), _num(s.ref_stack),
               "" if s.sell_value is None else str(round_half_up(s.sell_value)), "1" if s.volume_unknown else "0",
               str(round_half_up(s.chance * 1000)), _num(s.median_daily_supply),          # EX10
-              "1" if s.cur_suspect else "0"]                                            # A58
+              "1" if s.cur_suspect else "0", _num(s.closes_30d)]                      # A58; TT23
     return f"{','.join(fields)};{windows_text(s.sell_windows)};{windows_text(s.buy_windows)}"
 
 

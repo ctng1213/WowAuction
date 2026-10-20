@@ -45,7 +45,7 @@ describe("Reserves", function()
     AHProfitDB.reserves[A] = LINEN .. ",10;" .. SILK .. ",3"
     AHProfitDB.reserveTimes[A] = LINEN .. "," .. T .. ";" .. SILK .. "," .. (T + 2 * HOUR)
     Stubs.Reset({ keepSaved = true })
-    _G.AHProfitPlan = { schemaVersion = 1, exportVersion = 2, generatedAt = T, checksum = "0:0", ingestedUntil = {}, actions = {}, rules = {},
+    _G.AHProfitPlan = { schemaVersion = 1, exportVersion = 3, generatedAt = T, checksum = "0:0", ingestedUntil = {}, actions = {}, rules = {},
       reserves = { [A] = LINEN .. ",5," .. (T + HOUR) .. ";" .. SILK .. ",0," .. (T + HOUR) .. ";" .. WOOL .. ",-1," .. (T + HOUR) } }
     Stubs.Login()
     local Reserves = AHProfit.Reserves

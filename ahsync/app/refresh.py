@@ -24,7 +24,8 @@ from ahsync.recommend.history_page import history_page
 from ahsync.recommend.inventory_page import inventory_page
 from ahsync.recommend.on_ah_page import on_ah_page
 from ahsync.recommend.pages import craft_page, disenchant_page
-from ahsync.recommend.plan import plan_market, plan_rows, sell_records
+from ahsync.recommend.plan import plan_rows, sell_records
+from ahsync.recommend.portfolio import alternative_rows, plan_portfolio
 from ahsync.recommend.rules_page import rules_page
 from ahsync.recommend.plan_pages import plan_pages, view_actions
 
@@ -44,8 +45,9 @@ class RefreshResult:
 
 
 def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], intel_items: dict, items: dict,
-                now_ms: int, offset_ms: int, cfg: Config) -> list:
-    """Plan the market's characters and stage the plan and its Today, Week, Flip and Inventory pages (SPEC §3.4C, §3.5).
+                now_ms: int, offset_ms: int, cfg: Config, built_ms: int) -> tuple[list, int | None]:
+    """Plan the market's characters and stage the plan, its alternatives and its Today, Week, Flip and Inventory pages
+    (SPEC §3.4C, §3.4D, §3.5).
 
     Args:
         db: Database (inside the refresh's transaction).
@@ -56,15 +58,22 @@ def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], in
         now_ms: Now.
         offset_ms: Local time minus UTC, for the pages' days and times.
         cfg: Config.
+        built_ms: The intelligence's built_ms.
 
     Returns:
-        The planned actions (engine.plan.PlanAction), for the Craft page's chains (D56).
+        (the funded plan's actions (engine.plan.PlanAction), for the Craft page's chains (D56); the portfolio's
+        remaining capacity in copper, for the Craft and Disenchant pages' limit (D45), None without characters).
+
+    Raises:
+        engine.selection.SelectionError: The allocation broke a D.5 rule: nothing of the run is published.
     """
     records = sell_records(db, [c for c, _ in characters], market, now_ms, cfg)      # SPEC §3.3.3
     db.store_sell_records(market, records)                                           # for the status pass (M8)
-    actions = plan_market(db, characters, intel_items, items, now_ms, cfg, records)
+    plan = plan_portfolio(db, characters, intel_items, items, now_ms, cfg, records, built_ms)
+    actions = plan.actions if plan else []
     rows = plan_rows(actions, market, now_ms)
     db.stage_plan(rows)
+    db.stage_alternatives(market, alternative_rows(plan))                           # SPEC §3.4D, M9
     week_start = (now_ms + offset_ms) // DAY_MS * DAY_MS - offset_ms
     history = db.history_actions([c for c, _ in characters], week_start, week_start + 7 * DAY_MS)
     shown = view_actions(actions, rows, history, items)
@@ -79,7 +88,7 @@ def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], in
                                         intel_items, items, offset_ms)
     for page, body in pages.items():
         db.stage_view(page, market, body, now_ms)
-    return actions
+    return actions, plan.accounting.remaining_capacity if plan else None
 
 
 def refresh_market(db: Database, market: str, now_ms: int, cfg: Config, result: RefreshResult,
@@ -101,11 +110,12 @@ def refresh_market(db: Database, market: str, now_ms: int, cfg: Config, result: 
         log.warning("refresh: item %s on %s failed: %s", key, market, error)
     with db.transaction():
         db.stage_intel(intel)
-        _stage_recommendations(db, market, intel.items, now_ms, offset_ms, cfg)
+        _stage_recommendations(db, market, intel.items, now_ms, offset_ms, cfg, intel.built_ms)
     result.items += len(intel.items)
 
 
-def _stage_recommendations(db: Database, market: str, stats: dict, now_ms: int, offset_ms: int, cfg: Config) -> None:
+def _stage_recommendations(db: Database, market: str, stats: dict, now_ms: int, offset_ms: int, cfg: Config,
+                           built_ms: int) -> None:
     """Stage a market's plan and every page built from its intelligence and character state (SPEC §3.5).
 
     Args:
@@ -115,15 +125,17 @@ def _stage_recommendations(db: Database, market: str, stats: dict, now_ms: int, 
         now_ms: Now.
         offset_ms: Local time minus UTC.
         cfg: Config.
+        built_ms: The intelligence's built_ms (price ages, SPEC §3.4D.6).
     """
     items = db.items()
     characters = db.characters_in(market)
     char_ids = [c for c, _ in characters]
     total_gold = sum(g for _, g in characters)
-    db.stage_view("disenchant", market, disenchant_page(db, char_ids, stats, items, total_gold, now_ms, cfg), now_ms)
-    planned = _stage_plan(db, market, characters, stats, items, now_ms, offset_ms, cfg)
-    db.stage_view("craft", market, craft_page(db, char_ids, stats, items, total_gold, now_ms, cfg, planned, offset_ms),
-                  now_ms)                                                                       # D56
+    planned, capacity = _stage_plan(db, market, characters, stats, items, now_ms, offset_ms, cfg, built_ms)
+    db.stage_view("disenchant", market, disenchant_page(db, char_ids, stats, items, total_gold, now_ms, cfg, capacity),
+                  now_ms)
+    db.stage_view("craft", market, craft_page(db, char_ids, stats, items, total_gold, now_ms, cfg, planned, offset_ms,
+                                              capacity), now_ms)                                # D45, D56
     db.stage_view("on_ah", market, on_ah_page(db, char_ids, stats, items, now_ms, cfg), now_ms)   # D18, D53
     db.stage_view("history", market, history_page(db, char_ids, stats, items, now_ms, offset_ms), now_ms)   # D47
     sheets = [CharacterSheet(c, cls, level, faction, m, gold, cfg.budgets.get(c), recipes, updated, profs)
@@ -157,7 +169,7 @@ def replan_all(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0) -> li
         for market in markets:
             scanned = with_scan(intels[market], *db.scans_since(market, intels[market].built_ms))   # IU6
             with db.transaction():
-                _stage_recommendations(db, market, scanned.items, now_ms, offset_ms, cfg)
+                _stage_recommendations(db, market, scanned.items, now_ms, offset_ms, cfg, scanned.built_ms)
         db.publish_refresh(markets, with_intel=False)       # the stored intelligence stays the analysis' own
     except Exception as error:                         # noqa: BLE001  keep the last good plan (SPEC §5.2 rule 4)
         log.error("re-plan failed: %s: %s", type(error).__name__, error)

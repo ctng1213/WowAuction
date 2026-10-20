@@ -308,14 +308,14 @@ def category(a: ViewAction, chains: dict[str, set[str]]) -> str:
         chains: chain id -> the kinds of its actions.
 
     Returns:
-        "Crafts", "Flips", "Disenchant" or "Sell owned".
+        "Crafts", "Flips", "Disenchant" (a disenchant, or a buy to disenchant, SPEC §3.4D.3) or "Sell owned".
     """
     kinds = chains.get(chain_id(a), set()) if a.in_chain else set()
     if "craft" in kinds:
         return "Crafts"
-    if "buy" in kinds:
-        return "Flips"
-    return "Disenchant" if a.kind == "de" else "Sell owned"
+    if "de" in kinds or a.kind == "de":
+        return "Disenchant"
+    return "Flips" if "buy" in kinds else "Sell owned"
 
 
 def _post_note(a: ViewAction, offset_ms: int) -> str:

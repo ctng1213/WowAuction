@@ -1,14 +1,12 @@
-"""The whole weekly plan: your stock, crafts and flips allocated together (SPEC §3.4C).
+"""The weekly plan's world: your stock, the market and the rules, prepared once for the portfolio (SPEC §3.4C, §3.4D).
 
-Order (§3.4 hold value, §3.4C.4):
-1. A first sell plan of everything you own gives each item's hold value: what one
-   unit is worth under its own best sell plan.
-2. Crafts use owned mats at that hold value, so a craft never beats selling the mats
-   raw by accident; the units they use leave the stock.
-3. The sell plan of the stock that is left.
-4. Flips, from the auctions the crafts didn't buy.
-One capacity ledger and one set of budgets run through all of it, so each owned unit,
-each auction and each unit of a window's demand is spent once (PL4). Pure.
+A first sell plan of everything you own gives each item's hold value: what one unit is worth
+under its own best sell plan (§3.4 hold value). Crafts then price owned mats at that value, so
+a craft never beats selling the mats raw by accident. The rules take items out: `ignore` from
+everything, `no_buy` and "not selling" from buys and crafts, a vendor-sold item from posts and
+buys (R22, R23), a suspect price from flips (FM5). The portfolio's candidates (engine/candidates)
+are generated from this world, and the optimizer (engine/allocation) decides which are funded,
+spending each owned unit, each auction and each unit of a window's demand once (PL4). Pure.
 """
 from __future__ import annotations
 
@@ -16,23 +14,34 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
 from ahsync.engine import craft, fees
-from ahsync.engine.craft_plan import CraftWorld, craft_plan
-from ahsync.engine.flips import FlipSettings, auctions, flip_plan
-from ahsync.engine.plan import Lot, PlanAction, PlanSettings, SellFacts, sell_plan
+from ahsync.engine.craft_plan import CraftWorld
+from ahsync.engine.flips import auctions
+from ahsync.engine.plan import Lot, PlanSettings, SellFacts, sell_plan
 
 
 @dataclass(frozen=True)
 class WeekInputs:
-    """Everything the weekly plan reads."""
+    """Everything the weekly plan reads (no gold: the portfolio's accounting holds it, SPEC §3.4D.1)."""
 
     lots: tuple[Lot, ...]                     # your unbound stock per character
     facts: dict[int, SellFacts]               # item key -> what the plan knows (stock, products, flip candidates)
-    world: CraftWorld                         # recipes and mat sources (its hold values are filled in here)
-    budgets: dict[str, int]                   # character id -> copper it may spend
-    total_gold: int                           # all your characters' gold
+    world: CraftWorld                         # recipes and mat sources (its hold values are filled in by prepare)
     no_buy: frozenset[int] = frozenset()      # never buy or craft (rules no_buy, ignore; not selling)
     ignore: frozenset[int] = frozenset()      # in no recommendation, not even the sell plan (rule ignore)
     suspect: frozenset[int] = frozenset()     # lowest price out of range and unconfirmed: never flipped (FM5)
+
+
+@dataclass(frozen=True)
+class PlanWorld:
+    """The world candidates are generated from: rules applied, hold values filled in (SPEC §3.4D.3)."""
+
+    lots: tuple[Lot, ...]                     # your stock less ignored items
+    facts: dict[int, SellFacts]               # item key -> facts, ignored items left out
+    post_facts: dict[int, SellFacts]          # the same, with no post price for vendor-sold items (R23)
+    world: CraftWorld                         # recipes, the market at hold values (vendor first), who holds what
+    vendor_sold: frozenset[int]               # anyone can buy these from a vendor: never posted or bought (R22, R23)
+    no_craft: frozenset[int]                  # products never crafted: no_buy, ignore, vendor-sold, not selling (O5)
+    no_buy: frozenset[int]                    # items never bought to resell: no_craft plus suspect prices (FM5)
 
 
 def hold_values(lots: Sequence[Lot], facts: dict[int, SellFacts], now_ms: int, s: PlanSettings) -> dict[int, float]:
@@ -56,24 +65,32 @@ def hold_values(lots: Sequence[Lot], facts: dict[int, SellFacts], now_ms: int, s
     return {key: value / units for key, (value, units) in totals.items()}
 
 
-def without_used(lots: Sequence[Lot], used: dict[int, float]) -> list[Lot]:
-    """Your stock after crafts took owned mats, taken from characters in id order.
+def prepare(w: WeekInputs, now_ms: int, s: PlanSettings) -> PlanWorld:
+    """Apply the rules and fill in hold values (SPEC §3.4 hold value, §3.4.2, R22, R23, O5, O9, FM5).
 
     Args:
-        lots: Your stock.
-        used: Item key -> units the crafts used (may be fractional; rounded up).
+        w: Everything the plan reads.
+        now_ms: Now.
+        s: Plan settings.
 
     Returns:
-        The lots that are left, empty ones dropped.
+        The PlanWorld. An ignored item is no lot, no fact and no mat (O9); a vendor-sold mat is bought from the
+        vendor only and an owned unit of it is worth no more than the vendor price (R22).
     """
-    need = {key: -int(-units // 1) for key, units in used.items()}
-    out = []
-    for lot in sorted(lots, key=lambda lot: (lot.key, lot.char_id)):
-        take = min(lot.qty, need.get(lot.key, 0))
-        need[lot.key] = need.get(lot.key, 0) - take
-        if lot.qty - take > 0:
-            out.append(replace(lot, qty=lot.qty - take))
-    return out
+    lots = tuple(lot for lot in w.lots if lot.key not in w.ignore)
+    facts = {k: f for k, f in w.facts.items() if k not in w.ignore}
+    m = w.world.market
+    market = craft.vendor_first(craft.Market({k: v for k, v in m.books.items() if k not in w.ignore},
+                                             {k: v for k, v in m.vendor.items() if k not in w.ignore},
+                                             {k: v for k, v in m.owned.items() if k not in w.ignore},
+                                             hold_values(lots, facts, now_ms, s)))
+    world = replace(w.world, market=market, held={(lot.char_id, lot.key): float(lot.qty) for lot in lots})   # C22
+    vendor_sold = frozenset(m.vendor)
+    # SPEC §3.3.3: an item flagged not selling is bought and crafted no more; your stock is still sold (O5).
+    struggling = frozenset(k for k, f in w.facts.items() if f.record is not None and f.record.not_selling)
+    no_craft = w.no_buy | w.ignore | vendor_sold | struggling
+    post_facts = {k: replace(f, post_price=None, level=None) if k in vendor_sold else f for k, f in facts.items()}
+    return PlanWorld(lots, facts, post_facts, world, vendor_sold, no_craft, no_craft | w.suspect)
 
 
 def without_bought(f: SellFacts, units: float) -> SellFacts:
@@ -97,7 +114,7 @@ def without_bought(f: SellFacts, units: float) -> SellFacts:
     return replace(f, book=tuple((p, s, b, n) for (p, s, b), n in sorted(left.items())))
 
 
-def _bought(before: craft.Market, after: craft.Market) -> dict[int, float]:
+def bought_from(before: craft.Market, after: craft.Market) -> dict[int, float]:
     """AH units the crafts bought, per item.
 
     Args:
@@ -109,41 +126,3 @@ def _bought(before: craft.Market, after: craft.Market) -> dict[int, float]:
     """
     return {key: sum(u for _, u in levels) - sum(u for _, u in after.books.get(key, ()))
             for key, levels in before.books.items()}
-
-
-def week_plan(w: WeekInputs, now_ms: int, s: PlanSettings, fs: FlipSettings, max_depth: int) -> list[PlanAction]:
-    """The weekly plan (SPEC §3.4C): crafts, the sell plan of the rest of your stock, then flips.
-
-    Args:
-        w: Everything the plan reads; its budgets are copied, not changed.
-        now_ms: Now.
-        s: Plan settings.
-        fs: Flip settings (min_flip_margin, max_risk_pct).
-        max_depth: Config max_craft_depth.
-
-    Returns:
-        Every action, crafts first, then the sell plan, then flips; each part in its own order.
-    """
-    lots = [lot for lot in w.lots if lot.key not in w.ignore]
-    facts = {k: f for k, f in w.facts.items() if k not in w.ignore}
-    m = w.world.market
-    market = craft.vendor_first(craft.Market({k: v for k, v in m.books.items() if k not in w.ignore},
-                                             {k: v for k, v in m.vendor.items() if k not in w.ignore},
-                                             {k: v for k, v in m.owned.items() if k not in w.ignore},
-                                             hold_values(lots, facts, now_ms, s)))   # an ignored item is no mat (O9)
-    world = replace(w.world, market=market, held={(lot.char_id, lot.key): float(lot.qty) for lot in lots})   # C22
-    budgets, ledger = dict(w.budgets), {}
-    vendor_sold = set(m.vendor)               # anyone can buy these from a vendor: never posted (R22, R23)
-    # SPEC §3.3.3: an item flagged not selling is bought and crafted no more; your stock is still sold (O5).
-    struggling = {k for k, f in w.facts.items() if f.record is not None and f.record.not_selling}
-    crafts, after = craft_plan(world, budgets, w.total_gold, now_ms, s, fs.max_risk_pct, ledger, max_depth,
-                               exclude=set(w.no_buy | w.ignore) | vendor_sold | struggling)
-    used = {k: world.market.owned.get(k, 0.0) - after.owned.get(k, 0.0) for k in world.market.owned}
-    no_posts = {k: replace(f, post_price=None, level=None) if k in vendor_sold else f for k, f in facts.items()}
-    sold = [a for a in sell_plan(without_used(lots, used), no_posts, now_ms, s, ledger)
-            if not (a.key in vendor_sold and a.kind == "hold")]
-    bought = _bought(world.market, after)
-    flip_facts = {k: without_bought(f, bought.get(k, 0.0)) for k, f in facts.items()}
-    flips = flip_plan(flip_facts, budgets, w.total_gold, now_ms, s, fs, ledger,
-                      exclude=set(w.no_buy | w.ignore | w.suspect) | vendor_sold | struggling)   # R22, O5, FM5
-    return crafts + sold + flips

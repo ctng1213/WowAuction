@@ -207,25 +207,51 @@ def drop_suspect(closes: Sequence[tuple[int, int]], p10: int | None, p90: int | 
     return [(t, c) for t, c in closes if t not in lone]
 
 
-def post_price(cur_others_copper: int | None, med7: int | None, p90: int | None = None) -> int | None:
-    """Post price p = min(curOthers − 1, max(med7, p90_30)) (SPEC §3.4, PP1, PP2).
+def post_price(cur_others_copper: int | None, med7: int | None, p90: int | None = None,
+               closes: int | None = None) -> int | None:
+    """Post price p = min(curOthers − 1, max(med7, p90_30)) (SPEC §3.4, PP1, PP2, PP4).
 
     You undercut the cheapest competitor, up to the highest price the market traded at recently, and never post
-    above a price the last 30 days never saw.
+    above a price the last 30 days never saw. With fewer than MIN_HOURLY_CLOSES hourly closes in 30 days the cap
+    is med7 alone (PP4): a p90 of a few closes is the outlier, not the market.
 
     Args:
         cur_others_copper: Lowest competing buyout in copper, or None.
         med7: 7-day median in copper, or None.
         p90: 30-day nearest-rank 90th percentile of hourly closes in copper, or None.
+        closes: Hourly closes in the last 30 days; None when unknown (the cap is then max(med7, p90)).
 
     Returns:
-        The unit price in copper: with a competitor, the undercut capped at the larger of med7 and p90 (the
-        available one when the other is None; uncapped when both are); without one, med7, else p90; None when
-        nothing is known (the item is flagged "no price").
+        The unit price in copper: with a competitor, the undercut capped at the larger of med7 and p90 (med7
+        alone on thin data when med7 is known; the available one when the other is None; uncapped when both
+        are); without one, med7, else p90; None when nothing is known (the item is flagged "no price").
     """
-    known = [v for v in (med7, p90) if v is not None]
+    thin = closes is not None and closes < MIN_HOURLY_CLOSES and med7 is not None
+    known = [v for v in (med7, None if thin else p90) if v is not None]
     cap = max(known) if known else None
     if cur_others_copper is None:
         return med7 if med7 is not None else p90
     undercut = cur_others_copper - 1
     return undercut if cap is None else min(undercut, cap)
+
+
+def relist_price(cur_others_copper: int | None, med7: int | None, p90: int | None = None,
+                 closes: int | None = None) -> int | None:
+    """The price to relist bought units now: the post price, only when it is grounded (SPEC §3.4C.2, R28).
+
+    With another listing left, the undercut grounds it. With none, the price is the level alone, which is
+    grounded only by MIN_HOURLY_CLOSES hourly closes in 30 days: a med7 of four closes is not a price you can
+    sell at. Stock you already own may still post at post_price.
+
+    Args:
+        cur_others_copper: Lowest competing buyout left after the buy, copper, or None.
+        med7: 7-day median, copper, or None.
+        p90: 30-day 90th percentile of hourly closes, copper, or None.
+        closes: Hourly closes in the last 30 days; None when unknown (treated as enough).
+
+    Returns:
+        post_price(cur_others, med7, p90, closes), or None when nothing is listed and closes < MIN_HOURLY_CLOSES.
+    """
+    if cur_others_copper is None and closes is not None and closes < MIN_HOURLY_CLOSES:
+        return None
+    return post_price(cur_others_copper, med7, p90, closes)

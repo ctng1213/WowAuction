@@ -187,7 +187,7 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
     newest = item.book
     book = newest[1] if newest else None
     ref = ref_stack(book or [])
-    price = prices.post_price(cur.price if cur and cur.price is not None else None, med7, p90)        # PP2
+    price = prices.post_price(cur.price if cur and cur.price is not None else None, med7, p90, len(last30))  # PP2, PP4
     supply = Supply(volume.sold_per_day, volume.listed_per_day, tuple(book) if book is not None else None,
                     cur.price if cur else None, cur.qty if cur else None)
     chance, unknown = sellprob.posting_chance(supply, price, ref, now_ms, settings, sales[0].values)   # P26
@@ -210,7 +210,7 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
         cur_suspect=prices.suspect_price(cur.price if cur else None, p10, p90, recent),
         median_daily_supply=median_daily_supply(item.hourly_supply, now_ms),
         observed_listing_turnover=observed_turnover(item.hourly_supply, now_ms),
-        volume_kind=volume.main_kind)
+        volume_kind=volume.main_kind, closes_30d=len(last30))
 
 
 def with_scan(intel: MarketIntelligence, prices: dict[int, tuple[int, int, int]],

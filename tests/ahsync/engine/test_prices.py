@@ -7,7 +7,8 @@ from pathlib import Path
 import pytest
 
 from ahsync.engine.prices import (
-    DAY_MS, HOUR_MS, cur_others, drop_suspect, median, percentile, post_price, suspect_price, trend7, weekday_hour,
+    DAY_MS, HOUR_MS, cur_others, drop_suspect, median, percentile, post_price, relist_price, suspect_price, trend7,
+    weekday_hour,
     window_median,
 )
 
@@ -119,6 +120,23 @@ def test_PP1_post_price_shared_with_the_addon(s):
 @pytest.mark.parametrize("s", [s for s in POST_PRICE if s["id"] == "PP2"], ids=lambda s: s["name"])
 def test_PP2_post_price_undercuts_up_to_the_30_day_p90(s):
     assert post_price(s["args"]["cur_others"], s["args"]["med7"], s["args"]["p90"]) == s["expect"], s["why"]
+
+
+@pytest.mark.parametrize("s", [s for s in POST_PRICE if s["id"] == "PP4"], ids=lambda s: s["name"])
+def test_PP4_post_price_on_thin_data_caps_at_the_median(s):
+    a = s["args"]
+    assert post_price(a["cur_others"], a["med7"], a["p90"], a["closes"]) == s["expect"], s["why"]
+
+
+@pytest.mark.parametrize("s", [s for s in SHARED if s["call"] == "relist_price"], ids=lambda s: s["name"])
+def test_R28_a_relist_now_price_must_be_grounded(s):
+    a = s["args"]
+    assert relist_price(a["cur_others"], a["med7"], a["p90"], a["closes"]) == s["expect"], s["why"]
+
+
+def test_PP4_thin_data_without_a_median_still_caps_at_the_p90():
+    assert post_price(1000, None, 2000, 5) == 999         # no med7 to fall back on: the p90 is the only cap
+    assert post_price(None, None, 2000, 5) == 2000
 
 
 def test_FM5_a_price_far_out_of_range_is_suspect_until_a_second_hour_confirms_it():

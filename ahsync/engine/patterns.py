@@ -117,19 +117,21 @@ def sell_windows(how: Sequence[float], sales_how: Sequence[float], weeks: Sequen
         how: 168 price ratios.
         sales_how: 168 sales ratios.
         weeks: 168 counts of weeks of data per slot.
-        threshold: window_threshold: a slot qualifies at ≥ threshold × the best slot's score.
+        threshold: window_threshold: a slot with data qualifies at ≥ threshold × the best such slot's score.
 
     Returns:
-        Up to 3 windows ranked by score sum (ties: earlier start slot). Empty when
-        there is no data at all, or when every slot qualifies (a flat week has no
+        Up to 3 windows ranked by score sum (ties: earlier start slot), only of slots with at least 1 week of
+        data, so every window's weeks is at least 1 (W16). Empty when
+        there is no data at all, or when every slot with data qualifies (a flat week has no
         best time; the plan then posts now).
     """
     if not any(weeks):
         return []
     scores = sell_scores(how, sales_how)
-    cutoff = threshold * max(scores)
-    qualifying = [score >= cutoff for score in scores]
-    if all(qualifying):
+    cutoff = threshold * max(score for score, w in zip(scores, weeks) if w >= 1)
+    # W16: a slot without data (its value only a weekday fallback) never joins a window.
+    qualifying = [score >= cutoff and w >= 1 for score, w in zip(scores, weeks)]
+    if all(q for q, w in zip(qualifying, weeks) if w >= 1):           # flat over every hour with data
         # SPEC GAP: a flat week has no best window; treated like "no pattern".
         return []
     windows = []
@@ -149,17 +151,17 @@ def buy_windows(how: Sequence[float], weeks: Sequence[int], threshold: float = 0
     Args:
         how: 168 price ratios.
         weeks: 168 counts of weeks of data per slot.
-        threshold: window_threshold: a slot qualifies at a price ratio ≤ min(how) ÷ threshold.
+        threshold: window_threshold: a slot with data qualifies at a price ratio ≤ its cheapest ÷ threshold.
 
     Returns:
-        Up to 3 windows ranked by lowest average how (ties: earlier start slot). Empty
-        when there is no data at all, or when every slot qualifies (a buy is then planned for now).
+        Up to 3 windows ranked by lowest average how (ties: earlier start slot), only of slots with data (W16). Empty
+        when there is no data at all, or when every slot with data qualifies (a buy is then planned for now).
     """
     if not any(weeks):
         return []
-    cutoff = min(how) / threshold
-    qualifying = [ratio <= cutoff for ratio in how]
-    if all(qualifying):
+    cutoff = min(ratio for ratio, w in zip(how, weeks) if w >= 1) / threshold
+    qualifying = [ratio <= cutoff and w >= 1 for ratio, w in zip(how, weeks)]     # W16: data slots only
+    if all(q for q, w in zip(qualifying, weeks) if w >= 1):           # flat over every hour with data
         return []
     windows = []
     for run in _runs(qualifying):

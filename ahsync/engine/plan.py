@@ -10,17 +10,19 @@ and never planned. Pure: data in, numbers out; times are UTC ms, money copper.
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 
 from ahsync.engine import fees, sellprob
 from ahsync.engine.capacity import liquidity_cap, slot_of, window_supply
+from ahsync.engine.prices import MIN_HOURLY_CLOSES
 from ahsync.engine.sell_record import Record, repriced, stacks_to_post
 
 HOUR_MS = 3_600_000
 DAY_MS = 86_400_000
 WEEK_SLOTS = 168
 TREND_CLAMP_PCT = 5.0          # SPEC §3.4C.1: trend7 is clamped to ±5% per day
+OptionValue = Callable[[int, float], float]   # (option index, expected value) -> what choose_option maximizes
 
 
 @dataclass(frozen=True)
@@ -90,6 +92,9 @@ class SellFacts:
     record: Record | None = None                   # your own sell record (SPEC §3.3.3); None without one
     med7: int | None = None                        # 7-day median, copper: the post price's cap (SPEC §3.4, R24)
     p90: int | None = None                         # 30-day 90th percentile, copper: likewise
+    p10: int | None = None                         # 30-day 10th percentile, copper: buying below it is cheap (§3.4D.3)
+    buy_windows: tuple[PlanWindow, ...] = ()       # buying windows, cheapest first (Buy for later, §3.4D.3)
+    closes_30d: int | None = None                  # hourly closes in 30 days; thin data caps forecasts at the level (TT23)
 
 
 @dataclass(frozen=True)
@@ -154,11 +159,16 @@ def occurrences(windows: Sequence[PlanWindow], now_ms: int, horizon_days: int) -
     return sorted(found, key=lambda o: (o[0], o[2], o[3]))
 
 
-def slot_price(level: int, how_best: float, trend7: float, days_ahead: float, max_trend_total: float) -> int:
-    """Expected price at a window's best hour: level × how × trend factor (SPEC §3.4C.1, TT6, TT7).
+def slot_price(level: int, how_best: float, trend7: float, days_ahead: float, max_trend_total: float,
+               p10: int | None = None, med7: int | None = None, p90: int | None = None,
+               closes: int | None = None) -> int:
+    """Expected price at a window's best hour: level × how × trend factor, clamped (SPEC §3.4C.1, TT6, TT7, TT22).
 
     The trend factor is 1 + trend7 ÷ 100 × days ahead, with trend7 clamped to ±5% a day and the factor
-    clamped to 1 ± max_trend_total, so a week of thin data can't move a forecast 35%.
+    clamped to 1 ± max_trend_total, so a week of thin data can't move a forecast 35%. The result is then kept
+    within [p10_30, max(med7, p90_30)], as far as they are known: a window can't promise a price the last 30
+    days never traded at (the post-now price's cap, PP2). With fewer than MIN_HOURLY_CLOSES hourly closes in
+    30 days the ceiling is the level itself (TT23): a p90 of a few closes is the outlier, not the market.
 
     Args:
         level: The price level (med7, else med30), copper.
@@ -166,22 +176,48 @@ def slot_price(level: int, how_best: float, trend7: float, days_ahead: float, ma
         trend7: % per day, clamped to ±5.
         days_ahead: Days from now to the best hour.
         max_trend_total: Config max_trend_total, a fraction (0.15).
+        p10: The 30-day 10th percentile, copper, the floor; None for none.
+        med7: The 7-day median, copper; with p90 the ceiling is the larger known one.
+        p90: The 30-day 90th percentile, copper.
+        closes: Hourly closes in the last 30 days; None when unknown (the TT22 clamp).
 
     Returns:
-        Copper, rounded half up.
+        Copper, rounded half up, then raised to p10 and lowered to max(med7, p90) where known, or to the level
+        when closes < MIN_HOURLY_CLOSES.
     """
     trend = max(-TREND_CLAMP_PCT, min(TREND_CLAMP_PCT, trend7))
     factor = max(1 - max_trend_total, min(1 + max_trend_total, 1 + trend / 100 * days_ahead))
-    return math.floor(level * how_best * factor + 0.5)
+    price = math.floor(level * how_best * factor + 0.5)
+    if p10 is not None:
+        price = max(price, p10)
+    ceiling = [level] if closes is not None and closes < MIN_HOURLY_CLOSES else [x for x in (med7, p90) if x is not None]
+    return min(price, max(ceiling)) if ceiling else price
 
 
-def post_options(f: SellFacts, now_ms: int, s: PlanSettings) -> list[PostOption]:
+def thin(f: SellFacts) -> bool:
+    """Whether an item has too few hourly closes to forecast a window (SPEC §3.3.4, PF30).
+
+    Args:
+        f: The item.
+
+    Returns:
+        True when its count is known and below MIN_HOURLY_CLOSES; an unknown count is not thin.
+    """
+    return f.closes_30d is not None and f.closes_30d < MIN_HOURLY_CLOSES
+
+
+def post_options(f: SellFacts, now_ms: int, s: PlanSettings, thin_windows: bool = False) -> list[PostOption]:
     """Posting now and posting for each upcoming window occurrence, with their caps.
+
+    Thin data earns no deferral (PF30): an item with fewer than MIN_HOURLY_CLOSES closes has posting now only,
+    unless thin_windows asks for its windows anyway (a buy for later, which exists only for its window and is
+    then excluded "Forecast too uncertain").
 
     Args:
         f: The item.
         now_ms: Now.
         s: Settings.
+        thin_windows: Keep the windows of a thin item.
 
     Returns:
         The options that have hours left to sell in.
@@ -191,13 +227,13 @@ def post_options(f: SellFacts, now_ms: int, s: PlanSettings) -> list[PostOption]
         hours = tuple(sellprob.posting_now_window(now_ms, s.sell_window_hours))
         out.append(PostOption(now_ms, hours, record_price(f, f.post_price, s), None, _cap(f, hours, now_ms, s),
                            fees.shortest_duration_covering(s.sell_window_hours)))
-    if f.level is None:
+    if f.level is None or (thin(f) and not thin_windows):
         return out
     for start, end, best, weeks in occurrences(f.windows, now_ms, s.horizon_days):
         post = max(best - s.post_lead_hours * HOUR_MS, now_ms)
         hours = tuple(sellprob.planned_window(post, end, now_ms))    # never empty: occurrences haven't ended
         price = record_price(f, slot_price(f.level, f.how[slot_of(best // HOUR_MS)], f.trend7, (best - now_ms) / DAY_MS,
-                                           s.max_trend_total), s)
+                                           s.max_trend_total, f.p10, f.med7, f.p90, f.closes_30d), s)
         covering = -(-(best + HOUR_MS - post) // HOUR_MS)      # the listing stays up through the best hour
         out.append(PostOption(post, hours, price, (start, end, best), _cap(f, hours, now_ms, s),
                            fees.shortest_duration_covering(covering), weeks))
@@ -322,33 +358,37 @@ def required_uplift(weeks: int, s: PlanSettings) -> float:
 
 
 def choose_option(opts: Sequence[PostOption], scored: Sequence[tuple[int, float, float]],
-                  s: PlanSettings) -> tuple[int, float, float] | None:
+                  s: PlanSettings, value: OptionValue | None = None) -> tuple[int, float, float] | None:
     """The best option with room, where a window must beat posting now by its required uplift (SPEC §3.4C.1, R26).
 
     A window is eligible only when E_window ≥ E_now + required_uplift(weeks) × |E_now|, which is
     E_now × (1 + uplift) for the usual E_now ≥ 0; E_now is posting now's expected value for the same units.
-    Without a posting-now option with room, windows compete among themselves.
+    Without a posting-now option with room, windows compete among themselves. The trust gate always reads the
+    raw expected values; `value` only changes which eligible option wins (the portfolio's timing premium,
+    SPEC §3.4D.2: trust and time both apply, PF20).
 
     Args:
         opts: The post options.
         scored: (option index, expected value, P) of each option with room, in option order.
         s: Settings.
+        value: (option index, expected value) -> what to maximize; None maximizes the expected value.
 
     Returns:
-        The eligible option with the highest expected value (ties: the earlier option); None when none has room.
+        The eligible option with the highest value (ties: the earlier option); None when none has room.
     """
     now = next((e for i, e, _ in scored if opts[i].window is None), None)
-    best = None
+    best, best_value = None, 0.0
     for i, e, p in scored:
         if now is not None and opts[i].window is not None and e < now + required_uplift(opts[i].weeks, s) * abs(now):
             continue
-        if best is None or e > best[1]:
-            best = (i, e, p)
+        v = e if value is None else value(i, e)
+        if best is None or v > best_value:
+            best, best_value = (i, e, p), v
     return best
 
 
 def _best_post(f: SellFacts, opts: list[PostOption], used: list[float], qty: int,
-               s: PlanSettings) -> tuple[int, float, float] | None:
+               s: PlanSettings, value: OptionValue | None = None) -> tuple[int, float, float] | None:
     """The best option for one more stack, within its window's cap (choose_option, R26).
 
     Args:
@@ -357,6 +397,7 @@ def _best_post(f: SellFacts, opts: list[PostOption], used: list[float], qty: int
         used: Units already planned per option.
         qty: The stack.
         s: Settings.
+        value: choose_option's value; None for the expected value.
 
     Returns:
         (option index, expected value, P); None when no option has room.
@@ -368,7 +409,7 @@ def _best_post(f: SellFacts, opts: list[PostOption], used: list[float], qty: int
         p = post_chance(f, o.price, qty, o.hours, used[i], s)
         deposit = fees.deposit_copper(f.vendor_sell, qty, o.duration_h)
         scored.append((i, sellprob.expected_post(p, qty, o.price, max(alternative(f)[1], 0.0), deposit), p))
-    return choose_option(opts, scored, s)
+    return choose_option(opts, scored, s, value)
 
 
 def window_id(opt: PostOption) -> int | None:
@@ -383,14 +424,108 @@ def window_id(opt: PostOption) -> int | None:
     return opt.window[0] if opt.window else None
 
 
+@dataclass(frozen=True)
+class StackChoice:
+    """Where one stack of an item you hold goes (SPEC §3.4C.1 allocation): a post option, or no post."""
+
+    char_id: str
+    qty: int
+    option: int | None             # index into post_options; None when no post pays (hold, disenchant or vendor)
+    expected: float                # the post's expected value, float copper; 0 without a post
+    p: float                       # the post's chance to sell; 0 without a post
+    alt_kind: str = ""             # without a post: "hold", "de" or "vendor"
+    alt_value: float = 0.0         # without a post: what the stack fetches that way, float copper (0 for a hold)
+
+
+def stack_choices(lots: Sequence[Lot], f: SellFacts, opts: Sequence[PostOption], s: PlanSettings,
+                  ledger: dict[tuple[int, int | None], float] | None = None,
+                  value: OptionValue | None = None) -> Iterator[StackChoice]:
+    """The sell plan's per-stack loop for one item (SPEC §3.4C.1, R6, R7, R14): one choice per reference stack.
+
+    Lots are taken in character order and split into reference stacks. Each stack goes to the post option
+    with the best value that still has room in its window, when that pays more per unit than disenchanting or
+    vendoring. Otherwise it is a hold while the AH still pays more than either (it waits for later weeks),
+    else a disenchant or vendor sale. The portfolio's Sell stock candidates are these stacks (SPEC §3.4D.3).
+
+    Args:
+        lots: Your lots of this item.
+        f: The item.
+        opts: post_options of the item.
+        s: Settings.
+        ledger: (item key, window id) -> units already planned there by anyone (SPEC §3.4 market
+            capacity, PL4); updated with this item's posts. None for a private one.
+        value: choose_option's value (the timing premium); None picks by expected value.
+
+    Yields:
+        StackChoice per stack, in character order.
+    """
+    ledger = {} if ledger is None else ledger
+    used = [ledger.get((f.key, window_id(o)), 0.0) for o in opts]
+    alt_value = alternative(f)[1]
+    # SPEC §3.3.3 quantity: a losing streak halves the stacks posted per step (O3, O4).
+    stacks = sum(-(-lot.qty // f.ref_stack) for lot in lots)
+    postable = stacks_to_post(stacks, f.record.streak) if f.record else stacks
+    for lot in sorted(lots, key=lambda lot: lot.char_id):
+        left = lot.qty
+        while left > 0:
+            qty = min(f.ref_stack, left)
+            best = _best_post(f, list(opts), used, qty, s, value) if postable > 0 else None
+            if best is not None and best[1] / qty > alt_value:
+                postable -= 1
+                used[best[0]] += qty
+                yield StackChoice(lot.char_id, qty, best[0], best[1], best[2])
+            else:
+                yield stack_fallback(f, lot.char_id, qty)
+            left -= qty
+    for i, o in enumerate(opts):
+        ledger[(f.key, window_id(o))] = used[i]
+
+
+def stack_fallback(f: SellFacts, char_id: str, qty: int) -> StackChoice:
+    """Units no post takes: a hold while the AH still pays more than disenchanting or vendoring (SPEC §3.4C.1).
+
+    Args:
+        f: The item.
+        char_id: Who holds them.
+        qty: Units.
+
+    Returns:
+        A StackChoice without a post: "hold" (worth 0 this week), else "de" or "vendor" at their value.
+    """
+    alt_kind, alt_value = alternative(f)
+    held = f.post_price is not None and f.post_price * (1 - fees.AH_CUT) > alt_value
+    kind = "hold" if held or alt_kind == "hold" else alt_kind
+    return StackChoice(char_id, qty, None, 0.0, 0.0, kind, 0.0 if kind == "hold" else alt_value * qty)
+
+
+def merge_stacks(choices: Sequence[StackChoice], f: SellFacts, opts: Sequence[PostOption],
+                 now_ms: int) -> list[PlanAction]:
+    """Stacks as actions: one per (kind, character, option) (SPEC §3.4C.1).
+
+    Args:
+        choices: Stack choices of one item.
+        f: The item.
+        opts: Its post options.
+        now_ms: Now.
+
+    Returns:
+        Actions in time order (ties: character, kind).
+    """
+    merged: dict[tuple, list] = {}            # (kind, char, option) -> [qty, expected, expected sold units]
+    for c in choices:
+        kind, i = ("post", c.option) if c.option is not None else (c.alt_kind, -1)
+        slot = merged.setdefault((kind, c.char_id, i), [0, 0.0, 0.0])
+        slot[0] += c.qty
+        slot[1] += c.expected if c.option is not None else c.alt_value
+        slot[2] += c.p * c.qty
+    return sorted((_action(kind, char, opts[i] if i >= 0 else None, totals, f, now_ms)
+                   for (kind, char, i), totals in merged.items()),
+                  key=lambda a: (a.at_ms, a.char_id, a.kind))
+
+
 def plan_item(lots: Sequence[Lot], f: SellFacts, now_ms: int, s: PlanSettings,
               ledger: dict[tuple[int, int | None], float] | None = None) -> list[PlanAction]:
     """The sell plan for one item across your characters (SPEC §3.4C.1, R6, R7, R14).
-
-    Lots are taken in character order and split into reference stacks. Each stack goes to
-    the post option with the highest expected value that still has room in its window, when that pays more per
-    unit than disenchanting or vendoring. Otherwise it is a hold while the AH still pays more than either (it waits
-    for later weeks), else a disenchant or vendor sale.
 
     Args:
         lots: Your lots of this item.
@@ -401,39 +536,10 @@ def plan_item(lots: Sequence[Lot], f: SellFacts, now_ms: int, s: PlanSettings,
             capacity, PL4); updated with this item's posts. None for a private one.
 
     Returns:
-        Actions, one per (kind, character, option), in time order (ties: character, kind).
+        Actions, one per (kind, character, option), in time order (ties: character, kind): stack_choices merged.
     """
     opts = post_options(f, now_ms, s)
-    ledger = {} if ledger is None else ledger
-    used = [ledger.get((f.key, window_id(o)), 0.0) for o in opts]
-    merged: dict[tuple, list] = {}            # (kind, char, option) -> [qty, expected, expected sold units]
-    alt_kind, alt_value = alternative(f)
-    # SPEC §3.3.3 quantity: a losing streak halves the stacks posted per step (O3, O4).
-    stacks = sum(-(-lot.qty // f.ref_stack) for lot in lots)
-    postable = stacks_to_post(stacks, f.record.streak) if f.record else stacks
-    for lot in sorted(lots, key=lambda lot: lot.char_id):
-        left = lot.qty
-        while left > 0:
-            qty = min(f.ref_stack, left)
-            best = _best_post(f, opts, used, qty, s) if postable > 0 else None
-            if best is not None and best[1] / qty > alt_value:
-                postable -= 1
-                i, e, p = best
-                used[i] += qty
-                slot = merged.setdefault(("post", lot.char_id, i), [0, 0.0, 0.0])
-                slot[0], slot[1], slot[2] = slot[0] + qty, slot[1] + e, slot[2] + p * qty
-            else:
-                # This week has no room that pays: keep it for later weeks when the AH still pays more.
-                held = f.post_price is not None and f.post_price * (1 - fees.AH_CUT) > alt_value
-                kind = "hold" if held or alt_kind == "hold" else alt_kind
-                slot = merged.setdefault((kind, lot.char_id, -1), [0, 0.0, 0.0])
-                slot[0], slot[1] = slot[0] + qty, slot[1] + (0.0 if kind == "hold" else alt_value * qty)
-            left -= qty
-    for i, o in enumerate(opts):
-        ledger[(f.key, window_id(o))] = used[i]
-    return sorted((_action(kind, char, opts[i] if i >= 0 else None, totals, f, now_ms)
-                   for (kind, char, i), totals in merged.items()),
-                  key=lambda a: (a.at_ms, a.char_id, a.kind))
+    return merge_stacks(list(stack_choices(lots, f, opts, s, ledger)), f, opts, now_ms)
 
 
 def _action(kind: str, char_id: str, opt: PostOption | None, totals: list, f: SellFacts, now_ms: int) -> PlanAction:

@@ -142,7 +142,9 @@ def test_R26_TT7_the_window_margin_and_the_trend_clamp_are_settings(tmp_path):
 
 def test_the_portfolio_settings_are_read_with_their_defaults(tmp_path):
     assert portfolio_settings(Config()) == PortfolioSettings()
-    assert (Config().risk_tolerance, Config().max_risk_pct) == (0.30, 25)        # max_risk_pct stays until M10
+    assert Config().risk_tolerance == 0.30 and not hasattr(Config(), "max_risk_pct")   # the per-buy cap is gone
+    with pytest.raises(ConfigError, match="max_risk_pct was removed: risk_tolerance caps all the gold tied up"):
+        parse_config("max_risk_pct = 25\n", {}, tmp_path)
     text = ("risk_tolerance = 0.4\npremium_base = 0\npremium_per_day = 0.1\nimmediate_hours = 24\n"
             "top_buy_windows = 10\ntop_sell_windows = 1\ntoday_limit = 100\nweek_limit = 1\n"
             "candidate_export = 20\nhorizon_days = 7\n")
@@ -168,3 +170,13 @@ def test_bad_portfolio_settings_are_refused_with_the_line_and_reason(tmp_path, t
     with pytest.raises(ConfigError) as error:
         parse_config(text, {}, tmp_path)
     assert str(error.value).startswith(f"config.toml line 1: {message}")
+
+
+def test_the_candidate_pool_and_swap_bound_are_read_and_checked(tmp_path):
+    assert (portfolio_settings(Config()).candidate_pool, portfolio_settings(Config()).swap_candidates) == (400, 50)
+    s = portfolio_settings(parse_config("candidate_pool = 200\nswap_candidates = 10\n", {}, tmp_path))
+    assert (s.candidate_pool, s.swap_candidates) == (200, 10)
+    with pytest.raises(ConfigError, match="candidate_pool must be at least candidate_export"):
+        parse_config("candidate_pool = 100\n", {}, tmp_path)
+    with pytest.raises(ConfigError, match="swap_candidates must be 1 or more"):
+        parse_config("swap_candidates = 0\n", {}, tmp_path)

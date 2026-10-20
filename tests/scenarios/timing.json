@@ -1,0 +1,428 @@
+[
+ {
+  "id": "PF17",
+  "name": "55s in exactly 3 days waits 3.00 days",
+  "call": "wait_hundredths",
+  "args": {
+   "now_ms": 1728297480000,
+   "sale_ms": 1728556680000
+  },
+  "expect": 300,
+  "why": "4320 min x 100 / 1440 = 300"
+ },
+ {
+  "id": "PF17",
+  "name": "the premium after 3 days",
+  "call": "premium_micro",
+  "args": {
+   "hundredths": 300,
+   "premium_base": 0.15,
+   "premium_per_day": 0.05,
+   "immediate_hours": 8
+  },
+  "expect": 300000,
+  "why": "15% + 5% x 3 = 30%; 5500 / 1.30 = 4230.77 (42s 31c) beats 40s now"
+ },
+ {
+  "id": "PF17",
+  "name": "55s after 3 days adjusted",
+  "call": "adjusted",
+  "args": {
+   "expected_net": 5500,
+   "premium": 300000
+  },
+  "expect": 4230.7692307692305,
+  "why": "15% + 5% x 3 = 30%; 5500 / 1.30 = 4230.77 (42s 31c) beats 40s now"
+ },
+ {
+  "id": "PF17",
+  "name": "the premium after 1 days",
+  "call": "premium_micro",
+  "args": {
+   "hundredths": 100,
+   "premium_base": 0.15,
+   "premium_per_day": 0.05,
+   "immediate_hours": 8
+  },
+  "expect": 200000,
+  "why": "15% + 5% x 1 = 20%; 5500 / 1.20 = 4583.33 (45s 83c)"
+ },
+ {
+  "id": "PF17",
+  "name": "55s after 1 days adjusted",
+  "call": "adjusted",
+  "args": {
+   "expected_net": 5500,
+   "premium": 200000
+  },
+  "expect": 4583.333333333333,
+  "why": "15% + 5% x 1 = 20%; 5500 / 1.20 = 4583.33 (45s 83c)"
+ },
+ {
+  "id": "PF17",
+  "name": "the premium after 7 days",
+  "call": "premium_micro",
+  "args": {
+   "hundredths": 700,
+   "premium_base": 0.15,
+   "premium_per_day": 0.05,
+   "immediate_hours": 8
+  },
+  "expect": 500000,
+  "why": "15% + 5% x 7 = 50%; 5500 / 1.50 = 3666.67 (36s 67c): 40s now wins"
+ },
+ {
+  "id": "PF17",
+  "name": "55s after 7 days adjusted",
+  "call": "adjusted",
+  "args": {
+   "expected_net": 5500,
+   "premium": 500000
+  },
+  "expect": 3666.6666666666665,
+  "why": "15% + 5% x 7 = 50%; 5500 / 1.50 = 3666.67 (36s 67c): 40s now wins"
+ },
+ {
+  "id": "PF17",
+  "name": "40s now has no premium",
+  "call": "premium_micro",
+  "args": {
+   "hundredths": 0,
+   "premium_base": 0.15,
+   "premium_per_day": 0.05,
+   "immediate_hours": 8
+  },
+  "expect": 0,
+  "why": "a wait of 0 is inside the 8 h window"
+ },
+ {
+  "id": "PF18",
+  "name": "from Mon 10:38 a sale Tue 19:00 waits 1.35 days",
+  "call": "wait_hundredths",
+  "args": {
+   "now_ms": 1728297480000,
+   "sale_ms": 1728414000000
+  },
+  "expect": 135,
+  "why": "1942 min x 100 / 1440, half up to 0.01 d"
+ },
+ {
+  "id": "PF18",
+  "name": "a sale Tue 19:00 has a premium of 21.75%",
+  "call": "premium_micro",
+  "args": {
+   "hundredths": 135,
+   "premium_base": 0.15,
+   "premium_per_day": 0.05,
+   "immediate_hours": 8
+  },
+  "expect": 217500,
+  "why": "15% + 5% x 1.35"
+ },
+ {
+  "id": "PF18",
+  "name": "from Mon 10:38 a sale Wed 19:00 waits 2.35 days",
+  "call": "wait_hundredths",
+  "args": {
+   "now_ms": 1728297480000,
+   "sale_ms": 1728500400000
+  },
+  "expect": 235,
+  "why": "3382 min x 100 / 1440, half up to 0.01 d"
+ },
+ {
+  "id": "PF18",
+  "name": "a sale Wed 19:00 has a premium of 26.75%",
+  "call": "premium_micro",
+  "args": {
+   "hundredths": 235,
+   "premium_base": 0.15,
+   "premium_per_day": 0.05,
+   "immediate_hours": 8
+  },
+  "expect": 267500,
+  "why": "15% + 5% x 2.35"
+ },
+ {
+  "id": "PF18",
+  "name": "from Mon 10:38 a sale Thu 19:00 waits 3.35 days",
+  "call": "wait_hundredths",
+  "args": {
+   "now_ms": 1728297480000,
+   "sale_ms": 1728586800000
+  },
+  "expect": 335,
+  "why": "4822 min x 100 / 1440, half up to 0.01 d"
+ },
+ {
+  "id": "PF18",
+  "name": "a sale Thu 19:00 has a premium of 31.75%",
+  "call": "premium_micro",
+  "args": {
+   "hundredths": 335,
+   "premium_base": 0.15,
+   "premium_per_day": 0.05,
+   "immediate_hours": 8
+  },
+  "expect": 317500,
+  "why": "15% + 5% x 3.35"
+ },
+ {
+  "id": "PF18",
+  "name": "from Mon 10:38 a sale Fri 19:00 waits 4.35 days",
+  "call": "wait_hundredths",
+  "args": {
+   "now_ms": 1728297480000,
+   "sale_ms": 1728673200000
+  },
+  "expect": 435,
+  "why": "6262 min x 100 / 1440, half up to 0.01 d"
+ },
+ {
+  "id": "PF18",
+  "name": "a sale Fri 19:00 has a premium of 36.75%",
+  "call": "premium_micro",
+  "args": {
+   "hundredths": 435,
+   "premium_base": 0.15,
+   "premium_per_day": 0.05,
+   "immediate_hours": 8
+  },
+  "expect": 367500,
+  "why": "15% + 5% x 4.35"
+ },
+ {
+  "id": "PF18",
+  "name": "from Mon 10:38 a sale Sat 18:00 waits 5.31 days",
+  "call": "wait_hundredths",
+  "args": {
+   "now_ms": 1728297480000,
+   "sale_ms": 1728756000000
+  },
+  "expect": 531,
+  "why": "7642 min x 100 / 1440, half up to 0.01 d"
+ },
+ {
+  "id": "PF18",
+  "name": "a sale Sat 18:00 has a premium of 41.55%",
+  "call": "premium_micro",
+  "args": {
+   "hundredths": 531,
+   "premium_base": 0.15,
+   "premium_per_day": 0.05,
+   "immediate_hours": 8
+  },
+  "expect": 415500,
+  "why": "15% + 5% x 5.31"
+ },
+ {
+  "id": "PF18",
+  "name": "from Mon 10:38 a sale Sat 19:00 waits 5.35 days",
+  "call": "wait_hundredths",
+  "args": {
+   "now_ms": 1728297480000,
+   "sale_ms": 1728759600000
+  },
+  "expect": 535,
+  "why": "7702 min x 100 / 1440, half up to 0.01 d"
+ },
+ {
+  "id": "PF18",
+  "name": "a sale Sat 19:00 has a premium of 41.75%",
+  "call": "premium_micro",
+  "args": {
+   "hundredths": 535,
+   "premium_base": 0.15,
+   "premium_per_day": 0.05,
+   "immediate_hours": 8
+  },
+  "expect": 417500,
+  "why": "15% + 5% x 5.35"
+ },
+ {
+  "id": "PF18",
+  "name": "from Mon 10:38 a sale Sun 18:00 waits 6.31 days",
+  "call": "wait_hundredths",
+  "args": {
+   "now_ms": 1728297480000,
+   "sale_ms": 1728842400000
+  },
+  "expect": 631,
+  "why": "9082 min x 100 / 1440, half up to 0.01 d"
+ },
+ {
+  "id": "PF18",
+  "name": "a sale Sun 18:00 has a premium of 46.55%",
+  "call": "premium_micro",
+  "args": {
+   "hundredths": 631,
+   "premium_base": 0.15,
+   "premium_per_day": 0.05,
+   "immediate_hours": 8
+  },
+  "expect": 465500,
+  "why": "15% + 5% x 6.31"
+ },
+ {
+  "id": "PF18",
+  "name": "from Mon 10:38 a sale Sun 19:00 waits 6.35 days",
+  "call": "wait_hundredths",
+  "args": {
+   "now_ms": 1728297480000,
+   "sale_ms": 1728846000000
+  },
+  "expect": 635,
+  "why": "9142 min x 100 / 1440, half up to 0.01 d"
+ },
+ {
+  "id": "PF18",
+  "name": "a sale Sun 19:00 has a premium of 46.75%",
+  "call": "premium_micro",
+  "args": {
+   "hundredths": 635,
+   "premium_base": 0.15,
+   "premium_per_day": 0.05,
+   "immediate_hours": 8
+  },
+  "expect": 467500,
+  "why": "15% + 5% x 6.35"
+ },
+ {
+  "id": "PF18",
+  "name": "Thick Leather's 55s on Thu 19:00 adjusts to 41s 75c",
+  "call": "adjusted",
+  "args": {
+   "expected_net": 5500,
+   "premium": 317500
+  },
+  "expect": 4174.573055028463,
+  "why": "5500 / 1.3175 = 4174.57, shown 41s 75c"
+ },
+ {
+  "id": "PF18",
+  "name": "Mithril Spurs' 73s 42c on Sat 18:00 adjusts to 51s 87c",
+  "call": "adjusted",
+  "args": {
+   "expected_net": 7342,
+   "premium": 415500
+  },
+  "expect": 5186.859766866832,
+  "why": "7342 / 1.4155 = 5186.86, shown 51s 87c"
+ },
+ {
+  "id": "PF19",
+  "name": "a post for tonight's 18:00 peak waits 0.31 days",
+  "call": "wait_hundredths",
+  "args": {
+   "now_ms": 1728297480000,
+   "sale_ms": 1728324000000
+  },
+  "expect": 31,
+  "why": "442 min x 100 / 1440 = 30.69, half up 31 (7.44 h)"
+ },
+ {
+  "id": "PF19",
+  "name": "tonight's sale is inside the 8 hour window",
+  "call": "immediate",
+  "args": {
+   "hundredths": 31,
+   "immediate_hours": 8
+  },
+  "expect": true,
+  "why": "31 x 24 = 744 <= 800: a Today row with no premium"
+ },
+ {
+  "id": "PF19",
+  "name": "tonight's sale has no premium",
+  "call": "premium_micro",
+  "args": {
+   "hundredths": 31,
+   "premium_base": 0.15,
+   "premium_per_day": 0.05,
+   "immediate_hours": 8
+  },
+  "expect": 0,
+  "why": "inside the window"
+ },
+ {
+  "id": "PF19",
+  "name": "a sale Tue 08:00 waits 0.89 days",
+  "call": "wait_hundredths",
+  "args": {
+   "now_ms": 1728297480000,
+   "sale_ms": 1728374400000
+  },
+  "expect": 89,
+  "why": "1282 min x 100 / 1440 = 89.03 -> 89 (21.36 h)"
+ },
+ {
+  "id": "PF19",
+  "name": "Tue 08:00 is past an 8 hour window",
+  "call": "immediate",
+  "args": {
+   "hundredths": 89,
+   "immediate_hours": 8
+  },
+  "expect": false,
+  "why": "89 x 24 = 2136 > 800: a Next 7 days row"
+ },
+ {
+  "id": "PF19",
+  "name": "Tue 08:00 with an 8 hour window has a premium of 19.45%",
+  "call": "premium_micro",
+  "args": {
+   "hundredths": 89,
+   "premium_base": 0.15,
+   "premium_per_day": 0.05,
+   "immediate_hours": 8
+  },
+  "expect": 194500,
+  "why": "15% + 5% x 0.89 = 19.45%"
+ },
+ {
+  "id": "PF19",
+  "name": "Tue 08:00 is inside a 24 hour window",
+  "call": "immediate",
+  "args": {
+   "hundredths": 89,
+   "immediate_hours": 24
+  },
+  "expect": true,
+  "why": "2136 <= 2400: Today, no premium"
+ },
+ {
+  "id": "PF19",
+  "name": "Tue 08:00 with a 24 hour window has no premium",
+  "call": "premium_micro",
+  "args": {
+   "hundredths": 89,
+   "premium_base": 0.15,
+   "premium_per_day": 0.05,
+   "immediate_hours": 24
+  },
+  "expect": 0,
+  "why": "inside the 24 h window"
+ },
+ {
+  "id": "PF19",
+  "name": "a sale already started waits 0 days",
+  "call": "wait_hundredths",
+  "args": {
+   "now_ms": 1728297480000,
+   "sale_ms": 1728293880000
+  },
+  "expect": 0,
+  "why": "a window that started before now: no negative wait"
+ },
+ {
+  "id": "PF19",
+  "name": "a sale now waits 0 days",
+  "call": "wait_hundredths",
+  "args": {
+   "now_ms": 1728297480000,
+   "sale_ms": null
+  },
+  "expect": 0,
+  "why": "no sale time means now"
+ }
+]

@@ -54,8 +54,9 @@ local function OwnFlipRow(key, o, ctx)
 end
 
 --- One flip-now row from a live book (A69, FN1): buy the cheapest level (one reference stack at most) and relist
---- now at Prices.PostPrice(second level, med7, p90), with P from the curve at 0 ahead for this hour, or the
---- default chance for the cheapest position without a curve (volume unknown); nil when it doesn't pay the margin.
+--- now at Prices.RelistPrice(second level, med7, p90, closes), with P from the curve at 0 ahead for this hour, or the
+--- default chance for the cheapest position without a curve (volume unknown); nil when it doesn't pay the margin
+--- or nothing grounds the relist price (no second level on thin data, R28).
 ---@param c table    { key, cheapest, second, units } from Live.FlipCandidates
 ---@param ctx table  As ViewModel.OwnFlipRows
 ---@return table|nil
@@ -63,7 +64,8 @@ local function NowFlipRow(c, ctx)
   local item = ctx.itemOf(c.key)
   if not item then return nil end
   local units, curve = math.min(c.units, item.refStack or 1), ctx.curveOf(c.key)
-  local relist = Prices.PostPrice(c.second, item.med7, item.p90)
+  local relist = Prices.RelistPrice(c.second, item.med7, item.p90, item.closes30)
+  if not relist then return nil end
   local p = curve and SellProb.Lookup(curve.rows, curve.refreshMs, ctx.nowMs, 0, curve.aheadPoints)
             or SellProb.DefaultChance(relist, c.second, Options.DEFAULT_SELL_PROB, Options.DEFAULT_SELL_PROB_CHEAPEST)
   local vendor = ctx.vendorOf(c.key) or 0

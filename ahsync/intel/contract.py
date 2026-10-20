@@ -12,8 +12,9 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 
-INTEL_SCHEMA_VERSION = 7       # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
-                               # 5: median_daily_supply (V23); 6: observed_listing_turnover (V37); 7: volume_kind (D57)
+INTEL_SCHEMA_VERSION = 8       # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
+                               # 5: median_daily_supply (V23); 6: observed_listing_turnover (V37); 7: volume_kind (D57);
+                               # 8: closes_30d (TT23)
 
 
 class IntelVersionError(ValueError):
@@ -77,6 +78,8 @@ class ItemIntel:
     observed_listing_turnover: float | None = None   # units/day that left the AH, 7 days (V37); info only, never sales
     volume_kind: str | None = None        # volume_source's kind, "ids" | "groups" | "own" (D57); None in documents
                                           # before version 7, which are labelled by source name (views.volume_label)
+    closes_30d: int | None = None         # hourly closes in the last 30 days: thin data caps forecasts (TT23); None
+                                          # in documents before version 8
 
 
 @dataclass(frozen=True)

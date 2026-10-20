@@ -57,10 +57,9 @@ def state(tmp_path):
 CHARS = [("Amaya-G", 100_000), ("Brugan-G", 400_000)]
 
 
-def test_inputs_come_from_your_stock_recipes_budgets_and_rules(state):
+def test_inputs_come_from_your_stock_recipes_and_rules(state):
     w = plan.week_inputs(state, CHARS, STATS, ITEMS, Config(markets=(M,), budgets={"Amaya-G": 5_000}))
     assert [(lot.char_id, lot.key, lot.qty) for lot in w.lots] == [("Brugan-G", BAR, 6)]
-    assert w.budgets == {"Amaya-G": 5_000, "Brugan-G": 400_000} and w.total_gold == 500_000   # config [budgets] wins
     assert {BAR, ROD} <= set(w.facts) and w.world.products[ROD].windows[0].best_slot == 5 * 24 + 18
     assert (w.no_buy, w.ignore) == (frozenset({2589}), frozenset({2589}))
 
@@ -92,10 +91,6 @@ def test_rows_link_a_chain_to_its_first_step_and_carry_the_plan_week():
     assert plan.week_start_ms(NOW) == MONDAY
 
 
-def test_the_plan_for_a_market_with_and_without_characters(state):
-    actions = plan.plan_market(state, CHARS, STATS, ITEMS, NOW, Config(markets=(M,)))
-    assert actions and all(a.at_ms >= NOW for a in actions)
-    assert plan.plan_market(state, [], STATS, ITEMS, NOW, Config(markets=(M,))) == []
 
 
 def test_R21_forecasts_start_from_the_7_day_median_not_a_month_old_level():
@@ -104,7 +99,9 @@ def test_R21_forecasts_start_from_the_7_day_median_not_a_month_old_level():
     assert plan.sell_facts(venom, None, None).level == 103
     assert not plan.flip_candidate(venom, 0.2)                    # 103 × 0.95 = 97.85 < 1.2 × 90
     month_only = replace(venom, med7=None)
-    assert plan.sell_facts(month_only, None, None).level == 2094 and plan.flip_candidate(month_only, 0.2)
+    assert plan.sell_facts(month_only, None, None).level == 2094
+    assert not plan.flip_candidate(month_only, 0.2)          # 20s 94c is clamped to the 30-day p90, 90c (TT22)
+    assert plan.flip_candidate(replace(month_only, p90_30=2200), 0.2)     # a market that traded at 22s
 
 
 def test_sell_records_come_from_your_resolved_posts_the_closes_during_them_and_keep(state):

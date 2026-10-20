@@ -78,7 +78,7 @@ describe("Market", function()
   end)
 
   it("FM35 a file from a newer AHSync says to deploy the addon", function()
-    local Market = Boot(EX2, function(file) file.exportVersion = 3 end)
+    local Market = Boot(EX2, function(file) file.exportVersion = 4 end)
     assert_eq({ Market.Problem(), Market.Item(2589) }, { "This addon is older than AHSync's files: run tools/deploy.py, then /reload", nil })
   end)
 

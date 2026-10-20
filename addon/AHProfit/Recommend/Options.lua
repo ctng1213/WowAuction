@@ -44,7 +44,7 @@ function Options.Reprice(item, levels, curve, vendorEach, nowMs)
   local live = {}
   for k, v in pairs(item) do live[k] = v end
   local cheapest = levels[1] and levels[1].price
-  local price = Prices.PostPrice(cheapest, item.med7, item.p90)
+  local price = Prices.PostPrice(cheapest, item.med7, item.p90, item.closes30)
   if not price then return live end
   local ref = item.refStack or 1
   local p = item.chance or 0

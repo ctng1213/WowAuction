@@ -7,7 +7,7 @@ can use: your stock, your recipes' products and mats, and flip candidates.
 """
 from __future__ import annotations
 
-from ahsync.config import Config, flip_settings, plan_settings, record_settings
+from ahsync.config import Config, record_settings
 from ahsync.db.sqlite import Database
 from ahsync.engine import craft, disenchant, fees, profile
 from ahsync.engine.capacity import slot_of
@@ -15,9 +15,10 @@ from ahsync.engine.craft_plan import CraftWorld
 from ahsync.engine.flips import flip_offer
 from ahsync.engine.de_table import DE_TABLE
 from ahsync.engine.plan import TREND_CLAMP_PCT, Lot, PlanAction, PlanWindow, SellFacts
+from ahsync.engine.prices import MIN_HOURLY_CLOSES
 from ahsync.engine.sell_record import Record, ResolvedPost, sell_record
 from ahsync.engine.views import round_half_up
-from ahsync.engine.week import WeekInputs, week_plan
+from ahsync.engine.week import WeekInputs
 from ahsync.history.reads import ItemInfo
 from ahsync.intel.contract import ItemIntel, price_level, supply_level
 from ahsync.recommend.pages import DE_KIND, craft_market
@@ -27,6 +28,7 @@ HOUR_MS = 3_600_000
 DAY_MS = 86_400_000
 FLAT = tuple([1.0] * 168)
 GEAR_CLASSES = (2, 4)            # weapon, armor: the lenient gear cap (SPEC §3.4 Liquidity)
+DE_MATS = frozenset(m for *_, outcomes in DE_TABLE for m, _, _, _ in outcomes)   # what disenchanting yields
 
 
 def _pattern(values: str, weeks: str, empty: tuple[float, ...]) -> tuple[float, ...]:
@@ -34,13 +36,13 @@ def _pattern(values: str, weeks: str, empty: tuple[float, ...]) -> tuple[float, 
 
     Args:
         values: Packed thousandths (intelligence contract), "" for none.
-        weeks: Packed week counts.
+        weeks: Packed week counts (not read: the plan uses the ratios only).
         empty: What "no data" means for this profile.
 
     Returns:
         The ratios.
     """
-    return tuple(profile.unpack(values, weeks).values) if values else empty
+    return profile.unpack_values(values) or empty
 
 
 def de_offer(info: ItemInfo | None, stats: dict[int, ItemIntel], enchanters: list[tuple[str, int]]
@@ -112,7 +114,8 @@ def sell_facts(i: ItemIntel, info: ItemInfo | None, de: tuple[float, str] | None
         tuple(PlanWindow(w.start_slot, w.hours, w.best_slot, w.weeks) for w in i.sell_windows), i.book or None, i.cur,
         i.cur_qty, (info.vendor_sell if info else None) or 0, de[0] if de else None, de[1] if de else None, 0.0,
         supply_level(i), _pattern(i.supply_how, i.supply_weeks, ()),                        # V23
-        bool(info and info.item_class in GEAR_CLASSES), i.conf, record, i.med7, i.p90_30)
+        bool(info and info.item_class in GEAR_CLASSES), i.conf, record, i.med7, i.p90_30, i.p10_30,
+        tuple(PlanWindow(w.start_slot, w.hours, w.best_slot, w.weeks) for w in i.buy_windows), i.closes_30d)
 
 
 def window_candidate(i: ItemIntel, min_flip_margin: float, max_trend_total: float = 0.15) -> bool:
@@ -131,10 +134,14 @@ def window_candidate(i: ItemIntel, min_flip_margin: float, max_trend_total: floa
     level = price_level(i)
     if not (i.cur and level and i.sell_windows) or i.cur_suspect:
         return False
-    how = _pattern(i.how, i.how_weeks, FLAT)
-    best = max(how[w.best_slot] for w in i.sell_windows)
+    slots = i.how.split(",") if i.how else None             # only the windows' best hours are read (§3.1.2 re-plan)
+    best = max((int(slots[w.best_slot]) / profile.PACK_SCALE if slots else 1.0) for w in i.sell_windows)
     trend = 1 + min(max_trend_total, max(0.0, min(TREND_CLAMP_PCT, i.trend7)) / 100 * 7)
-    return level * best * trend * (1 - fees.AH_CUT) >= (1 + min_flip_margin) * i.cur
+    peak = level * best * trend
+    thin = i.closes_30d is not None and i.closes_30d < MIN_HOURLY_CLOSES          # slot_price's ceiling (TT22, TT23)
+    ceiling = [level] if thin else [x for x in (i.med7, i.p90_30) if x is not None]
+    peak = min(peak, max(ceiling)) if ceiling else peak
+    return peak * (1 - fees.AH_CUT) >= (1 + min_flip_margin) * i.cur
 
 
 def now_candidate(i: ItemIntel, min_flip_margin: float) -> bool:
@@ -194,7 +201,7 @@ def flip_offers(stats: dict[int, ItemIntel], items: dict[int, ItemInfo], vendor_
         vendor_sell = (items[key].vendor_sell if key in items else None) or 0
         expected, price = flip_offer(price_level(i), how[best], i.trend7, max(0.0, days), i.chance, float(vendor_sell),
                                      fees.deposit_copper(vendor_sell, i.ref_stack, duration), i.ref_stack,
-                                     cfg.max_trend_total)
+                                     cfg.max_trend_total, i.p10_30, i.med7, i.p90_30, i.closes_30d)
         if expected > 0:
             out[key] = f"{round_half_up(expected)},{price},{best}"
     return out
@@ -202,20 +209,22 @@ def flip_offers(stats: dict[int, ItemIntel], items: dict[int, ItemInfo], vendor_
 
 def week_inputs(state: StateReader, characters: list[tuple[str, int]], stats: dict[int, ItemIntel],
                 items: dict[int, ItemInfo], cfg: Config, records: dict[int, Record] | None = None) -> WeekInputs:
-    """The weekly plan's inputs for one market (SPEC §3.4C).
+    """The weekly plan's inputs for one market (SPEC §3.4C, §3.4D.3).
+
+    Facts are built only for items the plan can use: your stock, your recipes' products and mats, flip
+    candidates and the mats disenchanting yields (their capacity, SPEC §3.4 market capacity).
 
     Args:
         state: Character state.
         characters: (character id, gold copper) on the market, sorted by id.
         stats: Item key -> intelligence.
         items: Item metadata.
-        cfg: Config (budgets, margin).
+        cfg: Config (margin, trend clamp).
         records: Item key -> your sell record (SPEC §3.3.3); None for none.
 
     Returns:
-        WeekInputs; budgets are each character's gold unless config [budgets] overrides it.
+        WeekInputs (gold is the portfolio's accounting, SPEC §3.4D.1).
     """
-    gold = dict(characters)
     char_ids = [c for c, _ in characters]
     lots = tuple(Lot(c, k, q) for c, k, q in state.owned_lots(char_ids))
     recipes = tuple(craft.Recipe(r.spell, r.product, r.yield_min, r.yield_max, r.reagents, r.crafters, r.cooldown_s)
@@ -227,13 +236,13 @@ def week_inputs(state: StateReader, characters: list[tuple[str, int]], stats: di
     enchanters = [(c, s) for c, s in enchanters if s is not None]
     wanted = {lot.key for lot in lots} | {r.product for r in recipes} | {k for r in recipes for k, _ in r.reagents}
     wanted |= {k for k, i in stats.items() if flip_candidate(i, cfg.min_flip_margin, cfg.max_trend_total)}
+    wanted |= DE_MATS
     facts = {k: sell_facts(stats[k], items.get(k), de_offer(items.get(k), stats, enchanters), (records or {}).get(k))
              for k in sorted(wanted) if k in stats}
     world = CraftWorld(recipes, by_product, craft_market(state, char_ids, stats, items),
                        {k: f for k, f in facts.items() if k in {r.product for r in recipes}})
     rules = state.item_rules()
-    return WeekInputs(lots, facts, world, {c: cfg.budgets.get(c, g) for c, g in gold.items()}, sum(gold.values()),
-                      frozenset(k for k, r in rules.items() if r in ("no_buy", "ignore")),
+    return WeekInputs(lots, facts, world, frozenset(k for k, r in rules.items() if r in ("no_buy", "ignore")),
                       frozenset(k for k, r in rules.items() if r == "ignore"),
                       frozenset(facts_suspect(stats, facts)))
 
@@ -272,7 +281,7 @@ def plan_rows(actions: list[PlanAction], market: str, now_ms: int) -> list[tuple
     the action's planned chance to sell (posts), the P' its expected net assumed.
 
     Args:
-        actions: From plan_market, in plan order.
+        actions: The plan's actions (recommend.portfolio.plan_portfolio), in plan order.
         market: Market id.
         now_ms: The run time.
 
@@ -291,26 +300,3 @@ def plan_rows(actions: list[PlanAction], market: str, now_ms: int) -> list[tuple
                      a.net if a.kind == "post" else None, a.window_start_ms if a.kind == "post" else None, None, week,
                      a.peak_ms, a.source, a.duration_h if a.kind == "post" else None, a.to_char))
     return rows
-
-
-def plan_market(state: StateReader, characters: list[tuple[str, int]], stats: dict[int, ItemIntel],
-                items: dict[int, ItemInfo], now_ms: int, cfg: Config,
-                records: dict[int, Record] | None = None) -> list[PlanAction]:
-    """The weekly plan for one market's characters (SPEC §3.4C).
-
-    Args:
-        state: Character state.
-        characters: (character id, gold copper) on the market, sorted by id.
-        stats: Item key -> intelligence.
-        items: Item metadata.
-        now_ms: Now.
-        cfg: Config.
-        records: Item key -> your sell record (SPEC §3.3.3); None for none.
-
-    Returns:
-        The planned actions; empty without characters.
-    """
-    if not characters:
-        return []
-    return week_plan(week_inputs(state, characters, stats, items, cfg, records), now_ms, plan_settings(cfg),
-                     flip_settings(cfg), cfg.max_craft_depth)

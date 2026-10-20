@@ -65,9 +65,9 @@ def test_disenchant_page_from_intelligence(state):
     assert (gloves["item"], gloves["buy"]) == ("Embossed Leather Gloves", "8s")
 
 
-def test_a_disenchant_buy_that_risks_too_much_of_your_gold_is_left_out(state):
-    page = disenchant_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 2_000, NOW, Config(markets=(M,)))
-    assert (page["rows"], page["hidden"]) == ([], 1)     # the 8s gloves are over 25% of 20s
+def test_a_disenchant_buy_bigger_than_the_remaining_capacity_is_left_out(state):
+    page = disenchant_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 500_000, NOW, Config(markets=(M,)), 600)
+    assert (page["rows"], page["hidden"]) == ([], 1)     # the 8s gloves are over the 6s of capacity left
 
 
 def test_FM5_a_suspect_price_is_no_mat_source_and_no_disenchant_buy(state):
@@ -77,7 +77,7 @@ def test_FM5_a_suspect_price_is_no_mat_source_and_no_disenchant_buy(state):
     assert disenchant_page(state, ["Amaya-G", "Brugan-G"], suspect, ITEMS, 500_000, NOW, Config(markets=(M,)))["rows"] == []
 
 
-def test_D45_crafts_stop_at_what_the_market_takes_less_what_you_have_and_within_the_risk_limit(state):
+def test_D45_crafts_stop_at_what_the_market_takes_less_what_you_have_and_within_the_exposure_budget(state):
     cfg = Config(markets=(M,))
     [rod] = craft_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 500_000, NOW, cfg)["rows"]
     assert rod["crafts"] == 1                                    # others list 3 rods: half of that, at least a stack
@@ -87,7 +87,8 @@ def test_D45_crafts_stop_at_what_the_market_takes_less_what_you_have_and_within_
     assert (page["rows"], page["footer"]) == ([], "0 recipes worth crafting · 1 not shown: 1 already held or listed")
     with state.transaction():
         state.conn.execute("DELETE FROM inventory")
-    page = craft_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 4_000, NOW, cfg)   # 20s of bars is over 25% of 40s
+    # 40s of gold, nothing committed: risk tolerance 30% leaves 12s of capacity, less than the 20s of bars.
+    page = craft_page(state, ["Amaya-G", "Brugan-G"], STATS, ITEMS, 4_000, NOW, cfg, room=1_200)
     assert (page["rows"], page["footer"]) == ([], "0 recipes worth crafting · 1 not shown: 1 over your risk limit")
 
 

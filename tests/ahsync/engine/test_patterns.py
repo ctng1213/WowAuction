@@ -111,3 +111,23 @@ def test_buying_windows_need_data_and_a_cheaper_hour_and_keep_the_top_three():
     assert buy_windows(FLAT, SIX_WEEKS) == []
     how = ratios(1.0, {10: 0.9, 30: 0.8, 50: 0.8, 70: 0.85})
     assert [w.start_slot for w in buy_windows(how, SIX_WEEKS)] == [30, 50, 70]     # 10 is above 0.8 ÷ 0.9
+
+
+def test_W16_a_slot_without_data_never_joins_a_window():
+    tue = 24
+    weeks = [0] * 168
+    for h in (18, 19, 20):
+        weeks[tue + h] = 1
+    how = [1.0] * 168
+    for h in range(24):
+        how[tue + h] = 1.5                     # the weekday fallback fills Tuesday's other hours as high
+    how[tue + 18], how[tue + 19] = 1.0, 1.6     # one data hour is weak, so the observed hours aren't flat
+    sell = sell_windows(how, [1.0] * 168, weeks)
+    buy = buy_windows([2.0 - x for x in how], weeks)
+    data = {tue + 18, tue + 19, tue + 20}
+    for w in sell + buy:
+        assert {(w.start_slot + i) % 168 for i in range(w.hours)} <= data and w.weeks >= 1
+    assert sell and buy
+    assert sell_windows(how, [1.0] * 168, [0] * 168) == [] and buy_windows(how, [0] * 168) == []
+    flat = [1.5 if weeks[s] else 9.9 for s in range(168)]            # every hour with data alike: no best time
+    assert sell_windows(flat, [1.0] * 168, weeks) == [] and buy_windows(flat, weeks) == []

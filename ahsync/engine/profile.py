@@ -258,3 +258,23 @@ def unpack(values_text: str, weeks_text: str) -> Profile:
     if len(values) != SLOTS or len(weeks) != SLOTS:
         raise ValueError(f"a packed profile needs {SLOTS} slots, got {len(values)} and {len(weeks)}")
     return Profile(values, weeks, tuple(w >= MIN_WEEKS for w in weeks))
+
+
+def unpack_values(values_text: str) -> tuple[float, ...] | None:
+    """Only the ratios of a packed profile, without its weeks: what the plan's facts read (W13, SPEC §3.1.2 re-plan).
+
+    Args:
+        values_text: From pack: 168 integers in thousandths, or "".
+
+    Returns:
+        The ratios n ÷ 1000, the same floats as unpack(...).values; None for "".
+
+    Raises:
+        ValueError: When the text is not 168 integers.
+    """
+    if not values_text:
+        return None
+    values = tuple([n / PACK_SCALE for n in map(int, values_text.split(","))])
+    if len(values) != SLOTS:
+        raise ValueError(f"a packed profile needs {SLOTS} slots, got {len(values)}")
+    return values

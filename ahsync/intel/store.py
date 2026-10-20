@@ -47,11 +47,28 @@ class IntelStore:
         Args:
             market: Market id.
 
+        Each re-plan reads it (SPEC §3.1.1, IU13), so the parsed document is kept on this store and parsed again
+        only when a refresh published a different one (its built time or schema changed): parsing a 15k-item
+        market takes about a quarter of the re-plan's 1 s budget (§3.1.2). It is a frozen record; callers never
+        change it.
+
+        Args:
+            market: Market id.
+
         Returns:
             The intelligence, or None before the first refresh.
 
         Raises:
             intel.contract.IntelVersionError: When it was written by a newer AHSync.
         """
+        stamp = self.conn.execute("SELECT built, schema_version FROM intel WHERE market = ?", (market,)).fetchone()
+        if stamp is None:
+            return None
+        cache = self.__dict__.setdefault("_intel_cache", {})
+        cached = cache.get(market)
+        if cached is not None and cached[0] == tuple(stamp):
+            return cached[1]
         row = self.conn.execute("SELECT body FROM intel WHERE market = ?", (market,)).fetchone()
-        return from_json(row[0]) if row else None
+        intel = from_json(row[0])
+        cache[market] = (tuple(stamp), intel)
+        return intel

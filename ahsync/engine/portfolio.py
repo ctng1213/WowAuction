@@ -52,6 +52,8 @@ class PortfolioSettings:
     week_limit: int = 20               # most funded rows in Next 7 days
     candidate_export: int = 150        # candidates exported to the addon (§3.4D.3)
     horizon_days: int = 7              # the plan's horizon
+    candidate_pool: int = 400          # buys (flips, buys for later) kept past their first batch (§3.4D.3)
+    swap_candidates: int = 50          # excluded batches the swap pass tries (§3.4D.4)
 
 
 # ---------------------------------------------------------------- candidates (§3.4D.3)
@@ -502,6 +504,50 @@ def committed_share_pct(a: Accounting) -> int | None:
     if a.capital_base == 0:
         return None
     return (a.committed_capital * 200 + a.capital_base) // (2 * a.capital_base)
+
+
+def cash_of(c: Candidate) -> int:
+    """A row's cash for profit %: its gold needed plus the cost basis of bought stock it uses (SPEC §3.4D.8).
+
+    Args:
+        c: The candidate.
+
+    Returns:
+        Copper; 0 for a row that uses only found stock and needs no gold.
+    """
+    return c.gold_needed + c.cost_basis
+
+
+def profit_pct(expected_net: float, cash: int) -> int | None:
+    """Profit % = expected net ÷ cash, a whole percent, half up (SPEC §3.4D.8, PF21). Never a ranking key.
+
+    Args:
+        expected_net: Expected net, float copper.
+        cash: Gold needed + cost basis of bought stock used, copper.
+
+    Returns:
+        floor(net × 100 ÷ cash + 0.5); None when the cash is 0 (shown "—").
+    """
+    if cash <= 0:
+        return None
+    return math.floor(expected_net * 100 / cash + 0.5)
+
+
+def pool_profit_pct(rows: Iterable[tuple[float, int]]) -> int | None:
+    """Profit % of several rows: their nets ÷ their cash, leaving out rows with no cash (SPEC §3.4D.8, PF21).
+
+    Args:
+        rows: (expected net float copper, cash copper) per row.
+
+    Returns:
+        profit_pct of the sums over the rows whose cash is above 0; None when there are none.
+    """
+    net, cash = 0.0, 0
+    for row_net, row_cash in rows:
+        if row_cash > 0:
+            net += row_net
+            cash += row_cash
+    return profit_pct(net, cash)
 
 
 def accounting(chars: Sequence[CharacterGold], positions: Sequence[OpenPosition], risk_tolerance: float,

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import pytest
 
+from ahsync.engine import profile
 from ahsync.engine.prices import weekday_hour
 from ahsync.engine.profile import Profile, _slot, pack, price_profile, unpack, sales_profile, seasonality_strength, strength, supply_profile
 
@@ -138,3 +139,12 @@ def test_W13_profiles_pack_in_thousandths_half_up():
     assert unpack("", "") == Profile((1.0,) * 168, (0,) * 168, (False,) * 168)
     with pytest.raises(ValueError, match="168 slots"):
         unpack("1000,1000", "7,7")
+
+
+def test_unpack_values_reads_the_same_ratios_without_the_weeks():
+    values, weeks = profile.pack(profile.Profile(tuple(0.5 + i / 1000 for i in range(168)), tuple([3] * 168),
+                                                 tuple([True] * 168)))
+    assert profile.unpack_values(values) == profile.unpack(values, weeks).values
+    assert profile.unpack_values("") is None
+    with pytest.raises(ValueError):
+        profile.unpack_values("1,2,3")

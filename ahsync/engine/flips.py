@@ -1,25 +1,21 @@
 """The weekly plan, part 2: buy to flip (SPEC §3.4C.2).
 
 A flip buys auctions now, cheapest first, and posts them now, just under the listings
-left after the buy, or for an upcoming selling window, whichever pays more (R24). It is
-planned only when its expected profit, after fees and the chance to sell, is at least
-min_flip_margin × its cost, and flips are taken best expected
-profit × confidence first. Every flip stays within:
-- its character's budget (SPEC §3.4C.4, R9);
-- max_risk_pct of all your gold, so a buy may be smaller than a stack (§3.4 Risk, R19);
-- the selling windows' capacity, shared with your own stock and every other character
-  through one ledger (§3.4 market capacity, R16, PL4).
-Pure: data in, numbers out.
+left after the buy, or for an upcoming selling window, whichever pays more (R24). Each
+auction is added only while its expected profit, after fees and the chance to sell, is at
+least min_flip_margin × its cost. `flip_steps` yields the auctions one at a time: they are
+the portfolio's Flip batches (SPEC §3.4D.3), and the optimizer decides how many are funded
+within your gold and the exposure budget (§3.4D.4, R9, R19). Pure: data in, numbers out.
 """
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, replace
 
 from ahsync.engine import fees, sellprob
-from ahsync.engine.plan import PlanAction, PlanSettings, PostOption, SellFacts, alternative, choose_option, \
-    post_chance, post_options, record_price, slot_price, window_id
-from ahsync.engine.prices import post_price
+from ahsync.engine.plan import OptionValue, PlanAction, PlanSettings, PostOption, SellFacts, alternative, \
+    choose_option, post_chance, post_options, record_price, slot_price, window_id
+from ahsync.engine.prices import post_price, relist_price
 
 
 @dataclass(frozen=True)
@@ -27,7 +23,6 @@ class FlipSettings:
     """The config values flips need."""
 
     min_flip_margin: float = 0.20      # config min_flip_margin: expected profit ÷ cost
-    max_risk_pct: float = 25.0         # config max_risk_pct: the most one buy may spend, % of all your gold
 
 
 @dataclass(frozen=True)
@@ -90,19 +85,22 @@ def _remaining_book(f: SellFacts, bought: int) -> SellFacts:
     return replace(f, book=tuple((p, s, b, n) for (p, s, b), n in sorted(left.items())))
 
 
-def relisted(f_left: SellFacts, opts: list[PostOption], s: PlanSettings) -> list[PostOption]:
-    """The options with posting now re-priced for the book left after the buy (SPEC §3.4C.2, R24).
+def relisted(f_left: SellFacts, opts: list[PostOption], s: PlanSettings, grounded: bool = True) -> list[PostOption]:
+    """The options with posting now re-priced for the book left after the buy (SPEC §3.4C.2, R24, R28).
 
     Args:
         f_left: The item, with the bought auctions out of its book.
         opts: post_options of the item (posting now included).
         s: Settings.
+        grounded: True prices posting now by relist_price (no room on an empty book with thin data, R28); False
+            by post_price, to value the flip the grounding rule turns down (its excluded row).
 
     Returns:
-        The same options in order; posting now is post_price(the cheapest listing left, med7, p90) after your
-        record, and has no room (cap 0) when nothing is left to price it by.
+        The same options in order; posting now is relist_price(the cheapest listing left, med7, p90, closes) after
+        your record, and has no room (cap 0) when nothing grounds a price.
     """
-    price = post_price(sellprob.cheapest_other(f_left.book, f_left.cur), f_left.med7, f_left.p90)
+    price_of = relist_price if grounded else post_price
+    price = price_of(sellprob.cheapest_other(f_left.book, f_left.cur), f_left.med7, f_left.p90, f_left.closes_30d)
     out = []
     for o in opts:
         if o.window is None:
@@ -112,7 +110,7 @@ def relisted(f_left: SellFacts, opts: list[PostOption], s: PlanSettings) -> list
 
 
 def _best_window(f: SellFacts, opts: list[PostOption], used: list[float], stage: _Stage, qty: int,
-                 s: PlanSettings) -> tuple[int, float, float] | None:
+                 s: PlanSettings, value: OptionValue | None = None) -> tuple[int, float, float] | None:
     """The best way to sell one more auction's units, posting now or for a window, within capacity.
 
     Args:
@@ -122,6 +120,7 @@ def _best_window(f: SellFacts, opts: list[PostOption], used: list[float], stage:
         stage: The flip so far.
         qty: Units of the auction.
         s: Settings.
+        value: choose_option's value (the timing premium); None picks by expected value.
 
     Returns:
         (option index, expected value, P) as plan.choose_option picks it: a window must beat relisting now by
@@ -135,16 +134,29 @@ def _best_window(f: SellFacts, opts: list[PostOption], used: list[float], stage:
         p = post_chance(f, o.price, qty, o.hours, used[i] + mine, s)
         deposit = fees.deposit_copper(f.vendor_sell, qty, o.duration_h)
         scored.append((i, sellprob.expected_post(p, qty, o.price, alternative(f)[1], deposit), p))
-    return choose_option(opts, scored, s)
+    return choose_option(opts, scored, s, value)
 
 
-def build_flip(f: SellFacts, now_ms: int, s: PlanSettings, fs: FlipSettings, ledger: dict, spend_limit: int) -> _Stage | None:
-    """The flip worth making for one item: auctions bought cheapest first while each still pays.
+@dataclass(frozen=True)
+class FlipStep:
+    """One auction a flip buys, and where its units are posted (a Flip batch, SPEC §3.4D.3)."""
 
-    An auction is added while it fits the spend limit and an option with room (posting now, under what is left
-    after the buy, or a selling window), while that option is worth more per unit than disenchanting or
-    vendoring the units (else it is a disenchant buy, not a flip, R27), and while its own expected profit is at
-    least min_flip_margin × its cost; prices only rise along the book, so the first one that fails ends the flip.
+    price: int                         # unit price paid, copper
+    stack: int                         # units
+    option: int                        # index into post_options of the item
+    post_price: int                    # the unit price it is posted at (posting now: relisted under what is left)
+    expected: float                    # the post's expected value, float copper
+    p: float                           # its chance to sell
+
+
+def flip_steps(f: SellFacts, now_ms: int, s: PlanSettings, fs: FlipSettings, ledger: dict,
+               value: OptionValue | None = None, cost_value: bool = False, grounded: bool = True) -> Iterator[FlipStep]:
+    """The auctions a flip buys, cheapest first, while each still pays (SPEC §3.4C.2, R24, R27).
+
+    An auction is added while it fits an option with room (posting now, under what is left after the buy, or a
+    selling window), while that option is worth more per unit than disenchanting or vendoring the units (else
+    it is a disenchant buy, not a flip, R27), and while its own expected profit is at least min_flip_margin ×
+    its cost; prices only rise along the book, so the first one that fails ends the flip.
 
     Args:
         f: The item.
@@ -152,32 +164,73 @@ def build_flip(f: SellFacts, now_ms: int, s: PlanSettings, fs: FlipSettings, led
         s: Plan settings.
         fs: Flip settings.
         ledger: (item key, window id) -> units already planned; read only.
-        spend_limit: The most this flip may spend: the character's budget and the risk limit, copper.
+        value: choose_option's value for an option given its expected value (the timing premium); None picks by
+            expected value.
+        cost_value: When True, value is given the auction's profit (expected − cost) instead of its expected value.
+        grounded: False relists on an empty book at the ungrounded post price (relisted), to value an excluded flip.
 
-    Returns:
-        The flip; None when not even one auction is worth it.
+    Yields:
+        FlipStep per auction bought, in buying order.
     """
     opts = post_options(f, now_ms, s)
     used = [ledger.get((f.key, window_id(o)), 0.0) for o in opts]
     stage = _Stage(0, 0.0, 0, 0, {})
     for n, (price, stack, _) in enumerate(auctions(f.book, f.cur, f.cur_qty)):
         cost = price * stack
-        if stage.cost + cost > spend_limit:
-            break
         left = _remaining_book(f, n + 1)
-        here = relisted(left, opts, s)
-        best = _best_window(left, here, used, stage, stack, s)
+        here = relisted(left, opts, s, grounded)
+        best_unit = max([o.price * (1 - fees.AH_CUT) for i, o in enumerate(here) if used[i] + stack <= o.cap],
+                        default=None)
+        if best_unit is None or max(best_unit, alternative(f)[1]) * stack < (1 + fs.min_flip_margin) * cost:
+            return                                  # can't pay even if every unit sells: no simulation needed
+        scored_value = value
+        if value is not None and cost_value:
+            scored_value = lambda i, e, cost=cost: value(i, e - cost)        # noqa: E731  the auction's profit
+        best = _best_window(left, here, used, stage, stack, s, scored_value)
         if best is None or best[1] / stack <= alternative(f)[1] or not pays(best[1], cost, fs.min_flip_margin):
-            break
+            return
         i, e, p = best
         slot = stage.posts.setdefault((i, here[i].price), [0, 0.0, 0.0, 0])
         slot[0], slot[1], slot[2], slot[3] = slot[0] + stack, slot[1] + e, slot[2] + p * stack, slot[3] + cost
         stage = replace(stage, cost=stage.cost + cost, expected=stage.expected + e, units=stage.units + stack,
                         top_price=price)
+        yield FlipStep(price, stack, i, here[i].price, e, p)
+
+
+def build_flip(f: SellFacts, now_ms: int, s: PlanSettings, fs: FlipSettings, ledger: dict, spend_limit: int | None = None,
+               max_auctions: int | None = None, value: OptionValue | None = None,
+               cost_value: bool = False) -> _Stage | None:
+    """The flip worth making for one item: flip_steps' auctions, within a spend limit and a count.
+
+    Args:
+        f: The item.
+        now_ms: Now.
+        s: Plan settings.
+        fs: Flip settings.
+        ledger: (item key, window id) -> units already planned; read only.
+        spend_limit: The most this flip may spend, copper; None for no limit (the portfolio funds batches).
+        max_auctions: The most auctions to buy (the funded batches); None for all that pay.
+        value: flip_steps' value.
+        cost_value: flip_steps' cost_value.
+
+    Returns:
+        The flip; None when not even one auction is worth it.
+    """
+    stage = _Stage(0, 0.0, 0, 0, {})
+    for n, step in enumerate(flip_steps(f, now_ms, s, fs, ledger, value, cost_value)):
+        cost = step.price * step.stack
+        if (spend_limit is not None and stage.cost + cost > spend_limit) or (max_auctions is not None and n >= max_auctions):
+            break
+        slot = stage.posts.setdefault((step.option, step.post_price), [0, 0.0, 0.0, 0])
+        slot[0], slot[1], slot[2], slot[3] = slot[0] + step.stack, slot[1] + step.expected, \
+            slot[2] + step.p * step.stack, slot[3] + cost
+        stage = replace(stage, cost=stage.cost + cost, expected=stage.expected + step.expected,
+                        units=stage.units + step.stack, top_price=step.price)
     return stage if stage.units else None
 
 
-def _flip_actions(f: SellFacts, stage: _Stage, char_id: str, now_ms: int, s: PlanSettings) -> list[PlanAction]:
+def flip_actions(f: SellFacts, stage: _Stage, char_id: str, now_ms: int, s: PlanSettings,
+                 chain: str | None = None) -> list[PlanAction]:
     """A flip as a buy now and its follow-up posts, linked by one chain id.
 
     The buy carries the chain's expected profit; each post carries its own net against
@@ -190,11 +243,12 @@ def _flip_actions(f: SellFacts, stage: _Stage, char_id: str, now_ms: int, s: Pla
         char_id: Who buys and posts.
         now_ms: Now.
         s: Settings.
+        chain: The chain id; "flip:<key>" by default.
 
     Returns:
         [buy, posts by time (ties: price)].
     """
-    chain = f"flip:{f.key}"
+    chain = chain or f"flip:{f.key}"
     opts = post_options(f, now_ms, s)
     buy = PlanAction("buy", char_id, f.key, stage.units, stage.top_price, now_ms, None, None, None, None,
                      stage.expected, stage.expected - stage.cost, chain=chain, source="ah")
@@ -207,51 +261,9 @@ def _flip_actions(f: SellFacts, stage: _Stage, char_id: str, now_ms: int, s: Pla
     return [buy] + sorted(posts, key=lambda a: (a.at_ms, a.price))
 
 
-def flip_plan(facts: dict[int, SellFacts], budgets: dict[str, int], total_gold: int, now_ms: int, s: PlanSettings,
-              fs: FlipSettings, ledger: dict, exclude: set[int] = frozenset()) -> list[PlanAction]:
-    """Every flip worth making, best expected profit × confidence first (SPEC §3.4C.2).
-
-    Each item gets at most one flip, bought by the character with the most budget left
-    (ties: character id), so two characters never fill the same demand (R16). The ledger
-    is updated with the flips' posts.
-
-    Args:
-        facts: Item key -> what the plan knows.
-        budgets: Character id -> copper it may spend; changed in place as flips spend.
-        total_gold: All your characters' gold, copper (for the risk limit).
-        now_ms: Now.
-        s: Plan settings.
-        fs: Flip settings.
-        ledger: The shared capacity ledger (plan.plan_item).
-        exclude: Items never to buy (rules no_buy and ignore, not-selling flags).
-
-    Returns:
-        Buys and posts, in the order the flips were taken.
-    """
-    risk_limit = int(total_gold * fs.max_risk_pct / 100)
-    ranked = []
-    for key in sorted(facts):
-        if key in exclude or not budgets:
-            continue
-        stage = build_flip(facts[key], now_ms, s, fs, ledger, min(risk_limit, max(budgets.values())))
-        if stage is not None:
-            ranked.append((-(stage.expected - stage.cost) * facts[key].conf / 100, key))
-    actions = []
-    for _, key in sorted(ranked):
-        char_id = min(budgets, key=lambda c: (-budgets[c], c))
-        stage = build_flip(facts[key], now_ms, s, fs, ledger, min(risk_limit, budgets[char_id]))
-        if stage is None:
-            continue
-        budgets[char_id] -= stage.cost
-        opts = post_options(facts[key], now_ms, s)
-        for (i, _), (units, *_rest) in sorted(stage.posts.items()):
-            ledger[(key, window_id(opts[i]))] = ledger.get((key, window_id(opts[i])), 0.0) + units
-        actions.extend(_flip_actions(facts[key], stage, char_id, now_ms, s))
-    return actions
-
-
 def flip_offer(level: int, how_best: float, trend7: float, days_ahead: float, p: float, fallback: float, deposit: int,
-               ref: int, max_trend_total: float) -> tuple[float, int]:
+               ref: int, max_trend_total: float, p10: int | None = None, med7: int | None = None,
+               p90: int | None = None, closes: int | None = None) -> tuple[float, int]:
     """What one reference stack bought now could fetch at the item's best window, market-wide (SPEC §4.3, EX11).
 
     Args:
@@ -264,11 +276,15 @@ def flip_offer(level: int, how_best: float, trend7: float, days_ahead: float, p:
         deposit: Deposit for the stack, copper.
         ref: Reference stack, units.
         max_trend_total: Config max_trend_total (slot_price's total trend clamp, TT7).
+        p10: 30-day 10th percentile, copper (slot_price's clamp, TT22); None for none.
+        med7: 7-day median, copper.
+        p90: 30-day 90th percentile, copper.
+        closes: Hourly closes in 30 days (TT23); None when unknown.
 
     Returns:
         (expected value per unit after fees, float copper; the window's unit price, copper).
     """
-    price = slot_price(level, how_best, trend7, days_ahead, max_trend_total)
+    price = slot_price(level, how_best, trend7, days_ahead, max_trend_total, p10, med7, p90, closes)
     return sellprob.expected_post(p, ref, price, fallback, deposit) / ref, price
 
 
@@ -276,14 +292,14 @@ def flip_now_offer(p: float, units: int, cheapest: int, relist: int, fallback: f
                    min_flip_margin: float) -> float | None:
     """A flip seen in a live book: buy the cheapest level, relist now under the next one (SPEC §4.0, FN1).
 
-    The addon's Prices.FlipNow is its twin; both use post_price for relist.
+    The addon's Prices.FlipNow is its twin; both use relist_price for relist (R28).
 
     Args:
         p: Chance the units sell posted now at relist with nothing ahead (the curve at 0 ahead, or
             default_chance for the cheapest position when volume is unknown).
         units: Units bought: the cheapest level's, at most one reference stack.
         cheapest: The cheapest level's unit price, copper.
-        relist: The relist unit price, post_price(second level, med7, p90), copper.
+        relist: The relist unit price, relist_price(second level, med7, p90, closes), copper.
         fallback: Value per unsold unit, float copper.
         deposit: Deposit for the posting-now window, copper.
         min_flip_margin: Config min_flip_margin.

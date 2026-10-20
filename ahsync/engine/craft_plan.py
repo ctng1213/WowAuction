@@ -2,12 +2,13 @@
 
 Each recipe's output is valued at the product's best selling window in the next 7
 days (or posting now), with the room left in that window's capacity. The craft count
-comes from craft.craft_option (each extra craft must still pay). A planned craft
-becomes a linked chain: buy the missing mats → craft any intermediates (mailing them
-when another character makes the next step) → mail the owned mats other characters hold
-to the crafter (craft.gather picks the crafter, C19, C22) → craft → post the product. The
-chain's profit sits on the craft; mat buys and mail carry none (SPEC §3.4 expected net, D22).
-Pure: data in, numbers out.
+comes from craft.craft_option (each extra craft must still pay); its crafts are the
+portfolio's Craft and Multistage batches (SPEC §3.4D.3), and the optimizer decides how many
+are funded. A funded craft becomes a linked chain: buy the missing mats → craft any
+intermediates (mailing them when another character makes the next step) → mail the owned
+mats other characters hold to the crafter (craft.gather picks the crafter, C19, C22) →
+craft → post the product. The chain's profit sits on the craft; mat buys and mail carry
+none (SPEC §3.4 expected net, D22). Pure: data in, numbers out.
 """
 from __future__ import annotations
 
@@ -16,8 +17,8 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 
 from ahsync.engine import craft, fees, sellprob
-from ahsync.engine.plan import PlanAction, PlanSettings, PostOption, SellFacts, alternative, choose_option, \
-    post_chance, post_options, window_id
+from ahsync.engine.plan import OptionValue, PlanAction, PlanSettings, PostOption, SellFacts, alternative, \
+    choose_option, post_chance, post_options, window_id
 
 STEP_MS = 60_000      # chain steps a minute apart, so their order shows in time
 
@@ -46,8 +47,8 @@ def units_made(crafts: int, recipe: craft.Recipe) -> int:
     return 0 if crafts <= 0 else max(1, math.floor(crafts * recipe.avg_yield + 0.5))
 
 
-def _best_sale(f: SellFacts, opts: list[PostOption], ledger: dict, units: int,
-               s: PlanSettings) -> tuple[int, float, float] | None:
+def best_sale(f: SellFacts, opts: list[PostOption], ledger: dict, units: int,
+              s: PlanSettings, value: OptionValue | None = None) -> tuple[int, float, float] | None:
     """Where the product's units sell best, within the capacity left.
 
     Args:
@@ -56,6 +57,7 @@ def _best_sale(f: SellFacts, opts: list[PostOption], ledger: dict, units: int,
         ledger: (item key, window id) -> units already planned.
         units: Units to post together.
         s: Settings.
+        value: choose_option's value (the timing premium); None picks by expected value.
 
     Returns:
         (option index, expected value, P) as plan.choose_option picks it: a window must beat posting now by its
@@ -69,11 +71,11 @@ def _best_sale(f: SellFacts, opts: list[PostOption], ledger: dict, units: int,
         p = post_chance(f, o.price, units, o.hours, used, s)
         deposit = fees.deposit_copper(f.vendor_sell, units, o.duration_h)
         scored.append((i, sellprob.expected_post(p, units, o.price, alternative(f)[1], deposit), p))
-    return choose_option(opts, scored, s)
+    return choose_option(opts, scored, s, value)
 
 
 def product_value(f: SellFacts, recipe: craft.Recipe, opts: list[PostOption], ledger: dict,
-                  s: PlanSettings) -> Callable[[int], float]:
+                  s: PlanSettings, value: OptionValue | None = None) -> Callable[[int], float]:
     """n -> expected value of n crafts' output at its best window (SPEC §3.4C.3).
 
     Args:
@@ -82,6 +84,7 @@ def product_value(f: SellFacts, recipe: craft.Recipe, opts: list[PostOption], le
         opts: The product's post options.
         ledger: The capacity ledger; read only.
         s: Settings.
+        value: best_sale's value.
 
     Returns:
         A function of the craft count; output no window has room for is worth nothing,
@@ -89,7 +92,7 @@ def product_value(f: SellFacts, recipe: craft.Recipe, opts: list[PostOption], le
     """
     cache: dict[int, float] = {0: 0.0}
 
-    def value(n: int) -> float:
+    def worth(n: int) -> float:
         """Expected value of n crafts' output.
 
         Args:
@@ -99,10 +102,10 @@ def product_value(f: SellFacts, recipe: craft.Recipe, opts: list[PostOption], le
             Float copper.
         """
         if n not in cache:
-            best = _best_sale(f, opts, ledger, units_made(n, recipe), s)
+            best = best_sale(f, opts, ledger, units_made(n, recipe), s, value)
             cache[n] = best[1] if best else -math.inf
         return cache[n]
-    return value
+    return worth
 
 
 def intermediate_buys(option: craft.CraftOption, recipe: craft.Recipe, world: CraftWorld) -> list[tuple[str, int, float]]:
@@ -158,6 +161,27 @@ def consume(market: craft.Market, option: craft.CraftOption, extra: Sequence[tup
     return replace(market, owned=owned, books=books)
 
 
+def use_held(held: Mapping[tuple[str, int], float], crafter: str, used: Mapping[int, float],
+             mail: Mapping[int, Sequence[tuple[str, int]]]) -> dict[tuple[str, int], float]:
+    """Who still holds which owned mats after a chain: the crafter's own are used first, then the mailed ones (C22).
+
+    Args:
+        held: (character, key) -> units before the chain.
+        crafter: The chain's crafter.
+        used: Item key -> owned units the chain uses.
+        mail: From craft.gather: key -> ((sender, units), ...).
+
+    Returns:
+        A new mapping; nothing goes below 0.
+    """
+    left = dict(held)
+    for key, units in used.items():
+        left[(crafter, key)] = left.get((crafter, key), 0.0) - min(units, left.get((crafter, key), 0.0))
+        for sender, sent in mail.get(key, ()):
+            left[(sender, key)] = max(0.0, left.get((sender, key), 0.0) - sent)
+    return left
+
+
 def buy_terms(market: craft.Market, key: int, units: float) -> tuple[int, int]:
     """Price and cost of buying a mat: the vendor when it sells it, else the AH from the cheapest listing.
 
@@ -194,8 +218,8 @@ def buy_source(market: craft.Market, key: int) -> str:
 
 
 def chain_actions(recipe: craft.Recipe, option: craft.CraftOption, world: CraftWorld, ledger: dict, now_ms: int,
-                  s: PlanSettings) -> list[PlanAction]:
-    """One planned craft as its linked steps, all under chain id "craft:<spell>" (SPEC §3.4C.3, C7, C22, D22).
+                  s: PlanSettings, value: OptionValue | None = None, chain: str | None = None) -> list[PlanAction]:
+    """One planned craft as its linked steps, all under one chain id (SPEC §3.4C.3, C7, C22, D22).
 
     Mat buys, intermediate crafts and mail come first, a minute apart from now; the craft
     carries the chain's expected profit; the post follows at the product's chosen window
@@ -211,16 +235,18 @@ def chain_actions(recipe: craft.Recipe, option: craft.CraftOption, world: CraftW
         ledger: The capacity ledger; read only here.
         now_ms: Now.
         s: Settings.
+        value: best_sale's value, as the option was valued with.
+        chain: The chain id; "craft:<spell>" by default.
 
     Returns:
         The steps in time order; the ledger is not changed.
     """
-    chain = f"craft:{recipe.spell}"
+    chain = chain or f"craft:{recipe.spell}"
     _, mail = craft.gather(option.owned_used, world.held, (option.crafter,))
     f = world.products[recipe.product]
     opts = post_options(f, now_ms, s)
     units = units_made(option.crafts, recipe)
-    i, expected, p = _best_sale(f, opts, ledger, units, s)
+    i, expected, p = best_sale(f, opts, ledger, units, s, value)
     profit = sum(option.profits)
     out, at = [], now_ms
     needs = {key: count * option.crafts for key, count in recipe.reagents}     # intermediate units the craft uses
@@ -285,115 +311,31 @@ def _step(kind: str, char_id: str, key: int, qty: int, at_ms: int, chain: str, t
     return PlanAction(kind, char_id, key, qty, None, at_ms, None, None, None, None, 0.0, 0.0, chain=chain, to_char=to_char)
 
 
-def use_held(held: Mapping[tuple[str, int], float], crafter: str, used: Mapping[int, float],
-             mail: Mapping[int, Sequence[tuple[str, int]]]) -> dict[tuple[str, int], float]:
-    """Who still holds which owned mats after a chain: the crafter's own are used first, then the mailed ones (C22).
+def craft_option_for(recipe: craft.Recipe, world: CraftWorld, now_ms: int, s: PlanSettings,
+                     max_depth: int = craft.MAX_CRAFT_DEPTH, value: OptionValue | None = None,
+                     max_crafts: int = craft.MAX_CRAFTS, crafter: str | None = None) -> craft.CraftOption:
+    """A recipe's craft option: its count, sources and profit, crafted by the character gather picks (C19, C22).
+
+    The crafter is the one craft.gather picks for the owned mats the crafts use (the holder of most of them,
+    ties to the first who knows the recipe). Gold is not limited here: the portfolio funds the crafts it can
+    afford one batch at a time (SPEC §3.4D.3-D.4, C24).
 
     Args:
-        held: (character, key) -> units before the chain.
-        crafter: The chain's crafter.
-        used: Item key -> owned units the chain uses.
-        mail: From craft.gather: key -> ((sender, units), ...).
-
-    Returns:
-        A new mapping; nothing goes below 0.
-    """
-    left = dict(held)
-    for key, units in used.items():
-        left[(crafter, key)] = left.get((crafter, key), 0.0) - min(units, left.get((crafter, key), 0.0))
-        for sender, sent in mail.get(key, ()):
-            left[(sender, key)] = max(0.0, left.get((sender, key), 0.0) - sent)
-    return left
-
-
-def craft_plan(world: CraftWorld, budgets: dict[str, int], total_gold: int, now_ms: int, s: PlanSettings,
-               max_risk_pct: float, ledger: dict, max_depth: int = craft.MAX_CRAFT_DEPTH,
-               exclude: set[int] = frozenset()) -> tuple[list[PlanAction], craft.Market]:
-    """Every craft-to-sell chain worth making, best expected profit × confidence first (SPEC §3.4C.3).
-
-    Each chain's mat gold comes from its crafter's budget and stays within max_risk_pct of
-    all your gold (§3.4 Risk); its owned mats and AH units are used up for later chains, and
-    its product's post takes room in the shared capacity ledger (PL4).
-
-    Args:
-        world: Recipes, market and products.
-        budgets: Character id -> copper it may spend; changed in place.
-        total_gold: All your characters' gold, copper.
-        now_ms: Now.
-        s: Plan settings.
-        max_risk_pct: Config max_risk_pct.
-        ledger: The shared capacity ledger; updated with the chains' posts.
-        max_depth: Config max_craft_depth.
-        exclude: Products never to craft (rules no_buy and ignore).
-
-    Returns:
-        (the chains' steps in the order taken, the market after them: what is left for flips
-        and for the sell plan of your remaining stock).
-    """
-    risk_limit = total_gold * max_risk_pct / 100
-    market, held = world.market, world.held
-    ranked = []
-    for recipe in world.recipes:
-        f = world.products.get(recipe.product)
-        if f is None or recipe.product in exclude or not recipe.crafters:
-            continue
-        option = _option(recipe, world, market, ledger, now_ms, s, budgets, risk_limit, max_depth)
-        if option.crafts:
-            ranked.append((-sum(option.profits) * f.conf / 100, recipe.spell, recipe))
-    actions = []
-    for _, _, recipe in sorted(ranked, key=lambda r: (r[0], r[1])):
-        option = _option(recipe, replace(world, market=market, held=held), market, ledger, now_ms, s, budgets, risk_limit,
-                         max_depth)
-        if not option.crafts:
-            continue
-        steps = chain_actions(recipe, option, replace(world, market=market, held=held), ledger, now_ms, s)
-        post = steps[-1]
-        key = (post.key, post.window_start_ms if post.window_start_ms is not None else None)
-        ledger[key] = ledger.get(key, 0.0) + post.qty
-        budgets[post.char_id] = budgets.get(post.char_id, 0) - math.ceil(option.mat_gold)   # the chain's crafter (C22)
-        held = use_held(held, post.char_id, option.owned_used, craft.gather(option.owned_used, held, (post.char_id,))[1])
-        market = consume(market, option, intermediate_buys(option, recipe, world))
-        actions.extend(steps)
-    return actions, market
-
-
-def _option(recipe: craft.Recipe, world: CraftWorld, market: craft.Market, ledger: dict, now_ms: int,
-            s: PlanSettings, budgets: dict[str, int], risk_limit: float, max_depth: int) -> craft.CraftOption:
-    """The craft option for a recipe now: its count, sources and profit, within its crafter's budget and risk (C24).
-
-    The crafter is the one craft.gather picks for the owned mats the crafts use (C19); the count is checked against
-    that character's budget, the one the chain is charged to. The first try uses the first crafter's budget to find
-    which owned mats it uses; when gather picks someone else, the option is worked out again with that one's budget.
-
-    Args:
-        recipe: The recipe.
-        world: Recipes, products and who holds which owned mats.
-        market: The market as it stands (after earlier chains).
-        ledger: The capacity ledger; read only.
+        recipe: The recipe (it has crafters).
+        world: Recipes, market (owned mats at hold value), products and who holds which owned mats.
         now_ms: Now.
         s: Settings.
-        budgets: Character id -> copper left.
-        risk_limit: The most one chain may spend on mats, copper.
-        max_depth: Config max_craft_depth.
+        max_depth: Config max_craft_depth; 1 leaves crafted intermediates out (the bought route, PF4).
+        value: best_sale's value (the timing premium).
+        max_crafts: The most crafts (the funded batches).
+        crafter: The crafter to use; None lets gather pick.
 
     Returns:
-        The option, its crafter set to gather's choice; crafts = 0 when nothing pays.
+        The option, its crafter set; crafts = 0 when nothing pays.
     """
     f = world.products[recipe.product]
-    value = product_value(f, recipe, post_options(f, now_ms, s), ledger, s)
-
-    def option_for(crafter: str) -> craft.CraftOption:
-        """The option within one crafter's budget.
-
-        Args:
-            crafter: Character id.
-
-        Returns:
-            The option, crafted by that character.
-        """
-        budget = min(risk_limit, max(0, budgets.get(crafter, 0)))
-        made = craft.craft_option(recipe, market, world.by_product, value, budget=budget, max_depth=max_depth)
-        return replace(made, crafter=crafter)
-    option = option_for(recipe.crafters[0])
-    crafter = craft.gather(option.owned_used, world.held, recipe.crafters)[0]
-    return option if crafter == option.crafter else option_for(crafter)
+    worth = product_value(f, recipe, post_options(f, now_ms, s), {}, s, value)
+    made = craft.craft_option(recipe, world.market, world.by_product, worth, max_depth=max_depth,
+                              max_crafts=max_crafts)
+    chosen = crafter or craft.gather(made.owned_used, world.held, recipe.crafters)[0]
+    return replace(made, crafter=chosen)

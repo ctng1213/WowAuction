@@ -1,0 +1,2214 @@
+[
+ {
+  "id": "PF5",
+  "name": "the swap pass replaces one big ratio by two that make more",
+  "call": "select",
+  "args": {
+   "picks": [
+    {
+     "cand_id": "A",
+     "opp": "A",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 6000,
+     "adjusted": 3000.0,
+     "net": 3000.0,
+     "name": "A",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "B",
+     "opp": "B",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 5000,
+     "adjusted": 2000.0,
+     "net": 2000.0,
+     "name": "B",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "C",
+     "opp": "C",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 5000,
+     "adjusted": 1900.0,
+     "net": 1900.0,
+     "name": "C",
+     "reason": null,
+     "claims": []
+    }
+   ],
+   "resources": [],
+   "budget": {
+    "capacity": 10000,
+    "spendable": [
+     [
+      "Amaya-Grommash",
+      50000
+     ]
+    ],
+    "today_limit": 20,
+    "week_limit": 20,
+    "swap_candidates": 50
+   }
+  },
+  "expect": {
+   "funded": [
+    "B",
+    "C"
+   ],
+   "reasons": {
+    "A": "Exceeds risk tolerance (needs 60s, 0c left)"
+   },
+   "capacity_left": 0
+  },
+  "why": "greedy by adjusted per copper funds A (0.50) and B, C don't fit 40s; swapping A for B and refilling with C makes 39s > 30s"
+ },
+ {
+  "id": "PF11",
+  "name": "a higher return on a smaller trade never wins just for its ratio",
+  "call": "select",
+  "args": {
+   "picks": [
+    {
+     "cand_id": "X",
+     "opp": "X",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 500,
+     "adjusted": 1000.0,
+     "net": 1000.0,
+     "name": "X",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Y",
+     "opp": "Y",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 10000,
+     "adjusted": 4000.0,
+     "net": 4000.0,
+     "name": "Y",
+     "reason": null,
+     "claims": []
+    }
+   ],
+   "resources": [],
+   "budget": {
+    "capacity": 10000,
+    "spendable": [
+     [
+      "Amaya-Grommash",
+      50000
+     ]
+    ],
+    "today_limit": 20,
+    "week_limit": 20,
+    "swap_candidates": 50
+   }
+  },
+  "expect": {
+   "funded": [
+    "Y"
+   ],
+   "reasons": {
+    "X": "Exceeds risk tolerance (needs 5s, 0c left)"
+   },
+   "capacity_left": 0
+  },
+  "why": "X first (2.0 per copper), Y doesn't fit 95s; the swap pass replaces X by Y: 40s > 10s"
+ },
+ {
+  "id": "PF15",
+  "name": "Amaya's share of the mockup plan funds the same rows in the same order",
+  "call": "select",
+  "args": {
+   "picks": [
+    {
+     "cand_id": "Scouting Gloves of the Monkey:1",
+     "opp": "Scouting Gloves of the Monkey",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 800,
+     "adjusted": 625,
+     "net": 625.0,
+     "name": "Scouting Gloves of the Monkey",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Embossed Leather Gloves:1",
+     "opp": "Embossed Leather Gloves",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 500,
+     "adjusted": 380,
+     "net": 380.0,
+     "name": "Embossed Leather Gloves",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Linen Cloth:1",
+     "opp": "Linen Cloth",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 760,
+     "adjusted": 203,
+     "net": 203.0,
+     "name": "Linen Cloth",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Grunt's Bracers of Defense:1",
+     "opp": "Grunt's Bracers of Defense",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1500,
+     "adjusted": 600,
+     "net": 600.0,
+     "name": "Grunt's Bracers of Defense",
+     "reason": "Required profession unavailable: Enchanting 150",
+     "claims": []
+    },
+    {
+     "cand_id": "Elixir of Fortitude:1",
+     "opp": "Elixir of Fortitude",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 12000,
+     "adjusted": 900,
+     "net": 900.0,
+     "name": "Elixir of Fortitude",
+     "reason": "Insufficient liquidity: 3/day, 40 planned",
+     "claims": []
+    },
+    {
+     "cand_id": "Thick Leather:1",
+     "opp": "Thick Leather",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 16080,
+     "adjusted": 4174.573055028463,
+     "net": 5500.0,
+     "name": "Thick Leather",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Runed Copper Rod:1",
+     "opp": "Runed Copper Rod",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 3700,
+     "adjusted": 1112.2483793926988,
+     "net": 1630.0,
+     "name": "Runed Copper Rod",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Silk Cloth:1",
+     "opp": "Silk Cloth",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 2800,
+     "adjusted": 514.9911816578483,
+     "net": 730.0,
+     "name": "Silk Cloth",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Bolt of Silk Cloth:1",
+     "opp": "Bolt of Silk Cloth",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 560,
+     "adjusted": 132.1976149914821,
+     "net": 194.0,
+     "name": "Bolt of Silk Cloth",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Greater Magic Essence:1",
+     "opp": "Greater Magic Essence",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 3600,
+     "adjusted": 817.717206132879,
+     "net": 1200.0,
+     "name": "Greater Magic Essence",
+     "reason": "Forecast too uncertain (1 week of data)",
+     "claims": []
+    }
+   ],
+   "resources": [],
+   "budget": {
+    "capacity": 27640,
+    "spendable": [
+     [
+      "Amaya-Grommash",
+      27640
+     ]
+    ],
+    "today_limit": 20,
+    "week_limit": 20,
+    "swap_candidates": 50
+   }
+  },
+  "expect": {
+   "funded": [
+    "Scouting Gloves of the Monkey:1",
+    "Embossed Leather Gloves:1",
+    "Runed Copper Rod:1",
+    "Linen Cloth:1",
+    "Thick Leather:1",
+    "Bolt of Silk Cloth:1",
+    "Silk Cloth:1"
+   ],
+   "reasons": {
+    "Elixir of Fortitude:1": "Insufficient liquidity: 3/day, 40 planned",
+    "Greater Magic Essence:1": "Forecast too uncertain (1 week of data)",
+    "Grunt's Bracers of Defense:1": "Required profession unavailable: Enchanting 150"
+   },
+   "capacity_left": 2440
+  },
+  "why": "spendable cap 6g 49s 40c - Brugan's 3g 73s = 2g 76s 40c; adjusted per copper 0.78, 0.76, 0.30, 0.27, 0.26, 0.24, 0.18; 2g 52s funded, 24s 40c left"
+ },
+ {
+  "id": "PF24",
+  "name": "a post of bars a craft took is resources already claimed",
+  "call": "select",
+  "args": {
+   "picks": [
+    {
+     "cand_id": "post",
+     "opp": "post",
+     "batch": 1,
+     "char_id": "Brugan-Grommash",
+     "lst": "today",
+     "gold": 0,
+     "adjusted": 3000.0,
+     "net": 3000.0,
+     "name": "Copper Bar",
+     "reason": null,
+     "claims": [
+      [
+       "own:Brugan-Grommash:2840",
+       6
+      ]
+     ]
+    },
+    {
+     "cand_id": "craft",
+     "opp": "craft",
+     "batch": 1,
+     "char_id": "Brugan-Grommash",
+     "lst": "today",
+     "gold": 0,
+     "adjusted": 5400.0,
+     "net": 5400.0,
+     "name": "Copper Rod",
+     "reason": null,
+     "claims": [
+      [
+       "own:Brugan-Grommash:2840",
+       6
+      ]
+     ]
+    }
+   ],
+   "resources": [
+    {
+     "rid": "own:Brugan-Grommash:2840",
+     "limit": 6,
+     "name": "Copper Bar"
+    }
+   ],
+   "budget": {
+    "capacity": 10000,
+    "spendable": [
+     [
+      "Brugan-Grommash",
+      10000
+     ]
+    ],
+    "today_limit": 20,
+    "week_limit": 20,
+    "swap_candidates": 50
+   }
+  },
+  "expect": {
+   "funded": [
+    "craft"
+   ],
+   "reasons": {
+    "post": "Resources already claimed: 6 Copper Bar (Copper Rod)"
+   },
+   "capacity_left": 10000
+  },
+  "why": "the craft makes more from the 6 bars"
+ },
+ {
+  "id": "PF24",
+  "name": "a buy bigger than all characters' gold is insufficient gold",
+  "call": "select",
+  "args": {
+   "picks": [
+    {
+     "cand_id": "buy",
+     "opp": "buy",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 16080,
+     "adjusted": 100.0,
+     "net": 100.0,
+     "name": "Thick Leather",
+     "reason": null,
+     "claims": []
+    }
+   ],
+   "resources": [],
+   "budget": {
+    "capacity": 100000,
+    "spendable": [
+     [
+      "Amaya-Grommash",
+      10000
+     ],
+     [
+      "Brugan-Grommash",
+      5000
+     ]
+    ],
+    "today_limit": 20,
+    "week_limit": 20,
+    "swap_candidates": 50
+   }
+  },
+  "expect": {
+   "funded": [],
+   "reasons": {
+    "buy": "Insufficient gold (needs 1g 60s 80c, all characters hold 1g 50s)"
+   },
+   "capacity_left": 100000
+  },
+  "why": "1g + 50s < 1g 60s 80c"
+ },
+ {
+  "id": "PF24",
+  "name": "a buy the account covers but Amaya can't is insufficient gold on Amaya",
+  "call": "select",
+  "args": {
+   "picks": [
+    {
+     "cand_id": "buy",
+     "opp": "buy",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 16080,
+     "adjusted": 100.0,
+     "net": 100.0,
+     "name": "Thick Leather",
+     "reason": null,
+     "claims": []
+    }
+   ],
+   "resources": [],
+   "budget": {
+    "capacity": 100000,
+    "spendable": [
+     [
+      "Amaya-Grommash",
+      10000
+     ],
+     [
+      "Brugan-Grommash",
+      300000
+     ]
+    ],
+    "today_limit": 20,
+    "week_limit": 20,
+    "swap_candidates": 50
+   }
+  },
+  "expect": {
+   "funded": [],
+   "reasons": {
+    "buy": "Insufficient gold on Amaya (needs 1g 60s 80c, has 1g)"
+   },
+   "capacity_left": 100000
+  },
+  "why": "gold stays on its character"
+ },
+ {
+  "id": "PF24",
+  "name": "a 21st Today row is recommendation limit reached",
+  "call": "select",
+  "args": {
+   "picks": [
+    {
+     "cand_id": "r00",
+     "opp": "r00",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1,
+     "adjusted": 100.0,
+     "net": 100.0,
+     "name": "Row 00",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "r01",
+     "opp": "r01",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1,
+     "adjusted": 99.0,
+     "net": 99.0,
+     "name": "Row 01",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "r02",
+     "opp": "r02",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1,
+     "adjusted": 98.0,
+     "net": 98.0,
+     "name": "Row 02",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "r03",
+     "opp": "r03",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1,
+     "adjusted": 97.0,
+     "net": 97.0,
+     "name": "Row 03",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "r04",
+     "opp": "r04",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1,
+     "adjusted": 96.0,
+     "net": 96.0,
+     "name": "Row 04",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "r05",
+     "opp": "r05",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1,
+     "adjusted": 95.0,
+     "net": 95.0,
+     "name": "Row 05",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "r06",
+     "opp": "r06",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1,
+     "adjusted": 94.0,
+     "net": 94.0,
+     "name": "Row 06",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "r07",
+     "opp": "r07",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1,
+     "adjusted": 93.0,
+     "net": 93.0,
+     "name": "Row 07",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "r08",
+     "opp": "r08",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1,
+     "adjusted": 92.0,
+     "net": 92.0,
+     "name": "Row 08",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "r09",
+     "opp": "r09",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1,
+     "adjusted": 91.0,
+     "net": 91.0,
+     "name": "Row 09",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "r10",
+     "opp": "r10",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1,
+     "adjusted": 90.0,
+     "net": 90.0,
+     "name": "Row 10",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "r11",
+     "opp": "r11",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1,
+     "adjusted": 89.0,
+     "net": 89.0,
+     "name": "Row 11",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "r12",
+     "opp": "r12",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1,
+     "adjusted": 88.0,
+     "net": 88.0,
+     "name": "Row 12",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "r13",
+     "opp": "r13",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1,
+     "adjusted": 87.0,
+     "net": 87.0,
+     "name": "Row 13",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "r14",
+     "opp": "r14",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1,
+     "adjusted": 86.0,
+     "net": 86.0,
+     "name": "Row 14",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "r15",
+     "opp": "r15",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1,
+     "adjusted": 85.0,
+     "net": 85.0,
+     "name": "Row 15",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "r16",
+     "opp": "r16",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1,
+     "adjusted": 84.0,
+     "net": 84.0,
+     "name": "Row 16",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "r17",
+     "opp": "r17",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1,
+     "adjusted": 83.0,
+     "net": 83.0,
+     "name": "Row 17",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "r18",
+     "opp": "r18",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1,
+     "adjusted": 82.0,
+     "net": 82.0,
+     "name": "Row 18",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "r19",
+     "opp": "r19",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1,
+     "adjusted": 81.0,
+     "net": 81.0,
+     "name": "Row 19",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "r20",
+     "opp": "r20",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1,
+     "adjusted": 80.0,
+     "net": 80.0,
+     "name": "Row 20",
+     "reason": null,
+     "claims": []
+    }
+   ],
+   "resources": [],
+   "budget": {
+    "capacity": 1000,
+    "spendable": [
+     [
+      "Amaya-Grommash",
+      1000
+     ]
+    ],
+    "today_limit": 20,
+    "week_limit": 20,
+    "swap_candidates": 50
+   }
+  },
+  "expect": {
+   "funded": [
+    "r00",
+    "r01",
+    "r02",
+    "r03",
+    "r04",
+    "r05",
+    "r06",
+    "r07",
+    "r08",
+    "r09",
+    "r10",
+    "r11",
+    "r12",
+    "r13",
+    "r14",
+    "r15",
+    "r16",
+    "r17",
+    "r18",
+    "r19"
+   ],
+   "reasons": {
+    "r20": "Recommendation limit reached (20 of 20 today)"
+   },
+   "capacity_left": 980
+  },
+  "why": "Today funds 20 rows"
+ },
+ {
+  "id": "PF24",
+  "name": "Lesser Mana Potion after the week's rows exceeds risk tolerance",
+  "call": "select",
+  "args": {
+   "picks": [
+    {
+     "cand_id": "Mithril Spurs:1",
+     "opp": "Mithril Spurs",
+     "batch": 1,
+     "char_id": "Brugan-Grommash",
+     "lst": "week",
+     "gold": 30000,
+     "adjusted": 5186.859766866832,
+     "net": 7342.0,
+     "name": "Mithril Spurs",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Lesser Mana Potion:1",
+     "opp": "Lesser Mana Potion",
+     "batch": 1,
+     "char_id": "Brugan-Grommash",
+     "lst": "today",
+     "gold": 4500,
+     "adjusted": 80,
+     "net": 80.0,
+     "name": "Lesser Mana Potion",
+     "reason": null,
+     "claims": []
+    }
+   ],
+   "resources": [],
+   "budget": {
+    "capacity": 32440,
+    "spendable": [
+     [
+      "Brugan-Grommash",
+      104000
+     ]
+    ],
+    "today_limit": 20,
+    "week_limit": 20,
+    "swap_candidates": 50
+   }
+  },
+  "expect": {
+   "funded": [
+    "Mithril Spurs:1"
+   ],
+   "reasons": {
+    "Lesser Mana Potion:1": "Exceeds risk tolerance (needs 45s, 24s 40c left)"
+   },
+   "capacity_left": 2440
+  },
+  "why": "the Spurs (0.17 per copper) come before the potion (0.02); 24s 40c is left"
+ },
+ {
+  "id": "PF24",
+  "name": "a later batch takes its first batch's reason and the AH units are named",
+  "call": "select",
+  "args": {
+   "picks": [
+    {
+     "cand_id": "l:1",
+     "opp": "l",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 100,
+     "adjusted": 50.0,
+     "net": 50.0,
+     "name": "Linen Cloth",
+     "reason": null,
+     "claims": [
+      [
+       "ah:2589",
+       20
+      ]
+     ]
+    },
+    {
+     "cand_id": "l:2",
+     "opp": "l",
+     "batch": 2,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 100,
+     "adjusted": 40.0,
+     "net": 40.0,
+     "name": "Linen Cloth",
+     "reason": null,
+     "claims": [
+      [
+       "ah:2589",
+       20
+      ]
+     ]
+    },
+    {
+     "cand_id": "w",
+     "opp": "w",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 100,
+     "adjusted": 60.0,
+     "net": 60.0,
+     "name": "Wool Cloth",
+     "reason": null,
+     "claims": [
+      [
+       "ah:2589",
+       10
+      ]
+     ]
+    }
+   ],
+   "resources": [
+    {
+     "rid": "ah:2589",
+     "limit": 25,
+     "name": "Linen Cloth"
+    }
+   ],
+   "budget": {
+    "capacity": 1000,
+    "spendable": [
+     [
+      "Amaya-Grommash",
+      1000
+     ]
+    ],
+    "today_limit": 20,
+    "week_limit": 20,
+    "swap_candidates": 50
+   }
+  },
+  "expect": {
+   "funded": [
+    "w"
+   ],
+   "reasons": {
+    "l:1": "Resources already claimed: 20 Linen Cloth on the AH (Wool Cloth)",
+    "l:2": "Resources already claimed: 20 Linen Cloth on the AH (Wool Cloth)"
+   },
+   "capacity_left": 900
+  },
+  "why": "Wool takes 10 of the 25 units first; Linen's batch 2 inherits batch 1's reason"
+ },
+ {
+  "id": "PF24",
+  "name": "a full week says this week",
+  "call": "select",
+  "args": {
+   "picks": [
+    {
+     "cand_id": "w0",
+     "opp": "w0",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 1,
+     "adjusted": 7.590132827324478,
+     "net": 10.0,
+     "name": "W0",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "w1",
+     "opp": "w1",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 1,
+     "adjusted": 7.590132827324478,
+     "net": 10.0,
+     "name": "W1",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "w2",
+     "opp": "w2",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 1,
+     "adjusted": 7.590132827324478,
+     "net": 10.0,
+     "name": "W2",
+     "reason": null,
+     "claims": []
+    }
+   ],
+   "resources": [],
+   "budget": {
+    "capacity": 100,
+    "spendable": [
+     [
+      "Amaya-Grommash",
+      100
+     ]
+    ],
+    "today_limit": 20,
+    "week_limit": 2,
+    "swap_candidates": 50
+   }
+  },
+  "expect": {
+   "funded": [
+    "w0",
+    "w1"
+   ],
+   "reasons": {
+    "w2": "Recommendation limit reached (2 of 2 this week)"
+   },
+   "capacity_left": 98
+  },
+  "why": "the week funds 2 rows"
+ },
+ {
+  "id": "PF24",
+  "name": "a disenchant with no enchanter",
+  "call": "static_reason",
+  "args": {
+   "profession": "Enchanting",
+   "skill": 1,
+   "actor_skill": null,
+   "untrusted_weeks": null,
+   "price_age_ms": null,
+   "sold_per_day": null,
+   "planned_units": 0,
+   "missing_units": null,
+   "missing_name": null,
+   "horizon_days": 7
+  },
+  "expect": "Required profession unavailable: Enchanting 1",
+  "why": "nobody has Enchanting"
+ },
+ {
+  "id": "PF24",
+  "name": "Grunt's Bracers with Enchanting 142",
+  "call": "static_reason",
+  "args": {
+   "profession": "Enchanting",
+   "skill": 150,
+   "actor_skill": 142,
+   "untrusted_weeks": null,
+   "price_age_ms": null,
+   "sold_per_day": null,
+   "planned_units": 0,
+   "missing_units": null,
+   "missing_name": null,
+   "horizon_days": 7
+  },
+  "expect": "Required profession unavailable: Enchanting 150",
+  "why": "142 < 150"
+ },
+ {
+  "id": "PF24",
+  "name": "Greater Magic Essence's window seen in 1 week",
+  "call": "static_reason",
+  "args": {
+   "profession": null,
+   "skill": 0,
+   "actor_skill": null,
+   "untrusted_weeks": 1,
+   "price_age_ms": null,
+   "sold_per_day": null,
+   "planned_units": 0,
+   "missing_units": null,
+   "missing_name": null,
+   "horizon_days": 7
+  },
+  "expect": "Forecast too uncertain (1 week of data)",
+  "why": "a Buy for later window needs 3 weeks"
+ },
+ {
+  "id": "PF24",
+  "name": "a window seen in 2 weeks",
+  "call": "static_reason",
+  "args": {
+   "profession": null,
+   "skill": 0,
+   "actor_skill": null,
+   "untrusted_weeks": 2,
+   "price_age_ms": null,
+   "sold_per_day": null,
+   "planned_units": 0,
+   "missing_units": null,
+   "missing_name": null,
+   "horizon_days": 7
+  },
+  "expect": "Forecast too uncertain (2 weeks of data)",
+  "why": "plural"
+ },
+ {
+  "id": "PF24",
+  "name": "prices 30 hours old",
+  "call": "static_reason",
+  "args": {
+   "profession": null,
+   "skill": 0,
+   "actor_skill": null,
+   "untrusted_weeks": null,
+   "price_age_ms": 108000000,
+   "sold_per_day": null,
+   "planned_units": 0,
+   "missing_units": null,
+   "missing_name": null,
+   "horizon_days": 7
+  },
+  "expect": "Forecast too stale (prices 30 h old)",
+  "why": "over 24 h"
+ },
+ {
+  "id": "PF24",
+  "name": "prices 80 hours old",
+  "call": "static_reason",
+  "args": {
+   "profession": null,
+   "skill": 0,
+   "actor_skill": null,
+   "untrusted_weeks": null,
+   "price_age_ms": 288000000,
+   "sold_per_day": null,
+   "planned_units": 0,
+   "missing_units": null,
+   "missing_name": null,
+   "horizon_days": 7
+  },
+  "expect": "Forecast too stale (prices 3 days old)",
+  "why": "48 h and more in days"
+ },
+ {
+  "id": "PF24",
+  "name": "Elixir of Fortitude 40 planned at 3 a day",
+  "call": "static_reason",
+  "args": {
+   "profession": null,
+   "skill": 0,
+   "actor_skill": null,
+   "untrusted_weeks": null,
+   "price_age_ms": null,
+   "sold_per_day": 3.0,
+   "planned_units": 40,
+   "missing_units": null,
+   "missing_name": null,
+   "horizon_days": 7
+  },
+  "expect": "Insufficient liquidity: 3/day, 40 planned",
+  "why": "40 / 3 = 13.3 days > 7"
+ },
+ {
+  "id": "PF24",
+  "name": "a sales rate shown to one decimal",
+  "call": "static_reason",
+  "args": {
+   "profession": null,
+   "skill": 0,
+   "actor_skill": null,
+   "untrusted_weeks": null,
+   "price_age_ms": null,
+   "sold_per_day": 2.66,
+   "planned_units": 40,
+   "missing_units": null,
+   "missing_name": null,
+   "horizon_days": 7
+  },
+  "expect": "Insufficient liquidity: 2.7/day, 40 planned",
+  "why": "2.66 half up to 2.7"
+ },
+ {
+  "id": "PF24",
+  "name": "a recipe missing 2 Iron Bar",
+  "call": "static_reason",
+  "args": {
+   "profession": null,
+   "skill": 0,
+   "actor_skill": null,
+   "untrusted_weeks": null,
+   "price_age_ms": null,
+   "sold_per_day": null,
+   "planned_units": 0,
+   "missing_units": 2,
+   "missing_name": "Iron Bar",
+   "horizon_days": 7
+  },
+  "expect": "Missing materials: 2 Iron Bar",
+  "why": "nobody sells Iron Bar"
+ },
+ {
+  "id": "PF24",
+  "name": "a candidate failing the profession and another check shows the profession",
+  "call": "static_reason",
+  "args": {
+   "profession": "Enchanting",
+   "skill": 150,
+   "actor_skill": 142,
+   "untrusted_weeks": null,
+   "price_age_ms": null,
+   "sold_per_day": null,
+   "planned_units": 0,
+   "missing_units": 2,
+   "missing_name": "Iron Bar",
+   "horizon_days": 7
+  },
+  "expect": "Required profession unavailable: Enchanting 150",
+  "why": "first in D.6's order"
+ },
+ {
+  "id": "PF24",
+  "name": "a candidate passing every static check",
+  "call": "static_reason",
+  "args": {
+   "profession": "Enchanting",
+   "skill": 150,
+   "actor_skill": 150,
+   "untrusted_weeks": null,
+   "price_age_ms": 86400000,
+   "sold_per_day": 3.0,
+   "planned_units": 21,
+   "missing_units": null,
+   "missing_name": null,
+   "horizon_days": 7
+  },
+  "expect": null,
+  "why": "21 / 3 = 7 days is within 7"
+ },
+ {
+  "id": "PF30",
+  "name": "a flip-now relist of a suffix green with 4 closes is eligible",
+  "call": "static_reason",
+  "args": {
+   "profession": null,
+   "skill": 0,
+   "actor_skill": null,
+   "untrusted_weeks": null,
+   "price_age_ms": null,
+   "sold_per_day": 0.5,
+   "planned_units": 1,
+   "missing_units": null,
+   "missing_name": null,
+   "window_closes": null,
+   "volume_unknown": null,
+   "horizon_days": 7
+  },
+  "expect": null,
+  "why": "it sells now at a price from the live book: only a known sales rate is needed"
+ },
+ {
+  "id": "PF30",
+  "name": "a window flip of the same green is too uncertain",
+  "call": "static_reason",
+  "args": {
+   "profession": null,
+   "skill": 0,
+   "actor_skill": null,
+   "untrusted_weeks": null,
+   "price_age_ms": null,
+   "sold_per_day": 0.5,
+   "planned_units": 1,
+   "missing_units": null,
+   "missing_name": null,
+   "window_closes": 4,
+   "volume_unknown": null,
+   "horizon_days": 7
+  },
+  "expect": "Forecast too uncertain (4 closes in 30 d, needs 24)",
+  "why": "a sale at a window needs 24 hourly closes in 30 days; 4 is noise"
+ },
+ {
+  "id": "PF30",
+  "name": "a window sale with 1 close",
+  "call": "static_reason",
+  "args": {
+   "profession": null,
+   "skill": 0,
+   "actor_skill": null,
+   "untrusted_weeks": null,
+   "price_age_ms": null,
+   "sold_per_day": 0.5,
+   "planned_units": 1,
+   "missing_units": null,
+   "missing_name": null,
+   "window_closes": 1,
+   "volume_unknown": null,
+   "horizon_days": 7
+  },
+  "expect": "Forecast too uncertain (1 close in 30 d, needs 24)",
+  "why": "the singular"
+ },
+ {
+  "id": "PF30",
+  "name": "a potion with 30 closes whose sales rate is unknown",
+  "call": "static_reason",
+  "args": {
+   "profession": null,
+   "skill": 0,
+   "actor_skill": null,
+   "untrusted_weeks": null,
+   "price_age_ms": null,
+   "sold_per_day": null,
+   "planned_units": 20,
+   "missing_units": null,
+   "missing_name": null,
+   "window_closes": 30,
+   "volume_unknown": "",
+   "horizon_days": 7
+  },
+  "expect": "Sales volume unknown",
+  "why": "30 closes is enough history, but nobody knows how many sell a day"
+ },
+ {
+  "id": "PF30",
+  "name": "Linen at a window with 96 closes selling 48 a day",
+  "call": "static_reason",
+  "args": {
+   "profession": null,
+   "skill": 0,
+   "actor_skill": null,
+   "untrusted_weeks": null,
+   "price_age_ms": null,
+   "sold_per_day": 48.0,
+   "planned_units": 20,
+   "missing_units": null,
+   "missing_name": null,
+   "window_closes": 96,
+   "volume_unknown": null,
+   "horizon_days": 7
+  },
+  "expect": null,
+  "why": "96 >= 24 closes, a known rate, 20 planned < 7 x 48: every check passes"
+ },
+ {
+  "id": "PF30",
+  "name": "a disenchant whose Strange Dust has a sales rate is eligible",
+  "call": "static_reason",
+  "args": {
+   "profession": "Enchanting",
+   "skill": 1,
+   "actor_skill": 300,
+   "untrusted_weeks": null,
+   "price_age_ms": null,
+   "sold_per_day": null,
+   "planned_units": 1,
+   "missing_units": null,
+   "missing_name": null,
+   "window_closes": null,
+   "volume_unknown": null,
+   "horizon_days": 7
+  },
+  "expect": null,
+  "why": "the green is never resold, so its 4 closes don't count; the dust's rate is known"
+ },
+ {
+  "id": "PF30",
+  "name": "a disenchant whose Strange Dust has no sales rate",
+  "call": "static_reason",
+  "args": {
+   "profession": "Enchanting",
+   "skill": 1,
+   "actor_skill": 300,
+   "untrusted_weeks": null,
+   "price_age_ms": null,
+   "sold_per_day": null,
+   "planned_units": 1,
+   "missing_units": null,
+   "missing_name": null,
+   "window_closes": null,
+   "volume_unknown": "Strange Dust",
+   "horizon_days": 7
+  },
+  "expect": "Sales volume unknown (Strange Dust)",
+  "why": "the EV rests on the dust's sell value, and nobody knows how fast dust sells"
+ },
+ {
+  "id": "PF30",
+  "name": "the profession comes before thin data",
+  "call": "static_reason",
+  "args": {
+   "profession": "Enchanting",
+   "skill": 150,
+   "actor_skill": 142,
+   "untrusted_weeks": null,
+   "price_age_ms": null,
+   "sold_per_day": null,
+   "planned_units": 0,
+   "missing_units": null,
+   "missing_name": null,
+   "window_closes": 4,
+   "volume_unknown": null,
+   "horizon_days": 7
+  },
+  "expect": "Required profession unavailable: Enchanting 150",
+  "why": "D.6's order: profession, then forecast too uncertain"
+ },
+ {
+  "id": "PF30",
+  "name": "closes are checked before weeks",
+  "call": "static_reason",
+  "args": {
+   "profession": null,
+   "skill": 0,
+   "actor_skill": null,
+   "untrusted_weeks": 1,
+   "price_age_ms": null,
+   "sold_per_day": 0.5,
+   "planned_units": 0,
+   "missing_units": null,
+   "missing_name": null,
+   "window_closes": 4,
+   "volume_unknown": null,
+   "horizon_days": 7
+  },
+  "expect": "Forecast too uncertain (4 closes in 30 d, needs 24)",
+  "why": "one row: the detail says whichever failed, thin data first"
+ },
+ {
+  "id": "PF30",
+  "name": "a stale price comes before an unknown sales rate",
+  "call": "static_reason",
+  "args": {
+   "profession": null,
+   "skill": 0,
+   "actor_skill": null,
+   "untrusted_weeks": null,
+   "price_age_ms": 108000000,
+   "sold_per_day": null,
+   "planned_units": 0,
+   "missing_units": null,
+   "missing_name": null,
+   "window_closes": null,
+   "volume_unknown": "",
+   "horizon_days": 7
+  },
+  "expect": "Forecast too stale (prices 30 h old)",
+  "why": "D.6's order: forecast too stale, then sales volume unknown"
+ },
+ {
+  "id": "R28",
+  "name": "a flip relisting into an empty book on thin data has no price",
+  "call": "static_reason",
+  "args": {
+   "profession": null,
+   "skill": 0,
+   "actor_skill": null,
+   "untrusted_weeks": null,
+   "price_age_ms": null,
+   "sold_per_day": 1.0,
+   "planned_units": 1,
+   "missing_units": null,
+   "missing_name": null,
+   "window_closes": null,
+   "volume_unknown": null,
+   "no_listing": true,
+   "horizon_days": 7
+  },
+  "expect": "No listing left to price against",
+  "why": "the Spaulders: the only listing is the one bought, and 4 closes ground no level"
+ },
+ {
+  "id": "R28",
+  "name": "an unknown sales rate comes before no listing",
+  "call": "static_reason",
+  "args": {
+   "profession": null,
+   "skill": 0,
+   "actor_skill": null,
+   "untrusted_weeks": null,
+   "price_age_ms": null,
+   "sold_per_day": null,
+   "planned_units": 1,
+   "missing_units": null,
+   "missing_name": null,
+   "window_closes": null,
+   "volume_unknown": "",
+   "no_listing": true,
+   "horizon_days": 7
+  },
+  "expect": "Sales volume unknown",
+  "why": "D.6's order: sales volume unknown, then no listing left"
+ },
+ {
+  "id": "R28",
+  "name": "no listing comes before liquidity",
+  "call": "static_reason",
+  "args": {
+   "profession": null,
+   "skill": 0,
+   "actor_skill": null,
+   "untrusted_weeks": null,
+   "price_age_ms": null,
+   "sold_per_day": 1.0,
+   "planned_units": 40,
+   "missing_units": null,
+   "missing_name": null,
+   "window_closes": null,
+   "volume_unknown": null,
+   "no_listing": true,
+   "horizon_days": 7
+  },
+  "expect": "No listing left to price against",
+  "why": "D.6's order: no listing left, then insufficient liquidity"
+ },
+ {
+  "id": "PF29",
+  "name": "the swap pass tries only the best swap_candidates excluded batches",
+  "call": "select",
+  "args": {
+   "picks": [
+    {
+     "cand_id": "A",
+     "opp": "A",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 6000,
+     "adjusted": 3000.0,
+     "net": 3000.0,
+     "name": "A",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "B",
+     "opp": "B",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 7000,
+     "adjusted": 2100.0,
+     "net": 2100.0,
+     "name": "B",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "C",
+     "opp": "C",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 7000,
+     "adjusted": 2050.0,
+     "net": 2050.0,
+     "name": "C",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "D",
+     "opp": "D",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 4500,
+     "adjusted": 2000.0,
+     "net": 2000.0,
+     "name": "D",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "E",
+     "opp": "E",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 5000,
+     "adjusted": 1800.0,
+     "net": 1800.0,
+     "name": "E",
+     "reason": null,
+     "claims": []
+    }
+   ],
+   "resources": [],
+   "budget": {
+    "capacity": 10000,
+    "spendable": [
+     [
+      "Amaya-Grommash",
+      50000
+     ]
+    ],
+    "today_limit": 20,
+    "week_limit": 20,
+    "swap_candidates": 2
+   }
+  },
+  "expect": {
+   "funded": [
+    "A"
+   ],
+   "reasons": {
+    "B": "Exceeds risk tolerance (needs 70s, 40s left)",
+    "C": "Exceeds risk tolerance (needs 70s, 40s left)",
+    "D": "Exceeds risk tolerance (needs 45s, 40s left)",
+    "E": "Exceeds risk tolerance (needs 50s, 40s left)"
+   },
+   "capacity_left": 4000
+  },
+  "why": "B and C are the 2 best by adjusted profit and neither beats A; D with E would (38s > 30s) but D is third"
+ },
+ {
+  "id": "PF29",
+  "name": "with both lists full and too little capacity left the fill stops and claims are not checked",
+  "call": "select",
+  "args": {
+   "picks": [
+    {
+     "cand_id": "T1",
+     "opp": "T1",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 100,
+     "adjusted": 100.0,
+     "net": 100.0,
+     "name": "T1",
+     "reason": null,
+     "claims": [
+      [
+       "own:A:1",
+       1
+      ]
+     ]
+    },
+    {
+     "cand_id": "W1:1",
+     "opp": "W1",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 100,
+     "adjusted": 50.0,
+     "net": 50.0,
+     "name": "W1",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "W1:2",
+     "opp": "W1",
+     "batch": 2,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 20,
+     "adjusted": 10.0,
+     "net": 10.0,
+     "name": "W1",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "T2",
+     "opp": "T2",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 30,
+     "adjusted": 15.0,
+     "net": 15.0,
+     "name": "T2",
+     "reason": null,
+     "claims": [
+      [
+       "own:A:1",
+       1
+      ]
+     ]
+    }
+   ],
+   "resources": [
+    {
+     "rid": "own:A:1",
+     "limit": 1,
+     "name": "Copper Bar"
+    }
+   ],
+   "budget": {
+    "capacity": 210,
+    "spendable": [
+     [
+      "Amaya-Grommash",
+      1000
+     ]
+    ],
+    "today_limit": 1,
+    "week_limit": 1,
+    "swap_candidates": 50
+   }
+  },
+  "expect": {
+   "funded": [
+    "T1",
+    "W1:1"
+   ],
+   "reasons": {
+    "T2": "Recommendation limit reached (1 of 1 today)",
+    "W1:2": "Exceeds risk tolerance (needs 20c, 10c left)"
+   },
+   "capacity_left": 10
+  },
+  "why": "both lists hold 1 row and 10c is below every remaining batch's gold: T2's claim on the bar is not checked"
+ },
+ {
+  "id": "PF27",
+  "name": "Amaya's share in another order (1)",
+  "call": "select",
+  "args": {
+   "picks": [
+    {
+     "cand_id": "Linen Cloth:1",
+     "opp": "Linen Cloth",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 760,
+     "adjusted": 203,
+     "net": 203.0,
+     "name": "Linen Cloth",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Greater Magic Essence:1",
+     "opp": "Greater Magic Essence",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 3600,
+     "adjusted": 817.717206132879,
+     "net": 1200.0,
+     "name": "Greater Magic Essence",
+     "reason": "Forecast too uncertain (1 week of data)",
+     "claims": []
+    },
+    {
+     "cand_id": "Grunt's Bracers of Defense:1",
+     "opp": "Grunt's Bracers of Defense",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1500,
+     "adjusted": 600,
+     "net": 600.0,
+     "name": "Grunt's Bracers of Defense",
+     "reason": "Required profession unavailable: Enchanting 150",
+     "claims": []
+    },
+    {
+     "cand_id": "Bolt of Silk Cloth:1",
+     "opp": "Bolt of Silk Cloth",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 560,
+     "adjusted": 132.1976149914821,
+     "net": 194.0,
+     "name": "Bolt of Silk Cloth",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Embossed Leather Gloves:1",
+     "opp": "Embossed Leather Gloves",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 500,
+     "adjusted": 380,
+     "net": 380.0,
+     "name": "Embossed Leather Gloves",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Runed Copper Rod:1",
+     "opp": "Runed Copper Rod",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 3700,
+     "adjusted": 1112.2483793926988,
+     "net": 1630.0,
+     "name": "Runed Copper Rod",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Scouting Gloves of the Monkey:1",
+     "opp": "Scouting Gloves of the Monkey",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 800,
+     "adjusted": 625,
+     "net": 625.0,
+     "name": "Scouting Gloves of the Monkey",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Thick Leather:1",
+     "opp": "Thick Leather",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 16080,
+     "adjusted": 4174.573055028463,
+     "net": 5500.0,
+     "name": "Thick Leather",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Silk Cloth:1",
+     "opp": "Silk Cloth",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 2800,
+     "adjusted": 514.9911816578483,
+     "net": 730.0,
+     "name": "Silk Cloth",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Elixir of Fortitude:1",
+     "opp": "Elixir of Fortitude",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 12000,
+     "adjusted": 900,
+     "net": 900.0,
+     "name": "Elixir of Fortitude",
+     "reason": "Insufficient liquidity: 3/day, 40 planned",
+     "claims": []
+    }
+   ],
+   "resources": [],
+   "budget": {
+    "capacity": 27640,
+    "spendable": [
+     [
+      "Amaya-Grommash",
+      27640
+     ]
+    ],
+    "today_limit": 20,
+    "week_limit": 20,
+    "swap_candidates": 50
+   }
+  },
+  "expect": {
+   "funded": [
+    "Scouting Gloves of the Monkey:1",
+    "Embossed Leather Gloves:1",
+    "Runed Copper Rod:1",
+    "Linen Cloth:1",
+    "Thick Leather:1",
+    "Bolt of Silk Cloth:1",
+    "Silk Cloth:1"
+   ],
+   "reasons": {
+    "Elixir of Fortitude:1": "Insufficient liquidity: 3/day, 40 planned",
+    "Greater Magic Essence:1": "Forecast too uncertain (1 week of data)",
+    "Grunt's Bracers of Defense:1": "Required profession unavailable: Enchanting 150"
+   },
+   "capacity_left": 2440
+  },
+  "why": "the same candidates in any order give the same selection"
+ },
+ {
+  "id": "PF27",
+  "name": "Amaya's share in another order (2)",
+  "call": "select",
+  "args": {
+   "picks": [
+    {
+     "cand_id": "Scouting Gloves of the Monkey:1",
+     "opp": "Scouting Gloves of the Monkey",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 800,
+     "adjusted": 625,
+     "net": 625.0,
+     "name": "Scouting Gloves of the Monkey",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Thick Leather:1",
+     "opp": "Thick Leather",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 16080,
+     "adjusted": 4174.573055028463,
+     "net": 5500.0,
+     "name": "Thick Leather",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Grunt's Bracers of Defense:1",
+     "opp": "Grunt's Bracers of Defense",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1500,
+     "adjusted": 600,
+     "net": 600.0,
+     "name": "Grunt's Bracers of Defense",
+     "reason": "Required profession unavailable: Enchanting 150",
+     "claims": []
+    },
+    {
+     "cand_id": "Greater Magic Essence:1",
+     "opp": "Greater Magic Essence",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 3600,
+     "adjusted": 817.717206132879,
+     "net": 1200.0,
+     "name": "Greater Magic Essence",
+     "reason": "Forecast too uncertain (1 week of data)",
+     "claims": []
+    },
+    {
+     "cand_id": "Embossed Leather Gloves:1",
+     "opp": "Embossed Leather Gloves",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 500,
+     "adjusted": 380,
+     "net": 380.0,
+     "name": "Embossed Leather Gloves",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Elixir of Fortitude:1",
+     "opp": "Elixir of Fortitude",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 12000,
+     "adjusted": 900,
+     "net": 900.0,
+     "name": "Elixir of Fortitude",
+     "reason": "Insufficient liquidity: 3/day, 40 planned",
+     "claims": []
+    },
+    {
+     "cand_id": "Bolt of Silk Cloth:1",
+     "opp": "Bolt of Silk Cloth",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 560,
+     "adjusted": 132.1976149914821,
+     "net": 194.0,
+     "name": "Bolt of Silk Cloth",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Silk Cloth:1",
+     "opp": "Silk Cloth",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 2800,
+     "adjusted": 514.9911816578483,
+     "net": 730.0,
+     "name": "Silk Cloth",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Runed Copper Rod:1",
+     "opp": "Runed Copper Rod",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 3700,
+     "adjusted": 1112.2483793926988,
+     "net": 1630.0,
+     "name": "Runed Copper Rod",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Linen Cloth:1",
+     "opp": "Linen Cloth",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 760,
+     "adjusted": 203,
+     "net": 203.0,
+     "name": "Linen Cloth",
+     "reason": null,
+     "claims": []
+    }
+   ],
+   "resources": [],
+   "budget": {
+    "capacity": 27640,
+    "spendable": [
+     [
+      "Amaya-Grommash",
+      27640
+     ]
+    ],
+    "today_limit": 20,
+    "week_limit": 20,
+    "swap_candidates": 50
+   }
+  },
+  "expect": {
+   "funded": [
+    "Scouting Gloves of the Monkey:1",
+    "Embossed Leather Gloves:1",
+    "Runed Copper Rod:1",
+    "Linen Cloth:1",
+    "Thick Leather:1",
+    "Bolt of Silk Cloth:1",
+    "Silk Cloth:1"
+   ],
+   "reasons": {
+    "Elixir of Fortitude:1": "Insufficient liquidity: 3/day, 40 planned",
+    "Greater Magic Essence:1": "Forecast too uncertain (1 week of data)",
+    "Grunt's Bracers of Defense:1": "Required profession unavailable: Enchanting 150"
+   },
+   "capacity_left": 2440
+  },
+  "why": "the same candidates in any order give the same selection"
+ },
+ {
+  "id": "PF27",
+  "name": "Amaya's share in another order (3)",
+  "call": "select",
+  "args": {
+   "picks": [
+    {
+     "cand_id": "Silk Cloth:1",
+     "opp": "Silk Cloth",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 2800,
+     "adjusted": 514.9911816578483,
+     "net": 730.0,
+     "name": "Silk Cloth",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Linen Cloth:1",
+     "opp": "Linen Cloth",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 760,
+     "adjusted": 203,
+     "net": 203.0,
+     "name": "Linen Cloth",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Elixir of Fortitude:1",
+     "opp": "Elixir of Fortitude",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 12000,
+     "adjusted": 900,
+     "net": 900.0,
+     "name": "Elixir of Fortitude",
+     "reason": "Insufficient liquidity: 3/day, 40 planned",
+     "claims": []
+    },
+    {
+     "cand_id": "Greater Magic Essence:1",
+     "opp": "Greater Magic Essence",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 3600,
+     "adjusted": 817.717206132879,
+     "net": 1200.0,
+     "name": "Greater Magic Essence",
+     "reason": "Forecast too uncertain (1 week of data)",
+     "claims": []
+    },
+    {
+     "cand_id": "Embossed Leather Gloves:1",
+     "opp": "Embossed Leather Gloves",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 500,
+     "adjusted": 380,
+     "net": 380.0,
+     "name": "Embossed Leather Gloves",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Scouting Gloves of the Monkey:1",
+     "opp": "Scouting Gloves of the Monkey",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 800,
+     "adjusted": 625,
+     "net": 625.0,
+     "name": "Scouting Gloves of the Monkey",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Grunt's Bracers of Defense:1",
+     "opp": "Grunt's Bracers of Defense",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "today",
+     "gold": 1500,
+     "adjusted": 600,
+     "net": 600.0,
+     "name": "Grunt's Bracers of Defense",
+     "reason": "Required profession unavailable: Enchanting 150",
+     "claims": []
+    },
+    {
+     "cand_id": "Thick Leather:1",
+     "opp": "Thick Leather",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 16080,
+     "adjusted": 4174.573055028463,
+     "net": 5500.0,
+     "name": "Thick Leather",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Bolt of Silk Cloth:1",
+     "opp": "Bolt of Silk Cloth",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 560,
+     "adjusted": 132.1976149914821,
+     "net": 194.0,
+     "name": "Bolt of Silk Cloth",
+     "reason": null,
+     "claims": []
+    },
+    {
+     "cand_id": "Runed Copper Rod:1",
+     "opp": "Runed Copper Rod",
+     "batch": 1,
+     "char_id": "Amaya-Grommash",
+     "lst": "week",
+     "gold": 3700,
+     "adjusted": 1112.2483793926988,
+     "net": 1630.0,
+     "name": "Runed Copper Rod",
+     "reason": null,
+     "claims": []
+    }
+   ],
+   "resources": [],
+   "budget": {
+    "capacity": 27640,
+    "spendable": [
+     [
+      "Amaya-Grommash",
+      27640
+     ]
+    ],
+    "today_limit": 20,
+    "week_limit": 20,
+    "swap_candidates": 50
+   }
+  },
+  "expect": {
+   "funded": [
+    "Scouting Gloves of the Monkey:1",
+    "Embossed Leather Gloves:1",
+    "Runed Copper Rod:1",
+    "Linen Cloth:1",
+    "Thick Leather:1",
+    "Bolt of Silk Cloth:1",
+    "Silk Cloth:1"
+   ],
+   "reasons": {
+    "Elixir of Fortitude:1": "Insufficient liquidity: 3/day, 40 planned",
+    "Greater Magic Essence:1": "Forecast too uncertain (1 week of data)",
+    "Grunt's Bracers of Defense:1": "Required profession unavailable: Enchanting 150"
+   },
+   "capacity_left": 2440
+  },
+  "why": "the same candidates in any order give the same selection"
+ }
+]

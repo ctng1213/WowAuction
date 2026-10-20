@@ -108,6 +108,84 @@
   "why": "the one price known"
  },
  {
+  "id": "PP4",
+  "name": "post price on thin data caps at the median",
+  "call": "post_price",
+  "args": {
+   "cur_others": 1000,
+   "med7": 300,
+   "p90": 2000,
+   "closes": 5
+  },
+  "expect": 300,
+  "why": "5 hourly closes in 30 days (< 24): the p90 of 20g is an outlier, so the cap is med7 3g: min(9g 99s 99c, 3g) = 3g"
+ },
+ {
+  "id": "PP4",
+  "name": "post price with enough closes caps at the p90",
+  "call": "post_price",
+  "args": {
+   "cur_others": 1000,
+   "med7": 300,
+   "p90": 2000,
+   "closes": 30
+  },
+  "expect": 999,
+  "why": "30 hourly closes (>= 24): the cap is max(3g, 20g) = 20g, so the undercut 9g 99s 99c stands"
+ },
+ {
+  "id": "R28",
+  "name": "a relist into an empty book on thin data has no price",
+  "call": "relist_price",
+  "args": {
+   "cur_others": null,
+   "med7": 1500000,
+   "p90": 1500000,
+   "closes": 4
+  },
+  "expect": null,
+  "why": "the Spaulders: their only listing is the one bought, and a med7 of 150g from 4 closes grounds nothing"
+ },
+ {
+  "id": "R28",
+  "name": "a relist into an empty book with 30 closes is the level",
+  "call": "relist_price",
+  "args": {
+   "cur_others": null,
+   "med7": 1500000,
+   "p90": 1500000,
+   "closes": 30
+  },
+  "expect": 1500000,
+  "why": "30 >= 24 hourly closes ground the level: post_price without a competitor is med7, 150g"
+ },
+ {
+  "id": "R28",
+  "name": "a relist under a listing left is grounded on thin data",
+  "call": "relist_price",
+  "args": {
+   "cur_others": 50,
+   "med7": 55,
+   "p90": 60,
+   "closes": 4
+  },
+  "expect": 49,
+  "why": "Linen at 10c and 50c: the 50c listing grounds the undercut, min(49c, med7 55c) = 49c (PP4 cap)"
+ },
+ {
+  "id": "R28",
+  "name": "a relist with an unknown close count is the post price",
+  "call": "relist_price",
+  "args": {
+   "cur_others": null,
+   "med7": 60,
+   "p90": null,
+   "closes": null
+  },
+  "expect": 60,
+  "why": "an unknown count is not thin (as TT23 and PP4)"
+ },
+ {
   "id": "FN1",
   "name": "a dumped stack relisted now under the next level pays",
   "call": "flip_now_offer",
@@ -196,5 +274,127 @@
   },
   "expect": 106,
   "why": "1 + 0.02 x 3 = 1.06: 106c"
+ },
+ {
+  "id": "TT22",
+  "name": "a window forecast never promises more than the last 30 days traded at",
+  "call": "slot_price",
+  "args": {
+   "level": 1500000,
+   "how_best": 52.76,
+   "trend7": 0.0,
+   "days_ahead": 2,
+   "max_trend_total": 0.15,
+   "p10": 1000000,
+   "med7": 1500000,
+   "p90": 1800000
+  },
+  "expect": 1800000,
+  "why": "150g x 52.76 = 7,914g is clamped to max(med7 150g, p90 180g) = 180g"
+ },
+ {
+  "id": "TT22",
+  "name": "a forecast inside the 30-day range is unchanged",
+  "call": "slot_price",
+  "args": {
+   "level": 100,
+   "how_best": 1.2,
+   "trend7": 0.0,
+   "days_ahead": 2,
+   "max_trend_total": 0.15,
+   "p10": 90,
+   "med7": 100,
+   "p90": 150
+  },
+  "expect": 120,
+  "why": "1s x 1.2 = 1s 20c lies in [90c, 1s 50c]"
+ },
+ {
+  "id": "TT22",
+  "name": "a forecast never falls below the 30-day 10th percentile",
+  "call": "slot_price",
+  "args": {
+   "level": 100,
+   "how_best": 0.5,
+   "trend7": 0.0,
+   "days_ahead": 2,
+   "max_trend_total": 0.15,
+   "p10": 80,
+   "med7": 100,
+   "p90": 150
+  },
+  "expect": 80,
+  "why": "1s x 0.5 = 50c is raised to p10 80c"
+ },
+ {
+  "id": "TT22",
+  "name": "without the percentiles the forecast is not clamped",
+  "call": "slot_price",
+  "args": {
+   "level": 1500000,
+   "how_best": 52.76,
+   "trend7": 0.0,
+   "days_ahead": 2,
+   "max_trend_total": 0.15,
+   "p10": null,
+   "med7": null,
+   "p90": null
+  },
+  "expect": 79140000,
+  "why": "nothing to clamp to: 150g x 52.76 = 7,914g"
+ },
+ {
+  "id": "TT23",
+  "name": "a forecast on thin data earns no premium over the level",
+  "call": "slot_price",
+  "args": {
+   "level": 600,
+   "how_best": 235.0,
+   "trend7": 0.0,
+   "days_ahead": 2,
+   "max_trend_total": 0.15,
+   "p10": null,
+   "med7": 600,
+   "p90": 141000,
+   "closes": 20
+  },
+  "expect": 600,
+  "why": "20 closes < 24: the ceiling is the level, 6s"
+ },
+ {
+  "id": "TT23",
+  "name": "a forecast on enough closes is clamped to the 30-day p90",
+  "call": "slot_price",
+  "args": {
+   "level": 600,
+   "how_best": 235.0,
+   "trend7": 0.0,
+   "days_ahead": 2,
+   "max_trend_total": 0.15,
+   "p10": null,
+   "med7": 600,
+   "p90": 141000,
+   "closes": 30
+  },
+  "expect": 141000,
+  "why": "30 closes: 6s x 235 = 14g 10s, max(med7, p90) = 14g 10s"
+ },
+ {
+  "id": "TT23",
+  "name": "without a close count the TT22 clamp applies",
+  "call": "slot_price",
+  "args": {
+   "level": 600,
+   "how_best": 235.0,
+   "trend7": 0.0,
+   "days_ahead": 2,
+   "max_trend_total": 0.15,
+   "p10": null,
+   "med7": 600,
+   "p90": 141000,
+   "closes": null
+  },
+  "expect": 141000,
+  "why": "count unknown: the ceiling is max(med7, p90)"
  }
 ]

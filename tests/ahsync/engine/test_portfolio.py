@@ -1,4 +1,4 @@
-"""Tests for ahsync/engine/portfolio.py: the portfolio contracts (SPEC §3.4D.1, §3.4D.3; PF1, PF3, PF8, PF22, PF23)."""
+"""Tests for ahsync/engine/portfolio.py: the portfolio contracts (SPEC §3.4D.1, §3.4D.3, §3.4D.8; PF1, PF3, PF8, PF21-PF23)."""
 from __future__ import annotations
 
 import json
@@ -144,3 +144,14 @@ def test_accounting_refuses_bad_money_and_uses_budgets():
         with pytest.raises(ValueError):
             accounting(chars, positions, tolerance, reserved)
     assert isinstance(accounting(MOCKUP_CHARS, [], 1.0), Accounting)
+
+
+def test_PF21_profit_is_a_return_on_cash_and_found_stock_counts_none():
+    rod = rod_candidate(gold_deposits=100, cost_basis=5000, expected_net=6306.0)     # 5 rods bought at 10s, 1s deposit
+    assert portfolio.cash_of(rod) == 5100 and portfolio.profit_pct(rod.expected_net, portfolio.cash_of(rod)) == 124
+    today = [(6306.0, 5100), (4000.0, 3000), (625.0, 800), (380.0, 500), (203.0, 760)]
+    assert portfolio.pool_profit_pct(today) == 113                                   # 1g 15s 14c ÷ 1g 1s 60c
+    week = [(7342.0, 30000), (5500.0, 16080), (1855.0, 4200), (1630.0, 3700), (730.0, 2800), (194.0, 560), (134.0, 0)]
+    assert portfolio.pool_profit_pct(week) == 30                                     # Heavy Grinding Stone left out
+    assert portfolio.profit_pct(134.0, 0) is None and portfolio.pool_profit_pct([(134.0, 0)]) is None
+    assert portfolio.pool_profit_pct(today + week) == 43                             # 2g 87s 65c ÷ 6g 75s

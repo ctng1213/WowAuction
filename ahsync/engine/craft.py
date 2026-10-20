@@ -154,6 +154,16 @@ class Crafted:
     raw: frozenset[str]          # source kinds of its own raw mats ("owned", "vendor", "ah")
 
 
+@dataclass(frozen=True)
+class CraftStep:
+    """What one craft of an option used: a Craft batch's gold and claims (SPEC §3.4D.3)."""
+
+    gold: float                                           # copper spent on its mats (vendor, AH, crafted mats bought)
+    owned: tuple[tuple[int, float], ...] = ()             # (key, owned units used), by key
+    ah: tuple[tuple[int, float], ...] = ()                # (key, units bought on the AH), by key
+    crafted: tuple[tuple[int, float], ...] = ()           # (key, intermediate units crafted by you), by key
+
+
 @dataclass
 class CraftOption:
     """One recipe's crafting option for the Craft tab and the plan (SPEC §3.4B)."""
@@ -168,6 +178,7 @@ class CraftOption:
     spent: dict[int, float] = field(default_factory=dict)         # copper spent per mat, all crafts
     crafted: dict[int, Crafted] = field(default_factory=dict)
     profits: list[float] = field(default_factory=list)    # marginal profit of each craft
+    steps: list[CraftStep] = field(default_factory=list)  # what each craft used, in order (the portfolio's batches)
     missing: tuple[tuple[int, float], ...] = ()           # (key, units short) when not craftable
 
     @property
@@ -361,6 +372,9 @@ def craft_option(recipe: Recipe, market: Market, by_product: Mapping[int, Sequen
             break
         for key, f in fills:
             _record(option, pool, key, f)
+        option.steps.append(CraftStep(gold, tuple(sorted((k, f.used["owned"]) for k, f in fills if f.used["owned"])),
+                                      tuple(sorted((k, f.used["ah"]) for k, f in fills if f.used["ah"])),
+                                      tuple(sorted((k, f.used["crafted"]) for k, f in fills if f.used["crafted"]))))
         option.mat_gold += gold
         option.profits.append(marginal)
         option.crafts += 1

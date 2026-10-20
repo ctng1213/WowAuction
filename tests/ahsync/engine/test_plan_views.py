@@ -58,6 +58,9 @@ def test_D17_day_category_and_character_totals_add_up():
     assert view["days"][0]["total"] == "+1g 18s 10c" == view["total"]
     assert view["categories"] == {"Disenchant": "−20c", "Sell owned": "+1g 18s 30c"}
     assert view["characters"] == {"Amaya": "+1g 18s 30c", "Brugan": "−20c"}
+    buy = act("e", "buy", 625, FRI + 18 * HOUR, in_chain=True)                # a buy to disenchant (SPEC §3.4D.3)
+    de = act("f", "de", 0.0, FRI + 18 * HOUR + MINUTE, parent_id="e", in_chain=True)      # a step: no net
+    assert plan_views.week_view([buy, de], NOW, 0, LOOKS, GOLD)["categories"] == {"Disenchant": "+6s 25c"}
 
 
 def test_D19_a_chains_profit_counts_once_on_its_buy():

@@ -76,4 +76,24 @@ describe("FlipView", function()
     both = VM.OwnFlipRows({ [LINEN] = { expected = 53, price = 61, slot = 138 } }, Ctx(true, 50))
     assert_eq({ #both, both[1].when }, { 1, "Sat 18:00" })     -- the window offer pays more: (53 − 10) × 20 = 860
   end)
+
+  it("R28 a relist now needs a listing left or enough closes to ground its price", function()
+    Boot()
+    local VM = AHProfit.ViewModel
+    local item = { med7 = 55, p90 = 60, refStack = 20, conf = 86, closes30 = 4 }
+    --- The Flip tab context over one Linen candidate whose next level is `second` (nil: the only listing).
+    ---@param second number|nil
+    ---@return table
+    local function Ctx(second)
+      return { itemOf = function() return item end, levelsOf = function() return nil end,
+               lookOf = function() return { name = "Linen Cloth", quality = 1, conf = 86 } end,
+               skip = function() return false end, nowMs = NOW, offsetMs = 0, totalGold = 100000,
+               curveOf = function() return nil end, vendorOf = function() return 10 end,
+               nowCandidates = { { key = LINEN, cheapest = 10, second = second, units = 20 } } }
+    end
+    assert_eq(#VM.OwnFlipRows({}, Ctx(nil)), 0)                  -- the only listing, 4 closes: nothing grounds 55c
+    assert_eq(VM.OwnFlipRows({}, Ctx(50))[1].sell, "49c")        -- under the 50c level left, min(49c, med7 55c)
+    item.closes30 = 30
+    assert_eq(VM.OwnFlipRows({}, Ctx(nil))[1].sell, "55c")       -- 30 closes ground the level
+  end)
 end)

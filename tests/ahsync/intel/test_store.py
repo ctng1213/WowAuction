@@ -41,3 +41,16 @@ def test_SRC2_newer_prices_follow_the_primary_source(db):
     sql(db, "INSERT INTO current(market, key, price, qty, at, src) VALUES (?, ?, ?, ?, ?, ?)",
         (M, 1, 100, 1, 6 * DAY, "blizzard"), (M, 1, 100, 1, 4 * DAY, "ahf"))
     assert (db.prices_newer_than_intel(M, "blizzard"), db.prices_newer_than_intel(M)) == (True, False)
+
+
+def test_the_published_intelligence_is_parsed_once_until_a_refresh_publishes_another(db):
+    from ahsync.intel.contract import MarketIntelligence
+    with db.transaction():
+        db.stage_intel(MarketIntelligence(M, 10, 5, 1, {}))
+    db.publish_refresh([M])
+    first = db.read_intel(M)
+    assert db.read_intel(M) is first                                      # a re-plan reuses the parsed document
+    with db.transaction():
+        db.stage_intel(MarketIntelligence(M, 20, 15, 1, {}))
+    db.publish_refresh([M])
+    assert db.read_intel(M).built_ms == 20 and db.read_intel(M) is not first

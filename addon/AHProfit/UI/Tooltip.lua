@@ -59,8 +59,10 @@ function Tooltip.Lines(key, nowMs)
     cur = cur, curAgeText = VM.SeenAgo(ageMs), med30 = item.med30, deValue = deValue, canDisenchant = canDE,
     bestWindow = window and VM.WindowLabel(window, Adapter.LocalOffsetMs(nowMs)),
     -- The price level is med7, else med30 (SPEC §3.4C.1, R21), priced as the plan does, trend included (TT6).
+    -- Kept within the last 30 days' range, as the plan's forecasts are (TT22).
     bestPrice = window and (item.med7 or item.med30) and Prices.SlotPrice(item.med7 or item.med30, window.how,
-      item.trend or 0, Prices.DaysUntilSlot(window.best, nowMs)), chance = item.chance,
+      item.trend or 0, Prices.DaysUntilSlot(window.best, nowMs), nil, item.p10, item.med7, item.p90, item.closes30),
+    chance = item.chance,
   })
 end
 

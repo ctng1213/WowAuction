@@ -12,12 +12,13 @@ AHProfit.Market = Market
 Market.SCHEMA_VERSION = 1          -- must equal ahsync/export/market_lua.py MARKET_SCHEMA_VERSION (FM17)
 -- The build of both generated files' format; must equal ahsync/export/market_lua.py EXPORT_VERSION. A file of
 -- another build says which side is stale (FM34, FM35). Core/Plan.lua, which loads after this file, reads it too.
-AHProfit.EXPORT_VERSION = 2            -- 2: plan actions carry a mail's recipient (C22, EX16)
+AHProfit.EXPORT_VERSION = 3            -- 3: market items end in closes30 (TT23, PP4); 2: a mail's recipient (C22, EX16)
 Market.CACHE_LIMIT = 500           -- decoded items kept before the cache starts again
 Market.FIELDS = { "cur", "curQty", "curAgeMin", "med7", "med30", "p10", "p90", "trend10", "sold10", "listed10",
                   "supply", "conf", "seasonality", "postPrice", "refStack", "sellValue", "volumeUnknown",
-                  "chance1000", "typicalSupply", "suspect" }   -- typicalSupply: median daily listed units (EX10);
-                                                                -- suspect: 1 when AHSync hasn't confirmed cur (A58)
+                  "chance1000", "typicalSupply", "suspect", "closes30" }   -- typicalSupply: median daily listed
+                                                                -- units (EX10); suspect: 1 when AHSync hasn't confirmed cur
+                                                                -- (A58); closes30: hourly closes in 30 days (TT23)
 
 local state = nil                  -- { status, market = { I, C, observationsUntil, curveHour }, file } once checked
 local cache, cached = {}, 0
@@ -127,7 +128,7 @@ function Market.Decode(text)
   local item, i = {}, 0
   for field in (numbers .. ","):gmatch("([^,]*),") do
     i = i + 1
-    item[Market.FIELDS[i]] = tonumber(field)
+    if Market.FIELDS[i] then item[Market.FIELDS[i]] = tonumber(field) end   -- a newer AHSync's extra fields: ignored
   end
   item.trend = item.trend10 and item.trend10 / 10
   item.soldPerDay = item.sold10 and item.sold10 / 10

@@ -64,12 +64,12 @@ def _mat_caps(mat_keys: set[int], stats: dict[int, ItemIntel], now_ms: int, cfg:
 
 
 def disenchant_page(state: StateReader, char_ids: list[str], stats: dict[int, ItemIntel], items: dict[int, ItemInfo],
-                    total_gold: int, now_ms: int, cfg: Config) -> dict:
+                    total_gold: int, now_ms: int, cfg: Config, room: int | None = None) -> dict:
     """The Disenchant page payload (SPEC §3.4A, §3.5).
 
     The mats of all the buys together stay within each mat's cap: buys are taken best
-    profit first until a mat's cap is reached (SPEC §3.4 market capacity, R15). A buy that
-    would risk more than max_risk_pct of all your gold is left out (SPEC §3.4 Risk).
+    profit first until a mat's cap is reached (SPEC §3.4 market capacity, R15). A buy bigger
+    than the portfolio's remaining capacity is left out (SPEC §3.4 Risk, §3.4D.1).
 
     Args:
         state: Character state (for the best Enchanting skill).
@@ -79,6 +79,7 @@ def disenchant_page(state: StateReader, char_ids: list[str], stats: dict[int, It
         total_gold: All your characters' gold.
         now_ms: Now (the mats' posting-now window).
         cfg: Config (the liquidity cap's window and supply share).
+        room: The remaining capacity of the exposure budget, copper (SPEC §3.4D.1); None for no limit.
 
     Returns:
         {"rows": [...], "hidden": buys left out for capacity or risk, "help": header -> tooltip}, profit highest first.
@@ -89,9 +90,8 @@ def disenchant_page(state: StateReader, char_ids: list[str], stats: dict[int, It
                 and items[key].ilvl]                                                   # FM5
     sell = {key: s.sell_value for key, s in stats.items() if s.sell_value is not None}
     found, too_risky = [], 0
-    risk_limit = total_gold * cfg.max_risk_pct / 100
     for t in disenchant.targets(listings, DE_TABLE, sell, state.best_skill(char_ids, "Enchanting")):
-        if t.buy_copper > risk_limit:
+        if room is not None and t.buy_copper > room:
             too_risky += 1
             continue
         info = items[t.key]
@@ -284,7 +284,8 @@ def _chain_rows(state: StateReader, recipes: list[RecipeRow], planned: Sequence[
 
 
 def craft_page(state: StateReader, char_ids: list[str], stats: dict[int, ItemIntel], items: dict[int, ItemInfo],
-               total_gold: int, now_ms: int, cfg: Config, planned: Sequence[PlanAction] = (), offset_ms: int = 0) -> dict:
+               total_gold: int, now_ms: int, cfg: Config, planned: Sequence[PlanAction] = (), offset_ms: int = 0,
+               room: int | None = None) -> dict:
     """The Craft page payload (SPEC §3.4B, §3.5): the known recipes worth crafting now (D46).
 
     Args:
@@ -297,6 +298,8 @@ def craft_page(state: StateReader, char_ids: list[str], stats: dict[int, ItemInt
         cfg: Config.
         planned: The plan's actions: its craft chains are rows first, and their products get no own row (D56).
         offset_ms: Local time minus UTC, for the chains' sale times.
+        room: The remaining capacity of the exposure budget, copper: a recipe's mats stay within it (SPEC
+            §3.4D.1, D45); None for no limit.
 
     Returns:
         {"rows": [...], "hidden": recipes not shown, "footer": text, "help": header -> tooltip}: the plan's chains
@@ -319,7 +322,7 @@ def craft_page(state: StateReader, char_ids: list[str], stats: dict[int, ItemInt
         left = _craft_room(r, stats, have, now_ms, cfg)
         net = _product_net(stats.get(r.product), r, items, now_ms, cfg)
         option = craft.craft_option(engine_recipes[r.spell], market, by_product, net,
-                                    budget=total_gold * cfg.max_risk_pct / 100, max_depth=cfg.max_craft_depth,
+                                    budget=room, max_depth=cfg.max_craft_depth,
                                     max_crafts=left[0])                                   # D45
         if not option.crafts:                                                             # D46
             why = left[1] or ("mats" if option.missing else "risk" if craft.craft_option(

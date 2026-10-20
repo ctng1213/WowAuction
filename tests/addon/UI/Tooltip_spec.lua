@@ -10,10 +10,10 @@ local NOW = 1760000000000
 ---@param med7 number|nil     Linen's 7-day median (default 49c, the same as med30)
 ---@param trend10 number|nil  Its trend in tenths of a percent a day (default 0)
 ---@return table  The tooltip stub
-local function Boot(med7, trend10)
+local function Boot(med7, trend10, p90)
   Stubs.Reset()
-  local linen = "45,20,30," .. (med7 or 49) .. ",49,40,60," .. (trend10 or 0) .. ",480,,93,86,72,45,20,42,0,900;138:4:139:1120:7;"
-  _G.AHProfitMarket = { schemaVersion = 1, exportVersion = 2, generatedAt = NOW - 2 * HOUR, checksum = "1:" .. #linen,
+  local linen = "45,20,30," .. (med7 or 49) .. ",49,40," .. (p90 or 60) .. "," .. (trend10 or 0) .. ",480,,93,86,72,45,20,42,0,900;138:4:139:1120:7;"
+  _G.AHProfitMarket = { schemaVersion = 1, exportVersion = 3, generatedAt = NOW - 2 * HOUR, checksum = "1:" .. #linen,
     charMarkets = { ["Amaya-Grommash"] = UIWorld.MARKET },
     markets = { [UIWorld.MARKET] = { observationsUntil = NOW - 2 * HOUR, curveHour = 0, I = { [2589] = linen }, C = {} } } }
   Stubs.Login()
@@ -50,9 +50,15 @@ describe("Tooltip", function()
   end)
 
   it("R21 the price at best time starts from the 7-day median", function()
-    local tip = Boot(60)
+    local tip = Boot(60, nil, 80)
     Stubs.HoverItem(2589)
     assert_eq(tip.doubles[4][2], "67c (+49%)")                     -- 60c × 1.12 = 67.2c, (67.2 − 45) ÷ 45
+  end)
+
+  it("TT22 the price at best time stays within what the last 30 days traded at", function()
+    local tip = Boot(60)                                            -- p90 60c: 67.2c is clamped to max(60c, 60c)
+    Stubs.HoverItem(2589)
+    assert_eq(tip.doubles[4][2], "60c (+33%)")
   end)
 
   it("A21 a newer in-game scan's price replaces the file's, and the deltas follow it", function()

@@ -73,12 +73,11 @@ class Config:
     max_supply_share: float = 0.5
     max_supply_share_gear: float = 1.0
     min_gear_units: int = 2
-    max_risk_pct: float = 25                   # until M10: the per-buy cap the exposure budget replaces (§3.6)
     window_margin: float = 0.15
     pattern_full_weeks: int = 6
     max_trend_total: float = 0.15
     max_actions_per_day: int = 0
-    risk_tolerance: float = 0.30               # the portfolio optimizer (§3.4D); read and checked, used from M10
+    risk_tolerance: float = 0.30               # the portfolio optimizer's exposure budget (§3.4D.1)
     premium_base: float = 0.15
     premium_per_day: float = 0.05
     immediate_hours: int = 8
@@ -88,6 +87,8 @@ class Config:
     week_limit: int = 20
     candidate_export: int = 150
     horizon_days: int = 7
+    candidate_pool: int = 400                   # buys kept past their first batch (§3.4D.3), ≥ candidate_export
+    swap_candidates: int = 50                   # excluded batches the swap pass tries (§3.4D.4)
     launch_wow_after_catchup: bool = False
     realms: Mapping[str, str] = field(default_factory=dict)
     budgets: Mapping[str, int] = field(default_factory=dict)
@@ -113,12 +114,12 @@ for _name in ("retention_days", "dashboard_port", "live_refresh_minutes", "own_r
               "struggle_streak", "keep_retry_streak", "post_lead_hours", "sell_window_hours",
               "max_craft_depth", "max_actions_per_day", "min_gear_units", "pattern_full_weeks",
               "immediate_hours", "top_buy_windows", "top_sell_windows", "today_limit", "week_limit",
-              "candidate_export", "horizon_days"):
+              "candidate_export", "horizon_days", "candidate_pool", "swap_candidates"):
     _TYPES[_name] = _INT
 for _name in ("min_flip_margin", "default_sell_prob", "default_sell_prob_cheapest", "volume_prior_per_day",
               "volume_prior_hours", "default_undercut_share", "own_record_weight",
               "reprice_step", "min_sell_prob", "high_risk_pct", "pattern_half_life_weeks",
-              "window_threshold", "peak_tolerance", "max_supply_share", "max_supply_share_gear", "max_risk_pct",
+              "window_threshold", "peak_tolerance", "max_supply_share", "max_supply_share_gear",
               "window_margin", "max_trend_total", "risk_tolerance", "premium_base", "premium_per_day"):
     _TYPES[_name] = _NUMBER
 
@@ -158,6 +159,10 @@ def _fail(text: str, name: str, reason: str) -> ConfigError:
     return ConfigError(f"{where}: {name} {reason}")
 
 
+# Settings that were removed -> what to say when an old config.toml still has one.
+REMOVED = {"max_risk_pct": "was removed: risk_tolerance caps all the gold tied up at once instead (SPEC §3.4D.1)"}
+
+
 def _check_type(text: str, name: str, value: object) -> None:
     """Check one top-level setting's type.
 
@@ -171,7 +176,7 @@ def _check_type(text: str, name: str, value: object) -> None:
             where a count is needed gives "must be a whole number"). bool is not a number.
     """
     if name not in _TYPES:
-        raise _fail(text, name, "is not a known setting")
+        raise _fail(text, name, REMOVED.get(name, "is not a known setting"))
     types, wording = _TYPES[name]
     if types == (int,) and isinstance(value, float):
         raise _fail(text, name, "must be a whole number")
@@ -225,7 +230,7 @@ def _check_values(text: str, values: dict) -> None:
 # Whole-number portfolio settings -> (lowest, highest) allowed (SPEC §3.6); None = no upper bound.
 _PORTFOLIO_RANGES: dict[str, tuple[int, int | None]] = {
     "top_buy_windows": (1, 10), "top_sell_windows": (1, 10), "today_limit": (1, 100), "week_limit": (1, 100),
-    "candidate_export": (20, None),
+    "candidate_export": (20, None), "swap_candidates": (1, None),
 }
 
 
@@ -238,7 +243,7 @@ def _check_portfolio(text: str, values: dict) -> None:
 
     Raises:
         ConfigError: risk_tolerance outside (0, 1], immediate_hours other than 8 or 24, horizon_days
-            other than 7 (fixed until the optimizer is built), or a count outside its range.
+            other than 7 (fixed for now), candidate_pool below candidate_export, or a count outside its range.
     """
     if "risk_tolerance" in values and not 0 < values["risk_tolerance"] <= 1:
         raise _fail(text, "risk_tolerance", "must be more than 0 and at most 1")
@@ -246,6 +251,9 @@ def _check_portfolio(text: str, values: dict) -> None:
         raise _fail(text, "immediate_hours", "must be 8 or 24")
     if "horizon_days" in values and values["horizon_days"] != 7:
         raise _fail(text, "horizon_days", "must be 7 (the horizon is fixed for now)")
+    pool = values.get("candidate_pool", Config.candidate_pool)
+    if pool < values.get("candidate_export", Config.candidate_export):
+        raise _fail(text, "candidate_pool", "must be at least candidate_export")
     for name, (low, high) in _PORTFOLIO_RANGES.items():
         if name in values and high is None and values[name] < low:
             raise _fail(text, name, f"must be {low} or more")
@@ -416,7 +424,8 @@ def portfolio_settings(config: Config) -> PortfolioSettings:
     """
     return PortfolioSettings(config.risk_tolerance, config.premium_base, config.premium_per_day,
                              config.immediate_hours, config.top_buy_windows, config.top_sell_windows,
-                             config.today_limit, config.week_limit, config.candidate_export, config.horizon_days)
+                             config.today_limit, config.week_limit, config.candidate_export, config.horizon_days,
+                             config.candidate_pool, config.swap_candidates)
 
 
 def record_settings(config: Config) -> RecordSettings:
@@ -432,7 +441,7 @@ def record_settings(config: Config) -> RecordSettings:
 
 
 def flip_settings(config: Config) -> FlipSettings:
-    """The settings flips and buys need (SPEC §3.4C.2, §3.4 Risk), from the config.
+    """The settings flips and buys need (SPEC §3.4C.2), from the config.
 
     Args:
         config: Settings.
@@ -440,4 +449,4 @@ def flip_settings(config: Config) -> FlipSettings:
     Returns:
         The engine's FlipSettings.
     """
-    return FlipSettings(config.min_flip_margin, config.max_risk_pct)
+    return FlipSettings(config.min_flip_margin)

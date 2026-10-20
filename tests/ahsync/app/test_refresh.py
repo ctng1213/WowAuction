@@ -46,11 +46,12 @@ def seed(db: Database) -> None:
          (M, BAR, 1000, 6, NOW - HOUR, "ahf"), (M, ROD, 4001, 3, NOW - HOUR, "ahf"),
          (M, DUST, 601, 200, NOW - HOUR, "ahf"), (M, ESSENCE, 900, 50, NOW - HOUR, "ahf"),
          (M, GLOVES, 800, 1, NOW - 2 * HOUR, "ahf"))
-    closes = [(M, key, NOW - h * HOUR, price, "ahf") for key, price in ((ROD, 4000), (DUST, 600), (BAR, 1000))
+    closes = [(M, key, NOW - h * HOUR, price, "ahf") for key, price in ((ROD, 4000), (DUST, 600), (BAR, 1000), (GLOVES, 800))
               for h in range(30)]
     rows(db, "INSERT INTO candles_h1(market, key, t, close, src) VALUES (?, ?, ?, ?, ?)", *closes)
     volume = [(M, key, NOW // DAY - d, listed, sold, 0, "ahf") for key, sold, listed in
-              ((ROD, 60, 60), (DUST, 2000, 2000), (BAR, 500, 500), (ESSENCE, 300, 300)) for d in range(7)]
+              ((ROD, 60, 60), (DUST, 2000, 2000), (BAR, 500, 500), (ESSENCE, 300, 300), (GLOVES, 2, 2))
+              for d in range(7)]
     rows(db, "INSERT INTO volume_d1(market, key, day, listed, sold, expired, src) VALUES (?, ?, ?, ?, ?, ?, ?)",
          *volume)
     rows(db, "INSERT INTO characters(id, name, market, gold) VALUES (?, ?, ?, ?)",
@@ -194,6 +195,24 @@ def test_IU13_a_replan_follows_new_stock_from_the_published_intelligence_and_kee
     assert db.conn.execute("SELECT built FROM intel WHERE market = ?", (M,)).fetchone() == intel_before
     _, built = db.view("today", M)
     assert built == NOW + HOUR                                                      # the pages follow
+
+
+def test_PF10_a_skill_read_from_savedvariables_funds_a_waiting_candidate_without_reading_history(db, monkeypatch):
+    with db.transaction():
+        db.conn.execute("UPDATE professions SET skill = 20 WHERE char_id = ? AND profession = 'Enchanting'", (AMAYA,))
+    refresh.refresh_all(db, NOW, CFG)
+    buys = "SELECT kind FROM actions WHERE key = ? AND status = 'pending' ORDER BY kind"
+    assert db.conn.execute(buys, (GLOVES,)).fetchall() == []
+    waiting = [(c, why) for c, _, _, why, _ in db.alternatives(M) if c.startswith(f"disenchant:{GLOVES}:")]
+    assert [why for _, why in waiting] == ["Required profession unavailable: Enchanting 25"]   # ilvl 25 needs 25
+    intel_before = db.conn.execute("SELECT built FROM intel WHERE market = ?", (M,)).fetchone()
+    with db.transaction():
+        db.conn.execute("UPDATE professions SET skill = 150 WHERE char_id = ? AND profession = 'Enchanting'", (AMAYA,))
+    monkeypatch.setattr(refresh, "analyze_market", lambda *a: pytest.fail("a re-plan reads no history"))
+    assert refresh.replan_all(db, NOW + HOUR, CFG) == [M]
+    assert db.conn.execute(buys, (GLOVES,)).fetchall() == [("buy",), ("de",)]                 # now funded
+    assert not [c for c, *_ in db.alternatives(M) if c.startswith(f"disenchant:{GLOVES}:")]
+    assert db.conn.execute("SELECT built FROM intel WHERE market = ?", (M,)).fetchone() == intel_before
 
 
 def test_IU13_a_failed_replan_keeps_the_last_plan_and_a_market_without_intelligence_is_skipped(db, monkeypatch):
