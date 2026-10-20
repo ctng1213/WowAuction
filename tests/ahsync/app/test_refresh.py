@@ -375,3 +375,39 @@ def test_V24_a_refresh_reports_estimates_left_on_an_older_method_and_clears_it_a
     monkeypatch.setattr(local_scans, "VOLUME_METHOD_VERSION", 1)
     refresh.refresh_all(db, NOW, CFG)
     assert db.status(f"volume_method:{M}") is None
+
+
+def test_D74_every_page_response_but_rules_characters_and_status_carries_the_gold_pill(db):
+    refresh.refresh_all(db, NOW, CFG)
+    pill = "Gold 50g · 2 characters · Fri 12:00"               # Brugan 40g + Amaya 10g at the run, day 20000 a Friday
+    carrying = ["portfolio", "today", "week", "on_ah", "disenchant", "craft", "flip", "inventory", "history"]
+    assert [db.view(page, M)[0]["gold"] for page in carrying] == [pill] * len(carrying)
+    assert ["gold" in db.view(page, M)[0] for page in ("rules", "characters")] == [False, False]   # status: on request
+
+
+def test_D71_with_no_enchanter_the_disenchant_page_lists_research_and_the_portfolio_only_excludes_it(db):
+    rows(db, "DELETE FROM professions WHERE profession = ?", ("Enchanting",))
+    refresh.refresh_all(db, NOW, CFG)
+    disenchant, _ = db.view("disenchant", M)
+    [gloves] = disenchant["rows"]
+    assert gloves["item"] == "Embossed Leather Gloves" and disenchant["notice"]["title"] == "Research only"
+    portfolio, _ = db.view("portfolio", M)
+    today = portfolio["today"]["by_min"]["0"]
+    funded = {r["item"] for r in today["funded"] + portfolio["week"]["funded"]}
+    [excluded] = [r for r in today["excluded"] if r["item"] == "Embossed Leather Gloves"]
+    assert "Embossed Leather Gloves" not in funded
+    assert (excluded["status"], excluded["detail"]) == ("Required profession unavailable: Enchanting 25",
+                                                        "no character has Enchanting")
+    assert all(r["item"] != "Embossed Leather Gloves" for r in db.view("today", M)[0]["by_min"]["0"]["rows"])
+
+
+def test_D76_today_and_week_still_show_the_funded_plans_actions(db):
+    refresh.refresh_all(db, NOW, CFG)
+    portfolio, _ = db.view("portfolio", M)
+    funded = {r["item"] for r in portfolio["today"]["by_min"]["0"]["funded"] + portfolio["week"]["funded"]}
+    today = db.view("today", M)[0]["by_min"]["0"]["rows"]
+    week = [r for day in db.view("week", M)[0]["days"] for r in day["rows"]]
+    assert funded == {"Copper Rod", "Embossed Leather Gloves"}
+    assert {r["item"] for r in today} == funded == {r["item"] for r in week}
+    assert sorted(r["action"] for r in today) == ["buy", "craft", "de", "post"]       # as actions, not opportunities
+    assert all(r["status"] == "pending" and r["id"] for r in today)

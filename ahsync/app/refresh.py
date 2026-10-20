@@ -21,6 +21,7 @@ from ahsync.db.sqlite import Database
 from ahsync.engine.characters_view import CharacterSheet, characters_view
 from ahsync.engine.plan_chains import Arriving
 from ahsync.engine.positions import committed
+from ahsync.engine.views import GOLD_PAGES, gold_pill
 from ahsync.recommend.history_page import history_page
 from ahsync.recommend.inventory_page import inventory_page
 from ahsync.recommend.on_ah_page import on_ah_page
@@ -48,9 +49,9 @@ class RefreshResult:
 
 
 def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], intel_items: dict, items: dict,
-                now_ms: int, offset_ms: int, cfg: Config, built_ms: int) -> tuple[list, int | None]:
-    """Plan the market's characters and stage the plan, its alternatives, what the addon files carry of it (M11) and its
-    Portfolio (M13), Today, Week, Flip and Inventory pages (SPEC §3.4C, §3.4D, §3.5).
+                now_ms: int, offset_ms: int, cfg: Config, built_ms: int) -> tuple[dict, list, int | None]:
+    """Plan the market's characters, stage the plan, its alternatives and what the addon files carry of it (M11), and
+    build its Portfolio (M13), Today, Week, Flip and Inventory pages (SPEC §3.4C, §3.4D, §3.5).
 
     Args:
         db: Database (inside the refresh's transaction).
@@ -64,8 +65,9 @@ def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], in
         built_ms: The intelligence's built_ms.
 
     Returns:
-        (the funded plan's actions (engine.plan.PlanAction), for the Craft page's chains (D56); the portfolio's
-        remaining capacity in copper, for the Craft and Disenchant pages' limit (D45), None without characters).
+        (page name -> payload, for the caller to stage; the funded plan's actions (engine.plan.PlanAction), for the
+        Craft page's chains (D56); the portfolio's remaining capacity in copper, for the Craft and Disenchant pages'
+        limit (D45), None without characters).
 
     Raises:
         engine.selection.SelectionError: The allocation broke a D.5 rule: nothing of the run is published.
@@ -97,9 +99,7 @@ def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], in
                                         offset_ms, cfg, built_ms, held)                            # SPEC §3.5, M13
     pages["inventory"] = inventory_page(db, [c for c, _ in characters], [a for a in shown if a.status == "pending"],
                                         intel_items, items, offset_ms)
-    for page, body in pages.items():
-        db.stage_view(page, market, body, now_ms)
-    return actions, plan.accounting.remaining_capacity if plan else None
+    return pages, actions, plan.accounting.remaining_capacity if plan else None
 
 
 def refresh_market(db: Database, market: str, now_ms: int, cfg: Config, result: RefreshResult,
@@ -142,17 +142,19 @@ def _stage_recommendations(db: Database, market: str, stats: dict, now_ms: int, 
     characters = db.characters_in(market)
     char_ids = [c for c, _ in characters]
     total_gold = sum(g for _, g in characters)
-    planned, capacity = _stage_plan(db, market, characters, stats, items, now_ms, offset_ms, cfg, built_ms)
-    db.stage_view("disenchant", market, disenchant_page(db, char_ids, stats, items, total_gold, now_ms, cfg, capacity),
-                  now_ms)
-    db.stage_view("craft", market, craft_page(db, char_ids, stats, items, total_gold, now_ms, cfg, planned, offset_ms,
-                                              capacity), now_ms)                                # D45, D56
-    db.stage_view("on_ah", market, on_ah_page(db, char_ids, stats, items, now_ms, cfg), now_ms)   # D18, D53
-    db.stage_view("history", market, history_page(db, char_ids, stats, items, now_ms, offset_ms), now_ms)   # D47
+    pages, planned, capacity = _stage_plan(db, market, characters, stats, items, now_ms, offset_ms, cfg, built_ms)
+    pages["disenchant"] = disenchant_page(db, char_ids, stats, items, total_gold, now_ms, cfg, capacity)   # D71
+    pages["craft"] = craft_page(db, char_ids, stats, items, total_gold, now_ms, cfg, planned, offset_ms,
+                                capacity)                                                      # D45, D56
+    pages["on_ah"] = on_ah_page(db, char_ids, stats, items, now_ms, cfg)                       # D18, D53
+    pages["history"] = history_page(db, char_ids, stats, items, now_ms, offset_ms)            # D47
     sheets = [CharacterSheet(c, cls, level, faction, m, gold, cfg.budgets.get(c), recipes, updated, profs)
               for c, cls, level, faction, m, gold, recipes, updated, profs in db.character_sheets(char_ids)]
-    db.stage_view("characters", market, characters_view(sheets, now_ms), now_ms)                      # D49
-    db.stage_view("rules", market, rules_page(db, char_ids, market, stats, items, now_ms, offset_ms, cfg), now_ms)   # D50
+    pages["characters"] = characters_view(sheets, now_ms)                                      # D49
+    pages["rules"] = rules_page(db, char_ids, market, stats, items, now_ms, offset_ms, cfg)    # D50
+    pill = gold_pill([g for _, g in characters], now_ms, offset_ms)                            # D74
+    for page, body in pages.items():
+        db.stage_view(page, market, {**body, "gold": pill} if page in GOLD_PAGES else body, now_ms)
 
 
 def replan_all(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0) -> list[str]:

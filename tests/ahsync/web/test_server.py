@@ -668,3 +668,34 @@ def test_every_portfolio_column_has_its_tooltip_and_the_market_columns_in_order(
     headers = set(re.findall(r"\['([^']+)', [01]\]", block))
     assert headers and headers - set(COLUMN_HELP) == set()
     assert block.count("...MARKET_COLS") == 2                                   # sections B and C show a chance
+
+
+def test_D76_the_page_bar_keeps_today_and_week_between_portfolio_and_on_the_ah():
+    # The addon half (a Portfolio tab, no Today or Week) is MainWindow_spec's "the tab bar reads Portfolio, …".
+    page = INDEX_HTML.read_text(encoding="utf-8")
+    order = page[page.index("const ORDER = "):page.index("const nav = ")]
+    assert re.findall(r"\['([^']+)', '(\w+)'\]", order) == [
+        ("Portfolio", "portfolio"), ("Today", "today"), ("Week", "week"), ("On the AH", "on_ah"),
+        ("Disenchant", "disenchant"), ("Craft", "craft"), ("Flip", "flip"), ("Inventory", "inventory"),
+        ("History", "history"), ("Rules", "rules"), ("Characters", "characters"), ("Status", "status")]
+    assert [p for _, p in re.findall(r"\['([^']+)', '(\w+)'\]", order)] == list(PAGES)
+
+
+def test_D74_the_top_bar_draws_the_responses_gold_and_hides_the_pill_without_one(app, db):
+    page = INDEX_HTML.read_text(encoding="utf-8")
+    assert '<span class="pill gold" id="goldpill"' in page and "setGold(body.data && body.data.gold);" in page
+    setter = page[page.index("function setGold"):page.index("function setGold") + 200]
+    assert "pill.hidden = !text;" in setter and "pill.textContent = text || '';" in setter
+    publish(db, "inventory", M, {"rows": [], "gold": "Gold 31g 40s · 2 characters · Mon 10:38"})
+    reply = app.handle("GET", f"/api/views/inventory?market={M}", GOOD)
+    assert json.loads(reply.body)["data"]["gold"] == "Gold 31g 40s · 2 characters · Mon 10:38"   # served as stored
+
+
+def test_D75_D71_the_inventory_filter_picks_an_engine_view_and_the_disenchant_notice_comes_from_the_response():
+    page = INDEX_HTML.read_text(encoding="utf-8")
+    inventory = page[page.index("  inventory: {"):page.index("  status: {")]
+    assert "pick: (d, values) => ({ ...d, ...((d.by_char || {})[values.character || ''] || {}) })" in inventory
+    assert "{ id: 'character', label: 'Character', fromData: 'characters', test: () => true }" in inventory
+    disenchant = page[page.index("  disenchant: {"):page.index("  craft: {")]
+    assert "notice: d => d.notice ?" in disenchant and "esc(d.notice.title)" in disenchant
+    assert "filterBar(id, rows) + (spec.notice ? spec.notice(data) : '') + body" in page

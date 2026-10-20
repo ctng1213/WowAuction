@@ -67,12 +67,14 @@ def disenchant_page(state: StateReader, char_ids: list[str], stats: dict[int, It
                     total_gold: int, now_ms: int, cfg: Config, room: int | None = None) -> dict:
     """The Disenchant page payload (SPEC §3.4A, §3.5).
 
-    The mats of all the buys together stay within each mat's cap: buys are taken best
-    profit first until a mat's cap is reached (SPEC §3.4 market capacity, R15). A buy bigger
-    than the portfolio's remaining capacity is left out (SPEC §3.4 Risk, §3.4D.1).
+    Every disenchantable item is evaluated whether or not a character can disenchant it (D71): with
+    nobody at Enchanting the rows are research, under the notice. The mats of all the buys together
+    stay within each mat's cap: buys are taken best profit first until a mat's cap is reached (SPEC
+    §3.4 market capacity, R15). A buy bigger than the portfolio's remaining capacity is left out (SPEC
+    §3.4 Risk, §3.4D.1).
 
     Args:
-        state: Character state (for the best Enchanting skill).
+        state: Character state (the best Enchanting skill, for the notice only).
         char_ids: Your characters on the market.
         stats: Item key -> stats.
         items: Item metadata.
@@ -82,7 +84,8 @@ def disenchant_page(state: StateReader, char_ids: list[str], stats: dict[int, It
         room: The remaining capacity of the exposure budget, copper (SPEC §3.4D.1); None for no limit.
 
     Returns:
-        {"rows": [...], "hidden": buys left out for capacity or risk, "help": header -> tooltip}, profit highest first.
+        {"rows": [...], "hidden": buys left out for capacity or risk, "notice": views.disenchant_notice (None
+        while a character has Enchanting), "help": header -> tooltip}, profit highest first.
     """
     listings = [(key, s.cur, items[key].quality, items[key].ilvl, DE_KIND[items[key].item_class])
                 for key, s in sorted(stats.items())
@@ -90,7 +93,8 @@ def disenchant_page(state: StateReader, char_ids: list[str], stats: dict[int, It
                 and items[key].ilvl]                                                   # FM5
     sell = {key: s.sell_value for key, s in stats.items() if s.sell_value is not None}
     found, too_risky = [], 0
-    for t in disenchant.targets(listings, DE_TABLE, sell, state.best_skill(char_ids, "Enchanting")):
+    best_skill = state.best_skill(char_ids, "Enchanting")
+    for t in disenchant.targets(listings, DE_TABLE, sell):                              # D71: never gated
         if room is not None and t.buy_copper > room:
             too_risky += 1
             continue
@@ -109,7 +113,8 @@ def disenchant_page(state: StateReader, char_ids: list[str], stats: dict[int, It
         rows.append(views.disenchant_row(views.DisenchantInput(
             t.key, info.name, info.quality or 0, info.ilvl, t.buy_copper, mats, t.ev, _market(stats.get(main_mat)),
             stats[t.key].cur_age_ms), total_gold))
-    return {"rows": rows, "hidden": len(dropped) + too_risky, "help": views.COLUMN_HELP}
+    return {"rows": rows, "hidden": len(dropped) + too_risky, "notice": views.disenchant_notice(best_skill),
+            "help": views.COLUMN_HELP}
 
 
 def craft_market(state: StateReader, char_ids: list[str], stats: dict[int, ItemIntel], items: dict[int, ItemInfo]

@@ -209,3 +209,20 @@ def test_D60_one_name_for_every_page_plain_variant_and_unknown_suffix_keys():
     assert item_name(-9, items, names) == "Nine (unknown suffix)"              # a negative key's own row
     assert item_name(99, items, names) == "99"
     assert [item_quality(k, items) for k in (variant, 7, 99, -9)] == [2, 1, 1, 3]
+
+
+def test_D74_the_gold_pill_sums_gold_in_hand_at_the_portfolio_snapshot_in_local_time():
+    from ahsync.engine.views import GOLD_PAGES, gold_pill
+    from tests.support import mockup_export as mx
+    gold = [c.gold for c in mx.chars()]                        # Amaya 21g + Brugan 10g 40s, Mon 10:38 UTC
+    assert gold_pill(gold, mx.NOW, 0) == "Gold 31g 40s · 2 characters · Mon 10:38"
+    assert gold_pill(gold[:1], mx.NOW, -11 * 3_600_000) == "Gold 21g · 1 character · Sun 23:38"   # local time
+    assert GOLD_PAGES == ("portfolio", "today", "week", "on_ah", "disenchant", "craft", "flip", "inventory", "history")
+
+
+def test_D71_the_research_notice_shows_only_while_no_character_has_enchanting():
+    from ahsync.engine.views import disenchant_notice
+    notice = disenchant_notice(None)
+    assert f"{notice['title']}: {notice['text']}" == \
+        "Research only: no character has Enchanting yet. These rows enter the funded plan once one does."
+    assert disenchant_notice(1) is None and disenchant_notice(142) is None

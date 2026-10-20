@@ -144,3 +144,23 @@ def test_D56_the_plans_craft_chains_come_first_and_their_products_get_no_own_row
         "Copper Rod", "Plan", "Brugan (Blacksmithing 112)", "+16s")
     assert rod["lines"] == ["buy 2 Copper Bar on the AH · 20s", "post Fri 00:00"]   # day 20000 is a Friday
     assert page["footer"] == "1 planned · 0 recipes worth crafting"
+
+
+def test_D71_with_no_enchanter_every_disenchantable_item_is_listed_as_research_with_its_calculations(state):
+    scouting, greater_magic = 7005, 10939
+    items = {**ITEMS, scouting: ItemInfo(scouting, "Scouting Gloves of the Monkey", 2, 18, 4, None, 100, 1),
+             greater_magic: ItemInfo(greater_magic, "Greater Magic Essence", 2, 25, 7, None, 100, 10)}
+    stats = {DUST: replace(STATS[DUST], sell_value=600.0), greater_magic: intel(greater_magic, 1100, 20, 50.0, 1000.0),
+             scouting: intel(scouting, 800, 1, None, None)}
+    with_enchanter = disenchant_page(state, ["Amaya-G", "Brugan-G"], stats, items, 500_000, NOW, Config(markets=(M,)))
+    with state.transaction():
+        state.conn.execute("DELETE FROM professions WHERE profession = 'Enchanting'")
+    page = disenchant_page(state, ["Amaya-G", "Brugan-G"], stats, items, 500_000, NOW, Config(markets=(M,)))
+    [gloves] = page["rows"]
+    # EV = 0.75 × 2.5 × 6s + 0.2 × 1.5 × 10s = 14s 25c; bought at 8s.
+    assert (gloves["item"], gloves["buy"], gloves["ev"], gloves["profit"]) == \
+        ("Scouting Gloves of the Monkey", "8s", "14s 25c", "+6s 25c")
+    assert f"{page['notice']['title']}: {page['notice']['text']}" == \
+        "Research only: no character has Enchanting yet. These rows enter the funded plan once one does."
+    # Rows, their sort values and filter fields are the same as with an enchanter; only the notice differs.
+    assert page["rows"] == with_enchanter["rows"] and with_enchanter["notice"] is None

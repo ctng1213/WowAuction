@@ -7,6 +7,7 @@ The addon's twin is UI/ViewModel.lua (M5).
 from __future__ import annotations
 
 import math
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -526,6 +527,46 @@ def disenchant_row(d: DisenchantInput, total_gold: int) -> dict:
                  "price_age": d.price_age_ms if d.price_age_ms is not None else -1,
                  **_market_sort(d.market), "risk": risk_tenths(d.buy, total_gold)},
     }
+
+
+# The Disenchant page's notice when no character can disenchant at all (SPEC §3.4A, §3.5, D71).
+RESEARCH_NOTICE = {"title": "Research only",
+                   "text": "no character has Enchanting yet. These rows enter the funded plan once one does."}
+
+
+def disenchant_notice(best_skill: int | None) -> dict | None:
+    """The Disenchant page's info notice: research only while nobody has Enchanting (SPEC §3.4A, D71).
+
+    The page lists every disenchantable item either way; only funding needs an enchanter (§3.4D.4, PF9).
+
+    Args:
+        best_skill: Your characters' highest Enchanting skill, or None when none has Enchanting.
+
+    Returns:
+        {"title", "text"} (RESEARCH_NOTICE) when best_skill is None, else None.
+    """
+    return dict(RESEARCH_NOTICE) if best_skill is None else None
+
+
+# The pages whose response carries the gold pill: all but rules, characters and status (SPEC §3.5, D74).
+GOLD_PAGES = ("portfolio", "today", "week", "on_ah", "disenchant", "craft", "flip", "inventory", "history")
+
+
+def gold_pill(gold_by_char: Sequence[int], snapshot_ms: int, offset_ms: int) -> str:
+    """The top bar's gold pill: gold in hand across your characters at the portfolio snapshot (SPEC §3.5, D74).
+
+    Args:
+        gold_by_char: Each character's gold in hand at the snapshot, copper.
+        snapshot_ms: When the snapshot was taken (the plan run), UTC ms.
+        offset_ms: Local time minus UTC, ms.
+
+    Returns:
+        E.g. "Gold 31g 40s · 2 characters · Mon 10:38" (the time is local).
+    """
+    t = time.gmtime((snapshot_ms + offset_ms) // 1000)
+    count = len(gold_by_char)
+    return (f"Gold {money(sum(gold_by_char))} · {count} character{'' if count == 1 else 's'} · "
+            f"{time.strftime('%a', t)} {time.strftime('%H:%M', t)}")
 
 
 @dataclass(frozen=True)

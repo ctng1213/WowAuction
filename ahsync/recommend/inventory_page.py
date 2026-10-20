@@ -106,7 +106,8 @@ def inventory_page(state: StateReader, char_ids: list[str], actions: list[ViewAc
         offset_ms: Local time minus UTC.
 
     Returns:
-        {"rows", "tiles", "details": {item key: item detail}, "help"}.
+        {"rows", "tiles", "by_char", "characters" (engine.inventory_view), "details": {item key: item detail},
+        "help"}.
     """
     paid = state.cost_basis()
     holdings = [Holding(c, where, key, qty, bound,
@@ -125,6 +126,6 @@ def inventory_page(state: StateReader, char_ids: list[str], actions: list[ViewAc
     world = InventoryWorld(actions, looks, {k: windows_of(stats[k].sell_windows) for k in keys if k in stats},
                            values, craft_uses(state, char_ids, actions, looks), state.item_rules(), offset_ms,
                            state.reserves(char_ids))
-    view = inventory_view(holdings, world)
+    view = inventory_view(holdings, world, char_ids)                                 # D75: by_char
     details = {str(k): item_detail(detail_facts(looks[k], stats[k]), offset_ms) for k in sorted(keys) if k in stats}
     return {**view, "details": details, "help": COLUMN_HELP}

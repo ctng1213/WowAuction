@@ -71,24 +71,25 @@ def can_disenchant(skill_required: int, best_skill: int | None) -> bool:
 
 
 def targets(listings: Sequence[tuple[int, int, int, int, str]], table: Sequence[tuple],
-            sell_value: dict[int, float], best_skill: int | None) -> list[DisenchantTarget]:
-    """AH items that can be bought and disenchanted by one of your characters (SPEC §3.4A).
+            sell_value: dict[int, float]) -> list[DisenchantTarget]:
+    """AH items worth evaluating to buy and disenchant, whoever can disenchant them (SPEC §3.4A, D71).
+
+    Research is never gated by profession: every disenchantable listing is a target. Only funding needs
+    a character with Enchanting at the item's skill (`can_disenchant`, §3.4D.4, PF9).
 
     Args:
         listings: (key, buyout copper, quality, ilvl, kind) for items on the AH.
         table: DE_TABLE.
         sell_value: Material key -> sell value per unit, float copper; a material
             without one counts as 0.
-        best_skill: Your highest Enchanting skill, or None.
 
     Returns:
-        One target per listing you can disenchant, profit highest first
-        (ties: lower buyout, then key).
+        One target per disenchantable listing, profit highest first (ties: lower buyout, then key).
     """
     found = []
     for key, buy, quality, ilvl, kind in listings:
         row = outcomes_for(table, quality, ilvl, kind)
-        if row is None or not can_disenchant(row[0], best_skill):
+        if row is None:
             continue
         ev = expected_value(row[1], [sell_value.get(mat, 0.0) for mat, _, _, _ in row[1]])
         found.append(DisenchantTarget(key, buy, ev, ev - buy, row[0]))

@@ -152,6 +152,7 @@
   <div class="brand">AH<span>Sync</span></div>
   <label>Market: <select class="select" id="market" aria-label="Market"></select></label>
   <span class="grow"></span>
+  <span class="pill gold" id="goldpill" title="Gold in hand across your characters at the last portfolio snapshot. Hidden on Rules, Characters and Status" hidden></span>
   <span class="pill" id="built" title="Numbers are recomputed at start, once a day after daily_refresh_time, or when you press Refresh now." hidden></span>
   <button class="btn primary" id="refresh" type="button" title="Full refresh: recompute every statistic, chance and the plan (about a minute)">⟳ Refresh now</button>
   <span class="pill" id="notice" hidden></span>
@@ -332,7 +333,7 @@ const pfPage = (d, values) => {
 // ---------- live pages (SPEC §3.5 dashboard data) ----------
 // Each column: [header, numeric?, sort key in row.sort (or null)]. Optional hooks: `pick` chooses the staged view
 // the filters ask for (no computing), `render` draws a page that isn't a table, `footer` adds a summary line,
-// `above`/`below` draw around the table, and `selectKey` makes rows clickable (the selection goes to `below`).
+// `above`/`below` draw around the table, `notice` between the filters and the table, and `selectKey` makes rows clickable (the selection goes to `below`).
 const LIVE = {
   portfolio: {
     lede: 'One plan for all your gold (SPEC §3.4D). Your gold in hand plus what you paid for what you hold is the <b>capital base</b>; <b>risk tolerance</b> caps how much of it may be tied up at once, and what is not tied up yet is the <b>remaining capacity</b>. Today and the next 7 days draw on <b>one shared pool</b>, ranked by <b>adjusted profit</b>: expected net ÷ (1 + waiting premium). Funding runs down the list until the capacity runs out, and the <span class="neg">red line</span> marks where. Rows below it are greyed alternatives with the reason they were left out; they never count in a total. <b>Profit %</b> is return on cash; rows that use only found stock show "—" and stay out of the %.',
@@ -451,7 +452,9 @@ const LIVE = {
     filters: [],
   },
   inventory: {
-    lede: 'What you own on every character: bags, bank and mail (auctions you have up are on <b>On the AH</b>). <b>Paid</b> is what you paid (0 for items you found or held before tracking started); <b>Worth</b> is what the item is expected to bring under its plan. <b>Click a row</b> to see when it sells best and why.',
+    lede: 'What you own on every character: bags, bank and mail (auctions you have up are on <b>On the AH</b>). <b>Paid</b> is what you paid (0 for items you found or held before tracking started); <b>Worth</b> is what the item is expected to bring under its plan. The <b>Character</b> filter narrows the rows and the tiles; an item counts once, where it is now, and mail on its way counts for the character it is addressed to. <b>Click a row</b> to see when it sells best and why.',
+    // The Character filter only picks one of the engine's complete views (D75): rows and tiles of that character.
+    pick: (d, values) => ({ ...d, ...((d.by_char || {})[values.character || ''] || {}) }),
     above: d => tilesHtml(d.tiles),
     below: (d, values, selected) => selected ? detailHtml((d.details || {})[selected]) : '<div class="empty" style="border-top:1px solid var(--border)">Select a row to see when it sells best.</div>',
     selectKey: r => r.key,
@@ -465,7 +468,7 @@ const LIVE = {
                 `<option value="">Keep…</option><option value="-1">Keep all</option><option value="n">Keep a number…</option><option value="0">Sell normally</option></select>`) + `</td>`,
     filters: [
       { id: 'search', label: null, kind: 'search', placeholder: 'Search items…', test: (r, v) => !v || String(r.item).toLowerCase().includes(v.toLowerCase()) },
-      { id: 'character', label: 'Character', fromRows: 'character', test: (r, v) => v === '' || r.character === v },
+      { id: 'character', label: 'Character', fromData: 'characters', test: () => true },
       { id: 'where', label: 'Where', options: [['', 'All'], ['bags', 'Bags'], ['bank', 'Bank'], ['mail', 'Mail']], test: (r, v) => v === '' || r.where === v },
       { id: 'plan', label: 'Plan', options: [['', 'All'], ['post', 'Post'], ['de', 'Disenchant'], ['vendor', 'Vendor'], ['hold', 'Hold'], ['craft', 'Craft'], ['none', 'Not planned'], ['bound', 'Bound'], ['ignored', 'Ignored'], ['kept', 'Kept for yourself']],
         test: (r, v) => v === '' || r.plan_kind === v },
@@ -480,7 +483,9 @@ const LIVE = {
     filters: [],
   },
   disenchant: {
-    lede: 'AH items worth buying to disenchant (SPEC §3.4A). Only shown when one of your characters has the skill. Chance (with its confidence dot) and the market activity columns describe the <b>mats</b>, since they\'re what you sell. A "—" means the data can\'t support a number; it is never a guess and never 0. In every table, the <b>dot after a chance is its confidence</b> (<span class="dot h"></span>≥ 75% · <span class="dot m"></span>≥ 45% · <span class="dot l"></span>below); hover a chance for the exact %.',
+    lede: 'AH items worth buying to disenchant (SPEC §3.4A). <b>Always shown, as research</b>, even when none of your characters can disenchant: a notice then says so, and the rows stay out of the funded plan (Portfolio) until one can. Chance (with its confidence dot) and the market activity columns describe the <b>mats</b>, since they\'re what you sell. A "—" means the data can\'t support a number; it is never a guess and never 0. In every table, the <b>dot after a chance is its confidence</b> (<span class="dot h"></span>≥ 75% · <span class="dot m"></span>≥ 45% · <span class="dot l"></span>below); hover a chance for the exact %.',
+    // Research only (D71): the engine's notice when no character has Enchanting; the rows are the same either way.
+    notice: d => d.notice ? `<div class="alert info" style="margin:0;border-radius:0;border-width:0 0 1px 4px"><span class="grow"><b>${esc(d.notice.title)}:</b> ${esc(d.notice.text)}</span></div>` : '',
     cols: [['Item', 0, null], ['ilvl', 1, 'ilvl'], ['Buy', 1, 'buy'], ['Expected mats', 0, null], ['EV', 1, 'ev'], ['Profit', 1, 'profit'],
            ...MARKET_COLS, ['Risk', 1, 'risk'], ['Price age', 1, 'price_age']],
     row: r => `<tr><td>${item(r.item, r.quality)}</td><td class="num">${esc(r.ilvl)}</td><td class="num">${dash(r.buy)}</td>` +
@@ -546,6 +551,7 @@ function show(id) {
   if (!LIVE[id]) {
     main.innerHTML = `<h1>${esc(titleOf(id))}</h1><p class="lede">Coming in a later milestone.</p>`;
     setBuilt(null);
+    setGold(null);
     return;
   }
   main.innerHTML = `<h1>${esc(titleOf(id))}</h1><p class="lede">${LIVE[id].lede}</p><div class="card" id="card"><div class="empty">Loading…</div></div>`;
@@ -563,6 +569,7 @@ async function load(id) {
     return renderMessage(id, 'AHSync isn\'t answering. Is it still running?');
   }
   if (state.page !== id || state.market !== market) return;     // the user moved on meanwhile
+  if (!res.ok) setGold(null);
   if (res.status === 404 && body.error === 'no_refresh_yet') {
     setBuilt(null);
     return renderMessage(id, 'No numbers yet: the first full refresh hasn\'t finished. They appear here when it does, or press Refresh now.');
@@ -570,7 +577,15 @@ async function load(id) {
   if (!res.ok) return renderMessage(id, `Couldn't load this page (${esc(body.error || res.status)}).`);
   state.data[id] = body.data;
   setBuilt(body.built, body.prices_newer);
+  setGold(body.data && body.data.gold);
   render(id);
+}
+
+// The gold pill (SPEC §3.5, D74): the engine's text, on the pages whose response carries `gold` (not Rules, Characters, Status).
+function setGold(text) {
+  const pill = document.getElementById('goldpill');
+  pill.hidden = !text;
+  pill.textContent = text || '';
 }
 
 function renderMessage(id, text) {
@@ -613,7 +628,7 @@ function render(id) {
     ? `<div class="empty">Nothing to show for this market.</div>`
     : shown.length === 0 ? `<div class="empty">No rows match the filters.</div>`
     : `<div class="scrollx"><table><thead><tr>${head}</tr></thead><tbody>${shown.map(r => rowHtml(spec, r, selected)).join('')}</tbody></table></div>`;
-  card.innerHTML = (spec.above ? spec.above(data) : '') + hidden + filterBar(id, rows) + body + (spec.below ? spec.below(data, values, selected) : '');
+  card.innerHTML = (spec.above ? spec.above(data) : '') + hidden + filterBar(id, rows) + (spec.notice ? spec.notice(data) : '') + body + (spec.below ? spec.below(data, values, selected) : '');
   card.querySelectorAll('tr[data-select]').forEach(tr => {
     tr.onclick = e => {
       if (e.target.closest('select, button, input, a')) return;      // a control in the row keeps its focus (D55)
@@ -732,7 +747,7 @@ function filterBar(id, rows) {
   const parts = LIVE[id].filters.map(f => {
     const v = values[f.id] ?? '';
     if (f.kind === 'search') return `<input class="select search" type="search" data-filter="${f.id}" placeholder="${esc(f.placeholder)}" value="${esc(v)}">`;
-    const options = f.options || optionsFromRows(rows, f.fromRows);
+    const options = f.options || (f.fromData ? (state.data[id] || {})[f.fromData] : optionsFromRows(rows, f.fromRows));
     if (!options) return '';
     return `<label>${esc(f.label)} <select class="select" data-filter="${f.id}">${options.map(([val, text]) =>
       `<option value="${esc(val)}"${val === v ? ' selected' : ''}>${esc(text)}</option>`).join('')}</select></label>`;

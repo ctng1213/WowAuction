@@ -213,15 +213,65 @@ def _row(h: Holding, plan: _Plan, worth: float | None, w: InventoryWorld) -> dic
     }
 
 
-def inventory_view(holdings: Sequence[Holding], w: InventoryWorld) -> dict:
-    """The Inventory tab (SPEC §3.5, D25-D29).
+@dataclass(frozen=True)
+class _Entry:
+    """One Inventory row with what its tiles add up."""
+
+    char_id: str
+    worth: float | None           # its share of the item's worth, float copper
+    paid: int                     # copper
+    unplanned_key: int | None     # the item key when bound or ignored
+    row: dict
+
+
+def _tiles(entries: Sequence[_Entry]) -> list[list[str]]:
+    """The Inventory tiles over some rows (SPEC §3.5, D75).
 
     Args:
-        holdings: Every character's bags, bank and mail on the market.
-        w: The plan, item facts and rules.
+        entries: The rows the tiles count (all characters, or one).
 
     Returns:
-        {"rows": [...] best worth first (ties: item, character, place), "tiles": [[label, value, note]]}.
+        [[label, value, note]]: Worth, Paid and Not planned (distinct bound or ignored items).
+    """
+    unplanned = len({e.unplanned_key for e in entries if e.unplanned_key is not None})
+    return [["Worth", money(sum(e.worth or 0.0 for e in entries)), "under each item's plan"],
+            ["Paid", money(sum(e.paid for e in entries)), "found items and items from before tracking count as 0"],
+            ["Not planned", f"{unplanned} item{'' if unplanned == 1 else 's'}", "bound or ignored"]]
+
+
+def _by_char(entries: Sequence[_Entry], characters: Sequence[str]) -> dict[str, dict]:
+    """One complete Inventory view per character, plus "" for all of them (SPEC §3.5 Character filter, D75).
+
+    An item counts once, where it is now: rows are already per place (auctions are no holding; mail on its
+    way is the recipient's, T22), so a character's view is just its rows and their tiles.
+
+    Args:
+        entries: Every row, in display order.
+        characters: The market's character ids; a character holding nothing still gets an empty view.
+
+    Returns:
+        Character id ("" = all characters) -> {"rows", "tiles"}, by id.
+    """
+    ids = sorted(set(characters) | {e.char_id for e in entries})
+    out = {"": {"rows": [e.row for e in entries], "tiles": _tiles(entries)}}
+    for char_id in ids:
+        mine = [e for e in entries if e.char_id == char_id]
+        out[char_id] = {"rows": [e.row for e in mine], "tiles": _tiles(mine)}
+    return out
+
+
+def inventory_view(holdings: Sequence[Holding], w: InventoryWorld, characters: Sequence[str] = ()) -> dict:
+    """The Inventory tab (SPEC §3.5, D25-D29, D75).
+
+    Args:
+        holdings: Every character's bags, bank and mail on the market, and mail on its way to them.
+        w: The plan, item facts and rules.
+        characters: The market's character ids, for the Character filter.
+
+    Returns:
+        {"rows": [...] best worth first (ties: item, character, place), "tiles": [[label, value, note]],
+        "by_char": {character id or "" for all: {"rows", "tiles"}}, "characters": [[value, label]] the filter's
+        options, "All characters" first}.
     """
     held: dict[tuple[str, int], int] = {}
     holders: dict[int, set[str]] = {}
@@ -233,20 +283,18 @@ def inventory_view(holdings: Sequence[Holding], w: InventoryWorld) -> dict:
     units = {}
     for (_, key), qty in held.items():
         units[key] = units.get(key, 0) + qty
-    rows, worth_total, paid_total, unplanned = [], 0.0, 0, set()
+    rows = []
     for h in holdings:
         mine = [] if h.bound else _sale_actions(h.key, h.char_id, holders[h.key], w.actions)
         plan = _plan(h, held.get((h.char_id, h.key), 0), mine, w)
-        key_worth = None if plan.kind in ("bound", "ignored") else worth_by_key.get(h.key)
+        unplanned = plan.kind in ("bound", "ignored")
+        key_worth = None if unplanned else worth_by_key.get(h.key)
         worth = None if key_worth is None else key_worth * h.qty / units[h.key]
-        if plan.kind in ("bound", "ignored"):
-            unplanned.add(h.key)
-        worth_total += worth or 0.0
-        paid_total += (h.paid_each or 0) * h.qty
         rows.append((-(worth if worth is not None else -1.0), w.looks[h.key].name, h.char_id, h.where, h.key,
-                     _row(h, plan, worth, w)))
+                     _Entry(h.char_id, worth, (h.paid_each or 0) * h.qty, h.key if unplanned else None,
+                            _row(h, plan, worth, w))))
     rows.sort(key=lambda r: r[:5])
-    tiles = [["Worth", money(worth_total), "under each item's plan"],
-             ["Paid", money(paid_total), "found items and items from before tracking count as 0"],
-             ["Not planned", f"{len(unplanned)} items", "bound or ignored"]]
-    return {"rows": [r[5] for r in rows], "tiles": tiles}
+    entries = [r[5] for r in rows]
+    by_char = _by_char(entries, characters)
+    names = [[c, _name(c)] for c in sorted(by_char) if c]
+    return {**by_char[""], "by_char": by_char, "characters": [["", "All characters"], *names]}

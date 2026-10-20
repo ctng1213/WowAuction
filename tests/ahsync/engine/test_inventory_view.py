@@ -118,3 +118,54 @@ def test_a_partial_reserve_with_nothing_else_planned_still_says_what_is_kept():
 def test_D52_each_row_carries_its_full_character_id_for_the_keep_control():
     [row] = inventory_view([Holding("Amaya-G", "bags", GLOVES, 1, False)], world())["rows"]
     assert (row["character"], row["char_id"], row["key"]) == ("Amaya", "Amaya-G", str(GLOVES))
+
+
+LEATHER, ARCANITE = 4234, 12360
+D75_LOOKS = {**LOOKS, LEATHER: ItemLook("Heavy Leather", 1), ARCANITE: ItemLook("Arcanite Bar", 2),
+             RING: ItemLook("Hearthstone Band", 2)}
+
+
+def d75_world(linen_poster: str) -> InventoryWorld:
+    """The mockup's Inventory (SPEC §3.5): Brugan's rods, bars and leather posted, Amaya's cloth, fang and bars."""
+    return world(action("rod", "post", "Brugan-G", ROD, 5, 4100, 11306.0),
+                 action("bar", "post", "Brugan-G", BAR, 6, 1200, 6157.0),
+                 action("leather", "post", "Brugan-G", LEATHER, 5, 47, 235.0),
+                 action("linen", "post", linen_poster, LINEN, 20, 55, 963.0),
+                 action("wool", "post", "Amaya-G", WOOL, 20, 24, 472.0),
+                 action("fang", "vendor", "Amaya-G", FANG, 7, 12, 84.0),
+                 looks=D75_LOOKS, values={LEATHER: 47.0, ARCANITE: 205637.0})
+
+
+D75_BRUGAN = [Holding("Brugan-G", "bags", ROD, 5, False, 1000), Holding("Brugan-G", "bags", BAR, 6, False, 500),
+              Holding("Brugan-G", "bank", LEATHER, 10, False, 80), Holding("Brugan-G", "bags", RING, 1, True)]
+D75_AMAYA = [Holding("Amaya-G", "mail", WOOL, 20, False), Holding("Amaya-G", "bags", FANG, 7, False),
+             Holding("Amaya-G", "bank", ARCANITE, 4, False, 125610)]
+
+
+def test_D75_the_character_filter_narrows_rows_and_tiles_and_mail_on_its_way_counts_for_the_recipient_only():
+    chars = ["Amaya-G", "Brugan-G"]
+    # Brugan's 2 Silver Rods are on the AH: an auction is no holding, so they are on On the AH, never here.
+    view = inventory_view(D75_BRUGAN + D75_AMAYA + [Holding("Amaya-G", "bags", LINEN, 20, False, 38)],
+                          d75_world("Amaya-G"), chars)
+    assert view["characters"] == [["", "All characters"], ["Amaya-G", "Amaya"], ["Brugan-G", "Brugan"]]
+    everyone, brugan = view["by_char"][""], view["by_char"]["Brugan-G"]
+    assert (everyone["rows"], everyone["tiles"]) == (view["rows"], view["tiles"])           # "" is the default
+    assert [t[1] for t in everyone["tiles"][:2]] == ["84g 20s", "51g 20s"] and len(everyone["rows"]) == 8
+    assert [r["item"] for r in brugan["rows"]] == ["Copper Rod", "Copper Bar", "Heavy Leather", "Hearthstone Band"]
+    # Worth 1g 13s 6c + 61s 57c + 4s 70c; Paid 5 × 10s + 6 × 5s + 10 × 80c + 0; the bound band is not planned.
+    assert brugan["tiles"] == [["Worth", "1g 79s 33c", "under each item's plan"],
+                               ["Paid", "88s", "found items and items from before tracking count as 0"],
+                               ["Not planned", "1 item", "bound or ignored"]]
+    assert "Silver Rod" not in {r["item"] for r in everyone["rows"]}
+
+    # Amaya mails him her 20 Linen; until his next capture it is on its way, and the re-plan has him post it.
+    mailed = Holding("Brugan-G", "transit", LINEN, 20, False, 38, "Amaya", NOW)
+    after = inventory_view(D75_BRUGAN + D75_AMAYA + [mailed], d75_world("Brugan-G"), chars)["by_char"]
+    assert [(r["item"], r["where"]) for r in after["Brugan-G"]["rows"]][2] == ("Linen Cloth", "transit")
+    assert [t[1] for t in after["Brugan-G"]["tiles"][:2]] == ["1g 88s 96c", "95s 60c"]        # + 9s 63c, + 7s 60c
+    assert "Linen Cloth" not in {r["item"] for r in after["Amaya-G"]["rows"]}
+    assert [t[1] for t in after[""]["tiles"][:2]] == ["84g 20s", "51g 20s"]                    # counted once
+    assert inventory_view([], world(), ["Cara-G"])["by_char"]["Cara-G"] == {
+        "rows": [], "tiles": [["Worth", "0c", "under each item's plan"],
+                              ["Paid", "0c", "found items and items from before tracking count as 0"],
+                              ["Not planned", "0 items", "bound or ignored"]]}

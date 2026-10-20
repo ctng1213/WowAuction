@@ -22,24 +22,26 @@ def test_shared_scenarios(scenario):
 
 
 def test_R1_a_profitable_green_is_listed_with_its_profit():
-    found = de.targets([(GLOVES, 800, UNCOMMON, 25, ARMOR)], TABLE_25, {STRANGE_DUST: DUST_SELL_VALUE}, best_skill=100)
+    found = de.targets([(GLOVES, 800, UNCOMMON, 25, ARMOR)], TABLE_25, {STRANGE_DUST: DUST_SELL_VALUE})
     assert [(t.key, t.ev, t.profit) for t in found] == [(GLOVES, pytest.approx(1425), pytest.approx(625))]
 
 
-def test_R2_without_enchanting_nothing_is_listed():
-    assert de.targets([(GLOVES, 800, UNCOMMON, 25, ARMOR)], TABLE_25, {STRANGE_DUST: DUST_SELL_VALUE}, None) == []
+def test_R2_without_enchanting_the_item_is_listed_as_research_but_cannot_be_disenchanted():
+    # D71: targets are never gated by profession; funding is, through can_disenchant (PF9).
+    [t] = de.targets([(GLOVES, 800, UNCOMMON, 25, ARMOR)], TABLE_25, {STRANGE_DUST: DUST_SELL_VALUE})
+    assert (t.key, t.profit, t.skill_required) == (GLOVES, pytest.approx(625), 25)
+    assert not de.can_disenchant(t.skill_required, None)
 
 
-def test_targets_skip_items_too_high_or_not_disenchantable_and_sort_by_profit():
+def test_targets_skip_items_not_disenchantable_and_sort_by_profit_whatever_your_skill():
     listings = [(1, 800, UNCOMMON, 25, ARMOR), (2, 500, UNCOMMON, 25, ARMOR), (3, 100, 1, 25, ARMOR),
                 (4, 100, UNCOMMON, 25, ARMOR)]
-    found = de.targets(listings, TABLE_25, {STRANGE_DUST: DUST_SELL_VALUE}, best_skill=25)
+    found = de.targets(listings, TABLE_25, {STRANGE_DUST: DUST_SELL_VALUE})
     assert [t.key for t in found] == [4, 2, 1]          # profits 13s 25c, 9s 25c, 6s 25c; key 3 is grey
-    assert de.targets(listings, TABLE_25, {STRANGE_DUST: DUST_SELL_VALUE}, best_skill=24) == []
 
 
 def test_a_material_without_a_sell_value_counts_as_zero():
-    found = de.targets([(GLOVES, 0, UNCOMMON, 25, ARMOR)], TABLE_25, {}, best_skill=25)
+    found = de.targets([(GLOVES, 0, UNCOMMON, 25, ARMOR)], TABLE_25, {})
     assert found[0].ev == 0.0
 
 

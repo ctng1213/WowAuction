@@ -549,6 +549,7 @@
   "craft": {
    "forever.pvp.horde.us": {
     "footer": "2 planned · 0 recipes worth crafting",
+    "gold": "Gold 65g · 2 characters · Wed 12:30",
     "help": {
      "#": "Selection order: adjusted profit per copper of exposure, then the swap pass; shown by adjusted profit",
      "Action": "What to do: BUY, POST, DE (disenchant), CRAFT, VENDOR, MAIL or HOLD",
@@ -705,6 +706,7 @@
   },
   "disenchant": {
    "forever.pvp.horde.us": {
+    "gold": "Gold 65g · 2 characters · Wed 12:30",
     "help": {
      "#": "Selection order: adjusted profit per copper of exposure, then the swap pass; shown by adjusted profit",
      "Action": "What to do: BUY, POST, DE (disenchant), CRAFT, VENDOR, MAIL or HOLD",
@@ -781,6 +783,7 @@
      "ilvl": "Item level: sets the disenchant results"
     },
     "hidden": 0,
+    "notice": null,
     "rows": [
      {
       "buy": "8s",
@@ -820,6 +823,7 @@
   },
   "flip": {
    "forever.pvp.horde.us": {
+    "gold": "Gold 65g · 2 characters · Wed 12:30",
     "help": {
      "#": "Selection order: adjusted profit per copper of exposure, then the swap pass; shown by adjusted profit",
      "Action": "What to do: BUY, POST, DE (disenchant), CRAFT, VENDOR, MAIL or HOLD",
@@ -938,6 +942,7 @@
   },
   "history": {
    "forever.pvp.horde.us": {
+    "gold": "Gold 65g · 2 characters · Wed 12:30",
     "help": {
      "#": "Selection order: adjusted profit per copper of exposure, then the swap pass; shown by adjusted profit",
      "Action": "What to do: BUY, POST, DE (disenchant), CRAFT, VENDOR, MAIL or HOLD",
@@ -1074,6 +1079,552 @@
   },
   "inventory": {
    "forever.pvp.horde.us": {
+    "by_char": {
+     "": {
+      "rows": [
+       {
+        "chance": "100%",
+        "chance_note": "",
+        "char_id": "Amaya-Grommash",
+        "character": "Amaya",
+        "confidence": 75,
+        "days": "0.3 days",
+        "dot": "high",
+        "item": "Silk Cloth",
+        "key": "4306",
+        "paid_each": "0c",
+        "paid_note": "before tracking",
+        "paid_total": "0c",
+        "plan": "Post now at 20s 40c",
+        "plan_kind": "post",
+        "qty": 40,
+        "quality": 1,
+        "sales": "294 est.",
+        "sort": {
+         "chance": 100,
+         "days": 3,
+         "paid": 0,
+         "qty": 40,
+         "sales": 2938,
+         "supply": 80,
+         "worth": 77520
+        },
+        "supply": "80",
+        "where": "bags",
+        "windows": "Wed 22–Sun 02 (early pattern)",
+        "worth": "7g 75s 20c"
+       },
+       {
+        "chance": "100%",
+        "chance_note": "",
+        "char_id": "Amaya-Grommash",
+        "character": "Amaya",
+        "confidence": 75,
+        "days": "0.3 days",
+        "dot": "high",
+        "item": "Linen Cloth",
+        "key": "2589",
+        "paid_each": "0c",
+        "paid_note": "before tracking",
+        "paid_total": "0c",
+        "plan": "Post 160 now at 49c · Post 40 Sat 10:00 at 51c (18:00 peak)",
+        "plan_kind": "post",
+        "qty": 120,
+        "quality": 1,
+        "sales": "1183 est.",
+        "sort": {
+         "chance": 100,
+         "days": 3,
+         "paid": 0,
+         "qty": 120,
+         "sales": 11825,
+         "supply": 320,
+         "worth": 5632
+        },
+        "supply": "320",
+        "where": "bags",
+        "windows": "Sat 16–22",
+        "worth": "56s 32c"
+       },
+       {
+        "chance": "—",
+        "chance_note": "",
+        "char_id": "Brugan-Grommash",
+        "character": "Brugan",
+        "confidence": null,
+        "days": "1.1 days",
+        "dot": null,
+        "item": "Copper Ore",
+        "key": "2770",
+        "paid_each": "0c",
+        "paid_note": "before tracking",
+        "paid_total": "0c",
+        "plan": "For crafting Copper Bar",
+        "plan_kind": "craft",
+        "qty": 20,
+        "quality": 1,
+        "sales": "300 est.",
+        "sort": {
+         "chance": -1,
+         "days": 11,
+         "paid": 0,
+         "qty": 20,
+         "sales": 3002,
+         "supply": 320,
+         "worth": 4693
+        },
+        "supply": "320",
+        "where": "bags",
+        "windows": "—",
+        "worth": "46s 93c"
+       },
+       {
+        "chance": "100%",
+        "chance_note": "",
+        "char_id": "Amaya-Grommash",
+        "character": "Amaya",
+        "confidence": 75,
+        "days": "0.3 days",
+        "dot": "high",
+        "item": "Linen Cloth",
+        "key": "2589",
+        "paid_each": "0c",
+        "paid_note": "before tracking",
+        "paid_total": "0c",
+        "plan": "Post 160 now at 49c · Post 40 Sat 10:00 at 51c (18:00 peak)",
+        "plan_kind": "post",
+        "qty": 80,
+        "quality": 1,
+        "sales": "1183 est.",
+        "sort": {
+         "chance": 100,
+         "days": 3,
+         "paid": 0,
+         "qty": 80,
+         "sales": 11825,
+         "supply": 320,
+         "worth": 3754
+        },
+        "supply": "320",
+        "where": "bank",
+        "windows": "Sat 16–22",
+        "worth": "37s 54c"
+       },
+       {
+        "chance": "—",
+        "chance_note": "",
+        "char_id": "Brugan-Grommash",
+        "character": "Brugan",
+        "confidence": null,
+        "days": "0.6 days",
+        "dot": null,
+        "item": "Copper Bar",
+        "key": "2840",
+        "paid_each": "0c",
+        "paid_note": "before tracking",
+        "paid_total": "0c",
+        "plan": "Hold for a later week",
+        "plan_kind": "hold",
+        "qty": 4,
+        "quality": 1,
+        "sales": "198 est.",
+        "sort": {
+         "chance": -1,
+         "days": 6,
+         "paid": 0,
+         "qty": 4,
+         "sales": 1979,
+         "supply": 120,
+         "worth": 3006
+        },
+        "supply": "120",
+        "where": "bags",
+        "windows": "—",
+        "worth": "30s 6c"
+       },
+       {
+        "chance": "82%",
+        "chance_note": "",
+        "char_id": "Amaya-Grommash",
+        "character": "Amaya",
+        "confidence": 75,
+        "days": "2.0 days",
+        "dot": "high",
+        "item": "Light Leather",
+        "key": "2318",
+        "paid_each": "0c",
+        "paid_note": "before tracking",
+        "paid_total": "0c",
+        "plan": "Post now at 1s 18c",
+        "plan_kind": "post",
+        "qty": 30,
+        "quality": 1,
+        "sales": "98 est.",
+        "sort": {
+         "chance": 82,
+         "days": 20,
+         "paid": 0,
+         "qty": 30,
+         "sales": 978,
+         "supply": 200,
+         "worth": 2827
+        },
+        "supply": "200",
+        "where": "bags",
+        "windows": "—",
+        "worth": "28s 27c"
+       },
+       {
+        "chance": "—",
+        "chance_note": "",
+        "char_id": "Amaya-Grommash",
+        "character": "Amaya",
+        "confidence": null,
+        "days": "1.0 days",
+        "dot": null,
+        "item": "Embossed Leather Gloves",
+        "key": "4239",
+        "paid_each": "0c",
+        "paid_note": "before tracking",
+        "paid_total": "0c",
+        "plan": "Disenchant",
+        "plan_kind": "de",
+        "qty": 1,
+        "quality": 2,
+        "sales": "2 est.",
+        "sort": {
+         "chance": -1,
+         "days": 10,
+         "paid": 0,
+         "qty": 1,
+         "sales": 20,
+         "supply": 2,
+         "worth": 2113
+        },
+        "supply": "2",
+        "where": "bags",
+        "windows": "—",
+        "worth": "21s 13c"
+       },
+       {
+        "chance": "95%",
+        "chance_note": "",
+        "char_id": "Brugan-Grommash",
+        "character": "Brugan",
+        "confidence": 75,
+        "days": "2.6 days",
+        "dot": "high",
+        "item": "Rough Stone",
+        "key": "2835",
+        "paid_each": "0c",
+        "paid_note": "before tracking",
+        "paid_total": "0c",
+        "plan": "Post now at 29c",
+        "plan_kind": "post",
+        "qty": 40,
+        "quality": 1,
+        "sales": "152 est.",
+        "sort": {
+         "chance": 95,
+         "days": 26,
+         "paid": 0,
+         "qty": 40,
+         "sales": 1525,
+         "supply": 400,
+         "worth": 1056
+        },
+        "supply": "400",
+        "where": "bags",
+        "windows": "—",
+        "worth": "10s 56c"
+       }
+      ],
+      "tiles": [
+       ["Worth", "10g 6s", "under each item's plan"],
+       ["Paid", "0c", "found items and items from before tracking count as 0"],
+       ["Not planned", "0 items", "bound or ignored"]
+      ]
+     },
+     "Amaya-Grommash": {
+      "rows": [
+       {
+        "chance": "100%",
+        "chance_note": "",
+        "char_id": "Amaya-Grommash",
+        "character": "Amaya",
+        "confidence": 75,
+        "days": "0.3 days",
+        "dot": "high",
+        "item": "Silk Cloth",
+        "key": "4306",
+        "paid_each": "0c",
+        "paid_note": "before tracking",
+        "paid_total": "0c",
+        "plan": "Post now at 20s 40c",
+        "plan_kind": "post",
+        "qty": 40,
+        "quality": 1,
+        "sales": "294 est.",
+        "sort": {
+         "chance": 100,
+         "days": 3,
+         "paid": 0,
+         "qty": 40,
+         "sales": 2938,
+         "supply": 80,
+         "worth": 77520
+        },
+        "supply": "80",
+        "where": "bags",
+        "windows": "Wed 22–Sun 02 (early pattern)",
+        "worth": "7g 75s 20c"
+       },
+       {
+        "chance": "100%",
+        "chance_note": "",
+        "char_id": "Amaya-Grommash",
+        "character": "Amaya",
+        "confidence": 75,
+        "days": "0.3 days",
+        "dot": "high",
+        "item": "Linen Cloth",
+        "key": "2589",
+        "paid_each": "0c",
+        "paid_note": "before tracking",
+        "paid_total": "0c",
+        "plan": "Post 160 now at 49c · Post 40 Sat 10:00 at 51c (18:00 peak)",
+        "plan_kind": "post",
+        "qty": 120,
+        "quality": 1,
+        "sales": "1183 est.",
+        "sort": {
+         "chance": 100,
+         "days": 3,
+         "paid": 0,
+         "qty": 120,
+         "sales": 11825,
+         "supply": 320,
+         "worth": 5632
+        },
+        "supply": "320",
+        "where": "bags",
+        "windows": "Sat 16–22",
+        "worth": "56s 32c"
+       },
+       {
+        "chance": "100%",
+        "chance_note": "",
+        "char_id": "Amaya-Grommash",
+        "character": "Amaya",
+        "confidence": 75,
+        "days": "0.3 days",
+        "dot": "high",
+        "item": "Linen Cloth",
+        "key": "2589",
+        "paid_each": "0c",
+        "paid_note": "before tracking",
+        "paid_total": "0c",
+        "plan": "Post 160 now at 49c · Post 40 Sat 10:00 at 51c (18:00 peak)",
+        "plan_kind": "post",
+        "qty": 80,
+        "quality": 1,
+        "sales": "1183 est.",
+        "sort": {
+         "chance": 100,
+         "days": 3,
+         "paid": 0,
+         "qty": 80,
+         "sales": 11825,
+         "supply": 320,
+         "worth": 3754
+        },
+        "supply": "320",
+        "where": "bank",
+        "windows": "Sat 16–22",
+        "worth": "37s 54c"
+       },
+       {
+        "chance": "82%",
+        "chance_note": "",
+        "char_id": "Amaya-Grommash",
+        "character": "Amaya",
+        "confidence": 75,
+        "days": "2.0 days",
+        "dot": "high",
+        "item": "Light Leather",
+        "key": "2318",
+        "paid_each": "0c",
+        "paid_note": "before tracking",
+        "paid_total": "0c",
+        "plan": "Post now at 1s 18c",
+        "plan_kind": "post",
+        "qty": 30,
+        "quality": 1,
+        "sales": "98 est.",
+        "sort": {
+         "chance": 82,
+         "days": 20,
+         "paid": 0,
+         "qty": 30,
+         "sales": 978,
+         "supply": 200,
+         "worth": 2827
+        },
+        "supply": "200",
+        "where": "bags",
+        "windows": "—",
+        "worth": "28s 27c"
+       },
+       {
+        "chance": "—",
+        "chance_note": "",
+        "char_id": "Amaya-Grommash",
+        "character": "Amaya",
+        "confidence": null,
+        "days": "1.0 days",
+        "dot": null,
+        "item": "Embossed Leather Gloves",
+        "key": "4239",
+        "paid_each": "0c",
+        "paid_note": "before tracking",
+        "paid_total": "0c",
+        "plan": "Disenchant",
+        "plan_kind": "de",
+        "qty": 1,
+        "quality": 2,
+        "sales": "2 est.",
+        "sort": {
+         "chance": -1,
+         "days": 10,
+         "paid": 0,
+         "qty": 1,
+         "sales": 20,
+         "supply": 2,
+         "worth": 2113
+        },
+        "supply": "2",
+        "where": "bags",
+        "windows": "—",
+        "worth": "21s 13c"
+       }
+      ],
+      "tiles": [
+       ["Worth", "9g 18s 46c", "under each item's plan"],
+       ["Paid", "0c", "found items and items from before tracking count as 0"],
+       ["Not planned", "0 items", "bound or ignored"]
+      ]
+     },
+     "Brugan-Grommash": {
+      "rows": [
+       {
+        "chance": "—",
+        "chance_note": "",
+        "char_id": "Brugan-Grommash",
+        "character": "Brugan",
+        "confidence": null,
+        "days": "1.1 days",
+        "dot": null,
+        "item": "Copper Ore",
+        "key": "2770",
+        "paid_each": "0c",
+        "paid_note": "before tracking",
+        "paid_total": "0c",
+        "plan": "For crafting Copper Bar",
+        "plan_kind": "craft",
+        "qty": 20,
+        "quality": 1,
+        "sales": "300 est.",
+        "sort": {
+         "chance": -1,
+         "days": 11,
+         "paid": 0,
+         "qty": 20,
+         "sales": 3002,
+         "supply": 320,
+         "worth": 4693
+        },
+        "supply": "320",
+        "where": "bags",
+        "windows": "—",
+        "worth": "46s 93c"
+       },
+       {
+        "chance": "—",
+        "chance_note": "",
+        "char_id": "Brugan-Grommash",
+        "character": "Brugan",
+        "confidence": null,
+        "days": "0.6 days",
+        "dot": null,
+        "item": "Copper Bar",
+        "key": "2840",
+        "paid_each": "0c",
+        "paid_note": "before tracking",
+        "paid_total": "0c",
+        "plan": "Hold for a later week",
+        "plan_kind": "hold",
+        "qty": 4,
+        "quality": 1,
+        "sales": "198 est.",
+        "sort": {
+         "chance": -1,
+         "days": 6,
+         "paid": 0,
+         "qty": 4,
+         "sales": 1979,
+         "supply": 120,
+         "worth": 3006
+        },
+        "supply": "120",
+        "where": "bags",
+        "windows": "—",
+        "worth": "30s 6c"
+       },
+       {
+        "chance": "95%",
+        "chance_note": "",
+        "char_id": "Brugan-Grommash",
+        "character": "Brugan",
+        "confidence": 75,
+        "days": "2.6 days",
+        "dot": "high",
+        "item": "Rough Stone",
+        "key": "2835",
+        "paid_each": "0c",
+        "paid_note": "before tracking",
+        "paid_total": "0c",
+        "plan": "Post now at 29c",
+        "plan_kind": "post",
+        "qty": 40,
+        "quality": 1,
+        "sales": "152 est.",
+        "sort": {
+         "chance": 95,
+         "days": 26,
+         "paid": 0,
+         "qty": 40,
+         "sales": 1525,
+         "supply": 400,
+         "worth": 1056
+        },
+        "supply": "400",
+        "where": "bags",
+        "windows": "—",
+        "worth": "10s 56c"
+       }
+      ],
+      "tiles": [
+       ["Worth", "87s 54c", "under each item's plan"],
+       ["Paid", "0c", "found items and items from before tracking count as 0"],
+       ["Not planned", "0 items", "bound or ignored"]
+      ]
+     }
+    },
+    "characters": [
+     ["", "All characters"],
+     ["Amaya-Grommash", "Amaya"],
+     ["Brugan-Grommash", "Brugan"]
+    ],
     "details": {
      "2318": {
       "activity": [
@@ -2462,6 +3013,7 @@
       ]
      }
     },
+    "gold": "Gold 65g · 2 characters · Wed 12:30",
     "help": {
      "#": "Selection order: adjusted profit per copper of exposure, then the swap pass; shown by adjusted profit",
      "Action": "What to do: BUY, POST, DE (disenchant), CRAFT, VENDOR, MAIL or HOLD",
@@ -2804,6 +3356,7 @@
   },
   "on_ah": {
    "forever.pvp.horde.us": {
+    "gold": "Gold 65g · 2 characters · Wed 12:30",
     "help": {
      "#": "Selection order: adjusted profit per copper of exposure, then the swap pass; shown by adjusted profit",
      "Action": "What to do: BUY, POST, DE (disenchant), CRAFT, VENDOR, MAIL or HOLD",
@@ -2926,6 +3479,7 @@
    "forever.pvp.horde.us": {
     "empty": null,
     "fresh": "portfolio snapshot Wed 12:30 · tiles show the values at 30% · gold as each character last logged in · positions from the journal",
+    "gold": "Gold 65g · 2 characters · Wed 12:30",
     "help": {
      "#": "Selection order: adjusted profit per copper of exposure, then the swap pass; shown by adjusted profit",
      "Action": "What to do: BUY, POST, DE (disenchant), CRAFT, VENDOR, MAIL or HOLD",
@@ -6728,6 +7282,7 @@
       "total": "+14g 34s 42c"
      }
     },
+    "gold": "Gold 65g · 2 characters · Wed 12:30",
     "help": {
      "#": "Selection order: adjusted profit per copper of exposure, then the swap pass; shown by adjusted profit",
      "Action": "What to do: BUY, POST, DE (disenchant), CRAFT, VENDOR, MAIL or HOLD",
@@ -7374,6 +7929,7 @@
       "total": "0c"
      }
     ],
+    "gold": "Gold 65g · 2 characters · Wed 12:30",
     "help": {
      "#": "Selection order: adjusted profit per copper of exposure, then the swap pass; shown by adjusted profit",
      "Action": "What to do: BUY, POST, DE (disenchant), CRAFT, VENDOR, MAIL or HOLD",
