@@ -1,0 +1,107 @@
+Frame AHProfitWindow 640,320 640x440
+  Texture - 642,322 636x28
+  Texture - 642,350 636x1
+  FontString - 652,330 53x12 "AHProfit"
+  FontString - 715,331 88x10 "Grommash · Horde"
+  Button AHProfitWindowClose 1252,324 24x24
+  Frame AHProfitWindowAge 1150,327 96x18
+    FontString - 1176,331 44x10 "data now"
+  Button AHProfitWindowTabPortfolio 650,356 62x22 "Portfolio"
+  Button AHProfitWindowTabDisenchant 714,356 68x22 "Disenchant"
+  Button AHProfitWindowTabCraft 784,356 46x22 "Craft"
+  Button AHProfitWindowTabFlip 832,356 40x22 "Flip"
+  Button AHProfitWindowTabInventory 874,356 62x22 "Inventory"
+  Button AHProfitWindowTabReservations 938,356 78x22 "Reservations"
+  Texture - 642,378 636x1
+  Button AHProfitWindowMinChance 1140,356 130x20 "Min chance: 50%   "
+  Frame AHProfitWindowHeadertoday 650,380 606x20 (hidden)
+  Frame AHProfitWindowHeaderdisenchant 650,380 606x20 (hidden)
+  Frame AHProfitWindowHeadercraft 650,380 606x20 (hidden)
+  Frame AHProfitWindowHeaderflip 650,380 606x20 (hidden)
+  Frame AHProfitWindowHeaderinventory 650,380 606x20 (hidden)
+  Frame AHProfitWindowHeaderreservations 650,380 606x20 (hidden)
+  Button AHProfitWindowTop 650,380 606x20
+    FontString - 654,385 528x10 "portfolio 35   58   · 30% risk · capacity 6   49   40   · 24   40   unallocated · snapshot 10:38"
+  Frame AHProfitWindowList 650,402 620x240
+    Frame AHProfitWindowRow1 650,402 606x20
+      FontString - 654,402 598x20 "funded: cost 20   60   · profit +12   8   · 59% on cash"
+    Frame AHProfitWindowRow2 650,422 606x20
+      FontString - 654,426 73x12 "Next 7 days"
+      FontString - 1082,427 171x10 "net → adjusted · wait · premium"
+      Texture - 652,441 602x1
+    Frame AHProfitWindowRow3 650,442 606x20
+    Frame AHProfitWindowRow4 650,462 606x30
+      Texture - 652,462 602x1
+      FontString - 654,467 36x20 "BUY"
+      FontString - 1102,463 150x28 "Funded"
+      FontString - 1015,464 84x13 "→ +41   75  "
+      FontString - 956,467 56x20 "+55  "
+      FontString - 799,467 154x20 "buy now · sell Thu 19:00"
+      FontString - 693,467 103x20 "Thick Leather ×30"
+      Texture - 654,471 36x12
+      FontString - 1015,477 84x13 "3.35 d · 31.75%"
+    Frame AHProfitWindowRow5 650,492 606x30
+      Texture - 652,492 602x1
+      FontString - 654,497 36x20 "CRAFT"
+      FontString - 1102,493 150x28 "Funded"
+      FontString - 1015,494 84x13 "→ +11   12  "
+      FontString - 956,497 56x20 "+16   30  "
+      FontString - 799,497 154x20 "craft now · sell Sun 18:00"
+      FontString - 693,497 103x20 "Runed Copper Rod …"
+      Texture - 654,501 36x12
+      FontString - 1015,507 84x13 "6.31 d · 46.55%"
+    Frame AHProfitWindowRow6 650,522 606x30
+      Texture - 652,522 602x1
+      FontString - 654,527 36x20 "BUY"
+      FontString - 1102,523 150x28 "Funded"
+      FontString - 1015,524 84x13 "→ +5   15  "
+      FontString - 956,527 56x20 "+7   30  "
+      FontString - 799,527 154x20 "buy now · sell Sat 19:00"
+      FontString - 693,527 103x20 "Silk Cloth ×20"
+      Texture - 654,531 36x12
+      FontString - 1015,537 84x13 "5.35 d · 41.75%"
+    Frame AHProfitWindowRow7 650,552 606x30
+      Texture - 652,552 602x1
+      FontString - 654,557 36x20 "CRAFT"
+      FontString - 1102,553 150x28 "Funded"
+      FontString - 1015,554 84x13 "→ +1   32  "
+      FontString - 956,557 56x20 "+1   94  "
+      FontString - 799,557 154x20 "craft now · sell Sun 19:00"
+      FontString - 693,557 103x20 "Bolt of Silk Clot…"
+      Texture - 654,561 36x12
+      FontString - 1015,567 84x13 "6.35 d · 46.75%"
+    Frame AHProfitWindowRow8 650,582 606x30
+      Texture - 652,582 602x1
+      FontString - 654,587 36x20 "BUY"
+      FontString - 1102,583 150x28 "Forecast too uncertain (1 week of data)"
+      FontString - 1015,584 84x13 "→ +8   18  "
+      FontString - 956,587 56x20 "+12  "
+      FontString - 799,587 154x20 "buy now · sell Sun 19:00"
+      FontString - 693,587 103x20 "Greater Magic Ess…"
+      Texture - 654,591 36x12
+      FontString - 1015,597 84x13 "6.35 d · 46.75%"
+    Frame AHProfitWindowRow9 650,612 606x20
+      FontString - 654,612 598x20 "funded: cost 2   31   40   · profit +80   54   · 35% on cash"
+    Frame AHProfitWindowRow10 650,632 606x20 (hidden)
+    Frame AHProfitWindowRow11 650,652 606x20 (hidden)
+    Frame AHProfitWindowRow12 650,672 606x20 (hidden)
+    Frame AHProfitWindowHeaderpfPositions 650,422 606x20 (hidden)
+    Frame AHProfitWindowHeaderpfToday 650,422 606x20 (hidden)
+    Frame AHProfitWindowHeaderpfWeek 650,442 606x20
+      FontString - 654,442 40x20
+      Button - 654,442 40x20
+      FontString - 1102,442 150x20 "Status"
+      Button - 1102,442 150x20
+      FontString - 1015,442 84x20 "Adjusted"
+      Button - 1015,442 84x20
+      FontString - 956,442 56x20 "Net"
+      Button - 956,442 56x20
+      FontString - 799,442 154x20 "Plan"
+      Button - 799,442 154x20
+      FontString - 697,442 99x20 "Item"
+      Button - 697,442 99x20
+    Texture - 1262,402 8x240
+    Texture - 1263,556 6x86
+  Texture - 642,731 636x1
+  FontString - 652,740 259x10 "funded +92   62   · cost 2   52   · 37% on cash"
+  FontString - 1015,740 253x10 "capacity 6   49   40   · 24   40   unallocated"

@@ -246,7 +246,7 @@ function Reselect.Run(rcs, ctx)
   for rid in pairs(resources) do rids[#rids + 1] = rid end
   table.sort(rids)
   for i, rid in ipairs(rids) do list[i] = resources[rid] end
-  local spendable = { { ctx.charId, cap } }
+  local spendable = { { ctx.charId, math.max(0, ctx.liveGold) } }   -- its live gold; the capacity is the other bound
   for _, other in ipairs(ctx.others or {}) do spendable[#spendable + 1] = other end
   local budget = { capacity = mine, spendable = spendable, today_limit = s.todayLimit, week_limit = s.weekLimit,
                    swap_candidates = Reselect.SWAP_CANDIDATES }

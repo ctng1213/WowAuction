@@ -1,0 +1,126 @@
+Frame AHProfitWindow 640,320 640x440
+  Texture - 642,322 636x28
+  Texture - 642,350 636x1
+  FontString - 652,330 53x12 "AHProfit"
+  FontString - 715,331 88x10 "Grommash · Horde"
+  Button AHProfitWindowClose 1252,324 24x24
+  Frame AHProfitWindowAge 1150,327 96x18
+    FontString - 1176,331 44x10 "data now"
+  Button AHProfitWindowTabPortfolio 650,356 62x22 "Portfolio"
+  Button AHProfitWindowTabDisenchant 714,356 68x22 "Disenchant"
+  Button AHProfitWindowTabCraft 784,356 46x22 "Craft"
+  Button AHProfitWindowTabFlip 832,356 40x22 "Flip"
+  Button AHProfitWindowTabInventory 874,356 62x22 "Inventory"
+  Button AHProfitWindowTabReservations 938,356 78x22 "Reservations"
+  Texture - 642,378 636x1
+  Button AHProfitWindowMinChance 1140,356 130x20 "Min chance: 50%   "
+  Frame AHProfitWindowHeadertoday 650,380 606x20 (hidden)
+  Frame AHProfitWindowHeaderdisenchant 650,380 606x20 (hidden)
+  Frame AHProfitWindowHeadercraft 650,380 606x20 (hidden)
+  Frame AHProfitWindowHeaderflip 650,380 606x20 (hidden)
+  Frame AHProfitWindowHeaderinventory 650,380 606x20 (hidden)
+  Frame AHProfitWindowHeaderreservations 650,380 606x20 (hidden)
+  Button AHProfitWindowTop 650,380 606x20
+    FontString - 654,385 528x10 "portfolio 35   58   · 30% risk · capacity 6   49   40   · 24   40   unallocated · snapshot 10:38"
+  Frame AHProfitWindowList 650,402 620x240
+    Frame AHProfitWindowRow1 650,402 606x20
+      FontString - 654,406 59x12 "Positions"
+      FontString - 1153,407 99x10 "this character · 3"
+      Texture - 652,421 602x1
+    Frame AHProfitWindowRow2 650,422 606x20
+    Frame AHProfitWindowRow3 650,442 606x20
+      Texture - 652,442 602x1
+      FontString - 654,442 150x20 "Mageweave Cloth"
+      FontString - 807,442 60x20 "×10 of 25"
+      FontString - 870,442 118x20 "Partially sold"
+      FontString - 991,442 56x20 "+6  "
+      FontString - 1050,442 203x20 "post now"
+    Frame AHProfitWindowRow4 650,462 606x20
+      Texture - 652,462 602x1
+      FontString - 654,462 150x20 "Wool Cloth"
+      FontString - 807,462 60x20 "×20"
+      FontString - 870,462 118x20 "Holding"
+      FontString - 991,462 56x20 "+4   72  "
+      FontString - 1050,462 203x20 "hold · found, uses no capital"
+    Frame AHProfitWindowRow5 650,482 606x20
+      Texture - 652,482 602x1
+      FontString - 654,482 150x20 "Medium Leather"
+      FontString - 807,482 60x20 "×20"
+      FontString - 870,482 118x20 "Needs reconciliation"
+      FontString - 991,482 56x20 "—"
+      FontString - 1050,482 203x20 "—"
+    Frame AHProfitWindowRow6 650,502 606x20
+      FontString - 654,502 598x20 "committed 70   · est. +10   72   · +15% on committed capital"
+    Frame AHProfitWindowRow7 650,522 606x20
+      FontString - 654,526 33x12 "Today"
+      FontString - 1043,527 209x10 "realized today · funded, then unfunded"
+      Texture - 652,541 602x1
+    Frame AHProfitWindowRow8 650,542 606x20
+    Frame AHProfitWindowRow9 650,562 606x20
+      Texture - 652,562 602x1
+      FontString - 654,562 36x20 "DE"
+      FontString - 1102,563 150x18 "Funded"
+      FontString - 1071,562 28x20 "0.4%"
+      FontString - 1028,562 40x20 "—"
+      FontString - 989,562 36x20 "90%   "
+      FontString - 932,562 54x20 "+6   25  "
+      FontString - 885,562 44x20 "8  "
+      FontString - 842,562 40x20 "8  "
+      FontString - 815,562 24x20 "×1"
+      FontString - 693,562 119x20 "Scouting Gloves of t…"
+      Texture - 654,566 36x12
+    Frame AHProfitWindowRow10 650,582 606x20
+      FontString - 693,582 559x20 "disenchant now · sell today 18:00"
+    Frame AHProfitWindowRow11 650,602 606x20
+      Texture - 652,602 602x1
+      FontString - 654,602 36x20 "DE"
+      FontString - 1102,603 150x18 "Funded"
+      FontString - 1071,602 28x20 "0.2%"
+      FontString - 1028,602 40x20 "—"
+      FontString - 989,602 36x20 "90%   "
+      FontString - 932,602 54x20 "+3   80  "
+      FontString - 885,602 44x20 "5  "
+      FontString - 842,602 40x20 "5  "
+      FontString - 815,602 24x20 "×1"
+      FontString - 693,602 119x20 "Embossed Leather Glo…"
+      Texture - 654,606 36x12
+    Frame AHProfitWindowRow12 650,622 606x20
+      FontString - 693,622 559x20 "disenchant now · sell today 18:00"
+    Frame AHProfitWindowHeaderpfPositions 650,422 606x20
+      FontString - 654,422 150x20 "Item"
+      Button - 654,422 150x20
+      FontString - 807,422 60x20 "Qty"
+      Button - 807,422 60x20
+      FontString - 870,422 118x20 "Status"
+      Button - 870,422 118x20
+      FontString - 991,422 56x20 "Net"
+      Button - 991,422 56x20
+      FontString - 1050,422 203x20 "Next"
+      Button - 1050,422 203x20
+    Frame AHProfitWindowHeaderpfToday 650,542 606x20
+      FontString - 654,542 40x20
+      Button - 654,542 40x20
+      FontString - 1102,542 150x20 "Status"
+      Button - 1102,542 150x20
+      FontString - 1071,542 28x20 "Risk"
+      Button - 1071,542 28x20
+      FontString - 1028,542 40x20 "Volume"
+      Button - 1028,542 40x20
+      FontString - 989,542 36x20 "Chance"
+      Button - 989,542 36x20
+      FontString - 932,542 54x20 "Net"
+      Button - 932,542 54x20
+      FontString - 885,542 44x20 "Total"
+      Button - 885,542 44x20
+      FontString - 842,542 40x20 "Each"
+      Button - 842,542 40x20
+      FontString - 815,542 24x20 "Qty"
+      Button - 815,542 24x20
+      FontString - 697,542 115x20 "Item"
+      Button - 697,542 115x20
+    Frame AHProfitWindowHeaderpfWeek 650,402 606x20 (hidden)
+    Texture - 1262,402 8x240
+    Texture - 1263,402 6x115
+  Texture - 642,731 636x1
+  FontString - 652,740 259x10 "funded +92   62   · cost 2   52   · 37% on cash"
+  FontString - 1015,740 253x10 "capacity 6   49   40   · 24   40   unallocated"

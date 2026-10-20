@@ -24,11 +24,12 @@ function World.At(day, hour)
 end
 
 --- One K string (SPEC §3.5).
----@param c table  { id, strategy, char, key, qty, inputs (string), gold, net, sale, windowEnd, needs, status }
+---@param c table  { id, strategy, char, key, qty, inputs (string), gold, net, chance1000 (default 900), sale, windowEnd,
+---                needs, status }
 ---@return string
 function World.K(c)
   return table.concat({ c.id, c.strategy, c.char, c.key, c.qty or 1, c.inputs or "", c.gold, c.cashBasis or 0, c.net,
-                        900, c.sale, c.windowEnd or "", 80, c.needs or "", c.status or "" }, ";")
+                        c.chance1000 or 900, c.sale, c.windowEnd or "", 80, c.needs or "", c.status or "" }, ";")
 end
 
 --- The candidates, Amaya's first (PF15's rows), then two of Brugan's.
@@ -67,13 +68,48 @@ end
 
 --- One item string with a price (SPEC §3.5 `I`).
 ---@param cur number|nil  Its current price, copper
----@param extra table|nil { postPrice, sellValue, chance1000, supply, refStack, closes30, med7, p90 }
+---@param extra table|nil { postPrice, sellValue, chance1000, supply, refStack, closes30, med7, p90, sold10 (units sold in
+---                       10 days, default 10), sell (its sell windows, "start:hours:best:how1000:weeks/...") }
 ---@return string
 function World.Item(cur, extra)
   local e = extra or {}
-  local fields = { cur or "", 100, 60, e.med7 or "", "", "", e.p90 or "", 0, 10, 10, e.supply or "", 80, "", e.postPrice or "",
-                   e.refStack or 1, e.sellValue or "", 0, e.chance1000 or "", "", 0, e.closes30 or 100 }
-  return table.concat(fields, ",") .. ";;"
+  local fields = { cur or "", 100, 60, e.med7 or "", "", "", e.p90 or "", 0, e.sold10 or 10, 10, e.supply or "", 80, "",
+                   e.postPrice or "", e.refStack or 1, e.sellValue or "", 0, e.chance1000 or "", "", 0, e.closes30 or 100 }
+  return table.concat(fields, ",") .. ";" .. (e.sell or "") .. ";"
+end
+
+-- The mockup's item names (docs/mockups/addon.html), set by World.Name and cleared by World.Unname.
+World.NAMES = { [7005] = "Scouting Gloves of the Monkey", [4239] = "Embossed Leather Gloves",
+                [6187] = "Grunt's Bracers of Defense", [3825] = "Elixir of Fortitude", [4304] = "Thick Leather",
+                [4305] = "Bolt of Silk Cloth", [11082] = "Greater Magic Essence", [4338] = "Mageweave Cloth",
+                [2319] = "Medium Leather", [4234] = "Heavy Leather", [3385] = "Lesser Mana Potion", [7969] = "Mithril Spurs" }
+
+--- Give the mockup's items their names in the client's cache.
+---@param Stubs table
+function World.Name(Stubs)
+  for key, name in pairs(World.NAMES) do Stubs.ITEM_NAMES[key] = name end
+end
+
+--- Take the mockup's names out of the client's cache again.
+---@param Stubs table
+function World.Unname(Stubs)
+  for key in pairs(World.NAMES) do Stubs.ITEM_NAMES[key] = nil end
+end
+
+--- The mockup's Portfolio tab for Amaya (A79): Scouting Gloves and Embossed Leather Gloves are disenchants, as the
+--- mockup shows them; the market file knows the elixir sells 3 a day and the essence's Sunday peak was seen once.
+---@return table  World.Install's options
+function World.Mockup()
+  local c = World.Candidates()
+  c[1].id, c[1].strategy, c[1].inputs = "disenchant:7005:" .. World.AMAYA .. ":-/now/now:1", "disenchant", "7005:1:ah"
+  c[2].id, c[2].strategy, c[2].inputs, c[2].needs = "disenchant:4239:" .. World.AMAYA .. ":-/now/now:1", "disenchant",
+                                                     "4239:1:ah", nil
+  local A = World.AMAYA
+  return { candidates = c,
+           items = { [3825] = World.Item(300, { sold10 = 30 }), [11082] = World.Item(900, { sell = "162:3:163:1100:1" }) },
+           positions = { "pos:" .. A .. ":4338;4338;Partially sold;25;10;3000;600;;post",
+                         "stock:" .. A .. ":2592;2592;Holding;20;20;0;472;;hold",
+                         "pos:" .. A .. ":2319;2319;Needs reconciliation;20;20;4000;;;" } }
 end
 
 --- The graph: the copper chain (a rod is two bars) and Bolt of Silk Cloth, in the exported format.
@@ -115,7 +151,8 @@ local function PlanChecksum(f)
 end
 
 --- Install both addon files as globals.
----@param opts table|nil  { candidates (World.Candidates() changed), items = key -> I string, G, snapshot (string) }
+---@param opts table|nil  { candidates (World.Candidates() changed), items = key -> I string, G, snapshot (string),
+---                       positions (Amaya's position strings), reserved = charId -> copper }
 function World.Install(opts)
   local o = opts or {}
   local K = {}
@@ -130,8 +167,8 @@ function World.Install(opts)
                  ingestedUntil = { [World.AMAYA] = World.NOW }, actions = {}, rules = {},
                  portfolio = { [World.M] = o.snapshot or (World.NOW .. ";300;150;50;8;20;20;7;1;355800;41800;64940;62500") },
                  gold = { [World.AMAYA] = "210000," .. World.NOW, [World.BRUGAN] = "104000," .. World.NOW },
-                 reserved = { [World.AMAYA] = 25200, [World.BRUGAN] = 37300 },
-                 positions = { [World.AMAYA] = { "stock:" .. World.AMAYA .. ":2592;2592;Holding;20;20;0;472;;post" } } }
+                 reserved = o.reserved or { [World.AMAYA] = 25200, [World.BRUGAN] = 37300 },
+                 positions = { [World.AMAYA] = o.positions or { "stock:" .. World.AMAYA .. ":2592;2592;Holding;20;20;0;472;;post" } } }
   plan.checksum = PlanChecksum(plan)
   _G.AHProfitPlan = plan
 end
@@ -147,10 +184,11 @@ World.BAGS = { { 2318, 3 }, { 4306, 4 } }      -- the Light Leather and Silk Clo
 --- Log Amaya in to the world: the files installed, her gold, professions and bags (SPEC §2.2 capture).
 ---@param Stubs table     wow_stubs
 ---@param opts table|nil  World.Install's, plus { money (copper, default 21 g), nowMs, bags = { { id, count } }
----                       (default World.BAGS) }
+---                       (default World.BAGS), player (default "Amaya") }
 function World.Boot(Stubs, opts)
   local o = opts or {}
   Stubs.Reset()
+  Stubs.world.player.name = o.player or "Amaya"
   Stubs.world.serverTime = math.floor((o.nowMs or World.NOW) / 1000)
   Stubs.world.money = o.money or 210000
   Stubs.world.skillLines = { { name = "Professions", header = true }, { name = "Enchanting", rank = 142, max = 150 },

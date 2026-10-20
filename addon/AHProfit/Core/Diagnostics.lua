@@ -28,6 +28,8 @@ Diagnostics.APIS = {
   "AuctionHouseFrame", "AuctionHouseFrame.SearchBar", "AuctionHouseFrame.SearchBar.StartSearch",
   "AuctionHouseFrame.SearchBar.SetSearchText", "C_AuctionHouse.GetBrowseResults", "C_AuctionHouse.SendBrowseQuery",
   "TooltipDataProcessor.AddTooltipPostCall", "GameTooltip.HookScript",
+  -- the two-column tooltip in the small font (M13, TT8-TT21)
+  "GameTooltip.NumLines", "GameTooltipTextLeft1", "GameTooltipTextRight1", "GameTooltipTextSmall",
   -- filling the Sell tab from the panel (A29), still to verify on Forever
   "AuctionHouseFrame.SetPostItem", "ItemLocation.CreateFromBagAndSlot", "C_AuctionHouse.GetItemCommodityStatus",
   "C_AuctionHouse.GetAvailablePostCount", "C_AuctionHouse.IsSellItemValid",

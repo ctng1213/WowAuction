@@ -1,4 +1,4 @@
--- UI7: the AH panel's layout, docked to the right of the auction house window (SPEC §4.3, §8.4).
+-- UI7, UI18: the AH panel's layout, docked to the right of the auction house window (SPEC §4.3, §8.4).
 
 local Stubs = require("wow_stubs")
 local Layout = require("layout")
@@ -50,5 +50,19 @@ describe("AHPanel layout", function()
     AHWorld.Install()
     Stubs.FireEvent("AUCTION_HOUSE_SHOW")
     Layout.Golden("UI7_ah_panel_empty", AHProfit.AHPanel.Frames().frame)
+  end)
+
+  it("UI18 A82's unfunded rows: the tag fits beside the name, the muted rows stay clickable, the panel stays 300 px", function()
+    local ui = AHWorld.Unfunded()
+    local snapshot = Layout.Golden("UI18_ah_panel_unfunded", ui.frame)
+    assert_eq(snapshot:find("AHProfitPanel 902,100 300x", 1, true) ~= nil, true)        -- still docked, still 300 px
+    local rects = Layout.Resolve(UIParent)
+    for _, row in ipairs({ ui.shop[6], ui.post[2] }) do
+      local item, tag, r = rects[row.item], rects[row.tag], rects[row]
+      assert_eq({ row.tag:IsShown(), tag.x >= item.x + item.w, tag.x + tag.w <= r.x + r.w,
+                  AHProfit.ViewModel.TextWidth("unfunded", 8) <= tag.w, row:IsShown(), row:GetScript("OnClick") ~= nil },
+                { true, true, true, true, true, true }, row.item:GetText())
+    end
+    AHWorld.Unname()
   end)
 end)

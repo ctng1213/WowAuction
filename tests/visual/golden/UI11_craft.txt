@@ -6,17 +6,15 @@ Frame AHProfitWindow 680,360 560x360
   Button AHProfitWindowClose 1212,364 24x24
   Frame AHProfitWindowAge 1110,367 96x18
     FontString - 1136,371 44x10 "data now"
-  Button AHProfitWindowTabToday 690,396 48x22 "Today"
-  Button AHProfitWindowTabWeek 740,396 46x22 "Week"
-  Button AHProfitWindowTabDisenchant 788,396 68x22 "Disenchant"
-  Button AHProfitWindowTabCraft 858,396 46x22 "Craft"
-  Button AHProfitWindowTabFlip 906,396 40x22 "Flip"
-  Button AHProfitWindowTabInventory 948,396 62x22 "Inventory"
-  Button AHProfitWindowTabReservations 1012,396 78x22 "Reservations"
+  Button AHProfitWindowTabPortfolio 690,396 62x22 "Portfolio"
+  Button AHProfitWindowTabDisenchant 754,396 68x22 "Disenchant"
+  Button AHProfitWindowTabCraft 824,396 46x22 "Craft"
+  Button AHProfitWindowTabFlip 872,396 40x22 "Flip"
+  Button AHProfitWindowTabInventory 914,396 62x22 "Inventory"
+  Button AHProfitWindowTabReservations 978,396 78x22 "Reservations"
   Texture - 682,418 556x1
   Button AHProfitWindowMinChance 1100,396 130x20 "Min chance: 50%   " (hidden)
   Frame AHProfitWindowHeadertoday 690,420 526x20 (hidden)
-  Frame AHProfitWindowHeaderweek 690,420 526x20 (hidden)
   Frame AHProfitWindowHeaderdisenchant 690,420 526x20 (hidden)
   Frame AHProfitWindowHeadercraft 690,420 526x20
     FontString - 1178,420 34x20 "Risk"
@@ -38,6 +36,7 @@ Frame AHProfitWindow 680,360 560x360
   Frame AHProfitWindowHeaderflip 690,420 526x20 (hidden)
   Frame AHProfitWindowHeaderinventory 690,420 526x20 (hidden)
   Frame AHProfitWindowHeaderreservations 690,420 526x20 (hidden)
+  Button AHProfitWindowTop 690,420 526x20 (hidden)
   Frame AHProfitWindowList 690,442 540x240
     Frame AHProfitWindowRow1 690,442 526x20
       Texture - 692,442 522x1
@@ -61,6 +60,9 @@ Frame AHProfitWindow 680,360 560x360
     Frame AHProfitWindowRow10 690,622 526x20 (hidden)
     Frame AHProfitWindowRow11 690,642 526x20 (hidden)
     Frame AHProfitWindowRow12 690,662 526x20 (hidden)
+    Frame AHProfitWindowHeaderpfPositions 690,442 526x20 (hidden)
+    Frame AHProfitWindowHeaderpfToday 690,442 526x20 (hidden)
+    Frame AHProfitWindowHeaderpfWeek 690,442 526x20 (hidden)
   Texture - 682,691 556x1
   FontString - 692,700 149x10 "1 of 1 known recipe pay now"
   FontString - 1173,700 55x10 "Budget 0  "

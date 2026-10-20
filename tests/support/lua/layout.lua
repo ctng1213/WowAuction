@@ -196,17 +196,13 @@ local function Lines(text)
   return out
 end
 
---- Check a frame tree and compare its snapshot with tests/visual/golden/<name>.txt (SPEC §8.4).
---- The snapshot is also written to tests/visual/out/<name>.txt for `tools/visual.py --html`.
---- With AHP_UPDATE_VISUAL=1 the golden file is rewritten instead; review its diff like code.
----@param name string  Scenario name, e.g. "UI1_today"
----@param root table   The window's top frame
----@return string      The snapshot
-function Layout.Golden(name, root)
-  local rects = Layout.Resolve(_G.UIParent)
-  local problems = Layout.Check(root, rects)
-  if #problems > 0 then error("layout checks failed:\n  " .. table.concat(problems, "\n  "), 2) end
-  local text = Layout.Snapshot(root, rects)
+--- Compare a text with tests/visual/golden/<name>.txt (SPEC §8.4); it is also written to tests/visual/out/<name>.txt
+--- for `tools/visual.py --html`. With AHP_UPDATE_VISUAL=1 the golden file is rewritten instead; review its diff like code.
+---@param name string  Scenario name, e.g. "UI17_tooltip"
+---@param text string  The snapshot
+---@param level number|nil  The error level to report a difference at (default: the caller's caller)
+---@return string      The text
+function Layout.GoldenText(name, text, level)
   if package.config:sub(1, 1) == "\\" then
     os.execute([[mkdir "tests\visual\out" 2>nul]])
   else
@@ -219,16 +215,29 @@ function Layout.Golden(name, root)
     return text
   end
   local expected = ReadFile(golden)
-  if expected == nil then error("no golden snapshot " .. golden .. "; run python tools/visual.py --update", 2) end
+  if expected == nil then error("no golden snapshot " .. golden .. "; run python tools/visual.py --update", level or 3) end
   local want, got = Lines(expected), Lines(text)
   local n = 1
   while n <= math.max(#want, #got) and want[n] == got[n] do n = n + 1 end
   if n <= math.max(#want, #got) then
     error(string.format("snapshot %s differs at line %d:\n  golden: %s\n  now:    %s\n"
                         .. "(python tools/visual.py --update accepts it; review the diff)",
-                        name, n, tostring(want[n]), tostring(got[n])), 2)
+                        name, n, tostring(want[n]), tostring(got[n])), level or 3)
   end
   return text
+end
+
+--- Check a frame tree and compare its snapshot with tests/visual/golden/<name>.txt (SPEC §8.4).
+--- The snapshot is also written to tests/visual/out/<name>.txt for `tools/visual.py --html`.
+--- With AHP_UPDATE_VISUAL=1 the golden file is rewritten instead; review its diff like code.
+---@param name string  Scenario name, e.g. "UI1_today"
+---@param root table   The window's top frame
+---@return string      The snapshot
+function Layout.Golden(name, root)
+  local rects = Layout.Resolve(_G.UIParent)
+  local problems = Layout.Check(root, rects)
+  if #problems > 0 then error("layout checks failed:\n  " .. table.concat(problems, "\n  "), 2) end
+  return Layout.GoldenText(name, Layout.Snapshot(root, rects), 3)
 end
 
 return Layout

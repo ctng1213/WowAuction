@@ -6,13 +6,12 @@ Frame AHProfitWindow 640,320 640x440
   Button AHProfitWindowClose 1252,324 24x24
   Frame AHProfitWindowAge 1150,327 96x18
     FontString - 1179,331 39x10 "no data"
-  Button AHProfitWindowTabToday 650,356 48x22 "Today"
-  Button AHProfitWindowTabWeek 700,356 46x22 "Week"
-  Button AHProfitWindowTabDisenchant 748,356 68x22 "Disenchant"
-  Button AHProfitWindowTabCraft 818,356 46x22 "Craft"
-  Button AHProfitWindowTabFlip 866,356 40x22 "Flip"
-  Button AHProfitWindowTabInventory 908,356 62x22 "Inventory"
-  Button AHProfitWindowTabReservations 972,356 78x22 "Reservations"
+  Button AHProfitWindowTabPortfolio 650,356 62x22 "Portfolio"
+  Button AHProfitWindowTabDisenchant 714,356 68x22 "Disenchant"
+  Button AHProfitWindowTabCraft 784,356 46x22 "Craft"
+  Button AHProfitWindowTabFlip 832,356 40x22 "Flip"
+  Button AHProfitWindowTabInventory 874,356 62x22 "Inventory"
+  Button AHProfitWindowTabReservations 938,356 78x22 "Reservations"
   Texture - 642,378 636x1
   Button AHProfitWindowMinChance 1140,356 130x20 "Min chance: 50%   "
   Frame AHProfitWindowHeadertoday 650,380 606x20
@@ -34,12 +33,12 @@ Frame AHProfitWindow 640,320 640x440
     Button - 878,380 28x20
     FontString - 709,380 166x20 "Item"
     Button - 709,380 166x20
-  Frame AHProfitWindowHeaderweek 650,380 606x20 (hidden)
   Frame AHProfitWindowHeaderdisenchant 650,380 606x20 (hidden)
   Frame AHProfitWindowHeadercraft 650,380 606x20 (hidden)
   Frame AHProfitWindowHeaderflip 650,380 606x20 (hidden)
   Frame AHProfitWindowHeaderinventory 650,380 606x20 (hidden)
   Frame AHProfitWindowHeaderreservations 650,380 606x20 (hidden)
+  Button AHProfitWindowTop 650,380 606x20 (hidden)
   Frame AHProfitWindowList 650,402 620x240
     Frame AHProfitWindowRow1 650,402 606x20 (hidden)
     Frame AHProfitWindowRow2 650,422 606x20 (hidden)
@@ -53,6 +52,9 @@ Frame AHProfitWindow 640,320 640x440
     Frame AHProfitWindowRow10 650,582 606x20 (hidden)
     Frame AHProfitWindowRow11 650,602 606x20 (hidden)
     Frame AHProfitWindowRow12 650,622 606x20 (hidden)
+    Frame AHProfitWindowHeaderpfPositions 650,402 606x20 (hidden)
+    Frame AHProfitWindowHeaderpfToday 650,402 606x20 (hidden)
+    Frame AHProfitWindowHeaderpfWeek 650,402 606x20 (hidden)
     FontString - 812,516 297x12 "No market data yet. Run AHSync, then /reload."
   Texture - 642,731 636x1
   FontString - 652,740 248x10 "No market data yet. Run AHSync, then /reload."

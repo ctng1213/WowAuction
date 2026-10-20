@@ -1,0 +1,94 @@
+Frame AHProfitPanel 902,100 300x500
+  FontString - 912,110 119x12 "AHProfit at the AH"
+  FontString - 912,134 53x12 "Shopping"
+  FontString - 1088,134 105x10 "3 of 5 + 1 unfunded"
+  FontString - 928,152 90x20 "Item"
+  Button - 928,152 90x20
+  FontString - 1020,152 38x20 "For"
+  Button - 1020,152 38x20
+  FontString - 1060,152 48x20 "Price"
+  Button - 1060,152 48x20
+  FontString - 1112,152 44x20 "Max"
+  Button - 1112,152 44x20
+  FontString - 1164,152 30x20 "Qty"
+  Button - 1164,152 30x20
+  Button AHProfitPanelRow1 910,174 284x20
+    Texture - 910,177 14x14
+    FontString - 928,179 90x10 "Linen Cloth"
+    FontString - 1020,179 38x10
+    FontString - 1060,179 48x10 "38  "
+    FontString - 1112,179 44x10 "45  "
+    FontString - 1164,179 30x10 "×20"
+  Button AHProfitPanelRow2 910,194 284x20
+    Texture - 910,197 14x14
+    FontString - 928,199 90x10 "Scouting Gloves…"
+    FontString - 1020,199 38x10
+    FontString - 1060,199 48x10 "8  "
+    FontString - 1112,199 44x10 "9  "
+    FontString - 1164,199 30x10 "×1"
+  Button AHProfitPanelRow3 910,214 284x20
+    Texture - 910,217 14x14
+    FontString - 928,219 90x10 "Copper Bar"
+    FontString - 1020,219 38x10
+    FontString - 1060,219 48x10 "gone"
+    FontString - 1112,219 44x10 "5  "
+    FontString - 1164,219 30x10 "×6"
+  Button AHProfitPanelRow4 910,234 284x20
+    Texture - 910,237 14x14
+    FontString - 928,239 90x10 "Silk Cloth"
+    FontString - 1020,239 38x10
+    FontString - 1060,239 48x10 "checking"
+    FontString - 1112,239 44x10 "70  "
+    FontString - 1164,239 30x10 "×5"
+  Button AHProfitPanelRow5 910,254 284x20
+    Texture - 910,257 14x14
+    FontString - 928,259 90x10 "Wool Cloth"
+    FontString - 1020,259 38x10
+    FontString - 1060,259 48x10 "checking"
+    FontString - 1112,259 44x10 "30  "
+    FontString - 1164,259 30x10 "×5"
+  Button AHProfitPanelRow6 910,274 284x20
+    Texture - 910,277 14x14
+    FontString - 928,279 52x10 "Elixir o…"
+    FontString - 1020,279 38x10 "FLIP"
+    FontString - 1060,279 48x10 "checking"
+    FontString - 1112,279 44x10 "3  "
+    FontString - 1164,279 30x10 "×40"
+    FontString - 982,274 36x20 "unfunded"
+  Button AHProfitPanelRow7 910,294 284x20 (hidden)
+  Button AHProfitPanelRow8 910,314 284x20 (hidden)
+  Button AHProfitPanelRow9 910,334 284x20 (hidden)
+  Button AHProfitPanelRow10 910,354 284x20 (hidden)
+  FontString - 912,380 26x12 "Post"
+  FontString - 1115,380 77x10 "1 + 1 unfunded"
+  FontString - 910,398 82x20 "Item"
+  Button - 910,398 82x20
+  FontString - 994,398 58x20 "List price"
+  Button - 994,398 58x20
+  FontString - 1054,398 26x20 "Qty"
+  Button - 1054,398 26x20
+  FontString - 1082,398 64x20 "Est. profit"
+  Button - 1082,398 64x20
+  FontString - 1148,398 46x20 "Chance"
+  Button - 1148,398 46x20
+  Button AHProfitPanelRow11 910,420 284x20
+    Texture - 910,423 14x14
+    FontString - 910,425 82x10 "Copper Rod"
+    FontString - 994,425 58x10 "41  "
+    FontString - 1054,425 26x10 "×5"
+    FontString - 1082,425 64x10 "+63   6  "
+    FontString - 1148,425 46x10 "58%"
+  Button AHProfitPanelRow12 910,440 284x20
+    Texture - 910,443 14x14
+    FontString - 910,445 44x10 "Elixir …"
+    FontString - 994,445 58x10 "3   50  "
+    FontString - 1054,445 26x10 "×40"
+    FontString - 1082,445 64x10 "+9  "
+    FontString - 1148,445 46x10 "35%"
+    FontString - 956,440 36x20 "unfunded"
+  Button AHProfitPanelRow13 910,460 284x20 (hidden)
+  Button AHProfitPanelRow14 910,480 284x20 (hidden)
+  Button AHProfitPanelRow15 910,500 284x20 (hidden)
+  Button AHProfitPanelScan 1082,544 110x22 "Full scan"
+  FontString - 912,578 198x10 "2 found · budget left 31   24   40  "
+  FontString - 912,528 0x10

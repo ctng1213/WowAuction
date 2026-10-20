@@ -1,4 +1,4 @@
--- Specs for addon/AHProfit/UI/PlanView.lua: the Today and Week tabs, one row per chain (SPEC §4.3, A71-A74).
+-- Specs for addon/AHProfit/UI/PlanView.lua: the plan's Today rows, one row per chain (SPEC §4.3, A71, A73, A74).
 -- Expected values match ahsync/engine/plan_chains.py and engine/plan_views.py for the same inputs (D62-D66).
 
 local Stubs = require("wow_stubs")
@@ -69,23 +69,13 @@ describe("PlanView", function()
     owned[1].parent, owned[2].parent = nil, "k"                    -- every mat owned: no buys, Each and Total "—"
     local mine = VM.Today(owned, NOW, 0, 50, Look, GOLD).rows[1]
     assert_eq({ mine.each, mine.total, mine.risk }, { "—", "—", "0.0%" })
-  end)
-
-  it("A72 Week shows the chain as one row on its day and its post as a row on Sunday", function()
-    local VM = Boot()
-    local week = VM.Week(FishBowl(), NOW, 0, Look, GOLD)
-    local counts = {}
-    for i, day in ipairs(week.days) do counts[i] = #day.rows end
-    assert_eq(counts, { 1, 0, 0, 1, 0, 0, 0 })
-    assert_eq({ week.days[1].rows[1].id, week.days[4].rows[1].net, week.days[4].rows[1].note },
-              { "k", "0c", "for the 19:00 peak · profit counted on the Thu 14:30 craft" })
     -- A post risks its deposit (SPEC §3.4 Risk): 76 × 138c × 15% for 24 h = 1573c of 314000c = 0.5%.
+    local _, _, deposit = VM.RowMoney({ kind = "post", qty = 76, price = 2500, duration = 24 }, nil, { vendorSell = 138 })
     local _, _, unknown = VM.RowMoney({ kind = "post", qty = 1, price = 5 }, nil, nil)   -- no vendor price: 0
-    assert_eq({ week.days[4].rows[1].risk, unknown }, { "0.5%", 0 })
-    assert_eq(week.total, "+12g 4s 48c")
+    assert_eq({ deposit, VM.Risk(deposit, GOLD), unknown }, { 1573, "0.5%", 0 })
   end)
 
-  it("A73 holds and vendor sales are no rows on Today or Week and count toward no total", function()
+  it("A73 holds and vendor sales are no rows on Today and count toward no total", function()
     local VM = Boot()
     local actions = FishBowl()
     for _, a in ipairs({ Act("h1", "hold", 0, NOW, { qty = 2, price = nil }), Act("h2", "hold", 0, NOW, { key = BAR }),
@@ -95,7 +85,6 @@ describe("PlanView", function()
     end
     local today = VM.Today(actions, NOW, 0, 50, Look, GOLD)
     assert_eq({ today.count, today.total, today.rows[1].id, today.rows[2].id }, { 2, "+12g 9s 48c", "k", "w" })
-    assert_eq(VM.Week(actions, NOW, 0, Look, GOLD).total, "+12g 9s 48c")
   end)
 
   it("A74 the sender's Today shows the MAIL row; the crafter's craft row says the mail is not sent yet", function()

@@ -1,6 +1,7 @@
--- UI/AHPanel.lua: the AHProfit panel docked to the right of the auction house (SPEC §4.3, UI7, A24).
+-- UI/AHPanel.lua: the AHProfit panel docked to the right of the auction house (SPEC §4.3, UI7, A24, A82, UI18).
 -- It lists what to buy (AHSync's planned buys and the disenchant targets your enchanter can do)
--- with each one's state from the live data (the last scan, or a search), and what to post now.
+-- with each one's state from the live data (the last scan, or a search), and what to post now; then the rows the
+-- live portfolio left out, muted with an "unfunded" tag and their reason on hover, still clickable.
 -- Clicking a row searches for it; Full scan
 -- asks for a ReplicateItems scan. Frame code only: ViewModel.AHPanel makes the text.
 
@@ -32,6 +33,9 @@ AHPanel.ICONS = { found = "Interface\\RaidFrame\\ReadyCheck-Ready", gone = "Inte
                   checking = "Interface\\RaidFrame\\ReadyCheck-Waiting" }
 local FLAT = "Interface\\Buttons\\WHITE8X8"
 local GOLD, MUTED, BORDER = { 1, 0.82, 0 }, { 0.56, 0.54, 0.49 }, { 0.42, 0.35, 0.2 }
+local WHITE = { 1, 1, 1 }
+AHPanel.TAG_WIDTH, AHPanel.TAG_FONT = 36, 8      -- the "unfunded" tag beside a muted row's name (A82, UI18)
+local BUYS = { flip = "flip", buy_later = "flip", disenchant = "de" }   -- excluded strategies bought on the AH
 -- The window's action badge colours, for the For column (A40).
 local WHY_COLORS = { craft = { 1, 0.6, 0.24 }, flip = { 0.37, 0.71, 1 }, de = { 0.7, 0.48, 1 } }
 
@@ -98,6 +102,43 @@ local function Posts(charId)
   return VM.PostableRows(AHProfit.MainWindow.TodayRows(charId), held, AHPanel.POST_ROWS)
 end
 
+--- The rows the live portfolio left out (SPEC §4.0, A82): its excluded buys for Shopping (not already a funded row)
+--- and its excluded rows for an item in the bags for Post, each with its reason; empty without a portfolio snapshot.
+---@param charId string
+---@param fundedKeys table  key -> true for Shopping's funded rows
+---@return table            { shopping, posts } for ViewModel.AHPanel
+local function Unfunded(charId, fundedKeys)
+  local Adapt, PV = AHProfit.Adapt, AHProfit.PortfolioView
+  if not Adapt.Snapshot() then return { shopping = {}, posts = {} } end
+  local result = Adapt.Current()
+  local held = Options.Units(AHProfit.Capture.Inventory.Decode(((((DB.Get() or {}).inventory or {})[charId]) or {}).bags))
+  local shopping, posts = {}, {}
+  for _, e in ipairs(result and result.excluded or {}) do
+    local c = e.rc.c
+    local reason, item = PV.Reason(e.rc, e.reason, Market.Item), Market.Item(c.key)
+    if BUYS[c.strategy] and not fundedKeys[c.key] and c.qty > 0 then
+      shopping[#shopping + 1] = { key = c.key, qty = c.qty, price = math.floor(e.rc.gold / c.qty), why = BUYS[c.strategy],
+                                  reason = reason }
+    end
+    local units = math.min(held[c.key] or 0, c.qty)
+    if units > 0 and item and item.postPrice then
+      posts[#posts + 1] = { key = c.key, units = units, price = item.postPrice, net = e.rc.net * units / c.qty,
+                            chance = c.chance, conf = c.conf, reason = reason }
+    end
+  end
+  return { shopping = shopping, posts = posts }
+end
+
+--- A row's hover: its own text when it has one (an unfunded row's reason), else what a Post click does.
+---@param row table
+local function OnRowEnter(row)
+  if row.hoverText then return Adapter.ShowTooltip(row, row.itemName, row.hoverText) end
+  if row.isPost then
+    Adapter.ShowTooltip(row, "Post", "Click: put it on the AH's Sell tab with this price and quantity, then press the AH's "
+                                     .. "Post button. Right-click: keep it for yourself.")
+  end
+end
+
 --- Explain a button or row on hover.
 ---@param button table
 ---@param title string
@@ -135,13 +176,17 @@ local function BuildRow(parent, i, y, columns)
   else
     row.item, row.why, row.colA, row.colB, row.qty = unpack(row.cells)
   end
+  row.tag = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  row.tag:SetFont("Fonts\\FRIZQT__.TTF", AHPanel.TAG_FONT)
+  row.tag:SetSize(AHPanel.TAG_WIDTH, AHPanel.ROW_HEIGHT)
+  row.tag:SetPoint("LEFT", row, "LEFT", columns[1][2] + columns[1][3] - AHPanel.TAG_WIDTH, 0)
+  row.tag:SetText("unfunded")
+  row.tag:Hide()
   row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   row.isPost = columns == AHPanel.COLUMNS.post
   row:SetScript("OnClick", function(self, button) AHPanel.OnRowClick(self, button) end)
-  if row.isPost then
-    Explain(row, "Post", "Click: put it on the AH's Sell tab with this price and quantity, then press the AH's Post "
-                         .. "button. Right-click: keep it for yourself.")
-  end
+  row:SetScript("OnEnter", function(self) OnRowEnter(self) end)
+  row:SetScript("OnLeave", function() Adapter.HideTooltip() end)
   return row
 end
 
@@ -263,6 +308,22 @@ local function Build(anchor)
   ui.empty:SetJustifyH("LEFT")
 end
 
+--- Mark a row unfunded or not: its name narrows for the tag, its texts are muted and its hover gives the reason.
+---@param row table
+---@param line table  A ViewModel.AHPanel row
+---@param columns table
+local function MarkUnfunded(row, line, columns)
+  row.tag:SetShown(line.unfunded == true)
+  row.item:SetWidth(columns[1][3] - (line.unfunded and (AHPanel.TAG_WIDTH + 2) or 0))
+  row.hoverText = line.hover
+end
+
+--- Mute an unfunded row's texts (the mockup's .unf-row).
+---@param row table
+local function Mute(row)
+  for _, cell in ipairs(row.cells) do cell:SetTextColor(MUTED[1], MUTED[2], MUTED[3]) end
+end
+
 --- Fill a shopping row.
 ---@param row table
 ---@param line table|nil  A ViewModel.AHPanel shopping row
@@ -270,6 +331,8 @@ local function FillShop(row, line)
   row:SetShown(line ~= nil)
   if not line then return end
   row.key, row.itemName = line.key, line.item
+  MarkUnfunded(row, line, AHPanel.COLUMNS.shopping)
+  for _, cell in ipairs(row.cells) do cell:SetTextColor(WHITE[1], WHITE[2], WHITE[3]) end
   row.icon:SetTexture(AHPanel.ICONS[line.state])
   row.item:SetText(line.item)
   row.why:SetText(line.why)
@@ -280,6 +343,7 @@ local function FillShop(row, line)
                         line.state == "found" and 0.31 or MUTED[3])
   row.colB:SetText(VM.WithCoins(line.max))
   row.qty:SetText(line.qty)
+  if line.unfunded then Mute(row) end
 end
 
 --- Fill a post row.
@@ -291,12 +355,15 @@ local function FillPost(row, line)
   row.key, row.itemName, row.sellUnits, row.sellPrice, row.sellHours = line.key, line.item, line.units, line.price,
     line.durationH
   row.icon:SetTexture(nil)
+  MarkUnfunded(row, line, AHPanel.COLUMNS.post)
+  for _, cell in ipairs(row.cells) do cell:SetTextColor(WHITE[1], WHITE[2], WHITE[3]) end
   for i, c in ipairs(AHPanel.COLUMNS.post) do
     local text = line[c[5]]
     row.cells[i]:SetText(MONEY[c[5]] and VM.WithCoins(text) or text)
   end
   row.profit:SetTextColor(line.postNetColor == "neg" and 1 or 0.24, line.postNetColor == "neg" and 0.29 or 0.86,
                             line.postNetColor == "neg" and 0.24 or 0.31)
+  if line.unfunded then Mute(row) end
 end
 
 --- Redraw the panel from the live data.
@@ -305,9 +372,11 @@ function AHPanel.Render()
   local info = Adapter.PlayerInfo()
   local charId = info.name .. "-" .. info.realm
   local gold = VM.TotalGold((DB.Get() or {}).characters)
-  current = VM.AHPanel(Targets(charId), Posts(charId), LevelsOf, LookOf, gold)
+  local targets, funded = Targets(charId), {}
+  for _, t in ipairs(targets) do funded[t.key] = true end
+  current = VM.AHPanel(targets, Posts(charId), LevelsOf, LookOf, gold, Unfunded(charId, funded))
   ui.checked:SetText(current.checked)
-  ui.postCount:SetText(tostring(#current.posts))
+  ui.postCount:SetText(current.postCount)
   for i, row in ipairs(ui.shop) do FillShop(row, current.shopping[i]) end
   for i, row in ipairs(ui.post) do FillPost(row, current.posts[i]) end
   ui.footer:SetText(VM.WithCoins(current.footer))

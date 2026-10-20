@@ -1,14 +1,15 @@
--- UI/PlanView.lua: the Today and Week tabs (SPEC §4.3, D62-D66, A71-A74), split from UI/ViewModel.lua for size.
--- Lua twin of ahsync/engine/plan_chains.py and the Today and Week parts of engine/plan_views.py: a chain is one row
+-- UI/PlanView.lua: the plan's Today rows (SPEC §4.3, D62-D66, A71-A74), split from UI/ViewModel.lua for size: the
+-- Portfolio tab without a portfolio snapshot and the AH panel's Post list show them (the Today and Week tabs were
+-- replaced by the Portfolio tab at M13). Lua twin of ahsync/engine/plan_chains.py and the Today part of
+-- engine/plan_views.py: a chain is one row
 -- (the action that carries its profit), its mat buys and intermediate crafts by the same character are lines under
 -- it, mail another character sends for it is a line too, and the last line says when to sell; holds and vendor
 -- sales are no rows (D64). It adds to the same AHProfit.ViewModel table; frame code only draws.
 
 local AHProfit = AHProfit
-local Adapter = AHProfit.Adapter
 local ViewModel = AHProfit.ViewModel
 
-local HOUR_MS, DAY_MS = 3600000, 86400000
+local HOUR_MS = 3600000
 local LEFT_OUT = { hold = true, vendor = true }        -- never a Today or Week row, and in no total (D64)
 local FOLDS = { buy = true, craft = true }             -- step kinds that fold into their chain's row
 
@@ -274,44 +275,6 @@ function ViewModel.Today(actions, nowMs, offsetMs, minChance, lookOf, totalGold)
   return { rows = rows, hidden = hidden, total = ViewModel.SignedMoney(total), count = #rows }
 end
 
---- The Week tab: a rolling 7 days from today's local midnight, by day (D11, D17, D63, D64, A72, A73).
----@param actions table[]  Plan actions (incoming mail flagged as in Today)
----@param nowMs number
----@param offsetMs number
----@param lookOf function  key -> look
----@param totalGold number
----@return table           { days = { { label, today, total, rows } × 7 }, total }
-function ViewModel.Week(actions, nowMs, offsetMs, lookOf, totalGold)
-  ViewModel.MarkChains(actions)
-  local start = math.floor((nowMs + offsetMs) / DAY_MS) * DAY_MS - offsetMs
-  local finish = start + 7 * DAY_MS
-  local inWeek = {}
-  for _, a in ipairs(actions) do
-    if a.at >= start and a.at < finish then inWeek[#inWeek + 1] = a end
-  end
-  table.sort(inWeek, ViewModel.ByTime)
-  local shown, chains, folds = Collapse(inWeek, actions)
-  local view = { nets = ViewModel.Counted(shown, start, finish, offsetMs), chances = ViewModel.ChainChances(actions),
-                 crafts = ViewModel.ChainCrafts(actions, lookOf), chains = chains, folds = folds, lookOf = lookOf,
-                 offsetMs = offsetMs }
-  local days, total = {}, 0
-  for d = 0, 6 do
-    local midnight = start + d * DAY_MS
-    days[d + 1] = { label = Adapter.UtcDate("%a ", math.floor((midnight + offsetMs) / 1000))
-                      .. tonumber(Adapter.UtcDate("%d", math.floor((midnight + offsetMs) / 1000))),
-                    today = d == 0, cents = 0, rows = {} }
-  end
-  for _, a in ipairs(shown) do
-    local day = days[math.floor((a.at - start) / DAY_MS) + 1]
-    local row = Row(a, CellsOf(a, view), lookOf(a.key), totalGold, offsetMs)
-    day.rows[#day.rows + 1] = row
-    day.cents = day.cents + row.netCopper
-    total = total + row.netCopper
-  end
-  for _, day in ipairs(days) do day.total = ViewModel.SignedMoney(day.cents) end
-  return { days = days, total = ViewModel.SignedMoney(total) }
-end
-
 --- The footer under Today (SPEC §4.3 wireframe, A2).
 ---@param today table      From ViewModel.Today
 ---@param minChance number Percent
@@ -322,17 +285,4 @@ function ViewModel.TodayFooter(today, minChance, gone)
   if today.hidden > 0 then text = text .. " · " .. today.hidden .. " hidden (chance < " .. minChance .. "%)" end
   if gone and gone > 0 then text = text .. " · " .. gone .. " gone" end
   return text
-end
-
---- The Week tab as one list: a header line per day with its total, then its rows.
----@param week table  From ViewModel.Week
----@return table[]    { header = true, label, total, today } or a row
-function ViewModel.WeekLines(week)
-  local lines = {}
-  for _, day in ipairs(week.days) do
-    lines[#lines + 1] = { header = true, label = day.label .. (day.today and " (today)" or ""), total = day.total,
-                          netColor = day.cents > 0 and "pos" or (day.cents < 0 and "neg" or "muted") }
-    for _, row in ipairs(day.rows) do lines[#lines + 1] = row end
-  end
-  return lines
 end

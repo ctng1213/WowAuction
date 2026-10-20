@@ -1,4 +1,6 @@
--- Specs for addon/AHProfit/UI/Tooltip.lua: the AHProfit block on item tooltips (SPEC §4.3, A21).
+-- Specs for addon/AHProfit/UI/Tooltip.lua: the AHProfit block on item tooltips, gathered from the addon files and
+-- the live state and drawn as two-column lines (SPEC §4.3 Tooltip; A21, TT4, TT6, TT22, R21). The lines' words are
+-- TooltipView's (tests/addon/UI/TooltipView_spec.lua).
 
 local Stubs = require("wow_stubs")
 local UIWorld = require("ui_world")
@@ -9,6 +11,7 @@ local NOW = 1760000000000
 --- Log in with Linen in the market file (written 2 h ago, its price seen 30 min before that).
 ---@param med7 number|nil     Linen's 7-day median (default 49c, the same as med30)
 ---@param trend10 number|nil  Its trend in tenths of a percent a day (default 0)
+---@param p90 number|nil      Its 30-day 90th percentile (default 60c)
 ---@return table  The tooltip stub
 local function Boot(med7, trend10, p90)
   Stubs.Reset()
@@ -20,29 +23,47 @@ local function Boot(med7, trend10, p90)
   return Stubs.tooltip
 end
 
---- The added double lines as { label, value } pairs.
----@param tip table
----@return table
-local function Pairs(tip)
+--- The block's lines for an item now, as "label | value".
+---@param key number
+---@return string[]
+local function Texts(key)
   local out = {}
-  for i, d in ipairs(tip.doubles) do out[i] = { d[1], d[2] } end
+  for i, l in ipairs(AHProfit.Tooltip.Lines(key, NOW)) do out[i] = l.label .. " | " .. l.value end
   return out
 end
 
+--- The value of the line with a label.
+---@param key number
+---@param label string
+---@return string|nil
+local function ValueOf(key, label)
+  for _, l in ipairs(AHProfit.Tooltip.Lines(key, NOW)) do
+    if l.label == label then return l.value end
+  end
+  return nil
+end
+
 describe("Tooltip", function()
-  it("A21 hovering an item adds the AHProfit block from the market file", function()
+  it("A21 hovering Linen in the bags adds the AHProfit block from the market file, the addon's own option first", function()
     local tip = Boot()
+    assert_eq(Texts(2589), { "AHProfit | data 2 h old", "Market | 45c (2 h) · 49c 30-day (+9%)",
+      "Best time to sell | Sat 18–22 · 55c (+22%) · established", "Activity | 48/day · 93 listed · 1.9 d supply" })
+    Stubs.world.containers = { [0] = { size = 1, slots = { [1] = { id = 2589, count = 20 } } } }
+    Stubs.FireEvent("BAG_UPDATE_DELAYED")
+    Stubs.Advance(1)
+    local texts = Texts(2589)
+    assert_eq({ texts[2], texts[3] }, { "Do: POST 20 now at 45c | +8s 40c · 90% chance", " | then nothing" })
     Stubs.HoverItem(2589)
-    assert_eq(tip.lines, { "AHProfit" })
-    assert_eq(Pairs(tip), { { "Current AH price", "45c (2 h ago)" }, { "Historical price", "49c (30d, +9%)" },
-      { "Best time to sell", "Sat 18:00–22:00" }, { "Price at best time", "55c (+22%)" }, { "Chance to sell", "90%" } })
-    assert_eq({ tip.doubles[2][3], tip.doubles[2][4] }, { 0.24, 0.86 })           -- the green delta
+    local header, market = tip.doubles[1], tip.doubles[4]
+    assert_eq({ header[1]:match("AHProfit"), header[2]:match("data 2 h old|r |T.-WHITE8X8:7:7:0:0:8:8:0:8:0:8:61:219:79|t$") ~= nil },
+              { "AHProfit", true })                                        -- a green dot: the data is fresh
+    assert_eq(tip.doubles[2][1]:match("^|c%x+Do: |r|c(%x+)POST|r"), "ffffd100")   -- the verb in POST's gold
+    assert_eq(market[2]:match("|c(%x+)%(%+9%%%)|r"), "ff3ddb4f")                   -- the green delta
   end)
 
   it("TT6 the price at best time includes the trend up to the window's best hour", function()
-    local tip = Boot(nil, 20)                                       -- +2%/day; Sat 19:00 UTC is 2.42 days away
-    Stubs.HoverItem(2589)
-    assert_eq(tip.doubles[4][2], "58c (+29%)")                     -- floor(49 × 1.12 × (1 + 0.02 × 2.42) + 0.5)
+    Boot(nil, 20)                                                   -- +2%/day; Sat 19:00 UTC is 2.42 days away
+    assert_eq(ValueOf(2589, "Best time to sell"), "Sat 18–22 · 58c (+29%) · established")   -- floor(49 × 1.12 × 1.0484 + 0.5)
     local Prices = AHProfit.Engine.Prices
     assert_eq({ Prices.SlotPrice(49, 1.12, 2, 2), Prices.SlotPrice(49, 1.12, 9, 2), Prices.SlotPrice(49, 1.12, -9, 2) },
               { 57, 60, 49 })                                       -- clamped to ±5%/day
@@ -50,35 +71,34 @@ describe("Tooltip", function()
   end)
 
   it("R21 the price at best time starts from the 7-day median", function()
-    local tip = Boot(60, nil, 80)
-    Stubs.HoverItem(2589)
-    assert_eq(tip.doubles[4][2], "67c (+49%)")                     -- 60c × 1.12 = 67.2c, (67.2 − 45) ÷ 45
+    Boot(60, nil, 80)
+    assert_eq(ValueOf(2589, "Best time to sell"), "Sat 18–22 · 67c (+49%) · established")   -- 60c × 1.12 = 67.2c
   end)
 
   it("TT22 the price at best time stays within what the last 30 days traded at", function()
-    local tip = Boot(60)                                            -- p90 60c: 67.2c is clamped to max(60c, 60c)
-    Stubs.HoverItem(2589)
-    assert_eq(tip.doubles[4][2], "60c (+33%)")
+    Boot(60)                                                        -- p90 60c: 67.2c is clamped to max(60c, 60c)
+    assert_eq(ValueOf(2589, "Best time to sell"), "Sat 18–22 · 60c (+33%) · established")
   end)
 
   it("A21 a newer in-game scan's price replaces the file's, and the deltas follow it", function()
-    local tip = Boot()
+    Boot()
     AHProfit.Scan.Replicate.LastBook = function() return { at = NOW, book = { [2589] = { [40] = { [101] = 1 } } } } end
-    Stubs.HoverItem(2589)
-    assert_eq({ tip.doubles[1][2], tip.doubles[2][2] }, { "40c (now)", "49c (30d, +23%)" })
+    assert_eq(ValueOf(2589, "Market"), "40c now · 49c 30-day (+23%)")
+    assert_eq(ValueOf(2589, "Activity"), "48/day · 20 listed · 0.4 d supply")    -- the scan's 20 units
   end)
 
-  it("A21 an item without market data, or a broken lookup, adds nothing", function()
+  it("A21 an item without market data shows two lines; a broken lookup adds nothing", function()
     local tip = Boot()
+    assert_eq(Texts(2840), { "AHProfit | data 2 h old", "no market data yet | " })
     Stubs.HoverItem(2840)
-    assert_eq({ tip.lines, tip.doubles }, { {}, {} })
+    assert_eq(#tip.doubles, 2)
     AHProfit.Tooltip.Lines = function() error("boom") end
     Stubs.HoverItem(2589)
     assert_eq(tip.doubles, {})
   end)
 
   it("TT4 the disenchant line shows only when one of your characters can disenchant the item", function()
-    local tip = Boot()
+    Boot()
     Stubs.ITEM_NAMES[6585], Stubs.ITEM_COLORS[6585] = "Scouting Gloves", "1eff00"
     Stubs.ITEM_CLASSES[6585] = 4
     local gloves = "800,1,30,1100,1100,,,0,,,1,50,,,1,,0,500;;"
@@ -86,11 +106,18 @@ describe("Tooltip", function()
     AHProfitMarket.markets[UIWorld.MARKET].I[6585], AHProfitMarket.markets[UIWorld.MARKET].I[10940] = gloves, dust
     AHProfitMarket.checksum = "3:" .. (#AHProfitMarket.markets[UIWorld.MARKET].I[2589] + #gloves + #dust)
     AHProfit.Market.Reset()
-    Stubs.HoverItem(6585)
-    assert_eq(#tip.doubles, 5)
+    assert_eq(ValueOf(6585, "Disenchant"), nil)
     AHProfitDB.professions["Amaya-Grommash"] = { Enchanting = { skill = 100, max = 150 } }
-    Stubs.HoverItem(6585)
-    assert_eq({ #tip.doubles, tip.doubles[3][1] }, { 6, "Disenchant value" })
+    assert_eq(ValueOf(6585, "Disenchant") ~= nil, true)
     Stubs.ITEM_NAMES[6585], Stubs.ITEM_COLORS[6585], Stubs.ITEM_CLASSES[6585] = "Scouting Gloves", nil, nil
+  end)
+
+  it("the plan's action for this character comes before the addon's own option", function()
+    Boot()
+    UIWorld.Plan({ { id = "p", kind = "post", key = 2589, qty = 20, price = 55, at = NOW + 26 * HOUR, net = 1046, chance = 92,
+                     peak = NOW + 34 * HOUR } })
+    AHProfit.Plan.Reset()
+    local texts = Texts(2589)
+    assert_eq({ texts[2], texts[3] }, { "Do: POST Fri 10:53 | 55c · +22% vs now · 92%", " | for the 18:53 peak" })
   end)
 end)

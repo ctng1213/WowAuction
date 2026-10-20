@@ -1,11 +1,13 @@
--- Layout snapshots of the /ahp window (SPEC §8.4 layer 2, UI1-UI4, UI6, UI9, UI10, UI11-UI15). Each scenario draws the
+-- Layout snapshots of the /ahp window (SPEC §8.4 layer 2, UI1-UI4, UI6, UI9-UI16, UI19). Each scenario draws the
 -- window with the stub frames, runs the automatic layout checks and compares the frame tree with
 -- tests/visual/golden/<scenario>.txt. `python tools/visual.py --update` accepts a change, and
--- `--html` draws it for comparison with docs/mockups/addon.html.
+-- `--html` draws it for comparison with docs/mockups/addon.html. UI1-UI4, UI6, UI9, UI10 and UI15 draw the Portfolio
+-- tab without a portfolio snapshot (the plan's actions due now, as the old Today tab); UI16 and UI19 draw it with one.
 
 local Stubs = require("wow_stubs")
 local Layout = require("layout")
 local UIWorld = require("ui_world")
+local World = require("portfolio_world")
 
 local NOW = 1760000000000
 local KINDS = { "buy", "post", "craft", "de", "de", "post" }   -- no vendor: a vendor sale is no Today row (D64, A73)
@@ -65,7 +67,7 @@ local function NoteAndItem(ui, tab)
 end
 
 describe("MainWindow layout", function()
-  it("UI1 Today with 12 mixed actions", function()
+  it("UI1 the Portfolio tab without a snapshot, 12 mixed actions", function()
     local ui = Open(12)
     Layout.Golden("UI1_today", ui.frame)
     assert_eq(ui.thumb:IsShown(), false)
@@ -104,19 +106,19 @@ describe("MainWindow layout", function()
     assert_eq({ ui.rows[1].cells.craft.mats:GetText(), ui.rows[2].note:GetText() }, { "—", "use 6 owned Copper Bar" })
   end)
 
-  it("UI14 a note starts where the Item column starts: under the item on Craft, after the time and badge on Week", function()
+  it("UI14 a note starts where the Item column starts: under the item on Craft, after the badge on Portfolio", function()
     local note, item = NoteAndItem(CraftWindow(), "craft")
     assert_eq({ note, item }, { item, item }, "Craft: the first column")
     Stubs.Reset()
     UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48) }, NOW - UIWorld.HOUR)
     UIWorld.Plan({ { id = "f", kind = "buy", key = 2589, qty = 20, price = 38, at = NOW, net = 210, vendor = true } })
     Stubs.Login()
-    Stubs.Slash("/ahp week")
-    note, item = NoteAndItem(AHProfit.MainWindow.Frames(), "week")
-    assert_eq({ note, item }, { item, item }, "Week: after the time and the badge")
+    Stubs.Slash("/ahp portfolio")
+    note, item = NoteAndItem(AHProfit.MainWindow.Frames(), "today")
+    assert_eq({ note, item }, { item, item }, "Portfolio without a snapshot: after the badge")
   end)
 
-  it("UI13 the Flip tab at the minimum size: seven tabs fit beside the Min chance box", function()
+  it("UI13 the Flip tab at the minimum size: the six tabs fit beside the Min chance box", function()
     Stubs.Reset()
     local SAT10, SAT18, SUN11 = 1760176800000, 1760205600000, 1760266800000   -- Sat 11 Oct 10:00 and 18:00, Sun 11:00 UTC
     UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48), [4306] = UIWorld.Item(70, 80, 60), [2840] = UIWorld.Item(500, 80, 40) },
@@ -136,12 +138,12 @@ describe("MainWindow layout", function()
     local ui = AHProfit.MainWindow.Frames()
     ui.frame:SetSize(560, 360)
     local snapshot = Layout.Golden("UI13_flip", ui.frame)
-    -- The last tab ends at x 1090, before the Min chance box at 1100.
-    assert_eq(snapshot:find("AHProfitWindowTabReservations 1012,396 78x22", 1, true) ~= nil, true)
+    -- The last tab ends at x 1056, before the Min chance box at 1100.
+    assert_eq(snapshot:find("AHProfitWindowTabReservations 978,396 78x22", 1, true) ~= nil, true)
     assert_eq(ui.rows[1].cells.flip.item:GetText(), "Linen Cloth")
   end)
 
-  it("UI10 Today with a row below Min chance and an item not selling: Needs a decision at the bottom", function()
+  it("UI10 a row below Min chance and an item not selling: Needs a decision at the bottom", function()
     Stubs.Reset()
     Stubs.ITEM_NAMES[2318] = "Heavy Leather"
     UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48), [2840] = UIWorld.Item(500, 60, 40), [2318] = UIWorld.Item(50, 70, 10) },
@@ -190,21 +192,7 @@ describe("MainWindow layout", function()
     Stubs.ITEM_NAMES[159] = nil
   end)
 
-  it("Week with a flip: day headers, notes under rows and coin money (D37, mockup Week tab)", function()
-    Stubs.Reset()
-    _G.AHProfitMarket = nil
-    UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48) }, NOW - UIWorld.HOUR)
-    UIWorld.Plan({ { id = "f", kind = "buy", key = 2589, qty = 20, price = 38, at = NOW, net = 210 },
-                   { id = "g", kind = "post", key = 2589, qty = 20, price = 55, at = NOW + 86400000, net = 95,
-                     parent = "f", chance = 88, peak = NOW + 86400000 + 8 * UIWorld.HOUR } })
-    Stubs.Login()
-    Stubs.Slash("/ahp week")
-    local ui = AHProfit.MainWindow.Frames()
-    Layout.Golden("week_notes", ui.frame)
-    assert_eq(ui.rows[3].note:GetText(), "then: post Fri 08:53, for the 16:53 peak")   -- the chain's last line (D62)
-  end)
-
-  it("UI15 Today with a craft chain: one CRAFT row, its buys and its sale as lines under it", function()
+  it("UI15 the plan's craft chain: one CRAFT row, its buys and its sale as lines under it", function()
     Stubs.Reset()
     _G.AHProfitMarket = nil
     Stubs.ITEM_NAMES[3371], Stubs.ITEM_NAMES[6303], Stubs.ITEM_NAMES[6370] = "Empty Vial", "Raw Brilliant Smallfish", "Fish Bowl"
@@ -223,5 +211,69 @@ describe("MainWindow layout", function()
                 ui.rows[5]:IsShown() },
               { "CRAFT", "buy 76 Empty Vial from a vendor · 15s 20c", "then: post Sun 08:53, for the 16:53 peak", false })
     Stubs.ITEM_NAMES[3371], Stubs.ITEM_NAMES[6303], Stubs.ITEM_NAMES[6370] = nil, nil, nil
+  end)
+
+  it("UI16 the Portfolio tab (A79) in the 640 x 440 window: three sections scroll, Status wraps within 150 px", function()
+    World.Name(Stubs)
+    World.Boot(Stubs, World.Mockup())
+    Stubs.Slash("/ahp")
+    local ui = AHProfit.MainWindow.Frames()
+    Layout.Golden("UI16_portfolio", ui.frame)
+    local rects = Layout.Resolve(UIParent)
+    local last, chance = rects[ui.tabs.reservations], rects[ui.chance]
+    assert_eq({ last.x + last.w <= chance.x, ui.thumb:IsShown(), ui.top:IsShown() }, { true, true, true },
+              "the six tabs fit beside Min chance; the sections scroll; the top line shows")
+    local VM, checked = AHProfit.ViewModel, 0
+    for _, step in ipairs({ 0, 6, 100 }) do
+      AHProfit.MainWindow.Scroll(step)
+      rects = Layout.Resolve(UIParent)
+      for _, row in ipairs(ui.rows) do
+        local status = row.cells.pfToday.status:IsShown() and row.cells.pfToday.status or
+                       (row.cells.pfWeek.status:IsShown() and row.cells.pfWeek.status or nil)
+        if row:IsShown() and status then
+          local lines = VM.WrapCount(status:GetText(), 150, 10)
+          assert_eq({ rects[status].w, lines <= 2, rects[status].h >= 10 * lines }, { 150, true, true }, status:GetText())
+          checked = checked + 1
+        end
+        if row:IsShown() and row.cells.pfWeek.adjusted:IsShown() then
+          assert_eq({ VM.TextWidth(row.cells.pfWeek.adjusted:GetText(), 10) <= 84, VM.TextWidth(row.sub:GetText(), 10) <= 84,
+                      rects[row.sub].y + rects[row.sub].h <= rects[row].y + rects[row].h }, { true, true, true },
+                    row.sub:GetText())
+        end
+      end
+    end
+    assert_eq(checked > 0, true)
+    Layout.Golden("UI16_portfolio_end", ui.frame)
+    World.Unname(Stubs)
+  end)
+
+  it("UI19 nothing funded (PF14): the empty block with positions; on Brugan the excluded rows' tooltip fits 320 px", function()
+    World.Name(Stubs)
+    local opts = World.Mockup()
+    opts.snapshot, opts.money = World.NOW .. ";300;150;50;8;20;20;7;1;355800;108800;0;0", 143000
+    World.Boot(Stubs, opts)
+    Stubs.Slash("/ahp")
+    local ui = AHProfit.MainWindow.Frames()
+    Layout.Golden("UI19_empty", ui.frame)
+    assert_eq({ ui.footer:GetText(), ui.budget:GetText() }, { AHProfit.ViewModel.WithCoins("funded 0c"), "3 positions" })
+    local c = World.Candidates()
+    c[#c + 1] = { id = "craft:3385:" .. World.BRUGAN .. ":-/-/now:1", strategy = "craft", char = World.BRUGAN, key = 3385,
+                  qty = 10, gold = 4500, net = 80, sale = World.TONIGHT }
+    World.Boot(Stubs, { player = "Brugan", candidates = c, money = 104000, bags = { { World.ROD, 5 } },
+                        reserved = { [World.AMAYA] = 32400, [World.BRUGAN] = 37300 } })
+    Stubs.Slash("/ahp")
+    ui = AHProfit.MainWindow.Frames()
+    local potion = nil
+    for _, row in ipairs(ui.rows) do if row:IsShown() and row.menuTip then potion = row end end
+    potion:GetScript("OnMouseUp")(potion, "RightButton")
+    assert_eq({ Stubs.tooltip.shown, Stubs.tooltip.lines[1], Stubs.tooltip.lines[2] },
+              { true, "Not funded today (Brugan)", "Lesser Mana Potion · CRAFT ×10" })
+    local VM = AHProfit.ViewModel
+    for _, line in ipairs(potion.menuTip.lines) do
+      local width = line.text and (line.wrap and 0 or VM.TextWidth(line.text, 10))
+                    or (VM.TextWidth(line.left, 10) + 16 + VM.TextWidth(VM.WithCoins(line.right), 10))
+      assert_eq(width <= 320, true, (line.text or line.left) .. " is " .. width .. " px wide")
+    end
+    World.Unname(Stubs)
   end)
 end)

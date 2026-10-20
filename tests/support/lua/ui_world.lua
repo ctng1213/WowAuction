@@ -74,4 +74,25 @@ function UIWorld.StockFor(actions)
   if #slots > 0 then Stubs.world.containers[0] = { size = math.max(16, #slots), slots = slots } end
 end
 
+--- Give the installed files a portfolio (EX17, EX18): Amaya's candidates in the market file and a snapshot in the plan
+--- file, checksums updated, as an AHSync export since M11 carries them (the Portfolio tab and the AH panel's unfunded rows).
+---@param candidates string[]  K strings ("cid;strategy;charId;outKey;outQty;inputs;gold;cashBasis;net;chance1000;saleMs;
+---                            windowEndMs;conf;needs;status")
+---@param snapshotMs number    The snapshot's time
+---@param gold number          Amaya's gold at the snapshot, copper
+function UIWorld.Portfolio(candidates, snapshotMs, gold)
+  local market = AHProfitMarket.markets[UIWorld.MARKET]
+  market.K = candidates
+  local count, length = AHProfitMarket.checksum:match("^(%d+):(%d+)$")
+  count, length = tonumber(count), tonumber(length)
+  for _, text in ipairs(candidates) do count, length = count + 1, length + #text end
+  AHProfitMarket.checksum = count .. ":" .. length
+  local portfolio = snapshotMs .. ";300;150;50;8;20;20;7;1;355800;41800;64940;62500"
+  local goldText = gold .. "," .. snapshotMs
+  AHProfitPlan.portfolio, AHProfitPlan.gold, AHProfitPlan.reserved = { [UIWorld.MARKET] = portfolio },
+    { ["Amaya-Grommash"] = goldText }, {}
+  count, length = AHProfitPlan.checksum:match("^(%d+):(%d+)$")
+  AHProfitPlan.checksum = (tonumber(count) + 2) .. ":" .. (tonumber(length) + #portfolio + #goldText)
+end
+
 return UIWorld

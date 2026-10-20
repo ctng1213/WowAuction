@@ -42,7 +42,9 @@ UI\PortfolioView.lua
 UI\CraftView.lua
 UI\FlipView.lua
 UI\InventoryView.lua
+UI\TooltipView.lua
 UI\RowMenu.lua
+UI\WindowLines.lua
 UI\MainWindow.lua
 UI\Tooltip.lua
 UI\AHPanel.lua

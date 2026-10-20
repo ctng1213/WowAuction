@@ -301,6 +301,28 @@ describe("AHPanel", function()
     assert_eq(why, { "Copper Bar CRAFT", "Silk Cloth FLIP", Stubs.ITEM_NAMES[6585] .. " DE" })
   end)
 
+  it("A82 funded rows first, then the unfunded ones muted and tagged, with their reason on hover, still clickable", function()
+    local ui, ah = AHWorld.Unfunded()
+    assert_eq({ ui.checked:GetText(), ui.postCount:GetText() }, { "3 of 5 + 1 unfunded", "1 + 1 unfunded" })
+    local elixir, post = ui.shop[6], ui.post[2]
+    assert_eq({ elixir.item:GetText(), elixir.tag:IsShown(), elixir.tag:GetText(), elixir.qty:GetText(), ui.shop[5].tag:IsShown() },
+              { "Elixir of Fortitude", true, "unfunded", "×40", false })
+    assert_eq({ post.item:GetText(), post.qty:GetText(), post.price:GetText(), post.profit:GetText(), post.chance:GetText():match("^%d+%%") },
+              { "Elixir of Fortitude", "×40", AHProfit.ViewModel.WithCoins("3s 50c"), AHProfit.ViewModel.WithCoins("+9s"), "35%" })
+    assert_eq({ ui.post[1].item:GetText(), ui.post[1].tag:IsShown() }, { "Copper Rod", false })
+    elixir:GetScript("OnEnter")(elixir)
+    assert_eq(Stubs.tooltip.lines, { "Elixir of Fortitude", "Unfunded: Insufficient liquidity: 3/day, 40 planned. Click to search anyway" })
+    post:GetScript("OnEnter")(post)
+    assert_eq(Stubs.tooltip.lines[2], "Unfunded: Insufficient liquidity: 3/day, 40 planned. Click to fill the Sell tab anyway")
+    elixir:Click()
+    assert_eq(ah.searches[#ah.searches], "Elixir of Fortitude")
+    local sell = AHWorld.InstallSell(ah, 40)
+    post:Click()
+    assert_eq({ sell.quantity, sell.price }, { 40, 350 })
+    assert_eq(elixir.item.textColor, { 0.56, 0.54, 0.49 })
+    AHWorld.Unname()
+  end)
+
   it("A43 Full scan shows its progress: waiting, reading n of total, saving, done; or no answer", function()
     Stubs.Reset()
     local auctions = {}

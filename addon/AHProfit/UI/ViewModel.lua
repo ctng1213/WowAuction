@@ -1,7 +1,8 @@
 -- UI/ViewModel.lua: everything the addon window shows, as text and flags (SPEC §4.3, §8.5).
 -- Lua twin of the parts of ahsync/engine/views.py and engine/plan_views.py the window uses:
--- money, risk and the chain rule that counts a chain's profit once (VW1); the Today and Week tabs
--- are in UI/PlanView.lua. Frame code only draws what these functions return and does no arithmetic.
+-- money, risk and the chain rule that counts a chain's profit once (VW1); the plan's Today rows (the Portfolio tab
+-- without a snapshot, and the AH panel's Post list) are in UI/PlanView.lua, the Portfolio tab in UI/PortfolioView.lua
+-- and the tooltip in UI/TooltipView.lua. Frame code only draws what these functions return and does no arithmetic.
 -- Keep them formula-for-formula identical to the Python, rounding included (SPEC §3.3).
 
 local AHProfit = AHProfit
@@ -53,6 +54,13 @@ ViewModel.COLUMN_HELP = {
   Mats = "Gold for the mats you need to buy, at the AH's current prices. \"—\": you own them all",
   Sell = "The price to post at, each, for the selling window",
   When = "The peak the post is for, local time: post 8 hours before it",
+  -- the Portfolio tab (SPEC §4.3), the dashboard's texts
+  Status = "Funded, or why it was left out. For a position: Acquiring, Processing, Holding, Ready to sell, Listed, "
+           .. "Partially sold or Needs reconciliation",
+  Next = "The next thing to do for this position",
+  Plan = "When it buys or makes, and when it sells",
+  Adjusted = "Net ÷ (1 + waiting premium): 15% + 5% × the wait, in fractional days from now to the expected sale hour; "
+             .. "0% for what is realized today. The plan ranks Today and the week together by this",
 }
 
 --- Round half up, as every display does (SPEC §3.3).
@@ -406,76 +414,71 @@ function ViewModel.WithNotes(rows)
   return lines
 end
 
--- ------------------------------------------------------------------ item tooltip (SPEC §4.3)
+-- ------------------------------------------------------------------ text size and paging
 
-ViewModel.WEEKDAYS = { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" }
+ViewModel.GLYPH = 0.55             -- average glyph width as a share of the font size (tests/support/lua/layout.lua's)
 
---- Tooltip delta against the current AH price: (value − cur) ÷ cur × 100, half up (views.delta_percent).
----@param value number|nil
----@param current number|nil
----@return number|nil  Whole percent; nil when either is missing
-function ViewModel.DeltaPercent(value, current)
-  if value == nil or not current or current == 0 then return nil end
-  return ViewModel.RoundHalfUp((value - current) / current * 100)
+--- Text as the player sees it: colour codes and links reduced to their visible characters; an inline texture
+--- (a coin, a dot) counts as two characters.
+---@param text string|nil
+---@return string
+function ViewModel.Visible(text)
+  text = tostring(text or "")
+  text = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|cnIQ%d:", ""):gsub("|r", "")
+  return (text:gsub("|H.-|h(.-)|h", "%1"):gsub("|T.-|t", "  "))
 end
 
---- A value with its delta and the delta's colour (views._delta_text).
----@param value number|nil
----@param current number|nil
----@return string, string|nil  e.g. "11s (+38%)", "green"
-local function DeltaText(value, current)
-  local delta = ViewModel.DeltaPercent(value, current)
-  if value == nil then return "—", nil end
-  if delta == nil then return ViewModel.Money(value), nil end
-  local sign = delta > 0 and "+" or (delta < 0 and "−" or "")
-  return ViewModel.Money(value) .. " (" .. sign .. math.abs(delta) .. "%)", delta > 0 and "green" or (delta < 0 and "red" or nil)
+--- Estimated width of a text in px, as the layout snapshots estimate it (SPEC §8.4).
+---@param text string|nil
+---@param size number  Font size, px
+---@return number      px
+function ViewModel.TextWidth(text, size)
+  local _, chars = ViewModel.Visible(text):gsub("[^\128-\191]", "")     -- characters, not bytes: "…" is one glyph
+  return chars * size * ViewModel.GLYPH
 end
 
---- The tooltip block, one fact per line, prices per unit (views.tooltip, TT1-TT5).
----@param t table  { cur, curAgeText, med30, deValue, canDisenchant, bestWindow, bestPrice, chance }
----@return table[] { label, value, colour } in spec order; the Disenchant line is left out without an enchanter
-function ViewModel.Tooltip(t)
-  local lines = { { label = "Current AH price", value = t.cur and (ViewModel.Money(t.cur) .. " (" .. t.curAgeText .. ")") or "—" } }
-  local hist, colour = DeltaText(t.med30, t.cur)
-  if t.med30 and t.cur and t.cur ~= 0 then hist = hist:gsub(" %(", " (30d, ", 1) end
-  lines[#lines + 1] = { label = "Historical price", value = hist, colour = colour }
-  if t.canDisenchant then
-    local v, c = DeltaText(t.deValue, t.cur)
-    lines[#lines + 1] = { label = "Disenchant value", value = v, colour = c }
+--- How many lines a text takes when word-wrapped into a width.
+---@param text string
+---@param width number  px
+---@param size number   Font size, px
+---@return number       Lines, at least 1
+function ViewModel.WrapCount(text, width, size)
+  local lines, line = 1, ""
+  for word in tostring(text):gmatch("%S+") do
+    local candidate = line == "" and word or (line .. " " .. word)
+    if line ~= "" and ViewModel.TextWidth(candidate, size) > width then
+      lines, line = lines + 1, word
+    else
+      line = candidate
+    end
   end
-  lines[#lines + 1] = { label = "Best time to sell", value = t.bestWindow or "—" }
-  local v, c = DeltaText(t.bestPrice, t.cur)
-  lines[#lines + 1] = { label = "Price at best time", value = v, colour = c }
-  lines[#lines + 1] = { label = "Chance to sell", value = t.chance and (ViewModel.RoundHalfUp(t.chance * 100) .. "%") or "—" }
   return lines
 end
 
---- A selling window in local time, e.g. "Sat 17:00–21:00", with its strength when not yet established
---- (item_detail.window_long; SPEC §4.3 "Best time to sell").
----@param w table          { start, hours, weeks } (UTC slots, Market.Decode)
----@param offsetMs number  Local time minus UTC
----@return string
-function ViewModel.WindowLabel(w, offsetMs)
-  local start = (w.start + math.floor(offsetMs / HOUR_MS)) % 168
-  local finish = (start + w.hours) % 168
-  local startDay, endDay = math.floor(start / 24), math.floor(finish / 24)
-  local text = string.format("%s %02d:00–", ViewModel.WEEKDAYS[startDay + 1], start % 24)
-  if endDay ~= startDay then text = text .. ViewModel.WEEKDAYS[endDay + 1] .. " " end
-  text = text .. string.format("%02d:00", finish % 24)
-  if w.weeks < 3 then return text .. " (early)" end         -- short: the line must fit 320 px (UI8)
-  if w.weeks < 6 then return text .. " (pattern)" end
-  return text
-end
-
---- How long ago a price was seen, for the tooltip ("2 h ago", "now").
----@param ageMs number|nil
----@return string
-function ViewModel.SeenAgo(ageMs)
-  local minutes = math.floor(math.max(0, ageMs or 0) / 60000)
-  if minutes < 1 then return "now" end
-  if minutes < 60 then return minutes .. " min ago" end
-  if minutes < 1440 then return math.floor(minutes / 60) .. " h ago" end
-  return math.floor(minutes / 1440) .. " d ago"
+--- The lines a list of mixed heights shows from a scroll offset (the Portfolio tab's tall rows, UI16).
+---@param lines table[]   Every line; line.height px (default unitPx)
+---@param offset number   Lines scrolled past (clamped)
+---@param maxPx number    The list's height, px
+---@param pool number     Pooled rows available
+---@param unitPx number   A line's default height, px
+---@return table          { lines, offset, scrollable, thumbTop, thumbSize } (thumb as shares of the track)
+function ViewModel.PageByHeight(lines, offset, maxPx, pool, unitPx)
+  --- A line's height, px.
+  ---@param line table
+  ---@return number
+  local function H(line) return line.height or unitPx end
+  local total, used, maxOffset = #lines, 0, #lines
+  while maxOffset > 0 and used + H(lines[maxOffset]) <= maxPx and total - maxOffset + 1 <= pool do
+    used, maxOffset = used + H(lines[maxOffset]), maxOffset - 1
+  end
+  offset = math.max(0, math.min(offset, maxOffset))
+  local page, px = {}, 0
+  for i = offset + 1, total do
+    if #page >= pool or px + H(lines[i]) > maxPx then break end
+    page[#page + 1], px = lines[i], px + H(lines[i])
+  end
+  if maxOffset == 0 then return { lines = page, offset = 0, scrollable = false, thumbTop = 0, thumbSize = 1 } end
+  return { lines = page, offset = offset, scrollable = true, thumbTop = offset / total, thumbSize = #page / total }
 end
 
 -- ------------------------------------------------------------------ Flip tab (A28, UI13)
@@ -663,35 +666,76 @@ function ViewModel.BuyReason(a, actions)
   return nil
 end
 
---- The panel's shopping and post lists (UI7).
+--- One Shopping row with its state from the live data: found at or below its price, gone, or still checking (UI7).
+---@param t table          { key, qty, price, why }
+---@param look table
+---@param levels table[]|nil
+---@return table           The row
+---@return number|nil      What buying it costs now, copper, when found
+local function ShopRow(t, look, levels)
+  local row = { key = t.key, item = look.name, quality = look.quality, qty = "×" .. t.qty, max = ViewModel.Money(t.price),
+                why = ViewModel.WHY_LABELS[t.why] or "", whyKind = t.why }
+  if not levels then
+    row.state, row.text, row.price = "checking", "checking", "checking"
+    return row, nil
+  end
+  local units = 0
+  for _, level in ipairs(levels) do if level.price <= t.price then units = units + level.units end end
+  if units < t.qty then
+    row.state, row.text, row.price = "gone", "gone", "gone"
+    return row, nil
+  end
+  row.state, row.text = "found", ViewModel.Money(levels[1].price) .. " ≤ " .. ViewModel.Money(t.price)
+  row.price = ViewModel.Money(levels[1].price)
+  return row, levels[1].price * t.qty
+end
+
+--- An unfunded Post row (A82): the portfolio left it out, so it is muted and says why.
+---@param p table     { key, units, price (copper), net (float copper), chance (0-1), conf, reason }
+---@param look table
+---@return table      A post row as Today's, plus unfunded and hover
+local function UnfundedPost(p, look)
+  local chance = p.chance and ViewModel.RoundHalfUp(p.chance * 100) or nil
+  return { key = p.key, item = look.name, quality = look.quality, kind = "post", qty = "×" .. p.units, units = p.units,
+           price = p.price, each = ViewModel.Money(p.price), postNet = ViewModel.SignedMoney(p.net),
+           postNetColor = p.net < 0 and "neg" or "pos", postNetCopper = p.net,
+           chance = chance and (chance .. "%") or "—", dot = chance and ViewModel.Level(p.conf) or nil, unfunded = true,
+           hover = "Unfunded: " .. p.reason .. ". Click to fill the Sell tab anyway" }
+end
+
+--- The panel's shopping and post lists (UI7, A82): the funded rows first, then the rows the portfolio left out, muted
+--- and tagged, each with its reason on hover; the section counts say how many of each.
 ---@param targets table[]  { key, qty, price (the most to pay each), why ("craft" | "flip" | "de" | nil) } in list order
 ---@param posts table[]    Today rows of posts { item, quality, qty, each, chance, dot }
 ---@param levelsOf function key -> live levels, or nil when not checked yet
 ---@param lookOf function  key -> look
 ---@param gold number      All your gold, copper
----@return table           { shopping = rows, checked = "3 of 5", posts = rows, footer }
-function ViewModel.AHPanel(targets, posts, levelsOf, lookOf, gold)
+---@param unfunded table|nil { shopping = targets plus reason, posts = UnfundedPost's p } (Recommend/Reselect's
+---                        exclusions); nil without a portfolio snapshot
+---@return table           { shopping = rows, checked = "3 of 5 + 1 unfunded", posts = rows, postCount = "1 + 1 unfunded",
+---                        footer }
+function ViewModel.AHPanel(targets, posts, levelsOf, lookOf, gold, unfunded)
   local shopping, checked, found, spend = {}, 0, 0, 0
   for _, t in ipairs(targets) do
-    local look, levels = lookOf(t.key), levelsOf(t.key)
-    local row = { key = t.key, item = look.name, quality = look.quality, qty = "×" .. t.qty, max = ViewModel.Money(t.price),
-                  why = ViewModel.WHY_LABELS[t.why] or "", whyKind = t.why }
-    if not levels then
-      row.state, row.text, row.price = "checking", "checking", "checking"
-    else
-      checked = checked + 1
-      local units = 0
-      for _, level in ipairs(levels) do if level.price <= t.price then units = units + level.units end end
-      if units >= t.qty then
-        found, spend = found + 1, spend + levels[1].price * t.qty
-        row.state, row.text = "found", ViewModel.Money(levels[1].price) .. " ≤ " .. ViewModel.Money(t.price)
-        row.price = ViewModel.Money(levels[1].price)
-      else
-        row.state, row.text, row.price = "gone", "gone", "gone"
-      end
-    end
+    local row, cost = ShopRow(t, lookOf(t.key), levelsOf(t.key))
+    if row.state ~= "checking" then checked = checked + 1 end
+    if cost then found, spend = found + 1, spend + cost end
     shopping[#shopping + 1] = row
   end
-  return { shopping = shopping, checked = checked .. " of " .. #targets, posts = posts,
+  local extraShop, extraPost = (unfunded or {}).shopping or {}, (unfunded or {}).posts or {}
+  for _, t in ipairs(extraShop) do
+    local row = ShopRow(t, lookOf(t.key), levelsOf(t.key))
+    row.unfunded, row.hover = true, "Unfunded: " .. t.reason .. ". Click to search anyway"
+    shopping[#shopping + 1] = row
+  end
+  local postRows = {}
+  for _, row in ipairs(posts) do postRows[#postRows + 1] = row end
+  for _, p in ipairs(extraPost) do postRows[#postRows + 1] = UnfundedPost(p, lookOf(p.key)) end
+  --- The count's unfunded part: " + 1 unfunded", or "" for none.
+  ---@param n number
+  ---@return string
+  local function Unf(n) return n > 0 and (" + " .. n .. " unfunded") or "" end
+  return { shopping = shopping, checked = checked .. " of " .. #targets .. Unf(#extraShop), posts = postRows,
+           postCount = #posts .. Unf(#extraPost),
            footer = found .. " found · budget left " .. ViewModel.Money(math.max(0, gold - spend)) }
 end

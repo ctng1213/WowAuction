@@ -40,7 +40,7 @@ describe("MainWindow", function()
     assert_eq(frame:IsShown(), false)
   end)
 
-  it("Today shows the plan's actions due now with the market's volume and the age badge", function()
+  it("without a portfolio snapshot the Portfolio tab shows the plan's actions due now, with volume and the age badge", function()
     local MainWindow = Boot()
     Stubs.Slash("/ahp")
     local row, coins = FirstRow("today"), AHProfit.ViewModel.WithCoins
@@ -53,17 +53,18 @@ describe("MainWindow", function()
     assert_eq(ui.rows[2]:IsShown(), false)
   end)
 
-  it("the Week tab lists each day with its total, and /ahp week opens it directly", function()
+  it("the tab bar reads Portfolio, Disenchant, Craft, Flip, Inventory, Reservations; /ahp portfolio opens Portfolio", function()
     local MainWindow = Boot()
-    Stubs.Slash("/ahp week")
+    local labels = {}
+    for i, t in ipairs(MainWindow.TABS) do labels[i] = t[2] end
+    assert_eq(labels, { "Portfolio", "Disenchant", "Craft", "Flip", "Inventory", "Reservations" })
+    Stubs.Slash("/ahp")
+    MainWindow.ShowTab("flip")
+    Stubs.Slash("/ahp portfolio")
     local ui = MainWindow.Frames()
-    local coins = AHProfit.ViewModel.WithCoins
-    assert_eq({ ui.rows[1].dayLabel:GetText(), ui.rows[1].dayTotal:GetText() }, { "Thu 9 (today)", coins("+10s 46c") })
-    assert_eq({ ui.rows[2].cells.week.item:GetText(), ui.rows[3].dayLabel:GetText() }, { "Linen Cloth", "Fri 10" })
-    assert_eq({ ui.rows[1].cells.week.item:IsShown(), ui.chance:IsShown(), ui.footer:GetText() },
-              { false, false, coins("Week total +10s 46c") })
-    MainWindow.ShowTab("today")
-    assert_eq({ ui.headers.today:IsShown(), ui.headers.week:IsShown() }, { true, false })
+    assert_eq({ ui.frame:IsShown(), ui.chance:IsShown(), ui.headers.today:IsShown(), ui.top:IsShown() }, { true, true, true, false })
+    MainWindow.ShowTab("flip")
+    assert_eq({ ui.headers.flip:IsShown(), ui.headers.today:IsShown(), ui.chance:IsShown() }, { true, false, false })
   end)
 
   it("the Min chance button steps 50 → 75 → 0 and hides rows below it", function()
@@ -453,12 +454,6 @@ describe("MainWindow", function()
                        "POST Heavy Leather", "note: Your record (30 d): 0 of 3 sold · expired 3× while cheapest",
                        "header: Needs a decision", "DECIDE Heavy Leather",
                        "note: Your record (30 d): 0 of 3 sold · expired 3× while cheapest", "note: right-click: Blacklist or Keep" })
-    AHProfit.MainWindow.ShowTab("week")
-    local weekNotes = {}
-    for _, r in ipairs(ui.rows) do
-      if r:IsShown() and r.note:IsShown() and r.note:GetText():match("^Your record") then weekNotes[#weekNotes + 1] = r.note:GetText() end
-    end
-    assert_eq(#weekNotes, 2)
     Stubs.ITEM_NAMES[2318] = nil
   end)
 
@@ -540,17 +535,21 @@ describe("MainWindow", function()
   end)
 
   it("names come from the saved link first, then the client cache, then the key", function()
-    local MainWindow = Boot()
+    Stubs.Reset()
+    UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48), [2840] = UIWorld.Item(500, 60, 40) }, NOW - UIWorld.HOUR)
+    UIWorld.Plan({ { id = "p", kind = "post", key = 2589, qty = 20, price = 55, at = NOW, net = 1046, chance = 92 },
+                   { id = "c", kind = "post", key = 2840, qty = 6, price = 500, at = NOW, net = 300, chance = 92 } })
+    Stubs.Login()
     AHProfitDB.itemNames = { [2589] = "2,Linen Cloth of the Whale" }
     Stubs.world.uncached[2840] = true
-    Stubs.Slash("/ahp week")
-    local ui = MainWindow.Frames()
-    assert_eq(ui.rows[2].cells.week.item:GetText(), "Linen Cloth of the Whale")
-    assert_eq(ui.rows[4].cells.week.item:GetText(), "Item 2840")
+    Stubs.Slash("/ahp")
+    local ui = AHProfit.MainWindow.Frames()
+    assert_eq({ ui.rows[1].cells.today.item:GetText(), ui.rows[2].cells.today.item:GetText() },
+              { "Linen Cloth of the Whale", "Item 2840" })
     Stubs.world.uncached[2840] = nil                       -- the client fetched it
     Stubs.FireEvent("GET_ITEM_INFO_RECEIVED", 2840, true)
     Stubs.Advance(1)
-    assert_eq(ui.rows[4].cells.week.item:GetText(), "Copper Bar")
+    assert_eq(ui.rows[2].cells.today.item:GetText(), "Copper Bar")
     assert_eq(Stubs.IsRegistered("GET_ITEM_INFO_RECEIVED"), false)   -- every name is known: stop listening
   end)
 
@@ -621,7 +620,7 @@ describe("MainWindow", function()
     end
     local ui = Open(0, nil)                                     -- both stale: the market's problem shows
     assert_eq({ ui.rows[1]:IsShown(), ui.empty:GetText(), ui.footer:GetText() }, { false, "AHSync is older than this addon: restart AHSync, then /reload", "AHSync is older than this addon: restart AHSync, then /reload" })
-    AHProfit.MainWindow.ShowTab("week")
+    AHProfit.MainWindow.ShowTab("flip")
     assert_eq({ ui.rows[1]:IsShown(), ui.footer:GetText() }, { false, "AHSync is older than this addon: restart AHSync, then /reload" })
     ui = Open(4, 0)                                             -- only the plan is stale: its rows are gone, and why
     assert_eq({ ui.footer:GetText(), #AHProfit.Plan.Actions("Amaya-Grommash") }, { "AHSync is older than this addon: restart AHSync, then /reload", 0 })

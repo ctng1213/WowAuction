@@ -6,13 +6,12 @@ Frame AHProfitWindow 680,360 560x360
   Button AHProfitWindowClose 1212,364 24x24
   Frame AHProfitWindowAge 1110,367 96x18
     FontString - 1125,371 66x10 "data 2 h old"
-  Button AHProfitWindowTabToday 690,396 48x22 "Today"
-  Button AHProfitWindowTabWeek 740,396 46x22 "Week"
-  Button AHProfitWindowTabDisenchant 788,396 68x22 "Disenchant"
-  Button AHProfitWindowTabCraft 858,396 46x22 "Craft"
-  Button AHProfitWindowTabFlip 906,396 40x22 "Flip"
-  Button AHProfitWindowTabInventory 948,396 62x22 "Inventory"
-  Button AHProfitWindowTabReservations 1012,396 78x22 "Reservations"
+  Button AHProfitWindowTabPortfolio 690,396 62x22 "Portfolio"
+  Button AHProfitWindowTabDisenchant 754,396 68x22 "Disenchant"
+  Button AHProfitWindowTabCraft 824,396 46x22 "Craft"
+  Button AHProfitWindowTabFlip 872,396 40x22 "Flip"
+  Button AHProfitWindowTabInventory 914,396 62x22 "Inventory"
+  Button AHProfitWindowTabReservations 978,396 78x22 "Reservations"
   Texture - 682,418 556x1
   Button AHProfitWindowMinChance 1100,396 130x20 "Min chance: 50%   "
   Frame AHProfitWindowHeadertoday 690,420 526x20
@@ -34,12 +33,12 @@ Frame AHProfitWindow 680,360 560x360
     Button - 838,420 28x20
     FontString - 749,420 86x20 "Item"
     Button - 749,420 86x20
-  Frame AHProfitWindowHeaderweek 690,420 526x20 (hidden)
   Frame AHProfitWindowHeaderdisenchant 690,420 526x20 (hidden)
   Frame AHProfitWindowHeadercraft 690,420 526x20 (hidden)
   Frame AHProfitWindowHeaderflip 690,420 526x20 (hidden)
   Frame AHProfitWindowHeaderinventory 690,420 526x20 (hidden)
   Frame AHProfitWindowHeaderreservations 690,420 526x20 (hidden)
+  Button AHProfitWindowTop 690,420 526x20 (hidden)
   Frame AHProfitWindowList 690,442 540x240
     Frame AHProfitWindowRow1 690,442 526x20
       Texture - 692,442 522x1
@@ -185,6 +184,9 @@ Frame AHProfitWindow 680,360 560x360
       FontString - 838,662 28x20 "×12"
       FontString - 745,662 90x20 "Scouting Gloves…"
       Texture - 694,666 48x12
+    Frame AHProfitWindowHeaderpfPositions 690,442 526x20 (hidden)
+    Frame AHProfitWindowHeaderpfToday 690,442 526x20 (hidden)
+    Frame AHProfitWindowHeaderpfWeek 690,442 526x20 (hidden)
   Texture - 682,691 556x1
   FontString - 692,700 176x10 "12 actions · expected +76   20  "
   FontString - 1140,700 88x10 "Budget 10   40  "

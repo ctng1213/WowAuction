@@ -97,14 +97,6 @@ describe("ViewModel", function()
     assert_eq(today.total, "+2s 90c")
   end)
 
-  it("D37 a chain's post names its peak and where its profit was counted", function()
-    local VM = Boot()
-    local buy = Act("f", "buy", 210, NOW - 20 * MINUTE)
-    local post = Act("g", "post", 95, NOW + 20 * HOUR - 30 * MINUTE, 100, { parent = "f", price = 45, peak = NOW + DAY + 3 * HOUR + 30 * MINUTE })
-    local week = VM.Week({ buy, post }, NOW, 0, Look, GOLD)
-    assert_eq(week.days[2].rows[1].note, "for the 18:00 peak · profit counted on the Thu 14:10 buy")
-  end)
-
   it("D38 Today says which peak each post is for and when a chain will post", function()
     local VM = Boot()
     local buy = Act("f", "buy", 210, NOW)
@@ -127,32 +119,20 @@ describe("ViewModel", function()
     local wood = Act("w", "buy", 0, NOW, nil, { key = 2840, qty = 7, char = "Brugan-Grommash" })
     local kit = Act("k", "craft", 732, NOW + MINUTE, nil, { key = 5000, qty = 7, price = nil, parent = "w" })
     local eggs = Act("e", "hold", 0, NOW, nil, { qty = 2, price = nil })
-    local week = VM.Week({ wood, kit, eggs }, NOW, 0, Look, GOLD)
+    local today = VM.Today({ wood, kit, eggs }, NOW, 0, 0, Look, GOLD)
     local rows = {}
-    for _, r in ipairs(week.days[1].rows) do rows[r.id] = r end
+    for _, r in ipairs(today.rows) do rows[r.id] = r end
     assert_eq({ rows.w.net, rows.w.note, rows.e }, { "—", "for crafting Basic Campfire Kit", nil })
-    assert_eq(week.total, "+7s 32c")
+    assert_eq(today.total, "+7s 32c")
     LOOKS[5000] = nil
   end)
 
-  it("D17 Week: seven local days from today, each with its total, and the week total", function()
-    local VM = Boot()
-    local actions = { Act("a", "post", 830, NOW + HOUR), Act("b", "post", 11000, NOW + 2 * HOUR),
-                      Act("c", "de", -20, NOW + DAY, nil, { char = "Brugan-Grommash" }),   -- a vendor sale is no row (D64)
-                      Act("far", "post", 5, NOW + 8 * DAY) }
-    local week = VM.Week(actions, NOW, 0, Look, GOLD)
-    assert_eq({ #week.days, week.days[1].label, week.days[1].today, week.days[2].label }, { 7, "Thu 9", true, "Fri 10" })
-    assert_eq({ week.days[1].total, week.days[2].total, week.days[3].total, week.total }, { "+1g 18s 30c", "−20c", "0c", "+1g 18s 10c" })
-    assert_eq({ week.days[1].rows[1].time, week.days[2].rows[1].who }, { "15:30", "Brugan" })
-  end)
-
-  it("times are local: the client's time zone moves the week's first day and the clock", function()
+  it("times are local: the client's time zone moves the clock", function()
     local VM = Boot()
     Stubs.world.localOffsetS = -15 * 3600                 -- UTC-15: Thu 14:30 UTC is Wed 23:30 local
     local offset = AHProfit.Adapter.LocalOffsetMs(NOW)
     assert_eq(offset, -15 * HOUR)
     assert_eq({ VM.Clock(NOW, offset) }, { "Wed", "23:30" })
-    assert_eq(VM.Week({}, NOW, offset, Look, GOLD).days[1].label, "Wed 8")
     Stubs.world.localOffsetS = 9 * 3600 + 1800
     assert_eq(AHProfit.Adapter.LocalOffsetMs(NOW), 9 * HOUR + 30 * MINUTE)
   end)
@@ -248,41 +228,17 @@ describe("ViewModel", function()
               { "38c", "45c", "gone", "checking" })
   end)
 
-  it("labels a window in local time, with its strength when it isn't established", function()
+  it("estimates text widths, wrapped lines and pages of mixed heights as the layout snapshots do", function()
     local VM = Boot()
-    assert_eq(VM.WindowLabel({ start = 138, hours = 4, weeks = 7 }, 0), "Sat 18:00–22:00")
-    assert_eq(VM.WindowLabel({ start = 138, hours = 4, weeks = 4 }, -HOUR), "Sat 17:00–21:00 (pattern)")
-    assert_eq(VM.WindowLabel({ start = 167, hours = 3, weeks = 2 }, 0), "Sun 23:00–Mon 02:00 (early)")
-    assert_eq({ VM.SeenAgo(20000), VM.SeenAgo(25 * MINUTE), VM.SeenAgo(2 * HOUR), VM.SeenAgo(3 * DAY) },
-              { "now", "25 min ago", "2 h ago", "3 d ago" })
+    assert_eq({ VM.TextWidth("abcd", 10), VM.TextWidth("|cffffffff…|r", 10), VM.TextWidth("1|Tx|t", 10) }, { 22, 5.5, 16.5 })
+    assert_eq({ VM.WrapCount("Required profession unavailable: Enchanting 150", 150, 10),
+                VM.WrapCount("Funded", 150, 10), VM.WrapCount("", 150, 10) }, { 2, 1, 1 })
+    local lines = { { height = 20 }, { height = 30 }, { height = 30 }, {}, { height = 50 } }
+    local page = VM.PageByHeight(lines, 0, 80, 12, 20)
+    assert_eq({ #page.lines, page.scrollable, page.offset }, { 3, true, 0 })     -- 20 + 30 + 30; the 4th won't fit
+    page = VM.PageByHeight(lines, 99, 80, 12, 20)
+    assert_eq({ #page.lines, page.offset }, { 2, 3 })                          -- the last two: 20 + 50
+    assert_eq(VM.PageByHeight({ {}, {} }, 5, 80, 12, 20), { lines = { {}, {} }, offset = 0, scrollable = false,
+                                                            thumbTop = 0, thumbSize = 1 })
   end)
-end)
-
---- A JSON null from the generated fixtures as nil.
----@param v any
----@return any
-local function Value(v)
-  if v == JSON_NULL then return nil end
-  return v
-end
-
-describe("ViewModel tooltip shared scenarios (tests/scenarios/tooltip.json)", function()
-  for _, s in ipairs(dofile("tests/addon/generated/tooltip.lua")) do
-    it(s.id .. " " .. s.name, function()
-      local VM = Boot()
-      local a = s.args
-      if s.call == "delta_percent" then
-        assert_eq(VM.DeltaPercent(a.value, a.current), s.expect, s.why)
-        return
-      end
-      local lines = VM.Tooltip({ cur = Value(a.cur), curAgeText = a.cur_age_text, med30 = Value(a.med30), deValue = Value(a.de_value),
-                                 canDisenchant = a.can_disenchant, bestWindow = Value(a.best_window),
-                                 bestPrice = Value(a.best_price), chance = Value(a.chance) })
-      local got = {}
-      for i, line in ipairs(lines) do got[i] = { line.label, line.value, line.colour } end
-      local want = {}
-      for i, line in ipairs(s.expect) do want[i] = { line[1], line[2], Value(line[3]) } end
-      assert_eq(got, want, s.why)
-    end)
-  end
 end)

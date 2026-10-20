@@ -91,6 +91,25 @@ function Adapter.ShowTooltip(owner, title, text)
   GameTooltip:Show()
 end
 
+--- Show a tooltip of several lines on a frame: wrapped text lines and two-column lines (the Portfolio tab's excluded
+--- rows, UI19), each already coloured as RGB.
+---@param owner table   The frame hovered
+---@param title string  First line
+---@param lines table[] { text, rgb, wrap } or { left, right, leftRgb, rightRgb }
+function Adapter.ShowTooltipLines(owner, title, lines)
+  GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+  GameTooltip:SetText(title)
+  for _, line in ipairs(lines) do
+    if line.text then
+      GameTooltip:AddLine(line.text, line.rgb[1], line.rgb[2], line.rgb[3], line.wrap == true)
+    else
+      local l, r = line.leftRgb, line.rightRgb
+      GameTooltip:AddDoubleLine(line.left, line.right, l[1], l[2], l[3], r[1], r[2], r[3])
+    end
+  end
+  GameTooltip:Show()
+end
+
 --- Call a function whenever the game shows an item tooltip.
 --- UNVERIFIED: which hook Forever has. Modern clients have TooltipDataProcessor; Classic has
 --- GameTooltip's OnTooltipSetItem script. Whichever exists is used.
@@ -114,16 +133,24 @@ function Adapter.HookItemTooltip(fn)
   return false
 end
 
---- Add the AHProfit block's lines to a tooltip.
+--- Add the AHProfit block's lines to a tooltip, two columns each (SPEC §4.3: label left, value right), in the small
+--- tooltip font so a line fits 320 px.
+--- UNVERIFIED: GameTooltip's TextLeft<n>/TextRight<n> font strings and GameTooltipTextSmall exist on Forever, as on
+--- Classic; without them the lines keep the tooltip's own font.
 ---@param tooltip table  The tooltip shown
----@param title string   Gold header line
----@param lines table[]  { label, value, colour = "green" | "red" | nil }
-function Adapter.AddTooltipLines(tooltip, title, lines)
-  local colours = { green = { 0.24, 0.86, 0.31 }, red = { 1, 0.29, 0.24 } }
-  tooltip:AddLine(title, 1, 0.82, 0)
+---@param lines table[]  { left, right, leftRgb = { r, g, b }, rightRgb } each, text already coloured
+function Adapter.AddTooltipLines(tooltip, lines)
   for _, line in ipairs(lines) do
-    local c = colours[line.colour] or { 1, 1, 1 }
-    tooltip:AddDoubleLine(line.label, line.value, 0.56, 0.83, 1, c[1], c[2], c[3])
+    local l, r = line[3], line[4]
+    tooltip:AddDoubleLine(line[1], line[2], l[1], l[2], l[3], r[1], r[2], r[3])
+    local n = tooltip.NumLines and tooltip:NumLines()
+    local name = n and tooltip.GetName and tooltip:GetName()
+    if name and GameTooltipTextSmall then
+      for _, side in ipairs({ "TextLeft", "TextRight" }) do
+        local text = _G[name .. side .. n]
+        if text and text.SetFontObject then text:SetFontObject(GameTooltipTextSmall) end
+      end
+    end
   end
   tooltip:Show()
 end
