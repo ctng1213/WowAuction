@@ -31,6 +31,7 @@ from ahsync.export.addon_files import (DATA_FOLDER, MARKET_FILE, PLAN_FILE, expo
 WORLD = ROOT / "tests" / "fixtures" / "worlds" / "w1.json"
 EXPECTED = ROOT / "tests" / "fixtures" / "worlds" / "w1.expected.json"
 MARKET_ITEM_LINES = 40     # the market file is trimmed to its header and the first lines of its item table
+PORTFOLIO_LINES = ("K[", "R[", "U[", "G.")     # ...but keeps every candidate and graph line (EX17, EX18)
 
 
 def load_world(db: Database, world: dict) -> None:
@@ -49,19 +50,23 @@ def load_world(db: Database, world: dict) -> None:
 
 
 def trimmed(text: str, keep: int = MARKET_ITEM_LINES) -> str:
-    """The market file cut to its first `keep` lines plus its last line, to keep the snapshot small.
+    """The market file cut to its first `keep` lines, its candidate and graph lines (K, G) and its last line.
 
     Args:
         text: MarketIntelligence.lua.
         keep: Lines kept from the top (the header and the first items).
 
     Returns:
-        The kept lines, then a marker with how many were left out, then the last line.
+        The kept lines, then a marker with how many were left out, then every later K[, R[, U[ and G. line (the
+        portfolio export, EX17, EX18), then the header table from `AHProfitMarket = {` on (else the last line).
     """
     lines = text.splitlines()
     if len(lines) <= keep + 1:
         return text
-    return "\n".join(lines[:keep] + [f"-- ({len(lines) - keep - 1} lines trimmed by tools/snapshot.py)", lines[-1]])
+    header = next((i for i in range(keep, len(lines)) if lines[i].startswith("AHProfitMarket = {")), len(lines) - 1)
+    portfolio = [line for line in lines[keep:header] if line.startswith(PORTFOLIO_LINES)]
+    left_out = header - keep - len(portfolio)
+    return "\n".join(lines[:keep] + [f"-- ({left_out} lines trimmed by tools/snapshot.py)", *portfolio, *lines[header:]])
 
 
 def compact_cells(value: object) -> object:

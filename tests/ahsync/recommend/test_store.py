@@ -69,3 +69,21 @@ def test_alternatives_are_staged_and_swapped_in_with_the_plan(db):
     assert db.alternatives(M) == [row] and db.count("alternatives_new") == 0
     db.publish_refresh([M])                            # nothing staged: the market's alternatives are emptied
     assert db.alternatives(M) == []
+
+
+def test_the_exported_candidates_and_the_portfolio_snapshot_are_staged_and_swapped_in_with_the_plan(db):
+    rows = [("a:1", "", 120.5, "{}"), ("b:1", "Exceeds risk tolerance (needs 45s, 24s 40c left)", 80.0, "{}")]
+    snap = {"snapshot_ms": 1, "reserved": {"Brugan-G": 5}}
+    with db.transaction():
+        db.stage_export(M, rows, snap)
+        db.stage_export(OTHER, rows[:1], None)                 # a market without characters has no snapshot
+    assert db.export_candidates(M) == [] and db.portfolio_snapshot(M) is None        # staged, not live
+    db.publish_refresh([M], with_intel=False)
+    assert db.export_candidates(M) == rows and db.portfolio_snapshot(M) == snap
+    assert db.export_candidates(OTHER) == []
+    with db.transaction():
+        db.stage_export(M, [], None)
+    db.drop_staging()                                          # an interrupted refresh keeps the live ones (FM7)
+    assert db.export_candidates(M) == rows and db.count("export_candidates_new") == db.count("portfolio_snapshot_new") == 0
+    db.publish_refresh([M])                                    # nothing staged: emptied, like the plan
+    assert db.export_candidates(M) == [] and db.portfolio_snapshot(M) is None

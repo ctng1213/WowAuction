@@ -172,6 +172,18 @@ def _account_message(kind: str, d: dict) -> tuple[str, str]:
     }[kind]
 
 
+def size_text(size: int) -> str:
+    """A size budget in whole MB, or whole KB under 1 MB (FM40's "2 MB").
+
+    Args:
+        size: Bytes.
+
+    Returns:
+        E.g. "2 MB" or "200 KB".
+    """
+    return f"{size // 1_048_576} MB" if size >= 1_048_576 else f"{size // 1024} KB"
+
+
 def message(row: StatusRow, offset_ms: int) -> tuple[str, str]:
     """A stored Status line as a title and a sentence (SPEC §3.2, §5.2).
 
@@ -223,6 +235,10 @@ def message(row: StatusRow, offset_ms: int) -> tuple[str, str]:
                                                          f"previous one; the next refresh tries again."),
         "addon_file_large": ("Addon file over budget", f"{d.get('file', '?')} is {d.get('bytes', 0) // 1024} KB, over "
                                                        f"its {d.get('limit', 0) // 1024} KB budget; WoW may load slowly."),
+        "candidate_export_trimmed": ("Candidate export trimmed",
+                                     f"candidate export trimmed to {d.get('kept', 0)} of {d.get('total', 0)} to fit "
+                                     f"{size_text(d.get('limit', 0))}: the lowest alternatives stay on the dashboard; "
+                                     f"every funded row is in the addon file (FM40)."),
         "volume_method_old": ("Older sales estimates", f"{market}: {d.get('days', 0)} days of sales estimates are "
                                                        f"from an older method; their scans are gone, so they can't be "
                                                        f"recomputed. They age out with the 90-day history."),

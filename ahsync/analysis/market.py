@@ -12,6 +12,7 @@ from collections import Counter
 from dataclasses import replace
 
 from ahsync.engine import confidence, fees, patterns, prices, profile, sellprob
+from ahsync.engine.capacity import GEAR_CLASSES
 from ahsync.engine.profile import Profile
 from ahsync.engine.sellprob import MarketSettings, Supply
 from ahsync.engine.volume import (VOLUME_METHOD_VERSION, Cover, DailyVolume, Volume, daily_volume, median_daily_supply,
@@ -97,15 +98,39 @@ def _packed(name: str, prof: Profile, fields: dict) -> Profile:
 
 
 def _windows(windows: list[patterns.Window]) -> tuple[IntelWindow, ...]:
-    """Engine windows as contract windows.
+    """Engine windows as contract windows, with their forecasts (W15).
 
     Args:
         windows: From patterns.sell_windows or patterns.buy_windows.
 
     Returns:
-        The same windows, in order.
+        The same windows, in order; the forecast fields None for a window without a forecast.
     """
-    return tuple(IntelWindow(w.start_slot, w.hours, w.best_slot, w.how_avg, w.weeks) for w in windows)
+    return tuple(IntelWindow(w.start_slot, w.hours, w.best_slot, w.how_avg, w.weeks,
+                             *((w.forecast.price, w.forecast.exec_qty, w.forecast.conf) if w.forecast else ()))
+                 for w in windows)
+
+
+def window_fields(how: Profile, sales: Profile, facts: patterns.ForecastFacts | None, settings: MarketSettings) -> dict:
+    """An item's selling and buying windows with their forecasts (SPEC §3.3.4, §3.3.6, W14, W15).
+
+    Args:
+        how: The item's price profile, as stored.
+        sales: Its sales profile, as stored.
+        facts: What forecasting needs (level, supply, ...); None when the item has no price level.
+        settings: Window threshold and how many windows to keep.
+
+    Returns:
+        {"sell_windows", "buy_windows"} as contract windows: selling by sell_score, buying by actionable value
+        (by price ratio without a level).
+    """
+    forecast = None if facts is None else (lambda w: patterns.window_forecast(w, facts))
+    sell = patterns.sell_windows(how.values, sales.values, how.weeks, settings.window_threshold,
+                                 settings.top_sell_windows, forecast)
+    net = None if facts is None else patterns.sell_net_price(sell, facts.level)
+    buy = patterns.buy_windows(how.values, how.weeks, settings.window_threshold, settings.top_buy_windows, forecast,
+                               net)
+    return {"sell_windows": _windows(sell), "buy_windows": _windows(buy)}
 
 
 def sales_fields(item: ItemHistory, now_ms: int, settings: MarketSettings) -> tuple[Profile, dict]:
@@ -125,8 +150,8 @@ def sales_fields(item: ItemHistory, now_ms: int, settings: MarketSettings) -> tu
 
 
 def weekly_fields(item: ItemHistory, med30: int | None, volume: DailyVolume, ref: int, now_ms: int,
-                  settings: MarketSettings, sales: tuple[Profile, dict]) -> dict:
-    """An item's weekly patterns, windows, seasonality strength and curve (SPEC §3.3.4, §3.3.6, §3.1.1).
+                  settings: MarketSettings, sales: tuple[Profile, dict]) -> tuple[dict, tuple[Profile, Profile, Profile]]:
+    """An item's weekly patterns, seasonality strength and curve (SPEC §3.3.4, §3.3.6, §3.1.1).
 
     Args:
         item: The item's history (hourly closes and supply over the history window).
@@ -138,14 +163,14 @@ def weekly_fields(item: ItemHistory, med30: int | None, volume: DailyVolume, ref
         sales: From sales_fields.
 
     Returns:
-        The ItemIntel pattern fields by name.
+        (the ItemIntel pattern fields by name, (price, sales, supply) profiles as stored for window_fields).
     """
     hourly = item.hourly_closes
     half_life = settings.pattern_half_life_weeks
     fields: dict = dict(sales[1])
     sales_profile = sales[0]
     how = _packed("how", profile.price_profile(hourly, med30, now_ms, half_life), fields)
-    _packed("supply", profile.supply_profile(item.hourly_supply, now_ms, half_life), fields)
+    supply = _packed("supply", profile.supply_profile(item.hourly_supply, now_ms, half_life), fields)
     curve, curve_hour = "", None
     if volume.sold_per_day is not None:
         grid = sellprob.build_curve(volume.sold_per_day, volume.listed_per_day or 0.0, settings.default_undercut_share,
@@ -154,11 +179,8 @@ def weekly_fields(item: ItemHistory, med30: int | None, volume: DailyVolume, ref
     return {
         **fields,
         "seasonality": profile.seasonality_strength(hourly, med30, now_ms, half_life),
-        "sell_windows": _windows(patterns.sell_windows(how.values, sales_profile.values, how.weeks,
-                                                       settings.window_threshold)),
-        "buy_windows": _windows(patterns.buy_windows(how.values, how.weeks, settings.window_threshold)),
         "curve": curve, "curve_hour": curve_hour,
-    }
+    }, (how, sales_profile, supply)
 
 
 def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings: MarketSettings) -> ItemIntel:
@@ -199,16 +221,26 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
     book_age = now_ms - newest[0] if newest else None
     recent = [c for t, c in raw if t > now_ms - DAY_MS]
     conf = confidence.percent(confidence.score(len(last30), volume.volume_score, book_age, None, 0))
+    trend = prices.trend7(hourly, now_ms, med7)
+    units = sum(stack * count for _, stack, _, count in book) if book else (cur.qty if cur else None)
+    typical = median_daily_supply(item.hourly_supply, now_ms)
+    weekly, (how, sales_profile, supply_profile) = weekly_fields(item, med30, volume, ref, now_ms, settings, sales)
+    level, gear = (med7 if med7 is not None else med30), bool(info and info.item_class in GEAR_CLASSES)
+    facts = None if level is None else patterns.ForecastFacts(                     # W15: the window forecasts
+        now_ms, level, trend, p10, med7, p90, len(last30), units if units is not None else typical,
+        supply_profile.values if any(supply_profile.weeks) else (),
+        max(ref, settings.min_gear_units) if gear else ref,
+        settings.max_supply_share_gear if gear else settings.max_supply_share,
+        volume.volume_score, book_age, settings.max_trend_total)
     return ItemIntel(
         key, cur.price if cur else None, cur.qty if cur else None, now_ms - cur.at if cur else None,
         med7, med30, p10, p90,
-        prices.trend7(hourly, now_ms, med7), volume.sold_per_day, volume.expired_per_day, volume.listed_per_day,
+        trend, volume.sold_per_day, volume.expired_per_day, volume.listed_per_day,
         volume.main_source, volume.days_by_source, price, ref, chance, unknown, sell_value, conf,
-        sum(stack * count for _, stack, _, count in book) if book else (cur.qty if cur else None),
-        book_age, tuple(book or ()),
-        **weekly_fields(item, med30, volume, ref, now_ms, settings, sales),
+        units, book_age, tuple(book or ()),
+        **weekly, **window_fields(how, sales_profile, facts, settings),
         cur_suspect=prices.suspect_price(cur.price if cur else None, p10, p90, recent),
-        median_daily_supply=median_daily_supply(item.hourly_supply, now_ms),
+        median_daily_supply=typical,
         observed_listing_turnover=observed_turnover(item.hourly_supply, now_ms),
         volume_kind=volume.main_kind, closes_30d=len(last30))
 

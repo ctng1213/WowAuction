@@ -393,7 +393,9 @@ def market_settings(config: Config) -> MarketSettings:
     return MarketSettings(config.default_sell_prob, config.own_record_weight, config.default_undercut_share,
                           config.sell_window_hours, config.pattern_half_life_weeks, config.window_threshold,
                           config.default_sell_prob_cheapest,
-                          VolumePrior(config.volume_prior_per_day, config.volume_prior_hours))
+                          VolumePrior(config.volume_prior_per_day, config.volume_prior_hours),
+                          config.max_supply_share, config.max_supply_share_gear, config.min_gear_units,
+                          config.max_trend_total, config.top_buy_windows, config.top_sell_windows)
 
 
 

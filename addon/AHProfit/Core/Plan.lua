@@ -15,7 +15,8 @@ Plan.SCHEMA_VERSION = 1            -- must equal ahsync/export/plan_lua.py PLAN_
 
 local state = nil                  -- { status, file } once checked
 
---- Count and total length of every action and rule string, the file's checksum.
+--- Count and total length of every action, rule, portfolio, gold, reserved (its digits) and position string, the
+--- file's checksum.
 ---@param file table  AHProfitPlan
 ---@return string     "<strings>:<total length>"
 local function Checksum(file)
@@ -24,6 +25,12 @@ local function Checksum(file)
     for _, text in ipairs(list) do count, length = count + 1, length + #text end
   end
   for _, text in pairs(file.rules or {}) do count, length = count + 1, length + #text end
+  for _, text in pairs(file.portfolio or {}) do count, length = count + 1, length + #text end
+  for _, text in pairs(file.gold or {}) do count, length = count + 1, length + #text end
+  for _, copper in pairs(file.reserved or {}) do count, length = count + 1, length + #tostring(copper) end
+  for _, list in pairs(file.positions or {}) do
+    for _, text in ipairs(list) do count, length = count + 1, length + #text end
+  end
   return count .. ":" .. length
 end
 
@@ -243,6 +250,81 @@ function Plan.Reserves(charId)
   for key, qty, at in text:gmatch("(%-?%d+),(%-?%d+),(%d+)") do
     out[tonumber(key)] = { qty = tonumber(qty), at = tonumber(at) }
   end
+  return out
+end
+
+--- Split a text on ";", keeping empty fields.
+---@param text string
+---@return string[]
+local function Fields(text)
+  local out = {}
+  for field in (text .. ";"):gmatch("([^;]*);") do out[#out + 1] = field end
+  return out
+end
+
+--- Decode one market's portfolio snapshot (SPEC §3.5 `portfolio`, EX18).
+---@param text string  "snapshotMs;riskTolerance1000;premiumBase1000;premiumPerDay1000;immediateHours;todayLimit;
+---                    weekLimit;horizonDays;configVersion;capitalBase;committed;capacity;allocated"
+---@return table       Those fields by name, numbers; riskTolerance, premiumBase and premiumPerDay also as fractions
+function Plan.DecodePortfolio(text)
+  local names = { "snapshotMs", "riskTolerance1000", "premiumBase1000", "premiumPerDay1000", "immediateHours",
+                  "todayLimit", "weekLimit", "horizonDays", "configVersion", "capitalBase", "committed", "capacity",
+                  "allocated" }
+  local out = {}
+  for i, field in ipairs(Fields(text)) do
+    if names[i] then out[names[i]] = tonumber(field) end
+  end
+  out.riskTolerance = out.riskTolerance1000 and out.riskTolerance1000 / 1000
+  out.premiumBase = out.premiumBase1000 and out.premiumBase1000 / 1000
+  out.premiumPerDay = out.premiumPerDay1000 and out.premiumPerDay1000 / 1000
+  return out
+end
+
+--- A market's portfolio snapshot, as the desktop's last plan left it (EX18).
+---@param marketId string
+---@return table|nil  As Plan.DecodePortfolio; nil without a usable plan or a snapshot for that market
+function Plan.Portfolio(marketId)
+  local s = State()
+  local text = s.status == "ok" and (s.file.portfolio or {})[marketId]
+  if not text then return nil end
+  return Plan.DecodePortfolio(text)
+end
+
+--- A character's gold at its last snapshot (EX18).
+---@param charId string
+---@return number|nil  Copper; nil without a usable plan or a record
+---@return number|nil  When it was seen, ms; nil when unknown
+function Plan.Gold(charId)
+  local s = State()
+  local text = s.status == "ok" and (s.file.gold or {})[charId]
+  if not text then return nil, nil end
+  local copper, at = text:match("^(%d+),(%d*)$")
+  return tonumber(copper), tonumber(at)
+end
+
+--- The gold the desktop's funded plan reserves on a character (EX18).
+---@param charId string
+---@return number  Copper; 0 without a usable plan or a reservation
+function Plan.Reserved(charId)
+  local s = State()
+  return s.status == "ok" and (s.file.reserved or {})[charId] or 0
+end
+
+--- Decode one position string (SPEC §3.5 `positions`, EX18).
+---@param text string  "positionId;key;state;units;unitsLeft;costLeft;netNow;targetMs;nextAction"
+---@return table       { id, key, state, units, unitsLeft, costLeft, netNow, target, nextAction }; empty fields nil
+function Plan.DecodePosition(text)
+  local f = Fields(text)
+  return { id = f[1], key = tonumber(f[2]), state = f[3], units = tonumber(f[4]), unitsLeft = tonumber(f[5]),
+           costLeft = tonumber(f[6]), netNow = tonumber(f[7]), target = tonumber(f[8]), nextAction = Optional(f[9] or "") }
+end
+
+--- A character's open positions (EX18).
+---@param charId string
+---@return table[]  As Plan.DecodePosition, by item key; empty without a usable plan
+function Plan.Positions(charId)
+  local s, out = State(), {}
+  for i, text in ipairs(s.status == "ok" and (s.file.positions or {})[charId] or {}) do out[i] = Plan.DecodePosition(text) end
   return out
 end
 

@@ -6,14 +6,15 @@
       actions = { [charId] = { "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status;chance;peakMs;source;
                                durationH;toChar", ... } },
       rules = { [key] = "rule,setAtMs" },    -- "none" is a clear and travels too (SPEC §3.4.2)
+      portfolio, gold, reserved, positions   -- the portfolio snapshot (export/portfolio_lua.py, EX18)
     }
 
 Only open actions (pending, late) are exported, in time order; an empty field is
 unavailable. Net is the planned expected net in copper, rounded half up; chance is the
 planned chance to sell in whole percent and peakMs the hour a post is for (posts;
 empty otherwise); toChar is a mail's recipient (C22, EXPORT_VERSION 2). The checksum
-is "<strings>:<their total length>" over every action and rule string, like
-MarketIntelligence.lua's. It is account-specific: every account on the machine shares
+is "<strings>:<their total length>" over every action, rule, portfolio, gold, reserved (its digits) and
+position string, like MarketIntelligence.lua's. It is account-specific: every account on the machine shares
 it, which is why ingestedUntil is per character (SPEC §2.2). exportVersion (market_lua.EXPORT_VERSION, EX14) is
 outside the checksum.
 SPEC GAP: the sell record per item (s, x, streak) joins it with tracking (M6b).
@@ -21,11 +22,48 @@ SPEC GAP: the sell record per item (s, x, streak) joins it with tracking (M6b).
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 
 from ahsync.engine.views import round_half_up
 from ahsync.export.market_lua import EXPORT_VERSION, lua_string
 
 PLAN_SCHEMA_VERSION = 1        # the addon refuses any other (EX4)
+
+
+@dataclass(frozen=True)
+class PortfolioFields:
+    """The portfolio part of PortfolioPlan.lua (SPEC §3.5, EX18), formats in export/portfolio_lua.py."""
+
+    portfolio: dict[str, str] = field(default_factory=dict)           # market -> portfolio string
+    gold: dict[str, str] = field(default_factory=dict)                # character -> "copper,atMs"
+    reserved: dict[str, int] = field(default_factory=dict)            # character -> copper the funded plan reserves
+    positions: dict[str, list[str]] = field(default_factory=dict)     # character -> position strings
+
+    def strings(self) -> list[str]:
+        """Every string the checksum counts, in the file's order.
+
+        Returns:
+            Portfolio strings by market, gold strings by character, reserved amounts as decimal text by
+            character, then position strings by character.
+        """
+        out = [self.portfolio[m] for m in sorted(self.portfolio)] + [self.gold[c] for c in sorted(self.gold)]
+        out += [str(self.reserved[c]) for c in sorted(self.reserved)]
+        return out + [text for c in sorted(self.positions) for text in self.positions[c]]
+
+    def lines(self) -> list[str]:
+        """The Lua lines of the four tables, inside AHProfitPlan.
+
+        Returns:
+            Source lines.
+        """
+        lines = ["  portfolio = {"] + [f"    [{lua_string(m)}] = {lua_string(t)}," for m, t in sorted(self.portfolio.items())]
+        lines += ["  },", "  gold = {"] + [f"    [{lua_string(c)}] = {lua_string(t)}," for c, t in sorted(self.gold.items())]
+        lines += ["  },", "  reserved = {"] + [f"    [{lua_string(c)}] = {n}," for c, n in sorted(self.reserved.items())]
+        lines += ["  },", "  positions = {"]
+        for char_id in sorted(self.positions):
+            lines += [f"    [{lua_string(char_id)}] = {{", *(f"      {lua_string(t)}," for t in self.positions[char_id]),
+                      "    },"]
+        return lines + ["  },"]
 
 
 def _field(value: object) -> str:
@@ -63,7 +101,7 @@ def action_text(row: tuple) -> str:
 
 def plan_lua(actions: Sequence[tuple], rules: Sequence[tuple[int, str, int]], ingested_until: Mapping[str, int],
              generated_ms: int, records: Mapping[int, str] | None = None,
-             reserves: Sequence[tuple[str, int, int, int]] = ()) -> str:
+             reserves: Sequence[tuple[str, int, int, int]] = (), portfolio: PortfolioFields | None = None) -> str:
     """The whole PortfolioPlan.lua (SPEC §3.5, EX3).
 
     Args:
@@ -75,6 +113,7 @@ def plan_lua(actions: Sequence[tuple], rules: Sequence[tuple[int, str, int]], in
             so an older addon still reads the file.
         reserves: (character id, item key, units kept, set_at ms) with a time, clears (0) included (EX12); outside
             the checksum.
+        portfolio: The portfolio snapshot, gold, reservations and positions (EX18); empty tables when None.
 
     Returns:
         Lua source defining the global AHProfitPlan.
@@ -83,7 +122,8 @@ def plan_lua(actions: Sequence[tuple], rules: Sequence[tuple[int, str, int]], in
     for row in actions:
         by_char.setdefault(row[1], []).append(action_text(row))
     rule_texts = {key: f"{rule},{set_at}" for key, rule, set_at in rules}
-    strings = [s for texts in by_char.values() for s in texts] + list(rule_texts.values())
+    fields = portfolio or PortfolioFields()
+    strings = [s for texts in by_char.values() for s in texts] + list(rule_texts.values()) + fields.strings()
     based_on = max(ingested_until.values()) if ingested_until else None
     lines = ["-- PortfolioPlan.lua: generated by AHSync (SPEC §3.5). Do not edit; it is replaced whenever the plan changes.",
              "AHProfitPlan = {", f"  schemaVersion = {PLAN_SCHEMA_VERSION},",
@@ -98,7 +138,7 @@ def plan_lua(actions: Sequence[tuple], rules: Sequence[tuple[int, str, int]], in
         lines.append("    },")
     lines += ["  },", "  rules = {"]
     lines += [f"    [{key}] = {lua_string(text)}," for key, text in sorted(rule_texts.items())]
-    lines += ["  },", "  records = {"]
+    lines += ["  },", *fields.lines(), "  records = {"]
     lines += [f"    [{key}] = {lua_string(text)}," for key, text in sorted((records or {}).items())]
     kept: dict[str, list[str]] = {}
     for char_id, key, qty, set_at in sorted(reserves):

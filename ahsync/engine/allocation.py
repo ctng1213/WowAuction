@@ -49,6 +49,7 @@ class PortfolioPlan:
     alternatives: tuple[Alternative, ...]      # the rest, by candidate id
     selection: Selection
     accounting: Accounting
+    funded_adjusted: tuple[tuple[str, float], ...] = ()   # (candidate id, adjusted profit) of the funded, in funding order
 
 
 def stock_positions(units: Sequence[tuple[str, int, int]], cost: Mapping[int, tuple[int, int]]) -> list[OpenPosition]:
@@ -75,6 +76,62 @@ def stock_positions(units: Sequence[tuple[str, int, int]], cost: Mapping[int, tu
         if bought > 0 and paid > 0 and n > 0:
             out.append(OpenPosition(f"stock:{char_id}:{key}", char_id, (2 * n * paid + bought) // (2 * bought)))
     return out
+
+
+SELL_KINDS = ("post", "de", "vendor", "hold")       # what the sell plan does with units you hold
+
+
+@dataclass(frozen=True)
+class PositionRow:
+    """One open position as PortfolioPlan.lua carries it (SPEC §3.5 positions, EX18; the M10 interim rule until M14)."""
+
+    position_id: str                           # "stock:<char>:<key>", as stock_positions
+    char_id: str
+    key: int
+    state: str                                 # "Listed" when some of its units are on the AH, else "Holding"
+    units: int                                 # units held, in the mail or listed
+    units_left: int                            # the same until positions track sales (M14)
+    cost_left: int                             # copper, as stock_positions
+    net_now: float | None                      # Σ expected net of the plan's actions for these units; None without
+    target_ms: int | None                      # the first such action's peak hour, else its time
+    next_action: str | None                    # that action's kind: "post", "de", "vendor" or "hold"
+
+
+def position_rows(held: Sequence[tuple[str, int, int]], listed: Sequence[tuple[str, int, int]],
+                  cost: Mapping[int, tuple[int, int]], actions: Sequence[PlanAction]) -> list[PositionRow]:
+    """The open positions with what the plan does with them (SPEC §3.5 positions, interim until M14).
+
+    Positions are stock_positions' (units with a cost basis); the plan's actions for them are the sell plan's own
+    (no chain) posts, disenchants, vendor sales and holds of that character and item.
+
+    Args:
+        held: (character, item key, units) in bags, bank and mail, unbound.
+        listed: (character, item key, units) on the AH.
+        cost: Item key -> (units bought, total copper paid), account-wide.
+        actions: The funded plan's actions.
+
+    Returns:
+        One PositionRow per position, by character then item.
+    """
+    units: dict[tuple[str, int], int] = {}
+    for char_id, key, n in [*held, *listed]:
+        units[(char_id, key)] = units.get((char_id, key), 0) + n
+    on_ah = {(char_id, key) for char_id, key, n in listed if n > 0}
+    planned: dict[tuple[str, int], list[PlanAction]] = {}
+    for a in actions:
+        if a.chain is None and a.kind in SELL_KINDS:
+            planned.setdefault((a.char_id, a.key), []).append(a)
+    rows = []
+    for p in stock_positions([*held, *listed], cost):
+        key = int(p.position_id.rsplit(":", 1)[1])
+        mine = sorted(planned.get((p.char_id, key), []), key=lambda a: (a.at_ms, a.kind))
+        first = mine[0] if mine else None
+        n = units[(p.char_id, key)]
+        rows.append(PositionRow(p.position_id, p.char_id, key, "Listed" if (p.char_id, key) in on_ah else "Holding",
+                                n, n, p.cost_left, sum(a.net for a in mine) if mine else None,
+                                None if first is None else (first.peak_ms or first.at_ms),
+                                None if first is None else first.kind))
+    return rows
 
 
 def generate(world: PlanWorld, gi: GenInputs, run: Run) -> Universe:
@@ -186,4 +243,5 @@ def portfolio_plan(w: WeekInputs, gi: GenInputs, chars: Sequence[CharacterGold],
     pick_by_id = {p.cand_id: p for p in batch_picks}
     alternatives = tuple(Alternative(by_id[i][1].candidate, pick_by_id[i].lst, reason, pick_by_id[i].adjusted)
                          for i, reason in result.reasons)
-    return PortfolioPlan(actions, tuple(by_id[i][1].candidate for i in result.funded), alternatives, result, acct)
+    return PortfolioPlan(actions, tuple(by_id[i][1].candidate for i in result.funded), alternatives, result, acct,
+                         tuple((i, pick_by_id[i].adjusted) for i in result.funded))

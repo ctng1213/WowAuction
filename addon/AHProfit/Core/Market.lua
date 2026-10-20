@@ -1,7 +1,8 @@
 -- Core/Market.lua: reads MarketIntelligence.lua, written by AHSync (SPEC §3.5, §5.1, §5.2).
 -- The file is checked once (schema version, export version and checksum) the first time anything asks, and
 -- items stay compact strings until one is needed; decoded items sit in a small cache, so
--- login never builds 9k tables (SPEC §5.1 lazy data decode). Format: ahsync/export/market_lua.py.
+-- login never builds 9k tables (SPEC §5.1 lazy data decode). Candidates (K) decode the same way, one when asked;
+-- the dependency graph (G) decodes once, when first asked. Formats: ahsync/export/market_lua.py and portfolio_lua.py.
 
 local AHProfit = AHProfit
 local Adapter = AHProfit.Adapter
@@ -12,7 +13,8 @@ AHProfit.Market = Market
 Market.SCHEMA_VERSION = 1          -- must equal ahsync/export/market_lua.py MARKET_SCHEMA_VERSION (FM17)
 -- The build of both generated files' format; must equal ahsync/export/market_lua.py EXPORT_VERSION. A file of
 -- another build says which side is stale (FM34, FM35). Core/Plan.lua, which loads after this file, reads it too.
-AHProfit.EXPORT_VERSION = 3            -- 3: market items end in closes30 (TT23, PP4); 2: a mail's recipient (C22, EX16)
+AHProfit.EXPORT_VERSION = 4            -- 4: K, G and the portfolio snapshot (EX17, EX18); 3: market items end in
+                                       -- closes30 (TT23, PP4); 2: a mail's recipient (C22, EX16)
 Market.CACHE_LIMIT = 500           -- decoded items kept before the cache starts again
 Market.FIELDS = { "cur", "curQty", "curAgeMin", "med7", "med30", "p10", "p90", "trend10", "sold10", "listed10",
                   "supply", "conf", "seasonality", "postPrice", "refStack", "sellValue", "volumeUnknown",
@@ -22,6 +24,7 @@ Market.FIELDS = { "cur", "curQty", "curAgeMin", "med7", "med30", "p10", "p90", "
 
 local state = nil                  -- { status, market = { I, C, observationsUntil, curveHour }, file } once checked
 local cache, cached = {}, 0
+local candidates, graph = {}, nil  -- decoded K strings by position; the decoded G
 
 --- Count and total length of every item and curve string, the file's checksum.
 ---@param markets table  AHProfitMarket.markets
@@ -32,6 +35,13 @@ local function Checksum(markets)
     for _, text in pairs(m.I or {}) do count, length = count + 1, length + #text end
     for _, text in pairs(m.C or {}) do count, length = count + 1, length + #text end
     for _, text in pairs(m.D or {}) do count, length = count + 1, length + #text end
+    for _, text in ipairs(m.K or {}) do count, length = count + 1, length + #text end
+    local g = m.G or {}
+    for _, text in pairs(g.R or {}) do count, length = count + 1, length + #text end
+    for _, text in pairs(g.U or {}) do count, length = count + 1, length + #text end
+    for _, text in ipairs({ g.DE or "", g.order or "" }) do
+      if text ~= "" then count, length = count + 1, length + #text end   -- an empty one counts as no string
+    end
   end
   return count .. ":" .. length
 end
@@ -157,7 +167,8 @@ function Market.Item(key)
   return item
 end
 
---- One item's sell-probability curve (SPEC §3.1.1).
+--- One item's sell-probability curve (SPEC §3.1.1): 24 rows × 8 points for the shortlist; one row × 3 points (the
+--- refresh hour's, 0, 5 and 20 ahead) for a tooltip-only item, which SellProb.Lookup uses at any hour (EX19).
 ---@param key number  Item key
 ---@return table|nil  { rows, aheadPoints, refreshMs }; nil without a curve
 function Market.Curve(key)
@@ -180,9 +191,98 @@ function Market.Times()
   return s.file.generatedAt, s.market.observationsUntil
 end
 
---- Forget the checked file and the cache (tests, and a future reload of the data).
+--- Forget the checked file and the caches (tests, and a future reload of the data).
 function Market.Reset()
   state, cache, cached = nil, {}, 0
+  candidates, graph = {}, nil
+end
+
+--- Split a text on a separator, keeping empty fields.
+---@param text string
+---@param sep string  One character
+---@return string[]
+local function Split(text, sep)
+  local out = {}
+  for field in (text .. sep):gmatch("([^" .. sep .. "]*)" .. sep) do out[#out + 1] = field end
+  return out
+end
+
+--- Decode one candidate string (SPEC §3.5 `K`, EX17).
+---@param text string  "cid;strategy;charId;outKey;outQty;inputs;gold;cashBasis;net;chance1000;saleMs;windowEndMs;conf;needs;status"
+---@return table       { id, strategy, char, key, qty, inputs = { { key, count, source } }, gold, cashBasis, net (copper),
+---                    chance (0-1), sale, windowEnd (ms or nil), conf (%), needs = { profession, skill } or nil,
+---                    status (nil when funded, else the reason code), funded (bool) }
+function Market.DecodeCandidate(text)
+  local f = Split(text, ";")
+  local inputs = {}
+  for _, part in ipairs(f[6] ~= "" and Split(f[6], "/") or {}) do
+    local key, count, source = part:match("^(%d+):(%d+):(.*)$")
+    inputs[#inputs + 1] = { key = tonumber(key), count = tonumber(count), source = source }
+  end
+  local profession, skill = (f[14] or ""):match("^(.+):(%d+)$")
+  local status = f[15] or ""
+  return { id = f[1], strategy = f[2], char = f[3], key = tonumber(f[4]), qty = tonumber(f[5]), inputs = inputs,
+           gold = tonumber(f[7]), cashBasis = tonumber(f[8]), net = tonumber(f[9]),
+           chance = tonumber(f[10]) and tonumber(f[10]) / 1000, sale = tonumber(f[11]), windowEnd = tonumber(f[12]),
+           conf = tonumber(f[13]), needs = profession and { profession = profession, skill = tonumber(skill) } or nil,
+           status = status ~= "" and status or nil, funded = status == "" }
+end
+
+--- How many candidates the market exports (EX17).
+---@return number  0 without usable data or an older file
+function Market.CandidateCount()
+  local s = State()
+  if s.status ~= "ok" then return 0 end
+  return #(s.market.K or {})
+end
+
+--- One exported candidate, decoded on first use and kept (EX17): funded ones first, in funding order.
+---@param index number  1-based position in the export
+---@return table|nil    As Market.DecodeCandidate; nil past the end or without usable data
+function Market.Candidate(index)
+  local s = State()
+  if s.status ~= "ok" then return nil end
+  local found = candidates[index]
+  if found then return found end
+  local text = (s.market.K or {})[index]
+  if not text then return nil end
+  found = Market.DecodeCandidate(text)
+  candidates[index] = found
+  return found
+end
+
+--- Split "a,b,c" into numbers.
+---@param text string|nil
+---@return number[]
+local function Numbers(text)
+  local out = {}
+  for n in (text or ""):gmatch("%d+") do out[#out + 1] = tonumber(n) end
+  return out
+end
+
+--- Decode a G table (SPEC §3.5 `G`, EX18).
+---@param g table  { R = { [spell] = "product:yield1000:key*count/…" }, U = { [key] = "spell,…" }, DE, order }
+---@return table   { recipes = { [spell] = { product, yield, reagents = { { key, count } } } },
+---                uses = { [key] = { spell, … } }, disenchant = { key, … }, order = { key, … } }
+function Market.DecodeGraph(g)
+  local out = { recipes = {}, uses = {}, disenchant = Numbers(g.DE), order = Numbers(g.order) }
+  for spell, text in pairs(g.R or {}) do
+    local product, yield, mats = text:match("^(%d+):(%d+):(.*)$")
+    local reagents = {}
+    for key, count in mats:gmatch("(%d+)%*(%d+)") do reagents[#reagents + 1] = { key = tonumber(key), count = tonumber(count) } end
+    out.recipes[spell] = { product = tonumber(product), yield = tonumber(yield) / 1000, reagents = reagents }
+  end
+  for key, text in pairs(g.U or {}) do out.uses[key] = Numbers(text) end
+  return out
+end
+
+--- The market's dependency graph, decoded on first use (EX18).
+---@return table|nil  As Market.DecodeGraph; nil without usable data or an older file
+function Market.Graph()
+  local s = State()
+  if s.status ~= "ok" or not s.market.G then return nil end
+  graph = graph or Market.DecodeGraph(s.market.G)
+  return graph
 end
 
 --- What a merchant charges for an item it sells in unlimited supply (EX6).

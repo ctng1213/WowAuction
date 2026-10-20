@@ -25,7 +25,7 @@ from ahsync.recommend.store import RecommendStore
 from ahsync.state.journal import JournalReads
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 20
+SCHEMA_VERSION = 21
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
@@ -163,6 +163,20 @@ MIGRATIONS: dict[int, str] = {
             market TEXT NOT NULL, cand_id TEXT NOT NULL, char_id TEXT NOT NULL, list TEXT NOT NULL, reason TEXT NOT NULL,
             data TEXT NOT NULL, PRIMARY KEY(market, cand_id))
     """,
+    # 21: what the addon files carry of the portfolio: the exported candidates and the portfolio snapshot with its
+    # positions, staged and swapped with the plan (SPEC §3.5 `K`, `portfolio`, `positions`, M11).
+    21: """
+        CREATE TABLE IF NOT EXISTS export_candidates(
+            market TEXT NOT NULL, pos INTEGER NOT NULL, cand_id TEXT NOT NULL, status TEXT NOT NULL, adjusted REAL NOT NULL,
+            data TEXT NOT NULL, PRIMARY KEY(market, pos)
+        );
+        CREATE TABLE IF NOT EXISTS export_candidates_new(
+            market TEXT NOT NULL, pos INTEGER NOT NULL, cand_id TEXT NOT NULL, status TEXT NOT NULL, adjusted REAL NOT NULL,
+            data TEXT NOT NULL, PRIMARY KEY(market, pos)
+        );
+        CREATE TABLE IF NOT EXISTS portfolio_snapshot(market TEXT PRIMARY KEY, data TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS portfolio_snapshot_new(market TEXT PRIMARY KEY, data TEXT NOT NULL)
+    """,
     # 14: sell records, stored for the hourly status pass (M8).
     14: """
         CREATE TABLE IF NOT EXISTS sell_records(
@@ -174,7 +188,8 @@ MIGRATIONS: dict[int, str] = {
 }
 BACKUP_KEEP = 3
 BACKUP_PREFIX = "ahsync-"
-STAGING_TABLES = ("intel_new", "plan_new", "views_new", "alternatives_new")
+STAGING_TABLES = ("intel_new", "plan_new", "views_new", "alternatives_new", "export_candidates_new",
+                  "portfolio_snapshot_new")
 CANDLE_TABLES = ("candles_h1", "candles_d1")
 # Tables and time columns prune may delete from (SPEC §3.2 retention). Guards the SQL built in delete_before.
 PRUNABLE = {
@@ -829,7 +844,9 @@ class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, JournalRea
                 self.conn.execute(f"DELETE FROM plan_new WHERE char_id IN ({chars})", (market,))
                 swaps = (("intel", "intel_new", "market, schema_version, body, built"),
                          ("views", "views_new", "page, market, body, built"),
-                         ("alternatives", "alternatives_new", "market, cand_id, char_id, list, reason, data"))
+                         ("alternatives", "alternatives_new", "market, cand_id, char_id, list, reason, data"),
+                         ("export_candidates", "export_candidates_new", "market, pos, cand_id, status, adjusted, data"),
+                         ("portfolio_snapshot", "portfolio_snapshot_new", "market, data"))
                 for live, staged, cols in (swaps if with_intel else swaps[1:]):
                     self.conn.execute(f"DELETE FROM {live} WHERE market = ?", (market,))
                     self.conn.execute(f"INSERT INTO {live}({cols}) SELECT {cols} FROM {staged} WHERE market = ?",

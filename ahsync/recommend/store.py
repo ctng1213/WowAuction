@@ -61,6 +61,46 @@ class RecommendStore:
             "SELECT cand_id, char_id, list, reason, data FROM alternatives WHERE market = ? ORDER BY cand_id",
             (market,))]
 
+    def stage_export(self, market: str, candidates: list[tuple[str, str, float, str]], snapshot: dict | None) -> None:
+        """Stage what the addon files carry of a market's portfolio, published with the plan (SPEC §3.5, M11).
+
+        Args:
+            market: Market id.
+            candidates: The exported candidates in export order: (cand_id, status = "" funded or the D.6 status,
+                adjusted profit float copper, data = engine.portfolio.candidate_to_json).
+            snapshot: recommend.portfolio.snapshot_data (JSON-serializable), or None without characters.
+        """
+        self.conn.executemany(
+            "INSERT OR REPLACE INTO export_candidates_new(market, pos, cand_id, status, adjusted, data) "
+            "VALUES (?, ?, ?, ?, ?, ?)", [(market, pos, *row) for pos, row in enumerate(candidates)])
+        if snapshot is not None:
+            self.conn.execute("INSERT OR REPLACE INTO portfolio_snapshot_new(market, data) VALUES (?, ?)",
+                              (market, json.dumps(snapshot, sort_keys=True, separators=(",", ":"))))
+
+    def export_candidates(self, market: str) -> list[tuple[str, str, float, str]]:
+        """A market's published exported candidates (SPEC §3.5 `K`).
+
+        Args:
+            market: Market id.
+
+        Returns:
+            (cand_id, status, adjusted, data) in export order.
+        """
+        return [tuple(r) for r in self.conn.execute(
+            "SELECT cand_id, status, adjusted, data FROM export_candidates WHERE market = ? ORDER BY pos", (market,))]
+
+    def portfolio_snapshot(self, market: str) -> dict | None:
+        """A market's published portfolio snapshot (SPEC §3.5 `portfolio`, `positions`).
+
+        Args:
+            market: Market id.
+
+        Returns:
+            recommend.portfolio.snapshot_data as stored; None before the first plan with characters.
+        """
+        row = self.conn.execute("SELECT data FROM portfolio_snapshot WHERE market = ?", (market,)).fetchone()
+        return json.loads(row[0]) if row else None
+
     def open_actions(self, char_ids: list[str]) -> list[tuple]:
         """The characters' pending and late actions, for the status pass (SPEC §3.4.1).
 

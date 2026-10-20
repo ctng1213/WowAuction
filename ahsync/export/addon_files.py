@@ -18,9 +18,13 @@ from ahsync.config import Config
 from ahsync.db.sqlite import Database
 from ahsync.engine import disenchant
 from ahsync.engine.de_table import DE_TABLE
+from ahsync.engine.graph import Graph, build, graph_recipe
 from ahsync.engine.plan_views import record_line
-from ahsync.export.market_lua import EXPORT_VERSION, item_count, market_lua
-from ahsync.export.plan_lua import plan_lua
+from ahsync.engine.portfolio import candidate_from_json
+from ahsync.export.market_lua import EXPORT_VERSION, item_count, market_lua, wanted
+from ahsync.export.plan_lua import PortfolioFields, plan_lua
+from ahsync.export.portfolio_lua import candidate_text, portfolio_text, position_text, trim_candidates
+from ahsync.intel.contract import MarketIntelligence
 from ahsync.recommend.plan import flip_offers, sell_records
 from ahsync.state.importer import ingested_until
 
@@ -169,11 +173,111 @@ def export_market(db: Database, cfg: Config, now_ms: int, sleep: Callable[[float
     vendor = vendor_prices(db)
     items = db.items()
     flips = {i.market: flip_offers(i.items, items, set(vendor), now_ms, cfg) for i in intels}       # EX11
-    text = market_lua(intels, shortlists, char_markets, now_ms, disenchantable(db), vendor, flips, cfg.sell_window_hours)
+    de = disenchantable(db)
+    graphs = {i.market: market_graph(db, i, shortlists[i.market], de) for i in intels}             # EX18
+    rows = {i.market: candidate_rows(db, i.market) for i in intels}                                # EX17
+
+    def build_text(kept: dict[str, list[str]]) -> str:
+        """The whole file with these candidates.
+
+        Args:
+            kept: Market -> the K strings to write.
+
+        Returns:
+            MarketIntelligence.lua's text.
+        """
+        return market_lua(intels, shortlists, char_markets, now_ms, de, vendor, flips, cfg.sell_window_hours, kept,
+                          graphs)
+    text, kept = fit_market(build_text, rows, MAX_MARKET_BYTES)
+    _trim_status(db, rows, kept, MAX_MARKET_BYTES, now_ms)
     ok = _write(db, folder / MARKET_FILE, text, MAX_MARKET_BYTES, now_ms, sleep, replace)
     if ok:
         _log_written(MARKET_FILE, text, now_ms, f"{item_count(text)} items")
     return ok
+
+
+def candidate_rows(db: Database, market: str) -> list[tuple[str, str, float]]:
+    """A market's exported candidates as K strings (SPEC §3.5 `K`, EX17).
+
+    Args:
+        db: Database (the published export_candidates).
+        market: Market id.
+
+    Returns:
+        (K string, status "" funded or the D.6 status, adjusted profit float copper) in export order.
+    """
+    return [(candidate_text(candidate_from_json(data), status), status, adjusted)
+            for _cand_id, status, adjusted, data in db.export_candidates(market)]
+
+
+def market_graph(db: Database, intel: MarketIntelligence, short: set[int], de: dict[int, str]) -> Graph:
+    """A market's dependency graph: its characters' known recipes and its exported disenchantable items (EX18).
+
+    A recipe loop is cut (C13) and logged at INFO, once per cut edge (FM39).
+
+    Args:
+        db: Database (characters and known recipes).
+        intel: The market's intelligence (which items are exported).
+        short: The market's shortlist.
+        de: Item key -> disenchant string, for every item one could disenchant.
+
+    Returns:
+        The Graph.
+    """
+    char_ids = [c for c, _ in db.characters_in(intel.market)]
+    recipes = [graph_recipe(r.spell, r.product, r.yield_min, r.yield_max, r.reagents)
+               for r in db.known_recipes(char_ids) if r.product is not None]
+    graph = build(recipes, [k for k in sorted(de) if k in intel.items and wanted(k, intel.items[k], short)])
+    for reagent, spell in graph.cut:
+        log.info("recipe loop on %s: item %d is not followed back into spell %d (C13)", intel.market, reagent, spell)
+    return graph
+
+
+def fit_market(build_text: Callable[[dict[str, list[str]]], str], rows: dict[str, list[tuple[str, str, float]]],
+               limit: int) -> tuple[str, dict[str, list[str]]]:
+    """The market file within its budget, leaving out the lowest alternatives first (SPEC §3.5, FM40).
+
+    Args:
+        build_text: Builds the whole file from market -> K strings.
+        rows: Market -> its exported candidates (candidate_rows).
+        limit: The file's budget, bytes; the whole file counts (items, curves, K and G).
+
+    Returns:
+        (the file, market -> the K strings kept). When even the funded rows alone don't fit, every alternative is
+        left out and the file is over budget (the size warning says so, as for any file).
+    """
+    kept = {m: [text for text, _s, _a in r] for m, r in rows.items()}
+    text = build_text(kept)
+    over = len(text.encode("utf-8")) - limit
+    while over > 0:
+        still = {m: set(k) for m, k in kept.items()}
+        left = {m: [row for row in r if row[0] in still[m]] for m, r in rows.items()}
+        trimmed = trim_candidates(left, over)
+        if trimmed == kept:
+            break
+        kept = trimmed
+        text = build_text(kept)
+        over = len(text.encode("utf-8")) - limit
+    return text, kept
+
+
+def _trim_status(db: Database, rows: dict[str, list], kept: dict[str, list[str]], limit: int, now_ms: int) -> None:
+    """Keep the "candidate export trimmed" Status line current (FM40).
+
+    Args:
+        db: Database (Status lines).
+        rows: Market -> its exported candidates.
+        kept: Market -> the K strings written.
+        limit: The market file's budget, bytes.
+        now_ms: Now.
+    """
+    total, written = sum(len(r) for r in rows.values()), sum(len(k) for k in kept.values())
+    with db.transaction():
+        if written < total:
+            db.set_status("candidate_export", "warn", "candidate_export_trimmed",
+                          {"kept": written, "total": total, "limit": limit}, now_ms)
+        else:
+            db.clear_status("candidate_export")
 
 
 def _log_written(name: str, text: str, now_ms: int, holds: str) -> None:
@@ -220,6 +324,32 @@ def _write(db: Database, path: Path, text: str, limit: int, now_ms: int, sleep: 
     return ok
 
 
+def portfolio_fields(db: Database, cfg: Config) -> PortfolioFields:
+    """The portfolio snapshot, gold, reservations and positions PortfolioPlan.lua carries (SPEC §3.5, EX18).
+
+    Args:
+        db: Database (each market's published snapshot, the characters' gold).
+        cfg: Config (markets).
+
+    Returns:
+        PortfolioFields: market -> portfolio string, character -> "copper,atMs" for every character on a configured
+        market, character -> reserved copper, and character -> position strings, from the last published plan.
+    """
+    updated = {c: at for c, _realm, _faction, _m, at in db.characters()}
+    out = PortfolioFields({}, {}, {}, {})
+    for market in cfg.markets:
+        for char_id, gold in db.characters_in(market):
+            out.gold[char_id] = f"{gold},{'' if updated.get(char_id) is None else updated[char_id]}"
+        snap = db.portfolio_snapshot(market)
+        if snap is None:
+            continue
+        out.portfolio[market] = portfolio_text(snap)
+        out.reserved.update(snap["reserved"])
+        for row in snap["positions"]:
+            out.positions.setdefault(row[1], []).append(position_text(row))
+    return out
+
+
 def export_plan(db: Database, cfg: Config, now_ms: int, sleep: Callable[[float], None],
                 replace: Callable[[Path, Path], None] = os.replace) -> bool:
     """Write PortfolioPlan.lua: open actions, item rules and ingestedUntil (SPEC §3.5, §2.2, EX3).
@@ -246,7 +376,8 @@ def export_plan(db: Database, cfg: Config, now_ms: int, sleep: Callable[[float],
         for key, r in sell_records(db, [c for c, _ in db.characters_in(market)], market, now_ms, cfg).items():
             records[key] = f"{1 if r.not_selling else 0};{record_line(r)}"             # EX8
     actions = db.addon_actions(char_ids)
-    text = plan_lua(actions, db.rule_rows(), ingested_until(db), now_ms, records, db.timed_reserves(char_ids))   # EX12
+    text = plan_lua(actions, db.rule_rows(), ingested_until(db), now_ms, records, db.timed_reserves(char_ids),   # EX12
+                    portfolio_fields(db, cfg))                                                                   # EX18
     ok = _write(db, folder / PLAN_FILE, text, MAX_PLAN_BYTES, now_ms, sleep, replace)
     if ok:
         _log_written(PLAN_FILE, text, now_ms, f"{len(actions)} open actions")

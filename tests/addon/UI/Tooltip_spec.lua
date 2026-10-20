@@ -13,7 +13,7 @@ local NOW = 1760000000000
 local function Boot(med7, trend10, p90)
   Stubs.Reset()
   local linen = "45,20,30," .. (med7 or 49) .. ",49,40," .. (p90 or 60) .. "," .. (trend10 or 0) .. ",480,,93,86,72,45,20,42,0,900;138:4:139:1120:7;"
-  _G.AHProfitMarket = { schemaVersion = 1, exportVersion = 3, generatedAt = NOW - 2 * HOUR, checksum = "1:" .. #linen,
+  _G.AHProfitMarket = { schemaVersion = 1, exportVersion = 4, generatedAt = NOW - 2 * HOUR, checksum = "1:" .. #linen,
     charMarkets = { ["Amaya-Grommash"] = UIWorld.MARKET },
     markets = { [UIWorld.MARKET] = { observationsUntil = NOW - 2 * HOUR, curveHour = 0, I = { [2589] = linen }, C = {} } } }
   Stubs.Login()

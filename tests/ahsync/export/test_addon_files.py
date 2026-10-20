@@ -3,11 +3,16 @@ from __future__ import annotations
 
 import pytest
 
+from dataclasses import replace
+
 from ahsync.config import Config
 from ahsync.db.sqlite import BookScan, Database
 from ahsync.export import addon_files
+from ahsync.engine.portfolio import candidate_to_json, export_subset
 from ahsync.export import market_lua as market_module
+from ahsync.export.portfolio_lua import candidate_text
 from ahsync.intel.contract import ItemIntel, MarketIntelligence
+from tests.support import mockup_export as mx
 from tests.support.fake_clock import FakeClock
 
 HOUR, DAY = 3_600_000, 86_400_000
@@ -160,18 +165,19 @@ def plan_with_one_action(db: Database, tmp_path, now: int):
     return Config(markets=(M,), wow_path=str(tmp_path)), folder
 
 
-def test_EX14_both_addon_files_carry_export_version_2_after_schema_version_outside_the_checksum(db, tmp_path):
+def test_EX14_both_addon_files_carry_export_version_4_after_schema_version_outside_the_checksum(db, tmp_path):
     now = FakeClock().now_ms()
     cfg, folder = plan_with_one_action(db, tmp_path, now)
     assert addon_files.export_market(db, cfg, now, lambda s: None) and addon_files.export_plan(db, cfg, now, lambda s: None)
-    assert addon_files.EXPORT_VERSION == 3                              # 3: closes30 (TT23); 2: a recipient (EX16)
+    assert addon_files.EXPORT_VERSION == 4                  # 4: K, G, the portfolio (EX17, EX18); 3: closes30 (TT23)
     for name in ("MarketIntelligence.lua", "PortfolioPlan.lua"):
         header = (folder / name).read_text(encoding="utf-8").splitlines()
         at = header.index("  schemaVersion = 1,")
-        assert header[at + 1] == "  exportVersion = 3,"
+        assert header[at + 1] == "  exportVersion = 4,"
     plan = (folder / "PortfolioPlan.lua").read_text(encoding="utf-8")
     action = f"a1;post;{LINEN};20;55;{now};1046;;;pending;80;;;;"
-    assert f'checksum = "1:{len(action)}"' in plan                       # the action string only
+    # The action string and Brugan's gold ("100," with no snapshot time): the export version counts in neither.
+    assert f'checksum = "2:{len(action) + len("100,")}"' in plan
     market = (folder / "MarketIntelligence.lua").read_text(encoding="utf-8")
     linen = market_module.item_text(item(LINEN))
     assert f'checksum = "1:{len(linen)}"' in market                       # Linen's item string only
@@ -186,8 +192,8 @@ def test_EX15_each_written_addon_file_is_logged_with_its_size_time_and_contents(
     market_bytes = (folder / "MarketIntelligence.lua").stat().st_size
     plan_bytes = (folder / "PortfolioPlan.lua").stat().st_size
     assert [r.getMessage() for r in caplog.records if r.levelname == "INFO"] == [
-        f"wrote MarketIntelligence.lua: {market_bytes} bytes, generatedAt {now}, exportVersion 3, 1 items",
-        f"wrote PortfolioPlan.lua: {plan_bytes} bytes, generatedAt {now}, exportVersion 3, 1 open actions"]
+        f"wrote MarketIntelligence.lua: {market_bytes} bytes, generatedAt {now}, exportVersion 4, 1 items",
+        f"wrote PortfolioPlan.lua: {plan_bytes} bytes, generatedAt {now}, exportVersion 4, 1 open actions"]
 
     caplog.clear()
 
@@ -198,3 +204,118 @@ def test_EX15_each_written_addon_file_is_logged_with_its_size_time_and_contents(
     with caplog.at_level("INFO", logger="ahsync.export"):
         assert addon_files.export_market(db, cfg, now, lambda s: None, locked) is False
     assert [r.levelname for r in caplog.records] == ["WARNING"] * 3
+
+
+def publish_portfolio(db: Database, now: int, rows: list | None = None) -> None:
+    """Publish Linen and the mockup world's exported candidates and snapshot, with the copper chain known by Brugan.
+
+    Args:
+        db: Database.
+        now: Now.
+        rows: The exported candidates to stage; the mockup's 16 by default.
+    """
+    cands, result, adjusted = mx.selection()
+    status = dict(result.reasons)
+    picked = export_subset(cands, result.funded, adjusted, 150)
+    staged = rows if rows is not None else [(c.cand_id, status.get(c.cand_id, ""), adjusted[c.cand_id],
+                                             candidate_to_json(c)) for c in picked]
+    fields = mx.portfolio_fields()
+    snap = {"snapshot_ms": now, "settings": [300, 150, 50, 8, 20, 20, 7], "config_version": 7, "capital_base": 355800,
+            "committed": 41800, "capacity": 64940, "allocated": 62500, "reserved": fields.reserved,
+            "positions": [["stock:Brugan-G:2840", "Brugan-G", BAR, "Holding", 6, 6, 3000, 3157.0, now, "post"]]}
+    sql(db, "INSERT INTO characters(id, market, gold, updated) VALUES (?, ?, ?, ?)", ("Brugan-G", M, 104000, now - HOUR))
+    sql(db, "INSERT INTO recipes(profession, spell_id, product_key, yield_min, yield_max) VALUES (?, ?, ?, ?, ?)",
+        ("Mining", 2657, BAR, 1, 1), ("Blacksmithing", 7818, ROD, 1, 1), ("Enchanting", 7421, 6218, 1, 1),
+        ("Enchanting", 7795, None, 1, 1))
+    sql(db, "INSERT INTO reagents(profession, spell_id, key, count) VALUES (?, ?, ?, ?)",
+        ("Mining", 2657, 2770, 1), ("Blacksmithing", 7818, BAR, 1), ("Enchanting", 7421, ROD, 1),
+        ("Enchanting", 7421, 10940, 1), ("Enchanting", 7795, 10940, 1))
+    sql(db, "INSERT INTO known_recipes(char_id, spell_id) VALUES (?, ?)",
+        *[("Brugan-G", s) for s in (2657, 7818, 7421, 7795)])
+    with db.transaction():
+        db.stage_intel(MarketIntelligence(M, now, now - HOUR, 1, {LINEN: item(LINEN), GLOVES: item(GLOVES)}))
+        db.stage_export(M, staged, snap)
+    db.publish_refresh([M])
+
+
+def test_EX17_EX18_the_published_candidates_graph_and_snapshot_reach_both_files(db, tmp_path):
+    now = FakeClock().now_ms()
+    folder = tmp_path / "Interface" / "AddOns" / "AHProfit_Data"
+    folder.mkdir(parents=True)
+    publish_portfolio(db, now)
+    db.upsert_items([(GLOVES, GLOVES, "Scouting Gloves", 2, 18, 4, 0, 0, 100, 1)], now)
+    cfg = Config(markets=(M,), wow_path=str(tmp_path))
+    assert addon_files.export_market(db, cfg, now, lambda s: None) and addon_files.export_plan(db, cfg, now, lambda s: None)
+    market = (folder / "MarketIntelligence.lua").read_text(encoding="utf-8")
+    assert all(f'K[{n}]="{t}"' in market for n, t in enumerate(mx.k_strings(), start=1)) and "K[17]" not in market
+    assert 'R[7818]="6217:1000:2840*1"' in market and 'U[2840]="7818"' in market and "R[7795]" not in market
+    assert f'G.DE="{GLOVES}"' in market and 'G.order="2770,2840,6217,10940,6218,' + str(GLOVES) + '"' in market
+    assert db.status("candidate_export") is None
+    plan = (folder / "PortfolioPlan.lua").read_text(encoding="utf-8")
+    assert f'["{M}"] = "{now};300;150;50;8;20;20;7;7;355800;41800;64940;62500",' in plan
+    assert f'["Brugan-G"] = "104000,{now - HOUR}",' in plan and '["Amaya-Grommash"] = 25200,' in plan
+    assert f'"stock:Brugan-G:2840;{BAR};Holding;6;6;3000;3157;{now};post",' in plan
+
+
+def test_FM40_the_export_drops_the_lowest_alternatives_until_the_file_fits_2_MB():
+    cands, result, adjusted = mx.selection()
+    status = dict(result.reasons)
+    base = [(candidate_text(c, status.get(c.cand_id, "")), status.get(c.cand_id, ""), adjusted[c.cand_id])
+            for c in export_subset(cands, result.funded, adjusted, 16)]
+    extra = [(candidate_text(replace(cands[0], key=20_000 + i), "Exceeds risk tolerance (needs 1s, 0c left)"),
+              "Exceeds risk tolerance (needs 1s, 0c left)", 70.0 - i * 0.25) for i in range(134)]
+    rows = {M: base + extra}                                         # 12 funded, then 138 alternatives: 150
+    intel = MarketIntelligence(M, mx.NOW, None, 1, {})
+
+    def build(pad: int):
+        """The file built with a character name of `pad` letters: padding outside the checksum."""
+        return lambda kept: market_module.market_lua([intel], {}, {"x" * pad: M}, mx.NOW, candidates=kept,
+                                                     graphs={M: mx.graph()})
+    limit = addon_files.MAX_MARKET_BYTES
+    unpadded = build(0)({M: [t for t, _s, _a in rows[M][:112]]})
+    pad = limit - len(unpadded.encode("utf-8"))
+    full = build(pad)({M: [t for t, _s, _a in rows[M]]})
+    assert 2.0 * 1024 * 1024 < len(full) < 2.11 * 1024 * 1024           # "would be 2.1 MB"
+    text, kept = addon_files.fit_market(build(pad), rows, limit)
+    assert len(kept[M]) == 112 and len(text.encode("utf-8")) <= limit
+    assert kept[M] == [t for t, _s, _a in rows[M][:112]]               # the 38 lowest alternatives went, no funded row
+    over, kept_over = addon_files.fit_market(build(limit), rows, limit)  # the funded rows alone don't fit
+    assert kept_over[M] == [t for t, _s, _a in rows[M][:12]] and len(over.encode("utf-8")) > limit
+
+
+def test_FM40_the_trimmed_file_is_written_with_a_status_line_and_over_budget_with_its_warning(db, tmp_path, monkeypatch):
+    now = FakeClock().now_ms()
+    (tmp_path / "Interface" / "AddOns" / "AHProfit_Data").mkdir(parents=True)
+    publish_portfolio(db, now)
+    cfg = Config(markets=(M,), wow_path=str(tmp_path))
+    assert addon_files.export_market(db, cfg, now, lambda s: None)
+    full = (tmp_path / "Interface" / "AddOns" / "AHProfit_Data" / "MarketIntelligence.lua").stat().st_size
+    lowest = mx.k_strings()[-2:]                                       # Grunt's Bracers, Lesser Mana Potion
+    monkeypatch.setattr(addon_files, "MAX_MARKET_BYTES", full - 1)
+    assert addon_files.export_market(db, cfg, now, lambda s: None)
+    text = (tmp_path / "Interface" / "AddOns" / "AHProfit_Data" / "MarketIntelligence.lua").read_text(encoding="utf-8")
+    assert lowest[0] in text and lowest[1] not in text
+    line = db.status("candidate_export")
+    assert (line.kind, line.data["kept"], line.data["total"]) == ("candidate_export_trimmed", 15, 16)
+    assert db.status("addon_file_size:MarketIntelligence.lua") is None
+    monkeypatch.setattr(addon_files, "MAX_MARKET_BYTES", 100)
+    assert addon_files.export_market(db, cfg, now, lambda s: None)
+    text = (tmp_path / "Interface" / "AddOns" / "AHProfit_Data" / "MarketIntelligence.lua").read_text(encoding="utf-8")
+    assert all(t in text for t in mx.k_strings()[:12]) and "K[13]" not in text
+    assert db.status("candidate_export").data["kept"] == 12
+    assert db.status("addon_file_size:MarketIntelligence.lua").data["limit"] == 100
+
+
+def test_a_recipe_loop_is_cut_in_the_exported_graph_and_logged(db, tmp_path, caplog):
+    now = FakeClock().now_ms()
+    (tmp_path / "Interface" / "AddOns" / "AHProfit_Data").mkdir(parents=True)
+    publish_portfolio(db, now, rows=[])
+    sql(db, "INSERT INTO recipes(profession, spell_id, product_key, yield_min, yield_max) VALUES (?, ?, ?, ?, ?)",
+        ("Mining", 9001, 2770, 1, 1))
+    sql(db, "INSERT INTO reagents(profession, spell_id, key, count) VALUES (?, ?, ?, ?)", ("Mining", 9001, BAR, 1))
+    sql(db, "INSERT INTO known_recipes(char_id, spell_id) VALUES (?, ?)", ("Brugan-G", 9001))
+    with caplog.at_level("INFO", logger="ahsync.export"):
+        assert addon_files.export_market(db, Config(markets=(M,), wow_path=str(tmp_path)), now, lambda s: None)
+    assert f"recipe loop on {M}: item 2770 is not followed back into spell 2657 (C13)" in caplog.text
+    text = (tmp_path / "Interface" / "AddOns" / "AHProfit_Data" / "MarketIntelligence.lua").read_text(encoding="utf-8")
+    assert 'U[2770]="2657"' not in text and 'U[2840]="7818,9001"' in text and "K[1]" not in text

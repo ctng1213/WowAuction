@@ -174,6 +174,21 @@ CREATE TABLE IF NOT EXISTS alternatives_new(
     data TEXT NOT NULL, PRIMARY KEY(market, cand_id)
 );
 
+-- What the addon files carry of the portfolio (SPEC §3.5 `K`, `portfolio`, `positions`, M11), swapped in with the plan.
+-- export_candidates: the exported candidates in export order (pos 0 first: the funded in funding order, then the
+-- alternatives by adjusted profit, candidate_export in all); status: '' funded, else the D.6 status; adjusted: float
+-- copper; data: engine.portfolio.candidate_to_json. portfolio_snapshot: recommend.portfolio.snapshot_data as JSON.
+CREATE TABLE IF NOT EXISTS export_candidates(
+    market TEXT NOT NULL, pos INTEGER NOT NULL, cand_id TEXT NOT NULL, status TEXT NOT NULL, adjusted REAL NOT NULL,
+    data TEXT NOT NULL, PRIMARY KEY(market, pos)
+);
+CREATE TABLE IF NOT EXISTS export_candidates_new(
+    market TEXT NOT NULL, pos INTEGER NOT NULL, cand_id TEXT NOT NULL, status TEXT NOT NULL, adjusted REAL NOT NULL,
+    data TEXT NOT NULL, PRIMARY KEY(market, pos)
+);
+CREATE TABLE IF NOT EXISTS portfolio_snapshot(market TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS portfolio_snapshot_new(market TEXT PRIMARY KEY, data TEXT NOT NULL);
+
 -- rule: 'no_buy' | 'ignore' | 'keep' | 'none' (tombstone); source: 'dashboard' | 'addon'.
 CREATE TABLE IF NOT EXISTS item_rules(
     key INTEGER PRIMARY KEY, rule TEXT NOT NULL, set_at INTEGER NOT NULL, source TEXT

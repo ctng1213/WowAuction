@@ -25,7 +25,7 @@ from ahsync.recommend.inventory_page import inventory_page
 from ahsync.recommend.on_ah_page import on_ah_page
 from ahsync.recommend.pages import craft_page, disenchant_page
 from ahsync.recommend.plan import plan_rows, sell_records
-from ahsync.recommend.portfolio import alternative_rows, plan_portfolio
+from ahsync.recommend.portfolio import alternative_rows, plan_portfolio, portfolio_export
 from ahsync.recommend.rules_page import rules_page
 from ahsync.recommend.plan_pages import plan_pages, view_actions
 
@@ -46,7 +46,8 @@ class RefreshResult:
 
 def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], intel_items: dict, items: dict,
                 now_ms: int, offset_ms: int, cfg: Config, built_ms: int) -> tuple[list, int | None]:
-    """Plan the market's characters and stage the plan, its alternatives and its Today, Week, Flip and Inventory pages
+    """Plan the market's characters and stage the plan, its alternatives, what the addon files carry of it (M11) and its
+    Today, Week, Flip and Inventory pages
     (SPEC §3.4C, §3.4D, §3.5).
 
     Args:
@@ -74,6 +75,7 @@ def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], in
     rows = plan_rows(actions, market, now_ms)
     db.stage_plan(rows)
     db.stage_alternatives(market, alternative_rows(plan))                           # SPEC §3.4D, M9
+    db.stage_export(market, *portfolio_export(db, [c for c, _ in characters], plan, cfg, now_ms))   # SPEC §3.5, M11
     week_start = (now_ms + offset_ms) // DAY_MS * DAY_MS - offset_ms
     history = db.history_actions([c for c, _ in characters], week_start, week_start + 7 * DAY_MS)
     shown = view_actions(actions, rows, history, items)

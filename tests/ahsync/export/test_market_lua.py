@@ -34,18 +34,28 @@ def test_EX2_the_file_holds_compact_item_strings_curves_and_a_checked_header():
     assert f'I[{SHORT}]=",,,,,,,0,,,,6,,,1,,1,250,,0,;;"' in text and f"I[{OTHER}]" not in text
     linen_curve = market_lua.trim_curve(CURVE, False)
     assert f'C[{LINEN}]="{linen_curve}"' in text and f"C[{SHORT}]" not in text
-    strings = len("45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900,,0,;138:4:139:1120:7;") + 72 + len(",,,,,,,0,,,,6,,,1,,1,250,,0,;;")
+    strings = len("45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900,,0,;138:4:139:1120:7;") + 3 + len(",,,,,,,0,,,,6,,,1,,1,250,,0,;;")
     assert f'checksum = "3:{strings}"' in text and "schemaVersion = 1," in text and f"generatedAt = {BUILT}," in text
     assert f'charMarkets = {{ ["Amaya-Grommash"] = "{M}" }}' in text
-    assert f'["{M}"] = {{ observationsUntil = {BUILT - HOUR}, curveHour = {BUILT // HOUR}, I = I1, C = C1, D = D1, F = {{  }}, S = {{  }} }},' in text
+    assert f'["{M}"] = {{ observationsUntil = {BUILT - HOUR}, curveHour = {BUILT // HOUR}, I = I1, C = C1, D = D1, F = {{  }}, S = {{  }}, K = K1, G = G1 }},' in text
 
 
 def test_AR6_the_shortlist_keeps_the_full_curve_and_others_get_the_0_5_20_columns_unchanged():
     full = market_lua.exported_items(intel(LINEN_INTEL, replace(LINEN_INTEL, key=OTHER)), {LINEN})
-    assert full[0][2] == CURVE and len(full[1][2]) == 24 * 3
-    rows = [full[1][2][i:i + 3] for i in range(0, 72, 3)]
-    assert all(row == CURVE[r * 8] + CURVE[r * 8 + 3] + CURVE[r * 8 + 5] for r, row in enumerate(rows))
+    # Since EX19 the tooltip-only item keeps one row: the refresh hour's 0, 5 and 20 ahead points.
+    assert full[0][2] == CURVE and full[1][2] == CURVE[0] + CURVE[3] + CURVE[5]
     assert LINEN_INTEL.curve == CURVE                                       # the intelligence itself is unchanged
+
+
+def test_EX19_tooltip_only_items_carry_one_window_of_each_kind_and_a_three_point_curve():
+    windows = tuple(IntelWindow(s, 2, s, 1.1, 6) for s in (10, 40, 70))
+    item = replace(LINEN_INTEL, sell_windows=windows, buy_windows=tuple(replace(w, how_avg=0.9) for w in windows))
+    [(_, linen, linen_curve), (_, wool, wool_curve)] = market_lua.exported_items(
+        intel(item, replace(item, key=OTHER)), {LINEN})
+    assert linen.endswith(";10:2:10:1100:6/40:2:40:1100:6/70:2:70:1100:6;10:2:10:900:6/40:2:40:900:6/70:2:70:900:6")
+    assert len(linen_curve) == 24 * 8
+    assert wool.endswith(";10:2:10:1100:6;10:2:10:900:6") and wool_curve == CURVE[0] + CURVE[3] + CURVE[5]
+    assert market_lua.item_text(item).count("/") == 4                     # the default: shortlisted, every window
 
 
 def test_IU12_no_hour_of_week_profile_is_exported_but_the_windows_are():
@@ -68,7 +78,7 @@ def test_A23_disenchantable_exported_items_carry_their_skill_and_kind_and_count_
     text = market_lua.market_lua([intel(LINEN_INTEL, replace(EMPTY, key=OTHER))], {}, {}, BUILT,
                                  {LINEN: "1,2,18,a", OTHER: "1,2,18,w"})
     assert f'D[{LINEN}]="1,2,18,a"' in text and f"D[{OTHER}]" not in text               # OTHER isn't exported
-    strings = len("45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900,,0,;138:4:139:1120:7;") + 72 + len("1,2,18,a")
+    strings = len("45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900,,0,;138:4:139:1120:7;") + 3 + len("1,2,18,a")
     assert f'checksum = "3:{strings}"' in text
 
 

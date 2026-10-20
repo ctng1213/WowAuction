@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from ahsync.config import Config, record_settings
 from ahsync.db.sqlite import Database
-from ahsync.engine import craft, disenchant, fees, profile
+from ahsync.engine import capacity, craft, disenchant, fees, profile
 from ahsync.engine.capacity import slot_of
 from ahsync.engine.craft_plan import CraftWorld
 from ahsync.engine.flips import flip_offer
@@ -27,7 +27,7 @@ from ahsync.state.reads import StateReader
 HOUR_MS = 3_600_000
 DAY_MS = 86_400_000
 FLAT = tuple([1.0] * 168)
-GEAR_CLASSES = (2, 4)            # weapon, armor: the lenient gear cap (SPEC §3.4 Liquidity)
+GEAR_CLASSES = capacity.GEAR_CLASSES
 DE_MATS = frozenset(m for *_, outcomes in DE_TABLE for m, _, _, _ in outcomes)   # what disenchanting yields
 
 

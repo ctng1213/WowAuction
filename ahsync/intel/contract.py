@@ -12,9 +12,10 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 
-INTEL_SCHEMA_VERSION = 8       # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
+INTEL_SCHEMA_VERSION = 9       # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
                                # 5: median_daily_supply (V23); 6: observed_listing_turnover (V37); 7: volume_kind (D57);
-                               # 8: closes_30d (TT23)
+                               # 8: closes_30d (TT23); 9: each window's forecast: expected price, executable quantity,
+                               # confidence, and buying windows ranked by actionable value (W14, W15)
 
 
 class IntelVersionError(ValueError):
@@ -23,13 +24,21 @@ class IntelVersionError(ValueError):
 
 @dataclass(frozen=True)
 class IntelWindow:
-    """One selling or buying window (SPEC §3.3.4, §3.3.6). Slots are hours of the week, 0 = Mon 00:00 UTC."""
+    """One selling or buying window (SPEC §3.3.4, §3.3.6, W15). Slots are hours of the week, 0 = Mon 00:00 UTC.
+
+    Its weekday, start and end follow from start_slot and hours, its strength from weeks
+    (patterns.Window.strength), and its forecast time is the document's built_ms (kept once per document, not
+    per window). The forecast fields are None in documents before schema 9, and for an item without a price level.
+    """
 
     start_slot: int
     hours: int                            # length in slots
     best_slot: int                        # selling: the peak hour; buying: the cheapest hour
     how_avg: float                        # average price ratio over the window
     weeks: int                            # weeks of data behind it (the fewest of its slots)
+    expected_price: int | None = None     # copper: level × how_avg × trend factor, clamped (§3.3.4 forecast)
+    exec_qty: int | None = None           # units the market can take there: the window's liquidity cap
+    conf: int | None = None               # confidence %, the window's weeks as the pattern component (§3.3.5)
 
 
 @dataclass(frozen=True)
@@ -69,8 +78,8 @@ class ItemIntel:
     supply_how: str = ""
     supply_weeks: str = ""
     seasonality: int | None = None        # strength 0-100; None = insufficient evidence
-    sell_windows: tuple[IntelWindow, ...] = ()     # up to 3, best first
-    buy_windows: tuple[IntelWindow, ...] = ()      # up to 3, cheapest first
+    sell_windows: tuple[IntelWindow, ...] = ()     # up to top_sell_windows, best sell_score first
+    buy_windows: tuple[IntelWindow, ...] = ()      # up to top_buy_windows, highest actionable value first (W14)
     curve: str = ""                       # 24 × 8 encoded P grid (SPEC §3.1.1); "" when sales are unknown
     curve_hour: int | None = None         # hour number floor(ms / 3600000) of the curve's first row
     cur_suspect: bool = False             # cur is out of the usual range and unconfirmed: never bought from (FM5)

@@ -15,7 +15,8 @@ from dataclasses import replace
 
 from ahsync.engine import craft, fees
 from ahsync.engine.candidates import (Batch, DeInfo, GenInputs, Opportunity, Run, Universe, cap_rid, claims_of,
-                                      eligibility_of, make_candidate, sale_ms, stale, timed_value, ungrounded)
+                                      eligibility_of, make_candidate, sale_ms, stale, timed_value, ungrounded,
+                                      window_end)
 from ahsync.engine.craft_plan import (best_sale, chain_actions, consume, craft_option_for, intermediate_buys,
                                       units_made, use_held)
 from ahsync.engine.plan import OptionValue, PlanAction, PostOption, SellFacts, post_options, window_id
@@ -346,7 +347,7 @@ def _craft_batches(recipe: craft.Recipe, f: SellFacts, opts: Sequence[PostOption
             k, gi, out_qty=out_k, inputs=tuple(sorted(recipe.reagents)), gold_mats=gold_k, gold_deposits=dep_k,
             cost_basis=math.floor(sum(gi.cost_each.get(key, 0.0) * used for key, used in step.owned) + 0.5),
             expected_net=option.profits[k - 1], chance=p, exec_qty=out_k, conf=f.conf, needs=needs,
-            buy_ms=run.now_ms if option.bought else None, sale_ms=sale,
+            buy_ms=run.now_ms if option.bought else None, sale_ms=sale, window_end_ms=window_end(o),
             owned_claims=tuple(OwnedClaim(c, "stock", mat, n - prev_owned.get((c, mat), 0))
                                for (c, mat), n in sorted(owned.items()) if n != prev_owned.get((c, mat), 0)),
             capacity_claims=tuple(CapacityClaim(f.key, w, n) for w, n in

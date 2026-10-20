@@ -102,14 +102,15 @@ function SellProb.FromCurve(row, ahead, aheadPoints)
 end
 
 --- P from a curve for now and the units ahead (SPEC §3.1.1).
----@param curve number[][]      24 rows
+---@param curve number[][]      24 rows, or the one row of a tooltip-only item (EX19)
 ---@param refreshMs number      Refresh time, UTC ms
 ---@param nowMs number          Now, UTC ms
 ---@param ahead number          Units ahead now
 ---@param aheadPoints number[]  The curve's units-ahead points
----@return number               P_queue for posting now
+---@return number               P_queue for posting now: the row CurveRow mod the number of rows, so a one-row
+---                             curve is used at any hour
 function SellProb.Lookup(curve, refreshMs, nowMs, ahead, aheadPoints)
-  return SellProb.FromCurve(curve[SellProb.CurveRow(refreshMs, nowMs) + 1], ahead, aheadPoints)
+  return SellProb.FromCurve(curve[SellProb.CurveRow(refreshMs, nowMs) % #curve + 1], ahead, aheadPoints)
 end
 
 --- A probability in 2% steps, as exported (SPEC §3.1.1).

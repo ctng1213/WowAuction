@@ -460,3 +460,19 @@ def test_validate_refuses_a_resource_claimed_beyond_its_limit():
     q = Pick("q", "q", 1, AMAYA, "today", 0, 1.0, 1.0, "Q", None, (("own:A:1", 1),))
     with pytest.raises(sel.SelectionError, match="claimed beyond its limit"):
         sel.validate([p, q], [bars], Budget(0, ((AMAYA, 0),)), sel.Selection(("p", "q"), (), 0, (), 2.0, 2.0, 0))
+
+
+def test_EX17_each_status_has_a_short_reason_code_for_the_export():
+    texts = {"Required profession unavailable: Enchanting 150": "profession",
+             "Forecast too uncertain (4 closes in 30 d, needs 24)": "uncertain",
+             "Forecast too stale (prices 30 h old)": "stale", "Sales volume unknown (Strange Dust)": "volume",
+             "No listing left to price against": "no_listing", "Insufficient liquidity: 3/day, 40 planned": "liquidity",
+             "Missing materials: 2 Iron Bar": "missing", "Resources already claimed: 6 Copper Bar (Copper Rod)": "claimed",
+             "Insufficient gold (needs 1g, all characters hold 50s)": "gold_all",
+             "Insufficient gold on Amaya (needs 1g, has 50s)": "gold_char",
+             "Recommendation limit reached (20 of 20 today)": "limit",
+             "Exceeds risk tolerance (needs 45s, 24s 40c left)": "risk"}
+    assert {t: sel.reason_code(t) for t in texts} == texts
+    assert sel.reason_code("") == "" and sel.reason_code(None) == ""
+    with pytest.raises(ValueError, match="not a D.6 status"):
+        sel.reason_code("Something else")

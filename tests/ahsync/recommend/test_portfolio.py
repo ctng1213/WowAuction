@@ -122,3 +122,23 @@ def test_an_item_that_cannot_be_disenchanted_or_has_no_listing_gives_no_disencha
     stats = {**STATS, SCOUTING: replace(STATS[SCOUTING], cur_suspect=True), 7005: intel(7005, 100)}
     assert portfolio.de_infos(stats, items) == {}
     assert portfolio.de_infos({SCOUTING: intel(SCOUTING, None)}, ITEMS) == {}
+
+
+def test_EX17_EX18_a_run_stores_its_exported_candidates_and_its_portfolio_snapshot(state):
+    cfg = Config(markets=(M,))
+    chars = [("Amaya-G", 100_000), ("Brugan-G", 400_000)]
+    plan = portfolio.plan_portfolio(state, chars, STATS, ITEMS, NOW, cfg)
+    rows, snap = portfolio.portfolio_export(state, ["Amaya-G", "Brugan-G"], plan, cfg, NOW)
+    funded = [r for r in rows if r[1] == ""]
+    assert [r[0] for r in funded] == [c.cand_id for c in plan.funded]                    # funding order first
+    rest = [r[2] for r in rows[len(funded):]]
+    assert rest == sorted(rest, reverse=True) and all(r[1] for r in rows[len(funded):])
+    assert dict(plan.funded_adjusted) == {r[0]: r[2] for r in funded}
+    assert all(json.loads(r[3])["cand_id"] == r[0] for r in rows)
+    assert len(portfolio.export_rows(plan, 1)) == 1
+    assert (snap["snapshot_ms"], snap["settings"]) == (NOW, [300, 150, 50, 8, 20, 20, 7])
+    assert (snap["capital_base"], snap["committed"]) == (505_400, 5400)
+    assert snap["allocated"] == plan.selection.gold == sum(snap["reserved"].values())
+    assert [p[:7] for p in snap["positions"]] == [["stock:Brugan-G:2840", "Brugan-G", BAR, "Holding", 6, 6, 5400]]
+    assert portfolio.portfolio_export(state, [], None, cfg, NOW) == ([], None) and portfolio.export_rows(None, 5) == []
+    assert portfolio.listed_units(state, ["Brugan-G"]) == []

@@ -5,6 +5,7 @@ import pytest
 
 from ahsync.analysis import market
 from ahsync.db.sqlite import Database
+from ahsync.engine import patterns
 from ahsync.engine.profile import unpack
 from ahsync.engine.sellprob import MarketSettings
 from ahsync.history.reads import CurrentPrice, HistoryWindow, ItemHistory, ItemInfo
@@ -179,9 +180,15 @@ def test_AR5_the_intelligence_holds_the_weekly_patterns_windows_and_curve():
     assert unpack(bar.how, bar.how_weeks).values[4] == 0.8          # Mon 04:00, packed in thousandths
     # Smoothed sales are 5.6 on Tue 18-20 (2 + 8 + 8 + 8 + 2 over 5 slots), 4.4 next to them: under 0.9 × 5.6.
     assert [(w.start_slot, w.hours, w.best_slot, w.weeks) for w in bar.sell_windows] == [(TUE + 18, 3, TUE + 18, 7)]
-    # Smoothed price is 0.8 on Mon 03-06 (three 1.0s and two 0.5s), 0.9 next to them: above 0.8 ÷ 0.9.
-    assert [(w.start_slot, w.hours) for w in bar.buy_windows] == [(3, 4)]
-    assert bar.buy_windows[0].how_avg == pytest.approx(0.8)
+    # W15: the window's forecast: 100c × 1.0 (within p10..p90 = 100c), floor(0.5 × 20 listed) = 10 units, and the
+    # confidence with its 7 weeks as the pattern component.
+    assert [(w.expected_price, w.exec_qty, w.conf) for w in bar.sell_windows] == [(100, 10, 69)]
+    # Smoothed price is 0.8 on Mon 03-06 (three 1.0s and two 0.5s), 0.9 next to them: above 0.8 ÷ 0.9, so it
+    # qualifies; but its forecast is raised to p10 (100c), and 100c can't pay against 95c after the cut: a buy
+    # window worth 0 is dropped (W14).
+    how = unpack(bar.how, bar.how_weeks)
+    assert [(w.start_slot, w.hours) for w in patterns.buy_windows(how.values, how.weeks)] == [(3, 4)]
+    assert bar.buy_windows == ()
     assert bar.supply_how == ",".join(["1000"] * 168)
     # Smoothing spreads the 2-hour dip over 6 hours: the profile misses by 10+20+30+30+20+10 = 120c on them,
     # a flat 100c by 50+50 = 100c, so the profile is no better than flat → strength 0 (W11: predictability).

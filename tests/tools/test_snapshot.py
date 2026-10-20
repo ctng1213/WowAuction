@@ -28,6 +28,9 @@ def test_heat_map_cells_are_digested_and_long_files_trimmed():
     assert digest["heat"][0]["cells"]["first"] == "Mon 00:00" and len(digest["heat"][0]["cells"]["titles_sha256"]) == 64
     assert snapshot.trimmed("a\nb\nc\nd", keep=2) == "a\nb\n-- (1 lines trimmed by tools/snapshot.py)\nd"
     assert snapshot.trimmed("a\nb", keep=2) == "a\nb"
+    market = "a\nb\nI[1]=1\nK[1]=\"x\"\nR[2]=\"y\"\nend\nAHProfitMarket = {\n  checksum = 1,\n}"
+    assert snapshot.trimmed(market, keep=2) == \
+        "a\nb\n-- (2 lines trimmed by tools/snapshot.py)\nK[1]=\"x\"\nR[2]=\"y\"\nAHProfitMarket = {\n  checksum = 1,\n}"
     assert snapshot.render({"b": [1, 2], "a": {"c": [{"d": None}]}}) == \
         '{\n "a": {\n  "c": [\n   {\n    "d": null\n   }\n  ]\n },\n "b": [1, 2]\n}'
 

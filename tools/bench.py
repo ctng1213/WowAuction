@@ -5,12 +5,15 @@ Usage: python tools/bench.py [--items 9000] [--hours 2160]
 Builds a generated world in a temporary database (no network, nothing in data/):
 `--items` priced items with `--hours` hourly closes, listed units and sales rates
 each (2160 = the 90 days analysis reads, every hour observed: the worst case),
-7 days of volume, a complete order book, two characters, and 200 known recipes.
+7 days of volume, a complete order book, two characters, 200 known Blacksmithing
+recipes and 50 Enchanting ones, and stock with a cost basis on both characters (some
+of it listed), so the exported candidates, graph and positions are non-trivial (M11).
 
 The refresh then runs in a fresh process against that database, so the time is not
 slowed by memory tracing and the peak is the process's own (it includes the
-interpreter, so it is conservative). Budgets: full refresh ≤ 120 s for about 9k
-items, ≤ 400 MB peak.
+interpreter, so it is conservative); then both addon files are written into a
+temporary AddOns folder. Budgets: full refresh ≤ 120 s for about 9k items, ≤ 400 MB
+peak, MarketIntelligence.lua ≤ 2 MB and PortfolioPlan.lua ≤ 200 KB (SPEC §3.1.2, §3.5).
 """
 from __future__ import annotations
 
@@ -27,6 +30,8 @@ sys.path.insert(0, str(ROOT))
 from ahsync.config import Config  # noqa: E402
 from ahsync.db.sqlite import Database  # noqa: E402
 from ahsync.app.refresh import refresh_all  # noqa: E402
+from ahsync.export.addon_files import (DATA_FOLDER, MARKET_FILE, MAX_MARKET_BYTES, MAX_PLAN_BYTES,  # noqa: E402
+                                       PLAN_FILE, export_market, export_plan)
 
 M = "forever.pvp.horde.us"
 HOUR, DAY = 3_600_000, 86_400_000
@@ -78,6 +83,35 @@ def build_world(db: Database, n_items: int, hours: int) -> None:
             db.conn.executemany("INSERT INTO reagents(profession, spell_id, key, count) VALUES (?,?,?,?)",
                                 [("Blacksmithing", spell, m, rng.randint(1, 4)) for m in mats])
             db.conn.execute("INSERT INTO known_recipes(char_id, spell_id) VALUES (?,?)", ("B-R", spell))
+        stock_and_enchanting(db, rng, keys)
+
+
+def stock_and_enchanting(db: Database, rng: random.Random, keys: list[int]) -> None:
+    """Add what the M11 exports need to the world: Enchanting recipes, stock with a cost basis, some listed.
+
+    Drawn after everything else from the same seeded generator, so the rest of the world is unchanged.
+
+    Args:
+        db: The database being built (inside its transaction).
+        rng: The world's generator.
+        keys: The priced items.
+    """
+    for spell in range(1000, 1050):
+        product, mats = rng.sample(keys, 1)[0], rng.sample(keys, 2)
+        db.conn.execute("INSERT INTO recipes(profession, spell_id, product_key, yield_min, yield_max) "
+                        "VALUES (?,?,?,?,?)", ("Enchanting", spell, product, 1, 1))
+        db.conn.executemany("INSERT INTO reagents(profession, spell_id, key, count) VALUES (?,?,?,?)",
+                            [("Enchanting", spell, m, rng.randint(1, 3)) for m in mats])
+        db.conn.execute("INSERT INTO known_recipes(char_id, spell_id) VALUES (?,?)", ("A-R", spell))
+    held = rng.sample(keys, 120)
+    db.conn.executemany("INSERT INTO inventory(char_id, location, key, qty, bound) VALUES (?,?,?,?,0)",
+                        [("A-R" if i % 2 else "B-R", "bags", k, rng.randint(1, 40)) for i, k in enumerate(held)])
+    db.conn.executemany("INSERT INTO cost_basis(key, qty, total_cost) VALUES (?,?,?)",
+                        [(k, 40, 40 * rng.randint(10, 100)) for k in held])
+    db.conn.executemany("INSERT INTO own_auctions(char_id, key, price, stack, band, count, seen, end_ms) "
+                        "VALUES (?,?,?,?,?,?,?,?)",
+                        [("A-R" if i % 2 else "B-R", k, rng.randint(10, 50_000), 5, 3, 1, NOW - HOUR, NOW + 8 * HOUR)
+                         for i, k in enumerate(held[:20])])
 
 
 def peak_memory_mb() -> float:
@@ -123,13 +157,45 @@ def refresh_only(db_path: Path) -> int:
     started = time.perf_counter()
     result = refresh_all(db, NOW, Config(markets=(M,)))
     seconds = time.perf_counter() - started
-    db.close()
     peak_mb = peak_memory_mb()
-    ok = seconds <= BUDGET_S and peak_mb <= BUDGET_MB and result.error is None
+    sizes_ok = export_sizes(db, db_path.parent)
+    db.close()
+    ok = seconds <= BUDGET_S and peak_mb <= BUDGET_MB and result.error is None and sizes_ok
     print(f"bench: full refresh {seconds:.1f} s (budget {BUDGET_S:.0f} s), peak {peak_mb:.0f} MB "
           f"(budget {BUDGET_MB:.0f} MB), {result.items} items, {len(result.failed)} failed -> "
           f"{'OK' if ok else 'OVER BUDGET'}")
     return 0 if ok else 1
+
+
+def export_sizes(db: Database, tmp: Path) -> bool:
+    """Write both addon files of the refreshed world and compare their sizes with their budgets (SPEC §3.5, M11).
+
+    Args:
+        db: The refreshed database.
+        tmp: A temporary folder for the WoW install.
+
+    Returns:
+        True when both files were written within their budgets.
+    """
+    install = tmp / "wow"
+    folder = install.joinpath(*DATA_FOLDER)
+    folder.mkdir(parents=True, exist_ok=True)
+    cfg = Config(markets=(M,), wow_path=str(install))
+    started = time.perf_counter()
+    written = export_market(db, cfg, NOW, lambda _s: None) and export_plan(db, cfg, NOW, lambda _s: None)
+    seconds = time.perf_counter() - started
+    market, plan = (folder / MARKET_FILE).stat().st_size, (folder / PLAN_FILE).stat().st_size
+    text = (folder / MARKET_FILE).read_text(encoding="utf-8")
+    counts = {name: sum(1 for line in text.splitlines() if line.startswith(name)) for name in ("K[", "R[", "U[")}
+    plan_text = (folder / PLAN_FILE).read_text(encoding="utf-8")
+    positions = plan_text.count(";Holding;") + plan_text.count(";Listed;")
+    print(f"bench: {MARKET_FILE} {market / 1_048_576:.2f} MB (budget {MAX_MARKET_BYTES / 1_048_576:.0f} MB, "
+          f"{counts['K[']} candidates, {counts['R[']} recipes, {counts['U[']} reverse entries), {PLAN_FILE} "
+          f"{plan / 1024:.1f} KB (budget {MAX_PLAN_BYTES // 1024} KB, {positions} positions), written in {seconds:.2f} s")
+    trimmed = db.status("candidate_export")
+    if trimmed is not None:
+        print(f"bench: candidate export trimmed to {trimmed.data['kept']} of {trimmed.data['total']} (FM40)")
+    return written and market <= MAX_MARKET_BYTES and plan <= MAX_PLAN_BYTES
 
 
 def main() -> int:

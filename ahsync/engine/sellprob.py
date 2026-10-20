@@ -457,16 +457,17 @@ def lookup(curve: Sequence[Sequence[float]], refresh_ms: int, now_ms: int, ahead
     """P from a curve for now and the units ahead: the row for the current hour, interpolated (SPEC §3.1.1).
 
     Args:
-        curve: 24 rows from build_curve (or decode_curve).
+        curve: 24 rows from build_curve (or decode_curve), or the one row of a tooltip-only item (EX19).
         refresh_ms: Time of the refresh the curve came from.
         now_ms: Now.
         ahead: Units ahead now.
         ahead_points: The curve's units-ahead points.
 
     Returns:
-        P_queue for posting now.
+        P_queue for posting now: the row curve_row(...) mod the number of rows, so a one-row curve is used at any
+        hour.
     """
-    return from_curve(curve[curve_row(refresh_ms, now_ms)], ahead, ahead_points)
+    return from_curve(curve[curve_row(refresh_ms, now_ms) % len(curve)], ahead, ahead_points)
 
 
 def default_chance(price: int | None, cur_others: int | None, default_sell_prob: float = 0.25,
@@ -538,6 +539,12 @@ class MarketSettings:
     window_threshold: float = 0.90          # share of the best slot a window slot needs (SPEC §3.3.4)
     default_sell_prob_cheapest: float = 0.5 # P without volume when you'd be the cheapest seller (SPEC §3.3.2, PD1)
     volume_prior: VolumePrior = VolumePrior()   # the sales-rate prior (SPEC §3.3.1, V41)
+    max_supply_share: float = 0.5           # a window's liquidity cap: this share of others' listed units (W15)
+    max_supply_share_gear: float = 1.0      # the same for weapons and armor
+    min_gear_units: int = 2                 # gear always gets this many per window
+    max_trend_total: float = 0.15           # the most the trend may move a window's forecast (TT7)
+    top_buy_windows: int = 3                # buying windows kept per item, by actionable value (W14)
+    top_sell_windows: int = 3               # selling windows kept per item (W15)
 
 
 @dataclass(frozen=True)

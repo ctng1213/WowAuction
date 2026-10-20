@@ -59,6 +59,20 @@ def test_a_version_2_document_drops_its_unpacked_profiles():
     assert (item.how, item.how_weeks) == ("", "")
 
 
+def test_W15_windows_carry_their_forecast_and_a_version_8_document_reads_it_as_none():
+    window = IntelWindow(42, 3, 43, 1.12, 7, 112, 46, 70)
+    intel = MarketIntelligence("m", 1, None, 1, {2589: replace(ITEM, sell_windows=(window,), buy_windows=(window,))})
+    assert from_json(to_json(intel)) == intel
+    body = json.loads(to_json(intel))
+    body["schema_version"] = 8
+    for name in ("sell_windows", "buy_windows"):
+        for w in body["items"]["2589"][name]:
+            for field in ("expected_price", "exec_qty", "conf"):
+                del w[field]
+    old = from_json(json.dumps(body)).items[2589].sell_windows[0]
+    assert (old.start_slot, old.expected_price, old.exec_qty, old.conf) == (42, None, None, None)
+
+
 def test_V23_supply_level_is_listed_now_else_the_median_daily_supply():
     from dataclasses import replace
 

@@ -155,3 +155,32 @@ def test_PF21_profit_is_a_return_on_cash_and_found_stock_counts_none():
     assert portfolio.pool_profit_pct(week) == 30                                     # Heavy Grinding Stone left out
     assert portfolio.profit_pct(134.0, 0) is None and portfolio.pool_profit_pct([(134.0, 0)]) is None
     assert portfolio.pool_profit_pct(today + week) == 43                             # 2g 87s 65c ÷ 6g 75s
+
+
+def test_EX17_each_input_names_its_source_from_the_route():
+    rod = rod_candidate()
+    assert portfolio.input_sources(rod) == ((COPPER_BAR, 10, "craft"),)
+    mixed = rod_candidate(route=route_text({COPPER_BAR: ["owned", "ah"], 3371: ["vendor"]}, "now", "now"),
+                          inputs=((COPPER_BAR, 2), (3371, 1)))
+    assert portfolio.input_sources(mixed) == ((COPPER_BAR, 2, "own+ah"), (3371, 1, "vendor"))
+    stock = rod_candidate(strategy="sell_stock", route="-/-/now", inputs=((COPPER_ROD, 5),))
+    assert portfolio.input_sources(stock) == ((COPPER_ROD, 5, "own"),)
+    assert portfolio.input_sources(rod_candidate(strategy="disenchant", route="-/now/now")) == ((COPPER_BAR, 10, "ah"),)
+    assert portfolio.input_sources(rod_candidate(strategy="multistage", route="-/-/now")) == ((COPPER_BAR, 10, ""),)
+
+
+def test_EX18_the_config_version_is_stable_and_changes_with_any_portfolio_setting():
+    ps = portfolio.PortfolioSettings()
+    assert portfolio.config_version(ps) == portfolio.config_version(portfolio.PortfolioSettings())
+    changed = {portfolio.config_version(replace(ps, **{name: getattr(ps, name) * 2}))
+               for name in portfolio.CONFIG_VERSION_KEYS}
+    assert len(changed) == len(portfolio.CONFIG_VERSION_KEYS) and portfolio.config_version(ps) not in changed
+    assert 0 <= portfolio.config_version(ps) < 2 ** 32
+
+
+def test_a_version_1_candidate_reads_with_no_window_end():
+    body = json.loads(candidate_to_json(rod_candidate(window_end_ms=NOW + HOUR)))
+    assert body["window_end_ms"] == NOW + HOUR and body["v"] == 2
+    del body["window_end_ms"]
+    body["v"] = 1
+    assert candidate_from_json(json.dumps(body)).window_end_ms is None

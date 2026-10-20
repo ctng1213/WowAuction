@@ -10,7 +10,7 @@ from ahsync.engine.allocation import generate
 from ahsync.engine.candidates import DeInfo, GenInputs, Run
 from ahsync.engine.craft_plan import CraftWorld
 from ahsync.engine.flips import FlipSettings
-from ahsync.engine.plan import Lot, PlanSettings, PlanWindow, SellFacts
+from ahsync.engine.plan import Lot, PlanAction, PlanSettings, PlanWindow, SellFacts
 from ahsync.engine.portfolio import OpenPosition, PortfolioSettings
 from ahsync.engine.selection import profession_detail, static_reason
 from ahsync.engine.week import WeekInputs, prepare
@@ -132,3 +132,25 @@ def test_the_universe_is_the_same_at_any_risk_tolerance_only_funding_changes():
     universe = lambda r: sorted((c.cand_id, c.expected_net, c.gold_needed)                  # noqa: E731
                                 for c in list(r.funded) + [a.candidate for a in r.alternatives])
     assert universe(low) == universe(high) and len(low.funded) < len(high.funded)        # PF1 holds end to end
+
+
+def test_EX18_positions_are_holding_or_listed_with_the_plan_action_for_them():
+    held = [(AMAYA, BAR, 6), (BRUGAN, LINEN, 20)]
+    listed = [(AMAYA, BAR, 4), (BRUGAN, 6217, 0)]
+    peak = 5_000_000
+
+    def act(kind: str, char: str, key: int, at: int, net: float, peak_ms: int | None = None,
+            chain: str | None = None) -> PlanAction:
+        """A plan action."""
+        return PlanAction(kind, char, key, 1, 10, at, None, None, peak_ms, None, net, net, chain=chain)
+    actions = [act("post", AMAYA, BAR, 200, 50.0, peak), act("vendor", AMAYA, BAR, 100, 7.0),
+               act("post", AMAYA, BAR, 50, 900.0, chain="flip:2840"), act("buy", AMAYA, BAR, 10, 0.0)]
+    rows = allocation.position_rows(held, listed, {BAR: (10, 1000), LINEN: (0, 0)}, actions)
+    # Ten bars at 100c each, four of them on the AH: Listed. The flip's post and the buy aren't for these units; the
+    # vendor sale comes first, so it is the next action and its time is the target.
+    assert rows == [allocation.PositionRow(f"stock:{AMAYA}:{BAR}", AMAYA, BAR, "Listed", 10, 10, 1000, 57.0, 100,
+                                           "vendor")]
+    alone = allocation.position_rows([(BRUGAN, BAR, 2)], [], {BAR: (2, 30)}, [act("post", BRUGAN, BAR, 9, 5.0, peak)])
+    assert [(r.state, r.net_now, r.target_ms, r.next_action) for r in alone] == [("Holding", 5.0, peak, "post")]
+    none = allocation.position_rows([(BRUGAN, BAR, 2)], [], {BAR: (2, 30)}, [])
+    assert [(r.net_now, r.target_ms, r.next_action) for r in none] == [(None, None, None)]

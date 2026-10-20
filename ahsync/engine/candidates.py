@@ -132,6 +132,18 @@ def sale_ms(o: PostOption, now_ms: int) -> int:
     return o.window[0] if o.window else now_ms
 
 
+def window_end(o: PostOption) -> int | None:
+    """When a post option's selling window ends (the export's windowEndMs, EX17).
+
+    Args:
+        o: The option.
+
+    Returns:
+        Its window's end ms; None for posting now.
+    """
+    return o.window[1] if o.window else None
+
+
 def timed_value(opts: Sequence[PostOption], run: Run) -> OptionValue:
     """choose_option's value with the timing premium: the option's value ÷ (1 + premium) (SPEC §3.4D.2).
 
@@ -301,7 +313,7 @@ def _sell_opportunity(f: SellFacts, opts: Sequence[PostOption], char_id: str, po
             inputs=((f.key, c.qty),), gold_deposits=fees.deposit_copper(f.vendor_sell, c.qty, o.duration_h),
             cost_basis=math.floor(gi.cost_each.get(f.key, 0.0) * c.qty + 0.5), expected_net=c.expected - f.paid_each * c.qty,
             chance=c.p, exec_qty=c.qty, conf=f.conf, sale_ms=sale, owned_claims=(OwnedClaim(char_id, "stock", f.key, c.qty),),
-            capacity_claims=(CapacityClaim(f.key, window_id(o), c.qty),))
+            capacity_claims=(CapacityClaim(f.key, window_id(o), c.qty),), window_end_ms=window_end(o))
         batches.append(Batch(cand, eligibility_of(f.key, units, f, gi, o),
                              claims_of([(f"own:{char_id}:{f.key}", c.qty), (cap_rid(f.key, o), c.qty)])))
     return Opportunity(f"sell_stock:{f.key}:{char_id}", name, tuple(batches),
@@ -521,7 +533,8 @@ def _flip_opportunity(f: SellFacts, opts: Sequence[PostOption], steps: list, cha
                           out_qty=step.stack, gold_buys=cost,
                           gold_deposits=fees.deposit_copper(f.vendor_sell, step.stack, o.duration_h),
                           expected_net=step.expected - cost, chance=step.p, exec_qty=step.stack, conf=f.conf,
-                          buy_ms=run.now_ms, sale_ms=sale, capacity_claims=(CapacityClaim(f.key, window_id(o), step.stack),))
+                          buy_ms=run.now_ms, sale_ms=sale, capacity_claims=(CapacityClaim(f.key, window_id(o), step.stack),),
+                          window_end_ms=window_end(o))
         weeks = o.weeks if later and o.window is not None and o.weeks < PATTERN_WEEKS else None
         batches.append(Batch(cand, eligibility_of(f.key, units, f, gi, o, untrusted_weeks=weeks, no_listing=no_listing),
                              claims_of([(f"ah:{f.key}", step.stack), (cap_rid(f.key, o), step.stack)])))
@@ -645,7 +658,8 @@ def _later_opportunity(f: SellFacts, buy_ms: int, choice: tuple, char_id: str, l
         cand = make_candidate("buy_later", f.key, char_id, route, n, gi, out_qty=qty, gold_buys=price * qty,
                               gold_deposits=fees.deposit_copper(f.vendor_sell, qty, o.duration_h),
                               expected_net=e - price * qty, chance=p, exec_qty=qty, conf=f.conf, buy_ms=buy_ms,
-                              sale_ms=o.window[0], capacity_claims=(CapacityClaim(f.key, window_id(o), qty),))
+                              sale_ms=o.window[0], capacity_claims=(CapacityClaim(f.key, window_id(o), qty),),
+                              window_end_ms=window_end(o))
         batches.append(Batch(cand, eligibility_of(f.key, n * qty, f, gi, o, untrusted_weeks=weeks),
                              ((cap_rid(f.key, o), qty),)))
     return Opportunity(f"buy_later:{f.key}:{char_id}:{route}", name, tuple(batches),

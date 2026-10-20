@@ -846,6 +846,43 @@ def profession_detail(e: Eligibility) -> str:
     return f"{short_name(e.best[0])} has {e.profession} {e.best[1]}"
 
 
+# The export's reason codes (SPEC §3.5 `K` status, §3.4D.6), in D.6's order: a status text's start -> its code.
+REASON_CODES: tuple[tuple[str, str], ...] = (
+    ("Required profession unavailable", "profession"),
+    ("Forecast too uncertain", "uncertain"),
+    ("Forecast too stale", "stale"),
+    ("Sales volume unknown", "volume"),
+    ("No listing left to price against", "no_listing"),
+    ("Insufficient liquidity", "liquidity"),
+    ("Missing materials", "missing"),
+    ("Resources already claimed", "claimed"),
+    ("Insufficient gold (", "gold_all"),
+    ("Insufficient gold on ", "gold_char"),
+    ("Recommendation limit reached", "limit"),
+    ("Exceeds risk tolerance", "risk"),
+)
+
+
+def reason_code(status: str | None) -> str:
+    """A §3.4D.6 status as the export's short code (SPEC §3.5 `K`, EX17).
+
+    Args:
+        status: The exclusion reason's text; None or "" for a funded row.
+
+    Returns:
+        "" for a funded row; else its code, e.g. "risk" for "Exceeds risk tolerance (needs 45s, 24s 40c left)".
+
+    Raises:
+        ValueError: A status that is none of D.6's.
+    """
+    if not status:
+        return ""
+    for start, code in REASON_CODES:
+        if status.startswith(start):
+            return code
+    raise ValueError(f"not a D.6 status: {status!r}")
+
+
 # ---------------------------------------------------------------- empty states (§3.4D.7)
 
 def empty_state(characters: int, cash_gold: int, committed: int, risk_budget: int, lists_full: bool,

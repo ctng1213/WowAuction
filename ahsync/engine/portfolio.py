@@ -15,11 +15,12 @@ from __future__ import annotations
 
 import json
 import math
+import zlib
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field, fields
 
 HOUR_MS = 3_600_000
-CANDIDATE_SCHEMA_VERSION = 1
+CANDIDATE_SCHEMA_VERSION = 2          # 2: window_end_ms, the export's windowEndMs (EX17)
 # Strategy code (in ids and records) -> the Strategy column's label (SPEC §3.4D.3).
 STRATEGIES: dict[str, str] = {
     "flip": "Flip",
@@ -116,6 +117,7 @@ class Candidate:
     capacity_claims: tuple[CapacityClaim, ...] = ()   # by (key, window)
     built_ms: int = 0                              # the intelligence's built_ms
     method_versions: tuple[tuple[str, int], ...] = ()   # (method, version), by name
+    window_end_ms: int | None = None               # when the selling window it sells in ends; None selling now (EX17)
 
     @property
     def cand_id(self) -> str:
@@ -314,6 +316,55 @@ def export_subset(candidates: Sequence[Candidate], funded_ids: Sequence[str], ad
         raise ValueError("funded ids must be distinct candidates of the universe")
     rest = sorted((c for c in candidates if c.cand_id not in funded), key=lambda c: (-adjusted[c.cand_id], c.cand_id))
     return ([by_id[i] for i in funded_ids] + rest)[:limit]
+
+
+# A route letter -> the export's source word (SPEC §3.5 `K` inputs).
+SOURCE_WORDS: dict[str, str] = {"o": "own", "v": "vendor", "a": "ah", "c": "craft"}
+# Strategies without reagents in their route: where their inputs come from.
+_PLAIN_SOURCES: dict[str, str] = {"sell_stock": "own", "disenchant": "ah", "flip": "ah", "buy_later": "ah"}
+
+
+def input_sources(c: Candidate) -> tuple[tuple[int, int, str], ...]:
+    """Each input of a candidate with where it comes from (SPEC §3.5 `K` inputs, EX17).
+
+    A craft's sources are its route's reagent letters; a reagent with several sources lists them joined by "+",
+    in the order own, vendor, ah, craft. Sell stock uses your own units, a disenchant buys from the AH.
+
+    Args:
+        c: The candidate.
+
+    Returns:
+        (item key, units, source) per input, in the candidate's order (by key): source "own", "vendor", "ah",
+        "craft" or a "+" join of them.
+    """
+    reagents = c.route.split("/")[0]
+    letters: dict[int, str] = {}
+    if reagents != "-":
+        for part in reagents.split("+"):
+            digits = part.rstrip("ovac")
+            letters[int(digits)] = "+".join(SOURCE_WORDS[ch] for ch in part[len(digits):])
+    plain = _PLAIN_SOURCES.get(c.strategy, "")
+    return tuple((key, units, letters.get(key, plain)) for key, units in c.inputs)
+
+
+# The scoring, eligibility and allocation settings the addon reads from PortfolioPlan.lua (SPEC §3.6 configVersion).
+CONFIG_VERSION_KEYS = ("risk_tolerance", "premium_base", "premium_per_day", "immediate_hours", "top_buy_windows",
+                       "top_sell_windows", "today_limit", "week_limit", "candidate_export", "horizon_days",
+                       "candidate_pool", "swap_candidates")
+
+
+def config_version(ps: PortfolioSettings) -> int:
+    """A stable number that changes when any portfolio setting changes (SPEC §3.6 configVersion, EX18).
+
+    Args:
+        ps: The portfolio settings.
+
+    Returns:
+        CRC-32 (zlib.crc32, 0 to 2^32 - 1) of "key=value;..." over CONFIG_VERSION_KEYS in that order, each
+        value in whole thousandths, floor(x × 1000 + 0.5); the same settings always give the same number.
+    """
+    text = ";".join(f"{name}={math.floor(getattr(ps, name) * 1000 + 0.5)}" for name in CONFIG_VERSION_KEYS)
+    return zlib.crc32(text.encode("ascii"))
 
 
 # ---------------------------------------------------------------- accounting (§3.4D.1)

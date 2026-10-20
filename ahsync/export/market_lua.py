@@ -12,16 +12,20 @@ needs an item (SPEC §5.1 lazy decode):
   listings per day are in tenths, and chance1000 is the chance a reference stack posted now
   sells, in thousandths (the addon's own sell options use it, A15).
 - A window is "start:hours:best:how1000:weeks" (UTC slots, how_avg in thousandths),
-  windows joined by "/", best first.
-- Shortlist items keep the full 24 × 8 curve; the rest get the 24 × 3 tooltip subset
-  (the 0, 5 and 20 ahead columns, unchanged) (AR6). The 168-slot hour-of-week
+  windows joined by "/", best first. Shortlist items carry every window the intelligence
+  holds (top_sell_windows, top_buy_windows); tooltip-only items (not on the shortlist) only
+  the top selling and the top buying window (EX19).
+- Shortlist items keep the full 24 × 8 curve; tooltip-only items get one row of 3 points:
+  the refresh hour's row at 0, 5 and 20 ahead, used at any hour (AR6, EX19). The 168-slot hour-of-week
   profiles are never exported (IU12).
 - D[key] = "skill,quality,ilvl,kind" for exported items one could disenchant (kind a armor,
   w weapon), so the addon's Disenchant tab can list targets for an enchanter you don't have
   yet (A23).
 - vendor = { [key] = copper }: what a merchant charges for items it sells in unlimited supply,
   so the addon's crafts can buy mats from a vendor (EX6). Not in the checksum.
-- The checksum is "<item and D strings>:<their total length>": cheap for the addon to check
+- K, the exported candidates, and G, the dependency graph (R, U, DE, order), per market: formats in
+  export/portfolio_lua.py (EX17, EX18, EXPORT_VERSION 4).
+- The checksum is "<item, curve, D, K and G strings>:<their total length>": cheap for the addon to check
   at login, and a truncated or mixed-up file fails it.
 - exportVersion (EX14) is outside the checksum: the build of the format, shared with PortfolioPlan.lua.
 """
@@ -30,19 +34,23 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 
 from ahsync.engine import capacity, profile
-from ahsync.engine.sellprob import CURVE_AHEAD, CURVE_AHEAD_TOOLTIP, CURVE_ROWS
+from ahsync.engine.graph import Graph
+from ahsync.export.portfolio_lua import graph_strings
+from ahsync.engine.sellprob import CURVE_AHEAD, CURVE_AHEAD_TOOLTIP
 from ahsync.engine.views import round_half_up
 from ahsync.intel.contract import IntelWindow, ItemIntel, MarketIntelligence
 
 MARKET_SCHEMA_VERSION = 1      # the addon refuses any other (FM17)
 # Bumped on ANY change to either addon file's format, additive or not, so an addon and an AHSync of
 # different builds say which side is stale (SPEC §3.5, FM34, FM35). Equals AHProfit.EXPORT_VERSION (Core/Market.lua).
-EXPORT_VERSION = 3              # 3: market items end in closes30 (TT23, PP4); 2: a mail's recipient (EX16)
+EXPORT_VERSION = 4              # 4: K, G and the portfolio snapshot (EX17, EX18); 3: market items end in closes30
+                                # (TT23, PP4); 2: a mail's recipient (EX16)
 HOUR_MS = 3_600_000
 MINUTE_MS = 60_000
 STALE_PRICE_MS = 7 * 86_400_000   # older prices are left out unless shortlisted (EX5: the 2 MB budget)
 CHUNK = 2000                   # items per generated function: each has its own constant table (A3)
 TOOLTIP_COLUMNS = tuple(CURVE_AHEAD.index(a) for a in CURVE_AHEAD_TOOLTIP)
+EMPTY_GRAPH = Graph((), (), (), (), ())      # a market without known recipes or disenchantable items
 
 
 def lua_string(text: str) -> str:
@@ -107,15 +115,17 @@ def windows_text(windows: Sequence[IntelWindow]) -> str:
                     for w in windows)
 
 
-def item_text(s: ItemIntel) -> str:
+def item_text(s: ItemIntel, full: bool = True) -> str:
     """One item's string (module docstring, EX2).
 
     Args:
         s: The item's intelligence.
+        full: Whether the item is on the shortlist; a tooltip-only item keeps one window of each kind (EX19).
 
     Returns:
         "numbers;sellWindows;buyWindows".
     """
+    top = None if full else 1
     age = None if s.cur_age_ms is None else s.cur_age_ms // MINUTE_MS
     fields = [_num(s.cur), _num(s.cur_qty), _num(age), _num(s.med7), _num(s.med30), _num(s.p10_30), _num(s.p90_30),
               _tenths(s.trend7), _tenths(s.sold_per_day), _tenths(s.listed_per_day), _num(s.units_on_ah), _num(s.conf),
@@ -123,23 +133,38 @@ def item_text(s: ItemIntel) -> str:
               "" if s.sell_value is None else str(round_half_up(s.sell_value)), "1" if s.volume_unknown else "0",
               str(round_half_up(s.chance * 1000)), _num(s.median_daily_supply),          # EX10
               "1" if s.cur_suspect else "0", _num(s.closes_30d)]                      # A58; TT23
-    return f"{','.join(fields)};{windows_text(s.sell_windows)};{windows_text(s.buy_windows)}"
+    return f"{','.join(fields)};{windows_text(s.sell_windows[:top])};{windows_text(s.buy_windows[:top])}"
 
 
 def trim_curve(curve: str, full: bool) -> str:
-    """The curve as exported: all 8 columns for the shortlist, else the 3 tooltip columns (AR6).
+    """The curve as exported: all of it for the shortlist, else the refresh hour's 3 tooltip points (AR6, EX19).
 
     Args:
-        curve: The intelligence's 24 × 8 curve, one character per point.
+        curve: The intelligence's 24 × 8 curve, one character per point; row 0 is the refresh hour.
         full: Whether the item is on the shortlist.
 
     Returns:
-        24 × 8 or 24 × 3 characters; "" for an item without a curve.
+        24 × 8 characters, or 3 (row 0 at 0, 5 and 20 ahead), which the addon uses at any hour; "" for an item
+        without a curve.
     """
     if full or not curve:
         return curve
-    width = len(CURVE_AHEAD)
-    return "".join(curve[row * width + col] for row in range(CURVE_ROWS) for col in TOOLTIP_COLUMNS)
+    return "".join(curve[col] for col in TOOLTIP_COLUMNS)
+
+
+def wanted(key: int, s: ItemIntel, shortlist: set[int]) -> bool:
+    """Whether an item is exported (EX2, EX5).
+
+    Args:
+        key: Item key.
+        s: Its intelligence.
+        shortlist: The market's shortlist.
+
+    Returns:
+        True on the shortlist, or with a price at most 7 days old.
+    """
+    recent = s.cur is not None and (s.cur_age_ms is None or s.cur_age_ms <= STALE_PRICE_MS)
+    return recent or key in shortlist
 
 
 def exported_items(intel: MarketIntelligence, shortlist: set[int]) -> list[tuple[int, str, str]]:
@@ -152,20 +177,8 @@ def exported_items(intel: MarketIntelligence, shortlist: set[int]) -> list[tuple
     Returns:
         (key, item string, curve string) by key.
     """
-    def wanted(key: int, s: ItemIntel) -> bool:
-        """Whether an item is exported.
-
-        Args:
-            key: Item key.
-            s: Its intelligence.
-
-        Returns:
-            True on the shortlist, or with a price at most 7 days old.
-        """
-        recent = s.cur is not None and (s.cur_age_ms is None or s.cur_age_ms <= STALE_PRICE_MS)
-        return recent or key in shortlist
-    return [(key, item_text(s), trim_curve(s.curve, key in shortlist))
-            for key, s in sorted(intel.items.items()) if wanted(key, s)]
+    return [(key, item_text(s, key in shortlist), trim_curve(s.curve, key in shortlist))
+            for key, s in sorted(intel.items.items()) if wanted(key, s, shortlist)]
 
 
 def _supply_rows(intel: MarketIntelligence, keys: set[int], window_hours: int) -> str:
@@ -210,12 +223,15 @@ def _market_block(name: str, items: list[tuple[int, str, str]], de: Mapping[int,
     return lines
 
 
-def checksum(markets: Iterable[list[tuple[int, str, str]]], des: Iterable[Mapping[int, str]] = ()) -> str:
-    """The file's checksum over every item, curve and disenchant string.
+def checksum(markets: Iterable[list[tuple[int, str, str]]], des: Iterable[Mapping[int, str]] = (),
+             extra: Iterable[str] = ()) -> str:
+    """The file's checksum over every item, curve, disenchant, candidate and graph string.
 
     Args:
         markets: Each market's exported items.
         des: Each market's exported D strings (only those of exported items).
+        extra: Every K, R and U string and each market's G.DE and G.order (portfolio_strings); empty ones
+            are not counted.
 
     Returns:
         "<number of strings>:<their total length>".
@@ -228,13 +244,55 @@ def checksum(markets: Iterable[list[tuple[int, str, str]]], des: Iterable[Mappin
     for de in des:
         count += len(de)
         length += sum(len(v) for v in de.values())
+    for text in extra:
+        if text:                                   # an empty G.DE or G.order counts as no string
+            count += 1
+            length += len(text)
     return f"{count}:{length}"
+
+
+def portfolio_strings(candidates: Sequence[str], graph: Graph | None) -> list[str]:
+    """One market's K and G strings, as the checksum counts them (EX17, EX18).
+
+    Args:
+        candidates: Its K strings.
+        graph: Its graph, or None (an empty one).
+
+    Returns:
+        The K strings, the R and U strings by key, then G.DE and G.order (both always written, maybe empty;
+        the checksum skips an empty one).
+    """
+    recipes, uses, de, order = graph_strings(graph or EMPTY_GRAPH)
+    return [*candidates, *(recipes[k] for k in sorted(recipes)), *(uses[k] for k in sorted(uses)), de, order]
+
+
+def _portfolio_block(name: str, candidates: Sequence[str], graph: Graph | None) -> list[str]:
+    """Lua statements filling one market's K and G tables, in their own function (constant limits, A3).
+
+    Args:
+        name: The Lua locals' suffix, e.g. "1" for K1 and G1.
+        candidates: Its K strings, in export order.
+        graph: Its graph, or None (an empty one).
+
+    Returns:
+        Source lines: one `K[n]=`, `R[spell]=` or `U[key]=` per line, then `G.DE=` and `G.order=` (the snapshot
+        keeps these lines, tools/snapshot.py).
+    """
+    recipes, uses, de, order = graph_strings(graph or EMPTY_GRAPH)
+    lines = [f"local K{name}, G{name} = {{}}, {{ R = {{}}, U = {{}} }}", "do local fill = function(K, R, U, G)"]
+    lines += [f"K[{n}]={lua_string(text)}" for n, text in enumerate(candidates, start=1)]
+    lines += [f"R[{spell}]={lua_string(recipes[spell])}" for spell in sorted(recipes)]
+    lines += [f"U[{key}]={lua_string(uses[key])}" for key in sorted(uses)]
+    lines += [f"G.DE={lua_string(de)}", f"G.order={lua_string(order)}",
+              f"end fill(K{name}, G{name}.R, G{name}.U, G{name}) end"]
+    return lines
 
 
 def market_lua(intels: Sequence[MarketIntelligence], shortlists: Mapping[str, set[int]],
                char_markets: Mapping[str, str], generated_ms: int,
                disenchantable: Mapping[int, str] | None = None, vendor: Mapping[int, int] | None = None,
-               flips: Mapping[str, Mapping[int, str]] | None = None, window_hours: int = 8) -> str:
+               flips: Mapping[str, Mapping[int, str]] | None = None, window_hours: int = 8,
+               candidates: Mapping[str, Sequence[str]] | None = None, graphs: Mapping[str, Graph] | None = None) -> str:
     """The whole MarketIntelligence.lua (SPEC §3.5, EX2).
 
     Args:
@@ -247,6 +305,8 @@ def market_lua(intels: Sequence[MarketIntelligence], shortlists: Mapping[str, se
         flips: Market -> item key -> "expected,price,slot" flip offers (EX11); exported items only, outside the
             checksum.
         window_hours: sell_window_hours, for the shortlist's supply factors (EX13).
+        candidates: Market -> its K strings in export order (portfolio_lua.candidate_text, EX17); none when absent.
+        graphs: Market -> its dependency graph (EX18); an empty one when absent.
 
     Returns:
         Lua source defining the global AHProfitMarket.
@@ -254,9 +314,12 @@ def market_lua(intels: Sequence[MarketIntelligence], shortlists: Mapping[str, se
     blocks = [exported_items(intel, shortlists.get(intel.market, set())) for intel in intels]
     des = [{key: (disenchantable or {})[key] for key, _, _ in items if key in (disenchantable or {})} for items in blocks]
     lines = ["-- MarketIntelligence.lua: generated by AHSync (SPEC §3.5). Do not edit; it is replaced on every refresh."]
-    entries = []
+    entries, extra = [], []
     for n, (intel, items, de) in enumerate(zip(intels, blocks, des), start=1):
         lines += _market_block(str(n), items, de)
+        k_texts, graph = (candidates or {}).get(intel.market, ()), (graphs or {}).get(intel.market)
+        lines += _portfolio_block(str(n), k_texts, graph)
+        extra += portfolio_strings(k_texts, graph)
         until = _num(intel.observations_until_ms) or "nil"
         exported = {key for key, _, _ in items}
         offers = ", ".join(f"[{key}] = {lua_string(text)}" for key, text in sorted((flips or {}).get(intel.market, {}).items())
@@ -264,11 +327,11 @@ def market_lua(intels: Sequence[MarketIntelligence], shortlists: Mapping[str, se
         rows = _supply_rows(intel, shortlists.get(intel.market, set()) & exported, window_hours)
         entries.append(f"  [{lua_string(intel.market)}] = {{ observationsUntil = {until}, "
                        f"curveHour = {intel.built_ms // HOUR_MS}, I = I{n}, C = C{n}, D = D{n}, F = {{ {offers} }}, "
-                       f"S = {{ {rows} }} }},")
+                       f"S = {{ {rows} }}, K = K{n}, G = G{n} }},")
     chars = ", ".join(f"[{lua_string(c)}] = {lua_string(m)}" for c, m in sorted(char_markets.items()))
     vendors = ", ".join(f"[{key}] = {price}" for key, price in sorted((vendor or {}).items()))
     lines += ["AHProfitMarket = {", f"  schemaVersion = {MARKET_SCHEMA_VERSION},",
               f"  exportVersion = {EXPORT_VERSION},", f"  generatedAt = {generated_ms},",
-              f"  checksum = {lua_string(checksum(blocks, des))},", f"  charMarkets = {{ {chars} }},", f"  vendor = {{ {vendors} }},", "  markets = {",
+              f"  checksum = {lua_string(checksum(blocks, des, extra))},", f"  charMarkets = {{ {chars} }},", f"  vendor = {{ {vendors} }},", "  markets = {",
               *entries, "  },", "}", ""]
     return "\n".join(lines)

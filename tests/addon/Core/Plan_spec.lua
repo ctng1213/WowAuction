@@ -4,6 +4,7 @@
 local Stubs = require("wow_stubs")
 
 local EX3 = "tests/addon/generated/plan/ex3.lua"
+local EX18 = "tests/addon/generated/plan/ex18.lua"     -- the mockup world's portfolio (tests/support/mockup_export.py)
 local T = 1760000000000            -- the stubs' server time; EX3 has Amaya ingested until T + 2 h
 local HOUR = 3600000
 local A, B = "Amaya-Grommash", "Brugan-Grommash"
@@ -114,7 +115,7 @@ describe("Plan", function()
   end)
 
   it("FM34 a plan from an older AHSync (export version 0 or none) prunes nothing, shows no rows and says restart AHSync", function()
-    for _, version in ipairs({ 0, false }) do
+    for _, version in ipairs({ 0, false, 3 }) do
       local Plan = LoginWithRows(function(plan) plan.exportVersion = version or nil end)
       assert_eq({ #AHProfitDB.scans, #AHProfitDB.events }, { 3, 2 })
       assert_eq(Plan.Actions(A), {})
@@ -128,9 +129,44 @@ describe("Plan", function()
   end)
 
   it("FM35 a plan from a newer AHSync says to deploy the addon", function()
-    local Plan = LoginWithRows(function(plan) plan.exportVersion = 4 end)
+    local Plan = LoginWithRows(function(plan) plan.exportVersion = 5 end)
     assert_eq({ Plan.Actions(A), #AHProfitDB.scans }, { {}, 3 })
     assert_eq(Plan.Problem(), "This addon is older than AHSync's files: run tools/deploy.py, then /reload")
+  end)
+
+  it("EX18 decodes the portfolio snapshot, each character's gold, reservation and positions", function()
+    Stubs.Reset()
+    _G.AHProfitPlan = nil
+    dofile(EX18)
+    Stubs.Login()
+    local Plan = AHProfit.Plan
+    assert_eq(Plan.Problem(), nil)
+    local p = Plan.Portfolio("forever.pvp.horde.us")
+    assert_eq({ p.riskTolerance1000, p.riskTolerance, p.premiumBase, p.premiumPerDay, p.immediateHours, p.todayLimit,
+                p.weekLimit, p.horizonDays }, { 300, 0.3, 0.15, 0.05, 8, 20, 20, 7 })
+    assert_eq({ p.capitalBase, p.committed, p.capacity, p.allocated, p.configVersion > 0 },
+              { 355800, 41800, 64940, 62500, true })
+    assert_eq(Plan.Portfolio("forever.pve.horde.us"), nil)
+    local MON10 = 1728259200000 + 10 * HOUR
+    assert_eq({ Plan.Gold(A) }, { 210000, MON10 })
+    assert_eq({ Plan.Gold(B) }, { 104000, MON10 })
+    assert_eq({ Plan.Gold("Zed-Grommash") }, {})
+    assert_eq({ Plan.Reserved(A), Plan.Reserved(B), Plan.Reserved("Zed-Grommash") }, { 25200, 37300, 0 })
+    local brugan = Plan.Positions(B)
+    assert_eq(#brugan, 4)
+    assert_eq(brugan[4], { id = "stock:Brugan-Grommash:7920", key = 7920, state = "Listed", units = 1, unitsLeft = 1,
+                           costLeft = 30000, netNow = 4500, target = 1728297480000, nextAction = "post" })
+    local leather = Plan.Positions(A)[1]
+    assert_eq({ leather.key, leather.state, leather.costLeft, leather.netNow, leather.target, leather.nextAction },
+              { 2319, "Holding", 4000, nil, nil, nil })
+    assert_eq(Plan.Positions("Zed-Grommash"), {})
+    Stubs.Reset()
+    _G.AHProfitPlan = nil
+    dofile(EX18)
+    AHProfitPlan.reserved[A] = 252000                                 -- the checksum counts the reservation's digits
+    Stubs.Login()
+    assert_eq({ AHProfit.Plan.Portfolio("forever.pvp.horde.us"), AHProfit.Plan.Reserved(A), AHProfit.Plan.Positions(B),
+                AHProfit.Plan.Gold(A) }, { nil, 0, {}, nil })
   end)
 
   it("without a plan the addon carries on: nothing pruned, no problem shown", function()

@@ -8,13 +8,15 @@ already read, plus the alternatives (`alternative_rows`) for the `alternatives` 
 """
 from __future__ import annotations
 
+import math
+
 from ahsync.config import Config, flip_settings, plan_settings, portfolio_settings
 from ahsync.engine import disenchant
-from ahsync.engine.allocation import PortfolioPlan, portfolio_plan, stock_positions
+from ahsync.engine.allocation import PortfolioPlan, PositionRow, portfolio_plan, position_rows, stock_positions
 from ahsync.engine.candidates import DeInfo, GenInputs, Run
 from ahsync.engine.de_table import DE_TABLE
 from ahsync.engine.flips import auctions
-from ahsync.engine.portfolio import CharacterGold, candidate_to_json
+from ahsync.engine.portfolio import CharacterGold, PortfolioSettings, candidate_to_json, config_version, export_subset
 from ahsync.engine.sell_record import Record
 from ahsync.history.reads import ItemInfo
 from ahsync.intel.contract import ItemIntel
@@ -128,11 +130,35 @@ def held_units(state: StateReader, char_ids: list[str]) -> list[tuple[str, int, 
         char_ids: The market's characters.
 
     Returns:
-        (character, item key, units): unbound inventory (bags, bank, mail) and your auctions.
+        (character, item key, units): unbound inventory (bags, bank, mail), then your auctions.
     """
-    out = [(c, key, qty) for c, _place, key, qty, bound in state.holdings(char_ids) if not bound]
-    out += [(c, key, stack * count) for c, key, _p, stack, _b, count, _d, _e in state.own_auctions(char_ids)]
-    return out
+    return inventory_units(state, char_ids) + listed_units(state, char_ids)
+
+
+def inventory_units(state: StateReader, char_ids: list[str]) -> list[tuple[str, int, int]]:
+    """Unbound units in bags, bank and mail.
+
+    Args:
+        state: Character state.
+        char_ids: The market's characters.
+
+    Returns:
+        (character, item key, units).
+    """
+    return [(c, key, qty) for c, _place, key, qty, bound in state.holdings(char_ids) if not bound]
+
+
+def listed_units(state: StateReader, char_ids: list[str]) -> list[tuple[str, int, int]]:
+    """Units on the AH in your auctions.
+
+    Args:
+        state: Character state.
+        char_ids: The market's characters.
+
+    Returns:
+        (character, item key, units).
+    """
+    return [(c, key, stack * count) for c, key, _p, stack, _b, count, _d, _e in state.own_auctions(char_ids)]
 
 
 def plan_portfolio(state: StateReader, characters: list[tuple[str, int]], stats: dict[int, ItemIntel],
@@ -165,6 +191,80 @@ def plan_portfolio(state: StateReader, characters: list[tuple[str, int]], stats:
     positions = stock_positions(held_units(state, char_ids), state.cost_basis())
     run = Run(now_ms, plan_settings(cfg), flip_settings(cfg), portfolio_settings(cfg), cfg.max_craft_depth)
     return portfolio_plan(w, gi, chars, positions, run)
+
+
+def export_rows(plan: PortfolioPlan | None, limit: int) -> list[tuple[str, str, float, str]]:
+    """The candidates the addon file exports, in export order (SPEC §3.4D.3, §3.5 `K`, EX17).
+
+    Args:
+        plan: The run's plan, or None.
+        limit: Config candidate_export.
+
+    Returns:
+        (cand_id, status = "" funded or the D.6 status, adjusted profit float copper, candidate JSON): the funded
+        in funding order, then the best alternatives by adjusted profit (portfolio.export_subset), `limit` in all.
+    """
+    if plan is None:
+        return []
+    alternatives = {a.candidate.cand_id: a for a in plan.alternatives}
+    adjusted = {i: a.adjusted for i, a in alternatives.items()}
+    funded = dict(zip(plan.selection.funded, plan.funded))
+    picked = export_subset([*plan.funded, *(a.candidate for a in plan.alternatives)], plan.selection.funded,
+                           adjusted, limit)
+    funded_adjusted = dict(plan.funded_adjusted)
+    return [(c.cand_id, "" if c.cand_id in funded else alternatives[c.cand_id].reason,
+             funded_adjusted[c.cand_id] if c.cand_id in funded else adjusted[c.cand_id], candidate_to_json(c))
+            for c in picked]
+
+
+def snapshot_data(plan: PortfolioPlan, ps: PortfolioSettings, positions: list[PositionRow], now_ms: int) -> dict:
+    """The portfolio snapshot PortfolioPlan.lua carries, as stored between runs (SPEC §3.5 `portfolio`, EX18).
+
+    Args:
+        plan: The run's plan.
+        ps: The portfolio settings it ran with.
+        positions: allocation.position_rows of the run.
+        now_ms: The run's time.
+
+    Returns:
+        JSON-serializable: snapshot_ms, the settings the addon scores with (risk tolerance and premiums in whole
+        thousandths), config_version, capital_base, committed, capacity (the remaining capacity), allocated (gold
+        needed of the funded rows), reserved (character -> copper) and positions (rows of position_id, character,
+        key, state, units, units left, cost left, net now float copper or None, target ms or None, next action).
+    """
+    a, sel = plan.accounting, plan.selection
+    return {
+        "snapshot_ms": now_ms,
+        "settings": [math.floor(ps.risk_tolerance * 1000 + 0.5), math.floor(ps.premium_base * 1000 + 0.5),
+                     math.floor(ps.premium_per_day * 1000 + 0.5), ps.immediate_hours, ps.today_limit, ps.week_limit,
+                     ps.horizon_days],
+        "config_version": config_version(ps),
+        "capital_base": a.capital_base, "committed": a.committed_capital, "capacity": a.remaining_capacity,
+        "allocated": sel.gold, "reserved": {c: n for c, n in sel.reserved if n},
+        "positions": [[p.position_id, p.char_id, p.key, p.state, p.units, p.units_left, p.cost_left, p.net_now,
+                       p.target_ms, p.next_action] for p in positions],
+    }
+
+
+def portfolio_export(state: StateReader, char_ids: list[str], plan: PortfolioPlan | None, cfg: Config,
+                     now_ms: int) -> tuple[list[tuple[str, str, float, str]], dict | None]:
+    """What the addon files carry of one market's plan run, for RecommendStore.stage_export (SPEC §3.5, M11).
+
+    Args:
+        state: Character state (inventory, auctions, cost basis: the positions).
+        char_ids: The market's characters.
+        plan: The run's plan, or None without characters.
+        cfg: Config (candidate_export and the portfolio settings).
+        now_ms: The run's time.
+
+    Returns:
+        (export_rows, snapshot_data); ([], None) without a plan.
+    """
+    if plan is None:
+        return [], None
+    positions = position_rows(inventory_units(state, char_ids), listed_units(state, char_ids), state.cost_basis(),
+                              plan.actions)
+    return export_rows(plan, cfg.candidate_export), snapshot_data(plan, portfolio_settings(cfg), positions, now_ms)
 
 
 def alternative_rows(plan: PortfolioPlan | None) -> list[tuple[str, str, str, str, str]]:

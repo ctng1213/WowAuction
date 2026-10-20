@@ -10,6 +10,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 
+GEAR_CLASSES = (2, 4)            # WoW item classes weapon, armor: the lenient gear cap (SPEC §3.4 Liquidity)
+
+
 def slot_of(hour: int) -> int:
     """Hour of the week of a clock hour (UTC, 0 = Mon 00:00; the epoch was a Thursday).
 

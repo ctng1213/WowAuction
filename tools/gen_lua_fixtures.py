@@ -166,7 +166,31 @@ def generate_plan(out_dir: Path = OUT / "plan") -> list[Path]:
     return [out_dir / "ex3.lua"]
 
 
+def generate_portfolio(out_dir: Path = OUT) -> list[Path]:
+    """Write the mockup world's two addon files with the Python exporters (EX17, EX18), for the decoder specs.
+
+    - market/ex17.lua: no items; the 16 candidates as K (12 funded, then 4 alternatives) and the copper chain as G.
+    - plan/ex18.lua: no actions; the portfolio snapshot, both characters' gold and reservations, six positions.
+
+    Args:
+        out_dir: The generated folder (files go in its market/ and plan/ folders).
+
+    Returns:
+        Paths written.
+    """
+    sys.path.insert(0, str(ROOT))
+    from tests.support import mockup_export
+
+    files = {out_dir / "market" / "ex17.lua": mockup_export.market_file(),
+             out_dir / "plan" / "ex18.lua": mockup_export.plan_file()}
+    for path, text in files.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8", newline=chr(10))
+    return list(files)
+
+
 if __name__ == "__main__":
-    paths = generate() + generate(PROPERTIES, OUT / "properties") + generate_market() + generate_plan()
+    paths = (generate() + generate(PROPERTIES, OUT / "properties") + generate_market() + generate_plan()
+             + generate_portfolio())
     print(f"gen_lua_fixtures: {len(paths)} file(s) -> {OUT.relative_to(ROOT).as_posix()}")
     sys.exit(0)
