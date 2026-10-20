@@ -91,7 +91,7 @@ describe("CraftView", function()
     assert_eq({ rows[1].profit, rows[1].netCopper }, { "+9s 71c", 971 })        -- never +19s 42c
   end)
 
-  it("A64 an own craft's mats stay within 25% of your gold", function()
+  it("an own craft's mats stay within the budget it is given (A64's live cap, Recommend/Adapt_spec.lua)", function()
     Boot()
     local Options = AHProfit.Options
     local recipe = { spell = 1, product = 6217, yieldMin = 1, yieldMax = 1, reagents = { { 2840, 2 } } }
@@ -100,7 +100,7 @@ describe("CraftView", function()
     local ctx = { itemOf = function(k) return items[k] end, levelsOf = function() return nil end,
                   vendorOf = function() return 0 end, nowMs = NOW }
     local free = Options.CraftOptions({ recipe }, {}, ctx)[1]
-    ctx.budget = 4500                                                     -- 25% of 1.8g: two crafts' bars
+    ctx.budget = 4500                                                     -- 45s: two crafts' bars
     local capped = Options.CraftOptions({ recipe }, {}, ctx)[1]
     assert_eq({ free.crafts > 2, capped.crafts, capped.matGold <= 4500 }, { true, 2, true })
   end)

@@ -21,6 +21,7 @@ Professions.NAMES = {
 local TRADE_UPDATE = Adapter.TradeUpdateEvent()   -- modern or Classic event name
 local windowOpen = { trade = false, craft = false }
 local merchantOpen = false
+local learnedListeners = {}        -- called with recipes a character just learned (A83)
 
 --- Write the character's professions and skill levels, replacing the old entry.
 --- Skipped (old entry kept) when a collapsed Skills header hides lines (SPEC §2.2.1).
@@ -63,7 +64,9 @@ function Professions.CaptureRecipes(db, charId, kind)
   local definitions = db.recipes[window.profession] or {}
   db.recipes[window.profession] = definitions
   local known = DB.DecodeIdSet(db.knownRecipes[charId])
+  local learned = {}
   for _, recipe in ipairs(window.recipes) do
+    if recipe.learned and not known[recipe.spell] and recipe.product then learned[#learned + 1] = recipe end
     definitions[recipe.spell] = {
       product = recipe.product,
       yieldMin = recipe.yieldMin,
@@ -76,7 +79,31 @@ function Professions.CaptureRecipes(db, charId, kind)
     if recipe.learned then known[recipe.spell] = true end
   end
   db.knownRecipes[charId] = DB.EncodeIdSet(known)
+  if #learned > 0 then Professions.NotifyLearned(charId, learned) end
   return window.profession
+end
+
+--- Tell the listeners which recipes a character just learned (A83).
+---@param charId string
+---@param recipes table[]  The window's recipes newly known: { spell, product, yieldMin, yieldMax, cooldown,
+---                        reagents = { { key, count } } }, in window order
+function Professions.NotifyLearned(charId, recipes)
+  local out = {}
+  for i, r in ipairs(recipes) do
+    local reagents = {}
+    for j, m in ipairs(r.reagents) do reagents[j] = { m.key, m.count } end
+    out[i] = { spell = r.spell, product = r.product, yieldMin = r.yieldMin or 1, yieldMax = r.yieldMax or r.yieldMin or 1,
+               cooldown = r.cooldown, reagents = reagents, crafters = 1 }
+  end
+  table.sort(out, function(a, b) return a.spell < b.spell end)
+  for _, fn in ipairs(learnedListeners) do fn(charId, out) end
+end
+
+--- Call a function when a captured window shows recipes the character didn't know before (A83).
+--- A character's first capture counts every recipe as new; the listener decides what it needs.
+---@param fn function  Called with (charId, recipes in Options.KnownRecipes' shape, by spell)
+function Professions.OnLearned(fn)
+  learnedListeners[#learnedListeners + 1] = fn
 end
 
 --- Add the open merchant's unlimited items to the vendor-reagent set (SPEC §3.4B).

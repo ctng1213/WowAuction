@@ -23,6 +23,9 @@ Engine\SellProb.lua
 Engine\Disenchant.lua
 Engine\Craft.lua
 Engine\Prices.lua
+Engine\Timing.lua
+Engine\Portfolio.lua
+Engine\Graph.lua
 Capture\Posts.lua
 Capture\Crafts.lua
 Core\Market.lua
@@ -31,8 +34,11 @@ Recommend\Live.lua
 Capture\Purchases.lua
 Recommend\Options.lua
 Recommend\Reserves.lua
+Recommend\Reselect.lua
+Recommend\Adapt.lua
 UI\ViewModel.lua
 UI\PlanView.lua
+UI\PortfolioView.lua
 UI\CraftView.lua
 UI\FlipView.lua
 UI\InventoryView.lua

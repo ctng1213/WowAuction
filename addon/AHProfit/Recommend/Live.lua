@@ -10,6 +10,7 @@ AHProfit.Live = Live
 
 local searched = {}            -- item id -> { price, units, at } from AH search results this session (A24)
 local candidates = {}          -- { at, margin, list }: Live.FlipCandidates for the last book it was worked out for
+local searchListeners = {}     -- called after a search result is noted
 
 --- Units listed at one price of a book.
 ---@param slots table  stack * 5 + band -> count
@@ -65,6 +66,13 @@ end
 ---@param atMs number
 function Live.NoteSearch(itemId, price, units, atMs)
   searched[itemId] = { price = price, units = units, at = atMs }
+  for _, fn in ipairs(searchListeners) do fn(itemId) end
+end
+
+--- Call a function after each search result is noted (the live portfolio reprices, SPEC §4.0).
+---@param fn function  Called with the item id
+function Live.OnSearch(fn)
+  searchListeners[#searchListeners + 1] = fn
 end
 
 --- Forget search results and worked-out flip candidates (tests).

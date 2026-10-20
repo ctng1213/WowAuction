@@ -191,6 +191,24 @@ function Market.Times()
   return s.file.generatedAt, s.market.observationsUntil
 end
 
+--- This character's market id, from the checked file.
+---@return string|nil  nil without usable data
+function Market.MarketId()
+  local s = State()
+  return s.status == "ok" and s.marketId or nil
+end
+
+--- Whether another character trades on this character's market, by the file's map (S12); a character the map
+--- doesn't name counts as on it.
+---@param charId string
+---@return boolean
+function Market.SameMarket(charId)
+  local s = State()
+  if s.status ~= "ok" then return false end
+  local named = (s.file.charMarkets or {})[charId]
+  return named == nil or named == s.marketId
+end
+
 --- Forget the checked file and the caches (tests, and a future reload of the data).
 function Market.Reset()
   state, cache, cached = nil, {}, 0
@@ -270,7 +288,8 @@ function Market.DecodeGraph(g)
     local product, yield, mats = text:match("^(%d+):(%d+):(.*)$")
     local reagents = {}
     for key, count in mats:gmatch("(%d+)%*(%d+)") do reagents[#reagents + 1] = { key = tonumber(key), count = tonumber(count) } end
-    out.recipes[spell] = { product = tonumber(product), yield = tonumber(yield) / 1000, reagents = reagents }
+    out.recipes[spell] = { product = tonumber(product), yield = tonumber(yield) / 1000, yield1000 = tonumber(yield),
+                           reagents = reagents }
   end
   for key, text in pairs(g.U or {}) do out.uses[key] = Numbers(text) end
   return out

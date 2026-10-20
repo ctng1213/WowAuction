@@ -153,7 +153,7 @@ describe("MainWindow", function()
 
   it("A27 the Craft tab lists each known recipe that pays, with its mats", function()
     Stubs.Reset()
-    Stubs.world.money = 10000000                          -- 1000g: the mats are well within 25% (A64)
+    Stubs.world.money = 10000000                          -- 1000g: the mats are well within her live cap (A64)
     _G.AHProfitPlan = nil
     Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 2840, count = 4 } } } }
     UIWorld.Market({ [6217] = UIWorld.Item(4100, 86, 6, { postPrice = 4000, chance = 1, sellValue = 3800, refStack = 1 }),
@@ -225,7 +225,7 @@ describe("MainWindow", function()
 
   it("A30 the Craft tab buys mats from a vendor and says so, up to the product's liquidity cap", function()
     Stubs.Reset()
-    Stubs.world.money = 10000000                          -- 1000g: the mats are well within 25% (A64)
+    Stubs.world.money = 10000000                          -- 1000g: the mats are well within her live cap (A64)
     _G.AHProfitPlan = nil
     Stubs.ITEM_NAMES[4471] = "Basic Campfire Kit"
     Stubs.ITEM_NAMES[4470] = "Simple Wood"
@@ -247,7 +247,7 @@ describe("MainWindow", function()
 
   it("A33 buying vendor wood redraws the Craft tab, which then uses it; the cheaper AH wood is no source", function()
     Stubs.Reset()
-    Stubs.world.money = 10000000                          -- 1000g: the mats are well within 25% (A64)
+    Stubs.world.money = 10000000                          -- 1000g: the mats are well within her live cap (A64)
     _G.AHProfitPlan = nil
     Stubs.ITEM_NAMES[4471], Stubs.ITEM_NAMES[4470] = "Basic Campfire Kit", "Simple Wood"
     UIWorld.Market({ [4471] = UIWorld.Item(99, 80, 10, { postPrice = 99, chance = 1, refStack = 1, supply = 18 }),
@@ -272,7 +272,7 @@ describe("MainWindow", function()
 
   it("A34 a craft's mats are listed one per line, by source", function()
     Stubs.Reset()
-    Stubs.world.money = 10000000                          -- 1000g: the mats are well within 25% (A64)
+    Stubs.world.money = 10000000                          -- 1000g: the mats are well within her live cap (A64)
     _G.AHProfitPlan = nil
     Stubs.ITEM_NAMES[4240] = "Linen Belt"
     Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 2589, count = 10 } } } }
@@ -363,7 +363,7 @@ describe("MainWindow", function()
 
   it("A42 a made product you have up on the AH stays made, with when it ends, until the auction ends", function()
     Stubs.Reset()
-    Stubs.world.money = 10000000                          -- 1000g: the mats are well within 25% (A64)
+    Stubs.world.money = 10000000                          -- 1000g: the mats are well within her live cap (A64)
     _G.AHProfitPlan = nil
     Stubs.ITEM_NAMES[4471], Stubs.ITEM_NAMES[4470] = "Basic Campfire Kit", "Simple Wood"
     UIWorld.Market({ [4471] = UIWorld.Item(99, 80, 10, { postPrice = 99, chance = 1, refStack = 1, supply = 2 }) }, NOW)

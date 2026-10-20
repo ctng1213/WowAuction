@@ -535,7 +535,7 @@ local function CharacterActions(charId, nowMs)
   local units = Reserves.Apply(held, reserves)
   local ctx = { itemOf = LiveItem, levelsOf = LevelsOf, vendorOf = VendorOf, vendorBuyOf = Market.VendorPrice,
                 listed = Listed(charId, nowMs), nowMs = nowMs, charId = charId, planned = planned,
-                budget = VM.TotalGold((DB.Get() or {}).characters) * VM.HIGH_RISK_PCT / 100 }      -- A64
+                budget = AHProfit.Adapt.Cap() }      -- the live cap (A64)
   local crafts, reserved = Options.Crafts(recipes, units, ctx)
   ctx.reserved = reserved
   for _, a in ipairs(crafts) do actions[#actions + 1] = a end
@@ -651,7 +651,7 @@ local function Lines(nowMs, gold)
     for _, row in ipairs(plannedRows) do plannedKeys[row.key] = true end
     for _, r in ipairs(recipes) do if not plannedKeys[r.product] then own[#own + 1] = r end end
     local ctx = { itemOf = LiveItem, levelsOf = LevelsOf, vendorOf = VendorOf, vendorBuyOf = Market.VendorPrice,
-                  listed = Listed(charId, nowMs), nowMs = nowMs, budget = gold * VM.HIGH_RISK_PCT / 100 }   -- A64
+                  listed = Listed(charId, nowMs), nowMs = nowMs, budget = AHProfit.Adapt.Cap() }   -- the live cap (A64)
     local rows = VM.CraftRows(Options.CraftOptions(own, units, ctx), LookOf, gold, actions, nowMs, offset)
     for i = #plannedRows, 1, -1 do table.insert(rows, 1, plannedRows[i]) end
     local empty = #recipes == 0 and "No recipes seen on this character yet. Open each profession window once."
@@ -792,6 +792,7 @@ end
 --- Open or close the window; /ahp week opens the Week tab (SPEC §4.3).
 ---@param args string  The rest of the slash command line
 function MainWindow.Toggle(args)
+  if args == "perf" then return MainWindow.Perf() end
   if not ui then Build() end
   if args == "week" or args == "today" then
     view.tab, view.offset = args, 0
@@ -803,6 +804,14 @@ function MainWindow.Toggle(args)
     ui.frame:Show()
     MainWindow.Refresh()
   end
+end
+
+--- /ahp perf: the real numbers against the budgets (SPEC §5.1): the last scan's slowest steps and the live
+--- portfolio's last repricing and reselection.
+function MainWindow.Perf()
+  local s = AHProfit.Scan.Replicate.Stats()
+  Adapter.Print(string.format("scan: slowest step %.2f ms, redraw %.2f ms (budget 4 ms)", s.maxStepMs or 0, s.notifyMs or 0))
+  for _, line in ipairs(AHProfit.Adapt.PerfLines()) do Adapter.Print(line .. " (budget 2 ms)") end
 end
 
 --- The window's frames, for the layout snapshots (tests).

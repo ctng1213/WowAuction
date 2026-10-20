@@ -1,0 +1,28 @@
+[
+ {
+  "id": "DG1",
+  "name": "cheaper copper bars lower the copper rod's mat cost and follow through the runed rod",
+  "call": "reprice",
+  "args": {
+   "recipes": [[2657, 2840, 1000, [[2770, 1]]], [7818, 6217, 1000, [[2840, 2]]], [7421, 6218, 1000, [[6217, 1], [10938, 1], [10940, 1]]]],
+   "uses": {"2770": [2657], "2840": [7818], "6217": [7421], "10938": [7421], "10940": [7421]},
+   "order": [2770, 2840, 6217, 10938, 10940, 6218],
+   "base_prices": {"2770": 1200, "2840": 1000, "10938": 500, "10940": 300},
+   "prices": {"2770": 1200, "2840": 800, "10938": 500, "10940": 300},
+   "candidates": [
+    {"id": "craft:6217:Amaya-Grommash:2840a/-/now:1", "gold": 2000, "net": 1000.0, "inputs": [[2840, 2, "ah"]]},
+    {"id": "multistage:6218:Amaya-Grommash:6217c+10938a+10940a/-/h480162:1", "gold": 2800, "net": 1630.0,
+     "inputs": [[6217, 1, "craft"], [10938, 1, "ah"], [10940, 1, "ah"]]},
+    {"id": "sell_stock:2840:Amaya-Grommash:-/-/now:1", "gold": 0, "net": 4750.0, "inputs": [[2840, 5, "own"]]}
+   ]
+  },
+  "expect": {
+   "costs": {"2770": [1200.0, false], "2840": [800.0, false], "6217": [1600.0, true], "10938": [500.0, false],
+             "10940": [300.0, false], "6218": [2400.0, true]},
+   "candidates": {"craft:6217:Amaya-Grommash:2840a/-/now:1": [1600, 1400.0],
+                  "multistage:6218:Amaya-Grommash:6217c+10938a+10940a/-/h480162:1": [2400, 2030.0],
+                  "sell_stock:2840:Amaya-Grommash:-/-/now:1": [0, 4750.0]}
+  },
+  "why": "a bar is bought (10s on the AH beats 12s smelted from ore), so 8s; a rod is 2 bars crafted (none on the AH): 20s -> 16s, the rod craft's gold -4s and net +4s; the runed rod crafts its rod: 20s + 5s + 3s = 28s -> 24s; owned bars posted are not repriced"
+ }
+]

@@ -9,10 +9,15 @@ left out of the reverse index and the order. The cut edges are returned so the
 caller can log them. Items one could disenchant are graph items too (their results
 come from the addon's static disenchant table, not from here). Pure: data in,
 graph out; every list is sorted, so the same recipes always give the same graph.
+
+Repricing along it (`route_costs`, `repriced`, SPEC §4.0, DG1-DG3) is the twin of
+addon/AHProfit/Engine/Graph.lua, which reprices live; AHSync itself only runs it
+in the shared scenarios (tests/scenarios/graph.json).
 """
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+import math
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
 
@@ -121,3 +126,108 @@ def build(recipes: Iterable[GraphRecipe], disenchant: Iterable[int]) -> Graph:
                 uses.setdefault(key, []).append(r.spell)
     return Graph(tuple(kept), tuple((k, tuple(sorted(set(v)))) for k, v in sorted(uses.items())),
                  tuple(sorted(set(disenchant))), tuple(order), tuple(cut))
+
+
+@dataclass(frozen=True)
+class RouteCost:
+    """One graph item's cheapest route at a set of prices (SPEC §4.0 repricing, §3.4B, DG3)."""
+
+    cost: float          # copper a unit: its buy price, or its recipe's reagent costs ÷ the yield
+    crafted: bool        # True when crafting it is strictly cheaper than buying it
+
+
+def route_cost(graph: Graph, key: int, done: Mapping[int, RouteCost], prices: Mapping[int, int]) -> RouteCost | None:
+    """The cheaper of buying an item and crafting it from reagents already costed (SPEC §4.0, DG3).
+
+    Its twin is `Graph.RouteCost` in addon/AHProfit/Engine/Graph.lua: the same sums in the same order.
+
+    Args:
+        graph: The dependency graph.
+        key: The item.
+        done: Route costs of the items before it in `graph.order`; a reagent not in it (an edge cut to break a loop,
+            or an item with no price and no recipe) makes that recipe unusable.
+        prices: Item key -> buy price, copper a unit (the cheapest listing, or the market file's price).
+
+    Returns:
+        The RouteCost; a tie goes to buying. None when it has no price and no usable recipe.
+    """
+    buy = prices.get(key)
+    craft: float | None = None
+    for r in graph.recipes:                                    # by spell, as the addon's index lists them
+        if r.product != key:
+            continue
+        total, usable = 0.0, True
+        for reagent, count in r.reagents:
+            got = done.get(reagent)
+            if got is None:
+                usable = False
+                break
+            total += count * got.cost
+        if usable:
+            each = total * 1000 / r.yield1000
+            craft = each if craft is None or each < craft else craft
+    if craft is not None and (buy is None or craft < buy):
+        return RouteCost(craft, True)
+    if buy is None:
+        return None
+    return RouteCost(float(buy), False)
+
+
+def route_costs(graph: Graph, prices: Mapping[int, int]) -> dict[int, RouteCost]:
+    """Every graph item's cheapest route, intermediates first in the exported order (SPEC §4.0, DG1-DG3).
+
+    Args:
+        graph: The dependency graph.
+        prices: Item key -> buy price, copper a unit.
+
+    Returns:
+        Item key -> RouteCost, for the items with a price or a usable recipe.
+    """
+    done: dict[int, RouteCost] = {}
+    for key in graph.order:
+        got = route_cost(graph, key, done, prices)
+        if got is not None:
+            done[key] = got
+    return done
+
+
+def input_delta(inputs: Sequence[tuple[int, int, str]], base: Mapping[int, RouteCost],
+                now: Mapping[int, RouteCost]) -> float:
+    """How much a candidate's bought and crafted inputs cost more now than when it was exported (SPEC §4.0, DG1).
+
+    Args:
+        inputs: (item key, count, source) per input, as `K` lists them; a source naming `ah` or `craft` is priced,
+            `own` and `vendor` alone are not (owned units are valued at their hold value, vendors don't move).
+        base: Route costs at the exported prices.
+        now: Route costs at the live prices.
+
+    Returns:
+        Σ count × (cost now − cost then), float copper, over the priced inputs known at both; 0 when none moved.
+    """
+    delta = 0.0
+    for key, count, source in inputs:
+        parts = source.split("+")
+        if "ah" not in parts and "craft" not in parts:
+            continue
+        then, later = base.get(key), now.get(key)
+        if then is not None and later is not None:
+            delta += count * (later.cost - then.cost)
+    return delta
+
+
+def repriced(gold: int, net: float, inputs: Sequence[tuple[int, int, str]], base: Mapping[int, RouteCost],
+             now: Mapping[int, RouteCost]) -> tuple[int, float]:
+    """A candidate's gold needed and expected net after its inputs' prices moved (SPEC §4.0, DG1).
+
+    Args:
+        gold: The exported gold needed, copper.
+        net: The exported expected net, copper.
+        inputs: As input_delta.
+        base: Route costs at the exported prices.
+        now: Route costs at the live prices.
+
+    Returns:
+        (gold + floor(delta + 0.5), net − delta): gold stays integer copper, net is float copper (SPEC §3.3).
+    """
+    delta = input_delta(inputs, base, now)
+    return gold + math.floor(delta + 0.5), net - delta

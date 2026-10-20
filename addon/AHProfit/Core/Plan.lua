@@ -310,6 +310,15 @@ function Plan.Reserved(charId)
   return s.status == "ok" and (s.file.reserved or {})[charId] or 0
 end
 
+--- The characters the snapshot has gold for (EX18).
+---@return string[]  Character ids, ascending; empty without a usable plan
+function Plan.Characters()
+  local s, out = State(), {}
+  for charId in pairs(s.status == "ok" and s.file.gold or {}) do out[#out + 1] = charId end
+  table.sort(out)
+  return out
+end
+
 --- Decode one position string (SPEC §3.5 `positions`, EX18).
 ---@param text string  "positionId;key;state;units;unitsLeft;costLeft;netNow;targetMs;nextAction"
 ---@return table       { id, key, state, units, unitsLeft, costLeft, netNow, target, nextAction }; empty fields nil
