@@ -63,7 +63,8 @@ def test_D47_the_journal_reads_every_kind_of_event_with_the_plan_action_it_match
     assert by_kind["mailed"][7] == B and by_kind["disenchanted"][7] == f"{DUST},2"
     assert by_kind["untracked"][4:8] == (3, None, None, -3)
     assert db.journal([], NOW) == []
-    assert by_kind["posted"][9:] == (None, PostResult(None, None, 20, None))   # matched no action, still up
+    assert by_kind["posted"][9:11] == (None, PostResult(None, None, 20, None))   # matched no action, still up
+    assert by_kind["posted"][11] == "p" and by_kind["untracked"][11] is None      # the event id (M14, PO9)
 
 
 def test_D69_the_journal_gives_each_event_its_plan_facts(tmp_path):
@@ -93,7 +94,7 @@ def test_D69_the_journal_gives_each_event_its_plan_facts(tmp_path):
                       "VALUES (?, ?, ?, ?, 38, 'ah', ?, ?, ?, 1)",
                       [("u1", A, LINEN, 10, NOW - 7 * HOUR, "flip", 105.0), ("u2", A, CINCH, 1, NOW - 8 * HOUR, "debuy", 500.0),
                        ("u3", A, 2840, 14, NOW - 9 * HOUR, "bars", 0.0)])
-    facts = {r[2] + str(r[3]) + str(r[0]): r[9:] for r in db.journal([A], NOW - 30 * DAY)}
+    facts = {r[2] + str(r[3]) + str(r[0]): r[9:11] for r in db.journal([A], NOW - 30 * DAY)}
     paid, up = PostResult("sold", 300.0, 2, "bars"), PostResult(None, None, 2, "bars")
     chain = ChainFacts("bars", (paid, PostResult("sold", 350.0, 2, "bars"), up), 1)            # p3 is still to come
     assert facts[f"crafted{ROD}{NOW - 6 * HOUR}"] == (971.0, chain)

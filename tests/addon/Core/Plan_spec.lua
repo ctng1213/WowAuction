@@ -134,6 +134,26 @@ describe("Plan", function()
     assert_eq(Plan.Problem(), "This addon is older than AHSync's files: run tools/deploy.py, then /reload")
   end)
 
+  it("PO8 a sale or post after the plan file shows from the addon's own events, never the older file's Holding", function()
+    Stubs.Reset()
+    _G.AHProfitPlan = nil
+    Stubs.Login()
+    local MON10 = 1728259200000 + 10 * HOUR + 38 * 60000            -- the EX18 file's basedOnUntil for Brugan
+    AHProfitDB.events = {
+      { id = "x1", char = B, type = "auction_mail", outcome = "sold", key = 2840, qty = 6, at = MON10 + 1 },
+      { id = "x2", char = B, type = "post", key = 2840, stack = 6, at = MON10 + 2, confirmed = true },
+      { id = "x3", char = B, type = "post", key = 2457, stack = 2, at = MON10 + 3, confirmed = false },
+      { id = "x4", char = B, type = "post", key = 2457, stack = 2, at = MON10 - 1, confirmed = true } }
+    Stubs.Reset({ keepSaved = true })
+    _G.AHProfitPlan = nil
+    dofile(EX18)
+    Stubs.Login()
+    local coif, bar, elixir = unpack(AHProfit.Plan.LivePositions(B))
+    assert_eq({ bar.state, bar.provisional, elixir.state, elixir.provisional, coif.state },
+              { "Partially sold", true, "Ready to sell", nil, "Listed" }, "an attempt or an older post changes nothing")
+    assert_eq(AHProfit.Plan.LocalPositions(B), {}, "no plan action for these: nothing local")
+  end)
+
   it("EX18 decodes the portfolio snapshot, each character's gold, reservation and positions", function()
     Stubs.Reset()
     _G.AHProfitPlan = nil
@@ -154,11 +174,13 @@ describe("Plan", function()
     assert_eq({ Plan.Reserved(A), Plan.Reserved(B), Plan.Reserved("Zed-Grommash") }, { 25200, 37300, 0 })
     local brugan = Plan.Positions(B)
     assert_eq(#brugan, 4)
-    assert_eq(brugan[4], { id = "stock:Brugan-Grommash:7920", key = 7920, state = "Listed", units = 1, unitsLeft = 1,
-                           costLeft = 30000, netNow = 4500, target = 1728297480000, nextAction = "post" })
-    local leather = Plan.Positions(A)[1]
+    assert_eq(brugan[1], { id = "Brugan-Grommash:1728189480000:1", key = 7920, state = "Listed", units = 1,
+                           unitsLeft = 1, costLeft = 30000, netNow = 4500, nextAction = "undercut: relist at 4g 49s 99c" })
+    assert_eq({ brugan[4].key, brugan[4].state, brugan[4].target, brugan[4].nextAction },
+              { 2772, "Processing", 1728586800000, "smelt today · post Thu 11:00 for the 19:00 peak" })
+    local leather = Plan.Positions(A)[2]
     assert_eq({ leather.key, leather.state, leather.costLeft, leather.netNow, leather.target, leather.nextAction },
-              { 2319, "Holding", 4000, nil, nil, nil })
+              { 2319, "Needs reconciliation", 4000, nil, nil, "check bags and mail: 14 of 20 found" })
     assert_eq(Plan.Positions("Zed-Grommash"), {})
     Stubs.Reset()
     _G.AHProfitPlan = nil

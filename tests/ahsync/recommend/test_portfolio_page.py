@@ -7,8 +7,12 @@ import pytest
 
 from ahsync.config import Config
 from ahsync.db.sqlite import Database
+from ahsync.engine.portfolio import PortfolioSettings
+from ahsync.engine.positions import committed
 from ahsync.recommend import portfolio
 from ahsync.recommend.portfolio_page import portfolio_page, prices_stale
+from ahsync.recommend.positions_pass import clock_of, current, plan_steps, views
+from ahsync.recommend.tracking_pass import tracking_pass
 from tests.ahsync.recommend.test_portfolio import ITEMS, STATS, intel
 from tests.support.fake_clock import FakeClock
 
@@ -40,10 +44,20 @@ def state(tmp_path):
 
 
 def test_the_page_shows_the_runs_capital_its_rows_and_brugans_bars_as_a_position(state):
+    with state.transaction():                       # the 6 bars were a funded buy for later: a position (PO2)
+        state.conn.execute("INSERT INTO actions(action_id, run_at, slot_ms, char_id, kind, key, qty, price, expected_net, "
+                           "status, done_qty, cand_id) VALUES ('buy', ?, ?, 'Brugan-G', 'buy', ?, 6, 900, 300.0, "
+                           "'pending', 0, ?)", (NOW - DAY, NOW - 2 * HOUR, BAR, f"buy_later:{BAR}:Brugan-G:-/now/h1:1"))
+        state.conn.execute("INSERT INTO purchases(event_id, char_id, key, qty, price, source, at, confirmed) "
+                           "VALUES ('Brugan-G:1:0', 'Brugan-G', ?, 6, 900, 'ah', ?, 1)", (BAR, NOW - HOUR))
+    tracking_pass(state, NOW)
     cfg = Config(markets=(M,))
-    plan = portfolio.plan_portfolio(state, CHARS, STATS, ITEMS, NOW, cfg)
+    positions = current(state, NOW)
+    plan = portfolio.plan_portfolio(state, CHARS, STATS, ITEMS, NOW, cfg, committed=committed(positions))
     ids = [f"a{i}" for i in range(len(plan.actions))]
-    page = portfolio_page(state, CHARS, plan, ids, STATS, ITEMS, NOW, 0, cfg, NOW)
+    held = views(state, positions, [c for c, _ in CHARS], plan_steps(plan.actions), STATS,
+                 clock_of(NOW, 0, PortfolioSettings()))
+    page = portfolio_page(CHARS, plan, ids, STATS, ITEMS, NOW, 0, cfg, NOW, held)
     tiles = {t["label"]: t for t in page["tiles"]}
     assert tiles["Gold in hand"]["value"] == "50g" and tiles["Gold in hand"]["detail"] == "Amaya 10g · Brugan 40g"
     assert tiles["Committed capital"]["value"] == "54s"                              # the bars at what Brugan paid
@@ -58,7 +72,7 @@ def test_the_page_shows_the_runs_capital_its_rows_and_brugans_bars_as_a_position
 
 
 def test_without_characters_the_page_says_so_and_has_no_rows(state):
-    page = portfolio_page(state, [], None, [], STATS, ITEMS, NOW, 0, Config(markets=(M,)), NOW)
+    page = portfolio_page([], None, [], STATS, ITEMS, NOW, 0, Config(markets=(M,)), NOW)
     assert page["empty"]["title"] == "No characters yet" and page["positions"]["rows"] == []
 
 

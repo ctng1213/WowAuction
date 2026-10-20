@@ -1,4 +1,4 @@
-"""Retention policy (SPEC §3.2): 90 days of history, 30 days of order books, rule tombstones 90 days.
+"""Retention policy (SPEC §3.2): 90 days of history, 30 days of order books, rule tombstones and closed positions 90 days.
 
 `cost_basis` and live item rules are kept until they no longer apply, so they
 are never pruned here. The DB primitives live in db.py; this module only
@@ -54,4 +54,5 @@ def prune(db: Database, now_ms: int, retention_days: int = 90, book_days: int = 
     deleted["fetch_failures"] = db.delete_before("fetch_failures", cutoff_ms // HOUR_MS)
     deleted["scans"] = db.delete_scans_before(now_ms - book_days * DAY_MS)
     deleted["item_rules"] = db.delete_rule_tombstones_before(cutoff_ms)
+    deleted["positions"] = db.delete_closed_positions_before(cutoff_ms)   # 90 days after they close (SPEC §3.2)
     return PruneReport(deleted)

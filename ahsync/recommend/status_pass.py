@@ -1,6 +1,6 @@
 """The hourly status pass: late and missed actions, and missed-peak replacements (SPEC §3.1.1, §3.4.0, §3.4.1).
 
-It reads only stored actions, the published intelligence and character state, never
+It reads only stored actions, the published intelligence, character state and the positions' journal, never
 history, and runs no simulation beyond the few candidate windows of a missed post
 (IU10). A missed post's replacement carries the original anchor, so a later miss is
 still compared with the first peak (M3); it is linked by replaces_id.
@@ -11,6 +11,7 @@ from ahsync.config import Config, plan_settings
 from ahsync.db.sqlite import Database
 from ahsync.engine.missed import replan_missed, status_now
 from ahsync.recommend.plan import de_offer, sell_facts
+from ahsync.recommend.positions_pass import reevaluate
 
 DAY_MS = 86_400_000
 
@@ -45,16 +46,18 @@ def _replacement(row: tuple, db: Database, market: str, now_ms: int, cfg: Config
             r.duration_h if r.kind == "post" else None)
 
 
-def status_pass(db: Database, cfg: Config, now_ms: int) -> dict[str, int]:
-    """Bring every open action's status up to date (SPEC §3.4.1), re-planning missed posts (§3.4.0).
+def status_pass(db: Database, cfg: Config, now_ms: int, offset_ms: int = 0) -> dict[str, int]:
+    """Bring every open action's status up to date (SPEC §3.4.1), re-planning missed posts (§3.4.0), then
+    re-evaluate every position's state and next action (§3.4D.9 adaptive exit).
 
     Args:
         db: Database.
         cfg: Config.
         now_ms: Now.
+        offset_ms: Local time minus UTC, ms, for the positions' next-action times.
 
     Returns:
-        Counts: {"late": n, "missed": n, "replaced": n}.
+        Counts: {"late": n, "missed": n, "replaced": n, "positions": positions evaluated}.
     """
     counts = {"late": 0, "missed": 0, "replaced": 0}
     for market in cfg.markets:
@@ -75,4 +78,5 @@ def status_pass(db: Database, cfg: Config, now_ms: int) -> dict[str, int]:
                     if replacement is not None:
                         db.add_action(replacement)
                         counts["replaced"] += 1
+    counts["positions"] = reevaluate(db, cfg, now_ms, offset_ms)
     return counts

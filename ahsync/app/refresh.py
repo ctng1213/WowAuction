@@ -16,10 +16,11 @@ from dataclasses import dataclass, field
 from ahsync.analysis.market import HISTORY_DAYS, analyze_market, with_scan
 from ahsync.collect.own_mail import recompute_mail_volume
 from ahsync.collect.local_scans import recompute_stale_volume
-from ahsync.config import Config, market_settings, market_sources
+from ahsync.config import Config, market_settings, market_sources, portfolio_settings
 from ahsync.db.sqlite import Database
 from ahsync.engine.characters_view import CharacterSheet, characters_view
 from ahsync.engine.plan_chains import Arriving
+from ahsync.engine.positions import committed
 from ahsync.recommend.history_page import history_page
 from ahsync.recommend.inventory_page import inventory_page
 from ahsync.recommend.on_ah_page import on_ah_page
@@ -27,6 +28,7 @@ from ahsync.recommend.pages import craft_page, disenchant_page
 from ahsync.recommend.plan import plan_rows, sell_records
 from ahsync.recommend.portfolio import alternative_rows, plan_portfolio, portfolio_export
 from ahsync.recommend.portfolio_page import portfolio_page
+from ahsync.recommend.positions_pass import clock_of, current, plan_steps, views
 from ahsync.recommend.rules_page import rules_page
 from ahsync.recommend.plan_pages import plan_pages, view_actions
 
@@ -68,26 +70,31 @@ def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], in
     Raises:
         engine.selection.SelectionError: The allocation broke a D.5 rule: nothing of the run is published.
     """
-    records = sell_records(db, [c for c, _ in characters], market, now_ms, cfg)      # SPEC §3.3.3
+    char_ids = [c for c, _ in characters]
+    records = sell_records(db, char_ids, market, now_ms, cfg)                       # SPEC §3.3.3
     db.store_sell_records(market, records)                                           # for the status pass (M8)
-    plan = plan_portfolio(db, characters, intel_items, items, now_ms, cfg, records, built_ms)
+    positions = current(db, now_ms)                                                  # SPEC §3.4D.9, M14
+    plan = plan_portfolio(db, characters, intel_items, items, now_ms, cfg, records, built_ms,
+                          committed([p for p in positions if p.char_id in char_ids]))     # D.1: open positions
     actions = plan.actions if plan else []
-    rows = plan_rows(actions, market, now_ms)
+    rows = plan_rows(actions, market, now_ms, plan.action_cands if plan else ())
     db.stage_plan(rows)
     db.stage_alternatives(market, alternative_rows(plan))                           # SPEC §3.4D, M9
-    db.stage_export(market, *portfolio_export(db, [c for c, _ in characters], plan, cfg, now_ms))   # SPEC §3.5, M11
+    held = views(db, positions, char_ids, plan_steps(actions), intel_items,
+                 clock_of(now_ms, offset_ms, portfolio_settings(cfg)))                # section A and `positions`
+    db.write_position_views(held)
+    db.stage_export(market, *portfolio_export(plan, cfg, now_ms, held))             # SPEC §3.5, M11
     week_start = (now_ms + offset_ms) // DAY_MS * DAY_MS - offset_ms
     history = db.history_actions([c for c, _ in characters], week_start, week_start + 7 * DAY_MS)
     shown = view_actions(actions, rows, history, items)
-    char_ids = [c for c, _ in characters]
     uses: dict[int, frozenset[int]] = {}
     for r in db.known_recipes(char_ids):
         if r.product is not None:
             uses[r.product] = uses.get(r.product, frozenset()) | {k for k, _ in r.reagents}
     pages = plan_pages(shown, intel_items, items, sum(g for _, g in characters), now_ms, offset_ms, db.cost_basis(),
                        records, Arriving(tuple(db.transit(char_ids)), uses))                      # C23
-    pages["portfolio"] = portfolio_page(db, characters, plan, [r[0] for r in rows], intel_items, items, now_ms,
-                                        offset_ms, cfg, built_ms)                                  # SPEC §3.5, M13
+    pages["portfolio"] = portfolio_page(characters, plan, [r[0] for r in rows], intel_items, items, now_ms,
+                                        offset_ms, cfg, built_ms, held)                            # SPEC §3.5, M13
     pages["inventory"] = inventory_page(db, [c for c, _ in characters], [a for a in shown if a.status == "pending"],
                                         intel_items, items, offset_ms)
     for page, body in pages.items():

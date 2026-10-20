@@ -9,7 +9,8 @@ paid_out (money taken, profit realized or None), mailed (to character, -), misse
 untracked (units, + gained or − lost, -). The last two set the row against its plan (SPEC §3.4.1, D68-D70):
 expected is the expected net copied when the event matched an action (float copper, or None), and facts is a
 post's engine.tracking.PostResult, a chain carrier's ChainFacts (a buy or craft whose action carries its chain's
-profit), or None.
+profit), or None. A 12th column is the row's event id (a post's post id, a missed or skipped action's id; None for an
+untracked change), so History can tell which events count on a position (SPEC §3.4D.9, PO9).
 """
 from __future__ import annotations
 
@@ -28,30 +29,30 @@ _CARRIER = ("CASE WHEN a.kind IN ('buy', 'craft') AND a.expected_net <> 0 THEN C
 _OPEN = ("pending", "late")      # a post action still to come (a partial one has posted; it may never finish)
 _CHUNK = 500                    # chain ids per query, well inside SQLite's variable limit
 # (select list and joins, the table alias whose char_id and time filter the rows, its time column). After the 11
-# row columns come 4 more, (expected, x, y, z): posted (expected, outcome, its payout's realized, its action's
+# row columns come 4 more, (expected, x, y, z), then the event id: posted (expected, outcome, its payout's realized, its action's
 # parent), bought and crafted (expected, chain id when a carrier, the action's expected net, -), disenchanted
 # (expected, -, -, -), the others none.
 _QUERIES = (
     (f"p.at, p.char_id, 'posted', p.key, p.stack, p.price, {_PLAN}, p.duration_h, p.deposit, p.expected_net, "
-     f"p.outcome, {_PAID}, a.parent_id FROM posts p LEFT JOIN actions a ON a.action_id = p.action_id "
+     f"p.outcome, {_PAID}, a.parent_id, p.post_id FROM posts p LEFT JOIN actions a ON a.action_id = p.action_id "
      "WHERE p.confirmed = 1", "p", "at"),
-    (f"m.at, m.char_id, m.outcome, m.key, m.qty, m.price, NULL, NULL, NULL, p.at, p.deposit, {_NO_FACTS} "
+    (f"m.at, m.char_id, m.outcome, m.key, m.qty, m.price, NULL, NULL, NULL, p.at, p.deposit, {_NO_FACTS}, m.event_id "
      "FROM auction_mail m LEFT JOIN posts p ON p.post_id = m.post_id WHERE 1 = 1", "m", "at"),
     (f"u.at, u.char_id, CASE u.source WHEN 'vendor' THEN 'bought_vendor' ELSE 'bought' END, u.key, u.qty, u.price, "
-     f"{_PLAN}, NULL, NULL, u.expected_net, {_CARRIER}, NULL FROM purchases u "
+     f"{_PLAN}, NULL, NULL, u.expected_net, {_CARRIER}, NULL, u.event_id FROM purchases u "
      "LEFT JOIN actions a ON a.action_id = u.action_id WHERE u.confirmed = 1", "u", "at"),
     (f"c.at, c.char_id, 'crafted', (SELECT MIN(r.product_key) FROM recipes r WHERE r.spell_id = c.spell_id), c.count, "
-     f"NULL, {_PLAN}, NULL, NULL, c.expected_net, {_CARRIER}, NULL FROM crafts c "
+     f"NULL, {_PLAN}, NULL, NULL, c.expected_net, {_CARRIER}, NULL, c.event_id FROM crafts c "
      "LEFT JOIN actions a ON a.action_id = c.action_id WHERE 1 = 1", "c", "at"),
-    (f"d.at, d.char_id, 'disenchanted', d.key, 1, NULL, {_PLAN}, d.results, NULL, d.expected_net, NULL, NULL, NULL "
+    (f"d.at, d.char_id, 'disenchanted', d.key, 1, NULL, {_PLAN}, d.results, NULL, d.expected_net, NULL, NULL, NULL, d.event_id "
      "FROM disenchants d LEFT JOIN actions a ON a.action_id = d.action_id WHERE 1 = 1", "d", "at"),
-    (f"o.at, o.char_id, 'paid_out', o.key, o.qty, NULL, NULL, NULL, NULL, o.money, o.realized, {_NO_FACTS} "
+    (f"o.at, o.char_id, 'paid_out', o.key, o.qty, NULL, NULL, NULL, NULL, o.money, o.realized, {_NO_FACTS}, o.event_id "
      "FROM payouts o WHERE 1 = 1", "o", "at"),
-    (f"s.at, s.char_id, 'mailed', s.key, s.qty, NULL, {_PLAN}, s.to_char, NULL, {_NO_FACTS} FROM mail_sent s "
+    (f"s.at, s.char_id, 'mailed', s.key, s.qty, NULL, {_PLAN}, s.to_char, NULL, {_NO_FACTS}, s.event_id FROM mail_sent s "
      "LEFT JOIN actions a ON a.action_id = s.action_id WHERE s.confirmed = 1", "s", "at"),
     (f"a.slot_ms, a.char_id, a.status, a.key, a.qty, a.price, a.status, COALESCE(a.done_qty, 0), a.qty, a.kind, NULL, "
-     f"{_NO_FACTS} FROM actions a WHERE a.status IN ('missed', 'skipped')", "a", "slot_ms"),
-    (f"x.at, x.char_id, 'untracked', x.key, ABS(x.delta), NULL, NULL, NULL, NULL, x.delta, NULL, {_NO_FACTS} "
+     f"{_NO_FACTS}, a.action_id FROM actions a WHERE a.status IN ('missed', 'skipped')", "a", "slot_ms"),
+    (f"x.at, x.char_id, 'untracked', x.key, ABS(x.delta), NULL, NULL, NULL, NULL, x.delta, NULL, {_NO_FACTS}, NULL "
      "FROM untracked x WHERE 1 = 1", "x", "at"),
 )
 
@@ -102,7 +103,7 @@ class JournalReads:
                 if r[3] is not None]
         chains = self.chain_facts(sorted({r[12] for r in raw if r[2] in ("bought", "crafted") and r[12] is not None}))
         out = [(r[0], r[1], r[2], r[3], r[4], r[5], (r[6], r[7], r[8]) if r[6] is not None else None, r[9], r[10],
-                r[11], _facts(r, chains)) for r in raw]
+                r[11], _facts(r, chains), r[15]) for r in raw]
         out.sort(key=lambda r: (-r[0], r[2], r[1], r[3], r[4]))
         return out
 

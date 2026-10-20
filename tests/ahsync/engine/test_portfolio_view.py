@@ -2,7 +2,8 @@
 
 The mockup world (tests/support/mockup_export.py) is the dashboard mockup's: Monday 10:38, Amaya 21 g and Brugan
 10 g 40 s in hand, 4 g 18 s committed, risk tolerance 30%, its 16 candidates (12 funded, 4 excluded) and the seven
-positions of section A. Every expected text is the mockup's.
+rows of section A: six positions replayed and evaluated by the engine (M14) and the found Wool Cloth. Every expected
+text is the mockup's.
 """
 from __future__ import annotations
 
@@ -11,14 +12,14 @@ from dataclasses import replace
 import pytest
 
 from ahsync.engine import craft
-from ahsync.engine.allocation import PositionRow
 from ahsync.engine.craft_plan import CraftWorld
 from ahsync.engine.plan import Lot, PlanWindow, SellFacts
 from ahsync.engine.plan_views import ItemLook
+from ahsync.engine.position_views import PositionView
 from ahsync.engine.portfolio import Candidate, CharacterGold, PortfolioSettings, accounting
 from ahsync.engine.portfolio_view import (OppRow, PortfolioInputs, _Ctx, each_copper, materials_text,
-                                          next_action_text, portfolio_view, premium_text, reason_detail,
-                                          uncertain_detail, wait_text, week_row, when_text)
+                                          portfolio_view, premium_text, reason_detail, uncertain_detail, wait_text,
+                                          week_row, when_text)
 from ahsync.engine.selection import Eligibility
 from ahsync.engine.views import COLUMN_HELP
 from ahsync.engine.week import WeekInputs
@@ -101,18 +102,24 @@ def test_D73_the_week_lists_the_funded_rows_by_adjusted_profit_with_their_wait_a
 def test_D73_positions_count_their_cost_and_their_profit_on_committed_capital(page):
     a = page["positions"]
     assert len(a["rows"]) == 7 and a["summary"] == "gold already committed · 7 positions · they take no recommendation slots"
+    # 96s 79c expected on all seven rows; the % leaves out the found Wool Cloth: 92s 7c ÷ 4g 18s = 22.03% → 22%.
     assert joined(a["foot"]) == ("Capital committed 4g 18s · 12% of capital base (4g 18s ÷ 35g 58s) · estimated profit "
-                                 "on positions +96s 79c · +23% on committed capital")
-    assert a["foot"][-1][1] == "pos"
-    coif, bar, elixir, wool, mageweave, ore, leather = a["rows"]
-    assert (coif["state"], coif["state_class"], coif["paid"], coif["cost_left"], coif["net"]) == \
-        ("Listed", "listed", "3g", "3g", "+45s")
-    assert (bar["window"], bar["next"]) == ("Sat 19:00", "post for the Sat 19:00 peak")
-    assert (wool["paid"], wool["paid_note"], wool["note"], wool["next"]) == ("0c", "found", "found · uses no capital", "hold")
-    assert mageweave["qty"] == "10 of 25" and mageweave["state_class"] == "partial"
-    assert (ore["state_class"], elixir["state_class"], elixir["next"]) == ("proc", "ready", "post now")
+                                 "on positions +96s 79c · +22% on committed capital · % leaves out Wool Cloth (found "
+                                 "stock only)")
+    assert a["foot"][-2:] == [["+22% on committed capital", "pos"], ["% leaves out Wool Cloth (found stock only)", "muted"]]
+    coif, bar, elixir, mageweave, ore, leather, wool = a["rows"]
+    assert (coif["state"], coif["state_class"], coif["paid"], coif["cost_left"], coif["net"], coif["next"]) == \
+        ("Listed", "listed", "3g", "3g", "+45s", "undercut: relist at 4g 49s 99c")
+    assert (bar["window"], bar["next"]) == ("Sat 19:00", "post Sat 11:00 for the 19:00 peak")
+    assert (wool["paid"], wool["paid_note"], wool["note"], wool["next"], wool["window"]) == \
+        ("0c", "found", "found · uses no capital", "hold", "Sun 19:00")
+    assert (mageweave["qty"], mageweave["state_class"], mageweave["cost_left"], mageweave["next"]) == \
+        ("10 of 25", "partial", "30s", "collect mail: 15 sold, 25s 65c waiting")
+    assert (ore["state_class"], ore["next"], ore["window"]) == \
+        ("proc", "smelt today · post Thu 11:00 for the 19:00 peak", "Thu 19:00")
+    assert (elixir["state_class"], elixir["next"]) == ("ready", "sell now: price spike +38%")
     assert (leather["net"], leather["net_class"], leather["window"], leather["next"], leather["sort"]["net"]) == \
-        ("—", "", "—", "—", -1)
+        ("—", "", "—", "check bags and mail: 14 of 20 found", -1)
 
 
 def test_D73_no_excluded_row_counts_in_any_total(page):
@@ -272,16 +279,8 @@ def test_a_crafts_materials_name_each_source():
     assert materials_text(replace(c, strategy="flip"), ctx) == []
 
 
-def test_a_positions_next_action_follows_the_plans_action_for_it():
-    row = PositionRow("p", "A-B", 1, "Holding", 1, 1, 10, None, None, None)
-    assert next_action_text(replace(row, next_action="de"), NOW, 0) == "disenchant"
-    assert next_action_text(replace(row, next_action="vendor"), NOW, 0) == "sell to a vendor"
-    assert next_action_text(replace(row, next_action="post", target_ms=NOW - HOUR), NOW, 0) == "post now"
-    assert next_action_text(row, NOW, 0) == "—"
-
-
 def test_a_losing_position_book_shows_a_negative_return_and_no_week_sale_has_no_premium_list():
-    rows = (PositionRow("p", mx.BRUGAN, 7920, "Listed", 1, 1, 30_000, -1500.0, None, "post"),)
+    rows = (PositionView("p", mx.BRUGAN, 7920, "Listed", 1, 1, 30_000, 30_000, -1500.0, None, "listed · cheapest"),)
     inp = replace(mx.page_inputs(), positions=rows)
     view = portfolio_view(inp)
     assert view["positions"]["foot"][-1] == ["−4% on committed capital", "neg"]

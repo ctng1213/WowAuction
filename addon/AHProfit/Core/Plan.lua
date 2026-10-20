@@ -337,6 +337,94 @@ function Plan.Positions(charId)
   return out
 end
 
+-- ------------------------------------------------------------------ local positions (SPEC §4.0, §3.4D.9; A81, FM38)
+
+Plan.LOCAL_NEXT = "local · AHSync adds it at its next read"   -- a local position's next action
+
+--- Take an event's units off the first open plan action of its kind and item.
+---@param actions table[]  Decoded actions with `left` (lowered)
+---@param kind string      "buy" | "craft"
+---@param key number
+---@param units number
+---@return table|nil, number  The action and the units it took; nil, 0 when none is open
+local function TakeAction(actions, kind, key, units)
+  for _, a in ipairs(actions) do
+    if a.kind == kind and a.key == key and a.left > 0 then
+      local take = math.min(a.left, units)
+      a.left = a.left - take
+      return a, take
+    end
+  end
+  return nil, 0
+end
+
+--- Your confirmed purchases and crafts after the plan that matched one of its buy or craft actions, as positions
+--- AHSync hasn't read yet (A81). Each matched action is one position whose id is its first event's id, the same id
+--- AHSync gives it (the opening event's), so its next export replaces it; one the export already carries is left out.
+--- The events are kept in SavedVariables until AHSync ingests them (DB.Prune, A4), so a /reload keeps them (FM38).
+---@param charId string
+---@return table[]  { id, key, kind ("buy" | "craft"), state = "Holding", units, unitsLeft, costLeft (a purchase's
+---                 qty × price; a craft's 0 until AHSync costs its reagents), netNow (its share of the action's net),
+---                 nextAction, isLocal = true }, in event order; empty without a usable plan
+function Plan.LocalPositions(charId)
+  local s = State()
+  if s.status ~= "ok" then return {} end
+  local since, db = (s.file.ingestedUntil or {})[charId] or 0, DB.Get() or {}
+  local actions, exported, byAction, out = {}, {}, {}, {}
+  for i, text in ipairs((s.file.actions or {})[charId] or {}) do
+    local a = Plan.DecodeAction(text)
+    a.left, actions[i] = a.qty, a
+  end
+  for _, p in ipairs(Plan.Positions(charId)) do exported[p.id] = true end
+  for _, e in ipairs(db.events or {}) do
+    local kind, key, units = EventDid(db, e)
+    local a, take = nil, 0
+    if (kind == "buy" or kind == "craft") and key and e.char == charId and e.at > since and (units or 0) > 0 then
+      a, take = TakeAction(actions, kind, key, units)
+    end
+    if a and not byAction[a.id] then
+      byAction[a.id] = { id = e.id, key = key, kind = kind, state = "Holding", units = 0, unitsLeft = 0, costLeft = 0,
+                         netNow = 0, nextAction = Plan.LOCAL_NEXT, isLocal = true }
+      if not exported[e.id] then out[#out + 1] = byAction[a.id] end
+    end
+    local p = a and byAction[a.id]
+    if p then
+      p.units, p.unitsLeft = p.units + units, p.unitsLeft + units
+      p.costLeft = p.costLeft + (kind == "buy" and units * (e.price or 0) or 0)
+      p.netNow = p.netNow + (a.net or 0) * take / math.max(a.qty, 1)
+    end
+  end
+  return out
+end
+
+--- The gold your local positions commit (A81): the reselection treats it as committed, so the cap shrinks.
+---@param charId string
+---@return number  Copper
+function Plan.LocalCommitted(charId)
+  local sum = 0
+  for _, p in ipairs(Plan.LocalPositions(charId)) do sum = sum + p.costLeft end
+  return sum
+end
+
+--- A character's positions as the addon knows them now (SPEC §4.0 "never overwrite newer state with an older
+--- snapshot", PO8, FM38): the exported ones, each changed by your events after the plan (a post of its item lists
+--- it, a sold auction mail of it makes it Partially sold), then the local ones.
+---@param charId string
+---@return table[]  As Plan.DecodePosition (provisional = true when an event changed it), then Plan.LocalPositions'
+function Plan.LivePositions(charId)
+  local s, out = State(), Plan.Positions(charId)
+  local since, db = s.status == "ok" and (s.file.ingestedUntil or {})[charId] or 0, DB.Get() or {}
+  for _, e in ipairs(db.events or {}) do
+    local state = (e.type == "post" and e.confirmed ~= false and "Listed")
+      or (e.type == "auction_mail" and e.outcome == "sold" and "Partially sold") or nil
+    for _, p in ipairs((state and e.char == charId and e.at > since) and out or {}) do
+      if p.key == e.key and p.state ~= "Partially sold" then p.state, p.provisional = state, true end
+    end
+  end
+  for _, p in ipairs(Plan.LocalPositions(charId)) do out[#out + 1] = p end
+  return out
+end
+
 --- Forget the checked file (tests).
 function Plan.Reset()
   state = nil

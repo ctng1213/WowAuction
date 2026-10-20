@@ -4,17 +4,19 @@ Unlike the other pages it is not staged by the full refresh: sync runs, SavedVar
 reads and failures change it between refreshes. It reads only small tables (status
 lines, sync state, current prices, scans, characters, resolved posts) and the database file's size,
 never history or the intelligence; engine.status_view makes every text. The expected-against-realized sums (K7)
-are recomputed from the journal over 90 days (the stored History view covers only 30), by the same
-engine.tracking.profit_sums the History page uses.
+are recomputed from the journal and the positions over 90 days (the stored History view covers only 30), by the
+same engine.tracking.profit_sums over the same judged rows the History page uses.
 """
 from __future__ import annotations
 
 from ahsync.config import Config, market_sources
 from ahsync.db.sqlite import Database
 from ahsync.engine.sell_record import calibration
-from ahsync.engine.tracking import ProfitSums, judge, profit_sums
+from ahsync.engine.history_view import judged_rows
+from ahsync.engine.tracking import ProfitSums, profit_sums
 from ahsync.engine.volume import backtest
 from ahsync.engine.status_view import CharacterFacts, MarketFacts, StatusFacts, StatusRow, status_view
+from ahsync.recommend.positions_pass import current
 
 DAY_MS = 86_400_000
 CALIBRATION_DAYS = 90            # SPEC §8.8: the last 90 days of resolved posts
@@ -74,10 +76,12 @@ def _profit(db: Database, now_ms: int) -> ProfitSums:
         now_ms: Now.
 
     Returns:
-        The sums, as the History page builds them (engine.tracking.profit_sums over the journal's judged rows).
+        The sums, as the History page builds them (engine.tracking.profit_sums over history_view.judged_rows: the
+        events' own rows, less those counting on a position, and the positions', PO9).
     """
-    rows = db.journal([row[0] for row in db.characters()], now_ms - CALIBRATION_DAYS * DAY_MS)
-    return profit_sums([j for j in (judge(r[2], r[9], r[10]) for r in rows) if j is not None])
+    since = now_ms - CALIBRATION_DAYS * DAY_MS
+    rows = db.journal([row[0] for row in db.characters()], since)
+    return profit_sums(judged_rows(rows, current(db, now_ms), since))
 
 
 def status_facts(db: Database, cfg: Config, now_ms: int) -> StatusFacts:

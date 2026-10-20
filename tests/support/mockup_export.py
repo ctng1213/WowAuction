@@ -2,16 +2,20 @@
 
 Monday 10:38, Amaya 21 g and Brugan 10 g 40 s in hand, 4 g 18 s committed in six positions, risk tolerance 30%:
 the 16 candidates of the dashboard mockup (12 funded, 4 excluded), the copper chain's recipes, and the positions
-of the Portfolio page's section A. Shared by the Python export tests and tools/gen_lua_fixtures.py, so the Lua
+of the Portfolio page's section A, replayed from their lots and events by engine.positions and evaluated by
+engine.position_views (M14), so the committed capital comes from positions. Shared by the Python export tests and tools/gen_lua_fixtures.py, so the Lua
 decoders read exactly what AHSync writes, and by the Portfolio page's tests (D72, D73, D77-D79: page_inputs), so the
 page shows the mockup's numbers.
 """
 from __future__ import annotations
 
 from ahsync.engine import selection as sel
-from ahsync.engine.allocation import Alternative, PortfolioPlan, PositionRow, position_rows
+from ahsync.engine.allocation import Alternative, PortfolioPlan
 from ahsync.engine.graph import Graph, build, graph_recipe
 from ahsync.engine.plan import PlanAction
+from ahsync.engine.position_views import (Clock, MarketNow, Outlook, PositionView, SellStep, evaluate,
+                                          found_rows)
+from ahsync.engine.positions import Lot, Move, Position, Seed, World, committed, track
 from ahsync.engine.plan_views import ItemLook
 from ahsync.engine.portfolio import (Candidate, CharacterGold, OpenPosition, PortfolioSettings, Requirements,
                                      accounting, export_subset)
@@ -128,29 +132,143 @@ def chars() -> list[CharacterGold]:
     return [CharacterGold(AMAYA, 210_000), CharacterGold(BRUGAN, 104_000)]
 
 
-# The positions of section A: (character, key, units, listed, units bought, copper paid).
-_POSITIONS = ((BRUGAN, 7920, 1, True, 1, 30_000), (BRUGAN, BAR, 6, False, 6, 3000), (BRUGAN, 2457, 2, False, 2, 1400),
-              (BRUGAN, 2772, 10, False, 10, 400), (AMAYA, 4338, 10, False, 10, 3000), (AMAYA, 2319, 20, False, 20, 4000))
+# The positions of section A (SPEC §3.4D.9 table, D73): (key, character, strategy, product, units, unit cost, expected
+# net at open, original window start or None, opened at). The engine replays their events (moves()) against the
+# snapshots (world()) and evaluates them against the plan's actions and the market (outlooks()).
+WOOL, MAGEWEAVE, COIF, ELIXIR, LEATHER = 2592, 4338, 7920, 2457, 2319
+IRON_ORE, IRON_BAR = 2772, 3575
+_SEEDS = (
+    (COIF, BRUGAN, "flip", COIF, 1, 30_000, 4500.0, None, NOW - 30 * HOUR),
+    (BAR, BRUGAN, "buy_later", BAR, 6, 500, 3157.0, at(5, 19), NOW - 29 * HOUR),
+    (ELIXIR, BRUGAN, "buy_later", ELIXIR, 2, 700, 800.0, at(2, 20), NOW - 28 * HOUR),
+    (MAGEWEAVE, AMAYA, "buy_later", MAGEWEAVE, 25, 120, 600.0, at(8, 20), NOW - 27 * HOUR),
+    (IRON_ORE, BRUGAN, "craft", IRON_BAR, 10, 40, 150.0, at(3, 19), NOW - 26 * HOUR),
+    (LEATHER, AMAYA, "buy_later", LEATHER, 20, 200, 0.0, None, NOW - 25 * HOUR),
+)
 
 
-def positions() -> list[PositionRow]:
-    """The six positions (4 g 18 s committed) with the plan's actions for them.
+def seeds() -> list[Seed]:
+    """The six durable positions' opening facts: 4 g 18 s paid in all.
 
     Returns:
-        allocation.position_rows of the mockup's stock: the Mithril Coif listed, the rest held; posts for the Copper
-        Bar (Sat 19:00 peak), the Elixir of Agility (now), the Mageweave Cloth (Tue 20:00) and the coif's relist.
+        Seeds, one lot each (its id is the position id: the opening purchase's event id).
     """
-    held = [(c, k, n) for c, k, n, listed, _b, _p in _POSITIONS if not listed]
-    listed = [(c, k, n) for c, k, n, on_ah, _b, _p in _POSITIONS if on_ah]
-    cost = {k: (b, p) for _c, k, _n, _l, b, p in _POSITIONS}
+    out = []
+    for key, char, strategy, product, units, cost, net, window, opened in _SEEDS:
+        event = f"{char}:{opened}:1"
+        out.append(Seed(event, char, M, f"{strategy}:{product}:{char}:-/now/now:1", key, opened,
+                        (Lot(event, units, cost, opened),), net, window))
+    return out
 
-    def post(char: str, key: int, qty: int, net: float, peak: int | None) -> PlanAction:
-        """A sell-plan post."""
-        return PlanAction("post", char, key, qty, 100, NOW if peak is None else peak - 8 * HOUR, peak, peak, peak, 0.9,
-                          net, net)
-    actions = [post(BRUGAN, BAR, 6, 3157.0, at(5, 19)), post(BRUGAN, 2457, 2, 800.0, None),
-               post(AMAYA, 4338, 10, 600.0, at(8, 20)), post(BRUGAN, 7920, 1, 4500.0, None)]
-    return position_rows(held, listed, cost, actions)
+
+def moves() -> list[Move]:
+    """The events after the purchases: the coif and the Mageweave posted, 15 Mageweave sold (not paid out yet).
+
+    Returns:
+        Moves.
+    """
+    coif, mw_sold, mw_left = f"{BRUGAN}:post:1", f"{AMAYA}:post:1", f"{AMAYA}:post:2"
+    return [Move(NOW - 20 * HOUR, coif, "post", BRUGAN, COIF, 1, coif, deposit=300),
+            Move(NOW - 20 * HOUR, mw_sold, "post", AMAYA, MAGEWEAVE, 15, mw_sold, deposit=30),
+            Move(NOW - 20 * HOUR, mw_left, "post", AMAYA, MAGEWEAVE, 10, mw_left, deposit=20),
+            Move(NOW - 2 * HOUR, f"{AMAYA}:mail:1", "sold", AMAYA, MAGEWEAVE, 15, mw_sold, f"{AMAYA}:mail:1", 180)]
+
+
+def world() -> World:
+    """The newest snapshots (10:00): Amaya's bags show 14 of her 20 Medium Leather and her 20 found Wool Cloth.
+
+    Returns:
+        The World.
+    """
+    holdings = {(BRUGAN, BAR): 6, (BRUGAN, ELIXIR): 2, (BRUGAN, IRON_ORE): 10, (AMAYA, LEATHER): 14, (AMAYA, WOOL): 20}
+    snaps = {(c, place): MON + 10 * HOUR for c in (AMAYA, BRUGAN) for place in ("bags", "bank", "mail")}
+    return World(holdings, snaps)
+
+
+def mockup_positions() -> list[Position]:
+    """The six positions as their events leave them (4 g 18 s committed).
+
+    Returns:
+        engine.positions.track's records, oldest first.
+    """
+    return track(seeds(), moves(), world(), NOW)
+
+
+def _step(kind: str, char: str, key: int, qty: int, at_ms: int, window: int | None, expected: float,
+          net: float) -> SellStep:
+    """A plan action of the mockup's sell plan.
+
+    Args:
+        kind: post | hold | craft.
+        char: Its character.
+        key: Its item.
+        qty: Units.
+        at_ms: When to act.
+        window: Its selling window's start (3 h long, its peak at the start), or None.
+        expected: Expected value, copper.
+        net: Expected net, copper.
+
+    Returns:
+        The SellStep.
+    """
+    return SellStep(kind, char, key, qty, at_ms, window, None if window is None else window + 3 * HOUR, window,
+                    expected, net)
+
+
+STEPS = (
+    _step("post", BRUGAN, BAR, 6, at(5, 11), at(5, 19), 6157.0, 3157.0),
+    _step("post", BRUGAN, ELIXIR, 2, at(2, 12), at(2, 20), 1000.0, 800.0),
+    _step("hold", AMAYA, WOOL, 20, NOW, at(6, 19), 472.0, 472.0),
+    _step("craft", BRUGAN, IRON_BAR, 10, NOW + HOUR, None, 0.0, 0.0),
+    _step("post", BRUGAN, IRON_BAR, 10, at(3, 11), at(3, 19), 550.0, 150.0),
+)
+# The market now: the elixir's price spikes to 4 s 50 c over its 3 s 26 c median; another seller lists a coif at 4 g 50 s.
+MARKETS = {BAR: MarketNow(600.0, 650, 600), ELIXIR: MarketNow(450.0, 450, 326),
+           COIF: MarketNow(42_750.0, 45_000, 45_000, ((45_000, 2),))}
+CLOCK = Clock(NOW)
+
+
+def outlook(p: Position) -> Outlook:
+    """What the plan and the market say about one mockup position.
+
+    Args:
+        p: The position.
+
+    Returns:
+        Its Outlook (the ore: smelt today, then the bars' Thursday post).
+    """
+    own = tuple(s for s in STEPS if (s.char_id, s.key) == (p.char_id, p.key))
+    mine = ((45_000, 1),) if p.key == COIF else ()
+    if p.key == IRON_ORE:
+        return Outlook(own, 1.0, None, mine, "smelt", NOW + HOUR, STEPS[4])
+    return Outlook(own, 1.0, MARKETS.get(p.key), mine)
+
+
+def positions(found: bool = False) -> list[PositionView]:
+    """The mockup's positions evaluated, as section A and PortfolioPlan.lua show them.
+
+    Args:
+        found: Add Amaya's found Wool Cloth, held for Sunday (section A shows it; the EX18 world leaves it out).
+
+    Returns:
+        The six positions oldest first (Mithril Coif, Copper Bar, Elixir of Agility, Mageweave Cloth, Iron Ore,
+        Medium Leather), then the found row.
+    """
+    rows = [evaluate(p, outlook(p), CLOCK) for p in mockup_positions()]
+    if found:
+        covered = {(p.char_id, p.key) for p in mockup_positions()}
+        steps = {(s.char_id, s.key): [s] for s in STEPS}
+        rows += found_rows([(AMAYA, WOOL, 20)], {}, steps, covered, CLOCK)
+    return rows
+
+
+def mockup_committed() -> list[OpenPosition]:
+    """The committed capital of the mockup world: the open positions' cost left (4 g 18 s).
+
+    Returns:
+        engine.positions.committed of mockup_positions().
+    """
+    return committed(mockup_positions())
 
 
 def selection() -> tuple[list[Candidate], sel.Selection, dict[str, float]]:
@@ -161,7 +279,7 @@ def selection() -> tuple[list[Candidate], sel.Selection, dict[str, float]]:
     """
     cands = candidates()
     ps = picks(cands)
-    acct = accounting(chars(), [OpenPosition("p", BRUGAN, 41_800)], PS.risk_tolerance)
+    acct = accounting(chars(), mockup_committed(), PS.risk_tolerance)
     budget = sel.Budget(acct.capacity_left, acct.spendable)
     result = sel.select(ps, (), budget)
     sel.validate(ps, (), budget, result)
@@ -211,8 +329,7 @@ def portfolio_fields() -> PortfolioFields:
         The snapshot at 30%, both characters' gold (last seen at 10:00), their reservations and positions.
     """
     cands, result, _ = selection()
-    acct = accounting(chars(), [OpenPosition(p.position_id, p.char_id, p.cost_left) for p in positions()],
-                      PS.risk_tolerance)
+    acct = accounting(chars(), mockup_committed(), PS.risk_tolerance)
     snap = snapshot_data(PortfolioPlan([], (), (), result, acct), PS, positions(), NOW)
     out = PortfolioFields({M: portfolio_text(snap)}, {c.char_id: f"{c.gold},{MON + 10 * HOUR}" for c in chars()},
                           dict(snap["reserved"]))
@@ -230,36 +347,13 @@ def plan_file() -> str:
     return plan_lua([], [], {AMAYA: NOW, BRUGAN: NOW}, NOW, portfolio=portfolio_fields())
 
 
-# Section A of the mockup: (key, character, state, units left, units, cost left, est. net or None, target ms, next).
-WOOL, MAGEWEAVE = 2592, 4338
-_PAGE_POSITIONS = (
-    (7920, BRUGAN, "Listed", 1, 1, 30_000, 4500.0, None, "post"),
-    (BAR, BRUGAN, "Holding", 6, 6, 3000, 3157.0, at(5, 19), "post"),
-    (2457, BRUGAN, "Ready to sell", 2, 2, 1400, 800.0, None, "post"),
-    (WOOL, AMAYA, "Holding", 20, 20, 0, 472.0, at(6, 19), "hold"),
-    (MAGEWEAVE, AMAYA, "Partially sold", 10, 25, 3000, 600.0, at(8, 20), "post"),
-    (ORE, BRUGAN, "Processing", 10, 10, 400, 150.0, at(3, 19), "post"),
-    (2319, AMAYA, "Needs reconciliation", 20, 20, 4000, None, None, None),
-)
-
-
-def page_positions() -> list[PositionRow]:
-    """The seven rows of the mockup's section A (4 g 18 s committed, 96 s 79 c expected on them).
-
-    Returns:
-        PositionRows in the mockup's order.
-    """
-    return [PositionRow(f"pos:{char}:{key}", char, key, state, units, left, cost, net, target, nxt)
-            for key, char, state, left, units, cost, net, target, nxt in _PAGE_POSITIONS]
-
-
-def page_plan(gold: list[CharacterGold] | None = None, committed: int = 41_800, risk: float = 0.30,
+def page_plan(gold: list[CharacterGold] | None = None, committed: int | None = None, risk: float = 0.30,
               paying_only: bool = False) -> PortfolioPlan:
     """The mockup's plan run as the page reads it: picks, the funded rows, the alternatives with their facts.
 
     Args:
         gold: The characters' gold; chars() when None.
-        committed: Committed capital, copper.
+        committed: Committed capital, copper; the mockup positions' (4 g 18 s) when None.
         risk: Risk tolerance.
         paying_only: Leave out the rows that need no gold (PF14's world, where nothing is funded).
 
@@ -269,7 +363,8 @@ def page_plan(gold: list[CharacterGold] | None = None, committed: int = 41_800, 
     cands = candidates()
     facts = {c.cand_id: row[7] for c, row in zip(cands, _ROWS)}
     ps = [p for p in picks(cands) if p.gold > 0 or not paying_only]
-    acct = accounting(gold or chars(), [OpenPosition("p", BRUGAN, committed)], risk)
+    held = mockup_committed() if committed is None else [OpenPosition("p", BRUGAN, committed)]
+    acct = accounting(gold or chars(), held, risk)
     budget = sel.Budget(acct.capacity_left, acct.spendable)
     result = sel.select(ps, (), budget)
     sel.validate(ps, (), budget, result)
@@ -293,10 +388,10 @@ def page_inputs(plan: PortfolioPlan | None = None, gold: list[CharacterGold] | N
         risk: Risk tolerance the plan ran with.
 
     Returns:
-        PortfolioInputs at Mon 10:38 (UTC, offset 0) with section A's seven positions.
+        PortfolioInputs at Mon 10:38 (UTC, offset 0) with section A's six positions and the found Wool Cloth.
     """
-    names = {ROD: "Copper Rod", BAR: "Copper Bar", 7920: "Mithril Coif", 2457: "Elixir of Agility",
-             WOOL: "Wool Cloth", MAGEWEAVE: "Mageweave Cloth", ORE: "Iron Ore", 2319: "Medium Leather"}
+    names = {ROD: "Copper Rod", BAR: "Copper Bar", COIF: "Mithril Coif", ELIXIR: "Elixir of Agility",
+             WOOL: "Wool Cloth", MAGEWEAVE: "Mageweave Cloth", IRON_ORE: "Iron Ore", LEATHER: "Medium Leather"}
     looks = {key: ItemLook(name, 1) for key, name in names.items()}
-    return PortfolioInputs(plan if plan is not None else page_plan(), tuple(gold or chars()), tuple(page_positions()),
+    return PortfolioInputs(plan if plan is not None else page_plan(), tuple(gold or chars()), tuple(positions(True)),
                            ("act:rod:1",), looks, PortfolioSettings(risk_tolerance=risk), NOW)

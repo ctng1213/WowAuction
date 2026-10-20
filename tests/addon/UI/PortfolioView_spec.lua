@@ -12,7 +12,7 @@ local function Tab(nowMs, liveGold)
   local Adapt = AHProfit.Adapt
   local info = AHProfit.Adapter.PlayerInfo()
   local charId = info.name .. "-" .. info.realm
-  return AHProfit.PortfolioView.Build(Adapt.Current(), Adapt.Snapshot(), AHProfit.Plan.Positions(charId),
+  return AHProfit.PortfolioView.Build(Adapt.Current(), Adapt.Snapshot(), AHProfit.Plan.LivePositions(charId),
     { nowMs = nowMs or World.NOW, offsetMs = 0, nameOf = Adapt.NameOf, lookOf = AHProfit.WindowLines.LookOf,
       itemOf = AHProfit.Market.Item, totalGold = 314000, liveGold = liveGold or 210000, charId = charId,
       skills = World.Skills(), problem = Adapt.Problem() })
@@ -75,6 +75,55 @@ describe("PortfolioView", function()
     assert_eq({ tab.today.rows[3].muted, tab.today.rows[1].strategy, tab.today.rows[1].pct }, { true, "Flip", "78%" })
   end)
 
+  it("A81 a funded buy made before AHSync read it is a local position: its row leaves and its gold is committed", function()
+    local o = World.Mockup()
+    o.actions = { "a1;buy;2589;20;38;" .. World.NOW .. ";203;;;pending;;;;;" }
+    World.Boot(Stubs, o)
+    AHProfitDB.events = { { id = World.AMAYA .. ":" .. (World.NOW + 60000) .. ":1", char = World.AMAYA, type = "purchase",
+                            at = World.NOW + 60000, key = World.LINEN, qty = 20, price = 38, confirmed = true } }
+    local function Check(when)
+      local tab = Tab()
+      for _, r in ipairs(tab.today.rows) do assert_eq(r.key == World.LINEN, false, when .. ": the Linen row left Today") end
+      local linen = tab.positions.rows[4]
+      assert_eq({ linen.item, linen.qty, linen.state, linen.cost, linen.next, linen.isLocal },
+                { "Linen Cloth", "×20", "Holding", "7s 60c", AHProfit.Plan.LOCAL_NEXT, true }, when)
+      assert_eq(tab.positions.foot, "committed 77s 60c (7s 60c local) · est. +12s 75c · +10% on committed capital · % leaves out Wool Cloth (found stock only)", when)
+      assert_eq(tab.top.text, "portfolio 35g 58s · 30% risk · committed 4g 18s + 7s 60c local · capacity 6g 41s 80c · "
+        .. "16s 80c unallocated · snapshot 10:38", when .. ": the capacity shrinks by her 7s 60c")
+      assert_eq(AHProfit.Adapt.Cap(), 26880, when .. ": 6g 49s 40c − 7s 60c − Brugan's 3g 73s reserved")
+    end
+    Check("in game")
+    o.keepSaved = true
+    World.Boot(Stubs, o)                                             -- /reload with the same plan file (FM38)
+    Check("after /reload")
+  end)
+
+  it("FM38 after a /reload with the older plan file, the addon's newer events still win over the snapshot", function()
+    local o = World.Mockup()
+    local A = World.AMAYA
+    o.actions = { "a1;buy;2589;20;38;" .. World.NOW .. ";203;;;pending;;;;;",
+                  "a2;post;6217;5;4100;" .. World.NOW .. ";6306;;;pending;58;;;24;" }
+    o.positions = { "rods;6217;Holding;5;5;5000;6306;;post now", o.positions[2] }
+    World.Boot(Stubs, o)
+    o.keepSaved = true
+    local linenId = A .. ":" .. (World.NOW + 60000) .. ":1"
+    AHProfitDB.events = { { id = linenId, char = A, type = "purchase", at = World.NOW + 60000, key = World.LINEN, qty = 20,
+                            price = 38, confirmed = true },
+                          { id = A .. ":" .. (World.NOW + 120000) .. ":2", char = A, type = "post", at = World.NOW + 120000,
+                            key = World.ROD, stack = 5, price = 4100, confirmed = true } }
+    World.Boot(Stubs, o)                                             -- /reload with the same, older plan file
+    local rods, wool, linen = unpack(AHProfit.Plan.LivePositions(A))
+    assert_eq({ rods.state, rods.provisional, wool.state, linen.id, linen.state, linen.costLeft },
+              { "Listed", true, "Holding", linenId, "Holding", 760 }, "the snapshot's Holding never replaces the post")
+    assert_eq(AHProfit.ViewModel.Provisional(AHProfit.Plan.Provisional(A)), "provisional: 2 done in game since AHSync's plan · ")
+    o.positions = { "rods;6217;Listed;5;5;5000;6306;;listed · cheapest", linenId .. ";2589;Holding;20;20;760;203;;hold" }
+    World.Boot(Stubs, o)                                             -- AHSync's next export includes both
+    local ids = {}
+    for i, p in ipairs(AHProfit.Plan.LivePositions(A)) do ids[i] = p.id .. ":" .. tostring(p.isLocal) end
+    assert_eq(ids, { "rods:nil", linenId .. ":nil" }, "the exported position replaces the local one: same id")
+    assert_eq(AHProfit.Plan.LocalCommitted(A), 0)
+  end)
+
   it("A78 the top line is the snapshot's, with its time; Brugan's rows are neither shown nor recomputed", function()
     World.Boot(Stubs)
     local tab = Tab()
@@ -96,7 +145,7 @@ describe("PortfolioView", function()
       "section Positions", "colhead pfPositions",
       "row Mageweave Cloth ×10 of 25 Partially sold +6s", "row Wool Cloth ×20 Holding +4s 72c",
       "row Medium Leather ×20 Needs reconciliation —",
-      "foot committed 70s · est. +10s 72c · +15% on committed capital",
+      "foot committed 70s · est. +10s 72c · +9% on committed capital · % leaves out Wool Cloth (found stock only)",
       "section Today", "colhead pfToday",
       "row DE Scouting Gloves of the Monkey +6s 25c Funded", "note disenchant now · sell today 18:00",
       "row DE Embossed Leather Gloves +3s 80c Funded", "note disenchant now · sell today 18:00",
@@ -165,7 +214,7 @@ describe("PortfolioView", function()
     assert_eq({ tab.footer.funded, tab.footer.capacity }, { "funded 0c", "3 positions" })
     local texts = Texts(out.lines)
     assert_eq({ #texts, texts[1], texts[6], texts[7] },
-              { 7, "section Positions", "foot committed 70s · est. +10s 72c · +15% on committed capital",
+              { 7, "section Positions", "foot committed 70s · est. +10s 72c · +9% on committed capital · % leaves out Wool Cloth (found stock only)",
                 "empty Nothing funded: risk budget exhausted" })
     local PV = AHProfit.PortfolioView
     assert_eq(PV.EmptyBlock({ funded = {}, excluded = {} }, { committed = 0, capitalBase = 1000, riskTolerance1000 = 300 },

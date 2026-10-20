@@ -229,8 +229,8 @@ def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path,
         """
         result = ingest_file(path, ctx.db, ctx.clock, config.realms, markets=config.markets)
         if result.ingested:                       # ingestedUntil may have moved: the addon may prune (SPEC §2.2)
-            tracking_pass(ctx.db)                 # a buy or post marks its action done (SPEC §3.4.1)
             now = ctx.clock.now_ms()
+            tracking_pass(ctx.db, now)            # a buy or post marks its action done (SPEC §3.4.1), positions
             markets = replan_all(ctx.db, now, current(), ctx.clock.local_offset_ms(now))   # the dashboard follows (IU13)
             logging.getLogger("ahsync").info("re-planned after reading %s: %s", path.name,
                                              ", ".join(markets) or "nothing (no published intelligence, or it failed)")
@@ -238,8 +238,9 @@ def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path,
 
     def hourly_status() -> None:
         """The :00 tracking and status passes, then the plan file they changed (SPEC §3.1.1)."""
-        tracking_pass(ctx.db)
-        status_pass(ctx.db, current(), ctx.clock.now_ms())
+        now = ctx.clock.now_ms()
+        tracking_pass(ctx.db, now)
+        status_pass(ctx.db, current(), now, ctx.clock.local_offset_ms(now))
         export_plan(ctx.db, current(), ctx.clock.now_ms(), ctx.clock.sleep)
 
     return SchedulerHooks(store_hour=store_hour, daily=daily, weekly=ctx.db.vacuum,

@@ -143,6 +143,7 @@ end
 ---@return string
 local function PlanChecksum(f)
   local count, length = 0, 0
+  for _, list in pairs(f.actions) do for _, t in ipairs(list) do count, length = count + 1, length + #t end end
   for _, t in pairs(f.portfolio) do count, length = count + 1, length + #t end
   for _, t in pairs(f.gold) do count, length = count + 1, length + #t end
   for _, c in pairs(f.reserved) do count, length = count + 1, length + #tostring(c) end
@@ -152,7 +153,8 @@ end
 
 --- Install both addon files as globals.
 ---@param opts table|nil  { candidates (World.Candidates() changed), items = key -> I string, G, snapshot (string),
----                       positions (Amaya's position strings), reserved = charId -> copper }
+---                       positions (Amaya's position strings), reserved = charId -> copper, actions (Amaya's action
+---                       strings) }
 function World.Install(opts)
   local o = opts or {}
   local K = {}
@@ -164,7 +166,7 @@ function World.Install(opts)
                         charMarkets = { [World.AMAYA] = World.M, [World.BRUGAN] = World.M }, markets = markets,
                         checksum = MarketChecksum(markets) }
   local plan = { schemaVersion = 1, exportVersion = 4, generatedAt = World.NOW, basedOnUntil = World.NOW,
-                 ingestedUntil = { [World.AMAYA] = World.NOW }, actions = {}, rules = {},
+                 ingestedUntil = { [World.AMAYA] = World.NOW }, actions = { [World.AMAYA] = o.actions }, rules = {},
                  portfolio = { [World.M] = o.snapshot or (World.NOW .. ";300;150;50;8;20;20;7;1;355800;41800;64940;62500") },
                  gold = { [World.AMAYA] = "210000," .. World.NOW, [World.BRUGAN] = "104000," .. World.NOW },
                  reserved = o.reserved or { [World.AMAYA] = 25200, [World.BRUGAN] = 37300 },
@@ -184,10 +186,10 @@ World.BAGS = { { 2318, 3 }, { 4306, 4 } }      -- the Light Leather and Silk Clo
 --- Log Amaya in to the world: the files installed, her gold, professions and bags (SPEC §2.2 capture).
 ---@param Stubs table     wow_stubs
 ---@param opts table|nil  World.Install's, plus { money (copper, default 21 g), nowMs, bags = { { id, count } }
----                       (default World.BAGS), player (default "Amaya") }
+---                       (default World.BAGS), player (default "Amaya"), keepSaved (a /reload: SavedVariables stay) }
 function World.Boot(Stubs, opts)
   local o = opts or {}
-  Stubs.Reset()
+  Stubs.Reset(o.keepSaved and { keepSaved = true } or nil)
   Stubs.world.player.name = o.player or "Amaya"
   Stubs.world.serverTime = math.floor((o.nowMs or World.NOW) / 1000)
   Stubs.world.money = o.money or 210000

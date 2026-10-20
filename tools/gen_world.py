@@ -187,7 +187,7 @@ def scans(rng: random.Random) -> tuple[list[list], list[list], list[list]]:
 
 
 def characters() -> dict[str, list[list]]:
-    """The two characters: sheets, professions, recipes, holdings, one own auction.
+    """The two characters: sheets, professions, recipes, holdings, one own auction, one position.
 
     Returns:
         Table name -> rows.
@@ -207,7 +207,22 @@ def characters() -> dict[str, list[list]]:
                       [BRUGAN, "bags", ORE, 20, 0], [BRUGAN, "bags", STONE, 40, 0]],
         "snapshots": [[c, place, seen] for c in (AMAYA, BRUGAN) for place in ("auctions", "bags", "bank", "mail")],
         "own_auctions": [[BRUGAN, STONE, 30, 20, 3, 1, seen, NOW + 10 * HOUR]],
+        **position(),
     }
+
+
+def position() -> dict[str, list[list]]:
+    """Brugan's 4 Copper Bars, bought yesterday at 6s each by a funded buy for later: one open position (M14).
+
+    Returns:
+        Table name -> rows: the confirmed purchase, the position (its id is the purchase's event id) and its lot.
+    """
+    bought = NOW - DAY
+    pid = f"{BRUGAN}:{bought}:1"
+    return {"purchases": [[pid, BRUGAN, BAR, 4, 600, "ah", bought, 1]],
+            "positions": [[pid, BRUGAN, M, f"buy_later:{BAR}:{BRUGAN}:-/now/h{(NOW + 2 * DAY) // HOUR}:1", "buy_later",
+                           BAR, "Holding", bought, 4, 4, 2400, 2400, 600.0, 0.0]],
+            "position_lots": [[pid, pid, 4, 600, bought]]}
 
 
 COLUMNS = {
@@ -226,6 +241,10 @@ COLUMNS = {
     "inventory": ["char_id", "location", "key", "qty", "bound"],
     "snapshots": ["char_id", "location", "at"],
     "own_auctions": ["char_id", "key", "price", "stack", "band", "count", "seen", "end_ms"],
+    "purchases": ["event_id", "char_id", "key", "qty", "price", "source", "at", "confirmed"],
+    "positions": ["position_id", "char_id", "market", "cand_id", "strategy", "key", "state", "opened_at", "units",
+                  "units_left", "cost_total", "cost_left", "expected_net_open", "realized"],
+    "position_lots": ["position_id", "event_id", "units", "unit_cost", "at"],
 }
 
 

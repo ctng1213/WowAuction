@@ -12,8 +12,8 @@
    before), and the units you hold that no funded batch uses become a hold, a disenchant or a vendor sale.
    Every unfunded batch is an alternative with its reason; none is ever an action.
 
-Committed capital comes from the units you hold at their cost basis until positions exist (M14,
-`stock_positions`). Pure: data in, numbers out.
+Committed capital is the open positions' cost left (engine.positions.committed, SPEC §3.4D.1, M14), passed in.
+Pure: data in, numbers out.
 """
 from __future__ import annotations
 
@@ -53,88 +53,7 @@ class PortfolioPlan:
     funded_adjusted: tuple[tuple[str, float], ...] = ()   # (candidate id, adjusted profit) of the funded, in funding order
     picks: tuple[Pick, ...] = ()               # every batch as selection saw it (opportunity, list, name), for the page
     opp_actions: tuple[tuple[str, int, int], ...] = ()    # (opportunity, first, end) slices of `actions` it realized
-
-
-def stock_positions(units: Sequence[tuple[str, int, int]], cost: Mapping[int, tuple[int, int]]) -> list[OpenPosition]:
-    """Committed capital until positions exist (SPEC §3.4D.1, interim until M14).
-
-    Each character's units of an item that you hold, have in the mail or have listed count at the item's
-    account-wide average cost basis (what you paid ÷ units bought); found or untracked items have no cost
-    basis and count 0 (PF22).
-
-    Args:
-        units: (character, item key, units) held, in the mail or listed.
-        cost: Item key -> (units bought, total copper paid), account-wide (state cost_basis).
-
-    Returns:
-        One OpenPosition per (character, item) with a cost, cost left = floor(units × paid ÷ bought + 0.5) in
-        integer arithmetic; by character then item.
-    """
-    totals: dict[tuple[str, int], int] = {}
-    for char_id, key, n in units:
-        totals[(char_id, key)] = totals.get((char_id, key), 0) + n
-    out = []
-    for (char_id, key), n in sorted(totals.items()):
-        bought, paid = cost.get(key, (0, 0))
-        if bought > 0 and paid > 0 and n > 0:
-            out.append(OpenPosition(f"stock:{char_id}:{key}", char_id, (2 * n * paid + bought) // (2 * bought)))
-    return out
-
-
-SELL_KINDS = ("post", "de", "vendor", "hold")       # what the sell plan does with units you hold
-
-
-@dataclass(frozen=True)
-class PositionRow:
-    """One open position as PortfolioPlan.lua carries it (SPEC §3.5 positions, EX18; the M10 interim rule until M14)."""
-
-    position_id: str                           # "stock:<char>:<key>", as stock_positions
-    char_id: str
-    key: int
-    state: str                                 # "Listed" when some of its units are on the AH, else "Holding"
-    units: int                                 # units held, in the mail or listed
-    units_left: int                            # the same until positions track sales (M14)
-    cost_left: int                             # copper, as stock_positions
-    net_now: float | None                      # Σ expected net of the plan's actions for these units; None without
-    target_ms: int | None                      # the first such action's peak hour, else its time
-    next_action: str | None                    # that action's kind: "post", "de", "vendor" or "hold"
-
-
-def position_rows(held: Sequence[tuple[str, int, int]], listed: Sequence[tuple[str, int, int]],
-                  cost: Mapping[int, tuple[int, int]], actions: Sequence[PlanAction]) -> list[PositionRow]:
-    """The open positions with what the plan does with them (SPEC §3.5 positions, interim until M14).
-
-    Positions are stock_positions' (units with a cost basis); the plan's actions for them are the sell plan's own
-    (no chain) posts, disenchants, vendor sales and holds of that character and item.
-
-    Args:
-        held: (character, item key, units) in bags, bank and mail, unbound.
-        listed: (character, item key, units) on the AH.
-        cost: Item key -> (units bought, total copper paid), account-wide.
-        actions: The funded plan's actions.
-
-    Returns:
-        One PositionRow per position, by character then item.
-    """
-    units: dict[tuple[str, int], int] = {}
-    for char_id, key, n in [*held, *listed]:
-        units[(char_id, key)] = units.get((char_id, key), 0) + n
-    on_ah = {(char_id, key) for char_id, key, n in listed if n > 0}
-    planned: dict[tuple[str, int], list[PlanAction]] = {}
-    for a in actions:
-        if a.chain is None and a.kind in SELL_KINDS:
-            planned.setdefault((a.char_id, a.key), []).append(a)
-    rows = []
-    for p in stock_positions([*held, *listed], cost):
-        key = int(p.position_id.rsplit(":", 1)[1])
-        mine = sorted(planned.get((p.char_id, key), []), key=lambda a: (a.at_ms, a.kind))
-        first = mine[0] if mine else None
-        n = units[(p.char_id, key)]
-        rows.append(PositionRow(p.position_id, p.char_id, key, "Listed" if (p.char_id, key) in on_ah else "Holding",
-                                n, n, p.cost_left, sum(a.net for a in mine) if mine else None,
-                                None if first is None else (first.peak_ms or first.at_ms),
-                                None if first is None else first.kind))
-    return rows
+    action_cands: tuple[str | None, ...] = ()  # each action's opportunity's first funded candidate id; None: stock's rest
 
 
 def generate(world: PlanWorld, gi: GenInputs, run: Run) -> Universe:
@@ -208,7 +127,7 @@ def portfolio_plan(w: WeekInputs, gi: GenInputs, chars: Sequence[CharacterGold],
         w: The plan's inputs (stock, facts, recipes and market, rules).
         gi: Generation inputs (skills, disenchant facts, price ages, names, cost basis).
         chars: Your characters' gold and [budgets] values.
-        positions: Committed capital (stock_positions until M14).
+        positions: Committed capital: the open positions' cost left (engine.positions.committed).
         run: The run's settings.
 
     Returns:
@@ -237,7 +156,7 @@ def portfolio_plan(w: WeekInputs, gi: GenInputs, chars: Sequence[CharacterGold],
                     claimed[(oc.char_id, oc.key)] = claimed.get((oc.char_id, oc.key), 0) + oc.units
     actions: list[PlanAction] = []
     done: set[str] = set()
-    spans = []
+    spans, cands = [], []
     for cand_id in result.funded:
         opp = by_id[cand_id][0]
         if opp.opp not in done:
@@ -245,9 +164,12 @@ def portfolio_plan(w: WeekInputs, gi: GenInputs, chars: Sequence[CharacterGold],
             first = len(actions)
             actions.extend(opp.realize(counts[opp.opp]))
             spans.append((opp.opp, first, len(actions)))
+            cands += [cand_id] * (len(actions) - first)
     actions.extend(residual(world, claimed, run))
+    cands += [None] * (len(actions) - len(cands))
     pick_by_id = {p.cand_id: p for p in batch_picks}
     alternatives = tuple(Alternative(by_id[i][1].candidate, pick_by_id[i].lst, reason, pick_by_id[i].adjusted,
                                      by_id[i][1].eligibility) for i, reason in result.reasons)
     return PortfolioPlan(actions, tuple(by_id[i][1].candidate for i in result.funded), alternatives, result, acct,
-                         tuple((i, pick_by_id[i].adjusted) for i in result.funded), tuple(batch_picks), tuple(spans))
+                         tuple((i, pick_by_id[i].adjusted) for i in result.funded), tuple(batch_picks), tuple(spans),
+                         tuple(cands))

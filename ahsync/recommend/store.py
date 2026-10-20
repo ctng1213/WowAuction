@@ -33,8 +33,8 @@ class RecommendStore:
         self.conn.executemany(
             "INSERT OR REPLACE INTO plan_new(action_id, run_at, slot_ms, char_id, kind, key, qty, price, expected_net, "
             "conf, status, done_qty, done_at, parent_id, window_start_ms, window_end_ms, anchor_net, anchor_window_ms, "
-            "replaces_id, week_start_ms, peak_ms, source, duration_h, to_char) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+            "replaces_id, week_start_ms, peak_ms, source, duration_h, to_char, cand_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
 
     def stage_alternatives(self, market: str, rows: list[tuple[str, str, str, str, str]]) -> None:
         """Write a market's unfunded candidates into the staging table, published with the plan (SPEC §3.4D, M9).

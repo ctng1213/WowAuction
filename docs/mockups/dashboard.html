@@ -465,6 +465,9 @@ const PAGES = {
     const sum = (rows, i) => rows.reduce((t, r) => t + r[i], 0);
     const weekAdj = s.fundedWeek.reduce((t, r) => t + weekScore(r), 0);
     const posNet = POS.reduce((t, p) => t + (p[7] || 0), 0);
+    // The % counts only positions that cost something: found stock commits nothing (SPEC §3.4D.8).
+    const posCostedNet = POS.reduce((t, p) => t + (p[5] > 0 ? (p[7] || 0) : 0), 0);
+    const posFound = POS.filter(p => p[5] === 0 && p[7] != null).map(p => p[0]);
     const exToday = TODAY_OPP.filter(r => r[11]), exWeek = WEEK_OPP.filter(r => r[14]);
     const colsB = [['Strategy'], ['Action'], ['Item'], ['Qty', 1], ['Each', 1], ['Total', 1], ['Expected net', 1], ...MARKET, ['Risk', 1], ['Character'], ['Status'], ['']];
     const colsC = [['Strategy'], ['Item'], ['Qty', 1], ['Buy when'], ['Process'], ['Sell when'], ['Gold needed', 1], ['Materials'], ['Expected net', 1], ['Adjusted', 1], ...MARKET, ['Character'], ['Status'], ['']];
@@ -480,7 +483,7 @@ const PAGES = {
 
     <div class="card"><div class="card-h"><b>A. Active positions</b><span class="muted">gold already committed · ${POS.length} positions · they don't use recommendation slots</span></div>
     ${table([['Item'], ['Qty', 1], ['Character'], ['Status'], ['Paid', 1], ['Cost basis left', 1], ['Est. net', 1], ['Sell window'], ['Next action']], POS.map(posRow), null)}
-    <div class="foot"><span>Capital committed <b>${money(s.committed)}</b></span><span class="muted">·</span><span>${s.committedPct}% of capital base (${money(s.committed)} ÷ ${money(s.base)})</span><span class="muted">·</span><span>estimated profit on positions ${net(posNet)}</span><span class="muted">·</span><span class="pos">+${halfUpPct(posNet, s.committed)}% on committed capital</span><span class="muted">(${money(posNet)} ÷ ${money(s.committed)}; Medium Leather counts once it's reconciled)</span></div>
+    <div class="foot"><span>Capital committed <b>${money(s.committed)}</b></span><span class="muted">·</span><span>${s.committedPct}% of capital base (${money(s.committed)} ÷ ${money(s.base)})</span><span class="muted">·</span><span>estimated profit on positions ${net(posNet)}</span><span class="muted">·</span><span class="pos">+${halfUpPct(posCostedNet, s.committed)}% on committed capital</span><span class="muted">·</span><span class="muted">% leaves out ${posFound.join(', ')} (found stock only)</span><span class="muted">(${money(posCostedNet)} ÷ ${money(s.committed)}; Medium Leather counts once it's reconciled)</span></div>
     <div class="foot note">Stages: <span class="st acq">Acquiring</span> <span class="st proc">Processing</span> <span class="st hold">Holding</span> <span class="st ready">Ready to sell</span> <span class="st listed">Listed</span> <span class="st partial">Partially sold</span> <span class="st recon">Needs reconciliation</span> · Cost basis left is what you paid for the units not yet paid out to you: a sold unit stays in it until its gold is collected from the mailbox (Mageweave Cloth: all 25 × 1s 20c = 30s while 25s 65c waits). Found items cost 0 and use no capital, but their worth still counts in Est. net.</div></div>
 
     <div class="card"><div class="card-h"><b>B. Top opportunities today</b><span class="muted">realized within the immediate window (8 h): no premium, so adjusted profit = expected net</span><span class="select">Min chance to sell: 0% ▾</span></div>

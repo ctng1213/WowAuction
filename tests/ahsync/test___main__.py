@@ -386,8 +386,9 @@ def test_SEC11_a_risk_tolerance_set_on_the_dashboard_reaches_the_schedulers_plan
     db = Database.open(tmp_path / "ahsync.db", FakeClock().now_ms(), None)
     seen = []
     monkeypatch.setattr(app_main, "full_refresh", lambda _db, _clock, config: seen.append(("full", config.risk_tolerance)))
-    monkeypatch.setattr(app_main, "tracking_pass", lambda _db: None)
-    monkeypatch.setattr(app_main, "status_pass", lambda _db, config, _now: seen.append(("status", config.risk_tolerance)))
+    monkeypatch.setattr(app_main, "tracking_pass", lambda _db, _now=None: None)
+    monkeypatch.setattr(app_main, "status_pass",
+                        lambda _db, config, _now, _offset=0: seen.append(("status", config.risk_tolerance)))
     monkeypatch.setattr(app_main, "export_plan", lambda _db, config, *_a: seen.append(("plan", config.risk_tolerance)))
     live = app_main.LiveConfig(Config())
     hooks = build_hooks(SyncContext(None, db, FakeClock(), None), Config(), tmp_path / "backups", live=live)

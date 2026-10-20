@@ -249,3 +249,17 @@ def test_V38_book_rows_move_to_integer_scan_ids_and_read_the_same(tmp_path):
     db.store_book(BookScan("late", "m", "local", None, 2000), [(2589, 49, 20, 3, 1)])   # a re-read replaces in place
     assert db.scan_entries("late") == [(2589, 49, 20, 3, 1)] and db.count("scans") == 2
     db.close()
+
+
+def test_schema_22_adds_positions_and_each_actions_candidate_and_keeps_the_plan(tmp_path):
+    db = Database.open(tmp_path / "v21.db", T0, None)                  # a schema-21 database: before positions (M14)
+    db.conn.executescript("DROP TABLE positions; DROP TABLE position_lots; ALTER TABLE actions DROP COLUMN cand_id; "
+                          "ALTER TABLE plan_new DROP COLUMN cand_id; "
+                          "INSERT INTO actions(action_id, kind, status) VALUES ('a1', 'buy', 'pending');")
+    db.set_meta("schema_version", "21")
+    db.close()
+    migrated = Database.open(tmp_path / "v21.db", T0, None)
+    assert migrated.get_meta("schema_version") == "22"
+    assert migrated.conn.execute("SELECT action_id, cand_id FROM actions").fetchall() == [("a1", None)]
+    assert migrated.count("positions") == 0 and migrated.count("position_lots") == 0
+    migrated.close()

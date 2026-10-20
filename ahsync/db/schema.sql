@@ -152,7 +152,8 @@ CREATE TABLE IF NOT EXISTS actions(
     parent_id TEXT, window_start_ms INTEGER, window_end_ms INTEGER, anchor_net REAL, anchor_window_ms INTEGER,
     replaces_id TEXT, week_start_ms INTEGER, peak_ms INTEGER, source TEXT,  -- source: buys, 'vendor' | 'ah' (D41)
     duration_h INTEGER,                   -- posts: the auction duration, hours (EX9)
-    to_char TEXT                          -- mail: the recipient; char_id is the sender (C22)
+    to_char TEXT,                         -- mail: the recipient; char_id is the sender (C22)
+    cand_id TEXT                          -- the funded candidate whose opportunity made it; NULL for your stock's rest (M14)
 );
 
 -- Staging twin of actions for the atomic swap after a full refresh (§3.1.1, §5.2).
@@ -160,7 +161,8 @@ CREATE TABLE IF NOT EXISTS plan_new(
     action_id TEXT PRIMARY KEY, run_at INTEGER, slot_ms INTEGER, char_id TEXT, kind TEXT, key INTEGER,
     qty INTEGER, price INTEGER, expected_net REAL, conf REAL, status TEXT, done_qty INTEGER, done_at INTEGER,
     parent_id TEXT, window_start_ms INTEGER, window_end_ms INTEGER, anchor_net REAL, anchor_window_ms INTEGER,
-    replaces_id TEXT, week_start_ms INTEGER, peak_ms INTEGER, source TEXT, duration_h INTEGER, to_char TEXT
+    replaces_id TEXT, week_start_ms INTEGER, peak_ms INTEGER, source TEXT, duration_h INTEGER, to_char TEXT,
+    cand_id TEXT
 );
 
 -- Unfunded portfolio candidates and the reason they were left out (SPEC §3.4D.6), swapped in with the plan.
@@ -188,6 +190,25 @@ CREATE TABLE IF NOT EXISTS export_candidates_new(
 );
 CREATE TABLE IF NOT EXISTS portfolio_snapshot(market TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS portfolio_snapshot_new(market TEXT PRIMARY KEY, data TEXT NOT NULL);
+
+-- Positions (SPEC §3.4D.9, M14): gold you actually committed, opened when a confirmed purchase or craft matched a
+-- funded opportunity's action; never replaced by a re-plan. position_id is the opening event's id. state is one of
+-- D.9's eight; cost_total and cost_left integer copper (cost_left: units held, listed, in the mail or sold but not yet
+-- paid out; its sum over open positions is the committed capital, D.1); expected_net_open, expected_net_now and
+-- realized float copper; next_action the text the pages show. Kept 90 days after closed_at.
+CREATE TABLE IF NOT EXISTS positions(
+    position_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, market TEXT, cand_id TEXT, strategy TEXT, key INTEGER NOT NULL,
+    state TEXT NOT NULL, opened_at INTEGER NOT NULL, units INTEGER NOT NULL, units_left INTEGER NOT NULL,
+    cost_total INTEGER NOT NULL, cost_left INTEGER NOT NULL, expected_net_open REAL, expected_net_now REAL,
+    target_window_ms INTEGER, latest_window_ms INTEGER, next_action TEXT, realized REAL NOT NULL DEFAULT 0,
+    closed_at INTEGER
+);
+-- A position's lots: the matched purchase or craft events, upserted by event id (PO8). unit_cost integer copper.
+CREATE TABLE IF NOT EXISTS position_lots(
+    position_id TEXT NOT NULL, event_id TEXT NOT NULL, units INTEGER NOT NULL, unit_cost INTEGER NOT NULL,
+    at INTEGER NOT NULL, PRIMARY KEY(position_id, event_id)
+);
+CREATE INDEX IF NOT EXISTS position_lots_event ON position_lots(event_id);
 
 -- rule: 'no_buy' | 'ignore' | 'keep' | 'none' (tombstone); source: 'dashboard' | 'addon'.
 CREATE TABLE IF NOT EXISTS item_rules(

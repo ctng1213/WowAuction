@@ -7,6 +7,8 @@ can use: your stock, your recipes' products and mats, and flip candidates.
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from ahsync.config import Config, record_settings
 from ahsync.db.sqlite import Database
 from ahsync.engine import capacity, craft, disenchant, fees, profile
@@ -273,20 +275,24 @@ def week_start_ms(now_ms: int) -> int:
     return (hour - slot_of(hour)) * HOUR_MS
 
 
-def plan_rows(actions: list[PlanAction], market: str, now_ms: int) -> list[tuple]:
+def plan_rows(actions: list[PlanAction], market: str, now_ms: int,
+              cand_ids: Sequence[str | None] = ()) -> list[tuple]:
     """Planned actions as `actions` rows, status pending (SPEC §3.2 actions, §3.4.1).
 
     Ids are "<market>:<run ms>:<n>", unique per run. A chain's later steps name its first
     action as their parent, so a done buy or craft keeps its follow-up (§3.4.1). `conf` holds
-    the action's planned chance to sell (posts), the P' its expected net assumed.
+    the action's planned chance to sell (posts), the P' its expected net assumed. `cand_id` names the funded
+    candidate whose opportunity made the action, so a matched buy or craft opens a position (§3.4D.9).
 
     Args:
         actions: The plan's actions (recommend.portfolio.plan_portfolio), in plan order.
         market: Market id.
         now_ms: The run time.
+        cand_ids: Each action's funded candidate id, aligned with actions (PortfolioPlan.action_cands); missing or
+            None for your stock's rest.
 
     Returns:
-        Rows in `actions` column order.
+        Rows in `actions` column order, cand_id last.
     """
     rows, first_of_chain = [], {}
     week = week_start_ms(now_ms)
@@ -298,5 +304,6 @@ def plan_rows(actions: list[PlanAction], market: str, now_ms: int) -> list[tuple
         rows.append((action_id, now_ms, a.at_ms, a.char_id, a.kind, a.key, a.qty, a.price, a.net, a.p, "pending",
                      0, None, parent, a.window_start_ms, a.window_end_ms,
                      a.net if a.kind == "post" else None, a.window_start_ms if a.kind == "post" else None, None, week,
-                     a.peak_ms, a.source, a.duration_h if a.kind == "post" else None, a.to_char))
+                     a.peak_ms, a.source, a.duration_h if a.kind == "post" else None, a.to_char,
+                     cand_ids[n] if n < len(cand_ids) else None))
     return rows

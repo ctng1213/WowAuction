@@ -97,7 +97,8 @@ function PortfolioView.RiskLimit(snapshot)
 end
 
 --- The top line: the snapshot's cross-character totals and its time (A78). With nothing funded it leads with the
---- character's live gold and leaves out the unallocated part (UI19).
+--- character's live gold and leaves out the unallocated part (UI19). Local positions add "committed 4g 18s + 7s 60c
+--- local" (A81).
 ---@param snapshot table   Plan.Portfolio
 ---@param nowMs number
 ---@param offsetMs number
@@ -105,8 +106,11 @@ end
 ---@return table           { text, time, amber (older than 24 h), hover }
 function PortfolioView.TopLine(snapshot, nowMs, offsetMs, lead)
   local time = HourMinute(snapshot.snapshotMs, offsetMs)
+  local spent = snapshot.localCommitted or 0
+  local committed = spent > 0 and ("committed " .. ViewModel.Money(snapshot.committed - spent) .. " + "
+    .. ViewModel.Money(spent) .. " local · ") or ""
   local text = "portfolio " .. ViewModel.Money(snapshot.capitalBase) .. " · " .. math.floor(snapshot.riskTolerance1000 / 10)
-    .. "% risk · capacity " .. ViewModel.Money(snapshot.capacity) .. " · "
+    .. "% risk · " .. committed .. "capacity " .. ViewModel.Money(snapshot.capacity) .. " · "
   if lead then
     text = lead .. " · " .. text .. "snapshot " .. time
   else
@@ -327,14 +331,15 @@ function PortfolioView.SectionFoot(funded)
     .. (pct and (" · " .. pct .. "% on cash") or "")
 end
 
---- A position's next action (portfolio_view.next_action_text): "post now", "post for the Sat 19:00 peak",
---- "disenchant", "sell to a vendor", "hold" or "—"; found stock adds "found, uses no capital".
----@param p table          Plan.DecodePosition's
+--- A position's next action: AHSync writes it whole since M14 ("collect mail: 15 sold, 25s 65c waiting",
+--- "undercut: relist at 4g 49s 99c", position_views); an older file's kind reads "post now", "post for the Sat 19:00
+--- peak", "disenchant", "sell to a vendor" or "hold"; none is "—". Found stock adds "found, uses no capital".
+---@param p table          Plan.DecodePosition's, or Plan.LocalPositions'
 ---@param nowMs number
 ---@param offsetMs number
 ---@return string
 function PortfolioView.NextAction(p, nowMs, offsetMs)
-  local text = ({ de = "disenchant", vendor = "sell to a vendor", hold = "hold" })[p.nextAction or ""] or "—"
+  local text = ({ de = "disenchant", vendor = "sell to a vendor", hold = "hold" })[p.nextAction or ""] or p.nextAction or "—"
   if p.nextAction == "post" then
     if p.target == nil or p.target <= nowMs then
       text = "post now"
@@ -343,19 +348,25 @@ function PortfolioView.NextAction(p, nowMs, offsetMs)
       text = "post for the " .. day .. " " .. clock .. " peak"
     end
   end
-  if (p.costLeft or 0) == 0 then text = text .. " · found, uses no capital" end
+  if (p.costLeft or 0) == 0 and not p.isLocal then text = text .. " · found, uses no capital" end
   return text
 end
 
---- The Positions section from the snapshot (EX18; durable positions come with M14).
----@param positions table[]  Plan.Positions(charId)
+--- The Positions section: AHSync's positions as your newer events left them, then your local ones (EX18, A81).
+---@param positions table[]  Plan.LivePositions(charId)
 ---@param ctx table          { lookOf, nowMs, offsetMs }
----@return table             { rows, foot }
+---@return table             { rows, foot }: a local row has isLocal; the foot says how much of committed is local;
+---                          the % counts the est. net of rows that cost something (found stock, cost 0 and not local,
+---                          is left out and named: "% leaves out Wool Cloth (found stock only)"; portfolio_view)
 local function Positions(positions, ctx)
-  local rows, committed, est, withNet = {}, 0, 0, false
+  local rows, committed, est, costed, withNet, spent, found = {}, 0, 0, 0, false, 0, {}
   for _, p in ipairs(positions) do
     committed = committed + (p.costLeft or 0)
-    if p.netNow then est, withNet = est + p.netNow, true end
+    spent = spent + (p.isLocal and p.costLeft or 0)
+    local isFound = (p.costLeft or 0) == 0 and not p.isLocal
+    if p.netNow then est = est + p.netNow end
+    if p.netNow and not isFound then costed, withNet = costed + p.netNow, true end
+    if p.netNow and isFound then found[#found + 1] = ctx.lookOf(p.key).name end
     local left, units = p.unitsLeft or 0, p.units or p.unitsLeft or 0
     local look = ctx.lookOf(p.key)
     rows[#rows + 1] = { key = p.key, item = look.name, quality = look.quality,
@@ -363,11 +374,13 @@ local function Positions(positions, ctx)
                         stateKind = PortfolioView.STAGE_KIND[p.state] or "hold", cost = ViewModel.Money(p.costLeft or 0),
                         net = p.netNow and ViewModel.SignedMoney(p.netNow) or "—",
                         netColor = p.netNow and (p.netNow > 0 and "pos" or "neg") or "muted",
-                        next = PortfolioView.NextAction(p, ctx.nowMs, ctx.offsetMs) }
+                        next = PortfolioView.NextAction(p, ctx.nowMs, ctx.offsetMs), isLocal = p.isLocal }
   end
-  local pct = withNet and PortfolioView.ProfitPct(est, committed) or nil
-  return { rows = rows, foot = "committed " .. ViewModel.Money(committed) .. " · est. " .. ViewModel.SignedMoney(est)
-             .. (pct and (" · " .. (pct >= 0 and "+" or "") .. pct .. "% on committed capital") or "") }
+  local pct = withNet and PortfolioView.ProfitPct(costed, committed) or nil
+  local leftOut = (pct and #found > 0) and (" · % leaves out " .. table.concat(found, ", ") .. " (found stock only)") or ""
+  return { rows = rows, foot = "committed " .. ViewModel.Money(committed)
+             .. (spent > 0 and (" (" .. ViewModel.Money(spent) .. " local)") or "") .. " · est. " .. ViewModel.SignedMoney(est)
+             .. (pct and (" · " .. (pct >= 0 and "+" or "") .. pct .. "% on committed capital") or "") .. leftOut }
 end
 
 -- The empty block's second line, by its reason (portfolio_view.EMPTY_TEXTS, SPEC §3.4D.7).
@@ -407,7 +420,7 @@ end
 --- when nothing is funded, the empty block.
 ---@param result table     Reselect.Run's result (this character's live selection)
 ---@param snapshot table   Plan.Portfolio for the market
----@param positions table[] Plan.Positions(charId)
+---@param positions table[] Plan.LivePositions(charId)
 ---@param ctx table        { nowMs, offsetMs, nameOf, lookOf (key -> look; default from nameOf), itemOf (key ->
 ---                        Market.Item; default none), totalGold, liveGold, charId, skills, dataStale, windowHoursOf,
 ---                        problem (status line or nil) }

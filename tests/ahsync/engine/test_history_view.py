@@ -1,8 +1,9 @@
 """Tests for ahsync/engine/history_view.py: the History page (SPEC §3.5, D47, D48)."""
 from __future__ import annotations
 
-from ahsync.engine.history_view import history_view, open_text, ratio_text, short_when
+from ahsync.engine.history_view import history_view, judged_rows, open_text, ratio_text, short_when
 from ahsync.engine.plan_views import ItemLook
+from ahsync.engine.positions import Lot, Move, Seed, World, track
 from ahsync.engine.tracking import ChainFacts, PostResult, ProfitSums
 
 HOUR, DAY = 3_600_000, 86_400_000
@@ -138,3 +139,36 @@ def test_D70_the_tiles_set_resolved_expected_against_realized():
     assert open_text(ProfitSums(0.0, 0.0, 0, 0, 1)) == "1 chain in progress (counted once resolved)"
     assert ratio_text(ProfitSums(-100.0, 50.0, 1, 0, 0)) == "—"                 # nothing positive to compare with
     assert ratio_text(ProfitSums(400.0, -48.0, 2, 0, 0)) == "−12%"
+
+
+def test_PO9_history_shows_one_row_per_position_and_its_events_count_on_it_never_again_on_their_own():
+    bought = NOW - 6 * DAY
+    seed = Seed("B:1:0", "Brugan-G", "m", f"buy_later:2840:Brugan-G:-/h1/h2:1", 2840, bought,
+                (Lot("B:1:0", 6, 500, bought),), 3157.0)
+    moves = [Move(NOW - 3 * DAY, "p1", "post", "Brugan-G", 2840, 6, "p1", deposit=60),
+             Move(NOW - 2 * DAY, "m1", "sold", "Brugan-G", 2840, 6, "p1", "m1", 1200),
+             Move(NOW - 2 * DAY + HOUR, "o1", "payout", "Brugan-G", 2840, 6, mail_id="m1", money=6900)]
+    [position] = track([seed], moves, World({}, {}), NOW)
+    looks = {**LOOKS, 2840: ItemLook("Copper Bar", 1)}
+    journal = [   # the buy carries its chain (a carrier) and the post its own net: both roll up into the position
+        (NOW - 2 * DAY + HOUR, "Brugan-G", "paid_out", 2840, 6, None, None, 6900, 3840.0, None, None, "o1"),
+        (NOW - 2 * DAY, "Brugan-G", "sold", 2840, 6, 1200, None, NOW - 3 * DAY, 60, None, None, "m1"),
+        (NOW - 3 * DAY, "Brugan-G", "posted", 2840, 6, 1200, ("done", 6, 6), 24, 60, 3000.0,
+         PostResult("sold", 3840.0, 60, "c"), "p1"),
+        (bought, "Brugan-G", "bought", 2840, 6, 500, ("done", 6, 6), None, None, 3157.0,
+         ChainFacts("c", (PostResult("sold", 3840.0, 60, "c"),)), "B:1:0"),
+        (NOW - HOUR, A, "posted", ROD, 1, 4100, None, 24, 20, 447.0, PostResult("sold", 410.0, 20), "p9")]
+    page = history_view(journal, looks, NAMES, NOW, 0, [position])
+    [row] = [r for r in page["rows"] if r["kind"] == "position"]
+    assert (row["event"], row["item"], row["plan"], row["qty"], row["price"]) == \
+        ("Position", "Copper Bar", "Completed", 6, "30s")
+    assert cells(row) == ("+31s 57c", "+38s 40c", "pos", "completed")     # 68s 40c − 30s, above the +31s 57c expected
+    rolled = [cells(r) for r in page["rows"] if r["kind"] in ("bought", "posted") and r["item"] == "Copper Bar"]
+    assert rolled == [("", "", "", "counts on its position")] * 2
+    assert page["tiles"][5:7] == [["Expected (resolved)", "+36s 4c", "2 resolved plan events"],     # 31s 57c + 4s 47c
+                                  ["Realized", "+42s 50c", "the same events"]]                      # 38s 40c + 4s 10c
+    assert page["rows"][0]["kind"] == "posted" and row["sort"]["at"] == NOW - 2 * DAY + HOUR       # newest first
+    held = track([seed], [], World({}, {}), NOW)
+    assert history_view([], looks, NAMES, NOW, 0, held)["open"] == "1 position open (counted once resolved)"
+    assert open_text(ProfitSums(0.0, 0.0, 0, 0, 0, 2)) == "2 positions open (counted once resolved)"
+    assert len(judged_rows(journal, [position], NOW - 30 * DAY)) == 2      # the Rod post and the position

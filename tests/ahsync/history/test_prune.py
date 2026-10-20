@@ -60,3 +60,18 @@ def test_skips_follow_the_90_day_retention(tmp_path):
     assert [r[0] for r in db.conn.execute("SELECT action_id FROM skips")] == ["kept"]
     assert report.deleted["skips"] == 1
     db.close()
+
+
+def test_closed_positions_go_90_days_after_they_close_and_open_ones_stay(tmp_path):
+    db = open_db(tmp_path)
+    with db.transaction():
+        db.conn.executemany("INSERT INTO positions(position_id, char_id, key, state, opened_at, units, units_left, "
+                            "cost_total, cost_left, closed_at) VALUES (?, 'A-R', 1, ?, 0, 1, 0, 10, 0, ?)",
+                            [("old", "Completed", NOW - duration_ms("90d1h")), ("recent", "Completed", NOW - DAY_MS),
+                             ("open", "Holding", None)])
+
+    report = prune(db, NOW)
+
+    assert [r[0] for r in db.conn.execute("SELECT position_id FROM positions ORDER BY position_id")] == ["open", "recent"]
+    assert report.deleted["positions"] == 1
+    db.close()

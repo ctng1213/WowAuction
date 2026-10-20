@@ -56,14 +56,6 @@ def world(lots=(), fact_map=None) -> WeekInputs:
     return WeekInputs(tuple(lots), fact_map or {}, CraftWorld((), {}, craft.Market({}, {}, {}, {}), {}))
 
 
-def test_committed_capital_until_m14_is_what_you_paid_for_what_you_hold():
-    units = [(AMAYA, BAR, 6), (AMAYA, BAR, 4), (BRUGAN, BAR, 3), (AMAYA, LINEN, 20)]
-    positions = allocation.stock_positions(units, {BAR: (3, 1000), LINEN: (0, 0)})
-    # 10 bars at 1,000 ÷ 3 each: 3,333.3 → 3,333; Brugan's 3: 1,000; the Linen was found: no position.
-    assert [(p.char_id, p.cost_left) for p in positions] == [(AMAYA, 3333), (BRUGAN, 1000)]
-    assert allocation.stock_positions([(AMAYA, BAR, 1)], {BAR: (2, 3)})[0].cost_left == 2           # 1.5, half up
-
-
 def test_PF9_an_enchanter_short_of_the_skill_leaves_the_bracers_in_the_universe_with_their_status():
     bracers = DeInfo(150, 2100.0, (), ((1500, 1),), 90)
     gi = GenInputs((AMAYA, BRUGAN), {AMAYA: 210_000, BRUGAN: 104_000}, {(AMAYA, "Enchanting"): 142}, {},
@@ -134,28 +126,6 @@ def test_the_universe_is_the_same_at_any_risk_tolerance_only_funding_changes():
     assert universe(low) == universe(high) and len(low.funded) < len(high.funded)        # PF1 holds end to end
 
 
-def test_EX18_positions_are_holding_or_listed_with_the_plan_action_for_them():
-    held = [(AMAYA, BAR, 6), (BRUGAN, LINEN, 20)]
-    listed = [(AMAYA, BAR, 4), (BRUGAN, 6217, 0)]
-    peak = 5_000_000
-
-    def act(kind: str, char: str, key: int, at: int, net: float, peak_ms: int | None = None,
-            chain: str | None = None) -> PlanAction:
-        """A plan action."""
-        return PlanAction(kind, char, key, 1, 10, at, None, None, peak_ms, None, net, net, chain=chain)
-    actions = [act("post", AMAYA, BAR, 200, 50.0, peak), act("vendor", AMAYA, BAR, 100, 7.0),
-               act("post", AMAYA, BAR, 50, 900.0, chain="flip:2840"), act("buy", AMAYA, BAR, 10, 0.0)]
-    rows = allocation.position_rows(held, listed, {BAR: (10, 1000), LINEN: (0, 0)}, actions)
-    # Ten bars at 100c each, four of them on the AH: Listed. The flip's post and the buy aren't for these units; the
-    # vendor sale comes first, so it is the next action and its time is the target.
-    assert rows == [allocation.PositionRow(f"stock:{AMAYA}:{BAR}", AMAYA, BAR, "Listed", 10, 10, 1000, 57.0, 100,
-                                           "vendor")]
-    alone = allocation.position_rows([(BRUGAN, BAR, 2)], [], {BAR: (2, 30)}, [act("post", BRUGAN, BAR, 9, 5.0, peak)])
-    assert [(r.state, r.net_now, r.target_ms, r.next_action) for r in alone] == [("Holding", 5.0, peak, "post")]
-    none = allocation.position_rows([(BRUGAN, BAR, 2)], [], {BAR: (2, 30)}, [])
-    assert [(r.net_now, r.target_ms, r.next_action) for r in none] == [(None, None, None)]
-
-
 def test_a_run_keeps_every_batch_its_actions_per_opportunity_and_each_alternatives_facts_for_the_page():
     bracers = DeInfo(150, 2100.0, (), ((1500, 1),), 90)
     lots = [Lot(AMAYA, LINEN, 25)]
@@ -166,5 +136,8 @@ def test_a_run_keeps_every_batch_its_actions_per_opportunity_and_each_alternativ
     [(opp, start, end)] = result.opp_actions                      # the Linen's posts, before your stock's rest
     assert opp.startswith("sell_stock:2589:") and start == 0 and end >= 1
     assert all(a.kind == "post" for a in result.actions[start:end])
+    funded = [c.cand_id for c in result.funded if c.cand_id.startswith("sell_stock:2589:")][0]
+    assert len(result.action_cands) == len(result.actions)             # each action names its funded candidate (M14)
+    assert set(result.action_cands[start:end]) == {funded} and set(result.action_cands[end:]) <= {None}
     [gloves] = [a for a in result.alternatives if a.candidate.key == BRACERS]
     assert profession_detail(gloves.eligibility) == "Amaya has Enchanting 142"

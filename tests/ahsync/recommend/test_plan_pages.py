@@ -31,12 +31,14 @@ def test_new_plan_and_kept_history_become_view_actions():
     assert [(v.action_id, v.status, v.in_chain) for v in views] == [
         ("old", "done", True), ("kid", "missed", True), (rows[0][0], "pending", True), (rows[1][0], "pending", True)]
     assert views[1].net == 0.0 and views[3].parent_id == rows[0][0] and views[3].peak_ms == NOW + 2 * DAY + HOUR
-    assert (rows[0][-2], rows[1][-2]) == (None, 24)                  # EX9: the post carries its 24 h duration
+    assert (rows[0][-3], rows[1][-3]) == (None, 24)                  # EX9: the post carries its 24 h duration
+    assert rows[0][-1] is None                                      # no funded candidate given (M14's cand_id)
     priced = plan_pages.view_actions(actions, rows, history, ITEMS)
     assert (priced[2].deposit, priced[3].deposit) == (None, 30)      # D62: 20 × 10c × 15% for 24 h, the post's risk
     mail = [PlanAction("mail", "Brugan-G", LINEN, 6, None, NOW, None, None, None, None, 0.0, 0.0, chain="c",
                        to_char="Amaya-G")]
-    assert plan_rows(mail, M, NOW)[0][-1] == "Amaya-G"               # C22: the recipient is stored
+    assert plan_rows(mail, M, NOW)[0][-2] == "Amaya-G"               # C22: the recipient is stored
+    assert plan_rows(mail, M, NOW, ["flip:1:A:-/now/now:1"])[0][-1] == "flip:1:A:-/now/now:1"   # M14: its candidate
     done = [("m", "c", "mail", "Brugan-G", LINEN, 6, None, NOW - HOUR, 0.0, "done", NOW - 50 * 60_000, "Amaya-G")]
     [kept] = plan_pages.view_actions([], [], done)
     assert (kept.to_char, kept.done_at) == ("Amaya-G", NOW - 50 * 60_000)

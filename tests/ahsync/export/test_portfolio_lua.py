@@ -80,12 +80,15 @@ def test_EX18_the_portfolio_snapshot_gold_reservations_and_positions():
     assert {c: sorted(names[int(t.split(";")[1])] for t in rows) for c, rows in fields.positions.items()} == {
         mx.BRUGAN: ["Copper Bar", "Elixir of Agility", "Iron Ore", "Mithril Coif"],
         mx.AMAYA: ["Mageweave Cloth", "Medium Leather"]}
-    assert fields.positions[mx.BRUGAN][3] == f"stock:{mx.BRUGAN}:7920;7920;Listed;1;1;30000;4500;{mx.NOW};post"
-    assert fields.positions[mx.AMAYA][0] == f"stock:{mx.AMAYA}:2319;2319;Holding;20;20;4000;;;"
+    coif, leather = (v.position_id for v in mx.positions() if v.key in (mx.COIF, mx.LEATHER))
+    assert coif == f"{mx.BRUGAN}:{mx.NOW - 30 * mx.HOUR}:1"           # a position's id is its opening event's (M14)
+    assert fields.positions[mx.BRUGAN][0] == f"{coif};7920;Listed;1;1;30000;4500;;undercut: relist at 4g 49s 99c"
+    assert fields.positions[mx.AMAYA][1] == \
+        f"{leather};2319;Needs reconciliation;20;20;4000;;;check bags and mail: 14 of 20 found"
     plan = mx.plan_file()
     strings = fields.strings()
     assert len(strings) == 1 + 2 + 2 + 6
-    assert f'checksum = "{len(strings)}:{sum(len(s) for s in strings)}"' in plan
+    assert f'checksum = "{len(strings)}:{sum(len(s.encode()) for s in strings)}"' in plan    # bytes, as Lua's #
     assert f'    ["{mx.AMAYA}"] = 25200,' in plan
 
 

@@ -23,9 +23,10 @@ from ahsync.history.writes import HistoryWrites
 from ahsync.intel.store import IntelStore
 from ahsync.recommend.store import RecommendStore
 from ahsync.state.journal import JournalReads
+from ahsync.state.positions import PositionStore
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 21
+SCHEMA_VERSION = 22
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
@@ -177,6 +178,24 @@ MIGRATIONS: dict[int, str] = {
         CREATE TABLE IF NOT EXISTS portfolio_snapshot(market TEXT PRIMARY KEY, data TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS portfolio_snapshot_new(market TEXT PRIMARY KEY, data TEXT NOT NULL)
     """,
+    # 22: positions and their lots (SPEC §3.2, §3.4D.9, M14), and the funded candidate each plan action came from,
+    # so a matched purchase or craft knows the opportunity it opens a position for.
+    22: """
+        ALTER TABLE actions ADD COLUMN cand_id TEXT;
+        ALTER TABLE plan_new ADD COLUMN cand_id TEXT;
+        CREATE TABLE IF NOT EXISTS positions(
+            position_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, market TEXT, cand_id TEXT, strategy TEXT,
+            key INTEGER NOT NULL, state TEXT NOT NULL, opened_at INTEGER NOT NULL, units INTEGER NOT NULL,
+            units_left INTEGER NOT NULL, cost_total INTEGER NOT NULL, cost_left INTEGER NOT NULL, expected_net_open REAL,
+            expected_net_now REAL, target_window_ms INTEGER, latest_window_ms INTEGER, next_action TEXT,
+            realized REAL NOT NULL DEFAULT 0, closed_at INTEGER
+        );
+        CREATE TABLE IF NOT EXISTS position_lots(
+            position_id TEXT NOT NULL, event_id TEXT NOT NULL, units INTEGER NOT NULL, unit_cost INTEGER NOT NULL,
+            at INTEGER NOT NULL, PRIMARY KEY(position_id, event_id)
+        );
+        CREATE INDEX IF NOT EXISTS position_lots_event ON position_lots(event_id)
+    """,
     # 14: sell records, stored for the hourly status pass (M8).
     14: """
         CREATE TABLE IF NOT EXISTS sell_records(
@@ -325,7 +344,8 @@ def restore_newest_backup(path: Path, backup_dir: Path, now_ms: int) -> Path | N
     return None
 
 
-class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, JournalReads, IntelStore, RecommendStore):
+class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, JournalReads, IntelStore, RecommendStore,
+               PositionStore):
     """A connection to data/ahsync.db with AHSync's queries and upserts."""
 
     def __init__(self, conn: sqlite3.Connection, path: Path) -> None:

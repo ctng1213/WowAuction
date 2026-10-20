@@ -7,7 +7,7 @@ Builds a generated world in a temporary database (no network, nothing in data/):
 each (2160 = the 90 days analysis reads, every hour observed: the worst case),
 7 days of volume, a complete order book, two characters, 200 known Blacksmithing
 recipes and 50 Enchanting ones, and stock with a cost basis on both characters (some
-of it listed), so the exported candidates, graph and positions are non-trivial (M11).
+of it listed), each lot an open position (M14), so the exported candidates, graph and positions are non-trivial.
 
 The refresh then runs in a fresh process against that database, so the time is not
 slowed by memory tracing and the peak is the process's own (it includes the
@@ -104,14 +104,36 @@ def stock_and_enchanting(db: Database, rng: random.Random, keys: list[int]) -> N
                             [("Enchanting", spell, m, rng.randint(1, 3)) for m in mats])
         db.conn.execute("INSERT INTO known_recipes(char_id, spell_id) VALUES (?,?)", ("A-R", spell))
     held = rng.sample(keys, 120)
+    stock = [("A-R" if i % 2 else "B-R", k, rng.randint(1, 40), rng.randint(10, 100)) for i, k in enumerate(held)]
     db.conn.executemany("INSERT INTO inventory(char_id, location, key, qty, bound) VALUES (?,?,?,?,0)",
-                        [("A-R" if i % 2 else "B-R", "bags", k, rng.randint(1, 40)) for i, k in enumerate(held)])
+                        [(c, "bags", k, n) for c, k, n, _ in stock])
     db.conn.executemany("INSERT INTO cost_basis(key, qty, total_cost) VALUES (?,?,?)",
-                        [(k, 40, 40 * rng.randint(10, 100)) for k in held])
+                        [(k, 40, 40 * each) for _c, k, _n, each in stock])
+    positions(db, stock)
     db.conn.executemany("INSERT INTO own_auctions(char_id, key, price, stack, band, count, seen, end_ms) "
                         "VALUES (?,?,?,?,?,?,?,?)",
                         [("A-R" if i % 2 else "B-R", k, rng.randint(10, 50_000), 5, 3, 1, NOW - HOUR, NOW + 8 * HOUR)
                          for i, k in enumerate(held[:20])])
+
+
+def positions(db: Database, stock: list[tuple[str, int, int, int]]) -> None:
+    """One open position per stock row: a funded buy for later, bought a day ago (M14), so the replay, the
+    evaluation and the export's positions are non-trivial.
+
+    Args:
+        db: The database being built (inside its transaction).
+        stock: (character, key, units, copper each) held.
+    """
+    rows = [(f"{c}:{NOW - DAY}:{i}", c, k, n, each) for i, (c, k, n, each) in enumerate(stock)]
+    db.conn.executemany("INSERT INTO purchases(event_id, char_id, key, qty, price, source, at, confirmed) "
+                        "VALUES (?,?,?,?,?,'ah',?,1)", [(e, c, k, n, each, NOW - DAY) for e, c, k, n, each in rows])
+    db.conn.executemany("INSERT INTO positions(position_id, char_id, market, cand_id, strategy, key, state, opened_at, "
+                        "units, units_left, cost_total, cost_left, expected_net_open, realized) "
+                        "VALUES (?,?,?,?,'buy_later',?,'Holding',?,?,?,?,?,0,0)",
+                        [(e, c, M, f"buy_later:{k}:{c}:-/now/now:1", k, NOW - DAY, n, n, n * each, n * each)
+                         for e, c, k, n, each in rows])
+    db.conn.executemany("INSERT INTO position_lots(position_id, event_id, units, unit_cost, at) VALUES (?,?,?,?,?)",
+                        [(e, e, n, each, NOW - DAY) for e, _c, _k, n, each in rows])
 
 
 def peak_memory_mb() -> float:
@@ -188,7 +210,8 @@ def export_sizes(db: Database, tmp: Path) -> bool:
     text = (folder / MARKET_FILE).read_text(encoding="utf-8")
     counts = {name: sum(1 for line in text.splitlines() if line.startswith(name)) for name in ("K[", "R[", "U[")}
     plan_text = (folder / PLAN_FILE).read_text(encoding="utf-8")
-    positions = plan_text.count(";Holding;") + plan_text.count(";Listed;")
+    block = plan_text.split("  positions = {", 1)[1].split("  records = {", 1)[0]
+    positions = sum(1 for line in block.splitlines() if line.strip().startswith('"'))
     print(f"bench: {MARKET_FILE} {market / 1_048_576:.2f} MB (budget {MAX_MARKET_BYTES / 1_048_576:.0f} MB, "
           f"{counts['K[']} candidates, {counts['R[']} recipes, {counts['U[']} reverse entries), {PLAN_FILE} "
           f"{plan / 1024:.1f} KB (budget {MAX_PLAN_BYTES // 1024} KB, {positions} positions), written in {seconds:.2f} s")

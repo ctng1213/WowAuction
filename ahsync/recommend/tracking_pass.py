@@ -2,12 +2,15 @@
 
 It runs after every SavedVariables read and before the hourly status pass. Only confirmed
 purchases and posts match; an attempt waits for its confirmation. Crafts match by their
-recipe's product. engine.tracking decides; this module only reads and writes the rows.
+recipe's product. A matched purchase or craft of a funded opportunity opens or adds to a position, and every
+position is replayed from its lots and the journal (recommend.positions_pass, SPEC §3.4D.9). engine.tracking decides;
+this module only reads and writes the rows.
 """
 from __future__ import annotations
 
 from ahsync.db.sqlite import Database
 from ahsync.engine.cost_basis import Bought, Disenchanted, Made, cost_basis
+from ahsync.recommend.positions_pass import track_positions
 from ahsync.engine.tracking import (AuctionMail, DoneEvent, OpenAction, OpenPost, Payout, SoldMail, match, realize,
                                     resolve_posts)
 
@@ -207,20 +210,25 @@ def _realize(db: Database) -> int:
     return len(done)
 
 
-def tracking_pass(db: Database) -> dict[str, int]:
-    """Match events to actions, resolve posts and rebuild the cost basis, in one transaction (SPEC §3.4.1, §3.2).
+def tracking_pass(db: Database, now_ms: int | None = None) -> dict[str, int]:
+    """Match events to actions, resolve posts, rebuild the cost basis and keep the positions, in one transaction
+    (SPEC §3.4.1, §3.2, §3.4D.9).
 
     Args:
         db: Database (not inside a transaction).
+        now_ms: Now, UTC ms, for the positions' time rules (an unfinished buy's window, the 31-day loss); None skips
+            them.
 
     Returns:
-        {"matched": n, "resolved": n, "costed": items with a basis, "paid": payouts realized}.
+        {"matched": n, "resolved": n, "costed": items with a basis, "paid": payouts realized, "opened": positions
+        opened}.
 
     Side effects:
         Sets action_id and expected_net (the action's expected net × matched units ÷ its units) on matched
         events, done_qty, status and done_at on their actions, outcome
-        and resolved_at on resolved posts (with the mail's post_id), replaces cost_basis, and sets mail_id
-        and realized on new payouts.
+        and resolved_at on resolved posts (with the mail's post_id), replaces cost_basis, sets mail_id
+        and realized on new payouts, and opens, adds lots to and updates positions (recommend.positions_pass).
     """
     with db.transaction():
-        return {"matched": _match(db), "resolved": _resolve(db), "costed": _cost_basis(db), "paid": _realize(db)}
+        out = {"matched": _match(db), "resolved": _resolve(db), "costed": _cost_basis(db), "paid": _realize(db)}
+        return out | {"opened": track_positions(db, now_ms)["opened"]}

@@ -50,7 +50,7 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 991,482 56x20 "—"
       FontString - 1050,482 203x20 "—"
     Frame AHProfitWindowRow6 650,502 606x20
-      FontString - 654,502 598x20 "committed 70   · est. +10   72   · +15% on committed capital"
+      FontString - 654,502 598x20 "committed 70   · est. +10   72   · +9% on committed capital · % leaves out Wool Cloth (found stock only)"
     Frame AHProfitWindowRow7 650,522 606x20
       FontString - 654,526 33x12 "Today"
       FontString - 1043,527 209x10 "realized today · funded, then unfunded"

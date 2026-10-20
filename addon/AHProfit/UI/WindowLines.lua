@@ -256,7 +256,7 @@ local function PortfolioLines(charId, nowMs, offset, gold, minChance)
   local Adapt, PV = AHProfit.Adapt, AHProfit.PortfolioView
   local snapshot = Adapt.Snapshot()
   local generatedAt = Market.Times()
-  local tab = PV.Build(Adapt.Current(), snapshot, Plan.Positions(charId), {
+  local tab = PV.Build(Adapt.Current(), snapshot, Plan.LivePositions(charId), {   -- local positions too (A81)
     nowMs = nowMs, offsetMs = offset, nameOf = Adapt.NameOf, lookOf = LookOf, itemOf = Market.Item, totalGold = gold,
     liveGold = Adapter.Money(), charId = charId, skills = ((DB.Get() or {}).professions or {})[charId],
     dataStale = generatedAt ~= nil and nowMs - generatedAt > VM.STALE_MS, problem = Adapt.Problem() })

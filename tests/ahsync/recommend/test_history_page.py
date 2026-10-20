@@ -21,6 +21,10 @@ class FakeJournal:
         self.since = since_ms
         return [(NOW - 3_600_000, "Amaya-G", "disenchanted", CINCH, 1, None, None, f"{DUST},2", None, 150.0, None)]
 
+    def position_seeds(self):
+        """No positions."""
+        return []
+
 
 def test_the_page_reads_30_days_and_names_the_disenchant_results():
     db = FakeJournal()

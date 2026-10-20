@@ -172,11 +172,34 @@ local function Others()
   return sum, out
 end
 
---- The snapshot of this character's market, or nil without one.
----@return table|nil  As Plan.Portfolio
+--- The snapshot of this character's market, with your local positions' gold committed (A81): committed grows and
+--- the remaining capacity shrinks by what they cost until AHSync's next export includes them.
+---@return table|nil  As Plan.Portfolio, plus localCommitted (copper); nil without one
 function Adapt.Snapshot()
   local market = Market.MarketId()
-  return market and Plan.Portfolio(market) or nil
+  local snapshot = market and Plan.Portfolio(market) or nil
+  if not snapshot then return nil end
+  local spent = Plan.LocalCommitted(CharId())
+  snapshot.localCommitted = spent
+  snapshot.committed = (snapshot.committed or 0) + spent
+  snapshot.capacity = math.max(0, (snapshot.capacity or 0) - spent)
+  return snapshot
+end
+
+-- A strategy -> the event kind that executes it (a local position takes its candidates out of the reselection).
+Adapt.EXECUTED_BY = { flip = "buy", buy_later = "buy", disenchant = "buy", craft = "craft", multistage = "craft" }
+
+--- This character's candidates less those a local position already executed (A81: the bought row leaves).
+---@param rcs table[]  Repriced candidates
+---@return table[]
+function Adapt.Unexecuted(rcs)
+  local done, out = {}, {}
+  for _, p in ipairs(Plan.LocalPositions(CharId())) do done[p.kind .. ":" .. p.key] = true end
+  for _, rc in ipairs(rcs) do
+    local kind = Adapt.EXECUTED_BY[rc.c.strategy]
+    if not (kind and done[kind .. ":" .. rc.c.key]) then out[#out + 1] = rc end
+  end
+  return out
 end
 
 --- The most the character may spend now (SPEC §4.0, A80, A64): min(live gold, the snapshot's remaining capacity −
@@ -211,14 +234,15 @@ function Adapt.LiveItem(key)
                          Adapter.NowMs())
 end
 
---- Reselect now (SPEC §4.0, §3.4D.4): this character's candidates, live gold and skills, the cap of A80.
+--- Reselect now (SPEC §4.0, §3.4D.4): this character's candidates (less those a local position executed, A81),
+--- live gold and skills, the cap of A80 (the local positions' gold committed).
 ---@return table|nil  Reselect.Run's result; nil without a snapshot
 function Adapt.Reselect()
   local s, snapshot = State(), Adapt.Snapshot()
   if not snapshot then s.result = nil; return nil end
   local start, db = Adapter.ProfileMs(), DB.Get() or {}
   local othersReserved, others = Others()
-  s.result = Reselect.Run(s.rcs, { snapshot = snapshot, charId = s.charId, liveGold = Adapter.Money(),
+  s.result = Reselect.Run(Adapt.Unexecuted(s.rcs), { snapshot = snapshot, charId = s.charId, liveGold = Adapter.Money(),
     othersReserved = othersReserved, others = others, held = Held(db), skills = (db.professions or {})[s.charId],
     levelsOf = LevelsOf, nameOf = Adapt.NameOf, nowMs = Adapter.NowMs() })
   perf.reselectMs, perf.reselections = Adapter.ProfileMs() - start, perf.reselections + 1

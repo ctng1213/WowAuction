@@ -43,7 +43,7 @@ def test_T8_a_purchase_from_the_saved_variables_is_matched_like_any_other(db):
     purchase = {"id": f"{AMAYA}:{T + HOUR}:0", "type": "purchase", "char": AMAYA, "at": T + HOUR, "key": LINEN,
                 "qty": 20, "price": 40, "source": "ah", "confirmed": True}
     apply_data(db, read_ahprofit(savedvars_text({"characters": {AMAYA: character}, "events": [purchase]})), REALMS, T)
-    assert tracking_pass(db) == {"matched": 1, "resolved": 0, "costed": 0, "paid": 0}     # bags not read yet: nothing held
+    assert tracking_pass(db) == {"matched": 1, "resolved": 0, "costed": 0, "paid": 0, "opened": 0}   # nothing held yet
     assert rows(db, "SELECT status, done_qty, done_at FROM actions WHERE action_id = 'buy'") == [("done", 20, T + HOUR)]
     assert rows(db, "SELECT action_id FROM purchases") == [("buy",)]
     assert tracking_pass(db)["matched"] == 0                                    # nothing twice
@@ -54,7 +54,7 @@ def test_T1_the_matched_buy_also_sets_what_you_paid(db):
         db.conn.execute("INSERT INTO purchases(event_id, char_id, key, qty, price, source, at, confirmed) "
                         "VALUES ('p', ?, ?, 20, 40, 'ah', ?, 1)", (AMAYA, LINEN, T + HOUR))
         db.conn.execute("INSERT INTO inventory(char_id, location, key, qty, bound) VALUES (?, 'bags', ?, 20, 0)", (AMAYA, LINEN))
-    assert tracking_pass(db) == {"matched": 1, "resolved": 0, "costed": 1, "paid": 0}
+    assert tracking_pass(db) == {"matched": 1, "resolved": 0, "costed": 1, "paid": 0, "opened": 0}   # no funded row
     assert db.cost_basis() == {LINEN: (20, 800)}                                 # 20 × 40c = 8s
     assert rows(db, "SELECT status FROM actions WHERE action_id = 'post'") == [("pending",)]   # its sell stays planned
 

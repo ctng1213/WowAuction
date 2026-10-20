@@ -13,7 +13,8 @@ import time
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
-from ahsync.engine.allocation import PortfolioPlan, PositionRow
+from ahsync.engine.allocation import PortfolioPlan
+from ahsync.engine.position_views import PositionView
 from ahsync.engine.candidates import PATTERN_WEEKS
 from ahsync.engine.plan_chains import clock, short_name
 from ahsync.engine.plan_views import ItemLook
@@ -67,7 +68,7 @@ class PortfolioInputs:
 
     plan: PortfolioPlan | None                 # the run's plan; None without characters
     chars: tuple[CharacterGold, ...]           # the market's characters with their gold
-    positions: tuple[PositionRow, ...]         # section A's rows (allocation.position_rows until M14)
+    positions: tuple[PositionView, ...]        # section A's rows (recommend.positions_pass.views, M14)
     action_ids: tuple[str, ...]                # the plan's action ids, aligned with plan.actions (Skip)
     looks: Mapping[int, ItemLook]              # item key -> name, quality and market activity
     ps: PortfolioSettings                      # the settings the plan ran with
@@ -720,46 +721,27 @@ def risk_percent(risk_tolerance: float) -> int:
     return math.floor(risk_tolerance * 100 + 0.5)
 
 
-def next_action_text(p: PositionRow, now_ms: int, offset_ms: int) -> str:
-    """A position's Next action (SPEC §3.4D.9), from the plan's action for its units.
-
-    Args:
-        p: The position.
-        now_ms: Now.
-        offset_ms: Local time minus UTC.
-
-    Returns:
-        "post for the Sat 19:00 peak", "post now", "disenchant", "sell to a vendor", "hold" or "—".
-    """
-    if p.next_action == "post":
-        if p.target_ms is None or p.target_ms <= now_ms:
-            return "post now"
-        day, hour = clock(p.target_ms, offset_ms)
-        return f"post for the {day} {hour} peak"
-    return {"de": "disenchant", "vendor": "sell to a vendor", "hold": "hold"}.get(p.next_action or "", "—")
-
-
-def position_row(p: PositionRow, ctx: _Ctx) -> dict:
+def position_row(p: PositionView, ctx: _Ctx) -> dict:
     """One row of section A (SPEC §3.4D.9): Item · Qty · Character · Status · Paid · Cost basis left · Est. net ·
     Sell window · Next action.
 
     Args:
-        p: The position.
+        p: The evaluated position (or found stock).
         ctx: The build.
 
     Returns:
-        Row dict; until positions track lots (M14), Paid is the cost left.
+        Row dict: Paid is what the position cost (0 and "found" for found stock), Cost basis left what it still
+        commits, Sell window the latest recommended window, Next action the evaluation's text.
     """
     look, inp = ctx.look(p.key, str(p.key)), ctx.inp
     net = None if p.net_now is None else round_half_up(p.net_now)
-    return {"item": look.name, "quality": look.quality, "note": "found · uses no capital" if p.cost_left == 0 else "",
+    return {"item": look.name, "quality": look.quality, "note": "found · uses no capital" if p.found else "",
             "qty": str(p.units_left) if p.units_left == p.units else f"{p.units_left} of {p.units}",
             "character": short_name(p.char_id), "state": p.state, "state_class": STAGE_CLASS.get(p.state, "hold"),
-            "paid": money(p.cost_left), "paid_note": "found" if p.cost_left == 0 else "", "cost_left": money(p.cost_left),
+            "paid": money(p.paid), "paid_note": "found" if p.found else "", "cost_left": money(p.cost_left),
             "net": "—" if net is None else signed_money(net),
             "net_class": "" if net is None else "pos" if net > 0 else "neg" if net < 0 else "",
-            "window": when_text(p.target_ms, inp.now_ms, inp.offset_ms),
-            "next": next_action_text(p, inp.now_ms, inp.offset_ms),
+            "window": when_text(p.window_ms, inp.now_ms, inp.offset_ms), "next": p.next_action,
             "sort": {"cost": p.cost_left, "net": -1 if net is None else net}}
 
 
@@ -771,20 +753,28 @@ def positions_section(ctx: _Ctx) -> dict:
 
     Returns:
         {"rows", "summary", "foot", "note"}: the summary counts the positions; foot segments [text, class] such as
-        "+23% on committed capital" (Σ est. net of the positions that have one ÷ committed capital, half up).
+        "+22% on committed capital": Σ est. net of the positions that cost something and have one ÷ committed capital,
+        half up (found stock commits nothing, so it is left out of the %, like a funded row with no cash, D.8, and a
+        "% leaves out Wool Cloth (found stock only)" segment names it). "estimated profit on positions" still counts
+        found stock's est. net: it is what the positions are expected to make.
     """
     a = ctx.acct
     net = shown_sum(p.net_now for p in ctx.inp.positions if p.net_now is not None)
+    costed = shown_sum(p.net_now for p in ctx.inp.positions if p.net_now is not None and not p.found)
+    found = list(dict.fromkeys(ctx.look(p.key, str(p.key)).name for p in ctx.inp.positions
+                               if p.found and p.net_now is not None))
     foot = [[f"Capital committed {money(a.committed_capital)}", ""]]
     share = committed_share_pct(a)
     if share is not None:
         foot.append([f"{share}% of capital base ({money(a.committed_capital)} ÷ {money(a.capital_base)})", ""])
     foot.append([f"estimated profit on positions {signed_money(net)}", ""])
-    on_committed = profit_pct(net, a.committed_capital)
+    on_committed = profit_pct(costed, a.committed_capital)
     if on_committed is not None:
         sign = "+" if on_committed > 0 else "−" if on_committed < 0 else ""
         foot.append([f"{sign}{abs(on_committed)}% on committed capital",
                      "pos" if on_committed > 0 else "neg" if on_committed < 0 else ""])
+        if found:
+            foot.append([f"% leaves out {', '.join(found)} (found stock only)", "muted"])
     note = ("Cost basis left is what you paid for the units not yet paid out to you: the capital a position ties up. "
             "Found items cost 0 and use no capital, but their worth still counts in Est. net. Positions take no "
             "recommendation slots.")

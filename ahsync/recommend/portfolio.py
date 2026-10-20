@@ -9,19 +9,23 @@ already read, plus the alternatives (`alternative_rows`) for the `alternatives` 
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 
 from ahsync.config import Config, flip_settings, plan_settings, portfolio_settings
 from ahsync.engine import disenchant
-from ahsync.engine.allocation import PortfolioPlan, PositionRow, portfolio_plan, position_rows, stock_positions
+from ahsync.engine.allocation import PortfolioPlan, portfolio_plan
 from ahsync.engine.candidates import DeInfo, GenInputs, Run
 from ahsync.engine.de_table import DE_TABLE
 from ahsync.engine.flips import auctions
-from ahsync.engine.portfolio import CharacterGold, PortfolioSettings, candidate_to_json, config_version, export_subset
+from ahsync.engine.portfolio import (CharacterGold, OpenPosition, PortfolioSettings, candidate_to_json, config_version,
+                                     export_subset)
+from ahsync.engine.position_views import PositionView
 from ahsync.engine.sell_record import Record
 from ahsync.history.reads import ItemInfo
 from ahsync.intel.contract import ItemIntel
 from ahsync.recommend.pages import DE_KIND
 from ahsync.recommend.plan import week_inputs
+from ahsync.recommend.positions_pass import position_json
 from ahsync.state.reads import StateReader
 
 
@@ -122,48 +126,9 @@ def gen_inputs(state: StateReader, characters: list[tuple[str, int]], stats: dic
                      price_ages(stats, now_ms, built_ms), {k: i.name for k, i in items.items()}, cost, built_ms)
 
 
-def held_units(state: StateReader, char_ids: list[str]) -> list[tuple[str, int, int]]:
-    """The units committed capital counts until positions exist: held, in the mail or listed (SPEC §3.4D.1).
-
-    Args:
-        state: Character state.
-        char_ids: The market's characters.
-
-    Returns:
-        (character, item key, units): unbound inventory (bags, bank, mail), then your auctions.
-    """
-    return inventory_units(state, char_ids) + listed_units(state, char_ids)
-
-
-def inventory_units(state: StateReader, char_ids: list[str]) -> list[tuple[str, int, int]]:
-    """Unbound units in bags, bank and mail.
-
-    Args:
-        state: Character state.
-        char_ids: The market's characters.
-
-    Returns:
-        (character, item key, units).
-    """
-    return [(c, key, qty) for c, _place, key, qty, bound in state.holdings(char_ids) if not bound]
-
-
-def listed_units(state: StateReader, char_ids: list[str]) -> list[tuple[str, int, int]]:
-    """Units on the AH in your auctions.
-
-    Args:
-        state: Character state.
-        char_ids: The market's characters.
-
-    Returns:
-        (character, item key, units).
-    """
-    return [(c, key, stack * count) for c, key, _p, stack, _b, count, _d, _e in state.own_auctions(char_ids)]
-
-
 def plan_portfolio(state: StateReader, characters: list[tuple[str, int]], stats: dict[int, ItemIntel],
                    items: dict[int, ItemInfo], now_ms: int, cfg: Config, records: dict[int, Record] | None = None,
-                   built_ms: int | None = None) -> PortfolioPlan | None:
+                   built_ms: int | None = None, committed: Sequence[OpenPosition] = ()) -> PortfolioPlan | None:
     """The funded plan for one market's characters (SPEC §3.4D).
 
     Args:
@@ -175,6 +140,7 @@ def plan_portfolio(state: StateReader, characters: list[tuple[str, int]], stats:
         cfg: Config.
         records: Item key -> your sell record (SPEC §3.3.3); None for none.
         built_ms: The intelligence's built_ms; now when None.
+        committed: The committed capital: the open positions' cost left (engine.positions.committed, §3.4D.1).
 
     Returns:
         The PortfolioPlan; None without characters.
@@ -184,13 +150,11 @@ def plan_portfolio(state: StateReader, characters: list[tuple[str, int]], stats:
     """
     if not characters:
         return None
-    char_ids = [c for c, _ in characters]
     w = week_inputs(state, characters, stats, items, cfg, records)
     gi = gen_inputs(state, characters, stats, items, now_ms, now_ms if built_ms is None else built_ms, cfg)
     chars = [CharacterGold(c, g, cfg.budgets.get(c)) for c, g in characters]
-    positions = stock_positions(held_units(state, char_ids), state.cost_basis())
     run = Run(now_ms, plan_settings(cfg), flip_settings(cfg), portfolio_settings(cfg), cfg.max_craft_depth)
-    return portfolio_plan(w, gi, chars, positions, run)
+    return portfolio_plan(w, gi, chars, committed, run)
 
 
 def export_rows(plan: PortfolioPlan | None, limit: int) -> list[tuple[str, str, float, str]]:
@@ -217,20 +181,21 @@ def export_rows(plan: PortfolioPlan | None, limit: int) -> list[tuple[str, str, 
             for c in picked]
 
 
-def snapshot_data(plan: PortfolioPlan, ps: PortfolioSettings, positions: list[PositionRow], now_ms: int) -> dict:
+def snapshot_data(plan: PortfolioPlan, ps: PortfolioSettings, positions: Sequence[PositionView], now_ms: int) -> dict:
     """The portfolio snapshot PortfolioPlan.lua carries, as stored between runs (SPEC §3.5 `portfolio`, EX18).
 
     Args:
         plan: The run's plan.
         ps: The portfolio settings it ran with.
-        positions: allocation.position_rows of the run.
+        positions: The market's evaluated positions and found stock (recommend.positions_pass.views).
         now_ms: The run's time.
 
     Returns:
         JSON-serializable: snapshot_ms, the settings the addon scores with (risk tolerance and premiums in whole
         thousandths), config_version, capital_base, committed, capacity (the remaining capacity), allocated (gold
-        needed of the funded rows), reserved (character -> copper) and positions (rows of position_id, character,
-        key, state, units, units left, cost left, net now float copper or None, target ms or None, next action).
+        needed of the funded rows), reserved (character -> copper) and positions (positions_pass.position_json rows:
+        position id, character, key, state, units, units left, cost left, net now float copper or None, window ms
+        or None, next action).
     """
     a, sel = plan.accounting, plan.selection
     return {
@@ -241,46 +206,26 @@ def snapshot_data(plan: PortfolioPlan, ps: PortfolioSettings, positions: list[Po
         "config_version": config_version(ps),
         "capital_base": a.capital_base, "committed": a.committed_capital, "capacity": a.remaining_capacity,
         "allocated": sel.gold, "reserved": {c: n for c, n in sel.reserved if n},
-        "positions": [[p.position_id, p.char_id, p.key, p.state, p.units, p.units_left, p.cost_left, p.net_now,
-                       p.target_ms, p.next_action] for p in positions],
+        "positions": [position_json(v) for v in positions],
     }
 
 
-def portfolio_export(state: StateReader, char_ids: list[str], plan: PortfolioPlan | None, cfg: Config,
-                     now_ms: int) -> tuple[list[tuple[str, str, float, str]], dict | None]:
+def portfolio_export(plan: PortfolioPlan | None, cfg: Config, now_ms: int,
+                     positions: Sequence[PositionView]) -> tuple[list[tuple[str, str, float, str]], dict | None]:
     """What the addon files carry of one market's plan run, for RecommendStore.stage_export (SPEC §3.5, M11).
 
     Args:
-        state: Character state (inventory, auctions, cost basis: the positions).
-        char_ids: The market's characters.
         plan: The run's plan, or None without characters.
         cfg: Config (candidate_export and the portfolio settings).
         now_ms: The run's time.
+        positions: The market's evaluated positions and found stock.
 
     Returns:
         (export_rows, snapshot_data); ([], None) without a plan.
     """
     if plan is None:
         return [], None
-    positions = plan_positions(state, char_ids, plan)
     return export_rows(plan, cfg.candidate_export), snapshot_data(plan, portfolio_settings(cfg), positions, now_ms)
-
-
-def plan_positions(state: StateReader, char_ids: list[str], plan: PortfolioPlan | None) -> list[PositionRow]:
-    """The open positions with what the run's plan does with them (SPEC §3.5 positions, interim until M14).
-
-    Args:
-        state: Character state (inventory, auctions, cost basis).
-        char_ids: The market's characters.
-        plan: The run's plan; None without characters.
-
-    Returns:
-        allocation.position_rows of the characters' stock with a cost basis; [] without a plan.
-    """
-    if plan is None:
-        return []
-    return position_rows(inventory_units(state, char_ids), listed_units(state, char_ids), state.cost_basis(),
-                         plan.actions)
 
 
 def alternative_rows(plan: PortfolioPlan | None) -> list[tuple[str, str, str, str, str]]:

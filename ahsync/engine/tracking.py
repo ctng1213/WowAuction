@@ -245,7 +245,7 @@ def resolve_posts(posts: Sequence[OpenPost], mails: Sequence[AuctionMail]) -> li
 
 # ---- Expected against realized profit, per History row (SPEC §3.4.1 "Expected and realized", D68-D70) ----
 
-OPEN_POST, OPEN_CHAIN = "post", "chain"          # Judged.open: what is still open
+OPEN_POST, OPEN_CHAIN, OPEN_POSITION = "post", "chain", "position"   # Judged.open: what is still open
 
 
 @dataclass(frozen=True)
@@ -370,29 +370,32 @@ class ProfitSums:
     resolved: int                  # rows counted
     open_posts: int                # rows still open, not counted
     open_chains: int
+    open_positions: int = 0        # positions not yet Completed (SPEC §3.4D.9, PO9)
 
 
 def profit_sums(rows: Sequence[Judged]) -> ProfitSums:
     """Σ expected and Σ realized over the resolved rows that matched a plan action (SPEC §3.5 History, D70).
 
     A chain's profit counts once: a follow-up post whose chain's carrier is among the rows counts on that carrier,
-    not on its own. Rows that matched no action, and disenchants (not tracked), count nowhere.
+    not on its own. Rows that matched no action, and disenchants (not tracked), count nowhere. A position's row
+    (SPEC §3.4D.9, PO9) counts once it is Completed; its events are left out of the rows by the caller.
 
     Args:
         rows: Judged rows (None-free).
 
     Returns:
-        ProfitSums: the sums over resolved rows, and how many counted rows are still open (posts, chains).
+        ProfitSums: the sums over resolved rows, and how many counted rows are still open (posts, chains,
+        positions).
     """
     carried = {r.chain_id for r in rows if r.carrier}
     expected = realized = 0.0
-    resolved = open_posts = open_chains = 0
+    resolved = 0
+    still = {OPEN_POST: 0, OPEN_CHAIN: 0, OPEN_POSITION: 0}
     for r in rows:
         if r.expected is None or (not r.carrier and r.chain_id in carried):
             continue
         if r.open is not None:
-            open_posts += r.open == OPEN_POST
-            open_chains += r.open == OPEN_CHAIN
+            still[r.open] += 1
         elif r.realized is not None:
             expected, realized, resolved = expected + r.expected, realized + r.realized, resolved + 1
-    return ProfitSums(expected, realized, resolved, open_posts, open_chains)
+    return ProfitSums(expected, realized, resolved, still[OPEN_POST], still[OPEN_CHAIN], still[OPEN_POSITION])

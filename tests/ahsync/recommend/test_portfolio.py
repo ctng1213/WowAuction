@@ -12,6 +12,8 @@ from ahsync.engine import disenchant
 from ahsync.engine.de_table import DE_TABLE
 from ahsync.history.reads import ItemInfo
 from ahsync.intel.contract import IntelWindow, ItemIntel
+from ahsync.engine.portfolio import OpenPosition
+from ahsync.engine.position_views import PositionView
 from ahsync.recommend import portfolio
 from tests.support.fake_clock import FakeClock
 
@@ -95,11 +97,13 @@ def test_PF30_a_disenchant_buy_reads_its_main_mats_sales_rate_not_the_greens():
     assert portfolio.de_infos(no_intel, ITEMS)[SCOUTING].volume_unknown is None      # worth 0: the essence leads
 
 
-def test_committed_capital_counts_the_bars_brugan_paid_for(state):
-    plan = portfolio.plan_portfolio(state, [("Amaya-G", 100_000), ("Brugan-G", 400_000)], STATS, ITEMS, NOW,
-                                    Config(markets=(M,)))
-    assert plan.accounting.committed_capital == 5400                           # 6 bars at 9s each
-    assert portfolio.held_units(state, ["Brugan-G"]) == [("Brugan-G", BAR, 6)]
+def test_committed_capital_is_the_open_positions_cost_left_and_bars_bought_outside_a_plan_commit_none(state):
+    chars = [("Amaya-G", 100_000), ("Brugan-G", 400_000)]
+    plan = portfolio.plan_portfolio(state, chars, STATS, ITEMS, NOW, Config(markets=(M,)),
+                                    committed=[OpenPosition("p", "Brugan-G", 5400)])
+    assert plan.accounting.committed_capital == 5400                           # a position: 6 bars at 9s each
+    alone = portfolio.plan_portfolio(state, chars, STATS, ITEMS, NOW, Config(markets=(M,)))
+    assert alone.accounting.committed_capital == 0                             # the bars matched no plan (PO12)
     assert portfolio.plan_portfolio(state, [], STATS, ITEMS, NOW, Config(markets=(M,))) is None
     assert portfolio.alternative_rows(None) == []
 
@@ -127,8 +131,9 @@ def test_an_item_that_cannot_be_disenchanted_or_has_no_listing_gives_no_disencha
 def test_EX17_EX18_a_run_stores_its_exported_candidates_and_its_portfolio_snapshot(state):
     cfg = Config(markets=(M,))
     chars = [("Amaya-G", 100_000), ("Brugan-G", 400_000)]
-    plan = portfolio.plan_portfolio(state, chars, STATS, ITEMS, NOW, cfg)
-    rows, snap = portfolio.portfolio_export(state, ["Amaya-G", "Brugan-G"], plan, cfg, NOW)
+    plan = portfolio.plan_portfolio(state, chars, STATS, ITEMS, NOW, cfg, committed=[OpenPosition("p", "Brugan-G", 5400)])
+    bars = PositionView("Brugan-G:1:0", "Brugan-G", BAR, "Holding", 6, 6, 5400, 5400, 300.0, None, "hold")
+    rows, snap = portfolio.portfolio_export(plan, cfg, NOW, [bars])
     funded = [r for r in rows if r[1] == ""]
     assert [r[0] for r in funded] == [c.cand_id for c in plan.funded]                    # funding order first
     rest = [r[2] for r in rows[len(funded):]]
@@ -139,6 +144,5 @@ def test_EX17_EX18_a_run_stores_its_exported_candidates_and_its_portfolio_snapsh
     assert (snap["snapshot_ms"], snap["settings"]) == (NOW, [300, 150, 50, 8, 20, 20, 7])
     assert (snap["capital_base"], snap["committed"]) == (505_400, 5400)
     assert snap["allocated"] == plan.selection.gold == sum(snap["reserved"].values())
-    assert [p[:7] for p in snap["positions"]] == [["stock:Brugan-G:2840", "Brugan-G", BAR, "Holding", 6, 6, 5400]]
-    assert portfolio.portfolio_export(state, [], None, cfg, NOW) == ([], None) and portfolio.export_rows(None, 5) == []
-    assert portfolio.listed_units(state, ["Brugan-G"]) == []
+    assert snap["positions"] == [["Brugan-G:1:0", "Brugan-G", BAR, "Holding", 6, 6, 5400, 300.0, None, "hold"]]
+    assert portfolio.portfolio_export(None, cfg, NOW, []) == ([], None) and portfolio.export_rows(None, 5) == []

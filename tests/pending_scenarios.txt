@@ -37,7 +37,6 @@
 # Unified portfolio optimizer (SPEC §3.4D, M9-M15): M9 contracts built (PF1, PF3, PF8, PF22, PF23);
 # M10 optimizer built (PF2, PF4-PF7, PF9-PF21, PF24-PF27); M11 exports built (W14, W15, EX17, EX18, FM40;
 # FM39's addon half M12); M12 live adaptation built (DG1-DG7, A76-A78, A80, A83, FM39; A64 rewritten);
-# M13 built: the dashboard half (D72, D73, D77-D79, SEC11) and the addon half (A79, A82, A84, UI16-UI19, TT8-TT21)
-PO1-PO13
-FM38
-D71 D74-D76 A81
+# M13 built: the dashboard half (D72, D73, D77-D79, SEC11) and the addon half (A79, A82, A84, UI16-UI19, TT8-TT21);
+# M14 built: positions and reconciliation (PO1-PO13, A81, FM38)
+D71 D74-D76
