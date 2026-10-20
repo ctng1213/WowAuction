@@ -17,7 +17,7 @@ def test_WP1_the_whole_plan_on_the_fixture_world_matches_its_snapshot_byte_for_b
 def test_the_snapshot_holds_every_page_the_plan_and_both_addon_files():
     doc = json.loads(snapshot.EXPECTED.read_text(encoding="utf-8"))
     assert sorted(doc["views"]) == ["characters", "craft", "disenchant", "flip", "history", "inventory", "on_ah",
-                                    "rules", "today", "week"]
+                                    "portfolio", "rules", "today", "week"]
     assert doc["actions"] and sorted(doc["addon_files"]) == ["MarketIntelligence.lua", "PortfolioPlan.lua"]
 
 

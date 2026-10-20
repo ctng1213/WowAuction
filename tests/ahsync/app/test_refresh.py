@@ -174,7 +174,7 @@ def test_a_refresh_publishes_the_plan_and_the_next_one_keeps_what_was_done(db):
     first = db.conn.execute("SELECT action_id, kind, status, char_id FROM actions ORDER BY action_id").fetchall()
     assert first and {r[2] for r in first} == {"pending"} and {r[3] for r in first} <= {BRUGAN, AMAYA}
     assert db.conn.execute("SELECT COUNT(*) FROM plan_new").fetchone()[0] == 0          # staging emptied
-    assert all(db.view(page, M) for page in ("today", "week", "flip"))                  # the plan's pages, published
+    assert all(db.view(page, M) for page in ("portfolio", "today", "week", "flip"))     # the plan's pages, published
     with db.transaction():
         db.conn.execute("UPDATE actions SET status = 'done' WHERE action_id = ?", (first[0][0],))
     refresh.refresh_all(db, NOW + HOUR, CFG)
@@ -195,6 +195,7 @@ def test_IU13_a_replan_follows_new_stock_from_the_published_intelligence_and_kee
     assert db.conn.execute("SELECT built FROM intel WHERE market = ?", (M,)).fetchone() == intel_before
     _, built = db.view("today", M)
     assert built == NOW + HOUR                                                      # the pages follow
+    assert db.view("portfolio", M)[1] == NOW + HOUR                                 # the Portfolio page too (M13)
 
 
 def test_PF10_a_skill_read_from_savedvariables_funds_a_waiting_candidate_without_reading_history(db, monkeypatch):

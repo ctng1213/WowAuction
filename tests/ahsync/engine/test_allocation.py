@@ -154,3 +154,17 @@ def test_EX18_positions_are_holding_or_listed_with_the_plan_action_for_them():
     assert [(r.state, r.net_now, r.target_ms, r.next_action) for r in alone] == [("Holding", 5.0, peak, "post")]
     none = allocation.position_rows([(BRUGAN, BAR, 2)], [], {BAR: (2, 30)}, [])
     assert [(r.net_now, r.target_ms, r.next_action) for r in none] == [(None, None, None)]
+
+
+def test_a_run_keeps_every_batch_its_actions_per_opportunity_and_each_alternatives_facts_for_the_page():
+    bracers = DeInfo(150, 2100.0, (), ((1500, 1),), 90)
+    lots = [Lot(AMAYA, LINEN, 25)]
+    result = plans.plan(world(lots, {LINEN: facts(LINEN, 50)}), NOW, de={BRACERS: bracers},
+                        skills={(AMAYA, "Enchanting"): 142})
+    assert {p.cand_id for p in result.picks} == {c.cand_id for c in result.funded} | \
+        {a.candidate.cand_id for a in result.alternatives}
+    [(opp, start, end)] = result.opp_actions                      # the Linen's posts, before your stock's rest
+    assert opp.startswith("sell_stock:2589:") and start == 0 and end >= 1
+    assert all(a.kind == "post" for a in result.actions[start:end])
+    [gloves] = [a for a in result.alternatives if a.candidate.key == BRACERS]
+    assert profession_detail(gloves.eligibility) == "Amaya has Enchanting 142"

@@ -274,9 +274,10 @@ def test_index_serves_the_page_with_this_runs_token(app):
 
 def test_index_has_every_page_in_the_mockup_order_and_loads_nothing_external(app):
     html = app.handle("GET", "/", GOOD).body.decode()
-    names = ["Today", "Week", "On the AH", "Disenchant", "Craft", "Flip", "Inventory", "History", "Rules",
+    names = ["Portfolio", "Today", "Week", "On the AH", "Disenchant", "Craft", "Flip", "Inventory", "History", "Rules",
              "Characters", "Status"]
-    positions = [html.index(f"['{name}', ") for name in names]
+    order = html[html.index("const ORDER = "):]                     # column lists name 'Status' too
+    positions = [order.index(f"['{name}', ") for name in names]
     assert positions == sorted(positions)
     assert "<script src" not in html and "<link" not in html and "@import" not in html
     assert "Coming in a later milestone" in html
@@ -329,7 +330,7 @@ def test_views_of_an_unconfigured_market_are_404(app):
 
 
 def test_every_contract_page_is_routed_and_unknown_pages_are_404(app):
-    assert set(PAGES) == {"disenchant", "craft", "today", "week", "on_ah", "flip", "inventory", "history", "rules",
+    assert set(PAGES) == {"portfolio", "disenchant", "craft", "today", "week", "on_ah", "flip", "inventory", "history", "rules",
                           "characters", "status"}
     for page in PAGES:
         if page != "status":                      # built on request, never "no refresh yet"
@@ -590,3 +591,80 @@ def test_D55_a_click_on_a_rows_control_does_not_select_the_row():
     page = INDEX_HTML.read_text(encoding="utf-8")
     handler = page[page.index("tr[data-select]').forEach"):][:400]
     assert "e.target.closest('select, button, input, a')" in handler and handler.index("closest") < handler.index("render(id)")
+
+
+RISK_TOML = ('markets = ["forever.pvp.horde.us", "forever.pvp.alliance.us"]\n# my own note\n'
+             'risk_tolerance = 0.30                         # share of the capital base (§3.4D.1)\n\n[realms]\n"R" = "pvp"\n')
+
+
+def test_SEC11_the_risk_tolerance_rewrites_its_line_re_plans_and_is_checked_like_every_write(db, refreshes, tmp_path,
+                                                                                             monkeypatch):
+    from ahsync.web import server as server_module
+    path = tmp_path / "config.toml"
+    path.write_text(RISK_TOML, encoding="utf-8")
+    replans, exports, told = [], [], []
+    monkeypatch.setattr(server_module, "replan_all", lambda *a: replans.append(a) or [M])
+    monkeypatch.setattr(server_module, "export_plan", lambda *a: exports.append(a) or True)
+    app = DashboardApp(db, Config(markets=(M, OTHER)), FakeClock(), refreshes, token="tok-123", port=8765,
+                       config_path=path, config_changed=told.append)
+    reply = app.handle("POST", "/api/risk_tolerance", write_headers(), b'{"risk_tolerance": 0.4}')
+    assert reply.status == 200 and json.loads(reply.body) == {"set": True}
+    assert path.read_text(encoding="utf-8") == RISK_TOML.replace("= 0.30 ", "= 0.40 ")      # only that line
+    assert not (tmp_path / "config.toml.tmp").exists()
+    assert app.config.risk_tolerance == 0.4 and told == [app.config]                  # the running app follows
+    assert len(replans) == 1 and replans[0][2].risk_tolerance == 0.4 and len(exports) == 1   # re-planned, no history
+    for bad in (b'{"risk_tolerance": 0.37}', b'{"risk_tolerance": "high"}', b'{"risk_tolerance": true}', b"[]", b"nope"):
+        refused = app.handle("POST", "/api/risk_tolerance", write_headers(), bad)
+        assert refused.status == 400 and "one of 0.1, 0.2, 0.3, 0.4 or 0.5" in json.loads(refused.body)["message"], bad
+    foreign = app.handle("POST", "/api/risk_tolerance", write_headers(origin="https://evil.example"),
+                         b'{"risk_tolerance": 0.1}')
+    assert foreign.status == 403 and path.read_text(encoding="utf-8") == RISK_TOML.replace("= 0.30 ", "= 0.40 ")
+    assert app.handle("GET", "/api/risk_tolerance", GOOD).status == 405                 # GET never changes state
+    assert len(replans) == 1 and app.config.risk_tolerance == 0.4
+
+
+def test_SEC11_a_config_that_cannot_be_written_keeps_the_setting_and_says_so_on_status(app, db, monkeypatch):
+    from ahsync.web import server as server_module
+    replans = []
+    monkeypatch.setattr(server_module, "replan_all", lambda *a: replans.append(a) or [])
+    reply = app.handle("POST", "/api/risk_tolerance", write_headers(), b'{"risk_tolerance": 0.2}')   # no config.toml
+    assert reply.status == 500 and json.loads(reply.body) == {"error": "config_not_written"}
+    assert app.config.risk_tolerance == 0.3 and replans == []
+    [line] = [s for s in db.statuses() if s.topic == "risk_tolerance"]
+    assert (line.level, line.kind, line.data) == ("error", "risk_tolerance_not_saved", {"error": "OSError"})
+
+    def busy(*_args, **_kwargs):
+        """Fail like a locked database."""
+        raise sqlite3.OperationalError("database is locked")
+    monkeypatch.setattr(app.db, "set_status", busy)
+    assert app.handle("POST", "/api/risk_tolerance", write_headers(), b'{"risk_tolerance": 0.2}').status == 500
+
+
+def test_portfolio_is_served_like_every_page(app, db):
+    publish(db, "portfolio", M, {"tiles": [], "empty": None})
+    reply = app.handle("GET", f"/api/views/portfolio?market={M}", GOOD)
+    assert reply.status == 200 and json.loads(reply.body)["data"] == {"tiles": [], "empty": None}
+
+
+def test_D72_D79_the_portfolio_page_is_first_draws_its_sections_in_order_and_posts_the_risk_dropdown():
+    page = INDEX_HTML.read_text(encoding="utf-8")
+    assert page.index("['Portfolio', 'portfolio']") < page.index("['Today', 'today']")
+    assert "saved : 'portfolio'" in page and "state = { page: 'portfolio'" in page
+    body = page[page.index("const pfPage = "):page.index("// ---------- live pages")]
+    order = [body.index(s) for s in ("pfTiles(d)", "d.fresh", "'A. Active positions'", "pfLists(d, values, help)")]
+    assert order == sorted(order)
+    lists = page[page.index("const pfLists = "):page.index("const pfPage = ")]
+    assert lists.index("if (d.empty)") < lists.index("'B. Top opportunities today'") < \
+        lists.index("'C. Top opportunities, next 7 days'") < lists.index("'How the pool was funded'")
+    assert "pfCut(PF_COLS_B.length, b.cut)" in lists and "pfCut(PF_COLS_C.length, w.cut)" in lists
+    risk = page[page.index("async function setRisk"):page.index("async function setRisk") + 600]
+    assert "post('/api/risk_tolerance', { risk_tolerance: Number(sel.value) })" in risk and "load(id)" in risk
+    assert "select[data-risk]').forEach(sel => { sel.onchange = () => setRisk(id, sel); }" in page
+
+
+def test_every_portfolio_column_has_its_tooltip_and_the_market_columns_in_order():
+    page = INDEX_HTML.read_text(encoding="utf-8")
+    block = page[page.index("const PF_COLS_A"):page.index("const STAGE_CLASSES")]
+    headers = set(re.findall(r"\['([^']+)', [01]\]", block))
+    assert headers and headers - set(COLUMN_HELP) == set()
+    assert block.count("...MARKET_COLS") == 2                                   # sections B and C show a chance

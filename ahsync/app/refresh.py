@@ -26,6 +26,7 @@ from ahsync.recommend.on_ah_page import on_ah_page
 from ahsync.recommend.pages import craft_page, disenchant_page
 from ahsync.recommend.plan import plan_rows, sell_records
 from ahsync.recommend.portfolio import alternative_rows, plan_portfolio, portfolio_export
+from ahsync.recommend.portfolio_page import portfolio_page
 from ahsync.recommend.rules_page import rules_page
 from ahsync.recommend.plan_pages import plan_pages, view_actions
 
@@ -47,8 +48,7 @@ class RefreshResult:
 def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], intel_items: dict, items: dict,
                 now_ms: int, offset_ms: int, cfg: Config, built_ms: int) -> tuple[list, int | None]:
     """Plan the market's characters and stage the plan, its alternatives, what the addon files carry of it (M11) and its
-    Today, Week, Flip and Inventory pages
-    (SPEC §3.4C, §3.4D, §3.5).
+    Portfolio (M13), Today, Week, Flip and Inventory pages (SPEC §3.4C, §3.4D, §3.5).
 
     Args:
         db: Database (inside the refresh's transaction).
@@ -86,6 +86,8 @@ def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], in
             uses[r.product] = uses.get(r.product, frozenset()) | {k for k, _ in r.reagents}
     pages = plan_pages(shown, intel_items, items, sum(g for _, g in characters), now_ms, offset_ms, db.cost_basis(),
                        records, Arriving(tuple(db.transit(char_ids)), uses))                      # C23
+    pages["portfolio"] = portfolio_page(db, characters, plan, [r[0] for r in rows], intel_items, items, now_ms,
+                                        offset_ms, cfg, built_ms)                                  # SPEC §3.5, M13
     pages["inventory"] = inventory_page(db, [c for c, _ in characters], [a for a in shown if a.status == "pending"],
                                         intel_items, items, offset_ms)
     for page, body in pages.items():

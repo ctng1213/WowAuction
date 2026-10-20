@@ -242,6 +242,10 @@ def message(row: StatusRow, offset_ms: int) -> tuple[str, str]:
         "volume_method_old": ("Older sales estimates", f"{market}: {d.get('days', 0)} days of sales estimates are "
                                                        f"from an older method; their scans are gone, so they can't be "
                                                        f"recomputed. They age out with the 90-day history."),
+        "risk_tolerance_not_saved": ("Risk tolerance not saved",
+                                     f"The dashboard couldn't rewrite config.toml ({d.get('error', '?')}), so the risk "
+                                     f"tolerance and the plan are unchanged. Check that the file can be written, then "
+                                     f"pick the value again."),
         "restored": ("Database restored", f"The database was damaged and was restored from "
                                           f"{d.get('backup') or 'nothing (started empty)'}."),
     }

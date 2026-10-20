@@ -217,6 +217,29 @@ COLUMN_HELP = {
     "Best selling windows": "The hours of the week it sells best (price × buyers), local time. \"early pattern\" = "
                             "under 3 weeks of data",
     "Plan": "What this week's plan does with it",
+    # The Portfolio page (SPEC §3.5, §3.4D).
+    "Strategy": "How it makes money: Flip, Craft, Multistage craft (a reagent is crafted first), Disenchant, Sell stock "
+                "(items you own) or Buy for later",
+    "Status": "Funded, or why the opportunity was left out (the same words on the dashboard and in the addon)",
+    "Paid": "What you paid for the whole position; 0 for items you found",
+    "Cost basis left": "What you paid for the units you still hold: the capital this position ties up",
+    "Est. net": "Expected profit on what is left, after the 5% cut, deposits and the chance it sells",
+    "Sell window": "When it is planned to sell: the day and the peak hour",
+    "Next action": "The one thing to do next for this position",
+    "Buy when": "When to buy: now, or the buy window the price dips in",
+    "Process": "A craft or disenchant step between buying and selling",
+    "Sell when": "The day and peak hours it is planned to sell",
+    "Gold needed": "New gold it takes from the remaining capacity: buys, mats and deposits",
+    "Materials": "What it needs besides the item itself, and where each comes from: own, vendor, ah or craft",
+    "Adjusted": "Expected net ÷ (1 + waiting premium). Premium: 0% if it is realized within the immediate window, else "
+                "15% + 5% × the wait, in fractional days from now to the expected sale hour. One list across Today "
+                "and the week is ranked by this",
+    "#": "Selection order: adjusted profit per copper of exposure, then the swap pass; shown by adjusted profit",
+    "Sells": "When the profit is realized: the expected sale hour",
+    "Profit %": 'Return on cash: expected net ÷ cash (new gold + what you paid for bought stock it uses), half up. "—" '
+                "when it uses only found stock; such rows are left out of the % totals",
+    "Cash": "Gold needed + the cost basis of bought stock the row uses. Found stock counts 0",
+    "Left": "Remaining capacity after this row is funded",
 }
 
 

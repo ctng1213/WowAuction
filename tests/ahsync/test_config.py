@@ -4,7 +4,8 @@ from __future__ import annotations
 import pytest
 
 from ahsync.config import (Config, ConfigError, load_config, market_settings, parse_config, plan_settings,
-                           portfolio_settings, resolve_api_key, setting_line)
+                           portfolio_settings, resolve_api_key, setting_line, with_risk_tolerance,
+                           write_risk_tolerance)
 from ahsync.engine.portfolio import PortfolioSettings
 
 EXAMPLE = '''api_key = ""
@@ -180,3 +181,38 @@ def test_the_candidate_pool_and_swap_bound_are_read_and_checked(tmp_path):
         parse_config("candidate_pool = 100\n", {}, tmp_path)
     with pytest.raises(ConfigError, match="swap_candidates must be 1 or more"):
         parse_config("swap_candidates = 0\n", {}, tmp_path)
+
+
+RISK_CONFIG = ('# my settings\r\nmarkets = ["forever.pvp.horde.us"]\r\n'
+               'risk_tolerance = 0.30                         # share of the capital base (§3.4D.1)\r\n'
+               'premium_base = 0.15\r\n\r\n[realms]\r\n"RealmName" = "pvp"   # keep me\r\n')
+
+
+def test_SEC11_only_the_risk_tolerance_line_changes_and_its_comment_and_line_endings_stay():
+    new = with_risk_tolerance(RISK_CONFIG, 0.4)
+    assert new == RISK_CONFIG.replace("risk_tolerance = 0.30 ", "risk_tolerance = 0.40 ")
+    assert with_risk_tolerance("risk_tolerance=0.3\n", 0.1) == "risk_tolerance=0.10\n"
+
+
+def test_SEC11_a_config_without_the_line_gets_it_before_its_first_table_or_at_the_end():
+    assert with_risk_tolerance('markets = ["x"]\n[realms]\n"R" = "pvp"\n', 0.5) == \
+        'markets = ["x"]\nrisk_tolerance = 0.50\n[realms]\n"R" = "pvp"\n'
+    assert with_risk_tolerance('markets = ["x"]', 0.2) == 'markets = ["x"]\nrisk_tolerance = 0.20\n'
+    assert with_risk_tolerance("", 0.2) == "risk_tolerance = 0.20\n"
+    assert with_risk_tolerance('[realms]\nrisk_tolerance = 0.3\n', 0.2).startswith("risk_tolerance = 0.20\n[realms]")
+
+
+def test_SEC11_the_rewrite_goes_through_a_temp_file_and_reads_back(tmp_path, monkeypatch):
+    path = tmp_path / "config.toml"
+    path.write_bytes(RISK_CONFIG.encode("utf-8"))
+    write_risk_tolerance(path, 0.4)
+    assert path.read_bytes() == RISK_CONFIG.replace("= 0.30 ", "= 0.40 ").encode("utf-8")
+    assert load_config(path, {}, tmp_path).risk_tolerance == 0.4 and not (tmp_path / "config.toml.tmp").exists()
+    fresh = tmp_path / "new.toml"
+    write_risk_tolerance(fresh, 0.1)
+    assert fresh.read_text(encoding="utf-8") == "risk_tolerance = 0.10\n"
+    import ahsync.config as config_module
+    monkeypatch.setattr(config_module, "with_risk_tolerance", lambda text, value: text + "risk_tolerance = [\n")
+    with pytest.raises(ConfigError):
+        write_risk_tolerance(path, 0.2)
+    assert load_config(path, {}, tmp_path).risk_tolerance == 0.4                   # left as it was

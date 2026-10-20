@@ -25,7 +25,7 @@ from ahsync.engine.craft_candidates import crafts, disenchants
 from ahsync.engine.flips import auctions
 from ahsync.engine.plan import PlanAction
 from ahsync.engine.portfolio import Accounting, Candidate, CharacterGold, OpenPosition, accounting
-from ahsync.engine.selection import Budget, Pick, Selection, select, static_reason, validate
+from ahsync.engine.selection import Budget, Eligibility, Pick, Selection, select, static_reason, validate
 from ahsync.engine.timing import adjusted, immediate, premium_micro, wait_hundredths
 from ahsync.engine.week import PlanWorld, WeekInputs, bought_from, prepare, without_bought
 
@@ -38,6 +38,7 @@ class Alternative:
     lst: str                                   # "today" | "week"
     reason: str                                # the §3.4D.6 status
     adjusted: float                            # its adjusted profit, float copper
+    eligibility: Eligibility | None = None     # what its static checks read, for the reason's detail line (M13)
 
 
 @dataclass(frozen=True)
@@ -50,6 +51,8 @@ class PortfolioPlan:
     selection: Selection
     accounting: Accounting
     funded_adjusted: tuple[tuple[str, float], ...] = ()   # (candidate id, adjusted profit) of the funded, in funding order
+    picks: tuple[Pick, ...] = ()               # every batch as selection saw it (opportunity, list, name), for the page
+    opp_actions: tuple[tuple[str, int, int], ...] = ()    # (opportunity, first, end) slices of `actions` it realized
 
 
 def stock_positions(units: Sequence[tuple[str, int, int]], cost: Mapping[int, tuple[int, int]]) -> list[OpenPosition]:
@@ -234,14 +237,17 @@ def portfolio_plan(w: WeekInputs, gi: GenInputs, chars: Sequence[CharacterGold],
                     claimed[(oc.char_id, oc.key)] = claimed.get((oc.char_id, oc.key), 0) + oc.units
     actions: list[PlanAction] = []
     done: set[str] = set()
+    spans = []
     for cand_id in result.funded:
         opp = by_id[cand_id][0]
         if opp.opp not in done:
             done.add(opp.opp)
+            first = len(actions)
             actions.extend(opp.realize(counts[opp.opp]))
+            spans.append((opp.opp, first, len(actions)))
     actions.extend(residual(world, claimed, run))
     pick_by_id = {p.cand_id: p for p in batch_picks}
-    alternatives = tuple(Alternative(by_id[i][1].candidate, pick_by_id[i].lst, reason, pick_by_id[i].adjusted)
-                         for i, reason in result.reasons)
+    alternatives = tuple(Alternative(by_id[i][1].candidate, pick_by_id[i].lst, reason, pick_by_id[i].adjusted,
+                                     by_id[i][1].eligibility) for i, reason in result.reasons)
     return PortfolioPlan(actions, tuple(by_id[i][1].candidate for i in result.funded), alternatives, result, acct,
-                         tuple((i, pick_by_id[i].adjusted) for i in result.funded))
+                         tuple((i, pick_by_id[i].adjusted) for i in result.funded), tuple(batch_picks), tuple(spans))

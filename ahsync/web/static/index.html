@@ -122,6 +122,19 @@
   .heat .h2 { background: color-mix(in srgb, var(--c) 52%, transparent); } .heat .h3 { background: color-mix(in srgb, var(--c) 76%, transparent); }
   .heat .h4 { background: var(--c); } .heat .hn { background: repeating-linear-gradient(45deg, #2a2620 0 2px, transparent 2px 4px); }
   [hidden] { display: none !important; }
+  /* Portfolio: position stage badges, the Funded status, greyed alternatives, the red line and card footers */
+  .st { display: inline-block; font-size: 11px; padding: 0 7px; border-radius: 9px; border: 1px solid currentColor; white-space: nowrap; }
+  .st.acq { color: #69ccf0; } .st.proc { color: #ff8000; } .st.hold { color: var(--amber); } .st.ready { color: var(--pos); }
+  .st.listed { color: var(--accent); } .st.partial { color: var(--info); } .st.recon { color: var(--neg); } .st.funded { color: var(--pos); } .st.done { color: var(--muted); }
+  tr.excluded td:not(.why) { opacity: .45; }
+  .foot { display: flex; gap: 8px; flex-wrap: wrap; padding: 8px 14px; border-top: 1px solid var(--border-hi); background: #120f0b; font-size: 13px; }
+  .foot.note { border-top-color: var(--border); background: none; color: var(--muted); font-size: 12px; }
+  .fresh { color: var(--muted); font-size: 12px; margin: 0 0 14px; }
+  tr.cut td { color: var(--neg); border-top: 2px solid var(--neg); border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 600; padding: 3px 12px; background: none !important; letter-spacing: .3px; }
+  tr.total td { font-weight: 650; border-top: 1px solid var(--border-hi); }
+  .tile select { font: inherit; color: var(--text); background: #0b0a08; border: 1px solid var(--border-hi); border-radius: 4px; padding: 0 4px; cursor: pointer; }
+  .pf .card + .card, .pf .card + .alert, .pf .alert + .card { margin-top: 14px; }
+  .pf .tiles { padding: 0 0 12px; border-bottom: 0; }
 
   @media (max-width: 760px) {
     .layout { grid-template-columns: 1fr; }
@@ -242,11 +255,91 @@ const calibrationHtml = c => !c ? '<div class="empty">Sell-probability calibrati
   (c.profit ? `<div class="card" style="padding:8px 12px">${esc(c.profit)}</div>` : '') + `</div>`;
 const totalsList = obj => Object.entries(obj || {}).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${signed(v)}</dd>`).join('');
 
+// ---------- Portfolio (SPEC §3.5, §3.4D): every cell and text comes from engine/portfolio_view.py ----------
+const PF_COLS_A = [['Item', 0], ['Qty', 1], ['Character', 0], ['Status', 0], ['Paid', 1], ['Cost basis left', 1], ['Est. net', 1],
+                   ['Sell window', 0], ['Next action', 0]];
+const PF_COLS_B = [['Strategy', 0], ['Action', 0], ['Item', 0], ['Qty', 1], ['Each', 1], ['Total', 1], ['Expected net', 1],
+                   ...MARKET_COLS, ['Risk', 1], ['Character', 0], ['Status', 0], ['', 0]];
+const PF_COLS_C = [['Strategy', 0], ['Item', 0], ['Qty', 1], ['Buy when', 0], ['Process', 0], ['Sell when', 0], ['Gold needed', 1],
+                   ['Materials', 0], ['Expected net', 1], ['Adjusted', 1], ...MARKET_COLS, ['Character', 0], ['Status', 0], ['', 0]];
+const PF_COLS_POOL = [['#', 1], ['Item', 0], ['Sells', 0], ['Adjusted', 1], ['Expected net', 1], ['Gold needed', 1], ['Cash', 1],
+                      ['Profit %', 1], ['Left', 1]];
+const STAGE_CLASSES = ['acq', 'proc', 'hold', 'ready', 'listed', 'partial', 'done', 'recon'];
+const PF_STAGES = [['acq', 'Acquiring'], ['proc', 'Processing'], ['hold', 'Holding'], ['ready', 'Ready to sell'], ['listed', 'Listed'],
+                   ['partial', 'Partially sold'], ['recon', 'Needs reconciliation']];
+const FOOT_CLASSES = ['pos', 'neg', 'muted'];
+const pfTable = (cols, help, rows) => `<div class="scrollx"><table><thead><tr>${cols.map(([t, num]) =>
+  `<th class="${num ? 'num' : ''}"${help[t] ? ` title="${esc(help[t])}"` : ''}>${esc(t)}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+const pfFoot = foot => `<div class="foot">${(foot || []).map(([t, c]) => `<span class="${FOOT_CLASSES.includes(c) ? c : ''}">${esc(t)}</span>`).join('<span class="muted">·</span>')}</div>`;
+const pfNote = text => text ? `<div class="foot note">${esc(text)}</div>` : '';
+const pfCard = (title, note, body) => `<div class="card"><div class="card-h"><b>${esc(title)}</b>${note}</div>${body}</div>`;
+const pfNet = text => text === '—' ? '<span class="muted">—</span>' : signed(text);
+const pfCut = (span, text) => `<tr class="cut"><td colspan="${span}">${esc(text)}</td></tr>`;
+// The Status cell (SPEC §3.4D.6): the Funded badge, or the reason with its detail line.
+const pfStatus = r => `<td class="why">${r.status === 'funded' ? '<span class="st funded">Funded</span>'
+  : `<span class="${r.status_class === 'neg' ? 'neg' : 'amber'}">${esc(r.status)}</span>${r.detail ? `<span class="sub">${esc(r.detail)}</span>` : ''}`}</td>`;
+const pfSkip = r => r.status === 'funded' && r.id ? `<button class="btn" type="button" data-skip="${esc(r.id)}">Skip</button>` : '';
+const pfOpen = r => `<tr${r.excluded ? ' class="excluded"' : ''}>`;
+const pfPositionRow = r => `<tr><td>${item(r.item, r.quality)}${r.note ? `<span class="sub">${esc(r.note)}</span>` : ''}</td><td class="num">${esc(r.qty)}</td>` +
+  `<td>${esc(r.character)}</td><td><span class="st ${STAGE_CLASSES.includes(r.state_class) ? r.state_class : 'hold'}">${esc(r.state)}</span></td>` +
+  `<td class="num">${esc(r.paid)}${r.paid_note ? ` <span class="muted">${esc(r.paid_note)}</span>` : ''}</td><td class="num">${esc(r.cost_left)}</td>` +
+  `<td class="num">${pfNet(r.net)}</td><td>${dash(r.window)}</td><td>${dash(r.next)}</td></tr>`;
+const pfTodayRow = r => `${pfOpen(r)}<td>${esc(r.strategy)}</td><td>${act(r.action)}</td><td>${item(r.item, r.quality)}${chainLines(r, '<span class="sub">', '</span>')}</td>` +
+  `<td class="num">${esc(r.qty)}</td><td class="num">${dash(r.each)}</td><td class="num">${dash(r.total)}</td><td class="num">${pfNet(r.net)}</td>` +
+  `${marketCells(r)}${riskCell(r)}<td>${esc(r.character)}</td>${pfStatus(r)}<td>${pfSkip(r)}</td></tr>`;
+const pfWeekRow = r => `${pfOpen(r)}<td>${esc(r.strategy)}</td><td>${item(r.item, r.quality)}</td><td class="num">${esc(r.qty)}</td><td>${dash(r.buy_when)}</td>` +
+  `<td>${dash(r.process)}</td><td>${esc(r.sell_when)}${r.sale_note ? `<span class="sub">${esc(r.sale_note)}</span>` : ''}</td><td class="num">${esc(r.gold)}</td>` +
+  `<td class="muted">${dash(r.materials)}</td><td class="num">${pfNet(r.net)}</td><td class="num">${pfNet(r.adjusted)}<span class="sub">${esc(r.wait_note)}</span></td>` +
+  `${marketCells(r)}<td>${esc(r.character)}</td>${pfStatus(r)}<td>${pfSkip(r)}</td></tr>`;
+const pfPoolCells = r => `<td>${item(r.item, r.quality)}</td><td>${esc(r.sells)}</td><td class="num">${esc(r.adjusted)}</td><td class="num">${pfNet(r.net)}</td>` +
+  `<td class="num">${esc(r.gold)}</td><td class="num">${esc(r.cash)}</td><td class="num">${esc(r.pct)}${r.pct_note ? `<span class="sub">${esc(r.pct_note)}</span>` : ''}</td>`;
+// The funding card ("How the pool was funded", D78): rows by adjusted profit, the total, the red line, the first row left out.
+const pfPool = (p, help) => pfTable(PF_COLS_POOL, help, [
+  ...p.rows.map(r => `<tr><td class="num">${esc(r.n)}</td>${pfPoolCells(r)}<td class="num">${esc(r.left)}</td></tr>`),
+  `<tr class="total"><td></td><td>${esc(p.total.label)}${p.total.note ? `<span class="sub">${esc(p.total.note)}</span>` : ''}</td><td class="muted">${esc(p.total.rows)}</td>` +
+    `<td class="num">${esc(p.total.adjusted)}</td><td class="num">${pfNet(p.total.net)}</td><td class="num">${esc(p.total.gold)}</td><td class="num">${esc(p.total.cash)}</td>` +
+    `<td class="num">${esc(p.total.pct)}</td><td class="num">${esc(p.total.left)}</td></tr>`,
+  pfCut(PF_COLS_POOL.length, p.cut),
+  ...(p.first_excluded ? [`<tr class="excluded"><td></td>${pfPoolCells(p.first_excluded)}<td class="num why"><span class="amber">${esc(p.first_excluded.left)}</span></td></tr>`] : [])]);
+// The Risk tolerance tile is a dropdown (SEC11, D79): its option values come from the payload, posted as they are.
+const pfRiskSelect = risk => `<select data-risk aria-label="Risk tolerance" title="Changing it re-runs the allocation">${risk.options.map((pct, i) =>
+  `<option value="${esc(risk.values[i])}"${pct === risk.selected ? ' selected' : ''}>${esc(pct)}%</option>`).join('')}</select>`;
+const pfTiles = d => `<div class="tiles">${(d.tiles || []).map(t => `<div class="tile"><div class="k">${esc(t.label)}</div><div class="v">${t.risk ? pfRiskSelect(d.risk) : esc(t.value)}` +
+  `${t.of ? ` <span class="muted" style="font-size:13px;font-weight:400">${esc(t.of)}</span>` : ''}</div><div class="d">${esc(t.detail)}</div></div>`).join('')}</div>`;
+const PF_MIN_STEPS = [['0', '0%'], ['25', '25%'], ['50', '50%'], ['75', '75%']];
+// Sections B and C, then the funding card; or, when nothing new is funded, one alert in their place (SPEC §3.4D.7, D77).
+const pfLists = (d, values, help) => {
+  if (d.empty) return `<div class="alert bad"><span class="grow"><b>${esc(d.empty.title)}</b><span class="sub">${esc(d.empty.text)}</span></span></div>`;
+  const b = (d.today.by_min || {})[values.minChance] || { funded: [], excluded: [], cut: '', foot: [], hidden: 0 };
+  const min = `<label class="muted">${b.hidden ? `${esc(b.hidden)} hidden · ` : ''}Min chance to sell <select class="select" data-filter="minChance">` +
+    PF_MIN_STEPS.map(([v, t]) => `<option value="${v}"${v === values.minChance ? ' selected' : ''}>${t}</option>`).join('') + '</select></label>';
+  const w = d.week;
+  return pfCard('B. Top opportunities today', `<span class="muted">realized within the immediate window: no premium</span>${min}`,
+      pfTable(PF_COLS_B, help, [...b.funded.map(pfTodayRow), pfCut(PF_COLS_B.length, b.cut), ...b.excluded.map(pfTodayRow)]) + pfFoot(b.foot) + pfNote(d.today.note)) +
+    pfCard('C. Top opportunities, next 7 days', '<span class="muted">ranked by adjusted profit, in the same pool as Today</span>',
+      pfTable(PF_COLS_C, help, [...w.funded.map(pfWeekRow), pfCut(PF_COLS_C.length, w.cut), ...w.excluded.map(pfWeekRow)]) + pfFoot(w.foot) + pfNote(w.note)) +
+    pfCard('How the pool was funded', '<span class="muted">best adjusted profit first, Today and the week together</span>', pfPool(d.pool, help));
+};
+const pfPage = (d, values) => {
+  const help = d.help || {}, a = d.positions || { rows: [], foot: [], note: '' };
+  return `<div class="pf" style="padding:12px">${pfTiles(d)}<div class="fresh">${esc(d.fresh)}</div>` +
+    pfCard('A. Active positions', `<span class="muted">${esc(a.summary)}</span>`,
+      (a.rows.length ? pfTable(PF_COLS_A, help, a.rows.map(pfPositionRow)) : '<div class="empty">No open positions.</div>') + pfFoot(a.foot) +
+      `<div class="foot note">Stages: ${PF_STAGES.map(([cls, name]) => `<span class="st ${cls}">${name}</span>`).join(' ')} · ${esc(a.note)}</div>`) +
+    pfLists(d, values, help) + '</div>';
+};
+
 // ---------- live pages (SPEC §3.5 dashboard data) ----------
 // Each column: [header, numeric?, sort key in row.sort (or null)]. Optional hooks: `pick` chooses the staged view
 // the filters ask for (no computing), `render` draws a page that isn't a table, `footer` adds a summary line,
 // `above`/`below` draw around the table, and `selectKey` makes rows clickable (the selection goes to `below`).
 const LIVE = {
+  portfolio: {
+    lede: 'One plan for all your gold (SPEC §3.4D). Your gold in hand plus what you paid for what you hold is the <b>capital base</b>; <b>risk tolerance</b> caps how much of it may be tied up at once, and what is not tied up yet is the <b>remaining capacity</b>. Today and the next 7 days draw on <b>one shared pool</b>, ranked by <b>adjusted profit</b>: expected net ÷ (1 + waiting premium). Funding runs down the list until the capacity runs out, and the <span class="neg">red line</span> marks where. Rows below it are greyed alternatives with the reason they were left out; they never count in a total. <b>Profit %</b> is return on cash; rows that use only found stock show "—" and stay out of the %.',
+    defaults: { minChance: '0' },
+    render: pfPage,
+    filters: [],
+  },
   today: {
     lede: 'What to do right now at the AH, best expected net first (SPEC §3.4). <b>A chain is one row</b>: the craft or flip carries its profit, and its mat buys, intermediate crafts and incoming mail are lines under it. Mail you send for another character\'s craft is a row of yours. Holds and vendor sales are on Inventory. The <b>dot after a chance is its confidence</b> (<span class="dot h"></span>≥ 75% · <span class="dot m"></span>≥ 45% · <span class="dot l"></span>below).',
     defaults: { minChance: '50' },
@@ -425,14 +518,14 @@ const LIVE = {
 };
 
 // ---------- state ----------
-const state = { page: 'disenchant', market: '', sort: {}, filters: {}, data: {}, selected: {} };
+const state = { page: 'portfolio', market: '', sort: {}, filters: {}, data: {}, selected: {} };
 const storage = {
   get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} },
 };
 
 // ---------- page chrome: every page, in the mockup's order ----------
-const ORDER = [['Today', 'today'], ['Week', 'week'], ['On the AH', 'on_ah'], ['Disenchant', 'disenchant'], ['Craft', 'craft'], ['Flip', 'flip'],
+const ORDER = [['Portfolio', 'portfolio'], ['Today', 'today'], ['Week', 'week'], ['On the AH', 'on_ah'], ['Disenchant', 'disenchant'], ['Craft', 'craft'], ['Flip', 'flip'],
                ['Inventory', 'inventory'], ['History', 'history'], ['Rules', 'rules'], ['Characters', 'characters'], ['Status', 'status']];
 const nav = document.getElementById('nav');
 const main = document.getElementById('main');
@@ -502,7 +595,8 @@ function render(id) {
   const values = state.filters[id] || (state.filters[id] = { ...(spec.defaults || {}) });
   const data = spec.pick ? spec.pick(raw, values) : raw;
   if (spec.render) {
-    card.innerHTML = spec.render(data);
+    card.innerHTML = spec.render(data, values);
+    bindControls(id, card, values);
     return;
   }
   const rows = Array.isArray(data.rows) ? data.rows : [];
@@ -527,6 +621,11 @@ function render(id) {
     };
   });
   card.querySelectorAll('th[data-key]').forEach(th => { th.onclick = () => toggleSort(id, th.dataset.key); });
+  bindControls(id, card, values);
+}
+
+// The page's controls: filters, Skip, rules, reserves, the item search and the Risk tolerance dropdown.
+function bindControls(id, card, values) {
   card.querySelectorAll('[data-filter]').forEach(el => {
     el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', () => { values[el.dataset.filter] = el.value; render(id); refocus(el.dataset.filter); });
   });
@@ -535,6 +634,21 @@ function render(id) {
   card.querySelectorAll('select[data-rule-key]').forEach(sel => { sel.onchange = () => sel.value && setRule(id, sel.dataset.ruleKey, sel.value, sel); });
   card.querySelectorAll('select[data-reserve-key]').forEach(sel => { sel.onchange = () => sel.value && setReserve(id, sel); });
   card.querySelectorAll('input[data-item-search]').forEach(inp => { inp.oninput = () => searchItems(id, card, inp.value); });
+  card.querySelectorAll('select[data-risk]').forEach(sel => { sel.onchange = () => setRisk(id, sel); });
+}
+
+// Set the risk tolerance from the Portfolio page (SPEC §3.5, SEC11, D79): AHSync rewrites config.toml's line and
+// re-runs the allocation; the page then reloads the new numbers.
+async function setRisk(id, sel) {
+  sel.disabled = true;
+  try {
+    const r = await post('/api/risk_tolerance', { risk_tolerance: Number(sel.value) });
+    if (r && r.status === 200) { notice('Risk tolerance saved: the allocation was re-run.', 'ok'); load(id); }
+    else if (r) notice(`Not saved (${r.body.message || r.body.error || r.status}).`, 'warn');
+  } catch (e) {
+    notice("AHSync isn't answering. Is it still running?", 'warn');
+  }
+  sel.disabled = false;
 }
 
 // Set an item rule from Needs a decision (SPEC §3.4.2, D43): AHSync stores it, re-plans and rewrites the plan file.
@@ -705,7 +819,7 @@ async function loadMarkets() {
 window.addEventListener('hashchange', () => show(idOfHash() || state.page));
 loadMarkets().then(() => {
   const saved = storage.get('ahsync-page');
-  show(idOfHash() || (ORDER.some(([, id]) => id === saved) ? saved : 'disenchant'));
+  show(idOfHash() || (ORDER.some(([, id]) => id === saved) ? saved : 'portfolio'));
 });
 </script>
 </body>

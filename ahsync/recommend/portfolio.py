@@ -262,9 +262,25 @@ def portfolio_export(state: StateReader, char_ids: list[str], plan: PortfolioPla
     """
     if plan is None:
         return [], None
-    positions = position_rows(inventory_units(state, char_ids), listed_units(state, char_ids), state.cost_basis(),
-                              plan.actions)
+    positions = plan_positions(state, char_ids, plan)
     return export_rows(plan, cfg.candidate_export), snapshot_data(plan, portfolio_settings(cfg), positions, now_ms)
+
+
+def plan_positions(state: StateReader, char_ids: list[str], plan: PortfolioPlan | None) -> list[PositionRow]:
+    """The open positions with what the run's plan does with them (SPEC §3.5 positions, interim until M14).
+
+    Args:
+        state: Character state (inventory, auctions, cost basis).
+        char_ids: The market's characters.
+        plan: The run's plan; None without characters.
+
+    Returns:
+        allocation.position_rows of the characters' stock with a cost basis; [] without a plan.
+    """
+    if plan is None:
+        return []
+    return position_rows(inventory_units(state, char_ids), listed_units(state, char_ids), state.cost_basis(),
+                         plan.actions)
 
 
 def alternative_rows(plan: PortfolioPlan | None) -> list[tuple[str, str, str, str, str]]:

@@ -162,8 +162,29 @@ def full_refresh(db: Database, clock: Clock, config: Config) -> None:
         export_plan(db, config, now, clock.sleep)
 
 
+class LiveConfig:
+    """The running settings: the dashboard's risk tolerance change replaces them (SPEC §3.5, SEC11). Thread-safe:
+    the dashboard's thread swaps the whole Config, the scheduler reads it at each job."""
+
+    def __init__(self, config: Config) -> None:
+        """Start from the config loaded at start.
+
+        Args:
+            config: Validated settings.
+        """
+        self.current = config
+
+    def replace(self, config: Config) -> None:
+        """Use new settings from the next job on.
+
+        Args:
+            config: The settings with the dashboard's change.
+        """
+        self.current = config
+
+
 def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path,
-                refresh_requested: Callable[[], bool] = lambda: False) -> SchedulerHooks:
+                refresh_requested: Callable[[], bool] = lambda: False, live: LiveConfig | None = None) -> SchedulerHooks:
     """Wire the steady-state jobs.
 
     Args:
@@ -172,11 +193,21 @@ def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path,
         config: Settings.
         backup_dir: data/backups.
         refresh_requested: Consumes a pending "Refresh now" from the dashboard.
+        live: The running settings, when the dashboard may change them; the plan jobs read the risk tolerance
+            from here (SEC11). None: `config` throughout.
 
     Returns:
         Hooks with store_hour, full_refresh, refresh_requested, daily, weekly and
         savedvars_changed set. The live table stays off until its format is recorded (SPEC §5.2).
     """
+    def current() -> Config:
+        """The settings the plan jobs use now.
+
+        Returns:
+            live.current, else config.
+        """
+        return live.current if live is not None else config
+
     def store_hour() -> None:
         """Hourly :06 store: /me, new hours, snapshot, books; no recompute (SPEC §3.1)."""
         caps = check_capabilities(ctx.api, ctx.db, ctx.clock.now_ms())
@@ -200,20 +231,20 @@ def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path,
         if result.ingested:                       # ingestedUntil may have moved: the addon may prune (SPEC §2.2)
             tracking_pass(ctx.db)                 # a buy or post marks its action done (SPEC §3.4.1)
             now = ctx.clock.now_ms()
-            markets = replan_all(ctx.db, now, config, ctx.clock.local_offset_ms(now))   # the dashboard follows (IU13)
+            markets = replan_all(ctx.db, now, current(), ctx.clock.local_offset_ms(now))   # the dashboard follows (IU13)
             logging.getLogger("ahsync").info("re-planned after reading %s: %s", path.name,
                                              ", ".join(markets) or "nothing (no published intelligence, or it failed)")
-            export_plan(ctx.db, config, ctx.clock.now_ms(), ctx.clock.sleep)
+            export_plan(ctx.db, current(), ctx.clock.now_ms(), ctx.clock.sleep)
 
     def hourly_status() -> None:
         """The :00 tracking and status passes, then the plan file they changed (SPEC §3.1.1)."""
         tracking_pass(ctx.db)
-        status_pass(ctx.db, config, ctx.clock.now_ms())
-        export_plan(ctx.db, config, ctx.clock.now_ms(), ctx.clock.sleep)
+        status_pass(ctx.db, current(), ctx.clock.now_ms())
+        export_plan(ctx.db, current(), ctx.clock.now_ms(), ctx.clock.sleep)
 
     return SchedulerHooks(store_hour=store_hour, daily=daily, weekly=ctx.db.vacuum,
                           savedvars_changed=savedvars_changed,
-                          full_refresh=lambda: full_refresh(ctx.db, ctx.clock, config),
+                          full_refresh=lambda: full_refresh(ctx.db, ctx.clock, current()),
                           status_pass=hourly_status,
                           refresh_requested=refresh_requested)
 
@@ -274,7 +305,8 @@ class RefreshRequests:
 
 
 def serve_dashboard(data_dir: Path, config: Config, clock: Clock, refresh: RefreshRequests,
-                    out: IO[str]) -> tuple[DashboardServer, Database] | None:
+                    out: IO[str], config_path: Path | None = None,
+                    on_config: Callable[[Config], None] | None = None) -> tuple[DashboardServer, Database] | None:
     """Start the dashboard on its own thread (SPEC §3.1 "serve dashboard"); a failure is logged, never fatal.
 
     Args:
@@ -283,13 +315,16 @@ def serve_dashboard(data_dir: Path, config: Config, clock: Clock, refresh: Refre
         clock: Time source, for skip times.
         refresh: Receives "Refresh now" requests.
         out: Where the dashboard's address is printed for the user.
+        config_path: config.toml, which the Risk tolerance dropdown rewrites (SEC11); None: it can't.
+        on_config: Told the new settings after the dashboard changed one; None: nobody else is told.
 
     Returns:
         (server, its database connection) to stop and close at exit, or None when the
         port can't be bound (for example, already in use).
     """
     server_db = open_server_db(data_dir / "ahsync.db")
-    app = DashboardApp(server_db, config, clock, refresh.request_refresh, new_token(), config.dashboard_port)
+    app = DashboardApp(server_db, config, clock, refresh.request_refresh, new_token(), config.dashboard_port,
+                       config_path=config_path, config_changed=on_config or (lambda _config: None))
     try:
         server = start_dashboard(app, config.dashboard_port)
     except OSError as error:
@@ -330,7 +365,7 @@ def run(data_dir: Path, config_path: Path, runtime: Runtime) -> int:
             return 2
         outer_stop = runtime.should_stop
         stoppable = replace(runtime, should_stop=lambda: outer_stop() or stop_file.exists())
-        return _run_configured(data_dir, config, stoppable)
+        return _run_configured(data_dir, config, stoppable, config_path)
     finally:
         remove_stop_file(stop_file)
         lock.release()
@@ -348,13 +383,14 @@ def remove_stop_file(path: Path) -> None:
         pass
 
 
-def _run_configured(data_dir: Path, config: Config, runtime: Runtime) -> int:
+def _run_configured(data_dir: Path, config: Config, runtime: Runtime, config_path: Path | None = None) -> int:
     """Everything after the lock and config: log, database, catch-up, steady state.
 
     Args:
         data_dir: data/.
         config: Validated settings.
         runtime: As run().
+        config_path: config.toml, for the dashboard's Risk tolerance dropdown (SEC11).
 
     Returns:
         0 after a normal stop, 2 when the database can't be used.
@@ -383,10 +419,11 @@ def _run_configured(data_dir: Path, config: Config, runtime: Runtime) -> int:
         prune(db, clock.now_ms(), config.retention_days)
         full_refresh(db, clock, config)          # SPEC §3.1: FULL REFRESH, then serve the dashboard
         refresh_requests = RefreshRequests()
+        live = LiveConfig(config)
         if runtime.serve_dashboard:
-            dashboard = serve_dashboard(data_dir, config, clock, refresh_requests, runtime.out)
+            dashboard = serve_dashboard(data_dir, config, clock, refresh_requests, runtime.out, config_path, live.replace)
         ctx = SyncContext(api, db, clock, result.caps, config.retention_days, addresses)
-        scheduler = Scheduler(clock, build_hooks(ctx, config, backup_dir, refresh_requests.take), watcher,
+        scheduler = Scheduler(clock, build_hooks(ctx, config, backup_dir, refresh_requests.take, live), watcher,
                               config.daily_refresh_time, config.live_refresh_minutes)
         scheduler.run(runtime.should_stop)
         log.info("stopped")

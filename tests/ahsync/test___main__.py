@@ -379,3 +379,21 @@ def test_FM36_a_stop_file_ends_the_loop_and_a_stale_one_never_stops_a_start(tmp_
     finally:
         running.release()
     assert (code, printed.strip(), stop.exists()) == (1, ALREADY_RUNNING, True)   # the request still stands
+
+
+def test_SEC11_a_risk_tolerance_set_on_the_dashboard_reaches_the_schedulers_plan_jobs(tmp_path, monkeypatch):
+    from ahsync import __main__ as app_main
+    db = Database.open(tmp_path / "ahsync.db", FakeClock().now_ms(), None)
+    seen = []
+    monkeypatch.setattr(app_main, "full_refresh", lambda _db, _clock, config: seen.append(("full", config.risk_tolerance)))
+    monkeypatch.setattr(app_main, "tracking_pass", lambda _db: None)
+    monkeypatch.setattr(app_main, "status_pass", lambda _db, config, _now: seen.append(("status", config.risk_tolerance)))
+    monkeypatch.setattr(app_main, "export_plan", lambda _db, config, *_a: seen.append(("plan", config.risk_tolerance)))
+    live = app_main.LiveConfig(Config())
+    hooks = build_hooks(SyncContext(None, db, FakeClock(), None), Config(), tmp_path / "backups", live=live)
+    hooks.full_refresh()
+    live.replace(Config(risk_tolerance=0.4))                            # what the dashboard's POST does
+    hooks.full_refresh()
+    hooks.status_pass()
+    assert seen == [("full", 0.3), ("full", 0.4), ("status", 0.4), ("plan", 0.4)]
+    db.close()

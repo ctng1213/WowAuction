@@ -3,16 +3,19 @@
 Monday 10:38, Amaya 21 g and Brugan 10 g 40 s in hand, 4 g 18 s committed in six positions, risk tolerance 30%:
 the 16 candidates of the dashboard mockup (12 funded, 4 excluded), the copper chain's recipes, and the positions
 of the Portfolio page's section A. Shared by the Python export tests and tools/gen_lua_fixtures.py, so the Lua
-decoders read exactly what AHSync writes.
+decoders read exactly what AHSync writes, and by the Portfolio page's tests (D72, D73, D77-D79: page_inputs), so the
+page shows the mockup's numbers.
 """
 from __future__ import annotations
 
 from ahsync.engine import selection as sel
-from ahsync.engine.allocation import PortfolioPlan, PositionRow, position_rows
+from ahsync.engine.allocation import Alternative, PortfolioPlan, PositionRow, position_rows
 from ahsync.engine.graph import Graph, build, graph_recipe
 from ahsync.engine.plan import PlanAction
+from ahsync.engine.plan_views import ItemLook
 from ahsync.engine.portfolio import (Candidate, CharacterGold, OpenPosition, PortfolioSettings, Requirements,
                                      accounting, export_subset)
+from ahsync.engine.portfolio_view import PortfolioInputs
 from ahsync.engine.selection import Eligibility, Pick
 from ahsync.engine.timing import adjusted_profit, immediate, wait_hundredths
 from ahsync.export.market_lua import market_lua
@@ -47,7 +50,8 @@ def at(day: int, hour: int) -> int:
     return MON + day * DAY + hour * HOUR
 
 
-# name: (strategy, key, character, gold needed, expected net, sale ms, static reason or None, inputs, needs)
+# name: (strategy, key, character, gold needed, expected net, sale ms, eligibility failing a static check or None,
+#        inputs, needs)
 _ROWS = (
     ("Copper Rod", "sell_stock", ROD, BRUGAN, 100, 6306, TONIGHT, None, ((ROD, 5),), None),
     ("Silver Rod", "craft", 6338, BRUGAN, 3000, 4000, TONIGHT, None, ((2842, 1), (1206, 2)), ("Blacksmithing", 100)),
@@ -58,9 +62,9 @@ _ROWS = (
     ("Lesser Mana Potion", "craft", 3385, BRUGAN, 4500, 80, TONIGHT, None, ((785, 1), (3820, 1), (3371, 1)),
      ("Alchemy", 120)),
     ("Grunt's Bracers of Defense", "disenchant", BRACERS, AMAYA, 1500, 600, TONIGHT,
-     sel.static_reason(Eligibility("Enchanting", 150, 142, (AMAYA, 142)), 7), ((BRACERS, 1),), ("Enchanting", 150)),
+     Eligibility("Enchanting", 150, 142, (AMAYA, 142)), ((BRACERS, 1),), ("Enchanting", 150)),
     ("Elixir of Fortitude", "buy_later", 3825, AMAYA, 12000, 900, TONIGHT,
-     sel.static_reason(Eligibility(sold_per_day=3.0, planned_units=40), 7), (), None),
+     Eligibility(sold_per_day=3.0, planned_units=40), (), None),
     ("Mithril Spurs", "flip", 7969, BRUGAN, 30000, 7342, at(5, 18), None, (), None),
     ("Thick Leather", "buy_later", 4304, AMAYA, 16080, 5500, at(3, 19), None, (), None),
     ("Transmute: Iron to Gold", "craft", 3577, BRUGAN, 4200, 1855, at(3, 19), None, ((3575, 1),), ("Alchemy", 225)),
@@ -70,7 +74,7 @@ _ROWS = (
     ("Bolt of Silk Cloth", "craft", 4305, AMAYA, 560, 194, at(6, 19), None, ((4306, 4),), ("Tailoring", 125)),
     ("Heavy Grinding Stone", "craft", 3486, BRUGAN, 0, 134, at(5, 19), None, ((2838, 3),), ("Blacksmithing", 125)),
     ("Greater Magic Essence", "buy_later", 11082, AMAYA, 3600, 1200, at(6, 19),
-     sel.static_reason(Eligibility(untrusted_weeks=1), 7), (), None),
+     Eligibility(untrusted_weeks=1), (), None),
 )
 # A craft's reagent sources in its route (the multistage chain crafts its rod; the grinding stone uses found stone).
 _ROUTES = {"Silver Rod": "1206a+2842v", "Embossed Leather Gloves": "2318o+2320v", "Lesser Mana Potion": "785a+3371v+3820a",
@@ -110,7 +114,8 @@ def picks(cands: list[Candidate]) -> list[Pick]:
         lst = "today" if immediate(wait_hundredths(NOW, c.sale_ms), PS.immediate_hours) else "week"
         out.append(Pick(c.cand_id, c.cand_id, 1, c.char_id, lst, c.gold_needed,
                         adjusted_profit(c.expected_net, NOW, c.sale_ms, PS.premium_base, PS.premium_per_day,
-                                        PS.immediate_hours), c.expected_net, row[0], row[7]))
+                                        PS.immediate_hours), c.expected_net, row[0],
+                        sel.static_reason(row[7], PS.horizon_days) if row[7] else None))
     return out
 
 
@@ -223,3 +228,75 @@ def plan_file() -> str:
         The file's text.
     """
     return plan_lua([], [], {AMAYA: NOW, BRUGAN: NOW}, NOW, portfolio=portfolio_fields())
+
+
+# Section A of the mockup: (key, character, state, units left, units, cost left, est. net or None, target ms, next).
+WOOL, MAGEWEAVE = 2592, 4338
+_PAGE_POSITIONS = (
+    (7920, BRUGAN, "Listed", 1, 1, 30_000, 4500.0, None, "post"),
+    (BAR, BRUGAN, "Holding", 6, 6, 3000, 3157.0, at(5, 19), "post"),
+    (2457, BRUGAN, "Ready to sell", 2, 2, 1400, 800.0, None, "post"),
+    (WOOL, AMAYA, "Holding", 20, 20, 0, 472.0, at(6, 19), "hold"),
+    (MAGEWEAVE, AMAYA, "Partially sold", 10, 25, 3000, 600.0, at(8, 20), "post"),
+    (ORE, BRUGAN, "Processing", 10, 10, 400, 150.0, at(3, 19), "post"),
+    (2319, AMAYA, "Needs reconciliation", 20, 20, 4000, None, None, None),
+)
+
+
+def page_positions() -> list[PositionRow]:
+    """The seven rows of the mockup's section A (4 g 18 s committed, 96 s 79 c expected on them).
+
+    Returns:
+        PositionRows in the mockup's order.
+    """
+    return [PositionRow(f"pos:{char}:{key}", char, key, state, units, left, cost, net, target, nxt)
+            for key, char, state, left, units, cost, net, target, nxt in _PAGE_POSITIONS]
+
+
+def page_plan(gold: list[CharacterGold] | None = None, committed: int = 41_800, risk: float = 0.30,
+              paying_only: bool = False) -> PortfolioPlan:
+    """The mockup's plan run as the page reads it: picks, the funded rows, the alternatives with their facts.
+
+    Args:
+        gold: The characters' gold; chars() when None.
+        committed: Committed capital, copper.
+        risk: Risk tolerance.
+        paying_only: Leave out the rows that need no gold (PF14's world, where nothing is funded).
+
+    Returns:
+        The PortfolioPlan; its one action is Copper Rod's post at 41 s each (the row's Each).
+    """
+    cands = candidates()
+    facts = {c.cand_id: row[7] for c, row in zip(cands, _ROWS)}
+    ps = [p for p in picks(cands) if p.gold > 0 or not paying_only]
+    acct = accounting(gold or chars(), [OpenPosition("p", BRUGAN, committed)], risk)
+    budget = sel.Budget(acct.capacity_left, acct.spendable)
+    result = sel.select(ps, (), budget)
+    sel.validate(ps, (), budget, result)
+    by_id, pick_of = {c.cand_id: c for c in cands}, {p.cand_id: p for p in ps}
+    alternatives = tuple(Alternative(by_id[i], pick_of[i].lst, reason, pick_of[i].adjusted, facts[i])
+                         for i, reason in result.reasons)
+    rod = cands[0].cand_id
+    actions = [PlanAction("post", BRUGAN, ROD, 5, 4100, NOW, None, None, None, 0.58, 6306.0, 6306.0)]
+    spans = ((pick_of[rod].opp, 0, 1),) if rod in result.funded else ()
+    return PortfolioPlan(actions, tuple(by_id[i] for i in result.funded), alternatives, result, acct,
+                         tuple((i, pick_of[i].adjusted) for i in result.funded), tuple(ps), spans)
+
+
+def page_inputs(plan: PortfolioPlan | None = None, gold: list[CharacterGold] | None = None,
+                risk: float = 0.30) -> PortfolioInputs:
+    """The Portfolio page's inputs in the mockup world.
+
+    Args:
+        plan: The plan run; page_plan() when None.
+        gold: The characters' gold; chars() when None.
+        risk: Risk tolerance the plan ran with.
+
+    Returns:
+        PortfolioInputs at Mon 10:38 (UTC, offset 0) with section A's seven positions.
+    """
+    names = {ROD: "Copper Rod", BAR: "Copper Bar", 7920: "Mithril Coif", 2457: "Elixir of Agility",
+             WOOL: "Wool Cloth", MAGEWEAVE: "Mageweave Cloth", ORE: "Iron Ore", 2319: "Medium Leather"}
+    looks = {key: ItemLook(name, 1) for key, name in names.items()}
+    return PortfolioInputs(plan if plan is not None else page_plan(), tuple(gold or chars()), tuple(page_positions()),
+                           ("act:rod:1",), looks, PortfolioSettings(risk_tolerance=risk), NOW)

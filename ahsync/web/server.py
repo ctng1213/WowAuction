@@ -23,7 +23,7 @@ import secrets
 import sqlite3
 import threading
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -31,7 +31,7 @@ from urllib.parse import parse_qs, urlsplit
 from ahsync.app.refresh import replan_all
 from ahsync.app.status_page import status_page
 from ahsync.clock import Clock
-from ahsync.config import Config, market_sources
+from ahsync.config import Config, ConfigError, market_sources, write_risk_tolerance
 from ahsync.db.sqlite import Database
 from ahsync.export.addon_files import export_plan
 
@@ -46,10 +46,11 @@ MAX_BODY_BYTES = 4096
 BUSY_TIMEOUT_MS = 5000
 
 # SPEC §3.5 dashboard data. Every page is staged by the full refresh except status, built on request.
-PAGES = ("today", "week", "on_ah", "disenchant", "craft", "flip", "inventory", "history", "rules",
+PAGES = ("portfolio", "today", "week", "on_ah", "disenchant", "craft", "flip", "inventory", "history", "rules",
          "characters", "status")
 GET_PATHS = ("/", "/api/markets", "/api/items")
-POST_PATHS = ("/api/refresh", "/api/skip", "/api/rule", "/api/reserve")
+POST_PATHS = ("/api/refresh", "/api/skip", "/api/rule", "/api/reserve", "/api/risk_tolerance")
+RISK_CHOICES = (0.1, 0.2, 0.3, 0.4, 0.5)          # SPEC §3.5: the Portfolio page's Risk tolerance dropdown
 RULES = ("no_buy", "ignore", "keep", "none")       # SPEC §3.4.2: what the dashboard may set
 VIEWS_PREFIX = "/api/views/"
 
@@ -117,6 +118,8 @@ class DashboardApp:
     token: str                            # this run's write token (new_token())
     port: int                             # the port clients must name in Host; set by start_dashboard
     page_html: str = ""                   # index.html with the token placeholder; read from disk when empty
+    config_path: Path | None = None       # config.toml, rewritten by the Risk tolerance dropdown (SEC11)
+    config_changed: Callable[[Config], None] = lambda _config: None   # tells the scheduler the new settings
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def __post_init__(self) -> None:
@@ -312,6 +315,8 @@ class DashboardApp:
             return self.rule(body)
         if path == "/api/reserve":
             return self.reserve(body)
+        if path == "/api/risk_tolerance":
+            return self.risk_tolerance(body)
         return self.skip(body)
 
     def rule(self, body: bytes) -> Response:
@@ -356,6 +361,58 @@ class DashboardApp:
         response = self._store_and_replan(lambda now: self.db.set_reserve(char_id, key, qty, now, "dashboard"), "a reserve")
         log.info("reserve of item %s for %s set to %s from the dashboard", key, char_id, qty)
         return response
+
+    def risk_tolerance(self, body: bytes) -> Response:
+        """Set the risk tolerance from the Portfolio page, then re-plan and rewrite the plan file (SPEC §3.5, SEC11, D79).
+
+        Only config.toml's `risk_tolerance` line changes (temp file + rename); the running settings follow, and the
+        allocation re-runs from the published intelligence without reading history (§3.1.1).
+
+        Args:
+            body: JSON {"risk_tolerance": one of 0.1, 0.2, 0.3, 0.4, 0.5}.
+
+        Returns:
+            200 {"set": true}; 400 with the reason for any other value or a bad body; 500 {"error":
+            "config_not_written"} (and a Status line) when config.toml can't be rewritten, the setting unchanged;
+            503 when the database is busy.
+        """
+        try:
+            value = json.loads(body.decode("utf-8")).get("risk_tolerance")
+        except (ValueError, AttributeError):
+            value = None
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or value not in RISK_CHOICES:
+            return json_response(400, {"error": "bad_request",
+                                       "message": "risk_tolerance must be one of 0.1, 0.2, 0.3, 0.4 or 0.5"})
+        try:
+            if self.config_path is None:
+                raise OSError("this run has no config.toml to write")
+            with self._lock:                      # one writer of config.toml and its temp file at a time
+                write_risk_tolerance(self.config_path, float(value))
+        except (OSError, ConfigError) as error:
+            return self._config_not_written(error)
+        self.config = replace(self.config, risk_tolerance=float(value))
+        self.config_changed(self.config)
+        log.info("risk tolerance set to %s from the dashboard", value)
+        return self._store_and_replan(lambda _now: self.db.clear_status("risk_tolerance") or True, "the risk tolerance")
+
+    def _config_not_written(self, error: Exception) -> Response:
+        """Report a config.toml that couldn't be rewritten: a log line and a Status line, never its path (SEC11).
+
+        Args:
+            error: What failed.
+
+        Returns:
+            500 {"error": "config_not_written"}.
+        """
+        log.warning("risk tolerance not saved: %s", type(error).__name__)
+        try:
+            with self._lock:
+                with self.db.transaction():
+                    self.db.set_status("risk_tolerance", "error", "risk_tolerance_not_saved",
+                                       {"error": type(error).__name__}, self.clock.now_ms())
+        except sqlite3.Error:
+            log.warning("could not record the failure on Status")
+        return json_response(500, {"error": "config_not_written"})
 
     def _store_and_replan(self, write: Callable[[int], bool], what: str) -> Response:
         """Store one dashboard change, re-plan and rewrite the plan file (SPEC §3.4.2, §3.4.3).

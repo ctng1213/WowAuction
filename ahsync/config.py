@@ -8,6 +8,7 @@ appears in the `Config` repr or in any error message.
 from __future__ import annotations
 
 import dataclasses
+import os
 import re
 import tomllib
 from collections.abc import Mapping
@@ -365,6 +366,67 @@ def load_config(path: Path, env: Mapping[str, str], home: Path) -> Config:
     except UnicodeDecodeError:
         raise ConfigError("config.toml: the file must be saved as UTF-8") from None
     return parse_config(text, env, home)
+
+
+RISK_LINE = re.compile(r'^(\s*"?risk_tolerance"?\s*=\s*)([^#]*?)(\s*(?:#.*)?)$')
+
+
+def with_risk_tolerance(text: str, value: float) -> str:
+    """config.toml's text with only its risk_tolerance changed (SPEC §3.5 POST /api/risk_tolerance, SEC11).
+
+    Every other line, comment and line ending is kept; the line's own comment and spacing too.
+
+    Args:
+        text: The file's contents.
+        value: The new share in (0, 1], written with 2 decimals ("0.40").
+
+    Returns:
+        The new contents: the top-level `risk_tolerance = …` line rewritten, or, when there is none, the line added
+        before the first [table] (top-level keys must come first in TOML), else at the end.
+    """
+    formatted = f"{value:.2f}"
+    newline = "\r\n" if "\r\n" in text else "\n"
+    lines = text.splitlines(keepends=True)
+    for i, line in enumerate(lines):
+        body = line.rstrip("\r\n")
+        if body.lstrip().startswith("["):
+            lines.insert(i, f"risk_tolerance = {formatted}{newline}")
+            return "".join(lines)
+        match = RISK_LINE.match(body)
+        if match:
+            lines[i] = match.group(1) + formatted + match.group(3) + line[len(body):]
+            return "".join(lines)
+    if lines and not lines[-1].endswith(("\n", "\r")):
+        lines[-1] += newline
+    return "".join(lines) + f"risk_tolerance = {formatted}{newline}"
+
+
+def write_risk_tolerance(path: Path, value: float) -> None:
+    """Rewrite config.toml's risk_tolerance line atomically: temp file, check, rename (SPEC §3.5, §5.2, SEC11).
+
+    Args:
+        path: config.toml (a missing file is created with just this line).
+        value: The new share in (0, 1].
+
+    Raises:
+        OSError: The file couldn't be read or replaced; it is left as it was.
+        ConfigError: The rewritten text wouldn't read back with this value (the file is left as it was).
+    """
+    text = ""
+    if path.exists():
+        with path.open(encoding="utf-8", newline="") as f:
+            text = f.read()
+    new = with_risk_tolerance(text, value)
+    try:
+        written = tomllib.loads(new).get("risk_tolerance")
+    except tomllib.TOMLDecodeError:
+        written = None
+    if written != float(f"{value:.2f}"):
+        raise ConfigError("config.toml: risk_tolerance could not be rewritten")
+    temp = path.with_name(path.name + ".tmp")
+    with temp.open("w", encoding="utf-8", newline="") as f:
+        f.write(new)
+    os.replace(temp, path)
 
 
 def market_sources(config: Config, market: str) -> MarketSources:
