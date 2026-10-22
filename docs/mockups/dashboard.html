@@ -458,6 +458,405 @@ function poolTable(s) {
 const premiumTable = () => [['Tue', 1, 19], ['Wed', 2, 19], ['Thu', 3, 19], ['Fri', 4, 19], ['Sat', 5, 18], ['Sat', 5, 19], ['Sun', 6, 18], ['Sun', 6, 19]]
   .map(([d, day, h]) => { const w = waitHundredths([day, h]); return `${d} ${hhmm(h)} ${(w / 100).toFixed(2)} d → ${(premiumBp(w) / 100).toFixed(2)}%`; }).join(' · ');
 
+// ---------- gathering (Gathering spec v1.0; desktop only, the addon only records loot) ----------
+// One small illustrative world: every number on the Gathering page is derived from the constants below.
+// Now is Mon 10:38 (the portfolio snapshot). AH prices are from an AHF scan 26 h old (Sun 08:38), so they show as stale.
+const GA_NOW = 'Mon 10:38';
+const GA_PRICE_AGE_H = 26;          // hours since the AH prices were seen; over 24 h the age is amber
+const GA_STALE_H = 24;
+const GA_STRENGTH_MIN = 40;         // seasonality strength under this: "no timing edge" (config timing_edge_min_strength, SPEC §3.6)
+const GA_CUT = 0.05;                // AH cut (SPEC §3.4 Fees)
+const GA_DEPOSIT_RATE = 0.15;       // 24 h deposit: 15% of the vendor price per unit (fees.DEPOSIT_BP[24]); a 20-stack pays 3 × vendor exactly
+const GA_SESSION_MIN_UNITS = 20;    // units that confirm a session
+const GA_DEFAULT_P_CHEAPEST = 50;   // SPEC §3.3.2 default chance with no sales data when you'd be the cheapest (a tie included); else 25
+const GA_DAY_ONE_AGE_MIN = 12;      // the day-one state: your first in-game scan, 12 min old, and no price history
+const GA_SILENCE_MIN = 15;          // minutes without loot that end a session
+// Gathering skills only (the crafting professions are on Characters). Monster drops need none.
+const GA_CHARS = { Amaya: { Herbalism: 45, Fishing: 20 }, Brugan: { Mining: 68, Skinning: 40 } };
+// The static catalog: [item, quality, categories, gathering source [profession, required skill] or null (monster only),
+// AH unit price (copper, null = no listing), AH qty, 30-day median (copper), chance to sell (%, null = no sales data: the default applies), vendor sell price (copper),
+// seasonality strength (0–100, null = insufficient evidence), top selling window [best hour, window, average price ratio] or null].
+// Copper Ore's ratio is null here and filled from its hourly profile below, so the table, the heatmap and the detail agree.
+const GA_ITEMS = [
+  ['Copper Ore', 1, ['Mining'], ['Mining', 1], 220, 64, 200, 85, 5, 61, ['Sat 19:00', 'Sat 17:00–21:00', null]],
+  ['Tin Ore', 1, ['Mining'], ['Mining', 65], 275, 22, 300, null, 25, 48, ['Sat 19:00', 'Sat 18:00–21:00', 1.05]],
+  ['Silver Ore', 1, ['Mining'], ['Mining', 75], 900, 3, 1000, 60, 75, null, null],
+  ['Peacebloom', 1, ['Herbalism'], ['Herbalism', 1], 18, 140, 20, 90, 5, 22, null],
+  ['Silverleaf', 1, ['Herbalism'], ['Herbalism', 1], 24, 180, 20, 90, 5, 35, null],
+  ['Earthroot', 1, ['Herbalism'], ['Herbalism', 15], 60, 75, 50, 85, 5, 44, ['Sun 20:00', 'Sun 19:00–22:00', 1.06]],
+  ['Mageroyal', 1, ['Herbalism'], ['Herbalism', 50], 240, 30, 225, 75, 5, 57, ['Wed 20:00', 'Wed 19:00–22:00', 1.07]],
+  ['Briarthorn', 1, ['Herbalism'], ['Herbalism', 70], 300, 18, 280, 70, 15, 31, null],
+  ['Light Leather', 1, ['Skinning', 'Monster'], ['Skinning', 1], 95, 85, 100, 88, 15, 52, ['Sun 19:00', 'Sun 18:00–21:00', 1.06]],
+  ['Medium Leather', 1, ['Skinning'], ['Skinning', 100], 200, 40, 190, 80, 25, 46, ['Thu 19:00', 'Thu 19:00–22:00', 1.05]],
+  ['Linen Cloth', 1, ['Monster'], null, 38, 93, 49, 92, 13, 78, ['Sat 19:00', 'Sat 17:00–21:00', 1.12]],
+  ['Wool Cloth', 1, ['Monster'], null, 30, 140, 32, 81, 33, 55, ['Sun 19:00', 'Sun 19:00–22:00', 1.06]],
+  ['Small Egg', 1, ['Monster'], null, 12, 50, 10, 70, 4, 12, null],
+  ['Raw Brilliant Smallfish', 1, ['Fishing'], ['Fishing', 1], 8, 60, 8, 65, 1, null, null],
+  ['Raw Longjaw Mud Snapper', 1, ['Fishing'], ['Fishing', 1], null, 0, 15, 50, 2, null, null],
+  ['Light Feather', 1, ['Monster'], null, 9, 200, 12, 60, 4, 25, null],
+].map(([n, q, cats, src, price, qty, med, P, vendor, strength, top]) => ({ n, q, cats, src, price, qty, med, P, vendor, strength, top }));
+const GA = Object.fromEntries(GA_ITEMS.map(it => [it.n, it]));
+// Now on the week clock: Mon 10:38 (day 0 = Mon), so the current slot is Mon 10:00.
+const GA_NOW_DAY = 0, GA_NOW_MIN = 10 * 60 + 38;
+// Copper Ore's price ratio per hour of the week (how), in hundredths, half up: a midday low, an evening rise,
+// weekends a little higher, and three bumps that become its selling windows (example shape).
+function gaCopperHow(di, h) {
+  const bump = (di === 5 && h >= 17 && h <= 20) ? 0.04 : (di === 6 && h >= 19 && h <= 21) ? 0.01 : (di === 2 && h >= 20 && h <= 21) ? 0.02 : 0;
+  const r = 1 + 0.03 * Math.sin((h - 14) / 3.8) + (h >= 17 && h <= 21 ? 0.03 : 0) + (di >= 5 ? 0.02 : 0) + bump;
+  return Math.floor(r * 100 + 0.5) / 100;
+}
+// Copper Ore's top 3 selling windows: [label, day, first hour, end hour (exclusive), weeks of data]; ratio = the slots' mean, in hundredths, half up.
+const GA_COPPER_WINDOWS = [['Sat 17:00–21:00', 5, 17, 21, 7], ['Sun 19:00–22:00', 6, 19, 22, 7], ['Wed 20:00–22:00', 2, 20, 22, 4]]
+  .map(([label, day, from, to, weeks]) => {
+    const hs = Array.from({ length: to - from }, (_, i) => from + i);
+    const sum100 = hs.reduce((t, h) => t + Math.round(gaCopperHow(day, h) * 100), 0);
+    return { label, day, from, to, weeks, ratio: Math.floor(sum100 / hs.length + 0.5) / 100 };
+  });
+GA['Copper Ore'].top[2] = GA_COPPER_WINDOWS[0].ratio;
+// Confirmed farming sessions, newest first: [character, day, first loot, last loot, minutes first→last, how it ended, loot [[item, units]]].
+// Loot the catalog doesn't know (Rough Stone, Ruined Leather Scraps, Light Hide, Broken Fang, Chipped Claw) counts toward the 20 units but is never farmable.
+// 30 + 20 + 28 + 57 + 23 + 32 + 30 = 220 min = 3 h 40 min observed.
+const GA_SESSIONS = [
+  ['Brugan', 'Mon', '08:05', '08:35', 30, 'ended at logout', [['Copper Ore', 45], ['Tin Ore', 2], ['Rough Stone', 8]]],
+  ['Amaya', 'Sun', '20:40', '21:08', 28, 'ended at logout', [['Peacebloom', 11], ['Silverleaf', 9], ['Earthroot', 4]]],
+  ['Amaya', 'Sun', '20:00', '20:20', 20, 'ended by inactivity: no loot 20:20–20:35', [['Peacebloom', 10], ['Silverleaf', 6], ['Earthroot', 4]]],
+  ['Brugan', 'Sun', '14:02', '14:59', 57, 'ended by inactivity: no loot 14:59–15:14; those 15 min are not counted', [['Copper Ore', 17], ['Rough Stone', 11]]],
+  ['Brugan', 'Sat', '21:10', '21:33', 23, 'ended at logout', [['Copper Ore', 8], ['Light Leather', 7], ['Ruined Leather Scraps', 5]]],
+  ['Brugan', 'Sat', '19:00', '19:32', 32, 'ended by inactivity: no loot 19:32–19:47', [['Light Leather', 12], ['Ruined Leather Scraps', 8], ['Light Hide', 2]]],
+  ['Amaya', 'Sat', '17:00', '17:30', 30, 'ended at logout', [['Linen Cloth', 7], ['Broken Fang', 7], ['Chipped Claw', 6]]],
+].map(([who, day, from, to, min, end, loot]) => ({ who, day, from, to, min, end, loot }));
+// The open candidate: still collecting (12 units so far), not used for any rate; shown as a line in the rate card.
+const GA_CANDIDATE = { who: 'Brugan', day: 'Mon', from: '10:21', to: '10:30', min: 9, loot: [['Copper Ore', 9], ['Rough Stone', 3]] };
+// Manual overrides, items per hour, per character and item.
+const GA_MANUAL = { Amaya: { Earthroot: 12 } };
+
+const gaRound = x => Math.floor(x + 0.5);                       // SPEC §3.3: floor(x + 0.5), never round()
+const gaDur = m => m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}` : `${m} min`;
+const gaCopper = x => `${(Math.floor(x * 100 + 0.5) / 100).toFixed(2)}c`;
+// Observed rate of a character for an item: units ÷ minutes over the confirmed sessions that contained it, × 60, whole items/hr half up.
+function gaObserved(who, n) {
+  const ss = GA_SESSIONS.filter(s => s.who === who && s.loot.some(([m]) => m === n));
+  if (!ss.length) return null;
+  const units = ss.reduce((t, s) => t + s.loot.find(([m]) => m === n)[1], 0), min = ss.reduce((t, s) => t + s.min, 0);
+  return { rate: gaRound(units * 60 / min), units, min, sessions: ss.length };
+}
+// The rate a character would use: manual override first, then their own observed rate. null = none.
+function gaOwnRate(who, n) {
+  const manual = (GA_MANUAL[who] || {})[n], obs = gaObserved(who, n);
+  if (manual) return { who, rate: manual, kind: 'manual', obs };
+  return obs ? { who, rate: obs.rate, kind: 'observed', obs } : null;
+}
+// Eligibility (V1): monster drops always; otherwise the profession known at or above the source's required skill. Gear bonuses ignored.
+const gaCan = (who, it) => it.cats.includes('Monster') || (!!it.src && (GA_CHARS[who][it.src[0]] || 0) >= it.src[1]);
+const gaAnyone = it => Object.keys(GA_CHARS).some(w => gaCan(w, it));
+// Expected net per unit: post price − 5% cut − (1 − chance) × deposit (float copper, an expected value).
+// Chance to sell for a row: its own from sales data, else the day-one default (posting at the AH price ties the cheapest: 50%).
+const gaChance = (it, dayOne) => (dayOne || it.P === null ? { P: GA_DEFAULT_P_CHEAPEST, isDefault: true } : { P: it.P, isDefault: false });
+const gaNetUnit = (it, dayOne) => it.price === null ? null : it.price * (1 - GA_CUT) - (1 - gaChance(it, dayOne).P / 100) * GA_DEPOSIT_RATE * it.vendor;
+const gaNetHr = (it, rate, dayOne) => (rate === null || it.price === null ? null : gaRound(rate * gaNetUnit(it, dayOne)));
+// The best rate for a row: for one character, their own, else a fallback from another eligible character (display only).
+function gaRowRate(it, who) {
+  const pool = Object.keys(GA_CHARS).filter(w => gaCan(w, it)).map(w => gaOwnRate(w, it.n)).filter(Boolean)
+    .sort((a, b) => b.rate - a.rate || a.who.localeCompare(b.who));
+  if (!who) return pool[0] || null;
+  const own = gaOwnRate(who, it.n);
+  if (own) return own;
+  return pool.length ? { ...pool[0], fallback: true } : null;
+}
+// Deviation vs the 30-day median: whole percent, half up, with the existing delta colours.
+const gaDelta = (cur, med) => {
+  if (cur === null || !med) return DASH;
+  const d = gaRound((cur - med) / med * 100);
+  return `<span class="${d > 0 ? 'pos' : d < 0 ? 'neg' : ''}">${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(d)}%</span>`;
+};
+const gaAge = () => `seen ${GA_PRICE_AGE_H} h ago (AHF scan Sun 08:38)${GA_PRICE_AGE_H > GA_STALE_H ? ' · stale: over 24 h' : ''}`;
+const gaRateTitle = r => r.kind === 'manual'
+  ? `Manual override ${r.rate}/hr${r.obs ? ` (observed ${r.obs.rate}/hr: ${r.obs.units} units ÷ ${gaDur(r.obs.min)})` : ''}`
+  : `${r.obs.units} units ÷ ${gaDur(r.obs.min)} over ${r.obs.sessions} session${r.obs.sessions > 1 ? 's' : ''} = ${(r.obs.units * 60 / r.obs.min).toFixed(1)}/hr, rounded`;
+const gaFallbackTitle = (r, who) => `${r.who}'s observed rate; ${who} has none yet. Replaced by ${who}'s own rate once ${who === 'Amaya' ? 'she' : 'he'} has one, even if lower.`;
+const gaWindowPrice = it => (it.top && it.strength !== null && it.strength >= GA_STRENGTH_MIN && it.top[2] ? gaRound(it.med * it.top[2]) : null);
+// Sell window price cell: the forecast, with its delta vs the current AH price under it ("—" with no window).
+function gaWindowPriceCell(it) {
+  const w = gaWindowPrice(it);
+  if (w === null) return `<td class="num">${DASH}</td>`;
+  const delta = it.price === null ? '' : `<span class="sub">${gaDelta(w, it.price)} vs now</span>`;
+  return `<td class="num" title="${money(it.med).replace(/<[^>]+>/g, '')} median × ${it.top[2].toFixed(2)} (${it.top[1]})">${money(w)}${delta}</td>`;
+}
+// The Sell window cell shows the top window's start: "Sat 17:00" for Sat 17:00–21:00.
+const gaWindowStart = it => it.top[1].split('–')[0];
+function gaSellCell(it) {
+  if (it.strength === null) return `<td class="muted" title="Seasonality strength: insufficient evidence (fewer than 3 weeks of data)">${DASH}<span class="sub">too little data</span></td>`;
+  if (it.strength < GA_STRENGTH_MIN || !it.top) return `<td class="muted" title="Seasonality strength ${it.strength}, under ${GA_STRENGTH_MIN}: weak pattern, no strong timing advantage">no timing edge</td>`;
+  return `<td title="Start of the top selling window ${it.top[1]} (best hour ${it.top[0]}) · seasonality strength ${it.strength}">${gaWindowStart(it)}</td>`;
+}
+function gaNote(it, r, who) {
+  const bits = [];
+  if (it.cats.length > 1) bits.push('also drops from monsters');
+  if (it.price === null) bits.push('no listing in the newest scan');
+  if (it.P === null && r) bits.push('no sales data yet: default chance');
+  if (r && r.fallback) bits.push(`${who} has no rate yet`);
+  else if (r && r.kind === 'manual') bits.push(`${r.who}: manual rate`);
+  else if (r) bits.push(`${r.who}: ${r.obs.sessions} session${r.obs.sessions > 1 ? 's' : ''}, ${gaDur(r.obs.min)}`);
+  return bits.length ? `<span class="sub">${bits.join(' · ')}</span>` : '';
+}
+const CLICK_HINT = ' · click the row for the sessions behind this rate and to override it';
+// One main-table row. who = null for All characters; sel outlines the selected row; noRates renders the no-rates state;
+// dayOne renders the first-scan state (no price history: median, deviation and sell window columns "—", default chance).
+function gaRow(it, who, sel, noRates, dayOne) {
+  const r = noRates ? null : gaRowRate(it, who), fb = r && r.fallback;
+  const nobody = !gaAnyone(it);
+  const skill = !it.src ? DASH : nobody
+    ? `<span class="amber" title="no character has ${it.src[0]} ${it.src[1]}">${it.src[1]}</span>`
+    : `<span title="${it.src[0]} ${it.src[1]}">${it.src[1]}</span>${it.cats.includes('Monster') ? '<span class="sub">or monster drop</span>' : ''}`;
+  const g = r ? gaNetHr(it, r.rate, dayOne) : null, ch = gaChance(it, dayOne);
+  const defNote = ch.isDefault ? ` · chance is the default: no sales data yet (${ch.P}%, as you'd be the cheapest)` : ` · chance ${ch.P}%`;
+  const netTitle = g === null ? '' : ` title="${r.rate}/hr × ${gaCopper(gaNetUnit(it, dayOne))} net per unit (gross ${r.rate} × ${it.price}c = ${money(r.rate * it.price).replace(/<[^>]+>/g, '')})${defNote}"`;
+  const defDot = g !== null && ch.isDefault ? ' <span class="dot l"></span>' : '';
+  const hist = (cell) => (dayOne ? `<td class="num" title="Needs price history">${DASH}</td>` : cell);
+  const rateCell = !r ? `<td class="num" title="No rate yet${CLICK_HINT}">${DASH}</td>` : fb
+    ? `<td class="num muted" title="${gaFallbackTitle(r, who)}${CLICK_HINT}">${r.rate} <span class="st" style="color:var(--muted)">Fallback</span></td>`
+    : `<td class="num" title="${gaRateTitle(r)}${CLICK_HINT}">${r.rate}${r.kind === 'manual' ? '<span class="sub">manual</span>' : ''}</td>`;
+  return `<tr${sel ? ' style="outline:2px solid var(--accent);outline-offset:-2px"' : ''}><td>${item(it.n, it.q)}${gaNote(it, r, who)}</td><td>${it.cats.join(' · ')}</td><td class="num">${skill}</td>` +
+    `<td class="num" title="${it.price === null ? 'No listing in the newest scan' : dayOne ? `seen ${GA_DAY_ONE_AGE_MIN} min ago (your scan)` : gaAge()}">${money(it.price)}</td><td class="num">${it.qty}</td>${hist(`<td class="num">${money(it.med)}</td>`)}${hist(`<td class="num">${gaDelta(it.price, it.med)}</td>`)}` +
+    `${rateCell}<td class="${fb ? 'muted' : ''}">${r ? r.who : DASH}</td><td class="num${fb ? ' muted' : ''}"${netTitle}>${money(g)}${defDot}</td>${hist(gaSellCell(it))}${hist(gaWindowPriceCell(it))}</tr>`;
+}
+const GA_COLS = [['Item'], ['Category'], ['Skill', 1], ['AH Price', 1], ['AH Qty', 1], ['Median 30d', 1], ['Deviation', 1], ['Items/hr', 1], ['Character'], ['Net gold/hr', 1], ['Sell window'], ['Sell window price', 1]];
+// The shared table with Gathering's own header texts for Character and Sell window (GA_HELP).
+const gaHelpTitle = t => (GA_HELP[t] || HELP[t]).replace(/"/g, '&quot;');
+const gaTable = (cols, rows, sorted) => table(cols, rows, sorted).replace(/<th class="([^"]*)" title="[^"]*">(Character|Sell window)<\/th>/g,
+  (m, cls, t) => `<th class="${cls}" title="${gaHelpTitle(t)}">${t}</th>`);
+// The shared table, with some header tooltips replaced (day one: the history columns say they need price history).
+const GA_HISTORY_COLS = ['Median 30d', 'Deviation', 'Sell window', 'Sell window price'];
+const gaDayOneTable = rows => gaTable(GA_COLS, rows, 3).replace(/<th class="([^"]*)" title="[^"]*">(Median 30d|Deviation|Sell window|Sell window price)<\/th>/g,
+  (m, cls, t) => `<th class="${cls}" title="${gaHelpTitle(t)} · needs price history: &quot;—&quot; until weeks of data arrive">${t}</th>`);
+// Default sort: AH price, highest first; rows without a price last; ties by name.
+const gaSorted = list => [...list].sort((a, b) => (b.price ?? -1) - (a.price ?? -1) || a.n.localeCompare(b.n));
+const gaCheck = (label, on, extra) => `<label class="select${extra && extra.disabled ? ' muted' : ''}"${extra && extra.title ? ` title="${extra.title}"` : ''}><input type="checkbox"${on ? ' checked' : ''}${extra && extra.disabled ? ' disabled' : ''}> ${label}</label>`;
+// The one filter bar; who = null for All characters. search = the text in the search box.
+const gaFilters = (who, search) => `<div class="filters">${['Fishing', 'Herbalism', 'Mining', 'Skinning', 'Monster'].map(c => gaCheck(c, true)).join('')}
+  <span class="select" title="Any, 1s, 10s, 50s, 1g, Custom…">Min AH price: Any ▾</span><span class="select search">🔍 ${search || 'Search materials…'}</span>
+  <span class="select" title="All characters, Amaya, Brugan">Character: ${who || 'All characters'} ▾</span>
+  ${who ? gaCheck(`Only what ${who} can gather`, true, { title: `Hides what ${who} can't gather. Monster drops always stay` })
+        : gaCheck('Only what a character can gather', false, { disabled: true, title: 'Pick a character first' })}
+  <span class="select" title="Any, 1–75, 75–150, 150–225, 225–300">Skill: Any ▾</span></div>`;
+Object.assign(VOL, { 'Copper Ore': [30, 'AHF', 64] });
+Object.assign(CONF, { 'Copper Ore': 80 });
+// Header tooltips for the Gathering columns. Character and Sell window mean something else here than on the plan
+// pages, so Gathering's tables take their own texts (GA_HELP, applied by gaTable); the shared HELP keeps the plan texts.
+const GA_HELP = {
+  'Character': 'Whose observed or manual rate this is. Under All characters: the highest among the characters who can gather it. Grey with "Fallback" = another character\'s rate, display only',
+  'Sell window': 'The top selling window\'s start (day and hour, local time); see Sell window price. "no timing edge" = seasonality strength under 40; "—" = too little data',
+};
+Object.assign(HELP, {
+  'Category': 'Where it comes from: Fishing, Herbalism, Mining, Skinning or Monster (corpses). An item can be in two',
+  'Skill': 'Skill the gathering source requires. "—" for monster drops. Amber: none of your characters has it',
+  'AH Price': 'Cheapest buyout per unit in the newest scan; hover for its age. "—" = no listing',
+  'AH Qty': 'Units listed in the newest scan',
+  'Median 30d': 'Median unit price over the last 30 days',
+  'Deviation': 'AH price vs the 30-day median, whole percent',
+  'Items/hr': 'Your farming rate: manual override, else your own observed rate (units ÷ session time). Grey "Fallback" = another eligible character\'s rate, display only. "—" = no rate',
+  'Net gold/hr': 'Items/hr × net per unit; net per unit = price − 5% cut − (1 − chance) × deposit. An estimate: a listed price is not a sale',
+  'Sell window price': 'Forecast unit price in the top selling window: 30-day median × the window\'s average price ratio. The line under it compares it with the AH price now. "—" = no window (no timing edge or too little data)',
+  'Rank': 'Top selling windows, best first',
+  'Window': 'Day and hours of the week, local time',
+  'Median price': '30-day median × the window\'s average price ratio',
+  'Weeks of data': 'Weeks behind the window\'s thinnest hour',
+});
+// Wait in days, hours and minutes, e.g. "5 d 6 h 22 min".
+const gaWait = m => `${Math.floor(m / 1440)} d ${Math.floor(m % 1440 / 60)} h${m % 60 ? ` ${m % 60} min` : ''}`;
+// Copper Ore's 7 × 24 price heatmap in the shared .heat style: the current hour gets a thick accent outline,
+// the top window a light dashed one, windows 2 and 3 a faint dotted one.
+function gaHeat(windows) {
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], nowH = Math.floor(GA_NOW_MIN / 60);
+  const rank = (di, h) => windows.findIndex(w => w.day === di && h >= w.from && h < w.to);
+  let out = '<div class="heat"><div class="lbl"></div>' + Array.from({ length: 24 }, (_, h) => `<div class="lbl">${h % 6 ? '' : h}</div>`).join('');
+  days.forEach((d, di) => {
+    out += `<div class="lbl">${d}</div>`;
+    for (let h = 0; h < 24; h++) {
+      const r = gaCopperHow(di, h), k = rank(di, h), now = di === GA_NOW_DAY && h === nowH;
+      const a = Math.max(0.06, Math.min(1, (r - 0.94) / 0.2));
+      const mark = now ? ';outline:2px solid var(--accent);outline-offset:-2px;position:relative;z-index:1'
+        : k === 0 ? ';outline:1px dashed #fffb;outline-offset:-1px' : k > 0 ? ';outline:1px dotted #fff5;outline-offset:-1px' : '';
+      const w = k >= 0 ? windows[k].weeks : 7;
+      out += `<div style="background:color-mix(in srgb, var(--accent) ${Math.round(a * 100)}%, transparent)${mark}" title="${d} ${hhmm(h)} price ×${r.toFixed(2)} · ${w} weeks${now ? ' · now' : ''}${k >= 0 ? ` · window ${k + 1}` : ''}"></div>`;
+    }
+  });
+  return out + '</div>';
+}
+const GA_INPUT_STYLE = 'background:#0b0a08;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:1px 6px';
+// One session line under a rate: when, duration, units of the material and that session's items/hr (units × 60 ÷ minutes, half up).
+function gaSessionLine(s, n, first) {
+  const u = s.loot.find(([m]) => m === n)[1];
+  return `<div title="${s.end}">${s.day} ${s.from}–${s.to} · ${gaDur(s.min)} · ${first ? `${u} ${n}` : u} · ${gaRound(u * 60 / s.min)}/hr</div>`;
+}
+// The open candidate's line, when it is this character's and contains the material.
+function gaCandidateLine(who, n) {
+  const c = GA_CANDIDATE, hit = c.who === who && c.loot.find(([m]) => m === n);
+  if (!hit) return '';
+  const units = c.loot.reduce((t, [, u]) => t + u, 0);
+  return `<div style="opacity:.75">open: ${c.day} ${c.from}– · ${hit[1]} ${n} so far · not yet confirmed (${units} of the ${GA_SESSION_MIN_UNITS} units needed)</div>`;
+}
+// The farming-rate card of the detail panel, the one place sessions show: per character, the rate, an open candidate,
+// the last 3 sessions that contained the material (newest first), then the override.
+// A character without a rate gets an empty override when eligible, else "not eligible".
+function gaRateCard(n, only) {
+  const it = GA[n];
+  // Characters with a rate first (highest first), then the rest, each by name.
+  const rows = Object.keys(GA_CHARS).filter(w => !only || w === only)
+    .sort((a, b) => ((gaOwnRate(b, n) || { rate: -1 }).rate - (gaOwnRate(a, n) || { rate: -1 }).rate) || a.localeCompare(b)).map(who => {
+    const own = gaOwnRate(who, n), can = gaCan(who, it);
+    const ss = GA_SESSIONS.filter(s => s.who === who && s.loot.some(([m]) => m === n));
+    const lines = gaCandidateLine(who, n) + ss.slice(0, 3).map((s, k) => gaSessionLine(s, n, k === 0)).join('');
+    if (own && own.kind === 'manual') {
+      const o = own.obs;
+      return `<div style="margin-bottom:10px"><div><b>${who} · ${own.rate}/hr manual</b> <span class="muted">${o ? `(observed ${o.rate}/hr from ${o.units} ${n} over ${o.sessions} session${o.sessions > 1 ? 's' : ''}, ${gaDur(o.min)})` : '(no sessions)'}</span> <span class="btn">Clear</span></div>
+        <div class="muted" style="font-size:12px;margin:4px 0 0 12px">${lines}</div>
+        <div class="sub" style="margin-left:12px">the override replaces the observed rate in the table for ${who} until cleared</div></div>`;
+    }
+    if (own) {
+      const o = own.obs;
+      return `<div style="margin-bottom:10px"><div><b>${who} · ${own.rate}/hr observed</b> <span class="muted">· ${o.units} ${n} over ${o.sessions} session${o.sessions > 1 ? 's' : ''}, ${gaDur(o.min)}</span></div>
+        <div class="muted" style="font-size:12px;margin:4px 0 0 12px">${lines}</div>
+        <div style="margin-top:6px">Manual override: <input aria-label="Manual items per hour for ${who}" placeholder="${own.rate}" size="4" style="${GA_INPUT_STYLE}"> items/hr <span class="btn">Save</span> <span class="btn">Clear</span>
+          <span class="sub">an override replaces the observed rate in the table for ${who} until cleared</span></div></div>`;
+    }
+    return can
+      ? `<div style="margin-bottom:10px"><span class="muted">${who} — no sessions with ${n} yet</span> · Manual override: <input aria-label="Manual items per hour for ${who}" size="4" style="${GA_INPUT_STYLE}"> items/hr <span class="btn">Save</span></div>`
+      : `<div style="margin-bottom:10px" class="muted">${who} — no sessions with ${n} yet · not eligible (no ${it.src ? it.src[0] : 'source'})</div>`;
+  });
+  return `<div class="card"><div style="padding:10px 14px 0">${rows.join('')}</div></div>`;
+}
+// The detail panel for one catalog row (rendered here for Copper Ore): price, market activity, heatmap, windows, your rate.
+function gaDetail(n) {
+  const it = GA[n], r = gaRowRate(it, null), nu = gaNetUnit(it);
+  const level = it.med, windows = GA_COPPER_WINDOWS, best = windows[0];
+  const nowH = Math.floor(GA_NOW_MIN / 60), nowRatio = gaCopperHow(GA_NOW_DAY, nowH), bestPrice = gaRound(level * best.ratio);
+  const waitMin = best.day * 1440 + best.from * 60 - (GA_NOW_DAY * 1440 + GA_NOW_MIN);
+  const weak = it.strength !== null && it.strength < GA_STRENGTH_MIN;
+  return `<div class="card-h" style="border-top:1px solid var(--border)"><b>${n}: price, timing and your rate</b><span class="muted">selected row · ${it.src ? `${it.src[0]} ${it.src[1]}${it.cats.includes('Monster') ? ' or monster drop' : ''}` : 'monster drop'}</span></div>
+    <div class="detail" style="grid-template-columns:repeat(auto-fit, minmax(min(100%, 440px), 1fr))">
+      <div style="min-width:0">
+        <div class="muted" style="font-size:12px;margin-bottom:6px">Price</div>
+        <div class="breakdown">
+          <div><span>Current AH price</span><b>${money(it.price)} <span class="${GA_PRICE_AGE_H > GA_STALE_H ? 'amber' : ''}">· ${GA_PRICE_AGE_H} h old</span></b></div>
+          <div><span>30-day median</span><b>${money(it.med)}</b></div>
+          <div><span>Deviation</span><b>${gaDelta(it.price, it.med)}</b></div>
+          <div><span>Listed quantity</span><b>${it.qty} units</b></div>
+        </div>
+        <div class="muted" style="font-size:12px;margin:12px 0 4px">Your farming rate</div>
+        ${gaRateCard(n)}
+        <div class="muted" style="font-size:12px;margin:12px 0 4px">Market activity (SPEC §3.3.6)</div>
+        <div class="card">${table(MARKET, [`<tr>${market(n, it.P)}</tr>`], null)}</div>
+        <div class="breakdown" style="margin-top:10px">
+          <div><span>Gross gold/hr</span><b>${r.rate} × ${money(it.price)} = ${money(r.rate * it.price)}</b></div>
+          <div><span>Net per unit</span><b>${money(it.price)} − 5% cut ${gaCopper(it.price * GA_CUT)} − (1 − ${it.P}%) × ${gaCopper(GA_DEPOSIT_RATE * it.vendor)} deposit = ${gaCopper(nu)}</b></div>
+          <div><span>Net gold/hr</span><b class="pos">${r.rate} × ${gaCopper(nu)} = ${money(gaNetHr(it, r.rate))}</b></div>
+        </div>
+        <div class="legend">Deposit: 15% of the ${it.vendor}c vendor price per unit for 24 h, refunded on a sale, so only the ${100 - it.P}% chance it expires costs it. Estimates: a listed price is not a sale.</div>
+      </div>
+      <div style="min-width:0">
+        <div class="muted" style="font-size:12px;margin-bottom:6px">Price by hour of the week (<code>how</code>), local time</div>${gaHeat(windows)}
+        <div style="font-size:13px;margin-top:6px">now ${money(it.price)} <span class="muted">(Mon ${hhmm(nowH)} slot ratio ${nowRatio.toFixed(2)})</span> · best ${best.label} at ${money(bestPrice)} · ${gaDelta(bestPrice, it.price)} for a ${gaWait(waitMin)} wait</div>
+        <div class="legend"><span style="display:inline-block;width:10px;height:10px;outline:2px solid var(--accent);outline-offset:-2px;vertical-align:-1px"></span> now (Mon ${hhmm(nowH)}) · <span style="display:inline-block;width:10px;height:10px;outline:1px dashed #fffb;outline-offset:-1px;vertical-align:-1px"></span> the top selling window (${best.label}) · <span style="display:inline-block;width:10px;height:10px;outline:1px dotted #fff5;outline-offset:-1px;vertical-align:-1px"></span> windows 2 and 3. Brighter = higher. The wait runs from now to the window's start. Hover a cell for its ratio and the weeks behind it.</div>
+        <div class="muted" style="font-size:12px;margin:12px 0 4px">Top 3 selling windows</div>
+        <div class="card">${table([['Rank', 1], ['Window'], ['Median price', 1], ['Weeks of data', 1]], windows.map((w, i) =>
+          `<tr><td class="num">${i + 1}</td><td>${w.label}</td><td class="num" title="${money(level).replace(/<[^>]+>/g, '')} median × ${w.ratio.toFixed(2)}">${money(gaRound(level * w.ratio))}</td><td class="num">${w.weeks}</td></tr>`), null)}</div>
+        <div class="breakdown" style="margin-top:10px">
+          <div><span>Seasonality strength</span><b>${it.strength} <span>· ${weak ? 'weak pattern: no strong timing advantage' : 'the weekly profile beat a flat price on the held-out week'}</span></b></div>
+          <div><span>Sell window in the table</span><b>${gaWindowStart(it)} <span>· start of ${it.top[1]} (best hour ${it.top[0]})</span></b></div>
+        </div>
+        <div class="legend">Under ${GA_STRENGTH_MIN} the sentence reads "weak pattern: no strong timing advantage" and the table says "no timing edge" (Peacebloom: ${GA.Peacebloom.strength}).</div>
+      </div>
+    </div>`;
+}
+// Day-one detail for one row: price and rate filled from the scan and the loot events; history replaced by one line.
+function gaDayOneDetail(n) {
+  const it = GA[n], r = gaRowRate(it, null), ch = gaChance(it, true), nu = gaNetUnit(it, true);
+  return `<div class="card-h" style="border-top:1px solid var(--border)"><b>${n}: day one</b><span class="muted">selected row · compact</span></div>
+    <div class="detail" style="grid-template-columns:repeat(auto-fit, minmax(min(100%, 440px), 1fr))">
+      <div style="min-width:0"><div class="breakdown">
+        <div><span>Current AH price</span><b>${money(it.price)} <span class="pos">· ${GA_DAY_ONE_AGE_MIN} min old (your scan)</span></b></div>
+        <div><span>Listed quantity</span><b>${it.qty} units</b></div>
+        <div><span>30-day median · deviation</span><b>${DASH} <span>needs price history</span></b></div>
+        <div><span>Chance to sell</span><b>${ch.P}% <span class="dot l"></span><span>default: no sales data yet</span></b></div>
+        <div><span>Gross gold/hr</span><b>${r.rate} × ${money(it.price)} = ${money(r.rate * it.price)}</b></div>
+        <div><span>Net gold/hr</span><b class="pos">${r.rate} × ${gaCopper(nu)} = ${money(gaNetHr(it, r.rate, true))}</b></div>
+      </div></div>
+      <div style="min-width:0"><div class="muted" style="font-size:12px;margin-bottom:4px">Your farming rate</div>${gaRateCard(n)}
+        <div class="muted" style="margin-top:10px">no price history yet: the heatmap, the top selling windows and seasonality strength appear as weeks of data arrive</div></div>
+    </div>`;
+}
+// Page-scoped density: 12 columns fit a 1280 px window without a horizontal scroll (tighter cells, headers and
+// Category may wrap). Scoped to .ga so no other page changes.
+const GA_STYLE = `<style>.ga th, .ga td { padding: 6px 7px; } .ga th { white-space: normal; vertical-align: bottom; }
+  .ga td:nth-child(2) { white-space: normal; min-width: 70px; } .ga .sub { max-width: 220px; }</style>`;
+const GATHERING_PAGE = { count: GA_ITEMS.length, html: () => {
+  const all = gaSorted(GA_ITEMS);
+  const bruganRows = all.filter(it => gaCan('Brugan', it));
+  const hidden = all.filter(it => !gaCan('Brugan', it)), hiddenAmaya = hidden.filter(it => gaCan('Amaya', it));
+  const nobody = all.filter(it => !gaAnyone(it));
+  const withRate = all.filter(it => gaRowRate(it, null)).length;
+  const totalMin = GA_SESSIONS.reduce((t, s) => t + s.min, 0);
+  const stale = GA_PRICE_AGE_H > GA_STALE_H;
+  const monsterOnly = all.filter(it => it.cats.includes('Monster'));
+  return `${GA_STYLE}<div class="ga"><h1>Gathering</h1><p class="lede">What to farm, whether your character can farm it, what it earns per hour at <b>your own</b> pace, and when to sell it. Farmable materials come from a <b>static catalog</b> and are ranked by their current AH unit price. <b>Gold per hour comes from your observed farming rates</b>: the addon records what you loot from gathering nodes, fishing and corpses, and AHSync groups it into <b>sessions</b>: ${GA_SESSION_MIN_UNITS} units confirm a session, ${GA_SILENCE_MIN} minutes without loot end it, and a rate is units ÷ session duration. A listed price is not a sale, so gold per hour is an estimate. Nothing is ever inferred from drop tables: a material you haven't farmed has no rate ("—") until you do, or until you type one in.</p>
+    <div class="fresh"><span class="${stale ? 'amber' : ''}">AH prices ${GA_PRICE_AGE_H} h old</span> · professions synced ${GA_NOW} · ${GA_SESSIONS.length} farming sessions, ${gaDur(totalMin)} observed</div>
+    <div class="card"><div class="card-h"><b>Farmable materials</b><span class="muted">${all.length} in the catalog · ${withRate} with a rate · desktop only: the addon only records loot</span></div>
+    ${gaFilters(null)}
+    ${gaTable(GA_COLS, all.map(it => gaRow(it, null, it.n === 'Copper Ore')), 3)}
+    <div class="foot"><span>${all.length} materials · sorted by AH Price, highest first; rows with "—" sort last</span><span class="muted">·</span><span class="amber">${nobody.length} no character can gather (amber Skill)</span><span class="muted">·</span><span class="muted">Character = whose rate: the highest among the characters who can gather it</span></div>
+    <div class="foot note">Net gold/hr = items/hr × net per unit, where net per unit = post price − 5% AH cut − (1 − chance to sell) × deposit (24 h, refunded on a sale). Posts are priced at the current AH price. Gross gold/hr (items/hr × price) is on the detail below. ${stale ? `Prices are ${GA_PRICE_AGE_H} h old (amber over 24 h): every gold/hr uses them as they are.` : ''} Items the catalog doesn't know are never shown as farmable, even if you looted them; AHSync lists what you gathered that it couldn't place under Status.</div>
+    ${gaDetail('Copper Ore')}</div>
+
+    <h3>Example: Character set to Brugan</h3>
+    <p class="lede">With a character picked, "Only what Brugan can gather" is on by default: only rows he can gather (profession known, skill at or above the source's requirement) plus every Monster row, which needs no profession. Brugan has Mining ${GA_CHARS.Brugan.Mining} and Skinning ${GA_CHARS.Brugan.Skinning}. His own rate wins; where he has none, another eligible character's rate shows in grey as a <b>Fallback</b>, for display only (Linen Cloth, from Amaya's corpse session). It is replaced by his own rate once he has one, even if lower.</p>
+    <div class="card">${gaFilters('Brugan')}
+    ${gaTable(GA_COLS, bruganRows.map(it => gaRow(it, 'Brugan')), 3)}
+    <div class="foot"><span>${bruganRows.length} of ${all.length} shown</span><span class="muted">·</span><span class="muted">${hidden.length} hidden: ${hiddenAmaya.length} only Amaya can gather (${hiddenAmaya.map(it => it.n).join(', ')}), ${hidden.length - hiddenAmaya.length} no character can (${hidden.filter(it => !gaCan('Amaya', it)).map(it => it.n).join(', ')})</span></div></div>
+
+    <h3>How Gathering works</h3>
+    <div class="card"><ul class="states" style="font-size:13px;margin:10px 14px 12px 32px;padding:0">
+      <li><b>Sessions.</b> Loot from gathering nodes, fishing and corpses opens a candidate session. ${GA_SESSION_MIN_UNITS} units confirm it; ${GA_SILENCE_MIN} minutes without loot end it, and so does logging out. Its duration runs from the first loot to the last; the ${GA_SILENCE_MIN} quiet minutes are not counted. A single loot of ${GA_SESSION_MIN_UNITS}+ units has no duration, so it gives no rate. A candidate that ends under ${GA_SESSION_MIN_UNITS} units is dropped. Every unit in the session counts toward the ${GA_SESSION_MIN_UNITS}, catalog or not.</li>
+      <li><b>Worked example.</b> Brugan's ${GA_SESSIONS[0].day} ${GA_SESSIONS[0].from}–${GA_SESSIONS[0].to} session: ${GA_SESSIONS[0].loot.map(([n, u]) => `${u} ${n}`).join(' + ')} in ${GA_SESSIONS[0].min} min. All materials share the duration: ${GA_SESSIONS[0].loot.map(([n, u]) => `${gaRound(u * 60 / GA_SESSIONS[0].min)}/hr`).join(', ')}. All ${GA_SESSIONS[0].loot.reduce((t, [, u]) => t + u, 0)} units count toward the ${GA_SESSION_MIN_UNITS}, but Rough Stone is not in the catalog, so it is never shown as farmable. Copper Ore's rate uses only the sessions that contained it: (45 + 17 + 8) units ÷ (30 + 57 + 23) min = 38/hr. The item's detail lists the last 3 of them under "Your farming rate".</li>
+      <li><b>Rate.</b> Per character and material: the units looted ÷ the total duration of the confirmed sessions that contained it, in whole items per hour (half up). Gold/hr multiplies that whole number.</li>
+      <li><b>Rate priority.</b> Manual override → your own observed rate → a fallback from another character who can gather it → "—". The fallback is display only: it is greyed, tagged, and replaced by the character's own rate once there is one, even if lower. Under All characters the row shows the highest rate among the characters who can gather it.</li>
+      <li><b>Eligibility.</b> A character can gather a material when they know its profession at or above the skill its source requires (Tin Ore: Mining 65; Brugan has ${GA_CHARS.Brugan.Mining}). Monster drops are always eligible. Skill bonuses from gear are ignored in V1. Professions come from the addon's character capture.</li>
+      <li><b>What the addon records.</b> Loot windows that open after a gathering cast (mining, herb gathering, skinning), a fishing cast, or on a corpse. Never AH buys, mail, trades, the bank or crafts: none of them pass through the loot window. Disenchant loot is excluded.</li>
+      <li><b>No effect on the Portfolio in V1.</b> Farmed items arrive in your bags as found stock (cost 0), and the optimizer sells them like any other stock. Gathering suggests nothing to the plan.</li>
+      <li><b>Sell window.</b> The start of the item's top selling window (SPEC §3.3.4), the hour the wait to it is counted to. Under seasonality strength ${GA_STRENGTH_MIN} it reads "no timing edge"; with too little data, "—". <b>Sell window price</b> is the forecast there: 30-day median × the window's average price ratio, compared with the AH price now.</li>
+      <li><b>Chance with no sales data.</b> Net gold/hr needs a chance to sell. Without sales data it is the default of SPEC §3.3.2: ${GA_DEFAULT_P_CHEAPEST}% when you'd be the cheapest seller (posting at the AH price ties the cheapest), else 25%. The cell carries the low-confidence dot <span class="dot l"></span> (Tin Ore above). A mat's deposit is pennies, so the default barely moves the figure.</li>
+      <li><b>What needs what.</b> Useful right after your first in-game AH scan; only the history columns wait.
+        <ul style="margin:2px 0 0 18px;padding:0">
+          <li>Item, Category, Skill, eligibility: the catalog and the addon's professions capture. No AH data at all.</li>
+          <li>Items/hr, Character, sessions: the addon's loot events. No AH data.</li>
+          <li>AH Price, AH Qty, Net gold/hr: the newest scan or AHF snapshot. One scan is enough; its age shows.</li>
+          <li>Median 30d, Deviation, Sell window, Sell window price, the heatmap, top windows, seasonality strength: price history (weeks of data). "—" until then.</li>
+        </ul></li>
+      <li><b>AHF offline</b> (as now) changes nothing here except that the price age is your own scan's.</li>
+    </ul></div>
+
+    <h3>States</h3>
+    <div class="card"><div class="card-h"><b>Day one: after your first scan</b><span class="muted">one in-game AH scan, no price history yet · All characters</span></div>
+      <div class="fresh" style="margin:8px 14px"><span class="pos">AH prices ${GA_DAY_ONE_AGE_MIN} min old (your scan)</span> · no price history yet: medians, deviations and sell windows appear as weeks of data arrive</div>
+      ${gaFilters(null)}
+      ${gaDayOneTable(all.map(it => gaRow(it, null, it.n === 'Copper Ore', false, true)))}
+      <div class="foot note">Every Net gold/hr here uses the default chance (${GA_DEFAULT_P_CHEAPEST}% <span class="dot l"></span>): no sales data yet. Rates come from the loot events, so they are the same as above.</div>
+      ${gaDayOneDetail('Copper Ore')}</div>
+    <div class="card"><div class="card-h"><b>No catalog match</b><span class="muted">search "thorium"</span></div>${gaFilters(null, 'thorium')}
+      ${gaTable(GA_COLS, [`<tr><td colspan="${GA_COLS.length}" class="muted" style="white-space:normal">No farmable material matches "thorium". The catalog covers what it knows how to gather; clear the search or the filters.</td></tr>`], 3)}</div>
+    <div class="card"><div class="card-h"><b>Character with no gathering profession, toggle on</b><span class="muted">Brugan before he learned Mining and Skinning</span></div>
+      <div class="alert info" style="margin:0;border-radius:0;border-width:0 0 1px 4px"><span class="grow"><b>Brugan can gather nothing yet: Monster drops only.</b><span class="sub">Turn off "Only what Brugan can gather" to see every material. ${monsterOnly.length} Monster rows remain: ${monsterOnly.map(it => it.n).join(', ')}.</span></span></div></div>
+    <div class="card"><div class="card-h"><b>No rates anywhere</b><span class="muted">no confirmed session and no manual rate yet</span></div>
+      ${gaTable(GA_COLS, [...['Tin Ore', 'Copper Ore', 'Light Leather'].map(n => gaRow(GA[n], null, false, true)),
+        `<tr><td colspan="${GA_COLS.length}" class="muted">Farm for ${GA_SESSION_MIN_UNITS}+ units and the addon records your rate. Every row keeps its price and sell window meanwhile.</td></tr>`], 3)}</div>
+    <div class="card"><div class="card-h"><b>Prices stale</b><span class="muted">over 24 h old: the case shown above</span></div><div style="padding:10px 14px;font-size:13px">The page still shows. The freshness line reads <span class="amber">AH prices ${GA_PRICE_AGE_H} h old</span>, each AH Price says its age on hover, and gold/hr uses the stale prices as they are. Run AHSync or scan in game for fresher ones.</div></div>
+    <div class="card"><div class="card-h"><b>Catalog incomplete</b><span class="muted">a note under the table, always present</span></div><div style="padding:10px 14px;font-size:13px" class="muted">Items the catalog doesn't know are never shown as farmable, even if you looted them (Rough Stone and Light Hide, in Brugan's sessions). AHSync lists what you gathered that it couldn't place under Status.</div></div>
+    <div class="card"><div class="card-h"><b>An active manual override</b><span class="muted">Earthroot's rate card and its row: Amaya typed 12</span></div>
+      ${gaTable(GA_COLS, [gaRow(GA.Earthroot, null)], 3)}
+      <div style="padding:10px 14px">${gaRateCard('Earthroot')}</div></div>
+    <div class="card"><div class="card-h"><b>Weak pattern</b><span class="muted">seasonality strength under ${GA_STRENGTH_MIN}</span></div><div style="padding:10px 14px;font-size:13px">Peacebloom's detail reads "Seasonality strength ${GA.Peacebloom.strength} · weak pattern: no strong timing advantage", and its Sell window says <span class="muted">no timing edge</span>. With fewer than 3 weeks of data (Silver Ore) it is "—", too little data.</div></div></div>`;
+} };
+
 // ---------- pages ----------
 const PAGES = {
   Portfolio: { count: 12, html: () => {
@@ -586,7 +985,7 @@ const PAGES = {
     <h1>Craft</h1><p class="lede">The recipes your characters know that are worth crafting now (SPEC §3.4B), whether or not you have the mats. <b>Source</b>: <span class="pos">Owned</span> = all mats from your stock; <span class="amber">AH</span> = all mats bought, crafting straight from the market; Mixed = your stock topped up from the AH; <b>+ crafted</b> = one of your characters makes a reagent first (a chain, with a mail step if another character crafts the next step). Crafts stop at the first one that would lose money as AH mats get pricier. <b>Mats each / total</b> is the gold to buy the mats you're missing, at the latest AH prices (or vendor, if cheaper), per craft and for all crafts. It's "—" only when you already own every mat. Profit still counts owned mats at their <b>hold value</b>, what they'd fetch under their own best sell plan (now or at their peak), so a craft never beats selling the mats raw by accident. Every craft gets a post in the Week plan. The plan's own craft chains come first, source <b>Plan</b>, exactly as the addon's Craft tab shows them (D56); the rows after them are recipes the plan doesn't craft.</p>
     <div class="card">${filters('<span class="select">Profession: All ▾</span><span class="select">Source: All · Owned · AH · Mixed ▾</span>')}
     ${table([['Product'], ['Recipe known by'], ['Source'], ['Crafts', 1], ['Mats each', 1], ['Mats total', 1], ['Value each', 1], ['Expected profit', 1], ...MARKET, ['Risk', 1], ['Cooldown']], [
-      crRow('Bronze Bar', 1, 'Brugan (Mining 75)', 'Plan', 44, 253, 400, 3868, 92, '', 'buy 22 Copper Ore on the AH · 50s 82c</span><span class="sub">buy 22 Tin Ore on the AH · 60s 50c</span><span class="sub">craft 22 Copper Bar first</span><span class="sub">craft 22 Tin Bar first</span><span class="sub">post Sun 23:56, for the 19:00 peak'),
+      crRow('Bronze Bar', 1, 'Brugan (Mining 68)', 'Plan', 44, 253, 400, 3868, 92, '', 'buy 22 Copper Ore on the AH · 50s 82c</span><span class="sub">buy 22 Tin Ore on the AH · 60s 50c</span><span class="sub">craft 22 Copper Bar first</span><span class="sub">craft 22 Tin Bar first</span><span class="sub">post Sun 23:56, for the 19:00 peak'),
       crRow('Transmute: Iron to Gold', 2, 'Brugan (Alchemy 225)', 'AH', 1, 4200, 9500, 1855, 65, '<span class="pos">ready</span>', 'buy 1 Iron Bar on the AH · 42s'),
       crRow('Runed Copper Rod', 2, 'Amaya (Enchanting 142)', 'AH + crafted', 1, 3700, 5900, 1630, 95, '', 'Chain: buy 2 Copper Bar (20s) → Brugan crafts Copper Rod (vs 41s on the AH) → mail to Amaya · Amaya buys 1 Strange Dust, 1 Lesser Magic Essence'),
       crRow('Copper Rod', 1, 'Brugan (Blacksmithing 112)', 'AH', 3, 2000, 4100, 783, 58, '', 'Buys 6 Copper Bar on the AH (10s): your own 6 bars are worth 10s 26c each at their Sat peak (hold value), so they stay in the sell plan'),
@@ -616,6 +1015,8 @@ const PAGES = {
       flRow('Silk Cloth', 1, 40, 70, 105, 'Sat 19:00', 'Dip below 10th percentile', 730, null, 26, 88),
       flRow('Elixir of Agility', 1, 5, 700, 1300, 'Wed 20:00', 'Wednesday raid night +9%', 958, 64, 27, 70),
     ], 7)}</div>` },
+
+  Gathering: GATHERING_PAGE,
 
   Inventory: { count: 46, html: () => `
     <h1>Inventory</h1><p class="lede">What you own on every character: bags, bank and mail (auctions are on <b>On the AH</b>). It shows what you paid (0 for items you found), what it's worth and its plan. Select a row to see why.</p>
@@ -729,9 +1130,9 @@ const PAGES = {
     ], null)}</div>` },
 
   Characters: { count: 2, html: () => `
-    <h1>Characters</h1><p class="lede">Captured by the addon at login and when profession windows open. Each character's gold is its default budget.</p>
-    <div class="grid2">${charCard('Amaya', 'Mage · 38', 'Horde · Grommash (pvp)', 210000, [['Tailoring', 160, 225], ['Enchanting', 142, 225]], 37, 'Fri 13:52')}
-    ${charCard('Brugan', 'Warrior · 34', 'Horde · Grommash (pvp)', 104000, [['Blacksmithing', 112, 150], ['Alchemy', 225, 225]], 24, 'Thu 23:10')}</div>` },
+    <h1>Characters</h1><p class="lede">Captured by the addon at login and when profession windows open. Each character's gold is its default budget. Every profession is listed, crafting and gathering alike: Gathering's eligibility reads the gathering skills.</p>
+    <div class="grid2">${charCard('Amaya', 'Mage · 38', 'Horde · Grommash (pvp)', 210000, [['Tailoring', 160, 225], ['Enchanting', 142, 225], ['Herbalism', 45, 75, 1], ['Fishing', 20, 75, 1]], 37, 'Fri 13:52')}
+    ${charCard('Brugan', 'Warrior · 34', 'Horde · Grommash (pvp)', 104000, [['Blacksmithing', 112, 150], ['Alchemy', 225, 225], ['Mining', 68, 75, 1], ['Skinning', 40, 75, 1]], 24, 'Thu 23:10')}</div>` },
 
   Status: { count: null, html: () => `
     <h1>Status</h1><p class="lede">Sync state, data age and anything that needs attention.</p>
@@ -814,10 +1215,11 @@ function calRow(bucket, n, predicted, actual) {
 function ruleRow(n, q, rule, effect, set, from) {
   return `<tr><td>${item(n, q)}</td><td>${rule}</td><td class="muted">${effect}</td><td>${set}</td><td class="muted">${from}</td><td><span class="btn">Clear</span></td></tr>`;
 }
+// profs: [name, skill, max, gathering?]; a gathering profession gets a muted "gathering" tag.
 function charCard(name, cls, where, gold, profs, recipes, seen) {
   return `<div class="card"><div class="card-h"><b>${name}</b><span class="muted">${cls}</span></div>
     <dl class="kv"><dt>Realm</dt><dd>${where}</dd><dt>Gold (budget)</dt><dd>${money(gold)}</dd><dt>Known recipes</dt><dd>${recipes}</dd><dt>Last seen</dt><dd>${seen}</dd></dl>
-    ${profs.map(([p, s, m]) => `<div class="prof"><div style="display:flex;justify-content:space-between"><span>${p}</span><span class="muted">${s} / ${m}</span></div><div class="bar"><i style="width:${s / m * 100}%"></i></div></div>`).join('')}
+    ${profs.map(([p, s, m, g]) => `<div class="prof"><div style="display:flex;justify-content:space-between"><span>${p}${g ? ' <span class="muted" style="font-size:12px">· gathering</span>' : ''}</span><span class="muted">${s} / ${m}</span></div><div class="bar"><i style="width:${s / m * 100}%"></i></div></div>`).join('')}
     <div style="height:10px"></div></div>`;
 }
 function spark() {
@@ -865,7 +1267,7 @@ function daily() {
 
 // ---------- tab switching ----------
 const nav = document.getElementById('nav');
-const ORDER = ['Portfolio', 'Today', 'Week', 'On the AH', 'Disenchant', 'Craft', 'Flip', 'Inventory', 'History', 'Rules', 'Characters', 'Status'];
+const ORDER = ['Portfolio', 'Today', 'Week', 'On the AH', 'Disenchant', 'Craft', 'Flip', 'Gathering', 'Inventory', 'History', 'Rules', 'Characters', 'Status'];
 ORDER.map(name => [name, PAGES[name]]).forEach(([name, p]) => {
   const b = document.createElement('button');
   b.setAttribute('role', 'tab'); b.dataset.page = name;
