@@ -375,12 +375,21 @@ const gaRow = (r, selected) => `<tr data-select="${esc(r.key)}"${String(r.key) =
   `<td class="num">${dash(r.window_price)}${r.window_delta ? `<span class="sub ${gaClass(r.window_delta_class)}">${esc(r.window_delta)}</span>` : ''}</td></tr>`;
 const gaLines = lines => `<div class="breakdown">${(lines || []).map(([k, v, note, cls, dot]) => `<div><span>${esc(k)}</span><b>${esc(v)}` +
   `${DOTS[dot] ? ` <span class="dot ${DOTS[dot]}"></span>` : ''}${note ? ` <span class="${gaClass(cls)}">${esc(note)}</span>` : ''}</b></div>`).join('')}</div>`;
-// The rate card ("Your farming rate"), the one place sessions show (SPEC §3.4E.7): a block per character.
-const gaRateCard = c => `<div class="card"><div style="padding:10px 14px 0">${(c.blocks || []).map(b => b.kind === 'none' || b.kind === 'ineligible'
-  ? `<div style="margin-bottom:10px" class="muted">${esc(b.head)}</div>`
-  : `<div style="margin-bottom:10px"><div><b>${esc(b.head)}</b> <span class="muted">${esc(b.sub)}</span></div>` +
-    (b.lines.length ? `<div class="muted" style="font-size:12px;margin:4px 0 0 12px">${b.lines.map(l => `<div>${esc(l)}</div>`).join('')}</div>` : '') +
-    (b.foot ? `<div class="sub" style="margin-left:12px">${esc(b.foot)}</div>` : '') + '</div>').join('')}</div></div>`;
+// The rate card ("Your farming rate"), the one place sessions show (SPEC §3.4E.7): a block per character, its lines
+// (the open candidate faded, then the last sessions, how each ended on hover), Clear by an active override's head,
+// and the Manual override input with Save (and Clear) where the engine offers one (M17, D85).
+const gaLine = l => `<div${l.open ? ' style="opacity:.75"' : ''}${l.title ? ` title="${esc(l.title)}"` : ''}>${esc(l.text)}</div>`;
+const gaClearBtn = (b, key) => `<button class="btn" type="button" data-ga-clear="${esc(b.char)}" data-ga-key="${esc(key)}">Clear</button>`;
+const gaOverride = (b, key) => !b.override ? '' : `<div style="margin-top:6px">Manual override: ` +
+  `<input class="select" type="text" inputmode="numeric" size="4" data-ga-rate="${esc(b.char)}" placeholder="${esc(b.override.placeholder)}" aria-label="Manual items per hour for ${esc(b.char)}"> items/hr ` +
+  `<button class="btn" type="button" data-ga-save="${esc(b.char)}" data-ga-key="${esc(key)}">Save</button>${b.override.clear ? ' ' + gaClearBtn(b, key) : ''}` +
+  `${b.override.note ? `<span class="sub">${esc(b.override.note)}</span>` : ''}</div>`;
+const gaRateCard = (c, key) => `<div class="card"><div style="padding:10px 14px 0">${(c.blocks || []).map(b => {
+  const head = b.kind === 'none' || b.kind === 'ineligible' ? `<div class="muted">${esc(b.head)}</div>`
+    : `<div><b>${esc(b.head)}</b> <span class="muted">${esc(b.sub)}</span>${b.clear ? ' ' + gaClearBtn(b, key) : ''}</div>`;
+  const lines = (b.lines || []).length ? `<div class="muted" style="font-size:12px;margin:4px 0 0 12px">${b.lines.map(gaLine).join('')}</div>` : '';
+  return `<div style="margin-bottom:10px">${head}${lines}${b.foot ? `<div class="sub" style="margin-left:12px">${esc(b.foot)}</div>` : ''}${gaOverride(b, key)}</div>`;
+}).join('')}</div></div>`;
 // The detail below the table for the selected row: price card, rate card, market activity, gross / net per unit / net,
 // the deposit legend, then the line standing in for the price history (M16's compact form, SPEC §3.4E.8).
 // The rate card picks the item's blocks (only the picked character's) and the row's gross and net lines.
@@ -391,7 +400,7 @@ function gaDetail(d, rows, key, char) {
   const card = { blocks, lines: row.card_lines || [] };
   const formulas = [...card.lines.slice(0, 1), ...(x.net_unit ? [['Net per unit', x.net_unit]] : []), ...card.lines.slice(1)];
   return `<div class="card-h" style="border-top:1px solid var(--border)"><b>${esc(x.title)}</b><span class="muted">${esc(x.subtitle)}</span></div>` +
-    `<div class="detail"><div><div class="h">Price</div>${gaLines(x.price)}<div class="h">Your farming rate</div>${gaRateCard(card)}</div>` +
+    `<div class="detail"><div><div class="h">Price</div>${gaLines(x.price)}<div class="h">Your farming rate</div>${gaRateCard(card, key)}</div>` +
     `<div><div class="h">Market activity</div><div class="card">${pfTable(MARKET_COLS, d.help || {}, [`<tr>${marketCells(x.market)}</tr>`])}</div>` +
     `${formulas.length ? `<div style="margin-top:10px">${breakdown(formulas)}</div>` : ''}<div class="h">${esc(x.deposit)}</div>` +
     `<div class="muted" style="margin-top:10px">${esc(x.history)}</div></div></div>`;
@@ -428,6 +437,23 @@ function gaBind(id, card, values) {
   card.querySelectorAll('input[data-gonly]').forEach(el => { el.onchange = () => { values['only_' + (values.character || '')] = el.checked ? '1' : '0'; render(id); }; });
   card.querySelectorAll('tr[data-select]').forEach(tr => { tr.onclick = e => { if (e.target.closest('select, button, input, a')) return; state.selected[id] = tr.dataset.select; render(id); }; });
   card.querySelectorAll('th[data-key]').forEach(th => { th.onclick = () => toggleSort(id, th.dataset.key); });
+  card.querySelectorAll('button[data-ga-save]').forEach(btn => { btn.onclick = () => setManualRate(id, btn.dataset.gaSave, btn.dataset.gaKey, btn.parentElement.querySelector('input[data-ga-rate]').value, btn); });
+  card.querySelectorAll('button[data-ga-clear]').forEach(btn => { btn.onclick = () => setManualRate(id, btn.dataset.gaClear, btn.dataset.gaKey, null, btn); });
+}
+// Save or clear a manual farming rate (SPEC §3.4E.5, SEC12, D85): AHSync checks the value, stores it and rebuilds
+// the Gathering page, which is then reloaded. What was typed goes as typed (a number when it reads as one), so
+// AHSync refuses "fast" or 12.5 with its reason instead of the page guessing; null clears.
+async function setManualRate(id, char, key, typed, el) {
+  el.disabled = true;
+  const n = Number(typed), value = typed === null ? null : (String(typed).trim() !== '' && Number.isFinite(n) ? n : typed);
+  try {
+    const r = await post('/api/manual_rate', { char, key: Number(key), items_per_hour: value });
+    if (r && r.status === 200) { notice(value === null ? 'Manual rate cleared.' : 'Manual rate saved.', 'ok'); load(id); }
+    else if (r) notice(`Not saved (${r.body.message || r.body.error || r.status}).`, 'warn');
+  } catch (e) {
+    notice("AHSync isn't answering. Is it still running?", 'warn');
+  }
+  el.disabled = false;
 }
 
 // ---------- live pages (SPEC §3.5 dashboard data) ----------

@@ -4,9 +4,10 @@ from __future__ import annotations
 import pytest
 
 from ahsync.config import (Config, ConfigError, load_config, market_settings, parse_config, plan_settings,
-                           portfolio_settings, resolve_api_key, setting_line, with_risk_tolerance,
+                           portfolio_settings, resolve_api_key, session_settings, setting_line, with_risk_tolerance,
                            write_risk_tolerance)
-from ahsync.engine.portfolio import PortfolioSettings
+from ahsync.engine.portfolio import PortfolioSettings, config_version
+from ahsync.engine.sessions import SessionSettings
 
 EXAMPLE = '''api_key = ""
 markets = ["forever.pvp.horde.us"]
@@ -166,11 +167,22 @@ def test_the_portfolio_settings_are_read_with_their_defaults(tmp_path):
     ("week_limit = 101\n", "week_limit must be between 1 and 100"),
     ("candidate_export = 19\n", "candidate_export must be 20 or more"),
     ("horizon_days = 14\n", "horizon_days must be 7"),
+    ("session_confirm_units = 0\n", "session_confirm_units must be between 1 and 1000"),
+    ("session_confirm_units = 1001\n", "session_confirm_units must be between 1 and 1000"),
+    ("session_gap_minutes = 121\n", "session_gap_minutes must be between 1 and 120"),
+    ("session_gap_minutes = 7.5\n", "session_gap_minutes must be a whole number"),
 ])
 def test_bad_portfolio_settings_are_refused_with_the_line_and_reason(tmp_path, text, message):
     with pytest.raises(ConfigError) as error:
         parse_config(text, {}, tmp_path)
     assert str(error.value).startswith(f"config.toml line 1: {message}")
+
+
+def test_the_gathering_session_keys_are_read_with_their_defaults_and_stay_out_of_the_config_version(tmp_path):
+    assert session_settings(Config()) == SessionSettings(20, 15)
+    cfg = parse_config("session_confirm_units = 1000\nsession_gap_minutes = 1\n", {}, tmp_path)
+    assert session_settings(cfg) == SessionSettings(1000, 1) and session_settings(cfg).gap_ms == 60_000
+    assert config_version(portfolio_settings(cfg)) == config_version(portfolio_settings(Config()))
 
 
 def test_the_candidate_pool_and_swap_bound_are_read_and_checked(tmp_path):

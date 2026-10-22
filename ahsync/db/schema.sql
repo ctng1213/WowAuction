@@ -86,6 +86,31 @@ CREATE TABLE IF NOT EXISTS disenchants(
     expected_net REAL                    -- the matched action's expected net, copied at match time (T23); NULL = none
 );
 
+-- Gathering (SPEC §3.4E, M17). One loot window of farming loot, upserted by event id (GA13, FM41); source
+-- 'mining' | 'herbalism' | 'skinning' | 'fishing' | 'monster'; login_ms the character's initial login; loot
+-- "key,qty;..." by key, coin left out.
+CREATE TABLE IF NOT EXISTS gather_events(
+    event_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, at INTEGER NOT NULL, source TEXT NOT NULL,
+    login_ms INTEGER NOT NULL, loot TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS gather_events_char_at ON gather_events(char_id, at);
+-- Confirmed farming sessions only (§3.4E.4), rebuilt from a character's stored events in one transaction; the
+-- open candidate is derived at each page build. session_id is the first event's id; ended 'gap' | 'logout'.
+CREATE TABLE IF NOT EXISTS farming_sessions(
+    session_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL,
+    units INTEGER NOT NULL, ended TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS farming_sessions_char ON farming_sessions(char_id, end_ms);
+-- Units per item of a session, catalog or not.
+CREATE TABLE IF NOT EXISTS farming_session_items(
+    session_id TEXT NOT NULL, key INTEGER NOT NULL, qty INTEGER NOT NULL, PRIMARY KEY(session_id, key)
+);
+-- Manual rate overrides from the dashboard (§3.4E.5, SEC12), whole items per hour 1-10,000; a clear deletes the row.
+CREATE TABLE IF NOT EXISTS manual_rates(
+    char_id TEXT NOT NULL, key INTEGER NOT NULL, items_per_hour INTEGER NOT NULL, set_at INTEGER NOT NULL,
+    PRIMARY KEY(char_id, key)
+);
+
 -- What holdings did that no event explains, per bag snapshot (SPEC §2.2.1, FM21, D51): delta units, + gained.
 CREATE TABLE IF NOT EXISTS untracked(
     char_id TEXT NOT NULL, key INTEGER NOT NULL, at INTEGER NOT NULL, delta INTEGER NOT NULL,

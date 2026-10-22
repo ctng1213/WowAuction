@@ -159,6 +159,7 @@ def test_scans_events_rules_and_own_auctions_from_the_spec_example():
       { id = "A:1:5", type = "skip", char = "A", at = 1000, action = 17 },
       { id = "A:1:7", type = "disenchant", char = "A", at = 1000, key = 4570, results = "10940,2;10938,1;10940,1" },
       { id = "A:1:6", type = "payout", char = "A", at = 1000, key = 6217, qty = 5, money = 19475, sentAt = 900 },
+      { id = "A:1:8", type = "gather", char = "A", at = 1000, source = "mining", login = 900, loot = "2770,3;2835,1" },
     },
     rules = { [2589] = { rule = "no_buy", setAt = 1760000000000 }, [2592] = { rule = "none", setAt = 5 } },
     '''
@@ -176,6 +177,7 @@ def test_scans_events_rules_and_own_auctions_from_the_spec_example():
         Event("A:1:5", "skip", "A", 1000, action_id="17"),
         Event("A:1:7", "disenchant", "A", 1000, key=4570, results=((10938, 1), (10940, 3))),
         Event("A:1:6", "payout", "A", 1000, key=6217, qty=5, money_copper=19475),
+        Event("A:1:8", "gather", "A", 1000, source="mining", login_ms=900, loot=((2770, 3), (2835, 1))),
     )
     assert data.rules == (ItemRule(2589, "no_buy", 1760000000000), ItemRule(2592, "none", 5))
 
@@ -241,6 +243,12 @@ def test_malformed_refresh_request_is_a_problem_and_reads_as_none():
      "bad results: '10940,0'"),
     ('events = { { id = "e", type = "auction_mail", char = "A", at = 1, outcome = "won", key = 1, qty = 1 } },',
      "auction_mail won has no price"),
+    ('events = { { id = "e", type = "gather", char = "A", at = 1, source = "ah", login = 1, loot = "2770,1" } },',
+     "source is 'ah'"),
+    ('events = { { id = "e", type = "gather", char = "A", at = 1, source = "mining", loot = "2770,1" } },',
+     "gather event has no login"),
+    ('events = { { id = "e", type = "gather", char = "A", at = 1, source = "monster", login = 1, loot = "" } },',
+     "bad loot: ''"),
     ('events = { { id = "e", type = "post", char = "A", at = 1, key = 1, stack = 1, price = 1, durationH = 24,'
      ' deposit = 1, confirmed = "yes" } },', "confirmed is not a boolean"),
     ('events = { { id = "e", type = "purchase", char = "A", at = 1, key = 1, qty = 1, price = 1.5,'

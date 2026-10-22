@@ -2,15 +2,20 @@
 from __future__ import annotations
 
 import json
+import math
+import random
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
 
 from ahsync.engine import gathering as g
 from ahsync.engine.gathering import CatalogItem, Observed, Rate, Source
+from ahsync.engine.sessions import Session, sessions
 from tests.support import gathering_world as gw
 
 ROOT = Path(__file__).resolve().parents[3]
+HOUR, MINUTE = 3_600_000, 60_000
 MONSTER = {"type": "monster", "profession": None, "skill": None}
 
 
@@ -102,7 +107,43 @@ def test_the_skill_column_takes_the_lowest_gathering_source():
     assert g.skill_source(item).skill == 50
 
 
-OBS = {("A-R", 1): Observed(10, 10, 60, 1), ("B-R", 1): Observed(20, 20, 60, 1), ("C-R", 1): Observed(20, 20, 60, 1)}
+OBS = {("A-R", 1): Observed(10, 10, HOUR, 1), ("B-R", 1): Observed(20, 20, HOUR, 1),
+       ("C-R", 1): Observed(20, 20, HOUR, 1)}
+
+
+def test_GA19_brugans_rates_from_his_sessions_each_material_using_the_whole_duration():
+    found, _ = sessions(gw.EVENTS, gw.NOW, 15 * MINUTE, 20)
+    rates = g.observed_rates(found)
+    copper = rates[(gw.BRUGAN, gw.COPPER)]
+    assert (copper.items_per_hour, copper.units, copper.minutes, copper.sessions) == (38, 70, 110, 3)   # 38.18
+    assert rates[(gw.BRUGAN, gw.TIN)] == Observed(4, 2, 30 * MINUTE, 1)            # only the Mon session had Tin
+    assert rates[(gw.BRUGAN, gw.LIGHT_LEATHER)] == Observed(21, 19, 55 * MINUTE, 2)   # 20.73
+    assert [rates[(gw.AMAYA, k)].items_per_hour for k in (gw.PEACEBLOOM, gw.SILVERLEAF, gw.EARTHROOT, gw.LINEN)] == \
+        [26, 19, 10, 14]
+    assert rates[(gw.BRUGAN, gw.ROUGH_STONE)].units == 19          # computed for every item; only catalog rows show
+    zero = Session("z", gw.BRUGAN, gw.NOW, gw.NOW, ((gw.COPPER, 20),), "gap")
+    assert g.observed_rates([*found, zero])[(gw.BRUGAN, gw.COPPER)] == copper     # no duration: no units, no time
+
+
+def test_generated_sessions_give_an_observed_rate_between_their_own_session_rates():
+    seed = 9137
+    rng = random.Random(seed)
+    for case in range(300):
+        found = [Session(f"s{i}", "A-R", i * HOUR, i * HOUR + rng.randint(1, 120) * MINUTE + rng.randint(0, 59) * 1000,
+                         ((1, rng.randint(1, 400)),), "gap") for i in range(rng.randint(1, 6))]
+        rate = g.observed_rates(found)[("A-R", 1)]
+        units, ms = sum(s.items[0][1] for s in found), sum(s.duration_ms for s in found)
+        assert rate.items_per_hour == math.floor(Fraction(units * HOUR, ms) + Fraction(1, 2)), (seed, case)
+        own = [g.observed_rate(s.items[0][1], s.duration_ms) for s in found]
+        assert min(own) <= rate.items_per_hour <= max(own), (seed, case)
+
+
+def test_GA20_an_eight_minute_session_rounds_half_up_and_gold_multiplies_the_whole_rate():
+    assert g.observed_rate(3, 8 * MINUTE) == 23                    # 22.5 → 23, never banker's 22
+    assert g.observed_rate(17, 8 * MINUTE) == 128                  # 127.5 → 128
+    assert g.observed_rate(20, 0) is None                          # no duration, no rate (GA17)
+    assert g.net_per_hour(23, 259.375) == pytest.approx(5965.625)  # 59s 66c, not 22.5 × 259.375
+    assert g.minutes_of(29_999) == 0 and g.minutes_of(30_000) == 1 and g.minutes_of(57 * MINUTE) == 57
 
 
 def test_GA5_the_rate_priority_is_manual_then_own_observed_then_a_fallback_among_other_eligible_characters():

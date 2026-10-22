@@ -2,7 +2,8 @@
 
 This module only gathers inputs at the edge: it reads the catalog data file
 (`ahsync/data/gathering_catalog.json`), each catalog item's newest `current` price and its
-intelligence (no history read, §3.1.1), and the characters' professions. engine.gathering
+intelligence (no history read, §3.1.1), the characters' professions, their farming sessions and
+manual rates (M17). engine.gathering
 validates the catalog and engine.gathering_view makes every cell and text. A row the catalog
 can't use is skipped with a Status line (GA2); a catalog that can't be read leaves the page empty
 with a Status line, and the rest of the refresh carries on.
@@ -14,10 +15,11 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Protocol
 
-from ahsync.config import Config
+from ahsync.config import Config, session_settings
 from ahsync.engine.gathering import CatalogItem, catalog, skipped_text
 from ahsync.engine.gathering_view import GatheringWorld, PriceFacts, gathering_view
 from ahsync.engine.sellprob import cheapest_other
+from ahsync.engine.sessions import Candidate, GatherEvent, Session, SessionSettings, sessions
 from ahsync.history.reads import CurrentPrice, ItemInfo
 from ahsync.intel.contract import ItemIntel
 
@@ -47,6 +49,36 @@ class GatheringReads(Protocol):
 
         Returns:
             (id, class, level, faction, market, gold, recipes, updated ms, ((profession, skill, max), ...)) by id.
+        """
+
+    def farming_sessions(self, char_ids: Sequence[str]) -> list[Session]:
+        """The stored confirmed farming sessions (state.gathering).
+
+        Args:
+            char_ids: The characters.
+
+        Returns:
+            Sessions with their items.
+        """
+
+    def events_after_sessions(self, char_ids: Sequence[str]) -> list[GatherEvent]:
+        """Each character's gather events after her last stored session (state.gathering).
+
+        Args:
+            char_ids: The characters.
+
+        Returns:
+            The events.
+        """
+
+    def manual_rates(self, char_ids: Sequence[str]) -> dict[tuple[str, int], int]:
+        """The manual rate overrides (state.gathering).
+
+        Args:
+            char_ids: The characters.
+
+        Returns:
+            (character id, item key) -> items per hour.
         """
 
     def set_status(self, topic: str, level: str, kind: str, data: dict, at: int) -> None:
@@ -146,7 +178,8 @@ def gathering_page(db: GatheringReads, market: str, char_ids: Sequence[str], sta
         path: The catalog file.
 
     Returns:
-        engine.gathering_view's payload. No rates before M17's sessions (Items/hr "—", GA8).
+        engine.gathering_view's payload, its rates from the stored sessions, the sessions since the last stored one
+        and the manual overrides (farming_state).
     """
     catalog_items = load_catalog(db, now_ms, path)
     facts = {it.key: price_facts(it.key, db.current_price(market, it.key), stats.get(it.key), items.get(it.key))
@@ -154,7 +187,30 @@ def gathering_page(db: GatheringReads, market: str, char_ids: Sequence[str], sta
     sheets = db.character_sheets(list(char_ids))
     skills = {sheet[0]: {name: skill for name, skill, _ in sheet[8]} for sheet in sheets}
     synced = max((sheet[7] for sheet in sheets if sheet[7] is not None), default=None)
-    world = GatheringWorld(catalog_items, facts, skills, list(char_ids), now_ms, offset_ms, professions_ms=synced,
+    found, open_ = farming_state(db, char_ids, now_ms, session_settings(cfg))
+    world = GatheringWorld(catalog_items, facts, skills, list(char_ids), now_ms, offset_ms,
+                           manual=db.manual_rates(list(char_ids)), sessions=found, open=open_, professions_ms=synced,
                            default_sell_prob=cfg.default_sell_prob,
-                           default_sell_prob_cheapest=cfg.default_sell_prob_cheapest)
+                           default_sell_prob_cheapest=cfg.default_sell_prob_cheapest,
+                           confirm_units=cfg.session_confirm_units, gap_minutes=cfg.session_gap_minutes)
     return gathering_view(world)
+
+
+def farming_state(db: GatheringReads, char_ids: Sequence[str], now_ms: int,
+                  settings: SessionSettings) -> tuple[list[Session], dict[str, Candidate]]:
+    """The characters' confirmed sessions and open candidates as of now (SPEC §3.4E.4).
+
+    The stored sessions, plus what the events after each character's last stored session give now: a candidate
+    that ended since the last SavedVariables read (time passed) and the open candidate, neither stored.
+
+    Args:
+        db: The stored sessions and events.
+        char_ids: The market's characters.
+        now_ms: Now, ms.
+        settings: session_confirm_units and session_gap_minutes.
+
+    Returns:
+        (confirmed sessions, character id -> open candidate).
+    """
+    tail, open_ = sessions(db.events_after_sessions(list(char_ids)), now_ms, settings.gap_ms, settings.confirm_units)
+    return [*db.farming_sessions(list(char_ids)), *tail], open_

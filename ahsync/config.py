@@ -20,6 +20,7 @@ from ahsync.engine.plan import PlanSettings
 from ahsync.engine.portfolio import PortfolioSettings
 from ahsync.engine.sell_record import RecordSettings
 from ahsync.engine.sellprob import MarketSettings
+from ahsync.engine.sessions import SessionSettings
 from ahsync.engine.volume import VolumePrior
 
 API_KEY_ENV = "AUCTIONHOUSE_APIKEY"
@@ -90,6 +91,8 @@ class Config:
     horizon_days: int = 7
     candidate_pool: int = 400                   # buys kept past their first batch (§3.4D.3), ≥ candidate_export
     swap_candidates: int = 50                   # excluded batches the swap pass tries (§3.4D.4)
+    session_confirm_units: int = 20             # gathered units that confirm a farming session, 1-1000 (§3.4E.4)
+    session_gap_minutes: int = 15               # minutes without loot that end a farming session, 1-120
     launch_wow_after_catchup: bool = False
     realms: Mapping[str, str] = field(default_factory=dict)
     budgets: Mapping[str, int] = field(default_factory=dict)
@@ -115,7 +118,8 @@ for _name in ("retention_days", "dashboard_port", "live_refresh_minutes", "own_r
               "struggle_streak", "keep_retry_streak", "post_lead_hours", "sell_window_hours",
               "max_craft_depth", "max_actions_per_day", "min_gear_units", "pattern_full_weeks",
               "immediate_hours", "top_buy_windows", "top_sell_windows", "today_limit", "week_limit",
-              "candidate_export", "horizon_days", "candidate_pool", "swap_candidates"):
+              "candidate_export", "horizon_days", "candidate_pool", "swap_candidates", "session_confirm_units",
+              "session_gap_minutes"):
     _TYPES[_name] = _INT
 for _name in ("min_flip_margin", "default_sell_prob", "default_sell_prob_cheapest", "volume_prior_per_day",
               "volume_prior_hours", "default_undercut_share", "own_record_weight",
@@ -232,6 +236,7 @@ def _check_values(text: str, values: dict) -> None:
 _PORTFOLIO_RANGES: dict[str, tuple[int, int | None]] = {
     "top_buy_windows": (1, 10), "top_sell_windows": (1, 10), "today_limit": (1, 100), "week_limit": (1, 100),
     "candidate_export": (20, None), "swap_candidates": (1, None),
+    "session_confirm_units": (1, 1000), "session_gap_minutes": (1, 120),     # Gathering (§3.4E.4), not configVersion
 }
 
 
@@ -475,6 +480,18 @@ def plan_settings(config: Config) -> PlanSettings:
                         config.default_sell_prob, config.reprice_step, config.own_record_weight,
                         config.default_sell_prob_cheapest, config.window_margin, config.pattern_full_weeks,
                         config.max_trend_total)
+
+
+def session_settings(config: Config) -> SessionSettings:
+    """How farming sessions are cut (SPEC §3.4E.4, §3.6); not part of configVersion.
+
+    Args:
+        config: Settings.
+
+    Returns:
+        The engine's SessionSettings.
+    """
+    return SessionSettings(config.session_confirm_units, config.session_gap_minutes)
 
 
 def portfolio_settings(config: Config) -> PortfolioSettings:

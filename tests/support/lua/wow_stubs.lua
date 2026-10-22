@@ -58,6 +58,8 @@ function Stubs.NewWorld()
     sent = {},                -- { recipient, subject, body } per SendMail call
     inboxTotal = nil,         -- mails on the server; default #inbox (all loaded)
     merchant = {},            -- { id, numAvailable (-1 = unlimited), extendedCost = bool }
+    loot = {},                -- the open loot window's slots: { id, count } or { coin = copper } (Stubs.OpenLoot)
+    lootSource = nil,         -- GetLootSourceInfo's GUID for every slot; nil = the client gives none
     unknownEvents = {},       -- [event] = true: RegisterEvent raises, as the real client does
     tradeSkill = nil,         -- { name, rank, max, recipes = { { header = "Name" } | recipe } }
     craft = nil,              -- same shape as tradeSkill
@@ -408,6 +410,37 @@ local function InstallItems()
   end)
 end
 
+-- Spell names for GetSpellInfo; other spell ids have none (nil), like a spell the client doesn't know.
+Stubs.SPELL_NAMES = { [2575] = "Mining", [2366] = "Herb Gathering", [8613] = "Skinning", [7620] = "Fishing",
+                      [13262] = "Disenchant", [921] = "Pick Pocket", [3365] = "Opening", [133] = "Fireball" }
+Stubs.GUIDS = { creature = "Creature-0-4372-0-19-299-0000ABCDEF", object = "GameObject-0-4372-0-19-1731-0000ABCDEF",
+                item = "Item-4372-0-4000000012345678" }
+
+--- Open a loot window, as the client does before LOOT_OPENED.
+---@param slots table[]     { id, count } per slot; { coin = copper } for money
+---@param source string|nil "creature" | "object" | "item" (Stubs.GUIDS), or nil for a source GetLootSourceInfo lacks
+function Stubs.OpenLoot(slots, source)
+  Stubs.world.loot = slots
+  Stubs.world.lootSource = source and Stubs.GUIDS[source]
+end
+
+--- Install the spell and loot window globals (A55, A85-A91).
+local function InstallLoot()
+  Define("GetSpellInfo", function(id) return Stubs.SPELL_NAMES[id], nil, "icon" end)
+  Define("GetNumLootItems", function() return #Stubs.world.loot end)
+  Define("GetLootSlotLink", function(i)
+    local slot = Stubs.world.loot[i]
+    return slot and slot.id and Stubs.ItemLink(slot.id) or nil
+  end)
+  Define("GetLootSlotInfo", function(i)
+    local slot = Stubs.world.loot[i]
+    if slot then return "icon", slot.id and "item" or "coin", slot.count or 0, nil, 1 end
+  end)
+  Define("GetLootSourceInfo", function(i)
+    if Stubs.world.loot[i] and Stubs.world.lootSource then return Stubs.world.lootSource, 1 end
+  end)
+end
+
 --- Install player, clock, combat, timer and frame globals.
 local function InstallCore()
   -- hooksecurefunc([table,] name, fn): run fn after the original, with the same arguments.
@@ -494,6 +527,7 @@ function Stubs.Reset(options)
   InstallCore()
   InstallRecipeWindows()
   InstallItems()
+  InstallLoot()
 end
 
 --- The addon's files in .toc order.

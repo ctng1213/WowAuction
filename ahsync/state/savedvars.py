@@ -30,6 +30,7 @@ RULES = ("no_buy", "ignore", "keep", "none")  # SPEC §3.4.2
 RESERVE_ALL = -1                              # SPEC §3.4.3: a reserve that keeps every unit
 PURCHASE_SOURCES = ("ah", "vendor")
 MAIL_OUTCOMES = ("sold", "expired", "cancelled", "won")
+GATHER_SOURCES = ("mining", "herbalism", "skinning", "fishing", "monster")   # SPEC §2.2.1 gather
 
 
 # ---------------------------------------------------------------- errors
@@ -175,6 +176,8 @@ class Event:
     action_id: str | None = None
     money_copper: int | None = None
     results: tuple[tuple[int, int], ...] | None = None     # disenchant: (key, units) by key
+    login_ms: int | None = None                            # gather: the character's initial login, ms
+    loot: tuple[tuple[int, int], ...] | None = None        # gather: (key, units) by key
 
 
 @dataclass(frozen=True, slots=True)
@@ -503,6 +506,12 @@ _EVENT_FIELDS: dict[str, tuple[str, Callable[[object, str], object]]] = {
     "action": ("action_id", _action_id),
     "money": ("money_copper", _int),
     "results": ("results", _results),
+    "login": ("login_ms", _int),
+    "loot": ("loot", _results),
+}
+# Fields whose meaning depends on the event type: a gather event's source is what opened the loot window.
+_TYPE_FIELDS: dict[str, dict[str, tuple[str, Callable[[object, str], object]]]] = {
+    "gather": {"source": ("source", _one_of(GATHER_SOURCES))},
 }
 
 # Event type -> (required fields, optional fields).
@@ -515,6 +524,7 @@ _EVENT_TYPES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "skip": (("action",), ()),
     "payout": (("key", "qty", "money"), ("deposit",)),
     "disenchant": (("key", "results"), ()),
+    "gather": (("source", "login", "loot"), ()),
 }
 
 
@@ -540,7 +550,7 @@ def _event(_index: object, row: object) -> list[Event]:
             if name in required:
                 raise _RowError(f"{event_type} event has no {name}")
             continue
-        attribute, convert = _EVENT_FIELDS[name]
+        attribute, convert = _TYPE_FIELDS.get(event_type, {}).get(name) or _EVENT_FIELDS[name]
         fields[attribute] = convert(row[name], name)
     if event_type == "auction_mail" and fields["outcome"] in ("sold", "won") and "price_copper" not in fields:
         raise _RowError(f"auction_mail {fields['outcome']} has no price")

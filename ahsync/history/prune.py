@@ -14,7 +14,7 @@ from ahsync.db.sqlite import Database
 BOOK_RETENTION_DAYS = 30
 MS_TABLES = ("candles_h1", "candles_d1", "sales_h1", "posts", "purchases", "crafts", "disenchants", "auction_mail", "payouts",
              "untracked", "mail_sent",
-             "skips", "actions")
+             "skips", "actions", "gather_events")
 
 
 @dataclass(frozen=True)
@@ -55,4 +55,6 @@ def prune(db: Database, now_ms: int, retention_days: int = 90, book_days: int = 
     deleted["scans"] = db.delete_scans_before(now_ms - book_days * DAY_MS)
     deleted["item_rules"] = db.delete_rule_tombstones_before(cutoff_ms)
     deleted["positions"] = db.delete_closed_positions_before(cutoff_ms)   # 90 days after they close (SPEC §3.2)
+    with db.transaction():                                     # farming sessions: 90 days, like their events
+        deleted["farming_sessions"] = db.delete_farming_sessions_before(cutoff_ms)
     return PruneReport(deleted)

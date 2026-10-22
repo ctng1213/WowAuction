@@ -5,6 +5,7 @@ import json
 from dataclasses import replace
 
 from ahsync.config import Config
+from ahsync.engine.sessions import sessions
 from ahsync.history.reads import CurrentPrice, ItemInfo
 from ahsync.intel.contract import ItemIntel
 from ahsync.recommend import gathering_page as page
@@ -24,6 +25,21 @@ class FakeDb:
         self.prices = {gw.COPPER: CurrentPrice(gw.COPPER, 220, 10, gw.AHF_SEEN, "ahf"),
                        gw.TIN: CurrentPrice(gw.TIN, None, 0, gw.NOW - 12 * 60_000, "local")}
         self.status: dict[str, tuple] = {}
+        self.stored: list = []            # stored farming sessions
+        self.events: list = []            # gather events after them
+        self.manual: dict = {}
+
+    def farming_sessions(self, char_ids):
+        """The stored sessions of these characters."""
+        return [s for s in self.stored if s.char_id in char_ids]
+
+    def events_after_sessions(self, char_ids):
+        """The gather events after each character's last stored session."""
+        return [e for e in self.events if e.char_id in char_ids]
+
+    def manual_rates(self, char_ids):
+        """The overrides of these characters."""
+        return {k: v for k, v in self.manual.items() if k[0] in char_ids}
 
     def current_price(self, market, key):
         """The newest price, or None."""
@@ -76,6 +92,24 @@ def test_the_page_joins_the_catalog_with_current_prices_intelligence_and_profess
     assert payload["fresh"] == [["AH prices 12 min old (your scan)", "pos"], ["professions synced Mon 10:38", ""],
                                 ["0 farming sessions", ""]]
     assert payload["no_rates"] and "gathering_catalog" not in db.status
+
+
+def test_the_rates_come_from_the_stored_sessions_the_later_events_and_the_overrides(tmp_path):
+    db = FakeDb()
+    sun = gw.at(gw.SUN, "16:00")                                    # the last read: Sun 16:00, before Mon's loot
+    db.stored, _ = sessions([e for e in gw.EVENTS if e.at_ms <= sun], sun, gw.GAP_MS, 20)
+    last = {c: max(s.end_ms for s in db.stored if s.char_id == c) for c in (gw.AMAYA, gw.BRUGAN)}
+    db.events = [e for e in gw.EVENTS if e.at_ms > last[e.char_id]]
+    db.manual = {(gw.AMAYA, gw.EARTHROOT): 12}
+    payload, _ = build(tmp_path, db=db)
+    rows = {r["item"]: r for r in gw.view_rows(payload, "")}
+    assert (rows["Copper Ore"]["rate"], rows["Copper Ore"]["note"]) == ("38", "Brugan: 3 sessions, 1 h 50 min")
+    assert (rows["Earthroot"]["rate"], rows["Earthroot"]["rate_sub"]) == ("12", "manual")
+    lines = payload["rate_cards"][str(gw.COPPER)]["blocks"][0]["lines"]
+    assert lines[0]["text"].startswith("open: Mon 10:21– · 9 Copper Ore so far")   # derived, never stored
+    assert payload["fresh"][2] == ["7 farming sessions, 3 h 40 min observed", ""]
+    found, open_ = page.farming_state(db, [gw.BRUGAN], gw.NOW, page.session_settings(Config()))
+    assert len(found) == 4 and set(open_) == {gw.BRUGAN}
 
 
 def test_GA2_skipped_rows_set_a_status_line_and_the_other_rows_still_show(tmp_path):

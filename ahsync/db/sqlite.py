@@ -23,10 +23,11 @@ from ahsync.history.writes import HistoryWrites
 from ahsync.intel.store import IntelStore
 from ahsync.recommend.store import RecommendStore
 from ahsync.state.journal import JournalReads
+from ahsync.state.gathering import GatheringStore
 from ahsync.state.positions import PositionStore
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 22
+SCHEMA_VERSION = 23
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
@@ -196,6 +197,27 @@ MIGRATIONS: dict[int, str] = {
         );
         CREATE INDEX IF NOT EXISTS position_lots_event ON position_lots(event_id)
     """,
+    # 23: Gathering (SPEC §3.2, §3.4E, M17): gather events, the confirmed farming sessions derived from them with
+    # their items, and the manual rate overrides set from the dashboard.
+    23: """
+        CREATE TABLE IF NOT EXISTS gather_events(
+            event_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, at INTEGER NOT NULL, source TEXT NOT NULL,
+            login_ms INTEGER NOT NULL, loot TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS gather_events_char_at ON gather_events(char_id, at);
+        CREATE TABLE IF NOT EXISTS farming_sessions(
+            session_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL,
+            units INTEGER NOT NULL, ended TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS farming_sessions_char ON farming_sessions(char_id, end_ms);
+        CREATE TABLE IF NOT EXISTS farming_session_items(
+            session_id TEXT NOT NULL, key INTEGER NOT NULL, qty INTEGER NOT NULL, PRIMARY KEY(session_id, key)
+        );
+        CREATE TABLE IF NOT EXISTS manual_rates(
+            char_id TEXT NOT NULL, key INTEGER NOT NULL, items_per_hour INTEGER NOT NULL, set_at INTEGER NOT NULL,
+            PRIMARY KEY(char_id, key)
+        )
+    """,
     # 14: sell records, stored for the hourly status pass (M8).
     14: """
         CREATE TABLE IF NOT EXISTS sell_records(
@@ -214,6 +236,7 @@ CANDLE_TABLES = ("candles_h1", "candles_d1")
 PRUNABLE = {
     "candles_h1": "t", "candles_d1": "t", "sales_h1": "t", "volume_d1": "day", "volume_cover": "day", "posts": "at", "purchases": "at",
     "crafts": "at", "disenchants": "at", "auction_mail": "at", "payouts": "at", "untracked": "at", "mail_sent": "at", "skips": "at", "actions": "run_at",
+    "gather_events": "at",
     "fetch_failures": "hour",
 }
 
@@ -345,7 +368,7 @@ def restore_newest_backup(path: Path, backup_dir: Path, now_ms: int) -> Path | N
 
 
 class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, JournalReads, IntelStore, RecommendStore,
-               PositionStore):
+               PositionStore, GatheringStore):
     """A connection to data/ahsync.db with AHSync's queries and upserts."""
 
     def __init__(self, conn: sqlite3.Connection, path: Path) -> None:

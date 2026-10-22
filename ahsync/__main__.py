@@ -27,7 +27,7 @@ from typing import IO
 from ahsync.collect.ahf import AhfApi
 from ahsync.collect.client import ApiClient, RedactingFilter, Redactor, Transport, UrllibTransport
 from ahsync.clock import Clock, SystemClock
-from ahsync.config import Config, ConfigError, load_config, market_sources
+from ahsync.config import Config, ConfigError, load_config, market_sources, session_settings
 from ahsync.state.importer import ingest_file
 from ahsync.db.sqlite import Database, DatabaseError
 from ahsync.history.prune import prune
@@ -227,7 +227,8 @@ def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path,
         Args:
             path: The file.
         """
-        result = ingest_file(path, ctx.db, ctx.clock, config.realms, markets=config.markets)
+        result = ingest_file(path, ctx.db, ctx.clock, config.realms, markets=config.markets,
+                             sessions=session_settings(config))
         if result.ingested:                       # ingestedUntil may have moved: the addon may prune (SPEC §2.2)
             now = ctx.clock.now_ms()
             tracking_pass(ctx.db, now)            # a buy or post marks its action done (SPEC §3.4.1), positions
@@ -263,7 +264,8 @@ def read_savedvars_at_start(db: Database, clock: Clock, config: Config, watcher:
     log = logging.getLogger("ahsync")
     for path in find_savedvars(Path(config.wow_path)):
         try:
-            result = ingest_file(path, db, clock, config.realms, markets=config.markets)
+            result = ingest_file(path, db, clock, config.realms, markets=config.markets,
+                                 sessions=session_settings(config))
         except Exception:                         # like Scheduler._run: one file can't stop the start-up
             log.exception("reading %s failed; will try again", path.name)
             account = path.parent.parent.name
@@ -412,6 +414,9 @@ def _run_configured(data_dir: Path, config: Config, runtime: Runtime, config_pat
             print(f"AHSync can't start: {error}", file=runtime.out)
             return 2
         safe_backup(db, backup_dir, clock.now_ms())
+        with db.transaction():                   # a changed session key re-cuts the stored sessions (SPEC §3.6)
+            if db.ensure_session_settings(session_settings(config), clock.now_ms()):
+                log.info("farming sessions rebuilt for the session settings")
         watcher = SavedVarsWatcher(lambda: find_savedvars(Path(config.wow_path)), file_mtime_ms)
         read_savedvars_at_start(db, clock, config, watcher)
         api = AhfApi(ApiClient(runtime.transport, clock, config.api_key, redactor=redactor))

@@ -28,6 +28,7 @@ Engine\Portfolio.lua
 Engine\Graph.lua
 Capture\Posts.lua
 Capture\Crafts.lua
+Capture\Gather.lua
 Core\Market.lua
 Core\Plan.lua
 Recommend\Live.lua

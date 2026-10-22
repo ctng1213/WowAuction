@@ -259,7 +259,23 @@ def test_schema_22_adds_positions_and_each_actions_candidate_and_keeps_the_plan(
     db.set_meta("schema_version", "21")
     db.close()
     migrated = Database.open(tmp_path / "v21.db", T0, None)
-    assert migrated.get_meta("schema_version") == "22"
+    assert migrated.get_meta("schema_version") == str(db_module.SCHEMA_VERSION)          # through 22 to the latest
     assert migrated.conn.execute("SELECT action_id, cand_id FROM actions").fetchall() == [("a1", None)]
     assert migrated.count("positions") == 0 and migrated.count("position_lots") == 0
+    migrated.close()
+
+
+def test_schema_23_adds_the_gathering_tables_and_keeps_the_events(tmp_path):
+    db = Database.open(tmp_path / "v22.db", T0, None)                  # a schema-22 database: before Gathering (M17)
+    db.conn.executescript("DROP TABLE gather_events; DROP TABLE farming_sessions; DROP TABLE farming_session_items; "
+                          "DROP TABLE manual_rates; "
+                          "INSERT INTO crafts(event_id, char_id, spell_id, count, at) VALUES ('e1', 'A-R', 1, 1, 5);")
+    db.set_meta("schema_version", "22")
+    db.close()
+    migrated = Database.open(tmp_path / "v22.db", T0, None)
+    assert migrated.get_meta("schema_version") == "23" and migrated.count("crafts") == 1
+    assert [migrated.count(t) for t in ("gather_events", "farming_sessions", "farming_session_items",
+                                        "manual_rates")] == [0, 0, 0, 0]
+    indexes = {name for (name,) in migrated.conn.execute("SELECT name FROM sqlite_master WHERE type = 'index'")}
+    assert {"gather_events_char_at", "farming_sessions_char"} <= indexes
     migrated.close()

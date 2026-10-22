@@ -974,10 +974,16 @@
       },
       "cells": {
        "2770": {
-        "eligible": false
+        "eligible": false,
+        "fallback": true,
+        "note": "Amaya has no rate yet",
+        "rate_title": "Brugan's observed rate; Amaya has none yet. Replaced by Amaya's own rate once Amaya has one, even if lower. · click the row for the sessions behind this rate and to override it"
        },
        "2835": {
-        "eligible": false
+        "eligible": false,
+        "fallback": true,
+        "note": "Amaya has no rate yet",
+        "rate_title": "Brugan's observed rate; Amaya has none yet. Replaced by Amaya's own rate once Amaya has one, even if lower. · click the row for the sessions behind this rate and to override it"
        }
       },
       "foot": [
@@ -1186,10 +1192,10 @@
     "fresh": [
      ["AH prices 1 h old (your scan)", "pos"],
      ["professions synced Wed 10:30", ""],
-     ["0 farming sessions", ""]
+     ["1 farming session, 40 min observed", ""]
     ],
     "gold": "Gold 65g · 2 characters · Wed 12:30",
-    "header": "150 in the catalog · 0 with a rate · desktop only: the addon only records loot",
+    "header": "150 in the catalog · 2 with a rate · desktop only: the addon only records loot",
     "help": {
      "AH Price": "Cheapest buyout per unit in the newest scan; hover for its age. \"—\" = no listing",
      "AH Qty": "Units listed in the newest scan",
@@ -1210,7 +1216,7 @@
     },
     "no_match": "No farmable material matches \"{q}\". The catalog covers what it knows how to gather; clear the search or the filters.",
     "no_match_filters": "No farmable material matches the filters. The catalog covers what it knows how to gather; clear the search or the filters.",
-    "no_rates": "Farm for 20+ units and the addon records your rate. Every row keeps its price and sell window meanwhile.",
+    "no_rates": null,
     "note": "Net gold/hr = items/hr × net per unit, where net per unit = post price − 5% AH cut − (1 − chance to sell) × deposit (24 h, refunded on a sale). Posts are priced at the current AH price. Gross gold/hr (items/hr × price) is on the detail below. Items the catalog doesn't know are never shown as farmable, even if you looted them; AHSync lists what you gathered that it couldn't place under Status.",
     "other_details": {
      "count": 144,
@@ -1218,25 +1224,37 @@
     },
     "other_rows": {
      "count": 144,
-     "sha256": "a0f073a4394376f307ae67448aeb502f853285fac87f609664d6e567f6f9aadc"
+     "sha256": "9d63e5aa54b832d3911273f8c76f146b236e9a4afe05d8b9c1ccadd8fa64f74a"
     },
     "rate_cards": {
      "2318": {
       "blocks": [
        {
         "char": "Amaya-Grommash",
+        "clear": false,
         "foot": "",
         "head": "Amaya — no sessions with Light Leather yet",
         "kind": "none",
         "lines": [],
+        "override": {
+         "clear": false,
+         "note": "",
+         "placeholder": ""
+        },
         "sub": ""
        },
        {
         "char": "Brugan-Grommash",
+        "clear": false,
         "foot": "",
         "head": "Brugan — no sessions with Light Leather yet",
         "kind": "none",
         "lines": [],
+        "override": {
+         "clear": false,
+         "note": "",
+         "placeholder": ""
+        },
         "sub": ""
        }
       ]
@@ -1245,18 +1263,30 @@
       "blocks": [
        {
         "char": "Amaya-Grommash",
+        "clear": false,
         "foot": "",
         "head": "Amaya — no sessions with Linen Cloth yet",
         "kind": "none",
         "lines": [],
+        "override": {
+         "clear": false,
+         "note": "",
+         "placeholder": ""
+        },
         "sub": ""
        },
        {
         "char": "Brugan-Grommash",
+        "clear": false,
         "foot": "",
         "head": "Brugan — no sessions with Linen Cloth yet",
         "kind": "none",
         "lines": [],
+        "override": {
+         "clear": false,
+         "note": "",
+         "placeholder": ""
+        },
         "sub": ""
        }
       ]
@@ -1265,18 +1295,30 @@
       "blocks": [
        {
         "char": "Amaya-Grommash",
+        "clear": false,
         "foot": "",
         "head": "Amaya — no sessions with Wool Cloth yet",
         "kind": "none",
         "lines": [],
+        "override": {
+         "clear": false,
+         "note": "",
+         "placeholder": ""
+        },
         "sub": ""
        },
        {
         "char": "Brugan-Grommash",
+        "clear": false,
         "foot": "",
         "head": "Brugan — no sessions with Wool Cloth yet",
         "kind": "none",
         "lines": [],
+        "override": {
+         "clear": false,
+         "note": "",
+         "placeholder": ""
+        },
         "sub": ""
        }
       ]
@@ -1284,19 +1326,38 @@
      "2770": {
       "blocks": [
        {
+        "char": "Brugan-Grommash",
+        "clear": false,
+        "foot": "",
+        "head": "Brugan · 45/hr observed",
+        "kind": "observed",
+        "lines": [
+         {
+          "open": true,
+          "text": "open: Wed 12:15– · 8 Copper Ore so far · not yet confirmed (8 of the 20 units needed)",
+          "title": "still collecting: it ends 15 min after the last loot (12:25) or at logout; no rate uses it"
+         },
+         {
+          "open": false,
+          "text": "Tue 18:00–18:40 · 40 min · 30 Copper Ore · 45/hr",
+          "title": "ended at logout"
+         }
+        ],
+        "override": {
+         "clear": true,
+         "note": "an override replaces the observed rate in the table for Brugan until cleared",
+         "placeholder": "45"
+        },
+        "sub": "· 30 Copper Ore over 1 session, 40 min"
+       },
+       {
         "char": "Amaya-Grommash",
+        "clear": false,
         "foot": "",
         "head": "Amaya — no sessions with Copper Ore yet · not eligible (no Mining)",
         "kind": "ineligible",
         "lines": [],
-        "sub": ""
-       },
-       {
-        "char": "Brugan-Grommash",
-        "foot": "",
-        "head": "Brugan — no sessions with Copper Ore yet",
-        "kind": "none",
-        "lines": [],
+        "override": null,
         "sub": ""
        }
       ]
@@ -1304,19 +1365,33 @@
      "2835": {
       "blocks": [
        {
+        "char": "Brugan-Grommash",
+        "clear": false,
+        "foot": "",
+        "head": "Brugan · 15/hr observed",
+        "kind": "observed",
+        "lines": [
+         {
+          "open": false,
+          "text": "Tue 18:00–18:40 · 40 min · 10 Rough Stone · 15/hr",
+          "title": "ended at logout"
+         }
+        ],
+        "override": {
+         "clear": true,
+         "note": "an override replaces the observed rate in the table for Brugan until cleared",
+         "placeholder": "15"
+        },
+        "sub": "· 10 Rough Stone over 1 session, 40 min"
+       },
+       {
         "char": "Amaya-Grommash",
+        "clear": false,
         "foot": "",
         "head": "Amaya — no sessions with Rough Stone yet · not eligible (no Mining)",
         "kind": "ineligible",
         "lines": [],
-        "sub": ""
-       },
-       {
-        "char": "Brugan-Grommash",
-        "foot": "",
-        "head": "Brugan — no sessions with Rough Stone yet",
-        "kind": "none",
-        "lines": [],
+        "override": null,
         "sub": ""
        }
       ]
@@ -1325,18 +1400,30 @@
       "blocks": [
        {
         "char": "Amaya-Grommash",
+        "clear": false,
         "foot": "",
         "head": "Amaya — no sessions with Silk Cloth yet",
         "kind": "none",
         "lines": [],
+        "override": {
+         "clear": false,
+         "note": "",
+         "placeholder": ""
+        },
         "sub": ""
        },
        {
         "char": "Brugan-Grommash",
+        "clear": false,
         "foot": "",
         "head": "Brugan — no sessions with Silk Cloth yet",
         "kind": "none",
         "lines": [],
+        "override": {
+         "clear": false,
+         "note": "",
+         "placeholder": ""
+        },
         "sub": ""
        }
       ]
@@ -1441,10 +1528,13 @@
      },
      {
       "ah_price": "2s 48c",
-      "card_lines": [],
+      "card_lines": [
+       ["Gross gold/hr", "45 × 2s 48c = 1g 11s 60c"],
+       ["Net gold/hr", "45 × 235.60c = 1g 6s 2c"]
+      ],
       "category": "Mining",
       "cats": ["Mining"],
-      "character": "—",
+      "character": "Brugan",
       "deviation": "—",
       "deviation_class": "",
       "eligible": true,
@@ -1453,17 +1543,17 @@
       "key": 2770,
       "median": "—",
       "name": "Copper Ore",
-      "net": "—",
+      "net": "1g 6s 2c",
       "net_dot": false,
-      "net_title": "",
-      "note": "",
+      "net_title": "45/hr × 235.60c net per unit (gross 45 × 248c = 1g 11s 60c) · chance 100%",
+      "note": "Brugan: 1 session, 40 min",
       "price": 248,
       "price_title": "seen 1 h ago (your scan)",
       "qty": "320",
       "quality": 1,
-      "rate": "—",
+      "rate": "45",
       "rate_sub": "",
-      "rate_title": "No rate yet · click the row for the sessions behind this rate and to override it",
+      "rate_title": "30 units ÷ 40 min over 1 session = 45.0/hr, rounded · click the row for the sessions behind this rate and to override it",
       "skill": 1,
       "skill_amber": false,
       "skill_sub": "",
@@ -1471,10 +1561,10 @@
       "skill_title": "Mining 1",
       "sort": {
        "deviation": null,
-       "net": null,
+       "net": 10602,
        "price": 248,
        "qty": 320,
-       "rate": null,
+       "rate": 45,
        "skill": 1,
        "window_price": null
       },
@@ -1585,10 +1675,13 @@
      },
      {
       "ah_price": "30c",
-      "card_lines": [],
+      "card_lines": [
+       ["Gross gold/hr", "15 × 30c = 4s 50c"],
+       ["Net gold/hr", "15 × 28.50c = 4s 28c"]
+      ],
       "category": "Mining",
       "cats": ["Mining"],
-      "character": "—",
+      "character": "Brugan",
       "deviation": "—",
       "deviation_class": "",
       "eligible": true,
@@ -1597,17 +1690,17 @@
       "key": 2835,
       "median": "—",
       "name": "Rough Stone",
-      "net": "—",
+      "net": "4s 28c",
       "net_dot": false,
-      "net_title": "",
-      "note": "",
+      "net_title": "15/hr × 28.50c net per unit (gross 15 × 30c = 4s 50c) · chance 100%",
+      "note": "Brugan: 1 session, 40 min",
       "price": 30,
       "price_title": "seen 1 h ago (your scan)",
       "qty": "400",
       "quality": 1,
-      "rate": "—",
+      "rate": "15",
       "rate_sub": "",
-      "rate_title": "No rate yet · click the row for the sessions behind this rate and to override it",
+      "rate_title": "10 units ÷ 40 min over 1 session = 15.0/hr, rounded · click the row for the sessions behind this rate and to override it",
       "skill": 1,
       "skill_amber": false,
       "skill_sub": "",
@@ -1615,10 +1708,10 @@
       "skill_title": "Mining 1",
       "sort": {
        "deviation": null,
-       "net": null,
+       "net": 428,
        "price": 30,
        "qty": 400,
-       "rate": null,
+       "rate": 15,
        "skill": 1,
        "window_price": null
       },
@@ -1632,7 +1725,7 @@
       "window_title": ""
      }
     ],
-    "selected": "4306"
+    "selected": "2770"
    }
   },
   "history": {

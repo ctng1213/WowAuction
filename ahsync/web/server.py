@@ -28,12 +28,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from ahsync.app.refresh import replan_all
+from ahsync.app.refresh import rebuild_gathering, replan_all
 from ahsync.app.status_page import status_page
 from ahsync.clock import Clock
 from ahsync.config import Config, ConfigError, market_sources, write_risk_tolerance
 from ahsync.db.sqlite import Database
+from ahsync.engine.gathering import catalog, eligible, why_not_eligible
 from ahsync.export.addon_files import export_plan
+from ahsync.recommend.gathering_page import CATALOG_PATH, read_catalog
 
 log = logging.getLogger("ahsync.web")
 
@@ -49,7 +51,8 @@ BUSY_TIMEOUT_MS = 5000
 PAGES = ("portfolio", "today", "week", "on_ah", "disenchant", "craft", "flip", "gathering", "inventory", "history",
          "rules", "characters", "status")
 GET_PATHS = ("/", "/api/markets", "/api/items")
-POST_PATHS = ("/api/refresh", "/api/skip", "/api/rule", "/api/reserve", "/api/risk_tolerance")
+POST_PATHS = ("/api/refresh", "/api/skip", "/api/rule", "/api/reserve", "/api/risk_tolerance", "/api/manual_rate")
+MANUAL_RATE_MAX = 10_000                           # SPEC §3.4E.5: a whole number 1-10,000 items per hour
 RISK_CHOICES = (0.1, 0.2, 0.3, 0.4, 0.5)          # SPEC §3.5: the Portfolio page's Risk tolerance dropdown
 RULES = ("no_buy", "ignore", "keep", "none")       # SPEC §3.4.2: what the dashboard may set
 VIEWS_PREFIX = "/api/views/"
@@ -120,6 +123,7 @@ class DashboardApp:
     page_html: str = ""                   # index.html with the token placeholder; read from disk when empty
     config_path: Path | None = None       # config.toml, rewritten by the Risk tolerance dropdown (SEC11)
     config_changed: Callable[[Config], None] = lambda _config: None   # tells the scheduler the new settings
+    catalog_path: Path = CATALOG_PATH     # the gathering catalog, for POST /api/manual_rate's checks (SEC12)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def __post_init__(self) -> None:
@@ -317,7 +321,72 @@ class DashboardApp:
             return self.reserve(body)
         if path == "/api/risk_tolerance":
             return self.risk_tolerance(body)
+        if path == "/api/manual_rate":
+            return self.manual_rate(body)
         return self.skip(body)
+
+    def _manual_rate_request(self, body: bytes) -> tuple[str, int, int | None] | str:
+        """Read and check a manual-rate write (SPEC §3.5 POST /api/manual_rate, SEC12).
+
+        Args:
+            body: JSON {"char", "key", "items_per_hour"}; "items_per_hour": null or "clear": true clears.
+
+        Returns:
+            (character id, item key, items per hour or None to clear), or why it is refused.
+        """
+        try:
+            request = json.loads(body.decode("utf-8"))
+        except ValueError:
+            request = None
+        if not isinstance(request, dict):
+            return "the body must be a JSON object"
+        char_id, key, value = request.get("char"), request.get("key"), request.get("items_per_hour")
+        if char_id not in {c for c, *_ in self.db.characters()}:
+            return "unknown character"
+        found = {it.key: it for it in catalog(read_catalog(self.catalog_path)[0])[0]}
+        if isinstance(key, bool) or not isinstance(key, int) or key not in found:
+            return "the item is not in the gathering catalog"
+        if request.get("clear") is True or ("items_per_hour" in request and value is None):
+            return char_id, key, None
+        if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= MANUAL_RATE_MAX:
+            return "items_per_hour must be a whole number from 1 to 10,000"
+        skills = {c: {p: s for p, s, _ in profs} for c, *_, profs in self.db.character_sheets([char_id])}
+        if not eligible(found[key], skills.get(char_id, {})):
+            why = why_not_eligible(found[key], skills.get(char_id, {}))
+            return f"{char_id.split('-')[0]} can't gather {found[key].name} ({why})"
+        return char_id, key, value
+
+    def manual_rate(self, body: bytes) -> Response:
+        """Set or clear a character's manual farming rate from the Gathering page (SPEC §3.4E.5, §3.5, SEC12, D85).
+
+        Stores the row (set_at = now) or deletes it, then rebuilds only the Gathering page: no history read and
+        nothing re-planned, since Gathering is not part of the plan.
+
+        Args:
+            body: JSON {"char": "<Name-Realm>", "key": <catalog key>, "items_per_hour": 1-10,000 | null}.
+
+        Returns:
+            200 {"set": true|false} (false when a clear finds nothing); 400 {"error": "bad_request", "message"} for
+            a bad body, an unknown character or key, a rate outside 1-10,000 or not whole, or a character not
+            eligible for the item; 503 when the database is busy.
+        """
+        now = self.clock.now_ms()
+        try:
+            with self._lock:
+                checked = self._manual_rate_request(body)
+                if isinstance(checked, str):
+                    return json_response(400, {"error": "bad_request", "message": checked})
+                char_id, key, value = checked
+                with self.db.transaction():
+                    changed = (self.db.clear_manual_rate(char_id, key) if value is None
+                               else self.db.set_manual_rate(char_id, key, value, now))
+                rebuild_gathering(self.db, now, self.config, self.clock.local_offset_ms(now))
+        except sqlite3.Error as error:
+            log.warning("setting a manual rate failed: %s", error)
+            return json_response(503, {"error": "database_busy"})
+        log.info("manual rate of item %s for %s %s from the dashboard", key, char_id,
+                 "cleared" if value is None else f"set to {value}/hr")
+        return json_response(200, {"set": changed})
 
     def rule(self, body: bytes) -> Response:
         """Set or clear an item rule from the dashboard, then re-plan and rewrite the plan file (SPEC §3.4.2, D43, SEC8).

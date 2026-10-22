@@ -6,9 +6,11 @@ from dataclasses import replace
 from ahsync.engine import gathering_view as gv
 from ahsync.engine.gathering import CatalogItem, Observed, Source
 from ahsync.engine.gathering_view import PriceFacts, gathering_view
+from ahsync.engine.sessions import Candidate, Session
 from tests.support import gathering_world as gw
 
-HOUR = 3_600_000
+HOUR, MINUTE = 3_600_000, 60_000
+SUN, MON = gw.SUN, gw.MON
 
 
 def rows(payload: dict, char: str = "") -> dict[str, dict]:
@@ -192,7 +194,8 @@ def test_GA12_the_freshness_line_then_with_your_own_scan_as_the_newest_price():
     facts[gw.COPPER] = replace(facts[gw.COPPER], seen_ms=gw.NOW - 12 * 60_000, source="local")
     assert gathering_view(gw.world(facts=facts))["fresh"][0] == ["AH prices 12 min old (your scan)", "pos"]
     assert gathering_view(gw.world(rates=False))["fresh"][2] == ["0 farming sessions", ""]
-    assert gathering_view(gw.world(sessions=1, session_minutes=60))["fresh"][2] == ["1 farming session, 1 h observed", ""]
+    one = [Session("s", gw.BRUGAN, gw.NOW - 2 * HOUR, gw.NOW - HOUR, ((gw.COPPER, 20),), "gap")]
+    assert gathering_view(gw.world(sessions=one))["fresh"][2] == ["1 farming session, 1 h observed", ""]
 
 
 def test_the_day_one_page_says_no_price_history_yet_and_shows_the_compact_detail():
@@ -245,7 +248,8 @@ def test_rate_cards_list_who_has_a_rate_first_then_why_the_others_have_none():
     assert leather["lines"][0] == ["Gross gold/hr", "21 × 95c = 19s 95c"]      # Brugan's 21 as her fallback
     silver = gw.view_card(p, gw.BRUGAN, str(gw.SILVER))
     assert silver == {"blocks": [{"char": gw.BRUGAN, "kind": "ineligible", "head": "Brugan — no sessions with Silver Ore yet · not "
-                                  "eligible (Mining 68 of 75)", "sub": "", "foot": "", "lines": []}], "lines": []}
+                                  "eligible (Mining 68 of 75)", "sub": "", "foot": "", "lines": [], "clear": False,
+                                  "override": None}], "lines": []}
     alone = gathering_view(gw.world(manual={(gw.BRUGAN, gw.WOOL): 9}))
     assert gw.view_card(alone, "", str(gw.WOOL))["blocks"][0]["sub"] == "(no sessions)"
     assert rows(alone)["Wool Cloth"]["rate_title"] == "Manual override 9/hr" + gv.CLICK_HINT
@@ -313,9 +317,142 @@ def test_a_known_chance_that_is_not_the_cheapest_default_and_an_observed_rate_of
     item = CatalogItem(1, "Odd Herb", ("Herbalism",), (Source("node", "Herbalism", 1),))
     facts = {1: PriceFacts(300, gw.NOW, "ahf", 5, 10, cur_others=200)}
     w = gv.GatheringWorld([item], facts, {"A-R": {"Herbalism": 5}}, ["A-R"], gw.NOW,
-                          observed={("A-R", 1): Observed(6, 3, 30, 1)})
+                          sessions=[Session("A-R:1:0", "A-R", 0, 30 * 60_000, ((1, 3),), "gap")])
     row = gw.view_rows(gathering_view(w), "")[0]
     assert row["net_title"].endswith("· chance is the default: no sales data yet (25%)")
     assert row["rate_title"].startswith("3 units ÷ 30 min over 1 session = 6.0/hr")
-    zero = replace(w, observed={("A-R", 1): Observed(0, 0, 0, 1)})
-    assert gw.view_rows(gathering_view(zero), "")[0]["rate_title"].startswith("0 units ÷ 0 min over 1 session = 0.0")
+    assert w.observed == {("A-R", 1): Observed(6, 3, 1_800_000, 1)}
+
+
+def card(payload: dict, char: str, key: int) -> list[dict]:
+    """A view's rate-card blocks for one item."""
+    return gw.view_card(payload, char, key)["blocks"]
+
+
+def test_GA14_a_candidate_of_19_units_is_dropped_and_linen_cloth_has_no_rate():
+    runs = tuple((c, lg, a, b, {"monster": [(gw.LINEN, 7), (gw.BROKEN_FANG, 7), (gw.CHIPPED_CLAW, 5)]})
+                 if c == gw.AMAYA and a == gw.at(gw.SAT, "17:00") else (c, lg, a, b, loot)
+                 for c, lg, a, b, loot in gw.RUNS)
+    found, open_ = gw.sessions(gw.gather_events(runs), gw.NOW, gw.GAP_MS, 20)
+    linen = rows(gathering_view(gw.world(sessions=found, open=open_)))["Linen Cloth"]
+    assert (linen["rate"], linen["character"], linen["net"]) == ("—", "—", "—")
+    assert rows(gathering_view(gw.world()))["Linen Cloth"]["rate"] == "14"           # 7 × 60 ÷ 30 with 20 units
+
+
+def test_GA17_a_session_without_duration_counts_on_the_freshness_line_but_gives_no_rate():
+    single = ((gw.BRUGAN, gw.at(SUN, "08:55"), gw.at(SUN, "09:00"), gw.at(SUN, "09:00"), {"mining": [(gw.COPPER, 20)]}),)
+    p = gathering_view(gw.world(extra=single))
+    assert p["fresh"][2] == ["8 farming sessions, 3 h 40 min observed", ""]
+    assert rows(p)["Copper Ore"]["rate"] == "38"
+    assert [line["text"][:15] for line in card(p, "", gw.COPPER)[0]["lines"]] == [
+        "open: Mon 10:21", "Mon 08:05–08:35", "Sun 14:02–14:59", "Sat 21:10–21:33"]   # Sun 09:00 not listed
+
+
+def test_GA21_a_manual_rate_replaces_the_observed_one_until_cleared():
+    earth = rows(gathering_view(gw.world()))["Earthroot"]
+    assert (earth["rate"], earth["rate_sub"], earth["net"], earth["note"]) == ("12", "manual", "6s 83c",
+                                                                               "Amaya: manual rate")   # 682.65
+    cleared = rows(gathering_view(gw.world(manual={})))["Earthroot"]
+    assert (cleared["rate"], cleared["rate_sub"], cleared["net"], cleared["note"]) == (
+        "10", "", "5s 69c", "Amaya: 2 sessions, 48 min")                                          # 568.875
+
+
+def test_GA22_a_fallback_is_display_only_and_his_own_rate_replaces_it_even_if_lower():
+    linen = rows(gathering_view(gw.world()), gw.BRUGAN)["Linen Cloth"]
+    assert (linen["rate"], linen["fallback"], linen["character"], linen["net"]) == ("14", True, "Amaya", "5s 3c")
+    assert linen["rate_title"] == ("Amaya's observed rate; Brugan has none yet. Replaced by Brugan's own rate once "
+                                   "Brugan has one, even if lower." + gv.CLICK_HINT)
+    mine = ((gw.BRUGAN, gw.at(MON, "05:55"), gw.at(MON, "06:00"), gw.at(MON, "06:30"),
+             {"monster": [(gw.LINEN, 4), (gw.RUINED_SCRAPS, 16)]}),)
+    p = gathering_view(gw.world(extra=mine))
+    own = rows(p, gw.BRUGAN)["Linen Cloth"]
+    assert (own["rate"], own["fallback"], own["character"], own["net"]) == ("8", False, "Brugan", "2s 88c")
+    assert (rows(p)["Linen Cloth"]["rate"], rows(p)["Linen Cloth"]["character"]) == ("14", "Amaya")
+
+
+def test_GA23_under_all_characters_a_tie_goes_to_the_first_character_id_manual_included():
+    tie = gathering_view(gw.world(manual={**gw.MANUAL, (gw.AMAYA, gw.LIGHT_LEATHER): 21}))
+    leather = rows(tie)["Light Leather"]
+    assert (leather["rate"], leather["character"], leather["rate_sub"]) == ("21", "Amaya", "manual")
+    higher = rows(gathering_view(gw.world(manual={**gw.MANUAL, (gw.AMAYA, gw.LIGHT_LEATHER): 30})))["Light Leather"]
+    assert (higher["rate"], higher["character"], higher["rate_sub"], higher["net"]) == ("30", "Amaya", "manual",
+                                                                                      "26s 99c")   # 30 × 89.98
+
+
+def test_GA24_the_open_candidates_line_until_15_minutes_after_its_last_loot():
+    open_line = card(gathering_view(gw.world()), "", gw.COPPER)[0]["lines"][0]
+    assert open_line == {"text": "open: Mon 10:21– · 9 Copper Ore so far · not yet confirmed (12 of the 20 units "
+                                 "needed)", "open": True,
+                         "title": "still collecting: it ends 15 min after the last loot (10:30) or at logout; no rate "
+                                  "uses it"}
+    later = gathering_view(gw.world(now_ms=gw.at(MON, "10:45")))
+    assert not any(line["open"] for line in card(later, "", gw.COPPER)[0]["lines"])
+    assert rows(later)["Copper Ore"]["rate"] == "38" and later["fresh"][2][0].startswith("7 farming sessions")
+    big = gw.world(open={gw.BRUGAN: Candidate(gw.BRUGAN, gw.at(MON, "10:00"), gw.at(MON, "10:30"),
+                                              ((gw.COPPER, 25),))})
+    assert card(gathering_view(big), "", gw.COPPER)[0]["lines"][0]["text"] == (
+        "open: Mon 10:00– · 25 Copper Ore so far · 25 units: a session once it ends")
+    assert all(not line["open"] for line in card(gathering_view(gw.world()), "", gw.TIN)[0]["lines"])   # no Tin in it
+
+
+def test_GA25_copper_ores_rate_card_under_all_characters():
+    brugan, amaya = card(gathering_view(gw.world()), "", gw.COPPER)
+    assert (brugan["head"], brugan["sub"]) == ("Brugan · 38/hr observed", "· 70 Copper Ore over 3 sessions, 1 h 50 min")
+    assert [(line["text"], line["title"]) for line in brugan["lines"][1:]] == [
+        ("Mon 08:05–08:35 · 30 min · 45 Copper Ore · 90/hr", "ended at logout"),
+        ("Sun 14:02–14:59 · 57 min · 17 · 18/hr",
+         "ended by inactivity: no loot 14:59–15:14; those 15 min are not counted"),
+        ("Sat 21:10–21:33 · 23 min · 8 · 21/hr", "ended at logout")]
+    assert brugan["override"] == {"placeholder": "38", "clear": True,
+                                  "note": "an override replaces the observed rate in the table for Brugan until cleared"}
+    assert (amaya["head"], amaya["override"], amaya["lines"]) == (
+        "Amaya — no sessions with Copper Ore yet · not eligible (no Mining)", None, [])
+
+
+def test_GA26_earthroots_active_override_and_light_leather_for_amaya():
+    amaya, brugan = card(gathering_view(gw.world()), "", gw.EARTHROOT)
+    assert (amaya["head"], amaya["sub"], amaya["clear"], amaya["override"]) == (
+        "Amaya · 12/hr manual", "(observed 10/hr from 8 Earthroot over 2 sessions, 48 min)", True, None)
+    assert [line["text"] for line in amaya["lines"]] == ["Sun 20:40–21:08 · 28 min · 4 Earthroot · 9/hr",
+                                                         "Sun 20:00–20:20 · 20 min · 4 · 12/hr"]
+    assert amaya["lines"][1]["title"] == "ended by inactivity: no loot 20:20–20:35; those 15 min are not counted"
+    assert amaya["foot"] == "the override replaces the observed rate in the table for Amaya until cleared"
+    assert (brugan["head"], brugan["override"]) == (
+        "Brugan — no sessions with Earthroot yet · not eligible (no Herbalism)", None)
+    [leather] = card(gathering_view(gw.world()), gw.AMAYA, gw.LIGHT_LEATHER)
+    assert (leather["head"], leather["override"]) == ("Amaya — no sessions with Light Leather yet",
+                                                      {"placeholder": "", "note": "", "clear": False})
+    lost = gathering_view(gw.world(skills={**gw.SKILLS, gw.BRUGAN: {"Skinning": 40}}))
+    assert card(lost, gw.BRUGAN, gw.COPPER)[0]["override"] is None            # his history, no override to set
+
+
+def test_GA27_brugans_manual_copper_ore_rate():
+    copper = rows(gathering_view(gw.world(manual={**gw.MANUAL, (gw.BRUGAN, gw.COPPER): 15})))["Copper Ore"]
+    assert (copper["rate"], copper["rate_sub"], copper["net"], copper["note"]) == ("15", "manual", "31s 33c",
+                                                                                   "Brugan: manual rate")
+
+
+def test_D82_brugan_picked_with_the_toggle_on_then_off():
+    p = gathering_view(gw.world())
+    view = gw.view_rows(p, gw.BRUGAN)
+    shown = [r for r in view if r["eligible"]]
+    assert len(shown) == 7 and p["by_char"][gw.BRUGAN]["foot"][0] == ["7 of 16 shown", ""]
+    linen = next(r for r in shown if r["item"] == "Linen Cloth")
+    assert (linen["rate"], linen["fallback"], linen["character"], linen["note"]) == ("14", True, "Amaya",
+                                                                                     "Brugan has no rate yet")
+    assert len(view) == 16                                                        # toggle off: every row
+    earth = next(r for r in view if r["item"] == "Earthroot")
+    assert (earth["rate"], earth["fallback"], earth["character"]) == ("12", True, "Amaya")
+    assert earth["rate_title"].startswith("Amaya's manual rate; Brugan has none yet.")
+    copper = next(r for r in view if r["item"] == "Copper Ore")
+    assert (copper["rate"], copper["fallback"]) == ("38", False)
+
+
+def test_D87_the_freshness_line_and_stale_prices():
+    p = gathering_view(gw.world())
+    assert p["fresh"] == [["AH prices 26 h old", "amber"], ["professions synced Mon 10:38", ""],
+                          ["7 farming sessions, 3 h 40 min observed", ""]]
+    assert {r["price_title"] for r in gw.view_rows(p, "") if r["ah_price"] != "—"} == {
+        "seen 26 h ago (AHF scan Sun 08:38) · stale: over 24 h"}
+    assert "Prices are 26 h old (amber over 24 h): every gold/hr uses them as they are." in p["note"]
+    assert rows(p)["Copper Ore"]["net"] == "79s 38c"                               # the stale price, as it is

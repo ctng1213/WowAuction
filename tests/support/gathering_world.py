@@ -3,17 +3,21 @@
 Monday 10:38. Brugan has Mining 68 and Skinning 40, Amaya Herbalism 45 and Fishing 20. AH prices come from
 an AHF scan 26 h old (Sun 08:38). The mockup's 16-item catalog (its own small catalog: Rough Stone and the
 grey drops are not in it, unlike the shipped data/gathering_catalog.json), each item's price, quantity,
-30-day median, chance (None = no sales data) and vendor price. The rates are the mockup's, injected as
-M17 will compute them from sessions: Brugan's Copper Ore 38/hr (70 units over 3 sessions, 110 min), Tin Ore
-4/hr, Light Leather 21/hr; Amaya's Peacebloom 26/hr, Silverleaf 19/hr, Earthroot 10/hr observed with a
-manual 12, Linen Cloth 14/hr.
+30-day median, chance (None = no sales data) and vendor price. The rates come from the addon's gather
+events (EVENTS), grouped by engine.sessions into the mockup's 7 confirmed sessions (220 min) and Brugan's open
+candidate (Mon 10:21–10:30): Brugan's Copper Ore 38/hr (70 units over 3 sessions, 110 min), Tin Ore 4/hr,
+Light Leather 21/hr; Amaya's Peacebloom 26/hr, Silverleaf 19/hr, Earthroot 10/hr observed with a manual 12,
+Linen Cloth 14/hr. Two short candidates are dropped: Brugan's Sun 15:14 (2 Rough Stone, the GA15 event that
+ends his 14:02–14:59 session by inactivity) and Amaya's Mon 09:05 (1 Small Egg, the next login that makes
+her Sun 20:40–21:08 session "ended at logout").
 """
 from __future__ import annotations
 
 from dataclasses import replace
 
-from ahsync.engine.gathering import Observed, catalog
+from ahsync.engine.gathering import catalog
 from ahsync.engine.gathering_view import GatheringWorld, PriceFacts
+from ahsync.engine.sessions import GatherEvent, sessions
 
 HOUR, MINUTE = 3_600_000, 60_000
 MON = 1_728_259_200_000             # Mon 2024-10-07 00:00 UTC (offset 0: local = UTC)
@@ -24,6 +28,9 @@ COPPER, TIN, SILVER, PEACEBLOOM, SILVERLEAF, EARTHROOT = 2770, 2771, 2775, 2447,
 MAGEROYAL, BRIARTHORN, LIGHT_LEATHER, MEDIUM_LEATHER, LINEN, WOOL = 785, 2450, 2318, 2319, 2589, 2592
 SMALL_EGG, SMALLFISH, MUD_SNAPPER, LIGHT_FEATHER = 6889, 6291, 6289, 17056
 ROUGH_STONE, THORIUM = 2835, 10620
+RUINED_SCRAPS, LIGHT_HIDE, BROKEN_FANG, CHIPPED_CLAW = 2934, 783, 7073, 7074   # looted, never in the catalog
+SAT, SUN = MON - 2 * 24 * HOUR, MON - 24 * HOUR
+GAP_MS = 15 * MINUTE
 SKILLS = {AMAYA: {"Herbalism": 45, "Fishing": 20, "Tailoring": 160, "Enchanting": 142},
           BRUGAN: {"Mining": 68, "Skinning": 40, "Blacksmithing": 112, "Alchemy": 225}}
 
@@ -48,13 +55,90 @@ _ITEMS = (
 )
 TYPES = {"Mining": "node", "Herbalism": "node", "Skinning": "skinning", "Fishing": "fishing"}
 
-OBSERVED = {
-    (BRUGAN, COPPER): Observed(38, 70, 110, 3), (BRUGAN, TIN): Observed(4, 2, 30, 1),
-    (BRUGAN, LIGHT_LEATHER): Observed(21, 19, 55, 2), (AMAYA, PEACEBLOOM): Observed(26, 21, 48, 2),
-    (AMAYA, SILVERLEAF): Observed(19, 15, 48, 2), (AMAYA, EARTHROOT): Observed(10, 8, 48, 2),
-    (AMAYA, LINEN): Observed(14, 7, 30, 1),
-}
 MANUAL = {(AMAYA, EARTHROOT): 12}
+
+
+def at(day: int, hh_mm: str) -> int:
+    """A time of the mockup's week.
+
+    Args:
+        day: SAT, SUN or MON (UTC ms of midnight).
+        hh_mm: "21:10".
+
+    Returns:
+        UTC ms (offset 0: local = UTC).
+    """
+    hours, minutes = hh_mm.split(":")
+    return day + int(hours) * HOUR + int(minutes) * MINUTE
+
+
+# Each loot run: (character, login, first loot, last loot, {source: [(key, units), ...]}). A run's loot is spread
+# over events every 10 min or less from its first to its last loot, one event list per source.
+RUNS = (
+    (BRUGAN, at(SAT, "18:50"), at(SAT, "19:00"), at(SAT, "19:32"),
+     {"skinning": [(LIGHT_LEATHER, 12), (LIGHT_HIDE, 2)], "monster": [(RUINED_SCRAPS, 8)]}),
+    (BRUGAN, at(SAT, "18:50"), at(SAT, "21:10"), at(SAT, "21:33"),
+     {"mining": [(COPPER, 8)], "skinning": [(LIGHT_LEATHER, 7)], "monster": [(RUINED_SCRAPS, 5)]}),
+    (BRUGAN, at(SUN, "13:55"), at(SUN, "14:02"), at(SUN, "14:59"), {"mining": [(COPPER, 17), (ROUGH_STONE, 11)]}),
+    (BRUGAN, at(SUN, "13:55"), at(SUN, "15:14"), at(SUN, "15:14"), {"mining": [(ROUGH_STONE, 2)]}),
+    (BRUGAN, at(MON, "08:00"), at(MON, "08:05"), at(MON, "08:35"),
+     {"mining": [(COPPER, 45), (TIN, 2), (ROUGH_STONE, 8)]}),
+    (BRUGAN, at(MON, "10:15"), at(MON, "10:21"), at(MON, "10:30"), {"mining": [(COPPER, 9), (ROUGH_STONE, 3)]}),
+    (AMAYA, at(SAT, "16:55"), at(SAT, "17:00"), at(SAT, "17:30"),
+     {"monster": [(LINEN, 7), (BROKEN_FANG, 7), (CHIPPED_CLAW, 6)]}),
+    (AMAYA, at(SUN, "19:55"), at(SUN, "20:00"), at(SUN, "20:20"),
+     {"herbalism": [(PEACEBLOOM, 10), (SILVERLEAF, 6), (EARTHROOT, 4)]}),
+    (AMAYA, at(SUN, "19:55"), at(SUN, "20:40"), at(SUN, "21:08"),
+     {"herbalism": [(PEACEBLOOM, 11), (SILVERLEAF, 9), (EARTHROOT, 4)]}),
+    (AMAYA, at(MON, "09:00"), at(MON, "09:05"), at(MON, "09:05"), {"monster": [(SMALL_EGG, 1)]}),
+)
+
+
+def spread(char_id: str, login: int, first: int, last: int, loot: dict[str, list[tuple[int, int]]]) -> list[tuple]:
+    """One loot run as (char, time, login, source, loot) rows: per source, events every 10 min or less.
+
+    Args:
+        char_id: The character.
+        login: Her initial login, ms.
+        first: The run's first loot, ms.
+        last: Its last loot, ms.
+        loot: Source -> [(key, units)].
+
+    Returns:
+        Rows (char, at ms, login ms, source, ((key, units), ...)); each source's units split as evenly as possible
+        over its events, the remainder on the first ones; every source loots at the first and the last time.
+    """
+    rows = []
+    for source, items in loot.items():
+        n = max(2, -(-(last - first) // (10 * MINUTE)) + 1) if last > first else 1
+        n = min(n, max(units for _, units in items))        # every event loots at least one unit
+        for i in range(n):
+            t = first + ((last - first) * i // (n - 1)) // 1000 * 1000 if n > 1 else first
+            share = tuple((k, u // n + (1 if i < u % n else 0)) for k, u in items)
+            rows.append((char_id, t, login, source, tuple((k, q) for k, q in share if q)))
+    return rows
+
+
+def gather_events(runs=RUNS) -> list[GatherEvent]:
+    """The addon's gather events for some loot runs, with ids as the addon writes them (charId:timeMs:seq).
+
+    Args:
+        runs: Loot runs (RUNS by default).
+
+    Returns:
+        The events, by character, time and seq.
+    """
+    rows = sorted(row for run in runs for row in spread(*run))
+    seq: dict[tuple[str, int], int] = {}
+    out = []
+    for char_id, t, login, source, loot in rows:
+        n = seq.get((char_id, t), 0)
+        seq[(char_id, t)] = n + 1
+        out.append(GatherEvent(f"{char_id}:{t}:{n}", char_id, t, login, loot, source))
+    return out
+
+
+EVENTS = gather_events()
 
 
 def catalog_rows() -> list[dict]:
@@ -126,20 +210,22 @@ def view_card(payload: dict, char: str, key: int | str) -> dict:
     return {"blocks": [b for b in blocks if not char or b["char"] == char], "lines": row["card_lines"]}
 
 
-def world(day_one: bool = False, rates: bool = True, **changes) -> GatheringWorld:
-    """The mockup's Gathering world.
+def world(day_one: bool = False, rates: bool = True, now_ms: int = NOW, extra=(), **changes) -> GatheringWorld:
+    """The mockup's Gathering world, its sessions grouped from the gather events by engine.sessions.
 
     Args:
         day_one: The day-one state (price_facts).
-        rates: False for the no-rates state (no session, no manual rate).
+        rates: False for the no-rates state (no event, no manual rate).
+        now_ms: When the page is built (the open candidate ends 15 min after its last loot, GA24).
+        extra: More loot runs, as in RUNS, added to the mockup's.
         changes: GatheringWorld field overrides.
 
     Returns:
-        The world at Mon 10:38, 7 sessions over 220 min, professions synced Mon 10:38.
+        The world at Mon 10:38: 7 sessions over 220 min and Brugan's open candidate, professions synced Mon 10:38.
     """
     items, skipped = catalog(catalog_rows())
     assert not skipped
-    base = GatheringWorld(items, price_facts(day_one), SKILLS, [AMAYA, BRUGAN], NOW, 0,
-                          MANUAL if rates else {}, OBSERVED if rates else {}, 7 if rates else 0,
-                          220 if rates else 0, NOW)
+    found, open_ = sessions(gather_events((*RUNS, *extra)) if rates else [], now_ms, GAP_MS, 20)
+    base = GatheringWorld(items, price_facts(day_one), SKILLS, [AMAYA, BRUGAN], now_ms, 0,
+                          manual=MANUAL if rates else {}, sessions=found, open=open_, professions_ms=NOW)
     return replace(base, **changes)

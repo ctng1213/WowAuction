@@ -737,6 +737,87 @@ def test_D81_the_gathering_page_under_all_characters():
     assert ".blocks.filter(b => !char || b.char === char)" in js and "lines: row.card_lines || []" in js
 
 
+def gathering_characters(db: Database) -> None:
+    """Amaya (Herbalism 45) and Brugan (Mining 68), as a professions read leaves them."""
+    with db.transaction():
+        db.conn.executemany("INSERT INTO characters(id, name, market, gold) VALUES (?, ?, ?, 0)",
+                            [("Amaya-Grommash", "Amaya", M), ("Brugan-Grommash", "Brugan", M)])
+        db.conn.executemany("INSERT INTO professions(char_id, profession, skill, max_skill) VALUES (?, ?, ?, 75)",
+                            [("Amaya-Grommash", "Herbalism", 45), ("Brugan-Grommash", "Mining", 68)])
+
+
+def test_SEC12_a_manual_rate_is_checked_stored_and_rebuilds_only_the_gathering_page(db, refreshes, monkeypatch,
+                                                                                     caplog):
+    from ahsync.web import server as server_module
+    rebuilt, replans = [], []
+    monkeypatch.setattr(server_module, "rebuild_gathering", lambda *a: rebuilt.append(a) or [M])
+    monkeypatch.setattr(server_module, "replan_all", lambda *a: replans.append(a) or [M])
+    gathering_characters(db)
+    clock = FakeClock()
+    app = DashboardApp(db, Config(markets=(M,)), clock, refreshes, token="tok-123", port=8765)
+
+    def post(payload, headers=None) -> Reply:
+        """POST /api/manual_rate."""
+        body = payload if isinstance(payload, bytes) else json.dumps(payload).encode("utf-8")
+        reply = app.handle("POST", "/api/manual_rate", headers or write_headers(), body)
+        return Reply(reply.status, dict(reply.headers), reply.body)
+
+    ok = post({"char": "Amaya-Grommash", "key": 2449, "items_per_hour": 12})
+    assert (ok.status, ok.json()) == (200, {"set": True})
+    assert db.conn.execute("SELECT * FROM manual_rates").fetchall() == [("Amaya-Grommash", 2449, 12, clock.now_ms())]
+    assert len(rebuilt) == 1 and replans == [] and refreshes.calls == []          # the page only, no re-plan
+    for bad, reason in ((0, "whole number from 1 to 10,000"), (10001, "whole number from 1 to 10,000"),
+                        (12.5, "whole number from 1 to 10,000"), ("fast", "whole number from 1 to 10,000"),
+                        (True, "whole number from 1 to 10,000")):
+        refused = post({"char": "Amaya-Grommash", "key": 2449, "items_per_hour": bad})
+        assert refused.status == 400 and reason in refused.json()["message"], bad
+    for payload, reason in (({"char": "Cara-Grommash", "key": 2449, "items_per_hour": 5}, "unknown character"),
+                            ({"char": "Amaya-Grommash", "key": 99999, "items_per_hour": 5}, "not in the gathering catalog"),
+                            ({"char": "Brugan-Grommash", "key": 2449, "items_per_hour": 5},
+                             "Brugan can't gather Earthroot (no Herbalism)"),
+                            ({"char": "Amaya-Grommash", "key": 2449}, "whole number"),
+                            (b"[1]", "JSON object"), (b"nope", "JSON object")):
+        refused = post(payload)
+        assert (refused.status, refused.json()["error"]) == (400, "bad_request") and reason in refused.json()["message"]
+    assert db.conn.execute("SELECT items_per_hour FROM manual_rates").fetchall() == [(12,)] and len(rebuilt) == 1
+    cleared = post({"char": "Amaya-Grommash", "key": 2449, "items_per_hour": None})
+    assert (cleared.status, cleared.json()) == (200, {"set": True}) and db.count("manual_rates") == 0
+    assert post({"char": "Amaya-Grommash", "key": 2449, "clear": True}).json() == {"set": False}   # nothing to clear
+    caplog.set_level(logging.WARNING, logger="ahsync.web")
+    for headers in (write_headers(origin="https://evil.example"), write_headers(token=""),
+                    write_headers(host="evil.example:8765")):
+        refused = post({"char": "Amaya-Grommash", "key": 2449, "items_per_hour": 12}, headers)
+        assert refused.status == 403
+    assert db.count("manual_rates") == 0 and "tok-123" not in caplog.text
+    assert app.handle("GET", "/api/manual_rate", GOOD).status == 405                 # GET never changes state
+
+    def busy(*_args, **_kwargs):
+        """Fail like a locked database."""
+        raise sqlite3.OperationalError("database is locked")
+    monkeypatch.setattr(app.db, "set_manual_rate", busy)
+    assert post({"char": "Amaya-Grommash", "key": 2449, "items_per_hour": 12}).status == 503
+
+
+def test_D85_the_rate_card_posts_save_and_clear_and_reloads_the_rebuilt_payload():
+    from ahsync.engine.gathering_view import gathering_view
+    from tests.support import gathering_world as gw
+    js = gathering_js()
+    assert "post('/api/manual_rate', { char, key: Number(key), items_per_hour: value })" in js and "load(id)" in js
+    assert "typed === null ? null" in js                                              # Clear posts null
+    assert "button[data-ga-save]').forEach" in js and "button[data-ga-clear]').forEach" in js
+    assert "gaRateCard(card, key)" in js and "b.override.placeholder" in js and "b.clear ?" in js
+    assert "l.title ? ` title=" in js                                                # how a session ended, on hover
+    # What the page redraws from: Brugan's 15 on Copper Ore, then cleared; Earthroot's active override.
+    manual = gathering_view(gw.world(manual={**gw.MANUAL, (gw.BRUGAN, gw.COPPER): 15}))
+    copper = next(r for r in gw.view_rows(manual, "") if r["item"] == "Copper Ore")
+    assert (copper["rate"], copper["rate_sub"], copper["net"], copper["note"]) == ("15", "manual", "31s 33c",
+                                                                                   "Brugan: manual rate")
+    back = next(r for r in gw.view_rows(gathering_view(gw.world()), "") if r["item"] == "Copper Ore")
+    assert (back["rate"], back["rate_sub"]) == ("38", "")
+    earth = gw.view_card(gathering_view(gw.world()), "", gw.EARTHROOT)["blocks"][0]
+    assert (earth["head"], earth["clear"], earth["override"]) == ("Amaya · 12/hr manual", True, None)
+
+
 def test_D88_the_gathering_pages_empty_states_come_from_the_payload():
     js = gathering_js()
     assert "d.no_match.split('{q}').join(search)" in js and "d.no_match_filters" in js

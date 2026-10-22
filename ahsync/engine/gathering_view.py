@@ -1,22 +1,27 @@
 """The Gathering page: every cell, note, footer, filter field and sort key (SPEC §3.4E, §3.5 Gathering, §8.5).
 
 Built M16 (the day-one page): the catalog's rows ranked by AH price, eligibility per character, the
-rate priority over whatever rates exist (none before M17's sessions), net gold per hour with the
-default chance, the filters' data, one complete view per character (`by_char`), the freshness line,
-the rate cards and the compact detail. The historical columns (Median 30d, Deviation, Sell window,
-Sell window price) are "—" until M18 fills the same row fields. Pure: data in, texts out.
+rate priority, net gold per hour with the default chance, the filters' data, one complete view per
+character (`by_char`), the freshness line, the rate cards and the compact detail. Built M17: the
+observed rates come from the confirmed sessions (engine.sessions, engine.gathering.observed_rates),
+and the rate card lists the open candidate, the last sessions with how each ended, and the manual
+override's controls. The historical columns (Median 30d, Deviation, Sell window, Sell window price)
+are "—" until M18 fills the same row fields. Pure: data in, texts out.
 """
 from __future__ import annotations
 
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from functools import cached_property
 
 from ahsync.engine.fees import AH_CUT, DEPOSIT_BP
-from ahsync.engine.gathering import (CATEGORIES, GATHERING_PROFESSIONS, SESSION_CONFIRM_UNITS, CatalogItem,
-                                     Observed, Rate, best_rate, chance_to_sell, deposit_per_unit, effective_rate,
-                                     eligible, gross_per_hour, net_per_hour, net_per_unit, own_rate, skill_source)
+from ahsync.engine.gathering import (CATEGORIES, GATHERING_PROFESSIONS, SESSION_CONFIRM_UNITS, SESSION_GAP_MINUTES,
+                                     CatalogItem, Observed, Rate, best_rate, chance_to_sell, deposit_per_unit,
+                                     effective_rate, eligible, gross_per_hour, minutes_of, net_per_hour, net_per_unit,
+                                     observed_rate, observed_rates, own_rate, skill_source, why_not_eligible)
 from ahsync.engine.prices import MIN_HOURLY_CLOSES
+from ahsync.engine.sessions import LOGOUT_ENDED, Candidate, Session
 from ahsync.engine.views import market_activity, money, round_half_up, source_label
 
 MINUTE_MS, HOUR_MS = 60_000, 3_600_000
@@ -33,8 +38,9 @@ CATALOG_NOTE = ("Items the catalog doesn't know are never shown as farmable, eve
 FORMULA_NOTE = ("Net gold/hr = items/hr × net per unit, where net per unit = post price − 5% AH cut − (1 − chance to "
                 "sell) × deposit (24 h, refunded on a sale). Posts are priced at the current AH price. Gross gold/hr "
                 "(items/hr × price) is on the detail below.")
-NO_RATES = (f"Farm for {SESSION_CONFIRM_UNITS}+ units and the addon records your rate. Every row keeps its price and "
-            f"sell window meanwhile.")
+NO_RATES = ("Farm for {n}+ units and the addon records your rate. Every row keeps its price and sell window "
+            "meanwhile.")
+CARD_SESSIONS = 3                  # the rate card lists the last 3 confirmed sessions with the material (§3.4E.7)
 NO_MATCH = ('No farmable material matches "{q}". The catalog covers what it knows how to gather; clear the search or '
             'the filters.')
 NO_MATCH_FILTERS = ("No farmable material matches the filters. The catalog covers what it knows how to gather; clear "
@@ -104,13 +110,37 @@ class GatheringWorld:
     characters: Sequence[str]                          # the market's character ids
     now_ms: int
     offset_ms: int = 0
-    manual: Mapping[tuple[str, int], int] = field(default_factory=dict)
-    observed: Mapping[tuple[str, int], Observed] = field(default_factory=dict)
-    sessions: int = 0                                  # confirmed farming sessions in the 90 days kept (M17)
-    session_minutes: int = 0
+    manual: Mapping[tuple[str, int], int] = field(default_factory=dict)   # (character, key) -> manual items/hr
+    sessions: Sequence[Session] = ()                   # the characters' confirmed sessions in the 90 days kept
+    open: Mapping[str, Candidate] = field(default_factory=dict)          # character id -> her open candidate
     professions_ms: int | None = None                  # when the professions were last captured
     default_sell_prob: float = 0.25
     default_sell_prob_cheapest: float = 0.5
+    confirm_units: int = SESSION_CONFIRM_UNITS         # config session_confirm_units (the texts quote it)
+    gap_minutes: int = SESSION_GAP_MINUTES             # config session_gap_minutes
+
+    @cached_property
+    def observed(self) -> dict[tuple[str, int], Observed]:
+        """Every character's observed rate per material, computed once from the sessions (SPEC §3.4E.5).
+
+        Returns:
+            (character id, item key) -> Observed.
+        """
+        return observed_rates(self.sessions)
+
+    @cached_property
+    def card_sessions(self) -> dict[tuple[str, int], list[Session]]:
+        """The sessions a rate card lists: per character and material, those with a duration, newest first.
+
+        Returns:
+            (character id, item key) -> sessions (start time descending, then id), zero-duration ones left out (GA17).
+        """
+        out: dict[tuple[str, int], list[Session]] = {}
+        for s in sorted(self.sessions, key=lambda s: (-s.start_ms, s.session_id)):
+            if s.duration_ms > 0:
+                for key, _ in s.items:
+                    out.setdefault((s.char_id, key), []).append(s)
+        return out
 
 
 @dataclass(frozen=True)
@@ -178,6 +208,19 @@ def clock(ms: int, offset_ms: int) -> str:
     """
     t = time.gmtime((ms + offset_ms) // 1000)
     return f"{time.strftime('%a', t)} {time.strftime('%H:%M', t)}"
+
+
+def hhmm(ms: int, offset_ms: int) -> str:
+    """A local time of day, e.g. "14:59".
+
+    Args:
+        ms: UTC ms.
+        offset_ms: Local time minus UTC, ms.
+
+    Returns:
+        The text.
+    """
+    return time.strftime("%H:%M", time.gmtime((ms + offset_ms) // 1000))
 
 
 def copper2(x: float) -> str:
@@ -261,8 +304,9 @@ def _rate_title(r: Rate) -> str:
     if r.kind == "manual":
         seen = f" (observed {o.items_per_hour}/hr: {o.units} units ÷ {duration(o.minutes)})" if o else ""
         return f"Manual override {r.items_per_hour}/hr{seen}"
-    assert o is not None
-    tenths = round_half_up(o.units * 600 / o.minutes) if o.minutes else 0
+    assert o is not None and o.duration_ms > 0         # observed rates come from sessions with a duration (GA17)
+    ms = o.duration_ms
+    tenths = (o.units * 20 * HOUR_MS + ms) // (2 * ms)                    # items per hour in tenths, half up
     return (f"{o.units} units ÷ {duration(o.minutes)} over {o.sessions} session{'' if o.sessions == 1 else 's'} = "
             f"{tenths // 10}.{tenths % 10}/hr, rounded")
 
@@ -468,24 +512,58 @@ def _sessions_text(o: Observed) -> str:
     return f"{o.sessions} session{'' if o.sessions == 1 else 's'}, {duration(o.minutes)}"
 
 
-def _ineligible_why(item: CatalogItem, skills: Mapping[str, int]) -> str:
-    """Why a character can't gather an item, for the rate card.
+def _ended_text(s: Session, w: GatheringWorld) -> str:
+    """A session line's hover: how the session ended (SPEC §3.4E.7, GA25).
 
     Args:
-        item: A catalog item with a gathering source (a monster drop is always eligible).
-        skills: The character's profession -> skill.
+        s: The session.
+        w: The world (gap and local offset).
 
     Returns:
-        "no Herbalism", or "Mining 68 of 75" when she has the profession below the requirement.
+        "ended at logout", or "ended by inactivity: no loot 14:59–15:14; those 15 min are not counted".
     """
-    src = skill_source(item)
-    assert src is not None
-    have = skills.get(str(src.profession))
-    return f"no {src.profession}" if have is None else f"{src.profession} {have} of {src.skill}"
+    if s.ended == LOGOUT_ENDED:
+        return "ended at logout"
+    quiet = s.end_ms + w.gap_minutes * MINUTE_MS
+    return (f"ended by inactivity: no loot {hhmm(s.end_ms, w.offset_ms)}–{hhmm(quiet, w.offset_ms)}; those "
+            f"{w.gap_minutes} min are not counted")
+
+
+def _session_lines(char_id: str, item: CatalogItem, w: GatheringWorld) -> list[dict]:
+    """The rate card's lines for one character: her open candidate, then her last sessions with the material.
+
+    Args:
+        char_id: The character.
+        item: The material.
+        w: The world.
+
+    Returns:
+        [{"text", "title", "open"}]: "open: Mon 10:21– · 9 Copper Ore so far · not yet confirmed (12 of the 20 units
+        needed)" when her open candidate contains it (never a rate, GA24); then the last 3 confirmed sessions with a
+        duration that contained it, newest first, "Mon 08:05–08:35 · 30 min · 45 Copper Ore · 90/hr" (the material
+        named on the first only), each with how it ended as its hover (GA25).
+    """
+    lines = []
+    cand = w.open.get(char_id)
+    qty = dict(cand.items).get(item.key) if cand else None
+    if cand is not None and qty:
+        state = (f"not yet confirmed ({cand.units} of the {w.confirm_units} units needed)"
+                 if cand.units < w.confirm_units else f"{cand.units} units: a session once it ends")
+        lines.append({"text": f"open: {clock(cand.start_ms, w.offset_ms)}– · {qty} {item.name} so far · {state}",
+                      "title": f"still collecting: it ends {w.gap_minutes} min after the last loot "
+                               f"({hhmm(cand.last_ms, w.offset_ms)}) or at logout; no rate uses it", "open": True})
+    for i, s in enumerate(w.card_sessions.get((char_id, item.key), [])[:CARD_SESSIONS]):
+        units = dict(s.items)[item.key]
+        what = f"{units} {item.name}" if i == 0 else str(units)
+        lines.append({"text": f"{clock(s.start_ms, w.offset_ms)}–{hhmm(s.end_ms, w.offset_ms)} · "
+                              f"{duration(minutes_of(s.duration_ms))} · {what} · "
+                              f"{observed_rate(units, s.duration_ms)}/hr",
+                      "title": _ended_text(s, w), "open": False})
+    return lines
 
 
 def _card_block(b: _Base, char_id: str, w: GatheringWorld) -> dict:
-    """One character's block of the rate card (SPEC §3.4E.7 item 2).
+    """One character's block of the rate card (SPEC §3.4E.7 item 2; GA25, GA26, D85).
 
     Args:
         b: The item's base.
@@ -493,23 +571,30 @@ def _card_block(b: _Base, char_id: str, w: GatheringWorld) -> dict:
         w: The world.
 
     Returns:
-        {"kind": "manual" | "observed" | "none" | "ineligible", "head", "sub", "foot", "lines"} (lines: the last
-        sessions, filled from M17).
+        {"char", "kind": "manual" | "observed" | "none" | "ineligible", "head", "sub", "foot", "lines" (the open
+        candidate and the last sessions, _session_lines), "clear" (a Clear button by the head: an active override),
+        "override" (the Manual override input: {"placeholder", "note", "clear"}, or None where she can't set one:
+        an active override, which only clears, or a character not eligible now)}.
     """
     who, item = name_of(char_id), b.item.name
     r = own_rate(char_id, b.item.key, w.manual, w.observed)
-    block = {"char": char_id, "kind": "", "head": "", "sub": "", "foot": "", "lines": []}
+    can = char_id in b.eligible_chars
+    note = f"an override replaces the observed rate in the table for {who} until cleared"
+    block = {"char": char_id, "kind": "", "head": "", "sub": "", "foot": "",
+             "lines": _session_lines(char_id, b.item, w), "clear": False, "override": None}
     if r is not None and r.kind == "manual":
         o = r.observed
         sub = f"(observed {o.items_per_hour}/hr from {o.units} {item} over {_sessions_text(o)})" if o else "(no sessions)"
         return {**block, "kind": "manual", "head": f"{who} · {r.items_per_hour}/hr manual", "sub": sub,
-                "foot": f"the override replaces the observed rate in the table for {who} until cleared"}
+                "foot": f"the override replaces the observed rate in the table for {who} until cleared", "clear": True}
     if r is not None and r.observed is not None:
         return {**block, "kind": "observed", "head": f"{who} · {r.items_per_hour}/hr observed",
-                "sub": f"· {r.observed.units} {item} over {_sessions_text(r.observed)}"}
-    if char_id in b.eligible_chars:
-        return {**block, "kind": "none", "head": f"{who} — no sessions with {item} yet"}
-    why = _ineligible_why(b.item, w.skills.get(char_id, {}))
+                "sub": f"· {r.observed.units} {item} over {_sessions_text(r.observed)}",
+                "override": {"placeholder": str(r.items_per_hour), "note": note, "clear": True} if can else None}
+    if can:
+        return {**block, "kind": "none", "head": f"{who} — no sessions with {item} yet",
+                "override": {"placeholder": "", "note": "", "clear": False}}
+    why = why_not_eligible(b.item, w.skills.get(char_id, {}))
     return {**block, "kind": "ineligible", "head": f"{who} — no sessions with {item} yet · not eligible ({why})"}
 
 
@@ -707,8 +792,9 @@ def _fresh(bases: Sequence[_Base], w: GatheringWorld, day_one: bool) -> list[lis
         return [first, [NO_HISTORY_FRESH, ""]]
     synced = (f"professions synced {clock(w.professions_ms, w.offset_ms)}" if w.professions_ms is not None
               else "professions not synced yet")
-    sessions = (f"{w.sessions} farming session{'' if w.sessions == 1 else 's'}, {duration(w.session_minutes)} observed"
-                if w.sessions else "0 farming sessions")
+    count, observed_ms = len(w.sessions), sum(s.duration_ms for s in w.sessions)
+    sessions = (f"{count} farming session{'' if count == 1 else 's'}, {duration(minutes_of(observed_ms))} observed"
+                if count else "0 farming sessions")
     return [first, [synced, ""], [sessions, ""]]
 
 
@@ -777,7 +863,7 @@ def gathering_view(w: GatheringWorld) -> dict:
         "details": {str(b.item.key): _detail(b, w, day_one) for b in bases},
         "selected": str(best["key"]) if best else (str(rows[0]["key"]) if rows else ""),
         "note": _note_text(bases, w), "default_note": default_note,
-        "no_rates": None if any(_any_rate(b, w) for b in bases) else NO_RATES,
+        "no_rates": None if any(_any_rate(b, w) for b in bases) else NO_RATES.format(n=w.confirm_units),
         "no_match": NO_MATCH, "no_match_filters": NO_MATCH_FILTERS,
         "help": {k: v + (HISTORY_NOTE if k in HISTORY_COLUMNS else "") for k, v in GATHERING_HELP.items()},
     }

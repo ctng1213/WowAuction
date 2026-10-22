@@ -224,6 +224,20 @@ class RecommendStore:
                                 (page, market)).fetchone()
         return (json.loads(row[0]), row[1]) if row else None
 
+    def replace_view(self, page: str, market: str, body: dict, built_ms: int) -> None:
+        """Replace one published page in place, outside a full refresh (SPEC §3.5 POST /api/manual_rate).
+
+        One row upsert, so the page served is the old one or the new one, never a mix.
+
+        Args:
+            page: Page name, e.g. "gathering".
+            market: Market id.
+            body: JSON-serializable payload.
+            built_ms: When it was built.
+        """
+        self.conn.execute("INSERT OR REPLACE INTO views(page, market, body, built) VALUES (?, ?, ?, ?)",
+                          (page, market, json.dumps(body, sort_keys=True), built_ms))
+
     def skip_action(self, action_id: str, at_ms: int) -> bool:
         """Mark a plan action skipped from the dashboard (SPEC §3.4.1).
 

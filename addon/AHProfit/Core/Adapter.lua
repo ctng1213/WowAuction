@@ -681,6 +681,48 @@ function Adapter.ReadLoot()
   return out
 end
 
+-- ------------------------------------------------------------------ gathering loot (SPEC §3.4E.3, A85-A91)
+
+-- Spell name -> gather source. Matched by name, so every rank of a profession counts. UNVERIFIED: Forever's
+-- enUS spell names are Classic's (the node, corpse and bobber casts are "Mining", "Herb Gathering", "Skinning"
+-- and "Fishing"); only enUS clients are supported in v1 (SPEC §2.2.1).
+local GATHERING_SPELLS = { ["Mining"] = "mining", ["Herb Gathering"] = "herbalism", ["Skinning"] = "skinning",
+                           ["Fishing"] = "fishing" }
+-- Other casts that open a loot window of their own, which is never farming loot (A88). UNVERIFIED: the names.
+local LOOT_SPELLS = { ["Disenchant"] = true, ["Pick Pocket"] = true, ["Opening"] = true }
+
+--- What a successful cast of the player's means for the next loot window.
+--- UNVERIFIED: GetSpellInfo(spellId) returns the spell's name first, as on Classic.
+---@param spellId number|nil
+---@return string|nil  The gather source ("mining", "herbalism", "skinning", "fishing"); nil for other casts
+---@return string|nil  The spell's name for a gathering or other loot-opening cast; nil for any other cast
+function Adapter.LootCast(spellId)
+  if not (GetSpellInfo and spellId) then return nil, nil end
+  local name = GetSpellInfo(spellId)
+  if GATHERING_SPELLS[name] then return GATHERING_SPELLS[name], name end
+  if LOOT_SPELLS[name] then return nil, name end
+  return nil, nil
+end
+
+--- What the open loot window belongs to, from its first slot's source GUID.
+--- UNVERIFIED: GetLootSourceInfo(slot) returns the source's GUID first ("Creature-0-…" for a corpse,
+--- "GameObject-…" for a node, chest or bobber, "Item-…" for a container), as on Classic 1.13+. Without it every
+--- window reads "unknown", so no `monster` event is ever recorded (no event rather than a wrong one).
+---@return string  "creature" | "object" | "item" | "unknown"
+function Adapter.LootSourceKind()
+  if not (GetLootSourceInfo and GetNumLootItems) then return "unknown" end
+  for i = 1, GetNumLootItems() do
+    local guid = GetLootSourceInfo(i)
+    if type(guid) == "string" then
+      local kind = guid:match("^(%a+)-")
+      if kind == "Creature" or kind == "Vehicle" then return "creature" end
+      if kind == "GameObject" then return "object" end
+      return kind == "Item" and "item" or "unknown"
+    end
+  end
+  return "unknown"
+end
+
 --- Which item is in each bag slot, for naming what a post took from a slot that is empty by then (A44).
 ---@return table  "bag:slot" -> item key, occupied slots only
 function Adapter.ReadBagSlots()

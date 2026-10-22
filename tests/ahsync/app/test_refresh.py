@@ -231,6 +231,26 @@ def test_IU13_a_failed_replan_keeps_the_last_plan_and_a_market_without_intellige
     assert db.conn.execute("SELECT COUNT(*) FROM plan_new").fetchone()[0] == 0
 
 
+def test_SEC12_a_manual_rate_rebuilds_only_the_gathering_page_without_history_or_a_replan(db, monkeypatch):
+    assert refresh.rebuild_gathering(db, NOW, CFG) == []                             # nothing published yet
+    refresh.refresh_all(db, NOW, CFG)
+    plan = db.conn.execute("SELECT action_id, run_at FROM actions ORDER BY 1").fetchall()
+    today = db.view("today", M)
+    with db.transaction():
+        db.conn.execute("INSERT INTO professions(char_id, profession, skill, max_skill) VALUES (?, 'Mining', 50, 75)",
+                        (BRUGAN,))
+        db.set_manual_rate(BRUGAN, 2770, 15, NOW + HOUR)
+    monkeypatch.setattr(refresh, "analyze_market", lambda *a: pytest.fail("no history read"))
+    monkeypatch.setattr(refresh, "_stage_plan", lambda *a: pytest.fail("nothing re-planned"))
+    assert refresh.rebuild_gathering(db, NOW + HOUR, CFG) == [M]
+    page, built = db.view("gathering", M)
+    copper = next(r for r in page["rows"] if r["key"] == 2770)
+    assert (copper["rate"], copper["rate_sub"], copper["character"], built) == ("15", "manual", "Brugan", NOW + HOUR)
+    assert page["gold"].startswith("Gold ")                                          # the pill, like the refresh's
+    assert db.conn.execute("SELECT action_id, run_at FROM actions ORDER BY 1").fetchall() == plan
+    assert db.view("today", M) == today
+
+
 # ---------------------------------------------------------------- FI1: a crash at any commit point
 
 def _pipeline(folder, clock) -> None:

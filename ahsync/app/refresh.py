@@ -161,6 +161,37 @@ def _stage_recommendations(db: Database, market: str, stats: dict, now_ms: int, 
         db.stage_view(page, market, {**body, "gold": pill} if page in GOLD_PAGES else body, now_ms)
 
 
+def rebuild_gathering(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0) -> list[str]:
+    """Rebuild only the Gathering page of every market, after a manual-rate write (SPEC §3.5 POST /api/manual_rate).
+
+    Gathering is research, not part of the plan (§3.4E.9), so nothing is re-planned and no history is read: the
+    page is built from the published intelligence plus the newer scans (IU6), like a re-plan's, and replaces the
+    published one in a single row write.
+
+    Args:
+        db: Database.
+        now_ms: Now.
+        cfg: Config.
+        offset_ms: Local time minus UTC.
+
+    Returns:
+        The markets whose page was rebuilt (those with published intelligence).
+    """
+    markets = []
+    for market in cfg.markets:
+        intel = db.read_intel(market)
+        if intel is None:
+            continue
+        scanned = with_scan(intel, *db.scans_since(market, intel.built_ms))
+        characters = db.characters_in(market)
+        body = gathering_page(db, market, [c for c, _ in characters], scanned.items, db.items(), now_ms, offset_ms, cfg)
+        with db.transaction():
+            db.replace_view("gathering", market, {**body, "gold": gold_pill([g for _, g in characters], now_ms,
+                                                                               offset_ms)}, now_ms)
+        markets.append(market)
+    return markets
+
+
 def replan_all(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0) -> list[str]:
     """The incremental update: re-plan every market from its published intelligence (SPEC §3.1.1, IU13).
 

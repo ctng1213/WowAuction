@@ -1,18 +1,20 @@
-"""Gathering: the farmable catalog, eligibility, the rate priority and gold per hour (SPEC §3.4E).
+"""Gathering: the farmable catalog, eligibility, observed rates, the rate priority and gold per hour (SPEC §3.4E).
 
 Pure: the catalog's rows come in already read (recommend/gathering_page.py reads the data file),
-rates come in already computed (observed rates arrive with M17's sessions), prices come from the
-caller. Money is integer copper except the expected values (net per unit, net per hour), which are
-float copper rounded only for display (SPEC §3.3).
+the confirmed sessions come from engine.sessions (M17), prices come from the caller. Observed rates
+are computed from the sessions at each page build and never stored (§3.4E.5). Money is integer
+copper except the expected values (net per unit, net per hour), which are float copper rounded only
+for display (SPEC §3.3).
 """
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 from ahsync.engine.fees import deposit_copper, sale_net
 from ahsync.engine.sellprob import default_chance
+from ahsync.engine.sessions import Session
 
 CATEGORIES = ("Fishing", "Herbalism", "Mining", "Skinning", "Monster")    # display and filter order
 # Source type -> the professions that may gather it (SPEC §3.4E.1); a monster source has none.
@@ -22,7 +24,9 @@ GATHERING_PROFESSIONS = ("Fishing", "Herbalism", "Mining", "Skinning")
 MIN_SKILL, MAX_SKILL = 1, 300
 DEPOSIT_STACK = 20                 # the deposit per unit is the 24 h deposit of one 20-unit post ÷ 20 (§3.4E.6)
 DEPOSIT_HOURS = 24
-SESSION_CONFIRM_UNITS = 20         # units that confirm a farming session (§3.4E.4; config session_confirm_units, M17)
+SESSION_CONFIRM_UNITS = 20         # units that confirm a farming session (§3.4E.4; config session_confirm_units)
+SESSION_GAP_MINUTES = 15           # minutes without loot that end one (§3.4E.4; config session_gap_minutes)
+HOUR_MS, MINUTE_MS = 3_600_000, 60_000
 
 
 @dataclass(frozen=True)
@@ -47,12 +51,21 @@ class CatalogItem:
 
 @dataclass(frozen=True)
 class Observed:
-    """A character's observed rate for one material, with what it rests on (SPEC §3.4E.5; computed from M17)."""
+    """A character's observed rate for one material, with what it rests on (SPEC §3.4E.5)."""
 
     items_per_hour: int
-    units: int
-    minutes: int
-    sessions: int
+    units: int                     # units of the material over the sessions that contained it
+    duration_ms: int               # those sessions' total duration, ms
+    sessions: int                  # how many sessions
+
+    @property
+    def minutes(self) -> int:
+        """The sessions' total duration for display, in whole minutes, half up.
+
+        Returns:
+            Minutes.
+        """
+        return minutes_of(self.duration_ms)
 
 
 @dataclass(frozen=True)
@@ -195,6 +208,73 @@ def skill_source(item: CatalogItem) -> Source | None:
     """
     gathered = [s for s in item.sources if s.type != "monster"]
     return min(gathered, key=lambda s: int(s.skill or 0)) if gathered else None
+
+
+def why_not_eligible(item: CatalogItem, skills: Mapping[str, int]) -> str:
+    """Why a character can't gather an item (the rate card, and POST /api/manual_rate's 400; SPEC §3.4E.2).
+
+    Args:
+        item: A catalog item she is not eligible for (so it has a gathering source: monster loot always is).
+        skills: The character's profession -> skill.
+
+    Returns:
+        "no Herbalism", or "Mining 68 of 75" when she has the profession below the requirement.
+    """
+    src = skill_source(item)
+    assert src is not None
+    have = skills.get(str(src.profession))
+    return f"no {src.profession}" if have is None else f"{src.profession} {have} of {src.skill}"
+
+
+def minutes_of(duration_ms: int) -> int:
+    """A duration in whole minutes, half up (SPEC §3.3: floor(x + 0.5)), for display.
+
+    Args:
+        duration_ms: Duration, ms (≥ 0).
+
+    Returns:
+        Minutes.
+    """
+    return (duration_ms + MINUTE_MS // 2) // MINUTE_MS
+
+
+def observed_rate(units: int, duration_ms: int) -> int | None:
+    """Whole items per hour from units over a duration, half up (SPEC §3.4E.5, GA19, GA20).
+
+    Args:
+        units: Units looted.
+        duration_ms: The time they took, ms.
+
+    Returns:
+        floor(units × 3,600,000 ÷ ms + 0.5) in integer form, floor((units × 7,200,000 + ms) ÷ (2 × ms)), so it is
+        exact (22.5 → 23, never banker's 22); None for a zero duration (no duration, no rate: GA17).
+    """
+    if duration_ms <= 0:
+        return None
+    return (units * 2 * HOUR_MS + duration_ms) // (2 * duration_ms)
+
+
+def observed_rates(found: Iterable[Session]) -> dict[tuple[str, int], Observed]:
+    """Every character's observed rate per material, from her confirmed sessions (SPEC §3.4E.5, GA19).
+
+    A material's rate is its units ÷ the total duration of the sessions that contained it: every material of a
+    session uses the whole session's duration, so a secondary drop doesn't double-count time. A session without
+    a duration adds neither units nor time (GA17). Computed at each page build, never stored.
+
+    Args:
+        found: Confirmed sessions (engine.sessions), any characters.
+
+    Returns:
+        (character id, item key) -> Observed, for every material with a rate.
+    """
+    totals: dict[tuple[str, int], list[int]] = {}
+    for s in found:
+        if s.duration_ms <= 0:
+            continue
+        for key, qty in s.items:
+            t = totals.setdefault((s.char_id, key), [0, 0, 0])
+            t[0], t[1], t[2] = t[0] + qty, t[1] + s.duration_ms, t[2] + 1
+    return {k: Observed(int(observed_rate(units, ms) or 0), units, ms, n) for k, (units, ms, n) in sorted(totals.items())}
 
 
 def own_rate(char_id: str, key: int, manual: Mapping[tuple[str, int], int],

@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ahsync.clock import Clock
+from ahsync.engine.sessions import GatherEvent, SessionSettings
 from ahsync.state import savedvars as sv
 from ahsync.collect.local_scans import derive_from_scans
 from ahsync.state import untracked
@@ -165,6 +166,7 @@ class _Apply:
         self.pruning = _Pruning()
         self.follows: set[str] = set()     # characters whose professions and known recipes follow this file
         self.new_scans: list[tuple[str, str, int, bool]] = []   # (market, scan id, at, complete) stored now
+        self.gathered: set[str] = set()    # characters with new gather events: their sessions are rebuilt
         self.scans_stored = self.events_stored = 0              # for the read's log line (S17)
 
     def guarded(self, what: str, write: Callable[[], None]) -> bool:
@@ -350,6 +352,11 @@ class _Apply:
         if e.type == "skip":
             self.mark([self.db.record_skip(e.event_id, e.char_id, e.action_id, e.at_ms)])
             return
+        if e.type == "gather":                 # research only: no item is dirty, her sessions are (SPEC §3.4E.4)
+            if self.db.store_gather_event(GatherEvent(e.event_id, e.char_id, e.at_ms, int(e.login_ms or 0),
+                                                      tuple(e.loot or ()), str(e.source))):
+                self.gathered.add(e.char_id)
+            return
         table, row = _event_row(e, self.db.character_market(e.char_id) if e.type == "post" else None)
         if self.db.upsert_event(table, row):
             self.mark(self.db.recipe_item_keys(e.spell_id) if e.type == "craft" else [e.key])
@@ -469,15 +476,17 @@ def _event_row(e: sv.Event, market: str | None) -> tuple[str, dict[str, object]]
 # ---------------------------------------------------------------- entry points
 
 def apply_data(db: Database, data: sv.AHProfitData, realms: Mapping[str, str], now_ms: int,
-               markets: Sequence[str] = ()) -> ApplyResult:
+               markets: Sequence[str] = (), sessions: SessionSettings = SessionSettings()) -> ApplyResult:
     """Store one parsed SavedVariables file in one transaction, then advance ingested-until.
 
     Args:
         db: The database (not inside a transaction).
         data: The parsed file.
         realms: Config [realms]: realm name -> ruleset.
-        now_ms: Current time, UTC ms, for status rows.
+        now_ms: Current time, UTC ms, for status rows and farming sessions.
         markets: Config markets, for characters on realms not in [realms] (S12).
+        sessions: How farming sessions are cut; each character with new gather events has hers rebuilt in the
+            same transaction (SPEC §3.4E.4).
 
     Returns:
         The dirty item keys, the problems (the parser's and any row that failed to
@@ -499,6 +508,8 @@ def apply_data(db: Database, data: sv.AHProfitData, realms: Mapping[str, str], n
         work.scans(data.scans)
         work.mark(derive_from_scans(db, work.new_scans))     # local prices and book volume (SPEC §4.2)
         work.events(data.events)
+        for char_id in sorted(work.gathered):                # SPEC §3.4E.4: rebuilt from her stored events
+            db.rebuild_sessions(char_id, sessions, now_ms)
         work.mark(untracked.record(db.conn, held))           # what no event explains (FM21, D51)
         work.rules(data.rules)
         work.reserves(data)
@@ -607,7 +618,7 @@ def _report(db: Database, path: Path, result: IngestResult, now_ms: int) -> None
 
 def read_and_apply(path: Path, db: Database, clock: Clock, realms: Mapping[str, str],
                    stat_mtime_ms: Callable[[Path], int | None] = file_mtime_ms,
-                   markets: Sequence[str] = ()) -> IngestResult:
+                   markets: Sequence[str] = (), sessions: SessionSettings = SessionSettings()) -> IngestResult:
     """Read one AHProfit SavedVariables file and store it (SPEC §2.2 reading rules, §5.2).
 
     Args:
@@ -617,6 +628,7 @@ def read_and_apply(path: Path, db: Database, clock: Clock, realms: Mapping[str, 
         realms: Config [realms]: realm name -> ruleset.
         stat_mtime_ms: Returns a file's modification time in UTC ms, or None when missing.
         markets: Config markets, for characters on realms not in [realms] (S12).
+        sessions: How farming sessions are cut (apply_data).
 
     Returns:
         The outcome. A file changed less than 2 s ago, or changed while being read,
@@ -637,7 +649,7 @@ def read_and_apply(path: Path, db: Database, clock: Clock, realms: Mapping[str, 
     if data is None:
         result = IngestResult(path, False, reason, mtime_ms=mtime, ingested_until=ingested_until(db))
     else:
-        applied = apply_data(db, data, realms, now, markets)
+        applied = apply_data(db, data, realms, now, markets, sessions)
         result = IngestResult(path, True, None, read_from, mtime, applied.dirty_keys, applied.problems,
                               ingested_until(db), data.refresh_requested_at_ms, applied.ingested_until,
                               applied.scans_stored, applied.events_stored)
@@ -677,7 +689,7 @@ def incremental_update(db: Database, dirty_keys: frozenset[int], now_ms: int) ->
 
 def ingest_file(path: Path, db: Database, clock: Clock, realms: Mapping[str, str],
                 stat_mtime_ms: Callable[[Path], int | None] = file_mtime_ms,
-                markets: Sequence[str] = ()) -> IngestResult:
+                markets: Sequence[str] = (), sessions: SessionSettings = SessionSettings()) -> IngestResult:
     """Read one SavedVariables file, store it, log the read (S17) and run the incremental update on what changed.
 
     Args:
@@ -687,11 +699,12 @@ def ingest_file(path: Path, db: Database, clock: Clock, realms: Mapping[str, str
         realms: Config [realms].
         stat_mtime_ms: As read_and_apply.
         markets: Config markets, for characters on realms not in [realms] (S12).
+        sessions: How farming sessions are cut (apply_data).
 
     Returns:
         The outcome, as read_and_apply.
     """
-    result = read_and_apply(path, db, clock, realms, stat_mtime_ms, markets)
+    result = read_and_apply(path, db, clock, realms, stat_mtime_ms, markets, sessions)
     _log_read(result)
     if result.dirty_keys:
         incremental_update(db, result.dirty_keys, clock.now_ms())

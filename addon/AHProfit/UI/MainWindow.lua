@@ -746,6 +746,7 @@ function MainWindow.Perf()
   local s = AHProfit.Scan.Replicate.Stats()
   Adapter.Print(string.format("scan: slowest step %.2f ms, redraw %.2f ms (budget 4 ms)", s.maxStepMs or 0, s.notifyMs or 0))
   for _, line in ipairs(AHProfit.Adapt.PerfLines()) do Adapter.Print(line .. " (budget 2 ms)") end
+  Adapter.Print(AHProfit.Capture.Gather.PerfLine() .. " (one table write per window)")
 end
 
 --- The window's frames, for the layout snapshots (tests).
