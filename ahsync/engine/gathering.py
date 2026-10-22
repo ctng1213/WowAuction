@@ -4,7 +4,8 @@ Pure: the catalog's rows come in already read (recommend/gathering_page.py reads
 the confirmed sessions come from engine.sessions (M17), prices come from the caller. Observed rates
 are computed from the sessions at each page build and never stored (§3.4E.5). Money is integer
 copper except the expected values (net per unit, net per hour), which are float copper rounded only
-for display (SPEC §3.3).
+for display (SPEC §3.3). Built M18: the categories a gather event's source teaches a known item
+(observed categories) and the loot the catalog can't place (Status's info line).
 """
 from __future__ import annotations
 
@@ -14,13 +15,16 @@ from typing import Any
 
 from ahsync.engine.fees import deposit_copper, sale_net
 from ahsync.engine.sellprob import default_chance
-from ahsync.engine.sessions import Session
+from ahsync.engine.sessions import Candidate, Session
 
 CATEGORIES = ("Fishing", "Herbalism", "Mining", "Skinning", "Monster")    # display and filter order
 # Source type -> the professions that may gather it (SPEC §3.4E.1); a monster source has none.
 SOURCE_PROFESSIONS = {"node": ("Mining", "Herbalism"), "skinning": ("Skinning",), "fishing": ("Fishing",),
                       "monster": ()}
 GATHERING_PROFESSIONS = ("Fishing", "Herbalism", "Mining", "Skinning")
+# A gather event's source (§3.4E.3) -> the category it is evidence for (observed categories, §3.4E.1, GA33)
+EVENT_CATEGORIES = {"fishing": "Fishing", "herbalism": "Herbalism", "mining": "Mining", "skinning": "Skinning",
+                    "monster": "Monster"}
 MIN_SKILL, MAX_SKILL = 1, 300
 DEPOSIT_STACK = 20                 # the deposit per unit is the 24 h deposit of one 20-unit post ÷ 20 (§3.4E.6)
 DEPOSIT_HOURS = 24
@@ -408,3 +412,58 @@ def gross_per_hour(items_per_hour: int, price: int) -> int:
         Copper per hour (integer).
     """
     return items_per_hour * price
+
+
+def observed_categories(item: CatalogItem, sources: Iterable[str]) -> tuple[str, ...]:
+    """The categories gather events taught a known item beyond its catalog ones (SPEC §3.4E.1 observed, GA33).
+
+    They are display and filter only: eligibility and the Skill column stay the catalog's.
+
+    Args:
+        item: The catalog item.
+        sources: The sources of the stored gather events that looted it ("mining", "monster", ...); an unknown
+            source is ignored.
+
+    Returns:
+        The categories not already the item's, in CATEGORIES order; () when none.
+    """
+    seen = {EVENT_CATEGORIES[s] for s in sources if s in EVENT_CATEGORIES}
+    return tuple(c for c in CATEGORIES if c in seen and c not in item.categories)
+
+
+def unplaced_loot(found: Iterable[Session], open_: Iterable[Candidate], known: Iterable[int]) -> dict[int, int]:
+    """The units gathered of items the catalog can't place (SPEC §3.4E.1, §3.5 Status, GA34).
+
+    Counted over the confirmed sessions and the open candidates: a candidate dropped under the confirm units
+    is not farming, so its loot is left out.
+
+    Args:
+        found: The confirmed sessions.
+        open_: The open candidates.
+        known: The catalog's item keys.
+
+    Returns:
+        Item key -> units, only for keys outside the catalog.
+    """
+    catalog_keys = set(known)
+    units: dict[int, int] = {}
+    for run in (*found, *open_):
+        for key, qty in run.items:
+            if key not in catalog_keys:
+                units[key] = units.get(key, 0) + qty
+    return units
+
+
+def unplaced_text(units: Mapping[int, int], names: Mapping[int, str]) -> str:
+    """Status's list of the loot the catalog can't place (SPEC §3.5 Status, GA34).
+
+    Args:
+        units: Item key -> units (unplaced_loot).
+        names: Item key -> name; a key without one reads "item <key>".
+
+    Returns:
+        "Rough Stone 22, Ruined Leather Scraps 13, Broken Fang 7": most units first, ties by name, then key; ""
+        when there is nothing.
+    """
+    named = [(names.get(k, f"item {k}"), k, n) for k, n in units.items()]
+    return ", ".join(f"{name} {n}" for name, _, n in sorted(named, key=lambda x: (-x[2], x[0], x[1])))

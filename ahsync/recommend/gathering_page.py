@@ -2,11 +2,13 @@
 
 This module only gathers inputs at the edge: it reads the catalog data file
 (`ahsync/data/gathering_catalog.json`), each catalog item's newest `current` price and its
-intelligence (no history read, §3.1.1), the characters' professions, their farming sessions and
-manual rates (M17). engine.gathering
-validates the catalog and engine.gathering_view makes every cell and text. A row the catalog
-can't use is skipped with a Status line (GA2); a catalog that can't be read leaves the page empty
-with a Status line, and the rest of the refresh carries on.
+intelligence (no history read, §3.1.1: med30, closes, `how`, the selling windows and seasonality
+strength come from it, M18), the characters' professions, their farming sessions and manual rates
+(M17), and the sources their gather events looted each item from (observed categories, M18).
+engine.gathering validates the catalog and engine.gathering_view makes every cell and text. A row
+the catalog can't use is skipped with a Status line (GA2); a catalog that can't be read leaves the
+page empty with a Status line, and the rest of the refresh carries on. The loot the catalog can't
+place is an info line on Status (GA34).
 """
 from __future__ import annotations
 
@@ -16,15 +18,18 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from ahsync.config import Config, session_settings
-from ahsync.engine.gathering import CatalogItem, catalog, skipped_text
+from ahsync.engine.gathering import CatalogItem, catalog, skipped_text, unplaced_loot, unplaced_text
 from ahsync.engine.gathering_view import GatheringWorld, PriceFacts, gathering_view
+from ahsync.engine.profile import unpack
 from ahsync.engine.sellprob import cheapest_other
 from ahsync.engine.sessions import Candidate, GatherEvent, Session, SessionSettings, sessions
 from ahsync.history.reads import CurrentPrice, ItemInfo
 from ahsync.intel.contract import ItemIntel
+from ahsync.recommend.inventory_page import windows_of
 
 CATALOG_PATH = Path(__file__).resolve().parents[1] / "data" / "gathering_catalog.json"
 STATUS_TOPIC = "gathering_catalog"
+UNPLACED_TOPIC = "gathering_unplaced"     # + ":<market>"; kind gathering_unplaced (GA34)
 
 
 class GatheringReads(Protocol):
@@ -79,6 +84,16 @@ class GatheringReads(Protocol):
 
         Returns:
             (character id, item key) -> items per hour.
+        """
+
+    def looted_sources(self, char_ids: Sequence[str]) -> dict[int, tuple[str, ...]]:
+        """The sources the stored gather events looted each item from (state.gathering).
+
+        Args:
+            char_ids: The characters.
+
+        Returns:
+            Item key -> sources, sorted.
         """
 
     def set_status(self, topic: str, level: str, kind: str, data: dict, at: int) -> None:
@@ -148,17 +163,21 @@ def price_facts(key: int, cur: CurrentPrice | None, s: ItemIntel | None, info: I
         info: Its item metadata (vendor price, quality), or None.
 
     Returns:
-        The PriceFacts; the listed supply is the intelligence's, else the units at the newest price.
+        The PriceFacts; the listed supply is the intelligence's, else the units at the newest price. The price
+        history (med30, its closes, seasonality strength, `how` and the selling windows) is the intelligence's
+        as published (M18); `how` is None when it published none.
     """
     price = cur.price if cur else None
     supply = s.units_on_ah if s and s.units_on_ah is not None else (cur.qty if cur and price is not None else None)
     known = s is not None and not s.volume_unknown
+    if s is None:
+        return PriceFacts(price, cur.at if cur else None, cur.src if cur else None, supply,
+                          info.vendor_sell if info else None, (info.quality or 1) if info else 1, cur_others=price)
     return PriceFacts(price, cur.at if cur else None, cur.src if cur else None, supply,
                       info.vendor_sell if info else None, (info.quality or 1) if info else 1,
-                      s.chance if known else None, s.sold_per_day if s else None,
-                      s.volume_source if s else None, s.volume_kind if s else None, s.conf if s else None,
-                      cheapest_other(s.book or None, price) if s else price, s.med30 if s else None,
-                      s.closes_30d if s else None)
+                      s.chance if known else None, s.sold_per_day, s.volume_source, s.volume_kind, s.conf,
+                      cheapest_other(s.book or None, price), s.med30, s.closes_30d, s.seasonality,
+                      unpack(s.how, s.how_weeks) if s.how else None, windows_of(s.sell_windows))
 
 
 def gathering_page(db: GatheringReads, market: str, char_ids: Sequence[str], stats: dict[int, ItemIntel],
@@ -179,7 +198,8 @@ def gathering_page(db: GatheringReads, market: str, char_ids: Sequence[str], sta
 
     Returns:
         engine.gathering_view's payload, its rates from the stored sessions, the sessions since the last stored one
-        and the manual overrides (farming_state).
+        and the manual overrides (farming_state). Side effect: the Status lines of the catalog (load_catalog) and
+        of the loot it can't place (`gathering_unplaced:<market>`, set or cleared, GA34).
     """
     catalog_items = load_catalog(db, now_ms, path)
     facts = {it.key: price_facts(it.key, db.current_price(market, it.key), stats.get(it.key), items.get(it.key))
@@ -188,12 +208,20 @@ def gathering_page(db: GatheringReads, market: str, char_ids: Sequence[str], sta
     skills = {sheet[0]: {name: skill for name, skill, _ in sheet[8]} for sheet in sheets}
     synced = max((sheet[7] for sheet in sheets if sheet[7] is not None), default=None)
     found, open_ = farming_state(db, char_ids, now_ms, session_settings(cfg))
+    unplaced = unplaced_text(unplaced_loot(found, open_.values(), [it.key for it in catalog_items]),
+                             {k: i.name for k, i in items.items()})
+    if unplaced and catalog_items:
+        db.set_status(f"{UNPLACED_TOPIC}:{market}", "info", UNPLACED_TOPIC, {"text": unplaced}, now_ms)
+    else:
+        db.clear_status(f"{UNPLACED_TOPIC}:{market}")
     world = GatheringWorld(catalog_items, facts, skills, list(char_ids), now_ms, offset_ms,
                            manual=db.manual_rates(list(char_ids)), sessions=found, open=open_, professions_ms=synced,
                            default_sell_prob=cfg.default_sell_prob,
                            default_sell_prob_cheapest=cfg.default_sell_prob_cheapest,
-                           confirm_units=cfg.session_confirm_units, gap_minutes=cfg.session_gap_minutes)
+                           confirm_units=cfg.session_confirm_units, gap_minutes=cfg.session_gap_minutes,
+                           sources=db.looted_sources(list(char_ids)), min_strength=cfg.timing_edge_min_strength)
     return gathering_view(world)
+
 
 
 def farming_state(db: GatheringReads, char_ids: Sequence[str], now_ms: int,

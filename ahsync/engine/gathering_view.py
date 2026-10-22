@@ -5,8 +5,9 @@ rate priority, net gold per hour with the default chance, the filters' data, one
 character (`by_char`), the freshness line, the rate cards and the compact detail. Built M17: the
 observed rates come from the confirmed sessions (engine.sessions, engine.gathering.observed_rates),
 and the rate card lists the open candidate, the last sessions with how each ended, and the manual
-override's controls. The historical columns (Median 30d, Deviation, Sell window, Sell window price)
-are "—" until M18 fills the same row fields. Pure: data in, texts out.
+override's controls. Built M18: the historical columns (Median 30d, Deviation, Sell window, Sell window
+price), the full detail's heatmap, reading line, windows and seasonality (engine.gathering_history, from the
+intelligence only) and the observed categories. Pure: data in, texts out.
 """
 from __future__ import annotations
 
@@ -15,12 +16,15 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import cached_property
 
+from ahsync.engine import gathering_history as gh
 from ahsync.engine.fees import AH_CUT, DEPOSIT_BP
 from ahsync.engine.gathering import (CATEGORIES, GATHERING_PROFESSIONS, SESSION_CONFIRM_UNITS, SESSION_GAP_MINUTES,
                                      CatalogItem, Observed, Rate, best_rate, chance_to_sell, deposit_per_unit,
                                      effective_rate, eligible, gross_per_hour, minutes_of, net_per_hour, net_per_unit,
-                                     observed_rate, observed_rates, own_rate, skill_source, why_not_eligible)
-from ahsync.engine.prices import MIN_HOURLY_CLOSES
+                                     observed_categories, observed_rate, observed_rates, own_rate, skill_source,
+                                     why_not_eligible)
+from ahsync.engine.patterns import Window
+from ahsync.engine.profile import Profile
 from ahsync.engine.sessions import LOGOUT_ENDED, Candidate, Session
 from ahsync.engine.views import market_activity, money, round_half_up, source_label
 
@@ -29,6 +33,8 @@ STALE_MS = 24 * HOUR_MS            # prices over 24 h are stale: amber, used as 
 DASH = "—"
 CLICK_HINT = " · click the row for the sessions behind this rate and to override it"
 HISTORY_NOTE = ' · needs price history: "—" until weeks of data arrive'
+HISTORY_HOVER = 'Needs price history: "—" until weeks of data arrive'
+
 HISTORY_COLUMNS = ("Median 30d", "Deviation", "Sell window", "Sell window price")
 NO_HISTORY_LINE = ("no price history yet: the heatmap, the top selling windows and seasonality strength appear as "
                    "weeks of data arrive")
@@ -77,6 +83,10 @@ GATHERING_HELP = {
                       'your scans. "—" = no sales data',
     "Current Supply": "Units on the AH now, in the newest scan",
     "Supply/Volume": "Days of supply: current supply ÷ sales per day. Not a time-to-sell guarantee",
+    "Rank": "Top selling windows, best first",
+    "Window": "Day and hours of the week, local time",
+    "Median price": "30-day median × the window's average price ratio",
+    "Weeks of data": "Weeks behind the window's thinnest hour",
 }
 
 
@@ -96,8 +106,11 @@ class PriceFacts:
     volume_kind: str | None = None
     confidence: int | None = None
     cur_others: int | None = None      # the cheapest competing price, copper
-    med30: int | None = None           # price history (M18 fills the columns from these)
-    closes_30d: int | None = None
+    med30: int | None = None           # price history (M18): copper
+    closes_30d: int | None = None      # hourly closes in 30 days; None = unknown
+    seasonality: int | None = None     # 0-100; None = insufficient evidence
+    how: Profile | None = None         # the 168-slot price profile; None = none published
+    windows: tuple[Window, ...] = ()   # selling windows, best first
 
 
 @dataclass(frozen=True)
@@ -118,6 +131,8 @@ class GatheringWorld:
     default_sell_prob_cheapest: float = 0.5
     confirm_units: int = SESSION_CONFIRM_UNITS         # config session_confirm_units (the texts quote it)
     gap_minutes: int = SESSION_GAP_MINUTES             # config session_gap_minutes
+    sources: Mapping[int, Sequence[str]] = field(default_factory=dict)  # item key -> its gather events' sources
+    min_strength: int = gh.TIMING_EDGE_MIN_STRENGTH    # config timing_edge_min_strength
 
     @cached_property
     def observed(self) -> dict[tuple[str, int], Observed]:
@@ -153,6 +168,8 @@ class _Base:
     chance: float
     default: bool
     net_unit: float | None
+    history: gh.History
+    observed: tuple[str, ...] = ()     # categories its gather events taught it (GA33)
 
 
 def name_of(char_id: str) -> str:
@@ -237,7 +254,7 @@ def copper2(x: float) -> str:
 
 
 def _base(item: CatalogItem, w: GatheringWorld) -> _Base:
-    """An item's character-independent numbers: who can gather it, its chance and its net per unit.
+    """An item's character-independent numbers: who can gather it, its chance, its net per unit and its history.
 
     Args:
         item: The catalog item.
@@ -251,7 +268,9 @@ def _base(item: CatalogItem, w: GatheringWorld) -> _Base:
     p, default = chance_to_sell(f.market_chance, f.sold_per_day, f.price, f.cur_others, w.default_sell_prob,
                                 w.default_sell_prob_cheapest)
     net_unit = net_per_unit(f.price, p, f.vendor_sell) if f.price is not None else None
-    return _Base(item, f, chars, p, default, net_unit)
+    history = gh.History(f.price, f.med30, f.closes_30d, f.seasonality, f.how, f.windows, w.min_strength)
+    return _Base(item, f, chars, p, default, net_unit, history,
+                 observed_categories(item, w.sources.get(item.key, ())))
 
 
 def _price_title(f: PriceFacts, w: GatheringWorld) -> str:
@@ -400,7 +419,7 @@ def _qty(f: PriceFacts) -> int | None:
     return 0 if f.price is None else f.supply
 
 
-def _row(b: _Base, r: Rate | None, view_char: str, w: GatheringWorld) -> dict:
+def _row(b: _Base, r: Rate | None, view_char: str, w: GatheringWorld, hist: dict) -> dict:
     """One table row for one view (SPEC §3.5 Gathering): formatted cells, note, filter fields and sort keys.
 
     Args:
@@ -408,25 +427,27 @@ def _row(b: _Base, r: Rate | None, view_char: str, w: GatheringWorld) -> dict:
         r: The row's rate for this view, or None.
         view_char: The view's character id ("" for All characters).
         w: The world.
+        hist: The item's historical cells (gathering_history.columns, or blank_columns on day one).
 
     Returns:
-        The row. The historical cells are "—" until M18 fills them (median, deviation, window, window_price).
+        The row; the Category cell adds the observed categories with "(observed)", and so does its filter field
+        `cats` (GA33).
     """
     f, qty = b.facts, _qty(b.facts)
     net = _net_cells(b, r, w)
     skill = _skill_cells(b)
+    category = " · ".join([*b.item.categories, *(f"{c} (observed)" for c in b.observed)])
     return {
         "key": b.item.key, "item": b.item.name, "quality": f.quality, "url": b.item.url or "",
-        "note": _note(b, r, view_char), "category": " · ".join(b.item.categories),
+        "note": _note(b, r, view_char), "category": category,
         **{k: v for k, v in skill.items() if k != "skill"},
         "ah_price": money(f.price), "price_title": _price_title(f, w), "qty": DASH if qty is None else str(qty),
-        "median": DASH, "deviation": DASH, "deviation_class": "", "window": DASH, "window_sub": "",
-        "window_title": "", "window_muted": False, "window_price": DASH, "window_delta": "", "window_delta_class": "",
+        **{k: v for k, v in hist.items() if k != "sort"},
         **_rate_cells(r, view_char), **{k: v for k, v in net.items() if k != "net_copper"},
         "eligible": view_char == "" or view_char in b.eligible_chars,
-        "cats": list(b.item.categories), "price": f.price, "name": b.item.name, "skill": skill["skill"],
+        "cats": [*b.item.categories, *b.observed], "price": f.price, "name": b.item.name, "skill": skill["skill"],
         "sort": {"price": f.price, "net": net["net_copper"], "rate": r.items_per_hour if r else None,
-                 "deviation": None, "qty": qty, "skill": skill["skill"], "window_price": None},
+                 "qty": qty, "skill": skill["skill"], **hist["sort"]},
     }
 
 
@@ -643,13 +664,14 @@ def _alert(bases: Sequence[_Base], view_char: str, w: GatheringWorld) -> dict | 
                     f"remain: {', '.join(monster)}."}
 
 
-def _view(bases: Sequence[_Base], view_char: str, w: GatheringWorld) -> dict:
+def _view(bases: Sequence[_Base], view_char: str, w: GatheringWorld, hist: Mapping[int, dict]) -> dict:
     """One complete view: its rows, both footers, the toggle, the alert and the rate cards (SPEC §3.5 by_char).
 
     Args:
         bases: The items, in the default order.
         view_char: The character id, or "" for All characters.
         w: The world.
+        hist: Item key -> its historical cells (the same in every view).
 
     Returns:
         {"rows", "foot", "foot_all", "toggle": {"label", "disabled", "title"}, "alert", "rate_cards"}.
@@ -662,7 +684,9 @@ def _view(bases: Sequence[_Base], view_char: str, w: GatheringWorld) -> dict:
     else:
         toggle = {"label": "Only what a character can gather", "disabled": True, "title": "Pick a character first"}
     cards = [_rate_card(b, view_char, r, w) for b, r in zip(bases, rates)]
-    return {"rows": [{**_row(b, r, view_char, w), "card_lines": c["lines"]} for b, r, c in zip(bases, rates, cards)],
+    return {"rows": [{**_row(b, r, view_char, w, hist[b.item.key]), "card_lines": c["lines"]}
+                     for b, r, c in zip(bases, rates, cards)],
+
             "foot": _foot_toggle(bases, view_char) if view_char else _foot_all(bases, ""),
             "foot_all": _foot_all(bases, view_char), "toggle": toggle,
             "alert": _alert(bases, view_char, w) if view_char else None,
@@ -694,16 +718,18 @@ def _shared(views: Mapping[str, dict]) -> tuple[list[dict], dict, dict]:
     return shared, views[""]["rate_cards"], by_char
 
 
-def _price_lines(b: _Base, w: GatheringWorld) -> list[list]:
-    """The detail's price card in its day-one form (SPEC §3.4E.7 item 1, §3.4E.8).
+def _price_lines(b: _Base, w: GatheringWorld, day_one: bool) -> list[list]:
+    """The detail's price card (SPEC §3.4E.7 item 1, §3.4E.8; D83, D84).
 
     Args:
         b: The item's base.
         w: The world.
+        day_one: True for the compact form.
 
     Returns:
-        [label, value, note, note class, dot] lines: current AH price with its age, listed quantity, the 30-day
-        median and deviation ("—": needs price history), the chance to sell.
+        [label, value, note, note class, dot] lines. Full: current AH price with its age, the 30-day median, the
+        deviation, listed quantity. Day one: current AH price, listed quantity, the 30-day median and deviation
+        ("—": needs price history), the chance to sell.
     """
     f = b.facts
     if f.price is None or f.seen_ms is None:
@@ -714,24 +740,29 @@ def _price_lines(b: _Base, w: GatheringWorld) -> list[list]:
         mine = " (your scan)" if f.source == "local" else ""
         price = ["Current AH price", money(f.price), f"· {age(old)} old{mine}", cls, None]
     qty = _qty(f)
+    listed = ["Listed quantity", DASH if qty is None else f"{qty} units", "", "", None]
+    if not day_one:
+        return [price, *gh.median_lines(b.history), listed]
     dot = "low" if b.default else market_activity(b.chance, f.confidence, None, None, None).dot
-    return [price, ["Listed quantity", DASH if qty is None else f"{qty} units", "", "", None],
+    return [price, listed,
             ["30-day median · deviation", DASH, "needs price history", "", None],
             ["Chance to sell", f"{round_half_up(b.chance * 100)}%", "default: no sales data yet" if b.default else "",
              "", dot]]
 
 
 def _detail(b: _Base, w: GatheringWorld, day_one: bool) -> dict:
-    """An item's character-independent detail, the compact form of M16 (SPEC §3.4E.7, §3.4E.8).
+    """An item's character-independent detail, in E.7's order (SPEC §3.4E.7, §3.4E.8; GA31, GA32, D83, D84).
 
     Args:
         b: The item's base.
         w: The world.
-        day_one: True when no catalog item has price history yet.
+        day_one: True when no catalog item has price history yet: the compact form.
 
     Returns:
         {"title", "subtitle", "price", "market" (the market activity cells), "net_unit" (the formula, or None
-        without a price), "deposit" (its legend), "history" (the line in place of the history)}.
+        without a price), "deposit" (its legend), "history" (the line in place of the history on day one, else
+        ""), and gathering_history.detail's "heat", "reading", "legend", "windows", "windows_note", "timing",
+        "timing_note" (None, [], {}, [], "", [], "" on day one)}.
     """
     f, src = b.facts, skill_source(b.item)
     where = (f"{src.profession} {src.skill}{' or monster drop' if 'Monster' in b.item.categories else ''}"
@@ -742,16 +773,20 @@ def _detail(b: _Base, w: GatheringWorld, day_one: bool) -> dict:
     if f.price is not None and b.net_unit is not None:
         net_unit = (f"{money(f.price)} − 5% cut {copper2(f.price * AH_CUT)} − (1 − {percent}%) × "
                     f"{copper2(deposit_per_unit(f.vendor_sell))} deposit = {copper2(b.net_unit)}")
+    history = ({"heat": None, "reading": [], "legend": {}, "windows": [], "windows_note": "", "timing": [],
+                "timing_note": ""}
+
+               if day_one else gh.detail(b.history, w.now_ms, w.offset_ms))
     return {"title": f"{b.item.name}: day one" if day_one else f"{b.item.name}: price, timing and your rate",
             "subtitle": "selected row · compact" if day_one else f"selected row · {where}",
-            "price": _price_lines(b, w),
+            "price": _price_lines(b, w, day_one),
             "market": {"chance": m.chance, "confidence": m.confidence, "dot": "low" if b.default else m.dot,
                        "sales": m.sales, "supply": m.supply, "days": m.days, "chance_note": m.chance_note},
             "net_unit": net_unit,
             "deposit": (f"Deposit: {DEPOSIT_BP[24] // 100}% of the {money(f.vendor_sell or 0)} vendor price per unit "
                         f"for 24 h, refunded on a sale, so only the {100 - percent}% chance it expires costs it. "
                         f"Estimates: a listed price is not a sale."),
-            "history": NO_HISTORY_LINE}
+            "history": NO_HISTORY_LINE if day_one else "", **history}
 
 
 def _newest(bases: Sequence[_Base]) -> PriceFacts | None:
@@ -841,11 +876,15 @@ def gathering_view(w: GatheringWorld) -> dict:
         characters: the keys it shows, the cells that differ from the shared row, its footers, toggle and alert;
         _shared), "details" (item key -> its detail), "selected" (the row selected by default: the highest net
         gold/hr under All characters, else the first row), "note", "default_note", "no_rates" (the last row's text
-        while no character has any rate, else None), "no_match", "no_match_filters", "help"}.
+        while no character has any rate, else None), "no_match", "no_match_filters", "heat_hours" (the heatmap
+        hovers' hour labels, gathering_history.heat), "help"}.
+
     """
     bases = _order([_base(item, w) for item in w.items])
-    day_one = not any(b.facts.med30 is not None and (b.facts.closes_30d or 0) >= MIN_HOURLY_CLOSES for b in bases)
-    rows, cards, by_char = _shared({c: _view(bases, c, w) for c in ["", *sorted(w.characters)]})
+    day_one = not any(gh.has_median(b.history) for b in bases)       # E.8: decided per page build
+    hist = {b.item.key: gh.blank_columns(HISTORY_HOVER) if day_one else gh.columns(b.history, w.now_ms, w.offset_ms)
+            for b in bases}
+    rows, cards, by_char = _shared({c: _view(bases, c, w, hist) for c in ["", *sorted(w.characters)]})
     rated = [r for r in rows if r["sort"]["rate"] is not None]
     best = max((r for r in rows if r["sort"]["net"] is not None), key=lambda r: r["sort"]["net"], default=None)
     priced = [b for b in bases if b.facts.price is not None]
@@ -864,6 +903,6 @@ def gathering_view(w: GatheringWorld) -> dict:
         "selected": str(best["key"]) if best else (str(rows[0]["key"]) if rows else ""),
         "note": _note_text(bases, w), "default_note": default_note,
         "no_rates": None if any(_any_rate(b, w) for b in bases) else NO_RATES.format(n=w.confirm_units),
-        "no_match": NO_MATCH, "no_match_filters": NO_MATCH_FILTERS,
-        "help": {k: v + (HISTORY_NOTE if k in HISTORY_COLUMNS else "") for k, v in GATHERING_HELP.items()},
+        "no_match": NO_MATCH, "no_match_filters": NO_MATCH_FILTERS, "heat_hours": gh.HEAT_HOURS,
+        "help": {k: v + (HISTORY_NOTE if day_one and k in HISTORY_COLUMNS else "") for k, v in GATHERING_HELP.items()},
     }

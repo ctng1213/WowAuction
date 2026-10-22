@@ -164,6 +164,26 @@ class GatheringStore:
             out += self.gather_events(char_id, last[0])
         return out
 
+    def looted_sources(self, char_ids: Sequence[str]) -> dict[int, tuple[str, ...]]:
+        """The sources the characters' stored gather events looted each item from (observed categories, GA33).
+
+        Every stored event counts, a dropped candidate's too: what opened the loot window is evidence of where the
+        item comes from, whether or not the run became a session.
+
+        Args:
+            char_ids: The characters.
+
+        Returns:
+            Item key -> its distinct sources ("mining", "monster", ...), sorted.
+        """
+        marks = ", ".join("?" for _ in char_ids)
+        found: dict[int, set[str]] = {}
+        for source, loot in self.conn.execute(f"SELECT DISTINCT source, loot FROM gather_events "
+                                              f"WHERE char_id IN ({marks})", tuple(char_ids)):
+            for key, _ in decode_loot(loot):
+                found.setdefault(key, set()).add(source)
+        return {key: tuple(sorted(sources)) for key, sources in sorted(found.items())}
+
     def manual_rates(self, char_ids: Sequence[str]) -> dict[tuple[str, int], int]:
         """The manual rate overrides of some characters (SPEC §3.4E.5).
 

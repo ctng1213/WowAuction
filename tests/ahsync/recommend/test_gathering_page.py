@@ -7,7 +7,8 @@ from dataclasses import replace
 from ahsync.config import Config
 from ahsync.engine.sessions import sessions
 from ahsync.history.reads import CurrentPrice, ItemInfo
-from ahsync.intel.contract import ItemIntel
+from ahsync.intel.contract import IntelWindow, ItemIntel
+
 from ahsync.recommend import gathering_page as page
 from tests.support import gathering_world as gw
 
@@ -28,6 +29,11 @@ class FakeDb:
         self.stored: list = []            # stored farming sessions
         self.events: list = []            # gather events after them
         self.manual: dict = {}
+        self.sources: dict = {}           # item key -> the sources its gather events looted it from
+
+    def looted_sources(self, char_ids):
+        """The sources per item (the fake keeps one table for every character)."""
+        return self.sources
 
     def farming_sessions(self, char_ids):
         """The stored sessions of these characters."""
@@ -68,11 +74,12 @@ def write_catalog(tmp_path, rows):
     return path
 
 
-def build(tmp_path, rows=None, db=None, stats=None):
+def build(tmp_path, rows=None, db=None, stats=None, names=None):
     """The page from the mockup catalog (or rows) for both characters."""
     db = db or FakeDb()
     path = write_catalog(tmp_path, gw.catalog_rows() if rows is None else rows)
-    items = {gw.COPPER: ItemInfo(gw.COPPER, "Copper Ore", 1, 1, 7, 5, 5, 20)}
+    items = {gw.COPPER: ItemInfo(gw.COPPER, "Copper Ore", 1, 1, 7, 5, 5, 20),
+             **{k: ItemInfo(k, n, 1, 1, 7, 0, 1, 20) for k, n in (names or {}).items()}}
     return page.gathering_page(db, "m", [gw.AMAYA, gw.BRUGAN], {gw.COPPER: COPPER_INTEL} if stats is None else stats,
                                items, gw.NOW, 0, Config(), path), db
 
@@ -134,6 +141,59 @@ def test_an_unreadable_catalog_leaves_the_page_empty_with_a_status_line(tmp_path
                                                              "page is empty")
     (tmp_path / "bad.json").write_text("{", encoding="utf-8")
     assert page.read_catalog(tmp_path / "bad.json")[1].startswith("gathering catalog not read (JSONDecodeError)")
+
+
+def all_sessions(db: FakeDb) -> FakeDb:
+    """The mockup's sessions stored as of Sun 16:00 and every event after each character's last one."""
+    sun = gw.at(gw.SUN, "16:00")
+    db.stored, _ = sessions([e for e in gw.EVENTS if e.at_ms <= sun], sun, gw.GAP_MS, 20)
+    last = {c: max(s.end_ms for s in db.stored if s.char_id == c) for c in (gw.AMAYA, gw.BRUGAN)}
+    db.events = [e for e in gw.EVENTS if e.at_ms > last[e.char_id]]
+    return db
+
+
+NAMES = {gw.ROUGH_STONE: "Rough Stone", gw.RUINED_SCRAPS: "Ruined Leather Scraps", gw.BROKEN_FANG: "Broken Fang",
+         gw.CHIPPED_CLAW: "Chipped Claw", gw.LIGHT_HIDE: "Light Hide"}
+
+
+def test_GA34_status_lists_what_was_gathered_that_the_catalog_cant_place(tmp_path):
+    payload, db = build(tmp_path, db=all_sessions(FakeDb()), names=NAMES)
+    level, kind, data, at = db.status["gathering_unplaced:m"]
+    # Rough Stone 8 + 11 + 3 (the open candidate's); the dropped Sun 15:14 candidate's 2 are not farming
+    assert (level, kind, at) == ("info", "gathering_unplaced", gw.NOW)
+    assert data == {"text": "Rough Stone 22, Ruined Leather Scraps 13, Broken Fang 7, Chipped Claw 6, Light Hide 2"}
+    assert not {"Rough Stone", "Ruined Leather Scraps", "Light Hide"} & {r["item"] for r in gw.view_rows(payload, "")}
+    db.stored, db.events = [], []                                # nothing gathered outside the catalog: cleared
+    build(tmp_path, db=db)
+    assert "gathering_unplaced:m" not in db.status
+
+
+def test_GA33_the_page_passes_the_events_sources_to_the_observed_categories(tmp_path):
+    rows = [{**row, "categories": ["Skinning"], "sources": row["sources"][:1]} if row["key"] == gw.LIGHT_LEATHER
+            else row for row in gw.catalog_rows()]
+    db = FakeDb()
+    db.sources = {gw.LIGHT_LEATHER: ("monster", "skinning")}
+    payload, _ = build(tmp_path, rows, db=db)
+    leather = next(r for r in gw.view_rows(payload, "") if r["item"] == "Light Leather")
+    assert (leather["category"], leather["cats"]) == ("Skinning · Monster (observed)", ["Skinning", "Monster"])
+
+
+def test_the_history_comes_from_the_intelligence_with_its_profile_and_windows(tmp_path):
+    how = ",".join(str(int(gw.COPPER_HOW.values[s] * 1000 + 0.5)) for s in range(168))
+    weeks = ",".join(str(w) for w in gw.COPPER_HOW.weeks)
+    windows = tuple(IntelWindow(w.start_slot, w.hours, w.best_slot, w.how_avg, w.weeks) for w in gw.WINDOWS[gw.COPPER])
+    intel = replace(COPPER_INTEL, how=how, how_weeks=weeks, seasonality=61, sell_windows=windows)
+    facts = page.price_facts(gw.COPPER, CurrentPrice(gw.COPPER, 220, 10, gw.AHF_SEEN, "ahf"), intel, None)
+    assert (facts.med30, facts.closes_30d, facts.seasonality, facts.how.values[10]) == (200, 30, 61, 0.97)
+    assert [(w.start_slot, w.hours, w.how_avg, w.weeks) for w in facts.windows] == [(137, 4, 1.12, 7), (163, 3, 1.09, 7),
+                                                                                  (68, 2, 1.08, 4)]
+    assert page.price_facts(gw.COPPER, None, COPPER_INTEL, None).how is None           # no profile published
+    payload, _ = build(tmp_path, stats={gw.COPPER: intel})
+    copper = next(r for r in gw.view_rows(payload, "") if r["item"] == "Copper Ore")
+    assert (copper["median"], copper["window"], copper["window_price"]) == ("2s", "Sat 17:00", "2s 24c")
+    strict = page.gathering_page(FakeDb(), "m", [gw.AMAYA, gw.BRUGAN], {gw.COPPER: intel}, {}, gw.NOW, 0,
+                                 replace(Config(), timing_edge_min_strength=62), write_catalog(tmp_path, gw.catalog_rows()))
+    assert next(r for r in gw.view_rows(strict, "") if r["item"] == "Copper Ore")["window"] == "no timing edge"
 
 
 def test_the_shipped_catalog_loads_without_a_status_line():

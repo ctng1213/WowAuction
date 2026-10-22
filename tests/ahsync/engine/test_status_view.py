@@ -188,3 +188,13 @@ def test_SRC2_status_names_the_markets_primary_source():
     assert alert["title"] == "blizzard data is old" and "until blizzard has new data" in alert["text"]
     none = market(primary="blizzard", newest_price_ms=None)
     assert [a["title"] for a in status_view.status_view([], facts(none), NOW, 0)["alerts"]] == ["No blizzard prices yet"]
+
+
+def test_GA34_an_info_line_lists_the_loot_the_gathering_catalog_cannot_place():
+    text = "Rough Stone 22, Ruined Leather Scraps 13, Broken Fang 7, Chipped Claw 6, Light Hide 2"
+    line = row("gathering_unplaced", {"text": text}, "info", f"gathering_unplaced:{M}")
+    alert = status_view.alerts([line], facts(), NOW, 0)[0]
+    assert alert["level"] == "info" and f"{alert['title']}: {alert['text']}" == (
+        "Gathered, not in the catalog: Rough Stone 22, Ruined Leather Scraps 13, Broken Fang 7, Chipped Claw 6, "
+        "Light Hide 2")
+

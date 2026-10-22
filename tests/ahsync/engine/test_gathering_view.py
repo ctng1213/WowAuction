@@ -4,7 +4,8 @@ from __future__ import annotations
 from dataclasses import replace
 
 from ahsync.engine import gathering_view as gv
-from ahsync.engine.gathering import CatalogItem, Observed, Source
+from ahsync.engine.gathering import CatalogItem, Observed, Source, catalog
+
 from ahsync.engine.gathering_view import PriceFacts, gathering_view
 from ahsync.engine.sessions import Candidate, Session
 from tests.support import gathering_world as gw
@@ -220,7 +221,6 @@ def test_the_full_detail_title_and_the_price_card_with_history():
     assert p["details"][str(gw.LINEN)]["subtitle"] == "selected row · monster drop"
     copper = p["details"][str(gw.COPPER)]
     assert copper["price"][0] == ["Current AH price", "2s 20c", "· 26 h old", "amber", None]
-    assert copper["price"][3] == ["Chance to sell", "85%", "", "", "high"]
     assert copper["market"] == {"chance": "85%", "confidence": 80, "dot": "high", "sales": "30 AHF", "supply": "64",
                                 "days": "2.1 days", "chance_note": ""}
     assert copper["deposit"].startswith("Deposit: 15% of the 5c vendor price per unit for 24 h") and \
@@ -456,3 +456,129 @@ def test_D87_the_freshness_line_and_stale_prices():
         "seen 26 h ago (AHF scan Sun 08:38) · stale: over 24 h"}
     assert "Prices are 26 h old (amber over 24 h): every gold/hr uses them as they are." in p["note"]
     assert rows(p)["Copper Ore"]["net"] == "79s 38c"                               # the stale price, as it is
+
+
+def reading(detail: dict) -> str:
+    """The detail's reading line as the page joins it."""
+    return " ".join(t for t, _ in detail["reading"])
+
+
+def test_GA28_median_30d_and_deviation_with_the_thin_data_threshold():
+    facts = {**gw.price_facts(), gw.MAGEROYAL: replace(gw.price_facts()[gw.MAGEROYAL], closes_30d=23)}
+    p = gathering_view(gw.world(facts=facts))
+    r = rows(p)
+    copper, linen, snapper, thin = r["Copper Ore"], r["Linen Cloth"], r["Raw Longjaw Mud Snapper"], r["Mageroyal"]
+    assert (copper["median"], copper["deviation"], copper["deviation_class"]) == ("2s", "+10%", "pos")
+    assert (linen["median"], linen["deviation"], linen["deviation_class"]) == ("49c", "−22%", "neg")   # −22.4 → −22
+    assert (snapper["median"], snapper["deviation"], snapper["sort"]["deviation"]) == ("15c", "—", None)
+    assert (thin["median"], thin["deviation"], thin["window"], thin["window_price"]) == ("—", "—", "—", "—")
+    assert thin["median_title"] == "thin data: 23 hourly closes in 30 days; the median needs 24"
+    assert (copper["sort"]["median"], copper["sort"]["deviation"], thin["sort"]["median"]) == (200, 10, None)
+    view = gw.view_rows(p, "")
+    assert sort_like_the_page(view, "median", True)[:3] == ["Silver Ore", "Tin Ore", "Briarthorn"]   # 10s, 3s, 2s 80c
+    assert sort_like_the_page(view, "median", True)[-1] == "Mageroyal"                  # "—" sorts last
+
+
+def test_GA29_the_sell_window_is_the_top_windows_start_and_its_price_med30_times_its_ratio():
+    p = gathering_view(gw.world())
+    r = rows(p)
+    copper, tin, earthroot = r["Copper Ore"], r["Tin Ore"], r["Earthroot"]
+    assert (copper["window"], copper["window_price"], copper["window_delta"], copper["window_delta_class"]) == (
+        "Sat 17:00", "2s 24c", "+2% vs now", "pos")                        # 224 vs 220 = +1.8%
+    assert copper["window_title"] == ("Start of the top selling window Sat 17:00–21:00 (best hour Sat 19:00) · "
+                                      "seasonality strength 61")
+    assert (tin["window"], tin["window_price"], tin["window_delta"]) == ("Sat 18:00", "3s 15c", "+15% vs now")
+    assert (earthroot["window"], earthroot["window_price"], earthroot["window_delta"],
+            earthroot["window_delta_class"]) == ("Sun 19:00", "53c", "−12% vs now", "neg")
+    view = gw.view_rows(p, "")
+    assert sort_like_the_page(view, "window_price", True)[:3] == ["Tin Ore", "Mageroyal", "Copper Ore"]
+    assert sort_like_the_page(view, "window", False)[:3] == ["Mageroyal", "Medium Leather", "Copper Ore"]
+
+
+def test_GA30_no_timing_edge_under_40_too_little_data_without_evidence_and_40_is_inclusive():
+    facts = {**gw.price_facts(), gw.TIN: replace(gw.price_facts()[gw.TIN], seasonality=40)}
+    r = rows(gathering_view(gw.world(facts=facts)))
+    for name in ("Peacebloom", "Briarthorn"):
+        assert (r[name]["window"], r[name]["window_muted"], r[name]["window_price"]) == ("no timing edge", True, "—")
+    assert r["Peacebloom"]["window_title"] == ("Seasonality strength 22, under 40: weak pattern, no strong timing "
+                                               "advantage")
+    assert (r["Silver Ore"]["window"], r["Silver Ore"]["window_sub"], r["Silver Ore"]["window_price"]) == (
+        "—", "too little data", "—")
+    assert (r["Tin Ore"]["window"], r["Tin Ore"]["window_price"]) == ("Sat 18:00", "3s 15c")
+    strict = rows(gathering_view(gw.world(facts=facts, min_strength=41)))
+    assert strict["Tin Ore"]["window"] == "no timing edge"                 # config timing_edge_min_strength
+
+
+def test_GA31_copper_ores_heatmap_marks_and_reading_line_at_mon_10_38():
+    d = gathering_view(gw.world())["details"][str(gw.COPPER)]
+    marks = {(row["day"], h): c[2] for row in d["heat"]["rows"] for h, c in enumerate(row["cells"]) if c[2]}
+
+
+    assert marks == {("Mon", 10): "now", **{("Sat", h): "top" for h in range(17, 21)},
+                     **{("Sun", h): "next" for h in range(19, 22)}, **{("Wed", h): "next" for h in (20, 21)}}
+    assert reading(d) == ("now 2s 20c (Mon 10:00 slot ratio 0.97) · best Sat 17:00–21:00 at 2s 24c · +2% for a "
+                          "5 d 6 h 22 min wait")
+    assert d["legend"]["now"] == "now (Mon 10:00)" and d["legend"]["next"] == "windows 2 and 3"
+
+
+def test_GA32_the_top_three_windows_and_seasonality_then_peacebloom_and_silver_ore():
+    details = gathering_view(gw.world())["details"]
+    copper = details[str(gw.COPPER)]
+    assert [[w["rank"], w["window"], w["price"], w["weeks"]] for w in copper["windows"]] == [
+        ["1", "Sat 17:00–21:00", "2s 24c", "7"], ["2", "Sun 19:00–22:00", "2s 18c", "7"],
+        ["3", "Wed 20:00–22:00", "2s 16c", "4"]]
+    assert copper["timing"][0] == ["Seasonality strength", "61",
+                                   "· the weekly profile beat a flat price on the held-out week", "", None]
+    assert details[str(gw.PEACEBLOOM)]["timing"][0][1:3] == ["22", "· weak pattern: no strong timing advantage"]
+    silver = details[str(gw.SILVER)]
+    assert silver["timing"][0][1:3] == ["—", "· insufficient evidence"] and silver["windows"] == []
+
+
+def test_GA33_a_monster_loot_of_light_leather_teaches_its_category_but_not_its_eligibility():
+    rows_ = [{**row, "categories": ["Skinning"], "sources": row["sources"][:1]} if row["key"] == gw.LIGHT_LEATHER
+             else row for row in gw.catalog_rows()]
+    items, _ = catalog(rows_)
+    sources = {gw.LIGHT_LEATHER: ("monster", "skinning"), gw.ROUGH_STONE: ("mining",)}
+    p = gathering_view(gw.world(items=items, sources=sources))
+    leather = rows(p)["Light Leather"]
+    assert (leather["category"], leather["cats"]) == ("Skinning · Monster (observed)", ["Skinning", "Monster"])
+    assert (leather["skill_text"], leather["skill_sub"]) == ("1", "")                    # the catalog's skill
+    assert "Light Leather" in filter_like_the_page(p, off=("Fishing", "Herbalism", "Mining", "Skinning"))
+    assert not rows(p, gw.AMAYA)["Light Leather"]["eligible"]                            # still Skinning only
+    assert "Rough Stone" not in rows(p)                                                  # unknown: never taught
+
+
+def test_D83_copper_ores_detail_in_panel_order():
+    p = gathering_view(gw.world())
+    d = p["details"][str(gw.COPPER)]
+    assert (d["title"], d["subtitle"]) == ("Copper Ore: price, timing and your rate", "selected row · Mining 1")
+    assert d["price"] == [["Current AH price", "2s 20c", "· 26 h old", "amber", None],
+                          ["30-day median", "2s", "", "", None], ["Deviation", "", "+10%", "pos", None],
+                          ["Listed quantity", "64 units", "", "", None]]
+    assert (d["market"]["chance"], d["market"]["sales"], d["market"]["supply"], d["market"]["days"]) == (
+        "85%", "30 AHF", "64", "2.1 days")
+    assert gw.view_card(p, "", gw.COPPER)["lines"][0] == ["Gross gold/hr", "38 × 2s 20c = 83s 60c"]
+    assert d["net_unit"] == "2s 20c − 5% cut 11.00c − (1 − 85%) × 0.75c deposit = 208.89c" and d["history"] == ""
+    assert d["heat"] and reading(d).startswith("now 2s 20c") and len(d["windows"]) == 3 and d["timing"]
+    earthroot = p["details"][str(gw.EARTHROOT)]
+    assert earthroot["title"] == "Earthroot: price, timing and your rate" and earthroot["heat"] is None
+    assert earthroot["timing"][1][1:3] == ["Sun 19:00", "· start of Sun 19:00–22:00 (best hour Sun 20:00)"]
+    assert p["help"]["Median 30d"] == "Median unit price over the last 30 days"           # no "needs price history"
+    assert p["help"]["Weeks of data"] == "Weeks behind the window's thinnest hour"
+
+
+def test_D84_day_one_keeps_every_row_and_the_compact_detail():
+    p = gathering_view(gw.world(day_one=True))
+    assert p["fresh"][1] == [gv.NO_HISTORY_FRESH, ""]
+    for r in gw.view_rows(p, ""):
+        assert [r[k] for k in ("median", "deviation", "window", "window_price")] == ["—"] * 4
+        assert r["sort"]["median"] is None and r["sort"]["window"] is None
+    for column in gv.HISTORY_COLUMNS:
+        assert p["help"][column].endswith('needs price history: "—" until weeks of data arrive')
+    r = rows(p)
+    assert (r["Copper Ore"]["net"], r["Tin Ore"]["net"], r["Copper Ore"]["net_dot"]) == ("79s 28c", "10s 38c", True)
+    assert (r["Copper Ore"]["ah_price"], r["Copper Ore"]["qty"], r["Copper Ore"]["rate"]) == ("2s 20c", "64", "38")
+    d = p["details"][str(gw.COPPER)]
+    assert d["price"][3] == ["Chance to sell", "50%", "default: no sales data yet", "", "low"]
+    assert (d["history"], d["heat"], d["windows"], d["timing"]) == (gv.NO_HISTORY_LINE, None, [], [])
+    assert d["subtitle"] == "selected row · compact"

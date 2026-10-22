@@ -93,6 +93,7 @@ class Config:
     swap_candidates: int = 50                   # excluded batches the swap pass tries (§3.4D.4)
     session_confirm_units: int = 20             # gathered units that confirm a farming session, 1-1000 (§3.4E.4)
     session_gap_minutes: int = 15               # minutes without loot that end a farming session, 1-120
+    timing_edge_min_strength: int = 40          # Gathering shows a sell window from this seasonality strength, 0-100
     launch_wow_after_catchup: bool = False
     realms: Mapping[str, str] = field(default_factory=dict)
     budgets: Mapping[str, int] = field(default_factory=dict)
@@ -119,7 +120,7 @@ for _name in ("retention_days", "dashboard_port", "live_refresh_minutes", "own_r
               "max_craft_depth", "max_actions_per_day", "min_gear_units", "pattern_full_weeks",
               "immediate_hours", "top_buy_windows", "top_sell_windows", "today_limit", "week_limit",
               "candidate_export", "horizon_days", "candidate_pool", "swap_candidates", "session_confirm_units",
-              "session_gap_minutes"):
+              "session_gap_minutes", "timing_edge_min_strength"):
     _TYPES[_name] = _INT
 for _name in ("min_flip_margin", "default_sell_prob", "default_sell_prob_cheapest", "volume_prior_per_day",
               "volume_prior_hours", "default_undercut_share", "own_record_weight",
@@ -237,6 +238,8 @@ _PORTFOLIO_RANGES: dict[str, tuple[int, int | None]] = {
     "top_buy_windows": (1, 10), "top_sell_windows": (1, 10), "today_limit": (1, 100), "week_limit": (1, 100),
     "candidate_export": (20, None), "swap_candidates": (1, None),
     "session_confirm_units": (1, 1000), "session_gap_minutes": (1, 120),     # Gathering (§3.4E.4), not configVersion
+    "timing_edge_min_strength": (0, 100),                                    # Gathering (§3.4E.7), not configVersion
+
 }
 
 

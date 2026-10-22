@@ -185,3 +185,25 @@ def test_GA7_no_sales_data_takes_the_default_chance_at_the_ah_price():
     assert g.chance_to_sell(0.85, 30.0, 220, 220) == (0.85, False)
     assert g.chance_to_sell(None, None, 300, 275, 0.2, 0.6) == (0.2, True)   # someone cheaper: default_sell_prob
     assert g.net_per_hour(4, g.net_per_unit(275, 0.5, 25)) == 1037.5       # 4 × 259.375 → "10s 38c"
+
+
+def test_GA33_an_event_source_teaches_a_known_item_another_category_only():
+    leather = CatalogItem(gw.LIGHT_LEATHER, "Light Leather", ("Skinning",), (Source("skinning", "Skinning", 1),))
+    assert g.observed_categories(leather, ["skinning", "monster", "monster"]) == ("Monster",)
+    assert g.observed_categories(leather, ["skinning"]) == ()                 # its own category: nothing new
+    assert g.observed_categories(leather, ["fishing", "mining", "chest"]) == ("Fishing", "Mining")   # CATEGORIES order
+    assert g.eligible(leather, {}) is False                                   # eligibility stays the catalog's
+
+
+def test_GA34_loot_the_catalog_cannot_place_over_sessions_and_open_candidates():
+    found, open_ = sessions(gw.EVENTS, gw.NOW, gw.GAP_MS, 20)
+    units = g.unplaced_loot(found, open_.values(), [it.key for it in g.catalog(gw.catalog_rows())[0]])
+    # Rough Stone 8 + 11 + 3 (the open candidate's); the dropped Sun 15:14 candidate's 2 are left out
+    assert units == {gw.ROUGH_STONE: 22, gw.RUINED_SCRAPS: 13, gw.BROKEN_FANG: 7, gw.CHIPPED_CLAW: 6, gw.LIGHT_HIDE: 2}
+    names = {gw.ROUGH_STONE: "Rough Stone", gw.RUINED_SCRAPS: "Ruined Leather Scraps", gw.BROKEN_FANG: "Broken Fang",
+             gw.CHIPPED_CLAW: "Chipped Claw", gw.LIGHT_HIDE: "Light Hide"}
+    assert g.unplaced_text(units, names) == ("Rough Stone 22, Ruined Leather Scraps 13, Broken Fang 7, Chipped Claw 6, "
+                                             "Light Hide 2")
+    assert g.unplaced_text({1: 2, 3: 2, 2: 2}, {1: "B", 2: "A"}) == "A 2, B 2, item 3 2"      # ties by name, then key
+    assert g.unplaced_text({}, {}) == ""
+

@@ -171,6 +171,9 @@ def test_the_portfolio_settings_are_read_with_their_defaults(tmp_path):
     ("session_confirm_units = 1001\n", "session_confirm_units must be between 1 and 1000"),
     ("session_gap_minutes = 121\n", "session_gap_minutes must be between 1 and 120"),
     ("session_gap_minutes = 7.5\n", "session_gap_minutes must be a whole number"),
+    ("timing_edge_min_strength = 101\n", "timing_edge_min_strength must be between 0 and 100"),
+    ("timing_edge_min_strength = -1\n", "timing_edge_min_strength must be between 0 and 100"),
+    ("timing_edge_min_strength = 40.5\n", "timing_edge_min_strength must be a whole number"),
 ])
 def test_bad_portfolio_settings_are_refused_with_the_line_and_reason(tmp_path, text, message):
     with pytest.raises(ConfigError) as error:
@@ -183,6 +186,11 @@ def test_the_gathering_session_keys_are_read_with_their_defaults_and_stay_out_of
     cfg = parse_config("session_confirm_units = 1000\nsession_gap_minutes = 1\n", {}, tmp_path)
     assert session_settings(cfg) == SessionSettings(1000, 1) and session_settings(cfg).gap_ms == 60_000
     assert config_version(portfolio_settings(cfg)) == config_version(portfolio_settings(Config()))
+    assert Config().timing_edge_min_strength == 40
+    edge = parse_config("timing_edge_min_strength = 0\n", {}, tmp_path)
+    assert edge.timing_edge_min_strength == 0
+    assert config_version(portfolio_settings(edge)) == config_version(portfolio_settings(Config()))
+
 
 
 def test_the_candidate_pool_and_swap_bound_are_read_and_checked(tmp_path):

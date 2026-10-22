@@ -1131,8 +1131,8 @@ const PAGES = {
 
   Characters: { count: 2, html: () => `
     <h1>Characters</h1><p class="lede">Captured by the addon at login and when profession windows open. Each character's gold is its default budget. Every profession is listed, crafting and gathering alike: Gathering's eligibility reads the gathering skills.</p>
-    <div class="grid2">${charCard('Amaya', 'Mage · 38', 'Horde · Grommash (pvp)', 210000, [['Tailoring', 160, 225], ['Enchanting', 142, 225], ['Herbalism', 45, 75, 1], ['Fishing', 20, 75, 1]], 37, 'Fri 13:52')}
-    ${charCard('Brugan', 'Warrior · 34', 'Horde · Grommash (pvp)', 104000, [['Blacksmithing', 112, 150], ['Alchemy', 225, 225], ['Mining', 68, 75, 1], ['Skinning', 40, 75, 1]], 24, 'Thu 23:10')}</div>` },
+    <div class="grid2">${charCard('Amaya', 'Mage · 38', 'Horde · Grommash (pvp)', 210000, [['Enchanting', 142, 225], ['Tailoring', 160, 225], ['Fishing', 20, 75, 1], ['Herbalism', 45, 75, 1]], 37, 'Fri 13:52')}
+    ${charCard('Brugan', 'Warrior · 34', 'Horde · Grommash (pvp)', 104000, [['Alchemy', 225, 225], ['Blacksmithing', 112, 150], ['Mining', 68, 75, 1], ['Skinning', 40, 75, 1]], 24, 'Thu 23:10')}</div>` },
 
   Status: { count: null, html: () => `
     <h1>Status</h1><p class="lede">Sync state, data age and anything that needs attention.</p>
@@ -1215,7 +1215,8 @@ function calRow(bucket, n, predicted, actual) {
 function ruleRow(n, q, rule, effect, set, from) {
   return `<tr><td>${item(n, q)}</td><td>${rule}</td><td class="muted">${effect}</td><td>${set}</td><td class="muted">${from}</td><td><span class="btn">Clear</span></td></tr>`;
 }
-// profs: [name, skill, max, gathering?]; a gathering profession gets a muted "gathering" tag.
+// profs: [name, skill, max, gathering?], crafting first, then gathering, each by name; a gathering profession gets a muted "gathering" tag.
+
 function charCard(name, cls, where, gold, profs, recipes, seen) {
   return `<div class="card"><div class="card-h"><b>${name}</b><span class="muted">${cls}</span></div>
     <dl class="kv"><dt>Realm</dt><dd>${where}</dd><dt>Gold (budget)</dt><dd>${money(gold)}</dd><dt>Known recipes</dt><dd>${recipes}</dd><dt>Last seen</dt><dd>${seen}</dd></dl>

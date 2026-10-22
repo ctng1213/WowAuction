@@ -138,7 +138,14 @@
   /* Gathering: 12 columns fit a 1280 px window (tighter cells; headers and Category may wrap), as in the mockup */
   .ga th, .ga td { padding: 6px 7px; } .ga th { white-space: normal; vertical-align: bottom; }
   .ga td:nth-child(2) { white-space: normal; min-width: 70px; } .ga .sub { max-width: 220px; }
-  .breakdown span.amber { color: var(--amber); } .breakdown span.pos { color: var(--pos); }
+  .breakdown span.amber { color: var(--amber); } .breakdown span.pos { color: var(--pos); } .breakdown span.neg { color: var(--neg); }
+  /* Gathering's heatmap marks (SPEC §3.4E.7): now, the top window, windows 2 and 3; the legend draws the same swatches */
+  .heat .ga-now { outline: 2px solid var(--accent); outline-offset: -2px; position: relative; z-index: 1; }
+  .heat .ga-top { outline: 1px dashed #fffb; outline-offset: -1px; } .heat .ga-next { outline: 1px dotted #fff5; outline-offset: -1px; }
+  .ga .legend { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .ga-swatch { display: inline-block; width: 10px; height: 10px; vertical-align: -1px; }
+  .ga-swatch.ga-now { outline: 2px solid var(--accent); outline-offset: -2px; } .ga-swatch.ga-top { outline: 1px dashed #fffb; outline-offset: -1px; }
+  .ga-swatch.ga-next { outline: 1px dotted #fff5; outline-offset: -1px; }
 
   @media (max-width: 760px) {
     .layout { grid-template-columns: 1fr; }
@@ -337,8 +344,8 @@ const pfPage = (d, values) => {
 // ---------- Gathering (SPEC §3.4E, §3.5): every cell, note, footer and option comes from engine/gathering_view.py ----------
 // Columns in the mockup's order: [header, numeric?, sort key in row.sort (or null)]. Rows with a null key sort last both ways.
 const GA_COLS = [['Item', 0, null], ['Category', 0, null], ['Skill', 1, 'skill'], ['AH Price', 1, 'price'], ['AH Qty', 1, 'qty'],
-                 ['Median 30d', 1, null], ['Deviation', 1, 'deviation'], ['Items/hr', 1, 'rate'], ['Character', 0, null],
-                 ['Net gold/hr', 1, 'net'], ['Sell window', 0, null], ['Sell window price', 1, 'window_price']];
+                 ['Median 30d', 1, 'median'], ['Deviation', 1, 'deviation'], ['Items/hr', 1, 'rate'], ['Character', 0, null],
+                 ['Net gold/hr', 1, 'net'], ['Sell window', 0, 'window'], ['Sell window price', 1, 'window_price']];
 const GA_CLASSES = ['amber', 'muted', 'pos', 'neg'];
 const gaClass = c => GA_CLASSES.includes(c) ? c : '';
 const gaSegments = segs => (segs || []).map(([t, c]) => `<span class="${gaClass(c)}">${esc(t)}</span>`);
@@ -367,12 +374,12 @@ const gaSkill = r => r.skill_text === '—' ? dash('—') : `<span class="${r.sk
   (r.skill_sub ? `<span class="sub">${esc(r.skill_sub)}</span>` : '');
 const gaRow = (r, selected) => `<tr data-select="${esc(r.key)}"${String(r.key) === selected ? ' class="selected"' : ''}><td>${item(r.item, r.quality)}${r.note ? `<span class="sub">${esc(r.note)}</span>` : ''}</td>` +
   `<td>${esc(r.category)}</td><td class="num">${gaSkill(r)}</td><td class="num" title="${esc(r.price_title)}">${dash(r.ah_price)}</td><td class="num">${dash(r.qty)}</td>` +
-  `<td class="num">${dash(r.median)}</td><td class="num"><span class="${gaClass(r.deviation_class)}">${dash(r.deviation)}</span></td>` +
+  `<td class="num"${r.median_title ? ` title="${esc(r.median_title)}"` : ''}>${dash(r.median)}</td><td class="num"><span class="${gaClass(r.deviation_class)}">${dash(r.deviation)}</span></td>` +
   `<td class="num${r.fallback ? ' muted' : ''}" title="${esc(r.rate_title)}">${dash(r.rate)}${r.fallback ? ' <span class="st" style="color:var(--muted)">Fallback</span>' : ''}${r.rate_sub ? `<span class="sub">${esc(r.rate_sub)}</span>` : ''}</td>` +
   `<td class="${r.fallback ? 'muted' : ''}">${dash(r.character)}</td>` +
   `<td class="num${r.fallback ? ' muted' : ''}"${r.net_title ? ` title="${esc(r.net_title)}"` : ''}>${dash(r.net)}${r.net_dot ? ' <span class="dot l"></span>' : ''}</td>` +
   `<td class="${r.window_muted ? 'muted' : ''}"${r.window_title ? ` title="${esc(r.window_title)}"` : ''}>${dash(r.window)}${r.window_sub ? `<span class="sub">${esc(r.window_sub)}</span>` : ''}</td>` +
-  `<td class="num">${dash(r.window_price)}${r.window_delta ? `<span class="sub ${gaClass(r.window_delta_class)}">${esc(r.window_delta)}</span>` : ''}</td></tr>`;
+  `<td class="num"${r.window_price_title ? ` title="${esc(r.window_price_title)}"` : ''}>${dash(r.window_price)}${r.window_delta ? `<span class="sub ${gaClass(r.window_delta_class)}">${esc(r.window_delta)}</span>` : ''}</td></tr>`;
 const gaLines = lines => `<div class="breakdown">${(lines || []).map(([k, v, note, cls, dot]) => `<div><span>${esc(k)}</span><b>${esc(v)}` +
   `${DOTS[dot] ? ` <span class="dot ${DOTS[dot]}"></span>` : ''}${note ? ` <span class="${gaClass(cls)}">${esc(note)}</span>` : ''}</b></div>`).join('')}</div>`;
 // The rate card ("Your farming rate"), the one place sessions show (SPEC §3.4E.7): a block per character, its lines
@@ -390,8 +397,28 @@ const gaRateCard = (c, key) => `<div class="card"><div style="padding:10px 14px 
   const lines = (b.lines || []).length ? `<div class="muted" style="font-size:12px;margin:4px 0 0 12px">${b.lines.map(gaLine).join('')}</div>` : '';
   return `<div style="margin-bottom:10px">${head}${lines}${b.foot ? `<div class="sub" style="margin-left:12px">${esc(b.foot)}</div>` : ''}${gaOverride(b, key)}</div>`;
 }).join('')}</div></div>`;
-// The detail below the table for the selected row: price card, rate card, market activity, gross / net per unit / net,
-// the deposit legend, then the line standing in for the price history (M16's compact form, SPEC §3.4E.8).
+// The price heatmap (SPEC §3.4E.7 item 5): the item detail's cells, each [level, index of its hover text, mark] with
+// the engine's mark (now: the thick accent outline; top: the top window, dashed; next: windows 2 and 3, dotted); the
+// hover is the row's day, the payload's hour label and the picked text. Then the legend with its swatches.
+const GA_MARKS = { now: 'ga-now', top: 'ga-top', next: 'ga-next' };
+const gaHeat = (heat, hours) => `<div class="heat price"><div class="lbl"></div>${HOUR_LABELS.map(h => `<div class="lbl">${h}</div>`).join('')}` +
+  heat.rows.map(r => `<div class="lbl">${esc(r.day)}</div>` + r.cells.map(([level, i, mark], h) => `<div class="${LEVEL_CLASS[level] || 'hn'}${GA_MARKS[mark] ? ' ' + GA_MARKS[mark] : ''}" title="${esc(r.day)} ${esc(hours[h] || '')} ${esc(heat.texts[i])}"></div>`).join('')).join('') + '</div>';
+
+const gaSwatch = (cls, text) => text ? `<span class="ga-swatch ${cls}"></span> ${esc(text)}` : '';
+const gaLegend = l => `<div class="legend">${[gaSwatch('ga-now', l.now), gaSwatch('ga-top', l.top), gaSwatch('ga-next', l.next)].filter(Boolean).join(' · ')}. ${esc(l.text)}</div>`;
+// The history half of the detail (SPEC §3.4E.7 items 5-7): heatmap, reading line, top windows and seasonality.
+function gaHistory(x, help, hours) {
+  if (x.history) return `<div class="muted" style="margin-top:10px">${esc(x.history)}</div>`;
+  const heat = x.heat ? `<div class="h">Price by hour of the week (<code>how</code>), local time</div>${gaHeat(x.heat, hours)}` +
+    `<div style="font-size:13px;margin-top:6px">${(x.reading || []).map(([t, c]) => `<span class="${gaClass(c)}">${esc(t)}</span>`).join(' ')}</div>${gaLegend(x.legend)}` : '';
+  const windows = (x.windows || []).length ? `<div class="h">Top ${x.windows.length} selling windows</div><div class="card">` +
+    pfTable([['Rank', 1, null], ['Window', 0, null], ['Median price', 1, null], ['Weeks of data', 1, null]], help,
+      x.windows.map(w => `<tr><td class="num">${esc(w.rank)}</td><td>${esc(w.window)}</td><td class="num" title="${esc(w.title)}">${esc(w.price)}</td><td class="num">${esc(w.weeks)}</td></tr>`)) +
+    `</div><div class="legend">${esc(x.windows_note)}</div>` : '';
+  return `${heat}${windows}<div style="margin-top:10px">${gaLines(x.timing)}</div><div class="legend">${esc(x.timing_note)}</div>`;
+}
+// The detail below the table for the selected row, in SPEC §3.4E.7's order: price card, rate card, market activity,
+// gross / net per unit / net, the deposit legend, then the history (or, on day one, the line standing in for it).
 // The rate card picks the item's blocks (only the picked character's) and the row's gross and net lines.
 function gaDetail(d, rows, key, char) {
   const x = (d.details || {})[key], row = rows.find(r => String(r.key) === key);
@@ -400,11 +427,14 @@ function gaDetail(d, rows, key, char) {
   const card = { blocks, lines: row.card_lines || [] };
   const formulas = [...card.lines.slice(0, 1), ...(x.net_unit ? [['Net per unit', x.net_unit]] : []), ...card.lines.slice(1)];
   return `<div class="card-h" style="border-top:1px solid var(--border)"><b>${esc(x.title)}</b><span class="muted">${esc(x.subtitle)}</span></div>` +
-    `<div class="detail"><div><div class="h">Price</div>${gaLines(x.price)}<div class="h">Your farming rate</div>${gaRateCard(card, key)}</div>` +
-    `<div><div class="h">Market activity</div><div class="card">${pfTable(MARKET_COLS, d.help || {}, [`<tr>${marketCells(x.market)}</tr>`])}</div>` +
-    `${formulas.length ? `<div style="margin-top:10px">${breakdown(formulas)}</div>` : ''}<div class="h">${esc(x.deposit)}</div>` +
-    `<div class="muted" style="margin-top:10px">${esc(x.history)}</div></div></div>`;
+    `<div class="detail"><div><div class="h">Price</div>${gaLines(x.price)}<div class="h">Your farming rate</div>${gaRateCard(card, key)}` +
+    `<div class="h">Market activity</div><div class="card">${pfTable(MARKET_COLS, d.help || {}, [`<tr>${marketCells(x.market)}</tr>`])}</div>` +
+    `${formulas.length ? `<div style="margin-top:10px">${breakdown(formulas)}</div>` : ''}<div class="h">${esc(x.deposit)}</div></div>` +
+    `<div>${gaHistory(x, d.help || {}, d.heat_hours || [])}</div></div>`;
+
+
 }
+
 // A view's rows: each shared row (sent once) in the view's key order, with the view's differing cells laid over it.
 function gaViewRows(d, view) {
   const shared = Object.fromEntries((d.rows || []).map(r => [String(r.key), r]));
@@ -549,11 +579,11 @@ const LIVE = {
     ],
   },
   characters: {
-    lede: 'Captured by the addon at login and when profession windows open. Each character’s gold is its default budget; a <code>[budgets]</code> entry in config.toml overrides it.',
+    lede: 'Captured by the addon at login and when profession windows open. Each character’s gold is its default budget; a <code>[budgets]</code> entry in config.toml overrides it. Every profession is listed, crafting and gathering alike: Gathering’s eligibility reads the gathering skills.',
     render: d => !(d.cards || []).length ? `<div class="empty">${esc(d.empty)}</div>` :
       `<div class="grid2">${d.cards.map(c => `<div class="card"><div class="card-h"><b>${esc(c.title)}</b><span class="muted">${esc(c.subtitle)}</span></div>` +
         `<dl class="kv">${c.lines.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` +
-        c.professions.map(p => `<div class="prof"><div style="display:flex;justify-content:space-between"><span>${esc(p.name)}</span><span class="muted">${esc(p.skill)}</span></div>` +
+        c.professions.map(p => `<div class="prof"><div style="display:flex;justify-content:space-between"><span>${esc(p.name)}${p.gathering ? ' <span class="muted" style="font-size:12px">· gathering</span>' : ''}</span><span class="muted">${esc(p.skill)}</span></div>` +
           `<div class="bar"><i style="width:${Number(p.pct)}%"></i></div></div>`).join('') + '<div style="height:10px"></div></div>').join('')}</div>`,
     filters: [],
   },

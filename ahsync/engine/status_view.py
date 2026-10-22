@@ -247,6 +247,7 @@ def message(row: StatusRow, offset_ms: int) -> tuple[str, str]:
                                      f"tolerance and the plan are unchanged. Check that the file can be written, then "
                                      f"pick the value again."),
         "gathering_catalog": ("Gathering catalog", str(d.get("text", ""))),          # SPEC §3.4E.1, GA2
+        "gathering_unplaced": ("Gathered, not in the catalog", str(d.get("text", ""))),   # SPEC §3.5 Status, GA34
         "restored": ("Database restored", f"The database was damaged and was restored from "
                                           f"{d.get('backup') or 'nothing (started empty)'}."),
     }

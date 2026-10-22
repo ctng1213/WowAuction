@@ -54,7 +54,7 @@ def local_slot(slot: int, offset_ms: int) -> int:
     return (slot + offset_ms // HOUR_MS) % SLOTS
 
 
-def _hour_text(local: int) -> str:
+def hour_text(local: int) -> str:
     """A local slot as weekday and hour.
 
     Args:
@@ -78,8 +78,8 @@ def window_long(w: Window, offset_ms: int) -> str:
     """
     start = local_slot(w.start_slot, offset_ms)
     end = (start + w.hours) % SLOTS
-    end_text = _hour_text(end) if end // 24 != start // 24 else f"{end % 24:02d}:00"
-    return f"{_hour_text(start)}–{end_text}"
+    end_text = hour_text(end) if end // 24 != start // 24 else f"{end % 24:02d}:00"
+    return f"{hour_text(start)}–{end_text}"
 
 
 def windows_short(windows: Sequence[Window], offset_ms: int) -> str:
@@ -102,7 +102,7 @@ def windows_short(windows: Sequence[Window], offset_ms: int) -> str:
     return " · ".join(parts) or "—"
 
 
-def _ratio_text(value: float, places: int) -> str:
+def ratio_text(value: float, places: int) -> str:
     """A ratio with fixed decimals, rounded half up.
 
     Args:
@@ -137,10 +137,10 @@ def heatmap(prof: Profile, offset_ms: int, places: int = 2) -> list[dict]:
     for slot in range(SLOTS):
         local, value, weeks = local_slot(slot, offset_ms), prof.values[slot], prof.weeks[slot]
         if weeks == 0:
-            cells[local] = {"level": None, "title": f"{_hour_text(local)} no data"}
+            cells[local] = {"level": None, "title": f"{hour_text(local)} no data"}
             continue
         level = round_half_up(LEVELS * (value - lo) / (hi - lo)) if hi > lo else LEVELS // 2
-        cells[local] = {"level": level, "title": f"{_hour_text(local)} ×{_ratio_text(value, places)} · {weeks} weeks"}
+        cells[local] = {"level": level, "title": f"{hour_text(local)} ×{ratio_text(value, places)} · {weeks} weeks"}
     return [{"day": WEEKDAYS[d], "cells": cells[d * 24:(d + 1) * 24]} for d in range(7)]
 
 
@@ -173,9 +173,9 @@ def three_answers(how: Profile, sales: Profile, windows: Sequence[Window], offse
     price, busy = _peak(how), _peak(sales)
     return {
         "price": "—" if price is None else
-        f"{_hour_text(local_slot(price, offset_ms))} · ×{_ratio_text(how.values[price], 2)}",
+        f"{hour_text(local_slot(price, offset_ms))} · ×{ratio_text(how.values[price], 2)}",
         "sales": "—" if busy is None else
-        f"{_hour_text(local_slot(busy, offset_ms))} · {_ratio_text(sales.values[busy], 1)}× an average hour",
+        f"{hour_text(local_slot(busy, offset_ms))} · {ratio_text(sales.values[busy], 1)}× an average hour",
         "best": window_long(windows[0], offset_ms) if windows else "—",
     }
 

@@ -716,9 +716,12 @@ def test_D81_the_gathering_page_under_all_characters():
                     "Character", "Net gold/hr", "Sell window", "Sell window price"]
     assert set(cols) <= set(p["help"])
     copper = next(r for r in gw.view_rows(p, "") if r["item"] == "Copper Ore")
-    # M16: the historical cells are "—" until M18 ("2s · +10% · … · Sat 17:00 · 2s 24c (+2% vs now)").
+    # M18: the historical cells (the mockup's "2s · +10% · … · Sat 17:00 · 2s 24c (+2% vs now)")
     assert [copper[k] for k in ("ah_price", "qty", "median", "deviation", "rate", "character", "net", "window",
-                                "window_price")] == ["2s 20c", "64", "—", "—", "38", "Brugan", "79s 38c", "—", "—"]
+                                "window_price", "window_delta")] == ["2s 20c", "64", "2s", "+10%", "38", "Brugan",
+                                                                     "79s 38c", "Sat 17:00", "2s 24c", "+2% vs now"]
+    sorted_by = dict(re.findall(r"\['([^']+)', [01], '([a-z_]+)'\]", js[js.index("const GA_COLS"):js.index("const GA_CLASSES")]))
+    assert {sorted_by[c] for c in ("Median 30d", "Deviation", "Sell window", "Sell window price")} <= set(copper["sort"])
     assert copper["note"] == "Brugan: 3 sessions, 1 h 50 min" and p["selected"] == str(gw.COPPER)
     assert p["by_char"][""]["toggle"] == {"label": "Only what a character can gather", "disabled": True,
                                           "title": "Pick a character first"}
@@ -737,7 +740,40 @@ def test_D81_the_gathering_page_under_all_characters():
     assert ".blocks.filter(b => !char || b.char === char)" in js and "lines: row.card_lines || []" in js
 
 
+def test_D83_the_detail_draws_the_heatmap_marks_legend_reading_line_windows_and_seasonality():
+    from ahsync.engine.gathering_view import gathering_view
+    from tests.support import gathering_world as gw
+    d = gathering_view(gw.world())["details"][str(gw.COPPER)]
+    js = gathering_js()
+    page = INDEX_HTML.read_text(encoding="utf-8")
+    # the marks are the engine's: the page maps each to its outline class (the mockup's three outlines)
+    assert "const GA_MARKS = { now: 'ga-now', top: 'ga-top', next: 'ga-next' };" in js and "GA_MARKS[mark]" in js
+    assert {c[2] for r in d["heat"]["rows"] for c in r["cells"]} == {"", "now", "top", "next"}
+    assert 'title="${esc(r.day)} ${esc(hours[h] || \'\')} ${esc(heat.texts[i])}"' in js and "d.heat_hours || []" in js
+
+
+    assert ".heat .ga-now { outline: 2px solid var(--accent)" in page and "outline: 1px dashed #fffb" in page
+    assert "outline: 1px dotted #fff5" in page
+    assert "gaSwatch('ga-now', l.now), gaSwatch('ga-top', l.top), gaSwatch('ga-next', l.next)" in js
+    # the reading line, the windows table and the timing lines are drawn as served, in E.7's order
+    assert "(x.reading || []).map(([t, c])" in js and "['Rank', 1, null], ['Window', 0, null], ['Median price', 1, null]" in js
+    history = js[js.index("function gaHistory"):js.index("function gaDetail")]
+    assert history.index("gaHeat(x.heat, hours)") < history.index("x.windows.map") < history.index("gaLines(x.timing)")
+    detail = js[js.index("function gaDetail"):js.index("function gaViewRows")]
+    assert detail.index("gaLines(x.price)") < detail.index("gaRateCard(card, key)") < detail.index("marketCells(x.market)")
+    assert detail.index("marketCells(x.market)") < detail.index("gaHistory(x, d.help || {}, d.heat_hours || [])")
+    assert "if (x.history) return" in history                    # day one: the one line in place of the history
+
+
+def test_D86_the_characters_page_tags_gathering_professions():
+    page = INDEX_HTML.read_text(encoding="utf-8")
+    characters = page[page.index("  characters: {"):page.index("  rules: {")]
+    assert "${p.gathering ? ' <span class=\"muted\" style=\"font-size:12px\">· gathering</span>' : ''}" in characters
+    assert "crafting and gathering alike" in characters
+
+
 def gathering_characters(db: Database) -> None:
+
     """Amaya (Herbalism 45) and Brugan (Mining 68), as a professions read leaves them."""
     with db.transaction():
         db.conn.executemany("INSERT INTO characters(id, name, market, gold) VALUES (?, ?, ?, 0)",

@@ -1,12 +1,14 @@
 """The Characters page: one card per character, with its gold (the default budget) and professions (SPEC §3.5, D49).
 
-Pure: every text and every bar width is made here.
+Every captured profession has its bar, crafting and gathering alike, the gathering ones tagged (M18, D86), since
+Gathering's eligibility reads them. Pure: every text and every bar width is made here.
 """
 from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from ahsync.engine.gathering import GATHERING_PROFESSIONS
 from ahsync.engine.views import age_text, money, round_half_up
 
 
@@ -34,14 +36,19 @@ def _card(c: CharacterSheet, now_ms: int) -> dict:
         now_ms: Now, for "last seen".
 
     Returns:
-        {"title", "subtitle", "lines": [[label, value]], "professions": [{"name", "skill", "pct"}]}.
+        {"title", "subtitle", "lines": [[label, value]], "professions": [{"name", "skill", "pct", "gathering"}]}:
+        the crafting professions first, then the gathering ones (Fishing, Herbalism, Mining, Skinning; tagged
+        "gathering" on the page, D86), each group by name.
     """
     name, _, realm = c.char_id.partition("-")
     ruleset = c.market.split(".")[1] if c.market and c.market.count(".") >= 3 else None
     where = " · ".join(p for p in (c.faction, f"{realm} ({ruleset})" if ruleset else realm) if p)
     sub = " · ".join(p for p in ((c.char_class or "").title(), str(c.level) if c.level else "") if p)
+    ordered = sorted(c.professions, key=lambda p: (p[0] in GATHERING_PROFESSIONS, p[0]))
     profs = [{"name": p, "skill": f"{s if s is not None else '—'} / {m if m is not None else '—'}",
-              "pct": round_half_up(100 * min(s, m) / m) if s is not None and m else 0} for p, s, m in c.professions]
+              "pct": round_half_up(100 * min(s, m) / m) if s is not None and m else 0,
+              "gathering": p in GATHERING_PROFESSIONS} for p, s, m in ordered]
+
     budget = ["Budget", money(c.budget) + " (set in config.toml)"] if c.budget is not None else \
         ["Gold (budget)", money(c.gold)]
     return {"title": name, "subtitle": sub, "lines": [

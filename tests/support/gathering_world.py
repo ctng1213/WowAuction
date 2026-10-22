@@ -10,13 +10,21 @@ Light Leather 21/hr; Amaya's Peacebloom 26/hr, Silverleaf 19/hr, Earthroot 10/hr
 Linen Cloth 14/hr. Two short candidates are dropped: Brugan's Sun 15:14 (2 Rough Stone, the GA15 event that
 ends his 14:02–14:59 session by inactivity) and Amaya's Mon 09:05 (1 Small Egg, the next login that makes
 her Sun 20:40–21:08 session "ended at logout").
+
+The price history (M18) is the mockup's too: each item's seasonality strength and top selling window
+(Copper Ore's three windows and its hourly profile `how`, gaCopperHow: Sat 17:00–21:00 at 1.12, Sun
+19:00–22:00 at 1.09, Wed 20:00–22:00 at 1.08, strength 61; Peacebloom 22, so "no timing edge"; Silver Ore
+insufficient evidence). med30 rests on 30 hourly closes.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import replace
 
 from ahsync.engine.gathering import catalog
 from ahsync.engine.gathering_view import GatheringWorld, PriceFacts
+from ahsync.engine.patterns import Window
+from ahsync.engine.profile import Profile
 from ahsync.engine.sessions import GatherEvent, sessions
 
 HOUR, MINUTE = 3_600_000, 60_000
@@ -56,6 +64,62 @@ _ITEMS = (
 TYPES = {"Mining": "node", "Herbalism": "node", "Skinning": "skinning", "Fishing": "fishing"}
 
 MANUAL = {(AMAYA, EARTHROOT): 12}
+
+# Seasonality strength (None = insufficient evidence), from the mockup's GA_ITEMS.
+STRENGTH = {COPPER: 61, TIN: 48, SILVER: None, PEACEBLOOM: 22, SILVERLEAF: 35, EARTHROOT: 44, MAGEROYAL: 57,
+            BRIARTHORN: 31, LIGHT_LEATHER: 52, MEDIUM_LEATHER: 46, LINEN: 78, WOOL: 55, SMALL_EGG: 12, SMALLFISH: None,
+            MUD_SNAPPER: None, LIGHT_FEATHER: 25}
+SAT_SLOT, SUN_SLOT, WED_SLOT, THU_SLOT = 5 * 24, 6 * 24, 2 * 24, 3 * 24
+
+
+def window(day_slot: int, start: int, end: int, best: int, how_avg: float, weeks: int = 6) -> Window:
+    """A selling window of the mockup's week (UTC slots; offset 0).
+
+    Args:
+        day_slot: The weekday's first slot (SAT_SLOT, ...).
+        start: First hour.
+        end: End hour (exclusive).
+        best: Best hour.
+        how_avg: Its average price ratio.
+        weeks: Weeks of data behind its thinnest slot.
+
+    Returns:
+        The Window (no score, no forecast: Gathering reads neither).
+    """
+    return Window(day_slot + start, end - start, 0.0, how_avg, weeks, day_slot + best)
+
+
+# Each item's selling windows, best first (the mockup's top window; Copper Ore's three, GA_COPPER_WINDOWS).
+WINDOWS = {COPPER: (window(SAT_SLOT, 17, 21, 19, 1.12, 7), window(SUN_SLOT, 19, 22, 20, 1.09, 7),
+                    window(WED_SLOT, 20, 22, 20, 1.08, 4)),
+           TIN: (window(SAT_SLOT, 18, 21, 19, 1.05),), EARTHROOT: (window(SUN_SLOT, 19, 22, 20, 1.06),),
+           MAGEROYAL: (window(WED_SLOT, 19, 22, 20, 1.07),), LIGHT_LEATHER: (window(SUN_SLOT, 18, 21, 19, 1.06),),
+           MEDIUM_LEATHER: (window(THU_SLOT, 19, 22, 19, 1.05),), LINEN: (window(SAT_SLOT, 17, 21, 19, 1.12),),
+           WOOL: (window(SUN_SLOT, 19, 22, 19, 1.06),)}
+
+
+def copper_how(slot: int) -> float:
+    """Copper Ore's price ratio in one slot: the mockup's gaCopperHow, in hundredths, half up.
+
+    Args:
+        slot: UTC slot (offset 0: local), 0 = Mon 00:00.
+
+    Returns:
+        A midday low, an evening rise, weekends a little higher and three bumps (its windows): Mon 10:00 0.97,
+        Sat 18:00 1.12.
+    """
+    day, hour = divmod(slot, 24)
+    bump = (0.04 if day == 5 and 17 <= hour <= 20 else 0.01 if day == 6 and 19 <= hour <= 21
+            else 0.02 if day == 2 and 20 <= hour <= 21 else 0)
+    ratio = (1 + 0.03 * math.sin((hour - 14) / 3.8) + (0.03 if 17 <= hour <= 21 else 0) + (0.02 if day >= 5 else 0)
+             + bump)
+    return math.floor(ratio * 100 + 0.5) / 100
+
+
+# 7 weeks of data in every slot but Wed 20:00-21:00 (4 weeks, the third window's), as the mockup's heatmap titles.
+COPPER_HOW = Profile(tuple(copper_how(s) for s in range(168)),
+                     tuple(4 if WED_SLOT + 20 <= s <= WED_SLOT + 21 else 7 for s in range(168)),
+                     tuple(True for _ in range(168)))
 
 
 def at(day: int, hh_mm: str) -> int:
@@ -164,7 +228,8 @@ def price_facts(day_one: bool = False) -> dict[int, PriceFacts]:
 
     Returns:
         Item key -> PriceFacts. Copper Ore sells 30 a day (AHF) with confidence 80; an item with a chance sells
-        5 a day; med30 rests on 30 closes.
+        5 a day; med30 rests on 30 closes; strength, windows and Copper Ore's profile as STRENGTH, WINDOWS and
+        COPPER_HOW (none of them on day one).
     """
     out = {}
     for key, _, _, _, price, qty, med, chance, vendor in _ITEMS:
@@ -173,7 +238,10 @@ def price_facts(day_one: bool = False) -> dict[int, PriceFacts]:
                               qty, vendor, 1, chance / 100 if known else None,
                               (30.0 if key == COPPER else 5.0) if known else None, "ahf" if known else None,
                               "ids" if known else None, 80 if known else None, price,
-                              None if day_one else med, None if day_one else 30)
+                              None if day_one else med, None if day_one else 30,
+                              None if day_one else STRENGTH[key], COPPER_HOW if key == COPPER and not day_one else None,
+                              () if day_one else WINDOWS.get(key, ()))
+
     out[THORIUM] = PriceFacts(2500, AHF_SEEN, "ahf", 10, 100)
     out[ROUGH_STONE] = PriceFacts(15, AHF_SEEN, "ahf", 200, 2)
     return out
@@ -210,6 +278,22 @@ def view_card(payload: dict, char: str, key: int | str) -> dict:
     return {"blocks": [b for b in blocks if not char or b["char"] == char], "lines": row["card_lines"]}
 
 
+def looted_sources(events: list[GatherEvent]) -> dict[int, tuple[str, ...]]:
+    """What state.gathering.looted_sources reads: the sources each item was looted from.
+
+    Args:
+        events: Gather events.
+
+    Returns:
+        Item key -> distinct sources, sorted.
+    """
+    found: dict[int, set[str]] = {}
+    for e in events:
+        for key, _ in e.loot:
+            found.setdefault(key, set()).add(e.source)
+    return {key: tuple(sorted(s)) for key, s in sorted(found.items())}
+
+
 def world(day_one: bool = False, rates: bool = True, now_ms: int = NOW, extra=(), **changes) -> GatheringWorld:
     """The mockup's Gathering world, its sessions grouped from the gather events by engine.sessions.
 
@@ -221,11 +305,15 @@ def world(day_one: bool = False, rates: bool = True, now_ms: int = NOW, extra=()
         changes: GatheringWorld field overrides.
 
     Returns:
-        The world at Mon 10:38: 7 sessions over 220 min and Brugan's open candidate, professions synced Mon 10:38.
+        The world at Mon 10:38: 7 sessions over 220 min and Brugan's open candidate, professions synced Mon 10:38,
+        the events' sources for the observed categories (none in the mockup's catalog: every source is listed).
     """
     items, skipped = catalog(catalog_rows())
     assert not skipped
-    found, open_ = sessions(gather_events((*RUNS, *extra)) if rates else [], now_ms, GAP_MS, 20)
+    events = gather_events((*RUNS, *extra)) if rates else []
+    found, open_ = sessions(events, now_ms, GAP_MS, 20)
     base = GatheringWorld(items, price_facts(day_one), SKILLS, [AMAYA, BRUGAN], now_ms, 0,
-                          manual=MANUAL if rates else {}, sessions=found, open=open_, professions_ms=NOW)
+                          manual=MANUAL if rates else {}, sessions=found, open=open_, professions_ms=NOW,
+                          sources=looted_sources(events))
     return replace(base, **changes)
+

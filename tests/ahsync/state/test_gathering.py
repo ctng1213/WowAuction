@@ -118,3 +118,14 @@ def test_gather_events_and_sessions_are_kept_90_days(db):
 def test_loot_text_round_trips_summed_and_by_key():
     assert encode_loot([(2771, 1), (2770, 2), (2770, 1)]) == "2770,3;2771,1"
     assert decode_loot("2770,3;2771,1") == ((2770, 3), (2771, 1)) and decode_loot("") == ()
+
+
+def test_GA33_the_stored_events_give_each_items_sources_a_dropped_candidates_included(db):
+    read(db, gw.EVENTS)
+    sources = db.looted_sources([gw.AMAYA, gw.BRUGAN])
+    assert (sources[gw.LIGHT_LEATHER], sources[gw.RUINED_SCRAPS], sources[gw.COPPER]) == (
+        ("skinning",), ("monster",), ("mining",))
+    assert sources[gw.SMALL_EGG] == ("monster",)                     # Amaya's dropped Mon 09:05 candidate
+    assert gw.LIGHT_LEATHER not in db.looted_sources([gw.AMAYA]) and db.looted_sources([]) == {}
+    assert sources == gw.looted_sources(gw.EVENTS)                   # the test world's reader agrees
+
