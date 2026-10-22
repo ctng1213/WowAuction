@@ -940,6 +940,701 @@
     ]
    }
   },
+  "gathering": {
+   "forever.pvp.horde.us": {
+    "by_char": {
+     "": {
+      "alert": null,
+      "cells": {},
+      "foot": [
+       ["150 materials · sorted by AH Price, highest first; rows with \"—\" sort last", ""],
+       ["84 no character can gather (amber Skill)", "amber"],
+       ["Character = whose rate: the highest among the characters who can gather it", "muted"]
+      ],
+      "foot_all": [
+       ["150 materials · sorted by AH Price, highest first; rows with \"—\" sort last", ""],
+       ["84 no character can gather (amber Skill)", "amber"],
+       ["Character = whose rate: the highest among the characters who can gather it", "muted"]
+      ],
+      "keys": [4306, 2592, 2770, 2318, 2589, 2835],
+      "other": {
+       "count": 144,
+       "sha256": "5e38e1ce32d0de5d97f3bbf4a2d5d85396c9988d7a775a0c4d90dee39aea5ff1"
+      },
+      "toggle": {
+       "disabled": true,
+       "label": "Only what a character can gather",
+       "title": "Pick a character first"
+      }
+     },
+     "Amaya-Grommash": {
+      "alert": {
+       "text": "Turn off \"Only what Amaya can gather\" to see every material. 59 Monster rows remain: Silk Cloth, Wool Cloth, Light Leather, Linen Cloth, Bear Meat, Big Bear Meat, Black Whelp Scale, Boar Intestines, Boar Ribs, Breath of Wind, Chunk of Boar Meat, Core of Earth, Crawler Claw, Crawler Meat, Crocolisk Meat, Elemental Air, Elemental Earth, Elemental Fire, Elemental Water, Essence of Air, Essence of Earth, Essence of Fire, Essence of Undeath, Essence of Water, Felcloth, Giant Egg, Globe of Water, Goretusk Liver, Green Whelp Scale, Heart of Fire, Heart of the Wild, Heavy Kodo Meat, Ichor of Undeath, Ironweb Spider Silk, Light Feather, Lion Meat, Living Essence, Mageweave Cloth, Medium Leather, Mystery Meat, Raptor Egg, Raptor Flesh, Red Whelp Scale, Red Wolf Meat, Ruined Leather Scraps, Runecloth, Shadow Silk, Slimy Murloc Scale, Small Egg, Spider Ichor, Spider's Silk, Stringy Wolf Meat, Tender Crocolisk Meat, Tender Wolf Meat, Thick Murloc Scale, Thick Spider's Silk, Turtle Meat, White Spider Meat, Wildvine.",
+       "title": "Amaya can gather nothing yet: Monster drops only."
+      },
+      "cells": {
+       "2770": {
+        "eligible": false
+       },
+       "2835": {
+        "eligible": false
+       }
+      },
+      "foot": [
+       ["59 of 150 shown", ""],
+       ["91 hidden: 7 only Brugan can gather (Copper Ore, Rough Stone, Coarse Stone, Incendicite Ore, Lesser Bloodstone Ore, Silver Ore, Tin Ore), 84 no character can (Arcane Crystal, Arthas' Tears, Black Dragonscale, Black Lotus, Blindweed, Blue Dragonscale, Briarthorn, Bruiseweed, Chimera Leather, Dark Iron Ore, Dense Stone, Deviate Fish, Devilsaur Leather, Dreamfoil, Earthroot, Fadeleaf, Firebloom, Firefin Snapper, Frostsaber Leather, Ghost Mushroom, Gold Ore, Golden Sansam, Goldthorn, Grave Moss, Green Dragonscale, Gromsblood, Heavy Hide, Heavy Leather, Heavy Scorpid Scale, Heavy Stone, Icecap, Indurium Ore, Iron Ore, Khadgar's Whisker, Kingsblood, Large Raw Mightfish, Liferoot, Light Hide, Lightning Eel, Mageroyal, Medium Hide, Mithril Ore, Mountain Silversage, Oily Blackmouth, Peacebloom, Plaguebloom, Purple Lotus, Raw Brilliant Smallfish, Raw Bristle Whisker Catfish, Raw Glossy Mightfish, Raw Greater Sagefish, Raw Loch Frenzy, Raw Longjaw Mud Snapper, Raw Mithril Head Trout, Raw Nightfin Snapper, Raw Rainbow Fin Albacore, Raw Redgill, Raw Rockscale Cod, Raw Sagefish, Raw Slitherskin Mackerel, Raw Spotted Yellowtail, Raw Summer Bass, Raw Sunscale Salmon, Raw Whitescale Salmon, Red Dragonscale, Rugged Hide, Rugged Leather, Scorpid Scale, Silverleaf, Solid Stone, Stonescale Eel, Stranglekelp, Sungrass, Swiftthistle, Thick Hide, Thick Leather, Thorium Ore, Truesilver Ore, Turtle Scale, Warbear Leather, Wild Steelbloom, Winter Squid, Wintersbite, Worn Dragonscale)", "muted"]
+      ],
+      "foot_all": [
+       ["150 materials · sorted by AH Price, highest first; rows with \"—\" sort last", ""],
+       ["84 no character can gather (amber Skill)", "amber"],
+       ["Character = whose rate: Amaya's own, else a Fallback from another character who can gather it", "muted"]
+      ],
+      "keys": [4306, 2592, 2770, 2318, 2589, 2835],
+      "other": {
+       "count": 144,
+       "sha256": "94b69a8521a974f3406270578ccb313991c8634ea43859088f57fb647257eec8"
+      },
+      "toggle": {
+       "disabled": false,
+       "label": "Only what Amaya can gather",
+       "title": "Hides what Amaya can't gather. Monster drops always stay"
+      }
+     },
+     "Brugan-Grommash": {
+      "alert": null,
+      "cells": {},
+      "foot": [
+       ["66 of 150 shown", ""],
+       ["84 hidden: 84 no character can (Arcane Crystal, Arthas' Tears, Black Dragonscale, Black Lotus, Blindweed, Blue Dragonscale, Briarthorn, Bruiseweed, Chimera Leather, Dark Iron Ore, Dense Stone, Deviate Fish, Devilsaur Leather, Dreamfoil, Earthroot, Fadeleaf, Firebloom, Firefin Snapper, Frostsaber Leather, Ghost Mushroom, Gold Ore, Golden Sansam, Goldthorn, Grave Moss, Green Dragonscale, Gromsblood, Heavy Hide, Heavy Leather, Heavy Scorpid Scale, Heavy Stone, Icecap, Indurium Ore, Iron Ore, Khadgar's Whisker, Kingsblood, Large Raw Mightfish, Liferoot, Light Hide, Lightning Eel, Mageroyal, Medium Hide, Mithril Ore, Mountain Silversage, Oily Blackmouth, Peacebloom, Plaguebloom, Purple Lotus, Raw Brilliant Smallfish, Raw Bristle Whisker Catfish, Raw Glossy Mightfish, Raw Greater Sagefish, Raw Loch Frenzy, Raw Longjaw Mud Snapper, Raw Mithril Head Trout, Raw Nightfin Snapper, Raw Rainbow Fin Albacore, Raw Redgill, Raw Rockscale Cod, Raw Sagefish, Raw Slitherskin Mackerel, Raw Spotted Yellowtail, Raw Summer Bass, Raw Sunscale Salmon, Raw Whitescale Salmon, Red Dragonscale, Rugged Hide, Rugged Leather, Scorpid Scale, Silverleaf, Solid Stone, Stonescale Eel, Stranglekelp, Sungrass, Swiftthistle, Thick Hide, Thick Leather, Thorium Ore, Truesilver Ore, Turtle Scale, Warbear Leather, Wild Steelbloom, Winter Squid, Wintersbite, Worn Dragonscale)", "muted"]
+      ],
+      "foot_all": [
+       ["150 materials · sorted by AH Price, highest first; rows with \"—\" sort last", ""],
+       ["84 no character can gather (amber Skill)", "amber"],
+       ["Character = whose rate: Brugan's own, else a Fallback from another character who can gather it", "muted"]
+      ],
+      "keys": [4306, 2592, 2770, 2318, 2589, 2835],
+      "other": {
+       "count": 144,
+       "sha256": "a532334b6d66b70abe7de44991c7d24ea3368bfdd62acea290f99461aa1d26e8"
+      },
+      "toggle": {
+       "disabled": false,
+       "label": "Only what Brugan can gather",
+       "title": "Hides what Brugan can't gather. Monster drops always stay"
+      }
+     }
+    },
+    "characters": [
+     ["", "All characters"],
+     ["Amaya-Grommash", "Amaya"],
+     ["Brugan-Grommash", "Brugan"]
+    ],
+    "default_note": "",
+    "details": {
+     "2318": {
+      "deposit": "Deposit: 15% of the 15c vendor price per unit for 24 h, refunded on a sale, so only the 0% chance it expires costs it. Estimates: a listed price is not a sale.",
+      "history": "no price history yet: the heatmap, the top selling windows and seasonality strength appear as weeks of data arrive",
+      "market": {
+       "chance": "100%",
+       "chance_note": "",
+       "confidence": 75,
+       "days": "2.0 days",
+       "dot": "high",
+       "sales": "98 est.",
+       "supply": "200"
+      },
+      "net_unit": "1s 19c − 5% cut 5.95c − (1 − 100%) × 2.25c deposit = 113.05c",
+      "price": [
+       ["Current AH price", "1s 19c", "· 1 h old (your scan)", "pos", null],
+       ["Listed quantity", "200 units", "", "", null],
+       ["30-day median · deviation", "—", "needs price history", "", null],
+       ["Chance to sell", "100%", "", "", "high"]
+      ],
+      "subtitle": "selected row · Skinning 1 or monster drop",
+      "title": "Light Leather: price, timing and your rate"
+     },
+     "2589": {
+      "deposit": "Deposit: 15% of the 13c vendor price per unit for 24 h, refunded on a sale, so only the 0% chance it expires costs it. Estimates: a listed price is not a sale.",
+      "history": "no price history yet: the heatmap, the top selling windows and seasonality strength appear as weeks of data arrive",
+      "market": {
+       "chance": "100%",
+       "chance_note": "",
+       "confidence": 75,
+       "days": "0.3 days",
+       "dot": "high",
+       "sales": "1183 est.",
+       "supply": "320"
+      },
+      "net_unit": "50c − 5% cut 2.50c − (1 − 100%) × 1.95c deposit = 47.50c",
+      "price": [
+       ["Current AH price", "50c", "· 1 h old (your scan)", "pos", null],
+       ["Listed quantity", "320 units", "", "", null],
+       ["30-day median · deviation", "—", "needs price history", "", null],
+       ["Chance to sell", "100%", "", "", "high"]
+      ],
+      "subtitle": "selected row · monster drop",
+      "title": "Linen Cloth: price, timing and your rate"
+     },
+     "2592": {
+      "deposit": "Deposit: 15% of the 33c vendor price per unit for 24 h, refunded on a sale, so only the 0% chance it expires costs it. Estimates: a listed price is not a sale.",
+      "history": "no price history yet: the heatmap, the top selling windows and seasonality strength appear as weeks of data arrive",
+      "market": {
+       "chance": "100%",
+       "chance_note": "",
+       "confidence": 75,
+       "days": "1.5 days",
+       "dot": "high",
+       "sales": "143 est.",
+       "supply": "220"
+      },
+      "net_unit": "3s − 5% cut 15.00c − (1 − 100%) × 4.95c deposit = 285.00c",
+      "price": [
+       ["Current AH price", "3s", "· 1 h old (your scan)", "pos", null],
+       ["Listed quantity", "220 units", "", "", null],
+       ["30-day median · deviation", "—", "needs price history", "", null],
+       ["Chance to sell", "100%", "", "", "high"]
+      ],
+      "subtitle": "selected row · monster drop",
+      "title": "Wool Cloth: price, timing and your rate"
+     },
+     "2770": {
+      "deposit": "Deposit: 15% of the 5c vendor price per unit for 24 h, refunded on a sale, so only the 0% chance it expires costs it. Estimates: a listed price is not a sale.",
+      "history": "no price history yet: the heatmap, the top selling windows and seasonality strength appear as weeks of data arrive",
+      "market": {
+       "chance": "100%",
+       "chance_note": "",
+       "confidence": 75,
+       "days": "1.1 days",
+       "dot": "high",
+       "sales": "300 est.",
+       "supply": "320"
+      },
+      "net_unit": "2s 48c − 5% cut 12.40c − (1 − 100%) × 0.75c deposit = 235.60c",
+      "price": [
+       ["Current AH price", "2s 48c", "· 1 h old (your scan)", "pos", null],
+       ["Listed quantity", "320 units", "", "", null],
+       ["30-day median · deviation", "—", "needs price history", "", null],
+       ["Chance to sell", "100%", "", "", "high"]
+      ],
+      "subtitle": "selected row · Mining 1",
+      "title": "Copper Ore: price, timing and your rate"
+     },
+     "2835": {
+      "deposit": "Deposit: 15% of the 2c vendor price per unit for 24 h, refunded on a sale, so only the 0% chance it expires costs it. Estimates: a listed price is not a sale.",
+      "history": "no price history yet: the heatmap, the top selling windows and seasonality strength appear as weeks of data arrive",
+      "market": {
+       "chance": "100%",
+       "chance_note": "",
+       "confidence": 75,
+       "days": "2.6 days",
+       "dot": "high",
+       "sales": "152 est.",
+       "supply": "400"
+      },
+      "net_unit": "30c − 5% cut 1.50c − (1 − 100%) × 0.30c deposit = 28.50c",
+      "price": [
+       ["Current AH price", "30c", "· 1 h old (your scan)", "pos", null],
+       ["Listed quantity", "400 units", "", "", null],
+       ["30-day median · deviation", "—", "needs price history", "", null],
+       ["Chance to sell", "100%", "", "", "high"]
+      ],
+      "subtitle": "selected row · Mining 1",
+      "title": "Rough Stone: price, timing and your rate"
+     },
+     "4306": {
+      "deposit": "Deposit: 15% of the 1s 50c vendor price per unit for 24 h, refunded on a sale, so only the 0% chance it expires costs it. Estimates: a listed price is not a sale.",
+      "history": "no price history yet: the heatmap, the top selling windows and seasonality strength appear as weeks of data arrive",
+      "market": {
+       "chance": "100%",
+       "chance_note": "",
+       "confidence": 75,
+       "days": "0.3 days",
+       "dot": "high",
+       "sales": "294 est.",
+       "supply": "80"
+      },
+      "net_unit": "20s 60c − 5% cut 103.00c − (1 − 100%) × 22.50c deposit = 1957.00c",
+      "price": [
+       ["Current AH price", "20s 60c", "· 1 h old (your scan)", "pos", null],
+       ["Listed quantity", "80 units", "", "", null],
+       ["30-day median · deviation", "—", "needs price history", "", null],
+       ["Chance to sell", "100%", "", "", "high"]
+      ],
+      "subtitle": "selected row · monster drop",
+      "title": "Silk Cloth: price, timing and your rate"
+     }
+    },
+    "filters": {
+     "categories": ["Fishing", "Herbalism", "Mining", "Skinning", "Monster"],
+     "min_price": [
+      ["", "Any"],
+      ["100", "1s"],
+      ["1000", "10s"],
+      ["5000", "50s"],
+      ["10000", "1g"],
+      ["custom", "Custom…"]
+     ],
+     "search": "Search materials…",
+     "skill": [
+      ["", "Any", null, null],
+      ["1-75", "1–75", 1, 75],
+      ["75-150", "75–150", 75, 150],
+      ["150-225", "150–225", 150, 225],
+      ["225-300", "225–300", 225, 300]
+     ]
+    },
+    "fresh": [
+     ["AH prices 1 h old (your scan)", "pos"],
+     ["professions synced Wed 10:30", ""],
+     ["0 farming sessions", ""]
+    ],
+    "gold": "Gold 65g · 2 characters · Wed 12:30",
+    "header": "150 in the catalog · 0 with a rate · desktop only: the addon only records loot",
+    "help": {
+     "AH Price": "Cheapest buyout per unit in the newest scan; hover for its age. \"—\" = no listing",
+     "AH Qty": "Units listed in the newest scan",
+     "Category": "Where it comes from: Fishing, Herbalism, Mining, Skinning or Monster (corpses). An item can be in two",
+     "Chance": "Chance it sells in its planned window. The dot is the confidence in that chance: green ≥ 75%, amber ≥ 45%, grey below. Hover a cell for the exact %",
+     "Character": "Whose observed or manual rate this is. Under All characters: the highest among the characters who can gather it. Grey with \"Fallback\" = another character's rate, display only",
+     "Current Supply": "Units on the AH now, in the newest scan",
+     "Deviation": "AH price vs the 30-day median, whole percent · needs price history: \"—\" until weeks of data arrive",
+     "Est. Sales/Day": "Units the market sells per day (last 7 days), with its source: AHF, or est. from order books in your scans. \"—\" = no sales data",
+     "Item": "The item, in its quality colour. Click to open it on auctionhouse.fyi",
+     "Items/hr": "Your farming rate: manual override, else your own observed rate (units ÷ session time). Grey \"Fallback\" = another eligible character's rate, display only. \"—\" = no rate",
+     "Median 30d": "Median unit price over the last 30 days · needs price history: \"—\" until weeks of data arrive",
+     "Net gold/hr": "Items/hr × net per unit; net per unit = price − 5% cut − (1 − chance) × deposit. An estimate: a listed price is not a sale",
+     "Sell window": "The top selling window's start (day and hour, local time); see Sell window price. \"no timing edge\" = seasonality strength under 40; \"—\" = too little data · needs price history: \"—\" until weeks of data arrive",
+     "Sell window price": "Forecast unit price in the top selling window: 30-day median × the window's average price ratio. The line under it compares it with the AH price now. \"—\" = no window (no timing edge or too little data) · needs price history: \"—\" until weeks of data arrive",
+     "Skill": "Skill the gathering source requires. \"—\" for monster drops. Amber: none of your characters has it",
+     "Supply/Volume": "Days of supply: current supply ÷ sales per day. Not a time-to-sell guarantee"
+    },
+    "no_match": "No farmable material matches \"{q}\". The catalog covers what it knows how to gather; clear the search or the filters.",
+    "no_match_filters": "No farmable material matches the filters. The catalog covers what it knows how to gather; clear the search or the filters.",
+    "no_rates": "Farm for 20+ units and the addon records your rate. Every row keeps its price and sell window meanwhile.",
+    "note": "Net gold/hr = items/hr × net per unit, where net per unit = post price − 5% AH cut − (1 − chance to sell) × deposit (24 h, refunded on a sale). Posts are priced at the current AH price. Gross gold/hr (items/hr × price) is on the detail below. Items the catalog doesn't know are never shown as farmable, even if you looted them; AHSync lists what you gathered that it couldn't place under Status.",
+    "other_details": {
+     "count": 144,
+     "sha256": "7558b2733bd4deb385bb9b9b2ffa9a4c1f16646fa5b61531814969158e6d4176"
+    },
+    "other_rows": {
+     "count": 144,
+     "sha256": "a0f073a4394376f307ae67448aeb502f853285fac87f609664d6e567f6f9aadc"
+    },
+    "rate_cards": {
+     "2318": {
+      "blocks": [
+       {
+        "char": "Amaya-Grommash",
+        "foot": "",
+        "head": "Amaya — no sessions with Light Leather yet",
+        "kind": "none",
+        "lines": [],
+        "sub": ""
+       },
+       {
+        "char": "Brugan-Grommash",
+        "foot": "",
+        "head": "Brugan — no sessions with Light Leather yet",
+        "kind": "none",
+        "lines": [],
+        "sub": ""
+       }
+      ]
+     },
+     "2589": {
+      "blocks": [
+       {
+        "char": "Amaya-Grommash",
+        "foot": "",
+        "head": "Amaya — no sessions with Linen Cloth yet",
+        "kind": "none",
+        "lines": [],
+        "sub": ""
+       },
+       {
+        "char": "Brugan-Grommash",
+        "foot": "",
+        "head": "Brugan — no sessions with Linen Cloth yet",
+        "kind": "none",
+        "lines": [],
+        "sub": ""
+       }
+      ]
+     },
+     "2592": {
+      "blocks": [
+       {
+        "char": "Amaya-Grommash",
+        "foot": "",
+        "head": "Amaya — no sessions with Wool Cloth yet",
+        "kind": "none",
+        "lines": [],
+        "sub": ""
+       },
+       {
+        "char": "Brugan-Grommash",
+        "foot": "",
+        "head": "Brugan — no sessions with Wool Cloth yet",
+        "kind": "none",
+        "lines": [],
+        "sub": ""
+       }
+      ]
+     },
+     "2770": {
+      "blocks": [
+       {
+        "char": "Amaya-Grommash",
+        "foot": "",
+        "head": "Amaya — no sessions with Copper Ore yet · not eligible (no Mining)",
+        "kind": "ineligible",
+        "lines": [],
+        "sub": ""
+       },
+       {
+        "char": "Brugan-Grommash",
+        "foot": "",
+        "head": "Brugan — no sessions with Copper Ore yet",
+        "kind": "none",
+        "lines": [],
+        "sub": ""
+       }
+      ]
+     },
+     "2835": {
+      "blocks": [
+       {
+        "char": "Amaya-Grommash",
+        "foot": "",
+        "head": "Amaya — no sessions with Rough Stone yet · not eligible (no Mining)",
+        "kind": "ineligible",
+        "lines": [],
+        "sub": ""
+       },
+       {
+        "char": "Brugan-Grommash",
+        "foot": "",
+        "head": "Brugan — no sessions with Rough Stone yet",
+        "kind": "none",
+        "lines": [],
+        "sub": ""
+       }
+      ]
+     },
+     "4306": {
+      "blocks": [
+       {
+        "char": "Amaya-Grommash",
+        "foot": "",
+        "head": "Amaya — no sessions with Silk Cloth yet",
+        "kind": "none",
+        "lines": [],
+        "sub": ""
+       },
+       {
+        "char": "Brugan-Grommash",
+        "foot": "",
+        "head": "Brugan — no sessions with Silk Cloth yet",
+        "kind": "none",
+        "lines": [],
+        "sub": ""
+       }
+      ]
+     }
+    },
+    "rows": [
+     {
+      "ah_price": "20s 60c",
+      "card_lines": [],
+      "category": "Monster",
+      "cats": ["Monster"],
+      "character": "—",
+      "deviation": "—",
+      "deviation_class": "",
+      "eligible": true,
+      "fallback": false,
+      "item": "Silk Cloth",
+      "key": 4306,
+      "median": "—",
+      "name": "Silk Cloth",
+      "net": "—",
+      "net_dot": false,
+      "net_title": "",
+      "note": "",
+      "price": 2060,
+      "price_title": "seen 1 h ago (your scan)",
+      "qty": "80",
+      "quality": 1,
+      "rate": "—",
+      "rate_sub": "",
+      "rate_title": "No rate yet · click the row for the sessions behind this rate and to override it",
+      "skill": null,
+      "skill_amber": false,
+      "skill_sub": "",
+      "skill_text": "—",
+      "skill_title": "",
+      "sort": {
+       "deviation": null,
+       "net": null,
+       "price": 2060,
+       "qty": 80,
+       "rate": null,
+       "skill": null,
+       "window_price": null
+      },
+      "url": "https://www.wowhead.com/classic/item=4306",
+      "window": "—",
+      "window_delta": "",
+      "window_delta_class": "",
+      "window_muted": false,
+      "window_price": "—",
+      "window_sub": "",
+      "window_title": ""
+     },
+     {
+      "ah_price": "3s",
+      "card_lines": [],
+      "category": "Monster",
+      "cats": ["Monster"],
+      "character": "—",
+      "deviation": "—",
+      "deviation_class": "",
+      "eligible": true,
+      "fallback": false,
+      "item": "Wool Cloth",
+      "key": 2592,
+      "median": "—",
+      "name": "Wool Cloth",
+      "net": "—",
+      "net_dot": false,
+      "net_title": "",
+      "note": "",
+      "price": 300,
+      "price_title": "seen 1 h ago (your scan)",
+      "qty": "220",
+      "quality": 1,
+      "rate": "—",
+      "rate_sub": "",
+      "rate_title": "No rate yet · click the row for the sessions behind this rate and to override it",
+      "skill": null,
+      "skill_amber": false,
+      "skill_sub": "",
+      "skill_text": "—",
+      "skill_title": "",
+      "sort": {
+       "deviation": null,
+       "net": null,
+       "price": 300,
+       "qty": 220,
+       "rate": null,
+       "skill": null,
+       "window_price": null
+      },
+      "url": "https://www.wowhead.com/classic/item=2592",
+      "window": "—",
+      "window_delta": "",
+      "window_delta_class": "",
+      "window_muted": false,
+      "window_price": "—",
+      "window_sub": "",
+      "window_title": ""
+     },
+     {
+      "ah_price": "2s 48c",
+      "card_lines": [],
+      "category": "Mining",
+      "cats": ["Mining"],
+      "character": "—",
+      "deviation": "—",
+      "deviation_class": "",
+      "eligible": true,
+      "fallback": false,
+      "item": "Copper Ore",
+      "key": 2770,
+      "median": "—",
+      "name": "Copper Ore",
+      "net": "—",
+      "net_dot": false,
+      "net_title": "",
+      "note": "",
+      "price": 248,
+      "price_title": "seen 1 h ago (your scan)",
+      "qty": "320",
+      "quality": 1,
+      "rate": "—",
+      "rate_sub": "",
+      "rate_title": "No rate yet · click the row for the sessions behind this rate and to override it",
+      "skill": 1,
+      "skill_amber": false,
+      "skill_sub": "",
+      "skill_text": "1",
+      "skill_title": "Mining 1",
+      "sort": {
+       "deviation": null,
+       "net": null,
+       "price": 248,
+       "qty": 320,
+       "rate": null,
+       "skill": 1,
+       "window_price": null
+      },
+      "url": "https://www.wowhead.com/classic/item=2770",
+      "window": "—",
+      "window_delta": "",
+      "window_delta_class": "",
+      "window_muted": false,
+      "window_price": "—",
+      "window_sub": "",
+      "window_title": ""
+     },
+     {
+      "ah_price": "1s 19c",
+      "card_lines": [],
+      "category": "Skinning · Monster",
+      "cats": ["Skinning", "Monster"],
+      "character": "—",
+      "deviation": "—",
+      "deviation_class": "",
+      "eligible": true,
+      "fallback": false,
+      "item": "Light Leather",
+      "key": 2318,
+      "median": "—",
+      "name": "Light Leather",
+      "net": "—",
+      "net_dot": false,
+      "net_title": "",
+      "note": "also drops from monsters",
+      "price": 119,
+      "price_title": "seen 1 h ago (your scan)",
+      "qty": "200",
+      "quality": 1,
+      "rate": "—",
+      "rate_sub": "",
+      "rate_title": "No rate yet · click the row for the sessions behind this rate and to override it",
+      "skill": 1,
+      "skill_amber": false,
+      "skill_sub": "or monster drop",
+      "skill_text": "1",
+      "skill_title": "Skinning 1",
+      "sort": {
+       "deviation": null,
+       "net": null,
+       "price": 119,
+       "qty": 200,
+       "rate": null,
+       "skill": 1,
+       "window_price": null
+      },
+      "url": "https://www.wowhead.com/classic/item=2318",
+      "window": "—",
+      "window_delta": "",
+      "window_delta_class": "",
+      "window_muted": false,
+      "window_price": "—",
+      "window_sub": "",
+      "window_title": ""
+     },
+     {
+      "ah_price": "50c",
+      "card_lines": [],
+      "category": "Monster",
+      "cats": ["Monster"],
+      "character": "—",
+      "deviation": "—",
+      "deviation_class": "",
+      "eligible": true,
+      "fallback": false,
+      "item": "Linen Cloth",
+      "key": 2589,
+      "median": "—",
+      "name": "Linen Cloth",
+      "net": "—",
+      "net_dot": false,
+      "net_title": "",
+      "note": "",
+      "price": 50,
+      "price_title": "seen 1 h ago (your scan)",
+      "qty": "320",
+      "quality": 1,
+      "rate": "—",
+      "rate_sub": "",
+      "rate_title": "No rate yet · click the row for the sessions behind this rate and to override it",
+      "skill": null,
+      "skill_amber": false,
+      "skill_sub": "",
+      "skill_text": "—",
+      "skill_title": "",
+      "sort": {
+       "deviation": null,
+       "net": null,
+       "price": 50,
+       "qty": 320,
+       "rate": null,
+       "skill": null,
+       "window_price": null
+      },
+      "url": "https://www.wowhead.com/classic/item=2589",
+      "window": "—",
+      "window_delta": "",
+      "window_delta_class": "",
+      "window_muted": false,
+      "window_price": "—",
+      "window_sub": "",
+      "window_title": ""
+     },
+     {
+      "ah_price": "30c",
+      "card_lines": [],
+      "category": "Mining",
+      "cats": ["Mining"],
+      "character": "—",
+      "deviation": "—",
+      "deviation_class": "",
+      "eligible": true,
+      "fallback": false,
+      "item": "Rough Stone",
+      "key": 2835,
+      "median": "—",
+      "name": "Rough Stone",
+      "net": "—",
+      "net_dot": false,
+      "net_title": "",
+      "note": "",
+      "price": 30,
+      "price_title": "seen 1 h ago (your scan)",
+      "qty": "400",
+      "quality": 1,
+      "rate": "—",
+      "rate_sub": "",
+      "rate_title": "No rate yet · click the row for the sessions behind this rate and to override it",
+      "skill": 1,
+      "skill_amber": false,
+      "skill_sub": "",
+      "skill_text": "1",
+      "skill_title": "Mining 1",
+      "sort": {
+       "deviation": null,
+       "net": null,
+       "price": 30,
+       "qty": 400,
+       "rate": null,
+       "skill": 1,
+       "window_price": null
+      },
+      "url": "https://www.wowhead.com/classic/item=2835",
+      "window": "—",
+      "window_delta": "",
+      "window_delta_class": "",
+      "window_muted": false,
+      "window_price": "—",
+      "window_sub": "",
+      "window_title": ""
+     }
+    ],
+    "selected": "4306"
+   }
+  },
   "history": {
    "forever.pvp.horde.us": {
     "gold": "Gold 65g · 2 characters · Wed 12:30",

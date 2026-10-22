@@ -46,8 +46,8 @@ MAX_BODY_BYTES = 4096
 BUSY_TIMEOUT_MS = 5000
 
 # SPEC §3.5 dashboard data. Every page is staged by the full refresh except status, built on request.
-PAGES = ("portfolio", "today", "week", "on_ah", "disenchant", "craft", "flip", "inventory", "history", "rules",
-         "characters", "status")
+PAGES = ("portfolio", "today", "week", "on_ah", "disenchant", "craft", "flip", "gathering", "inventory", "history",
+         "rules", "characters", "status")
 GET_PATHS = ("/", "/api/markets", "/api/items")
 POST_PATHS = ("/api/refresh", "/api/skip", "/api/rule", "/api/reserve", "/api/risk_tolerance")
 RISK_CHOICES = (0.1, 0.2, 0.3, 0.4, 0.5)          # SPEC §3.5: the Portfolio page's Risk tolerance dropdown

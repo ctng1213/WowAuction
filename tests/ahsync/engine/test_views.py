@@ -217,7 +217,8 @@ def test_D74_the_gold_pill_sums_gold_in_hand_at_the_portfolio_snapshot_in_local_
     gold = [c.gold for c in mx.chars()]                        # Amaya 21g + Brugan 10g 40s, Mon 10:38 UTC
     assert gold_pill(gold, mx.NOW, 0) == "Gold 31g 40s · 2 characters · Mon 10:38"
     assert gold_pill(gold[:1], mx.NOW, -11 * 3_600_000) == "Gold 21g · 1 character · Sun 23:38"   # local time
-    assert GOLD_PAGES == ("portfolio", "today", "week", "on_ah", "disenchant", "craft", "flip", "inventory", "history")
+    assert GOLD_PAGES == ("portfolio", "today", "week", "on_ah", "disenchant", "craft", "flip", "gathering",
+                          "inventory", "history")                     # Gathering since M16 (D80)
 
 
 def test_D71_the_research_notice_shows_only_while_no_character_has_enchanting():

@@ -22,6 +22,7 @@ from ahsync.engine.characters_view import CharacterSheet, characters_view
 from ahsync.engine.plan_chains import Arriving
 from ahsync.engine.positions import committed
 from ahsync.engine.views import GOLD_PAGES, gold_pill
+from ahsync.recommend.gathering_page import gathering_page
 from ahsync.recommend.history_page import history_page
 from ahsync.recommend.inventory_page import inventory_page
 from ahsync.recommend.on_ah_page import on_ah_page
@@ -152,6 +153,9 @@ def _stage_recommendations(db: Database, market: str, stats: dict, now_ms: int, 
               for c, cls, level, faction, m, gold, recipes, updated, profs in db.character_sheets(char_ids)]
     pages["characters"] = characters_view(sheets, now_ms)                                      # D49
     pages["rules"] = rules_page(db, char_ids, market, stats, items, now_ms, offset_ms, cfg)    # D50
+    # SPEC §3.4E: staged at the full refresh and at every re-plan after a SavedVariables read (new professions or a
+    # scan); research only, so nothing of it touches the plan (E.9).
+    pages["gathering"] = gathering_page(db, market, char_ids, stats, items, now_ms, offset_ms, cfg)   # D80
     pill = gold_pill([g for _, g in characters], now_ms, offset_ms)                            # D74
     for page, body in pages.items():
         db.stage_view(page, market, {**body, "gold": pill} if page in GOLD_PAGES else body, now_ms)

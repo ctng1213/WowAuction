@@ -41,9 +41,9 @@
 # M14 built: positions and reconciliation (PO1-PO13, A81, FM38);
 # M15 built: the other UI updates (D71, D74-D76); its validation (a week of real play) is the user's
 
-# Gathering tab (SPEC §3.4E, M16-M18)
-GA1-GA34
-D80-D88
+# Gathering tab (SPEC §3.4E, M16-M18): M16 built (GA1-GA12, D80, D81, D88)
+GA13-GA34
+D82-D87
 A85-A91
 SEC12
 FM41-FM42

@@ -573,7 +573,7 @@ const gaAge = () => `seen ${GA_PRICE_AGE_H} h ago (AHF scan Sun 08:38)${GA_PRICE
 const gaRateTitle = r => r.kind === 'manual'
   ? `Manual override ${r.rate}/hr${r.obs ? ` (observed ${r.obs.rate}/hr: ${r.obs.units} units ÷ ${gaDur(r.obs.min)})` : ''}`
   : `${r.obs.units} units ÷ ${gaDur(r.obs.min)} over ${r.obs.sessions} session${r.obs.sessions > 1 ? 's' : ''} = ${(r.obs.units * 60 / r.obs.min).toFixed(1)}/hr, rounded`;
-const gaFallbackTitle = (r, who) => `${r.who}'s observed rate; ${who} has none yet. Replaced by ${who}'s own rate once ${who === 'Amaya' ? 'she' : 'he'} has one, even if lower.`;
+const gaFallbackTitle = (r, who) => `${r.who}'s ${r.kind} rate; ${who} has none yet. Replaced by ${who}'s own rate once ${who} has one, even if lower.`;
 const gaWindowPrice = it => (it.top && it.strength !== null && it.strength >= GA_STRENGTH_MIN && it.top[2] ? gaRound(it.med * it.top[2]) : null);
 // Sell window price cell: the forecast, with its delta vs the current AH price under it ("—" with no window).
 function gaWindowPriceCell(it) {

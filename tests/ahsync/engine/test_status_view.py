@@ -109,6 +109,8 @@ def test_D36_premium_shows_on_the_api_card_and_warns_near_its_end():
     ("candidate_export_trimmed", {"kept": 1, "total": 2, "limit": 204_800}, "Candidate export trimmed", "to fit 200 KB"),
     ("risk_tolerance_not_saved", {"error": "PermissionError"}, "Risk tolerance not saved",
      "couldn't rewrite config.toml (PermissionError)"),
+    ("gathering_catalog", {"text": "gathering catalog: 1 row skipped (Mithril Ore: unknown profession 'Minning')"},
+     "Gathering catalog", "1 row skipped (Mithril Ore"),
     ("something_new", {}, "something_new", ""),
 ])
 def test_every_stored_kind_reads_as_a_sentence(kind, data, title, phrase):

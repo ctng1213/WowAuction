@@ -91,6 +91,51 @@ def compact_cells(value: object) -> object:
     return value
 
 
+def _digest(value: object) -> str:
+    """A SHA-256 of a JSON value in canonical form.
+
+    Args:
+        value: A JSON value.
+
+    Returns:
+        The hex digest of its sorted-key JSON text.
+    """
+    return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def compact_gathering(body: dict) -> dict:
+    """The Gathering page with its unpriced catalog rows digested, to keep the snapshot small (SPEC §3.4E).
+
+    The shipped catalog has ~150 items and the fixture world prices a handful: every row, rate card and detail of
+    an item with an AH price or a rate under All characters is kept in full; the others become one count and one
+    hash per view (and for the details), so any change to them still changes the snapshot.
+
+    Args:
+        body: The gathering payload.
+
+    Returns:
+        A copy whose shared rows, rate cards and details, and each by_char view's keys and cells, are split into
+        the kept items and {"count", "sha256"} for the rest ("other_rows", "other_details", a view's "other").
+    """
+    kept = {str(r["key"]) for r in body["rows"] if r["price"] is not None or r["rate"] != "—"}
+    out = dict(body)
+    rest_rows = [r for r in body["rows"] if str(r["key"]) not in kept]
+    rest_cards = {k: v for k, v in body["rate_cards"].items() if k not in kept}
+    out["rows"] = [r for r in body["rows"] if str(r["key"]) in kept]
+    out["rate_cards"] = {k: v for k, v in body["rate_cards"].items() if k in kept}
+    out["other_rows"] = {"count": len(rest_rows), "sha256": _digest([rest_rows, rest_cards])}
+    out["by_char"] = {}
+    for char, view in body["by_char"].items():
+        rest = [view["keys"], {k: v for k, v in view["cells"].items() if k not in kept}]
+        out["by_char"][char] = {**view, "keys": [k for k in view["keys"] if str(k) in kept],
+                                "cells": {k: v for k, v in view["cells"].items() if k in kept},
+                                "other": {"count": len(view["keys"]) - len(kept), "sha256": _digest(rest)}}
+    rest_details = {k: v for k, v in body["details"].items() if k not in kept}
+    out["details"] = {k: v for k, v in body["details"].items() if k in kept}
+    out["other_details"] = {"count": len(rest_details), "sha256": _digest(rest_details)}
+    return out
+
+
 def outputs(db: Database, cfg: Config, now_ms: int, folder: Path) -> dict:
     """Every output of the refresh: pages, actions and the addon files.
 
@@ -105,7 +150,8 @@ def outputs(db: Database, cfg: Config, now_ms: int, folder: Path) -> dict:
     """
     views: dict = {}
     for page, market, body in db.conn.execute("SELECT page, market, body FROM views ORDER BY page, market"):
-        views.setdefault(page, {})[market] = compact_cells(json.loads(body))
+        payload = json.loads(body)
+        views.setdefault(page, {})[market] = compact_cells(compact_gathering(payload) if page == "gathering" else payload)
     cursor = db.conn.execute("SELECT * FROM actions")
     names = [d[0] for d in cursor.description]
     actions = sorted((dict(zip(names, row)) for row in cursor),

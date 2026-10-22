@@ -16,9 +16,26 @@ def test_WP1_the_whole_plan_on_the_fixture_world_matches_its_snapshot_byte_for_b
 
 def test_the_snapshot_holds_every_page_the_plan_and_both_addon_files():
     doc = json.loads(snapshot.EXPECTED.read_text(encoding="utf-8"))
-    assert sorted(doc["views"]) == ["characters", "craft", "disenchant", "flip", "history", "inventory", "on_ah",
-                                    "portfolio", "rules", "today", "week"]
+    assert sorted(doc["views"]) == ["characters", "craft", "disenchant", "flip", "gathering", "history", "inventory",
+                                    "on_ah", "portfolio", "rules", "today", "week"]
     assert doc["actions"] and sorted(doc["addon_files"]) == ["MarketIntelligence.lua", "PortfolioPlan.lua"]
+
+
+def test_the_gathering_page_keeps_priced_or_rated_rows_and_digests_the_rest():
+    def row(key, price, rate="—"):
+        return {"key": key, "price": price, "rate": rate}
+    view = {"keys": [1, 2, 3], "cells": {"1": {"eligible": False}, "2": {"eligible": False}}, "foot": []}
+    body = {"rows": [row(1, 20), row(2, None), row(3, None, "4")], "rate_cards": {"1": "a", "2": "b", "3": "c"},
+            "by_char": {"": {"keys": [1, 2, 3], "cells": {}, "foot": []}, "A-R": view},
+            "details": {"1": "d1", "2": "d2", "3": "d3"}, "header": "h"}
+    out = snapshot.compact_gathering(body)
+    assert [r["key"] for r in out["rows"]] == [1, 3] and out["rate_cards"] == {"1": "a", "3": "c"}
+    assert out["other_rows"]["count"] == 1 and len(out["other_rows"]["sha256"]) == 64
+    assert out["by_char"]["A-R"]["keys"] == [1, 3] and out["by_char"]["A-R"]["cells"] == {"1": {"eligible": False}}
+    assert out["by_char"]["A-R"]["other"]["count"] == 1
+    assert out["details"] == {"1": "d1", "3": "d3"} and out["other_details"]["count"] == 1 and out["header"] == "h"
+    changed = snapshot.compact_gathering({**body, "details": {**body["details"], "2": "other"}})
+    assert changed["other_details"]["sha256"] != out["other_details"]["sha256"]
 
 
 def test_heat_map_cells_are_digested_and_long_files_trimmed():

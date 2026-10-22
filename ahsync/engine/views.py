@@ -549,7 +549,8 @@ def disenchant_notice(best_skill: int | None) -> dict | None:
 
 
 # The pages whose response carries the gold pill: all but rules, characters and status (SPEC §3.5, D74).
-GOLD_PAGES = ("portfolio", "today", "week", "on_ah", "disenchant", "craft", "flip", "inventory", "history")
+GOLD_PAGES = ("portfolio", "today", "week", "on_ah", "disenchant", "craft", "flip", "gathering", "inventory",
+              "history")
 
 
 def gold_pill(gold_by_char: Sequence[int], snapshot_ms: int, offset_ms: int) -> str:

@@ -274,8 +274,8 @@ def test_index_serves_the_page_with_this_runs_token(app):
 
 def test_index_has_every_page_in_the_mockup_order_and_loads_nothing_external(app):
     html = app.handle("GET", "/", GOOD).body.decode()
-    names = ["Portfolio", "Today", "Week", "On the AH", "Disenchant", "Craft", "Flip", "Inventory", "History", "Rules",
-             "Characters", "Status"]
+    names = ["Portfolio", "Today", "Week", "On the AH", "Disenchant", "Craft", "Flip", "Gathering", "Inventory",
+             "History", "Rules", "Characters", "Status"]
     order = html[html.index("const ORDER = "):]                     # column lists name 'Status' too
     positions = [order.index(f"['{name}', ") for name in names]
     assert positions == sorted(positions)
@@ -330,8 +330,8 @@ def test_views_of_an_unconfigured_market_are_404(app):
 
 
 def test_every_contract_page_is_routed_and_unknown_pages_are_404(app):
-    assert set(PAGES) == {"portfolio", "disenchant", "craft", "today", "week", "on_ah", "flip", "inventory", "history", "rules",
-                          "characters", "status"}
+    assert set(PAGES) == {"portfolio", "disenchant", "craft", "today", "week", "on_ah", "flip", "gathering", "inventory",
+                          "history", "rules", "characters", "status"}
     for page in PAGES:
         if page != "status":                      # built on request, never "no refresh yet"
             assert json.loads(app.handle("GET", f"/api/views/{page}", GOOD).body) == {"error": "no_refresh_yet"}
@@ -672,13 +672,78 @@ def test_every_portfolio_column_has_its_tooltip_and_the_market_columns_in_order(
 
 def test_D76_the_page_bar_keeps_today_and_week_between_portfolio_and_on_the_ah():
     # The addon half (a Portfolio tab, no Today or Week) is MainWindow_spec's "the tab bar reads Portfolio, …".
+    # Since M16 Gathering follows Flip (D80).
     page = INDEX_HTML.read_text(encoding="utf-8")
     order = page[page.index("const ORDER = "):page.index("const nav = ")]
     assert re.findall(r"\['([^']+)', '(\w+)'\]", order) == [
         ("Portfolio", "portfolio"), ("Today", "today"), ("Week", "week"), ("On the AH", "on_ah"),
-        ("Disenchant", "disenchant"), ("Craft", "craft"), ("Flip", "flip"), ("Inventory", "inventory"),
-        ("History", "history"), ("Rules", "rules"), ("Characters", "characters"), ("Status", "status")]
+        ("Disenchant", "disenchant"), ("Craft", "craft"), ("Flip", "flip"), ("Gathering", "gathering"),
+        ("Inventory", "inventory"), ("History", "history"), ("Rules", "rules"), ("Characters", "characters"),
+        ("Status", "status")]
     assert [p for _, p in re.findall(r"\['([^']+)', '(\w+)'\]", order)] == list(PAGES)
+
+
+def test_D80_the_gathering_page_follows_flip_is_served_and_carries_the_gold_pill(app, db):
+    from ahsync.engine.gathering_view import gathering_view
+    from ahsync.engine.views import GOLD_PAGES
+    from tests.support import gathering_world as gw
+    assert PAGES.index("gathering") == PAGES.index("flip") + 1 and "gathering" in GOLD_PAGES
+    body = {**gathering_view(gw.world()), "gold": "Gold 31g 40s · 2 characters · Mon 10:38"}
+    publish(db, "gathering", M, body)
+    reply = app.handle("GET", f"/api/views/gathering?market={M}", GOOD)
+    data = json.loads(reply.body)["data"]
+    assert reply.status == 200 and data["gold"] == "Gold 31g 40s · 2 characters · Mon 10:38"
+    assert data == json.loads(json.dumps(body))                                   # served as stored
+    page = INDEX_HTML.read_text(encoding="utf-8")
+    gathering = page[page.index("  gathering: {"):page.index("  on_ah: {")]
+    assert "render: (d, values, id) => gaPage(d, values, id)" in gathering and "bind: gaBind" in gathering
+
+
+def gathering_js() -> str:
+    """The Gathering page's drawing code in index.html."""
+    page = INDEX_HTML.read_text(encoding="utf-8")
+    return page[page.index("// ---------- Gathering (SPEC"):page.index("// ---------- live pages")]
+
+
+def test_D81_the_gathering_page_under_all_characters():
+    from ahsync.engine.gathering_view import gathering_view
+    from tests.support import gathering_world as gw
+    p = gathering_view(gw.world())
+    assert p["header"] == "16 in the catalog · 7 with a rate · desktop only: the addon only records loot"
+    js = gathering_js()
+    cols = re.findall(r"\['([^']+)', [01], ", js[js.index("const GA_COLS"):js.index("const GA_CLASSES")])
+    assert cols == ["Item", "Category", "Skill", "AH Price", "AH Qty", "Median 30d", "Deviation", "Items/hr",
+                    "Character", "Net gold/hr", "Sell window", "Sell window price"]
+    assert set(cols) <= set(p["help"])
+    copper = next(r for r in gw.view_rows(p, "") if r["item"] == "Copper Ore")
+    # M16: the historical cells are "—" until M18 ("2s · +10% · … · Sat 17:00 · 2s 24c (+2% vs now)").
+    assert [copper[k] for k in ("ah_price", "qty", "median", "deviation", "rate", "character", "net", "window",
+                                "window_price")] == ["2s 20c", "64", "—", "—", "38", "Brugan", "79s 38c", "—", "—"]
+    assert copper["note"] == "Brugan: 3 sessions, 1 h 50 min" and p["selected"] == str(gw.COPPER)
+    assert p["by_char"][""]["toggle"] == {"label": "Only what a character can gather", "disabled": True,
+                                          "title": "Pick a character first"}
+    assert p["by_char"][""]["foot"] == [
+        ['16 materials · sorted by AH Price, highest first; rows with "—" sort last', ""],
+        ["4 no character can gather (amber Skill)", "amber"],
+        ["Character = whose rate: the highest among the characters who can gather it", "muted"]]
+    assert p["help"]["Character"].startswith("Whose observed or manual rate this is")
+    assert p["help"]["Sell window"].startswith("The top selling window's start")
+    assert COLUMN_HELP["Character"] == "Which of your characters does it"           # the other pages keep theirs
+    assert COLUMN_HELP["Sell window"] == "When it is planned to sell: the day and the peak hour"
+    assert "state.selected[id] || d.selected" in js and "class=\"selected\"" in js
+    assert "view.toggle.disabled ? ' disabled' : ''" in js and "esc(view.toggle.title)" in js
+    # Each row is sent once: a view picks the shared rows by its keys and lays its differing cells over them.
+    assert "(view.keys || []).map(k => ({ ...shared[String(k)], ...((view.cells || {})[String(k)] || {}) }))" in js
+    assert ".blocks.filter(b => !char || b.char === char)" in js and "lines: row.card_lines || []" in js
+
+
+def test_D88_the_gathering_pages_empty_states_come_from_the_payload():
+    js = gathering_js()
+    assert "d.no_match.split('{q}').join(search)" in js and "d.no_match_filters" in js
+    assert "gaOnly(values) && view.alert ?" in js and "esc(view.alert.title)" in js and "esc(view.alert.text)" in js
+    assert "const last = d.no_rates ?" in js
+    # The filters compare the engine's row fields only; categories OR, controls AND (GA10).
+    assert "r.cats.some(c => values['cat_' + c] !== '0')" in js and "(!only || r.eligible)" in js
 
 
 def test_D74_the_top_bar_draws_the_responses_gold_and_hides_the_pill_without_one(app, db):
