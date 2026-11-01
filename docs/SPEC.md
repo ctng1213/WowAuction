@@ -278,7 +278,7 @@ AHProfitDB = {
   - `current` (src `ahledger`): price = `minBuyout`, qty = `quantity`, at = `updated × 1000`; a row without `minBuyout` writes none.
   - one `candles_h1` close per item (src `ahledger`) at the hour `floor(updated ÷ 3600)` (stored as that hour's start in ms, like every hour row): close = `minBuyout`, qty = `quantity`, open, high and low NULL.
   - `ahledger_rows` (§3.2): its `median`, `median7d`, `median30d`, `low30d`, `high30d` and `soldPerDayx10` as they came. **Stored, used nowhere** (the user, 2026-10-22: "only stored for now, use our own calculation"): analysis reads its own statistics from the closes (SRC11).
-  - `observed_hours` (§3.2): the hour of `updated`, for the Data coverage card.
+  - `observed_hours` (§3.2): the hour of `updated`, for the Data coverage card, only when the table has a priced row. AHledger stamps an empty table (a market nobody has scanned) with its publish time, so it observed nothing (SRC19).
   - `source_state` (§3.2): the ETag, `updated` and the fetch time, so a restart sends the right `If-None-Match`.
 - Volume is untouched: AHledger's `soldPerDayx10` is never a sales source (§3.3.1).
 
@@ -2050,7 +2050,17 @@ Data moves through many hand-offs: AHF and AHledger → AHSync → SQLite → `M
 17. **Portfolio: the greedy fill with one swap pass** (§3.4D.4) is a heuristic. Compare it against an exhaustive search on small generated worlds before M10 is done; if it misses often, the fallback is a second fill by plain adjusted profit, keeping the better of the two.
 18. **Gathering capture** (§3.4E.3, M17): the spell names or ids of Mining, Herb Gathering, Skinning and Fishing on Forever and which event marks each cast done (fishing is channelled, and its loot opens on the bobber click); whether `GetLootSourceInfo` gives a creature GUID for corpse loot; whether `PLAYER_ENTERING_WORLD` carries `isInitialLogin`; whether autoloot fires `LOOT_OPENED` twice. Built M17 on Classic's answers (spell names via `GetSpellInfo`, `UNIT_SPELLCAST_CHANNEL_START` as a second Fishing trigger, a 10 s / 35 s window per cast, the GUID's type); `tools/savedvars_report.py` reads the diagnostics' probes of `GetSpellInfo` and `GetLootSourceInfo` and the loot traces to confirm them after a session. And the catalog itself: Forever's customised items and professions (§3.4E.1).
 
-19. **AHledger** (§2.3, M19-M21): whether the price table's `updated` is AHledger's newest full scan (as `pricesAsOf` is for its market tools) or its last publish; the `Cache-Control` max-age each endpoint really sends; whether a `range=24h` series is one point per full scan or hourly buckets (the developer page says both; AHSync doesn't use it); whether the table ever lists suffixed items under a base id (AHSync stores every row under the base id, §2.3). `tools/record_fixtures.py` records the answers into `tests/fixtures/ahledger/`.
+19. **AHledger** (§2.3, M19-M21). **Answered live on 2026-11-01:**
+    - **`updated`:** a table with rows carries its newest scan's time; it equals the history's `latest.observedAt`, whose `source` is "Addon scan". An empty table carries its publish time (SRC19).
+    - **`Cache-Control`:** the price table sends `max-age=60, s-maxage=60`, `/v1/prices` sends `max-age=60, s-maxage=300`, and `/v1/markets` sends `max-age=300`.
+    - **Compression:** the price table comes gzip-compressed when asked (SRC17), with a weak ETag (`W/"…"`), which AHSync sends back as it came.
+    - **History depth:** this market's history starts 2026-09-21, so `range=90d` gave 30 daily buckets.
+    - **Scans stopped:** every Forever market's newest scan is 21–23 Oct, and the other Forever markets serve empty tables.
+    **Still open:**
+    - Whether `updated` is AHledger's newest **full** scan or any scan.
+    - Whether a `range=24h` series is one point per scan or hourly buckets: it was empty everywhere, as there was no scan in the last day.
+    - Whether the table ever lists suffixed items under a base id.
+    `tools/record_fixtures.py --ahledger` recorded the fixtures live on 2026-11-01.
 
 ## 7. Milestones
 

@@ -262,15 +262,18 @@ def test_cache_max_age_reads_the_directive_or_returns_none():
 
 
 def test_ahledger_fixture_routes_are_distinct_and_the_table_has_an_etag():
+    from ahsync.collect.ahledger import parse_markets, parse_pricetable
     transport = FakeTransport.serve_ahledger_fixtures()
     client = client_with(transport, FakeClock())
     base = "https://api.ahledger.com/v1"
-    assert isinstance(client.get_json(f"{base}/markets", auth=False), list)
+    assert "forever.pvp.horde.us" in parse_markets(client.get_json(f"{base}/markets", auth=False))   # recorded live
     seven = client.get_json(f"{base}/prices/forever.pvp.horde.us/2589?range=7d", auth=False)
     ninety = client.get_json(f"{base}/prices/forever.pvp.horde.us/2589?range=90d", auth=False)
-    assert (seven["range"], len(seven["series"])) == ("7d", 168) and (ninety["range"], len(ninety["series"])) == ("90d", 90)
+    assert (seven["range"], len(seven["series"])) == ("7d", 0)          # no scan in the 7 days before recording
+    assert (ninety["range"], len(ninety["series"])) == ("90d", 30)      # one bucket per scanned day
     table = client.get_conditional(f"{base}/pricetable/forever.pvp.horde.us")
-    assert table.body.startswith(b"AHL1|forever/pvp/horde/us|1792585200|") and cache_max_age_s(table.headers) == 60
+    assert table.headers["content-encoding"] == "gzip" and cache_max_age_s(table.headers) == 60
+    assert parse_pricetable(table.body, "forever.pvp.horde.us").updated_s == 1792599906   # Wed 21 Oct 16:25 UTC
     assert client.get_conditional(f"{base}/pricetable/forever.pvp.horde.us", table.headers["etag"]).status == 304
 
 

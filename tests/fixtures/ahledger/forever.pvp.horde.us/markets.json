@@ -1,18 +1,164 @@
-[
- {
-  "faction": "alliance",
-  "game": "forever",
-  "id": "forever.pvp.alliance.us",
-  "label": "WoW: Forever PvP Alliance (US)",
-  "region": "us",
-  "ruleset": "pvp"
- },
- {
-  "faction": "horde",
-  "game": "forever",
-  "id": "forever.pvp.horde.us",
-  "label": "WoW: Forever PvP Horde (US)",
-  "region": "us",
-  "ruleset": "pvp"
- }
-]
+{
+ "markets": [
+  {
+   "faction": "alliance",
+   "game": "forever",
+   "id": "forever.normal.alliance.us",
+   "label": "Normal Alliance US",
+   "region": "us",
+   "ruleset": "normal"
+  },
+  {
+   "faction": "horde",
+   "game": "forever",
+   "id": "forever.normal.horde.us",
+   "label": "Normal Horde US",
+   "region": "us",
+   "ruleset": "normal"
+  },
+  {
+   "faction": "alliance",
+   "game": "forever",
+   "id": "forever.pvp.alliance.us",
+   "label": "PvP Alliance US",
+   "region": "us",
+   "ruleset": "pvp"
+  },
+  {
+   "faction": "horde",
+   "game": "forever",
+   "id": "forever.pvp.horde.us",
+   "label": "PvP Horde US",
+   "region": "us",
+   "ruleset": "pvp"
+  },
+  {
+   "faction": "alliance",
+   "game": "forever",
+   "id": "forever.rp.alliance.us",
+   "label": "RP Alliance US",
+   "region": "us",
+   "ruleset": "rp"
+  },
+  {
+   "faction": "horde",
+   "game": "forever",
+   "id": "forever.rp.horde.us",
+   "label": "RP Horde US",
+   "region": "us",
+   "ruleset": "rp"
+  },
+  {
+   "faction": "neutral",
+   "game": "retail",
+   "id": "retail.normal.neutral.us",
+   "label": "Retail \u00b7 Tichondrius",
+   "region": "us",
+   "ruleset": "normal"
+  },
+  {
+   "faction": "neutral",
+   "game": "retail-commodities",
+   "id": "retail-commodities.normal.neutral.us",
+   "label": "Retail commodities \u00b7 US",
+   "region": "us",
+   "ruleset": "normal"
+  },
+  {
+   "faction": "alliance",
+   "game": "forever",
+   "id": "forever.normal.alliance.eu",
+   "label": "Normal Alliance EU",
+   "region": "eu",
+   "ruleset": "normal"
+  },
+  {
+   "faction": "horde",
+   "game": "forever",
+   "id": "forever.normal.horde.eu",
+   "label": "Normal Horde EU",
+   "region": "eu",
+   "ruleset": "normal"
+  },
+  {
+   "faction": "alliance",
+   "game": "forever",
+   "id": "forever.pvp.alliance.eu",
+   "label": "PvP Alliance EU",
+   "region": "eu",
+   "ruleset": "pvp"
+  },
+  {
+   "faction": "horde",
+   "game": "forever",
+   "id": "forever.pvp.horde.eu",
+   "label": "PvP Horde EU",
+   "region": "eu",
+   "ruleset": "pvp"
+  },
+  {
+   "faction": "alliance",
+   "game": "forever",
+   "id": "forever.rp.alliance.eu",
+   "label": "RP Alliance EU",
+   "region": "eu",
+   "ruleset": "rp"
+  },
+  {
+   "faction": "horde",
+   "game": "forever",
+   "id": "forever.rp.horde.eu",
+   "label": "RP Horde EU",
+   "region": "eu",
+   "ruleset": "rp"
+  },
+  {
+   "faction": "alliance",
+   "game": "forever",
+   "id": "forever.normal.alliance.cn",
+   "label": "Normal Alliance CN",
+   "region": "cn",
+   "ruleset": "normal"
+  },
+  {
+   "faction": "horde",
+   "game": "forever",
+   "id": "forever.normal.horde.cn",
+   "label": "Normal Horde CN",
+   "region": "cn",
+   "ruleset": "normal"
+  },
+  {
+   "faction": "alliance",
+   "game": "forever",
+   "id": "forever.pvp.alliance.cn",
+   "label": "PvP Alliance CN",
+   "region": "cn",
+   "ruleset": "pvp"
+  },
+  {
+   "faction": "horde",
+   "game": "forever",
+   "id": "forever.pvp.horde.cn",
+   "label": "PvP Horde CN",
+   "region": "cn",
+   "ruleset": "pvp"
+  },
+  {
+   "faction": "alliance",
+   "game": "forever",
+   "id": "forever.rp.alliance.cn",
+   "label": "RP Alliance CN",
+   "region": "cn",
+   "ruleset": "rp"
+  },
+  {
+   "faction": "horde",
+   "game": "forever",
+   "id": "forever.rp.horde.cn",
+   "label": "RP Horde CN",
+   "region": "cn",
+   "ruleset": "rp"
+  }
+ ]
+}

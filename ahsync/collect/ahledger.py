@@ -311,7 +311,8 @@ def store_pricetable(db: Database, market: str, table: PriceTable, etag: str | N
                                                  for r in priced], SRC)
         db.upsert_ahledger_rows(market, table.updated_s,
                                 [(r.key, r.median, r.m7, r.m30, r.lo, r.hi, r.per_day_x10) for r in table.rows])
-        db.add_observed_hours(market, SRC, [table.updated_s // 3600])
+        if priced:                                # an empty table is stamped when published, not scanned (SRC19)
+            db.add_observed_hours(market, SRC, [table.updated_s // 3600])
         db.set_source_state(market, SRC, updated_ms=updated_ms)
     return {r.key for r in priced}
 

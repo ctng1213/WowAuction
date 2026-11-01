@@ -1,4 +1,4 @@
-"""AHledger parsers (SPEC §2.3): scenarios SRC7, SRC17, FM44 (parsing half), FM45 (parsing half)."""
+"""AHledger parsers (SPEC §2.3): scenarios SRC7, SRC17, SRC19, FM44 (parsing half), FM45 (parsing half)."""
 from __future__ import annotations
 
 import gzip
@@ -98,6 +98,7 @@ from ahsync.collect.client import ApiClient                              # noqa:
 from ahsync.db.sqlite import Database                                    # noqa: E402
 from tests.support.fake_clock import FakeClock                           # noqa: E402
 from tests.support.fake_transport import FakeTransport                   # noqa: E402
+from tests.support.ahledger_synth import history_json                   # noqa: E402
 
 UPDATED_MS = 1_792_585_200_000             # Wed 21 Oct 12:20 UTC
 HOUR_497940_MS = 497_940 * 3_600_000       # its hour, 12:00
@@ -280,25 +281,27 @@ def _doc(series: list, **over) -> dict:
     return {"item": {"id": 2589}, "latest": None, "range": "7d", "series": series, **over}
 
 
-def test_prices_7d_fixture_is_168_hourly_buckets():
+def test_prices_7d_fixture_recorded_live_is_empty_but_keeps_its_latest_time():
     history = parse_prices(_fixture("prices_2589_7d.json"), 2589)
-    assert (history.key, history.range, history.hourly, history.skipped) == (2589, "7d", True, 0)
-    assert len(history.buckets) == 168
-    # Why: 2026-10-14 is day 20740 since 1970 (56 years = 20454 days to 2026-01-01, plus 286 days), so 13:00 UTC is
-    # hour 20740*24+13 = 497773; the last bucket is 167 hours later, 497940 (12:00 on the 21st).
-    assert history.buckets[0].t_ms == 497_773 * _HOUR_MS
-    assert history.buckets[-1].t_ms == 497_940 * _HOUR_MS
-    assert history.buckets[0] == Bucket(497_773 * _HOUR_MS, 19, 21, 20, 23, 8587, 214)
-    # Why: latest.observedAt 2026-10-21T12:20:00Z is 20 minutes after hour 497940.
-    assert history.latest_ms == 497_940 * _HOUR_MS + 20 * 60_000
+    assert (history.key, history.range, history.hourly, history.buckets, history.skipped) == (2589, "7d", True, (), 0)
+    # Why: no scan in the 7 days before recording; latest.observedAt 2026-10-21T16:25:06Z is the table's updated.
+    assert history.latest_ms == 1_792_599_906_000
 
 
-def test_prices_90d_fixture_is_90_daily_buckets():
+def test_prices_7d_hourly_series_is_168_buckets():
+    history = parse_prices(history_json(MARKET, 2589, "7d", 20, 100), 2589)
+    assert (history.hourly, len(history.buckets), history.skipped) == (True, 168, 0)
+    # Why: the newest scan 1792585200 s (Wed 21 Oct 12:20) is in hour 497940; the first bucket is 167 hours earlier.
+    assert history.buckets[-1].t_ms == 497_940 * _HOUR_MS and history.buckets[0].t_ms == 497_773 * _HOUR_MS
+
+
+def test_prices_90d_fixture_recorded_live_has_one_bucket_per_scanned_day():
     history = parse_prices(_fixture("prices_2589_90d.json"), 2589)
-    assert (history.range, history.hourly, len(history.buckets)) == ("90d", False, 90)
-    # Why: the last day is 2026-10-21 00:00 = day 20747 = hour 497928; the first is 89 days earlier (2026-07-24).
+    assert (history.range, history.hourly, len(history.buckets), history.skipped) == ("90d", False, 30, 0)
+    # Why: AHledger's history of this market starts 2026-09-21 (hour 497208) and skips 22 Sep, so 31 days give 30
+    # buckets; the last is 2026-10-21 00:00 (hour 497928).
+    assert history.buckets[0] == Bucket(497_208 * _HOUR_MS, 49, 67, 60, 100, 6506, 262)
     assert history.buckets[-1].t_ms == 497_928 * _HOUR_MS
-    assert history.buckets[0].t_ms == (497_928 - 89 * 24) * _HOUR_MS
 
 
 def test_prices_ranges_say_whether_they_are_hourly():
@@ -361,3 +364,15 @@ def test_SRC17_a_gzip_compressed_price_table_is_stored_like_a_plain_one(world):
     assert source.poll(MARKET, MARKET) == set()
     assert db.source_state(MARKET, "ahledger")[0] is None          # forgotten, as FM44
     assert db.status("format:ahledger_pricetable").kind == "ahledger_format"
+
+
+def test_SRC19_an_empty_table_observes_no_hour(world):
+    db, clock, transport, source = world
+    transport.serve_etag(TABLE_PATH, SRC7_BODY, '"t1"')
+    source.poll(MARKET, MARKET)
+    before = [_rows(db, f"SELECT * FROM {t} ORDER BY 1, 2") for t in ("current", "candles_h1", "ahledger_rows")]
+    transport.serve_etag(TABLE_PATH, b"AHL1|forever/pvp/horde/us|1792592400|0\n", '"t2"')
+    clock.advance(2 * 60 * MINUTE)
+    assert source.poll(MARKET, MARKET) == set()
+    assert [_rows(db, f"SELECT * FROM {t} ORDER BY 1, 2") for t in ("current", "candles_h1", "ahledger_rows")] == before
+    assert _rows(db, "SELECT market, src, hour FROM observed_hours") == [(MARKET, "ahledger", 497_940)]

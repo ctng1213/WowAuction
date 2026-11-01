@@ -143,14 +143,15 @@ class FakeTransport:
             etag: ETag of the price table.
 
         Returns:
-            The transport, with `/v1/markets`, `/v1/pricetable/<market>` (with `etag` and
+            The transport, with `/v1/markets`, `/v1/pricetable/<market>` (gzip-compressed, with `etag` and
             `cache-control: max-age=60`) and `/v1/prices/<market>/2589?range=7d|90d`.
         """
         transport = transport or cls()
         folder = AHLEDGER_FIXTURES / market
         headers = {"cache-control": "max-age=60"}
         transport.serve_bytes("v1/markets", (folder / "markets.json").read_bytes(), headers)
-        transport.serve_etag(f"v1/pricetable/{market}", (folder / "pricetable.txt").read_bytes(), etag, headers)
+        transport.serve_etag(f"v1/pricetable/{market}", gzip.compress((folder / "pricetable.txt").read_bytes(), mtime=0),
+                             etag, {**headers, "content-encoding": "gzip"})     # compressed, as the live API sends it
         for rng in ("7d", "90d"):
             transport.serve_bytes(f"v1/prices/{market}/2589?range={rng}",
                                   (folder / f"prices_2589_{rng}.json").read_bytes(), headers)
