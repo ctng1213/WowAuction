@@ -205,6 +205,7 @@ def derive_from_scans(db: Database, new_scans: list[tuple[str, str, int, bool]])
         if complete:
             complete_times.setdefault(market, []).append(at_ms)
     for market, times in sorted(complete_times.items()):
+        db.add_observed_hours(market, "local", [at // HOUR_MS for at in times])   # a partial scan never counts (SRC16)
         for day in sorted(book_days(db, market, times)):
             dirty |= set(recompute_book_volume(db, market, day))
         recompute_sales_hours(db, market, times)

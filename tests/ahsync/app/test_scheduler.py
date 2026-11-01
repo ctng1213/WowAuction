@@ -212,3 +212,29 @@ def test_IU7_idle_for_10_minutes_runs_no_job_and_checks_the_files_once_every_5s(
         clock.advance(5_000)
         assert scheduler.tick() == []
     assert (ran, len(stats)) == ([], 120)                                    # no engine call; one stat per 5 s
+
+
+def test_the_ahledger_poll_runs_at_the_first_tick_then_every_30_minutes_and_a_failure_is_only_logged(caplog):
+    clock = FakeClock()
+    ran: list[str] = []
+    calls = {"n": 0}
+
+    def poll() -> None:
+        calls["n"] += 1
+        ran.append("ahledger")
+        if calls["n"] == 2:
+            raise RuntimeError("boom")
+
+    scheduler = Scheduler(clock, SchedulerHooks(ahledger_poll=poll, store_hour=lambda: ran.append("store")), None)
+    assert scheduler.tick() == ["ahledger_poll"]                         # at start
+    clock.advance(29 * 60_000)
+    assert "ahledger_poll" not in scheduler.tick()
+    clock.advance(60_000)
+    assert "ahledger_poll" in scheduler.tick()                           # 30 min after the first: raises, is logged
+    assert "ahledger_poll failed" in caplog.text
+    clock.advance(30 * 60_000)
+    assert "ahledger_poll" in scheduler.tick() and calls["n"] == 3       # carried on at the next time
+    assert scheduler.next_wake_ms() <= clock.now_ms() + 30 * 60_000
+    off = Scheduler(clock, SchedulerHooks(), None)
+    clock.advance(10 * 60_000)
+    assert "ahledger_poll" not in off.tick()                             # not wired: never runs

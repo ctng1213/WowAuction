@@ -7,7 +7,8 @@ mended by delivering the same snapshot again (FM32).
 """
 from __future__ import annotations
 
-from ahsync.collect.local_scans import book_days, recompute_book_volume, recompute_sales_hours, store_scan_prices
+from ahsync.collect.local_scans import (HOUR_MS, book_days, recompute_book_volume, recompute_sales_hours,
+                                       store_scan_prices)
 from ahsync.collect.provider import SnapshotObservation, snapshot_problems
 from ahsync.collect.snapshots import SnapshotStore
 from ahsync.db.sqlite import BookScan, Database
@@ -40,6 +41,7 @@ def ingest_snapshot(db: Database, store: SnapshotStore, obs: SnapshotObservation
     with db.transaction():
         db.store_book(BookScan(scan_id, obs.market, obs.src, None, obs.at_ms), entries)
         dirty = store_scan_prices(db, obs.market, scan_id, obs.at_ms, obs.src)
+        db.add_observed_hours(obs.market, obs.src, [obs.at_ms // HOUR_MS])   # a snapshot is always complete (SRC16)
         recompute_sales_hours(db, obs.market, [obs.at_ms])
         for day in sorted(book_days(db, obs.market, [obs.at_ms])):
             dirty |= set(recompute_book_volume(db, obs.market, day))

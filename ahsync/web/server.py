@@ -34,6 +34,7 @@ from ahsync.clock import Clock
 from ahsync.config import Config, ConfigError, market_sources, write_risk_tolerance
 from ahsync.db.sqlite import Database
 from ahsync.engine.gathering import catalog, eligible, why_not_eligible
+from ahsync.engine.views import source_credit
 from ahsync.export.addon_files import export_plan
 from ahsync.recommend.gathering_page import CATALOG_PATH, read_catalog
 
@@ -258,7 +259,7 @@ class DashboardApp:
             market: Market id; "" means the first configured market.
 
         Returns:
-            200 {"built": ms, "prices_newer": bool (IU2), "data": payload}; 404 {"error": "no_refresh_yet"} before the
+            200 {"built": ms, "prices_newer": bool (IU2), "credit": {"text", "url"} or None (S19), "data": payload}; 404 {"error": "no_refresh_yet"} before the
             first refresh; 404 {"error": "unknown_market"} for a market not in the config;
             503 {"error": "database_busy"} when the database can't be read right now;
             503 {"error": "bad_view"} when the stored payload can't be decoded.
@@ -271,7 +272,8 @@ class DashboardApp:
         try:
             with self._lock:
                 stored = self.db.view(page, market)
-                newer = self.db.prices_newer_than_intel(market, market_sources(self.config, market).primary)
+                primary = market_sources(self.config, market).primary
+                newer = self.db.prices_newer_than_intel(market, primary)
         except sqlite3.Error as error:
             log.warning("reading the %s view failed: %s", page, error)
             return json_response(503, {"error": "database_busy"})
@@ -281,7 +283,7 @@ class DashboardApp:
         if stored is None:
             return json_response(404, {"error": "no_refresh_yet"})
         payload, built_ms = stored
-        return json_response(200, {"built": built_ms, "prices_newer": newer, "data": payload})
+        return json_response(200, {"built": built_ms, "prices_newer": newer, "credit": source_credit(primary), "data": payload})
 
     def get_status(self) -> Response:
         """Build and serve the Status page now (SPEC §3.5 Status): it changes between refreshes.

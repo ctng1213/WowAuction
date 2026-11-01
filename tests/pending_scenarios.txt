@@ -47,7 +47,7 @@
 # this file holds only comments until a new scenario is listed before its code.
 
 # AHledger source and data coverage (SPEC §2.3, §3.5 Status; M19-M21)
-SRC6-SRC16
-S18-S20
-FM43-FM47
+SRC12-SRC15
+S19
+FM47
 D89-D96

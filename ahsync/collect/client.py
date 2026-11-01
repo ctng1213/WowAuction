@@ -184,6 +184,23 @@ def backoff_seconds(attempt: int) -> float:
     return min(MAX_BACKOFF_S, float(2 ** attempt))
 
 
+def cache_max_age_s(headers: dict[str, str]) -> int | None:
+    """Read `max-age` from a Cache-Control header (SPEC §2.3: AHledger responses are cached).
+
+    Args:
+        headers: Response headers, lower-cased names.
+
+    Returns:
+        max-age in seconds, or None when the header or the directive is absent or not a whole number.
+    """
+    for directive in headers.get("cache-control", "").split(","):
+        name, _, value = directive.strip().partition("=")
+        if name.strip().lower() == "max-age":
+            value = value.strip().strip('"')
+            return int(value) if value.isascii() and value.isdigit() else None
+    return None
+
+
 def retry_after_seconds(headers: dict[str, str], attempt: int) -> float:
     """How long a 429 asks us to wait.
 
@@ -257,17 +274,18 @@ class ApiClient:
             self._api_times = [t for t in self._api_times if now - t < 60_000]
         self._api_times.append(now)
 
-    def _send(self, url: str, auth: bool) -> HttpResponse | None:
+    def _send(self, url: str, auth: bool, extra_headers: dict[str, str] | None = None) -> HttpResponse | None:
         """Send one request.
 
         Args:
             url: Absolute URL. Never contains the key.
             auth: Attach the key, when there is one.
+            extra_headers: Further request headers, e.g. If-None-Match.
 
         Returns:
             The response, or None on a network error.
         """
-        headers = {"User-Agent": USER_AGENT, "Accept-Encoding": "gzip"}
+        headers = {"User-Agent": USER_AGENT, "Accept-Encoding": "gzip", **(extra_headers or {})}
         if auth and self.has_key:
             headers["Authorization"] = "Bearer " + self._api_key
         self._throttle(url)
@@ -313,6 +331,27 @@ class ApiClient:
             self.key_used = True
         return data
 
+    def get_conditional(self, url: str, etag: str | None = None, auth: bool = False) -> HttpResponse:
+        """GET with `If-None-Match` and return the raw response (SPEC §2.3: AHledger's price table).
+
+        Retries transient failures like get_json, but does not decode the body.
+
+        Args:
+            url: Absolute URL.
+            etag: The ETag of the copy we hold, sent as `If-None-Match`; None sends none.
+            auth: Attach the key, when there is one.
+
+        Returns:
+            The final response: status 200 (new body, undecoded) or 304 (unchanged).
+            Header names are lower-case.
+
+        Raises:
+            NotFound, FeatureUnavailable, Unauthorized, RateLimited, RetriesExhausted, ApiError:
+                As get_json (BadFile never, the body is not decoded).
+        """
+        headers = {"If-None-Match": etag} if etag else None
+        return self._fetch(url, auth, headers, accept_304=True)
+
     def _get_with_retries(self, url: str, auth: bool) -> object:
         """One GET with the retry rules, without the 401 fallback.
 
@@ -326,13 +365,30 @@ class ApiClient:
         Raises:
             As get_json.
         """
+        return decode_body(self._fetch(url, auth, None, accept_304=False).body)
+
+    def _fetch(self, url: str, auth: bool, headers: dict[str, str] | None, accept_304: bool) -> HttpResponse:
+        """One GET with the retry rules; returns the 200 (or accepted 304) response undecoded.
+
+        Args:
+            url: Absolute URL.
+            auth: Attach the key, when there is one.
+            headers: Extra request headers.
+            accept_304: Return a 304 instead of raising ApiError for it.
+
+        Returns:
+            The final response.
+
+        Raises:
+            As get_json, except BadFile.
+        """
         shown = self.redactor.scrub(url)
         for attempt in range(MAX_RETRIES + 1):
-            response = self._send(url, auth)
+            response = self._send(url, auth, headers)
             if response is not None:
-                self._raise_for_final_status(response, shown)
-                if response.status == 200:
-                    return decode_body(response.body)
+                self._raise_for_final_status(response, shown, accept_304)
+                if response.status == 200 or (accept_304 and response.status == 304):
+                    return response
             if attempt == MAX_RETRIES:
                 break
             wait = self._wait_before_retry(response, attempt, shown)
@@ -341,12 +397,13 @@ class ApiClient:
             self._clock.sleep(wait)
         raise RetriesExhausted(f"gave up on {shown} after {MAX_RETRIES} retries")
 
-    def _raise_for_final_status(self, response: HttpResponse, shown: str) -> None:
+    def _raise_for_final_status(self, response: HttpResponse, shown: str, accept_304: bool = False) -> None:
         """Raise for statuses that retrying won't fix.
 
         Args:
             response: The response.
             shown: The URL with secrets scrubbed, for messages.
+            accept_304: A 304 is a valid answer (conditional GET), not an error.
 
         Raises:
             NotFound, FeatureUnavailable, Unauthorized, ApiError: As get_json.
@@ -359,7 +416,7 @@ class ApiClient:
             raise FeatureUnavailable(feature, f"403 for {shown}: tier lacks {feature}")
         if status == 401:
             raise Unauthorized(f"401 for {shown}")
-        if status not in (200, 429) and status < 500:
+        if status not in (200, 429) and status < 500 and not (accept_304 and status == 304):
             raise ApiError(f"HTTP {status} for {shown}")
 
     def _wait_before_retry(self, response: HttpResponse | None, attempt: int, shown: str) -> float:

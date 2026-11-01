@@ -398,3 +398,29 @@ def test_SEC11_a_risk_tolerance_set_on_the_dashboard_reaches_the_schedulers_plan
     hooks.status_pass()
     assert seen == [("full", 0.3), ("full", 0.4), ("status", 0.4), ("plan", 0.4)]
     db.close()
+
+
+def test_the_ahledger_hook_polls_only_markets_with_an_address_and_a_failed_poll_is_logged_not_raised(tmp_path, caplog):
+    from ahsync.config import MarketSources
+    clock = FakeClock()
+    db = Database.open(tmp_path / "ahsync.db", clock.now_ms(), None)
+    polled: list[tuple[str, str]] = []
+
+    class Source:
+        """Records the polls; the second market's poll fails."""
+
+        def poll(self, market: str, address: str) -> set[int]:
+            polled.append((market, address))
+            if market == "forever.pvp.alliance.us":
+                raise RuntimeError("boom")
+            return set()
+
+    markets = ("forever.pvp.horde.us", "forever.pvp.alliance.us", "forever.normal.horde.us")
+    config = Config(markets=markets, sources={"forever.normal.horde.us": MarketSources(addresses={"ahledger": ""})})
+    hooks = build_hooks(SyncContext(None, db, clock, None, ahledger=Source()), config, tmp_path / "backups")
+    hooks.ahledger_poll()                                               # no exception, the third market is skipped
+    assert polled == [("forever.pvp.horde.us", "forever.pvp.horde.us"),
+                      ("forever.pvp.alliance.us", "forever.pvp.alliance.us")]
+    assert "AHledger poll of forever.pvp.alliance.us failed" in caplog.text
+    assert build_hooks(SyncContext(None, db, clock, None), config, tmp_path / "backups").ahledger_poll is None
+    db.close()

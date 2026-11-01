@@ -326,3 +326,24 @@ def test_FM31_the_statistics_are_computed_from_the_filtered_closes(monkeypatch):
     rod = intel.items[6217]
     assert (rod.med7, rod.med30) == (7, 7) and rod.p10_30 == 4000                 # medians from the filtered closes
     assert seen and all(n > 0 for n, *_ in seen if n)
+
+
+def test_SRC11_ahledgers_aggregates_are_stored_never_used(tmp_path):
+    from pathlib import Path
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    plain, odd = sqlite_history(tmp_path / "a"), sqlite_history(tmp_path / "b")
+    with plain.transaction():
+        plain.upsert_ahledger_rows(M, NOW // 1000, [(k, 50, 52, 49, 40, 60, 3600) for k in ITEMS])
+    with odd.transaction():
+        odd.upsert_ahledger_rows(M, NOW // 1000, [(k, 999_999, 999_999, 999_999, 999_999, 999_999, 0) for k in ITEMS])
+    first, _ = market.analyze_market(plain, M, NOW, MarketSettings())
+    second, _ = market.analyze_market(odd, M, NOW, MarketSettings())
+    plain.close()
+    odd.close()
+    assert to_json(first) == to_json(second)
+    # no reader anywhere: only the writer, its schema, migration and pruning name the table (the W1 half is WP1)
+    root = Path(__file__).resolve().parents[3] / "ahsync"
+    readers = sorted(str(p.relative_to(root)).replace("\\", "/") for p in root.rglob("*.py")
+                     if "ahledger_rows" in p.read_text(encoding="utf-8"))
+    assert readers == ["collect/ahledger.py", "db/sqlite.py", "history/prune.py", "history/writes.py"]

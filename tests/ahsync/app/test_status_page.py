@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 from ahsync.app import status_page
-from ahsync.config import Config
+from ahsync.config import Config, MarketSources
 from ahsync.db.sqlite import Database
 from tests.support.fake_clock import FakeClock
 
 HOUR, DAY = 3_600_000, 86_400_000
 M = "forever.pvp.horde.us"
+AHF_PRIMARY = {M: MarketSources(primary="ahf")}   # these tests predate M19: AHF is their primary
 
 
 def test_the_page_reads_status_lines_sync_state_prices_and_characters(tmp_path):
@@ -20,11 +21,11 @@ def test_the_page_reads_status_lines_sync_state_prices_and_characters(tmp_path):
                             (now - HOUR,))
         db.update_sync_state(M, last_hour=now // HOUR - 1, last_run=now - 10 * 60_000)
         db.upsert_current(M, "ahf", [(2589, 45, 20, now - 9 * DAY)])
-        facts = status_page.status_facts(db, Config(markets=(M,)), now)
+        facts = status_page.status_facts(db, Config(markets=(M,), sources=AHF_PRIMARY), now)
         assert facts.key_set is False and facts.db_bytes > 0 and facts.retention_days == 90
         assert (facts.markets[0].newest_price_ms, facts.markets[0].items_priced) == (now - 9 * DAY, 1)
         assert facts.characters[0].market is None
-        page = status_page.status_page(db, Config(markets=(M,), api_key="k"), now, 0)
+        page = status_page.status_page(db, Config(markets=(M,), api_key="k", sources=AHF_PRIMARY), now, 0)
         assert [a["title"] for a in page["alerts"]] == ["AHF data is old", "Realm not mapped to a market"]
         assert page["cards"][0]["badge"] == "data 9 d old" and page["cards"][1]["lines"][0][1] == "set"
     finally:
@@ -96,5 +97,27 @@ def test_K4_backtests_pair_your_scan_estimates_with_confirmed_rows_of_the_same_i
                                    (M, today - 1, "books", "groups", ",".join(["3600"] * 2 + ["0"] * 22))])
         [(src, b)] = status_page.status_facts(db, Config(markets=(M,)), now).markets[0].backtests
         assert (src, b.days, b.median_ratio, b.within) == ("blizzard", 2, 0.9, 2)   # 0.8 and 1 × 12 ÷ 12 = 1.0, both within ±25%
+    finally:
+        db.close()
+
+
+def test_the_status_facts_read_the_ahledger_tables_updated_time_and_item_count_come_from_the_database(tmp_path):
+    now = FakeClock().now_ms()
+    updated_s = now // 1000 - 26 * 3600
+    db = Database.open(tmp_path / "ahsync.db", now, None)
+    try:
+        facts = status_page.status_facts(db, Config(markets=(M,)), now).markets[0]
+        assert (facts.ahledger_on, facts.ahledger_updated_ms, facts.ahledger_items) == (True, None, 0)
+        with db.transaction():
+            db.upsert_ahledger_rows(M, updated_s, [(k, 5, 5, 5, 5, 5, 5) for k in (1, 2, 3)])
+            db.upsert_ahledger_rows(M, updated_s - 3600, [(9, 5, 5, 5, 5, 5, 5)])   # an older row of another table
+            db.set_source_state(M, "ahledger", updated_ms=updated_s * 1000)
+        facts = status_page.status_facts(db, Config(markets=(M,)), now).markets[0]
+        assert (facts.ahledger_updated_ms, facts.ahledger_items) == (updated_s * 1000, 3)
+        line = [l for l in status_page.status_page(db, Config(markets=(M,)), now, 0)["cards"][0]["lines"]
+                if l[0] == "AHledger table"]
+        assert line == [["AHledger table", "26 h old · 3 items", "amber", "https://ahledger.com"]]
+        off = Config(markets=(M,), sources={M: MarketSources(addresses={"ahledger": ""})})
+        assert status_page.status_facts(db, off, now).markets[0].ahledger_on is False
     finally:
         db.close()

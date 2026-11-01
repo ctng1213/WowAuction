@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from ahsync.config import (Config, ConfigError, load_config, market_settings, parse_config, plan_settings,
+from ahsync.config import (Config, ConfigError, MarketSources, load_config, market_settings, parse_config, plan_settings,
                            portfolio_settings, resolve_api_key, session_settings, setting_line, with_risk_tolerance,
                            write_risk_tolerance)
 from ahsync.engine.portfolio import PortfolioSettings, config_version
@@ -98,8 +98,9 @@ def test_SRC4_sources_map_a_market_to_its_providers_and_bad_tables_are_refused(t
             'rank = ["blizzard", "ahf"]\n[sources."forever.pvp.horde.us".addresses]\nblizzard = "us/4728/2"\n')
     config = parse_config(text, {}, tmp_path)
     assert market_sources(config, "forever.pvp.horde.us") == MarketSources(
-        "blizzard", ("blizzard", "ahf"), {"ahf": "forever.pvp.horde.us", "blizzard": "us/4728/2"})
-    assert market_sources(Config(), "forever.pvp.horde.us") == MarketSources(addresses={"ahf": "forever.pvp.horde.us"})
+        "blizzard", ("blizzard", "ahf"), {"ahf": "forever.pvp.horde.us", "ahledger": "forever.pvp.horde.us", "blizzard": "us/4728/2"})
+    assert market_sources(Config(), "forever.pvp.horde.us") == MarketSources(
+        addresses={"ahf": "forever.pvp.horde.us", "ahledger": "forever.pvp.horde.us"})
     for bad, message in (('[sources."eu-x"]\nprimary = "a"\n', "expected a market id"),
                          ('[sources."forever.pvp.horde.us"]\nmain = "a"\n', "main is not a known setting"),
                          ('[sources."forever.pvp.horde.us"]\nrank = "ahf"\n', "rank must be a list of source names"),
@@ -236,3 +237,83 @@ def test_SEC11_the_rewrite_goes_through_a_temp_file_and_reads_back(tmp_path, mon
     with pytest.raises(ConfigError):
         write_risk_tolerance(path, 0.2)
     assert load_config(path, {}, tmp_path).risk_tolerance == 0.4                   # left as it was
+
+
+# ---------------------------------------------------------------- AHledger as a source (M19, SRC10)
+
+def test_SRC10_ahledger_is_on_and_primary_by_default_per_market_and_can_be_switched_off_or_demoted(tmp_path):
+    from dataclasses import replace
+
+    from ahsync.__main__ import build_hooks
+    from ahsync.collect.catchup import SyncContext
+    from ahsync.config import market_sources
+    from ahsync.collect.ahledger import AhledgerSource
+    from ahsync.collect.client import ApiClient
+    from ahsync.db.sqlite import Database
+    from ahsync.engine import status_view
+    from ahsync.engine.status_view import CharacterFacts, MarketFacts, StatusFacts
+    from ahsync.intel.contract import MarketIntelligence
+    from tests.support.fake_clock import FakeClock
+    from tests.support.fake_transport import FakeTransport
+
+    market, hour = "forever.pvp.horde.us", 3_600_000
+    head = f'markets = ["{market}"]\n'
+    # no [sources] table: the defaults
+    default = parse_config(head, {}, tmp_path)
+    own = market_sources(default, market)
+    assert (own.primary, own.rank, dict(own.addresses), default.ahledger_backfill) == (
+        "ahledger", ("ahf", "ahledger"), {"ahf": market, "ahledger": market}, True)
+    # addresses.ahledger = "": no AHledger for this market, and the primary falls back to the first ranked source in use
+    off = market_sources(parse_config(head + f'[sources."{market}".addresses]\nahledger = ""\n', {}, tmp_path), market)
+    assert (off.primary, off.addresses["ahledger"], off.addresses["ahf"]) == ("ahf", "", market)
+    # primary = "ahf" is accepted and stays; "yes" for the backfill refuses to start, naming the key
+    demoted = parse_config(head + f'[sources."{market}"]\nprimary = "ahf"\n', {}, tmp_path)
+    assert market_sources(demoted, market).primary == "ahf"
+    assert parse_config("ahledger_backfill = false\n", {}, tmp_path).ahledger_backfill is False
+    with pytest.raises(ConfigError, match="ahledger_backfill must be true or false"):
+        parse_config('ahledger_backfill = "yes"\n', {}, tmp_path)
+
+    # Status follows the primary: the labels and the stale alert say AHledger, with the default; AHF with "ahf"
+    now = 1_792_585_200_000 + 8 * hour
+    def facts_for(config: Config, newest_ms: int | None) -> StatusFacts:
+        """The Status facts of the first market under a config."""
+        sources = market_sources(config, market)
+        m = MarketFacts(market, now // hour - 1, now - hour, newest_ms, 10, None, None, 0, 0, primary=sources.primary,
+                        ahledger_on=bool(sources.addresses["ahledger"]))
+        return StatusFacts((m,), (CharacterFacts("A-R", "R", "Horde", market, now),), True, 1, 90)
+    old = now - 7 * hour                                                   # the newest price is 7 h old: over 6 h
+    for config, name in ((default, "AHledger"), (demoted, "AHF")):
+        view = status_view.status_view([], facts_for(config, old), now, 0)
+        assert f"Newest {name} price" in [line[0] for line in view["cards"][0]["lines"]]
+        assert [a["title"] for a in view["alerts"]] == [f"{name} data is old"]
+    fresh = status_view.status_view([], facts_for(default, now - hour), now, 0)
+    assert fresh["alerts"] == [] and fresh["cards"][0]["badge"] == "up to date"
+    # the "AHledger table" line exists only while the market polls AHledger (S18's omitted line)
+    lines = lambda config: [line[0] for line in status_view.status_view([], facts_for(config, old), now, 0)["cards"][0]["lines"]]
+    assert "AHledger table" in lines(default) and "AHledger table" not in lines(parse_config(
+        head + f'[sources."{market}".addresses]\nahledger = ""\n', {}, tmp_path))
+
+    # "prices newer" follows the primary's table `updated`: the AHledger table counts with the default, not with "ahf"
+    db = Database.open(tmp_path / "ahsync.db", now, None)
+    try:
+        with db.transaction():
+            db.stage_intel(MarketIntelligence(market, now, now, 1, {}))
+        db.publish_refresh([market])
+        db.upsert_current(market, "ahledger", [(2589, 44, 20, now + hour)])        # the table's `updated` after the numbers
+        assert db.prices_newer_than_intel(market, market_sources(default, market).primary) is True
+        assert db.prices_newer_than_intel(market, market_sources(demoted, market).primary) is False
+
+        # with "" the transport sees no AHledger request for that market (the hook polls only markets with an address)
+        transport = FakeTransport()
+        transport.serve("v1/markets", [{"id": market}])
+        clock = FakeClock(now)
+        source = AhledgerSource(ApiClient(transport, clock, api_base="https://api.ahledger.com", per_minute=300), db, clock)
+        switched_off = replace(default, sources={market: replace(default.sources.get(market, MarketSources()),
+                                                                   addresses={"ahledger": ""})})
+        build_hooks(SyncContext(None, db, clock, None, ahledger=source), switched_off, tmp_path / "b").ahledger_poll()
+        assert transport.requests == []
+        build_hooks(SyncContext(None, db, clock, None, ahledger=source), default, tmp_path / "b").ahledger_poll()
+        assert transport.paths() == ["v1/markets", f"v1/pricetable/{market}"]
+    finally:
+        db.close()
+    # SRC10's coverage-card clause ("the coverage card has no ahledger row") belongs to M20

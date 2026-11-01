@@ -19,6 +19,8 @@ from urllib.parse import urlsplit
 from ahsync.collect.client import HttpRequest, HttpResponse, TransportError
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "ahf"
+AHLEDGER_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "ahledger"
+AHLEDGER_HOST = "api.ahledger.com"
 DEFAULT_MARKET = "forever.pvp.horde.us"
 
 
@@ -33,9 +35,13 @@ def path_of(url: str) -> str:
         url: Absolute URL.
 
     Returns:
-        The path without its leading slash, query or fragment.
+        The path without its leading slash, query or fragment. AHledger's URLs
+        keep their query (`v1/prices/<market>/2589?range=7d`), because the
+        range picks the response.
     """
-    return urlsplit(url).path.lstrip("/")
+    parts = urlsplit(url)
+    path = parts.path.lstrip("/")
+    return f"{path}?{parts.query}" if parts.query and parts.hostname == AHLEDGER_HOST else path
 
 
 def encode(path: str, data: object) -> bytes:
@@ -71,6 +77,7 @@ class FakeTransport:
     def __init__(self) -> None:
         """Start with no routes."""
         self.routes: dict[str, bytes] = {}
+        self.route_headers: dict[str, dict[str, str]] = {}   # extra response headers by path (lower-case names)
         self.requests: list[HttpRequest] = []
         self.faults: list[Fault] = []
 
@@ -103,14 +110,51 @@ class FakeTransport:
         """
         self.routes[path] = encode(path, data)
 
-    def serve_bytes(self, path: str, body: bytes) -> None:
+    def serve_bytes(self, path: str, body: bytes, headers: dict[str, str] | None = None) -> None:
         """Serve raw bytes at a path.
 
         Args:
             path: Route path.
             body: Exact body.
+            headers: Extra response headers, lower-case names (e.g. {"cache-control": "max-age=60"}).
         """
         self.routes[path] = body
+        self.route_headers[path] = dict(headers or {})
+
+    def serve_etag(self, path: str, body: bytes, etag: str, headers: dict[str, str] | None = None) -> None:
+        """Serve bytes with an ETag: a request with `If-None-Match` equal to it gets 304 and no body.
+
+        Args:
+            path: Route path.
+            body: Exact body.
+            etag: The ETag value, quotes included if the server sends them.
+            headers: Further response headers, lower-case names.
+        """
+        self.serve_bytes(path, body, {**(headers or {}), "etag": etag})
+
+    @classmethod
+    def serve_ahledger_fixtures(cls, market: str = DEFAULT_MARKET, transport: FakeTransport | None = None,
+                                etag: str = '"fixture-etag"') -> FakeTransport:
+        """Serve the recorded AHledger files of a market (tests/fixtures/ahledger/<market>/).
+
+        Args:
+            market: Fixture folder; also the market id in the URLs (dots, as AHSync writes it).
+            transport: Add the routes to this transport; a new one when None.
+            etag: ETag of the price table.
+
+        Returns:
+            The transport, with `/v1/markets`, `/v1/pricetable/<market>` (with `etag` and
+            `cache-control: max-age=60`) and `/v1/prices/<market>/2589?range=7d|90d`.
+        """
+        transport = transport or cls()
+        folder = AHLEDGER_FIXTURES / market
+        headers = {"cache-control": "max-age=60"}
+        transport.serve_bytes("v1/markets", (folder / "markets.json").read_bytes(), headers)
+        transport.serve_etag(f"v1/pricetable/{market}", (folder / "pricetable.txt").read_bytes(), etag, headers)
+        for rng in ("7d", "90d"):
+            transport.serve_bytes(f"v1/prices/{market}/2589?range={rng}",
+                                  (folder / f"prices_2589_{rng}.json").read_bytes(), headers)
+        return transport
 
     def remove(self, path: str) -> None:
         """Make a path 404.
@@ -119,6 +163,7 @@ class FakeTransport:
             path: Route path.
         """
         self.routes.pop(path, None)
+        self.route_headers.pop(path, None)
 
     def remove_matching(self, prefix: str) -> None:
         """Make every path with a prefix 404.
@@ -128,6 +173,7 @@ class FakeTransport:
         """
         for path in [p for p in self.routes if p.startswith(prefix)]:
             del self.routes[path]
+            self.route_headers.pop(path, None)
 
     # ------------------------------------------------------------ faults
 
@@ -262,4 +308,7 @@ class FakeTransport:
         body = self.routes[path]
         if fault is not None and fault.kind == "truncate":
             body = body[: int(len(body) * fault.fraction)]
-        return HttpResponse(200, {}, body)
+        headers = dict(self.route_headers.get(path, {}))
+        if "etag" in headers and request.headers.get("If-None-Match") == headers["etag"]:
+            return HttpResponse(304, headers, b"")
+        return HttpResponse(200, headers, body)

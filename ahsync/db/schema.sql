@@ -333,3 +333,24 @@ CREATE TABLE IF NOT EXISTS fetch_failures(
     market TEXT NOT NULL, hour INTEGER NOT NULL, failures INTEGER NOT NULL, last_error TEXT, last_at INTEGER,
     PRIMARY KEY(market, hour)
 );
+
+-- AHledger's price table aggregates, as they came (SPEC §2.3): stored, read by nothing (SRC11). updated = Unix s;
+-- prices copper, per_day_x10 tenths of a unit a day; NULL = the field was empty.
+CREATE TABLE IF NOT EXISTS ahledger_rows(
+    market TEXT NOT NULL, key INTEGER NOT NULL, updated INTEGER NOT NULL, median INTEGER, m7 INTEGER, m30 INTEGER,
+    lo INTEGER, hi INTEGER, per_day_x10 INTEGER,
+    PRIMARY KEY(market, key)
+) WITHOUT ROWID;
+
+-- Per market and remote source (SPEC §3.2): the last ETag, the source's own `updated` (ms), the last fetch (ms) and
+-- the backfill's resume point (JSON). A failure never clears it.
+CREATE TABLE IF NOT EXISTS source_state(
+    market TEXT NOT NULL, src TEXT NOT NULL, etag TEXT, updated_ms INTEGER, fetched_ms INTEGER, checkpoint TEXT,
+    PRIMARY KEY(market, src)
+);
+
+-- UTC hours (floor(ms/3600000)) with at least one complete observation, per source (SPEC §3.5 Data coverage).
+CREATE TABLE IF NOT EXISTS observed_hours(
+    market TEXT NOT NULL, src TEXT NOT NULL, hour INTEGER NOT NULL,
+    PRIMARY KEY(market, src, hour)
+) WITHOUT ROWID;

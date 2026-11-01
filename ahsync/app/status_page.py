@@ -100,8 +100,11 @@ def status_facts(db: Database, cfg: Config, now_ms: int) -> StatusFacts:
         state = db.get_sync_state(market)
         primary = market_sources(cfg, market).primary                                     # SRC2
         newest, priced, oldest, latest, local, books = db.sync_facts(market, now_ms - 7 * DAY_MS, primary)
+        on = bool(market_sources(cfg, market).addresses["ahledger"])                      # S18
+        _etag, updated_ms, _fetched, _checkpoint = db.source_state(market, "ahledger")
+        items = 0 if updated_ms is None else db.ahledger_item_count(market, updated_ms // 1000)
         markets.append(MarketFacts(market, state.last_hour, state.last_run, newest, priced, oldest, latest, local, books,
-                                   _backtests(db, market, now_ms), primary))
+                                   _backtests(db, market, now_ms), primary, on, updated_ms, items))
     characters = tuple(CharacterFacts(*row) for row in db.characters())
     results = [(p, outcome == "sold") for p, outcome in db.conn.execute(
         "SELECT p_at_post, outcome FROM posts WHERE outcome IN ('sold', 'expired') AND p_at_post IS NOT NULL "

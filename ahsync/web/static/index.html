@@ -252,7 +252,7 @@ const detailHtml = d => !d ? '<div class="empty" style="border-top:1px solid var
 const ALERT_CLASS = { error: 'bad', warn: 'warn', info: 'info' };
 const VALUE_CLASS = { amber: 'amber', muted: 'muted', pos: 'pos', neg: 'neg' };
 const statusCard = c => `<div class="card"><div class="card-h"><b>${esc(c.title)}</b>${c.badge ? `<span class="pill ${c.badge_class === 'ok' || c.badge_class === 'warn' || c.badge_class === 'gold' ? c.badge_class : ''}">${esc(c.badge)}</span>` : ''}</div>` +
-  `<dl class="kv">${c.lines.map(([k, v, cls]) => `<dt>${esc(k)}</dt><dd class="${VALUE_CLASS[cls] || ''}">${esc(v)}</dd>`).join('')}</dl></div>`;
+  `<dl class="kv">${c.lines.map(([k, v, cls, url]) => `<dt>${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(k)}</a>` : esc(k)}</dt><dd class="${VALUE_CLASS[cls] || ''}">${esc(v)}</dd>`).join('')}</dl></div>`;
 // Status: the sell-probability calibration section (SPEC §8.8); every text and width comes from engine/status_view.py.
 const calBar = (pct, color) => `<div class="bar" style="width:160px"><i style="width:${Number(pct)}%;background:${color}"></i></div>`;
 const calibrationHtml = c => !c ? '<div class="empty">Sell-probability calibration appears here once your posts are tracked to their outcome.</div>' :
@@ -639,7 +639,7 @@ const LIVE = {
   },
   status: {
     lede: 'Sync state, data age and anything that needs attention. This page is built when you open it, so it is always current; open it again to update it.',
-    render: d => `<div style="padding:12px">${(d.alerts || []).map(a => `<div class="alert ${ALERT_CLASS[a.level] || 'info'}"><b>${esc(a.title)}</b><span class="grow">${esc(a.text)}</span></div>`).join('') ||
+    render: d => `<div style="padding:12px">${(d.alerts || []).map(a => `<div class="alert ${ALERT_CLASS[a.level] || 'info'}"><b>${esc(a.title)}</b><span class="grow">${esc(a.text)}${a.url ? ` <a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.url)}</a>` : ''}</span></div>`).join('') ||
       '<div class="alert info"><b>All clear</b><span class="grow">Nothing needs attention.</span></div>'}</div>` +
       `<div class="grid2">${(d.cards || []).map(statusCard).join('')}</div>` +
       calibrationHtml(d.calibration),
@@ -739,7 +739,7 @@ async function load(id) {
   }
   if (!res.ok) return renderMessage(id, `Couldn't load this page (${esc(body.error || res.status)}).`);
   state.data[id] = body.data;
-  setBuilt(body.built, body.prices_newer);
+  setBuilt(body.built, body.prices_newer, body.credit);
   setGold(body.data && body.data.gold);
   render(id);
 }
@@ -757,12 +757,17 @@ function renderMessage(id, text) {
   if (card) card.innerHTML = `<div class="empty">${text}</div>`;
 }
 
-function setBuilt(builtMs, pricesNewer) {
+function setBuilt(builtMs, pricesNewer, credit) {
   const pill = document.getElementById('built');
   pill.hidden = builtMs === null || builtMs === undefined;
   pill.classList.toggle('amber', !!pricesNewer);
   if (!pill.hidden) pill.textContent = 'numbers from ' + new Date(builtMs).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' }) +
     (pricesNewer ? ' · prices newer than numbers · Refresh now' : '');      // IU2
+  if (!pill.hidden && credit) {      // S19: the primary source's credit, linked; the text and URL are the engine's
+    const link = document.createElement('a');
+    link.href = credit.url; link.target = '_blank'; link.rel = 'noopener'; link.textContent = credit.text;
+    pill.append(' · ', link);
+  }
 }
 
 // ---------- table ----------

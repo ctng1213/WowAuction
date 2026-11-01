@@ -52,6 +52,8 @@ def prune(db: Database, now_ms: int, retention_days: int = 90, book_days: int = 
     deleted["volume_d1"] = db.delete_before("volume_d1", cutoff_ms // DAY_MS)
     deleted["volume_cover"] = db.delete_before("volume_cover", cutoff_ms // DAY_MS)
     deleted["fetch_failures"] = db.delete_before("fetch_failures", cutoff_ms // HOUR_MS)
+    deleted["observed_hours"] = db.delete_before("observed_hours", cutoff_ms // HOUR_MS)   # SRC16
+    deleted["ahledger_rows"] = db.delete_before("ahledger_rows", cutoff_ms // 1000)        # its `updated` is in s
     deleted["scans"] = db.delete_scans_before(now_ms - book_days * DAY_MS)
     deleted["item_rules"] = db.delete_rule_tombstones_before(cutoff_ms)
     deleted["positions"] = db.delete_closed_positions_before(cutoff_ms)   # 90 days after they close (SPEC §3.2)

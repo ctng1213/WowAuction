@@ -33,8 +33,8 @@ WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 class MarketSources:
     """Where a market's data comes from (SPEC §3.6 [sources], §5.0): the market id stays AHSync's own key."""
 
-    primary: str = "ahf"                       # the remote source Status and freshness follow
-    rank: tuple[str, ...] = ("ahf",)           # remote sources for prices, most trusted first (your scans come first)
+    primary: str = "ahledger"                  # the remote source Status and freshness follow (SRC10)
+    rank: tuple[str, ...] = ("ahf", "ahledger")  # remote sources for prices, most trusted first (your scans come first)
     addresses: Mapping[str, str] = field(default_factory=dict)   # provider -> this market's id there ("" = not used)
 
 
@@ -95,6 +95,7 @@ class Config:
     session_gap_minutes: int = 15               # minutes without loot that end a farming session, 1-120
     timing_edge_min_strength: int = 40          # Gathering shows a sell window from this seasonality strength, 0-100
     launch_wow_after_catchup: bool = False
+    ahledger_backfill: bool = True              # fill missing hours from AHledger's per-item history (SPEC §2.3, M21; SRC10, SRC15)
     realms: Mapping[str, str] = field(default_factory=dict)
     budgets: Mapping[str, int] = field(default_factory=dict)
     sources: Mapping[str, MarketSources] = field(default_factory=dict)   # market id -> its sources (SRC1-SRC4)
@@ -111,6 +112,7 @@ _TYPES: dict[str, tuple[tuple[type, ...], str]] = {
     "daily_refresh_time": ((str,), 'a time like "06:00"'),
     "week_start": ((str,), "one of Mon, Tue, Wed, Thu, Fri, Sat, Sun"),
     "launch_wow_after_catchup": ((bool,), "true or false"),
+    "ahledger_backfill": ((bool,), "true or false"),
     "realms": ((dict,), "a table"),
     "budgets": ((dict,), "a table"),
     "sources": ((dict,), "a table"),
@@ -438,17 +440,23 @@ def write_risk_tolerance(path: Path, value: float) -> None:
 
 
 def market_sources(config: Config, market: str) -> MarketSources:
-    """A market's sources, with defaults: AHF under the market's own id, primary and only remote source (SRC1).
+    """A market's sources, with defaults: AHF and AHledger under the market's own id, AHledger primary (SRC1, SRC10).
 
     Args:
         config: The config.
         market: Market id.
 
     Returns:
-        Its MarketSources; `addresses` always says where AHF is ("" when this market doesn't use it).
+        Its MarketSources. `addresses` always says where AHF and AHledger are ("" when this market doesn't
+        use that provider). When the configured primary's address is "", the primary falls back to the first
+        ranked source with an address, so Status never follows a source that is never polled.
     """
     own = config.sources.get(market, MarketSources())
-    return dataclasses.replace(own, addresses={"ahf": market, **own.addresses})
+    addresses = {"ahf": market, "ahledger": market, **own.addresses}
+    primary = own.primary
+    if not addresses.get(primary, primary):
+        primary = next((s for s in own.rank if addresses.get(s, s)), primary)
+    return dataclasses.replace(own, primary=primary, addresses=addresses)
 
 
 def market_settings(config: Config) -> MarketSettings:

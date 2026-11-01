@@ -273,9 +273,31 @@ def test_schema_23_adds_the_gathering_tables_and_keeps_the_events(tmp_path):
     db.set_meta("schema_version", "22")
     db.close()
     migrated = Database.open(tmp_path / "v22.db", T0, None)
-    assert migrated.get_meta("schema_version") == "23" and migrated.count("crafts") == 1
+    assert migrated.get_meta("schema_version") == str(db_module.SCHEMA_VERSION) and migrated.count("crafts") == 1
     assert [migrated.count(t) for t in ("gather_events", "farming_sessions", "farming_session_items",
                                         "manual_rates")] == [0, 0, 0, 0]
     indexes = {name for (name,) in migrated.conn.execute("SELECT name FROM sqlite_master WHERE type = 'index'")}
     assert {"gather_events_char_at", "farming_sessions_char"} <= indexes
+    migrated.close()
+
+
+def test_schema_24_adds_the_ahledger_and_coverage_tables_and_fills_observed_hours(tmp_path):
+    db = Database.open(tmp_path / "v23.db", T0, None)                  # a schema-23 database: before AHledger (M19)
+    db.conn.executescript(
+        "DROP TABLE ahledger_rows; DROP TABLE source_state; DROP TABLE observed_hours; "
+        "INSERT INTO scans(scan_id, market, src, at, kind, coverage) VALUES "
+        "('full', 'm', 'local', 7200000 + 600000, 'full', 1), ('part', 'm', 'local', 10800000, 'partial', 0.4), "
+        "('thin', 'm', 'local', 14400000, 'full', 0.9), ('books', 'm', 'ahf', 18000000, 'full', 1); "
+        "INSERT INTO candles_h1(market, key, t, close, qty, src) VALUES "
+        "('m', 1, 3600000, 5, 1, 'ahf'), ('m', 2, 3600000, 6, 1, 'ahf'), ('m', 1, 7200000, 4, 1, 'local'), "
+        "('n', 1, 21600000, 5, 1, 'ahf');")
+    db.set_meta("schema_version", "23")
+    db.close()
+    migrated = Database.open(tmp_path / "v23.db", T0, None)
+    assert migrated.get_meta("schema_version") == "24" and migrated.count("scans") == 4
+    # the complete local scan's hour (2) and AHF's closes' hours (1 in m, 6 in n), once each; a partial scan, a
+    # scan under full coverage and AHF's book count for nobody, and a local close is not a scan
+    assert migrated.conn.execute("SELECT market, src, hour FROM observed_hours ORDER BY 1, 2, 3").fetchall() == [
+        ("m", "ahf", 1), ("m", "local", 2), ("n", "ahf", 6)]
+    assert migrated.count("ahledger_rows") == 0 and migrated.count("source_state") == 0
     migrated.close()

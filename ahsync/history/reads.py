@@ -12,6 +12,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
+from ahsync.collect.provider import source_precedence
+
+DEFAULT_RANK = {"local": 0, "ahf": 1}   # the per-item reads' rank, HistoryWindow's default (SRC3)
 SUFFIX_TABLE = Path(__file__).resolve().parents[1] / "data" / "bonus_suffixes.json"   # tools/gen_bonus_suffixes.py
 
 
@@ -48,7 +51,7 @@ class HistoryWindow:
     to_ms: int              # newest hour start to include
     volume_from_day: int    # oldest volume day number
     book_since_ms: int      # oldest complete book to accept
-    source_rank: tuple[str, ...] = ("local", "ahf")   # price sources, most trusted first; others after, by name (SRC3)
+    source_rank: tuple[str, ...] = ("local", "ahf")   # price sources, most trusted first within a kind (SRC3, SRC9)
 
 
 @dataclass(frozen=True)
@@ -225,7 +228,7 @@ class HistoryReads:
         return [r[0] for r in rows]
 
     def hourly_closes(self, market: str, key: int, from_ms: int, to_ms: int) -> list[tuple[int, int]]:
-        """One close per item-hour for statistics; a local close beats AHF's (SPEC §2.2, S9).
+        """One close per item-hour for statistics, by source kind then rank (SPEC §2.2, S9, SRC9).
 
         Args:
             market: AHF market id.
@@ -237,17 +240,12 @@ class HistoryReads:
             (hour start ms, close copper), ascending; hours with no listed close are left out.
         """
         rows = self.conn.execute(
-            "SELECT t, close FROM candles_h1 WHERE market = ? AND key = ? AND t BETWEEN ? AND ? "
-            "AND close IS NOT NULL ORDER BY t, CASE src WHEN 'local' THEN 0 ELSE 1 END, src",
-            (market, key, from_ms, to_ms)).fetchall()
-        closes: list[tuple[int, int]] = []
-        for t, close in rows:
-            if not closes or closes[-1][0] != t:
-                closes.append((t, close))
-        return closes
+            "SELECT t, close, src FROM candles_h1 WHERE market = ? AND key = ? AND t BETWEEN ? AND ? "
+            "AND close IS NOT NULL ORDER BY t, src", (market, key, from_ms, to_ms)).fetchall()
+        return _best_per_time(rows, DEFAULT_RANK)
 
     def hourly_supply(self, market: str, key: int, from_ms: int, to_ms: int) -> list[tuple[int, int]]:
-        """Units listed per item-hour for `supply_how`; a local row beats AHF's (SPEC §3.3.6).
+        """Units listed per item-hour for `supply_how`, by source kind then rank (SPEC §3.3.6, SRC9).
 
         Args:
             market: Market id.
@@ -259,13 +257,9 @@ class HistoryReads:
             (hour start ms, units listed), ascending; an hour with nothing listed is 0, an unobserved one absent.
         """
         rows = self.conn.execute(
-            "SELECT t, COALESCE(qty, 0) FROM candles_h1 WHERE market = ? AND key = ? AND t BETWEEN ? AND ? "
-            "ORDER BY t, CASE src WHEN 'local' THEN 0 ELSE 1 END, src", (market, key, from_ms, to_ms)).fetchall()
-        supply: list[tuple[int, int]] = []
-        for t, qty in rows:
-            if not supply or supply[-1][0] != t:
-                supply.append((t, qty))
-        return supply
+            "SELECT t, COALESCE(qty, 0), src FROM candles_h1 WHERE market = ? AND key = ? AND t BETWEEN ? AND ? "
+            "ORDER BY t, src", (market, key, from_ms, to_ms)).fetchall()
+        return _best_per_time(rows, DEFAULT_RANK)
 
     def hourly_sales(self, market: str, key: int, from_ms: int, to_ms: int) -> list[tuple[int, float]]:
         """Stored book-pair sales rates (SPEC §3.3 sales_h1).
@@ -284,7 +278,7 @@ class HistoryReads:
             (market, key, from_ms, to_ms))]
 
     def daily_closes(self, market: str, key: int, from_ms: int, to_ms: int) -> list[tuple[int, int]]:
-        """Daily closes, one per day, local preferred over AHF (SPEC §2.2).
+        """Daily closes, one per day, by source kind then rank (SPEC §2.2).
 
         Args:
             market: Market id.
@@ -297,11 +291,8 @@ class HistoryReads:
         """
         rows = self.conn.execute(
             "SELECT t, close, src FROM candles_d1 WHERE market = ? AND key = ? AND t BETWEEN ? AND ? "
-            "AND close IS NOT NULL ORDER BY t, src = 'local' DESC", (market, key, from_ms, to_ms))
-        out: dict[int, int] = {}
-        for t, close, _ in rows:
-            out.setdefault(t, close)
-        return sorted(out.items())
+            "AND close IS NOT NULL ORDER BY t, src", (market, key, from_ms, to_ms)).fetchall()
+        return _best_per_time(rows, DEFAULT_RANK)
 
     def current_price(self, market: str, key: int) -> CurrentPrice | None:
         """`cur` for an item: the newest observation across sources, keeping its src (S7).
@@ -476,19 +467,19 @@ class _Groups:
 
 
 def _best_per_time(rows: list[tuple], ranked: dict[str, int]) -> list[tuple]:
-    """One value per time: the most trusted source's (SPEC §2.2, S9, SRC3).
+    """One value per time: the most granular source's, then the most trusted (SPEC §2.2, S9, SRC3, SRC9).
 
     Args:
-        rows: (time ms, value, src) rows ordered by time, then src.
-        ranked: src -> rank, 0 most trusted ("local" first by default); an unranked source comes after every
-            ranked one, by name.
+        rows: (time ms, value, src) rows ordered by time.
+        ranked: src -> rank, 0 most trusted ("local" first by default); orders sources of the same kind only, an
+            unranked source after every ranked one, by name (collect.provider.source_precedence).
 
     Returns:
         One (time, value) per time, ascending.
     """
     best: list[tuple] = []
     for t, value, src in rows:
-        order = (ranked.get(src, len(ranked)), src)
+        order = source_precedence(src, ranked)
         if not best or best[-1][0] != t:
             best.append((t, value, order))
         elif order < best[-1][2]:

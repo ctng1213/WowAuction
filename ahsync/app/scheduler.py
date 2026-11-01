@@ -7,6 +7,8 @@ be wired later without touching the timing rules here:
 - every hour at :06 → `store_hour` (new h1 hour + snapshot (+ books); no recompute)
 - every hour at :00 → `status_pass` (SPEC §3.1.1)
 - every `live_refresh_minutes` with Premium → `live_refresh`
+- every 30 minutes, the first time at the first tick → `ahledger_poll` when wired (AHledger's price table; it
+  sends an ETag and a Cache-Control, so a poll with nothing new is one cheap request, SPEC §2.3)
 - first tick after `daily_refresh_time` local each day → `full_refresh`, then `daily`
   (d1/volume refresh, prune, backup); once a week → `weekly` (VACUUM)
 - every 5 s → stat the SavedVariables files; a file whose modification time changed
@@ -28,6 +30,7 @@ log = logging.getLogger("ahsync.scheduler")
 WATCH_INTERVAL_MS = 5_000      # one stat every 5 s (SPEC §3.1.1 "idle means idle")
 STABLE_MS = 2_000              # unchanged for 2 s before reading (SPEC §2.2)
 STORE_MINUTE = 6               # hourly store at :06
+AHLEDGER_POLL_MS = 30 * 60_000   # AHledger poll interval (SPEC §2.3)
 WEEK_MS = 7 * DAY_MS
 
 
@@ -63,6 +66,7 @@ class SchedulerHooks:
     daily: Callable[[], None] = _nothing              # prune + backup
     weekly: Callable[[], None] = _nothing             # VACUUM
     live_refresh: Callable[[], None] | None = None    # Premium live table; None disables it
+    ahledger_poll: Callable[[], None] | None = None   # AHledger price tables, every 30 min; None disables it (SRC10)
     savedvars_changed: Callable[[Path], None] = _nothing_for   # SavedVariables re-read (ingest.apply.ingest_file)
 
 
@@ -191,6 +195,7 @@ class Scheduler:
         self.next_status = self._next_at_minute(now, 0)
         self.next_watch = now + WATCH_INTERVAL_MS
         self.next_live = now + self.live_ms
+        self.next_ahledger = now                       # the first poll is at the first tick (start)
         self.next_daily = self._next_daily(now)
         self.next_weekly = now + WEEK_MS
 
@@ -246,6 +251,9 @@ class Scheduler:
         if self.hooks.live_refresh is not None and now >= self.next_live:
             self.next_live = now + self.live_ms
             self._run("live_refresh", self.hooks.live_refresh, ran)
+        if self.hooks.ahledger_poll is not None and now >= self.next_ahledger:
+            self.next_ahledger = now + AHLEDGER_POLL_MS
+            self._run("ahledger_poll", self.hooks.ahledger_poll, ran)
         if now >= self.next_daily:
             self.next_daily = self._next_daily(now)
             self.hooks.refresh_requested()               # a pending press is covered by this refresh
@@ -288,6 +296,8 @@ class Scheduler:
             timers.append(self.next_watch)
         if self.hooks.live_refresh is not None:
             timers.append(self.next_live)
+        if self.hooks.ahledger_poll is not None:
+            timers.append(self.next_ahledger)
         return min(timers)
 
     def run(self, should_stop: Callable[[], bool]) -> None:

@@ -635,3 +635,37 @@ def test_SRC1_a_market_reads_ahf_under_its_configured_address_and_keeps_its_own_
     before = len(world.transport.paths())
     run_catchup(api_for(world), db, clock, (ours,), addresses={ours: ""})
     assert not [p for p in world.transport.paths()[before:] if "/ah/" in p]   # "" = no AHF for this market
+
+
+def test_SRC16_each_writer_records_the_hours_it_observed_completely_idempotently(tmp_path):
+    from ahsync.collect.ahledger import parse_pricetable, store_pricetable
+    from ahsync.collect.local_scans import derive_from_scans
+    from ahsync.db.sqlite import BookScan
+    from ahsync.history.prune import prune
+    clock = FakeClock()
+    world = AhfWorld(clock)
+    db = open_db(tmp_path, clock)
+    empty_hour = world.sealed_h1 - 1                               # an AHF file without rows observed nothing
+    empty = hour_file(empty_hour)
+    empty["items"] = []
+    world.transport.serve(h1_path(MARKET, empty_hour), empty)
+    first = start_with_gap(db, world, 3)
+    for _ in range(2):                                             # the same files read again: same rows
+        run_catchup(api_for(world), db, clock, (MARKET,))
+        db.update_sync_state(MARKET, last_hour=first - 1)
+    tue_19 = 497_923 * HOUR_MS                                     # Tue 20 Oct 19:00 UTC
+    db.store_book(BookScan("full", MARKET, "local", "A-R", tue_19 + 10 * 60_000, "full", 1.0), [(2589, 45, 20, 3, 1)])
+    db.store_book(BookScan("part", MARKET, "local", "A-R", tue_19 + 75 * 60_000, "partial", 0.4), [(2589, 44, 20, 3, 1)])
+    for _ in range(2):
+        with db.transaction():
+            derive_from_scans(db, [(MARKET, "full", tue_19 + 10 * 60_000, True),
+                                   (MARKET, "part", tue_19 + 75 * 60_000, False)])
+        store_pricetable(db, MARKET, parse_pricetable("AHL1|forever/pvp/horde/us|1792585200|1\n2589:50:47:340:::::",
+                                                      MARKET), None, clock.now_ms())
+    rows = db.conn.execute("SELECT src, hour FROM observed_hours ORDER BY src, hour").fetchall()
+    assert ("local", 497_923) in rows and ("local", 497_924) not in rows       # 20:15 was a partial scan
+    assert ("ahledger", 497_940) in rows
+    assert [h for s, h in rows if s == "ahf"] == [first, world.sealed_h1]      # not the empty hour
+    assert len(rows) == 4
+    prune(db, 497_940 * HOUR_MS + 91 * DAY_MS)                                    # 90 days pass
+    assert db.count("observed_hours") == 0

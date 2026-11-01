@@ -198,3 +198,51 @@ def test_GA34_an_info_line_lists_the_loot_the_gathering_catalog_cannot_place():
         "Gathered, not in the catalog: Rough Stone 22, Ruined Leather Scraps 13, Broken Fang 7, Chipped Claw 6, "
         "Light Hide 2")
 
+
+
+# ---------------------------------------------------------------- AHledger (M19)
+
+AHL = "https://ahledger.com"
+WED_21 = 497_940 * HOUR + 20 * MINUTE                   # Wed 21 Oct 2026 12:20 UTC (hour 497940 starts at 12:00)
+
+
+def test_S18_the_market_card_shows_the_ahledger_tables_age_and_size():
+    def line(now: int, **changes) -> list[str]:
+        card = status_view.status_view([], facts(market(ahledger_on=True, **changes)), now, 0)["cards"][0]
+        return [l for l in card["lines"] if l[0] == "AHledger table"][0]
+    updated = {"ahledger_updated_ms": WED_21, "ahledger_items": 2207}
+    assert line(WED_21 + 26 * HOUR, **updated) == ["AHledger table", "26 h old · 2,207 items", "amber", AHL]       # Thu 14:20
+    assert line(WED_21 + 24 * HOUR, **updated) == ["AHledger table", "24 h old · 2,207 items", "", AHL]           # Thu 12:20
+    assert line(WED_21 + 40 * MINUTE, **updated) == ["AHledger table", "40 min old · 2,207 items", "", AHL]       # Wed 13:00
+    assert line(WED_21 + 50 * HOUR, **updated) == ["AHledger table", "2 d old · 2,207 items", "amber", AHL]       # Fri 14:20
+    assert line(WED_21) == ["AHledger table", "not fetched yet", "muted", AHL]
+    off = status_view.status_view([], facts(market(ahledger_on=False)), NOW, 0)["cards"][0]
+    assert "AHledger table" not in [l[0] for l in off["lines"]]                    # no AHledger address: no line
+
+
+def test_a_tables_age_is_in_minutes_then_hours_until_48_h_then_whole_days():
+    from ahsync.engine.views import table_age_text
+    assert [table_age_text(a) for a in (30_000, 40 * MINUTE, 59 * MINUTE, HOUR, 47 * HOUR + 59 * MINUTE, 48 * HOUR,
+                                        50 * HOUR, 5 * DAY)] == ["now", "40 min", "59 min", "1 h", "47 h", "2 d", "2 d", "5 d"]
+
+
+def test_the_ahledger_alerts_say_what_happened_and_carry_the_ahledger_link():
+    wed_14 = 497_940 * HOUR + 2 * HOUR          # Wed 21 Oct 14:00 UTC
+    rows = [StatusRow(f"ahledger:unreachable:{M}", "warn", "ahledger_unreachable",
+                      {"market": M, "since_ms": wed_14, "tries": 3}, NOW),               # FM43
+            StatusRow("format:ahledger_pricetable", "warn", "ahledger_format", {"endpoint": "pricetable"}, NOW),   # FM44
+            StatusRow(f"ahledger:no_market:{M}", "warn", "ahledger_no_market", {"market": M}, NOW)]   # FM46
+    alerts = status_view.alerts(rows, facts(), NOW, 0)
+    assert sorted(a["text"] for a in alerts) == [
+        "AHledger format changed: pricetable", "AHledger has no market forever.pvp.horde.us",
+        "AHledger: unreachable since Wed 14:00 (3 tries)"]
+    assert all(a["level"] == "warn" and a["url"] == AHL for a in alerts)
+    assert "url" not in status_view.alerts([row("refresh_failed", {"error": "x"})], facts(), NOW, 0)[0]
+
+
+def test_the_stale_alert_of_an_ahledger_primary_carries_the_link_and_names_ahledger():
+    old = market(primary="ahledger", newest_price_ms=NOW - 7 * HOUR)
+    [alert] = status_view.alerts([], facts(old), NOW, 0)
+    assert alert["title"] == "AHledger data is old" and alert["url"] == AHL
+    [ahf] = status_view.alerts([], facts(market(newest_price_ms=NOW - 7 * HOUR)), NOW, 0)
+    assert "url" not in ahf

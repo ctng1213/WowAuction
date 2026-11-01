@@ -147,3 +147,34 @@ def test_D60_item_metadata_carries_the_suffix_names_that_name_variants(db, tmp_p
     assert suffix_names_of(items) is items.suffix_names and suffix_names_of({}) == {}
     (tmp_path / "old.json").write_text('{"build": "x", "suffixes": {}}', encoding="utf-8")
     assert load_suffix_names(tmp_path / "old.json") == {} and load_suffix_names(tmp_path / "missing.json") == {}
+
+
+def test_SRC9_the_most_granular_observation_wins_and_rank_orders_only_within_a_kind(db):
+    from ahsync.analysis.market import history_window
+    ten = 1_792_584_000_000 - 26 * HOUR                     # Tue 20 Oct 10:00 UTC (Wed 12:00 is hour 497940)
+    eleven = ten + HOUR
+    linen, ore, silk = 2589, 2770, 4306
+    sql(db, "INSERT INTO candles_h1(market, key, t, close, qty, src) VALUES (?, ?, ?, ?, 1, ?)",
+        (M, linen, ten, 45, "local"), (M, linen, ten, 50, "ahf"), (M, linen, ten, 48, "ahledger_h1"),
+        (M, linen, ten, 47, "ahledger"), (M, linen, eleven, 52, "ahf"), (M, linen, eleven, 49, "ahledger_h1"),
+        (M, linen, eleven, 51, "ahledger"), (M, ore, ten, 30, "ahledger_h1"), (M, ore, ten, 28, "ahledger"),
+        (M, ore, eleven, 29, "ahledger"), (M, silk, ten, 120, "ahf"), (M, silk, ten, 115, "ahledger"))
+    sql(db, "INSERT INTO current(market, key, price, qty, at, src) VALUES (?, ?, ?, 1, ?, ?)",
+        (M, linen, 52, eleven, "ahf"), (M, linen, 51, eleven + 40 * 60_000, "ahledger"),
+        (M, linen, 45, ten + 20 * 60_000, "local"))
+    now = eleven + HOUR
+    default = {i.key: i for i in db.market_history(M, history_window(now, ("local", "ahf", "ahledger")))}
+    assert default[linen].hourly_closes == [(ten, 45), (eleven, 52)]   # book beats every kind; both hourly: ahf ranks first
+    assert default[ore].hourly_closes == [(ten, 30), (eleven, 29)]     # hourly beats the table; the table fills a lone hour
+    assert default[silk].hourly_closes == [(ten, 120)]                 # hourly beats table; no close at 11:00
+    assert default[linen].current.price == 51 and default[linen].current.src == "ahledger"   # still newest-wins
+    flipped = {i.key: i for i in db.market_history(M, history_window(now, ("local", "ahledger", "ahf")))}
+    assert flipped[linen].hourly_closes == [(ten, 45), (eleven, 49)]   # ahledger_h1 ranks with ahledger
+    assert flipped[silk].hourly_closes == [(ten, 120)]                 # the kind comes before the rank
+    assert db.hourly_closes(M, linen, ten, eleven) == default[linen].hourly_closes   # per-item read, same rule
+    assert db.hourly_closes(M, ore, ten, eleven) == default[ore].hourly_closes
+    sql(db, "INSERT OR REPLACE INTO current(market, key, price, qty, at, src) VALUES (?, ?, ?, 1, ?, ?)",
+        (M, linen, 44, eleven + 40 * 60_000, "local"))
+    assert db.current_price(M, linen).src == "local"                   # a local price at 11:40 too wins the tie
+    [tie] = [i for i in db.market_history(M, history_window(now, ("local", "ahf", "ahledger"))) if i.key == linen]
+    assert tie.current.src == "local"

@@ -11,8 +11,8 @@ import pytest
 
 from ahsync.collect.client import (ApiClient, ApiError, BadFile, FeatureUnavailable, HttpRequest, NotFound,
                                RateLimited, RedactingFilter, Redactor, RetriesExhausted, TransportError,
-                               Unauthorized, UrllibTransport, backoff_seconds, build_request, decode_body,
-                               retry_after_seconds)
+                               Unauthorized, UrllibTransport, backoff_seconds, build_request, cache_max_age_s,
+                               decode_body, retry_after_seconds)
 from tests.support.fake_clock import FakeClock
 from tests.support.fake_transport import FakeTransport
 
@@ -207,3 +207,68 @@ def test_authorization_is_not_forwarded_on_redirect():
         req, io.BytesIO(), 302, "Found", {}, "https://elsewhere.example/me")
     assert redirected.get_header("Authorization") is None
     assert redirected.get_header("User-agent") == "AHSync"
+
+
+# ---------------------------------------------------------------- conditional GET (SPEC §2.3)
+
+LEDGER = "https://api.ahledger.com/v1/pricetable/forever.pvp.horde.us"
+LEDGER_PATH = "v1/pricetable/forever.pvp.horde.us"
+
+
+def test_conditional_get_sends_if_none_match_and_gets_304_for_an_unchanged_table():
+    clock, transport = FakeClock(), FakeTransport()
+    transport.serve_etag(LEDGER_PATH, b"AHL1|x", '"abc"', {"cache-control": "max-age=60"})
+    client = client_with(transport, clock)
+    first = client.get_conditional(LEDGER)
+    assert (first.status, first.body, first.headers["etag"]) == (200, b"AHL1|x", '"abc"')   # body left undecoded
+    assert "If-None-Match" not in transport.requests[0].headers
+    second = client.get_conditional(LEDGER, etag='"abc"')
+    assert (second.status, second.body) == (304, b"")
+    assert transport.requests[1].headers["If-None-Match"] == '"abc"'
+    assert client.get_conditional(LEDGER, etag='"old"').status == 200      # a different ETag gets the new body
+    assert all("Authorization" not in r.headers for r in transport.requests)
+
+
+def test_conditional_get_retries_like_get_json_and_raises_the_same_errors():
+    clock, transport = FakeClock(), FakeTransport()
+    transport.serve_bytes(LEDGER_PATH, b"ok")
+    transport.fail(LEDGER_PATH, 503, times=2)
+    transport.network_error(LEDGER_PATH, times=1)
+    assert client_with(transport, clock).get_conditional(LEDGER).body == b"ok"
+    assert transport.count(LEDGER_PATH) == 4        # two 503s, one timeout, then the body
+    with pytest.raises(NotFound):
+        client_with(transport, clock).get_conditional("https://api.ahledger.com/v1/pricetable/none")
+    transport.fail(LEDGER_PATH, 429, times=1, headers={"retry-after": "7"})
+    assert client_with(transport, clock).get_conditional(LEDGER).status == 200
+    transport.fail(LEDGER_PATH, 418)
+    with pytest.raises(ApiError):
+        client_with(transport, clock).get_conditional(LEDGER)
+
+
+def test_a_304_is_an_error_for_get_json():
+    transport = FakeTransport()
+    transport.fail("api/v1/me", 304)
+    with pytest.raises(ApiError):
+        client_with(transport, FakeClock()).get_json(f"{API}/me")
+
+
+def test_cache_max_age_reads_the_directive_or_returns_none():
+    assert cache_max_age_s({"cache-control": "public, max-age=60"}) == 60
+    assert cache_max_age_s({"cache-control": "MAX-AGE=300, must-revalidate"}) == 300
+    assert cache_max_age_s({"cache-control": 'max-age="5"'}) == 5
+    assert cache_max_age_s({"cache-control": "no-store"}) is None
+    assert cache_max_age_s({"cache-control": "max-age=soon"}) is None
+    assert cache_max_age_s({}) is None
+
+
+def test_ahledger_fixture_routes_are_distinct_and_the_table_has_an_etag():
+    transport = FakeTransport.serve_ahledger_fixtures()
+    client = client_with(transport, FakeClock())
+    base = "https://api.ahledger.com/v1"
+    assert isinstance(client.get_json(f"{base}/markets", auth=False), list)
+    seven = client.get_json(f"{base}/prices/forever.pvp.horde.us/2589?range=7d", auth=False)
+    ninety = client.get_json(f"{base}/prices/forever.pvp.horde.us/2589?range=90d", auth=False)
+    assert (seven["range"], len(seven["series"])) == ("7d", 168) and (ninety["range"], len(ninety["series"])) == ("90d", 90)
+    table = client.get_conditional(f"{base}/pricetable/forever.pvp.horde.us")
+    assert table.body.startswith(b"AHL1|forever/pvp/horde/us|1792585200|") and cache_max_age_s(table.headers) == 60
+    assert client.get_conditional(f"{base}/pricetable/forever.pvp.horde.us", table.headers["etag"]).status == 304

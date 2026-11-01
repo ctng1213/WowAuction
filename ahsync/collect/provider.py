@@ -18,6 +18,11 @@ from ahsync.engine.volume import Auction
 BONUS_SUFFIXES = Path(__file__).resolve().parents[1] / "data" / "bonus_suffixes.json"
 SOURCE_NAME = re.compile(r"^[a-z][a-z0-9_]{0,31}$")    # also a folder name in the snapshot store
 RESERVED_SOURCES = ("local", "books", "mail", "ahf")  # your scans, derived volume rows, AHF's own path
+# What each price source's rows are, the most granular first (SPEC §2.2 one-close rule): complete order books, then
+# per-key hourly observations, then per-item aggregate tables. Analysis never names a source; it asks for the kind.
+KIND_ORDER = ("book", "hourly", "table")
+SOURCE_KINDS = {"local": "book", "books": "book", "ahf": "hourly", "ahledger_h1": "hourly", "ahledger": "table"}
+SOURCE_PROVIDER = {"ahledger_h1": "ahledger"}   # a source the config ranks under its provider's name (SRC9)
 
 
 @dataclass(frozen=True)
@@ -78,3 +83,30 @@ def snapshot_problems(obs: SnapshotObservation) -> list[str]:
     if any(a.qty < 1 or a.price < 1 or a.band not in (1, 2, 3, 4) or a.key == 0 for a in obs.auctions):
         problems.append("an auction has no units, no price, an unknown time-left band or no item")
     return problems
+
+
+def source_kind(src: str) -> str:
+    """The kind of a price source's rows (SPEC §2.2); a source not in SOURCE_KINDS counts as hourly.
+
+    Args:
+        src: The `src` of a candle or current row.
+
+    Returns:
+        "book", "hourly" or "table".
+    """
+    return SOURCE_KINDS.get(src, "hourly")
+
+
+def source_precedence(src: str, ranked: dict[str, int]) -> tuple[int, bool, int, str]:
+    """The sort key that picks one close per item and time: kind, then your scans, then the rank, then the name.
+
+    Args:
+        src: The `src` of a candle row.
+        ranked: Configured source -> rank, 0 most trusted; a source ranks under its provider (SOURCE_PROVIDER),
+            and an unranked one comes after every ranked one.
+
+    Returns:
+        A tuple; the smallest wins (SPEC §2.2, SRC3, SRC9).
+    """
+    return (KIND_ORDER.index(source_kind(src)), src != "local",
+            ranked.get(SOURCE_PROVIDER.get(src, src), len(ranked)), src)

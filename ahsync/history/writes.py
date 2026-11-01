@@ -75,3 +75,63 @@ class HistoryWrites:
         return [d for (d,) in self.conn.execute(
             "SELECT DISTINCT day FROM volume_d1 WHERE market = ? AND src = ? AND COALESCE(method, 1) < ? ORDER BY day",
             (market, src, method))]
+
+    def upsert_ahledger_rows(self, market: str, updated_s: int, rows: list[tuple]) -> None:
+        """Store AHledger's price table aggregates as they came; read by nothing (SPEC §2.3, §3.2, SRC11).
+
+        Args:
+            market: Market id.
+            updated_s: The table's `updated`, Unix seconds.
+            rows: (key, median, m7, m30, lo, hi, per_day_x10), copper and tenths a day, None for an empty field. A
+                newer table replaces an item's row; an item missing from it keeps its last row.
+        """
+        self.conn.executemany(
+            "INSERT OR REPLACE INTO ahledger_rows(market, key, updated, median, m7, m30, lo, hi, per_day_x10) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [(market, row[0], updated_s, *row[1:]) for row in rows])
+
+    def ahledger_item_count(self, market: str, updated_s: int) -> int:
+        """How many items a stored AHledger table holds (S18's "2,207 items").
+
+        Args:
+            market: Market id.
+            updated_s: The table's `updated`, Unix seconds.
+
+        Returns:
+            Rows of that table for the market.
+        """
+        return self.conn.execute("SELECT COUNT(*) FROM ahledger_rows WHERE market = ? AND updated = ?",
+                                 (market, updated_s)).fetchone()[0]
+
+    def source_state(self, market: str, src: str) -> tuple[str | None, int | None, int | None, str | None]:
+        """A remote source's state for a market (SPEC §3.2 source_state).
+
+        Args:
+            market: Market id.
+            src: The remote source, e.g. "ahledger".
+
+        Returns:
+            (etag, its own `updated` ms, last fetch ms, backfill checkpoint JSON), each None when unknown.
+        """
+        row = self.conn.execute("SELECT etag, updated_ms, fetched_ms, checkpoint FROM source_state "
+                                "WHERE market = ? AND src = ?", (market, src)).fetchone()
+        return tuple(row) if row else (None, None, None, None)
+
+    def set_source_state(self, market: str, src: str, **fields: object) -> None:
+        """Update some of a remote source's state, keeping the rest (a failure never clears it, SPEC §3.2).
+
+        Args:
+            market: Market id.
+            src: The remote source.
+            **fields: Any of etag, updated_ms, fetched_ms, checkpoint; None stores NULL.
+
+        Raises:
+            ValueError: An unknown field.
+        """
+        unknown = set(fields) - {"etag", "updated_ms", "fetched_ms", "checkpoint"}
+        if unknown:
+            raise ValueError(f"not a source_state field: {sorted(unknown)}")
+        self.conn.execute("INSERT OR IGNORE INTO source_state(market, src) VALUES (?, ?)", (market, src))
+        names = sorted(fields)
+        if names:
+            self.conn.execute(f"UPDATE source_state SET {', '.join(f'{n} = ?' for n in names)} "
+                              "WHERE market = ? AND src = ?", (*(fields[n] for n in names), market, src))

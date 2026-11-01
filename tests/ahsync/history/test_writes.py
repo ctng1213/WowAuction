@@ -46,3 +46,19 @@ def test_an_hour_range_of_sales_is_replaced_whole(db):
         db.replace_sales_hours(M, 0, 5, {1: {0: 6.0, 20: 9.0}})          # 20 is outside the range
     assert db.conn.execute("SELECT key, t, sold_per_hour FROM sales_h1 ORDER BY key, t").fetchall() == [
         (1, 0, 6.0), (1, 10, 2.0)]
+
+
+def test_ahledger_rows_replace_per_item_and_source_state_updates_only_the_given_fields(db):
+    with db.transaction():
+        db.upsert_ahledger_rows("m", 100, [(1, 50, 52, 49, 40, 60, 3600), (2, None, None, None, None, None, None)])
+        db.upsert_ahledger_rows("m", 200, [(1, 51, None, None, None, None, 4)])
+    assert db.conn.execute("SELECT * FROM ahledger_rows ORDER BY key").fetchall() == [
+        ("m", 1, 200, 51, None, None, None, None, 4), ("m", 2, 100, None, None, None, None, None, None)]
+    assert db.source_state("m", "ahledger") == (None, None, None, None)
+    with db.transaction():
+        db.set_source_state("m", "ahledger", etag='"t1"', updated_ms=5)
+        db.set_source_state("m", "ahledger", fetched_ms=7)
+        db.set_source_state("m", "ahledger")
+    assert db.source_state("m", "ahledger") == ('"t1"', 5, 7, None)
+    with pytest.raises(ValueError):
+        db.set_source_state("m", "ahledger", color="red")

@@ -1,0 +1,18 @@
+[
+ {
+  "faction": "alliance",
+  "game": "forever",
+  "id": "forever.pvp.alliance.us",
+  "label": "WoW: Forever PvP Alliance (US)",
+  "region": "us",
+  "ruleset": "pvp"
+ },
+ {
+  "faction": "horde",
+  "game": "forever",
+  "id": "forever.pvp.horde.us",
+  "label": "WoW: Forever PvP Horde (US)",
+  "region": "us",
+  "ruleset": "pvp"
+ }
+]

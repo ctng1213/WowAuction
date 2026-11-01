@@ -1,6 +1,11 @@
 """Record trimmed, redacted auctionhouse.fyi responses as test templates (SPEC §8.1).
 
-Usage: python tools/record_fixtures.py [--market forever.pvp.horde.us]
+Usage: python tools/record_fixtures.py [--market forever.pvp.horde.us] [--ahledger]
+
+--ahledger records AHledger's public API instead (keyless, SPEC §2.3) into
+tests/fixtures/ahledger/<market>/: markets.json, pricetable.txt (trimmed to the
+AHF fixture items, the header's row count rewritten) and the 7d and 90d price
+history of Linen Cloth (2589).
 
 Fetches /me, /config, /files, the snapshot, public and capability (Premium)
 hour and day candles, the newest order book, volume and /items. Each is trimmed
@@ -25,6 +30,13 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from ahsync.clock import SystemClock                                         # noqa: E402  after the path fix-up
+from ahsync.collect.ahledger import PriceRow, parse_pricetable               # noqa: E402
+from ahsync.collect.client import ApiClient, Transport, UrllibTransport      # noqa: E402
+
 API = "https://auctionhouse.fyi/api/v1"
 CDN = "https://cdn.auctionhouse.fyi/"
 HOUR_MS = 3_600_000
@@ -39,6 +51,12 @@ NAMED_ITEMS = {
 }
 TOP_BY_BOOK = 10       # plus the most-listed items in the newest book, for realism
 SUFFIX_VARIANTS = 3    # plus a few random-suffix keys (item + 2^31 × v)
+
+AHLEDGER_API = "https://api.ahledger.com"
+AHLEDGER_PER_MINUTE = 300       # SPEC §2.3, no key
+LEDGER_MIN_ROWS = 10            # fewer fixture items than this in the table: top up by ascending key
+LEDGER_TOP_UP_TO = 30
+LEDGER_HISTORY_ITEM = 2589      # Linen Cloth, for the price-history fixtures
 
 
 class Recorder:
@@ -332,11 +350,119 @@ def write(market: str, fixtures: dict[str, tuple[str, object]], recorder: Record
     return folder
 
 
+def ahf_fixture_keys(market: str, folder: Path | None = None) -> set[int]:
+    """Base item ids of the AHF fixtures for a market (suffix keys folded onto their item).
+
+    Args:
+        market: Market id, the fixture folder name.
+        folder: tests/fixtures/ahf; default under ROOT.
+
+    Returns:
+        The base ids found in the recorded snapshot, or an empty set when there is none.
+    """
+    path = (folder or ROOT / "tests" / "fixtures" / "ahf") / market / "snapshot.json"
+    if not path.exists():
+        return set()
+    rows = json.loads(path.read_text(encoding="utf-8"))["rows"]
+    return {row[0] % SUFFIX_BASE for row in rows}
+
+
+def render_pricetable(market: str, updated_s: int, rows: list[PriceRow]) -> str:
+    """Write a price table in AHledger's format, the header's count being the rows given.
+
+    Args:
+        market: AHSync's dotted market id.
+        updated_s: Update time in Unix seconds.
+        rows: The rows to write, in the order to write them.
+
+    Returns:
+        `AHL1|market/with/slashes|updated|count`, a newline, the rows joined by `;`, a newline.
+    """
+    def field(value: int | None) -> str:
+        """An empty string for unknown, else the number."""
+        return "" if value is None else str(value)
+
+    body = ";".join(":".join([str(r.key), *(field(v) for v in (r.median, r.min_buyout, r.qty, r.m7, r.m30,
+                                                                  r.lo, r.hi, r.per_day_x10))]) for r in rows)
+    return f"AHL1|{market.replace('.', '/')}|{updated_s}|{len(rows)}\n{body}\n"
+
+
+def trim_pricetable(body: bytes, market: str, wanted: set[int]) -> str:
+    """Trim a price table to the fixture items (SPEC §2.3, S20).
+
+    Args:
+        body: The response body.
+        market: AHSync's dotted market id.
+        wanted: Item ids to keep (those the AHF fixtures use).
+
+    Returns:
+        The table text with the wanted rows that exist; when that leaves fewer than
+        LEDGER_MIN_ROWS, the lowest keys are added up to LEDGER_TOP_UP_TO rows.
+        The header's count is rewritten to the kept count.
+    """
+    table = parse_pricetable(body, market)
+    kept = [r for r in table.rows if r.key in wanted]
+    if len(kept) < LEDGER_MIN_ROWS:
+        extra = [r for r in table.rows if r.key not in wanted][:LEDGER_TOP_UP_TO - len(kept)]
+        kept = sorted(kept + extra, key=lambda r: r.key)
+    return render_pricetable(market, table.updated_s, kept)
+
+
+def json_text(data: object) -> str:
+    """Serialize a fixture deterministically: sorted keys, indent 1, newline at the end.
+
+    Args:
+        data: JSON value.
+
+    Returns:
+        The text.
+    """
+    return json.dumps(data, indent=1, sort_keys=True) + "\n"
+
+
+def record_ahledger(market: str, transport: Transport, out_folder: Path | None = None,
+                    ahf_folder: Path | None = None) -> Path:
+    """Record AHledger's markets, price table and two price histories, keyless (SPEC §2.3, S20).
+
+    Args:
+        market: AHSync's dotted market id.
+        transport: Performs the HTTP requests (UrllibTransport; FakeTransport in tests). No
+            Authorization header is ever sent.
+        out_folder: Where to write; default tests/fixtures/ahledger/<market> under ROOT.
+        ahf_folder: tests/fixtures/ahf, to learn which items to keep; default under ROOT.
+
+    Returns:
+        The output folder.
+
+    Raises:
+        ahsync.collect.client.ApiError: A request failed for good.
+        ahsync.collect.ahledger.FormatChanged: The price table header is wrong.
+    """
+    client = ApiClient(transport, SystemClock(), "", AHLEDGER_API, AHLEDGER_PER_MINUTE)
+    folder = out_folder or ROOT / "tests" / "fixtures" / "ahledger" / market
+    markets = client.get_json(f"{AHLEDGER_API}/v1/markets", auth=False)
+    table = client.get_conditional(f"{AHLEDGER_API}/v1/pricetable/{market}")
+    pricetable = trim_pricetable(table.body, market, ahf_fixture_keys(market, ahf_folder))
+    history = {rng: client.get_json(f"{AHLEDGER_API}/v1/prices/{market}/{LEDGER_HISTORY_ITEM}?range={rng}",
+                                    auth=False) for rng in ("7d", "90d")}
+    folder.mkdir(parents=True, exist_ok=True)
+    files = {"markets.json": json_text(markets), "pricetable.txt": pricetable,
+             **{f"prices_{LEDGER_HISTORY_ITEM}_{rng}.json": json_text(data) for rng, data in history.items()}}
+    for name, text in files.items():
+        (folder / name).write_text(text, encoding="utf-8", newline="\n")
+    return folder
+
+
 def main() -> None:
     """Parse arguments, record one market and report what was written (never the key)."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--market", default="forever.pvp.horde.us")
+    parser.add_argument("--ahledger", action="store_true", help="record AHledger (keyless) instead of AHF")
     args = parser.parse_args()
+    if args.ahledger:
+        folder = record_ahledger(args.market, UrllibTransport())
+        print(f"record_fixtures: AHledger -> {folder.relative_to(ROOT).as_posix()} (without key)")
+        return
     recorder = Recorder(load_key())
     fixtures = record(args.market, recorder)
     folder = write(args.market, fixtures, recorder)

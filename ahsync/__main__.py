@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import IO
 
 from ahsync.collect.ahf import AhfApi
+from ahsync.collect.ahledger import BASE as AHLEDGER_BASE, AhledgerSource
 from ahsync.collect.client import ApiClient, RedactingFilter, Redactor, Transport, UrllibTransport
 from ahsync.clock import Clock, SystemClock
 from ahsync.config import Config, ConfigError, load_config, market_sources, session_settings
@@ -197,7 +198,7 @@ def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path,
             from here (SEC11). None: `config` throughout.
 
     Returns:
-        Hooks with store_hour, full_refresh, refresh_requested, daily, weekly and
+        Hooks with store_hour, ahledger_poll (only when ctx.ahledger is set), full_refresh, refresh_requested, daily, weekly and
         savedvars_changed set. The live table stays off until its format is recorded (SPEC §5.2).
     """
     def current() -> Config:
@@ -215,6 +216,21 @@ def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path,
             return
         ctx.caps = caps
         sync_markets(ctx, config.markets)
+
+    def ahledger_poll() -> None:
+        """Every 30 min: poll AHledger's price table of each market that has an AHledger address (SRC10).
+
+        A failure of one market is logged and the others still run; the scheduler and the AHF sync are never
+        affected (FM43). The dirty item keys wait for the next full refresh: no job updates single items yet.
+        """
+        for market in config.markets:
+            address = market_sources(current(), market).addresses["ahledger"]
+            if not address or ctx.ahledger is None:
+                continue
+            try:
+                ctx.ahledger.poll(market, address)
+            except Exception:
+                logging.getLogger("ahsync").exception("AHledger poll of %s failed; tried again in 30 minutes", market)
 
     def daily() -> None:
         """Daily prune and backup (SPEC §3.1)."""
@@ -245,6 +261,7 @@ def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path,
         export_plan(ctx.db, current(), ctx.clock.now_ms(), ctx.clock.sleep)
 
     return SchedulerHooks(store_hour=store_hour, daily=daily, weekly=ctx.db.vacuum,
+                          ahledger_poll=ahledger_poll if ctx.ahledger is not None else None,
                           savedvars_changed=savedvars_changed,
                           full_refresh=lambda: full_refresh(ctx.db, ctx.clock, current()),
                           status_pass=hourly_status,
@@ -428,7 +445,9 @@ def _run_configured(data_dir: Path, config: Config, runtime: Runtime, config_pat
         live = LiveConfig(config)
         if runtime.serve_dashboard:
             dashboard = serve_dashboard(data_dir, config, clock, refresh_requests, runtime.out, config_path, live.replace)
-        ctx = SyncContext(api, db, clock, result.caps, config.retention_days, addresses)
+        ahledger = AhledgerSource(ApiClient(runtime.transport, clock, "", api_base=AHLEDGER_BASE, per_minute=300,
+                                            redactor=redactor), db, clock)          # keyless, its own limit (SRC10)
+        ctx = SyncContext(api, db, clock, result.caps, config.retention_days, addresses, ahledger)
         scheduler = Scheduler(clock, build_hooks(ctx, config, backup_dir, refresh_requests.take, live), watcher,
                               config.daily_refresh_time, config.live_refresh_minutes)
         scheduler.run(runtime.should_stop)

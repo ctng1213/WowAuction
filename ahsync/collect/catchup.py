@@ -30,6 +30,7 @@ import time
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
+from ahsync.collect.ahledger import AhledgerSource
 from ahsync.collect.ahf import FEATURE_BOOKS, FEATURE_DEPTH, FEATURE_LIVE, AhfApi, Capabilities, FileIndex, FormatChanged
 from ahsync.collect.client import ApiError, FeatureUnavailable, RateLimited, RetriesExhausted
 from ahsync.collect.local_scans import book_days, recompute_book_volume, recompute_sales_hours
@@ -92,6 +93,7 @@ class SyncContext:
     caps: Capabilities
     retention_days: int = 90
     addresses: Mapping[str, str] = field(default_factory=dict)   # market id -> its id at AHF; "" = no AHF (SRC1)
+    ahledger: AhledgerSource | None = None                       # the keyless AHledger poller; None = never polled (SRC10)
 
 
 def format_day(ms: int) -> str:
@@ -337,6 +339,8 @@ class MarketSync:
             return True
         with self.db.transaction():
             self.db.upsert_candles("candles_h1", self.market, rows, "ahf")
+            if rows:                           # an empty hour file observed nothing (SRC16, D93)
+                self.db.add_observed_hours(self.market, "ahf", [hour])
             if advance:
                 self.db.update_sync_state(self.market, last_hour=hour)
             self.db.clear_fetch_failure(self.market, hour)

@@ -17,7 +17,9 @@ from ahsync.engine.item_key import KEY_SUFFIX_FACTOR, variant_name
 from ahsync.engine.volume import supply_to_volume
 
 HIGH_RISK_PCT = 25.0        # config high_risk_pct (SPEC §3.4)
-SOURCE_LABELS = {"ahf": "AHF"}
+SOURCE_LABELS = {"ahf": "AHF", "ahledger": "AHledger", "ahledger_h1": "AHledger"}
+# Where a source credits its data: AHledger's terms ask for a link wherever its data is shown (SPEC §2.3, S19).
+SOURCE_URLS = {"ahledger": "https://ahledger.com", "ahledger_h1": "https://ahledger.com"}
 # The sales label by the main volume source's kind (SPEC §3.5, D57); "ids" shows the source's own name.
 VOLUME_KIND_LABEL = {"groups": "est.", "own": "own"}
 # Intelligence written before kinds were stored (INTEL_SCHEMA_VERSION < 7) is labelled by source name.
@@ -34,6 +36,19 @@ def source_label(src: str) -> str:
         "AHF" for AuctionHouseFYI, else the name as configured.
     """
     return SOURCE_LABELS.get(src, src)
+
+
+def source_credit(src: str) -> dict | None:
+    """The top bar's credit for the primary source (S19): "Prices from AHledger", linked.
+
+    Args:
+        src: The market's primary remote source.
+
+    Returns:
+        {"text", "url"} for a source that must be credited with a link; None for the others (AHF).
+    """
+    url = SOURCE_URLS.get(src)
+    return None if url is None else {"text": f"Prices from {source_label(src)}", "url": url}
 
 
 def volume_label(volume_source: str | None, volume_kind: str | None) -> str:
@@ -450,6 +465,21 @@ def age_text(age_ms: int | None) -> str:
     if minutes < 60:
         return f"{minutes} min"
     return f"{minutes // 60} h" if minutes < 24 * 60 else f"{minutes // (24 * 60)} d"
+
+
+def table_age_text(age_ms: int) -> str:
+    """A table's age (S18): minutes under an hour, hours under 48 h, whole days from 48 h.
+
+    Args:
+        age_ms: Age in ms, at least 0.
+
+    Returns:
+        "40 min", "26 h" or "2 d"; "now" under a minute.
+    """
+    minutes = age_ms // 60_000
+    if minutes < 48 * 60:
+        return age_text(age_ms) if minutes < 60 else f"{minutes // 60} h"
+    return f"{minutes // (24 * 60)} d"
 
 
 def risk_tenths(spend_copper: float, total_gold_copper: int) -> int:

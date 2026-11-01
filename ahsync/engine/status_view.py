@@ -15,7 +15,7 @@ from ahsync.engine.history_view import ratio_text
 from ahsync.engine.sell_record import Calibration
 from ahsync.engine.tracking import ProfitSums
 from ahsync.engine.volume import Backtest
-from ahsync.engine.views import age_text, round_half_up, signed_money, source_label
+from ahsync.engine.views import SOURCE_URLS, age_text, round_half_up, signed_money, source_label, table_age_text
 
 HOUR_MS = 3_600_000
 DAY_MS = 86_400_000
@@ -49,6 +49,9 @@ class MarketFacts:
     primary_books_7d: int         # the primary source's order books in the last 7 days
     backtests: tuple[tuple[str, Backtest], ...] = ()   # (confirmed source, estimates against it), by source (K4)
     primary: str = "ahf"          # the market's primary remote source (config [sources], SRC2)
+    ahledger_on: bool = False     # the market polls AHledger (its address is not ""): the "AHledger table" line shows (S18)
+    ahledger_updated_ms: int | None = None   # when AHledger's table was last updated; None before any table
+    ahledger_items: int = 0       # rows in that table
 
 
 @dataclass(frozen=True)
@@ -87,6 +90,19 @@ def when(ms: int, offset_ms: int) -> str:
     """
     t = time.gmtime((ms + offset_ms) // 1000)
     return f"{time.strftime('%a', t)} {t.tm_mday} {time.strftime('%b %H:%M', t)}"
+
+
+def weekday_time(ms: int, offset_ms: int) -> str:
+    """A moment as weekday and local time, e.g. "Wed 14:00" (FM43).
+
+    Args:
+        ms: UTC ms.
+        offset_ms: Local time minus UTC, ms.
+
+    Returns:
+        The text.
+    """
+    return time.strftime("%a %H:%M", time.gmtime((ms + offset_ms) // 1000))
 
 
 def day(ms: int, offset_ms: int) -> str:
@@ -248,6 +264,10 @@ def message(row: StatusRow, offset_ms: int) -> tuple[str, str]:
                                      f"pick the value again."),
         "gathering_catalog": ("Gathering catalog", str(d.get("text", ""))),          # SPEC §3.4E.1, GA2
         "gathering_unplaced": ("Gathered, not in the catalog", str(d.get("text", ""))),   # SPEC §3.5 Status, GA34
+        "ahledger_unreachable": ("AHledger unreachable", f"AHledger: unreachable since {weekday_time(d.get('since_ms', row.at_ms), offset_ms)} "
+                                                         f"({d.get('tries', 0)} tries)"),
+        "ahledger_format": ("AHledger format changed", f"AHledger format changed: {d.get('endpoint', '?')}"),
+        "ahledger_no_market": ("AHledger has no market", f"AHledger has no market {market}"),
         "restored": ("Database restored", f"The database was damaged and was restored from "
                                           f"{d.get('backup') or 'nothing (started empty)'}."),
     }
@@ -318,10 +338,24 @@ def alerts(rows: Sequence[StatusRow], facts: StatusFacts, now_ms: int, offset_ms
     for m in facts.markets:
         stale = _stale(m, now_ms, offset_ms)
         if stale is not None:
-            items.append((StatusRow(f"stale:{m.market}", "warn", "stale", {}, now_ms), *stale))
+            items.append((StatusRow(f"stale:{m.market}", "warn", "stale", {"source": m.primary}, now_ms), *stale))
     items += [(r, *message(r, offset_ms)) for r in rows if r.kind == "premium_until" and r.level == "warn"]
     items.sort(key=lambda x: (LEVEL_ORDER.get(x[0].level, 3), x[1], x[0].topic))
-    return [{"level": r.level, "title": title, "text": text} for r, title, text in items]
+    return [{"level": r.level, "title": title, "text": text, **_alert_url(r)} for r, title, text in items]
+
+
+def _alert_url(row: StatusRow) -> dict:
+    """The credit link an alert carries when it is about AHledger (S19).
+
+    Args:
+        row: The alert's line.
+
+    Returns:
+        {"url": ...} for AHledger's lines and for the stale-data alert of an AHledger primary; {} otherwise.
+    """
+    source = row.data.get("source") if row.kind == "stale" else "ahledger" if row.kind.startswith("ahledger_") else None
+    url = SOURCE_URLS.get(source or "")
+    return {} if url is None else {"url": url}
 
 
 def _market_card(m: MarketFacts, now_ms: int, offset_ms: int) -> dict:
@@ -350,8 +384,29 @@ def _market_card(m: MarketFacts, now_ms: int, offset_ms: int) -> dict:
         ["Hourly history stored", history, ""],
         ["Your scans (7 d)", str(m.local_scans_7d), ""],
         [f"{source_label(m.primary)} order books (7 d)", str(m.primary_books_7d), "" if m.primary_books_7d else "muted"],
+        *_ahledger_line(m, now_ms),
         *_backtest_lines(m.backtests),
     ]}
+
+
+def _ahledger_line(m: MarketFacts, now_ms: int) -> list[list[str]]:
+    """The market card's "AHledger table" line (S18): the table's age and size, linked to AHledger.
+
+    Args:
+        m: The market.
+        now_ms: Now.
+
+    Returns:
+        [] when the market doesn't poll AHledger; else one line [label, value, class, url]: "26 h old · 2,207 items"
+        (amber over 24 h), or "not fetched yet" (muted) before any table.
+    """
+    if not m.ahledger_on:
+        return []
+    url = SOURCE_URLS["ahledger"]
+    if m.ahledger_updated_ms is None:
+        return [["AHledger table", "not fetched yet", "muted", url]]
+    age = max(0, now_ms - m.ahledger_updated_ms)
+    return [["AHledger table", f"{table_age_text(age)} old · {m.ahledger_items:,} items", "amber" if age > DAY_MS else "", url]]
 
 
 def _backtest_lines(backtests: tuple[tuple[str, Backtest], ...]) -> list[list[str]]:

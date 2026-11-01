@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from ahsync.config import Config
+from ahsync.config import Config, MarketSources
 from ahsync.engine.views import (COLUMN_HELP, MARKET_COLUMNS, CraftInput, DisenchantInput, craft_money, craft_row,
                                  disenchant_row, market_activity)
 from ahsync.db.sqlite import Database
@@ -19,6 +19,7 @@ from ahsync.web.server import (INDEX_HTML, MAX_BODY_BYTES, PAGES, TOKEN_HEADER, 
 from tests.support.fake_clock import FakeClock
 
 M, OTHER = "forever.pvp.horde.us", "forever.pvp.alliance.us"
+AHF_PRIMARY = {M: MarketSources(primary="ahf"), OTHER: MarketSources(primary="ahf")}   # these tests predate M19
 KEY = "ak_live_SECRET_9f8e7d6c5b4a"
 BUILT = 1_792_150_000_000
 
@@ -97,7 +98,7 @@ def refreshes():
 @pytest.fixture
 def app(db, refreshes):
     """An app on port 8765, called directly (no socket)."""
-    config = Config(markets=(M, OTHER), api_key=KEY)
+    config = Config(markets=(M, OTHER), api_key=KEY, sources=AHF_PRIMARY)
     return DashboardApp(db, config, FakeClock(), refreshes, token="tok-123", port=8765)
 
 
@@ -116,7 +117,7 @@ def live(tmp_path, refreshes):
     """A real server on an ephemeral 127.0.0.1 port, with its own thread-safe connection."""
     Database.open(tmp_path / "ahsync.db", FakeClock().now_ms(), None).close()
     server_db = open_server_db(tmp_path / "ahsync.db")
-    config = Config(markets=(M, OTHER), api_key=KEY)
+    config = Config(markets=(M, OTHER), api_key=KEY, sources=AHF_PRIMARY)
     app = DashboardApp(server_db, config, FakeClock(), refreshes, token=new_token(), port=0)
     server = start_dashboard(app, 0)
     yield app
@@ -311,7 +312,8 @@ def test_views_serve_the_stored_payload_as_is(app, db):
     publish(db, "disenchant", M, rows)
     reply = app.handle("GET", f"/api/views/disenchant?market={M}", GOOD)
     assert reply.status == 200
-    assert json.loads(reply.body) == {"built": BUILT, "prices_newer": False, "data": json.loads(json.dumps(rows))}
+    assert json.loads(reply.body) == {"built": BUILT, "prices_newer": False, "credit": None,
+                                         "data": json.loads(json.dumps(rows))}
     row = json.loads(reply.body)["data"]["rows"][0]
     assert row["chance"] == "92%" and row["dot"] == "high" and row["sort"]["profit"] == 612
 
@@ -881,3 +883,27 @@ def test_D75_D71_the_inventory_filter_picks_an_engine_view_and_the_disenchant_no
     disenchant = page[page.index("  disenchant: {"):page.index("  craft: {")]
     assert "notice: d => d.notice ?" in disenchant and "esc(d.notice.title)" in disenchant
     assert "filterBar(id, rows) + (spec.notice ? spec.notice(data) : '') + body" in page
+
+
+def test_the_top_bar_credit_follows_the_primary_source_and_the_page_only_draws_it(db, refreshes):
+    from ahsync.intel.contract import MarketIntelligence
+    with db.transaction():
+        db.stage_intel(MarketIntelligence(M, BUILT, BUILT, 1, {}))
+        db.stage_view("today", M, {"rows": []}, BUILT)
+    db.publish_refresh([M])
+    db.upsert_current(M, "ahledger", [(2589, 44, 20, BUILT + 3_600_000)])               # the table updated after the numbers
+
+    def reply(sources: dict) -> dict:
+        """The Today response of an app whose market has these sources."""
+        config = Config(markets=(M,), sources=sources)
+        app = DashboardApp(db, config, FakeClock(), refreshes, token="tok-123", port=8765)
+        return json.loads(app.handle("GET", f"/api/views/today?market={M}", GOOD).body)
+
+    default = reply({})                                                                 # the primary is AHledger
+    assert default["prices_newer"] is True
+    assert default["credit"] == {"text": "Prices from AHledger", "url": "https://ahledger.com"}
+    ahf = reply({M: MarketSources(primary="ahf")})
+    assert ahf["credit"] is None and ahf["prices_newer"] is False                       # no AHledger text with "ahf"
+    page = INDEX_HTML.read_text(encoding="utf-8")
+    draw = page[page.index("function setBuilt"):page.index("// ---------- table")]
+    assert "credit.text" in draw and "credit.url" in draw and "Prices from" not in draw  # the text is the engine's

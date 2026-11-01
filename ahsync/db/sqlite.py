@@ -27,7 +27,7 @@ from ahsync.state.gathering import GatheringStore
 from ahsync.state.positions import PositionStore
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 23
+SCHEMA_VERSION = 24
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
@@ -218,6 +218,27 @@ MIGRATIONS: dict[int, str] = {
             PRIMARY KEY(char_id, key)
         )
     """,
+    # 24: AHledger and data coverage (SPEC §2.3, §3.2, M19): its price table's side rows, each remote source's state,
+    # and the hours each source observed completely, filled from what is still stored: the complete local scans
+    # (30 days) and the hours of AHF hour closes. Older local hours are not recoverable and count for nobody.
+    24: """
+        CREATE TABLE IF NOT EXISTS ahledger_rows(
+            market TEXT NOT NULL, key INTEGER NOT NULL, updated INTEGER NOT NULL, median INTEGER, m7 INTEGER,
+            m30 INTEGER, lo INTEGER, hi INTEGER, per_day_x10 INTEGER, PRIMARY KEY(market, key)
+        ) WITHOUT ROWID;
+        CREATE TABLE IF NOT EXISTS source_state(
+            market TEXT NOT NULL, src TEXT NOT NULL, etag TEXT, updated_ms INTEGER, fetched_ms INTEGER,
+            checkpoint TEXT, PRIMARY KEY(market, src)
+        );
+        CREATE TABLE IF NOT EXISTS observed_hours(
+            market TEXT NOT NULL, src TEXT NOT NULL, hour INTEGER NOT NULL, PRIMARY KEY(market, src, hour)
+        ) WITHOUT ROWID;
+        INSERT OR IGNORE INTO observed_hours(market, src, hour)
+            SELECT DISTINCT market, 'local', at / 3600000 FROM scans
+            WHERE src = 'local' AND kind = 'full' AND coverage >= 1;
+        INSERT OR IGNORE INTO observed_hours(market, src, hour)
+            SELECT DISTINCT market, 'ahf', t / 3600000 FROM candles_h1 WHERE src = 'ahf'
+    """,
     # 14: sell records, stored for the hourly status pass (M8).
     14: """
         CREATE TABLE IF NOT EXISTS sell_records(
@@ -237,7 +258,7 @@ PRUNABLE = {
     "candles_h1": "t", "candles_d1": "t", "sales_h1": "t", "volume_d1": "day", "volume_cover": "day", "posts": "at", "purchases": "at",
     "crafts": "at", "disenchants": "at", "auction_mail": "at", "payouts": "at", "untracked": "at", "mail_sent": "at", "skips": "at", "actions": "run_at",
     "gather_events": "at",
-    "fetch_failures": "hour",
+    "fetch_failures": "hour", "observed_hours": "hour", "ahledger_rows": "updated",
 }
 
 
@@ -693,6 +714,18 @@ class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, JournalRea
                 "open = excluded.open, high = excluded.high, low = excluded.low, "
                 "close = excluded.close, qty = excluded.qty", data)
         return len(data)
+
+    def add_observed_hours(self, market: str, src: str, hours: Iterable[int]) -> None:
+        """Record hours a source observed completely, for the Data coverage card (SPEC §3.2, §3.5, SRC16).
+
+        Args:
+            market: Market id.
+            src: The source ("local", "ahf", "ahledger", "ahledger_h1", or a provider's name).
+            hours: UTC hour numbers, floor(ms / 3600000). Already recorded ones are left as they are.
+        """
+        with self.transaction():
+            self.conn.executemany("INSERT OR IGNORE INTO observed_hours(market, src, hour) VALUES (?, ?, ?)",
+                                  [(market, src, hour) for hour in sorted(set(hours))])
 
     def replace_current(self, market: str, src: str, rows: Iterable[tuple[int, int | None, int, int]]) -> int:
         """Replace one source's whole current-price table for a market (a full snapshot).

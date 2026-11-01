@@ -227,3 +227,10 @@ def test_D71_the_research_notice_shows_only_while_no_character_has_enchanting():
     assert f"{notice['title']}: {notice['text']}" == \
         "Research only: no character has Enchanting yet. These rows enter the funded plan once one does."
     assert disenchant_notice(1) is None and disenchant_notice(142) is None
+
+
+def test_ahledgers_sources_are_labelled_and_credited_with_a_link_and_ahf_is_not():
+    from ahsync.engine.views import source_credit, source_label
+    assert [source_label(s) for s in ("ahf", "ahledger", "ahledger_h1", "local")] == ["AHF", "AHledger", "AHledger", "local"]
+    assert source_credit("ahledger") == {"text": "Prices from AHledger", "url": "https://ahledger.com"}
+    assert source_credit("ahf") is None and source_credit("blizzard") is None
