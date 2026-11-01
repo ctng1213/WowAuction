@@ -8,9 +8,10 @@ arriving (D33). The page shows these texts as they are (SPEC §8.5).
 from __future__ import annotations
 
 import time
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 
+from ahsync.engine.coverage import coverage
 from ahsync.engine.history_view import ratio_text
 from ahsync.engine.sell_record import Calibration
 from ahsync.engine.tracking import ProfitSums
@@ -52,6 +53,9 @@ class MarketFacts:
     ahledger_on: bool = False     # the market polls AHledger (its address is not ""): the "AHledger table" line shows (S18)
     ahledger_updated_ms: int | None = None   # when AHledger's table was last updated; None before any table
     ahledger_items: int = 0       # rows in that table
+    coverage_hours: Mapping[str, Sequence[int]] = field(default_factory=dict)   # observed hours per source, last 2,160 h (M20)
+    coverage_sources: tuple[str, ...] = ("local",)   # the sources the Data coverage card lists: "local" + remote in use
+    partial_scan: tuple[int, float] | None = None    # newest partial local scan in the window: (time ms, coverage)
 
 
 @dataclass(frozen=True)
@@ -351,11 +355,12 @@ def _alert_url(row: StatusRow) -> dict:
         row: The alert's line.
 
     Returns:
-        {"url": ...} for AHledger's lines and for the stale-data alert of an AHledger primary; {} otherwise.
+        {"url", "url_label"} (the link and its text, "AHledger") for AHledger's lines and for the stale-data
+        alert of an AHledger primary; {} otherwise.
     """
     source = row.data.get("source") if row.kind == "stale" else "ahledger" if row.kind.startswith("ahledger_") else None
     url = SOURCE_URLS.get(source or "")
-    return {} if url is None else {"url": url}
+    return {} if url is None else {"url": url, "url_label": source_label(source)}
 
 
 def _market_card(m: MarketFacts, now_ms: int, offset_ms: int) -> dict:
@@ -540,8 +545,8 @@ def status_view(rows: Sequence[StatusRow], facts: StatusFacts, now_ms: int, offs
         offset_ms: Local time minus UTC, ms.
 
     Returns:
-        {"alerts": [...], "cards": [...], "calibration": section or None}: market cards in config order, then API,
-        Characters, Storage.
+        {"alerts": [...], "cards": [...], "calibration": section or None, "coverage": [...]}: market cards in
+        config order, then API, Characters, Storage; one Data coverage card per market (engine.coverage, M20).
     """
     megabytes = facts.db_bytes * 10 // 1_048_576
     storage = {"title": "Storage", "badge": "", "badge_class": "", "lines": [
@@ -550,4 +555,6 @@ def status_view(rows: Sequence[StatusRow], facts: StatusFacts, now_ms: int, offs
     cards = [_market_card(m, now_ms, offset_ms) for m in facts.markets]
     cards += [_api_card(rows, facts, offset_ms), _characters_card(facts, now_ms), storage]
     return {"alerts": alerts(rows, facts, now_ms, offset_ms), "cards": cards,
-            "calibration": calibration_view(facts.calibration, facts.profit)}
+            "calibration": calibration_view(facts.calibration, facts.profit),
+            "coverage": [{"market": m.market, **coverage(m.coverage_hours, now_ms // HOUR_MS, offset_ms,
+                                                         m.coverage_sources, m.partial_scan)} for m in facts.markets]}

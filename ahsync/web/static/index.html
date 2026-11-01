@@ -253,6 +253,26 @@ const ALERT_CLASS = { error: 'bad', warn: 'warn', info: 'info' };
 const VALUE_CLASS = { amber: 'amber', muted: 'muted', pos: 'pos', neg: 'neg' };
 const statusCard = c => `<div class="card"><div class="card-h"><b>${esc(c.title)}</b>${c.badge ? `<span class="pill ${c.badge_class === 'ok' || c.badge_class === 'warn' || c.badge_class === 'gold' ? c.badge_class : ''}">${esc(c.badge)}</span>` : ''}</div>` +
   `<dl class="kv">${c.lines.map(([k, v, cls, url]) => `<dt>${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(k)}</a>` : esc(k)}</dt><dd class="${VALUE_CLASS[cls] || ''}">${esc(v)}</dd>`).join('')}</dl></div>`;
+// Status: the Data coverage card (SPEC §3.5); every text and every cell step comes from engine/coverage.py, the page only draws.
+const COV_STRENGTH = [6, 22, 40, 58, 78, 100];   // the six steps' share of the accent colour
+const covShade = step => `color-mix(in srgb, var(--accent) ${COV_STRENGTH[step] ?? 0}%, transparent)`;
+const covHeat = c => '<div class="heat"><div class="lbl"></div>' + c.hour_labels.map(l => `<div class="lbl">${esc(l)}</div>`).join('') +
+  c.cells.map((row, di) => `<div class="lbl">${esc(c.days[di])}</div>` +
+    row.map(x => `<div style="background:${covShade(x.step)}" title="${esc(x.title)}"></div>`).join('')).join('') +
+  '</div><div class="legend" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;color:var(--muted);font-size:12px;margin-top:6px">' +
+  c.scale.map(k => `<span style="display:inline-flex;align-items:center;gap:3px"><i style="display:inline-block;width:12px;height:10px;background:${covShade(k.step)}"></i>${esc(k.label)}</span>`).join(' · ') +
+  ` ${esc(c.scale_note)}</div>`;
+const covLabel = r => r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.label)}</a>` : esc(r.label);
+const covTable = c => '<div class="scrollx"><table><thead><tr><th>Source</th><th class="num">Hours with data</th><th class="num">Share</th><th class="num">Newest</th><th class="num">Oldest</th></tr></thead><tbody>' +
+  c.sources.map(r => `<tr><td><code>${esc(r.src)}</code><span class="sub">${covLabel(r)}</span></td><td class="num">${esc(r.hours_text)}</td><td class="num">${esc(r.share)}</td>` +
+    `<td class="num ${esc(r.newest_class)}">${esc(r.newest)}</td><td class="num">${esc(r.oldest)}</td></tr>`).join('') +
+  `<tr class="total"><td>any source</td><td class="num">${esc(c.union.hours_text)}</td><td class="num">${esc(c.union.share)}</td><td></td><td></td></tr>` +
+  `<tr><td class="muted">no data</td><td class="num muted">${esc(c.none.hours_text)}</td><td class="num muted">${esc(c.none.share)}</td><td colspan="2" class="muted" style="white-space:normal">${esc(c.none.gap_text)}</td></tr>` +
+  `</tbody></table></div><div class="muted" style="font-size:12px;margin-top:6px">${esc(c.note)}</div>`;
+const covCard = c => `<div class="card" style="margin-top:14px"><div class="card-h"><b>${esc(c.title)}</b><span class="muted">${esc(c.sub)}</span></div>` +
+  `<div class="grid2" style="padding:12px 14px;align-items:start"><div><div class="muted" style="font-size:12px;margin-bottom:6px">${esc(c.heading)}</div>${covHeat(c)}</div>` +
+  `<div>${covTable(c)}</div></div>` +
+  `<div class="foot note" style="display:block"><div>${esc(c.reading)}</div><div style="margin-top:4px">${esc(c.rule)}</div></div></div>`;
 // Status: the sell-probability calibration section (SPEC §8.8); every text and width comes from engine/status_view.py.
 const calBar = (pct, color) => `<div class="bar" style="width:160px"><i style="width:${Number(pct)}%;background:${color}"></i></div>`;
 const calibrationHtml = c => !c ? '<div class="empty">Sell-probability calibration appears here once your posts are tracked to their outcome.</div>' :
@@ -348,7 +368,7 @@ const GA_COLS = [['Item', 0, null], ['Category', 0, null], ['Skill', 1, 'skill']
                  ['Net gold/hr', 1, 'net'], ['Sell window', 0, 'window'], ['Sell window price', 1, 'window_price']];
 const GA_CLASSES = ['amber', 'muted', 'pos', 'neg'];
 const gaClass = c => GA_CLASSES.includes(c) ? c : '';
-const gaSegments = segs => (segs || []).map(([t, c]) => `<span class="${gaClass(c)}">${esc(t)}</span>`);
+const gaSegments = segs => (segs || []).map(([t, c, url]) => `<span class="${gaClass(c)}">${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(t)}</a>` : esc(t)}</span>`);
 const gaOptions = (options, v) => (options || []).map(([val, text]) => `<option value="${esc(val)}"${val === v ? ' selected' : ''}>${esc(text)}</option>`).join('');
 // "Only what <character> can gather": on by default once a character is picked, remembered per character.
 const gaOnly = values => !!values.character && values['only_' + values.character] !== '0';
@@ -373,7 +393,7 @@ const gaFilters = (d, view, values) => `<div class="filters">` +
 const gaSkill = r => r.skill_text === '—' ? dash('—') : `<span class="${r.skill_amber ? 'amber' : ''}" title="${esc(r.skill_title)}">${esc(r.skill_text)}</span>` +
   (r.skill_sub ? `<span class="sub">${esc(r.skill_sub)}</span>` : '');
 const gaRow = (r, selected) => `<tr data-select="${esc(r.key)}"${String(r.key) === selected ? ' class="selected"' : ''}><td>${item(r.item, r.quality)}${r.note ? `<span class="sub">${esc(r.note)}</span>` : ''}</td>` +
-  `<td>${esc(r.category)}</td><td class="num">${gaSkill(r)}</td><td class="num" title="${esc(r.price_title)}">${dash(r.ah_price)}</td><td class="num">${dash(r.qty)}</td>` +
+  `<td>${esc(r.category)}</td><td class="num">${gaSkill(r)}</td><td class="num" title="${esc(r.price_title)}">${dash(r.ah_price)}${r.price_url ? `<span class="sub"><a href="${esc(r.price_url)}" target="_blank" rel="noopener">${esc(r.price_source)}</a></span>` : ''}</td><td class="num">${dash(r.qty)}</td>` +
   `<td class="num"${r.median_title ? ` title="${esc(r.median_title)}"` : ''}>${dash(r.median)}</td><td class="num"><span class="${gaClass(r.deviation_class)}">${dash(r.deviation)}</span></td>` +
   `<td class="num${r.fallback ? ' muted' : ''}" title="${esc(r.rate_title)}">${dash(r.rate)}${r.fallback ? ' <span class="st" style="color:var(--muted)">Fallback</span>' : ''}${r.rate_sub ? `<span class="sub">${esc(r.rate_sub)}</span>` : ''}</td>` +
   `<td class="${r.fallback ? 'muted' : ''}">${dash(r.character)}</td>` +
@@ -639,9 +659,10 @@ const LIVE = {
   },
   status: {
     lede: 'Sync state, data age and anything that needs attention. This page is built when you open it, so it is always current; open it again to update it.',
-    render: d => `<div style="padding:12px">${(d.alerts || []).map(a => `<div class="alert ${ALERT_CLASS[a.level] || 'info'}"><b>${esc(a.title)}</b><span class="grow">${esc(a.text)}${a.url ? ` <a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.url)}</a>` : ''}</span></div>`).join('') ||
+    render: d => `<div style="padding:12px">${(d.alerts || []).map(a => `<div class="alert ${ALERT_CLASS[a.level] || 'info'}"><b>${esc(a.title)}</b><span class="grow">${esc(a.text)}${a.url ? ` <a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.url_label)}</a>` : ''}</span></div>`).join('') ||
       '<div class="alert info"><b>All clear</b><span class="grow">Nothing needs attention.</span></div>'}</div>` +
       `<div class="grid2">${(d.cards || []).map(statusCard).join('')}</div>` +
+      (d.coverage || []).map(covCard).join('') +
       calibrationHtml(d.calibration),
     filters: [],
   },

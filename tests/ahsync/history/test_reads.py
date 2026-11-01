@@ -178,3 +178,20 @@ def test_SRC9_the_most_granular_observation_wins_and_rank_orders_only_within_a_k
     assert db.current_price(M, linen).src == "local"                   # a local price at 11:40 too wins the tie
     [tie] = [i for i in db.market_history(M, history_window(now, ("local", "ahf", "ahledger"))) if i.key == linen]
     assert tie.current.src == "local"
+
+
+def test_observed_hours_by_source_in_range(db):
+    db.add_observed_hours(M, "local", [5, 7])
+    db.add_observed_hours(M, "ahf", [3, 6, 9])
+    db.add_observed_hours(OTHER, "local", [6])
+    assert db.observed_hours(M, 5, 8) == {"local": [5, 7], "ahf": [6]}
+    assert db.observed_hours(M, 10, 20) == {}
+
+
+def test_newest_partial_scan_in_range(db):
+    sql(db, "INSERT INTO scans(scan_id, market, src, at, kind, coverage) VALUES (?, ?, ?, ?, ?, ?)",
+        ("a", M, "local", 100, "partial", 0.3), ("b", M, "local", 200, "full", 0.4), ("c", M, "local", 300, "full", 1.0),
+        ("d", M, "ahf", 250, "partial", 0.1), ("e", OTHER, "local", 260, "partial", 0.9))
+    assert db.newest_partial_scan(M, 0, 1000) == (200, 0.4)
+    assert db.newest_partial_scan(M, 0, 150) == (100, 0.3)
+    assert db.newest_partial_scan(M, 400, 500) is None

@@ -246,3 +246,30 @@ def test_the_stale_alert_of_an_ahledger_primary_carries_the_link_and_names_ahled
     assert alert["title"] == "AHledger data is old" and alert["url"] == AHL
     [ahf] = status_view.alerts([], facts(market(newest_price_ms=NOW - 7 * HOUR)), NOW, 0)
     assert "url" not in ahf
+
+
+def test_D95_the_status_page_carries_the_data_coverage_card_after_the_summary_cards():
+    from pathlib import Path
+    hours = {"local": [NOW // HOUR - 1, NOW // HOUR - 25], "ahf": list(range(NOW // HOUR - 200, NOW // HOUR - 100)),
+             "ahledger_h1": [NOW // HOUR - 5]}
+    on = market(coverage_hours=hours, coverage_sources=("local", "ahledger", "ahf"))
+    [card] = status_view.status_view([], facts(on), NOW, 0)["coverage"]
+    assert card["market"] == M and card["title"] == "Data coverage"
+    assert card["sub"] == "last 90 days to Sat 17 Oct 23:00 · your scans, AHledger and auctionhouse.fyi"
+    assert card["heading"] == "Weeks with data per hour of the week, local time"
+    assert card["reading"] == ("Coverage is the hours any source observed; it is what the weekly patterns and sales "
+                               "estimates are built from. Dark cells make reliable windows; pale cells are hours "
+                               "nobody has scanned yet.")
+    assert len(card["cells"]) == 7 and all(len(row) == 24 for row in card["cells"])
+    assert all(c["title"] and 0 <= c["step"] <= 5 for row in card["cells"] for c in row)
+    assert [r["src"] for r in card["sources"]] == ["local", "ahledger", "ahf"]
+    # without AHledger (address ""): the subtitle names two sources and the table has no ahledger row
+    off = market(coverage_hours=hours, coverage_sources=("local", "ahf"))
+    [bare] = status_view.status_view([], facts(off), NOW, 0)["coverage"]
+    assert bare["sub"].endswith("· your scans and auctionhouse.fyi")
+    assert [r["src"] for r in bare["sources"]] == ["local", "ahf"]
+    # the page draws the cards after the summary cards and before the calibration section, computing nothing
+    page = Path(status_view.__file__).parents[1].joinpath("web", "static", "index.html").read_text(encoding="utf-8")
+    order = [page.index(text) for text in ("map(statusCard)", "(d.coverage || []).map(covCard)", "calibrationHtml(d.calibration)")]
+    assert order == sorted(order)
+    assert "const covCard" in page and "COV_STRENGTH = [6, 22, 40, 58, 78, 100]" in page

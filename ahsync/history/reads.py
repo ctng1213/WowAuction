@@ -407,6 +407,42 @@ class HistoryReads:
             "SELECT scan_id, at FROM scans WHERE market = ? AND kind = 'full' AND coverage >= 1 "
             "AND at BETWEEN ? AND ? ORDER BY at, scan_id", (market, from_ms, to_ms))]
 
+    def observed_hours(self, market: str, from_hour: int, to_hour: int) -> dict[str, list[int]]:
+        """Hours with a complete observation per source, for the Data coverage card (SPEC §3.5).
+
+        Args:
+            market: Market id.
+            from_hour: First UTC hour number (floor(ms / 3600000)), inclusive.
+            to_hour: Last UTC hour number, inclusive.
+
+        Returns:
+            Source -> its hours in the range, sorted; sources without a row are absent. One query on the
+            observed_hours table, no candle reads.
+        """
+        hours: dict[str, list[int]] = {}
+        for src, hour in self.conn.execute(
+                "SELECT src, hour FROM observed_hours WHERE market = ? AND hour BETWEEN ? AND ? ORDER BY src, hour",
+                (market, from_hour, to_hour)):
+            hours.setdefault(src, []).append(hour)
+        return hours
+
+    def newest_partial_scan(self, market: str, from_ms: int, to_ms: int) -> tuple[int, float] | None:
+        """The newest partial local scan in a time range, for the coverage card's rule text (SPEC §3.5).
+
+        Args:
+            market: Market id.
+            from_ms: Start, inclusive.
+            to_ms: End, inclusive.
+
+        Returns:
+            (time ms, coverage 0..1) of the newest local scan that is kind 'partial' or under full coverage
+            (ties: scan id), or None.
+        """
+        row = self.conn.execute(
+            "SELECT at, coverage FROM scans WHERE market = ? AND src = 'local' AND (kind = 'partial' OR coverage < 1) "
+            "AND at BETWEEN ? AND ? ORDER BY at DESC, scan_id DESC LIMIT 1", (market, from_ms, to_ms)).fetchone()
+        return None if row is None else (row[0], row[1])
+
     def complete_books(self, market: str, from_ms: int, to_ms: int) -> list[tuple[str, int, str]]:
         """Complete books of a market from every source in a time range, with each one's source (V39).
 

@@ -19,6 +19,8 @@ from ahsync.engine.status_view import CharacterFacts, MarketFacts, StatusFacts, 
 from ahsync.recommend.positions_pass import current
 
 DAY_MS = 86_400_000
+HOUR_MS = 3_600_000
+COVERAGE_HOURS = 2_160           # SPEC §3.5 Data coverage: the last 90 days
 CALIBRATION_DAYS = 90            # SPEC §8.8: the last 90 days of resolved posts
 BACKTEST_DAYS = 30               # SPEC §8.8 volume backtest: the last 30 days
 
@@ -84,6 +86,23 @@ def _profit(db: Database, now_ms: int) -> ProfitSums:
     return profit_sums(judged_rows(rows, current(db, now_ms), since))
 
 
+def _coverage_sources(cfg: Config, market: str) -> tuple[str, ...]:
+    """The sources the Data coverage card lists for a market (SPEC §3.5).
+
+    Args:
+        cfg: Config.
+        market: Market id.
+
+    Returns:
+        "local", then each ranked remote source whose address isn't "", then the primary when it is missing.
+    """
+    own = market_sources(cfg, market)
+    used = ["local"] + [s for s in own.rank if own.addresses.get(s, s)]
+    if own.primary not in used:
+        used.append(own.primary)
+    return tuple(used)
+
+
 def status_facts(db: Database, cfg: Config, now_ms: int) -> StatusFacts:
     """Gather the Status page's facts.
 
@@ -103,8 +122,12 @@ def status_facts(db: Database, cfg: Config, now_ms: int) -> StatusFacts:
         on = bool(market_sources(cfg, market).addresses["ahledger"])                      # S18
         _etag, updated_ms, _fetched, _checkpoint = db.source_state(market, "ahledger")
         items = 0 if updated_ms is None else db.ahledger_item_count(market, updated_ms // 1000)
+        end = now_ms // HOUR_MS                                                           # the coverage window, M20
+        hours = db.observed_hours(market, end - COVERAGE_HOURS, end - 1)
+        partial = db.newest_partial_scan(market, (end - COVERAGE_HOURS) * HOUR_MS, now_ms)
         markets.append(MarketFacts(market, state.last_hour, state.last_run, newest, priced, oldest, latest, local, books,
-                                   _backtests(db, market, now_ms), primary, on, updated_ms, items))
+                                   _backtests(db, market, now_ms), primary, on, updated_ms, items,
+                                   hours, _coverage_sources(cfg, market), partial))
     characters = tuple(CharacterFacts(*row) for row in db.characters())
     results = [(p, outcome == "sold") for p, outcome in db.conn.execute(
         "SELECT p_at_post, outcome FROM posts WHERE outcome IN ('sold', 'expired') AND p_at_post IS NOT NULL "

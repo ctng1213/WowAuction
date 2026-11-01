@@ -316,4 +316,12 @@ def test_SRC10_ahledger_is_on_and_primary_by_default_per_market_and_can_be_switc
         assert transport.paths() == ["v1/markets", f"v1/pricetable/{market}"]
     finally:
         db.close()
-    # SRC10's coverage-card clause ("the coverage card has no ahledger row") belongs to M20
+    # the Data coverage card lists AHledger only while the market polls it (SRC10's coverage-card clause)
+    def coverage_sources(config: Config) -> list[str]:
+        """The `src` of the coverage card's rows for the first market under a config."""
+        from ahsync.app.status_page import _coverage_sources
+        one = replace(facts_for(config, None).markets[0], coverage_sources=_coverage_sources(config, market))
+        view = status_view.status_view([], StatusFacts((one,), (), True, 1, 90), now, 0)
+        return [row["src"] for row in view["coverage"][0]["sources"]]
+    no_ahledger = parse_config(head + f'[sources."{market}".addresses]\nahledger = ""\n', {}, tmp_path)
+    assert coverage_sources(default) == ["local", "ahledger", "ahf"] and coverage_sources(no_ahledger) == ["local", "ahf"]

@@ -26,7 +26,7 @@ from ahsync.engine.gathering import (CATEGORIES, GATHERING_PROFESSIONS, SESSION_
 from ahsync.engine.patterns import Window
 from ahsync.engine.profile import Profile
 from ahsync.engine.sessions import LOGOUT_ENDED, Candidate, Session
-from ahsync.engine.views import market_activity, money, round_half_up, source_label
+from ahsync.engine.views import SOURCE_URLS, market_activity, money, round_half_up, source_label
 
 MINUTE_MS, HOUR_MS = 60_000, 3_600_000
 STALE_MS = 24 * HOUR_MS            # prices over 24 h are stale: amber, used as they are (§3.4E.6)
@@ -281,14 +281,33 @@ def _price_title(f: PriceFacts, w: GatheringWorld) -> str:
         w: The world.
 
     Returns:
-        E.g. "seen 26 h ago (AHF scan Sun 08:38) · stale: over 24 h", "seen 12 min ago (your scan)", or
-        "No listing in the newest scan".
+        E.g. "seen 26 h ago (AHF scan Sun 08:38) · stale: over 24 h", "seen 12 min ago (your scan)",
+        "seen 26 h ago (AHledger)" or "No listing in the newest scan".
     """
     if f.price is None or f.seen_ms is None:
         return "No listing in the newest scan"
     old = w.now_ms - f.seen_ms
-    where = "your scan" if f.source == "local" else f"{source_label(str(f.source))} scan {clock(f.seen_ms, w.offset_ms)}"
+    src = str(f.source)
+    if f.source == "local":
+        where = "your scan"
+    elif src in SOURCE_URLS:                                     # AHledger's price table is not a scan (S19)
+        where = source_label(src)
+    else:
+        where = f"{source_label(src)} scan {clock(f.seen_ms, w.offset_ms)}"
     return f"seen {age(old)} ago ({where})" + (" · stale: over 24 h" if old > STALE_MS else "")
+
+
+def _price_credit(f: PriceFacts) -> dict:
+    """The AH Price cell's credit for a source that must be linked (S19).
+
+    Args:
+        f: The item's facts.
+
+    Returns:
+        {"price_source": label, "price_url": URL} for an AHledger price; both None for any other source or no price.
+    """
+    url = SOURCE_URLS.get(str(f.source)) if f.price is not None else None
+    return {"price_source": None if url is None else source_label(str(f.source)), "price_url": url}
 
 
 def _skill_cells(b: _Base) -> dict:
@@ -441,7 +460,8 @@ def _row(b: _Base, r: Rate | None, view_char: str, w: GatheringWorld, hist: dict
         "key": b.item.key, "item": b.item.name, "quality": f.quality, "url": b.item.url or "",
         "note": _note(b, r, view_char), "category": category,
         **{k: v for k, v in skill.items() if k != "skill"},
-        "ah_price": money(f.price), "price_title": _price_title(f, w), "qty": DASH if qty is None else str(qty),
+        "ah_price": money(f.price), "price_title": _price_title(f, w),
+        **_price_credit(f), "qty": DASH if qty is None else str(qty),
         **{k: v for k, v in hist.items() if k != "sort"},
         **_rate_cells(r, view_char), **{k: v for k, v in net.items() if k != "net_copper"},
         "eligible": view_char == "" or view_char in b.eligible_chars,
@@ -813,24 +833,29 @@ def _fresh(bases: Sequence[_Base], w: GatheringWorld, day_one: bool) -> list[lis
         day_one: True when no catalog item has price history yet.
 
     Returns:
-        [text, class] segments: the price age (amber over 24 h, "(your scan)" for your own), then the professions'
-        sync time and the sessions; on day one the no-history sentence in their place.
+        [text, class] segments: the price age (amber over 24 h, "(your scan)" for your own), then, for a source
+        that must be credited with a link (AHledger), a segment "prices from AHledger" carrying the URL as its
+        third element (S19), then the professions' sync time and the sessions; on day one the no-history
+        sentence in their place.
     """
     newest = _newest(bases)
+    credit: list[list[str]] = []
     if newest is None or newest.seen_ms is None:
         first = ["no AH prices yet", "amber"]
     else:
         old = w.now_ms - newest.seen_ms
         mine = " (your scan)" if newest.source == "local" else ""
         first = [f"AH prices {age(old)} old{mine}", "amber" if old > STALE_MS else "pos" if mine else ""]
+        url = SOURCE_URLS.get(str(newest.source))
+        credit = [[f"prices from {source_label(str(newest.source))}", "", url]] if url else []
     if day_one:
-        return [first, [NO_HISTORY_FRESH, ""]]
+        return [first, *credit, [NO_HISTORY_FRESH, ""]]
     synced = (f"professions synced {clock(w.professions_ms, w.offset_ms)}" if w.professions_ms is not None
               else "professions not synced yet")
     count, observed_ms = len(w.sessions), sum(s.duration_ms for s in w.sessions)
     sessions = (f"{count} farming session{'' if count == 1 else 's'}, {duration(minutes_of(observed_ms))} observed"
                 if count else "0 farming sessions")
-    return [first, [synced, ""], [sessions, ""]]
+    return [first, *credit, [synced, ""], [sessions, ""]]
 
 
 def _note_text(bases: Sequence[_Base], w: GatheringWorld) -> str:

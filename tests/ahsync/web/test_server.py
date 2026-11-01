@@ -907,3 +907,51 @@ def test_the_top_bar_credit_follows_the_primary_source_and_the_page_only_draws_i
     page = INDEX_HTML.read_text(encoding="utf-8")
     draw = page[page.index("function setBuilt"):page.index("// ---------- table")]
     assert "credit.text" in draw and "credit.url" in draw and "Prices from" not in draw  # the text is the engine's
+
+
+def test_S19_ahledger_is_credited_with_a_link_wherever_its_data_is_shown_and_never_called_your_scan(db, refreshes):
+    from ahsync.engine import status_view
+    from ahsync.engine.gathering import CatalogItem, Source
+    from ahsync.engine.gathering_view import GatheringWorld, PriceFacts, gathering_view
+    from ahsync.engine.status_view import MarketFacts, StatusFacts
+    from ahsync.engine.views import source_label
+    from ahsync.intel.contract import MarketIntelligence
+    from tests.support import gathering_world as gw
+    ahl, hour = "https://ahledger.com", 3_600_000
+    now = BUILT + 30 * hour
+    # the Status line carries the URL as its fourth field, and the coverage card's ahledger row links too
+    market = MarketFacts(M, now // hour - 1, now, now, 5, None, None, 0, 0, primary="ahledger", ahledger_on=True,
+                         ahledger_updated_ms=now - 26 * hour, ahledger_items=2207,
+                         coverage_hours={"ahledger_h1": [now // hour - 3]}, coverage_sources=("local", "ahledger", "ahf"))
+    view = status_view.status_view([], StatusFacts((market,), (), True, 1, 90), now, 0)
+    [line] = [l for l in view["cards"][0]["lines"] if l[0] == "AHledger table"]
+    assert line == ["AHledger table", "26 h old · 2,207 items", "amber", ahl]
+    rows = {r["src"]: r for r in view["coverage"][0]["sources"]}
+    assert (rows["ahledger"]["label"], rows["ahledger"]["url"], rows["ahf"]["url"], rows["local"]["url"]) == (
+        "AHledger", ahl, None, None) and rows["ahledger"]["hours"] == 1                 # ahledger_h1 shows as ahledger
+    # the item detail's "seen 26 h ago (AHledger)": label and URL are fields; the hourly bucket is AHledger too
+    item = CatalogItem(1, "Odd Herb", ("Herbalism",), (Source("node", "Herbalism", 1),))
+    for src in ("ahledger", "ahledger_h1"):
+        page = gathering_view(GatheringWorld([item], {1: PriceFacts(50, gw.NOW - 26 * hour, src, 4, 3, med30=40, closes_30d=30)},
+                                             {}, [], gw.NOW))
+        row = gw.view_rows(page, "")[0]
+        assert row["price_title"].startswith("seen 26 h ago (AHledger)") and (row["price_source"], row["price_url"]) == (
+            "AHledger", ahl)
+        assert page["fresh"][1] == ["prices from AHledger", "", ahl]               # the freshness line names its source
+        assert "your scan" not in row["price_title"] and "your scan" not in page["fresh"][0][0]
+        assert source_label(src) == "AHledger"
+    ahf = gathering_view(GatheringWorld([item], {1: PriceFacts(50, gw.NOW - 26 * hour, "ahf", 4, 3, med30=40, closes_30d=30)},
+                                        {}, [], gw.NOW))
+    assert gw.view_rows(ahf, "")[0]["price_url"] is None and all(len(s) == 2 for s in ahf["fresh"])
+    # the top bar: "Prices from AHledger", linked, with the default primary; nothing with "ahf"
+    with db.transaction():
+        db.stage_intel(MarketIntelligence(M, BUILT, BUILT, 1, {}))
+        db.stage_view("today", M, {"rows": []}, BUILT)
+    db.publish_refresh([M])
+
+    def credit(sources: dict):
+        """The top bar credit the Today response carries under these market sources."""
+        app = DashboardApp(db, Config(markets=(M,), sources=sources), FakeClock(), refreshes, token="tok-123", port=8765)
+        return json.loads(app.handle("GET", f"/api/views/today?market={M}", GOOD).body)["credit"]
+    assert credit({}) == {"text": "Prices from AHledger", "url": ahl}
+    assert credit({M: MarketSources(primary="ahf")}) is None
