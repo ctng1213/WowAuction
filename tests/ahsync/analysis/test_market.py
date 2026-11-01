@@ -346,4 +346,5 @@ def test_SRC11_ahledgers_aggregates_are_stored_never_used(tmp_path):
     root = Path(__file__).resolve().parents[3] / "ahsync"
     readers = sorted(str(p.relative_to(root)).replace("\\", "/") for p in root.rglob("*.py")
                      if "ahledger_rows" in p.read_text(encoding="utf-8"))
-    assert readers == ["collect/ahledger.py", "db/sqlite.py", "history/prune.py", "history/writes.py"]
+    assert readers == ["collect/ahledger.py", "collect/ahledger_backfill.py",   # the backfill reads only its keys (§2.3)
+                       "db/sqlite.py", "history/prune.py", "history/writes.py"]

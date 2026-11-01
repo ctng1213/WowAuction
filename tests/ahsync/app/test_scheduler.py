@@ -238,3 +238,15 @@ def test_the_ahledger_poll_runs_at_the_first_tick_then_every_30_minutes_and_a_fa
     off = Scheduler(clock, SchedulerHooks(), None)
     clock.advance(10 * 60_000)
     assert "ahledger_poll" not in off.tick()                             # not wired: never runs
+
+
+def test_the_ahledger_backfill_runs_after_the_poll_every_5_s_and_wakes_the_scheduler():
+    clock = FakeClock()
+    scheduler = Scheduler(clock, SchedulerHooks(ahledger_poll=lambda: None, ahledger_backfill=lambda: True), None)
+    assert scheduler.tick() == ["ahledger_poll", "ahledger_backfill"]
+    assert scheduler.next_wake_ms() == clock.now_ms() + 5_000
+    clock.advance(4_000)
+    assert "ahledger_backfill" not in scheduler.tick()
+    clock.advance(1_000)
+    assert scheduler.tick() == ["ahledger_backfill"]
+    assert "ahledger_backfill" not in Scheduler(clock, SchedulerHooks(), None).tick()

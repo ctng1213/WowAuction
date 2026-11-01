@@ -272,3 +272,23 @@ def test_ahledger_fixture_routes_are_distinct_and_the_table_has_an_etag():
     table = client.get_conditional(f"{base}/pricetable/forever.pvp.horde.us")
     assert table.body.startswith(b"AHL1|forever/pvp/horde/us|1792585200|") and cache_max_age_s(table.headers) == 60
     assert client.get_conditional(f"{base}/pricetable/forever.pvp.horde.us", table.headers["etag"]).status == 304
+
+
+def test_a_paced_client_spaces_requests_evenly_and_an_unpaced_one_bursts():
+    from tests.support.fake_clock import FakeClock
+    from tests.support.fake_transport import FakeTransport
+    clock = FakeClock()
+    transport = FakeTransport()
+    transport.serve("v1/markets", [])
+    start = clock.now_ms()
+    paced = ApiClient(transport, clock, api_base="https://api.ahledger.com", per_minute=300, paced=True)
+    times = []
+    for _ in range(3):
+        paced.get_json("https://api.ahledger.com/v1/markets", auth=False)
+        times.append(clock.now_ms() - start)
+    assert times == [0, 200, 400]                                  # 60 000 / 300 ms apart
+    plain = ApiClient(transport, clock, api_base="https://api.ahledger.com", per_minute=300)
+    before = clock.now_ms()
+    for _ in range(3):
+        plain.get_json("https://api.ahledger.com/v1/markets", auth=False)
+    assert clock.now_ms() == before

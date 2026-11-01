@@ -47,5 +47,4 @@
 # this file holds only comments until a new scenario is listed before its code.
 
 # AHledger source and data coverage (SPEC §2.3, §3.5 Status; M19-M21)
-SRC12-SRC15
-FM47
+# M19-M21 built: every listed scenario has a test.

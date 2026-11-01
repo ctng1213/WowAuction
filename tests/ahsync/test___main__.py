@@ -405,9 +405,16 @@ def test_the_ahledger_hook_polls_only_markets_with_an_address_and_a_failed_poll_
     clock = FakeClock()
     db = Database.open(tmp_path / "ahsync.db", clock.now_ms(), None)
     polled: list[tuple[str, str]] = []
+    refusals: list[str] = []
 
     class Source:
-        """Records the polls; the second market's poll fails."""
+        """Records the polls; the second market's poll fails. Every market is refused for the backfill."""
+
+        client = None
+
+        def refused(self, market: str) -> bool:
+            refusals.append(market)
+            return True
 
         def poll(self, market: str, address: str) -> set[int]:
             polled.append((market, address))
@@ -422,5 +429,8 @@ def test_the_ahledger_hook_polls_only_markets_with_an_address_and_a_failed_poll_
     assert polled == [("forever.pvp.horde.us", "forever.pvp.horde.us"),
                       ("forever.pvp.alliance.us", "forever.pvp.alliance.us")]
     assert "AHledger poll of forever.pvp.alliance.us failed" in caplog.text
-    assert build_hooks(SyncContext(None, db, clock, None), config, tmp_path / "backups").ahledger_poll is None
+    hooks.ahledger_backfill()                                           # asks only about markets with an address
+    assert refusals == ["forever.pvp.horde.us", "forever.pvp.alliance.us"]
+    unwired = build_hooks(SyncContext(None, db, clock, None), config, tmp_path / "backups")
+    assert unwired.ahledger_poll is None and unwired.ahledger_backfill is None
     db.close()

@@ -272,6 +272,8 @@ def message(row: StatusRow, offset_ms: int) -> tuple[str, str]:
                                                          f"({d.get('tries', 0)} tries)"),
         "ahledger_format": ("AHledger format changed", f"AHledger format changed: {d.get('endpoint', '?')}"),
         "ahledger_no_market": ("AHledger has no market", f"AHledger has no market {market}"),
+        "ahledger_backfill": ("AHledger backfill", f"AHledger backfill: {d.get('done', 0):,} of {d.get('total', 0):,} items"
+                              + (" · resumes at the next run" if d.get("paused") else "")),
         "restored": ("Database restored", f"The database was damaged and was restored from "
                                           f"{d.get('backup') or 'nothing (started empty)'}."),
     }

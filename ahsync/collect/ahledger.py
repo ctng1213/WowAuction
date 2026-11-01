@@ -5,8 +5,10 @@ transaction, and `AhledgerSource` polls each market's table with its ETag and tu
 """
 from __future__ import annotations
 
+import calendar
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from ahsync.clock import Clock
 from ahsync.collect.client import ApiClient, ApiError, NotFound, RateLimited, cache_max_age_s
@@ -152,6 +154,103 @@ def parse_pricetable(body: bytes | str, market: str) -> PriceTable:
         else:
             rows[row.key] = row
     return PriceTable(market, updated_s, tuple(rows[k] for k in sorted(rows)), skipped)
+
+
+@dataclass(frozen=True)
+class Bucket:
+    """One price-history bucket (an hour for 24h/7d, a day for 30d/90d); None means the field was null (never 0)."""
+
+    t_ms: int                     # UTC ms of the bucket's start
+    min: int | None               # copper
+    median: int | None            # copper
+    p25: int | None               # copper
+    p75: int | None               # copper
+    quantity: int | None          # units on the AH
+    auctions: int | None          # auctions on the AH
+
+
+@dataclass(frozen=True)
+class PriceHistory:
+    """A parsed `/v1/prices/<market>/<id>` response: the buckets by ascending time and how many were skipped."""
+
+    key: int
+    range: str                    # "24h" | "7d" | "30d" | "90d"
+    hourly: bool                  # True for 24h and 7d, False for the daily 30d and 90d
+    buckets: tuple[Bucket, ...]
+    latest_ms: int | None         # UTC ms of latest.observedAt; None when AHledger has no latest
+    skipped: int = 0              # buckets dropped for a bad time or price field
+
+
+_RANGES = {"24h": True, "7d": True, "30d": False, "90d": False}
+_BUCKET_FIELDS = ("min", "median", "p25", "p75", "quantity", "auctions")
+
+
+def _iso_ms(text: object) -> int | None:
+    """An ISO 8601 UTC time ("2026-11-04T14:00:00.000Z", milliseconds optional) as Unix ms.
+
+    Args:
+        text: The value of a `t` or `observedAt` field.
+
+    Returns:
+        UTC ms, or None when it is not a string ending in Z or does not parse.
+    """
+    if not isinstance(text, str) or not text.endswith("Z"):
+        return None
+    try:
+        moment = datetime.fromisoformat(text[:-1] + "+00:00")
+    except ValueError:
+        return None
+    return calendar.timegm(moment.utctimetuple()) * 1000 + moment.microsecond // 1000
+
+
+def _parse_bucket(raw: object) -> Bucket | None:
+    """One series entry, or None when it is unusable.
+
+    Args:
+        raw: A decoded JSON series entry.
+
+    Returns:
+        The Bucket; None when not a dict, `t` does not parse, or a price field is not a non-negative integer or null.
+    """
+    if not isinstance(raw, dict):
+        return None
+    t_ms = _iso_ms(raw.get("t"))
+    if t_ms is None:
+        return None
+    values = []
+    for name in _BUCKET_FIELDS:
+        value = raw.get(name)
+        if value is not None and (isinstance(value, bool) or not isinstance(value, int) or value < 0):
+            return None
+        values.append(value)
+    return Bucket(t_ms, *values)
+
+
+def parse_prices(data: object, key: int) -> PriceHistory:
+    """Read a `/v1/prices/<market>/<id>?range=...` response (SPEC §2.3, Item history).
+
+    Args:
+        data: The decoded JSON.
+        key: The item key that was asked for.
+
+    Returns:
+        The history; buckets sorted by time, unusable ones counted in `skipped`.
+
+    Raises:
+        FormatChanged: ("prices") not an object, a missing or unknown range, a series that is not a list,
+            an item id other than `key`, or a latest that is neither null nor an object.
+    """
+    if not isinstance(data, dict) or data.get("range") not in _RANGES or not isinstance(data.get("series"), list):
+        raise FormatChanged("prices")
+    item, latest = data.get("item"), data.get("latest")
+    if isinstance(item, dict) and "id" in item and item["id"] != key:
+        raise FormatChanged("prices")
+    if latest is not None and not isinstance(latest, dict):
+        raise FormatChanged("prices")
+    parsed = [_parse_bucket(raw) for raw in data["series"]]
+    buckets = tuple(sorted((b for b in parsed if b is not None), key=lambda b: b.t_ms))
+    latest_ms = None if latest is None else _iso_ms(latest.get("observedAt"))
+    return PriceHistory(key, data["range"], _RANGES[data["range"]], buckets, latest_ms, parsed.count(None))
 
 
 def parse_markets(data: object) -> set[str]:

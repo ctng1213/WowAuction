@@ -26,6 +26,7 @@ from typing import IO
 
 from ahsync.collect.ahf import AhfApi
 from ahsync.collect.ahledger import BASE as AHLEDGER_BASE, AhledgerSource
+from ahsync.collect.ahledger_backfill import AhledgerBackfill
 from ahsync.collect.client import ApiClient, RedactingFilter, Redactor, Transport, UrllibTransport
 from ahsync.clock import Clock, SystemClock
 from ahsync.config import Config, ConfigError, load_config, market_sources, session_settings
@@ -198,8 +199,8 @@ def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path,
             from here (SEC11). None: `config` throughout.
 
     Returns:
-        Hooks with store_hour, ahledger_poll (only when ctx.ahledger is set), full_refresh, refresh_requested, daily, weekly and
-        savedvars_changed set. The live table stays off until its format is recorded (SPEC §5.2).
+        Hooks with store_hour, ahledger_poll and ahledger_backfill (only when ctx.ahledger is set), full_refresh,
+        refresh_requested, daily, weekly and savedvars_changed set. The live table stays off until its format is recorded (SPEC §5.2).
     """
     def current() -> Config:
         """The settings the plan jobs use now.
@@ -216,6 +217,22 @@ def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path,
             return
         ctx.caps = caps
         sync_markets(ctx, config.markets)
+
+    def ahledger_markets() -> list[tuple[str, str]]:
+        """The markets that take data from AHledger now.
+
+        Returns:
+            (market id, AHledger address) per configured market whose address is not "" (SRC10).
+        """
+        return [(m, a) for m in config.markets if (a := market_sources(current(), m).addresses["ahledger"])]
+
+    backfill = None if ctx.ahledger is None else AhledgerBackfill(
+        ctx.ahledger.client, ctx.db, ctx.clock, ctx.ahledger, lambda: current().ahledger_backfill)
+
+    def ahledger_backfill() -> None:
+        """Every 5 s: one slice of AHledger's history backfill, or the check that nothing is due (M21, SRC15)."""
+        if backfill is not None:
+            backfill.step(ahledger_markets())
 
     def ahledger_poll() -> None:
         """Every 30 min: poll AHledger's price table of each market that has an AHledger address (SRC10).
@@ -262,6 +279,7 @@ def build_hooks(ctx: SyncContext, config: Config, backup_dir: Path,
 
     return SchedulerHooks(store_hour=store_hour, daily=daily, weekly=ctx.db.vacuum,
                           ahledger_poll=ahledger_poll if ctx.ahledger is not None else None,
+                          ahledger_backfill=ahledger_backfill if ctx.ahledger is not None else None,
                           savedvars_changed=savedvars_changed,
                           full_refresh=lambda: full_refresh(ctx.db, ctx.clock, current()),
                           status_pass=hourly_status,
@@ -446,7 +464,7 @@ def _run_configured(data_dir: Path, config: Config, runtime: Runtime, config_pat
         if runtime.serve_dashboard:
             dashboard = serve_dashboard(data_dir, config, clock, refresh_requests, runtime.out, config_path, live.replace)
         ahledger = AhledgerSource(ApiClient(runtime.transport, clock, "", api_base=AHLEDGER_BASE, per_minute=300,
-                                            redactor=redactor), db, clock)          # keyless, its own limit (SRC10)
+                                            redactor=redactor, paced=True), db, clock)          # keyless, its own limit (SRC10)
         ctx = SyncContext(api, db, clock, result.caps, config.retention_days, addresses, ahledger)
         scheduler = Scheduler(clock, build_hooks(ctx, config, backup_dir, refresh_requests.take, live), watcher,
                               config.daily_refresh_time, config.live_refresh_minutes)

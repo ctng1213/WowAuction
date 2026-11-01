@@ -241,3 +241,108 @@ def test_cache_control_rate_limits_and_markets_failures(world):
     clock.advance(30 * MINUTE)
     assert older.poll(MARKET, MARKET) == set()                     # 304 with the stored ETag
     assert store_pricetable(db, MARKET, parse_pricetable(SRC7_BODY, MARKET), None, 1) == set()   # not newer
+
+
+# --- parse_prices (SPEC §2.3, Item history) ---------------------------------------------------------------------
+import json                                                              # noqa: E402
+from pathlib import Path                                                 # noqa: E402
+
+from ahsync.collect.ahledger import Bucket, PriceHistory, parse_prices   # noqa: E402
+
+_FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "ahledger" / "forever.pvp.horde.us"
+_HOUR_MS = 3_600_000
+
+
+def _fixture(name: str) -> dict:
+    """Load a recorded prices response.
+
+    Args:
+        name: File name under the AHledger fixture folder.
+
+    Returns:
+        The decoded JSON.
+    """
+    return json.loads((_FIXTURES / name).read_text(encoding="utf-8"))
+
+
+def _doc(series: list, **over) -> dict:
+    """A minimal valid prices response around the given series.
+
+    Args:
+        series: The series entries.
+        **over: Top-level fields to replace.
+
+    Returns:
+        The response dict.
+    """
+    return {"item": {"id": 2589}, "latest": None, "range": "7d", "series": series, **over}
+
+
+def test_prices_7d_fixture_is_168_hourly_buckets():
+    history = parse_prices(_fixture("prices_2589_7d.json"), 2589)
+    assert (history.key, history.range, history.hourly, history.skipped) == (2589, "7d", True, 0)
+    assert len(history.buckets) == 168
+    # Why: 2026-10-14 is day 20740 since 1970 (56 years = 20454 days to 2026-01-01, plus 286 days), so 13:00 UTC is
+    # hour 20740*24+13 = 497773; the last bucket is 167 hours later, 497940 (12:00 on the 21st).
+    assert history.buckets[0].t_ms == 497_773 * _HOUR_MS
+    assert history.buckets[-1].t_ms == 497_940 * _HOUR_MS
+    assert history.buckets[0] == Bucket(497_773 * _HOUR_MS, 19, 21, 20, 23, 8587, 214)
+    # Why: latest.observedAt 2026-10-21T12:20:00Z is 20 minutes after hour 497940.
+    assert history.latest_ms == 497_940 * _HOUR_MS + 20 * 60_000
+
+
+def test_prices_90d_fixture_is_90_daily_buckets():
+    history = parse_prices(_fixture("prices_2589_90d.json"), 2589)
+    assert (history.range, history.hourly, len(history.buckets)) == ("90d", False, 90)
+    # Why: the last day is 2026-10-21 00:00 = day 20747 = hour 497928; the first is 89 days earlier (2026-07-24).
+    assert history.buckets[-1].t_ms == 497_928 * _HOUR_MS
+    assert history.buckets[0].t_ms == (497_928 - 89 * 24) * _HOUR_MS
+
+
+def test_prices_ranges_say_whether_they_are_hourly():
+    assert [parse_prices(_doc([], range=r), 2589).hourly for r in ("24h", "7d", "30d", "90d")] == [True, True, False, False]
+
+
+def test_prices_null_latest_gives_no_latest_time_and_null_fields_stay_none():
+    history = parse_prices(_doc([{"t": "2026-11-04T14:00:00Z", "median": 19, "min": None}]), 2589)
+    assert history.latest_ms is None
+    # Why: 2026-11-04 is day 20761, so 14:00 is hour 498278; no milliseconds in the text is fine.
+    assert history.buckets == (Bucket(498_278 * _HOUR_MS, None, 19, None, None, None, None),)
+
+
+def test_prices_latest_without_observed_time_gives_none():
+    assert parse_prices(_doc([], latest={"median": 5}), 2589).latest_ms is None
+
+
+def test_prices_buckets_come_back_sorted_and_milliseconds_are_kept():
+    history = parse_prices(_doc([{"t": "2026-11-04T15:00:00.250Z"}, {"t": "2026-11-04T14:00:00.000Z"}]), 2589)
+    assert [b.t_ms for b in history.buckets] == [498_278 * _HOUR_MS, 498_279 * _HOUR_MS + 250]
+
+
+@pytest.mark.parametrize("data", [
+    [], "x", None,
+    {"item": {"id": 2589}, "series": []},                                  # no range
+    {"range": "1y", "series": []},                                         # unknown range
+    {"range": "7d", "series": {}},                                         # series not a list
+    {"range": "7d"},                                                       # no series
+    {"range": "7d", "series": [], "item": {"id": 7}},                      # another item
+    {"range": "7d", "series": [], "latest": []},                           # latest of another shape
+])
+def test_prices_of_another_shape_is_a_format_change(data):
+    with pytest.raises(FormatChanged, match="prices"):
+        parse_prices(data, 2589)
+
+
+def test_prices_without_an_item_object_or_id_is_accepted():
+    assert parse_prices({"range": "7d", "series": []}, 2589).buckets == ()
+    assert parse_prices({"range": "7d", "series": [], "item": {}}, 2589).buckets == ()
+
+
+def test_prices_unusable_buckets_are_skipped_and_counted():
+    good = {"t": "2026-11-04T14:00:00.000Z", "median": 19}
+    series = [good, "x", {"median": 1}, {"t": 5}, {"t": "2026-11-04T14:00:00"}, {"t": "not a time Z"},
+              {"t": "2026-11-04T14:00:00Z", "median": 1.5}, {"t": "2026-11-04T14:00:00Z", "min": -1},
+              {"t": "2026-11-04T14:00:00Z", "p25": True}, {"t": "2026-11-04T14:00:00Z", "quantity": "9"}]
+    history = parse_prices(_doc(series), 2589)
+    assert len(history.buckets) == 1 and history.skipped == 9
+    assert isinstance(history, PriceHistory)

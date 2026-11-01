@@ -273,3 +273,16 @@ def test_D95_the_status_page_carries_the_data_coverage_card_after_the_summary_ca
     order = [page.index(text) for text in ("map(statusCard)", "(d.coverage || []).map(covCard)", "calibrationHtml(d.calibration)")]
     assert order == sorted(order)
     assert "const covCard" in page and "COV_STRENGTH = [6, 22, 40, 58, 78, 100]" in page
+
+
+def test_ahledger_backfill_line_counts_items_and_says_when_it_resumes():
+    running = row("ahledger_backfill", {"market": M, "done": 1200, "total": 2207, "paused": False}, level="info",
+                  topic=f"ahledger:backfill:{M}")
+    paused = row("ahledger_backfill", {"market": M, "done": 1200, "total": 2207, "paused": True}, level="info",
+                 topic=f"ahledger:backfill:{M}")
+    assert status_view.message(running, 0) == ("AHledger backfill", "AHledger backfill: 1,200 of 2,207 items")
+    assert status_view.message(paused, 0) == ("AHledger backfill",
+                                              "AHledger backfill: 1,200 of 2,207 items · resumes at the next run")
+    alerts = status_view.alerts([paused, row("refresh_failed", {"error": "x"})], facts(), NOW, 0)
+    assert [a["level"] for a in alerts] == ["warn", "info"]                  # info sorts after warn
+    assert alerts[1]["url"] == AHL and alerts[1]["url_label"] == "AHledger"

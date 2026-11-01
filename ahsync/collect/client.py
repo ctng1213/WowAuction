@@ -227,7 +227,7 @@ class ApiClient:
 
     def __init__(self, transport: Transport, clock: Clock, api_key: str = "",
                  api_base: str = "https://auctionhouse.fyi/api/v1", per_minute: int = 60,
-                 redactor: Redactor | None = None) -> None:
+                 redactor: Redactor | None = None, paced: bool = False) -> None:
         """Create a client.
 
         Args:
@@ -237,6 +237,8 @@ class ApiClient:
             api_base: API root; requests under it count toward the rate limit.
             per_minute: Allowed API requests per minute (60 without a key, from /me).
             redactor: Shared secret registry; one is created if omitted.
+            paced: Also space API requests evenly, 60 000 / per_minute ms apart (AHledger, SRC13), so a long run
+                never bursts.
         """
         self._transport = transport
         self._clock = clock
@@ -246,6 +248,7 @@ class ApiClient:
         self.redactor = redactor or Redactor()
         self.redactor.add(api_key)
         self._api_times: list[int] = []
+        self._spacing_ms = 60_000 // per_minute if paced else 0
         self.key_rejected = False    # set when a 401 made us drop the key for the rest of the run (FM25)
         self.key_used = False        # set when a keyed request succeeded
 
@@ -259,7 +262,7 @@ class ApiClient:
         return bool(self._api_key) and not self.key_rejected
 
     def _throttle(self, url: str) -> None:
-        """Wait so API requests stay within `per_minute` over any 60 s.
+        """Wait so API requests stay within `per_minute` over any 60 s, and evenly spaced when paced.
 
         Args:
             url: The request URL; only API URLs are throttled.
@@ -272,6 +275,9 @@ class ApiClient:
             self._clock.sleep((self._api_times[0] + 60_000 - now) / 1000)
             now = self._clock.now_ms()
             self._api_times = [t for t in self._api_times if now - t < 60_000]
+        if self._spacing_ms and self._api_times and now < self._api_times[-1] + self._spacing_ms:
+            self._clock.sleep((self._api_times[-1] + self._spacing_ms - now) / 1000)
+            now = self._clock.now_ms()
         self._api_times.append(now)
 
     def _send(self, url: str, auth: bool, extra_headers: dict[str, str] | None = None) -> HttpResponse | None:
