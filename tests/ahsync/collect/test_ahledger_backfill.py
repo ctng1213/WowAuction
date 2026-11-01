@@ -1,4 +1,4 @@
-"""Tests for ahsync/collect/ahledger_backfill.py: AHledger's per-item history backfill (SRC12-SRC15, FM47)."""
+"""Tests for ahsync/collect/ahledger_backfill.py: AHledger's per-item history backfill (SRC12-SRC15, SRC18, FM47)."""
 from __future__ import annotations
 
 import json
@@ -235,3 +235,17 @@ def test_a_paused_market_waits_and_unknown_or_malformed_answers_are_skipped(tmp_
     w.clock.advance(DAY)
     w.restart()
     assert w.backfill.step([(M, M)]) is False                                  # no table: nothing to do
+
+
+def test_SRC18_a_backfill_tick_before_the_first_table_does_not_skip_the_day(tmp_path, close_dbs):
+    w = World(tmp_path, [])
+    close_dbs.append(w)
+    w.serve_empty([1, 2, 3])
+    assert w.backfill.step([(M, M)]) is False                                  # no table yet
+    assert w.prices_requests() == []
+    with w.db.transaction():                                                   # the poll stores its first table
+        w.db.upsert_ahledger_rows(M, WED_1225 // 1000, [(k, 50, None, None, None, None, None) for k in (1, 2, 3)])
+    w.clock.advance(5_000)
+    w.run()
+    assert [u.rsplit("/", 1)[1] for _, u in w.prices_requests()] == [
+        "1?range=7d", "1?range=90d", "2?range=7d", "2?range=90d", "3?range=7d", "3?range=90d"]

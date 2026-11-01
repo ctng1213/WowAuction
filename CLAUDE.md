@@ -7,6 +7,7 @@ WowAuction: **AHSync** (Python companion app: sync + engine + dashboard) and **A
 ```
 python -m pip install -r requirements-dev.txt     # once: pytest + coverage (dev-only)
 tools/test.ps1                 # all tests: regenerates Lua scenario fixtures, then pytest + Lua runner (-NoLua skips Lua)
+tools/verify.ps1               # the milestone routine: test.ps1, then snapshot.py; -Bench adds bench.py. Puts lua5.1 on PATH from ~/tools/lua51
 python -m pytest tests/ahsync  # Python tests only
 python tools/gen_lua_fixtures.py                  # tests/scenarios/*.json + tests/properties/*.json -> Lua (run before the Lua runner alone)
 python tools/gen_properties.py                    # regenerate LP1 property cases after changing a ported formula
@@ -123,29 +124,38 @@ local function SellProbability(soldPerDay, windowDays, ahead, qty, defaultP) ...
 2. No function or file is over the size limits, and every non-test function has a docstring with its inputs and output.
 3. Source and test trees still mirror each other.
 4. SPEC.md is updated if behaviour or a formula changed, and SCENARIOS.md lists every scenario the change added or altered.
-5. `git diff` reviewed, including golden snapshots and `w1.expected.json`; commit only when asked.
+5. `git diff` reviewed, including golden snapshots and `w1.expected.json`; commit only when asked, or under a batch's standing approval.
 
 ## How work is run
 
-Three roles, by model. A batch of work moves through them in order.
+Who plans, who orchestrates, who implements the routine and who reviews is the global policy's call (`~/.claude/CLAUDE.md`, its agents and skills). This section only says what this project's artifacts are, which tasks count as routine here, and when each document changes.
 
-- **Fable plans.** Takes the user's feature spec, researches sources, drafts the mockup for alignment ([docs/mockups/](docs/mockups/)), merges the approved design into SPEC.md and SCENARIOS.md with the scenario IDs added to `tests/pending_scenarios.txt`, and writes a handoff plan at `docs/plans/<batch>.md`: the decisions already made, the working rules, and every task tagged **Opus** or **Sonnet** with a one-line reason.
-- **Opus orchestrates.** Runs the plan in its own session: does the Opus tasks itself, delegates the Sonnet tasks to Sonnet subagents in worktrees, reviews every Sonnet diff, verifies each milestone (`tools/test.ps1`, `tools/snapshot.py`, `tools/bench.py`, a headless render for dashboard changes), commits it, fast-forwards `main`, and continues. It stops only for a decision the spec doesn't cover or when the batch is done, then reports as the plan's wrap-up section says.
-- **Sonnet implements the routine.** Parsers of a documented format, fixtures and recorders, config keys with bounds, dashboard JavaScript that only draws a payload, scenario tests with given numbers, SPEC "built" marks.
+**A batch** is one approved spec merge, one handoff plan, then milestones executed one at a time, each verified and committed before the next.
 
-Tagging rule of thumb for the plan: **Opus** for new engine algorithms, merge or precedence logic, migrations with several writers, anything with a byte-identity or cross-module invariant, and every final review; **Sonnet** for the rest.
+- **Design-time documents**: a mockup in [docs/mockups/](docs/mockups/) for alignment, then the approved design merged into SPEC.md and SCENARIOS.md with the new scenario IDs added to `tests/pending_scenarios.txt`. These are revised when the user changes a decision between batches.
+- **The plan**: `docs/plans/<batch>.md`, with §1 the decisions already made, §2 the working rules, then the tasks per milestone, each tagged with who does it and a one-line reason. A plan never re-litigates a decision recorded in it. A decision made during execution is appended to §1 so the wrap-up can list it.
 
-Rules that hold for every role: one worktree per milestone, never `cd` into it from the main shell (use `git -C`); one commit per verified milestone with the model's attribution trailer; the user approves the mockup, the spec merge and the standing approval for each batch, and is otherwise not interrupted; a plan never re-litigates a decision recorded in it.
+**Routine here** (delegable): parsers of a documented format, fixtures and recorders, config keys with bounds, dashboard JavaScript that only draws a payload, scenario tests with given numbers, and the mechanical documentation marks: a SPEC "planned" note becoming "built" with module names, removing IDs from `tests/pending_scenarios.txt`, regenerating goldens and the whole-plan snapshot when the plan says so.
 
-**Documentation during execution.** Documentation is tagged by its complexity, like code, and lands in the same commit as the change that makes it true.
+**Judgement here** (never delegated): new engine algorithms, merge or precedence logic, migrations with several writers, anything with a byte-identity or cross-module invariant, the final review of every delegated diff, and any documentation change that alters meaning: a bug found mid-execution (its reproducing scenario row first, then the fix, then the SPEC rule it corrects), a formula or rule the implementation had to change, a scenario row whose number proved wrong, a decision the spec didn't cover.
 
-- **Sonnet** does the mechanical marks: a SPEC "planned" note becoming "built" with module names, removing IDs from `tests/pending_scenarios.txt`, regenerating goldens and the whole-plan snapshot when the plan says so.
-- **Opus** does anything that changes meaning: a bug found mid-execution (its reproducing scenario row first, then the fix, then the SPEC rule it corrects), a formula or rule the implementation had to change, a scenario row whose number proved wrong, a decision the spec didn't cover and the orchestrator had to make. Each such decision is also appended to the plan's decision list (`docs/plans/<batch>.md` §1) so the wrap-up can list them, and a decision that departs from the spec goes to the user before it is written.
-- **Fable** owns the design-time documentation (mockups, new SPEC sections and SCENARIOS families, the plan) and revises it when the user changes a decision between batches.
+**Approvals.** The user approves the mockup, the spec merge and a standing approval for each batch, and is otherwise not interrupted. Stop only for a decision that is theirs: a departure from the spec, or a rule the spec doesn't cover that changes a displayed number. A departure from the spec goes to the user before it is written anywhere.
 
-If a documentation change needs judgement about what the system should do, it is never delegated to Sonnet.
+**Verifying a milestone**, in its worktree: `tools/verify.ps1`, which runs `tools/test.ps1` then `python tools/snapshot.py` (byte-identical unless the plan says the snapshot moves, and then the diff is reviewed) and with `-Bench` also `python tools/bench.py` (required when a budget could move); plus a headless render of the real dashboard for dashboard changes (no console errors, no `undefined` or `NaN`).
 
-**Two documents stay current across batches.**
+**Git.** One worktree per milestone; never `cd` into it from the main shell (use `git -C` and absolute paths). One commit per verified milestone, with the model's attribution trailer, then fast-forward `main` and remove the worktree.
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the high-level design with Mermaid diagrams of the components and the data flows, linking to SPEC for detail. A milestone that adds, removes or re-routes a component, a table family, a source or a contract updates it in the same commit (Opus; Fable at the spec merge for planned changes). Its change log notes the milestone.
-- [docs/LESSONS.md](docs/LESSONS.md): the log of wrong assumptions found along the way (**Assumed · True · Found by · Changed**). Whoever discovers one writes the entry in the same commit as the fix; an entry that changes what the system should do is Opus's and also lands in SPEC and SCENARIOS. Append, never delete; mark superseded entries.
+**Documentation lands in the same commit as the change that makes it true.** Two documents stay current across batches:
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the high-level design with Mermaid diagrams of the components and the data flows, linking to SPEC for detail. A milestone that adds, removes or re-routes a component, a table family, a source or a contract updates it in the same commit; planned changes are drawn at the spec merge and marked built in the milestone. Its change log notes the milestone.
+- [docs/LESSONS.md](docs/LESSONS.md): the log of wrong assumptions found along the way (**Assumed · True · Found by · Changed**). Whoever discovers one writes the entry in the same commit as the fix; an entry that changes what the system should do also lands in SPEC and SCENARIOS. Append, never delete; mark superseded entries.
+
+**Where the global policy's documents live here.** The global policy names generic paths; this project's equivalents are:
+
+| Global policy | This project |
+|---|---|
+| Product requirements, approved specification | [docs/SPEC.md](docs/SPEC.md) and [docs/SCENARIOS.md](docs/SCENARIOS.md) |
+| Architecture overview | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| ADRs | The plan's §1 decision list; durable ones are restated in SPEC |
+| `work/active/<slug>/spec.md`, `plan.md`, `progress.md` | `docs/plans/<batch>.md`; progress is the git log (one commit per milestone) |
+| Recurring pitfalls | [docs/LESSONS.md](docs/LESSONS.md) |

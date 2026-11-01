@@ -116,7 +116,9 @@ class AhledgerBackfill:
         if checkpoint and not checkpoint["done"]:
             rest = [k for k in keys if checkpoint["last_key"] is None or k > checkpoint["last_key"]]
             return _Run(market, address, checkpoint["day"], rest, checkpoint["total"], checkpoint["count"])
-        if not keys or (checkpoint and checkpoint["day"] == today) or not self._has_gap(market, now):
+        if not keys:                              # no table yet: ask again next tick, the poll may store one (SRC18)
+            return None
+        if (checkpoint and checkpoint["day"] == today) or not self._has_gap(market, now):
             self._checked[market] = today
             return None
         return _Run(market, address, today, keys, len(keys), 0)

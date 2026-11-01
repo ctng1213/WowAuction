@@ -6,7 +6,9 @@ transaction, and `AhledgerSource` polls each market's table with its ETag and tu
 from __future__ import annotations
 
 import calendar
+import gzip
 import logging
+import zlib
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -126,7 +128,8 @@ def parse_pricetable(body: bytes | str, market: str) -> PriceTable:
     """Parse the addon-format price table of one market (SPEC §2.3, SRC7, FM44, FM45).
 
     Args:
-        body: The response body, UTF-8 text.
+        body: The response body, UTF-8 text; gzip-compressed bytes (detected by their magic bytes) are
+            decompressed first, since the live API compresses it (SRC17).
         market: AHSync's dotted market id, e.g. "forever.pvp.horde.us".
 
     Returns:
@@ -135,11 +138,13 @@ def parse_pricetable(body: bytes | str, market: str) -> PriceTable:
         from the header's is not an error.
 
     Raises:
-        FormatChanged: ("pricetable") the body is not UTF-8 or its header is bad.
+        FormatChanged: ("pricetable") the body is corrupt gzip, not UTF-8, or its header is bad.
     """
     try:
+        if isinstance(body, bytes) and body[:2] == b"\x1f\x8b":
+            body = gzip.decompress(body)
         text = body.decode("utf-8-sig") if isinstance(body, bytes) else body
-    except UnicodeDecodeError:
+    except (EOFError, OSError, zlib.error, UnicodeDecodeError):
         raise FormatChanged("pricetable") from None
     header, _, rest = text.partition("\n")
     updated_s = _parse_header(header, market)

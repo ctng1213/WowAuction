@@ -257,7 +257,7 @@ AHProfitDB = {
 | Purpose | Call | Returns | Cached | Used |
 |---|---|---|---|---|
 | Markets | `GET /v1/markets` | every market: id, game, ruleset, faction, region, label | 5 min | checks the market exists (SRC6) |
-| Price table | `GET /v1/pricetable/{market}` | every priced item as plain text, the addon's format (below); sends an `ETag`, and an unchanged table answers `304` | 1 min | the live source `ahledger`, every 30 min (M19) |
+| Price table | `GET /v1/pricetable/{market}` | every priced item as plain text, the addon's format (below), gzip-compressed when asked (SRC17); sends an `ETag`, and an unchanged table answers `304` | 1 min | the live source `ahledger`, every 30 min (M19) |
 | Item history | `GET /v1/prices/{market}/{itemId}?range=24h\|7d\|30d\|90d` | the item's `latest` price and its `series` (below), plus `sales.estimatedPerDay` (null until enough hours of scans back it) | 1 min | the backfill, `7d` and `90d` (M21) |
 | Tooltip | `GET /v1/tooltip/{market}?items=2589,2592` | latest price, 7 and 30 day medians and salesPerDay for up to 100 items at once; the market comes back with slashes | 1 min | not used |
 | Item | `GET /v1/items/{itemId}?game=forever` | name, quality, class, level, requirement, vendor value, icon | 5 min | not used (`/items` from AHF names items, §2.1) |

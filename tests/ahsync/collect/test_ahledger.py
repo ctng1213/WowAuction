@@ -1,5 +1,7 @@
-"""AHledger parsers (SPEC §2.3): scenarios SRC7, FM44 (parsing half), FM45 (parsing half)."""
+"""AHledger parsers (SPEC §2.3): scenarios SRC7, SRC17, FM44 (parsing half), FM45 (parsing half)."""
 from __future__ import annotations
+
+import gzip
 
 import pytest
 
@@ -346,3 +348,16 @@ def test_prices_unusable_buckets_are_skipped_and_counted():
     history = parse_prices(_doc(series), 2589)
     assert len(history.buckets) == 1 and history.skipped == 9
     assert isinstance(history, PriceHistory)
+
+
+def test_SRC17_a_gzip_compressed_price_table_is_stored_like_a_plain_one(world):
+    db, clock, transport, source = world
+    transport.serve_etag(TABLE_PATH, gzip.compress(SRC7_BODY), '"t1"', {"content-encoding": "gzip"})
+    assert source.poll(MARKET, MARKET) == {2589, 2770, 4306}
+    assert [r[0] for r in _rows(db, "SELECT key FROM current ORDER BY key")] == [2589, 2770, 4306]
+    assert db.source_state(MARKET, "ahledger")[0] == '"t1"'
+    transport.serve_etag(TABLE_PATH, gzip.compress(SRC7_BODY)[:20], '"t2"', {"content-encoding": "gzip"})
+    clock.advance(30 * MINUTE)
+    assert source.poll(MARKET, MARKET) == set()
+    assert db.source_state(MARKET, "ahledger")[0] is None          # forgotten, as FM44
+    assert db.status("format:ahledger_pricetable").kind == "ahledger_format"

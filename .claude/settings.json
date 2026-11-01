@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tools/test.ps1 *)",
+      "Bash(tools/verify.ps1 *)",
+      "Bash(powershell -NoProfile -ExecutionPolicy Bypass -File tools/test.ps1 *)",
+      "Bash(powershell -NoProfile -ExecutionPolicy Bypass -File tools/verify.ps1 *)",
+      "Bash(python -m pytest *)",
+      "Bash(python -m coverage *)",
+      "Bash(py -3.12 -m pytest *)",
+      "Bash(python tools/gen_lua_fixtures.py *)",
+      "Bash(python tools/gen_properties.py *)",
+      "Bash(python tools/snapshot.py *)",
+      "Bash(python tools/bench.py *)",
+      "Bash(python tools/visual.py *)",
+      "Bash(lua5.1 tests/support/lua/runner.lua *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(git worktree list *)",
+      "PowerShell(tools/test.ps1 *)",
+      "PowerShell(tools/verify.ps1 *)",
+      "PowerShell(python -m pytest *)",
+      "PowerShell(python tools/snapshot.py *)",
+      "PowerShell(python tools/bench.py *)",
+      "PowerShell(lua5.1 tests/support/lua/runner.lua *)",
+      "PowerShell(git status *)",
+      "PowerShell(git diff *)",
+      "PowerShell(git log *)"
+    ]
+  }
+}
