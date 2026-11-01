@@ -1,0 +1,27 @@
+# Lessons: wrong assumptions found along the way
+
+A log of assumptions that turned out false, so the context never disappears. Append, never delete; mark an entry superseded when a later one replaces it. One entry per assumption, newest first within a batch.
+
+Rule (CLAUDE.md "How work is run"): whoever discovers the mistake writes the entry in the same commit as the fix; an entry that changes what the system should do is written by the orchestrating model and also lands in SPEC and SCENARIOS. Format: **Assumed** · **True** · **Found by** · **Changed** (SPEC §, code, scenario).
+
+## Data sources
+
+- **2026-10-22 · AHledger's market ids need mapping.** Assumed its ids would differ from ours. True: `/v1/markets` uses our exact ids (`forever.pvp.horde.us`); only its web pages and the price table header use slashes. Found by calling the endpoint. Changed: `[sources].addresses.ahledger` defaults to the market id (SPEC §3.6).
+- **2026-11-01 · AHledger's public surface is just the price table.** Assumed per-item history needed a key or didn't exist. True: `/v1/prices/<market>/<id>` is keyless and gives hourly buckets for 7 days and daily for 90. Found by the user pasting the developer docs. Changed: M21 backfill (SPEC §2.3).
+- **2026-10-22 · Installing a second scanning addon adds scan data.** Assumed AHledger's or Auctionator's scans would be new data. True: Forever's full listing is one server answer shared by every addon; AHProfit already reads it whoever asked. Found by reading `Scan/Replicate.lua` and AHledger's source. Changed: nothing in code; the decision not to read other addons' SavedVariables (SPEC §2.3).
+- **2026-10-21 · AHF would come back.** AHSync kept retrying AHF hour files (137 failures) and the plan excluded every candidate as "Forecast too stale" while treating AHF as primary. True: the feed has published nothing for this market since 2026-10-09 and the user's own scan was the only live source. Found by the user asking why the Portfolio showed only holds. Changed: `primary` defaults to AHledger with a fallback to the first enabled source (SPEC §3.6, SRC10).
+- **2026-10-17 · Forever's time-left bands are retail's 0–3.** True: 1 short … 4 very long, as Classic; AHF's Premium books arrive shifted by one. Found in game and against AHF books. Changed: SPEC §2.1 books row, §4.2 reading, A12.
+
+## Engine and plan
+
+- **2026-10-20 · Found stock's profit belongs to committed capital.** The section A footer counted found stock's estimated net over a committed capital it never used, printing +391%. True: profit % on capital excludes rows that cost nothing, the same rule the funded lists use. Found by reading the W1 snapshot diff at review. Changed: `portfolio_view` footer and note, SPEC §3.4D.8, D73/A79/PF22.
+- **2026-10-22 · Every hour-of-week slot has weeks of data.** The heatmap reading line printed a fallback ratio (0.99) for a slot with no data while its cell said "no data". Found by rendering the real dashboard headless. Changed: `gathering_history.reading` says "slot: no data", GA31.
+- **2026-10-19 · A thin item can have a sell window.** Items with under 24 closes got windows and premiums from noise (0-week slots, 35× ratios). Found on the live database. Changed: W16, TT22, TT23, PP4, R28 (SPEC §3.3.4, §3.4D).
+- **2026-10-19 · Partial commodity fills are sales.** Group diffs by (key, price) counted a stack partly sold as fully sold, doubling market-wide sales. Found on a 28-minute live scan pair. Changed: unit-level diff, VOLUME_METHOD_VERSION 4, V42/V43.
+
+## Tooling and process
+
+- **2026-10-20 · A bench over 120 s means a code regression.** Measured 125–137 s across M13 and M14 and suspected the new code. True: the unchanged M13 code measured the same on the same day; the next day both read 100 s. The machine's load moves the bench by 30%. Found by timing HEAD and the branch back to back. Changed: compare against HEAD on the same machine before blaming a change (plan §2.3).
+- **2026-10-19 · A worktree can be removed from anywhere.** Removing a worktree while the shell's cwd was inside it failed and re-rooted the shell. True: leave the main tree's cwd alone and use `git -C`; a worktree lock from a finished agent needs `remove --force --force`. Changed: CLAUDE.md "How work is run".
+- **2026-11-01 · The worktree path is case-insensitive to the harness.** A lowercase drive letter in the working directory made the isolation worktree refuse to start. True: the harness compares paths textually. Changed: nothing in the repo; noted here so the next failure is recognised.
+- **2026-10-22 · String tests prove the dashboard renders.** Three milestones changed `index.html` on JS string tests alone; a headless render then found a real inconsistency. Changed: a headless render is part of every dashboard milestone's verification (plan §2.3).

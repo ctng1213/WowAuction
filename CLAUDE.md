@@ -124,3 +124,28 @@ local function SellProbability(soldPerDay, windowDays, ahead, qty, defaultP) ...
 3. Source and test trees still mirror each other.
 4. SPEC.md is updated if behaviour or a formula changed, and SCENARIOS.md lists every scenario the change added or altered.
 5. `git diff` reviewed, including golden snapshots and `w1.expected.json`; commit only when asked.
+
+## How work is run
+
+Three roles, by model. A batch of work moves through them in order.
+
+- **Fable plans.** Takes the user's feature spec, researches sources, drafts the mockup for alignment ([docs/mockups/](docs/mockups/)), merges the approved design into SPEC.md and SCENARIOS.md with the scenario IDs added to `tests/pending_scenarios.txt`, and writes a handoff plan at `docs/plans/<batch>.md`: the decisions already made, the working rules, and every task tagged **Opus** or **Sonnet** with a one-line reason.
+- **Opus orchestrates.** Runs the plan in its own session: does the Opus tasks itself, delegates the Sonnet tasks to Sonnet subagents in worktrees, reviews every Sonnet diff, verifies each milestone (`tools/test.ps1`, `tools/snapshot.py`, `tools/bench.py`, a headless render for dashboard changes), commits it, fast-forwards `main`, and continues. It stops only for a decision the spec doesn't cover or when the batch is done, then reports as the plan's wrap-up section says.
+- **Sonnet implements the routine.** Parsers of a documented format, fixtures and recorders, config keys with bounds, dashboard JavaScript that only draws a payload, scenario tests with given numbers, SPEC "built" marks.
+
+Tagging rule of thumb for the plan: **Opus** for new engine algorithms, merge or precedence logic, migrations with several writers, anything with a byte-identity or cross-module invariant, and every final review; **Sonnet** for the rest.
+
+Rules that hold for every role: one worktree per milestone, never `cd` into it from the main shell (use `git -C`); one commit per verified milestone with the model's attribution trailer; the user approves the mockup, the spec merge and the standing approval for each batch, and is otherwise not interrupted; a plan never re-litigates a decision recorded in it.
+
+**Documentation during execution.** Documentation is tagged by its complexity, like code, and lands in the same commit as the change that makes it true.
+
+- **Sonnet** does the mechanical marks: a SPEC "planned" note becoming "built" with module names, removing IDs from `tests/pending_scenarios.txt`, regenerating goldens and the whole-plan snapshot when the plan says so.
+- **Opus** does anything that changes meaning: a bug found mid-execution (its reproducing scenario row first, then the fix, then the SPEC rule it corrects), a formula or rule the implementation had to change, a scenario row whose number proved wrong, a decision the spec didn't cover and the orchestrator had to make. Each such decision is also appended to the plan's decision list (`docs/plans/<batch>.md` §1) so the wrap-up can list them, and a decision that departs from the spec goes to the user before it is written.
+- **Fable** owns the design-time documentation (mockups, new SPEC sections and SCENARIOS families, the plan) and revises it when the user changes a decision between batches.
+
+If a documentation change needs judgement about what the system should do, it is never delegated to Sonnet.
+
+**Two documents stay current across batches.**
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the high-level design with Mermaid diagrams of the components and the data flows, linking to SPEC for detail. A milestone that adds, removes or re-routes a component, a table family, a source or a contract updates it in the same commit (Opus; Fable at the spec merge for planned changes). Its change log notes the milestone.
+- [docs/LESSONS.md](docs/LESSONS.md): the log of wrong assumptions found along the way (**Assumed · True · Found by · Changed**). Whoever discovers one writes the entry in the same commit as the fix; an entry that changes what the system should do is Opus's and also lands in SPEC and SCENARIOS. Append, never delete; mark superseded entries.
