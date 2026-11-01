@@ -1141,7 +1141,8 @@ const PAGES = {
     <div class="grid2">
       <div class="card"><div class="card-h"><b>forever.pvp.horde.us</b><span class="pill ok">up to date</span></div><dl class="kv">
         <dt>Last hour synced</dt><dd>Fri 14:00</dd><dt>Next check</dt><dd>15:06</dd><dt>History in DB</dt><dd>38 days</dd>
-        <dt>AHF scans (7 d)</dt><dd class="amber">1 · low coverage</dd><dt>Your scans (7 d)</dt><dd>6</dd><dt>Items with prices</dt><dd>8,929</dd></dl></div>
+        <dt>AHF scans (7 d)</dt><dd class="amber">1 · low coverage</dd><dt>Your scans (7 d)</dt><dd>6</dd><dt>Items with prices</dt><dd>8,929</dd>
+        <dt>${AHL_LINK} table</dt><dd class="amber">26 h old · 2,207 items</dd></dl></div>
       <div class="card"><div class="card-h"><b>API</b><span class="pill gold">Premium via contributor</span></div><dl class="kv">
         <dt>Premium until</dt><dd class="amber">23 Oct · upload scans to extend</dd><dt>History window</dt><dd>90 days</dd><dt>Rate limit</dt><dd>600/min · 3 used</dd>
         <dt>Live prices</dt><dd class="pos">on · every 15 min</dd><dt>Sales volume</dt><dd class="pos">AHF · your scans' order books · auction mail</dd>
@@ -1155,6 +1156,7 @@ const PAGES = {
       <div class="card"><div class="card-h"><b>Storage</b></div><dl class="kv">
         <dt>Database</dt><dd>data/ahsync.db · 46 MB</dd><dt>Retention</dt><dd>90 days</dd><dt>Last prune</dt><dd>Fri 00:10</dd><dt>Last VACUUM</dt><dd>Mon 00:12</dd></dl></div>
     </div>
+    ${covCard(COV_MAIN, 'Data coverage', 'last 90 days to Thu 22 Oct 14:00 · your scans, AHledger and auctionhouse.fyi', true)}
     <h3>Recent problems</h3>
     <div class="card"><div class="card-h"><b>Last 7 days</b><span class="muted">nothing was lost; each step resumes from its last commit</span></div>
     ${table([['When'], ['Step'], ['What happened'], ['Result']], [
@@ -1170,7 +1172,17 @@ const PAGES = {
       calRow('0–20%', 10, 12, 10), calRow('20–40%', 15, 31, 33), calRow('40–60%', 25, 50, 28),
       calRow('60–80%', 22, 71, 68), calRow('80–100%', 34, 89, 91),
     ], null)}</div>
-    <div class="card" style="padding:8px 12px">Expected vs realized profit (last 90 days): realized +14g 2s of expected +16g 11s 30c (87%)</div>` },
+    <div class="card" style="padding:8px 12px">Expected vs realized profit (last 90 days): realized +14g 2s of expected +16g 11s 30c (87%)</div>
+
+    <h3>States: data coverage</h3>
+    ${covCard(COV_DAY_ONE, 'Day one', 'a single complete scan, Thu 13:20 · AHF offline, no AHledger import yet', false)}
+    ${covCard(COV_HEALTHY, 'A healthy 90 days', 'AHF every hour but some nights, AHledger daytime, your evening scans', false)}
+    <div class="card"><ul class="states" style="font-size:13px;margin:10px 14px 12px 32px;padding:0">
+      <li><b>Day one</b> (above): one cell at 1 of 13, every other cell 0; <code>local</code> 1 h and "no data" for the rest. The heatmap fills one week at a time.</li>
+      <li><b>A healthy 90 days</b> (above): most cells 10–13; the pale night cells are the hours to scan if you want windows there.</li>
+      <li><b>AHF outage</b>: the main card is one. AHF's newest hour file is 13 days old, so its row's Newest reads 13 d ago (amber) and it has no hours since 9 Oct, but your scans and AHledger cover those days, so the union stays dark wherever they observe. Only the hours no source covers turn pale.</li>
+      <li><b>No source at all for days</b> (4–6 Oct above): those hours count for nobody; the "no data" row names the longest such gap, and the Gap warning says why.</li>
+    </ul></div>` },
 };
 
 function tr(a, n, q, qty, each, e, P, c, ch, spend, note) {
@@ -1264,6 +1276,110 @@ function daily() {
   return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Daily sales and supply">${bars}
     <polyline points="${segment(0, 11)}" fill="none" stroke="var(--info)" stroke-width="2" vector-effect="non-scaling-stroke"/>
     <polyline points="${segment(12, n)}" fill="none" stroke="var(--info)" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
+}
+
+// ---------- Status: data coverage ----------
+// One illustrative world per state, so the heatmap's cells, their hover texts and the totals all come from the same hours.
+// The window is the last 90 days = 2,160 hours, local time, up to now, Thu 22 Oct 14:00: hour 0 starts Fri 24 Jul 14:00,
+// hour 2159 starts Thu 22 Oct 13:00. Local time is written as UTC so the mockup doesn't depend on the viewer's time zone.
+// A source counts an hour when it has at least one complete observation in it (a complete scan, an AHF hour file,
+// an AHledger table update or hourly bucket), never a partial scan. The hour-of-week slot's value is the union over the sources.
+const COV_HOURS = 2160, COV_SOURCES = ['local', 'ahledger', 'ahf'];
+const AHL_LINK = '<a href="https://ahledger.com" title="Prices from AHledger">AHledger</a>';
+const COV_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const COV_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const COV_T0 = Date.UTC(2026, 6, 24, 14), COV_TODAY = Date.UTC(2026, 9, 22);
+const covAt = i => new Date(COV_T0 + i * 3600e3);
+const covIdx = (month, day, h) => (Date.UTC(2026, month - 1, day, h) - COV_T0) / 3600e3;   // the hour's index; month 1–12
+const covBack = i => Math.round((COV_TODAY - Date.UTC(covAt(i).getUTCFullYear(), covAt(i).getUTCMonth(), covAt(i).getUTCDate())) / 86400e3);
+const covSlot = i => [(covAt(i).getUTCDay() + 6) % 7, covAt(i).getUTCHours()];
+const covWhen = i => `${covAt(i).getUTCDate()} ${COV_MONTHS[covAt(i).getUTCMonth()]} ${hhmm(covAt(i).getUTCHours())}`;
+// Main world (also the AHF outage case):
+//   ahf       12:00–23:59 every day, plus 06–11 one day in five, up to its last hour file, Fri 9 Oct 13:00; nothing since (13 days).
+//   ahledger  the last 8 weeks (from 27 Aug): weekdays 08–18, weekends 10–20, up to its last import, Wed 21 Oct 12:00.
+//   local     your scans in the last 61 days (from 22 Aug): Tue–Thu 19–22, weekends 15–22 and Sat/Sun 00–01, except one week in four
+//             (away), up to Wed 21 Oct 22:00. Tue 20 Oct 20:00 is the scan that closed at 40% (Recent problems): partial, not counted.
+//   nobody    4–6 Oct: AHSync didn't run and nobody scanned (the Gap warning above).
+const COV_OUTAGE = i => covAt(i).getUTCMonth() === 9 && covAt(i).getUTCDate() >= 4 && covAt(i).getUTCDate() <= 6;
+const COV_MAIN = (src, i) => {
+  const [di, h] = covSlot(i), back = covBack(i);
+  if (COV_OUTAGE(i)) return false;
+  if (src === 'ahf') return i <= covIdx(10, 9, 13) && (h >= 12 || (h >= 6 && back % 5 === 0));
+  if (src === 'ahledger') return back < 56 && i <= covIdx(10, 21, 12) && (di < 5 ? h >= 8 && h <= 18 : h >= 10 && h <= 20);
+  return back < 61 && Math.floor(back / 7) % 4 !== 2 && i <= covIdx(10, 21, 22) && i !== covIdx(10, 20, 20) &&
+    ((di >= 1 && di <= 3 && h >= 19 && h <= 22) || (di >= 5 && (h >= 15 && h <= 22 || h <= 1)));
+};
+// Day one: a single complete scan of yours, Thu 22 Oct 13:20; AHF offline, no AHledger import yet.
+const COV_DAY_ONE = (src, i) => src === 'local' && i === COV_HOURS - 1;
+// A healthy 90 days: AHF has every hour except 02–06 on two nights in three and one day in eleven (bad hour files);
+// AHledger 09–18 every day and weekend nights 00–06, your scans Fri–Sun 18–23, fill some of those hours.
+const COV_HEALTHY = (src, i) => {
+  const [di, h] = covSlot(i), back = covBack(i);
+  if (src === 'ahf') return back % 11 !== 5 && (!(h >= 2 && h <= 6) || back % 3 === 0);
+  if (src === 'ahledger') return (h >= 9 && h <= 18) || (di >= 5 && h <= 6);
+  return di >= 4 && h >= 18 && h <= 23;
+};
+// Counts per slot and per source, each source's newest and oldest hour, the union and the longest run with no data.
+const COV_CACHE = new Map();
+function covStats(world) {
+  if (COV_CACHE.has(world)) return COV_CACHE.get(world);
+  const cells = COV_DAYS.map(() => Array.from({ length: 24 }, () => ({ weeks: 0, any: 0, local: 0, ahledger: 0, ahf: 0 })));
+  const src = Object.fromEntries(COV_SOURCES.map(s => [s, { hours: 0, newest: null, oldest: null }]));
+  let any = 0, run = 0, gap = { len: 0, from: null };
+  for (let i = 0; i < COV_HOURS; i++) {
+    const [di, h] = covSlot(i), c = cells[di][h];
+    c.weeks++;
+    const seen = COV_SOURCES.filter(s => world(s, i));
+    seen.forEach(s => { c[s]++; src[s].hours++; src[s].newest = i; if (src[s].oldest === null) src[s].oldest = i; });
+    if (seen.length) { c.any++; any++; run = 0; } else if (++run > gap.len) gap = { len: run, from: i - run + 1 };
+  }
+  const stats = { cells, src, any, gap };
+  COV_CACHE.set(world, stats);
+  return stats;
+}
+// Shading by fraction of the weeks possible (13, or 12 for the 24 edge slots), so 12 of 12 is as dark as 13 of 13:
+// [label, colour strength %] for steps 0 · up to 25% · up to 50% · up to 75% · under 100% · 100%. (Not chosen: by value, 0 · 1–3 · … · 13.)
+const COV_STEPS = [['0', 6], ['up to 25%', 22], ['up to 50%', 40], ['up to 75%', 58], ['under 100%', 78], ['100%', 100]];
+const covStep = (v, p) => !v ? 0 : 4 * v <= p ? 1 : 2 * v <= p ? 2 : 4 * v <= 3 * p ? 3 : v < p ? 4 : 5;
+const covShadeStep = s => `color-mix(in srgb, var(--accent) ${COV_STEPS[s][1]}%, transparent)`;
+const covShade = (v, p) => covShadeStep(covStep(v, p));
+const covAge = i => { const h = COV_HOURS - i; return h < 48 ? `${h} h ago` : `${Math.floor(h / 24)} d ago`; };
+const covSpan = h => h < 48 ? `${h} h` : `${Math.floor(h / 24)} d${h % 24 ? ` ${h % 24} h` : ''}`;
+const covShare = h => { const p = halfUpPct(h, COV_HOURS); return h && !p ? '&lt;1%' : h < COV_HOURS && p === 100 ? '&gt;99%' : `${p}%`; };
+const covN = n => n.toLocaleString('en-US');
+// The 7 × 24 heatmap in the shared .heat style, and its scale.
+function covHeat(s) {
+  let out = '<div class="heat"><div class="lbl"></div>' + Array.from({ length: 24 }, (_, h) => `<div class="lbl">${h % 6 ? '' : h}</div>`).join('');
+  COV_DAYS.forEach((d, di) => {
+    out += `<div class="lbl">${d}</div>`;
+    s.cells[di].forEach((c, h) => {
+      out += `<div style="background:${covShade(c.any, c.weeks)}" title="${d} ${hhmm(h)} · ${c.any} of ${c.weeks} weeks · ${COV_SOURCES.map(k => `${k} ${c[k]}`).join(', ')}"></div>`;
+    });
+  });
+  const scale = COV_STEPS.map(([label], i) => `<span style="display:inline-flex;align-items:center;gap:3px"><i style="display:inline-block;width:12px;height:10px;background:${covShadeStep(i)}"></i>${label}</span>`).join(' · ');
+  return `${out}</div><div class="legend" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">${scale} of the weeks possible</div>`;
+}
+// AHledger's terms: credit it with a link to ahledger.com wherever its data is shown (SPEC §2.3).
+const COV_LABEL = { local: 'your scans', ahledger: AHL_LINK, ahf: 'auctionhouse.fyi' };
+// Source · Hours with data · Share · Newest · Oldest, then the union and the gap.
+function covTable(s) {
+  const none = COV_HOURS - s.any, g = s.gap;
+  const gapText = g.len ? `longest gap ${covSpan(g.len)} (${covWhen(g.from)} – ${g.from + g.len < COV_HOURS ? covWhen(g.from + g.len) : 'now'})` : 'no gap';
+  return table([['Source'], ['Hours with data', 1], ['Share', 1], ['Newest', 1], ['Oldest', 1]], [
+    ...COV_SOURCES.map(k => { const r = s.src[k]; return `<tr><td><code>${k}</code><span class="sub">${COV_LABEL[k]}</span></td><td class="num">${covN(r.hours)} h</td><td class="num">${covShare(r.hours)}</td>` +
+      `<td class="num${k === 'ahf' && r.newest !== null && COV_HOURS - r.newest > 72 ? ' amber' : ''}">${r.newest === null ? DASH : covAge(r.newest)}</td><td class="num">${r.oldest === null ? DASH : covAge(r.oldest)}</td></tr>`; }),
+    `<tr class="total"><td>any source</td><td class="num">${covN(s.any)} h</td><td class="num">${covShare(s.any)}</td><td></td><td></td></tr>`,
+    `<tr><td class="muted">no data</td><td class="num muted">${covN(none)} h</td><td class="num muted">${covShare(none)}</td><td colspan="2" class="muted" style="white-space:normal">${gapText}</td></tr>`,
+  ], null);
+}
+// One coverage card: heatmap beside the totals; the reading and the counting rule under them when asked.
+function covCard(world, title, sub, reading) {
+  const s = covStats(world);
+  return `<div class="card"${reading ? ' style="margin-top:14px"' : ''}><div class="card-h"><b>${title}</b><span class="muted">${sub}</span></div>
+    <div class="grid2" style="padding:12px 14px;align-items:start"><div><div class="muted" style="font-size:12px;margin-bottom:6px">Weeks with data per hour of the week, local time</div>${covHeat(s)}</div>
+    <div class="scrollx">${covTable(s)}<div class="muted" style="font-size:12px;margin-top:6px">of the ${covN(COV_HOURS)} hours in the last 90 days; sources overlap, so "any source" is less than their sum</div></div></div>
+    ${reading ? `<div class="foot note" style="display:block"><div>Coverage is the hours any source observed; it is what the weekly patterns and sales estimates are built from. Dark cells make reliable windows; pale cells are hours nobody has scanned yet.</div>
+    <div style="margin-top:4px">A source counts an hour when it has at least one complete observation in it: a complete scan, an AHF hour file, an AHledger table update or hourly bucket. Never a partial scan (Tue 20:15, closed at 40%, is not counted).</div></div>` : ''}</div>`;
 }
 
 // ---------- tab switching ----------

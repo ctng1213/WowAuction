@@ -1,9 +1,10 @@
-# WowAuction — Spec (draft v0.6, 2026-10-21)
+# WowAuction — Spec (draft v0.7, 2026-11-01)
 
 Two pieces:
 
 1. **AHSync**: a desktop companion app and the **brain**.
    - Start it whenever you're ready to play. It works out where it left off and catches up on auctionhouse.fyi prices.
+   - It also reads AHledger's public price table (§2.3), a second community source, and blends it into the same history.
    - It keeps a local 90-day history, works out every recommendation, and shows them in a **local dashboard** (out of game).
    - It also writes the same results into the addon.
 2. **AHProfit**: an in-game addon that acts as the **eyes and hands**.
@@ -28,7 +29,7 @@ Names are placeholders.
 | Fact | Consequence |
 |---|---|
 | A WoW addon runs in a Lua sandbox with **no network access**. It reads files only at login or `/reload`, and it writes its SavedVariables to disk only at logout, `/reload` or disconnect. | AHSync does all the HTTP work and the calculations. The two talk through files: the addon's SavedVariables go to AHSync, and generated `MarketIntelligence.lua` and `PortfolioPlan.lua` come back to the addon. |
-| WoW: Forever has **no official Blizzard AH API**. auctionhouse.fyi (AHF) prices come from players scanning in game. | Data is only as fresh as someone's last scan. Every price keeps its observation time, and results show their age and a confidence level. |
+| WoW: Forever has **no official Blizzard AH API**. auctionhouse.fyi (AHF) prices come from players scanning in game, and so do AHledger's (§2.3). | Data is only as fresh as someone's last scan, so AHSync takes every source it can get and keeps the most granular observation of each item and hour (§2.2). Every price keeps its observation time, and results show their age and a confidence level. |
 | AHF CDN retention: public **hour candles 7 days**, public **day candles 7 days**. Premium adds 14 days of hours and 90 days of days. | We build our own 90-day hourly history. See §2.1. |
 | Addons **cannot buy or post automatically**. Each action needs a hardware click. | We recommend and pre-fill searches. You click. |
 | Forever client: folder `_classic_beta_` (may be renamed at the Nov 4 launch), `## Interface: 16001`, client build 1.60.x. | The WoW path is configurable, and every game-API call goes through a thin adapter. |
@@ -106,7 +107,7 @@ Verified 2026-10-16, without a key: `/me`, `/files`, the snapshot, public h1 and
 
 The choice is made per run from `/me`, and per item and day for volume (§3.3.1). Losing Premium therefore changes the quality of the estimates, never whether the app works. Scenarios S11 and V14–V17 cover it.
 
-**Coverage warning (beta).** `forever.pvp.horde.us` had 8,929 items, all from **one scan about 7 days old**, with 1 contributor in 7 days. Its public h1 files were empty. Our own scans (§2.2) are therefore a first-class source.
+**Coverage warning (beta).** `forever.pvp.horde.us` had 8,929 items, all from **one scan about 7 days old**, with 1 contributor in 7 days. Its public h1 files were empty. Our own scans (§2.2) are therefore a first-class source, and AHledger (§2.3) a second remote one.
 
 ### 2.2 The AHProfit addon's SavedVariables
 
@@ -132,7 +133,12 @@ AHSync reads `WTF/Account/*/SavedVariables/AHProfit.lua`. It watches the file an
 
 **You never have to report anything by hand.** The inventory snapshot (bags, bank, mail, own auctions) is the source of truth for *what* you own, so a missed event can't make the app think you own something you don't. Events only say *where* items came from and *what they cost*. Items from outside the AH (farmed, traded, mailed between characters) have no recorded cost and are valued at their opportunity cost. Auctions that sell or expire while you're offline are learned at your next mailbox visit.
 
-The app merges own scans into the price tables as source `local`, next to AHF data. **One close per (item, hour):** when AHF and a local scan both have a value for the same item and hour, statistics use the local one. It is an exact observation, and it may be the very scan you uploaded to AHF, which would otherwise be counted twice.
+The app merges own scans into the price tables as source `local`, next to every remote source's data (AHF, AHledger §2.3, a future provider). **One close per (item, hour):** when several sources have a close for the same item and hour, statistics use exactly one, so a scan that reached two sources (your scan uploaded to AHF, the same server answer read by AHledger's addon, §2.3) is never counted twice. **The most granular observation wins** (planned, M19; `history.reads._best_per_time`, SRC3, SRC9):
+
+1. **By kind first.** Each source's rows have a kind, derived from their `src` in one table, `collect/provider.py` `SOURCE_KINDS = {"local": "book", "ahf": "hourly", "ahledger": "table", "ahledger_h1": "hourly"}`: `book` (a close taken from a complete order book: your scans) beats `hourly` (per-item hourly observations: AHF's h1 candles, AHledger's hourly history buckets) beats `table` (a per-item aggregate table: AHledger's price table). A source not in `SOURCE_KINDS` counts as `hourly`, so SRC3's providers keep their order; a new provider declares its kind there when it is added. The kind is not stored with the row: the schema stays as it is.
+2. **Then by rank** within a kind: `local` always first, then the market's configured `rank` (§3.6; `ahledger_h1` ranks with `ahledger`), then unranked sources by name (SRC3).
+
+So your scan's 45c beats AHF's 50c for the same hour, AHF's hourly close beats AHledger's hourly bucket by rank, AHledger's hourly bucket beats its own price table by kind, and the table fills an hour nobody else observed (SRC9). Analysis never names a source: it reads the one close per (item, hour) the reader hands it. The **current price** keeps its own rule, newest observation wins and `local` on ties (S7), and **sales volume** is untouched: AHledger's sales estimate is stored, never used (§2.3).
 
 Reading rules:
 
@@ -237,6 +243,53 @@ AHProfitDB = {
   - `payout` (A54, T17): a hook that only observes `TakeInboxMoney(index)` and `AutoLootMailItem(index)` reads the mail before the take lands (its header still shows the money): a seller invoice with money becomes one `payout` of that money, with the deposit the invoice reports, keyed like a sold mail, deduplicated by a `paid:` fingerprint in `mailSeen`. AHSync links each payout to the oldest sold mail of the same character, item and quantity not yet paid, and realizes its profit once: money − units × cost basis − the deposit (the invoice's; without one, the post's for those units), because the money includes the deposit coming back (§3.4.1).
 - Untracked changes (FM21) are not events. AHSync derives them by comparing consecutive inventory snapshots with the events between them (**built**, D51: `engine/untracked`, `state/untracked`): when a file brings a newer bag snapshot, each item's change in bags, bank and mail together, less what vendor buys, crafts and disenchants since the earlier one explain, is stored in `untracked` and listed in History. Items moved by AH buys, posts, auction mail or mail between your characters in that time are left out, because those places are captured at different moments. They compare the bag snapshots AHSync actually saw, so a file read after a newer one (its bag snapshot is skipped) adds none; FI2 holds for every other table.
 
+### 2.3 AHledger
+
+**Planned (M19-M21).** AHledger (`https://ahledger.com`) is a second community price source for WoW: Forever, built from in-game scans like AHF's. AHSync reads its public API as source `ahledger` (the price table) and `ahledger_h1` (the per-item history backfill), next to AHF and your scans. It is additive: nothing but the data-source layer changes, and a market with no AHledger rows (the W1 world) gives a byte-identical whole-plan snapshot (WP1).
+
+- Base: `https://api.ahledger.com`. Read only. **No key needed**: 300 requests a minute per address, `429` with `Retry-After` past it. A key (`ahlk_…`, sent as a bearer token or `x-ahl-api-key`) only lifts that limit; AHSync never needs one. If one is configured later it follows the AHF key rules (an environment variable, never in logs, URLs, exceptions, fixtures or dashboard responses).
+- **Every response carries `Cache-Control`, and AHSync honours it**: polling faster returns the same bytes. Breaking changes keep the old version for 30 days.
+- Market ids use dots and are **exactly AHSync's** (`forever.pvp.horde.us`); the price table's header and the tooltip endpoint write them with slashes (`forever/pvp/horde/us`). `[sources] addresses.ahledger` maps a market that AHledger names differently (§3.6).
+- Item ids are **Blizzard's**, which are AHSync's keys for unsuffixed items. A suffix key (§2.1 key) never comes from AHledger: its rows are always the base item.
+- Prices are integer **copper**; an empty field or `null` means unknown, never zero.
+- AHledger's addon scans with `C_AuctionHouse.ReplicateItems`, the same server answer our addon listens for (§4.2), so its table and our scans can be the same observation: the one-close rule (§2.2) keeps only one. **AHledger's SavedVariables are not read** (the user's decision, 2026-10-22: they would duplicate our own scans); reading them is a later option.
+
+| Purpose | Call | Returns | Cached | Used |
+|---|---|---|---|---|
+| Markets | `GET /v1/markets` | every market: id, game, ruleset, faction, region, label | 5 min | checks the market exists (SRC6) |
+| Price table | `GET /v1/pricetable/{market}` | every priced item as plain text, the addon's format (below); sends an `ETag`, and an unchanged table answers `304` | 1 min | the live source `ahledger`, every 30 min (M19) |
+| Item history | `GET /v1/prices/{market}/{itemId}?range=24h\|7d\|30d\|90d` | the item's `latest` price and its `series` (below), plus `sales.estimatedPerDay` (null until enough hours of scans back it) | 1 min | the backfill, `7d` and `90d` (M21) |
+| Tooltip | `GET /v1/tooltip/{market}?items=2589,2592` | latest price, 7 and 30 day medians and salesPerDay for up to 100 items at once; the market comes back with slashes | 1 min | not used |
+| Item | `GET /v1/items/{itemId}?game=forever` | name, quality, class, level, requirement, vendor value, icon | 5 min | not used (`/items` from AHF names items, §2.1) |
+| Economy | `GET /v1/economy/{market}` | market size and daily history, including `scans` per day | 10 min | not used |
+| Market tools | `/v1/deals`, `/v1/crafting`, `/v1/structure`, `/v1/signals`, `/v1/disenchant` | AHledger's own analyses, 60 requests a minute each (busy: `503` + `Retry-After`) | 10–15 min | never: AHSync computes its own |
+
+**Formats** (from AHledger's developer page, pasted 2026-11-01, and live calls on 2026-10-22; recorded into `tests/fixtures/ahledger/` by `tools/record_fixtures.py`, trimmed to tens of rows):
+
+- **Price table**: a header line `AHL1|forever/pvp/horde/us|1793000000|18422` (format `AHL1`, the market with slashes, `updated` in Unix **seconds**, the row count), then rows `itemId:median:minBuyout:quantity:median7d:median30d:low30d:high30d:soldPerDayx10` joined by `;`. An empty field means unknown. `soldPerDayx10` is tenths: "3600 is 360 a day, 4 is 0.4". On 2026-10-22 our market's table had 2,207 rows, about 92 KB, updated 26 h before.
+- **Item history** (`/v1/prices/forever.pvp.horde.us/2589?range=7d`): `{"market", "item": {"id", "name", "quality"}, "latest": {"observedAt": "2026-11-05T14:02:11.000Z", "source": "Addon scan", "minBuyout": 18, "median": 20, "quantity": 3420, "auctions": 212, "median7d": 22, "median30d": 21, "median90d": null}, "range": "7d", "series": [{"t": "2026-11-04T14:00:00.000Z", "min": 17, "median": 21, "p25": 19, "p75": 24, "quantity": 3100, "auctions": 190}, …]}`. `latest` is null until the market has been scanned. `series` holds **hourly** buckets for `7d` and **daily** buckets for `30d` and `90d`; for `24h` the endpoint table says one point per full scan and the prose says hourly buckets (unused by AHSync, so it doesn't matter).
+- Market tool responses carry `marketStatus`, `pricesAsOf` (the newest **full** scan; a partial scan never sets it) and an `attribution` block (`"Prices from AHledger"` with its URL); AHSync doesn't call them.
+
+**Attribution** (AHledger's terms: free for personal or commercial use on two conditions). (1) **Credit AHledger with a link to ahledger.com wherever its data is shown**: AHSync names the source "AHledger", linked to `https://ahledger.com`, on the Status page (its line on the market card and its row in the Data coverage card, §3.5), wherever a page names the source of a shown price (the item detail's source mix, "seen 26 h ago (AHledger)"), and in the top bar's "numbers from" pill when `primary = "ahledger"`, the default (§3.6). Campaign tags AHledger puts on links in its responses are kept. (2) **Never present the data as our own scan, and never resell it as a feed**: AHledger's rows keep `src` `ahledger` / `ahledger_h1` and are labelled as AHledger's, never as "your scan"; AHSync re-publishes nothing. The addon shows no AHledger data of its own: closes are blended into AHSync's statistics, and the dashboard's source labels carry the credit.
+
+**The price table: the live source** (M19, `collect/ahledger.py`). While AHSync runs it polls each market's table every 30 minutes (the steady state, §3.1) with `If-None-Match: <the last ETag>`:
+- `304` writes nothing (SRC8).
+- A changed table is parsed and checked (header `AHL1`, the market, a whole `updated`, the row count; a bad header writes nothing, FM44; a bad row is skipped, FM45), then written in one transaction, every write an idempotent upsert:
+  - `current` (src `ahledger`): price = `minBuyout`, qty = `quantity`, at = `updated × 1000`; a row without `minBuyout` writes none.
+  - one `candles_h1` close per item (src `ahledger`) at the hour `floor(updated ÷ 3600)` (stored as that hour's start in ms, like every hour row): close = `minBuyout`, qty = `quantity`, open, high and low NULL.
+  - `ahledger_rows` (§3.2): its `median`, `median7d`, `median30d`, `low30d`, `high30d` and `soldPerDayx10` as they came. **Stored, used nowhere** (the user, 2026-10-22: "only stored for now, use our own calculation"): analysis reads its own statistics from the closes (SRC11).
+  - `observed_hours` (§3.2): the hour of `updated`, for the Data coverage card.
+  - `source_state` (§3.2): the ETag, `updated` and the fetch time, so a restart sends the right `If-None-Match`.
+- Volume is untouched: AHledger's `soldPerDayx10` is never a sales source (§3.3.1).
+
+**The history backfill** (M21, `collect/ahledger.py`; on only with `ahledger_backfill = true`, the default, §3.6). On the first run, and after a gap, AHSync fills the hours it is missing from AHledger's per-item history:
+- **What.** For every key in the market's latest price table, `GET /v1/prices/<market>/<key>?range=7d`: each hourly bucket becomes a `candles_h1` close under src `ahledger_h1` (close = `min`, qty = `quantity`, at the bucket's hour `t`), **only for hours with no `local` or `ahf` close for that item**, so it fills gaps and never overwrites (SRC12). Then `range=90d`: each daily bucket becomes a `candles_d1` close under src `ahledger` for days with no d1 close of any source. Every received bucket's hour goes to `observed_hours` under `ahledger_h1`, whether or not its close was written (it observed that hour).
+- **When.** At most once per local calendar day per market, after the price table poll, and only when there is something to fill: on the first run (no `ahledger_h1` close yet), or when some hour of the last 7 days has no complete observation from any source in `observed_hours` (a gap). A 2,207-item market is about 15 minutes of requests at 300 a minute (two per item: 4,414 requests, the last one 882.6 s after the first); the collector runs it in the background between hourly cycles, chunked, and it never blocks the dashboard, a sync or a refresh.
+- **Limits.** At most 300 requests a minute per address, counted across every AHledger call (SRC13); `Cache-Control` honoured (a response still fresh is not requested again); a `429` waits its `Retry-After` (up to 300 s; a longer one ends the backfill for this run, FM47).
+- **Resume.** A checkpoint in `source_state` (the last key done and the range) is committed with each chunk of 100 keys, in ascending key order, so a crash, a stop or a `429` resumes at the next key, never from the start (SRC14).
+
+**Not used, on purpose:** AHledger's aggregates (`median`, `median7d`, `median30d`, `low30d`, `high30d`, `median90d`), its sales estimates (`soldPerDayx10`, `sales.estimatedPerDay`, `salesPerDay`) and its percentiles (`p25`, `p75`): stored where noted, never in a statistic. The tooltip, item, economy and market-tool endpoints are not called.
+
 ## 3. AHSync (companion app)
 
 ### 3.1 Lifecycle
@@ -258,12 +311,15 @@ start
  │    day candles: public d1 (7 days) or d1c (90 days); current: snapshot or live table
  │    volume: once a day if Premium
  │    commit and advance sync_state after each hour, so a crash resumes there
+ ├─ AHLEDGER per market (planned, M19/M21; §2.3): price table with If-None-Match (304 → nothing);
+ │    then the history backfill in the background, at most once a day, from its checkpoint
  ├─ prune > 90 days
  ├─ FULL REFRESH (§3.1.1) → market intelligence, recommendations, plan, dashboard data, the addon files
  ├─ serve dashboard at http://localhost:8765
  └─ STEADY STATE (mostly idle; see §3.1.1)
       every hour at :06 → store the new h1 hour + snapshot (+ AHF order book if Premium `books`); no recompute
       every 15 min (Premium) → store the live table; no recompute
+      every 30 min → AHledger price table per market (§2.3); no recompute; the backfill continues between cycles
       every hour at :00 → STATUS PASS (§3.1.1): late / missed transitions, missed-peak re-plans; no history reads
       SavedVariables changed → re-read → INCREMENTAL UPDATE of the changed items only (§3.1.1)
       first run after `daily_refresh_time`, or "Refresh now" → FULL REFRESH
@@ -286,7 +342,7 @@ All the heavy lifting happens in AHSync, and only in a **full refresh**. Everyth
 - The plan is re-planned whole rather than item by item, because budgets and each selling window's capacity are shared across items (§3.4C.4); a per-item update would let two items spend the same gold.
 - It is published like a full refresh (staged, then swapped in), keeping the live intelligence; a failure leaves the previous plan and pages live.
 - A new in-game scan updates `cur`, `curQty`, the book and the current supply for the scanned items only (`analysis.market.with_scan`, IU6): the re-plan applies your scans made after the intelligence was built to the items they priced, in memory, for the plan and the pages; the stored intelligence stays as analysis built it.
-- Hourly and live AHF data are **stored but not applied** until the next full refresh, so the numbers stay stable through the day. The exception is items you scanned in game, whose prices update immediately. The dashboard shows "prices newer than numbers · Refresh now" when newer data is waiting: each `/api/views` response carries `prices_newer`, true when the newest stored AHF price is newer than the published intelligence (IU2).
+- Hourly and live remote data (AHF, AHledger) are **stored but not applied** until the next full refresh, so the numbers stay stable through the day. The exception is items you scanned in game, whose prices update immediately. The dashboard shows "prices newer than numbers · Refresh now" when newer data is waiting: each `/api/views` response carries `prices_newer`, true when the newest stored price of the market's primary source (`[sources]` primary: `ahf` today, `"ahledger"` by default once M19 is built, §3.6; SRC2) is newer than the published intelligence (IU2).
 
 **Status pass** (`recommend/status_pass.py`, run by `app/scheduler.py`). Time passing changes the plan even when no data does, so AHSync runs this once an hour at :00. It runs on precomputed options only, with no history reads and no simulation:
 - It moves `pending` actions to `late` or `missed` by the rules in §3.4.1.
@@ -389,6 +445,9 @@ farming_sessions(session_id PK, char_id, start_ms, end_ms, units, ended)   -- bu
 farming_session_items(session_id, key, qty,                  PK(session_id,key))   -- built (schema 23): units per item, catalog or not
 manual_rates(char_id, key, items_per_hour, set_at,           PK(char_id,key))      -- built (schema 23): rate overrides from the dashboard (§3.4E.5)
 fetch_failures(market, hour, failures, last_error, last_at,  PK(market,hour))   -- hour files to retry (§5.2)
+ahledger_rows(market, key, updated, median, m7, m30, lo, hi, per_day_x10,  PK(market,key))   WITHOUT ROWID   -- planned (schema 24, M19): the price table's aggregates, as they came; read by nothing (§2.3)
+source_state(market, src, etag, updated_ms, fetched_ms, checkpoint,  PK(market,src))   -- planned (schema 24): per remote source: last ETag, the table's `updated`, last fetch; the backfill's resume point (§2.3)
+observed_hours(market, src, hour,                            PK(market,src,hour))   WITHOUT ROWID   -- planned (schema 24, M20): hours with a complete observation, per source (§3.5 Data coverage)
 ```
 
 **Portfolio tables.** `alternatives` is built (schema 20, M9): the plan's unfunded candidates with their D.6 reason, staged in `alternatives_new` and swapped in by `publish_refresh` with the plan, on a full refresh and a re-plan alike (`recommend/store.py` `stage_alternatives`, `alternatives`). The portfolio plan writes it since M10 (`recommend.portfolio.alternative_rows`): one row per unfunded candidate batch, its list (today or week) by its opportunity's first batch. **Built (schema 21, M11):** what the addon files carry of the portfolio, staged in `export_candidates_new` and `portfolio_snapshot_new` and swapped in by `publish_refresh` with the plan (`RecommendStore.stage_export`, written by `recommend.portfolio.portfolio_export`): `export_candidates` holds the exported candidates in export order (§3.4D.3, `candidate_export` in all), each with its status ("" when funded, else its D.6 status), adjusted profit and `candidate_to_json`; `portfolio_snapshot` holds one JSON document per market (`recommend.portfolio.snapshot_data`: the run's time, the settings the addon scores with, the config version, capital base, committed capital, remaining capacity, the gold allocated, the reservation per character and the positions with their plan action). The export reads them, so a `PortfolioPlan.lua` written after a SavedVariables read or the status pass carries the last plan's snapshot (the status pass swaps in its re-evaluated positions, §3.4D.9). **Built (schema 22, M14):** the position tables (§3.4D.9; `state/positions.py`, written by `recommend/positions_pass.py`), and `actions.cand_id` (and its staging twin's), so a matched purchase or craft knows the funded opportunity it opens a position for:
@@ -405,7 +464,11 @@ portfolio_snapshot(market PK, data)                                             
 - A position's `state` is one of §3.4D.9's eight. `cost_left` is what you paid for the units still held, listed, in the mail or sold but not yet paid out; the sum over open positions is the committed capital (§3.4D.1). Positions are kept 90 days after they close, like actions (`history/prune.py`, `delete_closed_positions_before`, their lots with them). `position_id` is the opening event's id (`charId:timeMs:seq`); `char_id` and `key` are who holds the units and what they are now (a mail moves them, a craft turns Processing mats into the product); `char_id`, `key`, `state`, the units, the costs, `realized`, `closed_at` and `next_action` are the replay's (tracking pass), `state`, `expected_net_now`, `latest_window_ms` and `next_action` then the latest evaluation's (plan run, status pass).
 - Lots are upserted by `event_id`, so reading the same SavedVariables twice never adds a lot twice (PO8).
 
-- Candle and `current` `src` is `ahf` or `local`.
+- Candle and `current` `src` is `local`, `ahf` or, planned (M19, M21), `ahledger` (the price table: `current`, `candles_h1`, and the backfill's `candles_d1`) or `ahledger_h1` (the backfill's hourly closes, `candles_h1` only), or a future provider's name. Which close statistics use for an (item, hour) follows the source's kind, then its rank (§2.2).
+- **AHledger and coverage tables** (planned, **schema 24**, M19-M21; `SCHEMA_VERSION` is 23, and the migration to 24 adds the three tables below and nothing else):
+  - `ahledger_rows` holds one row per market and item, the latest price table's `median`, `median7d` (`m7`), `median30d` (`m30`), `low30d` (`lo`), `high30d` (`hi`) in copper and `soldPerDayx10` (`per_day_x10`, tenths), NULL for an empty field, with the table's `updated` (Unix s). A newer table replaces the row; an item missing from a newer table keeps its last row. No reader, no analysis and no page uses it (SRC11); it is kept for a later decision and pruned with the market's other rows after 90 days.
+  - `source_state` holds, per market and remote source (`ahledger` today): the last `ETag`, the table's `updated` in ms, the last fetch time (ms) and the backfill's `checkpoint` (JSON: range, last key done, the day it started), so a restart polls with the right `If-None-Match` and the backfill resumes (§2.3). A failure never clears it.
+  - `observed_hours` holds, per market and source, each UTC hour (`floor(ms ÷ 3600000)`) with at least one **complete** observation (§3.5 Data coverage: a complete local scan, an AHF hour file with rows, an AHledger table's `updated`, an AHledger hourly bucket). Each writer upserts it in the same transaction as the data, so it stays idempotent; it is pruned at 90 days like candles. It exists because order books (`scans`) are kept only 30 days and the hourly tables are too big to read at each status pass (§3.1.1). The migration fills it from what is still there: the complete local scans kept (30 days) and the hours of stored `ahf` hour closes; older local hours are not recoverable and count for nobody.
 - Volume `src` is `ahf` (Premium depth), `books` (own order-book diffs) or `mail`, ranked in that order of trust; `qty_drop` rows hold listing turnover, never sales (§3.3.1). `conf` is `high`, `medium` or `low`.
 - Scan `kind` is `full` or `partial`. Mail `outcome` is `sold`, `expired`, `cancelled` or `won`. Post `outcome` is null while pending, then `sold`, `expired` or `cancelled`.
 - `location` is `bags`, `bank` or `mail`. Items on the AH live in `own_auctions`.
@@ -455,7 +518,7 @@ Scale linearly per extra market.
 
 | Field | Meaning |
 |---|---|
-| `cur`, `curQty`, `curAge` | newest lowest buyout (AHF or local, whichever is newer), quantity, age; nil when nothing is listed |
+| `cur`, `curQty`, `curAge` | newest lowest buyout (of every source, whichever is newest; `local` on ties, S7), quantity, age; nil when nothing is listed |
 | `curOthers` | lowest buyout that is not one of your own auctions (`own_auctions`). It uses the next price in the newest local book if you hold the lowest one; nil if unknown |
 | `med7`, `med30` | median of hourly closes in the window (one per item and hour, §2.2). With fewer than 24 hourly closes, it uses the median of daily closes instead, or the few hourly closes when there are no daily ones; nil when there are neither |
 | `p10_30`, `p90_30` | nearest-rank 10th and 90th percentiles of hourly closes over 30 days |
@@ -1260,10 +1323,21 @@ Some items you hold are for your own use: food, potions, mats for your own gear.
    - **Rules**: blacklisted items, and items flagged "not selling" waiting for a decision (**built**, D50: `engine/rules_view`, `recommend/rules_page`; Waiting for a decision with Blacklist and Keep, Kept on a fresh start with what sold since, and the Blacklist; Undo clears a rule through `POST /api/rule` with `none`. The Blacklist card has an item search (D54): `GET /api/items?q=…` answers up to 20 items whose name contains the text, those starting with it first (then by name and key), unknown-suffix items left out; each result offers "Don't buy or craft" and "Ignore completely", stored through `POST /api/rule`. The search only reads (SEC10).)
    - **Characters**: professions, skill and gold (**built**, D49: `engine/characters_view`; one card per character: class and level, faction, realm and ruleset, market, gold or the `[budgets]` override, known recipes, last seen, and a bar per profession). **Gathering professions too** (**built M18**, D86: each profession's `gathering` flag, the page's muted "· gathering" tag; the crafting professions first, then the gathering ones, each by name): every captured profession has its bar, crafting and gathering alike, the gathering ones tagged "gathering" (Amaya: Enchanting 142/225, Tailoring 160/225, Fishing 20/75, Herbalism 45/75; Brugan: Alchemy 225/225, Blacksmithing 112/150, Mining 68/75, Skinning 40/75), since Gathering's eligibility reads them. The Craft page's crafter names any captured profession's skill, so a smelt reads "Brugan (Mining 68)".
    - **Status**: sync state, data age, missed-hours warnings, the API tier (with the contributor expiry date and a warning 2 days before), and **sell-probability calibration** (predicted against actual sell rate per bucket, plus the Brier score; §8.8), ending with one line setting the plan's expected profit against what it realized over the last 90 days (K7). **Built (M18, GA34):** an info line lists what you gathered that the Gathering catalog couldn't place: "Gathered, not in the catalog: Rough Stone 22, Ruined Leather Scraps 13, Broken Fang 7, Chipped Claw 6, Light Hide 2" (`engine/status_view` kind `gathering_unplaced`, its title "Gathered, not in the catalog"; units over the confirmed sessions and the open candidates, §3.4E.1, most first, ties by name)
-     - **Alerts** turn every stored Status line into a sentence in local time, most serious first. The per-hour "bad file" lines become one alert per market (D32). One alert is derived, not stored: **AHF data is old** when a market's newest price from its primary source (`[sources]` primary, AHF by default, named in the alert, SRC2) is more than 6 h old, because then prices, sales and windows rest on stale data and your own scans are the fresh source (D33). An unmapped realm says how to fix `[realms]` (D34).
-     - **Cards**: one per market (last sync run, hours handled, newest AHF price and its age, items with prices, hourly history stored, your scans and AHF order books in 7 days), API (key set, Premium), Characters (each with its market, or "no market") and Storage (database size, retention).
+     - **Alerts** turn every stored Status line into a sentence in local time, most serious first. The per-hour "bad file" lines become one alert per market (D32). One alert is derived, not stored: **"<primary> data is old"** ("AHledger data is old", "AHF data is old") when a market's newest price from its primary source (`[sources]` primary, named in the alert, SRC2; `ahf` by default today, `"ahledger"` once M19 is built, §3.6) is more than 6 h old, because then prices, sales and windows rest on stale data and your own scans are the fresh source (D33). An unmapped realm says how to fix `[realms]` (D34).
+     - **Cards**: one per market (last sync run, hours handled, the newest price of the primary source and its age ("Newest AHledger price" with the default primary, §3.6), items with prices, hourly history stored, your scans and AHF order books in 7 days), API (key set, Premium), Characters (each with its market, or "no market") and Storage (database size, retention).
+     - **The AHledger line** (planned, M19; S18): on each market's card whose AHledger address isn't `""`, the label "AHledger table" (AHledger linked to `https://ahledger.com`) and the value "26 h old · 2,207 items": the age of the stored table's `updated` and its row count. The age reads in hours under 48 h and in whole days after ("26 h", "3 d", the Data coverage card's rule, not `views.age_text`, which would say "1 d"), "40 min" under an hour; amber over 24 h, like the AHF line. Before the first table: "not fetched yet" (muted). A failure is an alert, not this line: "AHledger: unreachable since Wed 14:00 (3 tries)" (FM43), "AHledger format changed: pricetable" (FM44), "AHledger has no market forever.pvp.horde.us" (FM46); the line keeps the last good table's age meanwhile.
+     - **Data coverage** (planned, M20; D89-D96; `engine/coverage.py`, the card exactly as the mockup draws it): one card per market after the summary cards and before Recent problems, titled "Data coverage" with the muted subtitle "last 90 days to Thu 22 Oct 14:00 · your scans, AHledger and auctionhouse.fyi" (the window's end in local time, then the labels of the market's sources: `local` and each configured remote source, joined with commas and a final "and").
+       - **The window** is the last 90 days, **2,160 whole hours**, ending at the start of the current hour (at Thu 22 Oct 14:20 it runs from Fri 24 Jul 14:00 to Thu 22 Oct 14:00; its last hour is 13:00–14:00).
+       - **The counting rule.** An hour counts for a source when that source has at least one **complete observation** in it: a complete local scan (`kind` full, coverage 1); an AHF hour file stored for that hour with at least one row; an AHledger price table whose `updated` falls in it, or an AHledger hourly bucket (`ahledger_h1`) for it. **A partial scan never counts** (Tue 20:15, closed at 40%: its hour counts for nobody unless another source observed it), nor does an empty AHF file, a day candle or a current price without an hour behind it. The hours come from `observed_hours` (§3.2), read in bulk per market (`history/reads.py` `observed_hours(market, from_hour, to_hour)` → {src: sorted hours}). `ahledger` and `ahledger_h1` show as one source, `ahledger` (the price table and the backfill together).
+       - **The heatmap** (left): "Weeks with data per hour of the week, local time" over a 7 × 24 grid, Mon–Sun by 0–23 in the machine's local time (the clock's offset, as every page). Each cell's **value** is the number of distinct hours of the window in that hour-of-week slot with a complete observation from **at least one** source (the union). A slot holds at most **13** such hours: 2,160 = 12 weeks (2,016 h) + 144 h, so 144 slots occur 13 times and **24 occur only 12 times**, the 24 slots from the window's end onwards (Thu 14:00 to Fri 13:00 at Thu 14:00); each cell knows its own possible count, counted, never assumed (a daylight-saving change can move one). **Shading by fraction** (the user's decision, 2026-11-01): a cell's step is its value ÷ its possible count, in six steps, 0 · up to 25% · up to 50% · up to 75% · under 100% · 100% (step 0: none; 1: more than 0 and at most 25%; 2: at most 50%; 3: at most 75%; 4: more than 75% but not all; 5: every possible week). Exact integer comparisons, no floats: step 1 when 4 × value ≤ possible, 2 when 2 × value ≤ possible, 3 when 4 × value ≤ 3 × possible. So "12 of 12" is as dark as "13 of 13" (step 5), and "12 of 13" is step 4. Of 13 possible, values 1–3 are step 1, 4–6 step 2, 7–9 step 3, 10–12 step 4; of 12, values 1–3, 4–6, 7–9, 10–11 and 12. *Not chosen*: shading by value (0 · 1–3 · 4–6 · 7–9 · 10–12 · 13 weeks), which made the 24 slots that can only reach 12 look one shade worse than they are. The hover keeps the count ("12 of 12 weeks"). Under the grid the scale: its six swatches labelled "0 · up to 25% · up to 50% · up to 75% · under 100% · 100%" and "of the weeks possible".
+       - **Each cell's hover**: "Tue 19:00 · 12 of 13 weeks · local 7, ahledger 0, ahf 10": the slot, the value of its possible count, then each source's own count. The source counts overlap (an hour two sources observed counts for both), so they may add up to more than the value, which is the union.
+       - **The table** (right): Source · Hours with data · Share · Newest · Oldest. One row per source in a fixed order, `local`, `ahledger`, `ahf`, then any other source by name (`coverage.SOURCE_ORDER`), each with its code and a sub label ("your scans", "AHledger" linked to ahledger.com, "auctionhouse.fyi"): hours with data ("209 h", thousands with a comma), share of 2,160, its newest and oldest counted hour as ages from the window's end ("16 h ago", "60 d ago"; hours under 48 h, whole days after; "—" when none). A remote source's Newest is amber when it is older than 72 h (a feed that stopped); `local` never is (you scan when you play). Then a total row "any source" (the union: hours and share) and a muted "no data" row: the hours no source observed, their share, and the longest run of them, "longest gap 3 d 6 h (4 Oct 00:00 – 7 Oct 06:00)": its length ("N h" under 48 h, else "D d" plus " H h" when not whole) and its first hour to the first hour after it ("now" when it reaches the window's end; the earliest of equal runs; "no gap" when every hour has data). Under the table: "of the 2,160 hours in the last 90 days; sources overlap, so "any source" is less than their sum".
+       - **Share** is hours × 100 ÷ 2,160, rounded half up, "<1%" when it rounds to 0 but isn't 0, ">99%" when it rounds to 100 but isn't all 2,160.
+       - **The foot**: the reading "Coverage is the hours any source observed; it is what the weekly patterns and sales estimates are built from. Dark cells make reliable windows; pale cells are hours nobody has scanned yet." and the rule "A source counts an hour when it has at least one complete observation in it: a complete scan, an AHF hour file, an AHledger table update or hourly bucket. Never a partial scan (Tue 20:15, closed at 40%, is not counted)." The parenthesis names the newest partial scan in the window, in local time, with its coverage; with none it is left out.
+       - **The mockup's world** (D89, D90): your scans 209 h (10%), AHledger 566 h (26%), AHF 978 h (45%), any source 1,268 h (59%), no data 892 h (41%), longest gap 3 d 6 h (4 Oct 00:00 – 7 Oct 06:00); AHF's newest is 13 d ago, amber (an AHF outage that your scans and AHledger cover). Day one (D91): one complete scan, so one cell at 1 of 13, every other cell 0, `local` 1 h (<1%), "no data" 2,159 h (>99%), "longest gap 89 d 23 h (24 Jul 14:00 – 22 Oct 13:00)". A healthy 90 days (D96): 1,899 h (88%) with any source.
+       - Built by the pure `engine/coverage.py` `coverage(hours_by_src, window_end_hour, offset_ms, sources, partial)` (each cell's value, possible count and fraction step, the hovers, the per-source rows, the union and the longest gap) from the per-source hour lists, into the Status payload's `coverage` (below). The Status page is built on request (below), so the card is too, from one read of `observed_hours` (at most 2,160 rows per source); no history table is read, as at the status pass (§3.1.1). The page only draws it.
 
-   Item names link to auctionhouse.fyi.
+   **Attribution and source labels** (planned, M19-M20; S19). Item names link to auctionhouse.fyi. **Wherever a page names AHledger as the source of what it shows, the name is a link to `https://ahledger.com`** (AHledger's terms, §2.3): the Status card's AHledger line and its alerts, the Data coverage card's `ahledger` row, the item detail's source mix ("seen 26 h ago (AHledger)") and the Gathering freshness line's price source, and, when the market's `primary` is `"ahledger"` (the default from M19, §3.6), the top bar's "numbers from" pill, whose "prices newer" then follows AHledger's prices (SRC2): "numbers from 06:00 · prices newer · Prices from AHledger", the last part linked (with `primary = "ahf"` the pill has no AHledger text). The top bar's freshness pill ("synced 14:06 · hour data 26 h old") follows the primary source too. `views.source_label` gains "AHledger" for both `ahledger` and `ahledger_h1`, and `views.SOURCE_URLS` its link; payloads carry the label and the URL as fields, so the page never builds either. AHledger's prices are never labelled "your scan".
 
    **Gold pill** (built, M15, D74: `views.gold_pill`, staged by `app/refresh.py` on the pages in `views.GOLD_PAGES`; the page hides the pill when a response has no `gold`): the top bar shows "Gold 31g 40s · 2 characters · Mon 10:38" (gold in hand across your characters at the last portfolio snapshot, that is the plan run that built the page, with its time in local time) on every page except Rules, Characters and Status.
 
@@ -1301,7 +1375,29 @@ Some items you hold are for your own use: food, potions, mats for your own gear.
    **Dashboard data (the contract between the full refresh and `web/`).** A full refresh writes one JSON payload per page and market into `views` (§3.2), swapped in atomically (§5.2). The server serves them as stored and computes nothing (§8.5).
    - `GET /` serves the page (`web/static/index.html`) with the per-run token embedded.
    - `GET /api/markets` returns `{"markets": [...], "default": "<id>"}` from the config.
-   - `GET /api/views/<page>?market=<id>` returns `{"built": <ms>, "data": <payload>}`, or `404 {"error": "no_refresh_yet"}` before the first refresh. `<page>` is `disenchant`, `craft` (M3), `today`, `week`, `flip`, `inventory` (M4), `status`, and later `on_ah`, `history`, `rules`, `characters`, `portfolio` (M13) and `gathering` (M16). **`status` is the one page built on request** (`app/status_page.py`, texts by `engine/status_view.py`), because sync runs, SavedVariables reads and failures change it between refreshes; it reads only small tables (status lines, sync state, current prices, scans, characters) and the database file's size, and `built` is the request time. Its payload is `{"alerts": [{"level", "title", "text"}], "cards": [{"title", "badge", "badge_class", "lines": [[label, value, class]]}]}`.
+   - `GET /api/views/<page>?market=<id>` returns `{"built": <ms>, "data": <payload>}`, or `404 {"error": "no_refresh_yet"}` before the first refresh. `<page>` is `disenchant`, `craft` (M3), `today`, `week`, `flip`, `inventory` (M4), `status`, and later `on_ah`, `history`, `rules`, `characters`, `portfolio` (M13) and `gathering` (M16). **`status` is the one page built on request** (`app/status_page.py`, texts by `engine/status_view.py`), because sync runs, SavedVariables reads and failures change it between refreshes; it reads only small tables (status lines, sync state, current prices, scans, characters, and, planned, `source_state` and `observed_hours`) and the database file's size, and `built` is the request time. Its payload is `{"alerts": [{"level", "title", "text"}], "cards": [{"title", "badge", "badge_class", "lines": [[label, value, class]]}]}`; a line may carry a fourth element, the URL its label links to (planned, the AHledger line: `["AHledger table", "26 h old · 2,207 items", "amber", "https://ahledger.com"]`). **Planned (M20):** it gains `coverage`, one per configured market, every text formatted by `engine/coverage.py`:
+
+     ```
+     coverage: [{"market", "title": "Data coverage", "sub": "last 90 days to Thu 22 Oct 14:00 · your scans, AHledger and auctionhouse.fyi",
+                 "window": {"from": <ms>, "to": <ms>, "hours": 2160},
+                 "heading": "Weeks with data per hour of the week, local time",
+                 "days": ["Mon", …, "Sun"], "hour_labels": ["0", "", …, "6", …],        -- every 6th hour labelled
+                 "cells": [[{"value": 12, "possible": 13, "step": 4, "by_src": {"local": 7, "ahledger": 0, "ahf": 10},
+                             "title": "Tue 19:00 · 12 of 13 weeks · local 7, ahledger 0, ahf 10"} ×24] ×7],   -- Mon first, hour 0 first
+                 "scale": [{"label": "0", "step": 0}, {"label": "up to 25%", "step": 1}, {"label": "up to 50%", "step": 2},
+                           {"label": "up to 75%", "step": 3}, {"label": "under 100%", "step": 4}, {"label": "100%", "step": 5}],
+                 "scale_note": "of the weeks possible",                                -- step = value ÷ possible (fraction)
+                 "sources": [{"src": "local", "label": "your scans", "url": null, "hours": 209, "hours_text": "209 h", "share": "10%",
+                              "newest": "16 h ago", "newest_class": "", "oldest": "60 d ago"}, …],
+                 "union": {"hours": 1268, "hours_text": "1,268 h", "share": "59%"},
+                 "none": {"hours": 892, "hours_text": "892 h", "share": "41%",
+                          "gap_text": "longest gap 3 d 6 h (4 Oct 00:00 – 7 Oct 06:00)",
+                          "longest_gap": {"hours": 78, "from": <ms>, "to": <ms>}},
+                 "note": "of the 2,160 hours in the last 90 days; sources overlap, so \"any source\" is less than their sum",
+                 "reading": "Coverage is the hours any source observed; …", "rule": "A source counts an hour when …"}]
+     ```
+
+     `step` is the shading step 0–5 by fraction (value ÷ possible), which the page maps to a colour strength; `longest_gap` is null when every hour has data, and `gap_text` then reads "no gap"; `url` is the label's link (AHledger's), null otherwise.
    - Payload of `disenchant` and `craft`: `{"rows": [...], "hidden": <n>, "help": {header: tooltip}}`. Each row is built by `views.disenchant_row` / `views.craft_row`: every cell is already formatted text (money, percents, the market activity cells `chance` with its `dot`, `sales`, `supply` and `days`, risk with `risk_amber`), plus a `sort` object with one number per sortable column (−1 for an unavailable value). `help` is `views.COLUMN_HELP`, the header tooltips. The page sorts by `sort` values and filters by row fields (quality, profession, source, profit); it never parses or computes numbers.
    - Payloads of the plan pages (`recommend/plan_pages.py`, built by `engine/plan_views.py`): `today` is `{"by_min": {"0"|"25"|"50"|"75": {"rows", "hidden", "total"}}, "help"}`, one complete view per step of the page's "Min chance" dropdown, so the page only picks one and never filters or totals itself (`hidden` counts only rows that step's filter hid; rows of volume-unknown items are in every step's `rows`, with `chance_note` "volume unknown", D58); `week` is `{"days": [{"label", "today", "total", "rows"}], "total", "categories", "characters", "sums", "help"}`; every Today and Week row carries `lines` (its chain's lines, [] for any other row) and `character` (D62, D65); `flip` is `{"rows", "hidden", "help"}`; `inventory` (`recommend/inventory_page.py`, built by `engine/inventory_view.py` and `engine/item_detail.py`) is `{"rows", "tiles", "details", "help"}`, where `details` maps each held item's key to its item detail (windows, the three selling answers, market activity lines and the three 7 × 24 heatmaps, each cell with a level 0–4 or none for no data and its title), so selecting a row only looks one up. Days and times are in the machine's local time (the clock's offset). Week rows include the week's kept history, so done actions show ticked.
    - **Built (M13).** `portfolio` (`recommend/portfolio_page.py`, built by `engine/portfolio_view.py` at the full refresh and at every re-plan, from the run just planned: nothing is selected again) is `{"tiles", "fresh", "risk": {"options": [10, 20, 30, 40, 50], "selected": 30, "values": [0.1, 0.2, 0.3, 0.4, 0.5]}, "positions": {"rows", "summary", "foot", "note"}, "today": {"by_min": {"0"|"25"|"50"|"75": {"funded", "excluded", "cut", "foot", "hidden"}}, "note"}, "week": {"funded", "excluded", "cut", "foot", "note"}, "pool": {"rows", "total", "cut", "first_excluded"}, "empty": null | {"title", "text"}, "help"}`: every cell formatted, each row with its `status` (`funded`, or the reason with `status_class` and its `detail`), `excluded` and its `sort` values; `cut` is the red line's text ("capacity reached · 24s 40c left"). A tile is `{"label", "value", "of", "detail", "risk"}` (`risk` true for the dropdown's tile); a footer is a list of `[text, class]` segments joined by " · "; `values` are the option values the dropdown posts; `summary` is section A's header line ("gold already committed · 7 positions · they take no recommendation slots").
@@ -1403,6 +1499,7 @@ swap_candidates = 50                          # excluded batches the swap pass t
 session_confirm_units = 20                    # gathered units that confirm a farming session, 1-1000 (§3.4E.4)
 session_gap_minutes = 15                      # minutes without loot that end a farming session, 1-120
 timing_edge_min_strength = 40                 # Gathering shows a sell window from this seasonality strength up, 0-100 (§3.4E.7)
+ahledger_backfill = true                      # planned (M21): fill missing hours from AHledger's per-item history (§2.3); false = price table only
 launch_wow_after_catchup = false
 
 [realms]                                      # realm -> ruleset; needed only when you sync several markets per faction (§2.1)
@@ -1411,13 +1508,21 @@ launch_wow_after_catchup = false
 [budgets]                                     # optional per-character budget in copper; default is the character's gold
 # "Amaya-RealmName" = 150000
 
-[sources."forever.pvp.horde.us"]              # optional: where this market's data comes from (SRC1-SRC4)
-primary = "ahf"                               # the remote source Status and "newer prices" follow (default ahf)
-rank = ["ahf"]                                # remote price sources, most trusted first; your scans always come first
-[sources."forever.pvp.horde.us".addresses]    # provider -> this market's id there; AHF defaults to the market id
+[sources."forever.pvp.horde.us"]              # optional: where this market's data comes from (SRC1-SRC4, SRC10)
+primary = "ahledger"                          # the remote source Status, the freshness pill and "prices newer" follow (default "ahledger":
+                                              # AHF has published nothing for this market since 2026-10-09; "ahf" allowed)
+rank = ["ahf", "ahledger"]                    # remote price sources, most trusted first within a kind (§2.2); your scans always come first
+[sources."forever.pvp.horde.us".addresses]    # provider -> this market's id there; AHF and AHledger default to the market id
 # ahf = ""                                    # "" = this market takes nothing from AHF
+# ahledger = ""                               # "" = this market takes nothing from AHledger (planned, M19)
 # blizzard = "us/4728/2"                      # a future provider's address (§5.0)
 ```
+
+**The AHledger keys** (planned, M19, M21; §2.3; SRC10, SRC15):
+- `rank`'s default becomes `["ahf", "ahledger"]` (it was `["ahf"]`). It orders sources **within a kind** only (§2.2): a `book` close beats an `hourly` one, which beats a `table` one, whatever the rank. `ahledger_h1` (the backfill's closes) ranks wherever `ahledger` does (`collect/provider.py` `RANK_ALIASES = {"ahledger_h1": "ahledger"}`).
+- `addresses.ahledger` defaults to the market id; `""` disables AHledger for that market: no price table, no backfill, no AHledger line, and its row is left out of the Data coverage card (stored rows stay until retention removes them).
+- `primary` **defaults to `"ahledger"`** (the user's decision, 2026-11-01: AHF has published nothing for forever.pvp.horde.us since 2026-10-09, so an AHF primary would leave Status permanently stale); `"ahf"` (or any configured source) is allowed. The primary drives the Status freshness alert ("AHledger data is old", D33, SRC2), the market card's "Newest AHledger price" line, the top bar's freshness pill and the pages' "prices newer" (IU2), all following AHledger's table `updated`, and adds the attribution to the top bar's pill (§3.5). `ahsync/config.py`'s `MarketSources.primary` default is `"ahf"` today; M19 changes it (and `market_sources`' docstring, "AHF … primary and only remote source", SRC1). When the primary's address is `""` (AHledger disabled for the market), the primary falls back to the first ranked source that is enabled (`ahf`), so Status never follows a source that isn't polled.
+- `ahledger_backfill` (a boolean, default `true`) allows the per-item history backfill; `false` keeps the price table only. A non-boolean refuses to start (FM16). None of these keys touches the plan's settings, so none is part of `configVersion`.
 
 **The portfolio keys** (`risk_tolerance` to `swap_candidates`) are read and checked since M9: a value outside the range in its comment refuses to start, with the line and the reason, like any other (FM16). `config.portfolio_settings` hands them to the engine as `engine.portfolio.PortfolioSettings`. Since M10 the selection uses `risk_tolerance`, the premium keys, `today_limit`, `week_limit`, `horizon_days`, `candidate_pool` and `swap_candidates`; since M11 analysis keeps `top_buy_windows` and `top_sell_windows` windows per item (`config.market_settings` hands them to `MarketSettings`, with `max_supply_share`, `max_supply_share_gear`, `min_gear_units` and `max_trend_total` for the window forecasts) and the export keeps `candidate_export` candidates.
 
@@ -1637,7 +1742,7 @@ Clicking a row runs an AH search for it, and the shopping and post lists show al
 The system is built as separate components that talk only through versioned contracts, so that **collection and historical analysis can move to the cloud** (for example AWS Lambda, if a Blizzard API ever replaces thin community data) without changes to the addon or the recommendation side.
 
 ```text
- Providers (AuctionHouseFYI, own in-game scans, future Blizzard API)
+ Providers (AuctionHouseFYI, AHledger, own in-game scans, future Blizzard API)
         │
         ▼
  COLLECTOR ──► HISTORICAL STORE ──► HISTORICAL ANALYSIS ──► MARKET INTELLIGENCE (versioned)
@@ -1655,7 +1760,7 @@ The system is built as separate components that talk only through versioned cont
 
 | Component | Folder | Owns | Does not own |
 |---|---|---|---|
-| Collector | `collect/` | acquiring, validating and normalizing observations from interchangeable provider adapters; catch-up checkpoints; own scans (§4.2) | statistics, recommendations |
+| Collector | `collect/` | acquiring, validating and normalizing observations from interchangeable provider adapters (AHF, AHledger, planned M19, §2.3); catch-up checkpoints and the AHledger backfill's; own scans (§4.2); the kind of each source's rows (`collect/provider.py` `SOURCE_KINDS`, §2.2); the hours each source observed completely (`observed_hours`) | statistics, recommendations |
 | Historical Store | `history/` | raw observations (candles, current, books, volume rows), retention | business logic |
 | Historical Analysis | `analysis/` | market-wide statistics, weekly patterns, seasonality strength, volume estimates, supply, buy/sell windows (§3.3) | anything character-specific |
 | Market Intelligence | `intel/` | the versioned analysis results and their store | live character state |
@@ -1673,8 +1778,8 @@ The system is built as separate components that talk only through versioned cont
 
 | Producer → consumer | Contract |
 |---|---|
-| Collector → Historical Store | normalized observations with source and observation time: `collect/provider.py` `SnapshotObservation` (snapshots with auction ids, checked whole by `snapshot_problems`), stored by `collect/observations.ingest_snapshot`. AHF's adapter predates the contract and writes through `collect/catchup.py`; your scans through `collect/local_scans.py` |
-| Historical Store → Analysis | `history.reads.HistoryReader` (a protocol: closes, current, books, volume, items), read **in bulk per market** (below) |
+| Collector → Historical Store | normalized observations with source and observation time: `collect/provider.py` `SnapshotObservation` (snapshots with auction ids, checked whole by `snapshot_problems`), stored by `collect/observations.ingest_snapshot`. AHF's adapter predates the contract and writes through `collect/catchup.py`; your scans through `collect/local_scans.py`; AHledger's (planned, M19) through `collect/ahledger.py`: `current`, `candles_h1`/`candles_d1` closes under `ahledger` or `ahledger_h1`, its side table, `source_state` and `observed_hours` |
+| Historical Store → Analysis | `history.reads.HistoryReader` (a protocol: closes, current, books, volume, items), read **in bulk per market** (below); one close per (item, hour) by kind, then rank (§2.2), so analysis never names a source |
 | Analysis → Intelligence | `intel.contract.MarketIntelligence` (`INTEL_SCHEMA_VERSION`, method versions, `built_ms`, `observations_until_ms`, one `ItemIntel` per item; contents below), JSON-serializable |
 | Intelligence → Export / Recommendations | `intel.store.IntelReader` |
 | State → Export | the shortlist: item keys on any desktop list, in stock or recipes, or recently scanned (`state.reads.StateReader`) |
@@ -1726,7 +1831,8 @@ ahsync/
   config.py
   clock.py    Clock protocol + SystemClock (injected everywhere; tests use FakeClock)
   app/        scheduler.py (timers, daily refresh, file-change watch), refresh.py (analysis → recommendations → publish, §3.1.1)
-  collect/    provider.py (provider adapter protocol, normalized snapshots, the bonus table), client.py (HTTP, retry, 429), ahf.py (AHF adapter),
+  collect/    provider.py (provider adapter protocol, normalized snapshots, the bonus table, SOURCE_KINDS), client.py (HTTP, retry, 429), ahf.py (AHF adapter),
+              ahledger.py (planned, M19/M21: the AHledger adapter: markets, price table with ETag, parse and checks, writes, polling, backfill; §2.3),
               catchup.py, local_scans.py (own scans → local observations, §4.2), own_mail.py (your mail as volume),
               snapshots.py (raw snapshots on disk), observations.py (snapshot ingest)
   data/       bonus_suffixes.json (generated: bonus ID → suffix id, as Data/BonusSuffixes.lua, and suffix id → name, D60),
@@ -1751,7 +1857,7 @@ ahsync/
               missed.py (missed peaks), cost_basis.py, untracked.py,
               item_key.py (item keys from bonus lists), and the page builders: views.py (tab totals, sorting, filters,
               tooltip deltas), plan_views.py, portfolio_view.py (the Portfolio page, M13), planned_crafts.py, inventory_view.py, item_detail.py, on_ah_view.py,
-              history_view.py, rules_view.py, characters_view.py, status_view.py,
+              history_view.py, rules_view.py, characters_view.py, status_view.py, coverage.py (planned, M20: the Status Data coverage card, §3.5),
               gathering.py and gathering_view.py (built M16: the catalog, eligibility, the rate priority, gold per hour and the Gathering page), sessions.py (built M17: farming sessions and the open candidate; §3.4E), gathering_history.py (built M18: the historical columns and the detail's heatmap, reading line, windows and seasonality)
   export/     market_lua.py (MarketIntelligence.lua), plan_lua.py (PortfolioPlan.lua), addon_files.py (atomic writes, the shortlist)
   web/        server.py, static/
@@ -1769,6 +1875,7 @@ tests/
   ahsync/...           test_<module>.py, same tree as ahsync/
   addon/...            <Module>_spec.lua, same tree as addon/AHProfit/
   fixtures/ahf/        trimmed recordings of real AHF responses (the templates)
+  fixtures/ahledger/   trimmed recordings of real AHledger responses (planned, M19: markets, a price table of tens of rows, item histories)
   fixtures/worlds/     w1.json (generated by tools/gen_world.py) + w1.expected.json (tools/snapshot.py): the whole-plan snapshot (§8.6)
   properties/          generated invariant cases shared by Python and Lua (§8.7)
   scenarios/           named JSON scenarios shared by the Python and Lua tests (their Lua form goes to addon/generated/, not committed)
@@ -1788,6 +1895,8 @@ CLAUDE.md
 **Portfolio modules** (M9–M14, §3.4D), all built with their mirrored test files: `ahsync/engine/portfolio.py`, `timing.py`, `positions.py`, `position_views.py`, `graph.py`, `portfolio_view.py`; `ahsync/recommend/portfolio.py`, `portfolio_page.py`, `positions_pass.py`; `ahsync/state/positions.py` (the addon's `Engine/Portfolio.lua`, `Timing.lua`, `Graph.lua` and `UI/PortfolioView.lua`, M10–M13; its local positions in `Core/Plan.lua`, M14).
 
 **Gathering modules** (M16 built `engine/gathering.py`, `engine/gathering_view.py` and `recommend/gathering_page.py` with their tests; M17 built `engine/sessions.py`, `state/gathering.py` and `Capture/Gather.lua` with theirs; M18 built `engine/gathering_history.py` with `tests/ahsync/engine/test_gathering_history.py`; §3.4E), each with its mirrored test file in the same change: `ahsync/engine/gathering.py`, `sessions.py`, `gathering_view.py`, `gathering_history.py`; `ahsync/state/gathering.py`; `ahsync/recommend/gathering_page.py`; `addon/AHProfit/Capture/Gather.lua` (tests in `tests/addon/Capture/Gather_spec.lua`). None is ported to Lua: the addon only records loot. `ahsync/data/gathering_catalog.json` is a data file, exempt from mirroring.
+
+**AHledger and coverage modules** (planned, M19-M21; §2.3, §3.5), each with its mirrored test file in the same change: `ahsync/collect/ahledger.py` (`tests/ahsync/collect/test_ahledger.py`), `ahsync/engine/coverage.py` (`tests/ahsync/engine/test_coverage.py`, inside the 100% engine branch coverage). `history/reads.py` gains `observed_hours`, `history/writes.py` the upserts of `ahledger_rows`, `source_state` and `observed_hours`, and `tools/record_fixtures.py` an AHledger recorder; none is ported to Lua (the addon shows no AHledger data).
 
 `tools/deploy.py` copies `addon/*` into the WoW AddOns folder.
 
@@ -1824,7 +1933,7 @@ The addon must never be noticeable in game: **no work while idle, a few millisec
 
 ### 5.2 Failure modes and recovery
 
-Data moves through many hand-offs: AHF → AHSync → SQLite → `MarketIntelligence.lua` / `PortfolioPlan.lua` → WoW → SavedVariables → AHSync. Any of them can fail halfway. Six rules make every failure recoverable:
+Data moves through many hand-offs: AHF and AHledger → AHSync → SQLite → `MarketIntelligence.lua` / `PortfolioPlan.lua` → WoW → SavedVariables → AHSync. Any of them can fail halfway. Six rules make every failure recoverable:
 
 1. **Commit points, then resume.** Every step commits in small units (one hour file, one SavedVariables ingest, one refresh). A crash resumes from the last commit point; nothing restarts from zero.
 2. **Idempotent writes.** Every write is an upsert on a natural key, so repeating a step is harmless. Every captured event has a unique id, `charId:timeMs:seq`, so reading the same SavedVariables twice never double-counts.
@@ -1837,7 +1946,7 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `MarketIntellig
    - The addon deletes an event from SavedVariables only after AHSync confirms it was **committed** (`ingestedUntil`, §2.2), and AHSync writes `ingestedUntil` only after the database commit.
    - Unconfirmed events are simply sent again next time.
 6. **Validate at every boundary, and degrade instead of crashing.**
-   - Each file has a format version and a check: AHF responses, SavedVariables, the market intelligence and the addon files.
+   - Each file has a format version and a check: AHF responses, AHledger's price table (its `AHL1` header, §2.3), SavedVariables, the market intelligence and the addon files.
    - One bad item is set aside with its error, and everything else carries on.
    - Errors go to `data/ahsync.log` (rotated, never containing the API key) and to the Status page.
    - The data flow is logged at INFO too, so it can be followed: each SavedVariables read (file, whether the `.bak` was used, scans and events stored, whose `ingestedUntil` moved, rows set aside) or why a file wasn't read (S17), the re-plan after it, and each addon file written (name, bytes, `generatedAt`, open actions or items, EX15). Names and counts only, never file contents or secrets.
@@ -1869,6 +1978,11 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `MarketIntellig
 | A stored dashboard page can't be decoded | that request answers `503 bad_view` and is logged | the next full refresh replaces it (FM29) |
 | Bad `config.toml` | refuses to start with the line and the reason | — |
 | A recipe loop in the dependency graph (desktop half built M11; the addon's check built M12, next row) | the desktop cuts the back edge as chains do (C13), exports an acyclic graph with its order, and logs the loop at INFO | — (FM39) |
+| AHledger unreachable (timeout, 5xx, connection refused; planned, M19) | the poll gives up for this cycle after the usual backoff; the last good table's rows stay, nothing is written, no exception reaches the scheduler; the alert "AHledger: unreachable since Wed 14:00 (3 tries)" counts failed polls since the last success | the next poll, 30 min later; the alert clears on the first success (FM43) |
+| AHledger price table with a bad header (not `AHL1`, another market, a non-integer `updated` or row count) | treated as a format change: nothing from that table is written, the ETag isn't kept, so the next poll fetches it whole | Status "AHledger format changed: pricetable"; record a new fixture and fix the parser (FM44) |
+| An AHledger row that doesn't parse (a non-integer id or field, too few fields) | that row is skipped and counted in the log line ("AHledger forever.pvp.horde.us: 2,206 rows stored, 1 skipped"); every other row is written | — (FM45) |
+| AHledger answers `404` for the market (not in `/v1/markets`, or its address is wrong) | AHledger is skipped for that market until the next start or the next day; no backfill | Status "AHledger has no market forever.pvp.horde.us": set `addresses.ahledger`, or `""` to stop asking (FM46) |
+| `429` from AHledger (rate limit) | waits `Retry-After` (up to 300 s) and goes on; a longer one ends the price poll or the backfill for this run; the backfill's checkpoint is already committed | the backfill resumes at the next key on its next run (FM47) |
 | The candidate export would push `MarketIntelligence.lua` past 2 MB (built M11) | the lowest-adjusted alternatives are dropped first, never a funded candidate, until it fits; Status "candidate export trimmed to 112 of 150 to fit 2 MB" | lower `candidate_export`, or it clears when the file fits again (FM40) |
 
 **Addon failures (in game):**
@@ -1936,6 +2050,8 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `MarketIntellig
 17. **Portfolio: the greedy fill with one swap pass** (§3.4D.4) is a heuristic. Compare it against an exhaustive search on small generated worlds before M10 is done; if it misses often, the fallback is a second fill by plain adjusted profit, keeping the better of the two.
 18. **Gathering capture** (§3.4E.3, M17): the spell names or ids of Mining, Herb Gathering, Skinning and Fishing on Forever and which event marks each cast done (fishing is channelled, and its loot opens on the bobber click); whether `GetLootSourceInfo` gives a creature GUID for corpse loot; whether `PLAYER_ENTERING_WORLD` carries `isInitialLogin`; whether autoloot fires `LOOT_OPENED` twice. Built M17 on Classic's answers (spell names via `GetSpellInfo`, `UNIT_SPELLCAST_CHANNEL_START` as a second Fishing trigger, a 10 s / 35 s window per cast, the GUID's type); `tools/savedvars_report.py` reads the diagnostics' probes of `GetSpellInfo` and `GetLootSourceInfo` and the loot traces to confirm them after a session. And the catalog itself: Forever's customised items and professions (§3.4E.1).
 
+19. **AHledger** (§2.3, M19-M21): whether the price table's `updated` is AHledger's newest full scan (as `pricesAsOf` is for its market tools) or its last publish; the `Cache-Control` max-age each endpoint really sends; whether a `range=24h` series is one point per full scan or hourly buckets (the developer page says both; AHSync doesn't use it); whether the table ever lists suffixed items under a base id (AHSync stores every row under the base id, §2.3). `tools/record_fixtures.py` records the answers into `tests/fixtures/ahledger/`.
+
 ## 7. Milestones
 
 | # | Deliverable | Done when |
@@ -1970,6 +2086,14 @@ Data moves through many hand-offs: AHF → AHSync → SQLite → `MarketIntellig
 | M17 | **Built (2026-10-22).** Loot capture and rates: the addon's `Capture/Gather.lua`; ingest with dedupe (`gather_events`), sessions (`engine/sessions.py`, `state/gathering.py`, `farming_sessions`, `farming_session_items`), observed rates, fallbacks, the rate card, manual overrides (`manual_rates`, `POST /api/manual_rate`); `session_confirm_units`, `session_gap_minutes` | GA13–GA27, D82, D85, D87, A85–A91, SEC12, FM41, FM42 pass; a farming session in game shows its rate on the page after a `/reload` |
 | M18 | **Built (2026-10-22).** History and the detail: med30, deviation, sell window and sell window price, the heatmap with its marks and reading line, the top windows, seasonality (`engine/gathering_history.py`, from the intelligence only); observed categories (`engine.gathering.observed_categories`, `state.gathering.looted_sources`); Status's unplaced loot (`engine.gathering.unplaced_loot`, `unplaced_text`, Status kind `gathering_unplaced`); the Characters page's gathering professions; `timing_edge_min_strength`; the bench re-check | GA28–GA34, D83, D84, D86 pass; the full refresh and the incremental update stay within budget (`tools/bench.py`, §3.1.2; measured 2026-10-22: full refresh 100.4 s, peak 277 MB, `MarketIntelligence.lua` 1.74 MB, `PortfolioPlan.lua` 37.2 KB, as before M18 within noise; the Gathering page build itself, from the intelligence only, takes about 35 ms with every one of the shipped 150 catalog items carrying a profile and 3 windows, against 7 ms without, and serves about 810 KB against 390 KB) |
 
+**AHledger and data coverage** (planned; §2.3, §3.5 Status; merged 2026-11-01 from the AHledger developer docs, `github.com/DeepCapt/ahledger-sync` and live calls on 2026-10-22). Additive: only the data-source layer and the Status page change; WP1 stays byte-identical for the W1 world, which has no AHledger rows.
+
+| # | Deliverable | Done when |
+|---|---|---|
+| M19 | The AHledger adapter and kind-based precedence: `collect/ahledger.py` (markets, the price table with `If-None-Match`/ETag, parse and checks, the writes to `current`, `candles_h1`, `ahledger_rows`, `source_state`, polling every 30 min), schema 24 (`ahledger_rows`, `source_state`, `observed_hours`), config (`rank` default `["ahf", "ahledger"]`, `addresses.ahledger`, the `primary` default changed from `"ahf"` to `"ahledger"` in `config.py`'s `MarketSources`, with its fallback to `ahf` when AHledger is disabled; the freshness pill, alert and "prices newer" follow it), the Status AHledger line and alerts with the attribution link, `tests/fixtures/ahledger/` and its recorder, the failure modes; `collect/provider.py` `SOURCE_KINDS` and `history.reads._best_per_time` by kind, then rank | SRC6-SRC11, SRC16, S18-S20, FM43-FM46 pass; SRC3 and S7, S9 pass unchanged; the scenarios that assumed the old default primary (D33, IU2) pass with `primary = "ahf"` set in their worlds (WP1 doesn't depend on the primary); WP1 byte-identical without `--update`; the full refresh within 120 s (`tools/bench.py`) |
+| M20 | The Data coverage card: `engine/coverage.py` (cells shaded by fraction, scale, per-source rows, union, longest gap, every text), `history/reads.py` `observed_hours`, the Status payload's `coverage`, the dashboard card as the mockup draws it, the attribution labels (`views.source_label`, `views.SOURCE_URLS`) on Status, the item detail's source mix and the top bar | D89-D96 pass; the card matches docs/mockups/dashboard.html's Status page for its world; a Status request stays within 50 ms with 90 days of `observed_hours` |
+| M21 | The per-item history backfill: `/v1/prices/<market>/<key>?range=7d` hourly buckets → `candles_h1` under `ahledger_h1`, `range=90d` daily buckets → `candles_d1` under `ahledger`, only for missing hours and days; 300 requests a minute, `Cache-Control`, `429` `Retry-After`; once a day per market in the background, its checkpoint in `source_state`; `ahledger_backfill` | SRC12-SRC15, FM47 pass; a first run on a market with a 2,207-item table backfills without blocking the dashboard, and a stop halfway resumes at the next key |
+
 ## 8. Testing
 
 ### 8.1 Principles
@@ -2002,7 +2126,7 @@ Builders accept item names, `"1g 20s 5c"` prices and `T0+2h` times, and convert 
 
 ### 8.3 Required scenarios (minimum set)
 
-The minimum set lives in **[SCENARIOS.md](SCENARIOS.md)**, grouped by module, with IDs V*, S*, FM*, SEC*, P*, W*, R*, O*, D*, C*, M*, IU*, CF*, T*, A* and UI*, TT*, K*, the planned portfolio IDs PF*, PO* and DG* (§3.4D), the planned gathering IDs GA* (§3.4E), plus the invariants PI*, VI*, CI*, PL*, VW*, LP* and FI* (§8.7).
+The minimum set lives in **[SCENARIOS.md](SCENARIOS.md)**, grouped by module, with IDs V*, S*, FM*, SEC*, P*, W*, R*, O*, D*, C*, M*, IU*, CF*, T*, A* and UI*, TT*, K*, the planned portfolio IDs PF*, PO* and DG* (§3.4D), the planned gathering IDs GA* (§3.4E), the AHledger source and data coverage IDs SRC6–SRC16, S18–S20, FM43–FM47 and D89–D96 (§2.3, §3.5; planned), plus the invariants PI*, VI*, CI*, PL*, VW*, LP* and FI* (§8.7).
 Spec sections refer to scenarios by ID. A convention test keeps that file and the tests in step (§8.1).
 
 ### 8.4 Visual tests (addon UI)
@@ -2043,7 +2167,7 @@ Each number a tab shows comes from a pure function in `ahsync/engine/`. The dash
 | Gold pill, Inventory filter (planned) | `views.gold_pill`, `inventory_view` per character | D74, D75 |
 | Gathering (built M16: `gathering.catalog`, `eligible`, `effective_rate`, `net_per_unit`, `net_per_hour`, `gathering_view.gathering_view`; built M17: `gathering.observed_rate`, `observed_rates`, `sessions.sessions`, the rate card's lines and override; built M18: `gathering_history.columns`, `detail`, `median_lines`, `gathering.observed_categories`, `unplaced_text`) |
  `gathering.catalog`, `gathering.eligible`, `gathering.observed_rate`, `gathering.effective_rate` (manual → observed → fallback), `gathering.net_per_unit`, `gathering.net_per_hour`; `sessions.sessions` (candidates, confirmation, the open candidate); `gathering_view.gathering_view` (`by_char` rows, notes, footers, filter fields and sort keys, the freshness line), `gathering_view.rate_card`, `gathering_view.detail` (price card, heatmap marks, the reading line, top windows, seasonality); `views.delta_percent` (deviation, the window price's delta) | GA1–GA34, D80–D88 |
-| Status | `status_view.status_view` (alerts, cards), `collect.catchup`, `sell_record.calibration`, `tracking.profit_sums` (the profit line) | S1–S10, D32–D36, K1–K3, K6, K7 |
+| Status | `status_view.status_view` (alerts, cards), `collect.catchup`, `sell_record.calibration`, `tracking.profit_sums` (the profit line); planned (M19): the AHledger line and alerts with their link; planned (M20): `coverage.coverage` (the Data coverage card: `cells` with each `title`, `scale`, `sources` with ages, shares and `newest_class`, `union`, `none` with `gap_text`, `sub`, `rule`) | S1–S10, D32–D36, K1–K3, K6, K7; planned S18, S19, FM43, FM44, FM46, D89–D96 |
 | Weekly patterns, best windows | `patterns.sell_windows`, `patterns.weighted_median` | W1–W7 |
 | Confidence % | `confidence.score` | CF1–CF4 |
 | Refresh and incremental updates | `refresh.refresh_all`, `refresh.update_items`, `plan.status_pass`, `sellprob.from_curve` | IU1–IU11 |

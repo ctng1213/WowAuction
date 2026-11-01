@@ -45,3 +45,9 @@
 # M17 built: loot capture and rates (GA13-GA27, D82, D85, D87, A85-A91, SEC12, FM41, FM42);
 # M18 built: history and the detail (GA28-GA34, D83, D84, D86). Every listed scenario now has a test:
 # this file holds only comments until a new scenario is listed before its code.
+
+# AHledger source and data coverage (SPEC §2.3, §3.5 Status; M19-M21)
+SRC6-SRC16
+S18-S20
+FM43-FM47
+D89-D96
