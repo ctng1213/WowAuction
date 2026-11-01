@@ -156,6 +156,7 @@
   <span class="btn primary" title="Full refresh: recompute every statistic, chance and the plan (about a minute)">⟳ Refresh now</span>
   <span class="pill ok">● synced 14:06 · hour data 2 h old</span>
   <span class="pill gold">Premium via contributor · until 23 Oct</span>
+  <a class="pill warn" href="https://github.com/ctng1213/WowAuction/releases/latest" title="A newer AHSync is on GitHub Releases. Nothing installs itself: download, quit AHSync from the tray, replace the folder (Windows) or the app (macOS), start it again.">⬆ update available · 0.4.0</a>
   <span class="pill">SavedVariables read 13:52</span>
 </div>
 
@@ -1129,6 +1130,26 @@ const PAGES = {
       ruleRow('Worn Dagger', 0, 'Ignore completely', 'no recommendations at all', '9 Oct 23:15', 'dashboard'),
     ], null)}</div>` },
 
+  Setup: { count: null, html: () => `
+    <h1>Set up AHSync</h1><p class="lede">Three things, then AHSync syncs prices, installs the AHProfit addon into your WoW folder and opens this dashboard. You can change any of them later in config.toml. In the real app this page shows alone at /setup, with no menu.</p>
+    <div class="card" style="max-width:720px"><div class="card-h"><b>1. Your WoW: Forever folder</b><span class="pill ok">found</span></div>
+      <div style="padding:12px 14px"><input class="select" style="width:100%" value="C:\\Program Files (x86)\\World of Warcraft\\_classic_beta_">
+      <div class="fresh" style="margin:6px 0 0">found Interface\\AddOns · 2 accounts · <span class="btn">Check</span></div>
+      <div class="muted" style="font-size:12px;margin-top:6px">The folder that holds <code>Interface</code> and <code>WTF</code>. On a Mac it is usually /Applications/World of Warcraft/_classic_beta_.</div></div></div>
+    <div class="card" style="max-width:720px"><div class="card-h"><b>2. Your market</b></div>
+      <div style="padding:12px 14px;display:flex;gap:10px;flex-wrap:wrap"><span class="select">Ruleset: PvP ▾</span><span class="select">Faction: Horde ▾</span><span class="muted" style="align-self:center">→ forever.pvp.horde.us</span></div></div>
+    <div class="card" style="max-width:720px"><div class="card-h"><b>3. auctionhouse.fyi key</b><span class="pill">optional</span></div>
+      <div style="padding:12px 14px"><input class="select" type="password" style="width:100%" placeholder="paste your key, or leave empty for free data only">
+      <div class="muted" style="font-size:12px;margin-top:6px">Stored only on this computer, in your user folder. It never appears on this page or in the log.</div></div></div>
+    <div class="card" style="max-width:720px"><div style="padding:12px 14px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+      <label><input type="checkbox" checked> Start AHSync when I log in</label><span class="grow"></span><span class="btn primary">Finish and start</span></div></div>
+    <h3>States</h3>
+    <div class="card"><ul class="states" style="font-size:13px;margin:10px 14px 12px 32px;padding:0">
+      <li><b>Folder not found</b>: pill "not found" (amber), field empty, line "enter the folder that holds Interface and WTF"; Finish disabled until Check passes.</li>
+      <li><b>Translocated (macOS)</b>: an alert above the cards: "AHSync is running from where it was downloaded. Drag AHSync to Applications and open it from there, then Start at login can be turned on."</li>
+      <li><b>Saving</b>: the button reads "Starting AHSync…" and a line below counts "first sync and refresh, about a minute"; the page reloads into the dashboard when it answers.</li>
+      <li><b>Error</b>: a red alert with the reason from the server ("ruleset must be normal, pvp or rp"; "the key could not be saved: …"), fields kept.</li>
+    </ul></div>` },
   Characters: { count: 2, html: () => `
     <h1>Characters</h1><p class="lede">Captured by the addon at login and when profession windows open. Each character's gold is its default budget. Every profession is listed, crafting and gathering alike: Gathering's eligibility reads the gathering skills.</p>
     <div class="grid2">${charCard('Amaya', 'Mage · 38', 'Horde · Grommash (pvp)', 210000, [['Enchanting', 142, 225], ['Tailoring', 160, 225], ['Fishing', 20, 75, 1], ['Herbalism', 45, 75, 1]], 37, 'Fri 13:52')}
@@ -1155,6 +1176,13 @@ const PAGES = {
         <dt>Amaya (Grommash, Horde)</dt><dd>forever.pvp.horde.us · seen 8 min ago</dd><dt>Brugan (Grommash, Horde)</dt><dd>forever.pvp.horde.us · seen 15 h ago</dd></dl></div>
       <div class="card"><div class="card-h"><b>Storage</b></div><dl class="kv">
         <dt>Database</dt><dd>data/ahsync.db · 46 MB</dd><dt>Retention</dt><dd>90 days</dd><dt>Last prune</dt><dd>Fri 00:10</dd><dt>Last VACUUM</dt><dd>Mon 00:12</dd></dl></div>
+      <div class="card"><div class="card-h"><b>AHSync app</b><span class="pill">0.3.1 · built 2 Nov</span></div><dl class="kv">
+        <dt>Update</dt><dd class="amber"><a href="https://github.com/ctng1213/WowAuction/releases/latest">AHSync 0.4.0 is available</a> · you run 0.3.1</dd>
+        <dt>Start at login</dt><dd><label title="Windows: a Run entry for your user. macOS: a LaunchAgent in ~/Library/LaunchAgents. Nothing needs admin rights."><input type="checkbox" checked> on</label></dd>
+        <dt>API key</dt><dd class="pos">set · Premium via contributor</dd>
+        <dt>Data folder</dt><dd class="muted">%LOCALAPPDATA%\\AHSync · 46 MB</dd>
+        <dt>WoW folder</dt><dd class="muted">C:\\Program Files (x86)\\World of Warcraft\\_classic_beta_</dd>
+        <dt>Addon</dt><dd>AHProfit installed · up to date</dd></dl></div>
     </div>
     ${covCard(COV_MAIN, 'Data coverage', 'last 90 days to Thu 22 Oct 14:00 · your scans, AHledger and auctionhouse.fyi', true)}
     <h3>Recent problems</h3>
@@ -1182,6 +1210,14 @@ const PAGES = {
       <li><b>A healthy 90 days</b> (above): most cells 10–13; the pale night cells are the hours to scan if you want windows there.</li>
       <li><b>AHF outage</b>: the main card is one. AHF's newest hour file is 13 days old, so its row's Newest reads 13 d ago (amber) and it has no hours since 9 Oct, but your scans and AHledger cover those days, so the union stays dark wherever they observe. Only the hours no source covers turn pale.</li>
       <li><b>No source at all for days</b> (4–6 Oct above): those hours count for nobody; the "no data" row names the longest such gap, and the Gap warning says why.</li>
+    </ul></div>
+    <h3>States: AHSync app</h3>
+    <div class="card"><ul class="states" style="font-size:13px;margin:10px 14px 12px 32px;padding:0">
+      <li><b>Dev build</b> (run from source): pill "dev build", Update "not checked for a dev build".</li>
+      <li><b>No update</b>: Update "up to date · checked 06:00"; the top-bar pill is hidden.</li>
+      <li><b>Offline</b>: Update "not checked: offline since Fri 06:00" (muted); nothing else changes.</li>
+      <li><b>Autostart failed</b>: Start at login unchecked, amber "not set: Move AHSync to Applications, then turn it on again".</li>
+      <li><b>No key</b>: API key "none · free data only".</li>
     </ul></div>` },
 };
 
