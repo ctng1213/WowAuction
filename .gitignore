@@ -30,3 +30,4 @@ Thumbs.db
 
 # local Python environments
 .venv/
+.python-version
