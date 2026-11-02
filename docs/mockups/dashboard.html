@@ -156,7 +156,7 @@
   <span class="btn primary" title="Full refresh: recompute every statistic, chance and the plan (about a minute)">⟳ Refresh now</span>
   <span class="pill ok">● synced 14:06 · hour data 2 h old</span>
   <span class="pill gold">Premium via contributor · until 23 Oct</span>
-  <a class="pill warn" href="https://github.com/ctng1213/WowAuction/releases/latest" title="A newer AHSync is on GitHub Releases. Nothing installs itself: download, quit AHSync from the tray, replace the folder (Windows) or the app (macOS), start it again.">⬆ update available · 0.4.0</a>
+  <a class="pill warn" href="https://github.com/ctng1213/WowAuction/releases/latest" title="AHSync 0.4.0 is downloaded and verified. It installs the next time AHSync starts, or now with Restart to update on the Status page or in the tray.">⬆ update ready · 0.4.0</a>
   <span class="pill">SavedVariables read 13:52</span>
 </div>
 
@@ -1177,7 +1177,9 @@ const PAGES = {
       <div class="card"><div class="card-h"><b>Storage</b></div><dl class="kv">
         <dt>Database</dt><dd>data/ahsync.db · 46 MB</dd><dt>Retention</dt><dd>90 days</dd><dt>Last prune</dt><dd>Fri 00:10</dd><dt>Last VACUUM</dt><dd>Mon 00:12</dd></dl></div>
       <div class="card"><div class="card-h"><b>AHSync app</b><span class="pill">0.3.1 · built 2 Nov</span></div><dl class="kv">
-        <dt>Update</dt><dd class="amber"><a href="https://github.com/ctng1213/WowAuction/releases/latest">AHSync 0.4.0 is available</a> · you run 0.3.1</dd>
+        <dt>Update</dt><dd class="amber"><a href="https://github.com/ctng1213/WowAuction/releases/latest">AHSync 0.4.0</a> downloaded · installs at the next start · you run 0.3.1 <span class="btn primary">Restart to update</span></dd>
+        <dt>Auto-update</dt><dd><label title="Download and install new releases from GitHub by itself. Off: only tell you when one is out."><input type="checkbox" checked> install updates automatically</label></dd>
+        <dt>Beta updates</dt><dd><label title="Also take pre-releases: new versions before they go out to everyone. Turning this off never downgrades; you stay on your version until a newer stable release is out."><input type="checkbox"> get beta updates</label></dd>
         <dt>Start at login</dt><dd><label title="Windows: a Run entry for your user. macOS: a LaunchAgent in ~/Library/LaunchAgents. Nothing needs admin rights."><input type="checkbox" checked> on</label></dd>
         <dt>API key</dt><dd class="pos">set · Premium via contributor</dd>
         <dt>Data folder</dt><dd class="muted">%LOCALAPPDATA%\\AHSync · 46 MB</dd>
@@ -1215,6 +1217,11 @@ const PAGES = {
     <div class="card"><ul class="states" style="font-size:13px;margin:10px 14px 12px 32px;padding:0">
       <li><b>Dev build</b> (run from source): pill "dev build", Update "not checked for a dev build".</li>
       <li><b>No update</b>: Update "up to date · checked 06:00"; the top-bar pill is hidden.</li>
+      <li><b>Auto-update off</b>: Update "AHSync 0.4.0 is available · you run 0.3.1" linking the release page, no button; the pill reads "update available".</li>
+      <li><b>Just updated</b>: Update "Updated to AHSync 0.4.0 · today 06:02".</li>
+      <li><b>Beta channel</b>: Beta updates ticked; the version pill reads "0.4.0 · beta"; a pre-release shows as "AHSync 0.4.1 (beta) downloaded · installs at the next start".</li>
+      <li><b>Left the beta</b>: Beta updates unticked while on 0.4.1 and the latest stable is 0.4.0 → Update "up to date · stays on 0.4.1 until a newer stable release".</li>
+      <li><b>Update failed</b>: Update (amber) "Update to 0.4.0 failed: not signed by the AHSync developer · still on 0.3.1 · tries again tomorrow".</li>
       <li><b>Offline</b>: Update "not checked: offline since Fri 06:00" (muted); nothing else changes.</li>
       <li><b>Autostart failed</b>: Start at login unchecked, amber "not set: Move AHSync to Applications, then turn it on again".</li>
       <li><b>No key</b>: API key "none · free data only".</li>

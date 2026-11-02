@@ -4,7 +4,7 @@ Written 2026-11-01 by Fable for the user's approval. Nothing here is merged into
 
 - SPEC §3.7 "Distribution and runtime";
 - the §5 layout;
-- milestones M22–M26 in §7;
+- milestones M22–M27 in §7;
 - the DR scenario family;
 - `docs/plans/packaging.md`, the handoff plan.
 
@@ -15,7 +15,7 @@ Model for structure: `docs/plans/ahledger-coverage.md`.
 1. **Audience: the user and a few friends.** First run: choose the WoW folder, enter the optional auctionhouse.fyi key, pick a market. Clear instructions for the unsigned-app warnings.
 2. **Unsigned builds on both platforms.** The workflow must let signing be added later without restructuring. *Superseded for macOS by decision 9: the Mac app is signed; Windows stays unsigned.*
 3. **A tray / menu-bar icon** with Open dashboard, Status and Quit. A small third-party tray library is acceptable as a packaging-only exception; `ahsync/` stays standard-library only.
-4. **Updates notify only.** The app checks GitHub Releases and shows "a new version is available". Nothing installs itself.
+4. **Updates notify only.** The app checks GitHub Releases and shows "a new version is available". Nothing installs itself. *Superseded by decision 11: automatic updates are part of this batch.*
 
 Answered on review (2026-11-01):
 
@@ -23,8 +23,11 @@ Answered on review (2026-11-01):
 6. **The user has an Apple Silicon Mac to test on.** The macOS build is arm64 only, and M26 is not done until it has passed on that Mac.
 7. **"Start at login" is ticked by default** on the setup page.
 8. **Windows gets an installer,** not a plain zip (1.1, 1.14). macOS stays a `.dmg`.
-9. **The macOS app is signed and notarized** (changed 2026-11-01; this replaces decision 2 for macOS). The user has an Apple Developer membership. The workflow signs `AHSync.app` with a Developer ID Application certificate and the hardened runtime, notarizes and staples the dmg, using GitHub Actions secrets (1.15). Windows stays unsigned. The user's reason is to make automatic updates easier later; v1 still only notifies (decision 4) unless the user changes that.
+9. **The macOS app is signed and notarized** (changed 2026-11-01; this replaces decision 2 for macOS). The user has an Apple Developer membership. The workflow signs `AHSync.app` with a Developer ID Application certificate and the hardened runtime, notarizes and staples the dmg, using GitHub Actions secrets (1.15). Windows stays unsigned. The user's reason is to make automatic updates easier (decision 11).
 10. **One shared core, a thin layer per OS** (1.13). Nearly all logic, tests and the build recipe are shared. Each OS adds only a small adapter module and its final packaging step. A convention test enforces the boundary.
+11. **Automatic updates are part of this batch** (2026-11-01, replacing decision 4). AHSync downloads, verifies and installs new releases itself (1.16).
+12. **Creating a release is what signs.** (Revised 2026-11-01.) A release tag `v*` always signs and notarizes the Mac app and fails if the secrets are missing or signing fails, so nothing unsigned reaches the Releases page or the updater. A merge to `main` builds unsigned and, once a `v*` tag exists, runs a signing preflight that fails when the secrets are missing or the certificate is invalid, so a broken setup shows up at the next merge rather than on release day. Development branches and pull requests build unsigned. A manual run of the workflow may ask for a full signed build without releasing (1.15).
+13. **Two release stages: beta, then GA** (2026-11-01). Every tag publishes a signed GitHub **pre-release**, which only installs set to the beta channel pick up. The user tests it on their own Windows PC and Mac, then promotes that same Release (same files, no rebuild) to the latest release, and every other install updates from it (1.17).
 
 ## 1. Recommended approach per topic
 
@@ -62,7 +65,8 @@ Each topic: the recommendation, then the alternatives rejected and why (one or t
   - **Open dashboard** (`webbrowser.open`).
   - **Status** (opens `/#status`).
   - **Start at login**, a checkbox (1.6).
-  - **Update available: download**, only when the check in 1.9 found one.
+  - **Restart to update (0.4.0)**, only when an update has been downloaded and verified (1.16); with auto-update off, **AHSync 0.4.0 available · download** opens the release page instead.
+  - **Install updates automatically**, a checkbox (1.16).
   - **Quit**.
 - **Menu model:** the menu is built from a pure `TrayState` dataclass (`tray.menu(state) -> list[MenuItem]`), so tests check items and enabled flags without pystray.
 - **Tray menu sketch:**
@@ -73,7 +77,8 @@ Each topic: the recommendation, then the alternatives rejected and why (one or t
   │ Open dashboard                   │   -> http://localhost:8765
   │ Status                           │   -> http://localhost:8765/#status
   │ ✓ Start at login                 │   checkbox; same function as the Status toggle
-  │ AHSync 0.4.0 available · download│   only when the daily check found one; opens the release page
+  │ Restart to update (0.4.0)        │   only when an update is downloaded and verified
+  │ ✓ Install updates automatically  │   checkbox; same as the Status card toggle
   │ ───────────────────────────────  │
   │ Quit AHSync                      │   sets the stop event; run() ends at its next tick
   └──────────────────────────────────┘
@@ -169,10 +174,11 @@ Each topic: the recommendation, then the alternatives rejected and why (one or t
   - AddOns missing or unwritable: warn "Addon not installed: no Interface/AddOns under <wow_path>" or "…not writable", and the app runs on (FM49).
 - **Rejected:** installing only at setup. Friends would never get addon updates.
 
-### 1.9 Update check: GitHub Releases, once a day, notify only
+### 1.9 Update check: GitHub Releases, once a day
 
 - **Request:** `ahsync/app/update_check.py`, using the existing `ApiClient`/`Transport`.
   - It sends `GET https://api.github.com/repos/<owner>/<repo>/releases/latest` with `If-None-Match` and `Accept: application/vnd.github+json`, at start and daily. The unauthenticated limit of 60 an hour is ample.
+  - GitHub's `releases/latest` never returns a pre-release or a draft, so on the stable channel a beta is invisible. On the beta channel the check reads `releases?per_page=20` instead and takes the highest `vX.Y.Z` among them, pre-releases included (1.17).
   - The result is stored in `meta`: `tag_name`, `html_url`, `checked_ms`.
 - **Comparison and texts:** `engine/updates.py` (pure) parses `vX.Y.Z` and compares it to the running version.
   - Texts: "AHSync 0.4.0 is available · you run 0.3.1", and the pill "update available".
@@ -181,7 +187,7 @@ Each topic: the recommendation, then the alternatives rejected and why (one or t
   - Dev builds (`0.0.0`) skip the check.
   - Config `update_check = true`, a bool. A non-bool refuses to start (FM16).
 - **Failures:** offline, 404 (no release yet), 403 (rate limit) or a bad body: nothing shown, one log line, and the next try is tomorrow (FM52).
-- **No download and no install** (decision 4).
+- **What happens next:** with `auto_update` on (the default), a newer release is downloaded, verified and installed (1.16). With it off, the app only notifies, as described here.
 - **Rejected:**
   - A version file hosted elsewhere: another thing to maintain.
   - Checking on every page load: the rate limit, and `web/` must not compute.
@@ -194,17 +200,19 @@ Each topic: the recommendation, then the alternatives rejected and why (one or t
   - **Steps:** `actions/checkout`; `actions/setup-python` 3.12; `pip install -r requirements-dev.txt`.
   - **Lua 5.1:** via `leafo/gh-actions-lua@v13` with `luaVersion: "5.1.5"`. Its README says Windows needs an MSVC dev-cmd action first. macOS fallback: `brew install lua@5.1` and a `lua5.1` symlink.
   - **Tests:** `pwsh -File tools/test.ps1`. PowerShell 7 is on every GitHub-hosted image. `test.ps1` must stay 5.1/7-compatible, and the Lua runner's output must not assume `\`.
-- **Job `build`:** needs `test`, and runs only on tags `v*` and on `workflow_dispatch`.
+- **Job `build`:** needs `test`. It runs on pushes to `main`, on tags `v*` and on `workflow_dispatch` (any branch, for a development build, with an input `sign: true|false`, default false). Pull requests and other branches run only `test`. `actions/checkout` uses `fetch-depth: 0`, so a `main` build can see whether a `v*` tag exists (1.15).
   1. `pip install -r requirements-app.txt pyinstaller==6.22.*`.
   2. Write the tag into `ahsync/version.py`.
   3. `pyinstaller packaging/ahsync.spec`.
   4. Package, the one per-OS step (`tools/build.py` calls it). Windows: Inno Setup compiles `packaging/windows/ahsync.iss` over `dist/AHSync/` → `AHSync-<ver>-windows-x64-setup.exe` (1.14). macOS: `packaging/macos/make_dmg.sh` runs `hdiutil create` of a folder holding `AHSync.app` and an `Applications` symlink → `AHSync-<ver>-macos-arm64.dmg`.
-  5. `actions/upload-artifact`.
-- **Job `release`:** needs `build`, with `permissions: contents: write`. It runs `gh release create "$TAG" --generate-notes <assets>`. gh is preinstalled, so no third-party release action is needed.
+  5. On macOS also `ditto -c -k --keepParent AHSync.app` → `AHSync-<ver>-macos-arm64.zip`, the asset the updater installs (1.16).
+  6. `actions/upload-artifact`. The release job adds `SHA256SUMS`, one line per asset (1.16).
+- **Job `release`:** needs `build`, with `permissions: contents: write`. It runs `gh release create "$TAG" --prerelease --generate-notes <assets>`: every tag publishes as a beta (1.17). gh is preinstalled, so no third-party release action is needed.
+- **Workflow `promote.yml`:** started by hand from the Actions tab (`workflow_dispatch`, input `tag`), with `permissions: contents: write`. It runs `python tools/promote.py <tag>`, which checks the Release and then runs `gh release edit <tag> --prerelease=false --latest` (1.17).
 - **Signing hook:**
   - `build` has steps `sign-windows` and `sign-macos`, between PyInstaller and packaging, plus a `notarize` step after packaging on macOS.
-  - They are guarded by `if: env.HAVE_SIGNING == 'true'`, with env mapped from secrets at job level.
-  - Today they are no-ops. Adding certificates later touches only those steps.
+  - A first step, `signing-policy`, decides one of three modes (1.15): **sign** (a tag, or a manual run with `sign: true`), **preflight** (`main` once a `v*` tag exists) or **unsigned** (everything else). Only **sign** runs the signing and notarize steps; it fails the job when the secrets are missing.
+  - The Windows steps stay no-ops (decision 2); adding a certificate later touches only them.
 - **Cost:**
   - Standard runners are free on public repositories.
   - Private repos get a monthly included amount, currently $12. macOS costs about 10x Linux per minute: Linux $0.006, Windows $0.010, macOS $0.062 ([GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions)).
@@ -227,7 +235,7 @@ Each topic: the recommendation, then the alternatives rejected and why (one or t
 
 ### 1.12 Versioning
 
-- **Tags:** git tags `vMAJOR.MINOR.PATCH`, the first being `v0.1.0`.
+- **Tags:** git tags `vMAJOR.MINOR.PATCH`, the first being `v0.1.0`. No `-beta` suffix: a beta is the same version as the GA it becomes, so the tested files can be promoted unchanged (1.17). A tag with any suffix is ignored by the update check.
 - **Version file:** `ahsync/version.py` holds `VERSION = "0.0.0"` in source, shown as "dev build" on Status, with no update check.
   - The workflow writes the tag into it before PyInstaller runs, so a release needs no version-bump commit.
 - **Addon format version:** `EXPORT_VERSION` stays separate.
@@ -243,7 +251,7 @@ The goal: everything that decides what AHSync does is written and tested once. A
   - One PyInstaller recipe, `packaging/ahsync.spec`, with at most a few lines that differ by OS (the icon file and macOS's `BUNDLE`/`LSUIElement`).
   - One CI workflow: a single job matrix over `windows-latest` and `macos-15`, with the same steps. Only the final "package" step calls a per-OS script.
 - **Per OS (small, and only facts):** `ahsync_app/platform/`:
-  - `base.py`: a `Platform` protocol with about six members: `app_dirs()` (config and data folders), `wow_candidates()` (likely WoW install folders, as data), `autostart_enable(exe)`, `autostart_disable()`, `autostart_enabled()`, `restrict_file(path)` (the key file's permissions), and `run_location_problem(exe)` (macOS translocation; Windows always None).
+  - `base.py`: a `Platform` protocol with nine members: `app_dirs()` (config and data folders), `wow_candidates()` (likely WoW install folders, as data), `autostart_enable(exe)`, `autostart_disable()`, `autostart_enabled()`, `restrict_file(path)` (the key file's permissions), and `run_location_problem(exe)` (macOS translocation; Windows always None), and for automatic updates (1.16) `update_asset_name(version)`, `verify_update(path)` and `apply_update(path, exe)`.
   - `windows.py`: `%LOCALAPPDATA%`, `winreg` for the Run key, Windows WoW folder candidates.
   - `macos.py`: `~/Library/Application Support`, `plistlib` and `launchctl` for the LaunchAgent, macOS WoW folder candidates, translocation detection.
   - `__init__.py`: `current()`, the single place that reads `sys.platform` and picks the module.
@@ -276,12 +284,65 @@ The goal: everything that decides what AHSync does is written and tested once. A
   - `APPLE_TEAM_ID`.
   - Notary credentials: an App Store Connect API key (`NOTARY_KEY_ID`, `NOTARY_ISSUER_ID`, `NOTARY_KEY_P8`), preferred over an Apple ID with an app-specific password.
 - **PyInstaller details:** pass `codesign_identity` and `entitlements_file` in the spec, so every bundled binary is signed. Python needs `com.apple.security.cs.allow-unsigned-executable-memory` and possibly `com.apple.security.cs.disable-library-validation` under the hardened runtime (verify on the first notarization; the notary log names any binary it rejects).
-- **Pull requests and forks:** secrets are absent there, so the build falls back to PyInstaller's ad-hoc signature and skips notarization. Releases come only from tags in this repo.
+- **When it signs** (decision 12), decided by the `signing-policy` step and implemented in `tools/build.py` so it is tested (DR19):
+  - **A release tag `v*`: sign.** Always, including the first release. Secrets missing → the job fails before PyInstaller runs, with "macOS signing secrets are required for a release (SPEC §3.7)". A signing or notarization failure fails the job, so the `release` job never runs and no Release is created. Fix it, delete the tag and push it again.
+  - **A push to `main`: unsigned build plus a preflight once any `v*` tag exists.** The app is ad-hoc signed and not notarized, even when the secrets are present. The preflight checks that all six secrets are set, imports the certificate into a temporary keychain, confirms `security find-identity -v -p codesigning` lists a valid Developer ID Application identity for `APPLE_TEAM_ID`, and deletes the keychain. Any failure fails the job, with a message naming the missing secret or the invalid certificate. It warns when the certificate expires within 30 days. Before the first release `main` skips the preflight.
+  - **A manual run (`workflow_dispatch`) with `sign: true`: sign,** as for a tag, but no Release. For checking signing and notarization on a branch before tagging.
+  - **Development branches, pull requests, manual runs without `sign`: unsigned.** Ad-hoc signature, no notarize, no preflight; the build passes without secrets (always the case for pull requests from forks).
+  - Releases come only from tags in this repo.
 - **What it changes elsewhere:**
   - INSTALL.md's macOS part shrinks to "open the dmg, drag AHSync to Applications". App Translocation still applies to an app run straight from the dmg or Downloads, so the nudge and its check stay (1.6, 1.11).
   - A signed app could use `SMAppService` for start-at-login instead of the LaunchAgent. The LaunchAgent stays in v1, as it is simpler and fully testable with fakes.
-  - Signing is a prerequisite for a later auto-update on macOS (for example the Sparkle framework); out of scope for v1.
+  - Signing is what lets the updater check that a download really comes from the user's Apple team (1.16).
 - **Rejected:** signing locally on the user's Mac and uploading by hand (releases would depend on one machine, and the notarize step would be manual).
+
+### 1.16 Automatic updates
+
+The update check (1.9) finds a newer release; this section installs it. Everything except the final "swap the app" step is shared code.
+
+- **Shared (`ahsync/app/updater.py`, texts in `engine/updates.py`):**
+  1. **Download** the asset for this OS, named by `platform.current().update_asset_name(version)`, into `<data>/updates/`, as a temp file plus rename. A failed download is simply retried tomorrow.
+  2. **Verify the hash:** download the release's `SHA256SUMS` and compare. A mismatch deletes the file.
+  3. **Verify the signature** where there is one: `platform.current().verify_update(path)` (below).
+  4. **Install** at the next start, or at once if the user clicks **Restart to update** in the tray or on the Status card (`POST /api/update/restart`, SEC15). Login autostart restarts the app daily, so updates land within a day without any click.
+  5. **Record the result:** the Status line "Updated to AHSync 0.4.0" after a successful install, or "Update to 0.4.0 failed: <reason> · still on 0.3.1" (warn); the next attempt is tomorrow.
+- **Per OS (members of the platform layer, 1.13):**
+  - `update_asset_name(version)`: `AHSync-<ver>-windows-x64-setup.exe` on Windows; `AHSync-<ver>-macos-arm64.zip` on macOS.
+  - `verify_update(path)`:
+    - **macOS:** unzip into the updates folder, then `codesign --verify --deep --strict` and check that its Team ID equals the running app's. A download that is validly signed but by anyone else is refused.
+    - **Windows:** nothing beyond the hash (the installer is unsigned, decision 2). See the risk in §4.
+  - `apply_update(path, exe)`: called by the shell after `run()` has stopped and the lock is released.
+    - **Windows:** start the installer with `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS`, then exit. Inno Setup upgrades the per-user install in place, and a `[Run]` entry restarts AHSync after a silent install. A file the app downloads itself has no mark-of-the-web, so SmartScreen does not interrupt.
+    - **macOS:** start a small detached helper (`/bin/sh`, written by the app) and exit. The helper waits for the app's process to end, moves `AHSync.app` aside to `AHSync.app.previous`, moves the new app into its place, and opens it. If the move or the launch fails, it puts the previous app back. If `/Applications/AHSync.app` isn't writable by the user, nothing is attempted, and the Status line says "Update downloaded · AHSync can't replace itself here; install it from the release page".
+- **Switches:**
+  - Config `auto_update = true` (bool; a non-bool refuses to start, FM16). Off means notify only.
+  - An **Install updates automatically** toggle on the Status card and in the tray (`POST /api/update/auto`, SEC15).
+  - Dev builds (`0.0.0`) never download or install.
+- **Safety rules:**
+  - Never install an equal or older version. A pre-release is installed only on the beta channel (1.17).
+  - Never install while a full refresh or a database write is running: the install happens only after `run()` has returned.
+  - The new version migrates the database at its first start; the existing migration backups (SPEC §5.2) cover a failed migration. There is no downgrade.
+  - The addon is updated by the normal install-at-start (1.8), so an update also brings the matching addon, followed by the "restart WoW" line.
+- **Rejected:**
+  - **Sparkle** (the standard macOS updater framework): it would need an Objective-C framework bridged into a PyInstaller bundle, and Windows would still need its own updater. A small shared updater keeps one design for both.
+  - **Installing silently in the middle of a session:** it would stop the dashboard without warning. Installing at the next start, or on the user's click, is predictable.
+  - **Our own signature over `SHA256SUMS` for Windows** (for example Ed25519): it needs a crypto library and a second key to guard, for little gain in a friends-only app whose releases come from the same GitHub account. It can be added later inside `verify_update` without changing anything else.
+### 1.17 Release stages: beta, then GA
+
+- **Beta:** pushing a tag `vX.Y.Z` builds, signs and notarizes as in 1.15, and the `release` job publishes it as a GitHub **pre-release**. Stable installs don't see it, because `releases/latest` skips pre-releases (1.9).
+- **The user's own installs** are set to the beta channel and pick the beta up at their next start, through the normal download, verify and install (1.16). The user tests it on the Windows PC and the Mac.
+- **GA:** the user starts the **Promote release** workflow with the tag (or runs `gh release edit vX.Y.Z --prerelease=false --latest`). The same Release, with the same signed files, becomes the latest release, and stable installs update from it within a day. Nothing is rebuilt, so friends get exactly the files the user tested.
+- **`tools/promote.py`** (tested, DR27) refuses unless the Release exists, is still a pre-release, and lists every asset of 1.10 plus `SHA256SUMS`; it also refuses a tag lower than the current latest release.
+- **A bad beta:** delete the Release and its tag (or just leave it as a pre-release), fix, and tag the next patch version. A skipped version number costs nothing.
+- **Channel setting:**
+  - Config `update_channel = "stable"`; the other value is `"beta"`. Anything else refuses to start (FM16).
+  - A **Get beta updates** toggle on the Status card and in the tray (`POST /api/update/channel`, SEC15).
+  - The Status card's version pill reads "0.4.0 · beta" while the channel is beta.
+  - Switching from beta to stable never downgrades: the install stays on its version until a newer stable release exists (DR26).
+- **Rejected:**
+  - **Separate `-beta.N` tags, then a fresh GA tag:** the GA would be a rebuild, not the files that were tested, and the version number is built into the app.
+  - **Draft releases as the beta:** drafts are invisible without a token, so the user's own installs couldn't update from one.
+  - **A second repository or a release branch for betas:** more to maintain for one tester.
 
 ## 2. Proposed milestones (after M21)
 
@@ -290,14 +351,15 @@ The goal: everything that decides what AHSync does is written and tested once. A
 | M22 | **Runtime foundations.** `ahsync/version.py`; the platform layer `ahsync_app/platform/` (`base.py` protocol, `windows.py` and `macos.py` with `app_dirs`, `wow_candidates`, `restrict_file`, `run_location_problem`; autostart members stubbed until M24) and its convention guardrail (DR16); `ahsync/export/addon_install.py` extracted from `tools/deploy.py`, with the Status lines and FM49; `ahsync_app/shell.py` and `__main__.py` running `run()` on a worker thread with a stop event (no tray yet); a second launch opens the dashboard (FM48); `test_conventions.py` covers `ahsync_app/`; `.github/workflows/ci.yml`, tests only, on both OSes; `.gitignore` gets `!packaging/*.spec`. User: create the repo, push, confirm green on both OSes. | DR1–DR4, DR16, FM48 and FM49 pass; `python -m ahsync_app` runs from source with per-user folders; WP1 byte-identical; CI green on Windows and macOS | Opus: the platform protocol and guardrail, lifecycle, threading, stop semantics, CI. Sonnet: the deploy extraction with tests, `version.py`, the folder members of the platform modules, SPEC marks |
 | M23 | **First-run setup.** `app/wow_paths.py` (detection, check text); `app/setup.py` (config and key file writes; the key file locked down by `platform.current().restrict_file`); server setup mode; the `GET /setup` page in `web/static/`; `GET /api/app`; `POST /api/setup` (plus `check_only`); `engine/app_view.py` texts | DR5–DR8, SEC13, FM50 and D97 pass; a fresh profile reaches the dashboard through the page alone; the headless render matches the mockup | Opus: the write path, security, mode switch. Sonnet: detection list, page JS that only draws, texts with given strings |
 | M24 | **Tray and autostart.** `ahsync_app/tray.py` (menu model plus pystray adapter, main thread); `ahsync_app/autostart.py` (the shared decisions: self-heal, translocation refusal) over the platform modules' autostart members (winreg; plistlib and launchctl); `POST /api/autostart`; the Status card toggle; the `--autostart` flag (no browser) | DR9–DR12, SEC14 and FM51 pass; manual test: Windows login starts it; the toggle round-trips on the Status page | Opus: autostart writers, platform branches, tray threading. Sonnet: the Status card JS, SPEC marks |
-| M25 | **Update check.** `engine/updates.py`; `app/update_check.py` (daily, ETag, degrade); the `update_check` config key; Status alert, top-bar pill, tray item | DR13–DR15, FM52 and D98 pass; engine branch coverage 100% | Sonnet (given texts and a documented JSON), with Opus review of the scheduler hook |
-| M26 | **Build and release.** macOS signing and notarization (1.15, DR18); `packaging/ahsync.spec` (onedir, windowed, BUNDLE with `LSUIElement`, hidden imports for pystray backends, `addon/` as data, icon); `tools/build.py` (local build and package); the workflow's `build` and `release` jobs with the signing hooks; the per-OS packaging steps `packaging/windows/ahsync.iss` (Inno Setup, per-user, upgrade and uninstall, 1.14) and `packaging/macos/make_dmg.sh` (dmg with an Applications symlink); `INSTALL.md`; SPEC §3.7, §5 and §7; ARCHITECTURE.md (app shell, build pipeline); CLAUDE.md Commands. User: tag `v0.1.0`, test on Windows and on the Apple Silicon Mac | A tag produces a Release with both assets (DR17); the Windows installer installs without admin, runs through setup to a dashboard on a clean user profile, upgrades over itself keeping data, and uninstalls cleanly; the macOS dmg passes the same run on the user's Apple Silicon Mac, including Forever's install folder there | Opus: spec file, workflow, docs that change meaning. Sonnet: `INSTALL.md` from this section's texts, `tools/build.py` packaging commands, SPEC built marks |
+| M25 | **Update check and download.** `engine/updates.py`; `app/update_check.py` (daily, ETag, degrade); `app/updater.py` (download, `SHA256SUMS` check, state, Status lines); the `update_check`, `auto_update` and `update_channel` config keys and the beta channel's release-list check (1.17); Status alert, top-bar pill, tray item, the auto-update and beta toggles | DR13–DR15, DR20, DR21, DR24, DR25, DR26, FM52, FM53 and D98 pass; engine branch coverage 100% | Opus: the updater's state and failure paths. Sonnet: the check against a documented JSON, texts with given strings |
+| M26 | **Build and release.** macOS signing and notarization (1.15, DR18); `packaging/ahsync.spec` (onedir, windowed, BUNDLE with `LSUIElement`, hidden imports for pystray backends, `addon/` as data, icon); `tools/build.py` (local build and package); the workflow's `build` and `release` jobs with the signing hooks, releases published as pre-releases, `promote.yml` and `tools/promote.py` (1.17); the per-OS packaging steps `packaging/windows/ahsync.iss` (Inno Setup, per-user, upgrade and uninstall, 1.14) and `packaging/macos/make_dmg.sh` (dmg with an Applications symlink); `INSTALL.md`; SPEC §3.7, §5 and §7; ARCHITECTURE.md (app shell, build pipeline); CLAUDE.md Commands; the signing policy (DR19). User: add the signing secrets, tag `v0.1.0`, test the pre-release on Windows and on the Apple Silicon Mac, then promote it | A tag produces a pre-release with all assets (DR17, DR28), and promoting it makes it the latest release (DR27); the Windows installer installs without admin, runs through setup to a dashboard on a clean user profile, upgrades over itself keeping data, and uninstalls cleanly; the macOS dmg passes the same run on the user's Apple Silicon Mac, including Forever's install folder there; a `main` push after `v0.1.0` without the secrets fails its preflight (DR19) | Opus: spec file, workflow, signing policy, docs that change meaning. Sonnet: `INSTALL.md` from this section's texts, `tools/build.py` packaging commands, SPEC built marks |
+| M27 | **Automatic install.** The platform members `update_asset_name`, `verify_update` (macOS codesign and Team ID) and `apply_update` (Windows silent Inno Setup with relaunch; macOS swap helper with roll-back); **Restart to update** in the tray and on the Status card (`POST /api/update/restart`, SEC15); the Inno Setup `[Run]` relaunch entry. User: tag `v0.1.1` | DR22, DR23, FM54, FM55 and SEC15 pass; on both the Windows PC and the Mac, an installed `v0.1.0` on the beta channel updates itself to the `v0.1.1` pre-release at the next start and keeps its data and settings, while a stable install stays on `v0.1.0` until `v0.1.1` is promoted, and a forced failure (FM55) leaves `v0.1.0` running | Opus: apply and roll-back on both OSes, the shell's quit-then-install sequence, final review. Sonnet: the Status card button JS, SPEC marks |
 
 Order rationale:
 
 - **CI first (M22),** so the macOS run exposes POSIX issues in the suite early.
 - **Setup before the tray,** because the tray's Open dashboard needs a configured app.
-- **Build last,** so every artifact test exercises the finished shell.
+- **Build before the automatic install (M26 before M27),** because installing needs real signed releases to update from and to: `v0.1.0` from M26, `v0.1.1` in M27.
 
 ## 3. Scenario IDs (new family "Distribution and runtime", plus FM/SEC/D rows)
 
@@ -314,22 +376,36 @@ Order rationale:
 | DR9 | Windows fake registry, enable → Run value `AHSync` = `"<exe>" --autostart`; disable → removed; enable twice → one value |
 | DR10 | macOS fake plist dir and launchctl log, enable → plist with Label, ProgramArguments, RunAtLoad true, `bootstrap gui/<uid>` called; disable → `bootout` and the file gone |
 | DR11 | exe under `/private/var/folders/x/AppTranslocation/…` → enable refused, Status "Move AHSync to Applications…", nothing written |
-| DR12 | tray menu model: configured, autostart on, update available → items Open dashboard, Status, Start at login (checked), "AHSync 0.4.0 available · download", Quit, in that order; Quit sets the stop event |
+| DR12 | tray menu model: configured, autostart on, update available → items Open dashboard, Status, Start at login (checked), "Restart to update (0.4.0)", Install updates automatically (checked), Get beta updates (unchecked); with auto-update off, "AHSync 0.4.0 available · download", Quit, in that order; Quit sets the stop event |
 | DR13 | releases/latest `tag_name` `v0.4.0`, running `0.3.1` → `update_available`, text "AHSync 0.4.0 is available · you run 0.3.1", pill "update available", link = `html_url` |
-| DR14 | `v0.3.1` or `v0.3.0` → nothing shown; `0.3.1-rc1`-style tags ignored |
+| DR14 | `v0.3.1` or `v0.3.0` → nothing shown; a tag with a suffix (`v0.4.0-rc1`) ignored |
 | DR15 | second check within 24 h → no request; after 24 h → request with `If-None-Match`; 304 → nothing changes |
 | DR16 | the convention test: `sys.platform`, `os.name`, `winreg`, `plistlib`, `launchctl` or `platform.system` anywhere outside `ahsync_app/platform/` (and the packaging choice in `tools/build.py`) → the test fails and names the file and line; the current tree passes |
 | DR18 | the macOS build step with the signing secrets present → `codesign` with the Developer ID identity and hardened runtime, `notarytool submit --wait`, `stapler staple`, in that order, and the keychain deleted at the end; without the secrets (pull request) → ad-hoc signature, no notarize, the build still passes (command lines checked with a fake runner) |
+| DR19 | the signing policy (mode and outcome, with a fake runner): tag `v0.1.0` without secrets → fails before PyInstaller with the message; tag with secrets → sign; `main` with no `v*` tag → unsigned, no preflight; `main` after `v0.1.0` with valid secrets → unsigned build, preflight passes, nothing notarized; `main` after `v0.1.0` with a secret missing → fails naming it; `main` after `v0.1.0` with no valid identity → fails "certificate invalid"; certificate expiring in 10 days → passes with a warning; manual run with `sign: true` → sign, no Release; a development branch or pull request without secrets → unsigned, passes |
+| DR20 | running 0.3.1, auto_update on, the release `v0.4.0` lists `AHSync-0.4.0-windows-x64-setup.exe` and `SHA256SUMS` → the installer downloaded to `<data>/updates/` and its hash matched; Status "AHSync 0.4.0 downloaded · installs at the next start"; the tray offers Restart to update |
+| DR21 | the same with auto_update off → nothing downloaded; the notify-only line of DR13 instead |
+| DR22 | Windows, a verified installer, the app quits → the installer started with `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS` after the lock is released (command checked with a fake runner); next start on 0.4.0 → "Updated to AHSync 0.4.0" |
+| DR23 | macOS, a zip whose app passes codesign with the running app's Team ID → the swap helper is written and started; a zip signed by another team → refused, Status "Update to 0.4.0 failed: not signed by the AHSync developer · still on 0.3.1", nothing moved |
+| DR24 | update rules: `v0.3.1` (equal), `v0.3.0` (older), `v0.4.0-rc1` (suffixed tag) or a dev build `0.0.0` → nothing downloaded or installed |
+| DR25 | running 0.3.1; the release list holds `v0.4.0` (pre-release) and `v0.3.1` (latest) → stable: `releases/latest` only, nothing offered; beta: `releases?per_page=20` requested, `v0.4.0` offered and downloaded; a list holding `v0.4.0` and an older-created `v0.5.0` → beta takes `v0.5.0` (highest version, not newest date) |
+| DR26 | after `v0.4.0` is promoted → a stable 0.3.1 install is offered 0.4.0; a beta 0.4.0 install sees no change; a 0.4.0 install switched from beta to stable while `latest` is 0.3.1 → nothing offered, no downgrade |
+| DR27 | `tools/promote.py v0.4.0` with a fake gh: a pre-release with all assets and `SHA256SUMS` → `gh release edit v0.4.0 --prerelease=false --latest`; already GA, no such Release, an asset or `SHA256SUMS` missing, or lower than the current latest → refused with the reason, no edit |
+| DR28 | the release job's command for tag `v0.4.0` → `gh release create v0.4.0 --prerelease --generate-notes` with the setup.exe, dmg, zip and `SHA256SUMS` (command checked with a fake runner) |
 | DR17 | `tools/build.py` on each OS → the same PyInstaller recipe, then exactly one packaging step (Inno Setup on Windows, `make_dmg.sh` on macOS); artifact names `AHSync-<ver>-windows-x64-setup.exe` and `AHSync-<ver>-macos-arm64.dmg` (the command lines checked with a fake runner, no real build in tests) |
+| FM53 | the download is cut off, then the hash doesn't match `SHA256SUMS`, then `SHA256SUMS` lacks the asset → the partial file deleted, Status "Update to 0.4.0 failed: <reason> · still on 0.3.1", next try tomorrow, the app runs on |
+| FM54 | macOS, `/Applications/AHSync.app` not writable by the user → nothing attempted; Status "Update downloaded · AHSync can't replace itself here; install it from the release page" with the link |
+| FM55 | macOS, the swap helper moves the new app in but it fails to launch (injected), then the move itself fails → `AHSync.app.previous` restored and opened; the next start shows "Update to 0.4.0 failed · still on 0.3.1"; Windows, the installer exits non-zero → the old install keeps running, with the same Status line |
 | FM48 | packaged shell starts while the lock is held → opens `http://localhost:8765`, exits 0, no second run; `python -m ahsync` still prints "already running" (FM15) |
 | FM49 | `wow_path` without `Interface/AddOns`, then an unwritable AddOns → Status warn text per case; the run continues; nothing half-copied |
 | FM50 | config.toml written but the key file write fails → 500 `{"error": "key_not_saved"}`, config kept, Status line, no key in any message |
 | FM51 | registry/plist write raises → `POST /api/autostart` 500 `autostart_not_set`, Status "Start at login not set", toggle shows the real state |
 | FM52 | update check offline, then 404, then 403, then a body without `tag_name` → nothing shown, one log line each, next check tomorrow |
 | SEC13 | `POST /api/setup` right token and Origin → accepted; wrong Origin → 403 with no files written; no token → 403; `GET /api/setup` → 405; the key never appears in a response |
+| SEC15 | `POST /api/update/restart`, `POST /api/update/auto {"enabled": false}` and `POST /api/update/channel {"channel": "beta"}` with the right token → 200; wrong Origin or no token → 403, nothing happens; GET on any → 405; `"enabled": "no"` or `"channel": "nightly"` → 400 |
 | SEC14 | `POST /api/autostart {"enabled": true}` right token → 200 `{"set": true, "enabled": true}`; wrong Origin → 403, unchanged; `"enabled": "yes"` → 400; GET → 405 |
 | D97 | `GET /api/app` payload: `version_text`, `update` (null or `{text, url, pill}`), `autostart` `{enabled, available, note}`, `api_key_set`, `wow_path`, `wow_check` — every text engine-made |
-| D98 | Status "AHSync app" card lines: version, Start at login, Update, Data folder (path inside the app folder only), API key set/none |
+| D98 | Status "AHSync app" card lines: version (with " · beta" on the beta channel), Update, Auto-update, Beta updates, Start at login, Data folder (path inside the app folder only), API key set/none |
 
 ## 4. Risks
 
@@ -338,6 +414,8 @@ Order rationale:
 - **App Translocation breaks path-based autostart.** Mitigated by the dmg's Applications nudge and the detection in 1.6.
 - **SmartScreen/Gatekeeper fatigue for friends.** Without signing, INSTALL.md with screenshots is the only mitigation.
 - **Runner drift.** `macos-latest` moved to macOS 26 in June 2026; pin `macos-15` and revisit yearly. The Lua 5.1 install on runners is unverified; fallbacks are listed.
+- **Windows updates are verified by hash only.** The installer is unsigned (decision 2), so anyone able to publish a release on the GitHub account could ship a malicious update; the hash only catches corruption. macOS updates are also checked against the Team ID. Mitigation: two-factor authentication on the GitHub account, and the optional Ed25519 signature in 1.16 later.
+- **A bad release reaches friends automatically.** Mitigation: every release is a beta first, installed only by the user's own beta-channel installs, and reaches friends only when the user promotes it (1.17).
 - **Two processes writing the same files.** The shell installs the addon while a running AHSync could be exporting. The lock check comes first, so only the lock owner installs.
 - **PowerShell differences.** `tools/test.ps1` runs under pwsh 7 on macOS. Path separators and `Get-Command lua5.1` behave the same, but the first CI run may need small fixes (Opus, M22).
 - **The key sits in a plain file.** Accepted for a friends-only tool; documented in SPEC §3.6 and INSTALL.md.
@@ -358,16 +436,18 @@ Answered 2026-11-01 (decisions 5–10 in §0). The repo is `ctng1213/WowAuction`
 2. **Create the GitHub repository.** Done on 2026-11-01: `ctng1213/WowAuction`, public, pushed.
 3. **After M22 lands,** check the Actions tab: `test` green on Windows and macOS.
 4. **Add the macOS signing secrets before the first tag** (1.15): export the Developer ID Application certificate as a .p12 from Keychain Access, create an App Store Connect API key for notarization, and add the six secrets under the repo's Settings → Secrets and variables → Actions.
-5. **Tag the first release after M26.** Run `git tag v0.1.0 && git push origin v0.1.0`, wait for the Release, and download both assets.
+5. **Tag the first release after M26.** Run `git tag v0.1.0 && git push origin v0.1.0`, wait for the pre-release, and download both assets. Set your own installs to Get beta updates.
 6. **Test the Windows installer** on a clean user account: SmartScreen → Run anyway → install → Launch AHSync → setup → dashboard → log off and on → the tray icon appears.
 7. **Test the dmg on the Mac:** drag to Applications → opens without a warning → setup → dashboard → log out and in.
-8. **Send friends** the Release link and `INSTALL.md`.
+8. **Promote it** from the Actions tab (Promote release, tag `v0.1.0`) once both tests pass.
+9. **Send friends** the Release link and `INSTALL.md`. Every later release: tag it, let your beta installs update, check them, promote.
 
 ## 7. Non-goals (v1)
 
-- Auto-install of updates.
+- More than one beta tester group, or staged percentage rollouts.
 - Windows code signing.
-- Automatic updates (the macOS signing makes them possible later).
+- Rolling back to an older version (the previous release stays downloadable from GitHub).
+- Installing updates in the middle of a session; they install at the next start or on the user's click.
 - Linux.
 - An Intel macOS build.
 - A Settings page beyond setup.
