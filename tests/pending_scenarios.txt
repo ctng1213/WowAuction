@@ -48,3 +48,17 @@
 
 # AHledger source and data coverage (SPEC §2.3, §3.5 Status; M19-M21)
 # M19-M21 built: every listed scenario has a test.
+
+# AHSync as a standalone app (SPEC 3.7; M22-M27, planned 2026-11-01; docs/plans/packaging.md)
+# M22 runtime foundations: DR1-DR4 DR16 FM48 FM49
+DR1-DR4 DR16 FM48 FM49
+# M23 first-run setup: DR5-DR8 SEC13 FM50 D97
+DR5-DR8 SEC13 FM50 D97
+# M24 tray and start at login: DR9-DR12 SEC14 FM51
+DR9-DR12 SEC14 FM51
+# M25 update check and download: DR13-DR15 DR20 DR21 DR24-DR26 FM52 FM53 D98
+DR13-DR15 DR20 DR21 DR24-DR26 FM52 FM53 D98
+# M26 build and release: DR17-DR19 DR27 DR28
+DR17-DR19 DR27 DR28
+# M27 automatic install: DR22 DR23 FM54 FM55 SEC15
+DR22 DR23 FM54 FM55 SEC15

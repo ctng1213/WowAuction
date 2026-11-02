@@ -37,12 +37,17 @@ flowchart LR
     Engine[engine/<br/>pure formulas and views]
     Export[export/<br/>addon data files]
     Web[web/ + app/<br/>dashboard server, refresh, scheduler]
+    Shell[ahsync_app/ planned M22–M27<br/>tray, setup, start at login, updater<br/>around run; SPEC §3.7]
   end
 
   Dashboard[Browser: localhost dashboard]
+  GH[GitHub Releases planned M25<br/>update check, assets, SHA256SUMS]
 
   AHF --> Collect
   AHL --> Collect
+  GH -.planned.-> Shell
+  Shell -.planned.-> Web
+  Shell -.planned, installs the addon.-> DataFiles
   Game --> Adapter --> Capture --> SV
   Game --> Adapter --> Scan --> SV
   SV --> State
@@ -121,6 +126,7 @@ sequenceDiagram
   Note over S,R: SavedVariables changed -> state import -> re-plan -> pages -> export
   S->>P: hourly status pass (positions re-evaluated, Status lines)
   W->>W: GET pages serve stored JSON (<= 50 ms); POST only for risk tolerance and manual rates, Host/Origin/token checked
+  Note over S,W: planned M23–M27 (§3.7): GET /setup, GET /api/app; POST /api/setup, /api/autostart, /api/update/{restart,auto,channel}, same checks
 ```
 
 ## 5. Storage families (SQLite)
@@ -132,11 +138,126 @@ sequenceDiagram
 | Intelligence | `intel` (+ `_new` staging) | `analysis/` via `intel/store.py` | `recommend/`, `export/` |
 | Player state | inventory, journal (`purchases`, `posts`, `auction_mail`, `payouts`, `crafts`, `disenchants`, `mail_sent`), `professions`, `recipes`, `known_recipes`, `characters`, `cost_basis`, `gather_events`, `farming_sessions`, `manual_rates`, `positions`, `position_lots` | `state/` | `recommend/`, `app/` |
 | Plan and pages | `actions`, `alternatives`, `export_candidates`, `portfolio_snapshot`, `views` (+ `_new` staging), `item_rules`, `reserves`, `sell_records` | `recommend/` | `export/`, `web/` |
-| Operations | `status`, `meta`, backups on disk, raw snapshots on disk | all | Status page |
+| Operations | `status`, `meta` (planned M25: the `update.*` keys), backups on disk, raw snapshots on disk, planned `<data>/updates/` (downloaded releases) | all | Status page |
 
-## 6. Change log of this page
+## 6. Distribution and runtime (planned M22–M27, SPEC §3.7)
+
+Everything here is **planned**; each diagram is marked built in the milestone that lands it. The rule: one shared core, a thin layer per OS. `ahsync/` stays standard-library only; `ahsync_app/` is the one package allowed third-party imports (pystray, Pillow, pyobjc), and `ahsync_app/platform/` is the one place that knows the OS (convention test DR16).
+
+### 6.1 The app shell and tray around `run()`
+
+```mermaid
+flowchart TD
+  Start([AHSync.exe / AHSync.app<br/>or python -m ahsync_app]) --> Lock{lock<br/>data/ahsync.lock free?}
+  Lock -- held --> Open[open http://localhost:port<br/>exit 0, FM48]
+  Lock -- taken --> Addon[export/addon_install.py<br/>mirror AHProfit/, never the generated files<br/>Addon line, FM49]
+  Addon --> Cfg{config.toml usable?<br/>wow_path has Interface/AddOns}
+  Cfg -- no --> Setup[web/server.py in setup mode<br/>GET /setup, GET /api/app, POST /api/setup<br/>writes config.toml + key file, DR5–DR8]
+  Setup --> Cfg
+  Cfg -- yes --> Heal[autostart.py self-heal<br/>rewrite the login entry with the current exe<br/>refuse a translocated app, DR11]
+  Heal --> Threads
+  subgraph Threads["two threads"]
+    Tray[main thread: tray.py<br/>pystray Icon.run<br/>menu = tray.menu(TrayState), DR12]
+    Run[worker thread: ahsync.__main__.run<br/>data_dir, config_path, Runtime should_stop = stop_event]
+  end
+  Tray -- Quit / Restart to update --> Stop[stop_event set<br/>run returns at its next 5 s tick]
+  Run --> Stop
+  Stop --> Pending{verified update<br/>waiting in data/updates/?}
+  Pending -- no --> Exit([exit 0])
+  Pending -- yes --> Apply[platform.apply_update after the lock is released<br/>Windows: silent Inno Setup, relaunch<br/>macOS: swap helper, roll back on failure<br/>DR22, DR23, FM55]
+  Apply --> Exit
+```
+
+From source `python -m ahsync` is unchanged (`./data`, `./config.toml`, no tray). The per-user folders come from `platform.current().app_dirs()`: `%LOCALAPPDATA%\AHSync` and `~/Library/Application Support/AHSync` (DR1).
+
+### 6.2 The platform layer
+
+```mermaid
+flowchart LR
+  subgraph Shared["shared, OS-free (tested once)"]
+    ShellM[ahsync_app/shell.py]
+    AutoM[ahsync_app/autostart.py]
+    SetupM[ahsync/app/setup.py<br/>wow_paths.py]
+    UpdM[ahsync/app/updater.py]
+  end
+  subgraph Platform["ahsync_app/platform/ (facts and thin writers)"]
+    Base[base.py: Platform protocol, nine members<br/>app_dirs, wow_candidates,<br/>autostart_enable / disable / enabled,<br/>restrict_file, run_location_problem,<br/>update_asset_name, verify_update, apply_update]
+    Win[windows.py<br/>LOCALAPPDATA, winreg Run key,<br/>Program Files WoW candidates,<br/>silent installer]
+    Mac[macos.py<br/>Application Support, plistlib + launchctl,<br/>/Applications WoW candidates, translocation,<br/>codesign + Team ID, swap helper]
+    Cur[__init__.py current<br/>the one sys.platform read]
+  end
+  ShellM --> Base
+  AutoM --> Base
+  SetupM --> Base
+  UpdM --> Base
+  Cur --> Win
+  Cur --> Mac
+  Win -.implements.-> Base
+  Mac -.implements.-> Base
+  Fakes[tests: fake registry, plist folder,<br/>recorded run, fake filesystem] -.inject.-> Win
+  Fakes -.inject.-> Mac
+```
+
+Both OS modules are tested on every OS by injection (DR9–DR11, DR22, DR23), so a Windows-only CI run still tests the macOS adapter.
+
+### 6.3 Update check, download and install
+
+```mermaid
+sequenceDiagram
+  participant S as app/scheduler.py
+  participant C as app/update_check.py
+  participant GH as GitHub Releases
+  participant E as engine/updates.py
+  participant U as app/updater.py
+  participant M as meta (update.*)
+  participant Sh as ahsync_app/shell.py
+  participant P as platform.current()
+  S->>C: at start and daily (not within 24 h; never for 0.0.0 or update_check = false)
+  C->>GH: stable: GET releases/latest · beta: GET releases?per_page=20 (If-None-Match)
+  GH-->>C: 200 tag_name, html_url, assets · or 304 · or failure (FM52: one log line, "not checked …")
+  C->>E: compare vX.Y.Z with the running version (numeric; suffixed tags ignored; never equal or older)
+  E-->>C: newer? texts: "AHSync 0.4.0 is available · you run 0.3.1", pill
+  C->>M: update.tag, update.url, update.etag, update.checked_ms
+  alt auto_update on and newer
+    U->>GH: GET SHA256SUMS, GET the OS asset (update_asset_name) into data/updates/*.part, rename
+    U->>P: verify_update: hash against SHA256SUMS; macOS codesign --verify --deep --strict + Team ID (DR23)
+    U->>M: update.downloaded → "AHSync 0.4.0 downloaded · installs at the next start · you run 0.3.1", pill "update ready · 0.4.0", Restart to update
+  else failure (FM53)
+    U->>M: delete the file · "Update to 0.4.0 failed: <reason> · still on 0.3.1 · tries again tomorrow"
+  end
+  Sh->>Sh: next start, or Restart to update (tray, POST /api/update/restart): run() returns, lock released
+  Sh->>M: update.pending = 0.4.0
+  Sh->>P: apply_update(path, exe): Windows silent Inno Setup + relaunch · macOS swap helper, roll back on failure (FM54, FM55)
+  Sh->>Sh: next start: running the pending version → "Updated to AHSync 0.4.0 · today 06:02", else "Update to 0.4.0 failed · still on 0.3.1 · tries again tomorrow"
+```
+
+Channel rule (DR25, DR26): the stable channel sees only promoted releases (`releases/latest` skips pre-releases); the beta channel takes the highest `vX.Y.Z` of the list, pre-releases included; switching back never downgrades.
+
+### 6.4 CI, build, release and promote
+
+```mermaid
+flowchart LR
+  Push[push / pull request] --> Test[job test<br/>windows-latest + macos-15<br/>Python 3.12, Lua 5.1, pwsh tools/test.ps1]
+  Test -- main, tag v*, workflow_dispatch --> Policy[tools/build.py policy, DR19<br/>sign: tag or sign:true<br/>preflight: main once a v* tag exists<br/>unsigned: everything else]
+  Policy --> Build[tools/build.py build, DR17<br/>write ahsync/version.py<br/>pyinstaller packaging/ahsync.spec]
+  Build --> SignMac[macOS, mode sign only, DR18<br/>temp keychain, codesign Developer ID + hardened runtime<br/>notarytool submit --wait, stapler staple<br/>keychain deleted]
+  Build --> Pack[one packaging step per OS<br/>Windows: Inno Setup → AHSync-ver-windows-x64-setup.exe<br/>macOS: make_dmg.sh → .dmg, ditto → .zip]
+  SignMac --> Pack
+  Pack --> Art[upload-artifact]
+  Art -- tag v* only --> Rel[job release, DR28<br/>tools/build.py release: SHA256SUMS,<br/>gh release create vX.Y.Z --prerelease --generate-notes]
+  Rel --> Beta[(GitHub pre-release = beta<br/>only beta-channel installs update)]
+  Beta -- user tests on the Windows PC and the Mac --> Promote[promote.yml, by hand<br/>tools/promote.py vX.Y.Z, DR27<br/>gh release edit --prerelease=false --latest]
+  Promote --> GA[(latest release = GA<br/>stable installs update within a day)]
+  Secrets[/GitHub secrets: MACOS_CERT_P12, MACOS_CERT_PASSWORD,<br/>APPLE_TEAM_ID, NOTARY_KEY_ID, NOTARY_ISSUER_ID, NOTARY_KEY_P8<br/>values never in the repo, logs or artifacts/] -.-> SignMac
+  Secrets -.-> Policy
+```
+
+Nothing is rebuilt at promotion: friends get exactly the files the user tested. Windows stays unsigned (SmartScreen once, `INSTALL.md`); the Windows signing steps are no-ops that a certificate can fill later.
+
+## 7. Change log of this page
 
 - 2026-11-01: created at the AHledger batch (SPEC draft v0.7); reflects M1–M18 built and M19–M21 planned (AHledger source, kind-based precedence, coverage card, backfill).
 - 2026-11-01: M19 built: the AHledger adapter (`collect/ahledger.py`), schema 24 (`ahledger_rows`, `source_state`, `observed_hours`), kind-based precedence (`collect/provider.py`), the 30-minute poll hook.
 - 2026-11-01: M20 built: the Data coverage card (`engine/coverage.py`, read from `observed_hours` by `history/reads.py`, drawn on the Status page); no component or flow changed.
 - 2026-11-01: M21 built: the AHledger history backfill (`collect/ahledger_backfill.py`), driven by the scheduler every 5 s and sharing the paced AHledger client with the table poll.
+- 2026-11-01: packaging batch spec merge (SPEC §3.7, M22–M27 planned): §6 added with the app shell and tray around `run()`, the platform layer, the update check / download / install flow and the CI build / release / promote pipeline, all marked planned; §1 gains the `ahsync_app/` shell and GitHub Releases as dashed, planned nodes; §4 notes the planned endpoints; §5 the planned `meta` keys and `data/updates/`. Each milestone marks its part built here.
