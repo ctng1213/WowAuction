@@ -253,6 +253,48 @@ const ALERT_CLASS = { error: 'bad', warn: 'warn', info: 'info' };
 const VALUE_CLASS = { amber: 'amber', muted: 'muted', pos: 'pos', neg: 'neg' };
 const statusCard = c => `<div class="card"><div class="card-h"><b>${esc(c.title)}</b>${c.badge ? `<span class="pill ${c.badge_class === 'ok' || c.badge_class === 'warn' || c.badge_class === 'gold' ? c.badge_class : ''}">${esc(c.badge)}</span>` : ''}</div>` +
   `<dl class="kv">${c.lines.map(([k, v, cls, url]) => `<dt>${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(k)}</a>` : esc(k)}</dt><dd class="${VALUE_CLASS[cls] || ''}">${esc(v)}</dd>`).join('')}</dl></div>`;
+// Status: the "AHSync app" card from GET /api/app (SPEC §3.7.4, §3.7.5); only the packaged app answers it, so a source
+// run (`python -m ahsync`, 404) shows no card. M24 draws the version and Start at login; M25 adds the other lines.
+async function drawAppCard(card) {
+  let res, app;
+  try {
+    res = await fetch('/api/app', { cache: 'no-store' });
+    app = await res.json();
+  } catch (e) {
+    return;
+  }
+  const grid = card.querySelector('.grid2');
+  if (!res.ok || !grid || state.page !== 'status') return;
+  const el = (tag, cls, text) => {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+  const box = el('div', 'card'), head = el('div', 'card-h'), lines = el('dl', 'kv');
+  head.append(el('b', '', 'AHSync app'), el('span', 'pill', app.version_text));
+  const auto = app.autostart || {}, toggle = el('input'), label = el('label'), value = el('dd', auto.note ? 'amber' : '');
+  toggle.type = 'checkbox';
+  toggle.checked = !!auto.enabled;
+  toggle.disabled = !auto.available;
+  label.title = 'Windows: a Run entry for your user. macOS: a LaunchAgent in ~/Library/LaunchAgents. Nothing needs admin rights.';
+  label.append(toggle, ' on');
+  value.append(label);
+  if (auto.note) value.append(' ', el('span', '', auto.note));
+  toggle.onchange = async () => {
+    toggle.disabled = true;
+    try {
+      await post('/api/autostart', { enabled: toggle.checked });
+    } catch (e) {
+      // no answer: the reload below shows the real state
+    } finally {
+      load('status');                  // the real state, and a Status line when it failed (FM51)
+    }
+  };
+  lines.append(el('dt', '', 'Start at login'), value);
+  box.append(head, lines);
+  grid.append(box);
+}
 // Status: the Data coverage card (SPEC §3.5); every text and every cell step comes from engine/coverage.py, the page only draws.
 const COV_STRENGTH = [6, 22, 40, 58, 78, 100];   // the six steps' share of the accent colour
 const covShade = step => `color-mix(in srgb, var(--accent) ${COV_STRENGTH[step] ?? 0}%, transparent)`;
@@ -664,6 +706,7 @@ const LIVE = {
       `<div class="grid2">${(d.cards || []).map(statusCard).join('')}</div>` +
       (d.coverage || []).map(covCard).join('') +
       calibrationHtml(d.calibration),
+    bind: (_id, card) => drawAppCard(card),
     filters: [],
   },
   disenchant: {

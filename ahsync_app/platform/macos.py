@@ -1,8 +1,10 @@
-"""macOS: ~/Library/Application Support, the macOS WoW folders and translocation; the LaunchAgent and the
-signed-update swap come in M24 and M27 (SPEC §3.7.2)."""
+"""macOS: ~/Library/Application Support, the macOS WoW folders, translocation and the LaunchAgent; the
+signed-update swap comes in M27 (SPEC §3.7.2)."""
 from __future__ import annotations
 
 import os
+import plistlib
+import uuid
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 
@@ -13,6 +15,7 @@ WOW_ROOT = PurePosixPath("/Applications/World of Warcraft")
 TRANSLOCATION_PREFIX = "/private/var/folders/"
 TRANSLOCATION_PART = "/AppTranslocation/"
 KEY_FILE_MODE = 0o600
+AGENT_LABEL = "com.wowauction.ahsync"
 
 
 class MacPlatform(Platform):
@@ -69,3 +72,57 @@ class MacPlatform(Platform):
         """
         posix = Path(exe).as_posix()
         return TRANSLOCATED if posix.startswith(TRANSLOCATION_PREFIX) and TRANSLOCATION_PART in posix else None
+
+    def agent_file(self) -> Path:
+        """`~/Library/LaunchAgents/com.wowauction.ahsync.plist` (SPEC §3.7.5).
+
+        Returns:
+            The LaunchAgent's path.
+        """
+        return Path(self.home) / "Library" / "LaunchAgents" / f"{AGENT_LABEL}.plist"
+
+    def autostart_enable(self, exe: Path, args: tuple[str, ...] = ()) -> None:
+        """Write the LaunchAgent that starts `<exe> --autostart` at login (SPEC §3.7.5, DR10).
+
+        Only the file: launchd loads the folder at each login, and `launchctl` is never run (`bootout` would stop
+        an AHSync that login started). Unchanged bytes are left alone; a change is a temp file and a rename.
+
+        Args:
+            exe: The executable inside the app bundle.
+            args: Arguments before --autostart (from source: the script).
+
+        Raises:
+            OSError: When the file can't be written; no temp file is left.
+        """
+        agent = self.agent_file()
+        text = plistlib.dumps({"Label": AGENT_LABEL, "ProgramArguments": [Path(exe).as_posix(), *args, "--autostart"],
+                               "RunAtLoad": True})
+        try:
+            if agent.read_bytes() == text:
+                return
+        except OSError:
+            pass                       # missing or unreadable: write it
+        agent.parent.mkdir(parents=True, exist_ok=True)
+        temp = agent.with_name(f"{agent.name}.{uuid.uuid4().hex}.tmp")
+        try:
+            temp.write_bytes(text)
+            os.replace(temp, agent)
+        except OSError:
+            temp.unlink(missing_ok=True)
+            raise
+
+    def autostart_disable(self) -> None:
+        """Delete the LaunchAgent; nothing happens when there is none (DR10). AHSync keeps running.
+
+        Raises:
+            OSError: When the file can't be removed.
+        """
+        self.agent_file().unlink(missing_ok=True)
+
+    def autostart_enabled(self) -> bool:
+        """Whether the LaunchAgent file exists (DR10).
+
+        Returns:
+            True when AHSync starts at login.
+        """
+        return self.agent_file().exists()

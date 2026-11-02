@@ -5,6 +5,9 @@ import socket
 from pathlib import Path
 
 import ahsync_app.__main__ as app_main
+from ahsync.web.server import AppHooks
+from ahsync_app.tray import PystrayIcon
+from ahsync_app.window import PyWebview
 
 
 def test_the_bundle_s_addon_folder_from_source_and_when_frozen(tmp_path):
@@ -28,6 +31,36 @@ def test_main_passes_autostart_to_the_shell_and_builds_the_real_world(monkeypatc
     assert app_main.main([]) == 0 and seen["autostart"] is False
     world = seen["world"]
     assert world.bundle_addon_dir == Path(app_main.__file__).resolve().parents[1] / "addon"
-    runtime = world.make_runtime(lambda: True, dict)
-    assert runtime.should_stop() is True and runtime.app_info() == {}
+    hooks = AppHooks(dict, lambda enabled: ("set", enabled))
+    runtime = world.make_runtime(lambda: True, hooks)
+    assert runtime.should_stop() is True and runtime.app_hooks is hooks
+    assert world.webview is PyWebview and world.make_tray is PystrayIcon
     assert app_main.real_world(None).out is not None
+
+
+def test_the_login_entry_starts_the_build_or_from_source_pythonw_with_this_script(tmp_path):
+    exe = tmp_path / "AHSync.exe"
+    assert app_main.login_command(True, exe, Path("x.py")) == (exe, ())
+    python = tmp_path / "python.exe"
+    script = tmp_path / "ahsync_app" / "__main__.py"
+    assert app_main.login_command(False, python, script) == (python, (str(script),))
+    (tmp_path / "pythonw.exe").write_text("", encoding="utf-8")
+    assert app_main.login_command(False, python, script) == (tmp_path / "pythonw.exe", (str(script),))
+
+
+def test_the_script_runs_from_any_working_folder_as_the_login_entry_does(tmp_path):
+    import subprocess
+    import sys
+
+    script = Path(app_main.__file__).resolve()
+    done = subprocess.run([sys.executable, str(script), "--help"], cwd=tmp_path, capture_output=True, text=True,
+                          timeout=60)
+    assert done.returncode == 0 and "--autostart" in done.stdout
+    # As a script, Python puts ahsync_app/ first on sys.path; its platform/ must not shadow the stdlib's
+    # (pywebview's Windows backend does `from platform import machine`).
+    probe = ("import runpy, sys, pathlib; script = sys.argv[1]; sys.path.insert(0, str(pathlib.Path(script).parent)); "
+             "runpy.run_path(script, run_name='probe'); import platform; print('stdlib platform', "
+             "hasattr(platform, 'machine'))")
+    seen = subprocess.run([sys.executable, "-c", probe, str(script)], cwd=tmp_path, capture_output=True, text=True,
+                          timeout=60)
+    assert "stdlib platform True" in seen.stdout, seen.stdout + seen.stderr

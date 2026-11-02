@@ -14,8 +14,8 @@ from ahsync.config import Config, MarketSources
 from ahsync.engine.views import (COLUMN_HELP, MARKET_COLUMNS, CraftInput, DisenchantInput, craft_money, craft_row,
                                  disenchant_row, market_activity)
 from ahsync.db.sqlite import Database
-from ahsync.web.server import (INDEX_HTML, MAX_BODY_BYTES, PAGES, TOKEN_HEADER, TOKEN_PLACEHOLDER, DashboardApp,
-                               new_token, open_server_db, start_dashboard, stop_dashboard)
+from ahsync.web.server import (INDEX_HTML, MAX_BODY_BYTES, PAGES, TOKEN_HEADER, TOKEN_PLACEHOLDER, AppHooks,
+                               DashboardApp, new_token, open_server_db, start_dashboard, stop_dashboard)
 from tests.support.fake_clock import FakeClock
 
 M, OTHER = "forever.pvp.horde.us", "forever.pvp.alliance.us"
@@ -962,7 +962,67 @@ def test_D97_get_api_app_serves_the_shell_s_payload_and_is_unknown_without_a_she
     plain = DashboardApp(db, config, FakeClock(), refreshes, token="tok-123", port=8765)
     assert plain.handle("GET", "/api/app", {"Host": "localhost:8765"}).status == 404
     shell = DashboardApp(db, config, FakeClock(), refreshes, token="tok-123", port=8765,
-                         app_info=lambda: {"version": "0.3.1", "setup": False})
+                         app_hooks=AppHooks(lambda: {"version": "0.3.1", "setup": False}, lambda e: ("set", e)))
     reply = shell.handle("GET", "/api/app", {"Host": "localhost:8765"})
     assert reply.status == 200 and json.loads(reply.body) == {"version": "0.3.1", "setup": False}
     assert shell.handle("POST", "/api/app", {"Host": "localhost:8765"}).status == 405
+
+
+def test_SEC14_post_api_autostart_is_checked_like_every_write_and_maps_the_shell_s_outcome(db, refreshes, caplog):
+    entry: list[bool] = []
+
+    def set_autostart(enabled: bool) -> tuple[str, bool]:
+        entry[:] = [enabled] if enabled else []
+        return "set", enabled
+
+    app = DashboardApp(db, Config(markets=(M,)), FakeClock(), refreshes, token="tok-123", port=8765,
+                       app_hooks=AppHooks(lambda: {}, set_autostart))
+    headers = write_headers(origin="http://localhost:8765", host="localhost:8765")
+
+    def post(body: bytes, h: dict = headers) -> tuple[int, dict]:
+        reply = app.handle("POST", "/api/autostart", h, body)
+        return reply.status, json.loads(reply.body)
+
+    assert post(b'{"enabled": true}') == (200, {"set": True, "enabled": True}) and entry == [True]
+    assert post(b'{"enabled": false}') == (200, {"set": True, "enabled": False}) and entry == []
+    with caplog.at_level(logging.WARNING, logger="ahsync.web"):
+        refused = post(b'{"enabled": true}', {**headers, "Origin": "http://evil.example"})
+    assert refused[0] == 403 and entry == [] and "tok-123" not in caplog.text
+    assert post(b'{"enabled": "yes"}') == (400, {"error": "bad_request", "message": "enabled must be true or false"})
+    assert post(b"not json") == (400, {"error": "bad_request", "message": "enabled must be true or false"})
+    assert app.handle("GET", "/api/autostart", {"Host": "localhost:8765"}).status == 405
+
+
+def test_DR11_FM51_the_shell_s_refusal_and_failure_answer_400_and_500(db, refreshes):
+    outcomes = iter([("bad_location", False), ("not_set", False)])
+    app = DashboardApp(db, Config(markets=(M,)), FakeClock(), refreshes, token="tok-123", port=8765,
+                       app_hooks=AppHooks(lambda: {}, lambda _enabled: next(outcomes)))
+    bad = app.handle("POST", "/api/autostart", write_headers(), b'{"enabled": true}')
+    assert (bad.status, json.loads(bad.body)) == (400, {"error": "bad_location",
+                                                        "message": "Move AHSync to Applications, then turn it on again"})
+    failed = app.handle("POST", "/api/autostart", write_headers(), b'{"enabled": true}')
+    assert (failed.status, json.loads(failed.body)) == (500, {"error": "autostart_not_set"})
+
+
+def test_post_api_autostart_is_unknown_without_the_app_shell(app):
+    assert app.handle("POST", "/api/autostart", write_headers(), b'{"enabled": true}').status == 404
+
+
+def test_FM57_a_port_another_server_listens_on_is_refused_and_ours_is_never_shared(db, refreshes):
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    other = ThreadingHTTPServer(("127.0.0.1", 0), BaseHTTPRequestHandler)     # SO_REUSEADDR, like an older AHSync
+    try:
+        port = other.server_address[1]
+        app = DashboardApp(db, Config(markets=(M,)), FakeClock(), refreshes, token="tok-123", port=port)
+        with pytest.raises(OSError):
+            start_dashboard(app, port)
+    finally:
+        other.server_close()
+    ours = start_dashboard(app, port)
+    try:
+        with pytest.raises(OSError):
+            ThreadingHTTPServer(("127.0.0.1", port), BaseHTTPRequestHandler)
+    finally:
+        stop_dashboard(ours)
+    stop_dashboard(start_dashboard(app, port))          # bound again at once (setup's hand-over)

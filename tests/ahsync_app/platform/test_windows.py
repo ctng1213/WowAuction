@@ -33,3 +33,48 @@ def test_windows_needs_no_permission_change_and_has_no_translocation(tmp_path):
     platform.restrict_file(key)
     assert key.read_text(encoding="utf-8") == "x"
     assert platform.run_location_problem(Path(r"C:\Users\u\Downloads\AHSync\AHSync.exe")) is None
+
+
+class FakeRunKey:
+    """A Run key in memory that records each write."""
+
+    def __init__(self) -> None:
+        self.values: dict[str, str] = {}
+        self.writes = 0
+
+    def get(self, name: str) -> str | None:
+        return self.values.get(name)
+
+    def set(self, name: str, data: str) -> None:
+        self.writes += 1
+        self.values[name] = data
+
+    def delete(self, name: str) -> None:
+        self.values.pop(name, None)
+
+
+def test_DR9_start_at_login_is_the_run_value_with_the_quoted_exe_and_autostart():
+    run_key = FakeRunKey()
+    platform = WindowsPlatform({}, Path("C:/Users/u"), run_key)
+    exe = Path(r"C:\Users\u\AppData\Local\Programs\AHSync\AHSync.exe")
+    platform.autostart_enable(exe)
+    assert run_key.values == {"AHSync": r'"C:\Users\u\AppData\Local\Programs\AHSync\AHSync.exe" --autostart'}
+    assert platform.autostart_enabled()
+    platform.autostart_disable()
+    assert run_key.values == {} and not platform.autostart_enabled()
+    platform.autostart_disable()                       # nothing to remove: fine
+    platform.autostart_enable(exe)
+    platform.autostart_enable(exe)
+    assert list(run_key.values) == ["AHSync"]
+
+
+def test_the_real_run_key_is_used_by_default():
+    from ahsync_app.platform.windows import WinRegRunKey
+    assert isinstance(WindowsPlatform({}, Path("C:/Users/u")).run_key, WinRegRunKey)
+
+
+def test_DR9_from_source_the_run_value_quotes_pythonw_and_the_script():
+    run_key = FakeRunKey()
+    WindowsPlatform({}, Path("C:/Users/u"), run_key).autostart_enable(
+        Path(r"C:\Python312\pythonw.exe"), (r"C:\Dev\WowAuction\ahsync_app\__main__.py",))
+    assert run_key.values == {"AHSync": r'"C:\Python312\pythonw.exe" "C:\Dev\WowAuction\ahsync_app\__main__.py" --autostart'}

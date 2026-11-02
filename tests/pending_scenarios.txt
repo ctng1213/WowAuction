@@ -52,8 +52,7 @@
 # AHSync as a standalone app (SPEC 3.7; M22-M27, planned 2026-11-01; docs/plans/packaging.md)
 # M22 runtime foundations built: DR1-DR4 DR16 FM48 FM49
 # M23 first-run setup built: DR5-DR8 SEC13 FM50 D97
-# M24 window, tray and start at login: DR9-DR12 DR29 SEC14 FM51 FM56
-DR9-DR12 DR29 SEC14 FM51 FM56
+# M24 window, tray and start at login built: DR9-DR12 DR29 SEC14 FM51 FM56
 # M25 update check and download: DR13-DR15 DR20 DR21 DR24-DR26 FM52 FM53 D98
 DR13-DR15 DR20 DR21 DR24-DR26 FM52 FM53 D98
 # M26 build and release: DR17-DR19 DR27 DR28

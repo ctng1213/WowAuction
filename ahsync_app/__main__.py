@@ -15,11 +15,18 @@ import webbrowser
 from collections.abc import Callable
 from pathlib import Path
 
+if not __package__:                    # run as a script (the from-source login entry): find the repository's packages,
+    _here = Path(__file__).resolve().parent   # and drop this folder, whose platform/ would shadow the stdlib module
+    sys.path[:] = [str(_here.parent)] + [p for p in sys.path if Path(p or ".").resolve() != _here]
+
 from ahsync.__main__ import Runtime, run
 from ahsync.clock import SystemClock
 from ahsync.collect.client import UrllibTransport
+from ahsync.web.server import AppHooks
 from ahsync_app import platform
 from ahsync_app.shell import ShellWorld, start
+from ahsync_app.tray import PystrayIcon
+from ahsync_app.window import PyWebview
 
 PORT_PROBE_S = 0.5
 
@@ -36,6 +43,24 @@ def bundle_addon_dir(frozen: bool, meipass: str | None, source_root: Path) -> Pa
         `<bundle>/addon` when frozen, else `<repo>/addon`.
     """
     return Path(meipass) / "addon" if frozen and meipass else source_root / "addon"
+
+
+def login_command(frozen: bool, executable: Path, script: Path) -> tuple[Path, tuple[str, ...]]:
+    """What the login entry starts (SPEC §3.7.5): the app itself, or from source pythonw with this script.
+
+    Args:
+        frozen: Whether this is a PyInstaller build (`sys.frozen`).
+        executable: `sys.executable`.
+        script: This file, which runs the app from any working folder.
+
+    Returns:
+        (executable, arguments before --autostart): (AHSync.exe, ()) for a build; from source pythonw.exe beside
+        python.exe when there is one (no console window at login), and the script.
+    """
+    if frozen:
+        return executable, ()
+    windowless = executable.with_name("pythonw.exe")
+    return (windowless if windowless.exists() else executable), (str(script),)
 
 
 def port_open(port: int) -> bool:
@@ -61,27 +86,30 @@ def real_world(out: io.TextIOBase | None) -> ShellWorld:
         out: Where start-up messages go (stderr); None in a windowed build, which has no console.
 
     Returns:
-        The world over the current platform, the real run(), the browser and the clock.
+        The world over the current platform, the real run(), the window (pywebview), the tray (pystray),
+        the browser and the clock.
     """
     stream = out if out is not None else io.StringIO()
     env, home = dict(os.environ), Path.home()
 
-    def make_runtime(should_stop: Callable[[], bool], app_info: Callable[[], dict]) -> Runtime:
+    def make_runtime(should_stop: Callable[[], bool], hooks: AppHooks) -> Runtime:
         """The Runtime run() gets, polling the shell's stop event.
 
         Args:
             should_stop: The shell's stop event's is_set.
-            app_info: GET /api/app's payload for run()'s dashboard.
+            hooks: The app shell's paths for run()'s dashboard (GET /api/app, POST /api/autostart).
 
         Returns:
             The real environment, transport and clock.
         """
-        return Runtime(env, home, UrllibTransport(), SystemClock(), should_stop, stream, app_info=app_info)
+        return Runtime(env, home, UrllibTransport(), SystemClock(), should_stop, stream, app_hooks=hooks)
 
     bundle = bundle_addon_dir(bool(getattr(sys, "frozen", False)), getattr(sys, "_MEIPASS", None),
                               Path(__file__).resolve().parents[1])
+    exe, launch_args = login_command(bool(getattr(sys, "frozen", False)), Path(sys.executable), Path(__file__).resolve())
     return ShellWorld(platform.current(), run, make_runtime, webbrowser.open, port_open, time.sleep, bundle,
-                      env, home, stream, SystemClock(), Path(sys.executable))
+                      env, home, stream, SystemClock(), exe, launch_args=launch_args,
+                      webview=PyWebview, make_tray=PystrayIcon)
 
 
 def main(argv: list[str] | None = None) -> int:

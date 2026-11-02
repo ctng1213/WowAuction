@@ -37,7 +37,7 @@ flowchart LR
     Engine[engine/<br/>pure formulas and views]
     Export[export/<br/>addon data files]
     Web[web/ + app/<br/>dashboard server, refresh, scheduler]
-    Shell[ahsync_app/ shell built M22; M23–M27 planned<br/>window, tray, setup, start at login, updater<br/>around run; SPEC §3.7]
+    Shell[ahsync_app/ shell, setup, window, tray, start at login built M22–M24;<br/>updater planned M25–M27<br/>around run; SPEC §3.7]
   end
 
   Dashboard[localhost dashboard<br/>the app window, or a browser]
@@ -126,7 +126,7 @@ sequenceDiagram
   Note over S,R: SavedVariables changed -> state import -> re-plan -> pages -> export
   S->>P: hourly status pass (positions re-evaluated, Status lines)
   W->>W: GET pages serve stored JSON (<= 50 ms); POST only for risk tolerance and manual rates, Host/Origin/token checked
-  Note over S,W: built M23: GET /setup, GET /api/app, POST /api/setup (web/setup_app.py, same checks); planned M24–M27 (§3.7): POST /api/autostart, /api/update/{restart,auto,channel}
+  Note over S,W: built M23: GET /setup, GET /api/app, POST /api/setup (web/setup_app.py, same checks); built M24: POST /api/autostart (AppHooks from the shell); planned M25–M27 (§3.7): /api/update/{restart,auto,channel}
 ```
 
 ## 5. Storage families (SQLite)
@@ -140,7 +140,7 @@ sequenceDiagram
 | Plan and pages | `actions`, `alternatives`, `export_candidates`, `portfolio_snapshot`, `views` (+ `_new` staging), `item_rules`, `reserves`, `sell_records` | `recommend/` | `export/`, `web/` |
 | Operations | `status`, `meta` (planned M25: the `update.*` keys), backups on disk, raw snapshots on disk, planned `<data>/updates/` (downloaded releases) | all | Status page |
 
-## 6. Distribution and runtime (M22–M23 built; M24–M27 planned, SPEC §3.7)
+## 6. Distribution and runtime (M22–M24 built; M25–M27 planned, SPEC §3.7)
 
 Each part is marked built in the milestone that lands it; the rest is **planned**. The rule: one shared core, a thin layer per OS. `ahsync/` stays standard-library only; `ahsync_app/` is the one package allowed third-party imports (pystray, Pillow, pyobjc), and `ahsync_app/platform/` is the one place that knows the OS (convention test DR16).
 
@@ -150,18 +150,18 @@ Each part is marked built in the milestone that lands it; the rest is **planned*
 flowchart TD
   Start([AHSync.exe / AHSync.app<br/>or python -m ahsync_app]) --> Lock{lock<br/>data/ahsync.lock free?}
   Lock -- held --> Show[write data/ahsync.show, exit 0<br/>the running shell shows its window<br/>with --autostart: exit 0, nothing written, FM48]
-  Lock -- taken --> Addon[export/addon_install.py<br/>mirror AHProfit/, never the generated files<br/>Addon line, FM49]
-  Addon --> Cfg{config.toml exists?<br/>a bad wow_path is the Addon line of FM49, not setup}
-  Cfg -- no --> Setup[web/server.py in setup mode<br/>GET /setup, GET /api/app, POST /api/setup<br/>writes config.toml + key file, DR5–DR8]
-  Setup --> Cfg
-  Cfg -- yes --> Heal[autostart.py self-heal<br/>rewrite the login entry with the current exe<br/>refuse a translocated app, DR11]
-  Heal --> Threads
-  subgraph Threads["the GUI loop and the worker"]
-    Win[main thread: window.py<br/>pywebview loop, one window hidden or shown<br/>browser fallback FM56, DR29]
-    Tray[tray.py: pystray Icon.run_detached<br/>menu = tray.menu(TrayState), DR12]
-    Run[worker thread: ahsync.__main__.run<br/>data_dir, config_path, Runtime should_stop = stop_event]
+  Lock -- taken --> Win[main thread: window.py<br/>one window created hidden, then the pywebview loop<br/>browser fallback FM56, DR29]
+  Win -- the loop runs --> Tray[tray.py: pystray Icon.run_detached<br/>menu = tray.menu TrayState, DR12]
+  Win -- the loop runs --> Cfg
+  subgraph Worker["the worker thread (shell.Session)"]
+    Cfg{config.toml exists?<br/>a bad wow_path is the Addon line of FM49, not setup}
+    Cfg -- no --> Setup[web/setup_app.py, setup mode<br/>GET /setup, GET /api/app, POST /api/setup<br/>writes config.toml + key file, DR5–DR8]
+    Setup --> Addon
+    Cfg -- yes --> Addon[export/addon_install.py<br/>mirror AHProfit/, never the generated files<br/>Addon line, FM49]
+    Addon --> Heal[autostart.py self-heal<br/>rewrite the login entry with the current exe<br/>refuse a translocated app, DR11]
+    Heal --> Run[ahsync.__main__.run on its own thread<br/>Runtime should_stop = the stop event, AppHooks<br/>the worker ticks: show file, first open, tray state]
   end
-  Tray -- Quit / Restart to update --> Stop[stop_event set<br/>run returns at its next 5 s tick]
+  Tray -- Quit / Restart to update --> Stop[stop event set<br/>run returns at its next 5 s tick<br/>the worker removes the tray and destroys the window]
   Run --> Stop
   Stop --> Pending{verified update<br/>waiting in data/updates/?}
   Pending -- no --> Exit([exit 0])
@@ -169,7 +169,7 @@ flowchart TD
   Apply --> Exit
 ```
 
-**Built (M22):** the lock and the show file (FM48), the addon install (`export/addon_install.py`, FM49) and `run()` on a worker thread with the shell ticking on the main thread (`ahsync_app/shell.py`, `__main__.py`); no window or tray yet: a manual launch opens the browser once the dashboard answers, and a missing `config.toml` was refused until setup mode landed. **Built (M23):** setup mode (`web/setup_app.py` on the dashboard's port, with `server.py`'s Security checks; `app/setup.py` writes `AddOns`, `config.toml` and the key file; `app/wow_paths.py` detects and checks the folder), the hand-over to `run()`, and `GET /api/app` from `ahsync_app/app_info.py` in both modes. The window, the tray, start at login and the update half of the chart are planned.
+**Built (M22):** the lock and the show file (FM48), the addon install (`export/addon_install.py`, FM49) and `run()` on a worker thread with the shell ticking on the main thread (`ahsync_app/shell.py`, `__main__.py`); no window or tray yet: a manual launch opens the browser once the dashboard answers, and a missing `config.toml` was refused until setup mode landed. **Built (M23):** setup mode (`web/setup_app.py` on the dashboard's port, with `server.py`'s Security checks; `app/setup.py` writes `AddOns`, `config.toml` and the key file; `app/wow_paths.py` detects and checks the folder), the hand-over to `run()`, and `GET /api/app` from `ahsync_app/app_info.py` in both modes. **Built (M24):** the window (`ahsync_app/window.py`) whose loop owns the main thread from the start, so setup shows in it too; the tray (`tray.py`) detached under it; the worker (`shell.Session`) running setup or the addon install, the self-heal (`autostart.py`) and `run()`; Quit and the stop file end the worker, which destroys the window; the browser fallback (FM56). The update half of the chart is planned.
 
 From source `python -m ahsync` is unchanged (`./data`, `./config.toml`, no tray). The per-user folders come from `platform.current().app_dirs()`: `%LOCALAPPDATA%\AHSync` and `~/Library/Application Support/AHSync` (DR1).
 
@@ -186,7 +186,7 @@ flowchart LR
   subgraph Platform["ahsync_app/platform/ (facts and thin writers)"]
     Base[base.py: Platform protocol, ten members<br/>app_dirs, wow_candidates,<br/>autostart_enable / disable / enabled,<br/>restrict_file, run_location_problem,<br/>update_asset_name, verify_update, apply_update]
     Win[windows.py<br/>LOCALAPPDATA, winreg Run key,<br/>Program Files WoW candidates,<br/>silent installer]
-    Mac[macos.py<br/>Application Support, plistlib + launchctl,<br/>/Applications WoW candidates, translocation,<br/>codesign + Team ID, swap helper]
+    Mac[macos.py<br/>Application Support, LaunchAgent plist (no launchctl),<br/>/Applications WoW candidates, translocation,<br/>codesign + Team ID, swap helper]
     Cur[__init__.py current<br/>the one sys.platform read]
   end
   ShellM --> Base
@@ -197,11 +197,11 @@ flowchart LR
   Cur --> Mac
   Win -.implements.-> Base
   Mac -.implements.-> Base
-  Fakes[tests: fake registry, plist folder,<br/>recorded run, fake filesystem] -.inject.-> Win
+  Fakes[tests: fake Run key, plist folder,<br/>recorded run, fake filesystem] -.inject.-> Win
   Fakes -.inject.-> Mac
 ```
 
-**Built (M22):** `base.py` (the protocol; the start-at-login and update members raise until M24 and M27), `app_dirs`, `wow_candidates`, `restrict_file` and `run_location_problem` in both modules, and `current()`; the guardrail DR16 in `tests/test_conventions.py`.
+**Built (M22):** `base.py` (the protocol; the update members raise until M27), `app_dirs`, `wow_candidates`, `restrict_file` and `run_location_problem` in both modules, and `current()`; the guardrail DR16 in `tests/test_conventions.py`. **Built (M24):** the start-at-login members (Windows: the Run key through an injected `RunKey`; macOS: the LaunchAgent file alone) and `ahsync_app/autostart.py` over them.
 
 Both OS modules are tested on every OS by injection (DR9–DR11, DR22, DR23), so a Windows-only CI run still tests the macOS adapter.
 
@@ -270,3 +270,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-01: plan review: the dashboard shows in the app's own window (`ahsync_app/window.py`, pywebview) with the tray detached under its loop; a second launch signals the running shell through `data/ahsync.show` (§6.1).
 - 2026-11-01: M22 built: the shell without window or tray (§6.1's lock, show file, addon install and worker thread), the platform layer's folder members (§6.2) and the CI `test` job (§6.4's first box); §1's shell node and its addon edge drawn built.
 - 2026-11-01: M23 built: setup mode and its hand-over (§6.1), `GET /api/app` and `POST /api/setup` (§4), with `web/setup_app.py` as setup mode's own request handler next to `server.py`.
+- 2026-11-02: M24 built: the window, the tray and start at login (§6.1 redrawn: the window's loop takes the main thread first and setup, the addon install, the self-heal and `run()` move to the worker); `POST /api/autostart` through the shell's `AppHooks` (§4); the macOS login entry is the LaunchAgent file alone, no `launchctl` (§6.2).

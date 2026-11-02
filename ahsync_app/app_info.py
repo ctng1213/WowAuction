@@ -6,26 +6,10 @@ from typing import TYPE_CHECKING
 from ahsync import version
 from ahsync.app.wow_paths import WowCheck, check
 from ahsync.engine.app_view import app_state, update_not_checked, wow_check
+from ahsync_app import autostart
 
 if TYPE_CHECKING:                                   # shell.py imports this module
     from ahsync_app.shell import ShellState, ShellWorld
-
-
-def autostart_facts(world: ShellWorld) -> tuple[dict, bool]:
-    """Start at login's state and whether the app runs translocated (SPEC §3.7.5).
-
-    Args:
-        world: The platform and the executable.
-
-    Returns:
-        ({"enabled", "available", "note"}, translocated). Until M24 builds the login entry, enabled is False.
-    """
-    translocated = world.platform.run_location_problem(world.exe) is not None
-    try:
-        enabled = world.platform.autostart_enabled()
-    except NotImplementedError:
-        enabled = False
-    return {"enabled": enabled, "available": not translocated, "note": ""}, translocated
 
 
 def app_payload(world: ShellWorld, state: ShellState, setup: bool, wow_path: str, api_key_set: bool) -> dict:
@@ -43,7 +27,7 @@ def app_payload(world: ShellWorld, state: ShellState, setup: bool, wow_path: str
     """
     found = check(wow_path) if wow_path else WowCheck(False, False, 0)
     folder = wow_check(wow_path, found.has_interface, found.has_addons, found.accounts, creatable=setup)
-    autostart, translocated = autostart_facts(world)
+    autostart_state, translocated = autostart.facts(world.platform, world.exe)
     addon = state.addon.line if state.addon is not None else None
-    return app_state(version.VERSION, version.BUILT, "stable", setup, wow_path, folder, api_key_set, autostart,
+    return app_state(version.VERSION, version.BUILT, "stable", setup, wow_path, folder, api_key_set, autostart_state,
                      True, update_not_checked(version.VERSION), translocated, addon)

@@ -20,6 +20,7 @@ import hmac
 import json
 import logging
 import secrets
+import socket
 import sqlite3
 import threading
 from collections.abc import Callable, Mapping
@@ -33,6 +34,7 @@ from ahsync.app.status_page import status_page
 from ahsync.clock import Clock
 from ahsync.config import Config, ConfigError, market_sources, write_risk_tolerance
 from ahsync.db.sqlite import Database
+from ahsync.engine.app_view import BAD_LOCATION_TEXT
 from ahsync.engine.gathering import catalog, eligible, why_not_eligible
 from ahsync.engine.views import source_credit
 from ahsync.export.addon_files import export_plan
@@ -52,11 +54,23 @@ BUSY_TIMEOUT_MS = 5000
 PAGES = ("portfolio", "today", "week", "on_ah", "disenchant", "craft", "flip", "gathering", "inventory", "history",
          "rules", "characters", "status")
 GET_PATHS = ("/", "/api/markets", "/api/items", "/api/app")
-POST_PATHS = ("/api/refresh", "/api/skip", "/api/rule", "/api/reserve", "/api/risk_tolerance", "/api/manual_rate")
+POST_PATHS = ("/api/refresh", "/api/skip", "/api/rule", "/api/reserve", "/api/risk_tolerance", "/api/manual_rate",
+              "/api/autostart")
 MANUAL_RATE_MAX = 10_000                           # SPEC §3.4E.5: a whole number 1-10,000 items per hour
 RISK_CHOICES = (0.1, 0.2, 0.3, 0.4, 0.5)          # SPEC §3.5: the Portfolio page's Risk tolerance dropdown
 RULES = ("no_buy", "ignore", "keep", "none")       # SPEC §3.4.2: what the dashboard may set
 VIEWS_PREFIX = "/api/views/"
+
+
+AUTOSTART_SET, AUTOSTART_BAD_LOCATION, AUTOSTART_NOT_SET = "set", "bad_location", "not_set"   # set_autostart's outcomes
+
+
+@dataclass(frozen=True)
+class AppHooks:
+    """What the app shell adds to the dashboard (SPEC §3.7); `python -m ahsync` has none, and its paths answer 404."""
+
+    app_info: Callable[[], dict]                         # GET /api/app's payload (D97)
+    set_autostart: Callable[[bool], tuple[str, bool]]    # wanted state -> (an AUTOSTART_* outcome, the real state)
 
 
 @dataclass(frozen=True)
@@ -163,7 +177,7 @@ class DashboardApp:
     config_path: Path | None = None       # config.toml, rewritten by the Risk tolerance dropdown (SEC11)
     config_changed: Callable[[Config], None] = lambda _config: None   # tells the scheduler the new settings
     catalog_path: Path = CATALOG_PATH     # the gathering catalog, for POST /api/manual_rate's checks (SEC12)
-    app_info: Callable[[], dict] | None = None   # GET /api/app's payload from the app shell; None: no such path (D97)
+    app_hooks: AppHooks | None = None     # the app shell's paths (/api/app, /api/autostart); None: they answer 404
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def __post_init__(self) -> None:
@@ -253,9 +267,9 @@ class DashboardApp:
         if path == "/api/items":
             return self.search_items(query.get("q", [""])[0])
         if path == "/api/app":
-            if self.app_info is None:              # `python -m ahsync`: no app shell around it
+            if self.app_hooks is None:             # `python -m ahsync`: no app shell around it
                 return json_response(404, {"error": "not_found"})
-            return json_response(200, self.app_info())
+            return json_response(200, self.app_hooks.app_info())
         return self.get_view(path[len(VIEWS_PREFIX):], query.get("market", [""])[0])
 
     def search_items(self, text: str) -> Response:
@@ -349,6 +363,8 @@ class DashboardApp:
             return self.risk_tolerance(body)
         if path == "/api/manual_rate":
             return self.manual_rate(body)
+        if path == "/api/autostart":
+            return self.autostart(body)
         return self.skip(body)
 
     def _manual_rate_request(self, body: bytes) -> tuple[str, int, int | None] | str:
@@ -489,6 +505,34 @@ class DashboardApp:
         self.config_changed(self.config)
         log.info("risk tolerance set to %s from the dashboard", value)
         return self._store_and_replan(lambda _now: self.db.clear_status("risk_tolerance") or True, "the risk tolerance")
+
+    def autostart(self, body: bytes) -> Response:
+        """Turn start at login on or off from the Status card (SPEC §3.7.5; SEC14, DR11, FM51).
+
+        The app shell does the write and keeps the Status line `autostart_not_set`; this only reads the body
+        and maps the outcome.
+
+        Args:
+            body: JSON {"enabled": true | false}.
+
+        Returns:
+            200 {"set": true, "enabled": <the real state>}; 400 bad_request for a non-bool, 400 bad_location for a
+            translocated app; 500 autostart_not_set when the entry can't be written; 404 without the app shell.
+        """
+        if self.app_hooks is None:
+            return json_response(404, {"error": "not_found"})
+        try:
+            enabled = json.loads(body.decode("utf-8")).get("enabled")
+        except (ValueError, AttributeError):
+            enabled = None
+        if not isinstance(enabled, bool):
+            return json_response(400, {"error": "bad_request", "message": "enabled must be true or false"})
+        outcome, now_enabled = self.app_hooks.set_autostart(enabled)
+        if outcome == AUTOSTART_BAD_LOCATION:
+            return json_response(400, {"error": "bad_location", "message": BAD_LOCATION_TEXT})
+        if outcome != AUTOSTART_SET:
+            return json_response(500, {"error": "autostart_not_set"})
+        return json_response(200, {"set": True, "enabled": now_enabled})
 
     def _config_not_written(self, error: Exception) -> Response:
         """Report a config.toml that couldn't be rewritten: a log line and a Status line, never its path (SEC11).
@@ -685,6 +729,22 @@ class DashboardServer(ThreadingHTTPServer):
         """
         super().__init__((BIND_ADDRESS, port), DashboardHandler)
         self.app = app
+
+    def server_bind(self) -> None:
+        """Bind the port exclusively where the OS offers it (FM57).
+
+        On Windows `SO_REUSEADDR` lets a second server listen on a port already in use and take its requests, so
+        `SO_EXCLUSIVEADDRUSE` replaces it: a taken port fails here, and nothing can share ours later. Elsewhere
+        `SO_REUSEADDR` stays (it only allows rebinding past TIME_WAIT there).
+
+        Raises:
+            OSError: The port is in use or can't be bound.
+        """
+        exclusive = getattr(socket, "SO_EXCLUSIVEADDRUSE", None)
+        if exclusive is not None:
+            self.allow_reuse_address = False
+            self.socket.setsockopt(socket.SOL_SOCKET, exclusive, 1)
+        super().server_bind()
 
 
 def start_dashboard(app: DashboardApp, port: int) -> DashboardServer:

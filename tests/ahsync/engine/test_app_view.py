@@ -99,3 +99,9 @@ def test_the_ruleset_choices_are_the_config_s():
     assert tuple(code for code, _ in app_view.RULESET_CHOICES) == RULESETS
     assert all(MARKET_PATTERN.match(f"forever.{r}.{f}.us") for r, _ in app_view.RULESET_CHOICES
                for f, _ in app_view.FACTION_CHOICES)
+
+
+def test_DR11_a_translocated_app_s_toggle_is_unavailable_with_its_note():
+    assert app_view.autostart_line(True, False) == {"enabled": True, "available": True, "note": ""}
+    assert app_view.autostart_line(False, True) == {
+        "enabled": False, "available": False, "note": "not set: Move AHSync to Applications, then turn it on again"}

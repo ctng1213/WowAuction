@@ -22,7 +22,7 @@ class Facts(Platform):
 
     def autostart_enabled(self) -> bool:
         if self.enabled is None:
-            return super().autostart_enabled()      # not built until M24
+            return super().autostart_enabled()      # the base: no answer, read as off
         return self.enabled
 
 
@@ -51,5 +51,6 @@ def test_D97_in_setup_mode_with_a_detected_folder(tmp_path):
 def test_D97_nothing_detected_translocated_and_start_at_login_on():
     payload = app_info.app_payload(World(Facts(translocated=True, enabled=True)), ShellState(False), True, "", False)
     assert payload["wow_path"] == "" and payload["wow_check"]["pill"] == "not found"
-    assert payload["autostart"] == {"enabled": True, "available": False, "note": ""}
+    assert payload["autostart"] == {"enabled": True, "available": False,
+                                    "note": "not set: Move AHSync to Applications, then turn it on again"}
     assert payload["location_problem"].startswith("AHSync is running from where it was downloaded")

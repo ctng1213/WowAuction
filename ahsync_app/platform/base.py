@@ -22,8 +22,8 @@ class AppDirs:
 
 
 class Platform:
-    """The OS layer. Subclasses answer every member; the start-at-login (M24) and update (M27) members
-    raise NotImplementedError until their milestone builds them."""
+    """The OS layer. Subclasses answer every member; the update members (M27) raise NotImplementedError
+    until their milestone builds them."""
 
     name = "base"
 
@@ -65,17 +65,25 @@ class Platform:
         """
         raise NotImplementedError
 
-    def autostart_enable(self, exe: Path) -> None:
+    def autostart_enable(self, exe: Path, args: tuple[str, ...] = ()) -> None:
         """Start AHSync at login with `--autostart`, replacing any older entry (SPEC §3.7.5).
 
         Args:
             exe: The executable the entry starts.
+            args: Arguments before `--autostart`: none for a build; from source, the script to run.
+
+        Raises:
+            OSError: When the entry can't be written.
         """
-        raise NotImplementedError("start at login is built in M24")
+        raise NotImplementedError
 
     def autostart_disable(self) -> None:
-        """Remove the login entry; nothing happens when there is none (SPEC §3.7.5)."""
-        raise NotImplementedError("start at login is built in M24")
+        """Remove the login entry; nothing happens when there is none (SPEC §3.7.5).
+
+        Raises:
+            OSError: When the entry can't be removed.
+        """
+        raise NotImplementedError
 
     def autostart_enabled(self) -> bool:
         """Whether the login entry exists (SPEC §3.7.5).
@@ -83,7 +91,7 @@ class Platform:
         Returns:
             True when AHSync starts at login.
         """
-        raise NotImplementedError("start at login is built in M24")
+        raise NotImplementedError
 
     def update_asset_name(self, version: str) -> str:
         """The release asset this OS installs (SPEC §3.7.9).

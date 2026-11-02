@@ -90,6 +90,22 @@ FACTION_CHOICES = (("alliance", "Alliance"), ("horde", "Horde"))
 NOT_DETECTED = "not found: enter the folder that holds Interface and WTF"
 TRANSLOCATED_TEXT = ("AHSync is running from where it was downloaded. Drag AHSync to Applications and open it "
                      "from there, then Start at login can be turned on.")
+BAD_LOCATION_TEXT = "Move AHSync to Applications, then turn it on again"     # POST /api/autostart's 400 (DR11)
+
+
+def autostart_line(enabled: bool, translocated: bool) -> dict:
+    """`GET /api/app`'s `autostart`: the toggle's state and why it can't be used (SPEC §3.7.5; DR11, D97).
+
+    Args:
+        enabled: Whether the login entry exists (the real state, read from the OS).
+        translocated: Whether the app runs translocated (macOS), where Start at login is refused.
+
+    Returns:
+        {"enabled", "available", "note"}; the note is "not set: Move AHSync to Applications, then turn it on
+        again" for a translocated app, else "".
+    """
+    note = f"not set: {BAD_LOCATION_TEXT}" if translocated else ""
+    return {"enabled": enabled, "available": not translocated, "note": note}
 
 
 def wow_check(wow_path: str, has_interface: bool, has_addons: bool, accounts: int, creatable: bool) -> dict:

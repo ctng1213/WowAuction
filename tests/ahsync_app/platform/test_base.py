@@ -14,8 +14,7 @@ TEN = ["app_dirs", "wow_candidates", "autostart_enable", "autostart_disable", "a
 
 
 @pytest.mark.parametrize("call, milestone", [
-    (lambda p: p.autostart_enable(Path("x")), "M24"), (lambda p: p.autostart_disable(), "M24"),
-    (lambda p: p.autostart_enabled(), "M24"), (lambda p: p.update_asset_name("0.4.0"), "M27"),
+    (lambda p: p.update_asset_name("0.4.0"), "M27"),
     (lambda p: p.verify_update(Path("x")), "M27"), (lambda p: p.apply_update(Path("x"), Path("y")), "M27"),
 ])
 def test_members_built_later_raise_naming_their_milestone(call, milestone):
@@ -27,7 +26,8 @@ def test_members_built_later_raise_naming_their_milestone(call, milestone):
 def test_the_base_answers_nothing_itself():
     base = Platform()
     for call in (base.app_dirs, base.wow_candidates, lambda: base.restrict_file(Path("k")),
-                 lambda: base.run_location_problem(Path("x"))):
+                 lambda: base.run_location_problem(Path("x")), lambda: base.autostart_enable(Path("x")),
+                 base.autostart_disable, base.autostart_enabled):
         with pytest.raises(NotImplementedError):
             call()
 

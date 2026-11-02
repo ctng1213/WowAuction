@@ -5,6 +5,7 @@ import http.client
 import io
 import json
 import socket
+import threading
 import time
 from pathlib import Path
 
@@ -50,8 +51,17 @@ class FolderPlatform(Platform):
     def run_location_problem(self, exe: Path) -> str | None:
         return None
 
-    def autostart_enable(self, exe: Path) -> None:
+    def autostart_enable(self, exe: Path, args: tuple[str, ...] = ()) -> None:
         self.autostarts.append(exe)
+
+
+def status_line(data_dir: Path, topic: str):
+    """One Status line from the app's database, or None."""
+    db = Database.open(data_dir / "ahsync.db", FakeClock().now_ms(), None)
+    try:
+        return db.status(topic)
+    finally:
+        db.close()
 
 
 def free_port() -> int:
@@ -74,6 +84,8 @@ class FakeApp:
         self.opened: list[str] = []
         self.opener = opener or self.opened.append
         self.app_infos: list = []
+        self.hooks: list = []
+        self.calls_done = False
         self.setup_port = free_port()
         self.probes = 0
         self.out = io.StringIO()
@@ -82,11 +94,13 @@ class FakeApp:
     def run(self, data_dir: Path, config: Path, runtime: Runtime, held_lock=None) -> int:
         """The fake ahsync run()."""
         self.calls.append((data_dir, config, held_lock is not None))
-        self.app_infos.append(runtime.app_info)
+        self.app_infos.append(runtime.app_hooks.app_info)
+        self.hooks.append(runtime.app_hooks)
         deadline = time.monotonic() + 5
         while self.until is not None and not self.until(data_dir) and not runtime.should_stop():
             assert time.monotonic() < deadline, "the shell never did what the fake run waits for"
             time.sleep(0.002)
+        self.calls_done = True
         return 0
 
     def port_open(self, port: int) -> bool:
@@ -97,7 +111,7 @@ class FakeApp:
     def world(self) -> shell.ShellWorld:
         """The shell's world over these fakes."""
         return shell.ShellWorld(self.platform, self.run,
-                                lambda stop, info: Runtime({}, self.tmp, None, FakeClock(), stop, self.out, app_info=info),
+                                lambda stop, hooks: Runtime({}, self.tmp, None, FakeClock(), stop, self.out, app_hooks=hooks),
                                 self.opener, self.port_open, lambda _s: time.sleep(0.001),
                                 self.tmp / "bundle" / "addon", {}, self.tmp / "home", self.out, FakeClock(),
                                 self.tmp / "AHSync.exe", self.setup_port)
@@ -177,7 +191,8 @@ def test_FM48_the_running_shell_takes_a_show_request(tmp_path):
     app = FakeApp(tmp_path, until=second_launch_seen)
     app.configure(tmp_path / "wow")
     assert shell.start(True, app.world()) == 0
-    assert not (app.platform.app_dirs().data_dir / shell.SHOW_FILE).exists() and app.opened == []
+    assert not (app.platform.app_dirs().data_dir / shell.SHOW_FILE).exists()
+    assert app.opened == ["http://localhost:8765"]          # no window here: the browser shows the dashboard
 
 
 def test_a_manual_launch_opens_the_dashboard_once_it_answers_and_an_autostart_launch_never(tmp_path):
@@ -335,17 +350,26 @@ def test_a_setup_port_in_use_is_reported_and_an_autostart_setup_opens_nothing(tm
     assert quiet.opened == [] and quiet.calls == []
 
 
-def test_start_at_login_failures_after_setup_are_logged_not_fatal(tmp_path, caplog):
+def test_FM51_a_login_entry_that_cannot_be_written_is_a_status_line_the_next_success_clears(tmp_path, caplog):
     app = FakeApp(tmp_path)
+    dirs = app.platform.app_dirs()
+    dirs.data_dir.mkdir(parents=True)
+    session = shell.Session(dirs, InstanceLock(dirs.data_dir / LOCK_FILE), shell.ShellState(False), app.world())
+    failing = {"on": True}
 
-    def refuse(exe: Path) -> None:
-        raise PermissionError("registry")
+    def enable(exe: Path, _args: tuple[str, ...] = ()) -> None:
+        if failing["on"]:
+            raise PermissionError(13, "Access is denied")
+        app.platform.autostarts.append(exe)
 
-    app.platform.autostart_enable = refuse
-    shell.enable_autostart(app.world())
-    app.platform.autostart_enable = Platform.autostart_enable.__get__(app.platform)   # not built until M24
-    shell.enable_autostart(app.world())
-    assert "start at login not set: PermissionError" in caplog.text
+    app.platform.autostart_enable = enable
+    app.platform.autostart_enabled = lambda: bool(app.platform.autostarts)
+    assert session.set_autostart(True) == ("not_set", False)
+    line = status_line(dirs.data_dir, "autostart")
+    assert (line.level, line.kind, line.data) == ("warn", "autostart_not_set", {"error": "PermissionError"})
+    assert "start at login not set: PermissionError" in caplog.text and "Access is denied" not in caplog.text
+    failing["on"] = False
+    assert session.set_autostart(True) == ("set", True) and status_line(dirs.data_dir, "autostart") is None
 
 
 def test_ctrl_c_sets_the_stop_event_and_waits_for_run_to_return(tmp_path):
@@ -407,3 +431,245 @@ def test_setup_logs_to_the_data_folder_without_the_key_and_the_stop_file_ends_it
     world = stopped.world()
     assert shell.start(True, shell.ShellWorld(**{**world.__dict__, "sleep": stop_soon})) == 0
     assert stopped.calls == [] and not (data / "ahsync.stop").exists()
+
+
+class FakeWebview:
+    """A webview that records what the window asks; its loop runs `script`, then waits for destroy."""
+
+    def __init__(self, script=None, fail_start: Exception | None = None) -> None:
+        self.calls: list = []
+        self.navigated = None          # set by a test: the user moved on inside the page
+        self.script = script
+        self.fail_start = fail_start
+        self.on_closing = None
+        self.destroyed = threading.Event()
+        self.starts = 0
+        self.error: BaseException | None = None   # a failed check in the script (the window would swallow it)
+
+    def create(self, url, title, width, height, on_closing) -> None:
+        self.calls.append(("create", url, title, width, height))
+        self.on_closing = on_closing
+
+    def start(self, on_started) -> None:
+        self.starts += 1
+        if self.fail_start is not None:
+            raise self.fail_start
+        on_started()
+        if self.script is not None:
+            try:
+                self.script(self)
+            except BaseException as error:      # end the loop; the test re-raises it
+                self.error = error
+                return
+        if not self.destroyed.wait(5):
+            self.error = AssertionError("the window was never destroyed")
+
+    def check(self) -> None:
+        """Re-raise what failed inside the loop."""
+        if self.error is not None:
+            raise self.error
+
+    def show(self) -> None:
+        self.calls.append(("show",))
+
+    def hide(self) -> None:
+        self.calls.append(("hide",))
+
+    def load(self, url: str) -> None:
+        self.calls.append(("load", url))
+
+    def destroy(self) -> None:
+        self.calls.append(("destroy",))
+        self.destroyed.set()
+
+    def current_url(self):
+        loads = [c[1] for c in self.calls if c[0] in ("load", "create")]
+        return self.navigated or (loads[-1] if loads else None)
+
+
+class FakeTray:
+    """A tray that keeps the shell's dispatch so a test can click its items."""
+
+    made: list = []
+
+    def __init__(self, state, dispatch, offset_ms) -> None:
+        self.state, self.dispatch, self.offset_ms = state, dispatch, offset_ms
+        self.events: list[str] = []
+        FakeTray.made.append(self)
+
+    def start(self) -> None:
+        self.events.append("start")
+
+    def refresh(self) -> None:
+        pass
+
+    def stop(self) -> None:
+        self.events.append("stop")
+
+
+def wait_for(condition, what: str) -> None:
+    """Wait up to 5 s for a condition."""
+    deadline = time.monotonic() + 5
+    while not condition():
+        assert time.monotonic() < deadline, what
+        time.sleep(0.002)
+
+
+def windowed(app: FakeApp, view: FakeWebview, make_tray=FakeTray) -> shell.ShellWorld:
+    """The fake world with a window and a tray."""
+    FakeTray.made.clear()
+    return shell.ShellWorld(**{**app.world().__dict__, "webview": lambda _storage: view, "make_tray": make_tray})
+
+
+def test_DR29_the_window_is_a_view_on_the_dashboard_and_closing_it_never_stops_ahsync(tmp_path):
+    app = FakeApp(tmp_path, until=lambda _d: False)
+    app.configure(tmp_path / "wow")
+    home = "http://localhost:8765"
+
+    def script(view: FakeWebview) -> None:
+        wait_for(lambda: ("show",) in view.calls, "the manual launch never showed the window")
+        assert view.calls[:3] == [("create", home, "AHSync", 1200, 800), ("load", home), ("show",)]
+        tray_icon = FakeTray.made[0]
+        tray_icon.dispatch("status")
+        assert view.calls[-2:] == [("load", f"{home}/#status"), ("show",)]
+        assert view.on_closing() is False and view.calls[-1] == ("hide",)
+        time.sleep(0.02)
+        assert len(app.calls) == 1 and not app.calls_done
+        tray_icon.dispatch("open")
+        assert view.calls[-2:] == [("load", home), ("show",)]
+        tray_icon.dispatch("quit")
+
+    view = FakeWebview(script)
+    assert shell.start(False, windowed(app, view)) == 0
+    view.check()
+    assert view.calls[-1] == ("destroy",) and app.calls_done and app.opened == []
+    assert FakeTray.made[0].events == ["start", "stop"]
+
+
+def test_DR29_an_autostart_launch_keeps_the_window_hidden_until_it_is_asked_for(tmp_path):
+    app = FakeApp(tmp_path, until=lambda _d: False)
+    app.configure(tmp_path / "wow")
+
+    def script(view: FakeWebview) -> None:
+        time.sleep(0.05)                               # several ticks with the dashboard answering
+        assert view.calls == [("create", "http://localhost:8765", "AHSync", 1200, 800)]
+        shell.request_show(app.platform.app_dirs().data_dir)   # a second launch (FM48)
+        wait_for(lambda: ("show",) in view.calls, "the show request never showed the window")
+        FakeTray.made[0].dispatch("quit")
+
+    view = FakeWebview(script)
+    assert shell.start(True, windowed(app, view)) == 0
+    view.check()
+    assert app.opened == []
+
+
+def test_FM56_without_a_webview_runtime_every_open_goes_to_the_browser_and_nothing_retries(tmp_path, caplog):
+    app = FakeApp(tmp_path, until=lambda _d: len(app.opened) >= 3)
+    app.configure(tmp_path / "wow")
+    data = app.platform.app_dirs().data_dir
+    view = FakeWebview(fail_start=RuntimeError("WebView2 runtime missing"))
+    world = windowed(app, view)
+
+    def drive() -> None:
+        wait_for(lambda: len(app.opened) == 1, "the manual launch never opened the browser")
+        FakeTray.made[0].dispatch("open")
+        shell.request_show(data)
+
+    driver = threading.Thread(target=drive)
+    driver.start()
+    assert shell.start(False, world) == 0
+    driver.join()
+    assert app.opened == ["http://localhost:8765"] * 3 and view.starts == 1
+    line = status_line(data, "window")
+    assert (line.level, line.kind) == ("warn", "window_unavailable")
+    assert caplog.text.count("app window unavailable (RuntimeError)") == 1
+
+
+def test_a_window_that_starts_clears_an_old_window_unavailable_line(tmp_path):
+    app = FakeApp(tmp_path, until=lambda _d: False)
+    app.configure(tmp_path / "wow")
+    data = app.platform.app_dirs().data_dir
+    data.mkdir(parents=True)
+    shell.record_status(data, app.world(), "window", ("window_unavailable", {}))
+    view = FakeWebview(lambda _v: FakeTray.made[0].dispatch("quit"))
+    assert shell.start(True, windowed(app, view)) == 0
+    view.check()
+    assert status_line(data, "window") is None
+
+
+def test_DR12_the_tray_s_start_at_login_item_toggles_and_the_update_items_wait_for_m25(tmp_path, caplog):
+    app = FakeApp(tmp_path, until=lambda _d: False)
+    app.configure(tmp_path / "wow")
+    app.platform.autostart_enabled = lambda: bool(app.platform.autostarts)
+    app.platform.autostart_disable = lambda: app.platform.autostarts.clear()
+
+    def script(_view: FakeWebview) -> None:
+        wait_for(lambda: app.calls, "run() never started")    # after the start's self-heal
+        tray_icon = FakeTray.made[0]
+        assert tray_icon.state().autostart is False and tray_icon.state().configured is True
+        tray_icon.dispatch("autostart")
+        assert tray_icon.state().autostart is True and app.platform.autostarts == [tmp_path / "AHSync.exe"]
+        tray_icon.dispatch("autostart")
+        assert tray_icon.state().autostart is False
+        tray_icon.dispatch("auto_update")
+        tray_icon.dispatch("quit")
+
+    view = FakeWebview(script)
+    assert shell.start(True, windowed(app, view)) == 0
+    view.check()
+    assert "tray item auto_update is built with the updates (M25, M27)" in caplog.text
+
+
+def test_a_tray_that_cannot_start_leaves_ahsync_running(tmp_path, caplog):
+    class BrokenTray(FakeTray):
+        def start(self) -> None:
+            raise OSError("no notification area")
+
+    app = FakeApp(tmp_path, until=lambda _d: bool(app.opened))
+    app.configure(tmp_path / "wow")
+    world = shell.ShellWorld(**{**app.world().__dict__, "make_tray": BrokenTray})
+    assert shell.start(False, world) == 0 and app.opened == ["http://localhost:8765"]
+    assert "tray icon unavailable: OSError" in caplog.text
+
+
+def test_FM51_a_toggle_during_a_refresh_keeps_the_staged_results(tmp_path):
+    app = FakeApp(tmp_path)
+    dirs = app.platform.app_dirs()
+    db = Database.open(dirs.data_dir / "ahsync.db", FakeClock().now_ms(), None)   # run() holds it, mid-refresh
+    with db.transaction():
+        db.conn.execute("INSERT INTO views_new(page, market, body, built) VALUES ('today', 'm', '{}', 1)")
+    session = shell.Session(dirs, InstanceLock(dirs.data_dir / LOCK_FILE), shell.ShellState(False), app.world())
+    app.platform.autostart_enabled = lambda: bool(app.platform.autostarts)
+    assert session.set_autostart(True) == ("set", True)
+    shell.record_status(dirs.data_dir, app.world(), "autostart", ("autostart_not_set", {"error": "OSError"}))
+    try:
+        assert db.conn.execute("SELECT COUNT(*) FROM views_new").fetchone() == (1,)
+        assert db.status("autostart").kind == "autostart_not_set"
+    finally:
+        db.close()
+
+
+def test_a_window_that_fails_to_open_is_logged_and_ahsync_runs_on_until_it_returns(tmp_path, caplog):
+    def broken(_url: str) -> None:
+        raise RuntimeError("the window's form is gone")
+
+    polls_after = []
+
+    def logged_then_more_ticks(_data_dir: Path) -> bool:
+        if "window or tray update failed" in caplog.text:
+            polls_after.append(1)
+        return len(polls_after) > 30                    # dozens of ticks after the failure
+
+    app = FakeApp(tmp_path, until=logged_then_more_ticks, opener=broken)
+    app.configure(tmp_path / "wow")
+    assert shell.start(False, app.world()) == 0 and app.calls_done
+    assert caplog.text.count("window or tray update failed: RuntimeError") == 1   # tried once, not every tick
+
+
+def test_only_a_build_refreshes_the_login_entry_at_start(tmp_path):
+    app = FakeApp(tmp_path)
+    app.configure(tmp_path / "wow")
+    app.platform.autostart_enabled = lambda: True
+    source = shell.ShellWorld(**{**app.world().__dict__, "launch_args": ("ahsync_app/__main__.py",)})
+    assert shell.start(False, source) == 0 and app.platform.autostarts == []
+    assert shell.start(False, app.world()) == 0 and app.platform.autostarts == [tmp_path / "AHSync.exe"]

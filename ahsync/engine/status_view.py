@@ -267,6 +267,10 @@ def message(row: StatusRow, offset_ms: int) -> tuple[str, str]:
                                      f"tolerance and the plan are unchanged. Check that the file can be written, then "
                                      f"pick the value again."),
         "api_key_not_saved": ("API key not saved", "Enter it again, or set AUCTIONHOUSE_APIKEY."),   # FM50
+        "autostart_not_set": ("Start at login not set", f"The login entry couldn't be written "
+                                                        f"({d.get('error', '?')}). Turn it on again here or from "
+                                                        f"the tray."),                                   # FM51
+        "window_unavailable": ("App window unavailable", "The dashboard opens in your browser."),   # FM56
         "gathering_catalog": ("Gathering catalog", str(d.get("text", ""))),          # SPEC §3.4E.1, GA2
         "gathering_unplaced": ("Gathered, not in the catalog", str(d.get("text", ""))),   # SPEC §3.5 Status, GA34
         "ahledger_unreachable": ("AHledger unreachable", f"AHledger: unreachable since {weekday_time(d.get('since_ms', row.at_ms), offset_ms)} "

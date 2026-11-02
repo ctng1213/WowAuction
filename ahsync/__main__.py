@@ -39,7 +39,8 @@ from ahsync.export.addon_files import export_market, export_plan
 from ahsync.recommend.status_pass import status_pass
 from ahsync.recommend.tracking_pass import tracking_pass
 from ahsync.app.scheduler import SavedVarsWatcher, Scheduler, SchedulerHooks, file_mtime_ms, find_savedvars
-from ahsync.web.server import DashboardApp, DashboardServer, new_token, open_server_db, start_dashboard, stop_dashboard
+from ahsync.web.server import (AppHooks, DashboardApp, DashboardServer, new_token, open_server_db, start_dashboard,
+                               stop_dashboard)
 
 LOG_BYTES = 1_000_000
 LOG_BACKUPS = 3
@@ -132,7 +133,7 @@ class Runtime:
     should_stop: Callable[[], bool]     # polled by the steady-state loop; run() adds data/ahsync.stop (FM36)
     out: IO[str]                        # user-facing start-up messages (stderr in the app)
     serve_dashboard: bool = True        # False in tests that don't exercise the dashboard
-    app_info: Callable[[], dict] | None = None   # GET /api/app's payload, from the app shell (SPEC §3.7.4); None: none
+    app_hooks: AppHooks | None = None   # the app shell's dashboard paths (SPEC §3.7); None: `python -m ahsync`
 
 
 def safe_backup(db: Database, backup_dir: Path, now_ms: int) -> None:
@@ -347,7 +348,7 @@ class RefreshRequests:
 def serve_dashboard(data_dir: Path, config: Config, clock: Clock, refresh: RefreshRequests,
                     out: IO[str], config_path: Path | None = None,
                     on_config: Callable[[Config], None] | None = None,
-                    app_info: Callable[[], dict] | None = None) -> tuple[DashboardServer, Database] | None:
+                    app_hooks: AppHooks | None = None) -> tuple[DashboardServer, Database] | None:
     """Start the dashboard on its own thread (SPEC §3.1 "serve dashboard"); a failure is logged, never fatal.
 
     Args:
@@ -358,7 +359,7 @@ def serve_dashboard(data_dir: Path, config: Config, clock: Clock, refresh: Refre
         out: Where the dashboard's address is printed for the user.
         config_path: config.toml, which the Risk tolerance dropdown rewrites (SEC11); None: it can't.
         on_config: Told the new settings after the dashboard changed one; None: nobody else is told.
-        app_info: GET /api/app's payload, from the app shell; None: the path is unknown (`python -m ahsync`).
+        app_hooks: The app shell's paths (GET /api/app, POST /api/autostart); None: they answer 404.
 
     Returns:
         (server, its database connection) to stop and close at exit, or None when the
@@ -366,7 +367,7 @@ def serve_dashboard(data_dir: Path, config: Config, clock: Clock, refresh: Refre
     """
     server_db = open_server_db(data_dir / "ahsync.db")
     app = DashboardApp(server_db, config, clock, refresh.request_refresh, new_token(), config.dashboard_port,
-                       config_path=config_path, config_changed=on_config or (lambda _config: None), app_info=app_info)
+                       config_path=config_path, config_changed=on_config or (lambda _config: None), app_hooks=app_hooks)
     try:
         server = start_dashboard(app, config.dashboard_port)
     except OSError as error:
@@ -472,7 +473,7 @@ def _run_configured(data_dir: Path, config: Config, runtime: Runtime, config_pat
         live = LiveConfig(config)
         if runtime.serve_dashboard:
             dashboard = serve_dashboard(data_dir, config, clock, refresh_requests, runtime.out, config_path, live.replace,
-                                        runtime.app_info)
+                                        runtime.app_hooks)
         ahledger = AhledgerSource(ApiClient(runtime.transport, clock, "", api_base=AHLEDGER_BASE, per_minute=300,
                                             redactor=redactor, paced=True), db, clock)          # keyless, its own limit (SRC10)
         ctx = SyncContext(api, db, clock, result.caps, config.retention_days, addresses, ahledger)
