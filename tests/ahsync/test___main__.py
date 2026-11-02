@@ -9,6 +9,7 @@ import os
 import shutil
 import socket
 import sqlite3
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -298,8 +299,11 @@ def test_start_serves_the_dashboard_during_the_steady_state_and_stops_it(tmp_pat
     assert seen["markets"] == (200, {"markets": [DEFAULT_MARKET], "default": DEFAULT_MARKET})
     status, body = seen["craft"]                      # the start-up full refresh published it (SPEC §3.1)
     assert status == 200 and body["data"]["rows"] == [] and body["data"]["hidden"] == 0 and body["built"] > 0
-    with socket.socket() as sock:                      # stopped: the port is free again
-        sock.bind(("127.0.0.1", port))
+    with pytest.raises(ConnectionRefusedError):        # stopped: nothing listens on the port any more
+        socket.create_connection(("127.0.0.1", port), timeout=5).close()
+    # ...and the next start can bind it. A plain bind() is not that check: on macOS the closed request's
+    # TIME_WAIT socket refuses it, while the dashboard binds with SO_REUSEADDR (ThreadingHTTPServer).
+    ThreadingHTTPServer(("127.0.0.1", port), BaseHTTPRequestHandler).server_close()
 
 
 def test_a_dashboard_port_in_use_is_logged_not_fatal(tmp_path, caplog):
