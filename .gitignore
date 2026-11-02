@@ -27,3 +27,6 @@ Thumbs.db
 
 # Claude Code agent worktrees (each is a separate checkout)
 .claude/worktrees/
+
+# local Python environments
+.venv/
