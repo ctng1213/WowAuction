@@ -83,3 +83,77 @@ def addon_text(outcome: str, wow_path: str = "", added_or_removed: int = 0, chan
     if changed:
         return {"text": "AHProfit updated · /reload in game", "class": ""}
     return {"text": "AHProfit installed · up to date", "class": ""}
+
+
+RULESET_CHOICES = (("normal", "Normal"), ("pvp", "PvP"), ("rp", "RP"))       # config.RULESETS, with labels
+FACTION_CHOICES = (("alliance", "Alliance"), ("horde", "Horde"))
+NOT_DETECTED = "not found: enter the folder that holds Interface and WTF"
+TRANSLOCATED_TEXT = ("AHSync is running from where it was downloaded. Drag AHSync to Applications and open it "
+                     "from there, then Start at login can be turned on.")
+
+
+def wow_check(wow_path: str, has_interface: bool, has_addons: bool, accounts: int, creatable: bool) -> dict:
+    """The WoW folder's check pill and line (SPEC §3.7.4; DR5, DR6).
+
+    Args:
+        wow_path: The folder checked; "" when nothing was detected.
+        has_interface: Whether `<wow_path>/Interface` exists.
+        has_addons: Whether `<wow_path>/Interface/AddOns` exists.
+        accounts: The `WTF/Account/*` folders.
+        creatable: Setup's check: a folder with Interface but no AddOns passes, as the save creates AddOns.
+            False for a configured folder, which the addon install needs complete.
+
+    Returns:
+        {"ok", "pill", "text"}: "found Interface/AddOns · 2 accounts", "not found: …" or
+        "no Interface/AddOns under <wow_path>".
+    """
+    if not wow_path:
+        return {"ok": False, "pill": "not found", "text": NOT_DETECTED}
+    if not has_addons and not (creatable and has_interface):
+        return {"ok": False, "pill": "not found", "text": f"no Interface/AddOns under {wow_path}"}
+    counted = "no accounts yet" if accounts == 0 else f"{accounts} account{'s' if accounts > 1 else ''}"
+    return {"ok": True, "pill": "found", "text": f"found Interface/AddOns · {counted}"}
+
+
+def update_not_checked(version: str) -> dict:
+    """The Update line before any check (SPEC §3.7.4, §3.7.8; DR2); M25's check replaces it.
+
+    Args:
+        version: The running version.
+
+    Returns:
+        {"text", "url", "pill", "restart", "class"}: "not checked for a dev build" or "not checked yet", muted.
+    """
+    text = "not checked for a dev build" if is_dev(version) else "not checked yet"
+    return {"text": text, "url": None, "pill": None, "restart": False, "class": "muted"}
+
+
+def app_state(version: str, built: str, channel: str, setup: bool, wow_path: str, check: dict,
+              api_key_set: bool, autostart: dict, auto_update: bool, update: dict,
+              location_problem: bool, addon: dict | None) -> dict:
+    """`GET /api/app`: the app's own state for the setup page, the Status card and the top bar (SPEC §3.7.4, D97).
+
+    Args:
+        version: "MAJOR.MINOR.PATCH" ("0.0.0" from source).
+        built: The build date "YYYY-MM-DD", or "".
+        channel: "stable" or "beta".
+        setup: True while the setup server answers.
+        wow_path: The configured folder, or in setup the detected one ("" when none): the one path a response
+            may carry (SPEC §3.5 Security).
+        check: From wow_check.
+        api_key_set: Whether a key is found (env var, key file or config); never the key itself.
+        autostart: {"enabled", "available", "note"}.
+        auto_update: The `auto_update` setting.
+        update: The Update line, e.g. from update_not_checked.
+        location_problem: Whether the app runs translocated (macOS).
+        addon: This start's Addon line {"text", "class"}; None before any install (setup).
+
+    Returns:
+        The payload of SPEC §3.7.4, every text made here.
+    """
+    return {"version": version, "version_text": version_text(version, built, channel), "dev": is_dev(version),
+            "channel": channel, "setup": setup, "wow_path": wow_path, "wow_check": check,
+            "markets": {"rulesets": [list(c) for c in RULESET_CHOICES], "factions": [list(c) for c in FACTION_CHOICES]},
+            "api_key_set": api_key_set, "autostart": autostart, "auto_update": auto_update, "update": update,
+            "location_problem": TRANSLOCATED_TEXT if location_problem else None,
+            "addon": addon if addon is not None else {"text": "not installed yet", "class": "muted"}}

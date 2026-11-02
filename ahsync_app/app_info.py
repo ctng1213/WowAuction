@@ -1,0 +1,49 @@
+"""`GET /api/app`'s payload from the running shell (SPEC §3.7.4, D97): the facts, then `engine/app_view` texts."""
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from ahsync import version
+from ahsync.app.wow_paths import WowCheck, check
+from ahsync.engine.app_view import app_state, update_not_checked, wow_check
+
+if TYPE_CHECKING:                                   # shell.py imports this module
+    from ahsync_app.shell import ShellState, ShellWorld
+
+
+def autostart_facts(world: ShellWorld) -> tuple[dict, bool]:
+    """Start at login's state and whether the app runs translocated (SPEC §3.7.5).
+
+    Args:
+        world: The platform and the executable.
+
+    Returns:
+        ({"enabled", "available", "note"}, translocated). Until M24 builds the login entry, enabled is False.
+    """
+    translocated = world.platform.run_location_problem(world.exe) is not None
+    try:
+        enabled = world.platform.autostart_enabled()
+    except NotImplementedError:
+        enabled = False
+    return {"enabled": enabled, "available": not translocated, "note": ""}, translocated
+
+
+def app_payload(world: ShellWorld, state: ShellState, setup: bool, wow_path: str, api_key_set: bool) -> dict:
+    """Build `GET /api/app` now (it is asked on every page).
+
+    Args:
+        world: The platform and the executable.
+        state: The shell's state (this start's Addon line).
+        setup: True while the setup server answers.
+        wow_path: The configured folder, or in setup the detected one ("" when none).
+        api_key_set: Whether a key is found; never the key.
+
+    Returns:
+        The payload of SPEC §3.7.4. Its only path is wow_path.
+    """
+    found = check(wow_path) if wow_path else WowCheck(False, False, 0)
+    folder = wow_check(wow_path, found.has_interface, found.has_addons, found.accounts, creatable=setup)
+    autostart, translocated = autostart_facts(world)
+    addon = state.addon.line if state.addon is not None else None
+    return app_state(version.VERSION, version.BUILT, "stable", setup, wow_path, folder, api_key_set, autostart,
+                     True, update_not_checked(version.VERSION), translocated, addon)

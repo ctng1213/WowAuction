@@ -955,3 +955,14 @@ def test_S19_ahledger_is_credited_with_a_link_wherever_its_data_is_shown_and_nev
         return json.loads(app.handle("GET", f"/api/views/today?market={M}", GOOD).body)["credit"]
     assert credit({}) == {"text": "Prices from AHledger", "url": ahl}
     assert credit({M: MarketSources(primary="ahf")}) is None
+
+
+def test_D97_get_api_app_serves_the_shell_s_payload_and_is_unknown_without_a_shell(db, refreshes):
+    config = Config(markets=(M,))
+    plain = DashboardApp(db, config, FakeClock(), refreshes, token="tok-123", port=8765)
+    assert plain.handle("GET", "/api/app", {"Host": "localhost:8765"}).status == 404
+    shell = DashboardApp(db, config, FakeClock(), refreshes, token="tok-123", port=8765,
+                         app_info=lambda: {"version": "0.3.1", "setup": False})
+    reply = shell.handle("GET", "/api/app", {"Host": "localhost:8765"})
+    assert reply.status == 200 and json.loads(reply.body) == {"version": "0.3.1", "setup": False}
+    assert shell.handle("POST", "/api/app", {"Host": "localhost:8765"}).status == 405

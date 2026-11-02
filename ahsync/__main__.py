@@ -46,6 +46,7 @@ LOG_BACKUPS = 3
 ALREADY_RUNNING = "AHSync is already running"
 STOP_FILE = "ahsync.stop"          # in data/: its presence asks the running AHSync to stop (FM36)
 LOCK_FILE = "ahsync.lock"
+API_KEY_TOPIC = "api_key_setup"    # the Status topic of setup's api_key_not_saved line (FM50; "api_key" is FM25's)
 
 
 class InstanceLock:
@@ -131,6 +132,7 @@ class Runtime:
     should_stop: Callable[[], bool]     # polled by the steady-state loop; run() adds data/ahsync.stop (FM36)
     out: IO[str]                        # user-facing start-up messages (stderr in the app)
     serve_dashboard: bool = True        # False in tests that don't exercise the dashboard
+    app_info: Callable[[], dict] | None = None   # GET /api/app's payload, from the app shell (SPEC §3.7.4); None: none
 
 
 def safe_backup(db: Database, backup_dir: Path, now_ms: int) -> None:
@@ -344,7 +346,8 @@ class RefreshRequests:
 
 def serve_dashboard(data_dir: Path, config: Config, clock: Clock, refresh: RefreshRequests,
                     out: IO[str], config_path: Path | None = None,
-                    on_config: Callable[[Config], None] | None = None) -> tuple[DashboardServer, Database] | None:
+                    on_config: Callable[[Config], None] | None = None,
+                    app_info: Callable[[], dict] | None = None) -> tuple[DashboardServer, Database] | None:
     """Start the dashboard on its own thread (SPEC §3.1 "serve dashboard"); a failure is logged, never fatal.
 
     Args:
@@ -355,6 +358,7 @@ def serve_dashboard(data_dir: Path, config: Config, clock: Clock, refresh: Refre
         out: Where the dashboard's address is printed for the user.
         config_path: config.toml, which the Risk tolerance dropdown rewrites (SEC11); None: it can't.
         on_config: Told the new settings after the dashboard changed one; None: nobody else is told.
+        app_info: GET /api/app's payload, from the app shell; None: the path is unknown (`python -m ahsync`).
 
     Returns:
         (server, its database connection) to stop and close at exit, or None when the
@@ -362,7 +366,7 @@ def serve_dashboard(data_dir: Path, config: Config, clock: Clock, refresh: Refre
     """
     server_db = open_server_db(data_dir / "ahsync.db")
     app = DashboardApp(server_db, config, clock, refresh.request_refresh, new_token(), config.dashboard_port,
-                       config_path=config_path, config_changed=on_config or (lambda _config: None))
+                       config_path=config_path, config_changed=on_config or (lambda _config: None), app_info=app_info)
     try:
         server = start_dashboard(app, config.dashboard_port)
     except OSError as error:
@@ -452,6 +456,8 @@ def _run_configured(data_dir: Path, config: Config, runtime: Runtime, config_pat
             print(f"AHSync can't start: {error}", file=runtime.out)
             return 2
         safe_backup(db, backup_dir, clock.now_ms())
+        if config.api_key:                       # a key found now settles setup's "not saved" line (FM50)
+            db.clear_status(API_KEY_TOPIC)
         with db.transaction():                   # a changed session key re-cuts the stored sessions (SPEC §3.6)
             if db.ensure_session_settings(session_settings(config), clock.now_ms()):
                 log.info("farming sessions rebuilt for the session settings")
@@ -465,7 +471,8 @@ def _run_configured(data_dir: Path, config: Config, runtime: Runtime, config_pat
         refresh_requests = RefreshRequests()
         live = LiveConfig(config)
         if runtime.serve_dashboard:
-            dashboard = serve_dashboard(data_dir, config, clock, refresh_requests, runtime.out, config_path, live.replace)
+            dashboard = serve_dashboard(data_dir, config, clock, refresh_requests, runtime.out, config_path, live.replace,
+                                        runtime.app_info)
         ahledger = AhledgerSource(ApiClient(runtime.transport, clock, "", api_base=AHLEDGER_BASE, per_minute=300,
                                             redactor=redactor, paced=True), db, clock)          # keyless, its own limit (SRC10)
         ctx = SyncContext(api, db, clock, result.caps, config.retention_days, addresses, ahledger)

@@ -126,7 +126,7 @@ sequenceDiagram
   Note over S,R: SavedVariables changed -> state import -> re-plan -> pages -> export
   S->>P: hourly status pass (positions re-evaluated, Status lines)
   W->>W: GET pages serve stored JSON (<= 50 ms); POST only for risk tolerance and manual rates, Host/Origin/token checked
-  Note over S,W: planned M23–M27 (§3.7): GET /setup, GET /api/app; POST /api/setup, /api/autostart, /api/update/{restart,auto,channel}, same checks
+  Note over S,W: built M23: GET /setup, GET /api/app, POST /api/setup (web/setup_app.py, same checks); planned M24–M27 (§3.7): POST /api/autostart, /api/update/{restart,auto,channel}
 ```
 
 ## 5. Storage families (SQLite)
@@ -140,7 +140,7 @@ sequenceDiagram
 | Plan and pages | `actions`, `alternatives`, `export_candidates`, `portfolio_snapshot`, `views` (+ `_new` staging), `item_rules`, `reserves`, `sell_records` | `recommend/` | `export/`, `web/` |
 | Operations | `status`, `meta` (planned M25: the `update.*` keys), backups on disk, raw snapshots on disk, planned `<data>/updates/` (downloaded releases) | all | Status page |
 
-## 6. Distribution and runtime (M22 built; M23–M27 planned, SPEC §3.7)
+## 6. Distribution and runtime (M22–M23 built; M24–M27 planned, SPEC §3.7)
 
 Each part is marked built in the milestone that lands it; the rest is **planned**. The rule: one shared core, a thin layer per OS. `ahsync/` stays standard-library only; `ahsync_app/` is the one package allowed third-party imports (pystray, Pillow, pyobjc), and `ahsync_app/platform/` is the one place that knows the OS (convention test DR16).
 
@@ -169,7 +169,7 @@ flowchart TD
   Apply --> Exit
 ```
 
-**Built (M22):** the lock and the show file (FM48), the addon install (`export/addon_install.py`, FM49) and `run()` on a worker thread with the shell ticking on the main thread (`ahsync_app/shell.py`, `__main__.py`); no window or tray yet: a manual launch opens the browser once the dashboard answers, and a missing `config.toml` is refused until setup mode lands (M23). The rest of the chart is planned.
+**Built (M22):** the lock and the show file (FM48), the addon install (`export/addon_install.py`, FM49) and `run()` on a worker thread with the shell ticking on the main thread (`ahsync_app/shell.py`, `__main__.py`); no window or tray yet: a manual launch opens the browser once the dashboard answers, and a missing `config.toml` was refused until setup mode landed. **Built (M23):** setup mode (`web/setup_app.py` on the dashboard's port, with `server.py`'s Security checks; `app/setup.py` writes `AddOns`, `config.toml` and the key file; `app/wow_paths.py` detects and checks the folder), the hand-over to `run()`, and `GET /api/app` from `ahsync_app/app_info.py` in both modes. The window, the tray, start at login and the update half of the chart are planned.
 
 From source `python -m ahsync` is unchanged (`./data`, `./config.toml`, no tray). The per-user folders come from `platform.current().app_dirs()`: `%LOCALAPPDATA%\AHSync` and `~/Library/Application Support/AHSync` (DR1).
 
@@ -269,3 +269,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-01: plan review before M22: §6.1 corrected so setup mode is entered only when `config.toml` is missing (a bad `wow_path` is FM49's Addon line) and a `--autostart` launch that finds the lock held exits silently (FM48); no component changed.
 - 2026-11-01: plan review: the dashboard shows in the app's own window (`ahsync_app/window.py`, pywebview) with the tray detached under its loop; a second launch signals the running shell through `data/ahsync.show` (§6.1).
 - 2026-11-01: M22 built: the shell without window or tray (§6.1's lock, show file, addon install and worker thread), the platform layer's folder members (§6.2) and the CI `test` job (§6.4's first box); §1's shell node and its addon edge drawn built.
+- 2026-11-01: M23 built: setup mode and its hand-over (§6.1), `GET /api/app` and `POST /api/setup` (§4), with `web/setup_app.py` as setup mode's own request handler next to `server.py`.

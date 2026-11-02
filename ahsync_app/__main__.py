@@ -66,21 +66,22 @@ def real_world(out: io.TextIOBase | None) -> ShellWorld:
     stream = out if out is not None else io.StringIO()
     env, home = dict(os.environ), Path.home()
 
-    def make_runtime(should_stop: Callable[[], bool]) -> Runtime:
+    def make_runtime(should_stop: Callable[[], bool], app_info: Callable[[], dict]) -> Runtime:
         """The Runtime run() gets, polling the shell's stop event.
 
         Args:
             should_stop: The shell's stop event's is_set.
+            app_info: GET /api/app's payload for run()'s dashboard.
 
         Returns:
             The real environment, transport and clock.
         """
-        return Runtime(env, home, UrllibTransport(), SystemClock(), should_stop, stream)
+        return Runtime(env, home, UrllibTransport(), SystemClock(), should_stop, stream, app_info=app_info)
 
     bundle = bundle_addon_dir(bool(getattr(sys, "frozen", False)), getattr(sys, "_MEIPASS", None),
                               Path(__file__).resolve().parents[1])
     return ShellWorld(platform.current(), run, make_runtime, webbrowser.open, port_open, time.sleep, bundle,
-                      env, home, stream)
+                      env, home, stream, SystemClock(), Path(sys.executable))
 
 
 def main(argv: list[str] | None = None) -> int:

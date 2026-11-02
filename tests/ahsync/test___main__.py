@@ -460,3 +460,18 @@ def test_run_with_a_lock_its_caller_holds_leaves_the_release_to_the_caller(tmp_p
         assert InstanceLock(tmp_path / "data" / "ahsync.lock").acquire() is False   # still held
     finally:
         lock.release()
+
+
+def test_FM50_a_start_that_finds_a_key_clears_setup_s_line_and_only_that_one(tmp_path):
+    data = tmp_path / "data"
+    db = Database.open(data / "ahsync.db", FakeClock().now_ms(), None)
+    with db.transaction():
+        db.set_status("api_key_setup", "warn", "api_key_not_saved", {"reason": "permission denied"}, 1)
+        db.set_status("other", "warn", "lost", {}, 1)
+    db.close()
+    code, _printed = start(tmp_path, AhfWorld(FakeClock()), env={"AUCTIONHOUSE_APIKEY": KEY})
+    db = Database.open(data / "ahsync.db", FakeClock().now_ms(), None)
+    try:
+        assert code == 0 and db.status("api_key_setup") is None and db.status("other") is not None
+    finally:
+        db.close()

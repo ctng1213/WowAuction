@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="ahsync-token" content="__AHSYNC_TOKEN__">
+<meta name="referrer" content="no-referrer">
+<title>Set up AHSync</title>
+<!--
+  First-run setup (SPEC §3.7.4), served by ahsync/web/setup_app.py at /setup while config.toml is missing.
+  The look follows docs/mockups/dashboard.html, page "Setup". It only draws GET /api/app and the two
+  POST /api/setup answers: every text comes from the server (engine/app_view.py). The one string it puts
+  together is the market id preview, from the two dropdowns' codes, as config.toml will hold it.
+-->
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0e0d0b; --surface: #181612; --border: #3d3424; --border-hi: #8a6d2f;
+    --text: #ece3cc; --muted: #9b917b; --accent: #ffd100; --pos: #3ddc4f; --neg: #ff4a3d; --amber: #ffb02e;
+    --serif: "Friz Quadrata TT", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+         background: radial-gradient(ellipse at 50% -10%, #2a2214 0%, var(--bg) 55%) fixed, var(--bg); }
+  main { padding: 28px 24px 48px; max-width: 768px; margin: 0 auto; }
+  h1 { font: 24px var(--serif); color: var(--accent); margin: 0 0 4px; text-shadow: 0 1px 3px #000; }
+  .lede { color: var(--muted); margin: 0 0 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-bottom: 14px;
+          box-shadow: inset 0 0 0 1px #000, 0 3px 12px rgba(0,0,0,.5); }
+  .card-h { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); background: linear-gradient(#241f16, #1a1711); }
+  .card-h b { flex: 1; font: 15px var(--serif); color: var(--accent); font-weight: normal; }
+  .body { padding: 12px 14px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .select { padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; background: #0b0a08; font: 13px inherit; color: var(--text); }
+  input.select { width: 100%; font-family: inherit; }
+  select.select { font-family: inherit; }
+  .pill { padding: 2px 10px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: #0b0a08; white-space: nowrap; }
+  .pill.ok { color: var(--pos); border-color: #2c6b32; } .pill.warn { color: var(--amber); border-color: #7a5a1b; }
+  .muted { color: var(--muted); } .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .line { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+  .line.ok { color: var(--pos); } .line.warn { color: var(--amber); }
+  .grow { flex: 1; }
+  .btn { display: inline-block; padding: 3px 12px; border: 1px solid #000; border-radius: 3px; font: 12px inherit; cursor: pointer; color: var(--accent);
+         background: linear-gradient(#8a1a14, #4d0c09); box-shadow: inset 0 0 0 1px #b2392f, 0 1px 2px #000; text-shadow: 0 1px 1px #000; }
+  .btn.primary { background: linear-gradient(#6b5420, #3a2c10); box-shadow: inset 0 0 0 1px #c9a64a, 0 1px 2px #000; font-size: 13px; padding: 5px 16px; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .alert { display: flex; gap: 10px; padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; border: 1px solid; }
+  .alert.warn { border-color: #7a5a1b; background: #2a210e; } .alert.error { border-color: #7a1f1a; background: #2a0f0d; color: #ffd0cc; }
+  .alert b { white-space: nowrap; }
+  [hidden] { display: none !important; }
+  code { color: var(--text); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Set up AHSync</h1>
+  <p class="lede">Three things, then AHSync syncs prices, installs the AHProfit addon into your WoW folder and opens the dashboard. You can change any of them later in config.toml.</p>
+
+  <div class="alert warn" id="location" hidden><b>Move AHSync</b><span class="grow" id="location-text"></span></div>
+  <div class="alert error" id="error" hidden><b>Not saved</b><span class="grow" id="error-text"></span></div>
+
+  <div class="card"><div class="card-h"><b>1. Your WoW: Forever folder</b><span class="pill" id="wow-pill"></span></div>
+    <div class="body">
+      <input class="select" id="wow" spellcheck="false" autocomplete="off" aria-label="WoW folder">
+      <div class="row" style="margin-top:6px"><span class="line" id="wow-line" style="margin:0"></span><span class="muted">·</span>
+        <button class="btn" id="check" type="button">Check</button></div>
+      <div class="hint">The folder that holds <code>Interface</code> and <code>WTF</code>. On a Mac it is usually /Applications/World of Warcraft/_classic_beta_.</div>
+    </div></div>
+
+  <div class="card"><div class="card-h"><b>2. Your market</b></div>
+    <div class="body row">
+      <label class="muted">Ruleset <select class="select" id="ruleset"></select></label>
+      <label class="muted">Faction <select class="select" id="faction"></select></label>
+      <span class="muted" id="market"></span>
+    </div></div>
+
+  <div class="card"><div class="card-h"><b>3. auctionhouse.fyi key</b><span class="pill">optional</span></div>
+    <div class="body">
+      <form id="key-form"><input class="select" id="key" type="password" autocomplete="off" placeholder="paste your key, or leave empty for free data only" aria-label="auctionhouse.fyi key"></form>
+      <div class="hint">Stored only on this computer, in your user folder. It never appears on this page or in the log.</div>
+    </div></div>
+
+  <div class="card"><div class="body row">
+    <label><input type="checkbox" id="autostart" checked> Start AHSync when I log in</label>
+    <span class="grow"></span>
+    <button class="btn primary" id="finish" type="button">Finish and start</button>
+  </div>
+  <div class="body muted" id="saving" hidden style="padding-top:0">first sync and refresh, about a minute</div></div>
+</main>
+<script>
+'use strict';
+const TOKEN = document.querySelector('meta[name="ahsync-token"]').content;
+const $ = (id) => document.getElementById(id);
+let folderOk = false;
+
+function drawCheck(ok, pill, text) {
+  folderOk = ok;
+  $('wow-pill').textContent = pill;
+  $('wow-pill').className = 'pill ' + (ok ? 'ok' : 'warn');
+  $('wow-line').textContent = text;
+  $('wow-line').className = 'line ' + (ok ? 'ok' : 'warn');
+  $('finish').disabled = !ok;
+}
+
+function drawMarket() {
+  $('market').textContent = '→ forever.' + $('ruleset').value + '.' + $('faction').value + '.us';
+}
+
+function fillSelect(select, choices, chosen) {
+  for (const [code, label] of choices) {
+    const option = document.createElement('option');
+    option.value = code; option.textContent = label; option.selected = code === chosen;
+    select.appendChild(option);
+  }
+}
+
+function showError(message) {
+  $('error-text').textContent = message;
+  $('error').hidden = !message;
+}
+
+async function post(body) {
+  let res;
+  try {
+    res = await fetch('/api/setup', { method: 'POST', cache: 'no-store',
+      headers: { 'Content-Type': 'application/json', 'X-AHSync-Token': TOKEN }, body: JSON.stringify(body) });
+  } catch (e) {
+    return { status: 0, data: {} };                 // no answer: the button comes back with the generic line
+  }
+  let data = {};
+  try { data = await res.json(); } catch (e) { data = {}; }
+  return { status: res.status, data };
+}
+
+async function check() {
+  showError('');
+  const { status, data } = await post({ wow_path: $('wow').value, check_only: true });
+  if (status !== 200) { showError(data.message || 'The check failed: reload this page.'); return; }
+  drawCheck(data.ok, data.ok ? 'found' : 'not found', data.text);
+}
+
+async function waitForDashboard() {
+  for (;;) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      const res = await fetch('/api/markets', { cache: 'no-store' });
+      if (res.ok) { location.href = '/'; return; }
+    } catch (e) { /* the setup server has stopped and the dashboard isn't up yet */ }
+  }
+}
+
+async function finish() {
+  showError('');
+  $('finish').disabled = true;
+  const label = $('finish').textContent;
+  $('finish').textContent = 'Starting AHSync…';
+  const { status, data } = await post({ wow_path: $('wow').value, ruleset: $('ruleset').value,
+    faction: $('faction').value, api_key: $('key').value, autostart: $('autostart').checked });
+  if (status === 200 && data.set) {
+    $('saving').hidden = false;
+    waitForDashboard();
+    return;
+  }
+  $('finish').textContent = label;
+  $('finish').disabled = !folderOk;
+  showError(data.message || 'Setup failed: reload this page and try again.');
+}
+
+async function load() {
+  const res = await fetch('/api/app', { cache: 'no-store' });
+  const app = await res.json();
+  $('wow').value = app.wow_path;
+  drawCheck(app.wow_check.ok, app.wow_check.pill, app.wow_check.text);
+  fillSelect($('ruleset'), app.markets.rulesets, 'pvp');
+  fillSelect($('faction'), app.markets.factions, 'horde');
+  drawMarket();
+  if (app.location_problem) { $('location-text').textContent = app.location_problem; $('location').hidden = false; }
+}
+
+$('wow').addEventListener('input', () => { $('finish').disabled = true; });
+$('key-form').addEventListener('submit', (event) => event.preventDefault());   // Enter in the key field must not reload
+$('check').addEventListener('click', check);
+$('finish').addEventListener('click', finish);
+$('ruleset').addEventListener('change', drawMarket);
+$('faction').addEventListener('change', drawMarket);
+load();
+</script>
+</body>
+</html>

@@ -54,6 +54,19 @@ From the proposal's §0, the user's decisions of 2026-11-01:
 - **`tools/build.py` joins the DR16 allowlist in M26**, when the file exists: an entry for a file without a token fails as stale, and the file does not exist yet.
 - **`requirements-app.txt` pins per minor series**: `pystray==0.19.5`, `Pillow==13.0.*`, `pywebview==6.2.*`, `pythonnet==3.2.*` (Windows), `pyobjc-*==12.2.*` (macOS; 13.0 was two days old at the review). The Windows set resolves (`pip install --dry-run`); the macOS set is resolved first by M26's build job.
 
+**Decided during execution (Opus, M23).**
+
+- **Setup mode is its own request handler**, `ahsync/web/setup_app.py` (`SetupApp`), served by `server.py`'s server class; the Host, Origin and token checks moved to module functions in `server.py` (`host_allowed`, `write_refusal`) that both use. `server.py` stays one responsibility and under its size.
+- **`GET /api/app` comes from the shell** (`ahsync_app/app_info.py`) through `Runtime.app_info` into `DashboardApp.app_info`; `python -m ahsync` has no shell, so its dashboard answers `404` there, and the app card and the pill exist only in the app.
+- **The setup page builds one string**: the market id preview "→ forever.<ruleset>.<faction>.us" from the dropdowns' codes, an identifier as config.toml holds it (no number, and the server checks the codes). The Check's pill reads "found" or "not found" from the answer's `ok`.
+- **The key file is a new temp file created with mode 0600**, renamed over `api_key` and then `restrict_file`d: never readable by others, and a failed write keeps an earlier key file (the independent review's finding 3).
+- **The key is checked**: one line of printable ASCII, no spaces, at most 256 characters, since it travels in an HTTP header whose error message would quote it (review finding 4; DR8 gains the case). **The folder** loses one pair of surrounding quotes and expands `~`; a relative folder fails the check.
+- **The Status line `api_key_not_saved`** (topic `api_key_setup`, since FM25's `key_rejected` already owns `api_key`; review finding 5; warn): title "API key not saved", text "Enter it again, or set AUCTIONHOUSE_APIKEY."; cleared by a later successful setup and by any start that finds a key. Setup writes it by opening the database itself (no `run()` yet).
+- **Setup's other answers**: a second save after a successful one is `409 already_set`; an unwritable `config.toml` is `500 config_not_written` with a message naming no path; in setup mode `/api/app`'s `addon` is "not installed yet" (muted) until the save installs it.
+- **Setup's start at login until M24**: the setup asks the platform, which raises "not built"; the shell logs it and carries on. `autostart.enabled` reads false until then. Any failure of a step after the save is logged and the hand-over goes ahead (review finding 1); the page restores its button when no answer comes.
+- **Setup mode logs to `data/ahsync.log`** with the key in the redactor before any write, prints its URL, and ends on the stop file like `run()` (review findings 2 and 6).
+- **The setup port is the default `dashboard_port` (8765)**, there being no config yet; `ShellWorld.setup_port` makes it injectable, so tests never bind a real AHSync's port.
+
 Spec: `docs/SPEC.md` §3.7 (all of it), §3.5 Security and the planned endpoints, §3.5 Status "AHSync app" card, §3.6 the distribution keys, §5.0.1 tech and layout, §5.2 the planned failure rows, §6 items 20–21, §7 "AHSync as a standalone app". Scenarios: `docs/SCENARIOS.md` "Distribution and runtime" (DR1–DR28, D97, D98), the Failure modes rows FM48–FM55, the Dashboard security rows SEC13–SEC15; all listed in `tests/pending_scenarios.txt` per milestone. Mockup: `docs/mockups/dashboard.html`, the Setup page, the top bar's update pill and the Status page's "AHSync app" card with its states. Architecture: `docs/ARCHITECTURE.md` §6 (planned diagrams to mark built).
 
 ## 2. Working rules for the orchestrator

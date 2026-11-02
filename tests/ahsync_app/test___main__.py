@@ -28,5 +28,6 @@ def test_main_passes_autostart_to_the_shell_and_builds_the_real_world(monkeypatc
     assert app_main.main([]) == 0 and seen["autostart"] is False
     world = seen["world"]
     assert world.bundle_addon_dir == Path(app_main.__file__).resolve().parents[1] / "addon"
-    assert world.make_runtime(lambda: True).should_stop() is True
+    runtime = world.make_runtime(lambda: True, dict)
+    assert runtime.should_stop() is True and runtime.app_info() == {}
     assert app_main.real_world(None).out is not None

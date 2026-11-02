@@ -51,7 +51,7 @@ BUSY_TIMEOUT_MS = 5000
 # SPEC §3.5 dashboard data. Every page is staged by the full refresh except status, built on request.
 PAGES = ("portfolio", "today", "week", "on_ah", "disenchant", "craft", "flip", "gathering", "inventory", "history",
          "rules", "characters", "status")
-GET_PATHS = ("/", "/api/markets", "/api/items")
+GET_PATHS = ("/", "/api/markets", "/api/items", "/api/app")
 POST_PATHS = ("/api/refresh", "/api/skip", "/api/rule", "/api/reserve", "/api/risk_tolerance", "/api/manual_rate")
 MANUAL_RATE_MAX = 10_000                           # SPEC §3.4E.5: a whole number 1-10,000 items per hour
 RISK_CHOICES = (0.1, 0.2, 0.3, 0.4, 0.5)          # SPEC §3.5: the Portfolio page's Risk tolerance dropdown
@@ -93,6 +93,44 @@ def json_response(status: int, payload: object, headers: tuple[tuple[str, str], 
     return Response(status, body, headers=headers)
 
 
+def host_allowed(host: str, port: int) -> bool:
+    """Whether a request's Host names this dashboard (SPEC §3.5 Security, DNS rebinding; SEC4).
+
+    Args:
+        host: The Host header.
+        port: The port the server is bound to.
+
+    Returns:
+        True for "127.0.0.1:<port>" and "localhost:<port>".
+    """
+    return host in (f"127.0.0.1:{port}", f"localhost:{port}")
+
+
+def write_refusal(path: str, host: str, headers: Mapping[str, str], token: str) -> Response | None:
+    """Check a write's Origin and token (SPEC §3.5 Security; SEC1-SEC3, SEC7, SEC13).
+
+    Args:
+        path: The write endpoint.
+        host: The request's Host, already allowed.
+        headers: Request headers with lower-case names.
+        token: This run's write token.
+
+    Returns:
+        None when both checks pass; otherwise a 403 response, after logging the reason (never the token's
+        value). A bad token says to reload the page, since a page from before a restart holds the old token (SEC7).
+    """
+    origin = headers.get("origin", "")
+    if origin != f"http://{host}":
+        log.warning("rejected POST %s: Origin %r is not this dashboard", path, origin[:100])
+        return json_response(403, {"error": "bad_origin"})
+    sent = headers.get(TOKEN_HEADER.lower(), "")
+    if not sent or not hmac.compare_digest(sent.encode("utf-8"), token.encode("utf-8")):
+        log.warning("rejected POST %s: %s token", path, "wrong" if sent else "missing")
+        return json_response(403, {"error": "bad_token", "reload": True,
+                                   "message": "AHSync was restarted: reload this page."})
+    return None
+
+
 def open_server_db(path: Path) -> Database:
     """Open a second connection to data/ahsync.db for the server's thread.
 
@@ -125,6 +163,7 @@ class DashboardApp:
     config_path: Path | None = None       # config.toml, rewritten by the Risk tolerance dropdown (SEC11)
     config_changed: Callable[[Config], None] = lambda _config: None   # tells the scheduler the new settings
     catalog_path: Path = CATALOG_PATH     # the gathering catalog, for POST /api/manual_rate's checks (SEC12)
+    app_info: Callable[[], dict] | None = None   # GET /api/app's payload from the app shell; None: no such path (D97)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def __post_init__(self) -> None:
@@ -149,7 +188,7 @@ class DashboardApp:
         """
         lowered = {k.lower(): v for k, v in headers.items()}
         host = lowered.get("host", "")
-        if host not in self.allowed_hosts():
+        if not host_allowed(host, self.port):
             log.warning("rejected %s request: Host %r is not this dashboard", method, host[:100])
             return json_response(403, {"error": "bad_host"})
         parts = urlsplit(target)
@@ -165,14 +204,6 @@ class DashboardApp:
         return self.do_get(path, query)
 
     # ------------------------------------------------------------ security
-
-    def allowed_hosts(self) -> tuple[str, str]:
-        """The Host values this dashboard answers to (SPEC §3.5 Security).
-
-        Returns:
-            ("127.0.0.1:<port>", "localhost:<port>").
-        """
-        return f"127.0.0.1:{self.port}", f"localhost:{self.port}"
 
     @staticmethod
     def allowed_method(path: str) -> str | None:
@@ -193,24 +224,13 @@ class DashboardApp:
 
         Args:
             path: The write endpoint.
-            host: The request's Host, already known to be one of allowed_hosts().
+            host: The request's Host, already allowed.
             headers: Request headers with lower-case names.
 
         Returns:
-            None when both checks pass; otherwise a 403 response, after logging the
-            reason (never the token's value). A bad token says to reload the page,
-            since a page from before a restart holds the old token (SEC7).
+            None when both checks pass; otherwise write_refusal's 403.
         """
-        origin = headers.get("origin", "")
-        if origin != f"http://{host}":
-            log.warning("rejected POST %s: Origin %r is not this dashboard", path, origin[:100])
-            return json_response(403, {"error": "bad_origin"})
-        token = headers.get(TOKEN_HEADER.lower(), "")
-        if not token or not hmac.compare_digest(token.encode("utf-8"), self.token.encode("utf-8")):
-            log.warning("rejected POST %s: %s token", path, "wrong" if token else "missing")
-            return json_response(403, {"error": "bad_token", "reload": True,
-                                       "message": "AHSync was restarted: reload this page."})
-        return None
+        return write_refusal(path, host, headers, self.token)
 
     # ------------------------------------------------------------ GET
 
@@ -218,11 +238,11 @@ class DashboardApp:
         """Serve a GET endpoint.
 
         Args:
-            path: "/", "/api/markets", "/api/items" or "/api/views/<page>".
+            path: "/", "/api/markets", "/api/items", "/api/app" or "/api/views/<page>".
             query: Parsed query string.
 
         Returns:
-            The page, the markets, an item search (D54), or a stored view payload.
+            The page, the markets, an item search (D54), the app's state (D97), or a stored view payload.
         """
         if path == "/":
             html = self.page_html.replace(TOKEN_PLACEHOLDER, self.token).encode("utf-8")
@@ -232,6 +252,10 @@ class DashboardApp:
             return json_response(200, {"markets": markets, "default": markets[0]})
         if path == "/api/items":
             return self.search_items(query.get("q", [""])[0])
+        if path == "/api/app":
+            if self.app_info is None:              # `python -m ahsync`: no app shell around it
+                return json_response(404, {"error": "not_found"})
+            return json_response(200, self.app_info())
         return self.get_view(path[len(VIEWS_PREFIX):], query.get("market", [""])[0])
 
     def search_items(self, text: str) -> Response:
