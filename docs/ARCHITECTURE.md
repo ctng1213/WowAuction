@@ -37,10 +37,10 @@ flowchart LR
     Engine[engine/<br/>pure formulas and views]
     Export[export/<br/>addon data files]
     Web[web/ + app/<br/>dashboard server, refresh, scheduler]
-    Shell[ahsync_app/ planned M22–M27<br/>tray, setup, start at login, updater<br/>around run; SPEC §3.7]
+    Shell[ahsync_app/ planned M22–M27<br/>window, tray, setup, start at login, updater<br/>around run; SPEC §3.7]
   end
 
-  Dashboard[Browser: localhost dashboard]
+  Dashboard[localhost dashboard<br/>the app window, or a browser]
   GH[GitHub Releases planned M25<br/>update check, assets, SHA256SUMS]
 
   AHF --> Collect
@@ -149,15 +149,16 @@ Everything here is **planned**; each diagram is marked built in the milestone th
 ```mermaid
 flowchart TD
   Start([AHSync.exe / AHSync.app<br/>or python -m ahsync_app]) --> Lock{lock<br/>data/ahsync.lock free?}
-  Lock -- held --> Open[open http://localhost:port<br/>exit 0, FM48]
+  Lock -- held --> Show[write data/ahsync.show, exit 0<br/>the running shell shows its window<br/>with --autostart: exit 0, nothing written, FM48]
   Lock -- taken --> Addon[export/addon_install.py<br/>mirror AHProfit/, never the generated files<br/>Addon line, FM49]
-  Addon --> Cfg{config.toml usable?<br/>wow_path has Interface/AddOns}
+  Addon --> Cfg{config.toml exists?<br/>a bad wow_path is the Addon line of FM49, not setup}
   Cfg -- no --> Setup[web/server.py in setup mode<br/>GET /setup, GET /api/app, POST /api/setup<br/>writes config.toml + key file, DR5–DR8]
   Setup --> Cfg
   Cfg -- yes --> Heal[autostart.py self-heal<br/>rewrite the login entry with the current exe<br/>refuse a translocated app, DR11]
   Heal --> Threads
-  subgraph Threads["two threads"]
-    Tray[main thread: tray.py<br/>pystray Icon.run<br/>menu = tray.menu(TrayState), DR12]
+  subgraph Threads["the GUI loop and the worker"]
+    Win[main thread: window.py<br/>pywebview loop, one window hidden or shown<br/>browser fallback FM56, DR29]
+    Tray[tray.py: pystray Icon.run_detached<br/>menu = tray.menu(TrayState), DR12]
     Run[worker thread: ahsync.__main__.run<br/>data_dir, config_path, Runtime should_stop = stop_event]
   end
   Tray -- Quit / Restart to update --> Stop[stop_event set<br/>run returns at its next 5 s tick]
@@ -261,3 +262,5 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-01: M20 built: the Data coverage card (`engine/coverage.py`, read from `observed_hours` by `history/reads.py`, drawn on the Status page); no component or flow changed.
 - 2026-11-01: M21 built: the AHledger history backfill (`collect/ahledger_backfill.py`), driven by the scheduler every 5 s and sharing the paced AHledger client with the table poll.
 - 2026-11-01: packaging batch spec merge (SPEC §3.7, M22–M27 planned): §6 added with the app shell and tray around `run()`, the platform layer, the update check / download / install flow and the CI build / release / promote pipeline, all marked planned; §1 gains the `ahsync_app/` shell and GitHub Releases as dashed, planned nodes; §4 notes the planned endpoints; §5 the planned `meta` keys and `data/updates/`. Each milestone marks its part built here.
+- 2026-11-01: plan review before M22: §6.1 corrected so setup mode is entered only when `config.toml` is missing (a bad `wow_path` is FM49's Addon line) and a `--autostart` launch that finds the lock held exits silently (FM48); no component changed.
+- 2026-11-01: plan review: the dashboard shows in the app's own window (`ahsync_app/window.py`, pywebview) with the tray detached under its loop; a second launch signals the running shell through `data/ahsync.show` (§6.1).
