@@ -1,0 +1,10 @@
+# Packaging only (SPEC §3.7.1, §5.0.1): the app shell in ahsync_app/ imports these; ahsync/ never does.
+# Reviewed 2026-11-01 (dependency-review, M22). Pinned to a minor series; transitive packages
+# (bottle, proxy_tools, typing_extensions, six, clr_loader, cffi, pyobjc-framework-Quartz and friends) follow.
+pystray==0.19.5
+Pillow==13.0.*
+pywebview==6.2.*
+pythonnet==3.2.*; sys_platform == "win32"
+pyobjc-core==12.2.*; sys_platform == "darwin"
+pyobjc-framework-Cocoa==12.2.*; sys_platform == "darwin"
+pyobjc-framework-WebKit==12.2.*; sys_platform == "darwin"

@@ -1,3 +1,5 @@
+**Superseded by SPEC §3.7 and docs/plans/packaging.md, 2026-11-01.**
+
 # Proposal: AHSync as a standalone app for Windows and macOS (stage 1, for approval)
 
 Written 2026-11-01 by Fable for the user's approval. Nothing here is merged into SPEC.md or SCENARIOS.md yet. After approval, the spec merge adds:

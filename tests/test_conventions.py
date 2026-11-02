@@ -14,6 +14,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PY_SRC = ROOT / "ahsync"
 PY_TESTS = ROOT / "tests" / "ahsync"
+APP_SRC = ROOT / "ahsync_app"                # the app shell (SPEC §3.7.1), held to the same conventions
+APP_TESTS = ROOT / "tests" / "ahsync_app"
+PY_TREES = ((PY_SRC, PY_TESTS), (APP_SRC, APP_TESTS))   # (source package, its mirrored tests)
+TOOLS = ROOT / "tools"
+CONVENTION_TOOLS = ("build.py", "promote.py")   # tools held to the conventions, tests in tests/tools/ (M26)
+TOOL_TESTS = ROOT / "tests" / "tools"
 LUA_SRC = ROOT / "addon" / "AHProfit"
 LUA_TESTS = ROOT / "tests" / "addon"
 VISUAL_TESTS = ROOT / "tests" / "visual"     # UI scenarios (SPEC §8.4); exempt from mirroring
@@ -40,10 +46,29 @@ def python_sources() -> list[Path]:
     """List AHSync source modules subject to the conventions.
 
     Returns:
-        Paths of every .py file under ahsync/, excluding web/static, sorted.
+        Paths of every .py file under ahsync/ (excluding web/static) and ahsync_app/, then
+        tools/build.py and tools/promote.py where they exist; sorted within each group.
     """
     static = PY_SRC / "web" / "static"
-    return sorted(p for p in PY_SRC.rglob("*.py") if static not in p.parents)
+    ahsync = sorted(p for p in PY_SRC.rglob("*.py") if static not in p.parents)
+    app = sorted(APP_SRC.rglob("*.py")) if APP_SRC.exists() else []
+    tools = [TOOLS / name for name in CONVENTION_TOOLS if (TOOLS / name).exists()]
+    return ahsync + app + tools
+
+
+def mirrored_test(path: Path) -> Path:
+    """The test file a source module must have (CLAUDE.md "Tests mirror source one-to-one").
+
+    Args:
+        path: A module from python_sources().
+
+    Returns:
+        tests/ahsync/<sub>/test_<name>.py, tests/ahsync_app/<sub>/test_<name>.py or tests/tools/test_<name>.py.
+    """
+    for source_root, test_root in PY_TREES:
+        if source_root in path.parents:
+            return test_root / path.parent.relative_to(source_root) / f"test_{path.name}"
+    return TOOL_TESTS / f"test_{path.name}"
 
 
 def lua_sources() -> list[Path]:
@@ -308,14 +333,75 @@ def test_python_sources_and_tests_mirror():
     for path in python_sources():
         if path.name in PY_MIRROR_EXEMPT:
             continue
-        test = PY_TESTS / path.parent.relative_to(PY_SRC) / f"test_{path.name}"
+        test = mirrored_test(path)
         if not test.exists():
             problems.append(f"{rel(path)}: missing {rel(test)}")
-    for test in sorted(PY_TESTS.rglob("test_*.py")) if PY_TESTS.exists() else []:
-        source = PY_SRC / test.parent.relative_to(PY_TESTS) / test.name.removeprefix("test_")
-        if not source.exists():
-            problems.append(f"{rel(test)}: no source {rel(source)}")
+    for source_root, test_root in PY_TREES:
+        for test in sorted(test_root.rglob("test_*.py")) if test_root.exists() else []:
+            source = source_root / test.parent.relative_to(test_root) / test.name.removeprefix("test_")
+            if not source.exists():
+                problems.append(f"{rel(test)}: no source {rel(source)}")
     assert not problems, "\n".join(problems)
+
+
+# ---------------------------------------------------------------- the platform layer (SPEC §3.7.2, DR16)
+
+OS_TOKENS = re.compile(r"\b(sys\.platform|os\.name|winreg|plistlib|launchctl|platform\.system)\b")
+OS_SCANNED = ("ahsync", "ahsync_app", "tools")
+OS_LAYER = "ahsync_app/platform/"
+# Places that predate the layer or cannot import it, by file. tools/build.py's packaging choice joins in M26,
+# when the file exists: an entry for a file without a token is stale.
+OS_ALLOWLIST = ("ahsync/__main__.py",      # InstanceLock: msvcrt or fcntl; ahsync/ must not import ahsync_app/
+                "tools/deploy.py",         # the detached start of AHSync
+                "tools/bench.py")          # memory units of the peak-memory reading
+
+
+def os_token_problems(root: Path, allowlist: tuple[str, ...]) -> list[str]:
+    """Find OS branches outside the platform layer and its named exceptions (DR16).
+
+    Args:
+        root: A repository root holding ahsync/, ahsync_app/ and tools/.
+        allowlist: Repository-relative files, with forward slashes, allowed to hold a token.
+
+    Returns:
+        "file:line: token …" for each token outside ahsync_app/platform/ and the allowlist, then
+        "stale allowlist entry: file" for each allowed file that holds none (or no longer exists).
+    """
+    problems, seen = [], set()
+    for top in OS_SCANNED:
+        for path in sorted((root / top).rglob("*.py")) if (root / top).exists() else []:
+            name = path.relative_to(root).as_posix()
+            if name.startswith(OS_LAYER):
+                continue
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                for match in OS_TOKENS.finditer(line):
+                    seen.add(name)
+                    if name not in allowlist:
+                        problems.append(f"{name}:{number}: {match.group(1)} outside {OS_LAYER} (SPEC §3.7.2)")
+    problems += [f"stale allowlist entry: {name}" for name in allowlist if name not in seen]
+    return problems
+
+
+def test_DR16_os_branches_stay_in_the_platform_layer():
+    problems = os_token_problems(ROOT, OS_ALLOWLIST)
+    assert not problems, "\n".join(problems)
+
+
+def test_DR16_planted_violations_and_a_stale_entry_fail_and_an_allowlisted_place_passes(tmp_path):
+    def write(name: str, text: str) -> None:
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text(text, encoding="utf-8")
+
+    write("ahsync/app/setup.py", "import sys\n\nWIN = sys.platform == 'win32'\n")
+    write("ahsync_app/shell.py", '"""The shell."""\nimport winreg\n')
+    write("ahsync_app/platform/windows.py", "import winreg\n")
+    write("tools/build.py", "import sys\nSTEP = 'iss' if sys.platform == 'win32' else 'dmg'\n")
+    write("tools/bench.py", "print('no OS branch here')\n")
+    assert os_token_problems(tmp_path, ("tools/build.py", "tools/bench.py")) == [
+        "ahsync/app/setup.py:3: sys.platform outside ahsync_app/platform/ (SPEC §3.7.2)",
+        "ahsync_app/shell.py:2: winreg outside ahsync_app/platform/ (SPEC §3.7.2)",
+        "stale allowlist entry: tools/bench.py",
+    ]
 
 
 def test_lua_sources_and_tests_mirror():

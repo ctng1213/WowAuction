@@ -374,13 +374,15 @@ def serve_dashboard(data_dir: Path, config: Config, clock: Clock, refresh: Refre
     return server, server_db
 
 
-def run(data_dir: Path, config_path: Path, runtime: Runtime) -> int:
+def run(data_dir: Path, config_path: Path, runtime: Runtime, held_lock: InstanceLock | None = None) -> int:
     """Start AHSync and run until runtime.should_stop() is True or data/ahsync.stop exists (FM36).
 
     Args:
         data_dir: data/ (database, backups, log, lock).
         config_path: config.toml.
         runtime: Environment, transport, clock, stop check and message stream.
+        held_lock: data/ahsync.lock already taken by the caller (the app shell, SPEC §3.7.6), which keeps
+            it and releases it after run() returns; None: run() takes and releases it itself.
 
     Returns:
         Exit code: 0 after a normal stop, 1 when already running, 2 for a bad config or database.
@@ -390,8 +392,8 @@ def run(data_dir: Path, config_path: Path, runtime: Runtime) -> int:
         it alone, so a pending stop request still reaches the running AHSync.
     """
     stop_file = data_dir / STOP_FILE
-    lock = InstanceLock(data_dir / LOCK_FILE)
-    if not lock.acquire():
+    lock = held_lock or InstanceLock(data_dir / LOCK_FILE)
+    if held_lock is None and not lock.acquire():
         print(ALREADY_RUNNING, file=runtime.out)
         return 1
     try:
@@ -406,7 +408,8 @@ def run(data_dir: Path, config_path: Path, runtime: Runtime) -> int:
         return _run_configured(data_dir, config, stoppable, config_path)
     finally:
         remove_stop_file(stop_file)
-        lock.release()
+        if held_lock is None:
+            lock.release()
 
 
 def remove_stop_file(path: Path) -> None:

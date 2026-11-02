@@ -18,45 +18,34 @@ Usage: python tools/deploy.py [--wow-path PATH] [--dry-run] [--restart]
   never reads files written by an older AHSync (SPEC §3.5).
 
 The WoW path comes from --wow-path, else `wow_path` in config.toml, else the
-SPEC §3.6 default.
+SPEC §3.6 default. The install rules live in `ahsync/export/addon_install.py`, which the app
+uses at every start (SPEC §3.7.7).
 """
 from __future__ import annotations
 
 import argparse
-import filecmp
 import os
-import shutil
 import subprocess
 import sys
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from ahsync.__main__ import LOCK_FILE, STOP_FILE, InstanceLock  # noqa: E402  (needs ROOT on sys.path)
 from ahsync.config import Config, load_config  # noqa: E402
+from ahsync.export.addon_install import GENERATED, Plan, apply, plan_data_addon, plan_mirror  # noqa: E402,F401
 
 ADDON = ROOT / "addon" / "AHProfit"
 DATA_ADDON = ROOT / "addon" / "AHProfit_Data"
-GENERATED = ("MarketIntelligence.lua", "PortfolioPlan.lua")   # written by AHSync
 DATA_DIR = ROOT / "data"           # AHSync's default --data folder: lock and stop files
 LOCK_POLL_S = 0.5
 LOCK_WAIT_S = 60                   # a running AHSync stops at its next tick, unless mid full refresh
 FILES_POLL_S = 1
 FILES_PROGRESS_S = 10
 FILES_WAIT_S = 15 * 60             # catch-up plus the first full refresh
-
-
-@dataclass
-class Plan:
-    """What a deploy will change, so it can be shown before (or instead of) doing it."""
-
-    copy: list[tuple[Path, Path]] = field(default_factory=list)    # (source, target)
-    remove: list[Path] = field(default_factory=list)
-    new_to_client: list[Path] = field(default_factory=list)        # targets that didn't exist before
-    kept_generated: list[Path] = field(default_factory=list)
 
 
 def wow_path_from_config(arg: str | None) -> Path:
@@ -74,68 +63,6 @@ def wow_path_from_config(arg: str | None) -> Path:
     if config_file.exists():
         return Path(load_config(config_file, os.environ, Path.home()).wow_path)
     return Path(Config().wow_path)
-
-
-def plan_mirror(source: Path, target: Path, plan: Plan) -> None:
-    """Add the copies and removals that make target an exact copy of source.
-
-    Args:
-        source: A folder in the repo.
-        target: The matching folder under Interface/AddOns (may not exist yet).
-        plan: Collects the changes.
-    """
-    wanted = {p.relative_to(source) for p in source.rglob("*") if p.is_file()}
-    for rel in sorted(wanted):
-        src, dst = source / rel, target / rel
-        if not dst.exists():
-            plan.copy.append((src, dst))
-            plan.new_to_client.append(dst)
-        elif not filecmp.cmp(src, dst, shallow=False):
-            plan.copy.append((src, dst))
-    if target.exists():
-        for existing in sorted(p for p in target.rglob("*") if p.is_file()):
-            if existing.relative_to(target) not in wanted:
-                plan.remove.append(existing)
-
-
-def plan_data_addon(source: Path, target: Path, plan: Plan) -> None:
-    """Add the copies for AHProfit_Data, never replacing an existing generated file.
-
-    Args:
-        source: addon/AHProfit_Data in the repo.
-        target: Interface/AddOns/AHProfit_Data.
-        plan: Collects the changes.
-    """
-    for src in sorted(p for p in source.iterdir() if p.is_file()):
-        dst = target / src.name
-        if src.name in GENERATED and dst.exists():
-            plan.kept_generated.append(dst)
-            continue
-        if not dst.exists():
-            plan.copy.append((src, dst))
-            plan.new_to_client.append(dst)
-        elif not filecmp.cmp(src, dst, shallow=False):
-            plan.copy.append((src, dst))
-
-
-def apply(plan: Plan) -> None:
-    """Carry out a plan: copy files, then remove stale ones and empty folders.
-
-    Args:
-        plan: From plan_mirror and plan_data_addon.
-
-    Raises:
-        PermissionError: If the AddOns folder isn't writable (e.g. needs admin rights).
-    """
-    for src, dst in plan.copy:
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, dst)
-    for stale in plan.remove:
-        stale.unlink()
-        parent = stale.parent
-        while parent.name != "AddOns" and not any(parent.iterdir()):
-            parent.rmdir()
-            parent = parent.parent
 
 
 @dataclass

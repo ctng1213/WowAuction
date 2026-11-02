@@ -17,6 +17,7 @@ __pycache__/
 build/
 dist/
 *.spec
+!packaging/*.spec
 
 # Editors / OS
 .vscode/

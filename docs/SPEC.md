@@ -1543,9 +1543,9 @@ rank = ["ahf", "ahledger"]                    # remote price sources, most trust
 
 The market id (`forever.<ruleset>.<faction>.us`) is AHSync's own key in every table, whatever the source. `[sources]` maps it to each provider's address, so a provider that names markets differently changes the config, not the stored data.
 
-### 3.7 Distribution and runtime (planned, M22–M27)
+### 3.7 Distribution and runtime (M22 built; M23–M27 planned)
 
-AHSync ships as a standalone app for Windows and macOS: no Python install, a tray icon, a first-run setup page, start at login, the addon installed by the app, and updates that install themselves. The audience is the user and a few friends. Merged 2026-11-01 from the approved proposal (`docs/plans/packaging-proposal.md`, decisions 1–13; this section supersedes it). Handoff plan: `docs/plans/packaging.md`. Scenarios: DR1–DR28 (the "Distribution and runtime" family), FM48–FM55, SEC13–SEC15, D97, D98. Everything in this section is **planned** until its milestone row in §7 says built.
+AHSync ships as a standalone app for Windows and macOS: no Python install, a tray icon, a first-run setup page, start at login, the addon installed by the app, and updates that install themselves. The audience is the user and a few friends. Merged 2026-11-01 from the approved proposal (`docs/plans/packaging-proposal.md`, decisions 1–13; this section supersedes it). Handoff plan: `docs/plans/packaging.md`. Scenarios: DR1–DR28 (the "Distribution and runtime" family), FM48–FM55, SEC13–SEC15, D97, D98. Everything in this section is **planned** until its milestone row in §7 says built; the subsections M22 built say so.
 
 **Decided (the user, 2026-11-01; not re-litigated):**
 - One shared core, a thin layer per OS (§3.7.2). A convention test keeps OS branches out of the shared code (DR16).
@@ -1559,6 +1559,8 @@ AHSync ships as a standalone app for Windows and macOS: no Python install, a tra
 - The dashboard and the setup page show in **the app's own window** (pywebview), not in the browser; the browser is only the fallback when the window cannot start (the user, at the plan review of 2026-11-01; the proposal had the browser). §3.7.1.
 
 #### 3.7.1 The app shell and tray (`ahsync_app/`)
+
+**Built (M22)**: `ahsync_app/shell.py` and `__main__.py` without the window and the tray: the lock and the show file (§3.7.6), the addon install (§3.7.7), `run()` on a worker thread while the main thread ticks once a second, a stop on Ctrl-C or the stop file; the opener is the browser, used once on a manual launch when the dashboard answers. Until setup mode (M23) the shell refuses a missing `config.toml` ("AHSync can't start: no <path>; copy docs/config.toml there", exit 2): `run()` alone would start on the §3.6 defaults. The window, the tray and setup mode are planned (M23, M24).
 
 - `ahsync_app/` is a new top-level package next to `ahsync/`, with tests in `tests/ahsync_app/` and the convention checks (§8.1) extended to it: `__main__.py` (the entry point), `shell.py` (the lifecycle), `tray.py` (the menu model, pure, plus a thin pystray adapter), `window.py` (the window's decisions, pure, plus a thin pywebview adapter), `autostart.py` (the shared start-at-login decisions), `platform/` (§3.7.2).
 - **Third-party code lives only here**: `pystray`, `Pillow` (pystray needs a PIL image), `pywebview` (the window; on Windows it brings `pythonnet` and uses the Edge WebView2 runtime that ships with Windows 11) and, on macOS, `pyobjc-core`, `pyobjc-framework-Cocoa` (pystray's backend) and `pyobjc-framework-WebKit` (pywebview's), listed in `requirements-app.txt`. `ahsync/` stays standard-library only (§5.0.1).
@@ -1579,14 +1581,18 @@ AHSync ships as a standalone app for Windows and macOS: no Python install, a tra
 
 #### 3.7.2 The platform layer (`ahsync_app/platform/`)
 
+**Built (M22)**: `base.py`, `windows.py`, `macos.py` and `__init__.py` with `app_dirs`, `wow_candidates`, `restrict_file`, `run_location_problem` and `current()`; the start-at-login and update members raise `NotImplementedError` naming M24 and M27. The guardrail is built (`tests/test_conventions.py`, DR16); `tools/build.py` joins its allowlist in M26, when the file exists (an entry for a file without a token is stale).
+
 Everything that decides what AHSync does is written and tested once. An OS answers only a few narrow questions, as data or as a thin writer:
 
-- `base.py` defines the `Platform` protocol, **nine members**: `app_dirs()` (config and data folders, §3.7.3), `wow_candidates()` (likely WoW folders, as a list), `autostart_enable(exe)`, `autostart_disable()`, `autostart_enabled()` (§3.7.5), `restrict_file(path)` (the key file's permissions, §3.7.4), `run_location_problem(exe)` (macOS App Translocation; Windows always None, §3.7.5), and for updates `update_asset_name(version)`, `verify_update(path)` and `apply_update(path, exe)` (§3.7.9).
+- `base.py` defines the `Platform` protocol, **ten members**: `app_dirs()` (config and data folders, §3.7.3), `wow_candidates()` (likely WoW folders, as a list), `autostart_enable(exe)`, `autostart_disable()`, `autostart_enabled()` (§3.7.5), `restrict_file(path)` (the key file's permissions, §3.7.4), `run_location_problem(exe)` (macOS App Translocation; Windows always None, §3.7.5), and for updates `update_asset_name(version)`, `verify_update(path)` and `apply_update(path, exe)` (§3.7.9).
 - `windows.py`: `%LOCALAPPDATA%`, `winreg` for the Run key, the Windows WoW candidates. `macos.py`: `~/Library/Application Support`, `plistlib` and `launchctl` for the LaunchAgent, the macOS candidates, translocation detection, `codesign` for `verify_update`. `__init__.py` holds `current()`, the **one place** that reads `sys.platform`.
 - Each module is a few dozen lines with no business logic, and takes injected fakes (a registry-like object, a plist folder, a `run` callable for `launchctl`, `codesign` and the installer), so **both are tested on every OS** (DR9–DR11, DR22, DR23).
 - **Guardrail (DR16).** `tests/test_conventions.py` scans `ahsync/`, `ahsync_app/` and `tools/` and fails, naming the file and line, when `sys.platform`, `os.name`, `winreg`, `plistlib`, `launchctl` or `platform.system` appears outside `ahsync_app/platform/` and outside an explicit allowlist of places that predate the layer or cannot import it: `ahsync/__main__.py`'s `InstanceLock` (`msvcrt` on Windows, `fcntl` elsewhere; `ahsync/` must not import `ahsync_app/`), `tools/deploy.py`'s detached start of AHSync, `tools/bench.py`'s memory units and `tools/build.py`'s choice of packaging step. The allowlist names each file; an entry whose file no longer holds a token fails too, so it cannot go stale.
 
 #### 3.7.3 Paths
+
+**Built (M22)**: the per-user folders (`app_dirs`, DR1) and the candidate lists (`wow_candidates`; `_classic_beta_`, `_classic_`, `_classic_era_`, `_anniversary_`). The probe `ahsync/app/wow_paths.py` is planned (M23).
 
 - **Packaged**: Windows `%LOCALAPPDATA%\AHSync\`, macOS `~/Library/Application Support/AHSync/`; each holds `config.toml` and `data/` (database, backups, log, lock, stop file, `updates/`). Not Roaming: the database is large and machine-local. `platform.current().app_dirs()` decides them and the shell passes them to `run()` as `--data` and `--config` (DR1).
 - **From source**: `python -m ahsync` keeps `./data` and `./config.toml`, so the developer loop, `tools/deploy.py --restart` and the snapshot tools are untouched (DR1). A developer's `./data` is never migrated to the per-user folder.
@@ -1632,9 +1638,11 @@ Everything that decides what AHSync does is written and tested once. An OS answe
 
 #### 3.7.6 Single instance
 
-`InstanceLock` on `<data>/ahsync.lock` stays (§5.2). When the packaged shell finds it held, it writes `<data>/ahsync.show` (the stop file's pattern, FM36) and exits 0; the running shell's loop sees the file within a second, removes it and shows its window on the dashboard (§3.7.1; until M24 builds the window it only removes the file), so a second click on the icon brings the dashboard up (FM48). A launch with `--autostart` that finds it held exits 0 and writes nothing: `launchctl bootstrap` of a `RunAtLoad` agent starts the job at once, so turning Start at login on while AHSync runs would otherwise pop the window up (§3.7.5; FM48). `python -m ahsync` still prints "AHSync is already running" (FM15). Only the lock owner installs the addon, so two processes on one data folder never write the same files; two data folders can (a developer's `./data` and the per-user folder): see the risks in §3.7.14.
+**Built (M22)** in `ahsync_app/shell.py`; the shell keeps the lock it took and hands it to `run(…, held_lock=lock)`, which uses it and leaves its release to the shell (a second `InstanceLock` in the same process would be refused). `InstanceLock` on `<data>/ahsync.lock` stays (§5.2). When the packaged shell finds it held, it writes `<data>/ahsync.show` (the stop file's pattern, FM36) and exits 0; the running shell's loop sees the file within a second, removes it and shows its window on the dashboard (§3.7.1; until M24 builds the window it only removes the file), so a second click on the icon brings the dashboard up (FM48). A launch with `--autostart` that finds it held exits 0 and writes nothing: `launchctl bootstrap` of a `RunAtLoad` agent starts the job at once, so turning Start at login on while AHSync runs would otherwise pop the window up (§3.7.5; FM48). `python -m ahsync` still prints "AHSync is already running" (FM15). Only the lock owner installs the addon, so two processes on one data folder never write the same files; two data folders can (a developer's `./data` and the per-user folder): see the risks in §3.7.14.
 
 #### 3.7.7 Addon install at every start
+
+**Built (M22)**: `ahsync/export/addon_install.py` (`install_addon`, `AddonResult`, the Addon line from `engine/app_view.addon_text`); `tools/deploy.py` imports it. The card and `GET /api/app` that show the line are planned (M23, M25).
 
 - `tools/deploy.py`'s `Plan`, `plan_mirror`, `plan_data_addon` and `apply` move to `ahsync/export/addon_install.py` (stdlib); `deploy.py` imports them and its CLI is unchanged. The addon is bundled with the app (`addon/` as PyInstaller data), so the app installs the addon it was built with.
 - The shell calls `install_addon(bundle_addon_dir, wow_path)` at each start before `run()`. The rules stay: `AHProfit/` is mirrored and stale files inside it removed; `AHProfit_Data/` gets the `.toc` and the placeholders only when none exists; the generated `MarketIntelligence.lua` and `PortfolioPlan.lua` are never overwritten (§3.5; DR3, DR4).
@@ -1676,7 +1684,7 @@ With `auto_update` true (the default) a newer release found by §3.7.8 is downlo
 #### 3.7.11 Versioning
 
 - Git tags `vMAJOR.MINOR.PATCH`, the first `v0.1.0`. No `-beta` suffix: a beta is the same version as the GA it becomes. A suffixed tag is ignored by the update check and never released.
-- `ahsync/version.py` holds `VERSION = "0.0.0"` and `BUILT = ""` in source; the workflow writes the tag and the build date (`"2026-11-02"`) into it before PyInstaller runs, so a release needs no version-bump commit. The Status card's pill reads "0.3.1 · built 2 Nov"; a source run reads "dev build" and checks for no update (DR2). `EXPORT_VERSION` (the addon file format, §3.5) stays separate.
+- `ahsync/version.py` (**built** M22) holds `VERSION = "0.0.0"` and `BUILT = ""` in source; the workflow writes the tag and the build date (`"2026-11-02"`) into it before PyInstaller runs, so a release needs no version-bump commit. The Status card's pill reads "0.3.1 · built 2 Nov"; a source run reads "dev build" and checks for no update (DR2). `EXPORT_VERSION` (the addon file format, §3.5) stays separate.
 
 #### 3.7.12 Build, signing and release
 
@@ -1999,7 +2007,7 @@ Layout. **`tests/` mirrors the source tree one-to-one**: every source module has
 ahsync/
   config.py
   clock.py    Clock protocol + SystemClock (injected everywhere; tests use FakeClock)
-  version.py  (planned M22, §3.7.11: VERSION = "0.0.0" and BUILT = "" in source; the release workflow writes the tag and date)
+  version.py  (built M22, §3.7.11: VERSION = "0.0.0" and BUILT = "" in source; the release workflow writes the tag and date)
   app/        scheduler.py (timers, daily refresh, file-change watch), refresh.py (analysis → recommendations → publish, §3.1.1),
               wow_paths.py (planned M23: WoW folder detection and check text, §3.7.3), setup.py (planned M23: the first config and key file, §3.7.4),
               update_check.py (planned M25: GitHub Releases, daily, ETag, §3.7.8), updater.py (planned M25/M27: download, SHA256SUMS, state, §3.7.9)
@@ -2031,17 +2039,17 @@ ahsync/
               tooltip deltas), plan_views.py, portfolio_view.py (the Portfolio page, M13), planned_crafts.py, inventory_view.py, item_detail.py, on_ah_view.py,
               history_view.py, rules_view.py, characters_view.py, status_view.py, coverage.py (**built** M20: the Status Data coverage card, §3.5),
               gathering.py and gathering_view.py (built M16: the catalog, eligibility, the rate priority, gold per hour and the Gathering page), sessions.py (built M17: farming sessions and the open candidate; §3.4E), gathering_history.py (built M18: the historical columns and the detail's heatmap, reading line, windows and seasonality),
-              updates.py (planned M25: version parsing and comparison, the update texts, §3.7.8), app_view.py (planned M23: the setup page's and the "AHSync app" card's texts, §3.7.4)
+              updates.py (planned M25: version parsing and comparison, the update texts, §3.7.8), app_view.py (built M22: the version pill, the tray hover, the Addon line; planned M23: the setup page's and the "AHSync app" card's texts, §3.7.4)
   export/     market_lua.py (MarketIntelligence.lua), plan_lua.py (PortfolioPlan.lua), addon_files.py (atomic writes, the shortlist),
-              addon_install.py (planned M22: the addon install at start, moved from tools/deploy.py, §3.7.7)
+              addon_install.py (built M22: the addon install at start, moved from tools/deploy.py, §3.7.7)
   web/        server.py (planned M23: setup mode, GET /setup, GET /api/app and the §3.7 POST endpoints), static/ (planned M23: setup.html)
-ahsync_app/   (planned M22–M27, §3.7.1: the standalone app's shell; tests in tests/ahsync_app/; the only package with third-party imports, §5.0.1)
+ahsync_app/   (built M22: __main__.py, shell.py without window or tray, platform/; planned M23–M27: the rest, §3.7.1: the standalone app's shell; tests in tests/ahsync_app/; the only package with third-party imports, §5.0.1)
   __main__.py  the entry point (python -m ahsync_app runs the shell from source against the per-user folders)
   shell.py     the lifecycle: lock and the show file, addon install, setup mode, run() on a worker thread, the window's loop on the main thread with the tray detached, quit, apply a downloaded update
   tray.py      the menu model (pure TrayState -> items) and its pystray adapter
   window.py    the window's decisions (pure WindowState) and its pywebview adapter; the browser fallback (FM56)
   autostart.py the shared start-at-login decisions: when to enable, self-heal, refuse a translocated app
-  platform/    base.py (the Platform protocol, nine members, §3.7.2), windows.py, macos.py, __init__.py (current(): the one sys.platform read)
+  platform/    base.py (the Platform protocol, ten members, §3.7.2), windows.py, macos.py, __init__.py (current(): the one sys.platform read)
 addon/AHProfit/
   Core/       Adapter.lua (every game API call) with AdapterAH.lua (its auction house half: panel, Sell tab, replicate scan) and AdapterDiagnostics.lua (its diagnostics), Events.lua, DB.lua (AHProfitDB setup, migrations, pruning; §2.2.1), Diagnostics.lua (§2.2.1), Market.lua (reads MarketIntelligence.lua: checks, lazy decode), Plan.lua (reads PortfolioPlan.lua; prunes at login)
   Capture/    Characters.lua, Professions.lua, Inventory.lua, Auctions.lua (your own auctions, A41), Mail.lua, Posts.lua, Purchases.lua, Crafts.lua,
@@ -2065,13 +2073,13 @@ tests/
   visual/              scenarios/*.lua (UI1…), golden/*.txt (frame-tree snapshots), golden/*.png (renders)
   ahsync_app/...       test_<module>.py, same tree as ahsync_app/ (planned M22)
   tools/               tests of tools/ (test_snapshot.py runs the whole-plan snapshot, WP1; planned M26: test_build.py, test_promote.py with fake runners)
-  test_conventions.py  docstrings, size limits, mirroring, scenario IDs (§8.1); planned M22: the platform guardrail (DR16)
+  test_conventions.py  docstrings, size limits, mirroring, scenario IDs (§8.1); built M22: the platform guardrail (DR16) and ahsync_app/ under the conventions
   pending_scenarios.txt  listed IDs not built yet (§8.1)
 pyproject.toml         pytest and coverage settings only (no runtime dependencies)
 requirements-dev.txt   pytest, coverage
-requirements-app.txt   (planned M22) pystray, Pillow, pywebview (pythonnet on Windows); on macOS pyobjc-core, pyobjc-framework-Cocoa, pyobjc-framework-WebKit: the app shell only (§5.0.1)
+requirements-app.txt   (built M22, pinned per minor series after a dependency review) pystray, Pillow, pywebview (pythonnet on Windows); on macOS pyobjc-core, pyobjc-framework-Cocoa, pyobjc-framework-WebKit: the app shell only (§5.0.1)
 packaging/             (planned M26, §3.7.12) ahsync.spec (PyInstaller, one recipe for both OSes), windows/ahsync.iss (Inno Setup), macos/make_dmg.sh (hdiutil), macos/entitlements.plist
-.github/workflows/     (planned M22 tests, M26 build and release) ci.yml (test, build, release jobs), promote.yml (Promote release)
+.github/workflows/     (built M22: the test job; planned M26: build and release) ci.yml (test, build, release jobs), promote.yml (Promote release)
 INSTALL.md             (planned M26) how to install on Windows and macOS, linked from every Release (§3.7.13)
 tools/                 record_fixtures.py, gen_lua_fixtures.py, gen_properties.py (LP1 cases, §8.7), gen_bonus_suffixes.py, gen_disenchant_data.py, deploy.py, savedvars_report.py (what the addon captured; §6 checks), visual.py, bench.py (performance budgets, §3.1.2), gen_world.py (the snapshot world, §8.6), snapshot.py (the whole-plan snapshot, §8.6),
                        build.py (planned M26: PyInstaller, the per-OS packaging step, the signing policy, SHA256SUMS, the release command; §3.7.12), promote.py (planned M26: pre-release → latest, §3.7.10)
@@ -2085,9 +2093,9 @@ CLAUDE.md
 
 **AHledger and coverage modules** (`collect/ahledger.py` and `tools/record_fixtures.py --ahledger` **built** M19; `engine/coverage.py` **built** M20; §2.3, §3.5), each with its mirrored test file in the same change: `ahsync/collect/ahledger.py` (`tests/ahsync/collect/test_ahledger.py`), `ahsync/engine/coverage.py` (`tests/ahsync/engine/test_coverage.py`, inside the 100% engine branch coverage). `history/reads.py` gains `observed_hours`, `history/writes.py` the upserts of `ahledger_rows`, `source_state` and `observed_hours`, and `tools/record_fixtures.py` an AHledger recorder; none is ported to Lua (the addon shows no AHledger data).
 
-`tools/deploy.py` copies `addon/*` into the WoW AddOns folder. **Planned (M22, §3.7.7)**: its `Plan`, `plan_mirror`, `plan_data_addon` and `apply` move to `ahsync/export/addon_install.py`, which the packaged app calls at every start; `deploy.py` imports them and its CLI is unchanged.
+`tools/deploy.py` copies `addon/*` into the WoW AddOns folder. **Built (M22, §3.7.7)**: its `Plan`, `plan_mirror`, `plan_data_addon` and `apply` move to `ahsync/export/addon_install.py`, which the packaged app calls at every start; `deploy.py` imports them and its CLI is unchanged.
 
-**Distribution modules** (**planned** M22–M27, §3.7), each with its mirrored test file in the same change: `ahsync/version.py`; `ahsync/app/wow_paths.py`, `setup.py`, `update_check.py`, `updater.py`; `ahsync/engine/updates.py` and `app_view.py` (inside the 100% engine branch coverage); `ahsync/export/addon_install.py`; `ahsync_app/shell.py`, `tray.py`, `autostart.py`, `platform/base.py`, `platform/windows.py`, `platform/macos.py` (tests in `tests/ahsync_app/`); `tools/build.py` and `tools/promote.py` (tests in `tests/tools/`). None is ported to Lua.
+**Distribution modules** (M22 built `version.py`, `engine/app_view.py`'s first texts, `export/addon_install.py`, `ahsync_app/shell.py` and `platform/`; the rest **planned** M23–M27, §3.7), each with its mirrored test file in the same change: `ahsync/version.py`; `ahsync/app/wow_paths.py`, `setup.py`, `update_check.py`, `updater.py`; `ahsync/engine/updates.py` and `app_view.py` (inside the 100% engine branch coverage); `ahsync/export/addon_install.py`; `ahsync_app/shell.py`, `tray.py`, `autostart.py`, `platform/base.py`, `platform/windows.py`, `platform/macos.py` (tests in `tests/ahsync_app/`); `tools/build.py` and `tools/promote.py` (tests in `tests/tools/`). None is ported to Lua.
 
 ### 5.1 Addon performance (WoW best practices)
 
@@ -2310,7 +2318,7 @@ Data moves through many hand-offs: AHF and AHledger → AHSync → SQLite → `M
 
 | # | Deliverable | Done when |
 |---|---|---|
-| M22 | **Runtime foundations.** `ahsync/version.py`; the platform layer `ahsync_app/platform/` (`base.py`'s protocol; `windows.py` and `macos.py` with `app_dirs`, `wow_candidates`, `restrict_file`, `run_location_problem`; the autostart and update members stubbed until M24 and M27) and its convention guardrail; `ahsync/export/addon_install.py` extracted from `tools/deploy.py`, with the Addon line and its failure cases; `ahsync_app/shell.py` and `__main__.py` running `run()` on a worker thread with a stop event (no tray yet); a second launch opens the dashboard; `tests/test_conventions.py` covers `ahsync_app/`; `.github/workflows/ci.yml` with the `test` job on both OSes; `.gitignore` gets `!packaging/*.spec`; `requirements-app.txt` | DR1–DR4, DR16, FM48, FM49 pass; `python -m ahsync_app` runs from source against the per-user folders; WP1 byte-identical; CI `test` green on Windows and macOS (the user checks the Actions tab) |
+| M22 | **Built (2026-11-01).** **Runtime foundations.** `ahsync/version.py`; the platform layer `ahsync_app/platform/` (`base.py`'s protocol; `windows.py` and `macos.py` with `app_dirs`, `wow_candidates`, `restrict_file`, `run_location_problem`; the autostart and update members stubbed until M24 and M27) and its convention guardrail; `ahsync/export/addon_install.py` extracted from `tools/deploy.py`, with the Addon line and its failure cases; `ahsync_app/shell.py` and `__main__.py` running `run()` on a worker thread with a stop event (no tray yet); a second launch hands over through the show file; `tests/test_conventions.py` covers `ahsync_app/`; `.github/workflows/ci.yml` with the `test` job on both OSes; `.gitignore` gets `!packaging/*.spec`; `requirements-app.txt` | DR1–DR4, DR16, FM48, FM49 pass; `python -m ahsync_app` runs from source against the per-user folders; WP1 byte-identical; CI `test` green on Windows and macOS (the user checks the Actions tab) |
 | M23 | **First-run setup.** `app/wow_paths.py` (detection, check text); `app/setup.py` (the config and key file writes, the key file locked down by `restrict_file`); the server's setup mode, `GET /setup` with `web/static/setup.html`, `GET /api/app`, `POST /api/setup` with `check_only`; `engine/app_view.py` | DR5–DR8, SEC13, FM50, D97 pass; a fresh profile reaches the dashboard through the page alone; the headless render of `/setup` matches the mockup's Setup page with no console errors |
 | M24 | **Tray and start at login.** `ahsync_app/window.py` (the window's decisions and its pywebview adapter, the main-thread loop, the browser fallback); `ahsync_app/tray.py` (the menu model and its pystray adapter, detached under the window's loop); `ahsync_app/autostart.py` over the platform modules' autostart members (`winreg`; `plistlib` and `launchctl`), self-heal, the translocation refusal; `POST /api/autostart`; the Status card's toggle; `--autostart` (window hidden) | DR9–DR12, DR29, SEC14, FM51, FM56 pass; manual: logging in to Windows starts AHSync with the tray icon and no window; closing the window leaves AHSync in the tray and Open dashboard brings it back; the toggle round-trips on the Status page |
 | M25 | **Update check and download.** `engine/updates.py`; `app/update_check.py` (daily, ETag, degrade; the beta channel's release list); `app/updater.py` (download, `SHA256SUMS`, state in `meta`, the Update line); the config keys `update_check`, `auto_update`, `update_channel`; the Status alert, the top bar's pill, the tray items, the auto-update and beta toggles with `POST /api/update/auto` and `/api/update/channel`; the "AHSync app" card | DR13–DR15, DR20, DR21, DR24–DR26, FM52, FM53, D98 pass; engine branch coverage 100%; the headless render shows the card in its states |

@@ -434,3 +434,25 @@ def test_the_ahledger_hook_polls_only_markets_with_an_address_and_a_failed_poll_
     unwired = build_hooks(SyncContext(None, db, clock, None), config, tmp_path / "backups")
     assert unwired.ahledger_poll is None and unwired.ahledger_backfill is None
     db.close()
+
+
+def test_DR1_python_m_ahsync_keeps_the_data_and_config_beside_it(monkeypatch):
+    seen = {}
+    monkeypatch.setattr("ahsync.__main__.run", lambda data_dir, config_path, _runtime: seen.update(
+        args=(data_dir, config_path)) or 0)
+    assert main([]) == 0
+    assert seen["args"] == (Path("data"), Path("config.toml"))
+
+
+def test_run_with_a_lock_its_caller_holds_leaves_the_release_to_the_caller(tmp_path):
+    lock = InstanceLock(tmp_path / "data" / "ahsync.lock")
+    assert lock.acquire()
+    try:
+        out = io.StringIO()
+        (tmp_path / "bad.toml").write_text("dashboard_port = 0\n", encoding="utf-8")
+        code = run(tmp_path / "data", tmp_path / "bad.toml",
+                   Runtime({}, tmp_path, None, FakeClock(), lambda: True, out), held_lock=lock)
+        assert code == 2 and ALREADY_RUNNING not in out.getvalue()
+        assert InstanceLock(tmp_path / "data" / "ahsync.lock").acquire() is False   # still held
+    finally:
+        lock.release()

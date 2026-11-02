@@ -1,0 +1,56 @@
+# CI (SPEC §3.7.12). M22: the test job on Windows and macOS. The build and release jobs come in M26.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-15]       # macos-15 is arm64; macos-latest moved to macOS 26 (SPEC §3.7.12)
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install the test tools
+        run: python -m pip install -r requirements-dev.txt
+
+      # Lua 5.1, as WoW runs (CLAUDE.md). The action builds it from source; on Windows it needs MSVC.
+      - if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - id: lua
+        uses: leafo/gh-actions-lua@v13
+        continue-on-error: ${{ runner.os == 'macOS' }}
+        with:
+          luaVersion: "5.1.5"
+
+      - name: Lua 5.1 from Homebrew (fallback when the action failed)
+        if: runner.os == 'macOS' && steps.lua.outcome == 'failure'
+        run: |
+          brew install lua@5.1
+          echo "$(brew --prefix lua@5.1)/bin" >> "$GITHUB_PATH"
+
+      - name: Put lua5.1 on PATH
+        shell: bash
+        run: |
+          lua_bin="$(command -v lua5.1 || command -v lua)"
+          dir="$(dirname "$lua_bin")"
+          if [ -f "$dir/lua.exe" ]; then cp "$dir/lua.exe" "$dir/lua5.1.exe";
+          elif [ ! -e "$dir/lua5.1" ]; then ln -s "$dir/lua" "$dir/lua5.1"; fi
+          lua5.1 -v
+
+      - name: Tests (suite, invariants, engine coverage, Lua)
+        shell: pwsh
+        run: ./tools/test.ps1
