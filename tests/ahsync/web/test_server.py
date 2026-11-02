@@ -962,7 +962,8 @@ def test_D97_get_api_app_serves_the_shell_s_payload_and_is_unknown_without_a_she
     plain = DashboardApp(db, config, FakeClock(), refreshes, token="tok-123", port=8765)
     assert plain.handle("GET", "/api/app", {"Host": "localhost:8765"}).status == 404
     shell = DashboardApp(db, config, FakeClock(), refreshes, token="tok-123", port=8765,
-                         app_hooks=AppHooks(lambda: {"version": "0.3.1", "setup": False}, lambda e: ("set", e)))
+                         app_hooks=AppHooks(lambda _db, _config: {"version": "0.3.1", "setup": False},
+                                            lambda e: ("set", e)))
     reply = shell.handle("GET", "/api/app", {"Host": "localhost:8765"})
     assert reply.status == 200 and json.loads(reply.body) == {"version": "0.3.1", "setup": False}
     assert shell.handle("POST", "/api/app", {"Host": "localhost:8765"}).status == 405
@@ -976,7 +977,7 @@ def test_SEC14_post_api_autostart_is_checked_like_every_write_and_maps_the_shell
         return "set", enabled
 
     app = DashboardApp(db, Config(markets=(M,)), FakeClock(), refreshes, token="tok-123", port=8765,
-                       app_hooks=AppHooks(lambda: {}, set_autostart))
+                       app_hooks=AppHooks(lambda _db, _config: {}, set_autostart))
     headers = write_headers(origin="http://localhost:8765", host="localhost:8765")
 
     def post(body: bytes, h: dict = headers) -> tuple[int, dict]:
@@ -996,7 +997,7 @@ def test_SEC14_post_api_autostart_is_checked_like_every_write_and_maps_the_shell
 def test_DR11_FM51_the_shell_s_refusal_and_failure_answer_400_and_500(db, refreshes):
     outcomes = iter([("bad_location", False), ("not_set", False)])
     app = DashboardApp(db, Config(markets=(M,)), FakeClock(), refreshes, token="tok-123", port=8765,
-                       app_hooks=AppHooks(lambda: {}, lambda _enabled: next(outcomes)))
+                       app_hooks=AppHooks(lambda _db, _config: {}, lambda _enabled: next(outcomes)))
     bad = app.handle("POST", "/api/autostart", write_headers(), b'{"enabled": true}')
     assert (bad.status, json.loads(bad.body)) == (400, {"error": "bad_location",
                                                         "message": "Move AHSync to Applications, then turn it on again"})
@@ -1026,3 +1027,81 @@ def test_FM57_a_port_another_server_listens_on_is_refused_and_ours_is_never_shar
     finally:
         stop_dashboard(ours)
     stop_dashboard(start_dashboard(app, port))          # bound again at once (setup's hand-over)
+
+
+def test_the_update_toggles_rewrite_one_line_each_and_are_checked_like_every_write(db, refreshes, tmp_path,
+                                                                                         caplog):
+    from ahsync.app.update_check import read_meta, write_meta
+    from ahsync.config import load_config
+
+    config_path = tmp_path / "config.toml"
+    config_path.write_text('# mine\nmarkets = ["forever.pvp.horde.us"]\nupdate_channel = "beta"\n', encoding="utf-8")
+    told: list = []
+    app = DashboardApp(db, Config(markets=(M,), update_channel="beta"), FakeClock(), refreshes, token="tok-123",
+                       port=8765, config_path=config_path, config_changed=told.append,
+                       app_hooks=AppHooks(lambda _db, _config: {}, lambda e: ("set", e)))
+    write_meta(db, {"checked_ms": 5, "etag": '"e1"'})
+
+    def post(path: str, body: bytes, headers: dict | None = None) -> tuple[int, dict]:
+        reply = app.handle("POST", path, headers or write_headers(), body)
+        return reply.status, json.loads(reply.body)
+
+    assert post("/api/update/auto", b'{"enabled": false}') == (200, {"set": True, "enabled": False})
+    assert post("/api/update/channel", b'{"channel": "stable"}') == (200, {"set": True, "channel": "stable"})
+    assert config_path.read_text(encoding="utf-8") == ('# mine\nmarkets = ["forever.pvp.horde.us"]\n'
+                                                       'update_channel = "stable"\nauto_update = false\n')
+    loaded = load_config(config_path, {}, tmp_path)
+    assert (loaded.auto_update, loaded.update_channel) == (False, "stable") and told[-1].update_channel == "stable"
+    meta = read_meta(db)
+    assert meta.get("left_beta") == "1" and "checked_ms" not in meta and "etag" not in meta   # DR26; asked again
+    before = config_path.read_bytes()
+    with caplog.at_level(logging.WARNING, logger="ahsync.web"):
+        for path, body in (("/api/update/auto", b'{"enabled": true}'), ("/api/update/channel", b'{"channel": "beta"}')):
+            assert post(path, body, write_headers(origin="http://evil.example"))[0] == 403
+            assert post(path, body, write_headers(token=""))[0] == 403
+            assert app.handle("GET", path, GOOD).status == 405
+    assert config_path.read_bytes() == before and "tok-123" not in caplog.text
+    assert post("/api/update/auto", b'{"enabled": "no"}') == (400, {"error": "bad_request",
+                                                                    "message": "enabled must be true or false"})
+    assert post("/api/update/channel", b'{"channel": "nightly"}') == (400, {"error": "bad_request",
+                                                                            "message": "channel must be stable or beta"})
+    assert post("/api/update/channel", b'["beta"]')[0] == 400
+    assert app.handle("POST", "/api/update/restart", write_headers(), b"{}").status == 404   # M27 builds it
+    assert post("/api/update/channel", b'{"channel": "beta"}') == (200, {"set": True, "channel": "beta"})
+    assert "left_beta" not in read_meta(db)
+
+
+def test_an_update_toggle_whose_config_cannot_be_written_is_500_and_without_the_shell_404(db, refreshes, app):
+    shell = DashboardApp(db, Config(markets=(M,)), FakeClock(), refreshes, token="tok-123", port=8765,
+                         app_hooks=AppHooks(lambda _db, _config: {}, lambda e: ("set", e)))
+    reply = shell.handle("POST", "/api/update/auto", write_headers(), b'{"enabled": false}')
+    assert (reply.status, json.loads(reply.body)) == (500, {"error": "config_not_written"})
+    assert shell.config.auto_update is True                                     # unchanged
+    assert app.handle("POST", "/api/update/auto", write_headers(), b'{"enabled": false}').status == 404
+    assert app.handle("POST", "/api/update/channel", write_headers(), b'{"channel": "beta"}').status == 404
+
+
+def test_D98_the_status_payload_carries_the_app_card_only_with_the_shell(db, refreshes, app):
+    payload = {"version": "0.3.1", "version_text": "0.3.1 · built 2 Nov", "channel": "stable", "auto_update": True,
+               "wow_path": "C:/wow", "data_folder": "%LOCALAPPDATA%\\AHSync",
+               "update": {"text": "up to date · checked 06:00", "url": None, "pill": None, "restart": False,
+                          "class": ""},
+               "autostart": {"enabled": True, "available": True, "note": ""},
+               "addon": {"text": "AHProfit installed · up to date", "class": ""}}
+    seen: list = []
+    shell = DashboardApp(db, Config(markets=(M,)), FakeClock(), refreshes, token="tok-123", port=8765,
+                         app_hooks=AppHooks(lambda d, c: seen.append((d, c)) or payload, lambda e: ("set", e)))
+    card = json.loads(shell.handle("GET", "/api/views/status", GOOD).body)["data"]["app_card"]
+    assert card["title"] == "AHSync app" and card["pill"] == "0.3.1 · built 2 Nov" and seen[0] == (db, shell.config)
+    assert json.loads(app.handle("GET", "/api/views/status", GOOD).body)["data"]["app_card"] is None
+
+
+def test_the_tray_reads_the_update_state_without_waiting_on_a_busy_dashboard(db, refreshes):
+    from ahsync.app.update_check import write_meta
+
+    shell = DashboardApp(db, Config(markets=(M,)), FakeClock(), refreshes, token="tok-123", port=8765)
+    write_meta(db, {"tag": "v0.4.0"})
+    state, synced = shell.tray_facts()
+    assert state.tag == "v0.4.0" and synced is None
+    with shell._lock:
+        assert shell.tray_facts() is None

@@ -11,6 +11,7 @@ import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
+from ahsync.engine.app_view import app_card
 from ahsync.engine.coverage import coverage
 from ahsync.engine.history_view import ratio_text
 from ahsync.engine.sell_record import Calibration
@@ -464,6 +465,23 @@ def _api_card(rows: Sequence[StatusRow], facts: StatusFacts, offset_ms: int) -> 
                       ["Premium", line, cls]]}
 
 
+def api_key_text(rows: Sequence[StatusRow], facts: StatusFacts, offset_ms: int) -> str:
+    """The app card's API key line: the API card's key and tier (D98).
+
+    Args:
+        rows: Stored Status lines.
+        facts: Whether a key is set.
+        offset_ms: Local time minus UTC, ms.
+
+    Returns:
+        "set", "set · Premium until 5 Nov" or "none · free data only".
+    """
+    if not facts.key_set:
+        return "none · free data only"
+    premium = next((r for r in rows if r.kind == "premium_until" and "until_ms" in r.data), None)
+    return "set" if premium is None else f"set · Premium until {day(premium.data['until_ms'], offset_ms)}"
+
+
 def _characters_card(facts: StatusFacts, now_ms: int) -> dict:
     """Your characters and the market each maps to (D34).
 
@@ -542,18 +560,21 @@ def calibration_view(c: Calibration | None, profit: ProfitSums | None = None) ->
             "warnings": warnings, "rows": rows, "profit": line}
 
 
-def status_view(rows: Sequence[StatusRow], facts: StatusFacts, now_ms: int, offset_ms: int) -> dict:
-    """The Status page (SPEC §3.5, D32-D36).
+def status_view(rows: Sequence[StatusRow], facts: StatusFacts, now_ms: int, offset_ms: int,
+                app: dict | None = None) -> dict:
+    """The Status page (SPEC §3.5, D32-D36, D98).
 
     Args:
         rows: Stored Status lines.
         facts: Sync, character and storage facts.
         now_ms: Now.
         offset_ms: Local time minus UTC, ms.
+        app: GET /api/app's payload from the app shell; None under `python -m ahsync` (no app card).
 
     Returns:
-        {"alerts": [...], "cards": [...], "calibration": section or None, "coverage": [...]}: market cards in
-        config order, then API, Characters, Storage; one Data coverage card per market (engine.coverage, M20).
+        {"alerts": [...], "cards": [...], "calibration": section or None, "coverage": [...], "app_card": card or
+        None}: market cards in config order, then API, Characters, Storage; one Data coverage card per market
+        (engine.coverage, M20); the "AHSync app" card (app_view.app_card) after Storage.
     """
     megabytes = facts.db_bytes * 10 // 1_048_576
     storage = {"title": "Storage", "badge": "", "badge_class": "", "lines": [
@@ -561,7 +582,8 @@ def status_view(rows: Sequence[StatusRow], facts: StatusFacts, now_ms: int, offs
         ["Retention", f"{facts.retention_days} days", ""]]}
     cards = [_market_card(m, now_ms, offset_ms) for m in facts.markets]
     cards += [_api_card(rows, facts, offset_ms), _characters_card(facts, now_ms), storage]
-    return {"alerts": alerts(rows, facts, now_ms, offset_ms), "cards": cards,
+    card = None if app is None else app_card(app, api_key_text(rows, facts, offset_ms), size_text(facts.db_bytes))
+    return {"alerts": alerts(rows, facts, now_ms, offset_ms), "cards": cards, "app_card": card,
             "calibration": calibration_view(facts.calibration, facts.profit),
             "coverage": [{"market": m.market, **coverage(m.coverage_hours, now_ms // HOUR_MS, offset_ms,
                                                          m.coverage_sources, m.partial_scan)} for m in facts.markets]}

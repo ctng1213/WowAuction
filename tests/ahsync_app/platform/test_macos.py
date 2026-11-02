@@ -96,3 +96,8 @@ def test_DR10_from_source_the_agent_runs_python_with_the_script(tmp_path):
     with platform.agent_file().open("rb") as f:
         assert plistlib.load(f)["ProgramArguments"] == ["/usr/bin/python3", "/Users/u/WowAuction/ahsync_app/__main__.py",
                                                          "--autostart"]
+
+
+def test_DR20_macos_takes_the_app_zip():
+    assert MacPlatform(Path("/Users/u")).update_asset_name("0.4.0") == "AHSync-0.4.0-macos-arm64.zip"
+    assert MacPlatform(Path("/Users/u")).app_dirs().shown == "~/Library/Application Support/AHSync"

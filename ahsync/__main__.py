@@ -28,6 +28,7 @@ from ahsync.collect.ahf import AhfApi
 from ahsync.collect.ahledger import BASE as AHLEDGER_BASE, AhledgerSource
 from ahsync.collect.ahledger_backfill import AhledgerBackfill
 from ahsync.collect.client import ApiClient, RedactingFilter, Redactor, Transport, UrllibTransport
+from ahsync import version
 from ahsync.clock import Clock, SystemClock
 from ahsync.config import Config, ConfigError, load_config, market_sources, session_settings
 from ahsync.state.importer import ingest_file
@@ -38,6 +39,7 @@ from ahsync.app.refresh import refresh_all, replan_all
 from ahsync.export.addon_files import export_market, export_plan
 from ahsync.recommend.status_pass import status_pass
 from ahsync.recommend.tracking_pass import tracking_pass
+from ahsync.app import update_check, updater
 from ahsync.app.scheduler import SavedVarsWatcher, Scheduler, SchedulerHooks, file_mtime_ms, find_savedvars
 from ahsync.web.server import (AppHooks, DashboardApp, DashboardServer, new_token, open_server_db, start_dashboard,
                                stop_dashboard)
@@ -376,7 +378,34 @@ def serve_dashboard(data_dir: Path, config: Config, clock: Clock, refresh: Refre
         print(f"Dashboard not started: port {config.dashboard_port} is not available", file=out)
         return None
     print(f"Dashboard: http://localhost:{app.port}", file=out)
+    if app_hooks is not None:
+        app_hooks.dashboard_ready(app)           # the shell's tray toggles go through the dashboard's own handlers
     return server, server_db
+
+
+def update_job(db: Database, transport: Transport, clock: Clock, data_dir: Path, live: LiveConfig,
+               app_hooks: AppHooks) -> Callable[[], None]:
+    """The scheduler's update job: the daily check, then the download when one is due (SPEC §3.7.8, §3.7.9).
+
+    Args:
+        db: run()'s database (the job runs on its thread).
+        transport: The real transport; GitHub never gets the AHF key (DR15).
+        clock: Now.
+        data_dir: data/, whose updates/ folder takes the download.
+        live: The running settings (the toggles change the channel and auto_update).
+        app_hooks: The platform's asset name and signature check.
+
+    Returns:
+        The job; it sends nothing unless a day has passed since the last check or download try.
+    """
+    def job() -> None:
+        """Check, then download, with one reading of the settings (a toggle in between waits for the next job)."""
+        settings = live.current
+        update_check.check(db, transport, clock, version.VERSION, settings)
+        updater.download(db, transport, clock, data_dir, version.VERSION, settings, app_hooks.asset_name,
+                         app_hooks.verify_update)
+
+    return job
 
 
 def run(data_dir: Path, config_path: Path, runtime: Runtime, held_lock: InstanceLock | None = None) -> int:
@@ -477,8 +506,10 @@ def _run_configured(data_dir: Path, config: Config, runtime: Runtime, config_pat
         ahledger = AhledgerSource(ApiClient(runtime.transport, clock, "", api_base=AHLEDGER_BASE, per_minute=300,
                                             redactor=redactor, paced=True), db, clock)          # keyless, its own limit (SRC10)
         ctx = SyncContext(api, db, clock, result.caps, config.retention_days, addresses, ahledger)
-        scheduler = Scheduler(clock, build_hooks(ctx, config, backup_dir, refresh_requests.take, live), watcher,
-                              config.daily_refresh_time, config.live_refresh_minutes)
+        hooks = build_hooks(ctx, config, backup_dir, refresh_requests.take, live)
+        if runtime.app_hooks is not None:        # only the app shell checks for updates (SPEC §3.7.8)
+            hooks = replace(hooks, update=update_job(db, runtime.transport, clock, data_dir, live, runtime.app_hooks))
+        scheduler = Scheduler(clock, hooks, watcher, config.daily_refresh_time, config.live_refresh_minutes)
         scheduler.run(runtime.should_stop)
         log.info("stopped")
         return 0

@@ -295,3 +295,14 @@ def test_a_paced_client_spaces_requests_evenly_and_an_unpaced_one_bursts():
     for _ in range(3):
         plain.get_json("https://api.ahledger.com/v1/markets", auth=False)
     assert clock.now_ms() == before
+
+
+def test_FM53_a_body_cut_off_mid_read_is_a_transport_error():
+    import http.client
+
+    class CutOff(FakeResponse):
+        def read(self):
+            raise http.client.IncompleteRead(b"x" * 1000, 1000)
+
+    with pytest.raises(TransportError):
+        UrllibTransport(lambda request, timeout: CutOff(b""))(HttpRequest("https://x/a"))

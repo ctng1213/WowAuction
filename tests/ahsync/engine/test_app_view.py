@@ -72,7 +72,7 @@ def test_D97_the_app_payload_exactly():
     found = app_view.wow_check(WOW, True, True, 2, creatable=False)
     payload = app_view.app_state("0.3.1", "2026-11-02", "stable", False, WOW, found, True,
                                  {"enabled": True, "available": True, "note": ""}, True, DOWNLOADED, False,
-                                 {"text": "AHProfit installed · up to date", "class": ""})
+                                 {"text": "AHProfit installed · up to date", "class": ""}, "%LOCALAPPDATA%\\AHSync")
     assert payload == {
         "version": "0.3.1", "version_text": "0.3.1 · built 2 Nov", "dev": False, "channel": "stable", "setup": False,
         "wow_path": WOW, "wow_check": {"ok": True, "pill": "found", "text": "found Interface/AddOns · 2 accounts"},
@@ -80,7 +80,7 @@ def test_D97_the_app_payload_exactly():
                     "factions": [["alliance", "Alliance"], ["horde", "Horde"]]},
         "api_key_set": True, "autostart": {"enabled": True, "available": True, "note": ""}, "auto_update": True,
         "update": DOWNLOADED, "location_problem": None,
-        "addon": {"text": "AHProfit installed · up to date", "class": ""}}
+        "addon": {"text": "AHProfit installed · up to date", "class": ""}, "data_folder": "%LOCALAPPDATA%\\AHSync"}
 
 
 def test_D97_in_setup_mode_and_translocated():
@@ -105,3 +105,46 @@ def test_DR11_a_translocated_app_s_toggle_is_unavailable_with_its_note():
     assert app_view.autostart_line(True, False) == {"enabled": True, "available": True, "note": ""}
     assert app_view.autostart_line(False, True) == {
         "enabled": False, "available": False, "note": "not set: Move AHSync to Applications, then turn it on again"}
+
+
+def card_payload(**changes) -> dict:
+    """D97's payload (0.3.1, stable, 0.4.0 downloaded), with changes."""
+    found = app_view.wow_check(WOW, True, True, 2, creatable=False)
+    base = app_view.app_state("0.3.1", "2026-11-02", "stable", False, WOW, found, True,
+                              {"enabled": True, "available": True, "note": ""}, True, DOWNLOADED, False,
+                              {"text": "AHProfit installed · up to date", "class": ""}, "%LOCALAPPDATA%\\AHSync")
+    return {**base, **changes}
+
+
+def test_D98_the_app_card_s_lines_in_order_with_their_controls():
+    card = app_view.app_card(card_payload(), "set · Premium until 5 Nov", "46 MB")
+    assert (card["title"], card["pill"]) == ("AHSync app", "0.3.1 · built 2 Nov")
+    assert [l["label"] for l in card["lines"]] == ["Update", "Auto-update", "Beta updates", "Start at login", "API key",
+                                                    "Data folder", "WoW folder", "Addon"]
+    update, auto, beta, login, key, data, wow, addon = card["lines"]
+    assert update["parts"][0] == ["AHSync 0.4.0", DOWNLOADED["url"]] and update["class"] == "amber"
+    assert update["button"] == {"text": "Restart to update", "enabled": False, "post": "/api/update/restart"}
+    assert auto["control"] == {"checked": True, "enabled": True, "text": "install updates automatically",
+                               "post": "/api/update/auto", "field": ["enabled", True, False],
+                               "title": app_view.AUTO_TITLE}
+    assert beta["control"]["field"] == ["channel", "beta", "stable"]
+    assert beta["control"]["checked"] is False and beta["control"]["text"] == "get beta updates"
+    assert {k: login["control"][k] for k in ("checked", "enabled", "text", "post")} == {
+        "checked": True, "enabled": True, "text": "on", "post": "/api/autostart"}
+    assert key["parts"] == [["set · Premium until 5 Nov", None]] and key["class"] == ""
+    assert data["parts"] == [["%LOCALAPPDATA%\\AHSync · 46 MB", None]] and data["class"] == "muted"
+    assert wow["parts"] == [[WOW, None]] and addon["parts"] == [["AHProfit installed · up to date", None]]
+
+
+def test_D98_on_the_beta_channel_from_source_and_refused_start_at_login():
+    up_to_date = {"text": "up to date · checked 06:00", "url": None, "pill": None, "restart": False, "class": ""}
+    beta = app_view.app_card(card_payload(channel="beta", version_text="0.4.0 · beta · built 2 Nov",
+                                          update=up_to_date), "none · free data only", "46 MB")
+    assert beta["pill"] == "0.4.0 · beta · built 2 Nov" and beta["lines"][2]["control"]["checked"] is True
+    assert beta["lines"][0]["button"] is None and beta["lines"][4]["class"] == "muted"
+    refused = app_view.app_card(card_payload(autostart={"enabled": False, "available": False,
+                                                        "note": "not set: Move AHSync to Applications, then turn it "
+                                                                "on again"}), "set", "1 MB")
+    login = refused["lines"][3]
+    assert login["control"]["enabled"] is False and login["control"]["text"] == "off" and login["class"] == "amber"
+    assert login["parts"] == [["not set: Move AHSync to Applications, then turn it on again", None]]

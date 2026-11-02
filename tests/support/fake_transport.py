@@ -20,6 +20,9 @@ from ahsync.collect.client import HttpRequest, HttpResponse, TransportError
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "ahf"
 AHLEDGER_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "ahledger"
+GITHUB_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "github"
+GITHUB_REPO = "repos/ctng1213/WowAuction"              # api.github.com paths (query dropped)
+GITHUB_DOWNLOADS = "ctng1213/WowAuction/releases/download"   # github.com release files
 AHLEDGER_HOST = "api.ahledger.com"
 DEFAULT_MARKET = "forever.pvp.horde.us"
 
@@ -155,6 +158,26 @@ class FakeTransport:
         for rng in ("7d", "90d"):
             transport.serve_bytes(f"v1/prices/{market}/2589?range={rng}",
                                   (folder / f"prices_2589_{rng}.json").read_bytes(), headers)
+        return transport
+
+    @classmethod
+    def serve_github(cls, transport: FakeTransport | None = None, etag: str = '"e1"') -> FakeTransport:
+        """Serve the GitHub release fixtures (tests/fixtures/github/; SPEC §3.7.8, §3.7.9).
+
+        Args:
+            transport: Add the routes to this transport; a new one when None.
+            etag: The ETag of both release answers.
+
+        Returns:
+            The transport, with `releases/latest` (v0.4.0), `releases` (v0.4.0 pre-release and v0.3.1), and
+            v0.4.0's `SHA256SUMS`, Windows installer (2,000 bytes) and macOS zip, each with its Content-Length.
+        """
+        transport = transport or cls()
+        transport.serve_etag(f"{GITHUB_REPO}/releases/latest", (GITHUB_FIXTURES / "latest.json").read_bytes(), etag)
+        transport.serve_etag(f"{GITHUB_REPO}/releases", (GITHUB_FIXTURES / "releases.json").read_bytes(), etag)
+        for name in ("SHA256SUMS", "AHSync-0.4.0-windows-x64-setup.exe", "AHSync-0.4.0-macos-arm64.zip"):
+            body = (GITHUB_FIXTURES / name).read_bytes()
+            transport.serve_bytes(f"{GITHUB_DOWNLOADS}/v0.4.0/{name}", body, {"content-length": str(len(body))})
         return transport
 
     def remove(self, path: str) -> None:

@@ -136,7 +136,7 @@ def status_facts(db: Database, cfg: Config, now_ms: int) -> StatusFacts:
                        calibration(results), _profit(db, now_ms))
 
 
-def status_page(db: Database, cfg: Config, now_ms: int, offset_ms: int) -> dict:
+def status_page(db: Database, cfg: Config, now_ms: int, offset_ms: int, app: dict | None = None) -> dict:
     """The Status payload (SPEC §3.5 dashboard data).
 
     Args:
@@ -144,9 +144,10 @@ def status_page(db: Database, cfg: Config, now_ms: int, offset_ms: int) -> dict:
         cfg: Config.
         now_ms: Now.
         offset_ms: Local time minus UTC.
+        app: GET /api/app's payload from the app shell, for the "AHSync app" card; None: no card.
 
     Returns:
         {"alerts": [{"level", "title", "text"}], "cards": [{"title", "badge", "badge_class", "lines"}]}.
     """
     rows = [StatusRow(s.topic, s.level, s.kind, s.data, s.at) for s in db.statuses()]
-    return status_view(rows, status_facts(db, cfg, now_ms), now_ms, offset_ms)
+    return status_view(rows, status_facts(db, cfg, now_ms), now_ms, offset_ms, app)

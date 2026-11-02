@@ -5,7 +5,7 @@ import pytest
 
 from ahsync.config import (Config, ConfigError, MarketSources, load_config, market_settings, parse_config, plan_settings,
                            portfolio_settings, resolve_api_key, session_settings, setting_line, with_risk_tolerance,
-                           write_risk_tolerance)
+                           write_risk_tolerance, write_setting)
 from ahsync.engine.portfolio import PortfolioSettings, config_version
 from ahsync.engine.sessions import SessionSettings
 
@@ -233,10 +233,37 @@ def test_SEC11_the_rewrite_goes_through_a_temp_file_and_reads_back(tmp_path, mon
     write_risk_tolerance(fresh, 0.1)
     assert fresh.read_text(encoding="utf-8") == "risk_tolerance = 0.10\n"
     import ahsync.config as config_module
-    monkeypatch.setattr(config_module, "with_risk_tolerance", lambda text, value: text + "risk_tolerance = [\n")
+    monkeypatch.setattr(config_module, "with_setting", lambda text, name, formatted: text + "risk_tolerance = [\n")
     with pytest.raises(ConfigError):
         write_risk_tolerance(path, 0.2)
     assert load_config(path, {}, tmp_path).risk_tolerance == 0.4                   # left as it was
+
+
+def test_the_update_toggles_rewrite_only_their_own_line(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_bytes(RISK_CONFIG.encode("utf-8"))
+    write_setting(path, "auto_update", False, "false")
+    write_setting(path, "update_channel", "beta", '"beta"')
+    assert path.read_bytes() == RISK_CONFIG.replace("[realms]", 'auto_update = false\r\nupdate_channel = "beta"\r\n'
+                                                                '[realms]').encode("utf-8")
+    write_setting(path, "update_channel", "stable", '"stable"')
+    config = load_config(path, {}, tmp_path)
+    assert (config.auto_update, config.update_channel, config.update_check) == (False, "stable", True)
+    with pytest.raises(ConfigError):
+        write_setting(path, "auto_update", False, '"false"')               # would read back as text
+    assert not (tmp_path / "config.toml.tmp").exists()
+
+
+@pytest.mark.parametrize("line, reason", [
+    ("update_channel = \"nightly\"", "update_channel must be stable or beta"),
+    ("auto_update = \"yes\"", "auto_update must be true or false"),
+    ("update_check = 1", "update_check must be true or false"),
+])
+def test_FM16_the_distribution_keys_refuse_a_bad_value_with_line_and_reason(tmp_path, line, reason):
+    path = tmp_path / "config.toml"
+    path.write_text(f"{line}\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match=f"line 1: {reason}"):
+        load_config(path, {}, tmp_path)
 
 
 # ---------------------------------------------------------------- AHledger as a source (M19, SRC10)

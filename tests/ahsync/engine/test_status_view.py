@@ -292,3 +292,19 @@ def test_ahledger_backfill_line_counts_items_and_says_when_it_resumes():
     alerts = status_view.alerts([paused, row("refresh_failed", {"error": "x"})], facts(), NOW, 0)
     assert [a["level"] for a in alerts] == ["warn", "info"]                  # info sorts after warn
     assert alerts[1]["url"] == AHL and alerts[1]["url_label"] == "AHledger"
+
+
+def test_D98_the_app_card_s_api_key_line_and_its_place_after_storage():
+    until = NOW + 5 * 24 * HOUR
+    assert status_view.api_key_text([], facts(key_set=False), 0) == "none · free data only"
+    assert status_view.api_key_text([], facts(key_set=True), 0) == "set"
+    premium = row("premium_until", {"until_ms": until}, "info")
+    assert status_view.api_key_text([premium], facts(key_set=True), 0).startswith("set · Premium until ")
+    app = {"version_text": "dev build", "channel": "stable", "auto_update": True, "wow_path": "C:/wow",
+           "data_folder": "%LOCALAPPDATA%\\AHSync",
+           "update": {"text": "not checked for a dev build", "url": None, "pill": None, "restart": False,
+                      "class": "muted"},
+           "autostart": {"enabled": False, "available": True, "note": ""}, "addon": {"text": "x", "class": ""}}
+    view = status_view.status_view([], facts(db_bytes=46 * 1_048_576), NOW, 0, app)
+    assert view["app_card"]["lines"][5]["parts"] == [["%LOCALAPPDATA%\\AHSync · 46 MB", None]]
+    assert status_view.status_view([], facts(), NOW, 0)["app_card"] is None

@@ -11,6 +11,8 @@ be wired later without touching the timing rules here:
   sends an ETag and a Cache-Control, so a poll with nothing new is one cheap request, SPEC §2.3)
 - every 5 s, after the poll → `ahledger_backfill` when wired: one slice of the history backfill (a few keys, about
   4 s), or a cheap check that there is nothing to do (SPEC §2.3, M21)
+- every 10 minutes, the first time at the first tick → `update` when wired (the app shell's update check and
+  download; each sends nothing unless a day has passed, SPEC §3.7.8, §3.7.9)
 - first tick after `daily_refresh_time` local each day → `full_refresh`, then `daily`
   (d1/volume refresh, prune, backup); once a week → `weekly` (VACUUM)
 - every 5 s → stat the SavedVariables files; a file whose modification time changed
@@ -33,6 +35,7 @@ WATCH_INTERVAL_MS = 5_000      # one stat every 5 s (SPEC §3.1.1 "idle means id
 STABLE_MS = 2_000              # unchanged for 2 s before reading (SPEC §2.2)
 STORE_MINUTE = 6               # hourly store at :06
 AHLEDGER_POLL_MS = 30 * 60_000   # AHledger poll interval (SPEC §2.3)
+UPDATE_POLL_MS = 10 * 60_000     # how often the update job looks whether a day has passed (SPEC §3.7.8)
 WEEK_MS = 7 * DAY_MS
 
 
@@ -70,6 +73,7 @@ class SchedulerHooks:
     live_refresh: Callable[[], None] | None = None    # Premium live table; None disables it
     ahledger_poll: Callable[[], None] | None = None   # AHledger price tables, every 30 min; None disables it (SRC10)
     ahledger_backfill: Callable[[], object] | None = None   # one slice of the backfill, every 5 s; None disables it
+    update: Callable[[], None] | None = None          # update check and download, every 10 min; None: no app shell
     savedvars_changed: Callable[[Path], None] = _nothing_for   # SavedVariables re-read (ingest.apply.ingest_file)
 
 
@@ -200,6 +204,7 @@ class Scheduler:
         self.next_live = now + self.live_ms
         self.next_ahledger = now                       # the first poll is at the first tick (start)
         self.next_backfill = now                       # checked at every 5 s tick after the poll (M21)
+        self.next_update = now                         # the first update check is at start (SPEC §3.7.8)
         self.next_daily = self._next_daily(now)
         self.next_weekly = now + WEEK_MS
 
@@ -258,6 +263,9 @@ class Scheduler:
         if self.hooks.ahledger_poll is not None and now >= self.next_ahledger:
             self.next_ahledger = now + AHLEDGER_POLL_MS
             self._run("ahledger_poll", self.hooks.ahledger_poll, ran)
+        if self.hooks.update is not None and now >= self.next_update:
+            self.next_update = now + UPDATE_POLL_MS
+            self._run("update", self.hooks.update, ran)
         if self.hooks.ahledger_backfill is not None and now >= self.next_backfill:
             self.next_backfill = now + WATCH_INTERVAL_MS
             self._run("ahledger_backfill", self.hooks.ahledger_backfill, ran)
@@ -305,6 +313,8 @@ class Scheduler:
             timers.append(self.next_live)
         if self.hooks.ahledger_poll is not None:
             timers.append(self.next_ahledger)
+        if self.hooks.update is not None:
+            timers.append(self.next_update)
         if self.hooks.ahledger_backfill is not None:
             timers.append(self.next_backfill)
         return min(timers)

@@ -5,6 +5,7 @@ built in JavaScript or in the shell (SPEC §8.5).
 """
 from __future__ import annotations
 
+import re
 import time
 
 DEV_VERSION = "0.0.0"
@@ -146,7 +147,7 @@ def update_not_checked(version: str) -> dict:
 
 def app_state(version: str, built: str, channel: str, setup: bool, wow_path: str, check: dict,
               api_key_set: bool, autostart: dict, auto_update: bool, update: dict,
-              location_problem: bool, addon: dict | None) -> dict:
+              location_problem: bool, addon: dict | None, data_folder: str = "") -> dict:
     """`GET /api/app`: the app's own state for the setup page, the Status card and the top bar (SPEC §3.7.4, D97).
 
     Args:
@@ -163,6 +164,7 @@ def app_state(version: str, built: str, channel: str, setup: bool, wow_path: str
         update: The Update line, e.g. from update_not_checked.
         location_problem: Whether the app runs translocated (macOS).
         addon: This start's Addon line {"text", "class"}; None before any install (setup).
+        data_folder: The app folder as the card shows it, unexpanded ("%LOCALAPPDATA%\\AHSync"): never a user name.
 
     Returns:
         The payload of SPEC §3.7.4, every text made here.
@@ -172,4 +174,95 @@ def app_state(version: str, built: str, channel: str, setup: bool, wow_path: str
             "markets": {"rulesets": [list(c) for c in RULESET_CHOICES], "factions": [list(c) for c in FACTION_CHOICES]},
             "api_key_set": api_key_set, "autostart": autostart, "auto_update": auto_update, "update": update,
             "location_problem": TRANSLOCATED_TEXT if location_problem else None,
-            "addon": addon if addon is not None else {"text": "not installed yet", "class": "muted"}}
+            "addon": addon if addon is not None else {"text": "not installed yet", "class": "muted"},
+            "data_folder": data_folder}
+
+
+def link_parts(update: dict) -> list[list]:
+    """The Update line as segments, so the page links "AHSync 0.4.0" without cutting the text itself (D98).
+
+    Args:
+        update: line()'s dict.
+
+    Returns:
+        [[text, url or None], ...]: the leading "AHSync X.Y.Z" linked when the line has a URL and starts with it;
+        else the whole line, linked when it has a URL.
+    """
+    text, url = update["text"], update["url"]
+    match = re.match(r"AHSync \d+\.\d+\.\d+", text)
+    if url is None:
+        return [[text, None]]
+    if match is None:
+        return [[text, url]]
+    return [[match[0], url], [text[match.end():], None]]
+
+
+AUTO_TITLE = "Download and install new releases from GitHub by itself. Off: only tell you when one is out."
+BETA_TITLE = ("Also take pre-releases: new versions before they go out to everyone. Turning this off never downgrades; "
+              "you stay on your version until a newer stable release is out.")
+LOGIN_TITLE = ("Windows: a Run entry for your user. macOS: a LaunchAgent in ~/Library/LaunchAgents. Nothing needs admin "
+               "rights.")
+
+
+def app_card(app: dict, api_key_text: str, size_text: str) -> dict:
+    """The Status page's "AHSync app" card, after Storage (SPEC §3.5, §3.7; D98). The page only draws it.
+
+    Args:
+        app: GET /api/app's payload (app_state()).
+        api_key_text: The API key line: "set", "set · Premium until 5 Nov" or "none · free data only".
+        size_text: The database's size, "46 MB".
+
+    Returns:
+        {"title", "pill", "lines": [{"label", "parts": [[text, url or None]], "class", "control", "button"}]}: Update
+        (with the Restart to update button while one waits; disabled until M27 installs it), Auto-update, Beta
+        updates, Start at login (checkboxes naming their POST), API key, Data folder, WoW folder, Addon.
+    """
+    update, auto = app["update"], app["autostart"]
+
+    def text_line(label: str, text: str, cls: str = "") -> dict:
+        """A line of plain text.
+
+        Args:
+            label: The line's name.
+            text: Its value.
+            cls: "muted", "amber" or "".
+
+        Returns:
+            The line.
+        """
+        return {"label": label, "parts": [[text, None]], "class": cls, "control": None, "button": None}
+
+    def checkbox(label: str, checked: bool, text: str, post: str, field: list, title: str, enabled: bool = True,
+                 note: str = "") -> dict:
+        """A line with a checkbox that posts {field[0]: field[1] when ticked, else field[2]}.
+
+        Args:
+            label: The line's name.
+            checked: Whether it is ticked.
+            text: The checkbox's own text.
+            post: The endpoint it posts to.
+            field: [name, value when ticked, value when not].
+            title: Its hover text.
+            enabled: False draws it greyed out.
+            note: An amber reason shown after it ("" for none).
+
+        Returns:
+            The line.
+        """
+        return {"label": label, "parts": [[note, None]] if note else [], "class": "amber" if note else "",
+                "control": {"checked": checked, "enabled": enabled, "text": text, "post": post, "field": field,
+                            "title": title}, "button": None}
+
+    restart = {"text": "Restart to update", "enabled": False, "post": "/api/update/restart"} if update["restart"] else None
+    return {"title": "AHSync app", "pill": app["version_text"], "lines": [
+        {"label": "Update", "parts": link_parts(update), "class": update["class"], "control": None, "button": restart},
+        checkbox("Auto-update", app["auto_update"], "install updates automatically", "/api/update/auto",
+                 ["enabled", True, False], AUTO_TITLE),
+        checkbox("Beta updates", app["channel"] == "beta", "get beta updates", "/api/update/channel",
+                 ["channel", "beta", "stable"], BETA_TITLE),
+        checkbox("Start at login", auto["enabled"], "on" if auto["enabled"] else "off", "/api/autostart",
+                 ["enabled", True, False], LOGIN_TITLE, auto["available"], auto["note"]),
+        text_line("API key", api_key_text, "" if api_key_text.startswith("set") else "muted"),
+        text_line("Data folder", f"{app['data_folder']} · {size_text}", "muted"),
+        text_line("WoW folder", app["wow_path"], "muted"),
+        text_line("Addon", app["addon"]["text"], app["addon"]["class"])]}

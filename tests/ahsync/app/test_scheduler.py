@@ -250,3 +250,15 @@ def test_the_ahledger_backfill_runs_after_the_poll_every_5_s_and_wakes_the_sched
     clock.advance(1_000)
     assert scheduler.tick() == ["ahledger_backfill"]
     assert "ahledger_backfill" not in Scheduler(clock, SchedulerHooks(), None).tick()
+
+
+def test_DR15_the_update_job_runs_at_start_then_every_10_minutes_and_only_when_wired():
+    clock = FakeClock()
+    calls = {"n": 0}
+    scheduler = Scheduler(clock, SchedulerHooks(update=lambda: calls.update(n=calls["n"] + 1)), None)
+    assert "update" in scheduler.tick() and calls["n"] == 1                  # at start
+    clock.advance(9 * 60_000)
+    assert "update" not in scheduler.tick()
+    clock.advance(60_000)
+    assert "update" in scheduler.tick() and scheduler.next_wake_ms() <= clock.now_ms() + 10 * 60_000
+    assert "update" not in Scheduler(clock, SchedulerHooks(), None).tick()   # python -m ahsync: no app shell

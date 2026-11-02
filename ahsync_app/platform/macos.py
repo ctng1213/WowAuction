@@ -40,7 +40,8 @@ class MacPlatform(Platform):
             The two paths.
         """
         root = PurePosixPath(Path(self.home).as_posix()) / "Library" / "Application Support" / APP_NAME
-        return AppDirs(Path(str(root / "config.toml")), Path(str(root / "data")))
+        return AppDirs(Path(str(root / "config.toml")), Path(str(root / "data")),
+                       f"~/Library/Application Support/{APP_NAME}")
 
     def wow_candidates(self) -> list[Path]:
         """`/Applications/World of Warcraft/<name>`, `_classic_beta_` first (SPEC §3.7.3; UNVERIFIED, §6 item 20).
@@ -126,3 +127,14 @@ class MacPlatform(Platform):
             True when AHSync starts at login.
         """
         return self.agent_file().exists()
+
+    def update_asset_name(self, version: str) -> str:
+        """The signed app zip this OS takes from a release (SPEC §3.7.9; DR20).
+
+        Args:
+            version: "MAJOR.MINOR.PATCH".
+
+        Returns:
+            "AHSync-<version>-macos-arm64.zip".
+        """
+        return f"{APP_NAME}-{version}-macos-arm64.zip"

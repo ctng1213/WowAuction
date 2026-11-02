@@ -78,3 +78,8 @@ def test_DR9_from_source_the_run_value_quotes_pythonw_and_the_script():
     WindowsPlatform({}, Path("C:/Users/u"), run_key).autostart_enable(
         Path(r"C:\Python312\pythonw.exe"), (r"C:\Dev\WowAuction\ahsync_app\__main__.py",))
     assert run_key.values == {"AHSync": r'"C:\Python312\pythonw.exe" "C:\Dev\WowAuction\ahsync_app\__main__.py" --autostart'}
+
+
+def test_DR20_windows_takes_the_setup_exe():
+    assert WindowsPlatform({}, Path("C:/Users/u")).update_asset_name("0.4.0") == "AHSync-0.4.0-windows-x64-setup.exe"
+    assert WindowsPlatform({"LOCALAPPDATA": LOCAL}, Path("C:/Users/u")).app_dirs().shown == r"%LOCALAPPDATA%\AHSync"

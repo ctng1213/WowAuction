@@ -35,6 +35,7 @@ from ahsync.web.setup_app import SetupApp
 from ahsync_app import autostart, tray
 from ahsync_app.app_info import app_payload
 from ahsync_app.platform.base import AppDirs, Platform
+from ahsync.engine.updates import UpdateState, newer, ready, tag_version
 from ahsync_app.tray import TrayState
 from ahsync_app.window import Webview, Window, WindowUnavailable
 
@@ -186,6 +187,9 @@ class Session:
         self.port = world.setup_port if self.setup else (self.config or Config()).dashboard_port
         self.code = 0
         self._begun = threading.Lock()
+        self.dashboard = None              # run()'s DashboardApp, once it serves (dashboard_ready)
+        self.toggles: list[threading.Thread] = []   # the tray's toggle threads (off_the_tray)
+        self.update_facts: tuple[UpdateState, int | None] = (UpdateState(version.VERSION), None)
 
     def home(self) -> str:
         """The dashboard's URL, e.g. "http://localhost:8765".
@@ -284,7 +288,30 @@ class Session:
             autostart.self_heal(self.world.platform, self.world.exe)
         info = partial(app_payload, self.world, self.state, False, config.wow_path if config else "",
                        bool(config and config.api_key))
-        return run_until_stopped(self, AppHooks(info, self.set_autostart))
+        return run_until_stopped(self, AppHooks(info, self.set_autostart, self.world.platform.update_asset_name,
+                                                self.verify_update, self.dashboard_ready))
+
+    def verify_update(self, path: Path) -> str | None:
+        """The platform's signature check of a download; until M27 builds it, nothing beyond the hash (SPEC §3.7.9).
+
+        Args:
+            path: The downloaded file, its hash checked.
+
+        Returns:
+            None when it may be installed; else the reason.
+        """
+        try:
+            return self.world.platform.verify_update(path)
+        except NotImplementedError:
+            return None
+
+    def dashboard_ready(self, app: object) -> None:
+        """Keep run()'s dashboard: the tray reads the update state through it and toggles through its handlers.
+
+        Args:
+            app: The DashboardApp.
+        """
+        self.dashboard = app
 
     def set_autostart(self, enabled: bool) -> tuple[str, bool]:
         """Turn start at login on or off for any control, keeping the Status line (SPEC §3.7.5; SEC14, FM51).
@@ -304,13 +331,20 @@ class Session:
         return outcome, now_enabled
 
     def tray_state(self) -> TrayState:
-        """The tray menu's state now (DR12); the update fields come with M25 and M27.
+        """The tray menu's state now (DR12): the update items from the dashboard's state, kept while it is busy.
 
         Returns:
             The state.
         """
+        facts = self.dashboard.tray_facts() if self.dashboard is not None else None
+        if facts is not None:
+            self.update_facts = facts
+        update, synced = self.update_facts
+        downloaded = update.downloaded if ready(update) and not update.cant_replace else None
+        available = tag_version(update.tag) if newer(update.tag, update.version) and downloaded is None else None
         return TrayState(configured=not self.setup, version=version.VERSION,
-                         autostart=autostart.is_enabled(self.world.platform), auto_update=True, channel="stable")
+                         autostart=autostart.is_enabled(self.world.platform), auto_update=update.auto_update,
+                         channel=update.channel, available=available, downloaded=downloaded, synced_ms=synced)
 
     def offset_ms(self) -> int:
         """Local time minus UTC now, for the hover text.
@@ -336,9 +370,42 @@ class Session:
             log.info("quit from the tray")
             self.stop.set()            # run() returns at its next tick; the worker then destroys the window
         else:
-            log.info("tray item %s is built with the updates (M25, M27)", action)
+            self.act_on_update(action)
         if self.tray is not None:
             self.tray.refresh()
+
+    def act_on_update(self, action: str) -> None:
+        """A tray update item: the toggles go through the dashboard's handlers, as the Status card's do (SEC15).
+
+        Args:
+            action: tray.AUTO_UPDATE, BETA, DOWNLOAD or RESTART_UPDATE.
+        """
+        update, _synced = self.update_facts
+        if action == tray.DOWNLOAD and update.url:
+            self.world.opener(update.url)        # the release page, in the browser (SPEC §3.7.1)
+        elif action == tray.RESTART_UPDATE:
+            log.info("Restart to update installs from M27")
+        elif self.dashboard is None:
+            log.info("tray item %s waits until AHSync runs", action)
+        elif action == tray.AUTO_UPDATE:
+            self.off_the_tray(self.dashboard.set_auto_update, not update.auto_update)
+        elif action == tray.BETA:
+            self.off_the_tray(self.dashboard.set_update_channel, "stable" if update.channel == "beta" else "beta")
+
+    def off_the_tray(self, toggle: Callable[[object], object], value: object) -> threading.Thread:
+        """Run a toggle on its own thread: it waits for the dashboard's lock, and a re-plan must not freeze the menu.
+
+        Args:
+            toggle: The dashboard's set_auto_update or set_update_channel.
+            value: Its argument.
+
+        Returns:
+            The started thread (tests join it).
+        """
+        thread = threading.Thread(target=toggle, args=(value,), name="ahsync-tray-toggle", daemon=True)
+        thread.start()
+        self.toggles.append(thread)
+        return thread
 
     def tick(self) -> None:
         """One pass of the worker's loop: a show request, the first show of a manual launch, the tray's state.

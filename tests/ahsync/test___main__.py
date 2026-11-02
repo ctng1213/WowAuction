@@ -475,3 +475,35 @@ def test_FM50_a_start_that_finds_a_key_clears_setup_s_line_and_only_that_one(tmp
         assert code == 0 and db.status("api_key_setup") is None and db.status("other") is not None
     finally:
         db.close()
+
+
+def test_DR20_the_update_job_checks_then_downloads_and_the_shell_gets_the_dashboard(tmp_path, monkeypatch):
+    import calendar
+
+    import ahsync.__main__ as app_main
+    from ahsync.__main__ import LiveConfig, serve_dashboard, update_job
+    from ahsync.app.update_check import read_meta
+    from ahsync.web.server import AppHooks, stop_dashboard
+    from tests.support.fake_transport import FakeTransport
+
+    monkeypatch.setattr(app_main.version, "VERSION", "0.3.1")
+    now = calendar.timegm((2026, 11, 6, 6, 0, 0)) * 1000
+    db = Database.open(tmp_path / "ahsync.db", now, None)
+    ready: list = []
+    hooks = AppHooks(lambda _db, _config: {}, lambda e: ("set", e), "AHSync-{}-windows-x64-setup.exe".format,
+                     lambda _path: None, ready.append)
+    try:
+        transport = FakeTransport.serve_github()
+        update_job(db, transport, FakeClock(now), tmp_path, LiveConfig(Config()), hooks)()
+        assert read_meta(db)["downloaded"] == "0.4.0"
+        assert (tmp_path / "updates" / "AHSync-0.4.0-windows-x64-setup.exe").exists()
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        served = serve_dashboard(tmp_path, Config(dashboard_port=port), FakeClock(now), RefreshRequests(),
+                                 io.StringIO(), app_hooks=hooks)
+        assert served is not None and len(ready) == 1 and ready[0].app_hooks is hooks
+        stop_dashboard(served[0])
+        served[1].close()
+    finally:
+        db.close()

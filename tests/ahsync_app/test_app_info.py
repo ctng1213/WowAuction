@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ahsync_app import app_info
-from ahsync_app.platform.base import TRANSLOCATED, Platform
+from ahsync_app.platform.base import TRANSLOCATED, AppDirs, Platform
 from ahsync_app.shell import ShellState
 
 
@@ -19,6 +19,9 @@ class Facts(Platform):
 
     def run_location_problem(self, exe: Path) -> str | None:
         return TRANSLOCATED if self.translocated else None
+
+    def app_dirs(self) -> AppDirs:
+        return AppDirs(Path("Local/AHSync/config.toml"), Path("Local/AHSync/data"), r"%LOCALAPPDATA%\AHSync")
 
     def autostart_enabled(self) -> bool:
         if self.enabled is None:
@@ -45,7 +48,8 @@ def test_D97_in_setup_mode_with_a_detected_folder(tmp_path):
     assert payload["autostart"] == {"enabled": False, "available": True, "note": ""}
     assert payload["location_problem"] is None and payload["addon"]["text"] == "not installed yet"
     paths = [v for v in json.dumps(payload).split('"') if "/" in v or "\\" in v]
-    assert all(str(tmp_path).replace("\\", "\\\\") in v or v.startswith("found Interface/AddOns") for v in paths)
+    assert all(str(tmp_path).replace("\\", "\\\\") in v or v.startswith("found Interface/AddOns")
+               or v == json.dumps("%LOCALAPPDATA%\\AHSync")[1:-1] for v in paths)   # unexpanded: no user name
 
 
 def test_D97_nothing_detected_translocated_and_start_at_login_on():
@@ -54,3 +58,26 @@ def test_D97_nothing_detected_translocated_and_start_at_login_on():
     assert payload["autostart"] == {"enabled": True, "available": False,
                                     "note": "not set: Move AHSync to Applications, then turn it on again"}
     assert payload["location_problem"].startswith("AHSync is running from where it was downloaded")
+
+
+def test_D97_DR25_with_the_dashboard_s_database_the_update_line_and_the_settings_are_live(tmp_path):
+    from ahsync.app.update_check import write_meta
+    from ahsync.config import Config
+    from ahsync.db.sqlite import Database
+    from tests.support.fake_clock import FakeClock
+
+    @dataclass
+    class ClockWorld(World):
+        clock: FakeClock = FakeClock()
+
+    db = Database.open(tmp_path / "ahsync.db", FakeClock().now_ms(), None)
+    try:
+        write_meta(db, {"checked_ms": FakeClock().now_ms(), "tag": "v0.4.0", "url": "page"})
+        payload = app_info.app_payload(ClockWorld(Facts()), ShellState(False), False, "", True, db,
+                                       Config(auto_update=False, update_channel="beta"))
+    finally:
+        db.close()
+    assert (payload["channel"], payload["auto_update"], payload["data_folder"]) == ("beta", False, r"%LOCALAPPDATA%\AHSync")
+    assert payload["update"]["text"] == "not checked for a dev build"           # source runs never check (0.0.0)
+    assert app_info.app_payload(World(Facts()), ShellState(False), True, "", False)["update"]["text"] == \
+        "not checked for a dev build"

@@ -597,7 +597,7 @@ def test_a_window_that_starts_clears_an_old_window_unavailable_line(tmp_path):
     assert status_line(data, "window") is None
 
 
-def test_DR12_the_tray_s_start_at_login_item_toggles_and_the_update_items_wait_for_m25(tmp_path, caplog):
+def test_DR12_the_tray_s_start_at_login_item_toggles_and_the_update_items_wait_for_the_dashboard(tmp_path, caplog):
     app = FakeApp(tmp_path, until=lambda _d: False)
     app.configure(tmp_path / "wow")
     app.platform.autostart_enabled = lambda: bool(app.platform.autostarts)
@@ -617,7 +617,7 @@ def test_DR12_the_tray_s_start_at_login_item_toggles_and_the_update_items_wait_f
     view = FakeWebview(script)
     assert shell.start(True, windowed(app, view)) == 0
     view.check()
-    assert "tray item auto_update is built with the updates (M25, M27)" in caplog.text
+    assert "tray item auto_update waits until AHSync runs" in caplog.text       # no dashboard in this fake run
 
 
 def test_a_tray_that_cannot_start_leaves_ahsync_running(tmp_path, caplog):
@@ -673,3 +673,57 @@ def test_only_a_build_refreshes_the_login_entry_at_start(tmp_path):
     source = shell.ShellWorld(**{**app.world().__dict__, "launch_args": ("ahsync_app/__main__.py",)})
     assert shell.start(False, source) == 0 and app.platform.autostarts == []
     assert shell.start(False, app.world()) == 0 and app.platform.autostarts == [tmp_path / "AHSync.exe"]
+
+
+class FakeDashboard:
+    """The two dashboard calls the tray uses, and the toggles it receives."""
+
+    def __init__(self, state) -> None:
+        self.state, self.calls, self.busy = state, [], False
+
+    def tray_facts(self):
+        return None if self.busy else (self.state, 1_762_000_000_000)
+
+    def set_auto_update(self, enabled: bool) -> None:
+        self.calls.append(("auto_update", enabled))
+
+    def set_update_channel(self, channel: str) -> None:
+        self.calls.append(("channel", channel))
+
+
+def test_DR12_DR13_DR20_the_tray_s_update_items_follow_the_updater_and_toggle_through_the_dashboard(tmp_path, caplog):
+    from ahsync.engine.updates import UpdateState
+
+    app = FakeApp(tmp_path, until=lambda _d: False)
+    app.configure(tmp_path / "wow")
+    page = "https://github.com/ctng1213/WowAuction/releases/tag/v0.4.0"
+    dashboard = FakeDashboard(UpdateState("0.3.1", auto_update=False, tag="v0.4.0", url=page))
+
+    def script(_view: FakeWebview) -> None:
+        wait_for(lambda: app.hooks, "run() never started")
+        app.hooks[0].dashboard_ready(dashboard)
+        tray_icon = FakeTray.made[0]
+        state = tray_icon.state()
+        assert (state.available, state.downloaded, state.auto_update, state.synced_ms) == ("0.4.0", None, False,
+                                                                                          1_762_000_000_000)
+        tray_icon.dispatch("download")
+        tray_icon.dispatch("auto_update")
+        time.sleep(0.05)                                            # each toggle runs on its own thread
+        tray_icon.dispatch("beta")
+        time.sleep(0.05)
+        dashboard.state = UpdateState("0.3.1", channel="beta", tag="v0.4.0", url=page, downloaded="0.4.0")
+        assert (tray_icon.state().available, tray_icon.state().downloaded) == (None, "0.4.0")
+        dashboard.busy = True                                       # a re-plan holds the dashboard: the last state
+        assert tray_icon.state().downloaded == "0.4.0" and tray_icon.state().channel == "beta"
+        tray_icon.dispatch("restart_update")
+        tray_icon.dispatch("beta")
+        tray_icon.dispatch("quit")
+
+    view = FakeWebview(script)
+    with caplog.at_level("INFO", logger="ahsync.app"):
+        assert shell.start(True, windowed(app, view)) == 0
+    view.check()
+    assert app.opened == [page]                                     # the release page, in the browser
+    assert dashboard.calls == [("auto_update", True), ("channel", "beta"), ("channel", "stable")]
+    assert "Restart to update installs from M27" in caplog.text
+    assert app.hooks[0].verify_update(tmp_path / "x.exe") is None     # no signature check until M27: the hash only

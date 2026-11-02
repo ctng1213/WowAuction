@@ -9,6 +9,7 @@ messages and, through `RedactingFilter`, from the log.
 from __future__ import annotations
 
 import gzip
+import http.client
 import json
 import logging
 import urllib.error
@@ -516,5 +517,5 @@ class UrllibTransport:
         except urllib.error.HTTPError as error:
             headers = {k.lower(): v for k, v in (error.headers or {}).items()}
             return HttpResponse(error.code, headers, error.read() or b"")
-        except (urllib.error.URLError, TimeoutError, ConnectionError) as error:
+        except (OSError, http.client.HTTPException) as error:   # URLError, timeouts, TLS and a body cut off mid-read
             raise TransportError(type(error).__name__) from None

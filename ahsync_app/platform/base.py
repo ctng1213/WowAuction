@@ -19,6 +19,7 @@ class AppDirs:
 
     config_file: Path     # <app folder>/config.toml
     data_dir: Path        # <app folder>/data: database, backups, log, lock, stop and show files, updates/
+    shown: str = ""       # the app folder as the Status card names it, unexpanded (no user name; M25, D98)
 
 
 class Platform:
@@ -102,7 +103,7 @@ class Platform:
         Returns:
             The asset's file name.
         """
-        raise NotImplementedError("automatic install is built in M27")
+        raise NotImplementedError
 
     def verify_update(self, path: Path) -> str | None:
         """Check a downloaded update's signature where the OS has one (SPEC §3.7.9).

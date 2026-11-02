@@ -37,15 +37,15 @@ flowchart LR
     Engine[engine/<br/>pure formulas and views]
     Export[export/<br/>addon data files]
     Web[web/ + app/<br/>dashboard server, refresh, scheduler]
-    Shell[ahsync_app/ shell, setup, window, tray, start at login built M22–M24;<br/>updater planned M25–M27<br/>around run; SPEC §3.7]
+    Shell[ahsync_app/ shell, setup, window, tray, start at login built M22–M24;<br/>update check and download built M25, install planned M27<br/>around run; SPEC §3.7]
   end
 
   Dashboard[localhost dashboard<br/>the app window, or a browser]
-  GH[GitHub Releases planned M25<br/>update check, assets, SHA256SUMS]
+  GH[GitHub Releases, built M25<br/>update check, assets, SHA256SUMS]
 
   AHF --> Collect
   AHL --> Collect
-  GH -.planned.-> Shell
+  GH -- the update job in run, M25 --> Shell
   Shell -.planned.-> Web
   Shell -- installs the addon, M22 --> DataFiles
   Game --> Adapter --> Capture --> SV
@@ -138,7 +138,7 @@ sequenceDiagram
 | Intelligence | `intel` (+ `_new` staging) | `analysis/` via `intel/store.py` | `recommend/`, `export/` |
 | Player state | inventory, journal (`purchases`, `posts`, `auction_mail`, `payouts`, `crafts`, `disenchants`, `mail_sent`), `professions`, `recipes`, `known_recipes`, `characters`, `cost_basis`, `gather_events`, `farming_sessions`, `manual_rates`, `positions`, `position_lots` | `state/` | `recommend/`, `app/` |
 | Plan and pages | `actions`, `alternatives`, `export_candidates`, `portfolio_snapshot`, `views` (+ `_new` staging), `item_rules`, `reserves`, `sell_records` | `recommend/` | `export/`, `web/` |
-| Operations | `status`, `meta` (planned M25: the `update.*` keys), backups on disk, raw snapshots on disk, planned `<data>/updates/` (downloaded releases) | all | Status page |
+| Operations | `status`, `meta` (the `update.*` keys, M25), backups on disk, raw snapshots on disk, `<data>/updates/` (the verified download, M25) | all | Status page |
 
 ## 6. Distribution and runtime (M22–M24 built; M25–M27 planned, SPEC §3.7)
 
@@ -217,7 +217,7 @@ sequenceDiagram
   participant M as meta (update.*)
   participant Sh as ahsync_app/shell.py
   participant P as platform.current()
-  S->>C: at start and daily (not within 24 h; never for 0.0.0 or update_check = false)
+  S->>C: the update job, every 10 min from start, only with the app shell; sends at most daily (not within 24 h; never for 0.0.0 or update_check = false)
   C->>GH: stable: GET releases/latest · beta: GET releases?per_page=20 (If-None-Match)
   GH-->>C: 200 tag_name, html_url, assets · or 304 · or failure (FM52: one log line, "not checked …")
   C->>E: compare vX.Y.Z with the running version (numeric; suffixed tags ignored; never equal or older)
@@ -237,6 +237,8 @@ sequenceDiagram
 ```
 
 Channel rule (DR25, DR26): the stable channel sees only promoted releases (`releases/latest` skips pre-releases); the beta channel takes the highest `vX.Y.Z` of the list, pre-releases included; switching back never downgrades.
+
+**Built (M25):** the check (`app/update_check.py`, one plain GET through the transport, never `ApiClient`: no AHF key, no retries), the texts (`engine/updates.py`), the download and hash check (`app/updater.py`; the platform's `update_asset_name`; `verify_update` accepts until M27), the state in `meta` `update.*`, read by `GET /api/app`, the Status card (`app_view.app_card` in the Status payload), the top bar's pill and the tray (`DashboardApp.tray_facts`); the toggles `POST /api/update/auto` and `/api/update/channel`, shared with the tray through `AppHooks.dashboard_ready`. Planned (M27): the signature check, `update.pending`, `apply_update` and the result line.
 
 ### 6.4 CI, build, release and promote
 
@@ -271,3 +273,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-01: M22 built: the shell without window or tray (§6.1's lock, show file, addon install and worker thread), the platform layer's folder members (§6.2) and the CI `test` job (§6.4's first box); §1's shell node and its addon edge drawn built.
 - 2026-11-01: M23 built: setup mode and its hand-over (§6.1), `GET /api/app` and `POST /api/setup` (§4), with `web/setup_app.py` as setup mode's own request handler next to `server.py`.
 - 2026-11-02: M24 built: the window, the tray and start at login (§6.1 redrawn: the window's loop takes the main thread first and setup, the addon install, the self-heal and `run()` move to the worker); `POST /api/autostart` through the shell's `AppHooks` (§4); the macOS login entry is the LaunchAgent file alone, no `launchctl` (§6.2).
+- 2026-11-02: M25 built: §6.3's check and download half and GitHub Releases as a source of §1 (the update job in `run()`, only with the app shell); `meta` `update.*` and `<data>/updates/` in §5; the update toggles in §4.

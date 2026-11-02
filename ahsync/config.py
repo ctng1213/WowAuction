@@ -26,6 +26,7 @@ from ahsync.engine.volume import VolumePrior
 API_KEY_ENV = "AUCTIONHOUSE_APIKEY"
 MARKET_PATTERN = re.compile(r"^forever\.(normal|pvp|rp)\.(alliance|horde)\.us$")
 RULESETS = ("normal", "pvp", "rp")
+CHANNELS = ("stable", "beta")                 # update_channel (SPEC §3.7.10)
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 
@@ -96,6 +97,9 @@ class Config:
     timing_edge_min_strength: int = 40          # Gathering shows a sell window from this seasonality strength, 0-100
     launch_wow_after_catchup: bool = False
     ahledger_backfill: bool = True              # fill missing hours from AHledger's per-item history (SPEC §2.3, M21; SRC10, SRC15)
+    update_check: bool = True                   # ask GitHub Releases for a newer AHSync once a day (SPEC §3.7.8)
+    auto_update: bool = True                    # download, verify and install it; false: only say it is out (§3.7.9)
+    update_channel: str = "stable"              # "stable", or "beta" to take pre-releases too (§3.7.10)
     realms: Mapping[str, str] = field(default_factory=dict)
     budgets: Mapping[str, int] = field(default_factory=dict)
     sources: Mapping[str, MarketSources] = field(default_factory=dict)   # market id -> its sources (SRC1-SRC4)
@@ -113,6 +117,9 @@ _TYPES: dict[str, tuple[tuple[type, ...], str]] = {
     "week_start": ((str,), "one of Mon, Tue, Wed, Thu, Fri, Sat, Sun"),
     "launch_wow_after_catchup": ((bool,), "true or false"),
     "ahledger_backfill": ((bool,), "true or false"),
+    "update_check": ((bool,), "true or false"),
+    "auto_update": ((bool,), "true or false"),
+    "update_channel": ((str,), "stable or beta"),
     "realms": ((dict,), "a table"),
     "budgets": ((dict,), "a table"),
     "sources": ((dict,), "a table"),
@@ -225,6 +232,8 @@ def _check_values(text: str, values: dict) -> None:
         raise _fail(text, "daily_refresh_time", 'must be a time like "06:00"')
     if "week_start" in values and values["week_start"] not in WEEKDAYS:
         raise _fail(text, "week_start", "must be one of " + ", ".join(WEEKDAYS))
+    if "update_channel" in values and values["update_channel"] not in CHANNELS:
+        raise _fail(text, "update_channel", "must be stable or beta")
     for realm, ruleset in values.get("realms", {}).items():
         if ruleset not in RULESETS:
             raise ConfigError(f"config.toml [realms]: {realm} must be one of normal, pvp, rp")
@@ -378,45 +387,58 @@ def load_config(path: Path, env: Mapping[str, str], home: Path) -> Config:
     return parse_config(text, env, home)
 
 
-RISK_LINE = re.compile(r'^(\s*"?risk_tolerance"?\s*=\s*)([^#]*?)(\s*(?:#.*)?)$')
+def with_setting(text: str, name: str, formatted: str) -> str:
+    """config.toml's text with only one top-level setting changed (SPEC §3.5; SEC11, SEC15).
+
+    Every other line, comment and line ending is kept; the line's own comment and spacing too.
+
+    Args:
+        text: The file's contents.
+        name: The top-level key, e.g. "risk_tolerance".
+        formatted: Its new value as TOML, e.g. "0.40", "false" or '"beta"'.
+
+    Returns:
+        The new contents: the top-level `name = …` line rewritten, or, when there is none, the line added before the
+        first [table] (top-level keys must come first in TOML), else at the end.
+    """
+    pattern = re.compile(rf'^(\s*"?{re.escape(name)}"?\s*=\s*)([^#]*?)(\s*(?:#.*)?)$')
+    newline = "\r\n" if "\r\n" in text else "\n"
+    lines = text.splitlines(keepends=True)
+    for i, line in enumerate(lines):
+        body = line.rstrip("\r\n")
+        if body.lstrip().startswith("["):
+            lines.insert(i, f"{name} = {formatted}{newline}")
+            return "".join(lines)
+        match = pattern.match(body)
+        if match:
+            lines[i] = match.group(1) + formatted + match.group(3) + line[len(body):]
+            return "".join(lines)
+    if lines and not lines[-1].endswith(("\n", "\r")):
+        lines[-1] += newline
+    return "".join(lines) + f"{name} = {formatted}{newline}"
 
 
 def with_risk_tolerance(text: str, value: float) -> str:
     """config.toml's text with only its risk_tolerance changed (SPEC §3.5 POST /api/risk_tolerance, SEC11).
-
-    Every other line, comment and line ending is kept; the line's own comment and spacing too.
 
     Args:
         text: The file's contents.
         value: The new share in (0, 1], written with 2 decimals ("0.40").
 
     Returns:
-        The new contents: the top-level `risk_tolerance = …` line rewritten, or, when there is none, the line added
-        before the first [table] (top-level keys must come first in TOML), else at the end.
+        with_setting()'s text.
     """
-    formatted = f"{value:.2f}"
-    newline = "\r\n" if "\r\n" in text else "\n"
-    lines = text.splitlines(keepends=True)
-    for i, line in enumerate(lines):
-        body = line.rstrip("\r\n")
-        if body.lstrip().startswith("["):
-            lines.insert(i, f"risk_tolerance = {formatted}{newline}")
-            return "".join(lines)
-        match = RISK_LINE.match(body)
-        if match:
-            lines[i] = match.group(1) + formatted + match.group(3) + line[len(body):]
-            return "".join(lines)
-    if lines and not lines[-1].endswith(("\n", "\r")):
-        lines[-1] += newline
-    return "".join(lines) + f"risk_tolerance = {formatted}{newline}"
+    return with_setting(text, "risk_tolerance", f"{value:.2f}")
 
 
-def write_risk_tolerance(path: Path, value: float) -> None:
-    """Rewrite config.toml's risk_tolerance line atomically: temp file, check, rename (SPEC §3.5, §5.2, SEC11).
+def write_setting(path: Path, name: str, value: object, formatted: str) -> None:
+    """Rewrite one top-level line of config.toml atomically: temp file, check, rename (SPEC §3.5, §5.2; SEC11, SEC15).
 
     Args:
         path: config.toml (a missing file is created with just this line).
-        value: The new share in (0, 1].
+        name: The key.
+        value: The value it must read back as.
+        formatted: The value as TOML.
 
     Raises:
         OSError: The file couldn't be read or replaced; it is left as it was.
@@ -426,17 +448,31 @@ def write_risk_tolerance(path: Path, value: float) -> None:
     if path.exists():
         with path.open(encoding="utf-8", newline="") as f:
             text = f.read()
-    new = with_risk_tolerance(text, value)
+    new = with_setting(text, name, formatted)
     try:
-        written = tomllib.loads(new).get("risk_tolerance")
+        written = tomllib.loads(new).get(name)
     except tomllib.TOMLDecodeError:
         written = None
-    if written != float(f"{value:.2f}"):
-        raise ConfigError("config.toml: risk_tolerance could not be rewritten")
+    if written != value or type(written) is not type(value):
+        raise ConfigError(f"config.toml: {name} could not be rewritten")
     temp = path.with_name(path.name + ".tmp")
     with temp.open("w", encoding="utf-8", newline="") as f:
         f.write(new)
     os.replace(temp, path)
+
+
+def write_risk_tolerance(path: Path, value: float) -> None:
+    """Rewrite config.toml's risk_tolerance line atomically (SPEC §3.5, §5.2, SEC11).
+
+    Args:
+        path: config.toml (a missing file is created with just this line).
+        value: The new share in (0, 1].
+
+    Raises:
+        OSError: The file couldn't be read or replaced; it is left as it was.
+        ConfigError: The rewritten text wouldn't read back with this value (the file is left as it was).
+    """
+    write_setting(path, "risk_tolerance", float(f"{value:.2f}"), f"{value:.2f}")
 
 
 def market_sources(config: Config, market: str) -> MarketSources:

@@ -32,7 +32,10 @@ from urllib.parse import parse_qs, urlsplit
 from ahsync.app.refresh import rebuild_gathering, replan_all
 from ahsync.app.status_page import status_page
 from ahsync.clock import Clock
-from ahsync.config import Config, ConfigError, market_sources, write_risk_tolerance
+from ahsync import version
+from ahsync.app.update_check import read_state, write_meta
+from ahsync.engine.updates import UpdateState
+from ahsync.config import CHANNELS, Config, ConfigError, market_sources, write_risk_tolerance, write_setting
 from ahsync.db.sqlite import Database
 from ahsync.engine.app_view import BAD_LOCATION_TEXT
 from ahsync.engine.gathering import catalog, eligible, why_not_eligible
@@ -55,7 +58,7 @@ PAGES = ("portfolio", "today", "week", "on_ah", "disenchant", "craft", "flip", "
          "rules", "characters", "status")
 GET_PATHS = ("/", "/api/markets", "/api/items", "/api/app")
 POST_PATHS = ("/api/refresh", "/api/skip", "/api/rule", "/api/reserve", "/api/risk_tolerance", "/api/manual_rate",
-              "/api/autostart")
+              "/api/autostart", "/api/update/auto", "/api/update/channel")
 MANUAL_RATE_MAX = 10_000                           # SPEC §3.4E.5: a whole number 1-10,000 items per hour
 RISK_CHOICES = (0.1, 0.2, 0.3, 0.4, 0.5)          # SPEC §3.5: the Portfolio page's Risk tolerance dropdown
 RULES = ("no_buy", "ignore", "keep", "none")       # SPEC §3.4.2: what the dashboard may set
@@ -67,10 +70,14 @@ AUTOSTART_SET, AUTOSTART_BAD_LOCATION, AUTOSTART_NOT_SET = "set", "bad_location"
 
 @dataclass(frozen=True)
 class AppHooks:
-    """What the app shell adds to the dashboard (SPEC §3.7); `python -m ahsync` has none, and its paths answer 404."""
+    """What the app shell adds to the dashboard and to run() (SPEC §3.7); `python -m ahsync` has none, and its paths
+    answer 404."""
 
-    app_info: Callable[[], dict]                         # GET /api/app's payload (D97)
+    app_info: Callable[[Database | None, Config | None], dict]   # GET /api/app (D97): the dashboard's db and settings
     set_autostart: Callable[[bool], tuple[str, bool]]    # wanted state -> (an AUTOSTART_* outcome, the real state)
+    asset_name: Callable[[str], str] = lambda version: ""          # version -> this OS's release asset (§3.7.9)
+    verify_update: Callable[[Path], str | None] = lambda path: None   # None: may install; else why not (§3.7.9)
+    dashboard_ready: Callable[[object], None] = lambda app: None   # gets the DashboardApp, for the tray's toggles
 
 
 @dataclass(frozen=True)
@@ -143,6 +150,23 @@ def write_refusal(path: str, host: str, headers: Mapping[str, str], token: str) 
         return json_response(403, {"error": "bad_token", "reload": True,
                                    "message": "AHSync was restarted: reload this page."})
     return None
+
+
+def body_field(body: bytes, name: str) -> object:
+    """One field of a JSON object body.
+
+    Args:
+        body: The request body.
+        name: The field.
+
+    Returns:
+        Its value; None when the body isn't a JSON object or lacks it.
+    """
+    try:
+        data = json.loads(body.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return None
+    return data.get(name) if isinstance(data, dict) else None
 
 
 def open_server_db(path: Path) -> Database:
@@ -269,7 +293,8 @@ class DashboardApp:
         if path == "/api/app":
             if self.app_hooks is None:             # `python -m ahsync`: no app shell around it
                 return json_response(404, {"error": "not_found"})
-            return json_response(200, self.app_hooks.app_info())
+            with self._lock:
+                return json_response(200, self.app_hooks.app_info(self.db, self.config))
         return self.get_view(path[len(VIEWS_PREFIX):], query.get("market", [""])[0])
 
     def search_items(self, text: str) -> Response:
@@ -333,7 +358,8 @@ class DashboardApp:
         now = self.clock.now_ms()
         try:
             with self._lock:
-                payload = status_page(self.db, self.config, now, self.clock.local_offset_ms(now))
+                app = self.app_hooks.app_info(self.db, self.config) if self.app_hooks is not None else None
+                payload = status_page(self.db, self.config, now, self.clock.local_offset_ms(now), app)
         except sqlite3.Error as error:
             log.warning("building the status page failed: %s", error)
             return json_response(503, {"error": "database_busy"})
@@ -365,6 +391,10 @@ class DashboardApp:
             return self.manual_rate(body)
         if path == "/api/autostart":
             return self.autostart(body)
+        if path == "/api/update/auto":
+            return self.update_auto(body)
+        if path == "/api/update/channel":
+            return self.update_channel(body)
         return self.skip(body)
 
     def _manual_rate_request(self, body: bytes) -> tuple[str, int, int | None] | str:
@@ -533,6 +563,116 @@ class DashboardApp:
         if outcome != AUTOSTART_SET:
             return json_response(500, {"error": "autostart_not_set"})
         return json_response(200, {"set": True, "enabled": now_enabled})
+
+    def update_auto(self, body: bytes) -> Response:
+        """Turn automatic updates on or off from the Status card (SPEC §3.7.9; SEC15).
+
+        Args:
+            body: JSON {"enabled": true | false}.
+
+        Returns:
+            set_auto_update()'s answer; 400 for a non-bool; 404 without the app shell.
+        """
+        if self.app_hooks is None:
+            return json_response(404, {"error": "not_found"})
+        enabled = body_field(body, "enabled")
+        if not isinstance(enabled, bool):
+            return json_response(400, {"error": "bad_request", "message": "enabled must be true or false"})
+        return self.set_auto_update(enabled)
+
+    def set_auto_update(self, enabled: bool) -> Response:
+        """Rewrite `auto_update` (the endpoint's and the tray's way in).
+
+        Args:
+            enabled: The new value.
+
+        Returns:
+            200 {"set": true, "enabled": enabled}; 500 {"error": "config_not_written"} when config.toml can't be
+            rewritten (the setting unchanged).
+        """
+        return self._set_setting("auto_update", enabled, "true" if enabled else "false", {"enabled": enabled})
+
+    def update_channel(self, body: bytes) -> Response:
+        """Choose the update channel from the Status card (SPEC §3.7.10; SEC15).
+
+        Args:
+            body: JSON {"channel": "stable" | "beta"}.
+
+        Returns:
+            set_update_channel()'s answer; 400 for any other value; 404 without the app shell.
+        """
+        if self.app_hooks is None:
+            return json_response(404, {"error": "not_found"})
+        channel = body_field(body, "channel")
+        if channel not in CHANNELS or not isinstance(channel, str):
+            return json_response(400, {"error": "bad_request", "message": "channel must be stable or beta"})
+        return self.set_update_channel(channel)
+
+    def set_update_channel(self, channel: str) -> Response:
+        """Rewrite `update_channel`, and ask GitHub again at the next update job (DR26).
+
+        Leaving the beta is remembered, so an install ahead of the latest stable release says it stays on its
+        version (never a downgrade); joining it forgets that.
+
+        Args:
+            channel: "stable" or "beta".
+
+        Returns:
+            200 {"set": true, "channel": channel}; 500 {"error": "config_not_written"}.
+        """
+        before = self.config.update_channel
+        response = self._set_setting("update_channel", channel, f'"{channel}"', {"channel": channel})
+        if response.status == 200 and channel != before:
+            try:
+                with self._lock:
+                    write_meta(self.db, {"checked_ms": None, "etag": None, "tag": None, "url": None,
+                                         "prerelease": None, "left_beta": "1" if channel == "stable" else None})
+            except sqlite3.Error:
+                log.warning("the update state was not reset after the channel change")
+        return response
+
+    def _set_setting(self, name: str, value: object, formatted: str, answer: dict) -> Response:
+        """Rewrite one config.toml line and tell the running settings (SPEC §3.5; SEC15).
+
+        Args:
+            name: The key.
+            value: Its new value.
+            formatted: The value as TOML.
+            answer: Added to {"set": true} on success.
+
+        Returns:
+            200 {"set": true, **answer}; 500 {"error": "config_not_written"}.
+        """
+        try:
+            if self.config_path is None:
+                raise OSError("this run has no config.toml to write")
+            with self._lock:                      # one writer: the endpoint and the tray can both get here
+                write_setting(self.config_path, name, value, formatted)
+                self.config = replace(self.config, **{name: value})
+                self.config_changed(self.config)
+        except (OSError, ConfigError) as error:
+            log.warning("%s not saved: %s", name, type(error).__name__)
+            return json_response(500, {"error": "config_not_written"})
+        log.info("%s set to %s from the dashboard", name, formatted)
+        return json_response(200, {"set": True, **answer})
+
+    def tray_facts(self) -> tuple[UpdateState, int | None] | None:
+        """The update state and the last sync, without waiting: the tray asks every second and must not stall on a
+        re-plan (DR12, DR2).
+
+        Returns:
+            (the update state, the newest market's last sync run in UTC ms or None); None when the dashboard is busy.
+        """
+        if not self._lock.acquire(blocking=False):
+            return None
+        try:
+            runs = [self.db.get_sync_state(m).last_run for m in self.config.markets]
+            synced = max((r for r in runs if r is not None), default=None)
+            return read_state(self.db, version.VERSION, self.config), synced
+        except sqlite3.Error:
+            return None
+        finally:
+            self._lock.release()
 
     def _config_not_written(self, error: Exception) -> Response:
         """Report a config.toml that couldn't be rewritten: a log line and a Status line, never its path (SEC11).

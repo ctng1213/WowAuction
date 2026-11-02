@@ -119,7 +119,7 @@ class WindowsPlatform(Platform):
         """
         local = self.env.get("LOCALAPPDATA") or str(PureWindowsPath(str(self.home)) / "AppData" / "Local")
         root = PureWindowsPath(local) / APP_NAME
-        return AppDirs(Path(str(root / "config.toml")), Path(str(root / "data")))
+        return AppDirs(Path(str(root / "config.toml")), Path(str(root / "data")), rf"%LOCALAPPDATA%\{APP_NAME}")
 
     def wow_candidates(self) -> list[Path]:
         """`C:\\Program Files (x86)\\World of Warcraft\\<name>`, `_classic_beta_` first (SPEC §3.7.3).
@@ -177,3 +177,14 @@ class WindowsPlatform(Platform):
             OSError: When the Run key can't be read.
         """
         return self.run_key.get(RUN_VALUE) is not None
+
+    def update_asset_name(self, version: str) -> str:
+        """The installer this OS takes from a release (SPEC §3.7.9; DR20).
+
+        Args:
+            version: "MAJOR.MINOR.PATCH".
+
+        Returns:
+            "AHSync-<version>-windows-x64-setup.exe".
+        """
+        return f"{APP_NAME}-{version}-windows-x64-setup.exe"
