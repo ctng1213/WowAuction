@@ -88,6 +88,20 @@ From the proposal's §0, the user's decisions of 2026-11-01:
 - **Setup mode logs to `data/ahsync.log`** with the key in the redactor before any write, prints its URL, and ends on the stop file like `run()` (review findings 2 and 6).
 - **The setup port is the default `dashboard_port` (8765)**, there being no config yet; `ShellWorld.setup_port` makes it injectable, so tests never bind a real AHSync's port.
 
+**Decided during execution (Opus, M26).**
+
+- **The work ran on a branch with a merge request, not a fast-forward of `main`** (the user's CLAUDE.md, 2026-11-02: never commit to `main`; branch `ctn-RCP-000-…`, push, open an MR, the user merges). This replaces §2.5's commit-and-fast-forward for M26 onward.
+- **The `build` job also runs on pull requests**, unsigned (decision 10 lists them; §3.7.12's job list did not), so the MR's CI compiles the installer and builds the dmg before the merge.
+- **The dmg is signed, notarized and stapled itself** (DR18 corrected; LESSONS). One more notarization per release, a few minutes.
+- **No credential on a command line**: the `.p12` is re-encrypted by `/usr/bin/openssl` (LibreSSL, which reads Keychain's legacy encryption without OpenSSL 3's `-legacy`) with a throwaway password; the notary key is a 0600 file in a 0700 temp folder; `NOTARY_KEY_ID`, `NOTARY_ISSUER_ID` and `APPLE_TEAM_ID` are identifiers and do appear (DR18 names them on `notarytool`'s line), masked by GitHub in the logs.
+- **`build.py build` stamps `version.py` and puts it back**, so a local build leaves the tree clean; the policy writes `mode`, `release` and `version` to `GITHUB_OUTPUT`, and a non-tag build is version `0.0.0`.
+- **The release notes' first line links `INSTALL.md` at the tag** (`--notes-file` before the generated notes; DR28's row gains it, as 26.6 asked).
+- **`promote.py` refuses when the latest release can't be read** (the lower-version check would be skipped otherwise), and reads `gh release list --exclude-pre-releases --json tagName,isLatest`.
+- **The installer waits for `AHSync.exe` to end** after the lock frees (a WMI query, up to 10 s; LESSONS).
+- **`ahsync_app/__main__.py` keeps a frozen build's `sys.path`** (LESSONS).
+- **The independent review of M26** (fixed): a `{app}` inside a Pascal brace comment would have ended the comment and failed ISCC; the secrets sat in the whole job's environment, `pip install` and PyInstaller's hooks included, so they moved to the two steps that need them and `real_run` strips the credentials from every child; a suffixed tag (`v0.4.0-rc1`) signed and notarized a `0.0.0` build and failed only at the release, so it now builds unsigned and the release job is gated on the policy's `release` output; the entitlements path is absolute. Recorded, not fixed: a fork inherits the `v*` tags, so its `main` pushes fail the preflight without secrets; two notarizations could approach the 90-minute job limit on a slow day; an interactive install during a long full refresh can report "did not stop" after 60 s. **For the user**: "also remove my AHSync data" leaves `~/.ahsync/api_key` (SPEC says `%LOCALAPPDATA%\AHSync` only).
+- **Left for M27**: the silent relaunch starts `AHSync.exe` without `--autostart`, so an update taken at a login start shows the window once.
+
 Spec: `docs/SPEC.md` §3.7 (all of it), §3.5 Security and the planned endpoints, §3.5 Status "AHSync app" card, §3.6 the distribution keys, §5.0.1 tech and layout, §5.2 the planned failure rows, §6 items 20–21, §7 "AHSync as a standalone app". Scenarios: `docs/SCENARIOS.md` "Distribution and runtime" (DR1–DR28, D97, D98), the Failure modes rows FM48–FM55, the Dashboard security rows SEC13–SEC15; all listed in `tests/pending_scenarios.txt` per milestone. Mockup: `docs/mockups/dashboard.html`, the Setup page, the top bar's update pill and the Status page's "AHSync app" card with its states. Architecture: `docs/ARCHITECTURE.md` §6 (planned diagrams to mark built).
 
 ## 2. Working rules for the orchestrator

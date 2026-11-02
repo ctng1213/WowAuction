@@ -349,11 +349,11 @@ def test_python_sources_and_tests_mirror():
 OS_TOKENS = re.compile(r"\b(sys\.platform|os\.name|winreg|plistlib|launchctl|platform\.system)\b")
 OS_SCANNED = ("ahsync", "ahsync_app", "tools")
 OS_LAYER = "ahsync_app/platform/"
-# Places that predate the layer or cannot import it, by file. tools/build.py's packaging choice joins in M26,
-# when the file exists: an entry for a file without a token is stale.
+# Places that predate the layer or cannot import it, by file; an entry for a file without a token is stale.
 OS_ALLOWLIST = ("ahsync/__main__.py",      # InstanceLock: msvcrt or fcntl; ahsync/ must not import ahsync_app/
                 "tools/deploy.py",         # the detached start of AHSync
-                "tools/bench.py")          # memory units of the peak-memory reading
+                "tools/bench.py",          # memory units of the peak-memory reading
+                "tools/build.py")          # which packaging step runs (M26)
 
 
 def os_token_problems(root: Path, allowlist: tuple[str, ...]) -> list[str]:

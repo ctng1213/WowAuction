@@ -20,6 +20,9 @@ python tools/gen_bonus_suffixes.py  # refresh addon/AHProfit/Data/BonusSuffixes.
 python tools/visual.py         # UI layout snapshots vs golden (--update to accept, --html to view)
 python tools/snapshot.py       # whole-plan snapshot vs tests/fixtures/worlds/w1.expected.json (--update to accept, prints a diff summary)
 python tools/gen_world.py      # regenerate the snapshot's fixture world w1.json (fixed seed), then snapshot.py --update
+python -m ahsync_app           # the app shell from source: window, tray, setup, per-user folders (needs requirements-app.txt)
+python tools/build.py build 0.0.0   # local build: PyInstaller, then Inno Setup (Windows) or the dmg (macOS); needs requirements-app.txt + pyinstaller
+python tools/promote.py v0.1.0      # make a tested pre-release the latest release (or the Promote release workflow)
 ```
 
 `lua5.1` is a standalone Lua 5.1 interpreter that must be on PATH. Use 5.1, not 5.4: WoW runs 5.1, and the two differ in integer and `#` behaviour.
