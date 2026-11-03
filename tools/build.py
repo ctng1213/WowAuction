@@ -50,6 +50,10 @@ RUN_TIMEOUT_S = 3600              # notarytool --wait is the slow one
 VERSION_RE = re.compile(r"([0-9]+)\.([0-9]+)\.([0-9]+)", re.ASCII)
 TAG_RE = re.compile(r"v([0-9]+)\.([0-9]+)\.([0-9]+)", re.ASCII)
 IDENTITY_RE = re.compile(r'\d+\)\s+[0-9A-F]{40}\s+"(Developer ID Application: .*\(([A-Z0-9]+)\))"')
+# Any identity, for the failure log: (kind, team or "", status or ""); the name between them is not captured.
+IDENTITY_ANY_RE = re.compile(r'\d+\)\s+[0-9A-F]{40}\s+"([^":]+):[^"]*?(?:\(([A-Z0-9]+)\))?"(?:[ \t]+\(([^)\n]*)\))?')
+# Apple's public Developer ID intermediates (apple.com/certificateauthority): G2 for certificates since 2021, G1 before.
+APPLE_CAS = ("packaging/macos/certs/DeveloperIDG2CA.cer", "packaging/macos/certs/DeveloperIDCA.cer")
 INSTALL_URL = "https://github.com/ctng1213/WowAuction/blob/{tag}/INSTALL.md"
 
 
@@ -209,7 +213,20 @@ def missing_secrets(env: Mapping[str, str]) -> list[str]:
     Returns:
         Their names, in SECRETS order.
     """
-    return [name for name in SECRETS if not env.get(name)]
+    return [name for name in SECRETS if not env.get(name, "").strip()]
+
+
+def secret_id(world: World, name: str) -> str:
+    """An identifier secret (APPLE_TEAM_ID, NOTARY_KEY_ID, NOTARY_ISSUER_ID) without the whitespace a paste adds.
+
+    Args:
+        world: The outside world.
+        name: The secret's name.
+
+    Returns:
+        Its value, stripped; "" when unset.
+    """
+    return world.env.get(name, "").strip()
 
 
 def policy_command(world: World) -> int:
@@ -351,7 +368,10 @@ def import_certificate(world: World, keychain: str, throwaway: str, p12: str, pe
     except BuildError:
         raise BuildError("certificate invalid: could not import MACOS_CERT_P12") from None
     world.cmd(["security", "set-key-partition-list", "-S", "apple-tool:,apple:,codesign:", "-s",
-               "-k", throwaway, keychain], "security set-key-partition-list")
+               "-k", throwaway, keychain], "security set-key-partition-list", capture=True)   # its dump is noise
+    for cert in APPLE_CAS:   # the chain to Apple's root: without it the runner sees the identity as untrusted
+        if world.run(["security", "import", str(world.root / cert), "-k", keychain]).code != 0:
+            world.out(f"note: could not import {cert} (already in the keychain?)")
     world.cmd(["security", "list-keychains", "-d", "user", "-s", keychain, "login.keychain-db"],
               "security list-keychains")
 
@@ -367,15 +387,34 @@ def find_identity(world: World, keychain: str) -> str:
         Its name, "Developer ID Application: <name> (<team>)".
 
     Raises:
-        BuildError: "certificate invalid: no Developer ID Application identity for team <team>".
+        BuildError: "certificate invalid: no Developer ID Application identity for team <team>", after logging
+            what the keychain holds (see `log_identities`).
     """
-    team = world.env.get("APPLE_TEAM_ID", "")
+    team = secret_id(world, "APPLE_TEAM_ID")
     listing = world.cmd(["security", "find-identity", "-v", "-p", "codesigning", keychain],
                         "security find-identity", capture=True).out
     for match in IDENTITY_RE.finditer(listing):
         if match.group(2) == team:
             return match.group(1)
+    log_identities(world, keychain)
     raise BuildError(f"certificate invalid: no Developer ID Application identity for team {team}")
+
+
+def log_identities(world: World, keychain: str) -> None:
+    """Log every code-signing identity in the keychain, valid or not, by kind, team and status, never by name.
+
+    The names hold the developer's real name, and a public repository's logs are public; the team ID is a
+    secret, which GitHub masks.
+
+    Args:
+        world: The outside world.
+        keychain: The temporary keychain.
+    """
+    listing = world.run(["security", "find-identity", "-p", "codesigning", keychain], capture=True).out
+    found = IDENTITY_ANY_RE.findall(listing)
+    world.out(f"find-identity: {len(found)} code-signing identities in the keychain")
+    for kind, team, status in found:
+        world.out(f"  {kind} · team {team or '?'} · {status or 'valid'}")
 
 
 def days_left(world: World, keychain: str, identity: str) -> int:
@@ -487,7 +526,7 @@ def notarize(world: World, path: str) -> None:
     with private_folder() as folder:
         key = write_private(folder / "notary.p8", world.env.get("NOTARY_KEY_P8", "").encode("utf-8"))
         world.cmd(["xcrun", "notarytool", "submit", path, "--wait", "--key", str(key),
-                   "--key-id", world.env.get("NOTARY_KEY_ID", ""), "--issuer", world.env.get("NOTARY_ISSUER_ID", "")],
+                   "--key-id", secret_id(world, "NOTARY_KEY_ID"), "--issuer", secret_id(world, "NOTARY_ISSUER_ID")],
                   "notarytool submit")
 
 

@@ -24,10 +24,11 @@ class FakeRunner:
     """Records every command; answers find-identity, find-certificate, openssl x509 and git tag; fails on demand."""
 
     def __init__(self, tags: str = "", identity_team: str = TEAM, expires: str = "Nov 12 00:00:00 2027 GMT",
-                 fail: str | None = None) -> None:
+                 fail: str | None = None, untrusted: bool = False) -> None:
         self.calls: list[list[str]] = []
         self.envs: list[dict[str, str]] = []
         self.tags, self.identity_team, self.expires, self.fail = tags, identity_team, expires, fail
+        self.untrusted = untrusted        # the chain to Apple's root is missing: -v lists nothing
 
     def __call__(self, args, *, input_text=None, extra_env=None, capture=False) -> build.Result:
         """Record and answer one command."""
@@ -40,6 +41,11 @@ class FakeRunner:
             return build.Result(0, self.tags)
         if args[:2] == ["security", "find-identity"]:
             name = f"Developer ID Application: Test Dev ({self.identity_team})"
+            if "-v" not in args:
+                status = " (CSSMERR_TP_NOT_TRUSTED)" if self.untrusted else ""
+                return build.Result(0, f'  1) {"A" * 40} "{name}"{status}\n     1 identities found\n')
+            if self.untrusted:
+                return build.Result(0, "     0 valid identities found\n")
             return build.Result(0, f'  1) {"A" * 40} "{name}"\n     1 valid identities found\n')
         if args[:2] == ["security", "find-certificate"]:
             return build.Result(0, "-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----\n")
@@ -162,6 +168,42 @@ def test_DR18_the_signed_build_signs_notarizes_staples_and_cleans_up(tmp_path):
     assert_no_credential(runner, lines)
     openssl = [env for c, env in zip(runner.calls, runner.envs) if c[0] == build.OPENSSL and "pkcs12" in c]
     assert openssl and all(env["MACOS_CERT_PASSWORD"] == "fake-cert-password" for env in openssl)
+
+
+def test_DR18_apples_developer_id_intermediates_join_the_keychain_before_the_identity_is_looked_up(tmp_path):
+    # The first real signed run imported the certificate and then found no valid identity: a runner may lack the
+    # Developer ID CA that chains it to Apple's root, and find-identity -v hides an untrusted identity.
+    runner = FakeRunner()
+    world, _ = make_world(tmp_path, runner, "macos", FAKE_SECRETS)
+    assert build.build_command(world, "0.4.0", "sign") == 0
+    cas = [str(tmp_path / cert) for cert in build.APPLE_CAS]
+    assert ["security", "import", cas[0], "-k", runner.calls[0][-1]] in runner.calls
+    assert in_order(runner, ["security import", "DeveloperIDG2CA.cer", "DeveloperIDCA.cer", "security find-identity"])
+    for cert in build.APPLE_CAS:
+        assert (build.ROOT / cert).is_file()
+
+
+def test_DR18_ids_pasted_with_whitespace_still_match(tmp_path):
+    runner = FakeRunner()
+    env = {**FAKE_SECRETS, "APPLE_TEAM_ID": f" {TEAM}\n", "NOTARY_KEY_ID": "FAKEKEYID\n", "NOTARY_ISSUER_ID": "fake-issuer "}
+    world, _ = make_world(tmp_path, runner, "macos", env)
+    assert build.build_command(world, "0.4.0", "sign") == 0
+    notary = next(c for c in runner.calls if "notarytool" in c)
+    assert notary[-4:] == ["--key-id", "FAKEKEYID", "--issuer", "fake-issuer"]
+    world, lines = make_world(tmp_path, FakeRunner(), "macos", {**FAKE_SECRETS, "APPLE_TEAM_ID": "  \n"})
+    assert build.main(["build", "0.4.0", "--mode", "sign"], world) == 1
+    assert lines[-1].endswith("missing APPLE_TEAM_ID")
+
+
+def test_DR18_an_untrusted_identity_is_logged_by_kind_team_and_status_never_by_name(tmp_path):
+    runner = FakeRunner(untrusted=True)
+    world, lines = make_world(tmp_path, runner, "macos", FAKE_SECRETS)
+    assert build.main(["build", "0.4.0", "--mode", "sign"], world) == 1
+    assert lines[-1] == f"::error::certificate invalid: no Developer ID Application identity for team {TEAM}"
+    assert "find-identity: 1 code-signing identities in the keychain" in lines
+    assert f"  Developer ID Application · team {TEAM} · CSSMERR_TP_NOT_TRUSTED" in lines
+    assert not any("Test Dev" in line for line in lines)
+    assert runner.calls[-1][:2] == ["security", "delete-keychain"]
 
 
 def test_DR18_the_keychain_is_deleted_also_when_notarization_fails(tmp_path):
