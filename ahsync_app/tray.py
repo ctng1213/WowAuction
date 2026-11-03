@@ -2,8 +2,8 @@
 
 `menu(state)` decides every item, check mark and enabled flag; `PystrayIcon` only turns those items into
 pystray's and dispatches a click to the shell by its action name. The icon runs detached under the window's
-GUI loop: on Windows on its own thread; on macOS in the one NSApplication (UNVERIFIED until the Mac run,
-SPEC §6 item 22). Without a window the icon runs its own loop on the main thread instead (FM61).
+GUI loop: on Windows on its own thread; on macOS in the one NSApplication, with every AppKit touch queued onto
+the main thread (FM65). Without a window the icon runs its own loop on the main thread instead (FM61).
 """
 from __future__ import annotations
 
@@ -93,6 +93,33 @@ def hover(state: TrayState, offset_ms: int) -> str:
     return hover_text(state.version, state.synced_ms, offset_ms)
 
 
+def on_gui_thread(action: Callable[[], None]) -> None:
+    """Run an action that touches the tray's AppKit objects on the main thread on macOS; elsewhere at once (FM65).
+
+    pystray's macOS backend makes and changes `NSStatusItem`s, which AppKit allows only on the main thread, while
+    the shell drives the tray from pywebview's start callback and the worker. The action is queued on the main
+    run loop (pywebview's or pystray's own) and runs once it spins; a failure is logged there, since an exception
+    escaping into Cocoa can abort the app. On Windows pystray posts to its own window, so the action runs now.
+
+    Args:
+        action: What to do, e.g. make the icon or rebuild its menu.
+    """
+    try:
+        from PyObjCTools import AppHelper
+    except ImportError:
+        action()
+        return
+
+    def guarded() -> None:
+        """Run the action on the main thread; log a failure instead of raising into the run loop."""
+        try:
+            action()
+        except Exception as error:
+            log.warning("tray action failed: %s: %s", type(error).__name__, error)
+
+    AppHelper.callAfter(guarded)
+
+
 class PystrayIcon:
     """The pystray adapter: a menu rebuilt from the state each time it changes, clicks dispatched by action."""
 
@@ -114,6 +141,7 @@ class PystrayIcon:
         self.own_loop = False              # run() owns the main thread's loop (FM61)
         self.loop_ready = False
         self.stopping = False
+        self.gui: Callable[[Callable[[], None]], None] = on_gui_thread   # where AppKit work runs (FM65)
 
     def _items(self) -> list:
         """pystray's items for the current state (pystray calls this when it builds the menu).
@@ -174,9 +202,34 @@ class PystrayIcon:
                             pystray.Menu(self._items), **kwargs)
 
     def start(self) -> None:
-        """Show the icon, detached under the running GUI loop (pystray's own `run()` would start a second loop)."""
-        self.icon = self._make_icon()
-        self.icon.run_detached()
+        """Show the icon, detached under the running GUI loop (pystray's own `run()` would start a second loop).
+
+        The icon is made on the GUI thread (FM65): on macOS this returns before it exists, and a failure is logged
+        there; on Windows it is made now.
+        """
+        self.gui(self._start_detached)
+
+    def _start_detached(self) -> None:
+        """On the GUI thread: make the icon and attach it to the running loop, unless stop() came first (FM65)."""
+        with self._lock:
+            if self.stopping or self.icon is not None:
+                return
+        icon = self._make_icon()
+        icon.run_detached(self._show)
+        with self._lock:
+            stopped = self.stopping
+            if not stopped:
+                self.icon = icon
+        if stopped:                        # stop() ran while the icon was being made: it found none to stop
+            icon.stop()
+
+    def _show(self, icon: object) -> None:
+        """pystray's setup callback (its own thread): make the icon visible, on the GUI thread (FM65).
+
+        Args:
+            icon: The pystray icon.
+        """
+        self.gui(lambda: setattr(icon, "visible", True))
 
     def run(self) -> None:
         """Show the icon and run pystray's loop on this (the main) thread until stop() (FM61; no window).
@@ -196,29 +249,12 @@ class PystrayIcon:
         Args:
             icon: The pystray icon.
         """
-        icon.visible = True
+        self._show(icon)
         with self._lock:
             self.loop_ready = True
             stopping = self.stopping
         if stopping:
-            self._stop_loop(icon)
-
-    @staticmethod
-    def _stop_loop(icon: object) -> None:
-        """Stop pystray's own loop from any thread (FM61).
-
-        On macOS the stop is queued on the main thread's run loop, so it can't be lost before `NSApp.run()` starts;
-        on Windows pystray posts its stop message to its window, which already exists once the loop is ready.
-
-        Args:
-            icon: The running pystray icon.
-        """
-        try:
-            from PyObjCTools import AppHelper
-        except ImportError:
-            icon.stop()
-            return
-        AppHelper.callAfter(icon.stop)
+            self.gui(icon.stop)        # queued on macOS, so it can't be lost before NSApp.run() starts (FM61)
 
     def refresh(self) -> None:
         """Rebuild the menu and the hover text when the state changed (called each shell tick)."""
@@ -229,7 +265,18 @@ class PystrayIcon:
         if now == self.shown:
             return
         self.shown = now
-        icon.title = hover(now, self.offset_ms())
+        title = hover(now, self.offset_ms())
+        self.gui(lambda: self._redraw(icon, title))
+
+    @staticmethod
+    def _redraw(icon: object, title: str) -> None:
+        """On the GUI thread: set the hover text and rebuild the menu (FM65).
+
+        Args:
+            icon: The pystray icon.
+            title: The new hover text.
+        """
+        icon.title = title
         icon.update_menu()
 
     def stop(self) -> None:
@@ -240,7 +287,5 @@ class PystrayIcon:
             own_loop, ready = self.own_loop, self.loop_ready
         if icon is None:
             return
-        if not own_loop:
-            icon.stop()
-        elif ready:
-            self._stop_loop(icon)
+        if not own_loop or ready:          # an own loop not yet ready is stopped by _loop_ready
+            self.gui(icon.stop)

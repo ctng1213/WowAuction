@@ -69,6 +69,7 @@ class FakeIcon:
 def test_the_adapter_rebuilds_the_menu_only_when_the_state_changed():
     state = {"now": TrayState(configured=True, version="0.3.1", autostart=False, auto_update=True, channel="stable")}
     adapter = PystrayIcon(lambda: state["now"], lambda _action: None, lambda: 0)
+    adapter.gui = lambda action: action()               # Windows' behaviour (FM65 tests the queue)
     adapter.refresh()                                   # not started: nothing to do
     icon = FakeIcon()
     adapter.icon, adapter.shown = icon, state["now"]
@@ -119,7 +120,7 @@ class LoopIcon(FakeIcon):
 def loop_adapter(icon: LoopIcon) -> PystrayIcon:
     adapter = PystrayIcon(lambda: None, lambda _a: None, lambda: 0)
     adapter._make_icon = lambda: icon
-    adapter._stop_loop = lambda running: running.stop()        # pystray's own marshalling is the real one's job
+    adapter.gui = lambda action: action()          # Windows' behaviour; FM65's tests queue instead
     return adapter
 
 
@@ -155,4 +156,97 @@ def test_FM61_run_never_makes_a_second_icon_beside_a_detached_one():
     adapter.icon = FakeIcon()                      # start() ran: the window's loop has the icon
     adapter.run()
     assert not icon.ran
+
+
+class DetachedIcon(FakeIcon):
+    """pystray's Icon as start() uses it: run_detached(setup) calls setup on its own thread, here at once."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.visible = False
+        self.detached = False
+
+    def run_detached(self, setup) -> None:
+        self.detached = True
+        setup(self)
+
+
+def queued_adapter(icon: FakeIcon, state=None):
+    """An adapter whose GUI-thread actions wait in a queue until the test runs them (macOS's run loop)."""
+    queue: list = []
+    adapter = PystrayIcon(state or (lambda: None), lambda _a: None, lambda: 0)
+    made: list = []
+    adapter._make_icon = lambda: made.append(icon) or icon
+    adapter.gui = queue.append
+    return adapter, queue, made
+
+
+def drain(queue: list) -> None:
+    while queue:
+        queue.pop(0)()
+
+
+def test_FM65_the_icon_is_made_and_shown_only_on_the_gui_thread():
+    icon = DetachedIcon()
+    adapter, queue, made = queued_adapter(icon)
+    adapter.start()
+    assert made == [] and adapter.icon is None            # nothing touched AppKit from the calling thread
+    drain(queue)
+    assert made == [icon] and icon.detached and icon.visible and adapter.icon is icon
+
+
+def test_FM65_a_stop_before_the_queued_start_keeps_no_icon():
+    icon = DetachedIcon()
+    adapter, queue, made = queued_adapter(icon)
+    adapter.start()
+    adapter.stop()
+    drain(queue)
+    assert made == [] and adapter.icon is None
+
+
+def test_FM65_the_menu_tooltip_and_stop_are_queued_too():
+    state = {"now": TrayState(True, "0.4.0", False, True, "stable")}
+    icon = DetachedIcon()
+    adapter, queue, _made = queued_adapter(icon, lambda: state["now"])
+    adapter.start()
+    drain(queue)
+    state["now"] = TrayState(True, "0.4.0", True, True, "stable")
+    adapter.refresh()
+    assert icon.updates == 0 and len(queue) == 1
+    drain(queue)
+    assert icon.updates == 1 and icon.title.startswith("AHSync 0.4.0")
+    adapter.stop()
+    assert not icon.stopped
+    drain(queue)
+    assert icon.stopped
+
+
+def test_FM65_a_failure_inside_a_queued_action_is_logged_not_raised(caplog, monkeypatch):
+    queued: list = []
+
+    class AppHelper:
+        @staticmethod
+        def callAfter(action):
+            queued.append(action)
+
+    import sys
+    import types
+    monkeypatch.setitem(sys.modules, "PyObjCTools", types.SimpleNamespace(AppHelper=AppHelper))
+    monkeypatch.setitem(sys.modules, "PyObjCTools.AppHelper", AppHelper)
+
+    def boom():
+        raise RuntimeError("NSWindow should only be instantiated on the main thread!")
+
+    tray.on_gui_thread(boom)
+    assert len(queued) == 1
+    queued[0]()                                     # the run loop runs it: nothing escapes into Cocoa
+    assert "tray action failed: RuntimeError: NSWindow should only be instantiated on the main thread!" in caplog.text
+
+
+def test_FM65_without_appkit_the_action_runs_at_once(monkeypatch):
+    import sys
+    monkeypatch.setitem(sys.modules, "PyObjCTools", None)            # Windows: no pyobjc
+    ran: list = []
+    tray.on_gui_thread(lambda: ran.append(True))
+    assert ran == [True]
 
