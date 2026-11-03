@@ -1,4 +1,4 @@
-"""The platform protocol: the ten narrow questions an OS answers for the app (SPEC §3.7.2).
+"""The platform protocol: the eleven narrow questions an OS answers for the app (SPEC §3.7.2).
 
 Everything that decides what AHSync does is shared and tested once; a platform module only
 answers these, as data or as a thin writer, over injected fakes so both are tested on any OS.
@@ -124,3 +124,11 @@ class Platform:
             exe: The running executable.
         """
         raise NotImplementedError("automatic install is built in M27")
+
+    def ca_bundle(self) -> Path | None:
+        """The CA certificates TLS uses when the bundled OpenSSL finds none of its own (SPEC §3.7.2, FM58).
+
+        Returns:
+            The OS's PEM bundle; None where Python reads the OS's certificate store itself.
+        """
+        raise NotImplementedError

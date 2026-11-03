@@ -188,3 +188,11 @@ class WindowsPlatform(Platform):
             "AHSync-<version>-windows-x64-setup.exe".
         """
         return f"{APP_NAME}-{version}-windows-x64-setup.exe"
+
+    def ca_bundle(self) -> Path | None:
+        """None: Python's `ssl` loads the Windows certificate store itself (FM58).
+
+        Returns:
+            None.
+        """
+        return None

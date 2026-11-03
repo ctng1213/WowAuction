@@ -101,3 +101,7 @@ def test_DR10_from_source_the_agent_runs_python_with_the_script(tmp_path):
 def test_DR20_macos_takes_the_app_zip():
     assert MacPlatform(Path("/Users/u")).update_asset_name("0.4.0") == "AHSync-0.4.0-macos-arm64.zip"
     assert MacPlatform(Path("/Users/u")).app_dirs().shown == "~/Library/Application Support/AHSync"
+
+
+def test_FM58_macos_tls_falls_back_to_the_system_ca_bundle():
+    assert MacPlatform(Path("/Users/u")).ca_bundle() == Path("/etc/ssl/cert.pem")

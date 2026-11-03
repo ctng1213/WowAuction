@@ -1029,6 +1029,21 @@ def test_FM57_a_port_another_server_listens_on_is_refused_and_ours_is_never_shar
     stop_dashboard(start_dashboard(app, port))          # bound again at once (setup's hand-over)
 
 
+
+def test_FM59_binding_the_dashboard_looks_up_no_name(db, refreshes, monkeypatch):
+    import socket
+
+    def no_lookup(*_args):
+        raise AssertionError("getfqdn: a reverse-DNS query macOS treats as local-network access")
+
+    monkeypatch.setattr(socket, "getfqdn", no_lookup)
+    app = DashboardApp(db, Config(markets=(M,)), FakeClock(), refreshes, token="tok-123", port=0)
+    server = start_dashboard(app, 0)
+    try:
+        assert (server.server_name, server.server_port) == ("127.0.0.1", app.port)
+    finally:
+        stop_dashboard(server)
+
 def test_the_update_toggles_rewrite_one_line_each_and_are_checked_like_every_write(db, refreshes, tmp_path,
                                                                                          caplog):
     from ahsync.app.update_check import read_meta, write_meta

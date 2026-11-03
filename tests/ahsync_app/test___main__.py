@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import socket
+import ssl
 from pathlib import Path
 
 import ahsync_app.__main__ as app_main
@@ -64,3 +65,34 @@ def test_the_script_runs_from_any_working_folder_as_the_login_entry_does(tmp_pat
     seen = subprocess.run([sys.executable, "-c", probe, str(script)], cwd=tmp_path, capture_output=True, text=True,
                           timeout=60)
     assert "stdlib platform True" in seen.stdout, seen.stdout + seen.stderr
+
+
+def test_FM58_a_missing_default_ca_file_points_tls_at_the_platform_s_bundle(tmp_path):
+    bundle = tmp_path / "cert.pem"
+    bundle.write_text("", encoding="utf-8")
+    missing = ssl.DefaultVerifyPaths(None, None, "SSL_CERT_FILE", "/build/etc/openssl/cert.pem", "SSL_CERT_DIR",
+                                     "/build/etc/openssl/certs")
+    present = missing._replace(cafile=str(tmp_path / "other.pem"))
+    assert app_main.tls_ca_env({}, missing, bundle) == {"SSL_CERT_FILE": str(bundle)}
+    assert app_main.tls_ca_env({"SSL_CERT_FILE": "/mine.pem"}, missing, bundle) == {}     # the user's choice
+    assert app_main.tls_ca_env({}, present, bundle) == {}                                  # OpenSSL has its own
+    assert app_main.tls_ca_env({}, missing, tmp_path / "absent.pem") == {}
+    assert app_main.tls_ca_env({}, missing, None) == {}                                    # Windows: the store
+
+
+def test_FM58_main_sets_ssl_cert_file_before_the_shell_starts(monkeypatch, tmp_path):
+    bundle = tmp_path / "cert.pem"
+    bundle.write_text("", encoding="utf-8")
+    monkeypatch.setattr(app_main.os, "environ", {})          # restored after the test: main writes into it
+    monkeypatch.setattr(app_main.ssl, "get_default_verify_paths",
+                        lambda: ssl.DefaultVerifyPaths(None, None, "SSL_CERT_FILE", "/x", "SSL_CERT_DIR", "/y"))
+
+    class Mac:
+        def ca_bundle(self):
+            return bundle
+
+    monkeypatch.setattr(app_main.platform, "current", Mac)
+    seen = {}
+    monkeypatch.setattr(app_main, "start", lambda _autostart, world: seen.update(env=world.env) or 0)
+    assert app_main.main([]) == 0
+    assert app_main.os.environ["SSL_CERT_FILE"] == str(bundle) == seen["env"]["SSL_CERT_FILE"]
