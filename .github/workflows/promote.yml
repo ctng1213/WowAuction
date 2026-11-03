@@ -1,0 +1,29 @@
+# Promote a tested pre-release to the latest release, without rebuilding (SPEC §3.7.10; tools/promote.py, DR27).
+name: Promote release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release tag to promote, e.g. v0.1.0
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Promote
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: python tools/promote.py "$TAG"

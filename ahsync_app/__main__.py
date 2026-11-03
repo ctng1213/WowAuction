@@ -15,7 +15,8 @@ import webbrowser
 from collections.abc import Callable
 from pathlib import Path
 
-if not __package__:                    # run as a script (the from-source login entry): find the repository's packages,
+# A PyInstaller build also runs this file as a script; it must keep its own sys.path.
+if not __package__ and not getattr(sys, "frozen", False):   # from source as a script (the login entry): find the repository's packages,
     _here = Path(__file__).resolve().parent   # and drop this folder, whose platform/ would shadow the stdlib module
     sys.path[:] = [str(_here.parent)] + [p for p in sys.path if Path(p or ".").resolve() != _here]
 
