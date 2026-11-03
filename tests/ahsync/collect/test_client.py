@@ -306,3 +306,38 @@ def test_FM53_a_body_cut_off_mid_read_is_a_transport_error():
 
     with pytest.raises(TransportError):
         UrllibTransport(lambda request, timeout: CutOff(b""))(HttpRequest("https://x/a"))
+
+
+def test_FM63_a_failure_below_http_names_the_wrapped_cause_s_type_never_its_text():
+    import ssl
+
+    def failing(error):
+        def opener(request, timeout):
+            raise error
+        return UrllibTransport(opener)
+
+    cases = [(urllib.error.URLError(ssl.SSLCertVerificationError(1, "unable to get local issuer certificate")),
+              "URLError (SSLCertVerificationError)"),
+             (urllib.error.URLError(ConnectionRefusedError(61, "refused")), "URLError (ConnectionRefusedError)"),
+             (TimeoutError("timed out"), "TimeoutError"),
+             (urllib.error.URLError("unknown url type: https://x/a?secret"), "URLError")]
+    for error, name in cases:
+        with pytest.raises(TransportError) as raised:
+            failing(error)(HttpRequest("https://x/a"))
+        assert str(raised.value) == name
+
+
+def test_FM62_a_traceback_an_earlier_filter_already_formatted_is_still_scrubbed():
+    first, second = Redactor(), Redactor()
+    second.add("SECRETKEY123")
+    try:
+        raise ValueError("bad key SECRETKEY123")
+    except ValueError:
+        import sys
+        record = logging.LogRecord("ahsync", logging.ERROR, __file__, 1, "boom", None, sys.exc_info())
+    record.stack_info = "Stack (most recent call last): SECRETKEY123"
+    RedactingFilter(first).filter(record)          # formats exc_text, clears exc_info, scrubs nothing
+    RedactingFilter(second).filter(record)
+    assert "SECRETKEY123" not in record.exc_text and "bad key ***" in record.exc_text
+    assert "SECRETKEY123" not in record.stack_info
+

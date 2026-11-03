@@ -137,7 +137,10 @@ class RedactingFilter(logging.Filter):
         self.redactor = redactor
 
     def filter(self, record: logging.LogRecord) -> bool:
-        """Rewrite the record's message without secrets; never drops a record.
+        """Rewrite the record's message, traceback and stack without secrets; never drops a record.
+
+        Several filters can share one handler (FM62): the first formats the traceback into `exc_text`, so every
+        filter scrubs `exc_text` and `stack_info`, not only a traceback still in `exc_info`.
 
         Args:
             record: The log record; its msg/args are replaced by the scrubbed text.
@@ -148,8 +151,12 @@ class RedactingFilter(logging.Filter):
         message = self.redactor.scrub(record.getMessage())
         record.msg, record.args = message, None
         if record.exc_info:
-            record.exc_text = self.redactor.scrub(logging.Formatter().formatException(record.exc_info))
+            record.exc_text = logging.Formatter().formatException(record.exc_info)
             record.exc_info = None
+        if record.exc_text:
+            record.exc_text = self.redactor.scrub(record.exc_text)
+        if record.stack_info:
+            record.stack_info = self.redactor.scrub(record.stack_info)
         return True
 
 
@@ -484,6 +491,21 @@ def build_request(request: HttpRequest) -> urllib.request.Request:
     return req
 
 
+def network_error_name(error: BaseException) -> str:
+    """The failure's type, and the cause a `URLError` wraps (FM63): type names only, never text that could hold a URL.
+
+    Args:
+        error: What urlopen raised.
+
+    Returns:
+        E.g. "URLError (SSLCertVerificationError)", "TimeoutError"; "URLError" when its reason is text.
+    """
+    reason = getattr(error, "reason", None) if isinstance(error, urllib.error.URLError) else None
+    if isinstance(reason, BaseException):
+        return f"{type(error).__name__} ({type(reason).__name__})"
+    return type(error).__name__
+
+
 class UrllibTransport:
     """The real transport, over urllib. Used only by `ahsync.__main__`."""
 
@@ -518,4 +540,4 @@ class UrllibTransport:
             headers = {k.lower(): v for k, v in (error.headers or {}).items()}
             return HttpResponse(error.code, headers, error.read() or b"")
         except (OSError, http.client.HTTPException) as error:   # URLError, timeouts, TLS and a body cut off mid-read
-            raise TransportError(type(error).__name__) from None
+            raise TransportError(network_error_name(error)) from None

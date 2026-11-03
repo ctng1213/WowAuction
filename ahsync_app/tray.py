@@ -3,11 +3,12 @@
 `menu(state)` decides every item, check mark and enabled flag; `PystrayIcon` only turns those items into
 pystray's and dispatches a click to the shell by its action name. The icon runs detached under the window's
 GUI loop: on Windows on its own thread; on macOS in the one NSApplication (UNVERIFIED until the Mac run,
-SPEC §6 item 22).
+SPEC §6 item 22). Without a window the icon runs its own loop on the main thread instead (FM61).
 """
 from __future__ import annotations
 
 import logging
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -109,6 +110,10 @@ class PystrayIcon:
         self.offset_ms = offset_ms
         self.icon = None
         self.shown: TrayState | None = None
+        self._lock = threading.Lock()
+        self.own_loop = False              # run() owns the main thread's loop (FM61)
+        self.loop_ready = False
+        self.stopping = False
 
     def _items(self) -> list:
         """pystray's items for the current state (pystray calls this when it builds the menu).
@@ -150,8 +155,12 @@ class PystrayIcon:
         """
         return lambda _item: value
 
-    def start(self) -> None:
-        """Show the icon, detached under the running GUI loop (pystray's own `run()` would start a second loop)."""
+    def _make_icon(self) -> object:
+        """pystray's icon for the current state, sharing the one NSApplication on macOS.
+
+        Returns:
+            A pystray.Icon, not yet shown.
+        """
         import pystray
         from PIL import Image
         kwargs = {}
@@ -161,23 +170,77 @@ class PystrayIcon:
         except ImportError:
             pass
         self.shown = self.state()
-        self.icon = pystray.Icon("AHSync", Image.open(ICON_FILE), hover(self.shown, self.offset_ms()),
-                                 pystray.Menu(self._items), **kwargs)
+        return pystray.Icon("AHSync", Image.open(ICON_FILE), hover(self.shown, self.offset_ms()),
+                            pystray.Menu(self._items), **kwargs)
+
+    def start(self) -> None:
+        """Show the icon, detached under the running GUI loop (pystray's own `run()` would start a second loop)."""
+        self.icon = self._make_icon()
         self.icon.run_detached()
+
+    def run(self) -> None:
+        """Show the icon and run pystray's loop on this (the main) thread until stop() (FM61; no window).
+
+        A stop() before the loop is ready ends it once it is; a stop() before this call means no loop at all.
+        """
+        with self._lock:
+            if self.stopping or self.icon is not None:     # stopped, or start()'s detached icon exists
+                return
+            self.own_loop = True
+            self.icon = icon = self._make_icon()
+        icon.run(self._loop_ready)
+
+    def _loop_ready(self, icon: object) -> None:
+        """pystray's setup callback, on its own thread once the loop runs: show the icon, honour an early stop.
+
+        Args:
+            icon: The pystray icon.
+        """
+        icon.visible = True
+        with self._lock:
+            self.loop_ready = True
+            stopping = self.stopping
+        if stopping:
+            self._stop_loop(icon)
+
+    @staticmethod
+    def _stop_loop(icon: object) -> None:
+        """Stop pystray's own loop from any thread (FM61).
+
+        On macOS the stop is queued on the main thread's run loop, so it can't be lost before `NSApp.run()` starts;
+        on Windows pystray posts its stop message to its window, which already exists once the loop is ready.
+
+        Args:
+            icon: The running pystray icon.
+        """
+        try:
+            from PyObjCTools import AppHelper
+        except ImportError:
+            icon.stop()
+            return
+        AppHelper.callAfter(icon.stop)
 
     def refresh(self) -> None:
         """Rebuild the menu and the hover text when the state changed (called each shell tick)."""
-        if self.icon is None:
+        icon = self.icon                   # stop() on the worker may clear it meanwhile
+        if icon is None:
             return
         now = self.state()
         if now == self.shown:
             return
         self.shown = now
-        self.icon.title = hover(now, self.offset_ms())
-        self.icon.update_menu()
+        icon.title = hover(now, self.offset_ms())
+        icon.update_menu()
 
     def stop(self) -> None:
-        """Remove the icon."""
-        if self.icon is not None:
-            self.icon.stop()
-            self.icon = None
+        """Remove the icon; with run()'s own loop, end it (now when ready, else once it is)."""
+        with self._lock:
+            self.stopping = True
+            icon, self.icon = self.icon, None
+            own_loop, ready = self.own_loop, self.loop_ready
+        if icon is None:
+            return
+        if not own_loop:
+            icon.stop()
+        elif ready:
+            self._stop_loop(icon)

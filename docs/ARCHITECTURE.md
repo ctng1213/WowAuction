@@ -150,7 +150,7 @@ Each part is marked built in the milestone that lands it; the rest is **planned*
 flowchart TD
   Start([AHSync.exe / AHSync.app<br/>or python -m ahsync_app]) --> Lock{lock<br/>data/ahsync.lock free?}
   Lock -- held --> Show[write data/ahsync.show, exit 0<br/>the running shell shows its window<br/>with --autostart: exit 0, nothing written, FM48]
-  Lock -- taken --> Win[main thread: window.py<br/>one window created hidden, then the pywebview loop<br/>browser fallback FM56, DR29]
+  Lock -- taken --> Win[main thread: window.py<br/>one window created hidden, then the pywebview loop<br/>browser fallback FM56, DR29;<br/>no window: the tray's loop instead, FM61]
   Win -- the loop runs --> Tray[tray.py: pystray Icon.run_detached<br/>menu = tray.menu TrayState, DR12]
   Win -- the loop runs --> Cfg
   subgraph Worker["the worker thread (shell.Session)"]
@@ -278,3 +278,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-02: M26 built: §6.4's pipeline (the policy, the build per OS, the release, promote); the build job also runs on pull requests, unsigned; the dmg is signed and notarized itself before stapling.
 - 2026-11-02: M25 built: §6.3's check and download half and GitHub Releases as a source of §1 (the update job in `run()`, only with the app shell); `meta` `update.*` and `<data>/updates/` in §5; the update toggles in §4.
 - 2026-11-02: first Mac run fixes: the platform protocol's eleventh member `ca_bundle` (§6.2; TLS certificates for a build, FM58); the dashboard binds without a name lookup (FM59); the window accepts pywebview's `wkwebview` (FM60).
+- 2026-11-03: without a window the tray's loop takes the main thread (§6.1, FM61); the shell holds the log for its whole run (FM62).

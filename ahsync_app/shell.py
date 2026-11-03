@@ -58,7 +58,13 @@ class Tray(Protocol):
         """Rebuild the menu when the state changed."""
 
     def stop(self) -> None:
-        """Remove the icon."""
+        """Remove the icon; ends run()'s loop."""
+
+    def run(self) -> None:
+        """Show the icon and run its loop on this (the main) thread until stop() (FM61): when there is no window.
+
+        A stop() before the loop is ready ends it once it is; a stop() before run() means it never starts.
+        """
 
 
 @dataclass
@@ -184,6 +190,8 @@ class Session:
         self.worker: threading.Thread | None = None
         self.setup = not dirs.config_file.exists()      # only a missing config: an existing one is never rewritten (DR5)
         self.config = None if self.setup else load_settings(dirs.config_file, world)
+        self.redactor = Redactor()         # the shell's log scrubs the key outside setup and run() too (FM62)
+        self.redactor.add(self.config.api_key if self.config else None)
         self.port = world.setup_port if self.setup else (self.config or Config()).dashboard_port
         self.code = 0
         self._begun = threading.Lock()
@@ -208,43 +216,85 @@ class Session:
         return f"{self.home()}/setup" if self.setup else self.home()
 
     def run(self) -> int:
-        """Give the main thread to the window's loop until Quit; without a window, wait for the worker.
+        """Give the main thread to the window's loop until Quit; without a window, to the tray's (FM61).
+
+        The shell's own lines go to data/ahsync.log for the whole run (FM62).
 
         Returns:
             The worker's exit code.
         """
-        if self.window.create(self.page()):
-            try:
-                self.window.start(self.begin)  # blocks until the worker's end destroys the window
-            except WindowUnavailable:
-                self.begin()
-            except KeyboardInterrupt:
-                self.stop.set()
-            else:
-                self.stop.set()            # the loop ended (Quit, or the OS ending the session): stop AHSync
-        else:
-            self.begin()
-        if self.world.webview is not None and not self.window.state.available:
-            record_status(self.dirs.data_dir, self.world, WINDOW_TOPIC, ("window_unavailable", {}))   # FM56
-        self.wait()
-        return self.code
+        release_log = setup_logging(self.dirs.data_dir, self.redactor)
+        try:
+            if not self.run_window():
+                if self.world.webview is not None:
+                    record_status(self.dirs.data_dir, self.world, WINDOW_TOPIC, ("window_unavailable", {}))   # FM56
+                if self.begin(tray_loop=True):     # not when the window's loop already started the tray (detached)
+                    self.run_tray()
+            self.wait()
+            return self.code
+        finally:
+            release_log()
 
-    def begin(self) -> None:
-        """Start the tray and the worker, once (the loop's start callback, or the fallback)."""
+    def run_window(self) -> bool:
+        """Run the window's loop on the main thread until Quit destroys the window.
+
+        Returns:
+            True when the loop ran (or Ctrl-C ended it); False when there is no window (FM56).
+        """
+        if not self.window.create(self.page()):
+            return False
+        try:
+            self.window.start(self.begin)  # blocks until the worker's end destroys the window
+        except WindowUnavailable:
+            return False
+        except KeyboardInterrupt:
+            pass
+        self.stop.set()                    # the loop ended (Quit, or the OS ending the session): stop AHSync
+        return True
+
+    def run_tray(self) -> None:
+        """Run the tray's loop on the main thread until the worker's end stops it (FM61): macOS draws only there.
+
+        However the loop ends, AHSync stops: without the icon there would be no Quit (pystray swallows Ctrl-C on
+        Windows and ends its loop; on macOS its SIGINT handler terminates the process). A tray whose loop can't run
+        at all is logged and AHSync runs on.
+        """
+        if self.tray is None:
+            return
+        try:
+            self.tray.run()
+        except KeyboardInterrupt:
+            pass
+        except Exception as error:         # no tray (a missing backend): AHSync still runs
+            log.warning("tray icon unavailable: %s", type(error).__name__)
+            return
+        self.stop.set()
+
+    def begin(self, tray_loop: bool = False) -> bool:
+        """Start the tray and the worker, once (the loop's start callback, or the fallback).
+
+        Args:
+            tray_loop: The tray will run its own loop (run_tray); else it joins the window's now.
+
+        Returns:
+            True when this call started them; False when an earlier one had.
+        """
         with self._begun:
             if self.worker is not None:
-                return
+                return False
             if self.window.state.created:
                 record_status(self.dirs.data_dir, self.world, WINDOW_TOPIC, None)
             if self.world.make_tray is not None:
                 self.tray = self.world.make_tray(self.tray_state, self.act, self.offset_ms)
                 try:
-                    self.tray.start()
+                    if not tray_loop:
+                        self.tray.start()
                 except Exception as error:     # no tray (a missing backend): AHSync still runs
                     log.warning("tray icon unavailable: %s", type(error).__name__)
                     self.tray = None
             self.worker = threading.Thread(target=self.lifecycle, name="ahsync-app", daemon=True)
             self.worker.start()
+            return True
 
     def wait(self) -> None:
         """Wait for the worker on the main thread; Ctrl-C asks it to stop (run() returns at its next tick)."""
@@ -278,6 +328,7 @@ class Session:
                 return saved
             self.setup = False
             self.config = load_settings(self.dirs.config_file, self.world)
+            self.redactor.add(self.config.api_key if self.config else None)
             self.port = (self.config or Config()).dashboard_port
         config = self.config
         if config is not None and self.state.addon is None:   # only the lock owner installs (SPEC §3.7.6)
@@ -459,14 +510,12 @@ def serve_setup(session: Session) -> bool | int:
                    partial(save_setup, config_file=dirs.config_file, home=world.home,
                            restrict_file=world.platform.restrict_file),
                    after_save, partial(record_key_status, dirs.data_dir, world))
-    redactor = Redactor()
-    app.redact = redactor.add
-    handler = setup_logging(dirs.data_dir, redactor)   # setup's log lines go to data/ahsync.log, keys scrubbed
+    app.redact = session.redactor.add                    # setup's keys stay scrubbed after setup ends (FM62)
+    release_log = setup_logging(dirs.data_dir, session.redactor)
     try:
         return wait_for_setup(app, session)
     finally:
-        logging.getLogger("ahsync").removeHandler(handler)
-        handler.close()
+        release_log()
 
 
 def wait_for_setup(app: SetupApp, session: Session) -> bool | int:
