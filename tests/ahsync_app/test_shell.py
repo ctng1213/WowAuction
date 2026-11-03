@@ -436,7 +436,9 @@ def test_setup_logs_to_the_data_folder_without_the_key_and_the_stop_file_ends_it
 class FakeWebview:
     """A webview that records what the window asks; its loop runs `script`, then waits for destroy."""
 
-    def __init__(self, script=None, fail_start: Exception | None = None) -> None:
+    def __init__(self, script=None, fail_start: Exception | None = None,
+                 fail_after_start: Exception | None = None) -> None:
+        self.fail_after_start = fail_after_start   # raised once on_started ran (a renderer refused late)
         self.calls: list = []
         self.navigated = None          # set by a test: the user moved on inside the page
         self.script = script
@@ -455,6 +457,8 @@ class FakeWebview:
         if self.fail_start is not None:
             raise self.fail_start
         on_started()
+        if self.fail_after_start is not None:
+            raise self.fail_after_start
         if self.script is not None:
             try:
                 self.script(self)
@@ -495,16 +499,23 @@ class FakeTray:
     def __init__(self, state, dispatch, offset_ms) -> None:
         self.state, self.dispatch, self.offset_ms = state, dispatch, offset_ms
         self.events: list[str] = []
+        self.stopped = threading.Event()
         FakeTray.made.append(self)
 
     def start(self) -> None:
         self.events.append("start")
+
+    def run(self) -> None:
+        self.events.append("run")
+        self.loop_thread = threading.current_thread()
+        assert self.stopped.wait(5), "the tray's loop was never stopped"
 
     def refresh(self) -> None:
         pass
 
     def stop(self) -> None:
         self.events.append("stop")
+        self.stopped.set()
 
 
 def wait_for(condition, what: str) -> None:
@@ -585,6 +596,74 @@ def test_FM56_without_a_webview_runtime_every_open_goes_to_the_browser_and_nothi
     assert caplog.text.count("app window unavailable (RuntimeError)") == 1
 
 
+def test_FM61_without_a_window_the_tray_s_loop_takes_the_main_thread_until_quit(tmp_path):
+    app = FakeApp(tmp_path, until=lambda _d: False)
+    app.configure(tmp_path / "wow")
+    world = windowed(app, FakeWebview(fail_start=RuntimeError("no WebKit")))
+
+    def quit_from_the_tray() -> None:
+        wait_for(lambda: FakeTray.made and "run" in FakeTray.made[0].events, "the tray's loop never ran")
+        FakeTray.made[0].dispatch("quit")
+
+    driver = threading.Thread(target=quit_from_the_tray)
+    driver.start()
+    assert shell.start(True, world) == 0
+    driver.join()
+    tray = FakeTray.made[0]
+    assert tray.events == ["run", "stop"] and tray.loop_thread is threading.main_thread()
+
+
+def test_FM61_a_tray_loop_that_ends_on_its_own_stops_ahsync(tmp_path):
+    class EndingTray(FakeTray):
+        def run(self) -> None:                     # Ctrl-C swallowed by pystray, or the loop died: no icon, no Quit
+            self.events.append("run")
+
+    app = FakeApp(tmp_path, until=lambda _d: False)
+    app.configure(tmp_path / "wow")
+    world = windowed(app, FakeWebview(fail_start=RuntimeError("no WebKit")), make_tray=EndingTray)
+    assert shell.start(True, world) == 0
+    assert EndingTray.made[0].events == ["run", "stop"]
+
+
+def test_FM61_a_window_refused_after_its_loop_started_keeps_the_one_detached_tray(tmp_path):
+    from ahsync_app.window import WindowUnavailable
+
+    app = FakeApp(tmp_path, until=lambda _d: False)
+    app.configure(tmp_path / "wow")
+    world = windowed(app, FakeWebview(fail_after_start=WindowUnavailable("renderer mshtml")))
+    driver = threading.Thread(target=lambda: (wait_for(lambda: FakeTray.made and "start" in FakeTray.made[0].events,
+                                                       "the tray never started"),
+                                              FakeTray.made[0].dispatch("quit")))
+    driver.start()
+    assert shell.start(True, world) == 0
+    driver.join()
+    assert len(FakeTray.made) == 1 and FakeTray.made[0].events == ["start", "stop"]   # no second loop
+
+
+def test_FM62_the_session_scrubs_the_key_from_its_own_lines(tmp_path):
+    app = FakeApp(tmp_path, until=lambda _d: False)
+    app.configure(tmp_path / "wow")
+    dirs = app.platform.app_dirs()
+    world = shell.ShellWorld(**{**app.world().__dict__, "env": {"AUCTIONHOUSE_APIKEY": "SECRETKEY123"}})
+    session = shell.Session(dirs, InstanceLock(dirs.data_dir / LOCK_FILE), shell.ShellState(True), world)
+    assert session.redactor.scrub("key SECRETKEY123") == "key ***"
+
+
+def test_FM62_the_shell_s_own_lines_reach_the_log_file(tmp_path):
+    app = FakeApp(tmp_path, until=lambda _d: False)
+    app.configure(tmp_path / "wow")
+    data = app.platform.app_dirs().data_dir
+    view = FakeWebview(fail_start=RuntimeError("no WebKit"))
+    world = windowed(app, view)
+    driver = threading.Thread(target=lambda: (wait_for(lambda: FakeTray.made and "run" in FakeTray.made[0].events,
+                                                       "the tray's loop never ran"),
+                                              FakeTray.made[0].dispatch("quit")))
+    driver.start()
+    assert shell.start(True, world) == 0
+    driver.join()
+    text = (data / "ahsync.log").read_text(encoding="utf-8")
+    assert "app window unavailable (RuntimeError)" in text and "quit from the tray" in text
+
 def test_a_window_that_starts_clears_an_old_window_unavailable_line(tmp_path):
     app = FakeApp(tmp_path, until=lambda _d: False)
     app.configure(tmp_path / "wow")
@@ -623,6 +702,9 @@ def test_DR12_the_tray_s_start_at_login_item_toggles_and_the_update_items_wait_f
 def test_a_tray_that_cannot_start_leaves_ahsync_running(tmp_path, caplog):
     class BrokenTray(FakeTray):
         def start(self) -> None:
+            raise OSError("no notification area")
+
+        def run(self) -> None:                     # no window here: the tray would run its own loop (FM61)
             raise OSError("no notification area")
 
     app = FakeApp(tmp_path, until=lambda _d: bool(app.opened))
