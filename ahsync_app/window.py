@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from ahsync_app.gui_thread import show_in_dock
+
 log = logging.getLogger("ahsync.app")
 
 TITLE = "AHSync"
@@ -201,13 +203,15 @@ class Window:
 class PyWebview:
     """The pywebview adapter (SPEC §3.7.1): Edge WebView2 on Windows, WebKit on macOS; nothing else counts."""
 
-    def __init__(self, storage_dir: Path) -> None:
+    def __init__(self, storage_dir: Path, dock: Callable[[bool], None] = show_in_dock) -> None:
         """Keep where the page keeps its storage.
 
         Args:
             storage_dir: The webview's own profile (the dashboard's saved choices), under data/.
+            dock: Puts AHSync in the Dock while the window shows (gui_thread.show_in_dock; a recorder in tests).
         """
         self.storage_dir = storage_dir
+        self.dock = dock
         self.handle = None
         self.renderer = ""
 
@@ -251,7 +255,8 @@ class PyWebview:
         import webview
 
         def started() -> None:
-            """Let the session's end through, then start the tray and AHSync."""
+            """Leave the Dock while the window is hidden (DR31), let the session's end through, start the rest."""
+            self.dock(False)
             self._let_session_end_close()
             on_started()
 
@@ -290,13 +295,15 @@ class PyWebview:
         closing += session_ending
 
     def show(self) -> None:
-        """Show and restore the window (pywebview marshals the call to the GUI thread)."""
+        """Join the Dock (DR31), then show and restore the window (pywebview marshals the call to the GUI thread)."""
+        self.dock(True)
         self.handle.show()
         self.handle.restore()
 
     def hide(self) -> None:
-        """Hide the window."""
+        """Hide the window, then leave the Dock (DR31)."""
         self.handle.hide()
+        self.dock(False)
 
     def load(self, url: str) -> None:
         """Load a URL in the window.

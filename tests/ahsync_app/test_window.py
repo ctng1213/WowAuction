@@ -144,3 +144,43 @@ def test_DR29_every_link_that_leaves_the_dashboard_opens_in_the_browser(page):
     assert all('target="_blank"' in a for a in leaving), [a for a in leaving if "_blank" not in a]
     for assigned in set(re.findall(r"(\w+)\.href\s*=", text)) - {"location"}:   # location.href stays in the app
         assert re.search(rf"{assigned}\.target\s*=\s*'_blank'", text), assigned
+
+
+class FakeHandle:
+    """pywebview's window as the adapter drives it."""
+
+    def __init__(self, calls: list) -> None:
+        self.calls = calls
+
+    def show(self) -> None:
+        self.calls.append("show")
+
+    def restore(self) -> None:
+        self.calls.append("restore")
+
+    def hide(self) -> None:
+        self.calls.append("hide")
+
+
+def test_DR31_the_adapter_puts_ahsync_in_the_dock_only_while_the_window_shows(tmp_path):
+    calls: list = []
+    adapter = PyWebview(tmp_path, dock=lambda shown: calls.append(("dock", shown)))
+    adapter.handle = FakeHandle(calls)
+    adapter.show()
+    adapter.hide()
+    assert calls == [("dock", True), "show", "restore", "hide", ("dock", False)]
+
+
+def test_DR31_the_loop_starts_with_ahsync_out_of_the_dock(tmp_path, monkeypatch):
+    import sys
+    import types
+
+    calls: list = []
+    fake_webview = types.SimpleNamespace(start=lambda func, **_kw: func())
+    monkeypatch.setitem(sys.modules, "webview", fake_webview)
+    adapter = PyWebview(tmp_path, dock=lambda shown: calls.append(("dock", shown)))
+    adapter.handle = types.SimpleNamespace()        # no WinForms form: nothing to hook at sign-out
+    monkeypatch.setattr(adapter, "_let_session_end_close", lambda: None)
+    adapter.start(lambda: calls.append("started"))
+    assert calls == [("dock", False), "started"]    # pywebview made it a Dock app; hidden window: none
+

@@ -281,3 +281,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-03: without a window the tray's loop takes the main thread (§6.1, FM61); the shell holds the log for its whole run (FM62).
 - 2026-11-03: the tray queues its AppKit work onto the main thread on macOS (FM65); the shared `NSApplication` of §6.1 is checked on the Mac.
 - 2026-11-03: a tray click runs the shell's action on its own thread (§6.1, FM66).
+- 2026-11-03: `ahsync_app/gui_thread.py` holds the main-thread queue the window and the tray share, and the Dock icon follows the window (§6.1, DR31).

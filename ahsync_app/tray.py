@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ahsync.engine.app_view import hover_text
+from ahsync_app.gui_thread import on_gui_thread
 
 log = logging.getLogger("ahsync.app")
 
@@ -91,33 +92,6 @@ def hover(state: TrayState, offset_ms: int) -> str:
         E.g. "AHSync 0.3.1 · synced 14:06", or "AHSync dev build".
     """
     return hover_text(state.version, state.synced_ms, offset_ms)
-
-
-def on_gui_thread(action: Callable[[], None]) -> None:
-    """Run an action that touches the tray's AppKit objects on the main thread on macOS; elsewhere at once (FM65).
-
-    pystray's macOS backend makes and changes `NSStatusItem`s, which AppKit allows only on the main thread, while
-    the shell drives the tray from pywebview's start callback and the worker. The action is queued on the main
-    run loop (pywebview's or pystray's own) and runs once it spins; a failure is logged there, since an exception
-    escaping into Cocoa can abort the app. On Windows pystray posts to its own window, so the action runs now.
-
-    Args:
-        action: What to do, e.g. make the icon or rebuild its menu.
-    """
-    try:
-        from PyObjCTools import AppHelper
-    except ImportError:
-        action()
-        return
-
-    def guarded() -> None:
-        """Run the action on the main thread; log a failure instead of raising into the run loop."""
-        try:
-            action()
-        except Exception as error:
-            log.warning("tray action failed: %s: %s", type(error).__name__, error)
-
-    AppHelper.callAfter(guarded)
 
 
 class PystrayIcon:

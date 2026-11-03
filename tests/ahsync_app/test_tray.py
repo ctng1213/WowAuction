@@ -224,36 +224,6 @@ def test_FM65_the_menu_tooltip_and_stop_are_queued_too():
     assert icon.stopped
 
 
-def test_FM65_a_failure_inside_a_queued_action_is_logged_not_raised(caplog, monkeypatch):
-    queued: list = []
-
-    class AppHelper:
-        @staticmethod
-        def callAfter(action):
-            queued.append(action)
-
-    import sys
-    import types
-    monkeypatch.setitem(sys.modules, "PyObjCTools", types.SimpleNamespace(AppHelper=AppHelper))
-    monkeypatch.setitem(sys.modules, "PyObjCTools.AppHelper", AppHelper)
-
-    def boom():
-        raise RuntimeError("NSWindow should only be instantiated on the main thread!")
-
-    tray.on_gui_thread(boom)
-    assert len(queued) == 1
-    queued[0]()                                     # the run loop runs it: nothing escapes into Cocoa
-    assert "tray action failed: RuntimeError: NSWindow should only be instantiated on the main thread!" in caplog.text
-
-
-def test_FM65_without_appkit_the_action_runs_at_once(monkeypatch):
-    import sys
-    monkeypatch.setitem(sys.modules, "PyObjCTools", None)            # Windows: no pyobjc
-    ran: list = []
-    tray.on_gui_thread(lambda: ran.append(True))
-    assert ran == [True]
-
-
 def test_FM66_a_click_returns_at_once_and_its_action_runs_off_the_gui_thread():
     release = threading.Event()
     ran: list = []
