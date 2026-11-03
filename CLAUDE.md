@@ -159,3 +159,16 @@ Who plans, who orchestrates, who implements the routine and who reviews is the g
 | ADRs | The plan's §1 decision list; durable ones are restated in SPEC |
 | `work/active/<slug>/spec.md`, `plan.md`, `progress.md` | `docs/plans/<batch>.md`; progress is the git log (one commit per milestone) |
 | Recurring pitfalls | [docs/LESSONS.md](docs/LESSONS.md) |
+
+## Git branching workflow
+
+- **Never commit or push directly to `main`.** The only exception is when a change has to be on `main` for a specific test. In that case, stop, explain why, and ask me before pushing.
+- Before making changes, create a new branch from an up-to-date `main`:
+  - Format: `ctn-RCP-000-<dash-delimited-description>`
+  - `ctn` = my initials. `RCP-000` is a placeholder ticket ID; always use it until I give you a real ticket number.
+  - Description: short, lowercase, words separated by dashes (e.g. `ctn-RCP-000-add-recipe-upload-form`)
+- Commit to that branch, push it, and open a merge request (MR) into `main`.
+  - MR title: plain-language summary of the change
+  - MR description: the same Summary / Next steps wrap-up from the security review section
+- Don't merge the MR yourself. I review and merge.
+- If I'm already on a `ctn-RCP-...` branch for this work, keep using it. Don't create a new one.
