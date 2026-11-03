@@ -91,6 +91,7 @@ class World:
         python: The interpreter that runs PyInstaller.
         which: Finds a program on PATH (shutil.which).
         hidden: Values masked in every logged command (the credentials, the throwaway keychain password).
+        sleep: Waits a number of seconds (time.sleep; a recorder in tests).
     """
 
     run: Run
@@ -102,6 +103,7 @@ class World:
     python: str = sys.executable
     which: Callable[[str], str | None] = shutil.which
     hidden: set[str] = field(default_factory=set)
+    sleep: Callable[[float], None] = time.sleep
 
     def __post_init__(self) -> None:
         """Mask the credentials that are set."""
@@ -546,6 +548,30 @@ def notarize(world: World, path: str) -> None:
                   "notarytool submit")
 
 
+STAPLE_WAITS_S = (15, 30, 60)      # between the 4 staple attempts (FM64)
+
+
+def staple(world: World, path: str) -> None:
+    """Staple a notarized file's ticket, retrying: Apple's ticket service drops connections (FM64).
+
+    Args:
+        world: The outside world (its sleep waits between attempts).
+        path: The notarized app or dmg.
+
+    Raises:
+        BuildError: "stapler staple failed (exit N) after 4 attempts" when every attempt failed.
+    """
+    for attempt, wait_s in enumerate((*STAPLE_WAITS_S, None), start=1):
+        try:
+            world.cmd(["xcrun", "stapler", "staple", path], "stapler staple")
+            return
+        except BuildError as error:
+            if wait_s is None:
+                raise BuildError(f"{error} after {attempt} attempts") from None
+            world.out(f"{error}; retry {attempt} of {len(STAPLE_WAITS_S)} in {wait_s} s")
+            world.sleep(wait_s)
+
+
 def build_macos_signed(world: World, version: str) -> list[str]:
     """Sign, notarize and staple the app, then make the dmg (signed, notarized, stapled) and the release zip.
 
@@ -567,11 +593,11 @@ def build_macos_signed(world: World, version: str) -> list[str]:
         world.cmd(["codesign", "--verify", "--deep", "--strict", APP], "codesign --verify")
         world.cmd(["ditto", "-c", "-k", "--keepParent", APP, NOTARIZE_ZIP], "ditto")
         notarize(world, NOTARIZE_ZIP)
-        world.cmd(["xcrun", "stapler", "staple", APP], "stapler staple")
+        staple(world, APP)
         world.cmd([DMG_SCRIPT, version], "make_dmg.sh")
         world.cmd(["codesign", "--sign", identity, "--timestamp", "--keychain", keychain, dmg], "codesign dmg")
         notarize(world, dmg)
-        world.cmd(["xcrun", "stapler", "staple", dmg], "stapler staple")
+        staple(world, dmg)
         world.cmd(["ditto", "-c", "-k", "--keepParent", APP, release_zip], "ditto")
     return [dmg, release_zip]
 

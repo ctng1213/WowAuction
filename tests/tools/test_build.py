@@ -24,20 +24,25 @@ class FakeRunner:
     """Records every command; answers find-identity, find-certificate, openssl x509 and git tag; fails on demand."""
 
     def __init__(self, tags: str = "", identity_team: str = TEAM, expires: str = "Nov 12 00:00:00 2027 GMT",
-                 fail: str | None = None, untrusted: bool = False, kind: str = "Developer ID Application") -> None:
+                 fail: str | None = None, untrusted: bool = False, kind: str = "Developer ID Application",
+                 fail_times: int = 0, fail_code: int = 1) -> None:
         self.calls: list[list[str]] = []
         self.envs: list[dict[str, str]] = []
         self.tags, self.identity_team, self.expires, self.fail = tags, identity_team, expires, fail
         self.untrusted = untrusted        # the chain to Apple's root is missing: -v lists nothing
         self.kind = kind                  # the certificate the .p12 holds
+        self.fail_times = fail_times      # with fail: only the first N matching commands fail (0: every one)
+        self.fail_code = fail_code
+        self.failed = 0
 
     def __call__(self, args, *, input_text=None, extra_env=None, capture=False) -> build.Result:
         """Record and answer one command."""
         self.calls.append(list(args))
         self.envs.append(dict(extra_env or {}))
         line = " ".join(args)
-        if self.fail and self.fail in line:
-            return build.Result(1)
+        if self.fail and self.fail in line and (not self.fail_times or self.failed < self.fail_times):
+            self.failed += 1
+            return build.Result(self.fail_code)
         if args[:2] == ["git", "tag"]:
             return build.Result(0, self.tags)
         if args[:2] == ["security", "find-identity"]:
@@ -415,3 +420,26 @@ def test_DR18_no_child_process_inherits_a_credential(monkeypatch):
     script = "import os, sys; print(sorted(n for n in os.environ if n.startswith(('MACOS', 'NOTARY', 'APPLE', 'X_'))))"
     result = build.real_run([sys.executable, "-c", script], extra_env={"X_PASS": "p"}, capture=True)
     assert result.out.strip() == "['APPLE_TEAM_ID', 'NOTARY_ISSUER_ID', 'NOTARY_KEY_ID', 'X_PASS']"
+
+
+def test_FM64_a_staple_that_fails_once_is_retried_and_the_build_succeeds(tmp_path):
+    dmg_staple = "stapler staple dist/AHSync-0.4.0-macos-arm64.dmg"
+    runner = FakeRunner(fail=dmg_staple, fail_times=1, fail_code=68)
+    world, lines = make_world(tmp_path, runner, "macos", FAKE_SECRETS)
+    waits: list[float] = []
+    world.sleep = waits.append
+    assert build.build_command(world, "0.4.0", "sign") == 0
+    assert sum(" ".join(c).endswith(dmg_staple) for c in runner.calls) == 2 and waits == [15]
+    assert "stapler staple failed (exit 68); retry 1 of 3 in 15 s" in lines
+
+
+def test_FM64_a_staple_that_always_fails_stops_the_build_after_four_attempts(tmp_path):
+    dmg_staple = "stapler staple dist/AHSync-0.4.0-macos-arm64.dmg"
+    runner = FakeRunner(fail=dmg_staple, fail_code=68)
+    world, lines = make_world(tmp_path, runner, "macos", FAKE_SECRETS)
+    waits: list[float] = []
+    world.sleep = waits.append
+    with pytest.raises(build.BuildError, match=r"stapler staple failed \(exit 68\) after 4 attempts"):
+        build.build_command(world, "0.4.0", "sign")
+    assert sum(" ".join(c).endswith(dmg_staple) for c in runner.calls) == 4 and waits == [15, 30, 60]
+    assert runner.calls[-1][:2] == ["security", "delete-keychain"]
