@@ -192,6 +192,20 @@ def test_DR18_a_certificate_that_will_not_import_fails_as_invalid(tmp_path):
     assert lines[-1] == "::error::certificate invalid: MACOS_CERT_P12 is not base64"
 
 
+def test_DR18_a_pasted_certificate_with_line_breaks_still_decodes(tmp_path):
+    # `base64` ends its output with a newline, and a paste into GitHub's form can carry it or wrap the text:
+    # the first real signed run failed "MACOS_CERT_P12 is not base64" on such a value.
+    p12 = bytes(range(256)) * 3
+    encoded = base64.b64encode(p12).decode()
+    wrapped = "\r\n".join(encoded[i:i + 76] for i in range(0, len(encoded), 76)) + "\n"
+    assert build.decode_certificate(encoded + "\n") == p12
+    assert build.decode_certificate(" " + wrapped) == p12
+    world, lines = make_world(tmp_path, FakeRunner(), "macos", {**FAKE_SECRETS, "MACOS_CERT_P12": wrapped})
+    assert build.main(["build", "0.4.0", "--mode", "sign"], world) == 0
+    with pytest.raises(build.BuildError, match="is not base64"):
+        build.decode_certificate("bad*chars")
+
+
 # ---------------------------------------------------------------- DR19
 
 @pytest.mark.parametrize("event, ref, sign_input, has_tag, expected", [
