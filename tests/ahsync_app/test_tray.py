@@ -92,7 +92,10 @@ def test_the_adapter_s_items_are_accepted_by_pystray_and_a_click_dispatches():
     assert [i.text for i in menu_items][:3] == ["Open dashboard", "Status", "Start at login"]
     assert menu_items[2].checked is True and menu_items[3].checked is False and menu_items[0].default
     menu_items[-1](None)
-    assert clicked == ["quit"]
+    deadline = time.monotonic() + 5
+    while clicked != ["quit"]:                      # the action runs on its own thread (FM66)
+        assert time.monotonic() < deadline, clicked
+        time.sleep(0.002)
 
 
 class LoopIcon(FakeIcon):
@@ -249,4 +252,26 @@ def test_FM65_without_appkit_the_action_runs_at_once(monkeypatch):
     ran: list = []
     tray.on_gui_thread(lambda: ran.append(True))
     assert ran == [True]
+
+
+def test_FM66_a_click_returns_at_once_and_its_action_runs_off_the_gui_thread():
+    release = threading.Event()
+    ran: list = []
+
+    def dispatch(action: str) -> None:
+        ran.append((action, threading.current_thread()))
+        release.wait(5)                            # Open dashboard waiting for the GUI thread
+
+    adapter = PystrayIcon(lambda: None, dispatch, lambda: 0)
+    started = time.monotonic()
+    adapter._click("open")(None, None)
+    adapter._click("status")(None, None)
+    assert time.monotonic() - started < 0.5        # the menu (the GUI thread) is never held
+    deadline = time.monotonic() + 5
+    while len(ran) < 2:
+        assert time.monotonic() < deadline, ran
+        time.sleep(0.002)
+    release.set()
+    assert sorted(a for a, _t in ran) == ["open", "status"]
+    assert all(t is not threading.current_thread() for _a, t in ran)
 

@@ -167,9 +167,20 @@ class PystrayIcon:
             action: The item's action name.
 
         Returns:
-            (icon, item) -> None, which dispatches the action.
+            (icon, item) -> None, which dispatches the action on its own thread (see _dispatch_off_the_menu).
         """
-        return lambda _icon, _item: self.dispatch(action)
+        return lambda _icon, _item: self._dispatch_off_the_menu(action)
+
+    def _dispatch_off_the_menu(self, action: str) -> None:
+        """Run the shell's action on its own thread, so the click returns at once (FM66).
+
+        On macOS pystray calls a click on the main thread, and the shell's actions wait for it: Open dashboard asks
+        pywebview for the current URL, which is read on the main thread. Run there, they would deadlock the app.
+
+        Args:
+            action: The item's action name.
+        """
+        threading.Thread(target=self.dispatch, args=(action,), name=f"ahsync-tray-{action}", daemon=True).start()
 
     @staticmethod
     def _checked(value: bool) -> Callable[[object], bool]:
