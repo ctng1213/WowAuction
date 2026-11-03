@@ -507,3 +507,33 @@ def test_DR20_the_update_job_checks_then_downloads_and_the_shell_gets_the_dashbo
         served[1].close()
     finally:
         db.close()
+
+
+def test_FM62_a_second_setup_logging_shares_the_handler_and_scrubs_its_secrets_while_it_runs(tmp_path):
+    from ahsync.__main__ import setup_logging
+    from ahsync.collect.client import Redactor
+
+    logger = logging.getLogger("ahsync")
+    before = list(logger.handlers)
+    release_shell = setup_logging(tmp_path, Redactor())
+    keyed = Redactor()
+    keyed.add("SECRETKEY123")
+    release_run = setup_logging(tmp_path, keyed)
+    try:
+        assert len(logger.handlers) == len(before) + 1          # one handler: no line written twice
+        logging.getLogger("ahsync.app").warning("shell line")
+        logging.getLogger("ahsync").warning("run line with SECRETKEY123")
+        try:
+            raise ValueError("bad key SECRETKEY123")
+        except ValueError:
+            logging.getLogger("ahsync").exception("traceback")   # the shell's filter formats it first
+    finally:
+        release_run()
+    assert len(logger.handlers) == len(before) + 1               # the shell's handler stays
+    logging.getLogger("ahsync.app").warning("after run")
+    release_shell()
+    assert logger.handlers == before
+    text = (tmp_path / "ahsync.log").read_text(encoding="utf-8")
+    assert "SECRETKEY123" not in text and "ValueError: bad key ***" in text
+    lines = [line.split(": ", 1)[1] for line in text.splitlines() if " WARNING " in line or " ERROR " in line]
+    assert lines == ["shell line", "run line with ***", "traceback", "after run"]

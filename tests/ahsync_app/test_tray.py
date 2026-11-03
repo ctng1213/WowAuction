@@ -1,6 +1,9 @@
 """Tests for ahsync_app/tray.py: the menu as a pure function of the state (SPEC §3.7.1; DR12)."""
 from __future__ import annotations
 
+import threading
+import time
+
 import pytest
 
 from ahsync_app import tray
@@ -89,3 +92,67 @@ def test_the_adapter_s_items_are_accepted_by_pystray_and_a_click_dispatches():
     assert menu_items[2].checked is True and menu_items[3].checked is False and menu_items[0].default
     menu_items[-1](None)
     assert clicked == ["quit"]
+
+
+class LoopIcon(FakeIcon):
+    """pystray's Icon as run() uses it: run(setup) blocks until stop(); setup runs once the loop is ready."""
+
+    def __init__(self, ready_hook=None) -> None:
+        super().__init__()
+        self.visible = False
+        self.ran = False
+        self.ready_hook = ready_hook
+        self.done = threading.Event()
+
+    def run(self, setup) -> None:
+        self.ran = True
+        if self.ready_hook is not None:
+            self.ready_hook()                     # e.g. a stop that arrives before the loop is ready
+        setup(self)
+        assert self.done.wait(5), "the loop was never stopped"
+
+    def stop(self) -> None:
+        super().stop()
+        self.done.set()
+
+
+def loop_adapter(icon: LoopIcon) -> PystrayIcon:
+    adapter = PystrayIcon(lambda: None, lambda _a: None, lambda: 0)
+    adapter._make_icon = lambda: icon
+    adapter._stop_loop = lambda running: running.stop()        # pystray's own marshalling is the real one's job
+    return adapter
+
+
+def test_FM61_the_tray_s_own_loop_runs_until_stop_and_shows_the_icon():
+    icon = LoopIcon()
+    adapter = loop_adapter(icon)
+    stopper = threading.Thread(target=lambda: (time.sleep(0.05), adapter.stop()))
+    stopper.start()
+    adapter.run()
+    stopper.join()
+    assert icon.ran and icon.visible and icon.stopped and adapter.icon is None
+
+
+def test_FM61_a_stop_before_the_loop_is_ready_ends_it_once_it_is():
+    icon = LoopIcon()
+    adapter = loop_adapter(icon)
+    icon.ready_hook = adapter.stop
+    adapter.run()
+    assert icon.ran and icon.stopped
+
+
+def test_FM61_a_stop_before_the_loop_starts_means_it_never_starts():
+    icon = LoopIcon()
+    adapter = loop_adapter(icon)
+    adapter.stop()
+    adapter.run()
+    assert not icon.ran
+
+
+def test_FM61_run_never_makes_a_second_icon_beside_a_detached_one():
+    icon = LoopIcon()
+    adapter = loop_adapter(icon)
+    adapter.icon = FakeIcon()                      # start() ran: the window's loop has the icon
+    adapter.run()
+    assert not icon.ran
+

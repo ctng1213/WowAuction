@@ -103,25 +103,42 @@ class InstanceLock:
             self._file = None
 
 
-def setup_logging(data_dir: Path, redactor: Redactor) -> logging.Handler:
-    """Log to data/ahsync.log, rotated, with secrets scrubbed (SPEC §5.2).
+def setup_logging(data_dir: Path, redactor: Redactor) -> Callable[[], None]:
+    """Log to data/ahsync.log, rotated, with secrets scrubbed (SPEC §5.2; FM62).
+
+    The app shell holds the log for its whole run and setup and run() call this again inside it: a handler already
+    writing this file is shared, so no line is written twice and no two handlers rotate one file.
 
     Args:
         data_dir: The data folder.
         redactor: Secrets to scrub from every record.
 
     Returns:
-        The file handler, attached to the "ahsync" logger (remove it to stop logging).
+        The release: it removes this call's scrubbing from a shared handler, or removes and closes the handler
+        this call attached.
     """
     data_dir.mkdir(parents=True, exist_ok=True)
-    handler = logging.handlers.RotatingFileHandler(data_dir / "ahsync.log", maxBytes=LOG_BYTES,
-                                                   backupCount=LOG_BACKUPS, encoding="utf-8")
-    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
-    handler.addFilter(RedactingFilter(redactor))
+    path = os.path.abspath(data_dir / "ahsync.log")
     logger = logging.getLogger("ahsync")
     logger.setLevel(logging.INFO)
+    scrub = RedactingFilter(redactor)
+    shared = next((h for h in logger.handlers
+                   if isinstance(h, logging.FileHandler) and h.baseFilename == path), None)
+    if shared is not None:
+        shared.addFilter(scrub)
+        return lambda: shared.removeFilter(scrub)
+    handler = logging.handlers.RotatingFileHandler(path, maxBytes=LOG_BYTES, backupCount=LOG_BACKUPS,
+                                                   encoding="utf-8")
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    handler.addFilter(scrub)
     logger.addHandler(handler)
-    return handler
+
+    def release() -> None:
+        """Detach and close the handler this call attached."""
+        logger.removeHandler(handler)
+        handler.close()
+
+    return release
 
 
 @dataclass(frozen=True)
@@ -472,7 +489,7 @@ def _run_configured(data_dir: Path, config: Config, runtime: Runtime, config_pat
     """
     redactor = Redactor()
     redactor.add(config.api_key)
-    handler = setup_logging(data_dir, redactor)
+    release_log = setup_logging(data_dir, redactor)
     log = logging.getLogger("ahsync")
     clock = runtime.clock
     db = None
@@ -519,8 +536,7 @@ def _run_configured(data_dir: Path, config: Config, runtime: Runtime, config_pat
             dashboard[1].close()
         if db is not None:
             db.close()
-        log.removeHandler(handler)
-        handler.close()
+        release_log()
 
 
 def main(argv: list[str] | None = None) -> int:
