@@ -273,6 +273,24 @@ def private_folder() -> Iterator[Path]:
         shutil.rmtree(folder, ignore_errors=True)
 
 
+def decode_certificate(value: str) -> bytes:
+    """Decode MACOS_CERT_P12, ignoring the whitespace a paste or `base64`'s line breaks leave in it.
+
+    Args:
+        value: The secret: the .p12 in base64, possibly with spaces, newlines or CRLFs anywhere.
+
+    Returns:
+        The .p12's bytes.
+
+    Raises:
+        BuildError: "certificate invalid: MACOS_CERT_P12 is not base64" for any other non-base64 character.
+    """
+    try:
+        return base64.b64decode("".join(value.split()), validate=True)
+    except (binascii.Error, ValueError):
+        raise BuildError("certificate invalid: MACOS_CERT_P12 is not base64") from None
+
+
 @contextmanager
 def signing_keychain(world: World) -> Iterator[str]:
     """Import the Developer ID certificate into a temporary keychain, deleted at the end, also on failure.
@@ -290,10 +308,7 @@ def signing_keychain(world: World) -> Iterator[str]:
     Raises:
         BuildError: "certificate invalid: ..." when the certificate can't be decoded or imported.
     """
-    try:
-        p12_bytes = base64.b64decode(world.env.get("MACOS_CERT_P12", ""), validate=True)
-    except (binascii.Error, ValueError):
-        raise BuildError("certificate invalid: MACOS_CERT_P12 is not base64") from None
+    p12_bytes = decode_certificate(world.env.get("MACOS_CERT_P12", ""))
     throwaway = secrets.token_hex(16)
     world.hidden.add(throwaway)
     with private_folder() as folder:
