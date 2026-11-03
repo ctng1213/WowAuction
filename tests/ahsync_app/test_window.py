@@ -129,9 +129,10 @@ def test_without_a_webview_every_open_goes_to_the_browser():
     assert window.closing() is False and browsed == [HOME]
 
 
-def test_the_adapter_accepts_only_renderers_that_draw_the_dashboard(tmp_path):
+def test_FM60_the_adapter_accepts_edge_webview2_and_wkwebview_and_refuses_the_rest(tmp_path):
     adapter = PyWebview(tmp_path)
-    assert adapter._renderer_ok("edgechromium") and adapter._renderer_ok("cocoa")
+    assert adapter._renderer_ok("edgechromium") and adapter._renderer_ok("wkwebview")   # pywebview's macOS name
+    assert not adapter._renderer_ok("cocoa")
     assert not adapter._renderer_ok("mshtml") and adapter.renderer == "mshtml"
 
 

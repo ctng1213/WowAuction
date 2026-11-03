@@ -21,6 +21,7 @@ import json
 import logging
 import secrets
 import socket
+import socketserver
 import sqlite3
 import threading
 from collections.abc import Callable, Mapping
@@ -871,11 +872,13 @@ class DashboardServer(ThreadingHTTPServer):
         self.app = app
 
     def server_bind(self) -> None:
-        """Bind the port exclusively where the OS offers it (FM57).
+        """Bind the port exclusively where the OS offers it (FM57), without looking up a name (FM59).
 
         On Windows `SO_REUSEADDR` lets a second server listen on a port already in use and take its requests, so
         `SO_EXCLUSIVEADDRUSE` replaces it: a taken port fails here, and nothing can share ours later. Elsewhere
-        `SO_REUSEADDR` stays (it only allows rebinding past TIME_WAIT there).
+        `SO_REUSEADDR` stays (it only allows rebinding past TIME_WAIT there). `HTTPServer.server_bind` is skipped:
+        its `socket.getfqdn` is a reverse-DNS query, which macOS treats as local-network access (a permission
+        prompt) and which can take seconds; the name it finds is never used.
 
         Raises:
             OSError: The port is in use or can't be bound.
@@ -884,7 +887,8 @@ class DashboardServer(ThreadingHTTPServer):
         if exclusive is not None:
             self.allow_reuse_address = False
             self.socket.setsockopt(socket.SOL_SOCKET, exclusive, 1)
-        super().server_bind()
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
 
 def start_dashboard(app: DashboardApp, port: int) -> DashboardServer:

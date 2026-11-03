@@ -16,6 +16,7 @@ TRANSLOCATION_PREFIX = "/private/var/folders/"
 TRANSLOCATION_PART = "/AppTranslocation/"
 KEY_FILE_MODE = 0o600
 AGENT_LABEL = "com.wowauction.ahsync"
+CA_BUNDLE = "/etc/ssl/cert.pem"     # the system's PEM bundle (FM58)
 
 
 class MacPlatform(Platform):
@@ -138,3 +139,12 @@ class MacPlatform(Platform):
             "AHSync-<version>-macos-arm64.zip".
         """
         return f"{APP_NAME}-{version}-macos-arm64.zip"
+
+    def ca_bundle(self) -> Path | None:
+        """`/etc/ssl/cert.pem`, the system's CA bundle (FM58): the bundled OpenSSL looks in the build machine's
+        Python folder, which a user's Mac doesn't have.
+
+        Returns:
+            The bundle's path; not probed here.
+        """
+        return Path(CA_BUNDLE)

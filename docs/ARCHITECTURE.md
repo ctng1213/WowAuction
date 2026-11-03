@@ -184,7 +184,7 @@ flowchart LR
     UpdM[ahsync/app/updater.py]
   end
   subgraph Platform["ahsync_app/platform/ (facts and thin writers)"]
-    Base[base.py: Platform protocol, ten members<br/>app_dirs, wow_candidates,<br/>autostart_enable / disable / enabled,<br/>restrict_file, run_location_problem,<br/>update_asset_name, verify_update, apply_update]
+    Base[base.py: Platform protocol, eleven members<br/>app_dirs, wow_candidates,<br/>autostart_enable / disable / enabled,<br/>restrict_file, run_location_problem,<br/>update_asset_name, verify_update, apply_update,<br/>ca_bundle]
     Win[windows.py<br/>LOCALAPPDATA, winreg Run key,<br/>Program Files WoW candidates,<br/>silent installer]
     Mac[macos.py<br/>Application Support, LaunchAgent plist (no launchctl),<br/>/Applications WoW candidates, translocation,<br/>codesign + Team ID, swap helper]
     Cur[__init__.py current<br/>the one sys.platform read]
@@ -277,3 +277,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-02: M24 built: the window, the tray and start at login (§6.1 redrawn: the window's loop takes the main thread first and setup, the addon install, the self-heal and `run()` move to the worker); `POST /api/autostart` through the shell's `AppHooks` (§4); the macOS login entry is the LaunchAgent file alone, no `launchctl` (§6.2).
 - 2026-11-02: M26 built: §6.4's pipeline (the policy, the build per OS, the release, promote); the build job also runs on pull requests, unsigned; the dmg is signed and notarized itself before stapling.
 - 2026-11-02: M25 built: §6.3's check and download half and GitHub Releases as a source of §1 (the update job in `run()`, only with the app shell); `meta` `update.*` and `<data>/updates/` in §5; the update toggles in §4.
+- 2026-11-02: first Mac run fixes: the platform protocol's eleventh member `ca_bundle` (§6.2; TLS certificates for a build, FM58); the dashboard binds without a name lookup (FM59); the window accepts pywebview's `wkwebview` (FM60).

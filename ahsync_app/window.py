@@ -20,7 +20,7 @@ log = logging.getLogger("ahsync.app")
 
 TITLE = "AHSync"
 WIDTH, HEIGHT = 1200, 800
-RENDERERS = ("edgechromium", "cocoa")    # MSHTML can't draw the dashboard: any other renderer is unavailable
+RENDERERS = ("edgechromium", "wkwebview")    # pywebview's names (FM60); MSHTML can't draw the dashboard
 
 
 class WindowUnavailable(Exception):
@@ -231,7 +231,7 @@ class PyWebview:
         """Refuse a renderer that can't draw the dashboard, so the browser takes over (FM56).
 
         Args:
-            renderer: pywebview's renderer name, e.g. "edgechromium" or "mshtml".
+            renderer: pywebview's renderer name, e.g. "edgechromium", "wkwebview" or "mshtml".
 
         Returns:
             False to abort the window.

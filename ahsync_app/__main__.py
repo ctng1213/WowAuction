@@ -9,10 +9,11 @@ import argparse
 import io
 import os
 import socket
+import ssl
 import sys
 import time
 import webbrowser
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 # A PyInstaller build also runs this file as a script; it must keep its own sys.path.
@@ -80,6 +81,25 @@ def port_open(port: int) -> bool:
         return False
 
 
+def tls_ca_env(env: Mapping[str, str], defaults: ssl.DefaultVerifyPaths, bundle: Path | None) -> dict[str, str]:
+    """Where TLS finds CA certificates when the bundled OpenSSL has none (FM58).
+
+    A build's OpenSSL looks in the build machine's Python folder; without certificates every HTTPS call fails.
+
+    Args:
+        env: The process environment.
+        defaults: `ssl.get_default_verify_paths()`; its cafile is None when that file doesn't exist.
+        bundle: The platform's CA bundle (`Platform.ca_bundle()`); None where Python reads the OS's store.
+
+    Returns:
+        {"SSL_CERT_FILE": bundle} when OpenSSL's default CA file is missing, the user set none and the bundle
+        exists; else {} (the environment is left alone).
+    """
+    if bundle is None or env.get("SSL_CERT_FILE") or defaults.cafile is not None or not bundle.is_file():
+        return {}
+    return {"SSL_CERT_FILE": str(bundle)}
+
+
 def real_world(out: io.TextIOBase | None) -> ShellWorld:
     """The shell's outside world when it really runs.
 
@@ -125,6 +145,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="ahsync_app", description="AHSync, the app: tray, window, setup")
     parser.add_argument("--autostart", action="store_true", help="started at login: open nothing")
     args = parser.parse_args(argv)
+    os.environ.update(tls_ca_env(os.environ, ssl.get_default_verify_paths(), platform.current().ca_bundle()))
     return start(args.autostart, real_world(sys.stderr))
 
 
