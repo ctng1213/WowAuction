@@ -83,7 +83,8 @@ def test_FM58_a_missing_default_ca_file_points_tls_at_the_platform_s_bundle(tmp_
 def test_FM58_main_sets_ssl_cert_file_before_the_shell_starts(monkeypatch, tmp_path):
     bundle = tmp_path / "cert.pem"
     bundle.write_text("", encoding="utf-8")
-    monkeypatch.setattr(app_main.os, "environ", {})          # restored after the test: main writes into it
+    env = {k: v for k, v in app_main.os.environ.items() if k != "SSL_CERT_FILE"}   # keeps HOME / USERPROFILE
+    monkeypatch.setattr(app_main.os, "environ", env)         # restored after the test: main writes into it
     monkeypatch.setattr(app_main.ssl, "get_default_verify_paths",
                         lambda: ssl.DefaultVerifyPaths(None, None, "SSL_CERT_FILE", "/x", "SSL_CERT_DIR", "/y"))
 
