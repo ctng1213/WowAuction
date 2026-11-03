@@ -63,8 +63,10 @@ jobs:
 
   # The app, built on Windows and macOS (SPEC Â§3.7.12). tools/build.py decides the signing mode and runs every
   # command, so this stays thin. Pull requests build too (unsigned), so a change to the packaging is built before
-  # it merges. The signing secrets reach the macOS policy and build steps only, never a pull request's, and only
-  # through the environment (tools/build.py keeps them from every command but openssl).
+  # it merges. The signing secrets are secrets of the `signing` environment, which may deploy only from main and
+  # v* tags: only the macOS leg of a main, tag or manual run names it, so a branch or pull request run never has
+  # them. Within the job they reach the policy and build steps only (tools/build.py keeps them from every
+  # command but openssl).
   build:
     needs: test
     if: >-
@@ -83,6 +85,10 @@ jobs:
               dist/AHSync-*-macos-arm64.dmg
               dist/AHSync-*-macos-arm64.zip
     runs-on: ${{ matrix.os }}
+    environment: >-
+      ${{ matrix.os == 'macos-15' && github.event_name != 'pull_request' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') ||
+      github.event_name == 'workflow_dispatch') && 'signing' || '' }}
     timeout-minutes: 90
     outputs:
       release: ${{ steps.policy.outputs.release }}   # the same on both legs
