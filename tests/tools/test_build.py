@@ -24,11 +24,12 @@ class FakeRunner:
     """Records every command; answers find-identity, find-certificate, openssl x509 and git tag; fails on demand."""
 
     def __init__(self, tags: str = "", identity_team: str = TEAM, expires: str = "Nov 12 00:00:00 2027 GMT",
-                 fail: str | None = None, untrusted: bool = False) -> None:
+                 fail: str | None = None, untrusted: bool = False, kind: str = "Developer ID Application") -> None:
         self.calls: list[list[str]] = []
         self.envs: list[dict[str, str]] = []
         self.tags, self.identity_team, self.expires, self.fail = tags, identity_team, expires, fail
         self.untrusted = untrusted        # the chain to Apple's root is missing: -v lists nothing
+        self.kind = kind                  # the certificate the .p12 holds
 
     def __call__(self, args, *, input_text=None, extra_env=None, capture=False) -> build.Result:
         """Record and answer one command."""
@@ -40,10 +41,12 @@ class FakeRunner:
         if args[:2] == ["git", "tag"]:
             return build.Result(0, self.tags)
         if args[:2] == ["security", "find-identity"]:
-            name = f"Developer ID Application: Test Dev ({self.identity_team})"
-            if "-v" not in args:
+            name = f"{self.kind}: Test Dev ({self.identity_team})"
+            if "-v" not in args:          # like the real tool: every identity, then the valid ones again
                 status = " (CSSMERR_TP_NOT_TRUSTED)" if self.untrusted else ""
-                return build.Result(0, f'  1) {"A" * 40} "{name}"{status}\n     1 identities found\n')
+                valid = "" if self.untrusted else f'  1) {"A" * 40} "{name}"\n'
+                return build.Result(0, f'Policy: Code Signing\n  Matching identities\n  1) {"A" * 40} "{name}"'
+                                       f'{status}\n     1 identities found\n\n  Valid identities only\n{valid}')
             if self.untrusted:
                 return build.Result(0, "     0 valid identities found\n")
             return build.Result(0, f'  1) {"A" * 40} "{name}"\n     1 valid identities found\n')
@@ -203,6 +206,20 @@ def test_DR18_an_untrusted_identity_is_logged_by_kind_team_and_status_never_by_n
     assert "find-identity: 1 code-signing identities in the keychain" in lines
     assert f"  Developer ID Application · team {TEAM} · CSSMERR_TP_NOT_TRUSTED" in lines
     assert not any("Test Dev" in line for line in lines)
+    assert runner.calls[-1][:2] == ["security", "delete-keychain"]
+
+
+def test_DR18_an_apple_development_certificate_is_named_with_what_to_export_instead(tmp_path):
+    # The user's first signed runs uploaded Xcode's Apple Development certificate; find-identity listed it
+    # twice and the error only said no Developer ID identity was found.
+    runner = FakeRunner(kind="Apple Development", identity_team="3FMPA4A4T9")
+    world, lines = make_world(tmp_path, runner, "macos", FAKE_SECRETS)
+    assert build.main(["build", "0.4.0", "--mode", "sign"], world) == 1
+    assert [line for line in lines if line.startswith("  ")] == ["  Apple Development · team 3FMPA4A4T9 · valid"]
+    assert "find-identity: 1 code-signing identities in the keychain" in lines
+    assert lines[-1] == ("::error::certificate invalid: MACOS_CERT_P12 holds Apple Development, not a Developer ID "
+                         "Application certificate: in Keychain Access (login, My Certificates) export the one "
+                         "named \"Developer ID Application: …\" and set MACOS_CERT_P12 and MACOS_CERT_PASSWORD again")
     assert runner.calls[-1][:2] == ["security", "delete-keychain"]
 
 

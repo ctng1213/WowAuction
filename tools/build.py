@@ -50,8 +50,13 @@ RUN_TIMEOUT_S = 3600              # notarytool --wait is the slow one
 VERSION_RE = re.compile(r"([0-9]+)\.([0-9]+)\.([0-9]+)", re.ASCII)
 TAG_RE = re.compile(r"v([0-9]+)\.([0-9]+)\.([0-9]+)", re.ASCII)
 IDENTITY_RE = re.compile(r'\d+\)\s+[0-9A-F]{40}\s+"(Developer ID Application: .*\(([A-Z0-9]+)\))"')
-# Any identity, for the failure log: (kind, team or "", status or ""); the name between them is not captured.
-IDENTITY_ANY_RE = re.compile(r'\d+\)\s+[0-9A-F]{40}\s+"([^":]+):[^"]*?(?:\(([A-Z0-9]+)\))?"(?:[ \t]+\(([^)\n]*)\))?')
+# Any identity, for the failure log: (sha1, kind, team or "", status or ""); the name is not captured.
+IDENTITY_ANY_RE = re.compile(
+    r'\d+\)\s+([0-9A-F]{40})\s+"([^":]+):[^"]*?(?:\(([A-Z0-9]+)\))?"(?:[ \t]+\(([^)\n]*)\))?')
+DEVELOPER_ID = "Developer ID Application"
+WRONG_KIND = ("certificate invalid: MACOS_CERT_P12 holds {kinds}, not a Developer ID Application certificate: in "
+              "Keychain Access (login, My Certificates) export the one named \"Developer ID Application: …\" "
+              "and set MACOS_CERT_P12 and MACOS_CERT_PASSWORD again")
 # Apple's public Developer ID intermediates (apple.com/certificateauthority): G2 for certificates since 2021, G1 before.
 APPLE_CAS = ("packaging/macos/certs/DeveloperIDG2CA.cer", "packaging/macos/certs/DeveloperIDCA.cer")
 INSTALL_URL = "https://github.com/ctng1213/WowAuction/blob/{tag}/INSTALL.md"
@@ -387,8 +392,10 @@ def find_identity(world: World, keychain: str) -> str:
         Its name, "Developer ID Application: <name> (<team>)".
 
     Raises:
-        BuildError: "certificate invalid: no Developer ID Application identity for team <team>", after logging
-            what the keychain holds (see `log_identities`).
+        BuildError: after logging what the keychain holds (see `log_identities`): WRONG_KIND when it holds
+            identities but no Developer ID Application one (the usual mistake: Xcode's Apple Development
+            certificate exported instead), else "certificate invalid: no Developer ID Application identity for
+            team <team>".
     """
     team = secret_id(world, "APPLE_TEAM_ID")
     listing = world.cmd(["security", "find-identity", "-v", "-p", "codesigning", keychain],
@@ -396,25 +403,34 @@ def find_identity(world: World, keychain: str) -> str:
     for match in IDENTITY_RE.finditer(listing):
         if match.group(2) == team:
             return match.group(1)
-    log_identities(world, keychain)
+    kinds = log_identities(world, keychain)
+    if kinds and DEVELOPER_ID not in kinds:
+        raise BuildError(WRONG_KIND.format(kinds=", ".join(sorted(kinds))))
     raise BuildError(f"certificate invalid: no Developer ID Application identity for team {team}")
 
 
-def log_identities(world: World, keychain: str) -> None:
+def log_identities(world: World, keychain: str) -> set[str]:
     """Log every code-signing identity in the keychain, valid or not, by kind, team and status, never by name.
 
     The names hold the developer's real name, and a public repository's logs are public; the team ID is a
-    secret, which GitHub masks.
+    secret, which GitHub masks. `find-identity` without -v lists each identity twice (all, then valid only), so
+    each certificate (by its SHA-1) is logged once, from the first list, which carries the trust status.
 
     Args:
         world: The outside world.
         keychain: The temporary keychain.
+
+    Returns:
+        The kinds found, e.g. {"Apple Development"}.
     """
     listing = world.run(["security", "find-identity", "-p", "codesigning", keychain], capture=True).out
-    found = IDENTITY_ANY_RE.findall(listing)
+    found: dict[str, tuple[str, str, str]] = {}
+    for sha1, kind, team, status in IDENTITY_ANY_RE.findall(listing):
+        found.setdefault(sha1, (kind, team, status))
     world.out(f"find-identity: {len(found)} code-signing identities in the keychain")
-    for kind, team, status in found:
+    for kind, team, status in found.values():
         world.out(f"  {kind} · team {team or '?'} · {status or 'valid'}")
+    return {kind for kind, _, _ in found.values()}
 
 
 def days_left(world: World, keychain: str, identity: str) -> int:
