@@ -280,3 +280,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-02: first Mac run fixes: the platform protocol's eleventh member `ca_bundle` (§6.2; TLS certificates for a build, FM58); the dashboard binds without a name lookup (FM59); the window accepts pywebview's `wkwebview` (FM60).
 - 2026-11-03: without a window the tray's loop takes the main thread (§6.1, FM61); the shell holds the log for its whole run (FM62).
 - 2026-11-03: the tray queues its AppKit work onto the main thread on macOS (FM65); the shared `NSApplication` of §6.1 is checked on the Mac.
+- 2026-11-03: a tray click runs the shell's action on its own thread (§6.1, FM66).
