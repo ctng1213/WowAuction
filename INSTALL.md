@@ -89,11 +89,13 @@ before they are made the normal release.
 ## 8. Uninstall
 
 - Windows: Settings, Apps, **AHSync**, Uninstall. It asks whether to also remove
-  your AHSync data. The default keeps it.
+  your AHSync data: settings, database, log and your auctionhouse.fyi key file.
+  The default keeps them.
 - Mac: choose **Quit AHSync** from the menu bar icon, then drag AHSync from Applications
   to the Bin. To remove everything, also delete
-  `~/Library/Application Support/AHSync` and
-  `~/Library/LaunchAgents/com.wowauction.ahsync.plist`.
+  `~/Library/Application Support/AHSync`,
+  `~/Library/LaunchAgents/com.wowauction.ahsync.plist` and your key file
+  `~/.ahsync/api_key`.
 
 ## 9. Building it yourself
 

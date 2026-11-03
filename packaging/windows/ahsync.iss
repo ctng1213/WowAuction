@@ -146,7 +146,7 @@ end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
-  DataRoot: String;
+  DataRoot, KeyDir: String;
 begin
   if CurUninstallStep = usUninstall then
   begin
@@ -156,13 +156,20 @@ begin
   end
   else if CurUninstallStep = usPostUninstall then
   begin
-    { Default is to keep the user's data. }
+    { Default is to keep the user's data. Yes also removes the key file setup
+      wrote (SPEC 3.7.4): a plain-text credential left behind is not what
+      "remove my data" means. Its folder goes only when nothing else is in it. }
     if not UninstallSilent then
     begin
       DataRoot := ExpandConstant('{localappdata}\AHSync');
-      if MsgBox('Also remove my AHSync data (settings, database and log in ' + DataRoot + ')?',
+      KeyDir := ExpandConstant('{%USERPROFILE}\.ahsync');
+      if MsgBox('Also remove my AHSync data (settings, database, log and your auctionhouse.fyi key)?',
                 mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+      begin
         DelTree(DataRoot, True, True, True);
+        DeleteFile(KeyDir + '\api_key');
+        RemoveDir(KeyDir);
+      end;
     end;
   end;
 end;
