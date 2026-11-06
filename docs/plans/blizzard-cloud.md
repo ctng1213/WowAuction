@@ -71,6 +71,18 @@ The user's decisions of 2026-11-06:
 - **The cadence watch is the recorder's `watch` subcommand**, writing `data/blizzard/cadence.json`; its result goes into SPEC §6 item 25 when it ends (26 h from 14:50 UTC).
 - **`tools/record_blizzard.py` is held to the conventions** (`CONVENTION_TOOLS`), with `tests/tools/test_record_blizzard.py`.
 
+**Decided during execution (Opus, M29, 2026-11-06).**
+
+- **`HttpRequest` gains `method` and `body`** (defaults GET and None, so every existing caller is unchanged): the token request is the only POST. `build_request` passes both to urllib; the Authorization header stays unredirected.
+- **The adapter decompresses gzip itself** (`UrllibTransport` returns raw bytes): a cut-off or corrupt body is a `BlizzardError` and nothing is stored (FM69).
+- **A regular auction's `buyout` is its total**, so the unit price is `buyout ÷ quantity` floored; every regular auction in M28's recording has quantity 1.
+- **One endpoint `304` and the other `200` is a mismatch**, like stamps more than 15 min apart (BZ9): the halves are from different refreshes; the next run fetches both again.
+- **An empty house is either body without an `auctions` array**; an empty list is a real answer (nothing listed).
+- **`context` and `modifiers` on item records do not key the item** (as AHF's key ignores them); every bonus list in M28's recording maps to a known suffix, so no recorded auction becomes an unvalued `−itemId`.
+- **SRC3 names a hypothetical hourly provider `extra`** instead of `blizzard`: blizzard is a book source now and wins by kind, so the scenario would no longer test the rank between remote sources of one kind (its row changed in this commit).
+- **No stack size is needed**: nothing reads the catalog's `stack`; the reference stack comes from the book.
+- **BZ6, BZ7 and BZ8 are split across M29 and M30**: the adapter's half (the token cache, the headers, the envelope and the key, both endpoints answering 304) is tested here; the collector's half (the state file, the metric, logs over a whole run) comes with M30 under the same IDs.
+
 ## 2. Working rules
 
 CLAUDE.md "How work is run" applies. In short: one worktree per milestone; `tools/verify.ps1` (tests, invariants, the whole-plan snapshot byte-identical unless this plan says it moves) before a commit; one commit per verified milestone with the attribution trailer; the plan's §1 gains any decision made during execution; LESSONS gains any wrong assumption found; SPEC and SCENARIOS are updated in the same commit as the code that makes them true, and a milestone's "planned" becomes "built" with module names.
