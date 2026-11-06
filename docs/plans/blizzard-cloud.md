@@ -83,6 +83,20 @@ The user's decisions of 2026-11-06:
 - **No stack size is needed**: nothing reads the catalog's `stack`; the reference stack comes from the book.
 - **BZ6, BZ7 and BZ8 are split across M29 and M30**: the adapter's half (the token cache, the headers, the envelope and the key, both endpoints answering 304) is tested here; the collector's half (the state file, the metric, logs over a whole run) comes with M30 under the same IDs.
 
+**Dependency review: `aws-cdk-lib` and `constructs` (Opus, M30, 2026-11-06; the `dependency-review` skill).**
+
+1. **Need.** Decision 15 (infrastructure as code). The stack is a bucket with lifecycle rules, two functions, two schedules, an S3 notification with a dead-letter queue, a secret grant, CloudFront with origin access control and a bucket policy, an SNS topic, alarms and a budget: about a dozen resources with least-privilege policies between them. Hand-written CloudFormation could do it with no dependency, but the IAM policies, the OAC bucket-policy wiring and the asset upload are exactly where hand-written templates go wrong, and CDK's `assertions` module lets SEC17 test the template. The standard library has nothing comparable.
+2. **Candidates.** CDK v2 in Python (proposed: same language as the repo, typed, testable with `aws_cdk.assertions`); AWS SAM (YAML, simpler for functions but weak for CloudFront, budgets and policy tests); raw CloudFormation (no dependency, no tests of intent). Terraform was not considered: a second toolchain and state backend for one stack.
+3. **Maintenance.** Maintained by AWS; 2.275.0 is the current release, with releases about weekly; a large team, not one person's project. `constructs` is AWS's too.
+4. **Compatibility.** Requires Python ≥ 3.10 (the repo is 3.12) and Node.js for the jsii runtime and the CLI: Node 24.14 and CDK CLI 2.1148 are already on the user's Mac. No overlap with any pinned package (`requirements-dev.txt` has pytest and coverage, `requirements-app.txt` the app shell's set). Not needed on Windows or in CI's `test` job unless `tests/infra/` runs there (decided below).
+5. **Licence.** Apache-2.0 for the CDK packages and jsii; the tree is MIT (attrs, cattrs, typeguard, publication), BSD-3-Clause (python-dateutil), PSF-2.0 (typing_extensions), Apache-2.0 (tzdata). All permissive; nothing is distributed to users: it builds the infrastructure only.
+6. **Security.** `pip-audit` against OSV: no known vulnerabilities in the resolved tree (13 packages). It reads no untrusted input at run time: it runs on the developer's machine to synthesize a template from our own code. The jsii runtime starts a Node process for each synth.
+7. **Runtime cost.** 440 MB installed (mostly the bundled AWS CLI and Node proxy assets); imports in about 3 s; a synth takes seconds. None of it is in the app or the Lambda.
+8. **Packaging.** Pure wheels, no native build. Never bundled: `tools/build_lambda.py` stages only `ahsync/` and `ahcloud/`, and AR9 checks that nothing outside `infra/` imports `aws_cdk`.
+9. **Exit.** Contained in `infra/` (two or three modules). `cdk synth` emits plain CloudFormation, so leaving CDK means committing that template and deploying it directly; the deployed resources do not depend on CDK.
+
+Pinned exactly with the resolved tree in `requirements-infra.txt`. **CI:** `tests/infra/` is skipped when `aws_cdk` is not importable, so the existing `test` job on Windows and macOS is unchanged; the stack tests run where the infra requirements are installed (the user's Mac, and later a CI job if wanted).
+
 ## 2. Working rules
 
 CLAUDE.md "How work is run" applies. In short: one worktree per milestone; `tools/verify.ps1` (tests, invariants, the whole-plan snapshot byte-identical unless this plan says it moves) before a commit; one commit per verified milestone with the attribution trailer; the plan's §1 gains any decision made during execution; LESSONS gains any wrong assumption found; SPEC and SCENARIOS are updated in the same commit as the code that makes them true, and a milestone's "planned" becomes "built" with module names.
