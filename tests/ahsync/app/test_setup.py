@@ -154,3 +154,13 @@ def test_a_folder_name_utf8_cannot_encode_fails_as_oserror_without_a_temp_file(t
     with pytest.raises(OSError, match="config.toml not written"):
         setup.write_config(tmp_path / "config.toml", request)
     assert list(tmp_path.iterdir()) == []
+
+
+def test_DR7_a_fresh_forever_install_without_interface_is_accepted_and_gets_interface_addons(tmp_path):
+    wow = tmp_path / "World of Warcraft" / "_forever_"
+    wow.mkdir(parents=True)
+    (wow / ".flavor.info").write_text("Product Flavor!STRING:0\nwowf\n", encoding="utf-8")   # no Interface, no WTF
+    assert setup.folder_check(str(wow)) == {"ok": True, "text": "found WoW: Forever · AddOns will be created"}
+    request = setup.parse_setup(body(wow))
+    setup.save_setup(request, tmp_path / "app" / "config.toml", tmp_path / "home", lambda path: None)
+    assert (wow / "Interface" / "AddOns").is_dir()

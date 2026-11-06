@@ -15,7 +15,7 @@ def test_DR1_the_per_user_folders_are_under_application_support():
 
 def test_the_wow_candidates_put_forever_s_folder_first():
     candidates = [p.as_posix() for p in MacPlatform(Path("/Users/u")).wow_candidates()]
-    assert candidates[0] == "/Applications/World of Warcraft/_classic_beta_"
+    assert candidates == ["/Applications/World of Warcraft/_forever_", "/Applications/World of Warcraft/_classic_beta_"]
     assert all(c.startswith("/Applications/World of Warcraft/") for c in candidates)
 
 

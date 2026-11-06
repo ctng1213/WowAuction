@@ -109,7 +109,8 @@ def autostart_line(enabled: bool, translocated: bool) -> dict:
     return {"enabled": enabled, "available": not translocated, "note": note}
 
 
-def wow_check(wow_path: str, has_interface: bool, has_addons: bool, accounts: int, creatable: bool) -> dict:
+def wow_check(wow_path: str, has_interface: bool, has_addons: bool, accounts: int, creatable: bool,
+              is_forever: bool = False) -> dict:
     """The WoW folder's check pill and line (SPEC §3.7.4; DR5, DR6).
 
     Args:
@@ -119,13 +120,16 @@ def wow_check(wow_path: str, has_interface: bool, has_addons: bool, accounts: in
         accounts: The `WTF/Account/*` folders.
         creatable: Setup's check: a folder with Interface but no AddOns passes, as the save creates AddOns.
             False for a configured folder, which the addon install needs complete.
+        is_forever: The folder is a WoW: Forever install (.flavor.info wowf): setup creates Interface/AddOns.
 
     Returns:
-        {"ok", "pill", "text"}: "found Interface/AddOns · 2 accounts", "not found: …" or
-        "no Interface/AddOns under <wow_path>".
+        {"ok", "pill", "text"}: "found Interface/AddOns · 2 accounts", "found WoW: Forever · AddOns will be
+        created", "not found: …" or "no Interface/AddOns under <wow_path>".
     """
     if not wow_path:
         return {"ok": False, "pill": "not found", "text": NOT_DETECTED}
+    if not has_addons and creatable and is_forever and not has_interface:
+        return {"ok": True, "pill": "found", "text": "found WoW: Forever · AddOns will be created"}
     if not has_addons and not (creatable and has_interface):
         return {"ok": False, "pill": "not found", "text": f"no Interface/AddOns under {wow_path}"}
     counted = "no accounts yet" if accounts == 0 else f"{accounts} account{'s' if accounts > 1 else ''}"

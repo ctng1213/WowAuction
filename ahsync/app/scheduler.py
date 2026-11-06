@@ -145,7 +145,7 @@ def find_savedvars(wow_path: Path) -> list[Path]:
     """Find every account's AHProfit SavedVariables file (SPEC §2.2).
 
     Args:
-        wow_path: The client folder, e.g. .../_classic_beta_.
+        wow_path: The client folder, e.g. .../_forever_.
 
     Returns:
         Paths matching WTF/Account/*/SavedVariables/AHProfit.lua, sorted.

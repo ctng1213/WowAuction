@@ -34,7 +34,7 @@ Names are placeholders.
 | WoW: Forever had **no official Blizzard AH API** at launch, and auctionhouse.fyi (AHF) prices come from players scanning in game, as do AHledger's (§2.3). **Found 2026-11-06 (§2.4, LESSONS):** Blizzard's Game Data API does serve Forever's auction houses, unofficially and undocumented, under a ruleset (`/data/wow/ruleset/{id}/auctions/{house}`, namespace `dynamic-forever-us`), refreshed about hourly, every auction with an id. | Until the cloud source is built (M28–M35): data is only as fresh as someone's last scan, so AHSync takes every source it can get and keeps the most granular observation of each item and hour (§2.2). After it: a cloud job snapshots the house every hour and publishes the analysis; AHSync reads the summary. Either way every price keeps its observation time, and results show their age and a confidence level. |
 | AHF CDN retention: public **hour candles 7 days**, public **day candles 7 days**. Premium adds 14 days of hours and 90 days of days. | We build our own 90-day hourly history. See §2.1. |
 | Addons **cannot buy or post automatically**. Each action needs a hardware click. | We recommend and pre-fill searches. You click. |
-| Forever client: folder `_classic_beta_` (may be renamed at the Nov 4 launch), `## Interface: 16001`, client build 1.60.x. | The WoW path is configurable, and every game-API call goes through a thin adapter. |
+| Forever client: folder **`_forever_`** since the Nov 4 launch (the beta's was `_classic_beta_`; verified on the user's Mac 2026-11-06, flavor `wowf` in its `.flavor.info`), `## Interface: 16001`, client build 1.60.1 (the release is 1.60.1.70790). | The WoW path is configurable, and every game-API call goes through a thin adapter. |
 
 ## 2. Data sources
 
@@ -1497,7 +1497,7 @@ Some items you hold are for your own use: food, potions, mats for your own gear.
 api_key = ""                                  # optional, discouraged: prefer env AUCTIONHOUSE_APIKEY or %USERPROFILE%\.ahsync\api_key
                                               # lookup order: env var, then key file, then this value
 markets = ["forever.pvp.horde.us"]
-wow_path = "C:/Program Files (x86)/World of Warcraft/_classic_beta_"
+wow_path = "C:/Program Files (x86)/World of Warcraft/_forever_"
 retention_days = 90
 dashboard_port = 8765
 live_refresh_minutes = 15
@@ -1652,11 +1652,11 @@ Everything that decides what AHSync does is written and tested once. An OS answe
 
 #### 3.7.3 Paths
 
-**Built (M22)**: the per-user folders (`app_dirs`, DR1) and the candidate lists (`wow_candidates`; `_classic_beta_`, `_classic_`, `_classic_era_`, `_anniversary_`). The probe `ahsync/app/wow_paths.py` is built (M23): `detect` over the candidates the shell passes in (`ahsync/` can't import the platform layer) and `check`, which only reads.
+**Built (M22)**: the per-user folders (`app_dirs`, DR1) and the candidate lists (`wow_candidates`; since 2026-11-06 `_forever_` then `_classic_beta_`, under both `Program Files` roots on Windows; the Classic, Classic Era and Anniversary folders were dropped: they are other games, and detection could have picked one that holds addons). The probe `ahsync/app/wow_paths.py` is built (M23): `detect` over the candidates the shell passes in (`ahsync/` can't import the platform layer) and `check`, which only reads.
 
 - **Packaged**: Windows `%LOCALAPPDATA%\AHSync\`, macOS `~/Library/Application Support/AHSync/`; each holds `config.toml` and `data/` (database, backups, log, lock, stop file, `updates/`). Not Roaming: the database is large and machine-local. `platform.current().app_dirs()` decides them and the shell passes them to `run()` as `--data` and `--config` (DR1).
 - **From source**: `python -m ahsync` keeps `./data` and `./config.toml`, so the developer loop, `tools/deploy.py --restart` and the snapshot tools are untouched (DR1). A developer's `./data` is never migrated to the per-user folder.
-- **The WoW folder** (`ahsync/app/wow_paths.py`, shared) probes `platform.current().wow_candidates()`: Windows `C:\Program Files (x86)\World of Warcraft\<name>`, macOS `/Applications/World of Warcraft/<name>`, `<name>` from a list with `_classic_beta_` first (the Nov 4 launch may rename it, §1). A folder is valid when `Interface/AddOns` exists; when `Interface` exists but `AddOns` does not, as in a fresh client, `AddOns` is created when setup saves; a Check only reads (DR6). The macOS path is **UNVERIFIED** (§6 item 20).
+- **The WoW folder** (`ahsync/app/wow_paths.py`, shared) probes `platform.current().wow_candidates()`: Windows `C:\Program Files (x86)\World of Warcraft\<name>`, macOS `/Applications/World of Warcraft/<name>`, `<name>` `_forever_` then `_classic_beta_`, and on Windows also under `C:\Program Files\World of Warcraft` (newer installs). **Detection** (`wow_paths.detect`) takes the candidate whose `.flavor.info` names flavor `wowf` (Battle.net writes it into every install; WoW: Forever's, seen 2026-11-06), else the first that holds `Interface/AddOns`. A folder is valid when `Interface/AddOns` exists; when `Interface` exists but `AddOns` does not, or the folder is a Forever install with no `Interface` yet (a fresh install has no addon folder until an addon is installed), setup creates `Interface/AddOns` when it saves ("found WoW: Forever · AddOns will be created"); a Check only reads (DR6). The macOS path is verified (§6 item 20).
 
 #### 3.7.4 First-run setup
 
@@ -1675,7 +1675,7 @@ Everything that decides what AHSync does is written and tested once. An OS answe
   ```
   {"version": "0.3.1", "version_text": "0.3.1 · built 2 Nov", "dev": false, "channel": "stable",
    "setup": false,                                           -- true while the setup server answers
-   "wow_path": "C:\\Program Files (x86)\\World of Warcraft\\_classic_beta_",
+   "wow_path": "C:\\Program Files (x86)\\World of Warcraft\\_forever_",
    "wow_check": {"ok": true, "pill": "found", "text": "found Interface/AddOns · 2 accounts"},
    "markets": {"rulesets": [["normal", "Normal"], ["pvp", "PvP"], ["rp", "RP"]],
                "factions": [["alliance", "Alliance"], ["horde", "Horde"]]},
@@ -2323,7 +2323,7 @@ Data moves through many hand-offs: AHF and AHledger → AHSync → SQLite → `M
 7. **Recipe cooldown API** for transmutes and similar recipes.
 8. **Tracking hooks**: the post and buy functions to hook, the sold / expired / won system messages, the mail invoice API, and the send-mail hook. Also check whether mail between your own characters arrives instantly or after a delay (it changes how mail steps are spaced in a chain).
 9. **wow-ui-sim spike** (§8.4, layer 3): can it load a Classic-style addon (`## Interface: 16001`) and render AHProfit's frames headless through Docker on Windows? It targets the retail client, and Classic support is not documented.
-10. **Folder name after launch.**
+10. ~~**Folder name after launch.**~~ Answered 2026-11-06: `_forever_` (§1, §3.7.3).
 11. ~~**Item key from a link**~~: done 2026-10-16.
    - Forever's links use the modern format: `item:id:enchant:gem1:gem2:gem3:gem4:suffixID:unique:level:spec:modifiersMask:context:numBonusIDs:bonusID…`. A random suffix is a **bonus ID**; the classic suffix field is empty.
    - AHF's `/items.bonusLists` maps a bonus ID to `[suffix id, stats]`, and AHF's key uses **`v = 2 × suffix id`** (true for all 523 variants in `/items`).
@@ -2349,7 +2349,7 @@ Data moves through many hand-offs: AHF and AHledger → AHSync → SQLite → `M
     - Whether the table ever lists suffixed items under a base id.
     `tools/record_fixtures.py --ahledger` recorded the fixtures live on 2026-11-01.
 
-20. **Forever's macOS install folder** (§3.7.3, M23/M26): `/Applications/World of Warcraft/_classic_beta_` is inferred from a forum post naming `/Applications/World of Warcraft/_classic_beta_/WTF/` and is **UNVERIFIED**; checked on the user's Apple Silicon Mac during M23 or M26, and `wow_candidates()` corrected if it differs.
+20. **Forever's macOS install folder** (§3.7.3, M23/M26). **Answered 2026-11-06:** `/Applications/World of Warcraft/_forever_` on the user's Mac (the release; the beta's `_classic_beta_` stays as the second candidate). Windows uses the same folder names under Battle.net's install root; its two usual roots are both probed.
 21. **Hardened-runtime entitlements** the bundled Python needs (§3.7.12, M26): `com.apple.security.cs.allow-unsigned-executable-memory` is expected, `com.apple.security.cs.disable-library-validation` possibly; settled by the first notarization, whose log names any binary it rejects; M26 ships the first alone. Also to confirm at the first CI run: Inno Setup preinstalled on `windows-latest` (fallback `choco install innosetup`) and Lua 5.1 through `leafo/gh-actions-lua` on both images.
 22. **pystray and pywebview sharing one `NSApplication` on macOS** (§3.7.1, M24/M26): pystray's `Icon.run_detached()` with `darwin_nsapplication` under pywebview's loop is documented by pystray but **UNVERIFIED** here, as is cancelling pywebview's `closing` event to hide the window on both backends; checked on the user's Mac, and the Windows half from source in M24 (built: the window, the tray, Quit's close and the hide on close work with Edge WebView2 and pystray on Windows 11). The first Mac run (2026-11-02) found pywebview's macOS renderer is named `wkwebview`, so the window was refused (FM60); with no GUI loop on the main thread the browser fallback shows as not responding and no menu-bar icon appears. The second Mac run (2026-11-03) opened the window, and the tray failed: pystray makes its `NSStatusItem` in `Icon()`, which the shell called from pywebview's start callback on a background thread, and AppKit refused (FM65). With every tray AppKit call queued onto the main thread, the icon shows under pywebview's loop, updates and stops (checked with real pywebview 6.2 and pystray 0.19.5 on the user's Mac); the hide-on-close half is still to check in the packaged app.
 

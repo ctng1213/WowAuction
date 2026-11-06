@@ -57,7 +57,7 @@ class Config:
     """Every setting from SPEC §3.6, with its default. Money in copper, shares as 0..1 fractions."""
 
     markets: tuple[str, ...] = ("forever.pvp.horde.us",)
-    wow_path: str = "C:/Program Files (x86)/World of Warcraft/_classic_beta_"
+    wow_path: str = "C:/Program Files (x86)/World of Warcraft/_forever_"
     retention_days: int = 90
     dashboard_port: int = 8765
     live_refresh_minutes: int = 15

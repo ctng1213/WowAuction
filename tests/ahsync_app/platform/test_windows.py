@@ -21,8 +21,9 @@ def test_without_localappdata_the_profile_s_appdata_local_is_used():
 
 def test_the_wow_candidates_put_forever_s_folder_first():
     candidates = [str(p) for p in WindowsPlatform({}, Path("C:/Users/u")).wow_candidates()]
-    assert candidates[0] == r"C:\Program Files (x86)\World of Warcraft\_classic_beta_"
-    assert all(c.startswith("C:\\Program Files (x86)\\World of Warcraft\\") for c in candidates)
+    assert candidates == [r"C:\Program Files (x86)\World of Warcraft\_forever_", r"C:\Program Files\World of Warcraft\_forever_",
+                          r"C:\Program Files (x86)\World of Warcraft\_classic_beta_",
+                          r"C:\Program Files\World of Warcraft\_classic_beta_"]   # Forever under either root first
     assert len(set(candidates)) == len(candidates)
 
 
