@@ -112,7 +112,7 @@ def disenchant_page(state: StateReader, char_ids: list[str], stats: dict[int, It
         main_mat = max(outcomes, key=lambda o: (o[1] * (o[2] + o[3]), -o[0]))[0]
         rows.append(views.disenchant_row(views.DisenchantInput(
             t.key, info.name, info.quality or 0, info.ilvl, t.buy_copper, mats, t.ev, _market(stats.get(main_mat)),
-            stats[t.key].cur_age_ms), total_gold))
+            None if stats[t.key].cur_age_ms is None else max(0, stats[t.key].cur_age_ms)), total_gold))   # IU6
     return {"rows": rows, "hidden": len(dropped) + too_risky, "notice": views.disenchant_notice(best_skill),
             "help": views.COLUMN_HELP}
 

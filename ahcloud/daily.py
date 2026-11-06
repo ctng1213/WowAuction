@@ -280,7 +280,7 @@ def _ingest_and_publish(db: Database, data: Store, intel_store: Store, client: B
         db.set_meta(LAST_INGESTED, str(last))
     intel, _failed = analyze_market(db, market, last, settings, (SRC,))
     intel = replace(intel, catalog=catalog_of(db, list(intel.items)), coverage=coverage(db, market, last),
-                    settings=settings_to_dict(settings))
+                    settings=settings_to_dict(settings), ages_at_ms=last)
     try:
         prior = read_latest(intel_store, market)
     except ValueError:                                              # a torn pointer: rebuild the rings from now

@@ -9,7 +9,7 @@ same engine.tracking.profit_sums over the same judged rows the History page uses
 """
 from __future__ import annotations
 
-from ahsync.config import Config, market_sources
+from ahsync.config import Config, is_cloud_market, market_sources
 from ahsync.db.sqlite import Database
 from ahsync.engine.sell_record import calibration
 from ahsync.engine.history_view import judged_rows
@@ -103,6 +103,24 @@ def _coverage_sources(cfg: Config, market: str) -> tuple[str, ...]:
     return tuple(used)
 
 
+def _cloud_facts(db: Database, cfg: Config, market: str) -> dict:
+    """A cloud market's summary facts (S21, S23, S24).
+
+    Args:
+        db: Database.
+        cfg: Config ([cloud] poll_minutes).
+        market: A cloud market.
+
+    Returns:
+        MarketFacts' cloud fields: cloud_on, the published document's built and prices times, the next poll.
+    """
+    intel = db.read_intel(market)
+    _etag, _updated, fetched, _held = db.source_state(market, "cloud")
+    return {"cloud_on": True, "cloud_built_ms": intel.built_ms if intel else None,
+            "cloud_prices_ms": (intel.observations_until_ms or intel.built_ms) if intel else None,
+            "cloud_next_ms": None if fetched is None else fetched + cfg.cloud.poll_minutes * 60_000}
+
+
 def status_facts(db: Database, cfg: Config, now_ms: int) -> StatusFacts:
     """Gather the Status page's facts.
 
@@ -125,9 +143,12 @@ def status_facts(db: Database, cfg: Config, now_ms: int) -> StatusFacts:
         end = now_ms // HOUR_MS                                                           # the coverage window, M20
         hours = db.observed_hours(market, end - COVERAGE_HOURS, end - 1)
         partial = db.newest_partial_scan(market, (end - COVERAGE_HOURS) * HOUR_MS, now_ms)
+        cloud = _cloud_facts(db, cfg, market) if is_cloud_market(cfg, market) else {}
+        if cloud:
+            newest = cloud["cloud_prices_ms"]                     # the summary's prices are the market's (D100)
         markets.append(MarketFacts(market, state.last_hour, state.last_run, newest, priced, oldest, latest, local, books,
                                    _backtests(db, market, now_ms), primary, on, updated_ms, items,
-                                   hours, _coverage_sources(cfg, market), partial))
+                                   hours, _coverage_sources(cfg, market), partial, **cloud))
     characters = tuple(CharacterFacts(*row) for row in db.characters())
     results = [(p, outcome == "sold") for p, outcome in db.conn.execute(
         "SELECT p_at_post, outcome FROM posts WHERE outcome IN ('sold', 'expired') AND p_at_post IS NOT NULL "

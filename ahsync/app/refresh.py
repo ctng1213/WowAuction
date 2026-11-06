@@ -16,8 +16,10 @@ from dataclasses import dataclass, field
 from ahsync.analysis.market import HISTORY_DAYS, analyze_market, with_scan
 from ahsync.collect.own_mail import recompute_mail_volume
 from ahsync.collect.local_scans import recompute_stale_volume
-from ahsync.config import Config, market_settings, market_sources, portfolio_settings
+from ahsync.config import Config, is_cloud_market, market_settings, market_sources, portfolio_settings, with_document_settings
 from ahsync.db.sqlite import Database
+from ahsync.engine.sellprob import MarketSettings
+from ahsync.intel.contract import MarketIntelligence, ages_reference_ms
 from ahsync.engine.characters_view import CharacterSheet, characters_view
 from ahsync.engine.plan_chains import Arriving
 from ahsync.engine.positions import committed
@@ -126,6 +128,48 @@ def refresh_market(db: Database, market: str, now_ms: int, cfg: Config, result: 
     result.items += len(intel.items)
 
 
+def scanned_intel(db: Database, intel: MarketIntelligence, cfg: Config) -> MarketIntelligence:
+    """The published intelligence with your in-game scans since its reference time applied (IU6).
+
+    A cloud document carries the settings its baselines were built with; a desktop-built one was built with
+    this config's.
+
+    Args:
+        db: Database.
+        intel: A market's published intelligence.
+        cfg: Config.
+
+    Returns:
+        analysis.market.with_scan of it.
+    """
+    settings = MarketSettings.from_dict(intel.settings) if intel.settings else market_settings(cfg)
+    vendor = {k: i.vendor_sell or 0 for k, i in db.items().items()}
+    return with_scan(intel, *db.scans_since(intel.market, ages_reference_ms(intel)), settings, vendor)
+
+
+def stage_document(db: Database, intel: MarketIntelligence, now_ms: int, offset_ms: int, cfg: Config) -> None:
+    """Stage a market's plan and pages from a published document plus your scans (SPEC §2.4, IU6, BZ17).
+
+    A cloud document's analysis settings drive the plan for the keys it shares with analysis; a local value that
+    differs gets an info line on Status (`cloud_settings:<market>`).
+
+    Args:
+        db: Database (inside a transaction).
+        intel: The market's document.
+        now_ms: Now.
+        offset_ms: Local time minus UTC.
+        cfg: Config.
+    """
+    planning, differs = with_document_settings(cfg, intel.settings)
+    if differs:
+        db.set_status(f"cloud_settings:{intel.market}", "info", "cloud_settings",
+                      {"market": intel.market, "differs": {k: list(v) for k, v in sorted(differs.items())}}, now_ms)
+    else:
+        db.clear_status(f"cloud_settings:{intel.market}")
+    scanned = scanned_intel(db, intel, planning)                                            # IU6
+    _stage_recommendations(db, intel.market, scanned.items, now_ms, offset_ms, planning, ages_reference_ms(scanned))
+
+
 def _stage_recommendations(db: Database, market: str, stats: dict, now_ms: int, offset_ms: int, cfg: Config,
                            built_ms: int) -> None:
     """Stage a market's plan and every page built from its intelligence and character state (SPEC §3.5).
@@ -182,7 +226,7 @@ def rebuild_gathering(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0
         intel = db.read_intel(market)
         if intel is None:
             continue
-        scanned = with_scan(intel, *db.scans_since(market, intel.built_ms))
+        scanned = scanned_intel(db, intel, cfg)
         characters = db.characters_in(market)
         body = gathering_page(db, market, [c for c, _ in characters], scanned.items, db.items(), now_ms, offset_ms, cfg)
         with db.transaction():
@@ -192,7 +236,8 @@ def rebuild_gathering(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0
     return markets
 
 
-def replan_all(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0) -> list[str]:
+def replan_all(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0,
+               documents: dict[str, MarketIntelligence] | None = None) -> list[str]:
     """The incremental update: re-plan every market from its published intelligence (SPEC §3.1.1, IU13).
 
     It runs after a SavedVariables read, so what you did in game (bought, crafted, posted, moved
@@ -205,20 +250,24 @@ def replan_all(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0) -> li
         now_ms: Now.
         cfg: Config.
         offset_ms: Local time minus UTC, for the plan pages.
+        documents: Market -> a newly fetched cloud document (collect.cloud_intel), staged and published with this
+            re-plan after its own drop_staging, so it can't be lost (SPEC §2.4, BZ17); None for a plain re-plan.
 
     Returns:
         The markets re-planned (those with published intelligence); [] when it failed, in which
         case the previous plan and pages stay live and the log says why.
     """
-    intels = {m: i for m in cfg.markets if (i := db.read_intel(m)) is not None}
+    documents = documents or {}
+    intels = {m: i for m in cfg.markets if (i := documents.get(m) or db.read_intel(m)) is not None}
     markets = list(intels)
     try:
         db.drop_staging()
         for market in markets:
-            scanned = with_scan(intels[market], *db.scans_since(market, intels[market].built_ms))   # IU6
             with db.transaction():
-                _stage_recommendations(db, market, scanned.items, now_ms, offset_ms, cfg, scanned.built_ms)
-        db.publish_refresh(markets, with_intel=False)       # the stored intelligence stays the analysis' own
+                if market in documents:
+                    db.stage_intel(documents[market])
+                stage_document(db, intels[market], now_ms, offset_ms, cfg)
+        db.publish_refresh(markets, with_intel=set(documents))   # only a new document replaces the stored one
     except Exception as error:                         # noqa: BLE001  keep the last good plan (SPEC §5.2 rule 4)
         log.error("re-plan failed: %s: %s", type(error).__name__, error)
         db.drop_staging()
@@ -243,7 +292,16 @@ def refresh_all(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0) -> R
     result = RefreshResult(list(cfg.markets))
     try:
         db.drop_staging()
+        published, analysed = [], set()
         for market in cfg.markets:
+            if is_cloud_market(cfg, market):                # no history, no volume, no analysis: the cloud's (BZ20)
+                intel = db.read_intel(market)
+                if intel is not None:
+                    with db.transaction():
+                        stage_document(db, intel, now_ms, offset_ms, cfg)
+                    published.append(market)
+                    result.items += len(intel.items)
+                continue
             with db.transaction():                     # estimates from an older method first (V24)
                 old = recompute_stale_volume(db, market)
                 if old:
@@ -254,7 +312,9 @@ def refresh_all(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0) -> R
                 recompute_mail_volume(db, market, [c for c, _ in db.characters_in(market)],   # V35
                                       (now_ms - HISTORY_DAYS * DAY_MS) // DAY_MS, now_ms // DAY_MS)
             refresh_market(db, market, now_ms, cfg, result, offset_ms)
-        db.publish_refresh(list(cfg.markets))
+            published.append(market)
+            analysed.add(market)
+        db.publish_refresh(published, with_intel=analysed)
     except Exception as error:                         # noqa: BLE001  keep the last good numbers (SPEC §5.2 rule 4)
         result.error = f"{type(error).__name__}: {error}"
         log.error("refresh failed: %s", result.error)

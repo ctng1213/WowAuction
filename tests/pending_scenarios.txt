@@ -59,10 +59,7 @@
 DR22 DR23 FM54 FM55 SEC15
 
 # Blizzard source and the cloud market (SPEC §2.4, M28-M35; docs/plans/blizzard-cloud.md)
-BZ17 BZ19-BZ30 BZ35 BZ36
+BZ22-BZ30 BZ35 BZ36
 K8
 A92
-FM71
-SEC16
-S21-S24
 D99-D102

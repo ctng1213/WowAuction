@@ -22,6 +22,8 @@ from ahsync.engine.views import SOURCE_URLS, age_text, round_half_up, signed_mon
 HOUR_MS = 3_600_000
 DAY_MS = 86_400_000
 STALE_MS = 6 * HOUR_MS          # newest primary-source price older than this: the data has stopped arriving (D33)
+CLOUD_STALE_MS = 3 * HOUR_MS    # a cloud market's prices older than this: no new summary (S23)
+BASELINES_STALE_MS = 36 * HOUR_MS   # its baselines older than this: no daily run (S24)
 LEVEL_ORDER = {"error": 0, "warn": 1, "info": 2}
 
 
@@ -57,6 +59,10 @@ class MarketFacts:
     coverage_hours: Mapping[str, Sequence[int]] = field(default_factory=dict)   # observed hours per source, last 2,160 h (M20)
     coverage_sources: tuple[str, ...] = ("local",)   # the sources the Data coverage card lists: "local" + remote in use
     partial_scan: tuple[int, float] | None = None    # newest partial local scan in the window: (time ms, coverage)
+    cloud_on: bool = False        # the market's intelligence is the cloud's summary (SPEC §2.4): its own line and alerts
+    cloud_built_ms: int | None = None    # the summary's baselines (its built_ms); None before the first summary
+    cloud_prices_ms: int | None = None   # its prices' time (observations_until_ms)
+    cloud_next_ms: int | None = None     # when AHSync asks for a newer one
 
 
 @dataclass(frozen=True)
@@ -280,6 +286,13 @@ def message(row: StatusRow, offset_ms: int) -> tuple[str, str]:
         "ahledger_no_market": ("AHledger has no market", f"AHledger has no market {market}"),
         "ahledger_backfill": ("AHledger backfill", f"AHledger backfill: {d.get('done', 0):,} of {d.get('total', 0):,} items"
                               + (" · resumes at the next run" if d.get("paused") else "")),
+        "cloud_schema": ("AHSync is out of date", f"{market}: the market summary is newer than this AHSync reads: "
+                                                  "update it."),                                   # S22
+        "cloud_fetch": ("Market summary not read", f"{market}: {d.get('detail', '')}. The last summary stays."),   # BZ19
+        "cloud_settings": ("Market summary settings", f"{market}: the market summary uses "
+                           + ", ".join(f"{k} {v[0]}" for k, v in sorted(d.get("differs", {}).items()))
+                           + "; your config says "
+                           + ", ".join(f"{v[1]}" for _, v in sorted(d.get("differs", {}).items())) + "."),   # BZ17
         "restored": ("Database restored", f"The database was damaged and was restored from "
                                           f"{d.get('backup') or 'nothing (started empty)'}."),
     }
@@ -308,6 +321,34 @@ def _bad_files(rows: Sequence[StatusRow], offset_ms: int) -> list[tuple[StatusRo
         text = (f"{len(hours)} hours of {market} failed {tries} times: {spans}. AHSync retries them every run; "
                 f"usually AHF simply has no file for those hours.")
         out.append((min(group, key=lambda r: r.topic), "AHF files failing", text))
+    return out
+
+
+def _cloud_alerts(m: MarketFacts, now_ms: int, offset_ms: int) -> list[tuple[StatusRow, str, str]]:
+    """A cloud market's staleness alerts: its prices (S23) and its baselines (S24), apart.
+
+    Args:
+        m: The market.
+        now_ms: Now.
+        offset_ms: Local time minus UTC, ms.
+
+    Returns:
+        (row, title, text) per alert: none yet, prices over 3 h old, baselines over 36 h old.
+    """
+    if m.cloud_prices_ms is None or m.cloud_built_ms is None:
+        return [(StatusRow(f"cloud_stale:{m.market}", "warn", "cloud_stale", {}, now_ms), "No market summary yet",
+                 f"{m.market}: AHSync hasn't read the cloud's market summary yet.")]
+    out = []
+    if now_ms - m.cloud_prices_ms > CLOUD_STALE_MS:
+        out.append((StatusRow(f"cloud_stale:{m.market}", "warn", "cloud_stale", {}, now_ms),
+                    f"No new market summary for {age_text(now_ms - m.cloud_prices_ms)}",
+                    f"{m.market}: prices to {when(m.cloud_prices_ms, offset_ms)}. The cloud collects every hour; "
+                    f"the numbers rest on the last summary until a new one arrives."))
+    if now_ms - m.cloud_built_ms > BASELINES_STALE_MS:
+        out.append((StatusRow(f"cloud_baselines:{m.market}", "warn", "cloud_baselines_stale", {}, now_ms),
+                    f"Baselines are {age_text(now_ms - m.cloud_built_ms)} old",
+                    f"{m.market}: the windows and sales rates are from {when(m.cloud_built_ms, offset_ms)}; "
+                    f"prices still follow the market hourly."))
     return out
 
 
@@ -348,6 +389,9 @@ def alerts(rows: Sequence[StatusRow], facts: StatusFacts, now_ms: int, offset_ms
     items = [(r, *message(r, offset_ms)) for r in rows if r.kind not in ("bad_file", "premium_until")]
     items += _bad_files([r for r in rows if r.kind == "bad_file"], offset_ms)
     for m in facts.markets:
+        if m.cloud_on:
+            items += _cloud_alerts(m, now_ms, offset_ms)
+            continue
         stale = _stale(m, now_ms, offset_ms)
         if stale is not None:
             items.append((StatusRow(f"stale:{m.market}", "warn", "stale", {"source": m.primary}, now_ms), *stale))
@@ -398,8 +442,30 @@ def _market_card(m: MarketFacts, now_ms: int, offset_ms: int) -> dict:
         ["Your scans (7 d)", str(m.local_scans_7d), ""],
         [f"{source_label(m.primary)} order books (7 d)", str(m.primary_books_7d), "" if m.primary_books_7d else "muted"],
         *_ahledger_line(m, now_ms),
+        *_cloud_line(m, offset_ms),
         *_backtest_lines(m.backtests),
     ]}
+
+
+def _cloud_line(m: MarketFacts, offset_ms: int) -> list[list[str]]:
+    """The market card's "Market summary" line (S21, S24): the baselines' and the prices' times, and the next check.
+
+    Args:
+        m: The market.
+        offset_ms: Local time minus UTC, ms.
+
+    Returns:
+        [] for a market that isn't a cloud market; else one line: "baselines built Fri 09:00 · prices to 15:02 ·
+        next check 15:20", or "not read yet" (muted) before the first summary.
+    """
+    if not m.cloud_on:
+        return []
+    if m.cloud_built_ms is None or m.cloud_prices_ms is None:
+        return [["Market summary", "not read yet", "muted"]]
+    text = f"baselines built {when(m.cloud_built_ms, offset_ms)} · prices to {when(m.cloud_prices_ms, offset_ms)}"
+    if m.cloud_next_ms is not None:
+        text += f" · next check {when(m.cloud_next_ms, offset_ms)}"
+    return [["Market summary", text, ""]]
 
 
 def _ahledger_line(m: MarketFacts, now_ms: int) -> list[list[str]]:

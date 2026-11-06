@@ -18,7 +18,7 @@ from ahsync.engine.sellprob import MarketSettings, Supply
 from ahsync.engine.volume import (VOLUME_METHOD_VERSION, Cover, DailyVolume, Volume, daily_volume, median_daily_supply,
                                   observed_turnover)
 from ahsync.history.reads import HistoryReader, HistoryWindow, ItemHistory, ItemInfo
-from ahsync.intel.contract import IntelWindow, ItemIntel, MarketIntelligence
+from ahsync.intel.contract import IntelWindow, ItemIntel, MarketIntelligence, ages_reference_ms
 
 HOUR_MS = 3_600_000
 DAY_MS = 86_400_000
@@ -318,26 +318,39 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
 
 
 def with_scan(intel: MarketIntelligence, prices: dict[int, tuple[int, int, int]],
-              books: dict[int, tuple[int, list[tuple[int, int, int, int]]]]) -> MarketIntelligence:
+              books: dict[int, tuple[int, list[tuple[int, int, int, int]]]], settings: MarketSettings,
+              vendor_sell: dict[int, int]) -> MarketIntelligence:
     """The intelligence with your newer in-game scans applied to the items they priced (SPEC §3.1.1, IU6).
+
+    A scanned item is repriced through now_fields, the formulas the analysis and the cloud's hourly mode use, so
+    the plan's post-now price, chance and expected value follow what you just saw (the user, 2026-11-06).
 
     Args:
         intel: The published intelligence.
-        prices: Item key -> (lowest buyout copper, units at it, seen ms) from your scans after intel.built_ms.
+        prices: Item key -> (lowest buyout copper, units at it, seen ms) from your scans after its reference time.
         books: Item key -> (scan ms, [(price, stack, band, count)]) from your newest complete scan after it.
+        settings: The settings the document's baselines were built with.
+        vendor_sell: Item key -> vendor sell price, copper (the deposit); a missing key counts as 0.
 
     Returns:
-        A copy whose scanned items have the scan's cur, cur_qty, price age (0 when seen after the build), book
-        and current supply, and cur_suspect re-checked; every other item and the build time unchanged.
+        A copy whose scanned items have the scan's cur, cur_qty, book, current supply, suspect flag and the
+        post-now fields recomputed; their ages count back from the document's reference time, so a scan after it
+        is negative (intel.contract.age_now_ms ages it); every other item and the build time unchanged.
     """
+    reference = ages_reference_ms(intel)
     items = dict(intel.items)
     for key in sorted(set(prices) & set(items)):
-        i, (price, qty, _at) = items[key], prices[key]
+        i, (price, qty, at) = items[key], prices[key]
         book = books.get(key)
         rows = tuple(book[1]) if book else i.book
-        items[key] = replace(i, cur=price, cur_qty=qty, cur_age_ms=0, book=rows,
+        base = NowBase(i.med7, i.p90_30, i.closes_30d or 0, i.sold_per_day, i.listed_per_day,
+                       profile.unpack(i.sales_how, i.sales_weeks).values, vendor_sell.get(key, 0))
+        post, ref, chance, unknown, sell_value = now_fields(Quote(price, qty, rows or None), base, at, settings)
+        items[key] = replace(i, cur=price, cur_qty=qty, cur_age_ms=reference - at, book=rows,
+                             book_age_ms=reference - book[0] if book else i.book_age_ms,
                              units_on_ah=sum(stack * count for _, stack, _, count in rows) if book else i.units_on_ah,
-                             cur_suspect=prices_suspect(price, i.p10_30, i.p90_30))
+                             cur_suspect=prices_suspect(price, i.p10_30, i.p90_30), post_price=post, ref_stack=ref,
+                             chance=chance, volume_unknown=unknown, sell_value=sell_value)
     return replace(intel, items=items)
 
 

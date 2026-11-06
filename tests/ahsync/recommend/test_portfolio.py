@@ -108,9 +108,12 @@ def test_committed_capital_is_the_open_positions_cost_left_and_bars_bought_outsi
     assert portfolio.alternative_rows(None) == []
 
 
-def test_price_ages_run_on_from_the_build_and_a_later_scan_is_fresh():
-    stats = {BAR: intel(BAR, 1000, age=HOUR), DUST: intel(DUST, 600, age=0), ROD: intel(ROD, None, age=None)}
-    assert portfolio.price_ages(stats, NOW, NOW - 2 * HOUR) == {BAR: 3 * HOUR, DUST: 0, ROD: None}
+def test_price_ages_run_on_from_the_reference_and_a_later_scan_ages_from_its_own_time():
+    # built 2 h ago; Dust scanned 1.5 h ago, stored 30 min after the reference as -30 min (IU6)
+    stats = {BAR: intel(BAR, 1000, age=HOUR), DUST: intel(DUST, 600, age=-HOUR // 2), ROD: intel(ROD, None, age=None),
+             SCOUTING: intel(SCOUTING, 50, age=0)}
+    assert portfolio.price_ages(stats, NOW, NOW - 2 * HOUR) == {
+        BAR: 3 * HOUR, DUST: 3 * HOUR // 2, ROD: None, SCOUTING: 2 * HOUR}   # 0 = seen at the reference, not "fresh"
 
 
 def test_generation_inputs_read_skills_recipes_and_cost_basis(state):

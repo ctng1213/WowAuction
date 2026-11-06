@@ -147,3 +147,12 @@ def test_BZ31_a_credential_on_the_command_line_is_refused_before_any_request(tmp
     assert http.requests == []
     assert main(["collect", "--house", "113"], env={}, home=tmp_path, transport=http) == 2   # no credentials anywhere
     assert http.requests == []
+
+
+def test_the_lambda_logs_its_info_lines(monkeypatch, caplog):
+    import logging as std_logging
+    lambda_env(monkeypatch, FakeS3Client(), FakeSecrets({"wowauction/blizzard-api": SECRET_JSON}), BlizzardHttp())
+    std_logging.getLogger().setLevel(std_logging.WARNING)                  # as Lambda's runtime starts it
+    collector.handler({}, None)
+    assert std_logging.getLogger().level == std_logging.INFO
+    assert any("snapshot" in r.getMessage() and r.levelno == std_logging.INFO for r in caplog.records)

@@ -18,6 +18,7 @@ APP_SRC = ROOT / "ahsync_app"                # the app shell (SPEC §3.7.1), hel
 APP_TESTS = ROOT / "tests" / "ahsync_app"
 CLOUD_SRC = ROOT / "ahcloud"                # the cloud job (SPEC §2.4), held to the same conventions (M30)
 INFRA_SRC = ROOT / "infra"                  # the CDK app (M30)
+GENERATED_DIRS = ("cdk.out",)                # synth output inside infra/, gitignored
 PY_TREES = ((PY_SRC, PY_TESTS), (APP_SRC, APP_TESTS), (CLOUD_SRC, ROOT / "tests" / "ahcloud"),
             (INFRA_SRC, ROOT / "tests" / "infra"))   # (source package, its mirrored tests)
 TOOLS = ROOT / "tools"
@@ -45,6 +46,21 @@ LUA_TEST_ID = re.compile(rf"""\bit\s*\(\s*["']({ID})\s""")
 
 # ---------------------------------------------------------------- helpers
 
+def tree_sources(root: Path) -> list[Path]:
+    """The .py files of a source tree, skipping hidden and generated folders (infra/.venv-infra, infra/cdk.out).
+
+    Args:
+        root: The tree's root.
+
+    Returns:
+        Sorted paths; [] when the root doesn't exist.
+    """
+    if not root.exists():
+        return []
+    return sorted(p for p in root.rglob("*.py")
+                  if not any(part.startswith(".") or part in GENERATED_DIRS for part in p.relative_to(root).parts))
+
+
 def python_sources() -> list[Path]:
     """List AHSync source modules subject to the conventions.
 
@@ -55,7 +71,7 @@ def python_sources() -> list[Path]:
     static = PY_SRC / "web" / "static"
     ahsync = sorted(p for p in PY_SRC.rglob("*.py") if static not in p.parents)
     app = sorted(APP_SRC.rglob("*.py")) if APP_SRC.exists() else []
-    cloud = sorted(p for root in (CLOUD_SRC, INFRA_SRC) if root.exists() for p in root.rglob("*.py"))
+    cloud = [p for root in (CLOUD_SRC, INFRA_SRC) for p in tree_sources(root)]
     tools = [TOOLS / name for name in CONVENTION_TOOLS if (TOOLS / name).exists()]
     return ahsync + app + cloud + tools
 
@@ -359,7 +375,7 @@ CLOUD_MAY_IMPORT = ("ahcloud", "ahsync.collect.blizzard", "ahsync.collect.client
 def test_AR9_the_cloud_is_a_thin_wrapper_over_the_same_pipeline():
     import sys
     problems = []
-    for path in sorted(CLOUD_SRC.rglob("*.py")):
+    for path in tree_sources(CLOUD_SRC):
         for line, name in imports_of(path):
             top = name.split(".")[0]
             if top == "boto3" and path.name != "aws.py":
@@ -368,7 +384,7 @@ def test_AR9_the_cloud_is_a_thin_wrapper_over_the_same_pipeline():
                 continue
             elif not any(name == m or name.startswith(m + ".") for m in CLOUD_MAY_IMPORT):
                 problems.append(f"{rel(path)}:{line} imports {name}")
-    for path in sorted(INFRA_SRC.rglob("*.py")):
+    for path in tree_sources(INFRA_SRC):
         problems += [f"{rel(path)}:{line} imports {name}" for line, name in imports_of(path)
                      if name.split(".")[0] in ("ahsync", "ahcloud", "ahsync_app")]
     for root in (PY_SRC, APP_SRC):

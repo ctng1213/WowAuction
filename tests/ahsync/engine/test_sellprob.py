@@ -346,3 +346,13 @@ def test_P25_posting_now_without_volume_uses_the_default_for_its_position():
     assert sp.posting_chance(sp.Supply(None, None, None, 45, 20), 46, 20, 0, settings) == (0.25, True)   # no book: cur
     assert sp.posting_chance(sp.Supply(None, None, (), None, None), None, 20, 0, settings) == (0.5, True)
     assert sp.cheapest_other(book, 99) == 45 and sp.cheapest_other(None, 45) == 45 and sp.cheapest_other((), 45) is None
+
+
+def test_market_settings_round_trip_through_a_cloud_document():
+    import json
+    from ahsync.engine.sellprob import MarketSettings
+    from ahsync.engine.volume import VolumePrior
+    settings = MarketSettings(default_sell_prob=0.3, volume_prior=VolumePrior(2.0, 4))
+    assert MarketSettings.from_dict(json.loads(json.dumps(settings.to_dict()))) == settings
+    assert MarketSettings.from_dict({}) == MarketSettings()                     # a desktop-built document
+    assert MarketSettings.from_dict({"default_sell_prob": 0.4}).default_sell_prob == 0.4   # no prior given

@@ -188,12 +188,12 @@ def test_K7_status_sets_the_plans_expected_profit_against_what_it_realized():
 def test_SRC2_status_names_the_markets_primary_source():
     card = status_view.status_view([], facts(market(primary="blizzard", primary_books_7d=2)), NOW, 0)["cards"][0]
     labels = [line[0] for line in card["lines"]]
-    assert "Newest blizzard price" in labels and "blizzard order books (7 d)" in labels
+    assert "Newest Blizzard price" in labels and "Blizzard order books (7 d)" in labels
     stale = market(primary="blizzard", newest_price_ms=NOW - 7 * HOUR)
     [alert] = [a for a in status_view.status_view([], facts(stale), NOW, 0)["alerts"] if "data is old" in a["title"]]
-    assert alert["title"] == "blizzard data is old" and "until blizzard has new data" in alert["text"]
+    assert alert["title"] == "Blizzard data is old" and "until Blizzard has new data" in alert["text"]
     none = market(primary="blizzard", newest_price_ms=None)
-    assert [a["title"] for a in status_view.status_view([], facts(none), NOW, 0)["alerts"]] == ["No blizzard prices yet"]
+    assert [a["title"] for a in status_view.status_view([], facts(none), NOW, 0)["alerts"]] == ["No Blizzard prices yet"]
 
 
 def test_GA34_an_info_line_lists_the_loot_the_gathering_catalog_cannot_place():
@@ -308,3 +308,53 @@ def test_D98_the_app_card_s_api_key_line_and_its_place_after_storage():
     view = status_view.status_view([], facts(db_bytes=46 * 1_048_576), NOW, 0, app)
     assert view["app_card"]["lines"][5]["parts"] == [["%LOCALAPPDATA%\\AHSync · 46 MB", None]]
     assert status_view.status_view([], facts(), NOW, 0)["app_card"] is None
+
+
+def cloud(**changes) -> MarketFacts:
+    """A cloud market: baselines built 09:00, prices to 22:52, the next check at 23:07."""
+    base = dict(primary="blizzard", cloud_on=True, cloud_built_ms=NOW - 14 * HOUR, cloud_prices_ms=NOW - 8 * MINUTE,
+                cloud_next_ms=NOW + 7 * MINUTE, newest_price_ms=NOW - 8 * MINUTE)
+    return market(**{**base, **changes})
+
+
+def test_S21_a_cloud_market_card_says_where_the_numbers_came_from():
+    card = status_view.status_view([], facts(cloud()), NOW, 0)["cards"][0]
+    [line] = [x for x in card["lines"] if x[0] == "Market summary"]
+    assert line[1] == "baselines built Sat 17 Oct 09:00 · prices to Sat 17 Oct 22:52 · next check Sat 17 Oct 23:07"
+    assert card["badge"] == "up to date"
+    assert [x for x in status_view.status_view([], facts(market()), NOW, 0)["cards"][0]["lines"]
+            if x[0] == "Market summary"] == []                              # not a cloud market: no line
+    first = status_view.status_view([], facts(cloud(cloud_built_ms=None, cloud_prices_ms=None)), NOW, 0)
+    assert ["Market summary", "not read yet", "muted"] in first["cards"][0]["lines"]
+    assert [a["title"] for a in first["alerts"]] == ["No market summary yet"]
+
+
+def test_S22_a_newer_summary_says_update_ahsync():
+    rows = [row("cloud_schema", {"market": M, "detail": "schema 11"}, level="error", topic=f"cloud_schema:{M}")]
+    [alert] = status_view.status_view(rows, facts(cloud()), NOW, 0)["alerts"]
+    assert (alert["level"], alert["title"]) == ("error", "AHSync is out of date") and "update it" in alert["text"]
+
+
+def test_S23_no_new_summary_for_3_hours_is_an_alert_and_the_old_rule_is_not_also_raised():
+    titles = [a["title"] for a in status_view.status_view([], facts(cloud(cloud_prices_ms=NOW - 4 * HOUR)), NOW, 0)["alerts"]]
+    assert titles == ["No new market summary for 4 h"]                      # not also "Blizzard data is old"
+    assert status_view.status_view([], facts(cloud()), NOW, 0)["alerts"] == []
+
+
+def test_S24_baselines_over_36_hours_old_are_an_alert_apart_from_the_prices():
+    alerts = status_view.status_view([], facts(cloud(cloud_built_ms=NOW - 40 * HOUR)), NOW, 0)["alerts"]
+    assert [a["title"] for a in alerts] == ["Baselines are 1 d old"]
+    assert "prices still follow the market hourly" in alerts[0]["text"]
+
+
+def test_BZ17_the_settings_note_names_the_documents_value_and_yours():
+    rows = [row("cloud_settings", {"market": M, "differs": {"default_sell_prob": [0.25, 0.3]}}, level="info",
+                topic=f"cloud_settings:{M}")]
+    [alert] = status_view.status_view(rows, facts(cloud()), NOW, 0)["alerts"]
+    assert alert["text"] == f"{M}: the market summary uses default_sell_prob 0.25; your config says 0.3."
+
+
+def test_S21_before_the_first_poll_the_line_has_no_next_check():
+    card = status_view.status_view([], facts(cloud(cloud_next_ms=None)), NOW, 0)["cards"][0]
+    [line] = [x for x in card["lines"] if x[0] == "Market summary"]
+    assert line[1] == "baselines built Sat 17 Oct 09:00 · prices to Sat 17 Oct 22:52"

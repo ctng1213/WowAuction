@@ -115,6 +115,7 @@ def handler(event: Any, context: Any) -> dict:
         The outcome as a dict, for the invocation log.
     """
     global _client
+    logging.getLogger().setLevel(logging.INFO)          # Lambda's root logger starts at WARNING
     env = os.environ
     settings = Settings(env["MARKET"], int(env["RULESET"]), int(env["HOUSE"]))
     clock = SystemClock()

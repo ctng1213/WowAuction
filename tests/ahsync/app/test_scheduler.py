@@ -262,3 +262,16 @@ def test_DR15_the_update_job_runs_at_start_then_every_10_minutes_and_only_when_w
     clock.advance(60_000)
     assert "update" in scheduler.tick() and scheduler.next_wake_ms() <= clock.now_ms() + 10 * 60_000
     assert "update" not in Scheduler(clock, SchedulerHooks(), None).tick()   # python -m ahsync: no app shell
+
+
+def test_BZ17_the_cloud_poll_runs_at_the_first_tick_then_every_poll_minutes():
+    clock = FakeClock()
+    polls: list[int] = []
+    scheduler = Scheduler(clock, SchedulerHooks(cloud_poll=lambda: polls.append(clock.now_ms())), None,
+                          cloud_poll_minutes=20)
+    assert scheduler.tick() == ["cloud_poll"] and scheduler.next_wake_ms() <= clock.now_ms() + 20 * 60_000
+    clock.advance(19 * 60_000)
+    assert "cloud_poll" not in scheduler.tick()
+    clock.advance(60_000)
+    assert "cloud_poll" in scheduler.tick() and len(polls) == 2
+    assert "cloud_poll" not in Scheduler(clock, SchedulerHooks(), None).tick()     # no [cloud]: never polled

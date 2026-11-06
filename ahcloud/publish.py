@@ -15,7 +15,6 @@ from dataclasses import dataclass
 
 from ahcloud.store import Store
 from ahsync.engine.sellprob import MarketSettings
-from ahsync.engine.volume import VolumePrior
 from ahsync.intel.contract import INTEL_SCHEMA_VERSION, MarketIntelligence, from_json, to_json
 
 
@@ -45,32 +44,27 @@ def pointer_key(market: str, schema: int = INTEL_SCHEMA_VERSION) -> str:
 
 
 def settings_to_dict(settings: MarketSettings) -> dict[str, object]:
-    """MarketSettings as the document's `settings`.
+    """MarketSettings as the document's `settings` (MarketSettings.to_dict, shared with the desktop).
 
     Args:
         settings: The analysis settings.
 
     Returns:
-        Field name -> value; the volume prior as a nested dict.
+        Field name -> value.
     """
-    return dataclasses.asdict(settings)
+    return settings.to_dict()
 
 
 def settings_from_dict(values: dict[str, object]) -> MarketSettings:
-    """The document's `settings` back as MarketSettings (the defaults when empty, as in a desktop-built document).
+    """The document's `settings` back as MarketSettings (MarketSettings.from_dict, shared with the desktop).
 
     Args:
         values: From settings_to_dict.
 
     Returns:
-        The settings.
+        The settings; the defaults when empty.
     """
-    if not values:
-        return MarketSettings()
-    fields: dict = dict(values)
-    if isinstance(fields.get("volume_prior"), dict):
-        fields["volume_prior"] = VolumePrior(**fields["volume_prior"])
-    return MarketSettings(**fields)
+    return MarketSettings.from_dict(values)
 
 
 def publish(store: Store, intel: MarketIntelligence, schemas: tuple[int, ...] = (INTEL_SCHEMA_VERSION,)) -> list[Pointer]:

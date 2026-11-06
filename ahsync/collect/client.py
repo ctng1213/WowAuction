@@ -508,18 +508,52 @@ def network_error_name(error: BaseException) -> str:
     return type(error).__name__
 
 
+class _RefuseRedirects(urllib.request.HTTPRedirectHandler):
+    """Hands a 3xx back as the response instead of following it (SEC16)."""
+
+    def redirect_request(self, req: urllib.request.Request, fp: object, code: int, msg: str,  # noqa: PLR0913
+                         headers: object, newurl: str) -> None:
+        """Never build the redirected request.
+
+        Args:
+            req: The request.
+            fp: The response body.
+            code: The 3xx status.
+            msg: Its reason.
+            headers: Its headers.
+            newurl: Where it points.
+
+        Returns:
+            None, so urllib raises HTTPError for the 3xx, which the transport returns as a response.
+        """
+        return None
+
+
+def no_redirect_opener() -> Callable[..., object]:
+    """An urlopen that never follows a redirect (SEC16: the cloud summary's reader).
+
+    Returns:
+        The opener's open function.
+    """
+    return urllib.request.build_opener(_RefuseRedirects).open
+
+
 class UrllibTransport:
     """The real transport, over urllib. Used only by `ahsync.__main__`."""
 
-    def __init__(self, opener: Callable[..., object] = urllib.request.urlopen, timeout_s: float = TIMEOUT_S) -> None:
+    def __init__(self, opener: Callable[..., object] = urllib.request.urlopen, timeout_s: float = TIMEOUT_S,
+                 max_bytes: int | None = None) -> None:
         """Create the transport.
 
         Args:
-            opener: urllib.request.urlopen, or a stand-in with the same signature in tests.
+            opener: urllib.request.urlopen, or a stand-in with the same signature in tests (no_redirect_opener for
+                the cloud summary).
             timeout_s: Socket timeout per request, in seconds.
+            max_bytes: The most body bytes read; a longer body is a TransportError (SEC16). None reads it all.
         """
         self._opener = opener
         self._timeout_s = timeout_s
+        self._max_bytes = max_bytes
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
         """Perform one request (a GET, or a POST for a token).
@@ -536,8 +570,10 @@ class UrllibTransport:
         req = build_request(request)
         try:
             with self._opener(req, timeout=self._timeout_s) as response:
-                return HttpResponse(response.status, {k.lower(): v for k, v in response.headers.items()},
-                                    response.read())
+                body = response.read() if self._max_bytes is None else response.read(self._max_bytes + 1)
+                if self._max_bytes is not None and len(body) > self._max_bytes:
+                    raise TransportError(f"body over {self._max_bytes} bytes")
+                return HttpResponse(response.status, {k.lower(): v for k, v in response.headers.items()}, body)
         except urllib.error.HTTPError as error:
             headers = {k.lower(): v for k, v in (error.headers or {}).items()}
             return HttpResponse(error.code, headers, error.read() or b"")

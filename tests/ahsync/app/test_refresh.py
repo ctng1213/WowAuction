@@ -431,3 +431,66 @@ def test_D76_today_and_week_still_show_the_funded_plans_actions(db):
     assert {r["item"] for r in today} == funded == {r["item"] for r in week}
     assert sorted(r["action"] for r in today) == ["buy", "craft", "de", "post"]       # as actions, not opportunities
     assert all(r["status"] == "pending" and r["id"] for r in today)
+
+
+def cloud_cfg():
+    """The test market as a cloud market: [cloud] set and blizzard ranked (SPEC §2.4)."""
+    from ahsync.config import CloudConfig, MarketSources
+    return Config(markets=(M,), cloud=CloudConfig("https://x.cloudfront.net"),
+                  sources={M: MarketSources("blizzard", ("blizzard",), {})})
+
+
+def cloud_document(db):
+    """A cloud-shaped document built from the seeded world: built an hour ago, prices to now, its settings."""
+    from dataclasses import replace
+    from ahsync.engine.sellprob import MarketSettings
+    refresh.refresh_all(db, NOW, CFG)
+    intel = db.read_intel(M)
+    return replace(intel, built_ms=NOW - HOUR, observations_until_ms=NOW, ages_at_ms=NOW,
+                   settings=MarketSettings(default_sell_prob=0.3).to_dict())
+
+
+def test_BZ17_a_new_document_is_staged_with_the_replan_and_its_settings_drive_the_plan(db, monkeypatch):
+    document = cloud_document(db)
+    monkeypatch.setattr(refresh, "analyze_market", lambda *a: pytest.fail("a cloud market is never analysed here"))
+    stale = db.read_intel(M)                                        # parsed and cached
+    assert refresh.replan_all(db, NOW, cloud_cfg(), documents={M: document}) == [M]
+    live = db.read_intel(M)
+    assert live == document and live is not stale                    # swapped, and the parse cache cleared
+    [note] = [s for s in db.statuses() if s.topic == f"cloud_settings:{M}"]
+    assert note.data["differs"] == {"default_sell_prob": [0.3, 0.25]}   # the document's 0.3 wins over the local 0.25
+    assert refresh.replan_all(db, NOW, cloud_cfg()) == [M] and db.read_intel(M) == document   # a plain re-plan keeps it
+
+
+def test_BZ20_a_cloud_markets_full_refresh_reads_no_history(db, monkeypatch):
+    document = cloud_document(db)
+    refresh.replan_all(db, NOW, cloud_cfg(), documents={M: document})
+    for name in ("analyze_market", "recompute_stale_volume", "recompute_mail_volume"):
+        monkeypatch.setattr(refresh, name, lambda *a, **k: pytest.fail("a cloud market's refresh reads no history"))
+    result = refresh.refresh_all(db, NOW + HOUR, cloud_cfg())
+    assert result.error is None and result.items == len(document.items)
+    assert db.read_intel(M) == document                              # the published document stays as fetched
+    assert db.view("portfolio", M) is not None
+
+
+def test_BZ20_a_cloud_market_with_no_document_yet_keeps_its_pages(db):
+    refresh.refresh_all(db, NOW, CFG)
+    before = db.view("portfolio", M)
+    db.conn.execute("DELETE FROM intel")
+    result = refresh.refresh_all(db, NOW + HOUR, cloud_cfg())
+    assert result.error is None and result.items == 0 and db.view("portfolio", M) == before
+
+
+def test_BZ21_your_scan_applies_when_newer_than_the_documents_prices_not_just_its_baselines(db):
+    document = cloud_document(db)                                   # built NOW - 1 h, prices to NOW
+    key = next(k for k, i in document.items.items() if i.cur is not None)
+    cur = document.items[key].cur
+    with db.transaction():
+        db.conn.execute("INSERT OR REPLACE INTO current(market, key, price, qty, at, src) VALUES (?, ?, ?, ?, ?, 'local')",
+                        (M, key, cur + 7, 3, NOW - HOUR // 2))
+    older = refresh.scanned_intel(db, document, cloud_cfg()).items[key]
+    assert older.cur == cur                                         # after the baselines, before the prices: not applied
+    with db.transaction():
+        db.conn.execute("UPDATE current SET at = ? WHERE market = ? AND key = ? AND src = 'local'", (NOW + 600_000, M, key))
+    newer = refresh.scanned_intel(db, document, cloud_cfg()).items[key]
+    assert (newer.cur, newer.cur_qty, newer.cur_age_ms) == (cur + 7, 3, -600_000)   # newer than the prices: applied
