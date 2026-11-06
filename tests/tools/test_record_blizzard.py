@@ -57,7 +57,7 @@ def test_missing_credentials_say_where_to_put_them_and_show_no_value(tmp_path):
     (tmp_path / ".ahsync" / "blizzard").write_text("only-one-line\n", encoding="utf-8")
     with pytest.raises(rb.CredentialsMissing) as error:
         rb.load_credentials({"BLIZZARD_CLIENT_ID": "half"}, tmp_path)
-    assert "BLIZZARD_CLIENT_SECRET" in str(error.value) and ".ahsync/blizzard" in str(error.value)
+    assert "BLIZZARD_CLIENT_SECRET" in str(error.value) and str(tmp_path / ".ahsync" / "blizzard") in str(error.value)   # the OS's separator
     assert "only-one-line" not in str(error.value) and "half" not in str(error.value)
 
 
