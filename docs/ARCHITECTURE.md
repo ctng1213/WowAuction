@@ -44,7 +44,7 @@ flowchart LR
     BAPI[Blizzard Game Data API<br/>ruleset 2 · the Horde house · hourly Last-Modified]
     Collector[ahcloud/collector.py<br/>Lambda every 15 min · If-Modified-Since]
     Raw[(S3 raw/<br/>one gzipped envelope per snapshot, kept forever)]
-    Analyzer[ahcloud/analyzer.py<br/>Lambda per raw object · history.db round trip<br/>ingest → analysis → publish]
+    Analyzer[ahcloud/analyzer.py<br/>daily: ingest → analysis → baselines, history.db round trip<br/>hourly per raw object: with_scan + last hour, no database]
     IntelS3[(S3 intel/<br/>MarketIntelligence JSON by sha256 + latest-schema.json)]
     CF[CloudFront<br/>public, intel/ only]
   end
@@ -52,8 +52,8 @@ flowchart LR
   Dashboard[localhost dashboard<br/>the app window, or a browser]
   GH[GitHub Releases, built M25<br/>update check, assets, SHA256SUMS]
 
-  AHF -- until M34 --> Collect
-  AHL -- until M34 --> Collect
+  AHF -- until M35 --> Collect
+  AHL -- until M35 --> Collect
   BAPI -.planned.-> Collector
   Collector -.-> Raw
   Raw -.S3 event.-> Analyzer
@@ -83,7 +83,7 @@ Boundaries that matter:
 - I/O lives at the edges (`collect/`, `db/`, `history/`, `state/`, `intel/store.py`, `export/`, `web/`), each taking a transport, clock or database so tests inject fakes.
 - The addon touches WoW only through `Core/Adapter*.lua`; the addon only looks up and compares, never computes history (SPEC §4.0, §5.1).
 - Sources are interchangeable behind the source tag (`src`) on every stored row; analysis picks by rule, never by name (SPEC §2.2, §5.0).
-- **Planned (M28–M34):** the market cloud runs the same `collect/observations.py`, `db/` and `analysis/` code over a SQLite file in S3, and publishes `MarketIntelligence`; AHSync fetches it and keeps only the personalization. `ahcloud/` imports `ahsync`; nothing imports it back (AR9). Summaries are public; raw and state are private; no install holds an AWS credential (SPEC §2.4).
+- **Planned (M28–M35):** the market cloud runs the same `collect/observations.py`, `db/` and `analysis/` code over a SQLite file in S3, and publishes `MarketIntelligence`; AHSync fetches it and keeps only the personalization. `ahcloud/` imports `ahsync`; nothing imports it back (AR9). Summaries are public; raw and state are private; no install holds an AWS credential (SPEC §2.4).
 
 ## 2. Market data flow: sources to intelligence to the addon
 
@@ -109,9 +109,11 @@ flowchart TD
 ```mermaid
 flowchart TD
   BAPI[Blizzard: auctions + commodities of the house<br/>src blizzard, kind book, ids] -->|every 15 min, new Last-Modified only| Raw[(S3 raw/ envelope)]
-  Raw -->|S3 event| Ingest[collect/observations.ingest_snapshot<br/>into state/history.db from S3]
-  Ingest --> Analysis[analysis/market.py, unchanged]
+  Raw -->|daily 09:00 UTC| Ingest[collect/observations.ingest_snapshot<br/>into state/history.db from S3]
+  Ingest --> Analysis[analysis/market.py, unchanged: the baselines]
   Analysis --> Doc[(S3 intel/: MarketIntelligence JSON by sha256, schema 10<br/>+ latest-schema.json written last)]
+  Raw -->|hourly, S3 event| Hourly[with_scan + last_hour + recent ring<br/>over the latest document, no database]
+  Hourly --> Doc
   Doc -->|CloudFront, public| Poll[collect/cloud_intel.py<br/>every 15 min, If-None-Match, sha256, schema]
   Poll --> IntelLocal[(intel store: staged, then live)]
   IntelLocal -->|incremental update| Plan[recommend/portfolio.py]
@@ -312,4 +314,5 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-03: the tray queues its AppKit work onto the main thread on macOS (FM65); the shared `NSApplication` of §6.1 is checked on the Mac.
 - 2026-11-03: a tray click runs the shell's action on its own thread (§6.1, FM66).
 - 2026-11-03: `ahsync_app/gui_thread.py` holds the main-thread queue the window and the tray share, and the Dock icon follows the window (§6.1, DR31).
-- 2026-11-06: Blizzard cloud batch spec merge (SPEC §2.4, M28–M34 planned): §1 gains the market cloud subgraph (Blizzard API, collector, raw, analyzer, published summary, CloudFront) as dashed planned nodes, with the AHF and AHledger edges marked "until M34"; §2 gains the cloud market's path. Each milestone marks its part built here.
+- 2026-11-06: Blizzard cloud batch spec merge (SPEC §2.4, M28–M35 planned): §1 gains the market cloud subgraph (Blizzard API, collector, raw, analyzer, published summary, CloudFront) as dashed planned nodes, with the AHF and AHledger edges marked "until M34"; §2 gains the cloud market's path. Each milestone marks its part built here.
+- 2026-11-06: the cadence split (SPEC §2.4, plan §1): the analyzer runs daily for the baselines and hourly for the state over one document; §1's analyzer node and §2's cloud path redrawn; horizons and regimes planned as M34, removal M35.
