@@ -1,6 +1,6 @@
-# Plan: the Blizzard source and the cloud market (M28–M34)
+# Plan: the Blizzard source and the cloud market (M28–M35)
 
-Written for: the Opus session that orchestrates this batch in Claude Code on this repo, delegating the tasks tagged **Sonnet** to Sonnet subagents and doing the tasks tagged **Opus** itself. The user's decisions were taken in conversation on 2026-11-06 (§1); the spec merge (SPEC §1, §2.4, §3.1, §3.6, §5.0, §6 items 23–25, §7 M28–M34; SCENARIOS BZ1–BZ24, FM67–FM72, SEC16–SEC17, S21–S23, D99–D100, AR9, SRC20; ARCHITECTURE §1, §2) is in the same commit as this plan. Nothing in §1 is open for redesign.
+Written for: the Opus session that orchestrates this batch in Claude Code on this repo, delegating the tasks tagged **Sonnet** to Sonnet subagents and doing the tasks tagged **Opus** itself. The user's decisions were taken in conversation on 2026-11-06 (§1); the spec merge (SPEC §1, §2.4, §3.1, §3.6, §5.0, §6 items 23–25, §7 M28–M35; SCENARIOS BZ1–BZ24, FM67–FM72, SEC16–SEC17, S21–S23, D99–D100, AR9, SRC20; ARCHITECTURE §1, §2) is in the same commit as this plan. Nothing in §1 is open for redesign.
 
 **What this batch is.** Market data moves from two community scan feeds (auctionhouse.fyi, AHledger) to Blizzard's own Forever auction API, read every hour by a cloud job that stores every raw snapshot and publishes the market analysis. AHSync stops analysing history and takes the published summary, keeping everything personal (characters, scans, mail, positions, the plan) local. Friends run the same app with only a URL.
 
@@ -16,11 +16,11 @@ The user's decisions of 2026-11-06:
 6. **The analyzer keeps a compact state and updates it each hour**, with a rebuild-from-raw command. Mechanism: AHSync's own SQLite schema (`history.db`) round-tripped through S3 (the planner's call, §1 "Decided at the merge").
 7. **The maximum auction duration is 24 h** (2, 8, 24 h as SPEC §2.2 records; the user confirmed 2026-11-06). Lifetimes look back 24 h plus one snapshot, not 3 days.
 8. **The summary carries the §3.3 primitives from the better source**, and the lifetime analysis is in this batch (M33). **Widened by the user 2026-11-06** to everything the raw lets us observe rather than estimate (SPEC §2.4 "Auction lifetimes"): each auction's posting window, duration and expiry window narrowed by its bands; partial fills as exact sales; sold or expired by where it vanished; sales credited to the vanish hour (so `sales_how` is measured); relists matched and *measured* before any subtraction; sell-through by price tier and window as an empirical `P` with a blend weight that rises with the sample; the undercut share measured; market-wide calibration (K8). Demand by price (elasticity) is a follow-up (SPEC §9). M33 begins by plotting the observed distributions from the raw collected by then and setting the tier edges, blend constants and band bounds from them, so no formula is designed blind.
-9. **Low confidence for the first weeks is accepted.** The cloud history starts empty; windows reach "high" after 3 weeks per slot. AHF and AHledger stay on during the transition and go in M34.
+9. **Low confidence for the first weeks is accepted.** The cloud history starts empty; windows reach "high" after 3 weeks per slot. AHF and AHledger stay on during the transition and go in M35.
 10. **AHSync mainly takes the summaries and applies the personalization**: no local history analysis for a cloud market. The desktop runs recommendations, the portfolio, positions, the dashboard and the exports from the published document plus local state.
 11. **Friends use the app too; the summaries are public**, as TradeSkillMaster publishes its pricing data: a private bucket, CloudFront serving the `intel/` prefix only, no AWS credential in any install. Raw snapshots and the state stay private.
 12. **Item names and metadata**: use Blizzard's static item namespace if `static-forever-us` exists (probed in M28); otherwise ids are the keys and the addon layers names on as best effort. Consistency matters, names don't.
-13. **AHF and AHledger are removed** in a final milestone after the cloud source has run cleanly for 14 days.
+13. **AHF and AHledger are removed** in a final milestone (M35) after the cloud source has run cleanly for 14 days.
 14. **Credentials**: the Blizzard client id and secret are in AWS Secrets Manager `wowauction/blizzard-api` (us-east-1, keys `client_id` and `client_secret`), created by the user 2026-11-06. The Lambda reads them at runtime; they appear in no environment text, log, raw file, fixture, commit or chat.
 15. **Infrastructure as code**: AWS CDK in Python under `infra/`, region `us-east-1` (where the secret lives). The account id is not written in the repository (it is public).
 16. **Failure alerts by email** (SNS), plus an AWS Budgets alarm.
@@ -28,7 +28,7 @@ The user's decisions of 2026-11-06:
 
 **Decided at the merge (the planner, 2026-11-06).** Mechanisms the decisions above need; each either follows an existing SPEC rule or fills a gap. The two marked **needs the user's OK** change behaviour the user will notice; the rest are recorded so the wrap-up can list them.
 
-- **Approved by the user 2026-11-06 (M32): the plan follows the market hourly.** A new published document runs the incremental update (SPEC §3.1.1, IU13) when it arrives, so the recommendations and the plan change up to once an hour, instead of "stored but not applied until the next full refresh". Reason: the document *is* the market now; holding it a day would show stale numbers next to a fresh freshness pill.
+- **Approved by the user 2026-11-06 (M32): the plan follows the market hourly.** A new published document runs the incremental update (SPEC §3.1.1, IU13) when it arrives. *Narrowed the same day by the cadence split (below): prices follow the market hourly; the baselines (windows, rates, curves) change once a day, so the hourly re-plan cannot churn on them.*
 - **Approved by the user 2026-11-06 (M31): the analysis settings are the code defaults in the cloud; everything that personalizes the plan to the user's characters and professions is local.** The split, from `config.py`'s `market_settings` and `plan_settings`:
   - **Cloud, carried in the document's `settings`** (the keys `market_settings` passes to analysis): `default_sell_prob`, `default_sell_prob_cheapest`, `default_undercut_share`, `own_record_weight`, `sell_window_hours`, `pattern_half_life_weeks`, `window_threshold`, `volume_prior_per_day`, `volume_prior_hours`, `max_supply_share`, `max_supply_share_gear`, `min_gear_units`, `max_trend_total`, `top_buy_windows`, `top_sell_windows`; and `retention_days`, fixed at 90 in the cloud. A changed cloud default is a method-version bump and a republish.
   - **Shared with the plan** (`plan_settings` reads them too): `default_sell_prob`, `default_sell_prob_cheapest`, `default_undercut_share`, `own_record_weight`, `sell_window_hours`, `max_supply_share`, `max_supply_share_gear`, `min_gear_units`, `max_trend_total`, `top_buy_windows`, `top_sell_windows`. For a cloud market the document's value wins, so the plan and the windows it was built on agree; Status notes a local value that differs (BZ17).
@@ -43,6 +43,15 @@ The user's decisions of 2026-11-06:
 - **Market settings for the cloud market in `config.toml`**: `[cloud] intel_url` (the CloudFront base URL, `""` = no cloud market) and the market's `[sources]` with `primary = "blizzard"`, `rank = ["blizzard"]`, `addresses.blizzard = "2/113"`. A market is a cloud market when `intel_url` is set and `blizzard` is in its rank. The source `blizzard` is kind `book` (SRC20).
 - **Own scans** still overlay `cur` for the scanned items (IU6) and own mail still feeds the sell record (§3.3.3); neither feeds volume for a cloud market: the hourly id snapshots (kind 1) outrank group diffs, and the desktop runs no volume analysis any more.
 - **Removal (M34) keeps the W1 world's numbers.** W1 has no AHF or AHledger rows in play beyond source labels; the whole-plan snapshot is updated on purpose and its diff reviewed for labels only.
+
+**Decided at the design review (the user and the planner, 2026-11-06; the cadence split).** The user asked whether the hourly job did too much. It did: the first design recomputed every baseline 24 times a day, round-tripped the database every hour, and let the plan churn on hourly noise in the windows, against SPEC §3.1.1's own stability rule. Decisions:
+
+- **Two cadences, one document** (SPEC §2.4 "Analyzer, two cadences, one document"). The analyzer function has a **daily mode** (09:00 UTC, the stack parameter `DAILY_HOUR_UTC`): the listing-driven ingest of the day's snapshots into `history.db`, `analyze_market`, the base document; and an **hourly mode** on each raw object: the newest two snapshots and the latest document, `with_scan` for the state fields, `last_hour` and the `recent` ring, every baseline copied through byte for byte, **no database**. Same document shape, one pointer, one reader; `built_ms` is the baselines' analysis time and `observations_until_ms` the newest snapshot applied. The two-document "pulse" form was considered and set aside as more than needed; it stays available later if an hourly event stream is wanted for notifications.
+- **The desktop's scan cutoff moves to `observations_until_ms`** (BZ21): `with_scan` picked local scans "newer than `built_ms`", which would let a scan older than the hourly prices overwrite them.
+- **Horizons and regimes are a milestone (M34)**: per item, 7 / 14 / 30 / 90-day rows (median, price slope, closes, sold per day, sales slope, listed per day, units on the AH, expired share) with "needs N more days" until a horizon is full, and a regime label from the 7-day row against the 30-day one. **The constants are set from two weeks of daily documents at M34's start** (the user, 2026-11-06), not now; the provisional values in SPEC §2.4 and BZ36 (±1% per day, 0.8×, 1.25×, 1.2×) are there so the rows have numbers to check.
+- **Spikes are not a detector**; they are a notifications follow-up in SPEC §9, gated on M33's evidence: the plan already reacts to a price jump through the hourly prices, and whether a deviation is real often enough to be worth a message is what the lifetimes will show. A spike rule must agree with FM5's suspect rule (persistence, or units selling at the new level).
+- **Status shows both ages** ("baselines built Fri 09:00 · prices to 15:02") and alerts separately on stale prices (3 h) and stale baselines (36 h) (S24).
+- **Removal is M35.**
 
 **Decided at the architect review (the planner, 2026-11-06; independent review of the merge against the code).** Each corrects a mechanism above or fills a gap the review found; SPEC §2.4 and the scenario rows carry the same corrections. One **needs the user's OK**.
 
@@ -93,7 +102,7 @@ Specific to this batch:
 - **No AWS CLI through Bash.** The AWS MCP server's tools do reads and checks; `cdk deploy` runs from the user's shell with their credentials (M30, M31 deployment tasks are the user's or run with the user's explicit approval each time). Every change to the account goes through the stack; nothing is clicked together in the console.
 - **Live checks are evidence.** A milestone that touches AWS is done only when the thing has been observed in the account: the raw objects at the expected cadence, the document read back through CloudFront, the alarm email received on an injected failure.
 - **Cost is checked, not assumed.** M31 records the first week's cost from Cost Explorer against the estimate in SPEC §2.4; a miss over 2× is a finding.
-- **Byte identity.** WP1's world is not a cloud market: it stays byte-identical through M28–M33. M34 moves it on purpose (labels only).
+- **Byte identity.** WP1's world is not a cloud market: it stays byte-identical through M28–M34. M35 moves it on purpose (labels only).
 
 ## 3. Milestones
 
@@ -128,25 +137,25 @@ Done when: BZ1–BZ7, BZ9, SRC20, FM69 pass; `tools/verify.ps1` green; WP1 byte-
 
 Done when: BZ8, BZ31 (collect), FM67, FM68, SEC17, AR9 pass; `python -m ahcloud collect --store data/cloud` on the user's machine writes a raw envelope with credentials from the key file; the stack deploys from the user's shell; 24 h of raw objects at the observed cadence; one alert email received on an injected failure.
 
-### M31 — The analyzer and the published document
+### M31 — The analyzer, two cadences, and the published document
 
-1. **Opus**: `intel/contract.py` schema 10: `catalog`, `coverage` and `settings` with their packing, `to_json(intel, schema=…)` for the previous schema, `from_json` defaults for older documents; `ahcloud/analyzer.py`: the listing-driven run (every raw snapshot without a `scans` row, in order), the compact snapshot store synced from `state/snapshots/` for the day's window, the `history.db` download, `ingest_snapshot`, the 2-day book prune and the 90-day history prune, `analyze_market(now_ms=at_ms)` with the code's `MarketSettings`, the catalog (static namespace, else the frozen file), the `VACUUM INTO` upload with `If-Match`, the publish (document by sha256, then the pointers), `meta.last_ingested_at_ms`, the `rebuild` flag. Reason: contracts, ordering and byte-identity.
-2. **Sonnet**: `tests/ahcloud/test_analyzer.py` (BZ10–BZ16, FM70, FM72) over the fake AWS and the W1-style builders; `tests/ahsync/intel/test_contract.py` for schema 10's round trip.
-3. **User**: `cdk deploy`. **Opus**: trigger the first run (the next snapshot does), read the document back through CloudFront, record the run's duration, peak memory and the document's size in SPEC §2.4; tighten the function's memory and timeout in the stack to measured values with headroom.
-4. **Opus**: after 7 days, the cost line from Cost Explorer through the MCP tools, written into SPEC §2.4.
+1. **Opus**: `intel/contract.py` schema 10: `catalog`, `coverage`, `settings`, `last_hour` and `recent` with their packing, `to_json(intel, schema=…)` for the previous schema, `from_json` defaults for older documents; `ahcloud/analyzer.py` **daily mode**: the listing-driven run (every raw snapshot without a `scans` row, in order), the compact snapshot store synced from `state/snapshots/` for the day's window, the `history.db` download, `ingest_snapshot`, the 2-day book prune and the 90-day history prune, `analyze_market(now_ms=at_ms)` with the code's `MarketSettings`, the catalog (static namespace), the `VACUUM INTO` upload with `If-Match`, the base document with `built_ms` = that `at_ms`, `meta.last_ingested_at_ms`, the `rebuild` flag. Reason: contracts, ordering and byte-identity.
+2. **Opus**: `ahcloud/analyzer.py` **hourly mode**: the newest two snapshots from the listing and the latest document; `with_scan` for `cur`, `cur_qty`, the book, `units_on_ah`, `post_price`, `chance`, `sell_value`, `cur_suspect`; `last_hour` from `estimate_volume_ids`; the `recent` ring shifted and appended; the baselines copied through unchanged; `observations_until_ms` set, `built_ms` untouched; a snapshot not newer than the document ignored; the publish (document by sha256, then the pointers). The stack gains the `DAILY_HOUR_UTC` schedule for the daily mode; the S3 event and the hourly fallback trigger the hourly mode. Reason: the stability rule (byte-identical baselines) is a contract.
+3. **Sonnet**: `tests/ahcloud/test_analyzer.py` (BZ10–BZ16, BZ32–BZ34, FM70, FM72) over the fake AWS and the W1-style builders, with a test that the hourly document's baseline fields are byte-identical to the daily one's; `tests/ahsync/intel/test_contract.py` for schema 10's round trip.
+4. **User**: `cdk deploy`. **Opus**: trigger the first runs (the next snapshot, then the next 09:00 UTC), read both documents back through CloudFront, record each mode's duration, peak memory and the document's size in SPEC §2.4; tighten the functions' memory and timeouts in the stack to measured values with headroom.
+5. **Opus**: after 7 days, the cost line from Cost Explorer through the MCP tools, written into SPEC §2.4.
+6. **Opus**: `python -m ahcloud analyze --daily --store s3://<bucket> --out data/cloud` and `--hourly` on the user's machine reproduce the live documents byte for byte from the raw (BZ31's analyze half); the comparison recorded in the milestone's commit message.
 
-5. **Opus**: `python -m ahcloud analyze --store s3://<bucket> --out data/cloud` on the user's machine reproduces the live document byte for byte from the raw (BZ31's analyze half); the comparison recorded in the milestone's commit message.
-
-Done when: BZ10–BZ16, BZ31, FM70, FM72 pass; a document is published and read back; one run within 10 min on the real house; a local run reproduces it; the cost estimate confirmed.
+Done when: BZ10–BZ16, BZ31–BZ34, FM70, FM72 pass; both documents are published and read back; the daily run within 10 min and the hourly within 1 min on the real house; local runs reproduce them; the cost estimate confirmed.
 
 ### M32 — AHSync consumes the document
 
-1. **Opus**: `ahsync/collect/cloud_intel.py` (poll `latest-<schema>.json` with `If-None-Match`, the bounded and checked document read: compressed and decompressed size, the key regex, no redirects, sha256, schema, `market`), `config.py` `[cloud]` with bounds, the scheduler's poll job, the document staged inside `replan_all` with a per-market `with_intel` in `publish_refresh` (and the parsed-intel cache cleared), the full refresh skipping the volume recomputes and the analysis for a cloud market, the document's `settings` applied to the plan with the Status note on a differing local config, the Status line and alerts (`cloud_schema`, `cloud_stale`), `engine/coverage.py` reading the document's `coverage`, the freshness from `observations_until_ms`. Reason: the lifecycle and the "last good state" rules.
+1. **Opus**: `ahsync/collect/cloud_intel.py` (poll `latest-<schema>.json` with `If-None-Match`, the bounded and checked document read: compressed and decompressed size, the key regex, no redirects, sha256, schema, `market`), `config.py` `[cloud]` with bounds, the scheduler's poll job, the document staged inside `replan_all` with a per-market `with_intel` in `publish_refresh` (and the parsed-intel cache cleared), the scan cutoff on `observations_until_ms` (BZ21), the full refresh skipping the volume recomputes and the analysis for a cloud market, the document's `settings` applied to the plan with the Status note on a differing local config, the Status line with both ages and the alerts (`cloud_schema`, `cloud_stale`, `cloud_baselines_stale`; S21, S24), `engine/coverage.py` reading the document's `coverage`, the freshness from `observations_until_ms`. Reason: the lifecycle and the "last good state" rules.
 2. **Opus** (after a `wow-adapter` consult): the addon's `itemNames` rows gain `sellPrice` and `classId` (`Capture/`, `Core/Adapter.lua`; SPEC §2.2; A92), the importer reads them into `items` as the local catalog's fill, and the plan prices the deposit of an item the document could not from the local vendor price (BZ25). Reason: a SavedVariables contract change and a number that moves.
-3. **Sonnet**: tests (BZ17–BZ21, FM71, SEC16, S21–S23, D99, D100); the dashboard's Status card draws the line (JavaScript draws a payload only); the headless render of the real dashboard for a cloud-market world.
+3. **Sonnet**: tests (BZ17–BZ21, FM71, SEC16, S21–S24, D99, D100); the dashboard's Status card draws the line (JavaScript draws a payload only); the headless render of the real dashboard for a cloud-market world.
 4. **User**: switch the own `config.toml` to the cloud market; a friend installs with only the URL. **Opus**: compare the two installs' Portfolio pages for the same character state (the numbers must agree; the plan differs only by local state).
 
-Done when: BZ17–BZ21, BZ25, A92, FM71, SEC16, S21–S23, D99, D100 pass; WP1 byte-identical; the user's and a friend's installs agree.
+Done when: BZ17–BZ21, BZ25, A92, FM71, SEC16, S21–S24, D99, D100 pass; WP1 byte-identical; the user's and a friend's installs agree.
 
 ### M33 — Auction lifetimes and what they feed
 
@@ -160,7 +169,19 @@ Starts only once the collector has several weeks of raw (it follows M32 anyway).
 
 Done when: BZ22–BZ24, BZ26–BZ30, K8 and the new invariants pass; §6 items 5, 12 and 13 closed; the constants and the relist decision recorded; WP1 byte-identical.
 
-### M34 — Remove AHF and AHledger
+### M34 — Horizons and regimes
+
+Starts once two weeks of daily documents exist (after M33, so the demand numbers are the observed ones). SPEC §2.4 "Horizons and regimes" is the rule set; its constants are provisional until step 1.
+
+1. **Sonnet**: `tools/horizons_report.py` over the daily documents (or `history.db`) collected so far: the distribution of 7-day price slopes (the noise band), of 7-day against 30-day sold-per-day ratios (the demand constants) and listed-per-day ratios (the supply constant), and how many items each regime would get under candidate constants. Output: `docs/plans/blizzard-cloud-horizons.md` (temporary). **Opus** sets the constants in SPEC §2.4, BZ36 and the invariants from it and records them in §1 of this plan. Reason: the labels are designed against the real distributions, not guessed.
+2. **Opus**: `engine/horizons.py` (the four rows per item from the daily closes, sold and listed units and units on the AH; the slopes by `trend7`'s formula; "needs N more days"; the regime rules), the `horizons` and `regime` fields in `ItemIntel` (schema 12), `analysis/market.py` filling them, invariants (§8.7: a horizon's median within its p10–p90; a flat series is *flat*; a longer horizon never has fewer observed days than a shorter one; a regime needs a 30-day row). Reason: new engine formulas and a contract change.
+3. **Opus**: the item detail's horizons table and regime line (`engine/item_detail.py`, D101) and the Portfolio page's badge (`engine/portfolio_view.py`, D102); the dashboard JavaScript draws the payload; the mockup `docs/mockups/dashboard.html` gains the table and the badge first. Reason: displayed numbers (§8.5).
+4. **Sonnet**: scenario tests BZ35, BZ36, D101, D102 with the rows' numbers (after step 1); the headless render of the item detail against the mockup.
+5. **Opus**: `tools/bench.py` (the horizons add one pass over closes per item); WP1 byte-identical (its world has no cloud market).
+
+Done when: BZ35, BZ36, D101, D102 and the invariants pass; the constants recorded; the golden snapshots of the item detail updated and reviewed against the mockup; WP1 byte-identical.
+
+### M35 — Remove AHF and AHledger
 
 Starts only after 14 days of clean cloud runs (no alarm, no gap over 3 h), confirmed from the account through the MCP tools.
 
@@ -176,11 +197,11 @@ Done when: the modules, fixtures, keys and lines are gone; the whole-plan snapsh
 2. M30: Node.js and the CDK CLI installed (`npm install -g aws-cdk`); `cdk bootstrap aws://<account-id>/us-east-1` once; `cdk deploy`; click the SNS confirmation email.
 3. M31: `cdk deploy` again.
 4. M32: switch `config.toml` to the cloud market; one friend installs with the URL.
-5. M34: say go after 14 clean days.
+5. M35: say go after 14 clean days.
 
 ## 5. Risks and open questions
 
-- **The API is unofficial.** Blizzard may rename, move or restrict it. The raw envelope keeps provenance so a change is diagnosable; FM33 refuses a changed format whole; the stale alarm says when data stops. The AHF and AHledger paths stay until M34 for that reason.
+- **The API is unofficial.** Blizzard may rename, move or restrict it. The raw envelope keeps provenance so a change is diagnosable; FM33 refuses a changed format whole; the stale alarm says when data stops. The AHF and AHledger paths stay until M35 for that reason.
 - **The house mapping may change after launch day** (the duplicate-content quirk). The marker-auction check is repeatable; a Status alert for "snapshot identical to another house" is not planned.
 - **Cancellations count as sales** in every id-based method. Stated in SPEC; the confidence label is "est.". No fix exists with this API.
 - **The SQLite round trip's size and time**: estimated in M28, measured in M31. If the database is still too big for the round trip after the 2-day book prune, the next step is uploading it gzipped (SQLite compresses 3–5×), then splitting `candles_h1` by month; EFS is the last resort because of the VPC and NAT cost.
