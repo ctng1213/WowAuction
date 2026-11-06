@@ -21,7 +21,8 @@ RESERVED_SOURCES = ("local", "books", "mail", "ahf")  # your scans, derived volu
 # What each price source's rows are, the most granular first (SPEC §2.2 one-close rule): complete order books, then
 # per-key hourly observations, then per-item aggregate tables. Analysis never names a source; it asks for the kind.
 KIND_ORDER = ("book", "hourly", "table")
-SOURCE_KINDS = {"local": "book", "books": "book", "ahf": "hourly", "ahledger_h1": "hourly", "ahledger": "table"}
+SOURCE_KINDS = {"local": "book", "books": "book", "blizzard": "book", "ahf": "hourly", "ahledger_h1": "hourly",
+                "ahledger": "table"}   # blizzard: a complete house snapshot (SPEC §2.4, SRC20)
 SOURCE_PROVIDER = {"ahledger_h1": "ahledger"}   # a source the config ranks under its provider's name (SRC9)
 
 

@@ -31,10 +31,12 @@ USER_AGENT = "AHSync/0.1"
 
 @dataclass(frozen=True)
 class HttpRequest:
-    """One GET request. `headers` may hold the Authorization header, so never log it."""
+    """One request, a GET unless stated. `headers` may hold the Authorization header, so never log it."""
 
     url: str
     headers: dict[str, str] = field(default_factory=dict)
+    method: str = "GET"                 # "POST" only for a token request (SPEC §2.4)
+    body: bytes | None = None           # the POST's form body; may hold a credential, so never log it
 
 
 @dataclass(frozen=True)
@@ -478,13 +480,13 @@ def build_request(request: HttpRequest) -> urllib.request.Request:
     onto a redirected request, which could go to another host.
 
     Args:
-        request: URL and headers.
+        request: URL, headers, method and body.
 
     Returns:
         The urllib request.
     """
     headers = {k: v for k, v in request.headers.items() if k.lower() != "authorization"}
-    req = urllib.request.Request(request.url, headers=headers, method="GET")
+    req = urllib.request.Request(request.url, data=request.body, headers=headers, method=request.method)
     for name, value in request.headers.items():
         if name.lower() == "authorization":
             req.add_unredirected_header("Authorization", value)
@@ -520,7 +522,7 @@ class UrllibTransport:
         self._timeout_s = timeout_s
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
-        """Perform one GET.
+        """Perform one request (a GET, or a POST for a token).
 
         Args:
             request: URL and headers.

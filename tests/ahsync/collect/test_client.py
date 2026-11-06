@@ -341,3 +341,12 @@ def test_FM62_a_traceback_an_earlier_filter_already_formatted_is_still_scrubbed(
     assert "SECRETKEY123" not in record.exc_text and "bad key ***" in record.exc_text
     assert "SECRETKEY123" not in record.stack_info
 
+
+
+def test_a_post_keeps_its_method_and_body_and_its_authorization_off_redirects():
+    from ahsync.collect.client import HttpRequest, build_request
+    req = build_request(HttpRequest("https://oauth.battle.net/token", {"Authorization": "Basic x", "Content-Type": "f"},
+                                    method="POST", body=b"grant_type=client_credentials"))
+    assert req.get_method() == "POST" and req.data == b"grant_type=client_credentials"
+    assert "Authorization" not in req.headers and req.unredirected_hdrs["Authorization"] == "Basic x"
+    assert build_request(HttpRequest("https://x/y")).get_method() == "GET"      # the default is unchanged
