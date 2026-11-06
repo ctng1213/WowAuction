@@ -79,6 +79,9 @@ def test_alarms_and_the_budget_email_the_user(template):
     assert all(a["Properties"]["AlarmActions"] for a in alarms.values())
     template.has_resource_properties("AWS::Budgets::Budget", {"Budget": Match.object_like(
         {"BudgetLimit": {"Amount": 5, "Unit": "USD"}, "TimeUnit": "MONTHLY"})})
+    [budget] = template.find_resources("AWS::Budgets::Budget").values()
+    services = budget["Properties"]["Budget"]["FilterExpression"]["Dimensions"]
+    assert services["Key"] == "SERVICE" and "AWS Lambda" in services["Values"] and "Amazon Elastic Compute Cloud - Compute" not in services["Values"]
 
 
 def analyzer_of(template):
