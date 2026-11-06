@@ -31,6 +31,9 @@ TOKEN_URL = "https://oauth.battle.net/token"
 API = "https://us.api.blizzard.com"
 REGION = "us"
 NAMESPACE = "dynamic-forever-us"
+STATIC_NAMESPACE = "static-forever-us"   # item metadata (SPEC §6 item 24)
+SEARCH_SPAN = 1000                    # ids per catalog search: a search answers at most 1,000 hits (M31)
+QUALITY = {"POOR": 0, "COMMON": 1, "UNCOMMON": 2, "RARE": 3, "EPIC": 4, "LEGENDARY": 5, "ARTIFACT": 6, "HEIRLOOM": 7}
 TIME_LEFT = {"SHORT": 1, "MEDIUM": 2, "LONG": 3, "VERY_LONG": 4}   # WoW's band codes (SPEC §2.2)
 STAMP_SKEW_MS = 15 * 60_000           # the two endpoints' Last-Modified further apart: not one snapshot (BZ9)
 TOKEN_MARGIN_MS = 5 * 60_000          # renew this long before the token expires (BZ6)
@@ -119,12 +122,36 @@ class BlizzardClient:
             return self._token
         return self._token
 
-    def _get(self, path: str, since: str | None) -> HttpResponse:
+    def search_items(self, first_id: int, last_id: int) -> list[dict]:
+        """Every item whose id lies in a range, from the static namespace's item search (SPEC §2.4 catalog, BZ16).
+
+        Args:
+            first_id: The range's first item id.
+            last_id: Its last; at most SEARCH_SPAN ids, so one page holds every hit.
+
+        Returns:
+            The items' records (`data` of each hit), in id order.
+
+        Raises:
+            BlizzardError: The range is too wide, or the search failed.
+        """
+        if last_id - first_id + 1 > SEARCH_SPAN:
+            raise BlizzardError(f"item search range {first_id}-{last_id} is wider than {SEARCH_SPAN}")
+        path = "/data/wow/search/item"
+        query = f"&id=[{first_id},{last_id}]&orderby=id&_pageSize={SEARCH_SPAN}&_page=1"
+        response = self._get(path, None, namespace=STATIC_NAMESPACE, query=query)
+        if response.status != 200:
+            raise BlizzardError(f"{path} answered {response.status}")
+        return [hit["data"] for hit in json.loads(response.body).get("results", [])]
+
+    def _get(self, path: str, since: str | None, namespace: str = NAMESPACE, query: str = "") -> HttpResponse:
         """One GET of an API route, its body decompressed; a 401 renews the token once.
 
         Args:
             path: The route.
             since: The If-Modified-Since value, or None.
+            namespace: The namespace query value.
+            query: More query parameters, each starting with "&".
 
         Returns:
             The response.
@@ -137,7 +164,7 @@ class BlizzardClient:
                        "User-Agent": USER_AGENT}
             if since:
                 headers["If-Modified-Since"] = since
-            response = self._transport(HttpRequest(f"{API}{path}?namespace={NAMESPACE}", headers))
+            response = self._transport(HttpRequest(f"{API}{path}?namespace={namespace}{query}", headers))
             if response.status != 401 or attempt:
                 break
             self._token = None
@@ -303,3 +330,46 @@ def raw_envelope(ruleset: int, house: int, last_modified: str, fetched_ms: int, 
     text = (head[:-1].encode("utf-8") + b',"auctions":' + auctions_body.strip() + b',"commodities":'
             + commodities_body.strip() + b"}")
     return gzip.compress(text, mtime=0)
+
+
+def open_envelope(data: bytes) -> tuple[str, bytes, bytes]:
+    """A raw envelope's snapshot: the inverse of raw_envelope (SPEC §2.4).
+
+    Args:
+        data: The gzipped envelope, as stored.
+
+    Returns:
+        (Last-Modified, the regular auctions body, the commodities body), the bodies as JSON bytes for
+        parse_snapshot.
+
+    Raises:
+        BlizzardError: It is not a gzipped envelope with those fields.
+    """
+    try:
+        envelope = json.loads(gzip.decompress(data))
+        return (str(envelope["last_modified"]), json.dumps(envelope["auctions"]).encode("utf-8"),
+                json.dumps(envelope["commodities"]).encode("utf-8"))
+    except (EOFError, OSError, zlib.error, ValueError, KeyError, TypeError):
+        raise BlizzardError("not a raw envelope") from None
+
+
+def catalog_row(record: dict) -> tuple:
+    """An item search record as an `items` row (SPEC §2.4 catalog; the shape db.upsert_items takes).
+
+    Args:
+        record: One hit's `data` from the static item search.
+
+    Returns:
+        (key, item_id, name, quality, ilvl, class, subclass, vendor_buy, vendor_sell, stack); the stack is None,
+        since Blizzard's record has none (M28: `max_count` is the unique-equip limit).
+
+    Raises:
+        BlizzardError: The record has no id or name.
+    """
+    try:
+        item_id, name = int(record["id"]), str(record["name"]["en_US"])
+    except (KeyError, TypeError, ValueError):
+        raise BlizzardError("item record without an id or an en_US name") from None
+    quality = QUALITY.get(str((record.get("quality") or {}).get("type")))
+    return (item_id, item_id, name, quality, record.get("level"), (record.get("item_class") or {}).get("id"),
+            (record.get("item_subclass") or {}).get("id"), record.get("purchase_price"), record.get("sell_price"), None)

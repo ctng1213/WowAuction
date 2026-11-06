@@ -65,3 +65,27 @@ def test_a_local_write_is_atomic_and_leaves_no_temporary_file(tmp_path, monkeypa
         store.put("state/collector.json", b"new")
     assert store.get("state/collector.json").data == b"old"
     assert [p.name for p in (tmp_path / "state").iterdir()] == ["collector.json"]
+
+
+def test_delete_removes_an_object_and_a_missing_one_is_fine(store):
+    store.put("state/snapshots/m/blizzard/1.json.gz", b"x")
+    store.delete("state/snapshots/m/blizzard/1.json.gz")
+    store.delete("state/snapshots/m/blizzard/1.json.gz")
+    assert store.get("state/snapshots/m/blizzard/1.json.gz") is None and store.list("state/") == []
+
+
+def test_an_overlay_reads_through_to_the_base_and_writes_only_to_itself(tmp_path):
+    from ahcloud.store import OverlayStore
+    base, out = S3Store("bucket", FakeS3Client()), LocalStore(tmp_path / "out")
+    etag = base.put("state/history.db", b"remote")
+    base.put("raw/m/2026/11/06/140240.json.gz", b"raw")
+    store = OverlayStore(base, out)
+    assert store.get("raw/m/2026/11/06/140240.json.gz").data == b"raw"
+    store.put("state/history.db", b"local", if_match=etag)                   # the ETag it read from the base
+    assert store.get("state/history.db").data == b"local" and base.get("state/history.db").data == b"remote"
+    with pytest.raises(PreconditionFailed):
+        OverlayStore(base, LocalStore(tmp_path / "other")).put("state/history.db", b"x", if_match="stale")
+    store.put("intel/m/latest-10.json", b"{}")
+    assert store.list("") == ["intel/m/latest-10.json", "raw/m/2026/11/06/140240.json.gz", "state/history.db"]
+    store.delete("raw/m/2026/11/06/140240.json.gz")                           # only the overlay: the base keeps it
+    assert base.get("raw/m/2026/11/06/140240.json.gz") is not None

@@ -351,6 +351,7 @@ def imports_of(path: Path) -> list[tuple[int, str]]:
 
 
 CLOUD_MAY_IMPORT = ("ahcloud", "ahsync.collect.blizzard", "ahsync.collect.client", "ahsync.collect.observations",
+                    "ahsync.collect.local_scans",
                     "ahsync.collect.snapshots", "ahsync.collect.provider", "ahsync.analysis", "ahsync.intel.contract",
                     "ahsync.db", "ahsync.history", "ahsync.engine", "ahsync.clock")
 

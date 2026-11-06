@@ -44,8 +44,8 @@ flowchart LR
     BAPI[Blizzard Game Data API<br/>ruleset 2 · the Horde house · hourly Last-Modified]
     Collector[ahcloud/collector.py, built M30<br/>Lambda every 15 min · If-Modified-Since]
     Raw[(S3 data bucket, built M30: raw/ + state/<br/>one gzipped envelope per snapshot, kept forever)]
-    Analyzer[ahcloud/analyzer.py<br/>daily: ingest → analysis → baselines, history.db round trip<br/>hourly per raw object: with_scan + last hour, no database]
-    IntelS3[(S3 intel bucket, built M30, empty until M31<br/>MarketIntelligence JSON by sha256 + latest-schema.json)]
+    Analyzer[ahcloud/analyzer.py, built M31<br/>daily: ingest → analysis → baselines, history.db round trip<br/>hourly per raw object: reprice_item + last hour, no database]
+    IntelS3[(S3 intel bucket, built M30<br/>MarketIntelligence JSON by sha256 + latest-schema.json, M31)]
     CF[CloudFront, built M30<br/>public, the intel bucket only]
   end
 
@@ -56,9 +56,9 @@ flowchart LR
   AHL -- until M35 --> Collect
   BAPI --> Collector
   Collector --> Raw
-  Raw -.S3 event.-> Analyzer
-  Analyzer -.-> IntelS3
-  IntelS3 -.-> CF
+  Raw -- S3 event --> Analyzer
+  Analyzer --> IntelS3
+  IntelS3 --> CF
   CF -.collect/cloud_intel.py, M32.-> Intel
   GH -- the update job in run, M25 --> Shell
   Shell -.planned.-> Web
@@ -112,7 +112,7 @@ flowchart TD
   Raw -->|daily 09:00 UTC| Ingest[collect/observations.ingest_snapshot<br/>into state/history.db from S3]
   Ingest --> Analysis[analysis/market.py, unchanged: the baselines]
   Analysis --> Doc[(S3 intel/: MarketIntelligence JSON by sha256, schema 10<br/>+ latest-schema.json written last)]
-  Raw -->|hourly, S3 event| Hourly[with_scan + last_hour + recent ring<br/>over the latest document, no database]
+  Raw -->|hourly, S3 event| Hourly[reprice_item + last_hour + recent ring<br/>over the latest document, no database]
   Hourly --> Doc
   Doc -->|CloudFront, public| Poll[collect/cloud_intel.py<br/>every 15 min, If-None-Match, sha256, schema]
   Poll --> IntelLocal[(intel store: staged, then live)]
@@ -317,3 +317,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-06: Blizzard cloud batch spec merge (SPEC §2.4, M28–M35 planned): §1 gains the market cloud subgraph (Blizzard API, collector, raw, analyzer, published summary, CloudFront) as dashed planned nodes, with the AHF and AHledger edges marked "until M34"; §2 gains the cloud market's path. Each milestone marks its part built here.
 - 2026-11-06: the cadence split (SPEC §2.4, plan §1): the analyzer runs daily for the baselines and hourly for the state over one document; §1's analyzer node and §2's cloud path redrawn; horizons and regimes planned as M34, removal M35.
 - 2026-11-06: M30 built: the stack (`infra/`), the collector and the stores (`ahcloud/`); two buckets (data private, intel served by CloudFront only), since an origin access control can't be scoped to a prefix; the analyzer's resources come with M31.
+- 2026-11-06: M31 built: the analyzer (`ahcloud/daily.py`, `hourly.py`, `publish.py`, `analyzer.py`) and its stack resources; the hourly mode reprices through `analysis.market.reprice_item` (not `with_scan`, which doesn't reprice); the daily run carries the hourly fields.

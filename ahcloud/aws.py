@@ -69,6 +69,14 @@ class S3Store:
             raise
         return answer["ETag"]
 
+    def delete(self, key: str) -> None:
+        """Delete an object (see Store.delete; S3 treats a missing key as deleted).
+
+        Args:
+            key: The object's key.
+        """
+        self._s3.delete_object(Bucket=self.bucket, Key=check_key(key))
+
     def list(self, prefix: str, start_after: str = "") -> list[str]:
         """The keys under a prefix, every page (see Store.list).
 

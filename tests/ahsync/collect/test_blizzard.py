@@ -222,3 +222,38 @@ def test_SRC20_a_blizzard_snapshot_is_a_complete_book():
     ranked = {"blizzard": 0, "ahledger": 1}
     order = sorted(["ahledger", "ahf", "blizzard", "local"], key=lambda s: source_precedence(s, ranked))
     assert order == ["local", "blizzard", "ahf", "ahledger"]   # book kinds first, your scans on a tie, then hourly, table
+
+
+def test_BZ7_an_envelope_opens_back_into_its_snapshot():
+    regular, commodities = body([SPAULDERS]), body([LINEN])
+    stamp, a, c = bz.open_envelope(bz.raw_envelope(2, 113, B, B_MS, regular, commodities))
+    assert stamp == B and json.loads(a) == json.loads(regular) and json.loads(c) == json.loads(commodities)
+    parsed = bz.parse_snapshot(M, a, c, bz.http_date_ms(stamp), SUFFIXES)
+    assert observation(parsed).auctions == (Auction(39643, 8180, 1, 1500, 1), Auction(2455, 2589, 14, 125, 4))
+    for bad in (b"not gzip", gzip.compress(b"{}"), gzip.compress(b"[1]")):
+        with pytest.raises(bz.BlizzardError, match="not a raw envelope"):
+            bz.open_envelope(bad)
+
+
+SEARCH_LINEN = {"id": 2589, "name": {"en_US": "Linen Cloth"}, "quality": {"type": "COMMON"}, "item_class": {"id": 7},
+                "item_subclass": {"id": 5}, "level": 5, "purchase_price": 55, "sell_price": 13, "max_count": 0}
+
+
+def test_BZ16_the_catalog_comes_from_ranged_item_searches():
+    requests = []
+
+    def search(request):
+        requests.append(request)
+        if request.method == "POST":
+            return HttpResponse(200, {}, json.dumps({"access_token": "t", "expires_in": 86399}).encode())
+        return HttpResponse(200, {}, json.dumps({"results": [{"data": SEARCH_LINEN}], "pageCount": 1}).encode())
+
+    records = bz.BlizzardClient(search, FakeClock(B_MS), CLIENT_ID, SECRET).search_items(2001, 3000)
+    assert records == [SEARCH_LINEN]
+    assert requests[-1].url == (f"{bz.API}/data/wow/search/item?namespace=static-forever-us"
+                                "&id=[2001,3000]&orderby=id&_pageSize=1000&_page=1")
+    assert bz.catalog_row(SEARCH_LINEN) == (2589, 2589, "Linen Cloth", 1, 5, 7, 5, 55, 13, None)
+    with pytest.raises(bz.BlizzardError, match="wider than 1000"):
+        bz.BlizzardClient(search, FakeClock(B_MS), CLIENT_ID, SECRET).search_items(1, 1001)
+    with pytest.raises(bz.BlizzardError, match="without an id"):
+        bz.catalog_row({"id": 1})

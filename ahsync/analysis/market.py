@@ -9,7 +9,7 @@ and the rest carry on (FM8).
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 from ahsync.engine import confidence, fees, patterns, prices, profile, sellprob
 from ahsync.engine.capacity import GEAR_CLASSES
@@ -183,6 +183,83 @@ def weekly_fields(item: ItemHistory, med30: int | None, volume: DailyVolume, ref
     }, (how, sales_profile, supply)
 
 
+@dataclass(frozen=True)
+class NowBase:
+    """What the "now" fields need from an item's baselines (SPEC §3.3; the cloud's hourly mode, §2.4)."""
+
+    med7: int | None                      # copper
+    p90_30: int | None                    # copper
+    closes_30d: int                       # hourly closes in 30 days (PP4's thin-data rule)
+    sold_per_day: float | None            # units
+    listed_per_day: float | None          # units
+    sales_values: tuple[float, ...]       # the stored sales_how profile's 168 ratios (as decoded, W13)
+    vendor_sell: int                      # copper per unit; 0 when unknown
+
+
+@dataclass(frozen=True)
+class Quote:
+    """The market's state of one item at one moment: its lowest price, units at it, and its book."""
+
+    price: int | None                     # lowest buyout, copper; None = no listing
+    qty: int | None                       # units at it
+    book: tuple[tuple[int, int, int, int], ...] | None   # (price, stack, band, count); None without a book
+
+
+def now_fields(quote: Quote, base: NowBase, now_ms: int, settings: MarketSettings
+               ) -> tuple[int | None, int, float, bool, float | None]:
+    """The post price, reference stack, chance and expected value of posting now (SPEC §3.3.2, PP2, PP4, P26).
+
+    One function for the daily analysis and the hourly repricing, so the two can never disagree (BZ32).
+
+    Args:
+        quote: The current price, units and book.
+        base: The item's baselines.
+        now_ms: Now, UTC ms (the chance depends on the clock hour).
+        settings: Market-wide defaults.
+
+    Returns:
+        (post_price copper or None, ref_stack units, chance, volume_unknown, sell_value float copper per unit or None).
+    """
+    ref = ref_stack(list(quote.book or ()))
+    price = prices.post_price(quote.price, base.med7, base.p90_30, base.closes_30d)
+    supply = Supply(base.sold_per_day, base.listed_per_day, quote.book, quote.price, quote.qty)
+    chance, unknown = sellprob.posting_chance(supply, price, ref, now_ms, settings, base.sales_values)
+    sell_value = None
+    if price is not None:
+        deposit = fees.deposit_copper(base.vendor_sell, ref, fees.shortest_duration_covering(settings.sell_window_hours))
+        sell_value = sellprob.expected_post(chance, ref, price, float(base.vendor_sell), deposit) / ref
+    return price, ref, chance, unknown, sell_value
+
+
+def reprice_item(i: ItemIntel, quote: Quote, now_ms: int, settings: MarketSettings, vendor_sell: int,
+                 recent_closes: list[int]) -> ItemIntel:
+    """An item with a newer complete snapshot's state applied over its daily baselines (SPEC §2.4 hourly mode, BZ32).
+
+    The baselines (medians, rates, profiles, windows, curve, confidence) are copied unchanged; only what the
+    snapshot determines changes: cur, cur_qty, their age, the book and units on the AH, and what follows from the
+    book against the baselines (post price, reference stack, chance, sell value, the suspect flag).
+
+    Args:
+        i: The item's intelligence (the daily document's, or the previous hourly one's).
+        quote: Its state in the snapshot (it is listed there).
+        now_ms: The snapshot's time, UTC ms.
+        settings: The settings the baselines were built with.
+        vendor_sell: Copper per unit; 0 when unknown.
+        recent_closes: Its closes in the last 24 h, confirming an out-of-range price (FM5).
+
+    Returns:
+        The repriced ItemIntel.
+    """
+    base = NowBase(i.med7, i.p90_30, i.closes_30d or 0, i.sold_per_day, i.listed_per_day,
+                   profile.unpack(i.sales_how, i.sales_weeks).values, vendor_sell)
+    price, ref, chance, unknown, sell_value = now_fields(quote, base, now_ms, settings)
+    book = quote.book or ()
+    return replace(i, cur=quote.price, cur_qty=quote.qty, cur_age_ms=0, post_price=price, ref_stack=ref,
+                   chance=chance, volume_unknown=unknown, sell_value=sell_value, book_age_ms=0, book=tuple(book),
+                   units_on_ah=sum(stack * count for _, stack, _, count in book),
+                   cur_suspect=prices.suspect_price(quote.price, i.p10_30, i.p90_30, recent_closes))
+
+
 def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings: MarketSettings) -> ItemIntel:
     """One item's intelligence from its stored history (SPEC §3.3).
 
@@ -208,16 +285,11 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
     volume = daily_volume(_volumes(item), week, _covers(item), sales[0].values, settings.volume_prior)   # V30-V32, V41
     newest = item.book
     book = newest[1] if newest else None
-    ref = ref_stack(book or [])
-    price = prices.post_price(cur.price if cur and cur.price is not None else None, med7, p90, len(last30))  # PP2, PP4
-    supply = Supply(volume.sold_per_day, volume.listed_per_day, tuple(book) if book is not None else None,
-                    cur.price if cur else None, cur.qty if cur else None)
-    chance, unknown = sellprob.posting_chance(supply, price, ref, now_ms, settings, sales[0].values)   # P26
     vendor_sell = (info.vendor_sell if info else None) or 0
-    sell_value = None
-    if price is not None:
-        deposit = fees.deposit_copper(vendor_sell, ref, fees.shortest_duration_covering(settings.sell_window_hours))
-        sell_value = sellprob.expected_post(chance, ref, price, float(vendor_sell), deposit) / ref
+    quote = Quote(cur.price if cur and cur.price is not None else None, cur.qty if cur else None,
+                  tuple(book) if book is not None else None)
+    base = NowBase(med7, p90, len(last30), volume.sold_per_day, volume.listed_per_day, sales[0].values, vendor_sell)
+    price, ref, chance, unknown, sell_value = now_fields(quote, base, now_ms, settings)   # PP2, PP4, P26
     book_age = now_ms - newest[0] if newest else None
     recent = [c for t, c in raw if t > now_ms - DAY_MS]
     conf = confidence.percent(confidence.score(len(last30), volume.volume_score, book_age, None, 0))
