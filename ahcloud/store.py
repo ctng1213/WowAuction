@@ -59,6 +59,14 @@ class Store(Protocol):
         """
         ...
 
+    def delete(self, key: str) -> None:
+        """Delete an object; deleting a missing one is not an error.
+
+        Args:
+            key: The object's key.
+        """
+        ...
+
     def list(self, prefix: str, start_after: str = "") -> list[str]:
         """The keys under a prefix, sorted.
 
@@ -171,6 +179,14 @@ class LocalStore:
             raise
         return etag_of(data)
 
+    def delete(self, key: str) -> None:
+        """Delete an object (see Store.delete).
+
+        Args:
+            key: The object's key.
+        """
+        self._path(key).unlink(missing_ok=True)
+
     def list(self, prefix: str, start_after: str = "") -> list[str]:
         """The keys under a prefix (see Store.list); temporary files are not keys.
 
@@ -190,3 +206,68 @@ class LocalStore:
                 if key.startswith(prefix) and key > start_after:
                     keys.append(key)
         return sorted(keys)
+
+
+class OverlayStore:
+    """Reads from an overlay first, then a base; writes and deletes touch only the overlay (plan decision 17).
+
+    So a laptop can reproduce a cloud run with `--store s3://<bucket> --out data/cloud`: the raw comes from the
+    bucket, and the state and the documents the run writes stay in the folder, never in the bucket.
+    """
+
+    def __init__(self, base: Store, overlay: Store) -> None:
+        """Layer an overlay over a base.
+
+        Args:
+            base: Read only.
+            overlay: Read first; every write goes here.
+        """
+        self.base, self.overlay = base, overlay
+
+    def get(self, key: str) -> StoredObject | None:
+        """The overlay's object, else the base's (see Store.get).
+
+        Args:
+            key: The object's key.
+
+        Returns:
+            Its bytes and ETag, or None.
+        """
+        return self.overlay.get(key) or self.base.get(key)
+
+    def put(self, key: str, data: bytes, if_match: str | None = None) -> str:
+        """Write to the overlay (see Store.put). A conditional write on a key only the base has copies it first.
+
+        Args:
+            key: The object's key.
+            data: Its bytes.
+            if_match: The ETag it must still have, or None.
+
+        Returns:
+            The new ETag.
+        """
+        if if_match is not None and self.overlay.get(key) is None and (base := self.base.get(key)) is not None:
+            if base.etag != if_match:
+                raise PreconditionFailed(key)
+            if_match = None
+        return self.overlay.put(key, data, if_match)
+
+    def delete(self, key: str) -> None:
+        """Delete from the overlay only (see Store.delete).
+
+        Args:
+            key: The object's key.
+        """
+        self.overlay.delete(key)
+
+    def list(self, prefix: str, start_after: str = "") -> list[str]:
+        """The keys of both, merged (see Store.list).
+
+        Args:
+            prefix: Key prefix.
+            start_after: Only keys sorting after this one.
+
+        Returns:
+            Keys in ascending order.
+        """
+        return sorted(set(self.base.list(prefix, start_after)) | set(self.overlay.list(prefix, start_after)))

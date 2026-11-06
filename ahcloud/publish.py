@@ -1,0 +1,120 @@
+"""Publishing and reading the market summary in the intel store (SPEC §2.4 "The published document", BZ15).
+
+A document is `intel.contract.to_json` gzipped (no gzip time, so the same intelligence gives the same bytes) at
+`intel/<market>/<sha256>.json.gz`, named by its own hash so a republish never overwrites a key CloudFront may
+still serve; then the pointer `intel/<market>/latest-<schema>.json` is written last, so a reader never sees a
+half-published document. The settings the baselines were built with travel in the document (`settings`).
+"""
+from __future__ import annotations
+
+import dataclasses
+import gzip
+import hashlib
+import json
+from dataclasses import dataclass
+
+from ahcloud.store import Store
+from ahsync.engine.sellprob import MarketSettings
+from ahsync.engine.volume import VolumePrior
+from ahsync.intel.contract import INTEL_SCHEMA_VERSION, MarketIntelligence, from_json, to_json
+
+
+@dataclass(frozen=True)
+class Pointer:
+    """What `latest-<schema>.json` says."""
+
+    schema: int
+    built_ms: int
+    observations_until_ms: int | None
+    key: str                          # the document's key
+    bytes: int                        # its gzipped size
+    sha256: str                       # of the gzipped bytes
+
+
+def pointer_key(market: str, schema: int = INTEL_SCHEMA_VERSION) -> str:
+    """The pointer's key.
+
+    Args:
+        market: Market id.
+        schema: Schema version.
+
+    Returns:
+        "intel/<market>/latest-<schema>.json".
+    """
+    return f"intel/{market}/latest-{schema}.json"
+
+
+def settings_to_dict(settings: MarketSettings) -> dict[str, object]:
+    """MarketSettings as the document's `settings`.
+
+    Args:
+        settings: The analysis settings.
+
+    Returns:
+        Field name -> value; the volume prior as a nested dict.
+    """
+    return dataclasses.asdict(settings)
+
+
+def settings_from_dict(values: dict[str, object]) -> MarketSettings:
+    """The document's `settings` back as MarketSettings (the defaults when empty, as in a desktop-built document).
+
+    Args:
+        values: From settings_to_dict.
+
+    Returns:
+        The settings.
+    """
+    if not values:
+        return MarketSettings()
+    fields: dict = dict(values)
+    if isinstance(fields.get("volume_prior"), dict):
+        fields["volume_prior"] = VolumePrior(**fields["volume_prior"])
+    return MarketSettings(**fields)
+
+
+def publish(store: Store, intel: MarketIntelligence, schemas: tuple[int, ...] = (INTEL_SCHEMA_VERSION,)) -> list[Pointer]:
+    """Write the document in each schema asked for, then each pointer (SPEC §2.4, BZ15, BZ18).
+
+    Args:
+        store: The intel store.
+        intel: The intelligence.
+        schemas: The schemas to publish: its own, plus the previous one during a transition.
+
+    Returns:
+        The pointers written, in the order given.
+    """
+    pointers = []
+    for schema in schemas:
+        data = gzip.compress(to_json(intel, schema).encode("utf-8"), mtime=0)
+        digest = hashlib.sha256(data).hexdigest()
+        key = f"intel/{intel.market}/{digest}.json.gz"
+        store.put(key, data)                 # named by its hash: rewriting it writes the same bytes
+        pointers.append(Pointer(schema, intel.built_ms, intel.observations_until_ms, key, len(data), digest))
+    for pointer in pointers:
+        store.put(pointer_key(intel.market, pointer.schema),
+                  json.dumps(dataclasses.asdict(pointer), sort_keys=True).encode("utf-8"))
+    return pointers
+
+
+def read_latest(store: Store, market: str) -> tuple[MarketIntelligence, Pointer] | None:
+    """The newest published document of this schema, checked against its pointer.
+
+    Args:
+        store: The intel store.
+        market: Market id.
+
+    Returns:
+        (the intelligence, its pointer); None before the first publish.
+
+    Raises:
+        ValueError: The document is missing or its hash differs from the pointer's (a torn or tampered write).
+    """
+    found = store.get(pointer_key(market))
+    if found is None:
+        return None
+    pointer = Pointer(**json.loads(found.data))
+    document = store.get(pointer.key)
+    if document is None or hashlib.sha256(document.data).hexdigest() != pointer.sha256:
+        raise ValueError(f"{pointer.key}: missing, or not the document the pointer names")
+    return from_json(gzip.decompress(document.data).decode("utf-8")), pointer

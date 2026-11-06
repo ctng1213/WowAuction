@@ -12,10 +12,15 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 
-INTEL_SCHEMA_VERSION = 9       # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
+INTEL_SCHEMA_VERSION = 10      # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
                                # 5: median_daily_supply (V23); 6: observed_listing_turnover (V37); 7: volume_kind (D57);
                                # 8: closes_30d (TT23); 9: each window's forecast: expected price, executable quantity,
-                               # confidence, and buying windows ranked by actionable value (W14, W15)
+                               # confidence, and buying windows ranked by actionable value (W14, W15); 10: the cloud
+                               # document's catalog, coverage and settings, and per item last_hour and the recent ring
+                               # (SPEC §2.4, BZ15, BZ32)
+# Fields each schema added, so to_json can write the previous schema for older readers (SPEC §2.4, BZ18).
+ADDED_IN = {10: {"document": ("catalog", "coverage", "settings"),
+                 "item": ("last_hour", "recent_closes", "recent_sold", "recent_listed", "recent_units")}}
 
 
 class IntelVersionError(ValueError):
@@ -89,6 +94,15 @@ class ItemIntel:
                                           # before version 7, which are labelled by source name (views.volume_label)
     closes_30d: int | None = None         # hourly closes in the last 30 days: thin data caps forecasts (TT23); None
                                           # in documents before version 8
+    # The hourly state (SPEC §2.4, schema 10; BZ32): units sold, expired and newly listed between the two newest
+    # snapshots, and the last 24 hours as packed rings of 24 comma-separated values, oldest first ("" for an hour
+    # without a snapshot): closes in copper, sold units, listed units, units on the AH. None / "" before schema 10
+    # and in a document no hourly run has touched.
+    last_hour: tuple[float, float, float] | None = None
+    recent_closes: str = ""
+    recent_sold: str = ""
+    recent_listed: str = ""
+    recent_units: str = ""
 
 
 @dataclass(frozen=True)
@@ -101,6 +115,12 @@ class MarketIntelligence:
     volume_method_version: int            # SPEC §3.3.6
     items: dict[int, ItemIntel]
     schema_version: int = INTEL_SCHEMA_VERSION
+    # The cloud document's extras (SPEC §2.4, schema 10): item key -> [name, quality, item_class, vendor_sell, stack];
+    # the hours observed as (first hour, last hour) ranges, hour numbers floor(ms / 3600000); the MarketSettings the
+    # baselines were built with, by field name. Empty in a desktop-built document and before schema 10.
+    catalog: dict[int, tuple] = field(default_factory=dict)
+    coverage: tuple[tuple[int, int], ...] = ()
+    settings: dict[str, object] = field(default_factory=dict)
 
 
 def price_level(i: ItemIntel) -> int | None:
@@ -127,17 +147,34 @@ def supply_level(i: ItemIntel) -> int | None:
     return i.units_on_ah if i.units_on_ah is not None else i.median_daily_supply
 
 
-def to_json(intel: MarketIntelligence) -> str:
-    """Serialize intelligence deterministically.
+def to_json(intel: MarketIntelligence, schema: int | None = None) -> str:
+    """Serialize intelligence deterministically, in its own schema or an older one (SPEC §2.4, BZ18).
 
     Args:
         intel: The intelligence.
+        schema: Write as this schema: the fields added after it are left out and `schema_version` says it. None
+            writes the intelligence's own schema. Schema changes are additive, so an older reader reads it whole.
 
     Returns:
-        JSON text with sorted keys; item keys become strings.
+        JSON text with sorted keys; item and catalog keys become strings.
+
+    Raises:
+        ValueError: schema is newer than the intelligence's or older than the oldest one ADDED_IN can produce.
     """
+    target = intel.schema_version if schema is None else schema
+    if target > intel.schema_version or target < min(ADDED_IN, default=target) - 1:
+        raise ValueError(f"cannot write schema {target} from schema {intel.schema_version}")
     body = asdict(intel)
     body["items"] = {str(k): v for k, v in sorted(body["items"].items())}
+    body["catalog"] = {str(k): list(v) for k, v in sorted(body["catalog"].items())}
+    for version in sorted(ADDED_IN):
+        if version > target:
+            for name in ADDED_IN[version]["document"]:
+                body.pop(name)
+            for item in body["items"].values():
+                for name in ADDED_IN[version]["item"]:
+                    item.pop(name)
+    body["schema_version"] = target
     return json.dumps(body, sort_keys=True, separators=(",", ":"))
 
 
@@ -167,6 +204,11 @@ def from_json(text: str) -> MarketIntelligence:
         for name in ("sell_windows", "buy_windows"):
             if name in item:
                 item[name] = tuple(IntelWindow(**w) for w in item[name])
+        if item.get("last_hour") is not None:
+            item["last_hour"] = tuple(item["last_hour"])
         items[int(key)] = ItemIntel(**item)
+    catalog = {int(k): tuple(v) for k, v in body.get("catalog", {}).items()}
+    coverage = tuple(tuple(r) for r in body.get("coverage", ()))
     return MarketIntelligence(body["market"], body["built_ms"], body["observations_until_ms"],
-                              body["volume_method_version"], items, body["schema_version"])
+                              body["volume_method_version"], items, body["schema_version"], catalog, coverage,
+                              dict(body.get("settings", {})))

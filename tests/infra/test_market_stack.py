@@ -76,6 +76,37 @@ def test_alarms_and_the_budget_email_the_user(template):
     stale = next(a["Properties"] for a in alarms.values() if a["Properties"].get("MetricName") == "snapshot_written")
     assert (stale["Namespace"], stale["EvaluationPeriods"], stale["Period"], stale["TreatMissingData"]) == (
         "WowAuction", 3, 3600, "breaching")
-    assert len(alarms) == 2 and all(a["Properties"]["AlarmActions"] for a in alarms.values())
+    assert all(a["Properties"]["AlarmActions"] for a in alarms.values())
     template.has_resource_properties("AWS::Budgets::Budget", {"Budget": Match.object_like(
         {"BudgetLimit": {"Amount": 5, "Unit": "USD"}, "TimeUnit": "MONTHLY"})})
+
+
+def analyzer_of(template):
+    """The analyzer function's properties."""
+    [function] = [f for f in template.find_resources("AWS::Lambda::Function").values()
+                  if f["Properties"].get("Handler") == "ahcloud.analyzer.handler"]
+    return function["Properties"]
+
+
+def test_SEC17_the_analyzer_environment_holds_names_only(template):
+    props = analyzer_of(template)
+    assert set(props["Environment"]["Variables"]) == {"DATA_BUCKET", "INTEL_BUCKET", "MARKET", "SECRET_NAME"}
+    assert (props["ReservedConcurrentExecutions"], props["Timeout"], props["MemorySize"]) == (1, 900, 2048)
+    assert props["EphemeralStorage"] == {"Size": 4096} and "TargetArn" in json.dumps(props["DeadLetterConfig"])
+
+
+def test_BZ34_the_analyzer_runs_daily_hourly_and_on_every_new_raw_object(template):
+    rules = [r["Properties"] for r in template.find_resources("AWS::Events::Rule").values()]
+    inputs = {r["ScheduleExpression"]: json.loads(r["Targets"][0]["Input"]) for r in rules if "Input" in r["Targets"][0]}
+    assert inputs == {"cron(0 9 * * ? *)": {"mode": "daily"}, "rate(1 hour)": {"mode": "hourly"}}
+    notification = json.dumps(template.find_resources("Custom::S3BucketNotifications"))
+    assert '"prefix"' in notification.lower() and "raw/" in notification and "s3:ObjectCreated:*" in notification
+    template.has_resource_properties("AWS::Lambda::EventInvokeConfig", {"MaximumRetryAttempts": 1})
+
+
+def test_FM70_failures_and_stale_baselines_alarm(template):
+    alarms = {a["Properties"]["AlarmDescription"]: a["Properties"] for a in template.find_resources("AWS::CloudWatch::Alarm").values()}
+    assert len(alarms) == 5
+    baselines = next(a for d, a in alarms.items() if "36 hours" in d)
+    assert (baselines["MetricName"], baselines["Period"] * baselines["EvaluationPeriods"]) == ("daily_published", 36 * 3600)
+    assert any("dead-letter" in d for d in alarms)

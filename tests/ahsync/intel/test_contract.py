@@ -82,3 +82,29 @@ def test_V23_supply_level_is_listed_now_else_the_median_daily_supply():
     assert supply_level(linen) == 93
     assert supply_level(replace(linen, units_on_ah=None, median_daily_supply=70)) == 70
     assert supply_level(replace(linen, units_on_ah=None)) is None
+
+
+def test_BZ15_schema_10_round_trips_its_cloud_fields_and_writes_schema_9_without_them():
+    item = replace(ITEM, last_hour=(4.0, 1.0, 0.0), recent_closes="125,,120", recent_sold="4,,2",
+                   recent_listed="0,,10", recent_units="10,,18")
+    intel = MarketIntelligence("forever.normal.horde.us", 1_000, 2_000, 1, {2589: item},
+                               catalog={2589: ("Linen Cloth", 1, 7, 13, None)}, coverage=((497_900, 497_950),),
+                               settings={"default_sell_prob": 0.25})
+    text = to_json(intel)
+    assert intel.schema_version == INTEL_SCHEMA_VERSION == 10
+    assert from_json(text) == intel and to_json(from_json(text)) == text
+    old = json.loads(to_json(intel, schema=9))
+    assert old["schema_version"] == 9 and not {"catalog", "coverage", "settings"} & set(old)
+    assert not {"last_hour", "recent_closes", "recent_sold", "recent_listed", "recent_units"} & set(old["items"]["2589"])
+    assert from_json(json.dumps(old)) == replace(intel, schema_version=9, items={2589: ITEM}, catalog={}, coverage=(),
+                                                 settings={})
+    with pytest.raises(ValueError, match="cannot write schema 11"):
+        to_json(intel, schema=11)
+    with pytest.raises(ValueError, match="cannot write schema 8"):
+        to_json(intel, schema=8)
+
+
+def test_a_schema_9_document_reads_with_empty_cloud_fields():
+    body = json.loads(to_json(MarketIntelligence("m", 1, None, 1, {2589: ITEM}), schema=9))
+    intel = from_json(json.dumps(body))
+    assert (intel.catalog, intel.coverage, intel.settings, intel.items[2589].last_hour) == ({}, (), {}, None)

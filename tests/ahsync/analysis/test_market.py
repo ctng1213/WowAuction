@@ -348,3 +348,26 @@ def test_SRC11_ahledgers_aggregates_are_stored_never_used(tmp_path):
                      if "ahledger_rows" in p.read_text(encoding="utf-8"))
     assert readers == ["collect/ahledger.py", "collect/ahledger_backfill.py",   # the backfill reads only its keys (§2.3)
                        "db/sqlite.py", "history/prune.py", "history/writes.py"]
+
+
+def test_BZ32_repricing_an_item_with_its_own_state_reproduces_the_daily_numbers():
+    intel, _ = market.analyze_market(MemoryHistory(), M, NOW, MarketSettings())
+    i = intel.items[6217]
+    quote = market.Quote(i.cur, i.cur_qty, i.book)
+    again = market.reprice_item(i, quote, NOW, MarketSettings(), ITEMS[6217].vendor_sell, [])
+    now = ("post_price", "ref_stack", "chance", "volume_unknown", "sell_value", "cur", "cur_qty", "book", "units_on_ah")
+    assert {f: getattr(again, f) for f in now} == {f: getattr(i, f) for f in now}   # one formula, daily and hourly
+
+
+def test_BZ32_a_newer_book_moves_the_now_fields_and_no_baseline():
+    intel, _ = market.analyze_market(MemoryHistory(), M, NOW, MarketSettings())
+    i = intel.items[6217]
+    book = ((3800, 1, 4, 3), (3990, 1, 3, 2))                         # a cheaper level appeared
+    later = market.reprice_item(i, market.Quote(3800, 3, book), NOW + 2 * HOUR, MarketSettings(), 50, [3800])
+    assert (later.cur, later.cur_qty, later.cur_age_ms, later.book_age_ms, later.units_on_ah) == (3800, 3, 0, 0, 5)
+    assert later.post_price is not None and later.post_price <= i.post_price
+    baselines = ("med7", "med30", "p10_30", "p90_30", "trend7", "sold_per_day", "expired_per_day", "listed_per_day",
+                 "how", "how_weeks", "sales_how", "sales_weeks", "supply_how", "supply_weeks", "seasonality",
+                 "sell_windows", "buy_windows", "curve", "curve_hour", "conf", "median_daily_supply", "closes_30d")
+    assert all(getattr(later, f) == getattr(i, f) for f in baselines)
+    assert to_json(intel) != to_json(market.replace(intel, items={**intel.items, 6217: later}))

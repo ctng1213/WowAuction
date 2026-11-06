@@ -74,6 +74,11 @@ class FakeS3Client:
         self.objects[Key] = bytes(Body)
         return {"ETag": self.etag(self.objects[Key])}
 
+    def delete_object(self, Bucket: str, Key: str) -> dict:     # noqa: N803
+        self.calls.append(("delete", Bucket, Key))
+        self.objects.pop(Key, None)
+        return {}
+
     def get_paginator(self, name: str) -> _Paginator:
         assert name == "list_objects_v2"
         return _Paginator(self)
