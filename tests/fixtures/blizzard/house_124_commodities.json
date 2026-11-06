@@ -1,0 +1,504 @@
+{
+ "_links": {
+  "self": {
+   "href": "https://us.api.blizzard.com/data/wow/ruleset/2/auctions/124/commodities?namespace=dynamic-forever-us"
+  }
+ },
+ "auctions": [
+  {
+   "id": 1428324,
+   "item": {
+    "id": 2450
+   },
+   "quantity": 9,
+   "time_left": "MEDIUM",
+   "unit_price": 400
+  },
+  {
+   "id": 1402733,
+   "item": {
+    "id": 10938
+   },
+   "quantity": 1,
+   "time_left": "SHORT",
+   "unit_price": 350
+  },
+  {
+   "id": 1383590,
+   "item": {
+    "id": 6290
+   },
+   "quantity": 12,
+   "time_left": "SHORT",
+   "unit_price": 15
+  },
+  {
+   "id": 1435586,
+   "item": {
+    "id": 248682
+   },
+   "quantity": 1,
+   "time_left": "MEDIUM",
+   "unit_price": 8099
+  },
+  {
+   "id": 1435138,
+   "item": {
+    "id": 6358
+   },
+   "quantity": 20,
+   "time_left": "MEDIUM",
+   "unit_price": 487
+  },
+  {
+   "id": 1450281,
+   "item": {
+    "id": 17056
+   },
+   "quantity": 2,
+   "time_left": "MEDIUM",
+   "unit_price": 13
+  },
+  {
+   "id": 1371102,
+   "item": {
+    "id": 4592
+   },
+   "quantity": 14,
+   "time_left": "SHORT",
+   "unit_price": 25
+  },
+  {
+   "id": 1388017,
+   "item": {
+    "id": 279956
+   },
+   "quantity": 5,
+   "time_left": "SHORT",
+   "unit_price": 485
+  },
+  {
+   "id": 1426889,
+   "item": {
+    "id": 279944
+   },
+   "quantity": 2,
+   "time_left": "MEDIUM",
+   "unit_price": 700
+  },
+  {
+   "id": 1418913,
+   "item": {
+    "id": 2880
+   },
+   "quantity": 5,
+   "time_left": "SHORT",
+   "unit_price": 600
+  },
+  {
+   "id": 1401644,
+   "item": {
+    "id": 1180
+   },
+   "quantity": 1,
+   "time_left": "SHORT",
+   "unit_price": 285
+  },
+  {
+   "id": 1446597,
+   "item": {
+    "id": 4596
+   },
+   "quantity": 1,
+   "time_left": "MEDIUM",
+   "unit_price": 200
+  },
+  {
+   "id": 1414665,
+   "item": {
+    "id": 2320
+   },
+   "quantity": 1,
+   "time_left": "SHORT",
+   "unit_price": 100
+  },
+  {
+   "id": 1435259,
+   "item": {
+    "id": 6358
+   },
+   "quantity": 12,
+   "time_left": "MEDIUM",
+   "unit_price": 487
+  },
+  {
+   "id": 1372070,
+   "item": {
+    "id": 774
+   },
+   "quantity": 1,
+   "time_left": "SHORT",
+   "unit_price": 120
+  },
+  {
+   "id": 1376380,
+   "item": {
+    "id": 6890
+   },
+   "quantity": 9,
+   "time_left": "SHORT",
+   "unit_price": 200
+  },
+  {
+   "id": 1382454,
+   "item": {
+    "id": 785
+   },
+   "quantity": 6,
+   "time_left": "SHORT",
+   "unit_price": 175
+  },
+  {
+   "id": 1424629,
+   "item": {
+    "id": 6533
+   },
+   "quantity": 1,
+   "time_left": "MEDIUM",
+   "unit_price": 5000
+  },
+  {
+   "id": 1401065,
+   "item": {
+    "id": 279967
+   },
+   "quantity": 3,
+   "time_left": "SHORT",
+   "unit_price": 100
+  },
+  {
+   "id": 1383198,
+   "item": {
+    "id": 268415
+   },
+   "quantity": 2,
+   "time_left": "SHORT",
+   "unit_price": 150
+  },
+  {
+   "id": 1891652,
+   "item": {
+    "id": 2589
+   },
+   "quantity": 15,
+   "time_left": "LONG",
+   "unit_price": 29
+  },
+  {
+   "id": 1909810,
+   "item": {
+    "id": 2589
+   },
+   "quantity": 20,
+   "time_left": "LONG",
+   "unit_price": 32
+  },
+  {
+   "id": 2224189,
+   "item": {
+    "id": 4306
+   },
+   "quantity": 1,
+   "time_left": "LONG",
+   "unit_price": 1800
+  },
+  {
+   "id": 2294772,
+   "item": {
+    "id": 2996
+   },
+   "quantity": 9,
+   "time_left": "LONG",
+   "unit_price": 79
+  },
+  {
+   "id": 2306752,
+   "item": {
+    "id": 2996
+   },
+   "quantity": 3,
+   "time_left": "LONG",
+   "unit_price": 79
+  },
+  {
+   "id": 2706988,
+   "item": {
+    "id": 2996
+   },
+   "quantity": 2,
+   "time_left": "LONG",
+   "unit_price": 70
+  },
+  {
+   "id": 2807467,
+   "item": {
+    "id": 4306
+   },
+   "quantity": 3,
+   "time_left": "LONG",
+   "unit_price": 1800
+  },
+  {
+   "id": 2945101,
+   "item": {
+    "id": 2589
+   },
+   "quantity": 20,
+   "time_left": "LONG",
+   "unit_price": 25
+  },
+  {
+   "id": 2967698,
+   "item": {
+    "id": 2840
+   },
+   "quantity": 4,
+   "time_left": "LONG",
+   "unit_price": 100
+  },
+  {
+   "id": 3053732,
+   "item": {
+    "id": 2589
+   },
+   "quantity": 10,
+   "time_left": "LONG",
+   "unit_price": 124
+  },
+  {
+   "id": 3054124,
+   "item": {
+    "id": 2589
+   },
+   "quantity": 20,
+   "time_left": "LONG",
+   "unit_price": 124
+  },
+  {
+   "id": 3271402,
+   "item": {
+    "id": 4306
+   },
+   "quantity": 7,
+   "time_left": "LONG",
+   "unit_price": 1700
+  },
+  {
+   "id": 3577207,
+   "item": {
+    "id": 4306
+   },
+   "quantity": 5,
+   "time_left": "VERY_LONG",
+   "unit_price": 1699
+  },
+  {
+   "id": 3590166,
+   "item": {
+    "id": 10940
+   },
+   "quantity": 4,
+   "time_left": "VERY_LONG",
+   "unit_price": 300
+  },
+  {
+   "id": 3684575,
+   "item": {
+    "id": 10940
+   },
+   "quantity": 29,
+   "time_left": "VERY_LONG",
+   "unit_price": 200
+  },
+  {
+   "id": 3852185,
+   "item": {
+    "id": 2996
+   },
+   "quantity": 25,
+   "time_left": "VERY_LONG",
+   "unit_price": 70
+  },
+  {
+   "id": 4029510,
+   "item": {
+    "id": 2996
+   },
+   "quantity": 6,
+   "time_left": "VERY_LONG",
+   "unit_price": 70
+  },
+  {
+   "id": 4146544,
+   "item": {
+    "id": 10940
+   },
+   "quantity": 5,
+   "time_left": "VERY_LONG",
+   "unit_price": 128
+  },
+  {
+   "id": 4209113,
+   "item": {
+    "id": 10940
+   },
+   "quantity": 3,
+   "time_left": "VERY_LONG",
+   "unit_price": 127
+  },
+  {
+   "id": 4228999,
+   "item": {
+    "id": 10940
+   },
+   "quantity": 2,
+   "time_left": "VERY_LONG",
+   "unit_price": 130
+  },
+  {
+   "id": 4260099,
+   "item": {
+    "id": 4306
+   },
+   "quantity": 7,
+   "time_left": "VERY_LONG",
+   "unit_price": 1695
+  },
+  {
+   "id": 4828739,
+   "item": {
+    "id": 2772
+   },
+   "quantity": 3,
+   "time_left": "MEDIUM",
+   "unit_price": 5000
+  },
+  {
+   "id": 5068915,
+   "item": {
+    "id": 2770
+   },
+   "quantity": 20,
+   "time_left": "VERY_LONG",
+   "unit_price": 3035
+  },
+  {
+   "id": 5089282,
+   "item": {
+    "id": 2770
+   },
+   "quantity": 20,
+   "time_left": "VERY_LONG",
+   "unit_price": 235
+  },
+  {
+   "id": 5242708,
+   "item": {
+    "id": 2772
+   },
+   "quantity": 1,
+   "time_left": "LONG",
+   "unit_price": 5000
+  },
+  {
+   "id": 5332637,
+   "item": {
+    "id": 2770
+   },
+   "quantity": 20,
+   "time_left": "LONG",
+   "unit_price": 1010
+  },
+  {
+   "id": 5332993,
+   "item": {
+    "id": 2770
+   },
+   "quantity": 38,
+   "time_left": "LONG",
+   "unit_price": 1010
+  },
+  {
+   "id": 5350103,
+   "item": {
+    "id": 2770
+   },
+   "quantity": 65,
+   "time_left": "VERY_LONG",
+   "unit_price": 100
+  },
+  {
+   "id": 5355210,
+   "item": {
+    "id": 2840
+   },
+   "quantity": 106,
+   "time_left": "LONG",
+   "unit_price": 95
+  },
+  {
+   "id": 5372323,
+   "item": {
+    "id": 2840
+   },
+   "quantity": 8,
+   "time_left": "LONG",
+   "unit_price": 95
+  },
+  {
+   "id": 5377446,
+   "item": {
+    "id": 2840
+   },
+   "quantity": 60,
+   "time_left": "LONG",
+   "unit_price": 95
+  },
+  {
+   "id": 5382368,
+   "item": {
+    "id": 2840
+   },
+   "quantity": 5,
+   "time_left": "LONG",
+   "unit_price": 85
+  },
+  {
+   "id": 5537023,
+   "item": {
+    "id": 2772
+   },
+   "quantity": 2,
+   "time_left": "VERY_LONG",
+   "unit_price": 5000
+  },
+  {
+   "id": 5548834,
+   "item": {
+    "id": 2772
+   },
+   "quantity": 43,
+   "time_left": "LONG",
+   "unit_price": 4000
+  },
+  {
+   "id": 5592642,
+   "item": {
+    "id": 2772
+   },
+   "quantity": 1,
+   "time_left": "LONG",
+   "unit_price": 3500
+  }
+ ]
+}

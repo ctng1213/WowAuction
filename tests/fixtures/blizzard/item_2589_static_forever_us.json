@@ -1,0 +1,288 @@
+{
+ "_links": {
+  "self": {
+   "href": "https://us.api.blizzard.com/data/wow/item/2589?namespace=static-1.60.1_70399-forever-us"
+  }
+ },
+ "id": 2589,
+ "inventory_type": {
+  "name": {
+   "de_DE": "Nicht anlegbar",
+   "en_GB": "Non-equippable",
+   "en_US": "Non-equippable",
+   "es_ES": "No se puede equipar",
+   "es_MX": "No equipable",
+   "fr_FR": "Objet hors \u00e9quipement",
+   "it_IT": "Non equipaggiabile",
+   "ko_KR": "\ucc29\uc6a9 \ubd88\uac00",
+   "pt_BR": "N\u00e3o equip\u00e1vel",
+   "ru_RU": "\u041d\u0435\u044d\u043a\u0438\u043f\u0438\u0440\u0443\u0435\u043c\u043e\u0435",
+   "zh_CN": "\u65e0\u6cd5\u88c5\u5907",
+   "zh_TW": "\u7121\u6cd5\u88dd\u5099"
+  },
+  "type": "NON_EQUIP"
+ },
+ "is_equippable": false,
+ "is_stackable": true,
+ "item_class": {
+  "id": 7,
+  "key": {
+   "href": "https://us.api.blizzard.com/data/wow/item-class/7?namespace=static-1.60.1_70399-forever-us"
+  },
+  "name": {
+   "de_DE": "Handwerkswaren",
+   "en_GB": "Trade Goods",
+   "en_US": "Trade Goods",
+   "es_ES": "Objeto comerciable",
+   "es_MX": "Objeto comerciable",
+   "fr_FR": "Artisanat",
+   "it_IT": "Beni commerciali",
+   "ko_KR": "\uc9c1\uc5c5 \uc6a9\ud488",
+   "pt_BR": "Mercadorias",
+   "ru_RU": "\u0425\u043e\u0437\u044f\u0439\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0435 \u0442\u043e\u0432\u0430\u0440\u044b",
+   "zh_CN": "\u5546\u54c1",
+   "zh_TW": "\u5546\u54c1"
+  }
+ },
+ "item_subclass": {
+  "id": 5,
+  "key": {
+   "href": "https://us.api.blizzard.com/data/wow/item-class/7/item-subclass/5?namespace=static-1.60.1_70399-forever-us"
+  },
+  "name": {
+   "de_DE": "Stoff",
+   "en_GB": "Cloth",
+   "en_US": "Cloth",
+   "es_ES": "Tela",
+   "es_MX": "Tela",
+   "fr_FR": "Tissu",
+   "it_IT": "Stoffa",
+   "ko_KR": "\ucc9c",
+   "pt_BR": "Tecido",
+   "ru_RU": "\u0422\u043a\u0430\u043d\u044c",
+   "zh_CN": "\u5e03\u6599",
+   "zh_TW": "\u5e03\u6599"
+  }
+ },
+ "level": 5,
+ "max_count": 0,
+ "media": {
+  "id": 2589,
+  "key": {
+   "href": "https://us.api.blizzard.com/data/wow/media/item/2589?namespace=static-1.60.1_70399-forever-us"
+  }
+ },
+ "name": {
+  "de_DE": "Leinenstoff",
+  "en_GB": "Linen Cloth",
+  "en_US": "Linen Cloth",
+  "es_ES": "Pa\u00f1o de lino",
+  "es_MX": "Pa\u00f1o de lino",
+  "fr_FR": "Etoffe de lin",
+  "it_IT": "Tessuto di Lino",
+  "ko_KR": "\ub9ac\ub128 \uc637\uac10",
+  "pt_BR": "Linho",
+  "ru_RU": "\u041b\u044c\u043d\u044f\u043d\u043e\u0439 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b",
+  "zh_CN": "\u4e9a\u9ebb\u5e03",
+  "zh_TW": "\u4e9e\u9ebb\u5e03"
+ },
+ "preview_item": {
+  "crafting_reagent": {
+   "de_DE": "Handwerksmaterial",
+   "en_GB": "Crafting Reagent",
+   "en_US": "Crafting Reagent",
+   "es_ES": "Componente de profesi\u00f3n",
+   "es_MX": "Componente de creaci\u00f3n",
+   "fr_FR": "Composant d\u2019artisanat",
+   "it_IT": "Reagente d'artigianato",
+   "ko_KR": "\uc81c\uc791 \uc7ac\ub8cc",
+   "pt_BR": "Reagente de cria\u00e7\u00e3o",
+   "ru_RU": "\u0418\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0435\u0442\u0441\u044f \u0434\u043b\u044f \u0440\u0435\u043c\u0435\u0441\u0435\u043b",
+   "zh_CN": "\u5236\u9020\u6750\u6599",
+   "zh_TW": "\u88fd\u9020\u6750\u6599"
+  },
+  "inventory_type": {
+   "name": {
+    "de_DE": "Nicht anlegbar",
+    "en_GB": "Non-equippable",
+    "en_US": "Non-equippable",
+    "es_ES": "No se puede equipar",
+    "es_MX": "No equipable",
+    "fr_FR": "Objet hors \u00e9quipement",
+    "it_IT": "Non equipaggiabile",
+    "ko_KR": "\ucc29\uc6a9 \ubd88\uac00",
+    "pt_BR": "N\u00e3o equip\u00e1vel",
+    "ru_RU": "\u041d\u0435\u044d\u043a\u0438\u043f\u0438\u0440\u0443\u0435\u043c\u043e\u0435",
+    "zh_CN": "\u65e0\u6cd5\u88c5\u5907",
+    "zh_TW": "\u7121\u6cd5\u88dd\u5099"
+   },
+   "type": "NON_EQUIP"
+  },
+  "is_subclass_hidden": true,
+  "item": {
+   "id": 2589,
+   "key": {
+    "href": "https://us.api.blizzard.com/data/wow/item/2589?namespace=static-1.60.1_70399-forever-us"
+   }
+  },
+  "item_class": {
+   "id": 7,
+   "key": {
+    "href": "https://us.api.blizzard.com/data/wow/item-class/7?namespace=static-1.60.1_70399-forever-us"
+   },
+   "name": {
+    "de_DE": "Handwerkswaren",
+    "en_GB": "Trade Goods",
+    "en_US": "Trade Goods",
+    "es_ES": "Objeto comerciable",
+    "es_MX": "Objeto comerciable",
+    "fr_FR": "Artisanat",
+    "it_IT": "Beni commerciali",
+    "ko_KR": "\uc9c1\uc5c5 \uc6a9\ud488",
+    "pt_BR": "Mercadorias",
+    "ru_RU": "\u0425\u043e\u0437\u044f\u0439\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0435 \u0442\u043e\u0432\u0430\u0440\u044b",
+    "zh_CN": "\u5546\u54c1",
+    "zh_TW": "\u5546\u54c1"
+   }
+  },
+  "item_subclass": {
+   "id": 5,
+   "key": {
+    "href": "https://us.api.blizzard.com/data/wow/item-class/7/item-subclass/5?namespace=static-1.60.1_70399-forever-us"
+   },
+   "name": {
+    "de_DE": "Stoff",
+    "en_GB": "Cloth",
+    "en_US": "Cloth",
+    "es_ES": "Tela",
+    "es_MX": "Tela",
+    "fr_FR": "Tissu",
+    "it_IT": "Stoffa",
+    "ko_KR": "\ucc9c",
+    "pt_BR": "Tecido",
+    "ru_RU": "\u0422\u043a\u0430\u043d\u044c",
+    "zh_CN": "\u5e03\u6599",
+    "zh_TW": "\u5e03\u6599"
+   }
+  },
+  "media": {
+   "id": 2589,
+   "key": {
+    "href": "https://us.api.blizzard.com/data/wow/media/item/2589?namespace=static-1.60.1_70399-forever-us"
+   }
+  },
+  "name": {
+   "de_DE": "Leinenstoff",
+   "en_GB": "Linen Cloth",
+   "en_US": "Linen Cloth",
+   "es_ES": "Pa\u00f1o de lino",
+   "es_MX": "Pa\u00f1o de lino",
+   "fr_FR": "Etoffe de lin",
+   "it_IT": "Tessuto di Lino",
+   "ko_KR": "\ub9ac\ub128 \uc637\uac10",
+   "pt_BR": "Linho",
+   "ru_RU": "\u041b\u044c\u043d\u044f\u043d\u043e\u0439 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b",
+   "zh_CN": "\u4e9a\u9ebb\u5e03",
+   "zh_TW": "\u4e9e\u9ebb\u5e03"
+  },
+  "quality": {
+   "name": {
+    "de_DE": "Verbreitet",
+    "en_GB": "Common",
+    "en_US": "Common",
+    "es_ES": "Com\u00fan",
+    "es_MX": "Com\u00fan",
+    "fr_FR": "Commun",
+    "it_IT": "Comune",
+    "ko_KR": "\uc77c\ubc18",
+    "pt_BR": "Comum",
+    "ru_RU": "\u041e\u0431\u044b\u0447\u043d\u043e\u0435",
+    "zh_CN": "\u666e\u901a",
+    "zh_TW": "\u666e\u901a"
+   },
+   "type": "COMMON"
+  },
+  "sell_price": {
+   "display_strings": {
+    "copper": {
+     "de_DE": "13",
+     "en_GB": "13",
+     "en_US": "13",
+     "es_ES": "13",
+     "es_MX": "13",
+     "fr_FR": "13",
+     "it_IT": "13",
+     "ko_KR": "13",
+     "pt_BR": "13",
+     "ru_RU": "13",
+     "zh_CN": "13",
+     "zh_TW": "13"
+    },
+    "gold": {
+     "de_DE": "0",
+     "en_GB": "0",
+     "en_US": "0",
+     "es_ES": "0",
+     "es_MX": "0",
+     "fr_FR": "0",
+     "it_IT": "0",
+     "ko_KR": "0",
+     "pt_BR": "0",
+     "ru_RU": "0",
+     "zh_CN": "0",
+     "zh_TW": "0"
+    },
+    "header": {
+     "de_DE": "Verkaufspreis:",
+     "en_GB": "Sell Price:",
+     "en_US": "Sell Price:",
+     "es_ES": "Precio de venta:",
+     "es_MX": "Precio de venta:",
+     "fr_FR": "Prix de vente :",
+     "it_IT": "Prezzo di vendita:",
+     "ko_KR": "\ud310\ub9e4 \uac00\uaca9:",
+     "pt_BR": "Pre\u00e7o de Venda:",
+     "ru_RU": "\u0426\u0435\u043d\u0430 \u043f\u0440\u043e\u0434\u0430\u0436\u0438:",
+     "zh_CN": "\u5356\u4ef7:",
+     "zh_TW": "\u552e\u50f9:"
+    },
+    "silver": {
+     "de_DE": "0",
+     "en_GB": "0",
+     "en_US": "0",
+     "es_ES": "0",
+     "es_MX": "0",
+     "fr_FR": "0",
+     "it_IT": "0",
+     "ko_KR": "0",
+     "pt_BR": "0",
+     "ru_RU": "0",
+     "zh_CN": "0",
+     "zh_TW": "0"
+    }
+   },
+   "value": 13
+  }
+ },
+ "purchase_price": 55,
+ "purchase_quantity": 1,
+ "quality": {
+  "name": {
+   "de_DE": "Verbreitet",
+   "en_GB": "Common",
+   "en_US": "Common",
+   "es_ES": "Com\u00fan",
+   "es_MX": "Com\u00fan",
+   "fr_FR": "Commun",
+   "it_IT": "Comune",
+   "ko_KR": "\uc77c\ubc18",
+   "pt_BR": "Comum",
+   "ru_RU": "\u041e\u0431\u044b\u0447\u043d\u043e\u0435",
+   "zh_CN": "\u666e\u901a",
+   "zh_TW": "\u666e\u901a"
+  },
+  "type": "COMMON"
+ },
+ "required_level": 0,
+ "sell_price": 13
+}
