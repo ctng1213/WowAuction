@@ -34,7 +34,7 @@ def config_from(app: cdk.App) -> MarketConfig:
     """
     missing = [k for k in ("house", "alert_email") if not app.node.try_get_context(k)]
     if missing:
-        raise SystemExit("cdk deploy needs " + " ".join(f"-c {k}=..." for k in missing))
+        raise SystemExit("cdk bootstrap, synth and deploy need " + " ".join(f"-c {k}=..." for k in missing))
     get = app.node.try_get_context
     return MarketConfig(market=get("market") or "forever.normal.horde.us", ruleset=int(get("ruleset") or 2),
                         house=int(get("house")), alert_email=str(get("alert_email")),

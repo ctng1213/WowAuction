@@ -27,7 +27,7 @@ From the repository root:
 python tools/build_lambda.py                     # stage ahsync/ + ahcloud/ into build/lambda
 source .venv-infra/bin/activate
 cd infra
-cdk bootstrap                                    # once per account and region
+cdk bootstrap -c house=<id> -c alert_email=<you@example.com>   # once per account and region
 cdk deploy -c house=<id> -c alert_email=<you@example.com>
 ```
 
