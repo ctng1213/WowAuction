@@ -277,22 +277,28 @@ def test_AR8_an_unknown_suffix_key_gets_no_intelligence():
 
 
 def test_IU6_a_newer_in_game_scan_updates_only_the_items_it_priced():
-    from ahsync.intel.contract import ItemIntel, MarketIntelligence
+    from ahsync.intel.contract import ItemIntel, MarketIntelligence, age_now_ms
     silk, linen = 4306, 2589
 
     def item(key: int, cur: int) -> ItemIntel:
         """An item priced at cur, with 5 listed."""
         return ItemIntel(key, cur, 5, HOUR, cur, cur, 80, 120, 0.0, 10.0, 0.0, 10.0, "books", {"books": 7}, cur, 1, 0.5,
-                         False, float(cur), 60, 5, None, ())
+                         False, float(cur), 60, 5, None, (), closes_30d=200)
     intel = MarketIntelligence(M, NOW, NOW, 1, {silk: item(silk, 100), linen: item(linen, 45)})
     book = [(90, 12, 4, 1), (95, 12, 4, 2)]
-    after = market.with_scan(intel, {silk: (90, 12, NOW + HOUR), 999: (5, 1, NOW + HOUR)}, {silk: (NOW + HOUR, book)})
+    settings, vendor = MarketSettings(), {silk: 8}
+    after = market.with_scan(intel, {silk: (90, 12, NOW + HOUR), 999: (5, 1, NOW + HOUR)}, {silk: (NOW + HOUR, book)},
+                             settings, vendor)
     s = after.items[silk]
-    assert (s.cur, s.cur_qty, s.cur_age_ms, s.book, s.units_on_ah, s.cur_suspect) == (90, 12, 0, tuple(book), 36, False)
+    assert (s.cur, s.cur_qty, s.book, s.units_on_ah, s.cur_suspect) == (90, 12, tuple(book), 36, False)
+    assert s.cur_age_ms == -HOUR and age_now_ms(s.cur_age_ms, NOW + 3 * HOUR, NOW) == 2 * HOUR   # aged from the scan
+    base = market.NowBase(100, 120, 200, 10.0, 10.0, tuple([1.0] * 168), 8)
+    expected = market.now_fields(market.Quote(90, 12, tuple(book)), base, NOW + HOUR, settings)
+    assert (s.post_price, s.ref_stack, s.chance, s.volume_unknown, s.sell_value) == expected   # repriced (decision 2)
+    assert s.post_price != intel.items[silk].post_price
     assert after.items[linen] == intel.items[linen] and after.built_ms == NOW and 999 not in after.items
-    lone = market.with_scan(intel, {silk: (5, 1, NOW + HOUR)}, {}).items[silk]        # no book in this scan
+    lone = market.with_scan(intel, {silk: (5, 1, NOW + HOUR)}, {}, settings, vendor).items[silk]   # no book in this scan
     assert (lone.cur, lone.book, lone.units_on_ah, lone.cur_suspect) == (5, (), 5, True)   # 5c < 10% of 80c
-
 
 def test_FM31_a_lone_outlier_close_moves_no_median_but_still_sets_the_range():
     base, _ = market.analyze_market(MemoryHistory(), M, NOW, MarketSettings())

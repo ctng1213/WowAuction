@@ -352,3 +352,25 @@ def test_SRC10_ahledger_is_on_and_primary_by_default_per_market_and_can_be_switc
         return [row["src"] for row in view["coverage"][0]["sources"]]
     no_ahledger = parse_config(head + f'[sources."{market}".addresses]\nahledger = ""\n', {}, tmp_path)
     assert coverage_sources(default) == ["local", "ahledger", "ahf"] and coverage_sources(no_ahledger) == ["local", "ahf"]
+
+
+
+def test_SEC16_the_cloud_table_takes_an_https_origin_and_a_bounded_poll(tmp_path):
+    from ahsync.config import CloudConfig, is_cloud_market
+    text = ('markets = ["forever.normal.horde.us"]\n[cloud]\nintel_url = "https://dtb79di8mf92m.cloudfront.net"\n'
+            'poll_minutes = 30\n[sources."forever.normal.horde.us"]\nprimary = "blizzard"\nrank = ["blizzard"]\n')
+    config = parse_config(text, {}, tmp_path)
+    assert config.cloud == CloudConfig("https://dtb79di8mf92m.cloudfront.net", 30)
+    assert is_cloud_market(config, "forever.normal.horde.us")
+    assert not is_cloud_market(Config(), "forever.normal.horde.us")                     # no [cloud]: no cloud market
+    no_rank = parse_config('[cloud]\nintel_url = "https://x.cloudfront.net"\n', {}, tmp_path)
+    assert not is_cloud_market(no_rank, "forever.normal.horde.us")                      # blizzard not ranked
+    for bad, message in (('[cloud]\nintel_url = "http://x.net"\n', "https://<host>"),
+                         ('[cloud]\nintel_url = "https://x.net/intel"\n', "nothing after the host"),
+                         ('[cloud]\nintel_url = "https://user:pw@x.net"\n', "https://<host>"),
+                         ('[cloud]\npoll_minutes = 2\n', "between 5 and 60"),
+                         ('[cloud]\npoll_minutes = true\n', "between 5 and 60"),
+                         ('[cloud]\nbucket = "x"\n', "bucket is not a known setting")):
+        with pytest.raises(ConfigError, match=message):
+            parse_config(bad, {}, tmp_path)
+    assert parse_config('[cloud]\nintel_url = ""\n', {}, tmp_path).cloud == CloudConfig()

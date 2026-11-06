@@ -129,6 +129,19 @@ Pinned exactly with the resolved tree in `requirements-infra.txt`. **CI:** `test
 - **The command line runs in a temporary folder**, never one inside the data folder; `analyze --hourly` needs no credentials.
 - **BZ15 and FM70 are split**: BZ15's contract half was built with the schema, its pointer half with the publish; FM70's cloud half (a failed run leaves the last document, the dead-letter queue, the alarm) is here, its desktop half with M32.
 
+**Decided during execution (Opus, M32a, 2026-11-06).**
+
+- **M32 is split.** M32a (this commit): the consumption core: `[cloud]`, the fetch and its checks, staging with the re-plan, the export after a new document, the ages, scan repricing, the document's settings, the Status line and alerts. M32b: the Data coverage card from the document's `coverage` (D99), the freshness pill (D100: the dashboard has no "prices N min old" pill yet, only "numbers from … · prices newer"), the addon's `itemNames` with vendor price and class (A92) and the plan's local vendor fill (BZ25), with a mockup for D100 first.
+- **Ages count back from a document's reference time** (`MarketIntelligence.ages_at_ms`, schema 10, additive; the cloud sets it to the prices' time; None = `built_ms`). The old rule (`cur_age_ms == 0` = "your scan after the build, fresh forever") would have made a cloud market never "too stale", since the hourly mode sets 0 on every listed item. A scan newer than the reference is stored as a negative age; `age_now_ms` is the one reader. It also fixes the export, whose ages were relative to `built_ms` while the file says "minutes before generatedAt". **The cloud must be redeployed** before a desktop reads its documents: documents published before this have no `ages_at_ms`, so their ages would be read against `built_ms`.
+- **The `built_ms` passed down the recommendation chain is the reference time** (`_stage_recommendations(..., built_ms)` is documented as "price ages" everywhere; `Candidate.built_ms` is never read back and is not part of the candidate id, so ids stay stable).
+- **`publish_refresh(markets, with_intel=…)` accepts the markets whose intelligence was staged**, so a market without a new document keeps its intelligence (the delete-then-insert swap would otherwise empty it); it clears the parsed-intel cache for each swapped market (the cache is keyed on `built_ms`, which an hourly document keeps).
+- **`cloud_intel.poll` returns a new document without remembering it**; `poll_cloud` remembers it only after the re-plan published it, so a failed re-plan fetches it again (found while writing the fetch).
+- **`MarketSettings.to_dict` / `from_dict` live in the engine**; `ahcloud.publish` delegates, since `ahsync/` must not import `ahcloud/`.
+- **"Blizzard" is a source label** (`engine/views.py`): every text that showed the raw name now reads "Blizzard" (D57's and SRC2's rows changed).
+- **A cloud market's Status uses its own staleness alerts** (3 h prices, 36 h baselines) instead of the AHF-style "data is old" (6 h of `current` rows the cloud market doesn't write), and the card's newest price is the document's prices' time.
+- **The convention scan skips hidden and generated folders** (`infra/.venv-infra`, `infra/cdk.out`).
+- **The Lambda handlers log at INFO** (the runtime's root logger starts at WARNING, so the collector's per-run lines were missing).
+
 ## 2. Working rules
 
 CLAUDE.md "How work is run" applies. In short: one worktree per milestone; `tools/verify.ps1` (tests, invariants, the whole-plan snapshot byte-identical unless this plan says it moves) before a commit; one commit per verified milestone with the attribution trailer; the plan's §1 gains any decision made during execution; LESSONS gains any wrong assumption found; SPEC and SCENARIOS are updated in the same commit as the code that makes them true, and a milestone's "planned" becomes "built" with module names.

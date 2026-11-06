@@ -22,7 +22,7 @@ from ahsync.engine.portfolio import (CharacterGold, OpenPosition, PortfolioSetti
 from ahsync.engine.position_views import PositionView
 from ahsync.engine.sell_record import Record
 from ahsync.history.reads import ItemInfo
-from ahsync.intel.contract import ItemIntel
+from ahsync.intel.contract import ItemIntel, age_now_ms
 from ahsync.recommend.pages import DE_KIND
 from ahsync.recommend.plan import week_inputs
 from ahsync.recommend.positions_pass import position_json
@@ -83,20 +83,16 @@ def price_ages(stats: dict[int, ItemIntel], now_ms: int, built_ms: int) -> dict[
     """How old each item's newest price is now (SPEC §3.4D.6 "Forecast too stale").
 
     Args:
-        stats: Item key -> intelligence (cur_age_ms is the age at built_ms; 0 for a scan after it, IU6).
+        stats: Item key -> intelligence (cur_age_ms counts back from the document's reference time; a scan after
+            it is negative, IU6).
         now_ms: Now.
-        built_ms: When the intelligence was built.
+        built_ms: The document's reference time (intel.contract.ages_reference_ms: built_ms for a desktop-built
+            document, the prices' time for a cloud one).
 
     Returns:
-        Item key -> age ms (a price scanned after the build counts as fresh); None without a price.
+        Item key -> age ms now (intel.contract.age_now_ms); None without a price.
     """
-    out: dict[int, int | None] = {}
-    for key, i in stats.items():
-        if i.cur_age_ms is None:
-            out[key] = None
-        else:
-            out[key] = 0 if i.cur_age_ms == 0 else i.cur_age_ms + max(0, now_ms - built_ms)
-    return out
+    return {key: age_now_ms(i.cur_age_ms, now_ms, built_ms) for key, i in stats.items()}
 
 
 def gen_inputs(state: StateReader, characters: list[tuple[str, int]], stats: dict[int, ItemIntel],

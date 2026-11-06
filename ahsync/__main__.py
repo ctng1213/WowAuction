@@ -35,6 +35,7 @@ from ahsync.state.importer import ingest_file
 from ahsync.db.sqlite import Database, DatabaseError
 from ahsync.history.prune import prune
 from ahsync.collect.catchup import SyncContext, check_capabilities, run_catchup, sync_markets
+from ahsync.app.cloud_job import cloud_transport, poll_cloud
 from ahsync.app.refresh import refresh_all, replan_all
 from ahsync.export.addon_files import export_market, export_plan
 from ahsync.recommend.status_pass import status_pass
@@ -526,7 +527,11 @@ def _run_configured(data_dir: Path, config: Config, runtime: Runtime, config_pat
         hooks = build_hooks(ctx, config, backup_dir, refresh_requests.take, live)
         if runtime.app_hooks is not None:        # only the app shell checks for updates (SPEC §3.7.8)
             hooks = replace(hooks, update=update_job(db, runtime.transport, clock, data_dir, live, runtime.app_hooks))
-        scheduler = Scheduler(clock, hooks, watcher, config.daily_refresh_time, config.live_refresh_minutes)
+        if config.cloud.intel_url:               # the cloud market's summary (SPEC §2.4, BZ17)
+            summaries = cloud_transport(runtime.transport)
+            hooks = replace(hooks, cloud_poll=lambda: poll_cloud(db, summaries, clock, live.current))
+        scheduler = Scheduler(clock, hooks, watcher, config.daily_refresh_time, config.live_refresh_minutes,
+                              config.cloud.poll_minutes)
         scheduler.run(runtime.should_stop)
         log.info("stopped")
         return 0

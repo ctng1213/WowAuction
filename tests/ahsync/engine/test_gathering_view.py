@@ -298,7 +298,7 @@ def test_missing_prices_professions_and_an_empty_catalog():
     q = gathering_view(gv.GatheringWorld([item], {1: unknown}, {}, [], gw.NOW))
     assert q["fresh"][0] == ["AH prices 4 d old", "amber"] and q["fresh"][1] == ["professions not synced yet", ""]
     qrow = gw.view_rows(q, "")[0]
-    assert qrow["qty"] == "—" and qrow["price_title"].startswith("seen 4 d ago (blizzard scan ")
+    assert qrow["qty"] == "—" and qrow["price_title"].startswith("seen 4 d ago (Blizzard scan ")
     assert q["details"]["1"]["deposit"].startswith("Deposit: 15% of the 0c vendor price")
     assert "Prices are 4 d old (amber over 24 h)" in q["note"]
     empty = gathering_view(gv.GatheringWorld([], {}, {}, [], gw.NOW))

@@ -350,3 +350,30 @@ def test_a_post_keeps_its_method_and_body_and_its_authorization_off_redirects():
     assert req.get_method() == "POST" and req.data == b"grant_type=client_credentials"
     assert "Authorization" not in req.headers and req.unredirected_hdrs["Authorization"] == "Basic x"
     assert build_request(HttpRequest("https://x/y")).get_method() == "GET"      # the default is unchanged
+
+
+
+def test_SEC16_a_bounded_transport_refuses_a_longer_body_and_redirects_are_not_followed():
+    import io
+    import urllib.error
+    from ahsync.collect.client import HttpRequest, TransportError, UrllibTransport, _RefuseRedirects
+
+    class Answer(io.BytesIO):
+        status, headers = 200, {"Content-Type": "application/json"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    big = UrllibTransport(opener=lambda req, timeout: Answer(b"x" * 11), max_bytes=10)
+    with pytest.raises(TransportError, match="over 10 bytes"):
+        big(HttpRequest("https://x.cloudfront.net/intel/m/latest-10.json"))
+    assert UrllibTransport(opener=lambda req, timeout: Answer(b"x" * 10), max_bytes=10)(HttpRequest("https://x")).body == b"x" * 10
+    assert _RefuseRedirects().redirect_request(None, None, 302, "Found", {}, "https://elsewhere") is None
+
+    def redirected(req, timeout):
+        raise urllib.error.HTTPError("https://x", 302, "Found", {"Location": "https://elsewhere"}, io.BytesIO(b""))
+
+    assert UrllibTransport(opener=redirected, max_bytes=10)(HttpRequest("https://x")).status == 302   # handed back

@@ -17,7 +17,7 @@ from ahsync.engine.item_key import KEY_SUFFIX_FACTOR, variant_name
 from ahsync.engine.volume import supply_to_volume
 
 HIGH_RISK_PCT = 25.0        # config high_risk_pct (SPEC §3.4)
-SOURCE_LABELS = {"ahf": "AHF", "ahledger": "AHledger", "ahledger_h1": "AHledger"}
+SOURCE_LABELS = {"ahf": "AHF", "ahledger": "AHledger", "ahledger_h1": "AHledger", "blizzard": "Blizzard"}
 # Where a source credits its data: AHledger's terms ask for a link wherever its data is shown (SPEC §2.3, S19).
 SOURCE_URLS = {"ahledger": "https://ahledger.com", "ahledger_h1": "https://ahledger.com"}
 # The sales label by the main volume source's kind (SPEC §3.5, D57); "ids" shows the source's own name.

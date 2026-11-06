@@ -7,6 +7,8 @@ The rest is ported to addon/AHProfit/Engine/SellProb.lua and must stay identical
 """
 from __future__ import annotations
 
+import dataclasses
+
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -545,6 +547,31 @@ class MarketSettings:
     max_trend_total: float = 0.15           # the most the trend may move a window's forecast (TT7)
     top_buy_windows: int = 3                # buying windows kept per item, by actionable value (W14)
     top_sell_windows: int = 3               # selling windows kept per item (W15)
+
+    def to_dict(self) -> dict[str, object]:
+        """The settings as a cloud document carries them (SPEC §2.4 `settings`).
+
+        Returns:
+            Field name -> value; the volume prior as a nested dict.
+        """
+        return dataclasses.asdict(self)
+
+    @classmethod
+    def from_dict(cls, values: dict[str, object]) -> "MarketSettings":
+        """Settings from a cloud document's `settings`; the defaults when empty (a desktop-built document).
+
+        Args:
+            values: From to_dict.
+
+        Returns:
+            The settings.
+        """
+        if not values:
+            return cls()
+        fields: dict = dict(values)
+        if isinstance(fields.get("volume_prior"), dict):
+            fields["volume_prior"] = VolumePrior(**fields["volume_prior"])
+        return cls(**fields)
 
 
 @dataclass(frozen=True)

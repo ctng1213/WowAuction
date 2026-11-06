@@ -25,6 +25,7 @@ from ahsync.engine.volume import VolumePrior
 
 API_KEY_ENV = "AUCTIONHOUSE_APIKEY"
 MARKET_PATTERN = re.compile(r"^forever\.(normal|pvp|rp)\.(alliance|horde)\.us$")
+CLOUD_URL = re.compile(r"^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$")   # an origin only: SEC16
 RULESETS = ("normal", "pvp", "rp")
 CHANNELS = ("stable", "beta")                 # update_channel (SPEC §3.7.10)
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
@@ -37,6 +38,14 @@ class MarketSources:
     primary: str = "ahledger"                  # the remote source Status and freshness follow (SRC10)
     rank: tuple[str, ...] = ("ahf", "ahledger")  # remote sources for prices, most trusted first (your scans come first)
     addresses: Mapping[str, str] = field(default_factory=dict)   # provider -> this market's id there ("" = not used)
+
+
+@dataclass(frozen=True)
+class CloudConfig:
+    """Where the published market summaries are (SPEC §2.4, §3.6 [cloud]); empty intel_url = no cloud market."""
+
+    intel_url: str = ""                       # the summaries' origin, https://<distribution>.cloudfront.net
+    poll_minutes: int = 15                    # how often AHSync asks for a newer summary, 5-60
 
 
 class ConfigError(Exception):
@@ -103,6 +112,7 @@ class Config:
     realms: Mapping[str, str] = field(default_factory=dict)
     budgets: Mapping[str, int] = field(default_factory=dict)
     sources: Mapping[str, MarketSources] = field(default_factory=dict)   # market id -> its sources (SRC1-SRC4)
+    cloud: CloudConfig = field(default_factory=CloudConfig)               # the cloud market's summaries (SPEC §2.4)
     api_key: str = field(default="", repr=False)   # resolved key; never printed
 
 
@@ -123,6 +133,7 @@ _TYPES: dict[str, tuple[tuple[type, ...], str]] = {
     "realms": ((dict,), "a table"),
     "budgets": ((dict,), "a table"),
     "sources": ((dict,), "a table"),
+    "cloud": ((dict,), "a table"),
 }
 for _name in ("retention_days", "dashboard_port", "live_refresh_minutes", "own_record_days",
               "struggle_streak", "keep_retry_streak", "post_lead_hours", "sell_window_hours",
@@ -242,6 +253,8 @@ def _check_values(text: str, values: dict) -> None:
             raise ConfigError(f"config.toml [budgets]: {char_id} must be a whole number of copper, 0 or more")
     for market, table in values.get("sources", {}).items():
         _check_sources(market, table)
+    if "cloud" in values:
+        _check_cloud(values["cloud"])
 
 
 # Whole-number portfolio settings -> (lowest, highest) allowed (SPEC §3.6); None = no upper bound.
@@ -279,6 +292,28 @@ def _check_portfolio(text: str, values: dict) -> None:
             raise _fail(text, name, f"must be {low} or more")
         if name in values and high is not None and not low <= values[name] <= high:
             raise _fail(text, name, f"must be between {low} and {high}")
+
+
+def _check_cloud(table: dict) -> None:
+    """Check the [cloud] table (SPEC §3.6, SEC16).
+
+    Args:
+        table: Its parsed value.
+
+    Raises:
+        ConfigError: An unknown key, an intel_url that is neither "" nor https:// (no path, query or credentials),
+            or poll_minutes outside 5-60.
+    """
+    where = "config.toml [cloud]"
+    for name, value in table.items():
+        if name == "intel_url":
+            if not isinstance(value, str) or (value and not CLOUD_URL.match(value)):
+                raise ConfigError(f"{where}: intel_url must be \"\" or https://<host> with nothing after the host")
+        elif name == "poll_minutes":
+            if isinstance(value, bool) or not isinstance(value, int) or not 5 <= value <= 60:
+                raise ConfigError(f"{where}: poll_minutes must be a whole number between 5 and 60")
+        else:
+            raise ConfigError(f"{where}: {name} is not a known setting (intel_url, poll_minutes)")
 
 
 def _check_sources(market: str, table: object) -> None:
@@ -357,6 +392,8 @@ def parse_config(text: str, env: Mapping[str, str], home: Path) -> Config:
     settings = {k: v for k, v in values.items() if k != "api_key"}
     if "markets" in settings:
         settings["markets"] = tuple(settings["markets"])
+    if "cloud" in settings:
+        settings["cloud"] = CloudConfig(**settings["cloud"])
     if "sources" in settings:
         settings["sources"] = {market: MarketSources(**{k: tuple(v) if k == "rank" else v for k, v in table.items()})
                                for market, table in settings["sources"].items()}
@@ -493,6 +530,41 @@ def market_sources(config: Config, market: str) -> MarketSources:
     if not addresses.get(primary, primary):
         primary = next((s for s in own.rank if addresses.get(s, s)), primary)
     return dataclasses.replace(own, primary=primary, addresses=addresses)
+
+
+def is_cloud_market(config: Config, market: str) -> bool:
+    """Whether a market's intelligence comes from the cloud's published summary (SPEC §2.4, §3.1).
+
+    Args:
+        config: Settings.
+        market: Market id.
+
+    Returns:
+        True when [cloud] intel_url is set and the market ranks the blizzard source.
+    """
+    return bool(config.cloud.intel_url) and "blizzard" in market_sources(config, market).rank
+
+
+# Analysis settings the plan also reads (plan_settings, portfolio_settings): a cloud document's values win for
+# its market, so the plan and the windows it was built on agree (SPEC §2.4 "settings", BZ17).
+SHARED_SETTINGS = ("default_sell_prob", "default_sell_prob_cheapest", "default_undercut_share", "own_record_weight",
+                   "sell_window_hours", "max_supply_share", "max_supply_share_gear", "min_gear_units",
+                   "max_trend_total", "top_buy_windows", "top_sell_windows")
+
+
+def with_document_settings(config: Config, settings: Mapping[str, object]) -> tuple[Config, dict[str, tuple]]:
+    """The config with a cloud document's analysis settings for the keys the plan shares with analysis (BZ17).
+
+    Args:
+        config: The local settings.
+        settings: The document's `settings` ({} for a desktop-built document).
+
+    Returns:
+        (the config to plan with, key -> (document's value, local value) for each key that differs).
+    """
+    shared = {k: settings[k] for k in SHARED_SETTINGS if k in settings}
+    differs = {k: (v, getattr(config, k)) for k, v in shared.items() if getattr(config, k) != v}
+    return (dataclasses.replace(config, **shared) if shared else config), differs
 
 
 def market_settings(config: Config) -> MarketSettings:

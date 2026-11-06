@@ -139,3 +139,17 @@ def test_TT23_each_item_ends_in_its_hourly_closes_over_30_days():
     linen = ItemIntel(2589, 45, 20, 3_600_000, 49, 49, 40, 60, 0.0, 48.0, 0.0, 48.0, "ahf", {"ahf": 7}, 45, 20, 0.9,
                       False, 42.4, 86, 93, None, (), closes_30d=31)
     assert item_text(linen).split(";")[0].endswith(",0,31")
+
+
+
+def test_ages_count_back_from_the_export_for_a_cloud_document_too():
+    from dataclasses import replace
+    from ahsync.export.market_lua import aged_at
+    from ahsync.intel.contract import ItemIntel, MarketIntelligence
+    item = ItemIntel(2589, 45, 40, 600_000, 50, 52, 40, 60, 1.5, 38.0, 4.0, 40.0, "blizzard", {}, 44, 20, 0.8,
+                     False, 41.8, 61, 93, 0, ())
+    cloud = MarketIntelligence("forever.normal.horde.us", 1_000_000, 4_600_000, 1, {2589: item}, ages_at_ms=4_600_000)
+    assert aged_at(cloud, 4_600_000) is cloud                                   # exported at its own time: as is
+    assert aged_at(cloud, 5_200_000).items[2589].cur_age_ms == 1_200_000        # 10 min old + 10 min since
+    desktop = replace(cloud, ages_at_ms=None)
+    assert aged_at(desktop, 1_600_000).items[2589].cur_age_ms == 1_200_000      # a desktop document counts from built

@@ -103,7 +103,7 @@ def test_D57_the_sales_label_follows_the_main_sources_kind_not_its_name():
                               week, {d: {src: Cover(kind) for src, (_, kind) in by.items()} for d, by in rows.items()})
         return market_activity(0.5, 50, volume.sold_per_day, volume.main_source, 10, volume.main_kind).sales
     mixed = {d: ({"blizzard": (48, "ids")} if d < 20_005 else {"books": (48, "groups")}) for d in week}
-    assert sales(mixed) == "48 blizzard"                    # 5 days of id diffs: a confirmed source, named
+    assert sales(mixed) == "48 Blizzard"                    # 5 days of id diffs: a confirmed source, named
     assert sales({d: {"books": (31, "groups")} for d in week}) == "31 est."
     assert sales({d: {"mail": (3, "own")} for d in week}) == "3 own"
     assert market_activity(0.5, 50, 48, "ahf", 10, "ids").sales == "48 AHF"

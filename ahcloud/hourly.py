@@ -134,7 +134,7 @@ def apply_snapshot(intel: MarketIntelligence, new: SnapshotObservation, flow: di
         vendor = intel.catalog.get(key, (None, None, None, 0))[3] or 0
         quote = Quote(low[0], low[1], tuple(books[key]))
         items[key] = replace(reprice_item(i, quote, new.at_ms, settings, int(vendor), ring_closes(closes)), **rings)
-    return replace(intel, items=items, observations_until_ms=new.at_ms)
+    return replace(intel, items=items, observations_until_ms=new.at_ms, ages_at_ms=new.at_ms)
 
 
 def advance(data: Store, intel: MarketIntelligence, market: str) -> MarketIntelligence | None:

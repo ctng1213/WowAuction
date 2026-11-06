@@ -8,6 +8,7 @@ Blizzard secret for the catalog's item search. Each run emits its outcome as a m
 """
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Any
@@ -57,6 +58,7 @@ def handler(event: Any, context: Any) -> dict:
     Returns:
         The outcome as a dict, for the invocation log.
     """
+    logging.getLogger().setLevel(logging.INFO)          # Lambda's root logger starts at WARNING
     env = os.environ
     market, clock = env["MARKET"], SystemClock()
     data, intel = aws.S3Store(env["DATA_BUCKET"]), aws.S3Store(env["INTEL_BUCKET"])

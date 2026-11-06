@@ -59,7 +59,7 @@ flowchart LR
   Raw -- S3 event --> Analyzer
   Analyzer --> IntelS3
   IntelS3 --> CF
-  CF -.collect/cloud_intel.py, M32.-> Intel
+  CF -- collect/cloud_intel.py, built M32a --> Intel
   GH -- the update job in run, M25 --> Shell
   Shell -.planned.-> Web
   Shell -- installs the addon, M22 --> DataFiles
@@ -318,3 +318,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-06: the cadence split (SPEC §2.4, plan §1): the analyzer runs daily for the baselines and hourly for the state over one document; §1's analyzer node and §2's cloud path redrawn; horizons and regimes planned as M34, removal M35.
 - 2026-11-06: M30 built: the stack (`infra/`), the collector and the stores (`ahcloud/`); two buckets (data private, intel served by CloudFront only), since an origin access control can't be scoped to a prefix; the analyzer's resources come with M31.
 - 2026-11-06: M31 built: the analyzer (`ahcloud/daily.py`, `hourly.py`, `publish.py`, `analyzer.py`) and its stack resources; the hourly mode reprices through `analysis.market.reprice_item` (not `with_scan`, which doesn't reprice); the daily run carries the hourly fields.
+- 2026-11-06: M32a built: AHSync reads the published summary (`collect/cloud_intel.py`, `app/cloud_job.py`), stages it with the re-plan and rewrites the addon files; ages count back from the document's `ages_at_ms`; in-game scans reprice.

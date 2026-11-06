@@ -19,7 +19,7 @@ INTEL_SCHEMA_VERSION = 10      # 2: weekly patterns, windows, strength, curve (A
                                # document's catalog, coverage and settings, and per item last_hour and the recent ring
                                # (SPEC §2.4, BZ15, BZ32)
 # Fields each schema added, so to_json can write the previous schema for older readers (SPEC §2.4, BZ18).
-ADDED_IN = {10: {"document": ("catalog", "coverage", "settings"),
+ADDED_IN = {10: {"document": ("catalog", "coverage", "settings", "ages_at_ms"),
                  "item": ("last_hour", "recent_closes", "recent_sold", "recent_listed", "recent_units")}}
 
 
@@ -122,6 +122,9 @@ class MarketIntelligence:
     catalog: dict[int, tuple] = field(default_factory=dict)
     coverage: tuple[tuple[int, int], ...] = ()
     settings: dict[str, object] = field(default_factory=dict)
+    # The time every item's cur_age_ms and book_age_ms count back from (schema 10): a cloud document's prices'
+    # time, which moves hourly while built_ms doesn't. None means built_ms (a desktop-built document).
+    ages_at_ms: int | None = None
 
 
 def price_level(i: ItemIntel) -> int | None:
@@ -146,6 +149,35 @@ def supply_level(i: ItemIntel) -> int | None:
         Units; None when neither is known.
     """
     return i.units_on_ah if i.units_on_ah is not None else i.median_daily_supply
+
+
+def ages_reference_ms(intel: MarketIntelligence) -> int:
+    """The time a document's ages count back from (SPEC §2.4; price ages, §3.4D.6).
+
+    Args:
+        intel: The intelligence.
+
+    Returns:
+        ages_at_ms, or built_ms when it is None.
+    """
+    return intel.built_ms if intel.ages_at_ms is None else intel.ages_at_ms
+
+
+def age_now_ms(age_ms: int | None, now_ms: int, reference_ms: int) -> int | None:
+    """An age stored relative to a document's reference time, as of now (SPEC §3.4D.6).
+
+    A price seen after the reference (your in-game scan, IU6) is stored as a negative age, so this one rule ages
+    every price the same way.
+
+    Args:
+        age_ms: The stored age (cur_age_ms), or None.
+        now_ms: Now, UTC ms.
+        reference_ms: ages_reference_ms of the document.
+
+    Returns:
+        The age now, never below 0; None for None.
+    """
+    return None if age_ms is None else max(0, age_ms + now_ms - reference_ms)
 
 
 def to_json(intel: MarketIntelligence, schema: int | None = None) -> str:
@@ -212,4 +244,4 @@ def from_json(text: str) -> MarketIntelligence:
     coverage = tuple(tuple(r) for r in body.get("coverage", ()))
     return MarketIntelligence(body["market"], body["built_ms"], body["observations_until_ms"],
                               body["volume_method_version"], items, body["schema_version"], catalog, coverage,
-                              dict(body.get("settings", {})))
+                              dict(body.get("settings", {})), body.get("ages_at_ms"))

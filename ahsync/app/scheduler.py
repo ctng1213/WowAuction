@@ -74,6 +74,7 @@ class SchedulerHooks:
     ahledger_poll: Callable[[], None] | None = None   # AHledger price tables, every 30 min; None disables it (SRC10)
     ahledger_backfill: Callable[[], object] | None = None   # one slice of the backfill, every 5 s; None disables it
     update: Callable[[], None] | None = None          # update check and download, every 10 min; None: no app shell
+    cloud_poll: Callable[[], object] | None = None    # the cloud market's summary, every poll_minutes; None: no [cloud]
     savedvars_changed: Callable[[Path], None] = _nothing_for   # SavedVariables re-read (ingest.apply.ingest_file)
 
 
@@ -184,7 +185,7 @@ class Scheduler:
     """Runs the steady-state jobs at their times. `tick()` does the due work; `run()` sleeps between ticks."""
 
     def __init__(self, clock: Clock, hooks: SchedulerHooks, watcher: SavedVarsWatcher | None = None,
-                 daily_refresh_time: str = "06:00", live_refresh_minutes: int = 15) -> None:
+                 daily_refresh_time: str = "06:00", live_refresh_minutes: int = 15, cloud_poll_minutes: int = 15) -> None:
         """Create a scheduler whose timers start from the clock's current time.
 
         Args:
@@ -193,6 +194,7 @@ class Scheduler:
             watcher: SavedVariables watcher, or None to skip watching.
             daily_refresh_time: Local "HH:MM" of the daily full refresh.
             live_refresh_minutes: Interval of the Premium live refresh, minutes.
+            cloud_poll_minutes: Interval of the cloud summary's poll, minutes ([cloud] poll_minutes, SPEC §2.4).
         """
         self.clock, self.hooks, self.watcher = clock, hooks, watcher
         self.daily_ms = parse_daily_time(daily_refresh_time)
@@ -205,6 +207,8 @@ class Scheduler:
         self.next_ahledger = now                       # the first poll is at the first tick (start)
         self.next_backfill = now                       # checked at every 5 s tick after the poll (M21)
         self.next_update = now                         # the first update check is at start (SPEC §3.7.8)
+        self.cloud_ms = cloud_poll_minutes * 60_000
+        self.next_cloud = now                          # the first summary poll is at the first tick (start)
         self.next_daily = self._next_daily(now)
         self.next_weekly = now + WEEK_MS
 
@@ -266,6 +270,9 @@ class Scheduler:
         if self.hooks.update is not None and now >= self.next_update:
             self.next_update = now + UPDATE_POLL_MS
             self._run("update", self.hooks.update, ran)
+        if self.hooks.cloud_poll is not None and now >= self.next_cloud:
+            self.next_cloud = now + self.cloud_ms
+            self._run("cloud_poll", self.hooks.cloud_poll, ran)
         if self.hooks.ahledger_backfill is not None and now >= self.next_backfill:
             self.next_backfill = now + WATCH_INTERVAL_MS
             self._run("ahledger_backfill", self.hooks.ahledger_backfill, ran)
@@ -315,6 +322,8 @@ class Scheduler:
             timers.append(self.next_ahledger)
         if self.hooks.update is not None:
             timers.append(self.next_update)
+        if self.hooks.cloud_poll is not None:
+            timers.append(self.next_cloud)
         if self.hooks.ahledger_backfill is not None:
             timers.append(self.next_backfill)
         return min(timers)

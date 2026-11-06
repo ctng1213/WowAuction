@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
-from collections.abc import Iterable, Iterator
+from collections.abc import Collection, Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -900,7 +900,7 @@ class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, JournalRea
                                        (market, since_ms)).fetchall())
         return newest, priced, oldest, latest, scans.get("local", 0), scans.get(src, 0)
 
-    def publish_refresh(self, markets: list[str], with_intel: bool = True) -> None:
+    def publish_refresh(self, markets: list[str], with_intel: bool | Collection[str] = True) -> None:
         """Swap the staged intelligence, pages, plan and alternatives in for these markets, in one transaction (SPEC §5.2 rule 3).
 
         The plan replaces the market's characters' pending and late actions; done, partial,
@@ -908,8 +908,10 @@ class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, JournalRea
 
         Args:
             markets: The markets this refresh rebuilt.
-            with_intel: False for a re-plan, which staged no intelligence: the live one stays (IU13). Pages and
-                alternatives (SPEC §3.4D) are swapped either way, like the plan.
+            with_intel: False for a re-plan, which staged no intelligence: the live one stays (IU13); or the markets
+                whose intelligence was staged (a cloud document, SPEC §2.4), the others' staying live. Pages and
+                alternatives (SPEC §3.4D) are swapped either way, like the plan. The parsed-intelligence cache is
+                cleared for every market whose intelligence is swapped (an hourly document keeps its built_ms).
         """
         with self.transaction():
             for market in markets:
@@ -923,7 +925,10 @@ class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, JournalRea
                          ("alternatives", "alternatives_new", "market, cand_id, char_id, list, reason, data"),
                          ("export_candidates", "export_candidates_new", "market, pos, cand_id, status, adjusted, data"),
                          ("portfolio_snapshot", "portfolio_snapshot_new", "market, data"))
-                for live, staged, cols in (swaps if with_intel else swaps[1:]):
+                swapped = with_intel is True or (not isinstance(with_intel, bool) and market in with_intel)
+                if swapped:
+                    self.__dict__.get("_intel_cache", {}).pop(market, None)
+                for live, staged, cols in (swaps if swapped else swaps[1:]):
                     self.conn.execute(f"DELETE FROM {live} WHERE market = ?", (market,))
                     self.conn.execute(f"INSERT INTO {live}({cols}) SELECT {cols} FROM {staged} WHERE market = ?",
                                       (market,))
