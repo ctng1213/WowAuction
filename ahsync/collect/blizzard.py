@@ -32,6 +32,7 @@ API = "https://us.api.blizzard.com"
 REGION = "us"
 NAMESPACE = "dynamic-forever-us"
 STATIC_NAMESPACE = "static-forever-us"   # item metadata (SPEC §6 item 24)
+FALLBACK_NAMESPACE = "static-classic1x-us"   # Classic Era: items Forever's static data lacks (the user, 2026-11-06)
 SEARCH_SPAN = 1000                    # ids per catalog search: a search answers at most 1,000 hits (M31)
 QUALITY = {"POOR": 0, "COMMON": 1, "UNCOMMON": 2, "RARE": 3, "EPIC": 4, "LEGENDARY": 5, "ARTIFACT": 6, "HEIRLOOM": 7}
 TIME_LEFT = {"SHORT": 1, "MEDIUM": 2, "LONG": 3, "VERY_LONG": 4}   # WoW's band codes (SPEC §2.2)
@@ -122,12 +123,13 @@ class BlizzardClient:
             return self._token
         return self._token
 
-    def search_items(self, first_id: int, last_id: int) -> list[dict]:
+    def search_items(self, first_id: int, last_id: int, namespace: str = STATIC_NAMESPACE) -> list[dict]:
         """Every item whose id lies in a range, from the static namespace's item search (SPEC §2.4 catalog, BZ16).
 
         Args:
             first_id: The range's first item id.
             last_id: Its last; at most SEARCH_SPAN ids, so one page holds every hit.
+            namespace: The static namespace: Forever's, or FALLBACK_NAMESPACE for what it lacks.
 
         Returns:
             The items' records (`data` of each hit), in id order.
@@ -139,7 +141,7 @@ class BlizzardClient:
             raise BlizzardError(f"item search range {first_id}-{last_id} is wider than {SEARCH_SPAN}")
         path = "/data/wow/search/item"
         query = f"&id=[{first_id},{last_id}]&orderby=id&_pageSize={SEARCH_SPAN}&_page=1"
-        response = self._get(path, None, namespace=STATIC_NAMESPACE, query=query)
+        response = self._get(path, None, namespace=namespace, query=query)
         if response.status != 200:
             raise BlizzardError(f"{path} answered {response.status}")
         return [hit["data"] for hit in json.loads(response.body).get("results", [])]

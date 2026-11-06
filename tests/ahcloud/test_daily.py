@@ -37,7 +37,7 @@ def test_BZ10_the_daily_run_ingests_every_new_snapshot_and_publishes_the_baselin
     assert (doc.built_ms, doc.observations_until_ms, pointer.built_ms) == (B_MS, B_MS, B_MS)
     linen = doc.items[LINEN]
     assert (linen.cur, linen.cur_qty, linen.book) == (125, 10, ((125, 10, 4, 1),))
-    assert doc.catalog[LINEN] == ("Linen Cloth", 1, 7, 13, None) and doc.catalog[SPAULDERS][2] == 4
+    assert doc.catalog[LINEN] == ("Linen Cloth", 1, 7, 13, None, "forever") and doc.catalog[SPAULDERS][2] == 4
     assert doc.coverage == ((A_MS // HOUR, B_MS // HOUR),) and doc.settings["default_sell_prob"] == 0.25
     assert linen.recent_sold.split(",")[-1] == "4" and linen.last_hour == (4.0, 0.0, 0.0)   # the state layered once
     db = history(data, tmp_path)
@@ -138,9 +138,19 @@ def _shifted(envelope: bytes, at_ms: int) -> bytes:
     return gzip.compress(json.dumps(body).encode(), mtime=0)
 
 
+def test_BZ16_what_forever_lacks_comes_from_classic_era_marked_as_such(tmp_path):
+    data, intel = stores(tmp_path, (A_MS, SNAP_A), (B_MS, SNAP_B))
+    full = FakeCatalog().records
+    catalog = FakeCatalog({LINEN: full[LINEN]}, fallback={SPAULDERS: full[SPAULDERS]})
+    run_daily(data, intel, catalog, M, tmp_path / "run")
+    doc = read_latest(intel, M)[0]
+    assert doc.catalog[LINEN][5] == "forever" and doc.catalog[SPAULDERS] == ("Fortified Spaulders", 2, 4, 412, None, "classic1x")
+    assert catalog.fallback_ranges == [(SPAULDERS, SPAULDERS + 999)]         # only what Forever lacked
+
+
 def test_BZ16_an_item_the_search_does_not_know_is_asked_again_after_a_week(tmp_path):
     data, intel = stores(tmp_path, (A_MS, SNAP_A), (B_MS, SNAP_B))
-    catalog = FakeCatalog({LINEN: FakeCatalog().records[LINEN]})             # Spaulders unknown to the search
+    catalog = FakeCatalog({LINEN: FakeCatalog().records[LINEN]})             # Spaulders unknown to both searches
     run_daily(data, intel, catalog, M, tmp_path / "run")
     doc = read_latest(intel, M)[0]
     assert LINEN in doc.catalog and SPAULDERS not in doc.catalog and SPAULDERS in doc.items

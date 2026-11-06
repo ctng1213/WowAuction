@@ -115,7 +115,8 @@ class MarketIntelligence:
     volume_method_version: int            # SPEC §3.3.6
     items: dict[int, ItemIntel]
     schema_version: int = INTEL_SCHEMA_VERSION
-    # The cloud document's extras (SPEC §2.4, schema 10): item key -> [name, quality, item_class, vendor_sell, stack];
+    # The cloud document's extras (SPEC §2.4, schema 10): item key -> [name, quality, item_class, vendor_sell, stack,
+    # source], source "forever" or "classic1x" (Classic Era's static data, for what Forever's lacks);
     # the hours observed as (first hour, last hour) ranges, hour numbers floor(ms / 3600000); the MarketSettings the
     # baselines were built with, by field name. Empty in a desktop-built document and before schema 10.
     catalog: dict[int, tuple] = field(default_factory=dict)
