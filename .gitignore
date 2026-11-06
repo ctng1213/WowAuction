@@ -31,3 +31,6 @@ Thumbs.db
 # local Python environments
 .venv/
 .python-version
+
+# CDK synth output and the staged Lambda asset (M30): generated, never committed
+infra/cdk.out/

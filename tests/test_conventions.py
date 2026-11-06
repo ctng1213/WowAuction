@@ -16,9 +16,12 @@ PY_SRC = ROOT / "ahsync"
 PY_TESTS = ROOT / "tests" / "ahsync"
 APP_SRC = ROOT / "ahsync_app"                # the app shell (SPEC §3.7.1), held to the same conventions
 APP_TESTS = ROOT / "tests" / "ahsync_app"
-PY_TREES = ((PY_SRC, PY_TESTS), (APP_SRC, APP_TESTS))   # (source package, its mirrored tests)
+CLOUD_SRC = ROOT / "ahcloud"                # the cloud job (SPEC §2.4), held to the same conventions (M30)
+INFRA_SRC = ROOT / "infra"                  # the CDK app (M30)
+PY_TREES = ((PY_SRC, PY_TESTS), (APP_SRC, APP_TESTS), (CLOUD_SRC, ROOT / "tests" / "ahcloud"),
+            (INFRA_SRC, ROOT / "tests" / "infra"))   # (source package, its mirrored tests)
 TOOLS = ROOT / "tools"
-CONVENTION_TOOLS = ("build.py", "promote.py", "record_blizzard.py")   # held to the conventions, tests in tests/tools/ (M26, M28)
+CONVENTION_TOOLS = ("build.py", "promote.py", "record_blizzard.py", "build_lambda.py")   # tests in tests/tools/ (M26-M30)
 TOOL_TESTS = ROOT / "tests" / "tools"
 LUA_SRC = ROOT / "addon" / "AHProfit"
 LUA_TESTS = ROOT / "tests" / "addon"
@@ -52,8 +55,9 @@ def python_sources() -> list[Path]:
     static = PY_SRC / "web" / "static"
     ahsync = sorted(p for p in PY_SRC.rglob("*.py") if static not in p.parents)
     app = sorted(APP_SRC.rglob("*.py")) if APP_SRC.exists() else []
+    cloud = sorted(p for root in (CLOUD_SRC, INFRA_SRC) if root.exists() for p in root.rglob("*.py"))
     tools = [TOOLS / name for name in CONVENTION_TOOLS if (TOOLS / name).exists()]
-    return ahsync + app + tools
+    return ahsync + app + cloud + tools
 
 
 def mirrored_test(path: Path) -> Path:
@@ -325,6 +329,51 @@ def test_AR4_analysis_imports_only_the_engine_and_the_two_contracts():
                 allowed = any(name == m or name.startswith(m + ".") for m in ANALYSIS_MAY_IMPORT)
                 if not (stdlib or allowed):
                     problems.append(f"{rel(path)}:{node.lineno} imports {name} (SPEC §5.0 invariant 1)")
+    assert not problems, "\n".join(problems)
+
+
+def imports_of(path: Path) -> list[tuple[int, str]]:
+    """The absolute imports of a module.
+
+    Args:
+        path: A .py file.
+
+    Returns:
+        (line, module name) per imported module, in order.
+    """
+    found = []
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            found += [(node.lineno, a.name) for a in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            found.append((node.lineno, node.module))
+    return found
+
+
+CLOUD_MAY_IMPORT = ("ahcloud", "ahsync.collect.blizzard", "ahsync.collect.client", "ahsync.collect.observations",
+                    "ahsync.collect.snapshots", "ahsync.collect.provider", "ahsync.analysis", "ahsync.intel.contract",
+                    "ahsync.db", "ahsync.history", "ahsync.engine", "ahsync.clock")
+
+
+def test_AR9_the_cloud_is_a_thin_wrapper_over_the_same_pipeline():
+    import sys
+    problems = []
+    for path in sorted(CLOUD_SRC.rglob("*.py")):
+        for line, name in imports_of(path):
+            top = name.split(".")[0]
+            if top == "boto3" and path.name != "aws.py":
+                problems.append(f"{rel(path)}:{line} imports boto3 outside ahcloud/aws.py")
+            elif top in sys.stdlib_module_names or name == "__future__" or top == "boto3":
+                continue
+            elif not any(name == m or name.startswith(m + ".") for m in CLOUD_MAY_IMPORT):
+                problems.append(f"{rel(path)}:{line} imports {name}")
+    for path in sorted(INFRA_SRC.rglob("*.py")):
+        problems += [f"{rel(path)}:{line} imports {name}" for line, name in imports_of(path)
+                     if name.split(".")[0] in ("ahsync", "ahcloud", "ahsync_app")]
+    for root in (PY_SRC, APP_SRC):
+        for path in sorted(root.rglob("*.py")):
+            problems += [f"{rel(path)}:{line} imports {name}" for line, name in imports_of(path)
+                         if name.split(".")[0] in ("ahcloud", "infra", "aws_cdk", "boto3")]
     assert not problems, "\n".join(problems)
 
 

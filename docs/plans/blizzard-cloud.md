@@ -106,6 +106,16 @@ The user's decisions of 2026-11-06:
 
 Pinned exactly with the resolved tree in `requirements-infra.txt`. **CI:** `tests/infra/` is skipped when `aws_cdk` is not importable, so the existing `test` job on Windows and macOS is unchanged; the stack tests run where the infra requirements are installed (the user's Mac, and later a CI job if wanted).
 
+**Decided during execution (Opus, M30, 2026-11-06).**
+
+- **Two buckets, data and intel.** CDK's `S3BucketOrigin.with_origin_access_control` grants the distribution `s3:GetObject` on the whole bucket and has no prefix option; scoping it to `intel/*` would mean hand-written policy fighting the helper. A separate intel bucket makes the public/private line a bucket boundary. The analyzer (M31) writes the intel bucket; the collector has no access to it. SEC17's row and SPEC §2.4 changed.
+- **The analyzer's resources land in M31** (its function, the daily schedule, the S3 event, the dead-letter queue), with its code; M30's stack has the buckets, the collector, CloudFront (serving an empty bucket until M31), SNS, the two alarms and the budget.
+- **Metrics are Embedded Metric Format log lines** (`ahcloud.aws.metric`), not `PutMetricData`: no API call, no IAM permission, and the "no new snapshot in 3 h" alarm reads them (`snapshot_written`, sum per hour, three hours, missing data breaching).
+- **An explicit log group** (30 days) instead of the function's deprecated `logRetention`, which also removed CDK's helper function.
+- **The handler keeps one piece of module state**, the Blizzard client, so a warm Lambda reuses its token (BZ6). `run()` takes the client as an argument; the state lives only in `handler`. The Lambda reads its credentials from Secrets Manager only (`credentials.from_secret`); the environment and key-file lookup is the command line's.
+- **`tests/infra/` is skipped without `aws_cdk`** (`pytest.importorskip`), so CI's test job needs no CDK; the stack tests ran here in a scratch environment with `requirements-infra.txt`. `infra/cdk.out/` is gitignored; `build/` already was.
+- **BZ31 is split**: its collect half (the command line and the handler write the same bytes, a credential flag refused before any request) is tested here; its analyze half comes with M31.
+
 ## 2. Working rules
 
 CLAUDE.md "How work is run" applies. In short: one worktree per milestone; `tools/verify.ps1` (tests, invariants, the whole-plan snapshot byte-identical unless this plan says it moves) before a commit; one commit per verified milestone with the attribution trailer; the plan's §1 gains any decision made during execution; LESSONS gains any wrong assumption found; SPEC and SCENARIOS are updated in the same commit as the code that makes them true, and a milestone's "planned" becomes "built" with module names.

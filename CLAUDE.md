@@ -23,6 +23,10 @@ python tools/gen_world.py      # regenerate the snapshot's fixture world w1.json
 python -m ahsync_app           # the app shell from source: window, tray, setup, per-user folders (needs requirements-app.txt)
 python tools/build.py build 0.0.0   # local build: PyInstaller, then Inno Setup (Windows) or the dmg (macOS); needs requirements-app.txt + pyinstaller
 python tools/promote.py v0.1.0      # make a tested pre-release the latest release (or the Promote release workflow)
+python tools/record_blizzard.py record   # record Blizzard's Forever auction API into fixtures (creds: env or ~/.ahsync/blizzard)
+python -m ahcloud collect --house 113 --store data/cloud   # run the cloud collector locally (same code as the Lambda)
+python tools/build_lambda.py        # stage ahsync/ + ahcloud/ as the Lambda asset in build/lambda
+cd infra && cdk deploy -c house=<id> -c alert_email=<you>   # deploy the cloud job (infra/README.md; needs requirements-infra.txt)
 ```
 
 `lua5.1` is a standalone Lua 5.1 interpreter that must be on PATH. Use 5.1, not 5.4: WoW runs 5.1, and the two differ in integer and `#` behaviour.
