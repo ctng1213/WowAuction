@@ -1,0 +1,167 @@
+"""The market stack: storage, the collector, the public summary's distribution and the alerts (SPEC §2.4, M30).
+
+Two buckets, so the public/private line is a bucket boundary rather than a prefix condition:
+- **data** (private): `raw/` (Blizzard's snapshots, kept forever, Standard-IA after 30 days) and `state/`.
+- **intel** (read only by the CloudFront distribution, through origin access control): the published
+  summaries; objects expire after 7 days.
+The collector runs every 15 minutes with reserved concurrency 1; its environment holds names only and it
+reads the one Blizzard secret. Alarms (collector errors, no new snapshot for 3 hours) and a monthly budget
+email the user through one SNS topic. The analyzer, its schedules and its dead-letter queue land in M31.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from aws_cdk import (
+    Duration, RemovalPolicy, Stack,
+    aws_budgets as budgets,
+    aws_cloudfront as cloudfront,
+    aws_cloudfront_origins as origins,
+    aws_cloudwatch as cloudwatch,
+    aws_cloudwatch_actions as cw_actions,
+    aws_events as events,
+    aws_events_targets as targets,
+    aws_lambda as lambda_,
+    aws_logs as logs,
+    aws_s3 as s3,
+    aws_secretsmanager as secretsmanager,
+    aws_sns as sns,
+    aws_sns_subscriptions as subscriptions,
+)
+from constructs import Construct
+
+METRIC_NAMESPACE = "WowAuction"      # ahcloud.aws.NAMESPACE: the collector's metric lines
+
+
+@dataclass(frozen=True)
+class MarketConfig:
+    """What one market's stack needs; from `cdk deploy -c ...` context (infra/app.py)."""
+
+    market: str                      # AHSync's market id
+    ruleset: int                     # the route's ruleset
+    house: int                       # the auction house id (SPEC §6 item 23)
+    alert_email: str                 # where alarms and the budget write
+    secret_name: str = "wowauction/blizzard-api"
+    asset_path: str = "build/lambda"  # tools/build_lambda.py's output
+    budget_usd: int = 5
+
+
+class MarketStack(Stack):
+    """One market's cloud job."""
+
+    def __init__(self, scope: Construct, construct_id: str, config: MarketConfig, **kwargs) -> None:
+        """Define the resources.
+
+        Args:
+            scope: The CDK app.
+            construct_id: The stack's id.
+            config: The market's settings.
+            **kwargs: Passed to Stack (env, description).
+        """
+        super().__init__(scope, construct_id, **kwargs)
+        self.data, self.intel = self._buckets()
+        self.alerts = sns.Topic(self, "Alerts", display_name="WowAuction market alerts")
+        self.alerts.add_subscription(subscriptions.EmailSubscription(config.alert_email))
+        self.collector = self._collector(config)
+        self.distribution = self._distribution()
+        self._alarms(config)
+        self._budget(config)
+
+    def _buckets(self) -> tuple[s3.Bucket, s3.Bucket]:
+        """The private data bucket and the intel bucket.
+
+        Returns:
+            (data, intel).
+        """
+        common = dict(block_public_access=s3.BlockPublicAccess.BLOCK_ALL, enforce_ssl=True,
+                      encryption=s3.BucketEncryption.S3_MANAGED, versioned=False,
+                      object_ownership=s3.ObjectOwnership.BUCKET_OWNER_ENFORCED, removal_policy=RemovalPolicy.RETAIN)
+        data = s3.Bucket(self, "Data", lifecycle_rules=[s3.LifecycleRule(
+            id="raw-to-infrequent-access", prefix="raw/",
+            transitions=[s3.Transition(storage_class=s3.StorageClass.INFREQUENT_ACCESS,
+                                       transition_after=Duration.days(30))])], **common)
+        intel = s3.Bucket(self, "Intel", lifecycle_rules=[s3.LifecycleRule(
+            id="expire-old-summaries", expiration=Duration.days(7))], **common)
+        return data, intel
+
+    def _collector(self, config: MarketConfig) -> lambda_.Function:
+        """The collector function, its schedule and its grants.
+
+        Args:
+            config: The market's settings.
+
+        Returns:
+            The function.
+        """
+        log_group = logs.LogGroup(self, "CollectorLogs", retention=logs.RetentionDays.ONE_MONTH,
+                                  removal_policy=RemovalPolicy.DESTROY)
+        function = lambda_.Function(
+            self, "Collector", runtime=lambda_.Runtime.PYTHON_3_12, architecture=lambda_.Architecture.ARM_64,
+            handler="ahcloud.collector.handler", code=lambda_.Code.from_asset(config.asset_path),
+            timeout=Duration.minutes(2), memory_size=512, reserved_concurrent_executions=1, log_group=log_group,
+            environment={"BUCKET": self.data.bucket_name, "MARKET": config.market, "RULESET": str(config.ruleset),
+                         "HOUSE": str(config.house), "SECRET_NAME": config.secret_name})
+        self.data.grant_read(function, "state/*")
+        self.data.grant_put(function, "raw/*")
+        self.data.grant_put(function, "state/collector.json")
+        secretsmanager.Secret.from_secret_name_v2(self, "BlizzardSecret", config.secret_name).grant_read(function)
+        events.Rule(self, "CollectorSchedule", schedule=events.Schedule.rate(Duration.minutes(15)),
+                    targets=[targets.LambdaFunction(function, retry_attempts=0)])
+        return function
+
+    def _distribution(self) -> cloudfront.Distribution:
+        """CloudFront in front of the intel bucket only, HTTPS only, honouring each object's Cache-Control.
+
+        Returns:
+            The distribution.
+        """
+        cache = cloudfront.CachePolicy(
+            self, "SummaryCache", default_ttl=Duration.seconds(60), min_ttl=Duration.seconds(0),
+            max_ttl=Duration.minutes(5), enable_accept_encoding_gzip=True)
+        return cloudfront.Distribution(
+            self, "Summaries", comment="WowAuction public market summaries",
+            price_class=cloudfront.PriceClass.PRICE_CLASS_100,
+            default_behavior=cloudfront.BehaviorOptions(
+                origin=origins.S3BucketOrigin.with_origin_access_control(self.intel),
+                viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
+                allowed_methods=cloudfront.AllowedMethods.ALLOW_GET_HEAD, cache_policy=cache))
+
+    def _alarms(self, config: MarketConfig) -> None:
+        """Email on collector errors and on 3 hours without a new snapshot.
+
+        Args:
+            config: The market's settings.
+        """
+        action = cw_actions.SnsAction(self.alerts)
+        errors = self.collector.metric_errors(period=Duration.minutes(15), statistic="Sum").create_alarm(
+            self, "CollectorErrors", threshold=1, evaluation_periods=1,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+            alarm_description="The collector failed (FM67, FM68)")
+        written = cloudwatch.Metric(namespace=METRIC_NAMESPACE, metric_name="snapshot_written",
+                                    dimensions_map={"market": config.market}, period=Duration.hours(1),
+                                    statistic="Sum")
+        stale = written.create_alarm(
+            self, "NoNewSnapshot", threshold=1, evaluation_periods=3,
+            comparison_operator=cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.BREACHING,
+            alarm_description="No new snapshot for 3 hours (FM68)")
+        for alarm in (errors, stale):
+            alarm.add_alarm_action(action)
+            alarm.add_ok_action(action)
+
+    def _budget(self, config: MarketConfig) -> None:
+        """A monthly cost budget that emails at 80% actual and 100% forecast.
+
+        Args:
+            config: The market's settings.
+        """
+        subscriber = [budgets.CfnBudget.SubscriberProperty(subscription_type="EMAIL", address=config.alert_email)]
+        notes = [budgets.CfnBudget.NotificationWithSubscribersProperty(
+            notification=budgets.CfnBudget.NotificationProperty(
+                notification_type=kind, comparison_operator="GREATER_THAN", threshold=share, threshold_type="PERCENTAGE"),
+            subscribers=subscriber) for kind, share in (("ACTUAL", 80), ("FORECASTED", 100))]
+        budgets.CfnBudget(self, "MonthlyBudget", budget=budgets.CfnBudget.BudgetDataProperty(
+            budget_type="COST", time_unit="MONTHLY", budget_name=f"wowauction-{config.market}",
+            budget_limit=budgets.CfnBudget.SpendProperty(amount=config.budget_usd, unit="USD")),
+            notifications_with_subscribers=notes)

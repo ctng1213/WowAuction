@@ -42,11 +42,11 @@ flowchart LR
 
   subgraph Cloud["Market cloud (AWS us-east-1; planned M30–M31, SPEC §2.4)"]
     BAPI[Blizzard Game Data API<br/>ruleset 2 · the Horde house · hourly Last-Modified]
-    Collector[ahcloud/collector.py<br/>Lambda every 15 min · If-Modified-Since]
-    Raw[(S3 raw/<br/>one gzipped envelope per snapshot, kept forever)]
+    Collector[ahcloud/collector.py, built M30<br/>Lambda every 15 min · If-Modified-Since]
+    Raw[(S3 data bucket, built M30: raw/ + state/<br/>one gzipped envelope per snapshot, kept forever)]
     Analyzer[ahcloud/analyzer.py<br/>daily: ingest → analysis → baselines, history.db round trip<br/>hourly per raw object: with_scan + last hour, no database]
-    IntelS3[(S3 intel/<br/>MarketIntelligence JSON by sha256 + latest-schema.json)]
-    CF[CloudFront<br/>public, intel/ only]
+    IntelS3[(S3 intel bucket, built M30, empty until M31<br/>MarketIntelligence JSON by sha256 + latest-schema.json)]
+    CF[CloudFront, built M30<br/>public, the intel bucket only]
   end
 
   Dashboard[localhost dashboard<br/>the app window, or a browser]
@@ -54,8 +54,8 @@ flowchart LR
 
   AHF -- until M35 --> Collect
   AHL -- until M35 --> Collect
-  BAPI -.planned.-> Collector
-  Collector -.-> Raw
+  BAPI --> Collector
+  Collector --> Raw
   Raw -.S3 event.-> Analyzer
   Analyzer -.-> IntelS3
   IntelS3 -.-> CF
@@ -316,3 +316,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-03: `ahsync_app/gui_thread.py` holds the main-thread queue the window and the tray share, and the Dock icon follows the window (§6.1, DR31).
 - 2026-11-06: Blizzard cloud batch spec merge (SPEC §2.4, M28–M35 planned): §1 gains the market cloud subgraph (Blizzard API, collector, raw, analyzer, published summary, CloudFront) as dashed planned nodes, with the AHF and AHledger edges marked "until M34"; §2 gains the cloud market's path. Each milestone marks its part built here.
 - 2026-11-06: the cadence split (SPEC §2.4, plan §1): the analyzer runs daily for the baselines and hourly for the state over one document; §1's analyzer node and §2's cloud path redrawn; horizons and regimes planned as M34, removal M35.
+- 2026-11-06: M30 built: the stack (`infra/`), the collector and the stores (`ahcloud/`); two buckets (data private, intel served by CloudFront only), since an origin access control can't be scoped to a prefix; the analyzer's resources come with M31.
