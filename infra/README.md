@@ -5,12 +5,16 @@ The CDK app for the market's cloud job (SPEC §2.4, plan `docs/plans/blizzard-cl
 ## Prerequisites
 
 - Node.js 18 or newer and the CDK CLI (`npm install -g aws-cdk`).
-- Python 3.12 with the infra requirements in their own environment:
+- Python 3.12 with the infra requirements in their own environment, from the repository root (with pyenv,
+  use the 3.12 interpreter's full path: `python3.12` is usually not on the PATH):
 
   ```sh
-  python3.12 -m venv .venv-infra
+  ~/.pyenv/versions/3.12.16/bin/python -m venv .venv-infra
   .venv-infra/bin/pip install -r requirements-infra.txt -r requirements-dev.txt
   ```
+
+  `cdk` runs `python3 app.py`, so activate the environment (`source .venv-infra/bin/activate`) in the shell that
+  runs `cdk`; otherwise it fails with `No module named 'aws_cdk'`.
 
 - AWS credentials for the account in your shell (`aws login`, or a profile).
 - The secret `wowauction/blizzard-api` in `us-east-1`, a JSON object with `client_id` and `client_secret`.
@@ -23,7 +27,7 @@ From the repository root:
 python tools/build_lambda.py                     # stage ahsync/ + ahcloud/ into build/lambda
 source .venv-infra/bin/activate
 cd infra
-cdk bootstrap                                    # once per account and region
+cdk bootstrap -c house=<id> -c alert_email=<you@example.com>   # once per account and region
 cdk deploy -c house=<id> -c alert_email=<you@example.com>
 ```
 
