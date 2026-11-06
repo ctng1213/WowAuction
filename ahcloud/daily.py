@@ -18,7 +18,7 @@ from ahcloud.hourly import advance, snapshot
 from ahcloud.publish import publish, read_latest, settings_to_dict
 from ahcloud.store import Store
 from ahsync.analysis.market import analyze_market
-from ahsync.collect.blizzard import SEARCH_SPAN, BlizzardClient, catalog_row, raw_key
+from ahsync.collect.blizzard import FALLBACK_NAMESPACE, SEARCH_SPAN, STATIC_NAMESPACE, BlizzardClient, catalog_row, raw_key
 from ahsync.collect.observations import ingest_snapshot
 from ahsync.collect.snapshots import SnapshotStore
 from ahsync.db.sqlite import Database
@@ -110,11 +110,33 @@ def upload_compact(data: Store, root: Path, market: str, keep_from_ms: int) -> N
             data.delete(key)
 
 
+def search_ranges(client: BlizzardClient, ids: list[int], namespace: str) -> dict[int, tuple]:
+    """Catalog rows for some item ids, one item search per 1,000-id range that holds any of them.
+
+    Args:
+        client: The Blizzard client.
+        ids: Item ids, ascending.
+        namespace: The static namespace to search.
+
+    Returns:
+        Item id -> items row, for the ids (and their range neighbours) the search knows.
+    """
+    rows: dict[int, tuple] = {}
+    start = 0
+    while start < len(ids):
+        first = ids[start]
+        rows.update({r[0]: r for r in map(catalog_row, client.search_items(first, first + SEARCH_SPAN - 1, namespace))})
+        start += sum(1 for i in ids[start:] if i < first + SEARCH_SPAN)
+    return rows
+
+
 def fill_catalog(db: Database, client: BlizzardClient, keys: list[int], now_ms: int) -> int:
     """Fetch the metadata of priced items the catalog lacks, in id ranges (SPEC §2.4, BZ16).
 
-    A random-suffix key gets its base item's row under its own key, as AHF listed variants. An id the search
-    doesn't know is remembered and asked again after a week.
+    Forever's static data first; what it lacks from Classic Era's (`static-classic1x-us`, the user's decision
+    2026-11-06), remembered in meta `catalog_fallback` so the document marks those rows. A random-suffix key gets
+    its base item's row under its own key, as AHF listed variants. An id neither knows is asked again after a
+    week.
 
     Args:
         db: The history database.
@@ -129,13 +151,12 @@ def fill_catalog(db: Database, client: BlizzardClient, keys: list[int], now_ms: 
     missing = json.loads(db.get_meta("catalog_missing") or "{}")
     wanted = sorted({k % KEY_SUFFIX_FACTOR for k in keys if k > 0 and k not in known}
                     - {int(i) for i, at in missing.items() if now_ms - at < MISSING_RETRY_MS})
-    rows: dict[int, tuple] = {}
-    start = 0
-    while start < len(wanted):
-        first = wanted[start]
-        span = [i for i in wanted[start:] if i < first + SEARCH_SPAN]
-        rows.update({r[0]: r for r in map(catalog_row, client.search_items(first, first + SEARCH_SPAN - 1))})
-        start += len(span)
+    rows = search_ranges(client, wanted, STATIC_NAMESPACE)
+    fallback = search_ranges(client, [i for i in wanted if i not in rows], FALLBACK_NAMESPACE)
+    fallback = {i: r for i, r in fallback.items() if i in wanted and i not in rows}
+    rows.update(fallback)
+    sources = set(json.loads(db.get_meta("catalog_fallback") or "[]")) - {i for i in rows if i not in fallback}
+    sources |= set(fallback)
     for item_id in wanted:
         if item_id not in rows:
             missing[str(item_id)] = now_ms
@@ -145,6 +166,7 @@ def fill_catalog(db: Database, client: BlizzardClient, keys: list[int], now_ms: 
     written = db.upsert_items(sorted(rows.values()) + sorted(variants), now_ms)
     with db.transaction():
         db.set_meta("catalog_missing", json.dumps(missing, sort_keys=True))
+        db.set_meta("catalog_fallback", json.dumps(sorted(sources)))
     return written
 
 
@@ -177,10 +199,12 @@ def catalog_of(db: Database, keys: list[int]) -> dict[int, tuple]:
         keys: The document's item keys.
 
     Returns:
-        Key -> (name, quality, item_class, vendor_sell, stack), for the keys the catalog knows.
+        Key -> (name, quality, item_class, vendor_sell, stack, source), for the keys the catalog knows; source is
+        "forever", or "classic1x" for a row from the fallback.
     """
-    items = db.items()
-    return {k: (items[k].name, items[k].quality, items[k].item_class, items[k].vendor_sell, items[k].stack)
+    items, fallback = db.items(), set(json.loads(db.get_meta("catalog_fallback") or "[]"))
+    return {k: (items[k].name, items[k].quality, items[k].item_class, items[k].vendor_sell, items[k].stack,
+                "classic1x" if k % KEY_SUFFIX_FACTOR in fallback else "forever")
             for k in sorted(keys) if k in items}
 
 

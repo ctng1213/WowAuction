@@ -43,12 +43,16 @@ SEARCH = {LINEN: {"id": LINEN, "name": {"en_US": "Linen Cloth"}, "quality": {"ty
 
 
 class FakeCatalog:
-    """Stands in for BlizzardClient.search_items: answers from SEARCH, records each range asked for."""
+    """Stands in for BlizzardClient.search_items: answers from SEARCH (Forever) and `fallback` (Classic Era)."""
 
-    def __init__(self, records: dict | None = None) -> None:
+    def __init__(self, records: dict | None = None, fallback: dict | None = None) -> None:
         self.records = SEARCH if records is None else records
-        self.ranges: list[tuple[int, int]] = []
+        self.fallback = fallback or {}
+        self.ranges: list[tuple[int, int]] = []           # Forever searches
+        self.fallback_ranges: list[tuple[int, int]] = []
 
-    def search_items(self, first_id: int, last_id: int) -> list[dict]:
-        self.ranges.append((first_id, last_id))
-        return [r for i, r in sorted(self.records.items()) if first_id <= i <= last_id]
+    def search_items(self, first_id: int, last_id: int, namespace: str = "static-forever-us") -> list[dict]:
+        forever = namespace == "static-forever-us"
+        (self.ranges if forever else self.fallback_ranges).append((first_id, last_id))
+        source = self.records if forever else self.fallback
+        return [r for i, r in sorted(source.items()) if first_id <= i <= last_id]

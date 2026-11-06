@@ -253,6 +253,8 @@ def test_BZ16_the_catalog_comes_from_ranged_item_searches():
     assert requests[-1].url == (f"{bz.API}/data/wow/search/item?namespace=static-forever-us"
                                 "&id=[2001,3000]&orderby=id&_pageSize=1000&_page=1")
     assert bz.catalog_row(SEARCH_LINEN) == (2589, 2589, "Linen Cloth", 1, 5, 7, 5, 55, 13, None)
+    bz.BlizzardClient(search, FakeClock(B_MS), CLIENT_ID, SECRET).search_items(2001, 3000, bz.FALLBACK_NAMESPACE)
+    assert "namespace=static-classic1x-us&id=[2001,3000]" in requests[-1].url
     with pytest.raises(bz.BlizzardError, match="wider than 1000"):
         bz.BlizzardClient(search, FakeClock(B_MS), CLIENT_ID, SECRET).search_items(1, 1001)
     with pytest.raises(bz.BlizzardError, match="without an id"):
