@@ -34,6 +34,10 @@ from aws_cdk import (
 )
 from constructs import Construct
 
+# The services this stack bills, as Cost Explorer names them, so the budget measures WowAuction alone and other
+# resources in the account can't trip it (the user, 2026-11-06; the account's own budget watches everything).
+BUDGET_SERVICES = ("AWS Lambda", "Amazon Simple Storage Service", "Amazon CloudFront", "AmazonCloudWatch",
+                   "Amazon Simple Notification Service", "Amazon Simple Queue Service", "AWS Secrets Manager")
 METRIC_NAMESPACE = "WowAuction"      # ahcloud.aws.NAMESPACE: the functions' metric lines
 
 
@@ -212,7 +216,7 @@ class MarketStack(Stack):
             alarm.add_ok_action(action)
 
     def _budget(self, config: MarketConfig) -> None:
-        """A monthly cost budget that emails at 80% actual and 100% forecast.
+        """A monthly cost budget on this stack's services that emails at 80% actual and 100% forecast.
 
         Args:
             config: The market's settings.
@@ -224,5 +228,7 @@ class MarketStack(Stack):
             subscribers=subscriber) for kind, share in (("ACTUAL", 80), ("FORECASTED", 100))]
         budgets.CfnBudget(self, "MonthlyBudget", budget=budgets.CfnBudget.BudgetDataProperty(
             budget_type="COST", time_unit="MONTHLY", budget_name=f"wowauction-{config.market}",
-            budget_limit=budgets.CfnBudget.SpendProperty(amount=config.budget_usd, unit="USD")),
+            budget_limit=budgets.CfnBudget.SpendProperty(amount=config.budget_usd, unit="USD"),
+            filter_expression=budgets.CfnBudget.ExpressionProperty(dimensions=budgets.CfnBudget.ExpressionDimensionValuesProperty(
+                key="SERVICE", values=list(BUDGET_SERVICES)))),
             notifications_with_subscribers=notes)
