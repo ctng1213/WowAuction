@@ -1,0 +1,240 @@
+{
+ "house_113_auctions": {
+  "auctions_sha256": "f88f303bdace2724356a68494fb96db37e9fa10a8c448e664a51fbc34e2f5c86",
+  "bid_only": 15,
+  "bytes": 7195193,
+  "gzip_bytes": 562952,
+  "headers": {
+   "content-encoding": "gzip",
+   "content-type": "application/json;charset=UTF-8",
+   "date": "Fri, 06 Nov 2026 14:40:52 GMT",
+   "last-modified": "Fri, 6 Nov 2026 14:17:20 GMT"
+  },
+  "namespace": "dynamic-forever-us",
+  "path": "/data/wow/ruleset/2/auctions/113",
+  "records": 78635,
+  "status": 200
+ },
+ "house_113_commodities": {
+  "auctions_sha256": "1ad0b0500e1c6cda878eaa85c14748b840b566bfc5fbe6d3c518320c5e8d9baf",
+  "bid_only": 0,
+  "bytes": 2523239,
+  "gzip_bytes": 243749,
+  "headers": {
+   "content-encoding": "gzip",
+   "content-type": "application/json;charset=UTF-8",
+   "date": "Fri, 06 Nov 2026 14:40:52 GMT",
+   "last-modified": "Fri, 6 Nov 2026 14:17:20 GMT"
+  },
+  "namespace": "dynamic-forever-us",
+  "path": "/data/wow/ruleset/2/auctions/113/commodities",
+  "records": 29915,
+  "status": 200
+ },
+ "house_114_auctions": {
+  "auctions_sha256": "3613f8fa537fe54463d9f4234e692e60c1db347477ae1220d4fa55756499f2a1",
+  "bid_only": 11,
+  "bytes": 6607205,
+  "gzip_bytes": 507693,
+  "headers": {
+   "content-encoding": "gzip",
+   "content-type": "application/json;charset=UTF-8",
+   "date": "Fri, 06 Nov 2026 14:40:53 GMT",
+   "last-modified": "Fri, 6 Nov 2026 14:17:20 GMT"
+  },
+  "namespace": "dynamic-forever-us",
+  "path": "/data/wow/ruleset/2/auctions/114",
+  "records": 73919,
+  "status": 200
+ },
+ "house_114_commodities": {
+  "auctions_sha256": "24c9c8a8b2e98972b44e8939fed199b3b39d790c76f0503ef48c0429de44a3d3",
+  "bid_only": 0,
+  "bytes": 2212525,
+  "gzip_bytes": 214616,
+  "headers": {
+   "content-encoding": "gzip",
+   "content-type": "application/json;charset=UTF-8",
+   "date": "Fri, 06 Nov 2026 14:40:53 GMT",
+   "last-modified": "Fri, 6 Nov 2026 14:17:20 GMT"
+  },
+  "namespace": "dynamic-forever-us",
+  "path": "/data/wow/ruleset/2/auctions/114/commodities",
+  "records": 26230,
+  "status": 200
+ },
+ "house_115_auctions": {
+  "auctions_sha256": null,
+  "bid_only": 0,
+  "bytes": 760,
+  "gzip_bytes": 431,
+  "headers": {
+   "content-encoding": "gzip",
+   "content-type": "application/json;charset=UTF-8",
+   "date": "Fri, 06 Nov 2026 14:40:54 GMT",
+   "last-modified": "Fri, 6 Nov 2026 14:17:15 GMT"
+  },
+  "namespace": "dynamic-forever-us",
+  "path": "/data/wow/ruleset/2/auctions/115",
+  "records": 0,
+  "status": 200
+ },
+ "house_115_commodities": {
+  "auctions_sha256": null,
+  "bid_only": 0,
+  "bytes": 131,
+  "gzip_bytes": 131,
+  "headers": {
+   "content-encoding": "gzip",
+   "content-type": "application/json;charset=UTF-8",
+   "date": "Fri, 06 Nov 2026 14:40:54 GMT",
+   "last-modified": "Fri, 6 Nov 2026 14:17:15 GMT"
+  },
+  "namespace": "dynamic-forever-us",
+  "path": "/data/wow/ruleset/2/auctions/115/commodities",
+  "records": 0,
+  "status": 200
+ },
+ "house_120_auctions": {
+  "auctions_sha256": "d80d5464488ab123a820acb107b03330bd94d4ad87881d798de002aa5a0d960d",
+  "bid_only": 0,
+  "bytes": 751702,
+  "gzip_bytes": 62636,
+  "headers": {
+   "content-encoding": "gzip",
+   "content-type": "application/json;charset=UTF-8",
+   "date": "Fri, 06 Nov 2026 14:40:54 GMT",
+   "last-modified": "Fri, 6 Nov 2026 14:17:16 GMT"
+  },
+  "namespace": "dynamic-forever-us",
+  "path": "/data/wow/ruleset/2/auctions/120",
+  "records": 8472,
+  "status": 200
+ },
+ "house_120_commodities": {
+  "auctions_sha256": "e3588bc27e90a53e6bb9ac78aee7b4a9be39631c2cb4c7cf5aeea352b0fa768b",
+  "bid_only": 0,
+  "bytes": 411546,
+  "gzip_bytes": 42909,
+  "headers": {
+   "content-encoding": "gzip",
+   "content-type": "application/json;charset=UTF-8",
+   "date": "Fri, 06 Nov 2026 14:40:54 GMT",
+   "last-modified": "Fri, 6 Nov 2026 14:17:16 GMT"
+  },
+  "namespace": "dynamic-forever-us",
+  "path": "/data/wow/ruleset/2/auctions/120/commodities",
+  "records": 4860,
+  "status": 200
+ },
+ "house_124_auctions": {
+  "auctions_sha256": "c714c9898252ab59237abd51cfe51f05bb09d1a62e8d7fd2a354428433edf595",
+  "bid_only": 1,
+  "bytes": 1085413,
+  "gzip_bytes": 89204,
+  "headers": {
+   "content-encoding": "gzip",
+   "content-type": "application/json;charset=UTF-8",
+   "date": "Fri, 06 Nov 2026 14:40:54 GMT",
+   "last-modified": "Fri, 6 Nov 2026 14:17:16 GMT"
+  },
+  "namespace": "dynamic-forever-us",
+  "path": "/data/wow/ruleset/2/auctions/124",
+  "records": 11878,
+  "status": 200
+ },
+ "house_124_commodities": {
+  "auctions_sha256": "9772690933f25b4b9b9f45d2841ad82a66cf07bd5620150b54fa5fa4df133532",
+  "bid_only": 0,
+  "bytes": 593225,
+  "gzip_bytes": 60744,
+  "headers": {
+   "content-encoding": "gzip",
+   "content-type": "application/json;charset=UTF-8",
+   "date": "Fri, 06 Nov 2026 14:40:55 GMT",
+   "last-modified": "Fri, 6 Nov 2026 14:17:16 GMT"
+  },
+  "namespace": "dynamic-forever-us",
+  "path": "/data/wow/ruleset/2/auctions/124/commodities",
+  "records": 7006,
+  "status": 200
+ },
+ "item_2589_static_classic1x_us": {
+  "bytes": 5201,
+  "gzip_bytes": 1241,
+  "headers": {
+   "content-encoding": "gzip",
+   "content-type": "application/json;charset=UTF-8",
+   "date": "Fri, 06 Nov 2026 14:40:55 GMT",
+   "last-modified": "Tue, 3 Nov 2026 15:18:03 GMT"
+  },
+  "namespace": "static-classic1x-us",
+  "path": "/data/wow/item/2589",
+  "status": 200
+ },
+ "item_2589_static_forever_us": {
+  "bytes": 5361,
+  "gzip_bytes": 1448,
+  "headers": {
+   "content-encoding": "gzip",
+   "content-type": "application/json;charset=UTF-8",
+   "date": "Fri, 06 Nov 2026 14:40:55 GMT",
+   "last-modified": "Thu, 5 Nov 2026 15:47:39 GMT"
+  },
+  "namespace": "static-forever-us",
+  "path": "/data/wow/item/2589",
+  "status": 200
+ },
+ "item_2589_static_us": {
+  "bytes": 5292,
+  "gzip_bytes": 1433,
+  "headers": {
+   "content-encoding": "gzip",
+   "content-type": "application/json;charset=UTF-8",
+   "date": "Fri, 06 Nov 2026 14:40:55 GMT",
+   "last-modified": "Tue, 3 Nov 2026 16:06:42 GMT"
+  },
+  "namespace": "static-us",
+  "path": "/data/wow/item/2589",
+  "status": 200
+ },
+ "ruleset_2": {
+  "bytes": 676,
+  "gzip_bytes": 383,
+  "headers": {
+   "content-encoding": "gzip",
+   "content-type": "application/json;charset=UTF-8",
+   "date": "Fri, 06 Nov 2026 14:40:51 GMT",
+   "last-modified": "Fri, 6 Nov 2026 14:40:44 GMT"
+  },
+  "namespace": "dynamic-forever-us",
+  "path": "/data/wow/ruleset/2",
+  "status": 200
+ },
+ "ruleset_2_auctions_index": {
+  "bytes": 8423,
+  "gzip_bytes": 813,
+  "headers": {
+   "content-encoding": "gzip",
+   "content-type": "application/json;charset=UTF-8",
+   "date": "Fri, 06 Nov 2026 14:40:51 GMT",
+   "last-modified": "Fri, 6 Nov 2026 14:17:15 GMT"
+  },
+  "namespace": "dynamic-forever-us",
+  "path": "/data/wow/ruleset/2/auctions/index",
+  "status": 200
+ },
+ "ruleset_index": {
+  "bytes": 528,
+  "gzip_bytes": 161,
+  "headers": {
+   "content-encoding": "gzip",
+   "content-type": "application/json;charset=UTF-8",
+   "date": "Fri, 06 Nov 2026 14:40:51 GMT",
+   "last-modified": "Fri, 6 Nov 2026 14:40:44 GMT"
+  },
+  "namespace": "dynamic-forever-us",
+  "path": "/data/wow/ruleset/index",
+  "status": 200
+ }
+}

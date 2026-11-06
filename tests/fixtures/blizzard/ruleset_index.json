@@ -1,0 +1,33 @@
+{
+ "_links": {
+  "self": {
+   "href": "https://us.api.blizzard.com/data/wow/ruleset/?namespace=dynamic-forever-us"
+  }
+ },
+ "rulesets": [
+  {
+   "id": 1,
+   "key": {
+    "href": "https://us.api.blizzard.com/data/wow/ruleset/1?namespace=dynamic-forever-us"
+   }
+  },
+  {
+   "id": 15,
+   "key": {
+    "href": "https://us.api.blizzard.com/data/wow/ruleset/15?namespace=dynamic-forever-us"
+   }
+  },
+  {
+   "id": 3,
+   "key": {
+    "href": "https://us.api.blizzard.com/data/wow/ruleset/3?namespace=dynamic-forever-us"
+   }
+  },
+  {
+   "id": 2,
+   "key": {
+    "href": "https://us.api.blizzard.com/data/wow/ruleset/2?namespace=dynamic-forever-us"
+   }
+  }
+ ]
+}

@@ -1,0 +1,41 @@
+{
+ "_links": {
+  "self": {
+   "href": "https://us.api.blizzard.com/data/wow/ruleset/2?namespace=dynamic-forever-us"
+  }
+ },
+ "auctions": {
+  "href": "https://us.api.blizzard.com/data/wow/ruleset/2/auctions/?namespace=dynamic-forever-us"
+ },
+ "id": 2,
+ "name": {
+  "de_DE": "Normal",
+  "en_GB": "Normal",
+  "en_US": "Normal",
+  "es_ES": "Normal",
+  "es_MX": "Normal",
+  "fr_FR": "Normal",
+  "ko_KR": "\uc77c\ubc18",
+  "pt_BR": "Normal",
+  "ru_RU": "\u041e\u0431\u044b\u0447\u043d\u044b\u0439",
+  "zh_CN": "\u666e\u901a",
+  "zh_TW": "\u666e\u901a"
+ },
+ "status": {
+  "name": {
+   "de_DE": "Verf\u00fcgbar",
+   "en_GB": "Up",
+   "en_US": "Up",
+   "es_ES": "Activo",
+   "es_MX": "Disponible",
+   "fr_FR": "En ligne",
+   "it_IT": "Attivo",
+   "ko_KR": "\uc815\uc0c1",
+   "pt_BR": "Para Cima",
+   "ru_RU": "\u0420\u0430\u0431\u043e\u0442\u0430\u0435\u0442",
+   "zh_CN": "\u6b63\u5e38",
+   "zh_TW": "\u6b63\u5e38"
+  },
+  "type": "UP"
+ }
+}
