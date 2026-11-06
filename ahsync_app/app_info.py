@@ -34,7 +34,8 @@ def app_payload(world: ShellWorld, state: ShellState, setup: bool, wow_path: str
     """
     settings = config or Config()
     found = check(wow_path) if wow_path else WowCheck(False, False, 0)
-    folder = wow_check(wow_path, found.has_interface, found.has_addons, found.accounts, creatable=setup)
+    folder = wow_check(wow_path, found.has_interface, found.has_addons, found.accounts, creatable=setup,
+                       is_forever=found.is_forever)
     autostart_state, translocated = autostart.facts(world.platform, world.exe)
     addon = state.addon.line if state.addon is not None else None
     if db is None:

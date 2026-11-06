@@ -99,7 +99,8 @@ def folder_check(wow_path: object) -> dict:
     """
     path = typed_folder(wow_path)
     found = check(path) if path and Path(path).is_absolute() else WowCheck(False, False, 0)
-    result = wow_check(path, found.has_interface, found.has_addons, found.accounts, creatable=True)
+    result = wow_check(path, found.has_interface, found.has_addons, found.accounts, creatable=True,
+                       is_forever=found.is_forever)
     return {"ok": result["ok"], "text": result["text"]}
 
 
@@ -235,7 +236,7 @@ def save_setup(request: SetupRequest, config_file: Path, home: Path, restrict_fi
     """
     addons = Path(request.wow_path) / "Interface" / "AddOns"
     if not addons.is_dir():
-        addons.mkdir()                     # a fresh client has Interface without AddOns (DR6)
+        addons.mkdir(parents=True)         # a fresh client has no addon folder until an addon is installed (DR6)
     write_config(config_file, request)
     log.info("setup: config.toml written for %s", request.market)
     if not request.api_key:

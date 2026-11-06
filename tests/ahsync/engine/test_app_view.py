@@ -148,3 +148,10 @@ def test_D98_on_the_beta_channel_from_source_and_refused_start_at_login():
     login = refused["lines"][3]
     assert login["control"]["enabled"] is False and login["control"]["text"] == "off" and login["class"] == "amber"
     assert login["parts"] == [["not set: Move AHSync to Applications, then turn it on again", None]]
+
+
+def test_DR6_a_fresh_forever_folder_passes_setups_check_and_a_configured_one_does_not():
+    assert app_view.wow_check("/Applications/World of Warcraft/_forever_", False, False, 0, creatable=True,
+                              is_forever=True) == {"ok": True, "pill": "found", "text": "found WoW: Forever · AddOns will be created"}
+    assert app_view.wow_check("/Applications/World of Warcraft/_forever_", False, False, 0, creatable=False,
+                              is_forever=True)["ok"] is False       # the addon install needs the folder complete

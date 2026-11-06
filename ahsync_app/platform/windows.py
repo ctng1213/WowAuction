@@ -7,7 +7,8 @@ from typing import Protocol
 
 from ahsync_app.platform.base import APP_NAME, WOW_NAMES, AppDirs, Platform
 
-WOW_ROOT = PureWindowsPath(r"C:\Program Files (x86)\World of Warcraft")
+# Battle.net installs under either root: Program Files (x86) for older installs, Program Files for newer ones.
+WOW_ROOTS = (PureWindowsPath(r"C:\Program Files (x86)\World of Warcraft"), PureWindowsPath(r"C:\Program Files\World of Warcraft"))
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"   # under HKEY_CURRENT_USER (SPEC §3.7.5)
 RUN_VALUE = APP_NAME
 
@@ -122,12 +123,12 @@ class WindowsPlatform(Platform):
         return AppDirs(Path(str(root / "config.toml")), Path(str(root / "data")), rf"%LOCALAPPDATA%\{APP_NAME}")
 
     def wow_candidates(self) -> list[Path]:
-        """`C:\\Program Files (x86)\\World of Warcraft\\<name>`, `_classic_beta_` first (SPEC §3.7.3).
+        """`<root>\\World of Warcraft\\<name>` under both Program Files roots, `_forever_` first (SPEC §3.7.3).
 
         Returns:
             The folders, most likely first.
         """
-        return [Path(str(WOW_ROOT / name)) for name in WOW_NAMES]
+        return [Path(str(root / name)) for name in WOW_NAMES for root in WOW_ROOTS]
 
     def restrict_file(self, path: Path) -> None:
         """Nothing to do: a file in the user's profile is already the user's alone (SPEC §3.7.4).

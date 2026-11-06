@@ -10,7 +10,7 @@ from pathlib import Path, PurePosixPath
 
 from ahsync_app.platform.base import APP_NAME, TRANSLOCATED, WOW_NAMES, AppDirs, Platform
 
-# UNVERIFIED: inferred from a forum post naming /Applications/World of Warcraft/_classic_beta_/WTF/ (SPEC §6 item 20)
+# Verified 2026-11-06 on the user's Mac: the release installs into /Applications/World of Warcraft/_forever_ (§6 item 20)
 WOW_ROOT = PurePosixPath("/Applications/World of Warcraft")
 TRANSLOCATION_PREFIX = "/private/var/folders/"
 TRANSLOCATION_PART = "/AppTranslocation/"
@@ -45,7 +45,7 @@ class MacPlatform(Platform):
                        f"~/Library/Application Support/{APP_NAME}")
 
     def wow_candidates(self) -> list[Path]:
-        """`/Applications/World of Warcraft/<name>`, `_classic_beta_` first (SPEC §3.7.3; UNVERIFIED, §6 item 20).
+        """`/Applications/World of Warcraft/<name>`, `_forever_` first (SPEC §3.7.3, §6 item 20).
 
         Returns:
             The folders, most likely first.

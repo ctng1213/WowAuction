@@ -1133,9 +1133,9 @@ const PAGES = {
   Setup: { count: null, html: () => `
     <h1>Set up AHSync</h1><p class="lede">Three things, then AHSync syncs prices, installs the AHProfit addon into your WoW folder and opens this dashboard. You can change any of them later in config.toml. In the real app this page shows alone at /setup, with no menu.</p>
     <div class="card" style="max-width:720px"><div class="card-h"><b>1. Your WoW: Forever folder</b><span class="pill ok">found</span></div>
-      <div style="padding:12px 14px"><input class="select" style="width:100%" value="C:\\Program Files (x86)\\World of Warcraft\\_classic_beta_">
+      <div style="padding:12px 14px"><input class="select" style="width:100%" value="C:\\Program Files (x86)\\World of Warcraft\\_forever_">
       <div class="fresh" style="margin:6px 0 0">found Interface\\AddOns · 2 accounts · <span class="btn">Check</span></div>
-      <div class="muted" style="font-size:12px;margin-top:6px">The folder that holds <code>Interface</code> and <code>WTF</code>. On a Mac it is usually /Applications/World of Warcraft/_classic_beta_.</div></div></div>
+      <div class="muted" style="font-size:12px;margin-top:6px">The folder that holds <code>Interface</code> and <code>WTF</code>. On a Mac it is usually /Applications/World of Warcraft/_forever_.</div></div></div>
     <div class="card" style="max-width:720px"><div class="card-h"><b>2. Your market</b></div>
       <div style="padding:12px 14px;display:flex;gap:10px;flex-wrap:wrap"><span class="select">Ruleset: PvP ▾</span><span class="select">Faction: Horde ▾</span><span class="muted" style="align-self:center">→ forever.pvp.horde.us</span></div></div>
     <div class="card" style="max-width:720px"><div class="card-h"><b>3. auctionhouse.fyi key</b><span class="pill">optional</span></div>
@@ -1183,7 +1183,7 @@ const PAGES = {
         <dt>Start at login</dt><dd><label title="Windows: a Run entry for your user. macOS: a LaunchAgent in ~/Library/LaunchAgents. Nothing needs admin rights."><input type="checkbox" checked> on</label></dd>
         <dt>API key</dt><dd class="pos">set · Premium via contributor</dd>
         <dt>Data folder</dt><dd class="muted">%LOCALAPPDATA%\\AHSync · 46 MB</dd>
-        <dt>WoW folder</dt><dd class="muted">C:\\Program Files (x86)\\World of Warcraft\\_classic_beta_</dd>
+        <dt>WoW folder</dt><dd class="muted">C:\\Program Files (x86)\\World of Warcraft\\_forever_</dd>
         <dt>Addon</dt><dd>AHProfit installed · up to date</dd></dl></div>
     </div>
     ${covCard(COV_MAIN, 'Data coverage', 'last 90 days to Thu 22 Oct 14:00 · your scans, AHledger and auctionhouse.fyi', true)}

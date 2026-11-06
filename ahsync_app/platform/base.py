@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 APP_NAME = "AHSync"
-WOW_NAMES = ("_classic_beta_", "_classic_", "_classic_era_", "_anniversary_")   # Forever first (SPEC §1, §3.7.3)
+WOW_NAMES = ("_forever_", "_classic_beta_")   # the release (seen on the user's Mac 2026-11-06), then the beta's
 TRANSLOCATED = "translocated"     # run_location_problem's answer for macOS App Translocation (SPEC §3.7.5)
 
 

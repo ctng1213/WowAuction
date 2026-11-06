@@ -241,7 +241,7 @@ def main() -> int:
         Process exit code: 0 on success, 1 when the WoW folder is wrong or not writable, or the restart failed.
     """
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--wow-path", help="WoW client folder, e.g. ...\\World of Warcraft\\_classic_beta_")
+    parser.add_argument("--wow-path", help="WoW client folder, e.g. ...\\World of Warcraft\\_forever_")
     parser.add_argument("--dry-run", action="store_true", help="show the changes without making them")
     parser.add_argument("--restart", action="store_true",
                         help="then restart AHSync and wait until it has written both addon files")
