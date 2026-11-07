@@ -4,7 +4,7 @@ from __future__ import annotations
 import calendar
 from collections import Counter
 
-from ahsync.engine.coverage import age_text, coverage, share_text, span_text, step
+from ahsync.engine.coverage import age_text, coverage, ranges_to_hours, share_text, span_text, step
 
 HOUR = 3_600_000
 END = calendar.timegm((2026, 10, 22, 14, 0, 0)) // 3600     # Thu 22 Oct 14:00, local written as UTC (the mockup's)
@@ -191,6 +191,20 @@ def test_sources_order_aliases_others_and_the_local_offset():
     card = coverage({"blizzard": [END - 1], "ahledger_h1": [END - 2], "zeta": [END - 3], "old": [END - 5000]},
                     END, 2 * HOUR, ("zeta", "local", "blizzard", "ahledger_h1"), None)
     assert [s["src"] for s in card["sources"]] == ["local", "ahledger", "blizzard", "zeta"]
-    assert card["sub"] == "last 90 days to Thu 22 Oct 16:00 · your scans, AHledger, blizzard and zeta"
+    assert card["sub"] == "last 90 days to Thu 22 Oct 16:00 · your scans, AHledger, Blizzard (cloud) and zeta"   # D99
     assert cell(card, "Thu", 15)["by_src"]["blizzard"] == 1          # 13:00 UTC is 15:00 local
     assert coverage({}, END, 0, ("local",), None)["sub"].endswith("· your scans")
+
+
+def test_D99_a_cloud_markets_row_comes_from_the_summarys_coverage():
+    start = calendar.timegm((2026, 11, 5, 14, 0, 0)) // 3600                # Thu 5 Nov 14:00
+    gap = calendar.timegm((2026, 11, 6, 3, 0, 0)) // 3600                   # Fri 03:00-05:00 unobserved
+    now = calendar.timegm((2026, 11, 7, 15, 0, 0)) // 3600
+    document = ((start, gap - 1), (gap + 3, now - 1))                       # the summary's `coverage`, as ranges
+    assert ranges_to_hours(document) == set(range(start, gap)) | set(range(gap + 3, now))
+    card = coverage({"blizzard": ranges_to_hours(document)}, now, 0, ("local", "blizzard"), None)
+    blizzard = rows(card)["blizzard"]
+    assert blizzard["label"] == "Blizzard (cloud)" and blizzard["hours"] == now - start - 3
+    assert card["union"]["hours"] == blizzard["hours"] and rows(card)["local"]["hours"] == 0
+    assert card["none"]["gap_text"] == "longest gap 87 d 23 h (9 Aug 15:00 – 5 Nov 14:00)"   # before the first hour, as D91
+    assert [cell(card, "Fri", h)["by_src"]["blizzard"] for h in (2, 3, 4, 5, 6)] == [1, 0, 0, 0, 1]   # the 3 h hole

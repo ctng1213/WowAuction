@@ -450,6 +450,28 @@ def _market_card(m: MarketFacts, now_ms: int, offset_ms: int) -> dict:
     ]}
 
 
+def cloud_freshness(prices_ms: int | None, built_ms: int | None, now_ms: int, offset_ms: int) -> dict | None:
+    """The top bar's freshness pill for a cloud market (SPEC §2.4, D100; the approved mockup).
+
+    Args:
+        prices_ms: The summary's prices time (`observations_until_ms`), UTC ms; None before the first summary.
+        built_ms: Its baselines' time, UTC ms; None likewise.
+        now_ms: Now.
+        offset_ms: Local time minus UTC, ms.
+
+    Returns:
+        {"text": "prices 18 min old · baselines Sat 09:00", "stale": bool}: the age in whole minutes under an hour,
+        whole hours from then (floored); stale exactly when S23's alert is raised (CLOUD_STALE_MS). None without a
+        summary: the pill is not drawn.
+    """
+    if prices_ms is None or built_ms is None:
+        return None
+    age_ms = max(0, now_ms - prices_ms)
+    age = f"{age_ms // 60_000} min" if age_ms < HOUR_MS else f"{age_ms // HOUR_MS} h"
+    t = time.gmtime((built_ms + offset_ms) // 1000)
+    return {"text": f"prices {age} old · baselines {time.strftime('%a %H:%M', t)}", "stale": age_ms > CLOUD_STALE_MS}
+
+
 def _cloud_line(m: MarketFacts, offset_ms: int) -> list[list[str]]:
     """The market card's "Market summary" line (S21, S24): the baselines' and the prices' times, and the next check.
 

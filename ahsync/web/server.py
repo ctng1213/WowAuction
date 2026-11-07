@@ -36,10 +36,12 @@ from ahsync.clock import Clock
 from ahsync import version
 from ahsync.app.update_check import read_state, write_meta
 from ahsync.engine.updates import UpdateState
-from ahsync.config import CHANNELS, Config, ConfigError, market_sources, write_risk_tolerance, write_setting
+from ahsync.config import (CHANNELS, Config, ConfigError, is_cloud_market, market_sources, write_risk_tolerance,
+                           write_setting)
 from ahsync.db.sqlite import Database
 from ahsync.engine.app_view import BAD_LOCATION_TEXT
 from ahsync.engine.gathering import catalog, eligible, why_not_eligible
+from ahsync.engine.status_view import cloud_freshness
 from ahsync.engine.views import source_credit
 from ahsync.export.addon_files import export_plan
 from ahsync.recommend.gathering_page import CATALOG_PATH, read_catalog
@@ -323,7 +325,9 @@ class DashboardApp:
             market: Market id; "" means the first configured market.
 
         Returns:
-            200 {"built": ms, "prices_newer": bool (IU2), "credit": {"text", "url"} or None (S19), "data": payload}; 404 {"error": "no_refresh_yet"} before the
+            200 {"built": ms, "prices_newer": bool (IU2), "credit": {"text", "url"} or None (S19), "freshness": the cloud
+            market's pill {"text", "stale"} or None (D100; the key only for a cloud market), "data": payload};
+            404 {"error": "no_refresh_yet"} before the
             first refresh; 404 {"error": "unknown_market"} for a market not in the config;
             503 {"error": "database_busy"} when the database can't be read right now;
             503 {"error": "bad_view"} when the stored payload can't be decoded.
@@ -338,6 +342,7 @@ class DashboardApp:
                 stored = self.db.view(page, market)
                 primary = market_sources(self.config, market).primary
                 newer = self.db.prices_newer_than_intel(market, primary)
+                freshness = self._cloud_freshness(market) if is_cloud_market(self.config, market) else False
         except sqlite3.Error as error:
             log.warning("reading the %s view failed: %s", page, error)
             return json_response(503, {"error": "database_busy"})
@@ -347,7 +352,26 @@ class DashboardApp:
         if stored is None:
             return json_response(404, {"error": "no_refresh_yet"})
         payload, built_ms = stored
-        return json_response(200, {"built": built_ms, "prices_newer": newer, "credit": source_credit(primary), "data": payload})
+        body = {"built": built_ms, "prices_newer": newer, "credit": source_credit(primary), "data": payload}
+        if freshness is not False:
+            body["freshness"] = freshness
+        return json_response(200, body)
+
+    def _cloud_freshness(self, market: str) -> dict | None:
+        """A cloud market's freshness pill from its published summary (D100).
+
+        Args:
+            market: A cloud market.
+
+        Returns:
+            engine.status_view.cloud_freshness's pill; None before the first summary.
+        """
+        intel = self.db.read_intel(market)
+        now = self.clock.now_ms()
+        if intel is None:
+            return None
+        return cloud_freshness(intel.observations_until_ms or intel.built_ms, intel.built_ms, now,
+                               self.clock.local_offset_ms(now))
 
     def get_status(self) -> Response:
         """Build and serve the Status page now (SPEC §3.5 Status): it changes between refreshes.

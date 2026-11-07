@@ -6,7 +6,7 @@ from dataclasses import replace
 import pytest
 
 from ahsync.engine import status_view
-from ahsync.engine.status_view import CharacterFacts, MarketFacts, StatusFacts, StatusRow
+from ahsync.engine.status_view import CharacterFacts, MarketFacts, StatusFacts, StatusRow, cloud_freshness
 
 HOUR, DAY, MINUTE = 3_600_000, 86_400_000, 60_000
 M, OTHER = "forever.pvp.horde.us", "forever.pvp.alliance.us"
@@ -371,3 +371,15 @@ def test_S21_before_the_first_poll_the_line_has_no_next_check():
     card = status_view.status_view([], facts(cloud(cloud_next_ms=None)), NOW, 0)["cards"][0]
     [line] = [x for x in card["lines"] if x[0] == "Market summary"]
     assert line[1] == "baselines built Sat 17 Oct 09:00 · prices to Sat 17 Oct 22:52"
+
+
+def test_D100_a_cloud_markets_freshness_pill_says_how_old_its_prices_are():
+    sat = 20_036 * 86_400_000                                      # a Saturday, 00:00 UTC ((20036 + 3) mod 7 = 5)
+    built, prices = sat + 9 * HOUR, sat + 15 * HOUR + 2 * 60_000   # baselines Sat 09:00, prices to 15:02 (UTC = local here)
+    pill = cloud_freshness(prices, built, sat + 15 * HOUR + 20 * 60_000, 0)
+    assert pill == {"text": "prices 18 min old · baselines Sat 09:00", "stale": False}
+    assert cloud_freshness(prices, built, sat + 17 * HOUR + 5 * 60_000, 0)["text"] == "prices 2 h old · baselines Sat 09:00"
+    assert cloud_freshness(prices, built, sat + 18 * HOUR + 10 * 60_000, 0) == {
+        "text": "prices 3 h old · baselines Sat 09:00", "stale": True}                  # amber with S23's alert
+    assert cloud_freshness(None, None, sat, 0) is None                                # no summary yet: no pill
+    assert cloud_freshness(prices, built, sat + 15 * HOUR + 20 * 60_000, -5 * HOUR)["text"].endswith("baselines Sat 04:00")

@@ -832,7 +832,7 @@ async function load(id) {
   }
   if (!res.ok) return renderMessage(id, `Couldn't load this page (${esc(body.error || res.status)}).`);
   state.data[id] = body.data;
-  setBuilt(body.built, body.prices_newer, body.credit);
+  setBuilt(body.built, body.prices_newer, body.credit, body.freshness);
   setGold(body.data && body.data.gold);
   render(id);
 }
@@ -850,8 +850,18 @@ function renderMessage(id, text) {
   if (card) card.innerHTML = `<div class="empty">${text}</div>`;
 }
 
-function setBuilt(builtMs, pricesNewer, credit) {
+const LOCAL_PILL_TITLE = 'Numbers are recomputed at start, once a day after daily_refresh_time, or when you press Refresh now.';
+const CLOUD_PILL_TITLE = 'Prices come from the market summary, updated hourly in the cloud. Baselines (medians, sales rates, sell windows) are rebuilt once a day. Your in-game scans update the items you scan right away.';
+function setBuilt(builtMs, pricesNewer, credit, freshness) {
   const pill = document.getElementById('built');
+  if (freshness !== undefined) {      // a cloud market (D100): the engine's text, drawn as given; null = no summary yet
+    pill.hidden = freshness === null;
+    pill.classList.toggle('amber', !!(freshness && freshness.stale));
+    pill.title = CLOUD_PILL_TITLE;
+    if (freshness) pill.textContent = freshness.text;
+    return;
+  }
+  pill.title = LOCAL_PILL_TITLE;
   pill.hidden = builtMs === null || builtMs === undefined;
   pill.classList.toggle('amber', !!pricesNewer);
   if (!pill.hidden) pill.textContent = 'numbers from ' + new Date(builtMs).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' }) +
