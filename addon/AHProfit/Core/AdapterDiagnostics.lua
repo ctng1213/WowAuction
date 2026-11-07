@@ -67,8 +67,10 @@ local function Describe(fn)
 end
 
 --- The raw Skills-tab lines, to see why professions were or weren't captured.
----@return string  "name|isHeader|isExpanded|rank|max;..." in game order, or "error: ..."
+---@return string  "name|isHeader|isExpanded|rank|max;..." in game order, "none: no Skills tab API" on a client
+---                 without one (the live Forever client, A93), or "error: ..."
 function Adapter.DescribeSkillLines()
+  if not (GetNumSkillLines and GetSkillLineInfo) then return "none: no Skills tab API" end
   return Describe(function()
     local rows = {}
     for i = 1, GetNumSkillLines() do

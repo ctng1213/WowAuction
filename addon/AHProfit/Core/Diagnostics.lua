@@ -51,13 +51,15 @@ Diagnostics.APIS = {
   "GetNumLootItems", "GetLootSlotLink", "GetLootSlotInfo",
   -- gathering loot (A85-A91): the cast's spell name and the loot window's source
   "GetSpellInfo", "GetLootSourceInfo",
+  -- the item and spell APIs the live Forever client moved into namespaces (A93)
+  "GetItemInfo", "GetItemInfoInstant", "C_Item.GetItemInfo", "C_Item.GetItemInfoInstant", "C_Spell.GetSpellName", "C_Spell.GetSpellInfo",
   -- mail sent to your own characters (A75); events are no globals, so MAIL_SEND_SUCCESS reads "nil" unless the
   -- client defines a constant by that name: the event itself shows in the traces
   "SendMail", "GetSendMailItem", "GetSendMailItemLink", "ATTACHMENTS_MAX_SEND", "MAIL_SEND_SUCCESS",
 }
 
 -- Namespaces whose function lists we need to write the modern readers (SPEC §6).
-Diagnostics.NAMESPACES = { "C_TradeSkillUI", "C_MerchantFrame", "C_AuctionHouse", "C_Container", "C_Item" }
+Diagnostics.NAMESPACES = { "C_TradeSkillUI", "C_MerchantFrame", "C_AuctionHouse", "C_Container", "C_Item", "C_Spell" }
 
 local lastMerchant = nil   -- DescribeMerchant() text from the last merchant this session
 local lastTradeSkill = nil -- DescribeTradeSkill() text from the last trade skill window this session

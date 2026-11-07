@@ -190,4 +190,24 @@ describe("Adapter", function()
     assert_eq(Adapter.LoadSaved("AHProfitDB"), { formatVersion = 1 })
   end)
 
+  it("A93 on the live Forever client item info, item details and gathering spells come from C_Item and C_Spell", function()
+    local Adapter = Boot()
+    local classic = { { Adapter.ItemInfo(2589) }, { Adapter.ItemDetails(2589) }, { Adapter.LootCast(2575) } }
+    Stubs.Reset()
+    Stubs.LiveForeverClient()
+    Stubs.LoadAddon({ "Core/Adapter.lua", "Core/AdapterAH.lua", "Core/AdapterDiagnostics.lua" })
+    Adapter = AHProfit.Adapter
+    assert_eq({ { Adapter.ItemInfo(2589) }, { Adapter.ItemDetails(2589) }, { Adapter.LootCast(2575) } }, classic)
+    assert_eq(classic[1][1], "Linen Cloth")
+    assert_eq({ Adapter.LootCast(133) }, {}, "a spell that opens no loot window is still nothing")
+    assert_eq(Adapter.DescribeSkillLines(), "none: no Skills tab API")
+    C_Spell.GetSpellName = nil                                   -- only GetSpellInfo's table
+    assert_eq({ Adapter.LootCast(2575) }, classic[3])
+    C_Spell.GetSpellInfo = function() return "Mining" end        -- an older, string-shaped answer
+    assert_eq({ Adapter.LootCast(2575) }, classic[3])
+    C_Spell, C_Item = nil, nil                                   -- no spell or item API at all: nothing, no error
+    assert_eq({ Adapter.LootCast(2575) }, {})
+    assert_eq({ Adapter.ItemInfo(2589) }, {})
+    assert_eq({ Adapter.ItemDetails(2589) }, {})
+  end)
 end)

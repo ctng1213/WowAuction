@@ -69,14 +69,30 @@ function Adapter.CreateFrame(kind, name, parent, template)
   return CreateFrame(kind, name, parent or UIParent, template)
 end
 
+--- The client's GetItemInfo: the Classic global, else C_Item's (the live Forever client, build 1.60.1, has no
+--- global; A93). Looked up at each call, so it follows the client and never fails while loading.
+---@return function|nil  GetItemInfo or C_Item.GetItemInfo; nil when the client has neither
+local function ItemInfoApi()
+  return GetItemInfo or (C_Item and C_Item.GetItemInfo)
+end
+
+--- The client's GetItemInfoInstant: the Classic global, else C_Item's (A93).
+---@return function|nil  GetItemInfoInstant or C_Item.GetItemInfoInstant; nil when the client has neither
+local function ItemInstantApi()
+  return GetItemInfoInstant or (C_Item and C_Item.GetItemInfoInstant)
+end
+
 --- An item's name, quality and merchant price from the client's item cache.
---- UNVERIFIED: Forever's GetItemInfo returns name 1st, quality 3rd and sell price 11th, as Classic's does.
+--- UNVERIFIED: Forever's GetItemInfo (or C_Item.GetItemInfo) returns name 1st, quality 3rd and sell price 11th,
+--- as Classic's does.
 ---@param itemId number  Base item id
----@return string|nil    Name; nil while the item isn't cached yet
+---@return string|nil    Name; nil while the item isn't cached yet (or the client has no item API)
 ---@return number|nil    Quality 0-7
 ---@return number|nil    What a merchant pays for one, copper (0 = can't be sold to one)
 function Adapter.ItemInfo(itemId)
-  local name, _, quality, _, _, _, _, _, _, _, sellPrice = GetItemInfo(itemId)
+  local api = ItemInfoApi()
+  if not api then return nil, nil, nil end
+  local name, _, quality, _, _, _, _, _, _, _, sellPrice = api(itemId)
   return name, quality, sellPrice
 end
 
@@ -156,12 +172,14 @@ function Adapter.AddTooltipLines(tooltip, lines)
 end
 
 --- An item's quality, item level and class from the client (for the disenchant line).
---- UNVERIFIED: GetItemInfo's 3rd and 4th returns and GetItemInfoInstant's 6th, as on Classic.
+--- UNVERIFIED: GetItemInfo's 3rd and 4th returns and GetItemInfoInstant's 6th, as on Classic (or C_Item's, A93).
 ---@param itemId number
 ---@return number|nil quality, number|nil ilvl, number|nil classId (2 weapon, 4 armor)
 function Adapter.ItemDetails(itemId)
-  local _, _, quality, ilvl = GetItemInfo(itemId)
-  local _, _, _, _, _, classId = GetItemInfoInstant(itemId)
+  local info, instant = ItemInfoApi(), ItemInstantApi()
+  local quality, ilvl, classId
+  if info then quality, ilvl = select(3, info(itemId)) end
+  if instant then classId = select(6, instant(itemId)) end
   return quality, ilvl, classId
 end
 
@@ -362,6 +380,7 @@ end
 ---                     Classic header hides lines (SPEC §2.2.1: complete snapshots only)
 function Adapter.ReadSkillLines()
   if type(GetProfessions) == "function" then return ReadProfessionLines() end
+  if not (GetNumSkillLines and GetSkillLineInfo) then return nil end   -- neither API: no snapshot (A93)
   local lines = {}
   for i = 1, GetNumSkillLines() do
     local name, isHeader, isExpanded, rank, _, _, maxRank = GetSkillLineInfo(i)
@@ -692,13 +711,24 @@ local GATHERING_SPELLS = { ["Mining"] = "mining", ["Herb Gathering"] = "herbalis
 local LOOT_SPELLS = { ["Disenchant"] = true, ["Pick Pocket"] = true, ["Opening"] = true }
 
 --- What a successful cast of the player's means for the next loot window.
---- UNVERIFIED: GetSpellInfo(spellId) returns the spell's name first, as on Classic.
+--- UNVERIFIED: GetSpellInfo(spellId) returns the spell's name first, as on Classic. The live Forever client has no
+--- global (A93); there C_Spell is assumed present as on retail (UNVERIFIED: its presence too; the diagnostics probe
+--- it): C_Spell.GetSpellName(spellId) returns the name, else C_Spell.GetSpellInfo(spellId) a table with `name`.
+--- Without any of them every cast reads as no gathering cast.
 ---@param spellId number|nil
 ---@return string|nil  The gather source ("mining", "herbalism", "skinning", "fishing"); nil for other casts
 ---@return string|nil  The spell's name for a gathering or other loot-opening cast; nil for any other cast
 function Adapter.LootCast(spellId)
-  if not (GetSpellInfo and spellId) then return nil, nil end
-  local name = GetSpellInfo(spellId)
+  if not spellId then return nil, nil end
+  local name
+  if GetSpellInfo then
+    name = GetSpellInfo(spellId)
+  elseif C_Spell and C_Spell.GetSpellName then
+    name = C_Spell.GetSpellName(spellId)              -- a string: no table per cast
+  elseif C_Spell and C_Spell.GetSpellInfo then
+    local info = C_Spell.GetSpellInfo(spellId)
+    name = type(info) == "table" and info.name or type(info) == "string" and info or nil
+  end
   if GATHERING_SPELLS[name] then return GATHERING_SPELLS[name], name end
   if LOOT_SPELLS[name] then return nil, name end
   return nil, nil
