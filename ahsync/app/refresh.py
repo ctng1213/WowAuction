@@ -151,7 +151,8 @@ def stage_document(db: Database, intel: MarketIntelligence, now_ms: int, offset_
     """Stage a market's plan and pages from a published document plus your scans (SPEC §2.4, IU6, BZ17).
 
     A cloud document's analysis settings drive the plan for the keys it shares with analysis; a local value that
-    differs gets an info line on Status (`cloud_settings:<market>`).
+    differs gets an info line on Status (`cloud_settings:<market>`). Its catalog becomes the local catalog first, so
+    the plan's deposits and vendor values use it (BZ39).
 
     Args:
         db: Database (inside a transaction).
@@ -160,6 +161,7 @@ def stage_document(db: Database, intel: MarketIntelligence, now_ms: int, offset_
         offset_ms: Local time minus UTC.
         cfg: Config.
     """
+    db.merge_catalog(intel.catalog, now_ms)                                                 # BZ39: before the plan reads it
     planning, differs = with_document_settings(cfg, intel.settings)
     if differs:
         db.set_status(f"cloud_settings:{intel.market}", "info", "cloud_settings",

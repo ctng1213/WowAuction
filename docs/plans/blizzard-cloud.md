@@ -193,6 +193,8 @@ no craft pays at it (found from the Craft tab, PR #31).
 - **The pill's baselines time is `built_ms`** (the newest snapshot the daily run ingested), the same moment Status's Market summary line shows, not the run's publish time the mockup's "Sat 09:00" illustrates; the two lines always agree.
 - **The headless render found a bug the suite missed** (`ranges_to_hours` not imported in `app/status_page.py`, so a cloud market's Status page failed); the app-level D99 test now covers it.
 
+**Decided by the user 2026-11-07: M32c in two parts.** Part 1 (BZ39) stages the summary's catalog into the local `items` before the release: it needs no game check and lifts the user's install from 3,651 to 12,000 summary items with a vendor price (a fresh install from 0). Part 2 (A92, BZ25: the addon's vendor price and class, and the item detail's "vendor price from the game") is a fast follow, verified in game. Where the summary and the local list disagree (35 of 3,651 on the user's install, all `forever` rows) the summary wins: it is Blizzard's own Forever data, and SPEC already makes it the local catalog.
+
 ## 2. Working rules
 
 CLAUDE.md "How work is run" applies. In short: one worktree per milestone; `tools/verify.ps1` (tests, invariants, the whole-plan snapshot byte-identical unless this plan says it moves) before a commit; one commit per verified milestone with the attribution trailer; the plan's §1 gains any decision made during execution; LESSONS gains any wrong assumption found; SPEC and SCENARIOS are updated in the same commit as the code that makes them true, and a milestone's "planned" becomes "built" with module names.

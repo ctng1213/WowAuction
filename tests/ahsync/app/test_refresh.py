@@ -494,3 +494,23 @@ def test_BZ21_your_scan_applies_when_newer_than_the_documents_prices_not_just_it
         db.conn.execute("UPDATE current SET at = ? WHERE market = ? AND key = ? AND src = 'local'", (NOW + 600_000, M, key))
     newer = refresh.scanned_intel(db, document, cloud_cfg()).items[key]
     assert (newer.cur, newer.cur_qty, newer.cur_age_ms) == (cur + 7, 3, -600_000)   # newer than the prices: applied
+
+
+def test_BZ39_the_summarys_catalog_becomes_the_local_catalog(db):
+    from dataclasses import replace
+    from ahsync.engine import fees
+    from ahsync.recommend.plan import sell_facts
+    db.upsert_items([(11287, 11287, "Lesser Magic Wand", 2, 13, 2, 10, 2032, 508, 1),        # AHF's old list
+                     (2589, 2589, "Linen Cloth", 1, 5, 7, 5, 55, 13, 20)], NOW - DAY)
+    document = replace(cloud_document(db), catalog={
+        3486: ("Heavy Grinding Stone", 1, 7, 50, None, "forever"),
+        11287: ("Lesser Magic Wand", 2, 2, 110, None, "forever"),
+        2589: ("Linen Cloth", 1, 7, 13, None, "classic1x")})
+    refresh.replan_all(db, NOW, cloud_cfg(), documents={M: document})
+    items = db.items()
+    assert (items[3486].name, items[3486].quality, items[3486].item_class, items[3486].vendor_sell) == (
+        "Heavy Grinding Stone", 1, 7, 50)
+    assert items[11287].vendor_sell == 110                                          # the summary wins
+    assert (items[2589].stack, items[2589].vendor_buy) == (20, 55)                 # what it lacks is kept
+    i = next(iter(document.items.values()))
+    assert fees.deposit_copper(sell_facts(i, items[3486], None).vendor_sell, 20, 24) == fees.deposit_copper(50, 20, 24)
