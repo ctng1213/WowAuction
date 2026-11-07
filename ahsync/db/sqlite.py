@@ -12,11 +12,12 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
-from collections.abc import Collection, Iterable, Iterator
+from collections.abc import Collection, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from ahsync.engine.item_key import KEY_SUFFIX_FACTOR
 from ahsync.state.writes import IngestWrites
 from ahsync.history.reads import CurrentPrice, HistoryReads  # noqa: F401  (CurrentPrice re-exported)
 from ahsync.history.writes import HistoryWrites
@@ -795,6 +796,29 @@ class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, JournalRea
                 "vendor_buy = excluded.vendor_buy, vendor_sell = excluded.vendor_sell, "
                 "stack = excluded.stack, updated = excluded.updated", data)
         return len(data)
+
+    def merge_catalog(self, catalog: Mapping[int, tuple], updated_ms: int) -> None:
+        """Make a cloud document's catalog the local catalog (SPEC §2.4, BZ39); inside the caller's transaction.
+
+        The document's name, quality, class and vendor price win where it has them; a value it lacks (None) never
+        erases a local one, and the local stack, item level, subclass and vendor buy price stay. A row whose
+        values are already the same is not rewritten.
+
+        Args:
+            catalog: Item key -> (name, quality, item_class, vendor_sell, stack, source), as the document's.
+            updated_ms: Now, UTC ms.
+        """
+        rows = [(key, key % KEY_SUFFIX_FACTOR, row[0], row[1], row[2], row[3], updated_ms)
+                for key, row in sorted(catalog.items()) if key > 0]
+        self.conn.executemany(
+            "INSERT INTO items(key, item_id, name, quality, class, vendor_sell, updated) VALUES (?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET name = COALESCE(excluded.name, items.name), "
+            "quality = COALESCE(excluded.quality, items.quality), class = COALESCE(excluded.class, items.class), "
+            "vendor_sell = COALESCE(excluded.vendor_sell, items.vendor_sell), updated = excluded.updated "
+            "WHERE items.name IS NOT COALESCE(excluded.name, items.name) "
+            "OR items.quality IS NOT COALESCE(excluded.quality, items.quality) "
+            "OR items.class IS NOT COALESCE(excluded.class, items.class) "
+            "OR items.vendor_sell IS NOT COALESCE(excluded.vendor_sell, items.vendor_sell)", rows)
 
     def store_book(self, scan: BookScan, entries: Iterable[tuple[int, int, int, int, int]]) -> int:
         """Store an order book: its scan row and entries, replacing any earlier copy of the same scan.
