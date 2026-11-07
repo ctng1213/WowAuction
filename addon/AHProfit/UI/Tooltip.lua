@@ -275,7 +275,7 @@ function Tooltip.Lines(key, nowMs)
   local facts = { atAH = atAH, deValue = deValue, sell = sell, buy = buy }
   return TV.Lines({ age = age, doing = DoFor(key, item, nowMs, facts), offsetMs = offsetMs, sell = sell, buy = buy,
     market = { cur = cur, ageText = ageText, med7 = item.med7, med14 = item.med14, med30 = item.med30, listed = listed,
-              soldPerDay = item.soldPerDay },
+              soldPerDay = item.soldPerDay, salesDays = item.salesDays },
     mats = canDE and mats or nil, holdings = HoldingsOf(DB.Get() or {}, key, nowMs) })
 end
 

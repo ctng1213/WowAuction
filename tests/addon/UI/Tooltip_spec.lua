@@ -16,7 +16,7 @@ local NOW = 1760000000000
 local function Boot(med7, trend10, p90)
   Stubs.Reset()
   local linen = "45,20,30," .. (med7 or 49) .. ",49,40," .. (p90 or 60) .. "," .. (trend10 or 0) .. ",480,,93,86,72,45,20,42,0,900;138:4:139:1120:7;"
-  _G.AHProfitMarket = { schemaVersion = 1, exportVersion = 4, generatedAt = NOW - 2 * HOUR, checksum = "1:" .. #linen,
+  _G.AHProfitMarket = { schemaVersion = 1, exportVersion = 5, generatedAt = NOW - 2 * HOUR, checksum = "1:" .. #linen,
     charMarkets = { ["Amaya-Grommash"] = UIWorld.MARKET },
     markets = { [UIWorld.MARKET] = { observationsUntil = NOW - 2 * HOUR, curveHour = 0, I = { [2589] = linen }, C = {} } } }
   Stubs.Login()
@@ -48,14 +48,14 @@ describe("Tooltip", function()
     local tip = Boot()
     assert_eq(Texts(2589), { "AHProfit | data 2 h old", "Market Price | 45c (2 h) · 8% lower than 7d median",
       "Price history | steady", " | (30d) 49c · (14d) — · (7d) 49c", "Market Inventory | 93 listed",
-      "Sales Rate | 48 sold/day · 1.9 days of supply",
+      "Sales Rate | 48 sold/day",
       "Best Sell Price | 55c · Saturday Evening · established" })        -- (45 − 49) ÷ 49 = −8.2%; no med14 in this file
     Stubs.world.containers = { [0] = { size = 1, slots = { [1] = { id = 2589, count = 20 } } } }
     Stubs.FireEvent("BAG_UPDATE_DELAYED")
     Stubs.Advance(1)
     local texts = Texts(2589)
     assert_eq({ texts[2], texts[3], texts[#texts] },
-              { "Do: POST 20 now at 45c | +8s 40c · 90% chance", " | then nothing", "Inventory | 20 · bags 20" })
+              { "Do: POST 20 now at 45c | +8s 40c · 90% chance", " | then nothing", "Inventory | Total: 20 · Bags: 20" })
     Stubs.HoverItem(2589)
     local header, market = tip.doubles[1], tip.doubles[4]
     assert_eq({ header[1]:match("AHProfit"), header[2]:match("data 2 h old|r |T.-WHITE8X8:7:7:0:0:8:8:0:8:0:8:61:219:79|t$") ~= nil },
@@ -89,7 +89,7 @@ describe("Tooltip", function()
     AHProfit.Scan.Replicate.LastBook = function() return { at = NOW, book = { [2589] = { [40] = { [101] = 1 } } } } end
     assert_eq(ValueOf(2589, "Market Price"), "40c now · 18% lower than 7d median")   -- (40 − 49) ÷ 49 = −18.4%
     assert_eq(ValueOf(2589, "Market Inventory"), "20 listed")                         -- the scan's 20 units (TT27)
-    assert_eq(ValueOf(2589, "Sales Rate"), "48 sold/day · 0.4 days of supply")      -- 20 ÷ 48 (TT32)
+    assert_eq(ValueOf(2589, "Sales Rate"), "48 sold/day")                           -- no salesDays in this file (TT32)
   end)
 
   it("TT30 what you hold of an item across your characters, by place: bags, bank, mail, then the AH", function()
@@ -99,9 +99,9 @@ describe("Tooltip", function()
                                                     bank = Inventory.Encode({ { key = 2589, qty = 1 } }) },
                              ["Brugan-Grommash"] = { mail = Inventory.Encode({ { key = 2589, qty = 24 } }) } }
     AHProfitDB.ownAuctions = { ["Brugan-Grommash"] = { ends = "2589,20," .. (NOW + HOUR) .. ",45" } }
-    assert_eq(ValueOf(2589, "Inventory"), "49 · bags 4, bank 1, mail 24, AH 20")
+    assert_eq(ValueOf(2589, "Inventory"), "Total: 49 · Bags: 4 · Bank: 1 · Mail: 24 · AH: 20")
     AHProfitDB.ownAuctions = { ["Brugan-Grommash"] = { ends = "2589,20," .. (NOW - HOUR) .. ",45" } }   -- ended: not held
-    assert_eq(ValueOf(2589, "Inventory"), "29 · bags 4, bank 1, mail 24")
+    assert_eq(ValueOf(2589, "Inventory"), "Total: 29 · Bags: 4 · Bank: 1 · Mail: 24")
   end)
 
   it("A21 an item without market data shows two lines; a broken lookup adds nothing", function()

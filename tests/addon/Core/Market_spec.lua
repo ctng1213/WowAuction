@@ -50,6 +50,15 @@ describe("Market", function()
     assert_eq(Market.Decode(fields .. ",;;").med14, nil)
   end)
 
+  it("EX21 an item's last field is its days of sales data; a file written before it has none", function()
+    local Market = Boot(EX2)
+    local fields = "45,20,60,49,49,40,60,4,480,0,93,86,72,42,20,42,0,900,70,0,24,52"
+    assert_eq(Market.Decode(fields .. ",2;;").salesDays, 2)
+    assert_eq(Market.Decode(fields .. ",7;;").salesDays, 7)
+    assert_eq(Market.Decode(fields .. ",;;").salesDays, nil)
+    assert_eq(Market.Decode(fields .. ";;").salesDays, nil)
+  end)
+
   it("EX19 a tooltip-only item's one curve row is used at any hour; a shortlisted item keeps 24 rows", function()
     local Market = Boot(BIG)
     local SellProb = AHProfit.Engine.SellProb
@@ -99,7 +108,7 @@ describe("Market", function()
   end)
 
   it("FM35 a file from a newer AHSync says to deploy the addon", function()
-    local Market = Boot(EX2, function(file) file.exportVersion = 5 end)
+    local Market = Boot(EX2, function(file) file.exportVersion = 6 end)
     assert_eq({ Market.Problem(), Market.Item(2589) }, { "This addon is older than AHSync's files: run tools/deploy.py, then /reload", nil })
   end)
 

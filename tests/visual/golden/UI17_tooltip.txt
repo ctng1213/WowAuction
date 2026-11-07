@@ -6,10 +6,10 @@
 126 Price history | falling
 209  | (30d) 45s · (14d) 43s · (7d) 40s
 154 Market Inventory | 14 listed
-242 Sales Rate | 6 sold/day · 2.3 days of supply
+220 Sales Rate | 6 sold/day · 2 days of data
 242 Best Buy Price | 38s · Sunday Night · early
 269 Best Sell Price | 45s · Friday Evening · pattern
-121 Inventory | 5 · bags 5
+165 Inventory | Total: 5 · Bags: 5
 -- 2 bag item planned for a later peak
 126 AHProfit | data 2 h old
 269 Do: POST Sat 10:00 | 4g 50s · +53% vs now · 85%
@@ -18,7 +18,7 @@
 126 Price history | falling
 275  | (30d) 3g 80s · (14d) 3g 30s · (7d) 3g 10s
 148 Market Inventory | 4 listed
-242 Sales Rate | 3 sold/day · 1.3 days of supply
+126 Sales Rate | 3 sold/day
 291 Best Buy Price | 2g 80s · Tuesday Evening · pattern
 302 Best Sell Price | 4g 50s · Saturday Evening · pattern
 198 Disenchant | 69% lower than AH price
@@ -26,7 +26,7 @@
 264   20% · 1.5 Greater Mystic Essence @ 80s | 24s
 275   5% · 1 Large Radiant Shard @ 1g 70s | 8s 50c
  66  | 90s 25c
-121 Inventory | 1 · bags 1
+165 Inventory | Total: 1 · Bags: 1
 -- 3 hold
 126 AHProfit | data 2 h old
 275 Do: HOLD until next Tue | no window pays this week
@@ -34,10 +34,10 @@
 121 Price history | steady
 275  | (30d) 1s 15c · (14d) 1s 14c · (7d) 1s 12c
 159 Market Inventory | 120 listed
-247 Sales Rate | 55 sold/day · 2.2 days of supply
+132 Sales Rate | 55 sold/day
 269 Best Buy Price | 1s 2c · Saturday Night · early
 297 Best Sell Price | 1s 20c · Tuesday Evening · pattern
-132 Inventory | 30 · bags 30
+176 Inventory | Total: 30 · Bags: 30
 -- 4 craft mat in bags (on Brugan, who knows the recipe)
 126 AHProfit | data 2 h old
 220 Do: CRAFT 5 Copper Rod | +9s 71c · 90%
@@ -46,10 +46,10 @@
 121 Price history | steady
 275  | (30d) 9s 50c · (14d) 9s 55c · (7d) 9s 60c
 159 Market Inventory | 150 listed
-247 Sales Rate | 40 sold/day · 3.8 days of supply
+132 Sales Rate | 40 sold/day
 280 Best Buy Price | 9s 20c · Tuesday Night · pattern
 302 Best Sell Price | 12s · Saturday Evening · established
-132 Inventory | 10 · bags 10
+176 Inventory | Total: 10 · Bags: 10
 -- 5 mail step (on Amaya, who holds the bars)
 126 AHProfit | data 2 h old
 253 Do: MAIL 6 to Brugan | for crafting Copper Rod
@@ -57,10 +57,10 @@
 121 Price history | steady
 275  | (30d) 9s 50c · (14d) 9s 55c · (7d) 9s 60c
 159 Market Inventory | 150 listed
-247 Sales Rate | 40 sold/day · 3.8 days of supply
+132 Sales Rate | 40 sold/day
 280 Best Buy Price | 9s 20c · Tuesday Night · pattern
 302 Best Sell Price | 12s · Saturday Evening · established
-132 Inventory | 10 · bags 10
+176 Inventory | Total: 10 · Bags: 10
 -- 6 disenchant
 126 AHProfit | data 2 h old
 275 Do: DISENCHANT | +6s 25c · mats 14s 25c · 100%
@@ -68,14 +68,14 @@
 121 Price history | steady
 236  | (30d) 11s · (14d) 10s 50c · (7d) 10s
 159 Market Inventory | 400 listed
-253 Sales Rate | 210 sold/day · 1.9 days of supply
+137 Sales Rate | 210 sold/day
 264 Best Buy Price | 7s 10c · Sunday Night · early
 308 Best Sell Price | 12s 30c · Saturday Afternoon · early
 203 Disenchant | 78% higher than AH price
 214   75% · 2.5 Soul Dust @ 6s | 11s 25c
 253   20% · 1.5 Lesser Mystic Essence @ 10s | 3s
  66  | 14s 25c
-121 Inventory | 1 · bags 1
+165 Inventory | Total: 1 · Bags: 1
 -- 7 AH listing on your Shopping list
 126 AHProfit | data 2 h old
 280 Do: BUY ≤ 10s · for Copper Rod | funded · 6 needed
@@ -83,7 +83,7 @@
 121 Price history | steady
 275  | (30d) 9s 50c · (14d) 9s 55c · (7d) 9s 60c
 159 Market Inventory | 150 listed
-247 Sales Rate | 40 sold/day · 3.8 days of supply
+132 Sales Rate | 40 sold/day
 280 Best Buy Price | 9s 20c · Tuesday Night · pattern
 302 Best Sell Price | 12s · Saturday Evening · established
 -- 8 unfunded alternative (on Brugan)
@@ -94,7 +94,7 @@
 121 Price history | steady
 275  | (30d) 5s 40c · (14d) 5s 35c · (7d) 5s 30c
 154 Market Inventory | 25 listed
-247 Sales Rate | 10 sold/day · 2.5 days of supply
+132 Sales Rate | 10 sold/day
 280 Best Buy Price | 4s 90c · Wednesday Night · early
 302 Best Sell Price | 5s 80c · Saturday Evening · pattern
 -- 9 kept item
@@ -105,10 +105,10 @@
 121 Price history | steady
 209  | (30d) 24c · (14d) 24c · (7d) 24c
 159 Market Inventory | 200 listed
-247 Sales Rate | 30 sold/day · 6.7 days of supply
+132 Sales Rate | 30 sold/day
 242 Best Buy Price | 26c · Monday Night · early
 258 Best Sell Price | 27c · Sunday Evening · early
-132 Inventory | 13 · bags 13
+176 Inventory | Total: 13 · Bags: 13
 -- 10 vendor
 126 AHProfit | data 2 h old
 203 Do: VENDOR 12c each | nothing better
@@ -117,7 +117,7 @@
 176  | (30d) 10c · (14d) — · (7d) —
 148 Market Inventory | 0 listed
 126 Sales Rate | 0 sold/day
-121 Inventory | 4 · bags 4
+165 Inventory | Total: 4 · Bags: 4
 -- 11 no market data
 126 AHProfit | data 2 h old
  99 no market data yet | 
@@ -129,17 +129,17 @@
 126 Price history | falling
 209  | (30d) 45s · (14d) 43s · (7d) 40s
 154 Market Inventory | 14 listed
-242 Sales Rate | 6 sold/day · 2.3 days of supply
+220 Sales Rate | 6 sold/day · 2 days of data
 242 Best Buy Price | 38s · Sunday Night · early
 269 Best Sell Price | 45s · Friday Evening · pattern
-121 Inventory | 5 · bags 5
+165 Inventory | Total: 5 · Bags: 5
 -- 13 AH listing on none of your lists
 126 AHProfit | data 2 h old
 297 Market Price | 11s 50c now · 3% lower than 7d median
 121 Price history | steady
 264  | (30d) 12s · (14d) 11s 90c · (7d) 11s 80c
 154 Market Inventory | 45 listed
-247 Sales Rate | 26 sold/day · 1.7 days of supply
+132 Sales Rate | 26 sold/day
 297 Best Buy Price | 10s 80c · Tuesday Morning · pattern
 313 Best Sell Price | 13s · Saturday Afternoon · established
 -- 14 bag item inside its best sell window (Fri 18:30)
@@ -150,7 +150,7 @@
 126 Price history | falling
 209  | (30d) 45s · (14d) 43s · (7d) 40s
 154 Market Inventory | 14 listed
-242 Sales Rate | 6 sold/day · 2.3 days of supply
+220 Sales Rate | 6 sold/day · 2 days of data
 242 Best Buy Price | 38s · Sunday Night · early
 209 Best Sell Price | 45s · now · pattern
-121 Inventory | 5 · bags 5
+165 Inventory | Total: 5 · Bags: 5

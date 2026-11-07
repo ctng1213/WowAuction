@@ -56,7 +56,7 @@ def test_EX17_the_checksum_counts_every_candidate_and_graph_string():
     strings = [*k, *g[0].values(), *g[1].values(), g[2], g[3]]
     assert f'checksum = "{len(strings)}:{sum(len(s) for s in strings)}"' in text
     assert all(f'K[{n}]="{t}"' in text for n, t in enumerate(k, start=1))
-    assert ", K = K1, G = G1 }," in text and "exportVersion = 4," in text
+    assert ", K = K1, G = G1 }," in text and "exportVersion = 5," in text
     empty = market_lua([MarketIntelligence(mx.M, mx.NOW, None, 1, {})], {}, {}, mx.NOW)
     assert 'checksum = "0:0"' in empty and 'G.DE=""' in empty and 'G.order=""' in empty
 

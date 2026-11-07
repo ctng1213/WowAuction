@@ -46,7 +46,7 @@ from ahsync.intel.contract import IntelWindow, ItemIntel, MarketIntelligence, ag
 MARKET_SCHEMA_VERSION = 1      # the addon refuses any other (FM17)
 # Bumped on ANY change to either addon file's format, additive or not, so an addon and an AHSync of
 # different builds say which side is stale (SPEC §3.5, FM34, FM35). Equals AHProfit.EXPORT_VERSION (Core/Market.lua).
-EXPORT_VERSION = 4              # 4: K, G and the portfolio snapshot (EX17, EX18); 3: market items end in closes30
+EXPORT_VERSION = 5              # 5: market items end in salesDays (EX21); 4: K, G and the portfolio snapshot (EX17, EX18); 3: closes30
                                 # (TT23, PP4); 2: a mail's recipient (EX16)
 HOUR_MS = 3_600_000
 MINUTE_MS = 60_000
@@ -136,7 +136,8 @@ def item_text(s: ItemIntel, full: bool = True) -> str:
               "" if s.sell_value is None else str(round_half_up(s.sell_value)), "1" if s.volume_unknown else "0",
               str(round_half_up(s.chance * 1000)), _num(s.median_daily_supply),          # EX10
               "1" if s.cur_suspect else "0", _num(s.closes_30d),                      # A58; TT23
-              _num(s.med14)]                                                          # EX20: last, so older addons ignore it
+              _num(s.med14),                                                          # EX20
+              _num(sum(s.days_by_source.values()) if s.days_by_source else None)]     # EX21: salesDays, last
     return f"{','.join(fields)};{windows_text(s.sell_windows[:top])};{windows_text(s.buy_windows[:top])}"
 
 

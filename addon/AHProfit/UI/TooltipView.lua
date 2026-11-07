@@ -162,17 +162,17 @@ function TooltipView.PriceHistoryLines(m)
   return { title, Line("", Median("30d", m.med30) .. " · " .. Median("14d", m.med14) .. " · " .. Median("7d", m.med7)) }
 end
 
---- Sales Rate (TT32): units sold per day, then days of supply (listed ÷ sold per day; one decimal under 10 days).
+--- Sales Rate (TT32, M40): units sold per day, then, while fewer than 7 of the last 7 days have sales data, how many
+--- do, muted ("14246 sold/day · 2 days of data"), so a number from a day of data doesn't read as settled.
 ---@param soldPerDay number|nil  Units a day; nil when unknown
----@param listed number          Units listed now
+---@param salesDays number|nil   Days of the last 7 with sales data (EX21); nil in a file from before M40
 ---@return table                 A line
-function TooltipView.SalesRateLine(soldPerDay, listed)
+function TooltipView.SalesRateLine(soldPerDay, salesDays)
   if soldPerDay == nil then return Line("Sales Rate", "— sold/day") end
   local text = ViewModel.RoundHalfUp(soldPerDay) .. " sold/day"
-  if soldPerDay <= 0 then return Line("Sales Rate", text) end
-  local tenths = ViewModel.RoundHalfUp(listed * 10 / soldPerDay)
-  local days = tenths < 100 and (math.floor(tenths / 10) .. "." .. tenths % 10) or tostring(ViewModel.RoundHalfUp(listed / soldPerDay))
-  return Line("Sales Rate", text .. " · " .. days .. " days of supply")
+  if not salesDays or salesDays >= 7 then return Line("Sales Rate", text) end
+  local tail = salesDays .. (salesDays == 1 and " day of data" or " days of data")
+  return Line("Sales Rate", text .. " · " .. tail, { { tail, "muted" } })
 end
 
 --- A local hour of the week in words (SPEC §4.3): Morning 06-12, Afternoon 12-18, Evening 18-23, Night 23-06, an
@@ -243,13 +243,15 @@ function TooltipView.DisenchantLines(mats, cur)
   return lines
 end
 
---- Inventory (TT30): the units you hold across your characters and where, in the order bags, bank, mail, AH.
----@param h table  { total, places = { { where, qty } } }
+local PLACE_LABEL = { bags = "Bags", bank = "Bank", mail = "Mail", AH = "AH" }
+
+--- Inventory (TT30, M40): "Total: 29 · Bags: 4 · Bank: 1 · Mail: 24", places in the order bags, bank, mail, AH.
+---@param h table  { total, places = { { where, qty } } }, only the places that hold some
 ---@return table   A line
 function TooltipView.InventoryLine(h)
-  local parts = {}
-  for _, p in ipairs(h.places) do parts[#parts + 1] = p[1] .. " " .. p[2] end
-  return Line("Inventory", h.total .. " · " .. table.concat(parts, ", "))
+  local parts = { "Total: " .. h.total }
+  for _, p in ipairs(h.places) do parts[#parts + 1] = (PLACE_LABEL[p[1]] or p[1]) .. ": " .. p[2] end
+  return Line("Inventory", table.concat(parts, " · "))
 end
 
 --- A Do line's verb, the rest of its left text, its value and the value-only lines under it (SPEC §4.3 Do).
@@ -352,7 +354,7 @@ function TooltipView.Lines(f)
   Add(TooltipView.MarketPriceLines(m))
   Add(TooltipView.PriceHistoryLines(m))
   lines[#lines + 1] = Line("Market Inventory", ViewModel.Thousands(m.listed or 0) .. " listed")
-  lines[#lines + 1] = TooltipView.SalesRateLine(m.soldPerDay, m.listed or 0)
+  lines[#lines + 1] = TooltipView.SalesRateLine(m.soldPerDay, m.salesDays)
   if f.buy then Add(TooltipView.BestLines("Best Buy Price", f.buy, f.offsetMs or 0)) end
   if f.sell then Add(TooltipView.BestLines("Best Sell Price", f.sell, f.offsetMs or 0)) end
   if f.mats then Add(TooltipView.DisenchantLines(f.mats, m.cur)) end

@@ -52,13 +52,14 @@ end
 --- One variant's facts.
 ---@param TV table        AHProfit.TooltipView
 ---@param doCtx table|nil TW.Ctx's, or nil for no Do line
----@param body table      { cur, ageText, med7, med14, med30, listed, sold (per day), sell, buy, mats, holdings }
+---@param body table      { cur, ageText, med7, med14, med30, listed, sold (per day), salesDays, sell, buy, mats,
+---                       holdings }
 ---@param age table|nil   { text, amber }; default "data 2 h old"
 ---@return table          TooltipView.Lines' facts
 local function Facts(TV, doCtx, body, age)
   return { age = age or { text = "data 2 h old", amber = false }, doing = doCtx and TV.DoOf(doCtx), offsetMs = 0,
            market = { cur = body.cur, ageText = body.ageText or "2 h", med7 = body.med7, med14 = body.med14,
-                      med30 = body.med30, listed = body.listed, soldPerDay = body.sold },
+                      med30 = body.med30, listed = body.listed, soldPerDay = body.sold, salesDays = body.salesDays },
            sell = body.sell, buy = body.buy, mats = body.mats, holdings = body.holdings }
 end
 
@@ -73,7 +74,8 @@ local function CopperRod(TV, age, friday)
   local post = { id = "p", kind = "post", key = TW.ROD, qty = 5, price = 4100, at = now, net = 6306, chance = 58 }
   local inside = TV.InWindow(sell, now)
   return Facts(TV, TW.Ctx({ key = TW.ROD, held = 5, actions = { post }, nowMs = now, sellNow = inside }),
-    { cur = 4200, med7 = 4000, med14 = 4300, med30 = 4500, listed = 14, sold = 6, sell = Win(4, 18, 4500, 4, inside),
+    { cur = 4200, med7 = 4000, med14 = 4300, med30 = 4500, listed = 14, sold = 6, salesDays = 2,
+      sell = Win(4, 18, 4500, 4, inside),
       buy = Win(0, 3, 3800, 2), holdings = Bags(5) }, age)
 end
 
