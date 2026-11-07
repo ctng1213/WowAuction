@@ -132,24 +132,40 @@ function Adapter.ShowTooltipLines(owner, title, lines, titleRight)
   GameTooltip:Show()
 end
 
+--- The item link a tooltip shows: its tooltip data's hyperlink, else the tooltip's GetItem (TT33).
+--- On the live Forever client GetItem raises inside the client for some tooltips (the comparison tooltips of
+--- CompareItem, loot); the hook calls this under pcall, so a failure reads as no link.
+-- UNVERIFIED: that Forever's item tooltip data carries `hyperlink`, as retail's does.
+---@param tooltip table     The tooltip being shown
+---@param data table|nil    TooltipDataProcessor's data for it; nil from OnTooltipSetItem
+---@return string|nil       The item link; nil when none can be read
+local function TooltipItemLink(tooltip, data)
+  if type(data) == "table" and type(data.hyperlink) == "string" then return data.hyperlink end
+  if type(tooltip.GetItem) ~= "function" then return nil end
+  local _, link = tooltip:GetItem()
+  return type(link) == "string" and link or nil
+end
+
 --- Call a function whenever the game shows an item tooltip.
 --- UNVERIFIED: which hook Forever has. Modern clients have TooltipDataProcessor; Classic has
 --- GameTooltip's OnTooltipSetItem script. Whichever exists is used.
 ---@param fn function  Called with (tooltip, item link)
 ---@return boolean     true when a hook was installed
 function Adapter.HookItemTooltip(fn)
+  --- The hook itself: fn with the tooltip's item link, when it has one. Reading the link and fn both run under
+  --- pcall, so nothing the client's tooltips do can raise a Lua error from here (TT33).
+  ---@param tooltip table   The tooltip being shown
+  ---@param data table|nil  Its tooltip data; nil from OnTooltipSetItem
+  local function OnItem(tooltip, data)
+    local ok, link = pcall(TooltipItemLink, tooltip, data)
+    if ok and link then pcall(fn, tooltip, link) end
+  end
   if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType then
-    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tooltip)
-      local _, link = tooltip:GetItem()
-      if link then fn(tooltip, link) end
-    end)
+    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, OnItem)
     return true
   end
   if GameTooltip and GameTooltip.HookScript then
-    GameTooltip:HookScript("OnTooltipSetItem", function(tooltip)
-      local _, link = tooltip:GetItem()
-      if link then fn(tooltip, link) end
-    end)
+    GameTooltip:HookScript("OnTooltipSetItem", function(tooltip) OnItem(tooltip, nil) end)
     return true
   end
   return false
