@@ -384,9 +384,12 @@ def alerts(rows: Sequence[StatusRow], facts: StatusFacts, now_ms: int, offset_ms
         offset_ms: Local time minus UTC, ms.
 
     Returns:
-        [{"level", "title", "text"}], ordered error, warn, info; ties by title, then topic.
+        [{"level", "title", "text"}], ordered error, warn, info; ties by title, then topic. A line about a market
+        no longer in `markets` raises none: it stays stored, so switching back shows it again (D103).
     """
-    items = [(r, *message(r, offset_ms)) for r in rows if r.kind not in ("bad_file", "premium_until")]
+    configured = {m.market for m in facts.markets}
+    rows = [r for r in rows if not r.data.get("market") or r.data["market"] in configured]
+    items =[(r, *message(r, offset_ms)) for r in rows if r.kind not in ("bad_file", "premium_until")]
     items += _bad_files([r for r in rows if r.kind == "bad_file"], offset_ms)
     for m in facts.markets:
         if m.cloud_on:
