@@ -174,7 +174,7 @@ class MarketStack(Stack):
                 allowed_methods=cloudfront.AllowedMethods.ALLOW_GET_HEAD, cache_policy=cache))
 
     def _alarms(self, config: MarketConfig) -> None:
-        """Email on collector errors and on 3 hours without a new snapshot.
+        """Email on failures, on 3 hours without a new snapshot or a published summary, and on stale baselines.
 
         Args:
             config: The market's settings.
@@ -211,9 +211,31 @@ class MarketStack(Stack):
             comparison_operator=cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
             treat_missing_data=cloudwatch.TreatMissingData.BREACHING,
             alarm_description="No daily baselines published for 36 hours (S24)")
-        for alarm in (errors, stale, analyzer_errors, dead, baselines):
+        for alarm in (errors, stale, analyzer_errors, dead, baselines, self._no_summary_alarm(config)):
             alarm.add_alarm_action(action)
             alarm.add_ok_action(action)
+
+    def _no_summary_alarm(self, config: MarketConfig) -> cloudwatch.Alarm:
+        """The alarm for 3 hours without a published market summary, hourly or daily (SPEC §2.4 Alerts, FM77).
+
+        The two publishes are summed per hour: the hour a daily run publishes, the hourly run may rightly find
+        nothing new, so neither metric alone is a stall. Missing data counts as missing publishes.
+
+        Args:
+            config: The market's settings.
+
+        Returns:
+            The alarm, without actions (the caller adds them).
+        """
+        total = cloudwatch.MathExpression(expression="FILL(hourly, 0) + FILL(daily, 0)",
+                                          using_metrics={"hourly": hourly_sum(config.market, "hourly_published"),
+                                                         "daily": hourly_sum(config.market, "daily_published")},
+                                          period=Duration.hours(1), label="summaries published")
+        return total.create_alarm(
+            self, "NoMarketSummary", threshold=1, evaluation_periods=3,
+            comparison_operator=cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.BREACHING,
+            alarm_description="No market summary published for 3 hours: snapshots may arrive while the analyzer stalls (FM77)")
 
     def _budget(self, config: MarketConfig) -> None:
         """A monthly cost budget on this stack's services that emails at 80% actual and 100% forecast.
@@ -232,3 +254,18 @@ class MarketStack(Stack):
             filter_expression=budgets.CfnBudget.ExpressionProperty(dimensions=budgets.CfnBudget.ExpressionDimensionValuesProperty(
                 key="SERVICE", values=list(BUDGET_SERVICES)))),
             notifications_with_subscribers=notes)
+
+
+def hourly_sum(market: str, name: str) -> cloudwatch.Metric:
+    """One of the functions' count metrics for a market, summed per hour.
+
+    Args:
+        market: Market id (the metric's dimension).
+        name: Metric name, e.g. "hourly_published".
+
+    Returns:
+        The metric.
+    """
+    return cloudwatch.Metric(namespace=METRIC_NAMESPACE, metric_name=name, dimensions_map={"market": market},
+                             period=Duration.hours(1), statistic="Sum")
+
