@@ -585,8 +585,8 @@ class Supply:
     cur_qty: int | None
 
 
-def posting_chance(supply: Supply, price: int | None, qty: int, now_ms: int,
-                   settings: MarketSettings, sales_how: Sequence[float] | None = None) -> tuple[float, bool]:
+def posting_chance(supply: Supply, price: int | None, qty: int, now_ms: int, settings: MarketSettings,
+                   sales_how: Sequence[float] | None = None, undercut: float | None = None) -> tuple[float, bool]:
     """P for posting qty units now at price, from market data only (no own record, SPEC §3.3.2).
 
     Args:
@@ -596,6 +596,7 @@ def posting_chance(supply: Supply, price: int | None, qty: int, now_ms: int,
         now_ms: Now, UTC ms.
         settings: Defaults and the posting-now window.
         sales_how: The item's 168-slot hourly sales profile, the window's demand (P26); None for flat.
+        undercut: The measured u(p) at this post (BZ29); None for default_undercut_share.
 
     Returns:
         (P, volume_unknown); without sales or a price, the default chance for the post's position (default_chance).
@@ -608,6 +609,6 @@ def posting_chance(supply: Supply, price: int | None, qty: int, now_ms: int,
                                                     for p, stack, band, count in supply.book]
     ahead = ahead_of(competitors, price, supply.cur_price, supply.cur_qty)
     demand = demand_for(posting_now_window(now_ms, settings.sell_window_hours), sales_how or FLAT_HOW)
-    queue = QueueInputs(supply.sold_per_day, supply.listed_per_day or 0.0, settings.default_undercut_share,
-                        demand, qty, ahead)
+    u = settings.default_undercut_share if undercut is None else undercut
+    queue = QueueInputs(supply.sold_per_day, supply.listed_per_day or 0.0, u, demand, qty, ahead)
     return chance(queue, None, 0, 0, 0, settings.default_sell_prob, settings.own_record_weight)

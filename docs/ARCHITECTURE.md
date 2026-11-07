@@ -165,7 +165,7 @@ sequenceDiagram
 
 | Family | Tables | Written by | Read by |
 |---|---|---|---|
-| Market history | `candles_h1`, `candles_d1`, `current`, `scans`, `book_entries`, `volume_d1`, `volume_cover`, `sales_h1`, `observed_hours`, `ahledger_rows`, `source_state`, `sync_state`, `fetch_failures` | `collect/` | `history/reads.py` |
+| Market history | `candles_h1`, `candles_d1`, `current`, `scans`, `book_entries`, `volume_d1`, `volume_cover`, `sales_h1`, `lifetimes_d1`, `new_listings_d1`, `observed_hours`, `ahledger_rows`, `source_state`, `sync_state`, `fetch_failures` | `collect/` | `history/reads.py` |
 | Items | `items` | `collect/` | everywhere, via the catalog |
 | Intelligence | `intel` (+ `_new` staging) | `analysis/` via `intel/store.py` | `recommend/`, `export/` |
 | Player state | inventory, journal (`purchases`, `posts`, `auction_mail`, `payouts`, `crafts`, `disenchants`, `mail_sent`), `professions`, `recipes`, `known_recipes`, `characters`, `cost_basis`, `gather_events`, `farming_sessions`, `manual_rates`, `positions`, `position_lots` | `state/` | `recommend/`, `app/` |
@@ -321,3 +321,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-06: M32a built: AHSync reads the published summary (`collect/cloud_intel.py`, `app/cloud_job.py`), stages it with the re-plan and rewrites the addon files; ages count back from the document's `ages_at_ms`; in-game scans reprice.
 - 2026-11-07: tooltip and flips spec merge (`docs/plans/tooltip-and-flips.md`, M36–M38 planned): the summary's schema 11 (`med14`, published beside 10 during the transition) drawn on §2's document node; no component or flow changes.
 - 2026-11-07: M36 built: the summary is schema 11 (`med14`), published beside schema 10 (`ahcloud.publish.PUBLISHED_SCHEMAS`); the market file carries `med14` as its last field; the addon tooltip is laid out anew (no component or flow changes).
+- 2026-11-07: M33a built: id volume comes from auction lifetimes (`engine/volume.lifetimes`, `collect/observations.recompute_id_days`), with two new market-history tables, `lifetimes_d1` (ended, expired and matched listings) and `new_listings_d1` (new listings' positions against the book, for the measured undercut share); the summary is schema 12, published beside 10 and 11. No component or flow changes.

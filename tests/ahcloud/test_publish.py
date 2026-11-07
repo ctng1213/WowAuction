@@ -40,14 +40,14 @@ def test_BZ18_a_transition_publishes_the_previous_schema_too(tmp_path):
     assert json.loads(store.get(pointer_key(M, 9)).data)["key"] == old.key
 
 
-def test_BZ37_the_cloud_publishes_schemas_10_and_11_side_by_side(tmp_path):
+def test_BZ37_the_cloud_publishes_every_schema_a_release_reads_side_by_side(tmp_path):
     store = LocalStore(tmp_path)
-    old, new = publish(store, INTEL)
-    assert (old.schema, new.schema) == (10, 11) and old.key != new.key
-    for pointer in (old, new):
+    *older, new = pointers = publish(store, INTEL)
+    assert [p.schema for p in pointers] == [10, 11, 12] and len({p.key for p in pointers}) == 3   # v0.1.2 reads 10
+    for pointer in pointers:
         assert json.loads(store.get(pointer_key(M, pointer.schema)).data)["key"] == pointer.key
         assert json.loads(gzip.decompress(store.get(pointer.key).data))["schema_version"] == pointer.schema
-    assert read_latest(store, M) == (INTEL, new)                                   # AHSync on 11 reads 11
+    assert read_latest(store, M) == (INTEL, new)                                   # AHSync reads its own schema
 
 
 def test_a_document_that_does_not_match_its_pointer_is_refused(tmp_path):

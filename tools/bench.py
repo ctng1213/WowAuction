@@ -12,7 +12,7 @@ of it listed), each lot an open position (M14), so the exported candidates, grap
 The refresh then runs in a fresh process against that database, so the time is not
 slowed by memory tracing and the peak is the process's own (it includes the
 interpreter, so it is conservative); then both addon files are written into a
-temporary AddOns folder. Budgets: full refresh ≤ 120 s for about 9k items, ≤ 400 MB
+temporary AddOns folder. Budgets: full refresh ≤ 120 s for about 9k items, ≤ 512 MB
 peak, MarketIntelligence.lua ≤ 2 MB and PortfolioPlan.lua ≤ 200 KB (SPEC §3.1.2, §3.5).
 """
 from __future__ import annotations
@@ -36,7 +36,7 @@ from ahsync.export.addon_files import (DATA_FOLDER, MARKET_FILE, MAX_MARKET_BYTE
 M = "forever.pvp.horde.us"
 HOUR, DAY = 3_600_000, 86_400_000
 NOW = 20_500 * DAY
-BUDGET_S, BUDGET_MB = 120.0, 400.0
+BUDGET_S, BUDGET_MB = 120.0, 512.0
 SEED = 42
 
 

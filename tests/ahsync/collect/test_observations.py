@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from ahsync.collect.observations import ingest_snapshot
+from ahsync.collect.observations import id_days, ingest_snapshot, recompute_id_days
 from ahsync.collect.provider import SnapshotObservation
 from ahsync.collect.snapshots import SnapshotStore
 from ahsync.db.sqlite import Database
@@ -84,3 +84,76 @@ def test_a_snapshot_delivered_late_pairs_with_the_next_one_on_another_day(db, tm
     ingest_snapshot(db, store, morning)
     ingest_snapshot(db, store, late)
     assert db.conn.execute("SELECT DISTINCT day FROM volume_d1 WHERE src = 'blizzard'").fetchall() == [(D,)]
+
+
+# --- id volume from lifetimes: each day's result is independent of what else is recomputed (M33a review) ----------
+
+def snap(at: int, *auctions: Auction) -> SnapshotObservation:
+    """A snapshot of the market at a time."""
+    return SnapshotObservation(M, "blizzard", at, tuple(auctions))
+
+
+def day_rows(db: Database, day: int) -> tuple[list, list, list]:
+    """A day's id volume, ended listings and new-listing positions."""
+    return (db.conn.execute("SELECT key, sold, expired, listed FROM volume_d1 WHERE src = 'blizzard' AND day = ? "
+                            "ORDER BY key", (day,)).fetchall(),
+            db.conn.execute("SELECT key, ended, expired, matched FROM lifetimes_d1 WHERE day = ? ORDER BY key",
+                            (day,)).fetchall(),
+            db.conn.execute("SELECT key, positions FROM new_listings_d1 WHERE day = ? ORDER BY key", (day,)).fetchall())
+
+
+def sparse_store(tmp_path) -> SnapshotStore:
+    """Snapshots 5-6 h apart; a 24 h Linen auction posted at D−25 h is first seen at D−21 h and runs out at D−1 h."""
+    store = SnapshotStore(tmp_path / "snapshots")
+    start = D * DAY
+    ore = Auction(9, ORE, 5, 30, 4)
+    bands = {-21: 4, -16: 4, -11: 3, -6: 3}                  # Blizzard's bands for 20, 15, 10 and 5 h left
+    for h in (-27, -21, -16, -11, -6, 0):
+        linen = (Auction(1, LINEN, 10, 50, bands[h]),) if h in bands else ()
+        store.put(snap(start + h * HOUR, ore, *linen))
+    return store
+
+
+def test_a_days_lifetimes_do_not_depend_on_which_other_days_are_recomputed(db, tmp_path):
+    store = sparse_store(tmp_path)
+    with db.transaction():
+        recompute_id_days(db, store, M, "blizzard", {D})
+    alone = day_rows(db, D)
+    with db.transaction():
+        recompute_id_days(db, store, M, "blizzard", {D - 1, D})
+    assert day_rows(db, D) == alone
+    assert alone[1] == [(LINEN, 1.0, 0.75, 0.0)]     # its window narrows to (D−3 h, D+1 h]; gone by D: 3/4 expired
+
+
+def test_a_lifetime_credited_hour_keeps_its_rate_when_the_next_day_starts(db, tmp_path):
+    store = SnapshotStore(tmp_path / "snapshots")
+    t = D * DAY - 90 * 60_000                                    # D−1 22:30
+    ingest_snapshot(db, store, snap(t, Auction(100, LINEN, 5, 50, 4)))
+    ingest_snapshot(db, store, snap(t + HOUR, Auction(200, LINEN, 5, 50, 4)))     # sold, and an identical new one
+    ingest_snapshot(db, store, snap(t + 2 * HOUR, Auction(200, LINEN, 5, 50, 4)))  # D 00:30
+    hour = t // HOUR * HOUR
+    assert db.conn.execute("SELECT sold_per_hour FROM sales_h1 WHERE key = ? AND t = ?", (LINEN, hour)).fetchone() == (5.0,)
+
+
+def test_a_pooled_hour_comes_out_the_same_in_any_recompute_order(db, tmp_path):
+    store = SnapshotStore(tmp_path / "snapshots")
+    t = D * DAY - 110 * 60_000                                   # D−1 22:10, then 23:50, then D 00:20
+    for at, qty in ((t, 10), (t + 100 * 60_000, 6), (t + 130 * 60_000, 3)):
+        store.put(snap(at, Auction(1, LINEN, qty, 50, 4)))
+    hour = (D * DAY - HOUR) // HOUR * HOUR                       # 23:00, credited by both gaps
+    rates = []
+    for order in ((D, D - 1), (D - 1, D)):
+        for day in order:
+            with db.transaction():
+                recompute_id_days(db, store, M, "blizzard", {day})
+        rates.append(db.conn.execute("SELECT sold_per_hour FROM sales_h1 WHERE t = ?", (hour,)).fetchone())
+    assert rates[0] == rates[1]
+
+
+def test_a_late_snapshot_recomputes_every_day_its_lifetimes_reach(tmp_path):
+    store = SnapshotStore(tmp_path / "snapshots")
+    t = D * DAY + 20 * HOUR
+    for at in (t, t + 20 * HOUR, t + 60 * HOUR):                  # D 20:00, D+1 16:00, D+3 08:00
+        store.put(snap(at))
+    assert id_days(store, M, "blizzard", t) == {D, D + 1}        # to the last snapshot within 36 h, not D+3
+    assert id_days(store, M, "blizzard", D * DAY + HOUR) == {D - 1, D}   # its book pairs reach D−1 23:00; D+1 is 39 h on

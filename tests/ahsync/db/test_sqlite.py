@@ -294,7 +294,7 @@ def test_schema_24_adds_the_ahledger_and_coverage_tables_and_fills_observed_hour
     db.set_meta("schema_version", "23")
     db.close()
     migrated = Database.open(tmp_path / "v23.db", T0, None)
-    assert migrated.get_meta("schema_version") == "24" and migrated.count("scans") == 4
+    assert migrated.get_meta("schema_version") == str(db_module.SCHEMA_VERSION) and migrated.count("scans") == 4
     # the complete local scan's hour (2) and AHF's closes' hours (1 in m, 6 in n), once each; a partial scan, a
     # scan under full coverage and AHF's book count for nobody, and a local close is not a scan
     assert migrated.conn.execute("SELECT market, src, hour FROM observed_hours ORDER BY 1, 2, 3").fetchall() == [

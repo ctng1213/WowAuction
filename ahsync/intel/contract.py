@@ -12,16 +12,19 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 
-INTEL_SCHEMA_VERSION = 11      # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
+INTEL_SCHEMA_VERSION = 12      # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
                                # 5: median_daily_supply (V23); 6: observed_listing_turnover (V37); 7: volume_kind (D57);
                                # 8: closes_30d (TT23); 9: each window's forecast: expected price, executable quantity,
                                # confidence, and buying windows ranked by actionable value (W14, W15); 10: the cloud
                                # document's catalog, coverage and settings, and per item last_hour and the recent ring
-                               # (SPEC §2.4, BZ15, BZ32); 11: per item med14, the 14-day median (SPEC §4.3, BZ37)
+                               # (SPEC §2.4, BZ15, BZ32); 11: per item med14, the 14-day median (SPEC §4.3, BZ37);
+                               # 12: per item expired_share and the measured undercut_share, from auction lifetimes
+                               # (SPEC §2.4, BZ23, BZ29)
 # Fields each schema added, so to_json can write the previous schema for older readers (SPEC §2.4, BZ18).
 ADDED_IN = {10: {"document": ("catalog", "coverage", "settings", "ages_at_ms"),
                  "item": ("last_hour", "recent_closes", "recent_sold", "recent_listed", "recent_units")},
-            11: {"document": (), "item": ("med14",)}}
+            11: {"document": (), "item": ("med14",)},
+            12: {"document": (), "item": ("expired_share", "undercut_share")}}
 
 
 class IntelVersionError(ValueError):
@@ -105,6 +108,12 @@ class ItemIntel:
     recent_listed: str = ""
     recent_units: str = ""
     med14: int | None = None              # the 14-day median, copper (SPEC §4.3 Price history); None before schema 11
+    # The share of the listings that ended in 30 days that expired (auction lifetimes, SPEC §2.4, BZ23). None without an
+    # ended listing, and before schema 12.
+    expired_share: float | None = None
+    # u(p) at the post-now price: the share of the last 7 days' new units listed at or below that position against the
+    # book (SPEC §3.3.2, BZ29); the chance and the curve used it. None without that history (the default applied).
+    undercut_share: float | None = None
 
 
 @dataclass(frozen=True)

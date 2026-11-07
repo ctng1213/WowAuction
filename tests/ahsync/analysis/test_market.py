@@ -5,7 +5,7 @@ import pytest
 
 from ahsync.analysis import market
 from ahsync.db.sqlite import Database
-from ahsync.engine import patterns
+from ahsync.engine import patterns, sellprob
 from ahsync.engine.profile import unpack
 from ahsync.engine.sellprob import MarketSettings
 from ahsync.history.reads import CurrentPrice, HistoryWindow, ItemHistory, ItemInfo
@@ -377,3 +377,30 @@ def test_BZ32_a_newer_book_moves_the_now_fields_and_no_baseline():
                  "sell_windows", "buy_windows", "curve", "curve_hour", "conf", "median_daily_supply", "closes_30d")
     assert all(getattr(later, f) == getattr(i, f) for f in baselines)
     assert to_json(intel) != to_json(market.replace(intel, items={**intel.items, 6217: later}))
+
+
+def test_BZ23_expired_share_is_the_share_of_ended_listings_that_expired():
+    now = 20_030 * 86_400_000 + 12 * 3_600_000
+    day = now // 86_400_000
+    ended = {day: (25.0, 6.0, 2.0), day - 29: (15.0, 4.0, 0.0), day - 30: (100.0, 100.0, 0.0)}
+    assert market.expired_share(ended, now) == 0.25                     # 40 ended in 30 days, 10 expired; day −30 is out
+    assert market.expired_share({}, now) is None
+
+
+def test_BZ29_the_undercut_share_is_measured_from_the_weeks_new_listings():
+    now = 20_030 * 86_400_000 + 12 * 3_600_000
+    day = now // 86_400_000
+    listings = {day: {960: 200.0, 1000: 500.0}, day - 6: {950: 100.0, 1100: 200.0}, day - 7: {500: 9_999.0}}
+    assert market.measured_undercut(listings, 120, 125, now) == 0.3     # 300 of 1,000 at or below 120/125; day −7 is out
+    assert market.measured_undercut(listings, None, 125, now) is None and market.measured_undercut({}, 120, 125, now) is None
+    assert market.measured_undercut(listings, 120, None, now) is None
+
+
+def test_BZ29_the_simulation_uses_the_measured_share_not_the_default():
+    settings = MarketSettings()
+    supply = sellprob.Supply(240.0, 480.0, ((125, 20, 4, 5),), 125, 100)
+    measured, _ = sellprob.posting_chance(supply, 120, 20, 0, settings, None, 0.3)
+    default, _ = sellprob.posting_chance(supply, 120, 20, 0, settings)
+    assert measured > default
+    assert default == sellprob.posting_chance(supply, 120, 20, 0, settings, None, settings.default_undercut_share)[0]
+

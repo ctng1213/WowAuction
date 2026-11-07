@@ -49,6 +49,21 @@ CREATE TABLE IF NOT EXISTS volume_cover(
     PRIMARY KEY(market, day, src)
 ) WITHOUT ROWID;
 
+-- Listings that ended per item and day from auction lifetimes (SPEC §2.4, M33a): ended, how many of them expired, and
+-- how many matched a new listing of the same key and units (a possible relist, measured only), in listings.
+CREATE TABLE IF NOT EXISTS lifetimes_d1(
+    market TEXT NOT NULL, key INTEGER NOT NULL, day INTEGER NOT NULL, src TEXT NOT NULL,
+    ended REAL NOT NULL, expired REAL NOT NULL, matched REAL NOT NULL,
+    PRIMARY KEY(market, key, day, src)
+) WITHOUT ROWID;
+
+-- New listings' units per item and day by their position against the book at first sight: "<position>:<units>,...",
+-- the position in thousandths of the lowest other price (SPEC §2.4, §3.3.2 u(p), BZ29).
+CREATE TABLE IF NOT EXISTS new_listings_d1(
+    market TEXT NOT NULL, key INTEGER NOT NULL, day INTEGER NOT NULL, src TEXT NOT NULL, positions TEXT NOT NULL,
+    PRIMARY KEY(market, key, day, src)
+) WITHOUT ROWID;
+
 CREATE TABLE IF NOT EXISTS current(
     market TEXT NOT NULL, key INTEGER NOT NULL, price INTEGER, qty INTEGER, at INTEGER NOT NULL, src TEXT NOT NULL,
     PRIMARY KEY(market, key, src)

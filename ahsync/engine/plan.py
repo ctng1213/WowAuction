@@ -95,6 +95,7 @@ class SellFacts:
     p10: int | None = None                         # 30-day 10th percentile, copper: buying below it is cheap (§3.4D.3)
     buy_windows: tuple[PlanWindow, ...] = ()       # buying windows, cheapest first (Buy for later, §3.4D.3)
     closes_30d: int | None = None                  # hourly closes in 30 days; thin data caps forecasts at the level (TT23)
+    undercut_share: float | None = None            # the document's measured u(p) (BZ29); None for the default
 
 
 @dataclass(frozen=True)
@@ -286,7 +287,8 @@ def post_chance(f: SellFacts, price: int, qty: int, hours: Sequence[int], own_ah
     ahead = sellprob.ahead_of(competitors, price, f.cur, f.cur_qty)
     if own_ahead:
         ahead = ahead + (sellprob.Competitor(price, own_ahead, 0),)
-    queue = sellprob.QueueInputs(f.sold_per_day, f.listed_per_day or 0.0, s.default_undercut_share,
+    u = s.default_undercut_share if f.undercut_share is None else f.undercut_share
+    queue = sellprob.QueueInputs(f.sold_per_day, f.listed_per_day or 0.0, u,
                                  sellprob.demand_for(hours, f.sales_how), qty, ahead)
     return _with_record(f, sellprob.simulate(queue), s)
 

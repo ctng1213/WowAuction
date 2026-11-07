@@ -176,6 +176,19 @@ def test_FM74_a_refused_snapshot_is_set_aside_and_the_rest_is_published(tmp_path
     assert (again.state, again.ingested, again.refused) == ("republished", 0, 0)       # B is not tried again
 
 
+def test_BZ23_the_daily_document_carries_each_items_ended_shares(tmp_path):
+    data, intel = stores(tmp_path, (A_MS, SNAP_A), (B_MS, SNAP_B))
+    run_daily(data, intel, FakeCatalog(), M, tmp_path / "run")
+    doc = read_latest(intel, M)[0]
+    assert doc.items[SPAULDERS].expired_share == 1.0                                               # short, gone: expired
+    assert doc.items[LINEN].expired_share is None                                                  # nothing ended
+    db = history(data, tmp_path)
+    try:
+        assert db.conn.execute("SELECT ended, expired FROM lifetimes_d1 WHERE key = ?", (SPAULDERS,)).fetchall() == [(1.0, 1.0)]
+    finally:
+        db.close()
+
+
 def test_FM72_a_damaged_database_fails_the_run(tmp_path):
     data, intel = stores(tmp_path, (A_MS, SNAP_A))
     data.put(DB_KEY, b"this is not a database" * 200)
