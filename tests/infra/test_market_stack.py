@@ -109,7 +109,22 @@ def test_BZ34_the_analyzer_runs_daily_hourly_and_on_every_new_raw_object(templat
 
 def test_FM70_failures_and_stale_baselines_alarm(template):
     alarms = {a["Properties"]["AlarmDescription"]: a["Properties"] for a in template.find_resources("AWS::CloudWatch::Alarm").values()}
-    assert len(alarms) == 5
+    assert len(alarms) == 6
     baselines = next(a for d, a in alarms.items() if "36 hours" in d)
     assert (baselines["MetricName"], baselines["Period"] * baselines["EvaluationPeriods"]) == ("daily_published", 36 * 3600)
     assert any("dead-letter" in d for d in alarms)
+
+
+def test_FM77_no_published_summary_for_3_hours_alarms(template):
+    alarms = {a["Properties"]["AlarmDescription"]: a["Properties"] for a in template.find_resources("AWS::CloudWatch::Alarm").values()}
+    alarm = next(a for d, a in alarms.items() if "No market summary published" in d)
+    assert (alarm["EvaluationPeriods"], alarm["Threshold"], alarm["ComparisonOperator"], alarm["TreatMissingData"]) == (
+        3, 1, "LessThanThreshold", "breaching")
+    expression = next(m for m in alarm["Metrics"] if "Expression" in m)
+    assert expression["Expression"].replace(" ", "") == "FILL(hourly,0)+FILL(daily,0)" and expression["ReturnData"]
+    inputs = {m["Id"]: m["MetricStat"] for m in alarm["Metrics"] if "MetricStat" in m}
+    assert {i: (s["Metric"]["MetricName"], s["Metric"]["Namespace"], s["Period"], s["Stat"]) for i, s in inputs.items()} == {
+        "hourly": ("hourly_published", "WowAuction", 3600, "Sum"), "daily": ("daily_published", "WowAuction", 3600, "Sum")}
+    assert all(s["Metric"]["Dimensions"] == [{"Name": "market", "Value": "forever.normal.horde.us"}] for s in inputs.values())
+    assert alarm["AlarmActions"] and alarm["OKActions"]
+

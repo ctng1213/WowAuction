@@ -1187,6 +1187,18 @@ const PAGES = {
         <dt>Addon</dt><dd>AHProfit installed · up to date</dd></dl></div>
     </div>
     ${covCard(COV_MAIN, 'Data coverage', 'last 90 days to Thu 22 Oct 14:00 · your scans, AHledger and auctionhouse.fyi', true)}
+    <h3>Top bar for a cloud market (D100)</h3>
+    <div class="card"><div class="card-h"><b>The freshness pill when the market comes from the cloud summary</b><span class="muted">replaces "numbers from … · prices newer"; the text is the engine's, the page draws it</span></div>
+      <div style="padding:6px 14px 12px;font-size:13px">
+        <div class="muted">Fresh: at 15:20, the summary's prices are to 15:02 and its daily run published Sat 09:00 (your local time). Hover the pill for what it means.</div>
+        <div class="top" style="border-radius:4px;margin:6px 0"><div class="brand">AH<span>Sync</span></div><span class="select">Market: forever.normal.horde.us ▾</span><span class="grow"></span><span class="pill gold">412g 30s</span><span class="pill" title="Prices come from the market summary, updated hourly in the cloud. Baselines (medians, sales rates, sell windows) are rebuilt once a day. Your in-game scans update the items you scan right away.">prices 18 min old · baselines Sat 09:00</span><span class="btn primary">⟳ Refresh now</span></div>
+        <div class="muted">Over an hour: whole hours from 60 min on (at 17:05).</div>
+        <div class="top" style="border-radius:4px;margin:6px 0"><div class="brand">AH<span>Sync</span></div><span class="select">Market: forever.normal.horde.us ▾</span><span class="grow"></span><span class="pill gold">412g 30s</span><span class="pill" title="Prices come from the market summary, updated hourly in the cloud. Baselines (medians, sales rates, sell windows) are rebuilt once a day. Your in-game scans update the items you scan right away.">prices 2 h old · baselines Sat 09:00</span><span class="btn primary">⟳ Refresh now</span></div>
+        <div class="muted">Stale: amber from 3 h (at 18:10), the same moment Status raises <span class="amber">no new market summary for 3 h · prices to 15:02</span> (S23).</div>
+        <div class="top" style="border-radius:4px;margin:6px 0"><div class="brand">AH<span>Sync</span></div><span class="select">Market: forever.normal.horde.us ▾</span><span class="grow"></span><span class="pill gold">412g 30s</span><span class="pill amber" title="Prices come from the market summary, updated hourly in the cloud. Baselines (medians, sales rates, sell windows) are rebuilt once a day. Your in-game scans update the items you scan right away.">prices 3 h old · baselines Sat 09:00</span><span class="btn primary">⟳ Refresh now</span></div>
+        <div class="muted">No summary yet (a new install before its first poll, or the cloud has never published): the pill is not drawn at all, so the bar has only the gold and Refresh now; Status's Market summary line reads <span class="muted">not read yet</span>.</div>
+        <div class="top" style="border-radius:4px;margin:6px 0"><div class="brand">AH<span>Sync</span></div><span class="select">Market: forever.normal.horde.us ▾</span><span class="grow"></span><span class="pill gold">412g 30s</span><span class="btn primary">⟳ Refresh now</span></div>
+      </div></div>
     <h3>Recent problems</h3>
     <div class="card"><div class="card-h"><b>Last 7 days</b><span class="muted">nothing was lost; each step resumes from its last commit</span></div>
     ${table([['When'], ['Step'], ['What happened'], ['Result']], [

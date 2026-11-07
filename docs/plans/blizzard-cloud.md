@@ -184,6 +184,8 @@ no craft pays at it (found from the Craft tab, PR #31).
 - **The daily run recomputes id volume once per day touched**, not per snapshot (`ingest_snapshot(id_volume=False)`, `recompute_id_days`), and lifetimes stream one snapshot at a time; a local rebuild of the 22 snapshots took 72 s at 695 MB peak. **Corrected at the independent review (same day):** each day is its own pass from 36 h before it (`LIFETIME_LOOKBACK_MS` = 24 h + 2 × the 6 h link limit: an ending's posting gap can start that early) to 6 h after, keeping only that day's records, so a day's numbers don't depend on which other days a run recomputes (rebuild and incremental agree, FM72), pooled hours across midnight agree in any order, and memory is one day's; `id_days` covers every day a snapshot can change (2 h before it to the last snapshot 36 h after); the compact store is downloaded from 36 h before the first such day and kept 4 days. Known limit: a `rebuild` through the Lambda reads each day's 66 h, so beyond a few weeks of raw it outgrows the 15-min timeout (it already did per snapshot); run it locally then (`python -m ahcloud rebuild`).
 - **Deploy, no `rebuild` needed**: the next daily run recomputes every day it touches (all of Nov 7); only Nov 6's first 6 h stay on the pair method, and they leave the 7-day window by Nov 14. A rebuild is the emergency path (FM72). **Changed after review (the user):** the id method got its own `ID_METHOD_VERSION` (5); `VOLUME_METHOD_VERSION` stays 4, so the desktop's `books` rows are not recomputed for nothing. The bench's memory budget is 512 MB (the user; it was 400, and `main` already measured 431 MB).
 
+**Decided by the user 2026-11-07 (the batch after M33a): M39, then M38, then M32b, then a release.** M39 is the no-summary alarm (the 2026-11-07 hourly stall went 9 h unalarmed; the existing analyzer-error alarm did fire for the daily crash at 09:03, and the dead-letter alarm has been in ALARM since 09:08 on that failed event). M38 is `docs/plans/tooltip-and-flips.md`'s two-week half-life. M32b is the rest of M32 (D99, D100 with its approved mockup, A92, BZ25). The release (v0.1.3) follows, so installs read schema 12 and the cloud can later stop publishing 10.
+
 ## 2. Working rules
 
 CLAUDE.md "How work is run" applies. In short: one worktree per milestone; `tools/verify.ps1` (tests, invariants, the whole-plan snapshot byte-identical unless this plan says it moves) before a commit; one commit per verified milestone with the attribution trailer; the plan's §1 gains any decision made during execution; LESSONS gains any wrong assumption found; SPEC and SCENARIOS are updated in the same commit as the code that makes them true, and a milestone's "planned" becomes "built" with module names.
@@ -282,6 +284,23 @@ Starts only after 14 days of clean cloud runs (no alarm, no gap over 3 h), confi
 3. **Opus**: `python tools/snapshot.py --update` with the diff reviewed for labels only; `tools/bench.py`.
 
 Done when: the modules, fixtures, keys and lines are gone; the whole-plan snapshot's diff is labels only; `tools/verify.ps1 -Bench` green.
+
+### M39 — The no-summary alarm
+
+1. **Opus**: `infra/market_stack.py`: an alarm "No market summary published for 3 hours" on the math expression `FILL(hourly_published, 0) + FILL(daily_published, 0)` per hour, `< 1` for 3 periods, missing data breaching, alarm and OK actions on the alerts topic; `tests/infra/test_market_stack.py` asserts it (FM77). SPEC §2.4's Alerts line marked built. Reason: an alarm's semantics (what counts as a publish) are a contract with the analyzer's metrics.
+2. **User**: purge the analyzer's dead-letter queue (the 09:00 event of 2026-11-07, failed on the bug fixed in PR #32), so its alarm can report the next failure; or approve Opus doing it through the MCP tools. **User**: `cdk deploy` (or Opus with approval).
+3. **Opus**: read the alarm back in the account; its state is OK once an hour has a publish.
+
+Done when: FM77 passes; the alarm exists in the account and is OK; the dead-letter alarm is OK.
+
+### M32b — the rest of M32 (after M38)
+
+1. **Opus**: D100: `engine/views` makes the cloud market's freshness text and amber flag ("prices 18 min old · baselines Sat 09:00", amber from 3 h; SPEC §2.4, the approved mockup); the server returns it; `web/static/index.html` draws it instead of "numbers from …" for a cloud market (JavaScript draws only). Reason: a displayed number (§8.5).
+2. **Sonnet**: D99: the Data coverage card's `blizzard (cloud)` row from the document's `coverage` (`engine/coverage.py` reads it; the card draws it), with D99's numbers. Reason: routine, the reader and the card exist.
+3. **Opus** (after a `wow-adapter` consult): A92 and BZ25 as M32's task 2 says (the addon's `itemNames` rows with vendor price and class, the importer, the plan's local vendor fill). Reason: a SavedVariables contract change and a number that moves.
+4. **Sonnet**: the scenario tests D99, D100, A92, BZ25; the headless render of the real dashboard for a cloud-market world (no console errors, no `undefined` or `NaN`); the golden snapshots if the addon's UI changes.
+
+Done when: D99, D100, A92, BZ25 pass; the real dashboard renders the pill as the mockup; WP1 byte-identical.
 
 ## 4. The user's actions, in order
 
