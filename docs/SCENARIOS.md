@@ -963,6 +963,7 @@ Layers and tooling: SPEC §8.4. UI8 (the six-line tooltip) was retired at M13 wi
 | UI22 | log in with no `minimap` setting; left-click the button; right-click it | the button sits at 225° on the minimap; the first click opens the window, the second closes it |
 | UI23 | `/ahp minimap`, then `/reload`, then `/ahp minimap` again | the button hides and `minimap.hidden` is true; after the reload it is still hidden; the second command shows it and stores false |
 | UI24 | how far a Flip row's When time is (M40; `ViewModel.InTime`): 2 days 9 h ahead; exactly 1 day; 6 days 4 h; 23 h 59 min; 3 h 30 min; 40 min | "in 2 days"; "in 1 day"; "in 6 days"; "in 23 h"; "in 3 h"; "within the hour" (whole units, floored) |
+| UI25 | a Flip row's Buy, Sell and Profit cells (M40; the user, 2026-11-07: drop copper from 1g, so the cells show whole): 15 g 12 s 1 c; a profit of 6 g 55 s 1 c; 6 g 55 s 50 c; exactly 1 g; 99 s 99 c; a profit of 30 c; a loss of 1 g 23 s 45 c | "15g 12s"; "+6g 55s"; "+6g 56s" (half up); "1g"; "99s 99c"; "+30c"; "−1g 23s"; a flip clears the 20% margin (`min_flip_margin`), so at 1 g and up its sell is at least 26 s above its buy and the two never round to the same text; the note line keeps full amounts |
 
 ## 3. Views and tooltip (D16–D22, TT1–TT21)
 

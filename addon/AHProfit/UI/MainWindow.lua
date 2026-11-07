@@ -55,7 +55,7 @@ MainWindow.COLUMNS = {
             { "Mats", "mats", 56, "RIGHT" }, { "Profit", "profit", 70, "RIGHT" }, { "Chance", "chance", 46, "RIGHT" },
             { "Volume", "volume", 52, "RIGHT" }, { "Risk", "risk", 34, "RIGHT" } },
   flip = { { "Item", "item", nil, "LEFT" }, { "Qty", "qty", 28, "RIGHT" }, { "Buy", "buy", 46, "RIGHT" },
-           { "Sell", "sell", 46, "RIGHT" }, { "When", "when", 62, "LEFT" }, { "Profit", "profit", 64, "RIGHT" },
+           { "Sell", "sell", 64, "RIGHT" }, { "When", "when", 62, "LEFT" }, { "Profit", "profit", 76, "RIGHT" },
            { "Chance", "chance", 46, "RIGHT" }, { "Risk", "risk", 34, "RIGHT" } },
   reservations = { { "Item", "item", nil, "LEFT" }, { "Keeping", "keeping", 52, "RIGHT" }, { "Held", "held", 44, "RIGHT" },
                    { "Free", "free", 44, "RIGHT" } },

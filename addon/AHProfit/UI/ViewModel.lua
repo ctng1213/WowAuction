@@ -96,6 +96,22 @@ function ViewModel.SignedMoney(copper)
   return text
 end
 
+--- Money for a Flip cell (UI25): from 1g up, rounded half up to the silver ("15g 12s", "+6g 55s"), so it fits its
+--- column; under 1g as ViewModel.Money. A flip clears a 20% margin, so its buy and sell never round to the same text.
+---@param copper number|nil  Copper; nil for none
+---@param signed boolean|nil True for a profit: a leading "+" when positive
+---@return string
+function ViewModel.CellMoney(copper, signed)
+  if copper == nil then return "—" end
+  local amount = ViewModel.RoundHalfUp(copper)
+  local size = amount < 0 and -amount or amount
+  if size < 10000 then return signed and ViewModel.SignedMoney(copper) or ViewModel.Money(copper) end
+  local silver = ViewModel.RoundHalfUp(size / 100)
+  local text = math.floor(silver / 100) .. "g" .. (silver % 100 > 0 and (" " .. silver % 100 .. "s") or "")
+  if amount < 0 then return "−" .. text end
+  return (signed and "+" or "") .. text
+end
+
 --- Risk % = gold the action spends ÷ all your gold, one decimal (views.risk).
 ---@param spend number      Copper at stake
 ---@param totalGold number  All your characters' gold, copper
@@ -124,6 +140,20 @@ end
 function ViewModel.Clock(ms, offsetMs)
   local seconds = math.floor((ms + offsetMs) / 1000)
   return Adapter.UtcDate("%a", seconds), Adapter.UtcDate("%H:%M", seconds)
+end
+
+--- How far ahead a moment is, for a Flip row's note (UI24): whole days floored ("in 2 days", "in 1 day"), else whole
+--- hours ("in 3 h"), else "within the hour".
+---@param aheadMs number  The moment minus now, ms
+---@return string
+function ViewModel.InTime(aheadMs)
+  local hours = math.floor(aheadMs / 3600000)
+  if hours >= 24 then
+    local days = math.floor(hours / 24)
+    return "in " .. days .. (days == 1 and " day" or " days")
+  end
+  if hours >= 1 then return "in " .. hours .. " h" end
+  return "within the hour"
 end
 
 --- Mark which actions are part of a chain: those with a parent, or that are one (plan_views).
@@ -489,8 +519,9 @@ end
 ---@param levelsOf function key -> live levels or nil
 ---@param totalGold number All your gold, copper, for risk
 ---@param offsetMs number
+---@param nowMs number|nil  Now, UTC ms, for how far the peak is (UI24); nil leaves that out
 ---@return table[]         Rows of text, best profit first (ties: id); each with spend (copper)
-function ViewModel.FlipRows(actions, lookOf, levelsOf, totalGold, offsetMs)
+function ViewModel.FlipRows(actions, lookOf, levelsOf, totalGold, offsetMs, nowMs)
   local posts, crafts = {}, {}
   local sorted = {}
   for i, a in ipairs(actions) do sorted[i] = a end
@@ -509,11 +540,12 @@ function ViewModel.FlipRows(actions, lookOf, levelsOf, totalGold, offsetMs)
       local day, peak = ViewModel.Clock(post.peak or post.at, offsetMs)
       local postDay, postHour = ViewModel.Clock(post.at, offsetMs)
       local note = { "post " .. postDay .. " " .. postHour .. ", for the " .. peak .. " peak" }
-      if levels and levels[1] then note[2] = "on the AH now from " .. ViewModel.Money(levels[1].price) end
+      if nowMs then note[#note + 1] = ViewModel.InTime((post.peak or post.at) - nowMs) end
+      if levels and levels[1] then note[#note + 1] = "on the AH now from " .. ViewModel.Money(levels[1].price) end
       rows[#rows + 1] = {
         id = a.id, key = a.key, item = look.name, quality = look.quality, kind = "buy", qty = "×" .. a.qty,
-        buy = ViewModel.Money(a.price), sell = ViewModel.Money(post.price), when = day .. " " .. peak,
-        profit = ViewModel.SignedMoney(a.net or 0), netColor = (a.net or 0) > 0 and "pos" or "neg",
+        buy = ViewModel.CellMoney(a.price), sell = ViewModel.CellMoney(post.price), when = day .. " " .. peak,
+        profit = ViewModel.CellMoney(a.net or 0, true), netColor = (a.net or 0) > 0 and "pos" or "neg",
         chance = post.chance and (post.chance .. "%") or "—", dot = post.chance and ViewModel.Level(look.conf) or nil,
         risk = risk, riskAmber = amber, note = table.concat(note, " · "), spend = spend, netCopper = a.net or 0,
       }

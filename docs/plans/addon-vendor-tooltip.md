@@ -13,6 +13,8 @@ Written for: the Opus session that runs this batch in Claude Code on this repo. 
 
 Decisions made during execution are appended here.
 
+7. **Decided by the user 2026-11-07, during M40c: Flip cells drop copper from 1g** (UI25). At the approved 64 and 76 px, "15g 12s 1c" and "+6g 55s 1c" still cut off (about 6.6 px a character at the window font, a coin counting two, measured from the user's screenshot), so Buy, Sell and Profit round to the silver from 1g; under 1g they keep their copper. The user's concern, buy and sell reading alike, cannot arise: the 20% flip margin keeps them at least 26s apart at 1g and up. Buy was included: it has the same problem.
+
 ## 2. Working rules
 
 CLAUDE.md's. One branch (`ctn-RCP-000-addon-vendor-tooltip`), one commit per milestone, each verified with the full suite, the Lua runner, the snapshot and `tools/visual.py`; one PR at the end. A UI change updates the goldens in its commit, the diff reviewed against `docs/mockups/addon.html`.

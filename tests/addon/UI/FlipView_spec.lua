@@ -36,7 +36,7 @@ describe("FlipView", function()
       lookOf = function() return { name = "Linen Cloth", quality = 1, conf = 86 } end, skip = function() return false end,
       nowMs = NOW, offsetMs = 0, totalGold = 100000 })
     assert_eq({ own[1].qty, own[1].buy, own[1].sell, own[1].when, own[1].profit, own[1].chance, own[1].note },
-              { "×20", "40c", "61c", "Sat 18:00", "+2s 60c", "90%", "addon's own idea · one stack · buy at or below 44c" })
+              { "×20", "40c", "61c", "Sat 18:00", "+2s 60c", "90%", "addon's own idea · buy at or below 44c · sell Sat 18:00, in 2 days" })
     assert_eq(MainWindow.Frames().footer:GetText():find("1 own idea (one stack each)", 1, true) ~= nil, true)
     local gone = VM.OwnFlipRows({ [LINEN] = { expected = 53, price = 61, slot = 138 } }, {
       itemOf = function() return { cur = 40, refStack = 20 } end,

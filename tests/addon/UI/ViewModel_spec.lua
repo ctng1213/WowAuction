@@ -241,4 +241,19 @@ describe("ViewModel", function()
     assert_eq(VM.PageByHeight({ {}, {} }, 5, 80, 12, 20), { lines = { {}, {} }, offset = 0, scrollable = false,
                                                             thumbTop = 0, thumbSize = 1 })
   end)
+
+  it("UI24 how far a Flip row's When time is: whole days, else whole hours, else within the hour", function()
+    local VM = Boot()
+    local H, D = 3600000, 86400000
+    assert_eq({ VM.InTime(2 * D + 9 * H), VM.InTime(D), VM.InTime(6 * D + 4 * H), VM.InTime(D - 60000),
+                VM.InTime(3 * H + 30 * 60000), VM.InTime(40 * 60000) },
+              { "in 2 days", "in 1 day", "in 6 days", "in 23 h", "in 3 h", "within the hour" })
+  end)
+
+  it("UI25 a Flip cell's money from 1g rounds to the silver; under 1g keeps its copper", function()
+    local VM = Boot()
+    assert_eq({ VM.CellMoney(151201), VM.CellMoney(65501, true), VM.CellMoney(65550, true), VM.CellMoney(10000),
+                VM.CellMoney(9999), VM.CellMoney(30, true), VM.CellMoney(-12345, true), VM.CellMoney(nil) },
+              { "15g 12s", "+6g 55s", "+6g 56s", "1g", "99s 99c", "+30c", "−1g 23s", "—" })
+  end)
 end)

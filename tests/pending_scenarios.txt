@@ -63,6 +63,3 @@ BZ24 BZ25 BZ28 BZ35 BZ36
 K8
 A92
 D101 D102
-
-# M40 the addon after v0.1.3 in game (docs/plans/addon-vendor-tooltip.md)
-UI24

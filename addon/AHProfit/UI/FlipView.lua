@@ -38,15 +38,17 @@ local function OwnFlipRow(key, o, ctx)
   local ref, look = item.refStack or 1, ctx.lookOf(key)
   local net, spend = (o.expected - now) * ref, now * ref
   local risk, amber = ViewModel.Risk(spend, ctx.totalGold)
-  local day, hour = ViewModel.Clock(ctx.nowMs + Prices.DaysUntilSlot(o.slot, ctx.nowMs) * DAY_MS, ctx.offsetMs)
+  local sellAt = ctx.nowMs + Prices.DaysUntilSlot(o.slot, ctx.nowMs) * DAY_MS
+  local day, hour = ViewModel.Clock(sellAt, ctx.offsetMs)
   local chance = item.chance and ViewModel.RoundHalfUp(item.chance * 100)
   return {
     id = "own:" .. key, key = key, item = look.name, quality = look.quality, kind = "buy", qty = "×" .. ref,
-    buy = ViewModel.Money(now), sell = ViewModel.Money(o.price), when = day .. " " .. hour,
-    profit = ViewModel.SignedMoney(net), netColor = net > 0 and "pos" or "neg",
+    buy = ViewModel.CellMoney(now), sell = ViewModel.CellMoney(o.price), when = day .. " " .. hour,
+    profit = ViewModel.CellMoney(net, true), netColor = net > 0 and "pos" or "neg",
     chance = chance and (chance .. "%") or "—", dot = chance and ViewModel.Level(look.conf) or nil,
     risk = risk, riskAmber = amber, spend = spend, netCopper = net, own = true,
-    note = "addon's own idea · one stack · buy at or below " .. ViewModel.Money(ceiling),
+    note = "addon's own idea · buy at or below " .. ViewModel.Money(ceiling) .. " · sell " .. day .. " " .. hour .. ", "
+      .. ViewModel.InTime(sellAt - ctx.nowMs),                       -- "one stack each" is the footer's (M40, A59)
   }
 end
 

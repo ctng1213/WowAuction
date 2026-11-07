@@ -200,7 +200,7 @@ describe("MainWindow", function()
     local row = FirstRow("flip")
     assert_eq({ row.item, row.qty, row.buy, row.sell, row.when, row.profit, row.chance:match("^%d+%%"), row.risk },
               { "Linen Cloth", "×20", VM.WithCoins("40c"), VM.WithCoins("55c"), "Sat 18:00", VM.WithCoins("+2s 10c"), "88%", "8.0%" })
-    assert_eq(ui.rows[2].note:GetText(), "post Sat 10:00, for the 18:00 peak · on the AH now from 38c")
+    assert_eq(ui.rows[2].note:GetText(), "post Sat 10:00, for the 18:00 peak · in 2 days · on the AH now from 38c")
     assert_eq(ui.footer:GetText(), VM.WithCoins("1 flip · capital needed 8s · 1 gone"))
   end)
 
