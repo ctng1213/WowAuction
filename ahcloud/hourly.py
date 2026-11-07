@@ -15,7 +15,7 @@ from dataclasses import dataclass, replace
 from ahcloud.publish import publish, read_latest, settings_from_dict
 from ahcloud.store import Store
 from ahsync.analysis.market import Quote, reprice_item
-from ahsync.collect.blizzard import http_date_ms, open_envelope, parse_snapshot
+from ahsync.collect.blizzard import BlizzardError, http_date_ms, open_envelope, parse_snapshot
 from ahsync.collect.local_scans import prices_from_book
 from ahsync.collect.provider import SnapshotObservation, load_bonus_suffixes
 from ahsync.engine.volume import IdBook, Volume, estimate_volume_ids, group_book
@@ -159,9 +159,28 @@ def advance(data: Store, intel: MarketIntelligence, market: str) -> MarketIntell
     new = snapshot(data, keys[-1], market)
     if new is None or new.at_ms <= (intel.observations_until_ms or 0):
         return None
-    before = snapshot(data, keys[-2], market) if len(keys) > 1 else None
+    before = previous_snapshot(data, keys, market)
     flow = estimate_volume_ids(IdBook(before.at_ms, before.auctions), IdBook(new.at_ms, new.auctions)) if before else None
     return apply_snapshot(intel, new, flow)
+
+
+def previous_snapshot(data: Store, keys: list[str], market: str) -> SnapshotObservation | None:
+    """The snapshot before the newest, for the last hour's flow; None when there is none or it is refused (FM74).
+
+    Args:
+        data: The data store (raw/).
+        keys: The market's raw keys, ascending.
+        market: Market id.
+
+    Returns:
+        The observation; None without a readable one (the document then has no last_hour for that hour).
+    """
+    if len(keys) < 2:
+        return None
+    try:
+        return snapshot(data, keys[-2], market)
+    except BlizzardError:
+        return None
 
 
 def run_hourly(data: Store, intel_store: Store, market: str) -> HourlyOutcome:

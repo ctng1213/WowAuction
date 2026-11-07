@@ -142,6 +142,25 @@ Pinned exactly with the resolved tree in `requirements-infra.txt`. **CI:** `test
 - **The convention scan skips hidden and generated folders** (`infra/.venv-infra`, `infra/cdk.out`).
 - **The Lambda handlers log at INFO** (the runtime's root logger starts at WARNING, so the collector's per-run lines were missing).
 
+**Decided by the user 2026-11-07 (approved): M33 starts now, split in three**, because the live plan has no sales rate:
+the cloud document has `sold_per_day` None and `volume_unknown` for every item, so every chance is the 0.5 default and
+no craft pays at it (found from the Craft tab, PR #31).
+
+- **M33a — lifetimes and the sales rate**, next: `volume.lifetimes` (posting window, duration from the first band,
+  expiry narrowing, partial fills, sold or expired by the vanish gap, the vanish-hour credit, relists matched and
+  counted, not subtracted), `sold/day` and `sales_how` from it, `expired_share`; the `ItemIntel` fields in **schema
+  12** (schema 11 went to `med14` in M36; the cloud publishes 11 and 12 during the transition), `VOLUME_METHOD_VERSION`
+  bump, the invariants, BZ22, BZ23's `expired_share` half, BZ26, BZ27, BZ30; cloud redeploy. Step 1's report runs first on the raw collected so
+  far (house 114 since 2026-11-06, about two days), so **the band bounds are the spec's rules, marked provisional**,
+  and re-measured in M33b. The milestone row's "schema 11" in SPEC §7 is corrected at M33a's spec edit; M34 becomes
+  schema 13.
+- **M33b — tiers and the undercut share**, after a week or more of lifetimes: `tier_sell_through` by tier and window
+  with the rising blend weight, the measured `undercut_share`, the tier edges and blend constants set from step 1's
+  report re-run, the band bounds measured from a week of lifetimes, the relist decision (BZ23's tier half, BZ24, BZ28, BZ29).
+- **M33c — calibration** (K8), after two weeks of tier predictions to check against.
+
+**Found at M33a's start (Opus, 2026-11-07): the cloud had never ingested a day, so it was fixed first** (its own commit, before M33a). The empty sales rate came from two bugs, not from the missing lifetimes: Blizzard repeated one auction record in the 07:27:32 snapshot, FM33 refused it, and every daily run aborted on it; and after the M36 deploy the hourly mode read only `latest-11.json` and stopped at `hourly_no_base`. Fixed: an identical repeat counts once (BZ38); a refused snapshot is set aside (FM74); `read_latest` falls back to the previous schema (FM75). A local daily run over the 21 live snapshots (2026-11-06 18:21 to 11-07 14:21) ingested all of them and gave all 12,223 items a `sold_per_day` from id diffs. **Needs a `cdk deploy`.** Noted, not fixed: no alarm watches `hourly_no_base` or a day without a daily publish; only the function-error alarm covers the daily crash.
+
 ## 2. Working rules
 
 CLAUDE.md "How work is run" applies. In short: one worktree per milestone; `tools/verify.ps1` (tests, invariants, the whole-plan snapshot byte-identical unless this plan says it moves) before a commit; one commit per verified milestone with the attribution trailer; the plan's §1 gains any decision made during execution; LESSONS gains any wrong assumption found; SPEC and SCENARIOS are updated in the same commit as the code that makes them true, and a milestone's "planned" becomes "built" with module names.
