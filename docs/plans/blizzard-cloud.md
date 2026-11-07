@@ -186,6 +186,13 @@ no craft pays at it (found from the Craft tab, PR #31).
 
 **Decided by the user 2026-11-07 (the batch after M33a): M39, then M38, then M32b, then a release.** M39 is the no-summary alarm (the 2026-11-07 hourly stall went 9 h unalarmed; the existing analyzer-error alarm did fire for the daily crash at 09:03, and the dead-letter alarm has been in ALARM since 09:08 on that failed event). M38 is `docs/plans/tooltip-and-flips.md`'s two-week half-life. M32b is the rest of M32 (D99, D100 with its approved mockup, A92, BZ25). The release (v0.1.3) follows, so installs read schema 12 and the cloud can later stop publishing 10.
 
+**Decided during execution (Opus, M32b, 2026-11-07).**
+
+- **M32b is split**: D99 and D100 here; A92 and BZ25 become **M32c**. Found while starting BZ25: the desktop never reads the document's `catalog` (a cloud market's plan takes vendor prices from the local `items` table only), so BZ25 first needs the catalog staged into `items`, and A92 is an addon contract change that the `wow-adapter` consult says needs an in-game check. M32c's design from that consult: one Adapter function for sell price (`ItemInfoApi`, 11th) and class (`ItemInstantApi`, 6th), both `-- UNVERIFIED:` on `C_Item`, nil (written "") when the client gives nothing and 0 kept as "can't be sold"; the row written at once with the link's name and filled on `GET_ITEM_INFO_RECEIVED` through a debounced, self-unregistering handler that never re-arms itself; a known value never overwritten by ""; every reader (`Mail.KeyByName`, `ViewModel.Look`, `savedvars._item_name`) parsing from the right through one shared parser, old two-field rows still read. Version skew is not a risk: the app installs its own bundled addon at every start, and `add_item_names` overwrites a name.
+- **D99's row had a wrong number**: "longest gap 3 h" contradicts D91's approved rule that the stretch before the first observed hour counts; the row now expects "longest gap 87 d 23 h (9 Aug 15:00 – 5 Nov 14:00)" with the Fri 03:00–05:00 hole as empty cells.
+- **The pill's baselines time is `built_ms`** (the newest snapshot the daily run ingested), the same moment Status's Market summary line shows, not the run's publish time the mockup's "Sat 09:00" illustrates; the two lines always agree.
+- **The headless render found a bug the suite missed** (`ranges_to_hours` not imported in `app/status_page.py`, so a cloud market's Status page failed); the app-level D99 test now covers it.
+
 ## 2. Working rules
 
 CLAUDE.md "How work is run" applies. In short: one worktree per milestone; `tools/verify.ps1` (tests, invariants, the whole-plan snapshot byte-identical unless this plan says it moves) before a commit; one commit per verified milestone with the attribution trailer; the plan's §1 gains any decision made during execution; LESSONS gains any wrong assumption found; SPEC and SCENARIOS are updated in the same commit as the code that makes them true, and a milestone's "planned" becomes "built" with module names.
@@ -293,7 +300,7 @@ Done when: the modules, fixtures, keys and lines are gone; the whole-plan snapsh
 
 Done when: FM77 passes; the alarm exists in the account and is OK; the dead-letter alarm is OK.
 
-### M32b — the rest of M32 (after M38)
+### M32b — the rest of M32 (after M38); A92 and BZ25 split off as M32c (§1)
 
 1. **Opus**: D100: `engine/views` makes the cloud market's freshness text and amber flag ("prices 18 min old · baselines Sat 09:00", amber from 3 h; SPEC §2.4, the approved mockup); the server returns it; `web/static/index.html` draws it instead of "numbers from …" for a cloud market (JavaScript draws only). Reason: a displayed number (§8.5).
 2. **Sonnet**: D99: the Data coverage card's `blizzard (cloud)` row from the document's `coverage` (`engine/coverage.py` reads it; the card draws it), with D99's numbers. Reason: routine, the reader and the card exist.

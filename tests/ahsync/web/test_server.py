@@ -1120,3 +1120,20 @@ def test_the_tray_reads_the_update_state_without_waiting_on_a_busy_dashboard(db,
     assert state.tag == "v0.4.0" and synced is None
     with shell._lock:
         assert shell.tray_facts() is None
+
+
+def test_D100_a_cloud_markets_view_carries_the_engines_freshness_pill(db):
+    from ahsync.config import CloudConfig
+    from ahsync.intel.contract import MarketIntelligence
+    sat = 20_036 * 86_400_000                                       # a Saturday
+    config = Config(markets=(M,), cloud=CloudConfig("https://x.cloudfront.net"),
+                    sources={M: MarketSources("blizzard", ("blizzard",), {})})
+    app = DashboardApp(db, config, FakeClock(sat + 15 * 3_600_000 + 20 * 60_000), Refreshes(), token="tok-123", port=8765)
+    publish(db, "craft", M, {"rows": [], "hidden": 0})
+    assert json.loads(app.handle("GET", f"/api/views/craft?market={M}", GOOD).body)["freshness"] is None   # no summary yet
+    with db.transaction():                                          # the re-plan stages the views with the document
+        db.stage_view("craft", M, {"rows": [], "hidden": 0}, BUILT)
+        db.stage_intel(MarketIntelligence(M, sat + 9 * 3_600_000, sat + 15 * 3_600_000 + 2 * 60_000, 4, {}))
+    db.publish_refresh([M], with_intel=[M])
+    body = json.loads(app.handle("GET", f"/api/views/craft?market={M}", GOOD).body)
+    assert body["freshness"] == {"text": "prices 18 min old · baselines Sat 09:00", "stale": False}

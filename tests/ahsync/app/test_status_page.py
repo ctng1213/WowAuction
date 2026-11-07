@@ -121,3 +121,24 @@ def test_the_status_facts_read_the_ahledger_tables_updated_time_and_item_count_c
         assert status_page.status_facts(db, off, now).markets[0].ahledger_on is False
     finally:
         db.close()
+
+
+def test_D99_a_cloud_markets_coverage_card_shows_the_summarys_hours(tmp_path):
+    from ahsync.config import CloudConfig
+    from ahsync.intel.contract import MarketIntelligence
+    now = FakeClock().now_ms()
+    end = now // HOUR
+    db = Database.open(tmp_path / "ahsync.db", now, None)
+    try:
+        with db.transaction():
+            db.stage_intel(MarketIntelligence(M, now - 6 * HOUR, now - 18 * 60_000, 5, {},
+                                              coverage=((end - 48, end - 38), (end - 34, end - 1))))
+        db.publish_refresh([M], with_intel=[M])
+        cfg = Config(markets=(M,), cloud=CloudConfig("https://x.cloudfront.net"),
+                     sources={M: MarketSources("blizzard", ("blizzard",), {})})
+        card = status_page.status_page(db, cfg, now, 0)["coverage"][0]
+        rows = {r["src"]: r for r in card["sources"]}
+        assert rows["blizzard"]["label"] == "Blizzard (cloud)" and rows["blizzard"]["hours"] == 11 + 34
+        assert rows["local"]["hours"] == 0
+    finally:
+        db.close()

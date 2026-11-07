@@ -15,7 +15,8 @@ HOUR_MS = 3_600_000
 WINDOW_HOURS = 2160                       # 90 days
 SOURCE_ORDER = ("local", "ahledger", "ahf")
 SOURCE_ALIASES = {"ahledger_h1": "ahledger"}   # the table and the backfill show as one source
-LABELS = {"local": "your scans", "ahledger": "AHledger", "ahf": "auctionhouse.fyi"}
+LABELS = {"local": "your scans", "ahledger": "AHledger", "ahf": "auctionhouse.fyi",
+          "blizzard": "Blizzard (cloud)"}       # its hours are the cloud summary's coverage (D99)
 LOCAL_ONLY = ("local",)                   # never amber: you scan when you play
 STALE_HOURS = 72                          # a remote source's newest hour older than this is amber
 DAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
@@ -24,6 +25,18 @@ READING = ("Coverage is the hours any source observed; it is what the weekly pat
            "from. Dark cells make reliable windows; pale cells are hours nobody has scanned yet.")
 RULE = ("A source counts an hour when it has at least one complete observation in it: a complete scan, an AHF hour "
         "file, an AHledger table update or hourly bucket. Never a partial scan")
+
+
+def ranges_to_hours(ranges: Iterable[tuple[int, int]]) -> set[int]:
+    """A cloud summary's `coverage` as the hours it observed (SPEC §2.4, D99).
+
+    Args:
+        ranges: (first hour, last hour) runs of observed UTC hour numbers, both inclusive.
+
+    Returns:
+        Every hour in them.
+    """
+    return {hour for first, last in ranges for hour in range(first, last + 1)}
 
 
 def step(value: int, possible: int) -> int:
