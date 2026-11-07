@@ -67,9 +67,11 @@ def settings_from_dict(values: dict[str, object]) -> MarketSettings:
     return MarketSettings.from_dict(values)
 
 
-# The schemas published side by side (SPEC §2.4, BZ37): the current one, and the previous while installs that read only
-# it are still out there (v0.1.1 reads 10). Drop the old one once every release in use reads the new one.
-PUBLISHED_SCHEMAS = (INTEL_SCHEMA_VERSION - 1, INTEL_SCHEMA_VERSION)
+# The schemas published side by side, oldest first (SPEC §2.4, BZ37): the current one, and every older one a release in
+# use still reads. v0.1.1 and v0.1.2 read 10 and no release reads 11 yet, so 10 stays until one does; drop a schema
+# once every release in use reads a newer one.
+OLDEST_PUBLISHED = 10
+PUBLISHED_SCHEMAS = tuple(range(OLDEST_PUBLISHED, INTEL_SCHEMA_VERSION + 1))
 
 
 def publish(store: Store, intel: MarketIntelligence, schemas: tuple[int, ...] = PUBLISHED_SCHEMAS) -> list[Pointer]:
@@ -97,9 +99,9 @@ def publish(store: Store, intel: MarketIntelligence, schemas: tuple[int, ...] = 
 
 
 def read_latest(store: Store, market: str) -> tuple[MarketIntelligence, Pointer] | None:
-    """The newest published document, checked against its pointer: this schema's, else the previous one's.
+    """The newest published document, checked against its pointer: this schema's, else the newest older one's.
 
-    Right after a schema bump only the older pointer exists until a daily run publishes the new one; reading it
+    Right after a schema bump only the older pointers exist until a daily run publishes the new one; reading one
     (with `from_json`'s defaults for the new fields) keeps the hourly prices moving meanwhile (FM75).
 
     Args:

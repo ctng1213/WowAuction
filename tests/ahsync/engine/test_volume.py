@@ -6,6 +6,8 @@ import pytest
 from ahsync.engine.volume import (NO_PRIOR, VolumePrior, posterior_rate,
     MAX_GAP_MS, Auction, Book, BookEntry, Cover, IdBook, Volume, book_pairs, calibration_factor, covered_seconds, daily_volume, day_shares,
     estimate_volume, estimate_volume_ids, expiring_fraction, group_book, hourly_sales, observed_turnover, listing_turnover, supply_to_volume,
+    DURATION_MS, LifeFlow, band_window, expired_fraction, gap_hours, life_flows, lifetimes, narrow, sold_by_hour,
+    new_listing_positions, position_milli,
 )
 from tests.support.gen import cases
 
@@ -458,3 +460,173 @@ def test_VI4_the_prior_rate_is_monotonic_bounded_and_fades_with_more_data():
         far = posterior_rate(raw * 10_000, 10_000, prior)                    # the same rate over 10,000 days
         assert abs(far - raw) <= abs(rate - raw) + 1e-9, context
         assert far == pytest.approx(raw, rel=0.01, abs=0.05), context
+
+
+# --- Auction lifetimes (SPEC §2.4, M33a) ---------------------------------------------------------------------------
+
+THU_1702 = (20_000 + 6) * 86_400_000 + 17 * HOUR_MS + 2 * 60_000     # a Thursday, 17:02 UTC
+MINUTE = 60_000
+
+
+def band_left(left_ms: int) -> int:
+    """The time-left band Blizzard's API gives an auction with left_ms to run (ID_BAND_HOURS)."""
+    hours_left = left_ms / HOUR_MS
+    return SHORT if hours_left <= 0.5 else MEDIUM if hours_left <= 2 else LONG if hours_left <= 12 else VERY_LONG
+
+
+def hourly(first_ms: int, count: int, auctions: list[tuple]) -> list[IdBook]:
+    """Hourly snapshots; each auction (id, key, posted ms, expires ms, gone ms, qty at ms -> units) is listed from
+    its posting until it expires or is gone, with the band its true time left gives."""
+    out = []
+    for k in range(count):
+        at = first_ms + k * HOUR_MS
+        listed = [Auction(i, key, qty(at), 125, band_left(expires - at))
+                  for i, key, posted, expires, gone, qty in auctions if posted <= at < min(expires, gone)]
+        out.append(IdBook(at, tuple(listed)))
+    return out
+
+
+def test_BZ22_lifetimes_name_each_listings_fate():
+    thu_1700 = THU_1702 - 2 * MINUTE
+    posted = thu_1700 + 30 * MINUTE
+    snaps = hourly(thu_1700, 26, [
+        (1, LINEN, posted, posted + 24 * HOUR_MS, 1 << 62, lambda at: 5),        # 24 h, runs out Fri 17:30
+        (2, LINEN, posted, posted + 8 * HOUR_MS, thu_1700 + 4 * HOUR_MS - MINUTE, lambda at: 5),   # 8 h, gone at 20:59
+        (3, ORE, posted + 30 * MINUTE - 1, posted + 30 * MINUTE + 20 * MINUTE, 1 << 62, lambda at: 2)])  # short at 18:00
+    assert snaps[24].auctions[0].band == SHORT and snaps[3].auctions[1].band == LONG
+    fates = {e.auction: (e.expired, e.gap) for e in lifetimes(snaps).endings}
+    assert fates[1] == (1.0, (thu_1700 + 24 * HOUR_MS, thu_1700 + 25 * HOUR_MS))            # its end fell in 17:00-18:00
+    assert fates[2] == (0.0, (thu_1700 + 3 * HOUR_MS, thu_1700 + 4 * HOUR_MS))               # sold, 5-6 h left
+    assert fates[3][0] == 1.0                                                                 # treated as 2 h: expired
+
+
+def test_BZ26_the_bands_narrow_the_expiry_and_the_vanish_gap_decides():
+    posted, expires = THU_1702 + 43 * MINUTE, THU_1702 + 24 * HOUR_MS + 43 * MINUTE     # truth: Fri 17:45
+    qty = lambda at: 14 if at < THU_1702 + 6 * HOUR_MS else 10                          # 4 bought in (22:02, 23:02]
+    snaps = hourly(THU_1702, 26, [(2455, LINEN, posted, expires, 1 << 62, qty)])
+    lt = lifetimes(snaps)
+    assert lt.fills == ((2455, LINEN, 4, (THU_1702 + 5 * HOUR_MS, THU_1702 + 6 * HOUR_MS)),)
+    (ending,) = lt.endings
+    assert (ending.qty, ending.expired, ending.gap) == (10, 1.0, (THU_1702 + 24 * HOUR_MS, THU_1702 + 25 * HOUR_MS))
+    flow = life_flows(lt)[ending.gap][LINEN]
+    assert (flow.sold, flow.expired, flow.ended, flow.expired_listings) == (0.0, 10.0, 1.0, 1.0)
+    assert lt.clashes == 0
+    early = hourly(THU_1702, 26, [(2455, LINEN, posted, expires, THU_1702 + 18 * HOUR_MS, qty)])   # gone by Fri 11:02
+    (sold,) = lifetimes(early).endings
+    assert (sold.expired, sold.gap) == (0.0, (THU_1702 + 17 * HOUR_MS, THU_1702 + 18 * HOUR_MS))
+
+
+def test_BZ26_the_windows_come_from_posting_plus_duration_narrowed_by_bands():
+    window, clash = narrow((THU_1702 + 24 * HOUR_MS, THU_1702 + 25 * HOUR_MS), THU_1702 + 24 * HOUR_MS, MEDIUM)
+    assert (window, clash) == ((THU_1702 + 24 * HOUR_MS + 30 * MINUTE, THU_1702 + 25 * HOUR_MS), False)
+    assert narrow(window, THU_1702, SHORT) == (band_window(THU_1702, SHORT), True)        # a clash keeps the newest
+    assert expired_fraction(window, THU_1702 + 24 * HOUR_MS + 45 * MINUTE) == 0.5
+    assert DURATION_MS == {VERY_LONG: 24 * HOUR_MS, LONG: 8 * HOUR_MS, MEDIUM: 2 * HOUR_MS, SHORT: 2 * HOUR_MS}
+    assert band_window(THU_1702, LONG) == (THU_1702 + 2 * HOUR_MS, THU_1702 + 12 * HOUR_MS)        # Blizzard's bounds
+    assert band_window(THU_1702, VERY_LONG) == (THU_1702 + 12 * HOUR_MS, THU_1702 + 24 * HOUR_MS)
+
+
+def test_BZ27_relists_are_measured_and_never_subtracted():
+    spaulders = 15210 + 28644 * 10 ** 6                       # a gear key with its bonus list's suffix
+    at = THU_1702 + 17 * HOUR_MS                              # Fri 10:02
+    before = IdBook(at, (Auction(1, spaulders, 1, 150_000, VERY_LONG), Auction(3, LINEN, 20, 125, VERY_LONG),
+                         Auction(4, LINEN, 20, 125, VERY_LONG)))
+    after = IdBook(at + HOUR_MS, (Auction(9, spaulders, 1, 140_000, VERY_LONG), Auction(11, LINEN, 20, 120, VERY_LONG)))
+    lt = lifetimes([before, after])
+    assert [(e.auction, e.matched) for e in lt.endings] == [(1, True), (3, True), (4, False)]   # one new listing, one match
+    flows = life_flows(lt)[(at, at + HOUR_MS)]
+    assert (flows[spaulders].sold, flows[spaulders].ended, flows[spaulders].matched) == (1.0, 1.0, 1.0)
+    assert (flows[LINEN].sold, flows[LINEN].ended, flows[LINEN].matched) == (40.0, 2.0, 1.0)
+    assert flows[spaulders].listed == 1.0 and flows[LINEN].listed == 20.0
+
+
+def test_BZ30_sales_land_in_the_hour_they_happened():
+    at = THU_1702 + 17 * HOUR_MS                              # 10:02
+    one = lifetimes([IdBook(at, (Auction(1, LINEN, 10, 125, VERY_LONG),)), IdBook(at + HOUR_MS, ())])
+    hour10 = at // HOUR_MS * HOUR_MS
+    assert sold_by_hour(life_flows(one)) == {LINEN: {hour10: 10.0}}
+    three = lifetimes([IdBook(at, (Auction(2, ORE, 9, 50, VERY_LONG),)), IdBook(at + 3 * HOUR_MS, ())])
+    assert sold_by_hour(life_flows(three)) == {ORE: {hour10: 3.0, hour10 + HOUR_MS: 3.0, hour10 + 2 * HOUR_MS: 3.0}}
+    assert gap_hours((at, at + 20 * MINUTE)) == [hour10]
+    pooled = sold_by_hour({(at, at + 30 * MINUTE): {LINEN: LifeFlow(sold=2.0)},
+                           (at + 30 * MINUTE, at + 50 * MINUTE): {LINEN: LifeFlow(sold=3.0)}})
+    assert pooled == {LINEN: {hour10: pytest.approx(5.0 * 60 / 50)}}           # 5 units over 50 min
+    assert sold_by_hour(life_flows(three), hours={hour10 + HOUR_MS}) == {ORE: {hour10 + HOUR_MS: 3.0}}
+
+
+def test_BZ29_new_listings_are_placed_against_the_book_they_joined():
+    at = THU_1702
+    before = IdBook(at, (Auction(1, LINEN, 20, 125, VERY_LONG),))
+    after = IdBook(at + HOUR_MS, (Auction(1, LINEN, 20, 125, VERY_LONG), Auction(2, LINEN, 20, 120, VERY_LONG),
+                                  Auction(3, LINEN, 10, 130, VERY_LONG), Auction(4, ORE, 5, 50, VERY_LONG)))
+    lt = lifetimes([before, after])
+    assert [(a, price, lowest) for a, _, _, _, price, lowest in lt.listed] == [(2, 120, 125), (3, 130, 120), (4, 50, None)]
+    assert new_listing_positions(lt) == {(at, at + HOUR_MS): {LINEN: {960: 20.0, 1083: 10.0}}}   # ore has no book: left out
+    assert position_milli(120, 125) == 960 and position_milli(1, 3) == 333 and position_milli(5, 6) == 833
+
+
+def test_lifetimes_keep_only_the_records_of_the_span_asked_for_but_every_window():
+    at = THU_1702
+    books = [IdBook(at, ()), IdBook(at + HOUR_MS, (Auction(1, LINEN, 10, 125, VERY_LONG),)),
+             IdBook(at + 2 * HOUR_MS, (Auction(1, LINEN, 8, 125, VERY_LONG),)),            # a fill before the span
+             IdBook(at + 3 * HOUR_MS, ())]
+    full, kept = lifetimes(books), lifetimes(books, keep_from_ms=at + 3 * HOUR_MS)
+    assert kept.gaps == ((at + 2 * HOUR_MS, at + 3 * HOUR_MS),) and kept.fills == () and kept.listed == ()
+    assert kept.endings == full.endings                       # the posting gap, outside the span, still set the window
+
+
+def test_lifetimes_do_not_link_across_a_hole():
+    at = THU_1702
+    lt = lifetimes([IdBook(at, (Auction(1, LINEN, 10, 125, VERY_LONG),)), IdBook(at + 7 * HOUR_MS, ())])
+    assert lt.gaps == () and lt.endings == () and lt.listed == ()
+
+
+SEED_VI5 = 5
+
+
+def random_world(rng) -> list[IdBook]:
+    """Hourly snapshots of a few auctions that shrink, vanish and appear at random (bands random too)."""
+    live: dict[int, list] = {}
+    snaps, next_id, at = [], 1, THU_1702
+    for _ in range(rng.randint(2, 30)):
+        for i in sorted(live):
+            if rng.random() < 0.2:
+                del live[i]
+            elif rng.random() < 0.3:
+                live[i][1] = max(1, live[i][1] - rng.randint(0, 5))
+        for _ in range(rng.randint(0, 3)):
+            live[next_id] = [rng.choice([LINEN, ORE, 15210]), rng.randint(1, 20)]
+            next_id += 1
+        snaps.append(IdBook(at, tuple(Auction(i, k, q, 100, rng.randint(1, 4)) for i, (k, q) in sorted(live.items()))))
+        at += rng.choice([HOUR_MS, HOUR_MS, 2 * HOUR_MS, 7 * HOUR_MS])
+    return snaps
+
+
+def test_VI5_lifetimes_account_for_every_unit_once():
+    for n, snaps in enumerate(cases(SEED_VI5, random_world)):
+        context = f"seed {SEED_VI5} case {n}"
+        lt = lifetimes(snaps)
+        flows = life_flows(lt)
+        for e in lt.endings:
+            assert 0.0 <= e.expired <= 1.0, context
+        gone = sum(e.qty for e in lt.endings) + sum(f[2] for f in lt.fills)
+        total = sum(f.sold + f.expired for by_key in flows.values() for f in by_key.values())
+        assert total == pytest.approx(gone), context                            # sold + expired = what left
+        for by_key in flows.values():
+            for f in by_key.values():
+                assert min(f.sold, f.expired, f.listed, f.matched) >= 0, context
+                assert f.expired_listings <= f.ended + 1e-9 and f.matched <= f.ended, context
+        bought: dict[int, int] = {}
+        for auction, _, units, _ in lt.fills:
+            bought[auction] = bought.get(auction, 0) + units
+        first: dict[int, int] = {}
+        last: dict[int, int] = {}
+        for book in snaps:
+            for a in book.auctions:
+                first.setdefault(a.id, a.qty)
+                last[a.id] = a.qty
+        for auction, units in bought.items():
+            assert units <= first[auction] - last[auction], context             # a partial fill never counts twice
+        rates = sold_by_hour(flows)
+        credited = sum(r for by_hour in rates.values() for r in by_hour.values())
+        assert credited >= 0, context

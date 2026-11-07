@@ -7,27 +7,32 @@ mended by delivering the same snapshot again (FM32).
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from ahsync.collect.local_scans import (HOUR_MS, book_days, recompute_book_volume, recompute_sales_hours,
                                        store_scan_prices)
 from ahsync.collect.provider import SnapshotObservation, snapshot_problems
 from ahsync.collect.snapshots import SnapshotStore
 from ahsync.db.sqlite import BookScan, Database
-from ahsync.engine.volume import (MAX_GAP_MS, VOLUME_METHOD_VERSION, IdBook, covered_seconds, estimate_volume_ids,
-                                  group_book)
+from ahsync.engine.volume import (LIFETIME_LOOKBACK_MS, MAX_GAP_MS, SALES_PAIR_MAX_GAP_MS, VOLUME_METHOD_VERSION, IdBook, covered_seconds,
+                                  gap_hours, group_book, life_flows, lifetimes, new_listing_positions,
+                                  sold_by_hour)
 
 DAY_MS = 86_400_000
 
 
-def ingest_snapshot(db: Database, store: SnapshotStore, obs: SnapshotObservation) -> set[int]:
+def ingest_snapshot(db: Database, store: SnapshotStore, obs: SnapshotObservation, id_volume: bool = True) -> set[int]:
     """Store a provider's snapshot and everything derived from it (V36).
 
     Args:
         db: Database.
         store: The raw snapshot store.
         obs: The snapshot.
+        id_volume: Recompute the id volume of the days it touches now; False when the caller ingests a batch and
+            calls `recompute_id_days` once for all of them (the cloud's daily run: each day's lifetimes read 36 h before it).
 
     Returns:
-        Item keys whose prices or volume changed.
+        Item keys whose prices or volume changed (without the id volume when id_volume is False).
 
     Raises:
         ValueError: The snapshot is malformed (provider.snapshot_problems); nothing is stored.
@@ -45,8 +50,8 @@ def ingest_snapshot(db: Database, store: SnapshotStore, obs: SnapshotObservation
         recompute_sales_hours(db, obs.market, [obs.at_ms])
         for day in sorted(book_days(db, obs.market, [obs.at_ms])):
             dirty |= set(recompute_book_volume(db, obs.market, day))
-        for day in sorted(id_days(store, obs.market, obs.src, obs.at_ms)):
-            dirty |= recompute_id_volume(db, store, obs.market, obs.src, day)
+        if id_volume:
+            dirty |= recompute_id_days(db, store, obs.market, obs.src, id_days(store, obs.market, obs.src, obs.at_ms))
     return dirty
 
 
@@ -60,16 +65,104 @@ def id_days(store: SnapshotStore, market: str, src: str, at_ms: int) -> set[int]
         at_ms: The new snapshot's time.
 
     Returns:
-        Its day, and the day of the next snapshot after it (an older one delivered late pairs with it).
+        From the day 2 h before it (its book pairs rewrite those hours of `sales_h1`, which the ids own) to the day of
+        the last snapshot up to LIFETIME_LOOKBACK_MS after it (its sightings shape the windows of auctions ending
+        that late, M33a review).
     """
-    later = store.times(market, src, at_ms + 1, at_ms + MAX_GAP_MS)
-    return {at_ms // DAY_MS} | ({later[0] // DAY_MS} if later else set())
+    later = store.times(market, src, at_ms + 1, at_ms + LIFETIME_LOOKBACK_MS)
+    last = later[-1] if later else at_ms
+    return set(range((at_ms - SALES_PAIR_MAX_GAP_MS) // DAY_MS, last // DAY_MS + 1))
+
+
+def recompute_id_days(db: Database, store: SnapshotStore, market: str, src: str, days: set[int]) -> set[int]:
+    """Some days' id volume, ended listings and hourly sales of one source, from auction lifetimes (SPEC §2.4).
+
+    One `lifetimes` pass per day, over the snapshots from LIFETIME_LOOKBACK_MS (36 h) before it to MAX_GAP_MS
+    after it, keeping only the records of gaps that end from MAX_GAP_MS before the day on, so memory is one day's.
+    A gap counts for the day of its later snapshot (its cover too); its sold units are credited to its clock hours,
+    which replace those hours' book-pair rates in `sales_h1` (ids rank above groups, §3.3.1); every gap crediting
+    a written hour is in the pass, so an hour pooled across midnight comes out the same in any order. A day's
+    result does not depend on which other days are recomputed (an ending in it needs at most 36 h before it).
+
+    Args:
+        db: Database, inside the caller's transaction.
+        store: The snapshot store.
+        market: Market id.
+        src: Source name.
+        days: Day numbers.
+
+    Returns:
+        The item keys written (each day's rows are replaced whole).
+    """
+    written: set[int] = set()
+    for day in sorted(days):
+        day_ms = day * DAY_MS
+        times = store.times(market, src, day_ms - LIFETIME_LOOKBACK_MS, day_ms + DAY_MS - 1 + MAX_GAP_MS)
+        lt = lifetimes((store.load(market, src, at) for at in times), keep_from_ms=day_ms - MAX_GAP_MS)
+        flows, positions = life_flows(lt), new_listing_positions(lt)
+        gaps = [g for g in sorted(flows) if g[1] // DAY_MS == day]
+        volume: dict[int, list[float]] = {}
+        ended: dict[int, list[float]] = {}
+        for gap in gaps:
+            for key, f in flows[gap].items():
+                row = volume.setdefault(key, [0.0, 0.0, 0.0])
+                row[0] += f.sold
+                row[1] += f.expired
+                row[2] += f.listed
+                if f.ended:
+                    tally = ended.setdefault(key, [0.0, 0.0, 0.0])
+                    for i, value in enumerate((f.ended, f.expired_listings, f.matched)):
+                        tally[i] += value
+        db.replace_volume_day(market, day, src, {k: tuple(v) for k, v in sorted(volume.items())}, VOLUME_METHOD_VERSION,
+                              ("ids", covered_seconds(gaps)) if gaps else None)
+        db.replace_lifetimes_day(market, day, src, {k: tuple(v) for k, v in sorted(ended.items())})
+        db.replace_new_listings_day(market, day, src, merge_positions(positions.get(g, {}) for g in gaps))
+        hours = {h for gap in gaps for h in gap_hours(gap)}
+        rates = sold_by_hour(flows, hours)
+        for first, last in _runs(sorted(hours)):
+            db.replace_sales_hours(market, first, last, rates)
+        written |= set(volume)
+    return written
+
+
+def merge_positions(per_gap: Iterable[dict[int, dict[int, float]]]) -> dict[int, dict[int, float]]:
+    """Several gaps' new-listing positions summed per item and position.
+
+    Args:
+        per_gap: key -> position -> units, one mapping per gap.
+
+    Returns:
+        key -> position -> units.
+    """
+    out: dict[int, dict[int, float]] = {}
+    for by_key in per_gap:
+        for key, by_position in by_key.items():
+            mine = out.setdefault(key, {})
+            for position, units in by_position.items():
+                mine[position] = mine.get(position, 0.0) + units
+    return out
+
+
+def _runs(hours: list[int]) -> list[tuple[int, int]]:
+    """Consecutive hour starts merged into ranges.
+
+    Args:
+        hours: Hour starts in ms, ascending.
+
+    Returns:
+        (first, last) hour starts of each run of consecutive hours.
+    """
+    runs: list[list[int]] = []
+    for hour in hours:
+        if runs and hour == runs[-1][1] + HOUR_MS:
+            runs[-1][1] = hour
+        else:
+            runs.append([hour, hour])
+    return [(a, b) for a, b in runs]
 
 
 def recompute_id_volume(db: Database, store: SnapshotStore, market: str, src: str, day: int) -> set[int]:
-    """A day's id-diff volume of one source, from its consecutive snapshots at most 6 h apart (V33, V36).
-
-    A pair counts for the day of its later snapshot; the day's cover records the hours its pairs observed.
+    """One day's id volume (V33, V36): `recompute_id_days` for that day alone.
 
     Args:
         db: Database, inside the caller's transaction.
@@ -79,27 +172,6 @@ def recompute_id_volume(db: Database, store: SnapshotStore, market: str, src: st
         day: Day number.
 
     Returns:
-        The item keys written for that day (the day's rows are replaced whole).
+        The item keys written for that day.
     """
-    times = store.times(market, src, day * DAY_MS - MAX_GAP_MS, (day + 1) * DAY_MS - 1)
-    loaded: dict[int, IdBook] = {}
-    totals: dict[int, list[float]] = {}
-    pairs: list[tuple[int, int]] = []
-    for prev_at, next_at in zip(times, times[1:]):
-        if next_at // DAY_MS != day:
-            continue
-        prev = loaded.get(prev_at) or store.load(market, src, prev_at)
-        loaded[next_at] = store.load(market, src, next_at)
-        volume = estimate_volume_ids(prev, loaded[next_at])
-        if volume is None:
-            continue
-        pairs.append((prev_at, next_at))
-        for key, v in volume.items():
-            row = totals.setdefault(key, [0.0, 0.0, 0.0])
-            row[0] += v.sold
-            row[1] += v.expired
-            row[2] += v.listed
-    rows = {key: (sold, expired, listed) for key, (sold, expired, listed) in sorted(totals.items())}
-    db.replace_volume_day(market, day, src, rows, VOLUME_METHOD_VERSION,
-                          ("ids", covered_seconds(pairs)) if pairs else None)
-    return set(rows)
+    return recompute_id_days(db, store, market, src, {day})

@@ -98,19 +98,31 @@ def test_BZ15_schema_10_round_trips_its_cloud_fields_and_writes_schema_9_without
     assert not {"last_hour", "recent_closes", "recent_sold", "recent_listed", "recent_units"} & set(old["items"]["2589"])
     assert from_json(json.dumps(old)) == replace(intel, schema_version=9, items={2589: ITEM}, catalog={}, coverage=(),
                                                  settings={})
-    with pytest.raises(ValueError, match="cannot write schema 12"):
-        to_json(intel, schema=12)
+    with pytest.raises(ValueError, match=f"cannot write schema {INTEL_SCHEMA_VERSION + 1}"):
+        to_json(intel, schema=INTEL_SCHEMA_VERSION + 1)
     with pytest.raises(ValueError, match="cannot write schema 8"):
         to_json(intel, schema=8)
 
 
 def test_BZ37_schema_11_carries_med14_and_schema_10_is_written_without_it():
     intel = MarketIntelligence("forever.normal.horde.us", 1_000, 2_000, 1, {2589: replace(ITEM, med14=52)})
-    assert INTEL_SCHEMA_VERSION == 11 and json.loads(to_json(intel))["items"]["2589"]["med14"] == 52
+    assert INTEL_SCHEMA_VERSION >= 11 and json.loads(to_json(intel))["items"]["2589"]["med14"] == 52
     assert from_json(to_json(intel)) == intel
     old = json.loads(to_json(intel, schema=10))
     assert old["schema_version"] == 10 and "med14" not in old["items"]["2589"]
     assert from_json(json.dumps(old)).items[2589].med14 is None                  # an older document: "—" in game
+
+
+def test_BZ23_schema_12_carries_expired_share_and_schema_11_is_written_without_it():
+    intel = MarketIntelligence("forever.normal.horde.us", 1_000, 2_000, 1,
+                               {2589: replace(ITEM, expired_share=0.25, undercut_share=0.3)})
+    body = json.loads(to_json(intel))
+    assert INTEL_SCHEMA_VERSION == 12 and body["items"]["2589"]["expired_share"] == 0.25
+    assert from_json(to_json(intel)) == intel
+    old = json.loads(to_json(intel, schema=11))
+    assert old["schema_version"] == 11 and "expired_share" not in old["items"]["2589"]
+    assert "undercut_share" not in old["items"]["2589"]                          # BZ29's field is schema 12's too
+    assert from_json(json.dumps(old)).items[2589].expired_share is None
 
 
 def test_a_schema_9_document_reads_with_empty_cloud_fields():

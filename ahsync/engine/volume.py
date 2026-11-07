@@ -9,7 +9,8 @@ it saw, weighted by the hourly sales pattern. Quantity drops ("qty_drop") are li
 """
 from __future__ import annotations
 
-from collections.abc import Sequence
+import math
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
 from ahsync.engine.prices import median
@@ -19,12 +20,15 @@ SUPPLY_DAYS = 30            # median_daily_supply looks back this far (SPEC §3.
 MAX_GAP_MS = 6 * HOUR_MS
 SALES_PAIR_MAX_GAP_MS = 2 * HOUR_MS     # hourly sales rates need books this close (SPEC §3.3 sales_how)
 CROSS_SOURCE_MIN_GAP_MS = 15 * 60_000   # books of different sources closer than this never pair (SPEC §3.3.1, V39)
-VOLUME_METHOD_VERSION = 4     # bump when the estimation changes; stored data is then recomputed (SPEC §3.3.6)
+VOLUME_METHOD_VERSION = 5     # bump when the estimation changes; stored data is then recomputed (SPEC §3.3.6)
 KINDS = ("ids", "groups", "own")       # volume kinds in trust order (SPEC §3.3.1)
 LEGACY_KIND = {"ahf": "groups", "books": "groups", "mail": "own"}   # rows stored without a cover (V24)
 # Time-left bands [lo, hi) in hours, by WoW band code (SPEC §3.3.1). UNVERIFIED for Forever (§6 item 5).
 # Very long ends at the longest auction duration (fees.DURATIONS_H; 24 h on Classic Era).
 BAND_HOURS = {1: (0.0, 0.5), 2: (0.5, 2.0), 3: (2.0, 8.0), 4: (8.0, 24.0)}
+# Blizzard's auction API (the id snapshots) reads its bands as retail does: LONG 2-12 h, VERY_LONG over 12 h. Measured
+# on house 114 (2026-11-07): 24 h auctions turn LONG 11-12 h after posting (SPEC §2.4, §6 item 5; the user, 2026-11-07).
+ID_BAND_HOURS = {1: (0.0, 0.5), 2: (0.5, 2.0), 3: (2.0, 12.0), 4: (12.0, 24.0)}
 
 
 @dataclass(frozen=True)
@@ -116,17 +120,18 @@ class DailyVolume:
     main_kind: str | None = None      # its kind ("ids" | "groups" | "own") on the first day it was used (D57)
 
 
-def expiring_fraction(band: int, gap_hours: float) -> float:
+def expiring_fraction(band: int, gap_hours: float, bands: dict[int, tuple[float, float]] = BAND_HOURS) -> float:
     """Expected share of a band's auctions that ran out during a gap (SPEC §3.3.1).
 
     Args:
         band: Time-left code 1-4; an auction is equally likely anywhere in its band.
         gap_hours: Time between the two books, in hours.
+        bands: Each band's bounds in hours left: the game client's (BAND_HOURS) or Blizzard's API's (ID_BAND_HOURS).
 
     Returns:
         clamp((gap − lo) ÷ (hi − lo), 0, 1).
     """
-    lo, hi = BAND_HOURS[band]
+    lo, hi = bands[band]
     return min(1.0, max(0.0, (gap_hours - lo) / (hi - lo)))
 
 
@@ -196,7 +201,8 @@ def estimate_volume_ids(prev: IdBook, next_: IdBook, max_gap_ms: int = MAX_GAP_M
     """Units sold, expired and newly listed between two snapshots with auction ids (SPEC §3.3.1, V33).
 
     An id still listed with fewer units sold the difference (a partial commodity buy). An id that is gone
-    expired with its band's chance of running out in the gap, else it sold. An id not seen before is new.
+    expired with its band's chance of running out in the gap (Blizzard's bounds, ID_BAND_HOURS), else it sold. An
+    id not seen before is new.
 
     Args:
         prev: The earlier snapshot.
@@ -220,7 +226,7 @@ def estimate_volume_ids(prev: IdBook, next_: IdBook, max_gap_ms: int = MAX_GAP_M
         if b is not None:
             total[0] += max(0, a.qty - b.qty)
             continue
-        expired = a.qty * expiring_fraction(a.band, gap_hours)
+        expired = a.qty * expiring_fraction(a.band, gap_hours, ID_BAND_HOURS)
         total[0] += a.qty - expired
         total[1] += expired
     for b in sorted(next_.auctions, key=lambda b: b.id):
@@ -228,6 +234,331 @@ def estimate_volume_ids(prev: IdBook, next_: IdBook, max_gap_ms: int = MAX_GAP_M
         if b.id not in earlier:
             total[2] += b.qty
     return {key: Volume(sold, expired, listed) for key, (sold, expired, listed) in sorted(totals.items())}
+
+
+@dataclass(frozen=True, slots=True)
+class Ending:
+    """How one auction left the AH (SPEC §2.4 Auction lifetimes, BZ22, BZ26, BZ27)."""
+
+    auction: int
+    key: int
+    qty: int                      # units when last seen
+    gap: tuple[int, int]          # (last seen ms, first absent ms)
+    expired: float                # the share of it that expired, 0-1; the rest left early, counted sold
+    matched: bool                 # a new listing of the same key and units appeared in the gap: a possible relist,
+                                  # measured, never subtracted (SPEC §2.4 item 5; the user, 2026-11-07)
+
+
+@dataclass(frozen=True)
+class Lifetimes:
+    """Every auction followed through consecutive id snapshots (SPEC §2.4 Auction lifetimes)."""
+
+    gaps: tuple[tuple[int, int], ...]                      # (earlier ms, later ms) of linked snapshots, ascending
+    seen: dict[tuple[int, int], frozenset[int]]            # gap -> item keys listed in either of its snapshots
+    endings: tuple[Ending, ...]
+    fills: tuple[tuple[int, int, int, tuple[int, int]], ...]     # (auction, key, units bought, gap): partial fills
+    # (auction, key, units, gap, unit price, lowest other price of the key in that snapshot or None): new listings
+    # first seen after a linked gap; the price against the book feeds the undercut share (SPEC §2.4, BZ29)
+    listed: tuple[tuple[int, int, int, tuple[int, int], int, int | None], ...]
+    clashes: int                  # sightings whose band contradicted the expiry window (checks the band bounds, BZ24)
+
+
+@dataclass(frozen=True, slots=True)
+class LifeFlow:
+    """One item's lifetimes over one gap: units, and listings that ended (SPEC §2.4)."""
+
+    sold: float = 0.0             # units: partial fills plus what left early
+    expired: float = 0.0          # units
+    listed: float = 0.0           # units of new listings
+    ended: float = 0.0            # listings that ended
+    expired_listings: float = 0.0
+    matched: float = 0.0          # ended listings matched to a new listing of the same key and units (BZ27)
+
+
+# How long an auction runs, from its band when first seen just after posting (SPEC §2.4; §2.2's 2, 8 and 24 h).
+# Provisional until a week of lifetimes is measured in M33b (BZ24, §6 item 5).
+DURATION_MS = {4: 24 * HOUR_MS, 3: 8 * HOUR_MS, 2: 2 * HOUR_MS, 1: 2 * HOUR_MS}
+# How far before a day its lifetimes must start so the day's result is exact (SPEC §2.4): an ending in the day was last
+# seen at most MAX_GAP_MS before it, posted at most 24 h before that, and its posting gap began up to MAX_GAP_MS earlier.
+LIFETIME_LOOKBACK_MS = 24 * HOUR_MS + 2 * MAX_GAP_MS
+
+
+def band_window(at_ms: int, band: int) -> tuple[int, int]:
+    """When an auction seen with a band can expire (Blizzard's band bounds, ID_BAND_HOURS; SPEC §2.4).
+
+    Args:
+        at_ms: The sighting's time.
+        band: Its time-left code 1-4.
+
+    Returns:
+        (start, end] in ms.
+    """
+    lo, hi = ID_BAND_HOURS[band]
+    return at_ms + int(lo * HOUR_MS), at_ms + int(hi * HOUR_MS)
+
+
+def narrow(window: tuple[int, int], at_ms: int, band: int) -> tuple[tuple[int, int], bool]:
+    """An expiry window narrowed by one more sighting's band (SPEC §2.4 item 2, BZ26).
+
+    Args:
+        window: The expiry window so far, (start, end] ms.
+        at_ms: The sighting's time.
+        band: Its time-left code.
+
+    Returns:
+        (the narrowed window, False); when the two don't overlap, (the sighting's own band window, True): the
+        newest evidence wins and the clash is counted.
+    """
+    lo, hi = band_window(at_ms, band)
+    start, end = max(window[0], lo), min(window[1], hi)
+    return ((start, end), False) if start < end else ((lo, hi), True)
+
+
+def expired_fraction(window: tuple[int, int], absent_ms: int) -> float:
+    """The share of an auction that expired, given it was gone by a time (SPEC §2.4 item 4, kind 1's band rule).
+
+    Args:
+        window: Its expiry window, (start, end] ms, the expiry equally likely anywhere in it.
+        absent_ms: The first snapshot it was missing from.
+
+    Returns:
+        clamp((absent − start) ÷ (end − start), 0, 1): 0 when the gap is wholly before the window (sold), 1 when
+        the window ends inside or before the gap (expired).
+    """
+    start, end = window
+    return min(1.0, max(0.0, (absent_ms - start) / (end - start)))
+
+
+def match_relists(vanished: list[tuple[int, int, int, float]], new: list[Auction], gap: tuple[int, int]) -> list[Ending]:
+    """Endings of one gap, each matched to a new listing of the same item and units if one is free (BZ27).
+
+    A cancel looks like a sale and the API names no seller; the only clue is a new id for the same key (item and
+    bonus list) and units in the same gap. Measured on house 114 such a listing is as likely three hours later
+    (0.70) as in the vanish gap (0.68), so a match is counted, never subtracted. Each new listing matches at most
+    one ending, lowest ids first; only an ending that may have left early (expired < 1) is matched.
+
+    Args:
+        vanished: (auction, key, units, expired share) of the auctions gone in the gap, by auction id.
+        new: The auctions first seen after it, by auction id.
+        gap: (earlier ms, later ms).
+
+    Returns:
+        The Endings, in auction id order.
+    """
+    free: dict[tuple[int, int], list[int]] = {}
+    for a in new:
+        free.setdefault((a.key, a.qty), []).append(a.id)
+    endings = []
+    for auction, key, qty, expired in vanished:
+        ids = free.get((key, qty))
+        matched = bool(ids) and expired < 1.0
+        if matched:
+            ids.pop(0)
+        endings.append(Ending(auction, key, qty, gap, expired, matched))
+    return endings
+
+
+def lowest_two(auctions: Sequence[Auction]) -> dict[int, list[tuple[int, int]]]:
+    """Each key's two cheapest auctions in a snapshot.
+
+    Args:
+        auctions: The snapshot's auctions.
+
+    Returns:
+        key -> up to two (unit price, auction id), cheapest first (ties: lower id).
+    """
+    out: dict[int, list[tuple[int, int]]] = {}
+    for a in auctions:
+        best = out.setdefault(a.key, [])
+        best.append((a.price, a.id))
+        if len(best) > 2:
+            best.sort()
+            best.pop()
+    return {key: sorted(best) for key, best in out.items()}
+
+
+def lowest_other(best: list[tuple[int, int]], auction: int) -> int | None:
+    """The cheapest price of the key's other auctions (the book a new listing joined, SPEC §2.4).
+
+    Args:
+        best: The key's two cheapest (price, id), from `lowest_two`.
+        auction: The new listing's id.
+
+    Returns:
+        Copper per unit; None when it is the only auction of its key.
+    """
+    others = [price for price, i in best if i != auction]
+    return others[0] if others else None
+
+
+def new_listing_positions(lt: Lifetimes) -> dict[tuple[int, int], dict[int, dict[int, float]]]:
+    """New listings' units by their position against the book at first sight (SPEC §2.4, §3.3.2, BZ29).
+
+    Args:
+        lt: From `lifetimes`.
+
+    Returns:
+        gap -> item key -> position -> units, the position being price ÷ the lowest other price, in thousandths
+        rounded half up (floor(x × 1000 + 0.5), §3.3); a listing with no other auction of its key is left out.
+    """
+    out: dict[tuple[int, int], dict[int, dict[int, float]]] = {}
+    for _, key, units, gap, price, lowest in lt.listed:
+        if lowest is None:
+            continue
+        position = position_milli(price, lowest)
+        by_position = out.setdefault(gap, {}).setdefault(key, {})
+        by_position[position] = by_position.get(position, 0.0) + units
+    return out
+
+
+def position_milli(price: int, lowest: int) -> int:
+    """A price's position against a lowest price, in thousandths (SPEC §3.3 rounding).
+
+    Args:
+        price: Copper per unit.
+        lowest: The lowest other price, copper per unit (> 0).
+
+    Returns:
+        floor(price × 1000 ÷ lowest + 0.5), in integers only.
+    """
+    return (2 * price * 1000 + lowest) // (2 * lowest)
+
+
+def lifetimes(books: Iterable[IdBook], max_gap_ms: int = MAX_GAP_MS, keep_from_ms: int | None = None) -> Lifetimes:
+    """Follow every auction id from first sight to its end (SPEC §2.4 Auction lifetimes, BZ22, BZ26, BZ27).
+
+    Snapshots more than max_gap_ms apart don't link: nothing carries over the hole. An auction first seen right
+    after a linked gap was posted in it, so its expiry window is that gap plus the duration its band implies
+    (DURATION_MS); one seen in the first snapshot, or after a hole, gets its band's window. Every later sighting
+    narrows the window (`narrow`; Blizzard's band bounds, ID_BAND_HOURS). A drop in units is a partial fill, sold
+    in that gap. An auction gone in a gap expired by `expired_fraction` and otherwise left early (sold), with a
+    possible relist counted (`match_relists`).
+
+    Args:
+        books: Snapshots of one market, oldest first; read once, so a generator keeps one in memory at a time.
+        max_gap_ms: Largest gap between linked snapshots, in ms.
+        keep_from_ms: Keep the records (gaps, endings, fills, listings) only of gaps ending at or after this; the
+            earlier snapshots still build each auction's window. None keeps everything.
+
+    Returns:
+        The Lifetimes; auctions still listed at the end have no ending.
+    """
+    live: dict[int, list] = {}                     # auction id -> [key, units, expiry window]
+    gaps, endings, fills, listed, seen = [], [], [], [], {}
+    clashes, prev_at, prev_keys = 0, None, frozenset()
+    for book in books:
+        linked = prev_at is not None and 0 < book.at_ms - prev_at <= max_gap_ms
+        gap = (prev_at, book.at_ms) if linked else None
+        keep = linked and (keep_from_ms is None or book.at_ms >= keep_from_ms)   # earlier gaps only build windows
+        current = sorted(book.auctions, key=lambda a: a.id)
+        ids = {a.id for a in current}
+        vanished = []
+        if linked:
+            vanished = [(i, s[0], s[1], expired_fraction(s[2], book.at_ms)) for i, s in sorted(live.items()) if i not in ids]
+            for auction, *_ in vanished:
+                del live[auction]
+        else:
+            live = {}                              # a hole: nothing is known across it
+        new = []
+        lowest = lowest_two(current) if keep else {}
+        for a in current:
+            state = live.get(a.id)
+            if state is None:
+                if linked:
+                    new.append(a)
+                    if keep:
+                        listed.append((a.id, a.key, a.qty, gap, a.price, lowest_other(lowest[a.key], a.id)))
+                    posted = (prev_at + DURATION_MS[a.band], book.at_ms + DURATION_MS[a.band])
+                    window, clash = narrow(posted, book.at_ms, a.band)
+                    clashes += clash and a.band != 1   # short at first sight is expected to clash (SPEC §2.4 item 2)
+                else:
+                    window = band_window(book.at_ms, a.band)
+                live[a.id] = [a.key, a.qty, window]
+                continue
+            if a.qty < state[1]:
+                if keep:
+                    fills.append((a.id, a.key, state[1] - a.qty, gap))
+                state[1] = a.qty
+            state[2], clash = narrow(state[2], book.at_ms, a.band)
+            clashes += clash
+        keys = frozenset(a.key for a in current)
+        if keep:
+            gaps.append(gap)
+            seen[gap] = prev_keys | keys
+            endings.extend(match_relists(vanished, new, gap))
+        prev_at, prev_keys = book.at_ms, keys
+    return Lifetimes(tuple(gaps), seen, tuple(endings), tuple(fills), tuple(listed), clashes)
+
+
+def life_flows(lt: Lifetimes) -> dict[tuple[int, int], dict[int, LifeFlow]]:
+    """Each gap's lifetimes summed per item (SPEC §2.4 "What the lifetimes feed").
+
+    Args:
+        lt: From `lifetimes`.
+
+    Returns:
+        gap -> item key -> LifeFlow, for every item listed in either snapshot of the gap (zeros included, so an
+        observed hour with no sale reads 0, not missing). An ending's units split into expired (its expired
+        share) and left early, which is sold.
+    """
+    totals: dict[tuple[int, int], dict[int, list[float]]] = {
+        gap: {key: [0.0] * 6 for key in sorted(lt.seen[gap])} for gap in lt.gaps}
+    for e in lt.endings:
+        row = totals[e.gap][e.key]
+        row[0] += e.qty * (1.0 - e.expired)
+        row[1] += e.qty * e.expired
+        row[3] += 1.0
+        row[4] += e.expired
+        row[5] += 1.0 if e.matched else 0.0
+    for _, key, units, gap in lt.fills:
+        totals[gap][key][0] += units
+    for _, key, units, gap, *_ in lt.listed:
+        totals[gap][key][2] += units
+    return {gap: {key: LifeFlow(*row) for key, row in by_key.items()} for gap, by_key in totals.items()}
+
+
+def gap_hours(gap: tuple[int, int]) -> list[int]:
+    """The clock hours a gap's sales are credited to (SPEC §2.4 item 4, BZ30).
+
+    Args:
+        gap: (earlier ms, later ms).
+
+    Returns:
+        Hour starts in ms: from the earlier snapshot's hour, as many as the gap is long in whole hours (rounded
+        half up, at least one).
+    """
+    count = max(1, math.floor((gap[1] - gap[0]) / HOUR_MS + 0.5))
+    first = gap[0] // HOUR_MS * HOUR_MS
+    return [first + k * HOUR_MS for k in range(count)]
+
+
+def sold_by_hour(flows: dict[tuple[int, int], dict[int, LifeFlow]], hours: set[int] | None = None) -> dict[int, dict[int, float]]:
+    """Sales rate per clock hour from lifetimes: the vanish-hour credit (SPEC §2.4 item 4, §3.3 sales_how, BZ30).
+
+    A gap's sold units are spread evenly over its hours (`gap_hours`), each hour taking an even share of the gap's
+    time too; an hour credited by several gaps pools their units and time, as `hourly_sales` pools book pairs.
+
+    Args:
+        flows: From `life_flows`.
+        hours: Only these hour starts (ms); None for every credited hour.
+
+    Returns:
+        Item key -> hour start ms -> units sold per hour; 0 for an item listed in the gap that sold nothing.
+    """
+    units: dict[int, dict[int, float]] = {}
+    time_ms: dict[int, float] = {}
+    for gap in sorted(flows):
+        credited = gap_hours(gap)
+        share = (gap[1] - gap[0]) / len(credited)
+        for hour in credited:
+            if hours is not None and hour not in hours:
+                continue
+            time_ms[hour] = time_ms.get(hour, 0.0) + share
+            for key, flow in flows[gap].items():
+                by_hour = units.setdefault(key, {})
+                by_hour[hour] = by_hour.get(hour, 0.0) + flow.sold / len(credited)
+    return {key: {hour: u * HOUR_MS / time_ms[hour] for hour, u in sorted(by_hour.items())}
+            for key, by_hour in sorted(units.items())}
 
 
 def group_book(snapshot: IdBook) -> Book:

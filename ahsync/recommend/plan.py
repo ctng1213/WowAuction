@@ -117,7 +117,8 @@ def sell_facts(i: ItemIntel, info: ItemInfo | None, de: tuple[float, str] | None
         i.cur_qty, (info.vendor_sell if info else None) or 0, de[0] if de else None, de[1] if de else None, 0.0,
         supply_level(i), _pattern(i.supply_how, i.supply_weeks, ()),                        # V23
         bool(info and info.item_class in GEAR_CLASSES), i.conf, record, i.med7, i.p90_30, i.p10_30,
-        tuple(PlanWindow(w.start_slot, w.hours, w.best_slot, w.weeks) for w in i.buy_windows), i.closes_30d)
+        tuple(PlanWindow(w.start_slot, w.hours, w.best_slot, w.weeks) for w in i.buy_windows), i.closes_30d,
+        i.undercut_share)
 
 
 def window_candidate(i: ItemIntel, min_flip_margin: float, max_trend_total: float = 0.15) -> bool:

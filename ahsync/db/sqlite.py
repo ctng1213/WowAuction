@@ -27,7 +27,7 @@ from ahsync.state.gathering import GatheringStore
 from ahsync.state.positions import PositionStore
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 24
+SCHEMA_VERSION = 25
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
@@ -247,6 +247,18 @@ MIGRATIONS: dict[int, str] = {
             PRIMARY KEY(market, key)
         )
     """,
+    # 25: listings that ended per item and day, and new listings by position, from auction lifetimes (SPEC §2.4, M33a).
+    25: """
+        CREATE TABLE IF NOT EXISTS new_listings_d1(
+            market TEXT NOT NULL, key INTEGER NOT NULL, day INTEGER NOT NULL, src TEXT NOT NULL, positions TEXT NOT NULL,
+            PRIMARY KEY(market, key, day, src)
+        ) WITHOUT ROWID;;
+        CREATE TABLE IF NOT EXISTS lifetimes_d1(
+            market TEXT NOT NULL, key INTEGER NOT NULL, day INTEGER NOT NULL, src TEXT NOT NULL,
+            ended REAL NOT NULL, expired REAL NOT NULL, matched REAL NOT NULL,
+            PRIMARY KEY(market, key, day, src)
+        ) WITHOUT ROWID;
+    """,
 }
 BACKUP_KEEP = 3
 BACKUP_PREFIX = "ahsync-"
@@ -255,7 +267,7 @@ STAGING_TABLES = ("intel_new", "plan_new", "views_new", "alternatives_new", "exp
 CANDLE_TABLES = ("candles_h1", "candles_d1")
 # Tables and time columns prune may delete from (SPEC §3.2 retention). Guards the SQL built in delete_before.
 PRUNABLE = {
-    "candles_h1": "t", "candles_d1": "t", "sales_h1": "t", "volume_d1": "day", "volume_cover": "day", "posts": "at", "purchases": "at",
+    "candles_h1": "t", "candles_d1": "t", "sales_h1": "t", "volume_d1": "day", "volume_cover": "day", "lifetimes_d1": "day", "new_listings_d1": "day", "posts": "at", "purchases": "at",
     "crafts": "at", "disenchants": "at", "auction_mail": "at", "payouts": "at", "untracked": "at", "mail_sent": "at", "skips": "at", "actions": "run_at",
     "gather_events": "at",
     "fetch_failures": "hour", "observed_hours": "hour", "ahledger_rows": "updated",

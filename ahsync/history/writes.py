@@ -61,6 +61,35 @@ class HistoryWrites:
             [(market, key, day, listed, sold, expired, src, "medium", method)
              for key, (sold, expired, listed) in sorted(rows.items())])
 
+    def replace_lifetimes_day(self, market: str, day: int, src: str,
+                              rows: dict[int, tuple[float, float, float]]) -> None:
+        """Write one day's ended listings for one source whole (idempotent; SPEC §2.4 Auction lifetimes).
+
+        Args:
+            market: Market id.
+            day: Day number.
+            src: The id source, e.g. "blizzard".
+            rows: key -> (ended, expired, matched), each in listings.
+        """
+        self.conn.execute("DELETE FROM lifetimes_d1 WHERE market = ? AND day = ? AND src = ?", (market, day, src))
+        self.conn.executemany(
+            "INSERT INTO lifetimes_d1(market, key, day, src, ended, expired, matched) VALUES (?, ?, ?, ?, ?, ?, ?)", [(market, key, day, src, *row) for key, row in sorted(rows.items())])
+
+    def replace_new_listings_day(self, market: str, day: int, src: str, rows: dict[int, dict[int, float]]) -> None:
+        """Write one day's new-listing positions for one source whole (idempotent; SPEC §3.3.2 u(p), BZ29).
+
+        Args:
+            market: Market id.
+            day: Day number.
+            src: The id source, e.g. "blizzard".
+            rows: key -> position (thousandths of the lowest other price) -> units (whole units: sums of quantities).
+        """
+        self.conn.execute("DELETE FROM new_listings_d1 WHERE market = ? AND day = ? AND src = ?", (market, day, src))
+        self.conn.executemany(
+            "INSERT INTO new_listings_d1(market, key, day, src, positions) VALUES (?, ?, ?, ?, ?)",
+            [(market, key, day, src, ",".join(f"{pos}:{int(units)}" for pos, units in sorted(by_pos.items())))
+             for key, by_pos in sorted(rows.items())])
+
     def stale_volume_days(self, market: str, src: str, method: int) -> list[int]:
         """Days whose rows of an estimated source come from an older method (V24).
 

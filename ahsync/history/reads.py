@@ -68,6 +68,10 @@ class ItemHistory:
     book: tuple[int, list[tuple[int, int, int, int]]] | None   # newest complete book: (at ms, [(price, stack, band, count)])
     # day -> source -> (kind, seconds observed per UTC hour or None for the whole day); market-wide, shared
     volume_cover: dict[int, dict[str, tuple[str, tuple[int, ...] | None]]] = field(default_factory=dict)
+    # day -> (ended, expired, matched) listings from auction lifetimes, summed over id sources (SPEC §2.4)
+    lifetimes: dict[int, tuple[float, float, float]] = field(default_factory=dict)
+    # day -> position (thousandths of the lowest other price) -> new units, summed over id sources (SPEC §3.3.2, BZ29)
+    new_listings: dict[int, dict[int, float]] = field(default_factory=dict)
 
 
 class ItemCatalog(dict):
@@ -190,6 +194,12 @@ class HistoryReads:
             "SELECT key, day, src, sold, expired, listed FROM volume_d1 WHERE market = ? AND day >= ? "
             "ORDER BY key, day, src", (market, window.volume_from_day)))
         cover = self.volume_cover(market, window.volume_from_day)
+        ends = _Groups(self.conn.execute(
+            "SELECT key, day, ended, expired, matched FROM lifetimes_d1 WHERE market = ? AND day >= ? "
+            "ORDER BY key, day, src", (market, window.volume_from_day)))
+        news = _Groups(self.conn.execute(
+            "SELECT key, day, positions FROM new_listings_d1 WHERE market = ? AND day >= ? ORDER BY key, day, src",
+            (market, window.volume_from_day)))
         # The recent complete scans first (newest first, ties: scan id), then only their entries:
         # a join over every stored book would read and sort all of them.
         scans = self.conn.execute(
@@ -208,7 +218,8 @@ class HistoryReads:
                 _best_per_time([(t, q or 0, src) for t, _, q, src in candles], ranked),
                 [tuple(r) for r in sales.take(key)], _best_per_time(d1.take(key), ranked),
                 CurrentPrice(*current[0]) if current else None, _volume_by_day(vol.take(key)),
-                _newest_book(books.take(key), rank), cover)
+                _newest_book(books.take(key), rank), cover, _lifetimes_by_day(ends.take(key)),
+                _positions_by_day(news.take(key)))
 
     def priced_keys(self, market: str, since_ms: int) -> list[int]:
         """Item keys with any price data in a market since a time.
@@ -521,6 +532,39 @@ def _best_per_time(rows: list[tuple], ranked: dict[str, int]) -> list[tuple]:
         elif order < best[-1][2]:
             best[-1] = (t, value, order)
     return [(t, value) for t, value, _ in best]
+
+
+def _positions_by_day(rows: list[tuple]) -> dict[int, dict[int, float]]:
+    """Stored new-listing positions, unpacked and summed per day over their sources (SPEC §3.3.2, BZ29).
+
+    Args:
+        rows: (day, "<position>:<units>,...") rows, by day.
+
+    Returns:
+        day -> position -> units.
+    """
+    out: dict[int, dict[int, float]] = {}
+    for day, packed in rows:
+        by_position = out.setdefault(day, {})
+        for pair in filter(None, packed.split(",")):
+            position, units = pair.split(":")
+            by_position[int(position)] = by_position.get(int(position), 0.0) + float(units)
+    return out
+
+
+def _lifetimes_by_day(rows: list[tuple]) -> dict[int, tuple[float, float, float]]:
+    """Stored ended-listing rows summed per day over their sources (SPEC §2.4).
+
+    Args:
+        rows: (day, ended, expired, matched) rows, by day.
+
+    Returns:
+        day -> (ended, expired, matched).
+    """
+    out: dict[int, tuple[float, float, float]] = {}
+    for day, *values in rows:
+        out[day] = tuple(a + b for a, b in zip(out.get(day, (0.0, 0.0, 0.0)), values))
+    return out
 
 
 def _volume_by_day(rows: list[tuple]) -> dict[int, dict[str, tuple[float, float, float]]]:

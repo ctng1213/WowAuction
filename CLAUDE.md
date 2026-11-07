@@ -20,6 +20,7 @@ python tools/gen_bonus_suffixes.py  # refresh addon/AHProfit/Data/BonusSuffixes.
 python tools/visual.py         # UI layout snapshots vs golden (--update to accept, --html to view)
 python tools/snapshot.py       # whole-plan snapshot vs tests/fixtures/worlds/w1.expected.json (--update to accept, prints a diff summary)
 python tools/gen_world.py      # regenerate the snapshot's fixture world w1.json (fixed seed), then snapshot.py --update
+python tools/lifetimes_report.py --raw <raw/market folder> --out docs/plans/blizzard-cloud-lifetimes.md   # M33 step 1: band, fate and relist distributions
 python -m ahsync_app           # the app shell from source: window, tray, setup, per-user folders (needs requirements-app.txt)
 python tools/build.py build 0.0.0   # local build: PyInstaller, then Inno Setup (Windows) or the dmg (macOS); needs requirements-app.txt + pyinstaller
 python tools/promote.py v0.1.0      # make a tested pre-release the latest release (or the Promote release workflow)

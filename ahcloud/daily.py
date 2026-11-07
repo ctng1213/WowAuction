@@ -21,13 +21,13 @@ from ahcloud.store import Store
 from ahsync.analysis.market import analyze_market
 from ahsync.collect.blizzard import (FALLBACK_NAMESPACE, SEARCH_SPAN, STATIC_NAMESPACE, BlizzardClient, BlizzardError,
                                      catalog_row, raw_key)
-from ahsync.collect.observations import ingest_snapshot
+from ahsync.collect.observations import id_days, ingest_snapshot, recompute_id_days
 from ahsync.collect.provider import snapshot_problems
 from ahsync.collect.snapshots import SnapshotStore
 from ahsync.db.sqlite import Database
 from ahsync.engine.item_key import KEY_SUFFIX_FACTOR
 from ahsync.engine.sellprob import MarketSettings
-from ahsync.engine.volume import MAX_GAP_MS
+from ahsync.engine.volume import LIFETIME_LOOKBACK_MS, SALES_PAIR_MAX_GAP_MS
 from ahsync.history.prune import prune
 from ahsync.intel.contract import MarketIntelligence
 
@@ -35,7 +35,7 @@ DB_KEY = "state/history.db"
 SRC = "blizzard"
 DAY_MS, HOUR_MS = 86_400_000, 3_600_000
 CLOUD_BOOK_DAYS = 2                     # the cloud needs only the newest book and the day's pairs (SPEC §2.4)
-COMPACT_DAYS = 3                        # compact snapshots kept: a day's id volume reads 6 h before it; lifetimes 25 h
+COMPACT_DAYS = 4                        # compact snapshots kept: a late snapshot (a day old) reaches 2 h + 36 h before its day
 MISSING_RETRY_MS = 7 * DAY_MS           # an id the item search didn't know is asked again after a week (BZ16)
 LAST_INGESTED = "last_ingested_at_ms"   # meta key: the newest snapshot in history.db (BZ12)
 REFUSED = "refused_snapshots"           # meta key: snapshot times refused whole, never tried again (FM74)
@@ -273,7 +273,8 @@ def _ingest_and_publish(db: Database, data: Store, intel_store: Store, client: B
         return DailyOutcome("empty")
     store = SnapshotStore(workdir / "snapshots")
     if pending and etag is not None:                                 # a rebuild starts the compact store afresh
-        download_compact(data, store.root, market, (key_time_ms(pending[0]) // DAY_MS) * DAY_MS - MAX_GAP_MS)
+        first_day = (key_time_ms(pending[0]) - SALES_PAIR_MAX_GAP_MS) // DAY_MS          # id_days' first day
+        download_compact(data, store.root, market, first_day * DAY_MS - LIFETIME_LOOKBACK_MS)
     new_refusals = ingest_pending(db, data, store, market, pending)
     if new_refusals:
         with db.transaction():
@@ -308,10 +309,11 @@ def _ingest_and_publish(db: Database, data: Store, intel_store: Store, client: B
 
 
 def ingest_pending(db: Database, data: Store, store: SnapshotStore, market: str, pending: list[str]) -> list[int]:
-    """Ingest raw snapshots in order, setting aside any that is refused whole (FM33, FM74).
+    """Ingest raw snapshots in order, setting aside any that is refused whole (FM33, FM74), then their id volume.
 
     A refused snapshot is stored nowhere (`ingest_snapshot` checks before writing) and logged with its key and
-    reason; the rest go on, so one bad answer from Blizzard never stops the cloud.
+    reason; the rest go on, so one bad answer from Blizzard never stops the cloud. The days the batch touches get
+    their lifetimes recomputed once at the end, not once per snapshot (each day reads 36 h before it, SPEC §2.4).
 
     Args:
         db: The history database.
@@ -323,7 +325,7 @@ def ingest_pending(db: Database, data: Store, store: SnapshotStore, market: str,
     Returns:
         The times of the snapshots refused, ascending.
     """
-    refused = []
+    refused, days = [], set()
     for key in pending:
         try:
             observation = snapshot(data, key, market)
@@ -335,7 +337,10 @@ def ingest_pending(db: Database, data: Store, store: SnapshotStore, market: str,
             log.warning("refused %s: %s", key, "; ".join(problems))
             refused.append(key_time_ms(key))
         elif observation is not None:                               # an empty house ingests nothing (BZ5)
-            ingest_snapshot(db, store, observation)
+            ingest_snapshot(db, store, observation, id_volume=False)
+            days |= id_days(store, market, SRC, observation.at_ms)
+    with db.transaction():
+        recompute_id_days(db, store, market, SRC, days)
     return refused
 
 
