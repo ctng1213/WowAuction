@@ -40,6 +40,19 @@ def test_D32_failing_hour_files_are_one_alert_per_market():
     assert alert["text"].startswith(f"21 hours of {M} failed 4 times: Fri 9 Oct 00:00–21:00. ")
 
 
+def test_D103_lines_of_a_market_no_longer_configured_raise_no_alert():
+    old = "forever.pvp.horde.us"
+    now_on = market(market="forever.normal.horde.us")
+    rows = [row("bad_file", {"market": old, "hour": h, "failures": 26}, topic=f"bad_file:{old}:{h}")
+            for h in range(497640, 497650)]
+    rows += [row("ahledger_no_market", {"market": old}, topic=f"ahledger_no_market:{old}"),
+             row("unknown_realm", {"realm": "Classic Beta PvP", "faction": "Horde"}, topic="realm:Classic Beta PvP")]
+    alerts = status_view.alerts(rows, facts(now_on), NOW, 0)
+    assert [a["title"] for a in alerts] == [status_view.message(rows[-1], 0)[0]]     # only the realm line
+    assert not any(old in a["text"] for a in alerts)
+    assert len(status_view.alerts(rows, facts(market(market=old)), NOW, 0)) == 3      # switch back: they return
+
+
 def test_D33_ahf_data_older_than_6_hours_is_flagged_on_the_card_and_as_a_warning():
     old = market(newest_price_ms=FRI_9 + 21 * HOUR + 14 * MINUTE)
     fresh = market(market=OTHER)
