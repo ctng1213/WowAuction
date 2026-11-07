@@ -70,7 +70,7 @@ class Result:
     out: str = ""
 
 
-Run = Callable[..., Result]   # (args, *, input_text=None, extra_env=None, capture=False) -> Result
+Run = Callable[..., Result]   # (args, *, input_text=None, extra_env=None, capture=False, timeout_s=None) -> Result
 
 
 class BuildError(Exception):
@@ -123,7 +123,7 @@ class World:
         return text
 
     def cmd(self, args: list[str], what: str, *, input_text: str | None = None,
-            extra_env: dict[str, str] | None = None, capture: bool = False) -> Result:
+            extra_env: dict[str, str] | None = None, capture: bool = False, timeout_s: float | None = None) -> Result:
         """Log and run a command that must succeed.
 
         Args:
@@ -132,6 +132,7 @@ class World:
             input_text: Standard input, if any.
             extra_env: Variables added to the environment (a way to pass a password without the command line).
             capture: Whether to capture standard output.
+            timeout_s: Seconds before the command is stopped (exit 124); None is RUN_TIMEOUT_S.
 
         Returns:
             The command's result.
@@ -140,7 +141,7 @@ class World:
             BuildError: "<what> failed (exit N)" when it exits non-zero.
         """
         self.out(self.redact("+ " + " ".join(args)))
-        result = self.run(args, input_text=input_text, extra_env=extra_env, capture=capture)
+        result = self.run(args, input_text=input_text, extra_env=extra_env, capture=capture, timeout_s=timeout_s)
         if result.code != 0:
             raise BuildError(f"{what} failed (exit {result.code})")
         return result
@@ -534,18 +535,37 @@ def build_windows(world: World, version: str) -> list[str]:
     return [f"dist/{artifact_names(version)['windows']}"]
 
 
+NOTARY_ATTEMPT_S = 20 * 60          # one submission and its wait: Apple takes about a minute (FM73)
+NOTARY_RETRY_WAIT_S = 30            # before the second attempt
+
+
 def notarize(world: World, path: str) -> None:
-    """Submit a file to Apple's notary service and wait (the key from a private temp file).
+    """Submit a file to Apple's notary service and wait, at most twice (the key from a private temp file).
+
+    A submission can stall before its upload completes (CI run 42314968556: no "Submission ID received" for an
+    hour), so each attempt is stopped after 20 minutes and tried once more; notarytool's own --timeout bounds only
+    the wait, not the upload (FM73).
 
     Args:
-        world: The outside world (NOTARY_KEY_P8, NOTARY_KEY_ID, NOTARY_ISSUER_ID).
+        world: The outside world (NOTARY_KEY_P8, NOTARY_KEY_ID, NOTARY_ISSUER_ID; its sleep waits between tries).
         path: The zip or dmg to submit.
+
+    Raises:
+        BuildError: "notarytool submit failed (exit N) after 2 attempts" when both failed or stalled.
     """
     with private_folder() as folder:
         key = write_private(folder / "notary.p8", world.env.get("NOTARY_KEY_P8", "").encode("utf-8"))
-        world.cmd(["xcrun", "notarytool", "submit", path, "--wait", "--key", str(key),
-                   "--key-id", secret_id(world, "NOTARY_KEY_ID"), "--issuer", secret_id(world, "NOTARY_ISSUER_ID")],
-                  "notarytool submit")
+        args = ["xcrun", "notarytool", "submit", path, "--wait", "--key", str(key),
+                "--key-id", secret_id(world, "NOTARY_KEY_ID"), "--issuer", secret_id(world, "NOTARY_ISSUER_ID")]
+        for attempt in (1, 2):
+            try:
+                world.cmd(args, "notarytool submit", timeout_s=NOTARY_ATTEMPT_S)
+                return
+            except BuildError as error:
+                if attempt == 2:
+                    raise BuildError(f"{error} after 2 attempts") from None
+                world.out(f"{error}; retry 1 of 1 in {NOTARY_RETRY_WAIT_S} s")
+                world.sleep(NOTARY_RETRY_WAIT_S)
 
 
 STAPLE_WAITS_S = (15, 30, 60)      # between the 4 staple attempts (FM64)
@@ -703,7 +723,7 @@ def release_command(world: World, tag: str) -> int:
 # ---------------------------------------------------------------- entry point
 
 def real_run(args: list[str], *, input_text: str | None = None, extra_env: dict[str, str] | None = None,
-             capture: bool = False) -> Result:
+             capture: bool = False, timeout_s: float | None = None) -> Result:
     """Run a command in the repository root, without the credentials in its environment.
 
     PyInstaller's hooks and the packaging tools run third-party code, so the certificate, its password and the
@@ -715,13 +735,15 @@ def real_run(args: list[str], *, input_text: str | None = None, extra_env: dict[
         input_text: Standard input, if any.
         extra_env: Variables added to the environment.
         capture: Capture standard output (else it streams to the job's log).
+        timeout_s: Seconds before it is stopped; None is RUN_TIMEOUT_S.
 
     Returns:
         The exit code (124 on a timeout, 127 when the program is missing) and the captured output.
     """
     env = {name: value for name, value in os.environ.items() if name not in CREDENTIALS}
     try:
-        proc = subprocess.run(args, cwd=ROOT, input=input_text, text=True, check=False, timeout=RUN_TIMEOUT_S,
+        proc = subprocess.run(args, cwd=ROOT, input=input_text, text=True, check=False,
+                              timeout=RUN_TIMEOUT_S if timeout_s is None else timeout_s,
                               stdout=subprocess.PIPE if capture else None, env={**env, **(extra_env or {})})
     except subprocess.TimeoutExpired:
         return Result(124)
