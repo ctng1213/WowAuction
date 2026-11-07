@@ -190,13 +190,16 @@ def flip_offers(stats: dict[int, ItemIntel], items: dict[int, ItemInfo], vendor_
         cfg: Config (min_flip_margin, sell_window_hours).
 
     Returns:
-        Item key -> "expected per unit,window price,best slot" for flip candidates, by key.
+        Item key -> "expected per unit,window price,best slot" for flip candidates, by key; none for an item with
+        fewer than MIN_HOURLY_CLOSES hourly closes in 30 days, which has no later window to sell in (R28, R29).
     """
     out = {}
     duration = fees.shortest_duration_covering(cfg.sell_window_hours)
     for key in sorted(stats):
         i = stats[key]
-        if key in vendor_sold or i.cur_suspect or not window_candidate(i, cfg.min_flip_margin, cfg.max_trend_total):
+        thin = i.closes_30d is not None and i.closes_30d < MIN_HOURLY_CLOSES      # no later window, so no flip (R28)
+        if (key in vendor_sold or i.cur_suspect or thin
+                or not window_candidate(i, cfg.min_flip_margin, cfg.max_trend_total)):
             continue
         how = _pattern(i.how, i.how_weeks, FLAT)
         best = max(i.sell_windows, key=lambda w: (how[w.best_slot], -w.best_slot)).best_slot
