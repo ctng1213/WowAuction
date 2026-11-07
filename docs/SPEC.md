@@ -732,7 +732,7 @@ It is always visible. Every action row for an item with a record shows (the tool
 
 The week's 168 hours are treated as **repeating slots**: every Tuesday 19:00 is the same slot. Each week of history adds one more observation to each slot. So the patterns sharpen over time and become a forecast for the coming week.
 
-- **Recency weighting.** `how` and `sales_how` use a weighted median per slot. Each week's observation has weight `0.5 ^ (age_in_weeks ÷ pattern_half_life_weeks)` (4), so a pattern from last month counts half as much as last week's. A shift in when people buy, say after a patch, shows up within a few weeks. **Planned (M38; the user, 2026-11-07):** the default becomes 2 weeks while Forever's new economy settles (last week 1, two weeks ago ½, four ¼), to be returned to 4 once its patterns are stable (around January 2027); it is a shared analysis setting, so the cloud's document carries it. Fixed 7/14/30-day cut-offs were considered and rejected: a weekly pattern gets one sample per slot per week.
+- **Recency weighting.** `how` and `sales_how` use a weighted median per slot. Each week's observation has weight `0.5 ^ (age_in_weeks ÷ pattern_half_life_weeks)` (2; it was 4), so a pattern from two weeks ago counts half as much as last week's. A shift in when people buy, say after a patch, shows up within a few weeks. **Built M38 (the user, 2026-11-07):** the default is 2 weeks while Forever's new economy settles (last week 1, two weeks ago ½, four ¼), to be returned to 4 once its patterns are stable (around January 2027); it is a shared analysis setting, so the cloud's document carries it. Fixed 7/14/30-day cut-offs were considered and rejected: a weekly pattern gets one sample per slot per week.
   - Weighted median, deterministic: sort the values, then take the first value where the cumulative weight reaches half the total.
 - **Best selling windows** (`patterns.sell_windows`):
   1. Take the slots with data (at least 1 week, W16) whose `sell_score` is at least `window_threshold` (90%) of the best such slot. A slot whose value only comes from its weekday's fallback can't join a window, so every window has at least 1 week of data; buying windows (§3.3.6) follow the same rule.
@@ -1519,7 +1519,7 @@ high_risk_pct = 25                            # risk % shown in amber above this
 daily_refresh_time = "06:00"                  # full refresh once a day after this local time (§3.1.1)
 post_lead_hours = 8                           # posts are planned this long before their peak slot (§3.4C)
 sell_window_hours = 8                         # sell-probability window when posting now (§3.3.2)
-pattern_half_life_weeks = 4                   # recency weighting of weekly patterns (§3.3.4)
+pattern_half_life_weeks = 2                   # recency weighting of weekly patterns (§3.3.4; 2 since M38, back to 4 around Jan 2027)
 window_threshold = 0.90                       # a slot joins a best-selling window at ≥ 90% of the best slot's score
 peak_tolerance = 0.10                         # after a missed peak, a later window must be within 10% of the original (§3.4.0)
 week_start = "Mon"                            # plan weeks start Mon 00:00 local; a new week is a fresh slate

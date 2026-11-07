@@ -83,7 +83,7 @@ def recency_weight(age_weeks: int, half_life_weeks: float) -> float:
 
     Args:
         age_weeks: Whole weeks between the observation and now (0 = this week).
-        half_life_weeks: pattern_half_life_weeks from config (4).
+        half_life_weeks: pattern_half_life_weeks from config (2).
 
     Returns:
         0.5 ^ (age_weeks ÷ half_life_weeks).
