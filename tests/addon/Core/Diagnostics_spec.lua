@@ -31,9 +31,12 @@ describe("Diagnostics", function()
 
   it("turns a missing API into error text instead of raising", function()
     Boot()
-    GetNumSkillLines = nil   -- as if Forever had removed it
+    GetSkillLineInfo = function() error("boom") end   -- an API that fails when called
     Stubs.FireEvent("PLAYER_LOGOUT")
     assert_eq(AHProfitDB.diagnostics.skillLines:sub(1, 7), "error: ")
+    GetNumSkillLines = nil   -- removed, as on the live Forever client (A93): said plainly, not as an error
+    Stubs.FireEvent("PLAYER_LOGOUT")
+    assert_eq(AHProfitDB.diagnostics.skillLines, "none: no Skills tab API")
   end)
 
   it("records the last merchant's raw items once they have loaded", function()

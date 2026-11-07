@@ -173,6 +173,48 @@ function Stubs.Define(name, value)
   Define(name, value)
 end
 
+-- The Classic globals the live Forever client (build 1.60.1, 2026-11-06) no longer has: its diagnostics read
+-- each of them nil (SPEC §6 item 26).
+Stubs.DROPPED_ON_LIVE = { "GetItemInfo", "GetItemInfoInstant", "GetSpellInfo", "GetNumSkillLines", "GetSkillLineInfo",
+                          "GetTradeSkillLine", "GetNumTradeSkills", "GetTradeSkillInfo", "GetTradeSkillRecipeLink",
+                          "GetCraftDisplaySkillLine", "GetNumCrafts", "GetCraftInfo", "GetMerchantItemInfo",
+                          "GetContainerItemInfo", "QueryAuctionItems", "CanSendAuctionQuery", "GetAuctionItemInfo" }
+
+--- Make the client look like the live Forever client: the dropped globals are gone, and what it has instead
+--- answers: C_Item, C_Spell, GetProfessions from world.skillLines' non-header lines, and C_MerchantFrame from
+--- world.merchant (A93, A94). Call once after Stubs.Reset (and any Stubs.Define of its own), before Stubs.Login.
+function Stubs.LiveForeverClient()
+  local itemInfo, instant, spellInfo = _G.GetItemInfo, _G.GetItemInfoInstant, _G.GetSpellInfo
+  local merchantInfo = _G.GetMerchantItemInfo
+  for _, name in ipairs(Stubs.DROPPED_ON_LIVE) do _G[name] = nil end
+  Define("C_Item", { GetItemInfo = itemInfo, GetItemInfoInstant = instant })
+  Define("C_Spell", { GetSpellName = function(id) return (spellInfo(id)) end, GetSpellInfo = function(id)
+    local name = spellInfo(id)
+    return name and { name = name, spellID = id, iconID = 136243 }
+  end })
+  local function Professions()
+    local out = {}
+    for _, line in ipairs(Stubs.world.skillLines) do
+      if not line.header then out[#out + 1] = line end
+    end
+    return out
+  end
+  Define("GetProfessions", function()
+    local indices = {}
+    for i = 1, #Professions() do indices[i] = i end
+    return unpack(indices)
+  end)
+  Define("GetProfessionInfo", function(i)
+    local line = Professions()[i]
+    if line then return line.name, "icon", line.rank, line.max end
+  end)
+  Define("C_MerchantFrame", { GetItemInfo = function(i)
+    local name, _, price, stack, numAvailable, _, _, extendedCost = merchantInfo(i)
+    return name and { name = name, price = price, stackCount = stack, numAvailable = numAvailable,
+                      hasExtendedCost = extendedCost }
+  end })
+end
+
 --- A fake modern C_TradeSkillUI (Dragonflight-era shape) showing one open profession window.
 --- Define it with Stubs.Define("C_TradeSkillUI", Stubs.ModernTradeSkill{...}) before Stubs.Login().
 ---@param window table  { name, rank, max, linked = bool, ready = bool (default true),
