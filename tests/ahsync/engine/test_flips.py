@@ -191,55 +191,41 @@ def dumped_linen(**changes) -> SellFacts:
     return replace(base, **changes)
 
 
-def test_R24_a_dumped_stack_is_bought_and_relisted_now_under_the_next_level():
+def test_R24_a_dumped_stack_is_bought_and_posted_for_its_later_window():
     s = replace(S, default_undercut_share=0.0)
-    buy, post = flip(dumped_linen(), s)
-    expected = 0.9 * 20 * 49 * 0.95 + 0.1 * (20 * 10 - 10)                 # 837.9 + 19 = 856.9
-    assert (buy.kind, buy.qty, buy.price, buy.chain) == ("buy", 20, 10, "flip:2589")
-    assert buy.expected == pytest.approx(expected) and buy.net == pytest.approx(expected - 200)
-    assert (post.kind, post.qty, post.price, post.at_ms, post.window_start_ms, post.peak_ms, post.duration_h) == \
-        ("post", 20, 49, NOW, None, None, 8)                                # min(50 − 1, max(48, 55)), due now, 8 h
-    assert (post.p, post.chain) == (pytest.approx(0.9), "flip:2589")
     sat = dumped_linen(windows=(PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18, 6),), book=((10, 20, 4, 1), (50, 20, 1, 5)),
                        p90=75,                                                  # it has traded at 72c (TT22)
                        how=tuple(1.5 if h == SAT * 24 + 18 else 1.0 for h in range(168)))
     buy, post = flip(sat, s)
-    assert (post.price, post.peak_ms, buy.expected) == (72, MONDAY + SAT * DAY + 18 * HOUR, pytest.approx(1368))
+    assert (buy.kind, buy.qty, buy.price, buy.chain) == ("buy", 20, 10, "flip:2589")
+    assert (post.price, post.peak_ms, buy.expected) == (72, MONDAY + SAT * DAY + 18 * HOUR, pytest.approx(1368))   # 20 × 72 × 0.95
+    assert post.window_start_ms is not None and post.at_ms > NOW
+    assert flip(dumped_linen(), s) == []                                        # no window: no flip, never a relist now
 
-
-def test_R26_a_flip_relists_now_unless_its_early_window_pays_enough_more():
+def test_R29_a_flip_sells_only_in_a_window_that_starts_later():
     s = replace(S, default_undercut_share=0.0)
-    how = tuple(1.05 if h == SAT * 24 + 18 else 1.0 for h in range(168))          # Saturday 18:00: 48 × 1.05 → 50c
+    friday = PlanWindow(4 * 24 + 13, 4, 4 * 24 + 14, 6)                          # Fri 13-17: open at Fri 14:00, now
+    how = tuple(1.5 if h in (4 * 24 + 14, SAT * 24 + 18) else (1.17 if h == SAT * 24 + 17 else 1.0) for h in range(168))
+    both = dumped_linen(windows=(friday, PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18, 6)), how=how, p90=75,
+                        book=((10, 20, 4, 1), (50, 20, 1, 5)))
+    buy, *posts = flip(both, s)
+    assert (buy.qty, buy.at_ms) == (40, NOW)                                      # both stacks pay at 72c
+    assert [(p.qty, p.price, (p.peak_ms - MONDAY) // HOUR) for p in posts] == [
+        (20, 72, SAT * 24 + 18), (20, 72, 7 * 24 + 4 * 24 + 14)]                 # Saturday, then next Friday 14:00
+    assert all(p.window_start_ms > NOW for p in posts)                            # the open Friday window counts as now
+    assert flip(dumped_linen(windows=(friday,), how=how, p90=75), s) == []      # no window after now: no flip
+    thin = dumped_linen(windows=(PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18, 6),), how=how, p90=75, closes_30d=4)
+    assert flip(thin, s) == []                                                  # thin data: no windows, no relist
+    opts = flips.later_only(plan.post_options(both, NOW, s), NOW)
+    assert all(o.window is not None and o.window[0] > NOW for o in opts if o.cap > 0) and any(o.cap > 0 for o in opts)
 
-    def saturday(weeks: int) -> SellFacts:
-        """R24's Linen with a Saturday window backed by `weeks` weeks of data."""
-        return dumped_linen(windows=(PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18, weeks),), how=how,
-                            book=((10, 20, 4, 1), (50, 20, 1, 5)))
-    _, early = flip(saturday(1), s)
-    assert (early.price, early.window_start_ms) == (49, None)       # 20 × 50 × 0.95 = 950 < 856.9 × 1.125 = 964.0
-    _, trusted = flip(saturday(6), s)
-    assert (trusted.price, trusted.peak_ms) == (50, MONDAY + SAT * DAY + 18 * HOUR)    # 950 > 856.9
-    # In the plan the window must also pay its timing premium (SPEC §3.4D.2): from Fri 14:00 the Sat 17:00 window
-    # waits 1.13 days (20.65%), and 950 ÷ 1.2065 = 787.4 < 856.9, so the funded flip relists now.
-    planned = plans.actions(world({LINEN: saturday(6)}), NOW, s=s, gold={"Amaya-G": RICH})
-    assert [(a.price, a.window_start_ms) for a in planned if a.kind == "post"] == [(49, None)]
-
-
-def test_R28_a_relist_now_needs_a_listing_left_or_enough_closes_to_ground_its_price():
+def test_R28_thin_data_is_no_flip_and_no_excluded_row():
     s = replace(S, default_undercut_share=0.0)
     spaulders = dumped_linen(key=7005, level=1_500_000, med7=1_500_000, p90=1_500_000, post_price=1_500_000,
                              book=((3500, 1, 3, 1),), cur=3500, cur_qty=1, ref_stack=1, sold_per_day=1.0,
                              supply_now=1, vendor_sell=100, closes_30d=4)      # one listing at 35s, med7 150g, 4 closes
     thin = plans.plan(world({7005: spaulders}), NOW, s=s, gold={"Amaya-G": RICH})
-    assert not [a for a in thin.actions if a.kind == "buy"]                    # nothing to relist against
-    assert [(a.candidate.strategy, a.reason) for a in thin.alternatives] == [("flip", "No listing left to price against")]
-    measured = plans.plan(world({7005: replace(spaulders, closes_30d=30)}), NOW, s=s, gold={"Amaya-G": RICH})
-    assert [(a.kind, a.price) for a in measured.actions] == [("buy", 3500), ("post", 1_500_000)]  # 30 closes: med7
-    linen = plans.plan(world({LINEN: dumped_linen(closes_30d=4, med7=55, p90=60)}), NOW, s=s, gold={"Amaya-G": RICH})
-    assert [(a.kind, a.price) for a in linen.actions] == [("buy", 10), ("post", 49)]     # under the 50c level left
-    opts = flips.relisted(flips._remaining_book(spaulders, 1), plan.post_options(spaulders, NOW, s), s)
-    assert [o.cap for o in opts] == [0]                                        # posting now has no room
-
+    assert not [a for a in thin.actions if a.kind == "buy"] and not thin.alternatives   # no windows: nothing to flip
 
 def gloves(**changes) -> SellFacts:
     """Embossed Leather Gloves (R27): listed at 8s and 16s, med7 and p90 15s, nobody buys them (P 0);
@@ -255,29 +241,19 @@ def test_R27_a_flip_whose_post_pays_no_more_than_disenchanting_is_not_a_flip():
     # P 0: the post is worth 1 × (21s − deposit) per glove, below the 21s of disenchanting it: a disenchant buy
     # (the Disenchant page lists it), not a flip, even though 21s against 8s paid clears the margin.
     assert flip(gloves()) == []
-    # Listed at 8s only, med7 and p90 30s, 2.7 sold a day (0.9 of a glove in the 8 h window): posting at 30s is
-    # worth about 0.9 × 30s × 0.95 + 0.1 × 21s ≈ 27s 75c per glove, above 21s: a flip.
-    selling = gloves(book=((800, 1, 3, 1),), sold_per_day=2.7, med7=3000, p90=3000, level=3000)
+    # Listed at 8s only, med7 and p90 30s, 2.7 sold a day, a Saturday window at 30s: posting there is worth more per
+    # glove than the 21s of disenchanting it: a flip.
+    selling = gloves(book=((800, 1, 3, 1),), sold_per_day=2.7, med7=3000, p90=3000, level=3000,
+                     windows=(PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18, 6),))                                         # a flip sells later (R29)
     buy, post = flip(selling)
-    assert (buy.qty, buy.price, post.price, post.p) == (1, 800, 3000, pytest.approx(0.9))
+    assert (buy.qty, buy.price, post.price, post.peak_ms) == (1, 800, 3000, MONDAY + SAT * DAY + 18 * HOUR)
     assert post.expected / post.qty > 2100
 
 
-def test_R25_no_flip_when_the_next_level_is_too_close():
-    close = dumped_linen(book=((45, 20, 4, 1), (50, 20, 4, 5)), cur=45)
-    assert flip(close, replace(S, default_undercut_share=0.0)) == []         # 856.9 < 1.2 × 900
-
-
-def test_relisting_needs_something_to_price_by():
-    alone = dumped_linen(book=((10, 20, 4, 1),), med7=None, p90=None)       # nothing left after the buy
-    [now] = flips.relisted(flips._remaining_book(alone, 1), plan.post_options(alone, NOW, S), S)
-    assert now.cap == 0
-    assert flip(alone) == []
-
-
-@pytest.mark.parametrize("s", [s for s in SHARED if s["call"] == "flip_now_offer"], ids=lambda s: s["name"])
-def test_FN1_a_flip_seen_in_a_live_book_shared_with_the_addon(s):
-    result = flips.flip_now_offer(**s["args"])
-    assert (result is None) == (s["expect"] is None), s["why"]
-    if result is not None:
-        assert result == pytest.approx(s["expect"]), s["why"]
+def test_R25_no_flip_when_the_later_window_does_not_clear_the_margin():
+    s = replace(S, default_undercut_share=0.0)
+    how = tuple(1.1 if h == SAT * 24 + 18 else 1.0 for h in range(168))               # 48 × 1.1 → 53c
+    close = dumped_linen(windows=(PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18, 6),), how=how, book=((45, 20, 4, 1), (50, 20, 1, 5)), cur=45)
+    assert flip(close, s) == []                                                       # 20 × 53 × 0.95 = 1007 < 1.2 × 900
+    cheap = replace(close, book=((10, 20, 4, 1), (50, 20, 1, 5)), cur=10)
+    assert [a.price for a in flip(cheap, s)] == [10, 53]                              # the same window pays from 10c

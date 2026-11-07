@@ -186,54 +186,6 @@
   "why": "an unknown count is not thin (as TT23 and PP4)"
  },
  {
-  "id": "FN1",
-  "name": "a dumped stack relisted now under the next level pays",
-  "call": "flip_now_offer",
-  "args": {
-   "p": 0.9,
-   "units": 20,
-   "cheapest": 10,
-   "relist": 49,
-   "fallback": 10,
-   "deposit": 10,
-   "min_flip_margin": 0.2
-  },
-  "expect": 856.9,
-  "why": "0.9 x 20 x 49 x 0.95 + 0.1 x (20 x 10 - 10) = 837.9 + 19 = 856.9; profit 656.9 >= 20% x 200"
- },
- {
-  "id": "FN1",
-  "name": "relisting 45c units at 49c does not pay the margin",
-  "call": "flip_now_offer",
-  "args": {
-   "p": 0.9,
-   "units": 20,
-   "cheapest": 45,
-   "relist": 49,
-   "fallback": 10,
-   "deposit": 10,
-   "min_flip_margin": 0.2
-  },
-  "expect": null,
-  "why": "856.9 < 1.2 x 900"
- },
- {
-  "id": "FN1",
-  "name": "volume unknown: the cheapest position's default chance",
-  "call": "flip_now_offer",
-  "args": {
-   "p": 0.5,
-   "units": 20,
-   "cheapest": 10,
-   "relist": 49,
-   "fallback": 10,
-   "deposit": 10,
-   "min_flip_margin": 0.2
-  },
-  "expect": 560.5,
-  "why": "0.5 x 20 x 49 x 0.95 + 0.5 x (200 - 10) = 465.5 + 95 = 560.5 >= 1.2 x 200"
- },
- {
   "id": "TT7",
   "name": "a rising trend stops at +15% in total",
   "call": "slot_price",

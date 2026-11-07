@@ -101,7 +101,8 @@ def opportunity(u: Universe, prefix: str) -> Opportunity:
 
 
 def linen_book(**changes) -> SellFacts:
-    """Linen: stacks of 20 at 5c, 8c and 12c below a 14c market, posting now only.
+    """Linen: stacks of 20 at 5c, 8c and 12c below a 14c market, and a Sunday window at the level (6 weeks): a flip
+    sells there, never at once (R29).
 
     Args:
         changes: Field overrides.
@@ -109,7 +110,8 @@ def linen_book(**changes) -> SellFacts:
     Returns:
         The SellFacts.
     """
-    base = facts(LINEN, 14, ref_stack=20, windows=(), post_price=13, med7=14, p90=14, vendor_sell=1,
+    base = facts(LINEN, 14, ref_stack=20, windows=(PlanWindow(SUN * 24 + 17, 3, SUN * 24 + 18, 6),), post_price=13,
+                 med7=14, p90=14, vendor_sell=1,
                  book=((5, 20, 4, 1), (8, 20, 4, 1), (12, 20, 4, 1), (14, 20, 4, 5)), cur=5, cur_qty=20,
                  sold_per_day=400.0, supply_now=400)
     return replace(base, **changes)

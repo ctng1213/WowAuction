@@ -193,7 +193,7 @@ local function FlipLines(charId, nowMs, offset, gold)
   local _, newest = Market.Times()
   local own = VM.OwnFlipRows(Market.FlipOffers(), { itemOf = LiveItem, levelsOf = LevelsOf, lookOf = LookOf,
     skip = FlipSkip(flipped), nowMs = nowMs, offsetMs = offset, totalGold = gold, curveOf = Market.Curve,
-    vendorOf = VendorOf, nowCandidates = Live.FlipCandidates(newest, VM.MIN_FLIP_MARGIN) })     -- A69
+    vendorOf = VendorOf })
   for _, row in ipairs(own) do rows[#rows + 1] = row end
   if #own > 0 then footer = footer .. " · " .. #own .. (#own == 1 and " own idea" or " own ideas") .. " (one stack each)" end
   return { lines = VM.WithNotes(rows), footer = footer,
