@@ -11,7 +11,7 @@ from ahcloud.publish import pointer_key, publish, read_latest, settings_from_dic
 from ahcloud.store import LocalStore
 from ahsync.engine.sellprob import MarketSettings
 from ahsync.engine.volume import VolumePrior
-from ahsync.intel.contract import MarketIntelligence, from_json
+from ahsync.intel.contract import INTEL_SCHEMA_VERSION, MarketIntelligence, from_json
 
 M = "forever.normal.horde.us"
 INTEL = MarketIntelligence(M, 1_000, 2_000, 4, {}, catalog={2589: ("Linen Cloth", 1, 7, 13, None)},
@@ -20,11 +20,11 @@ INTEL = MarketIntelligence(M, 1_000, 2_000, 4, {}, catalog={2589: ("Linen Cloth"
 
 def test_BZ15_the_document_is_named_by_its_hash_and_the_pointer_says_so(tmp_path):
     store = LocalStore(tmp_path)
-    [pointer] = publish(store, INTEL)
+    *_, pointer = publish(store, INTEL)                                         # the current schema's is last
     data = store.get(pointer.key).data
     assert pointer.key == f"intel/{M}/{hashlib.sha256(data).hexdigest()}.json.gz" and pointer.bytes == len(data)
     assert json.loads(store.get(pointer_key(M)).data) == {
-        "schema": 10, "built_ms": 1_000, "observations_until_ms": 2_000, "key": pointer.key, "bytes": len(data),
+        "schema": INTEL_SCHEMA_VERSION, "built_ms": 1_000, "observations_until_ms": 2_000, "key": pointer.key, "bytes": len(data),
         "sha256": pointer.sha256}
     assert from_json(gzip.decompress(data).decode()) == INTEL
     assert read_latest(store, M) == (INTEL, pointer)
@@ -40,9 +40,19 @@ def test_BZ18_a_transition_publishes_the_previous_schema_too(tmp_path):
     assert json.loads(store.get(pointer_key(M, 9)).data)["key"] == old.key
 
 
+def test_BZ37_the_cloud_publishes_schemas_10_and_11_side_by_side(tmp_path):
+    store = LocalStore(tmp_path)
+    old, new = publish(store, INTEL)
+    assert (old.schema, new.schema) == (10, 11) and old.key != new.key
+    for pointer in (old, new):
+        assert json.loads(store.get(pointer_key(M, pointer.schema)).data)["key"] == pointer.key
+        assert json.loads(gzip.decompress(store.get(pointer.key).data))["schema_version"] == pointer.schema
+    assert read_latest(store, M) == (INTEL, new)                                   # AHSync on 11 reads 11
+
+
 def test_a_document_that_does_not_match_its_pointer_is_refused(tmp_path):
     store = LocalStore(tmp_path)
-    [pointer] = publish(store, INTEL)
+    *_, pointer = publish(store, INTEL)
     store.put(pointer.key, gzip.compress(b"{}", mtime=0))                      # torn or tampered
     with pytest.raises(ValueError, match="not the document the pointer names"):
         read_latest(store, M)

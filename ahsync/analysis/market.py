@@ -278,6 +278,7 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
     hourly = prices.drop_suspect(raw, p10, p90)            # unconfirmed outliers count in no statistic (SPEC §5.2, FM31)
     item = replace(item, hourly_closes=hourly)
     med7 = prices.window_median(hourly, daily, now_ms, 7)
+    med14 = prices.window_median(hourly, daily, now_ms, 14)       # the tooltip's Price history only (SPEC §4.3, BZ37)
     med30 = prices.window_median(hourly, daily, now_ms, 30)
     last30 = [c for t, c in hourly if t > now_ms - 30 * DAY_MS]
     week = range((now_ms - 7 * DAY_MS) // DAY_MS + 1, now_ms // DAY_MS + 1)
@@ -313,7 +314,7 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
         **weekly, **window_fields(how, sales_profile, facts, settings),
         cur_suspect=prices.suspect_price(cur.price if cur else None, p10, p90, recent),
         median_daily_supply=typical,
-        observed_listing_turnover=observed_turnover(item.hourly_supply, now_ms),
+        observed_listing_turnover=observed_turnover(item.hourly_supply, now_ms), med14=med14,
         volume_kind=volume.main_kind, closes_30d=len(last30))
 
 

@@ -42,6 +42,14 @@ describe("Market", function()
     assert_eq(newest, generated - 3600000)
   end)
 
+  it("EX20 an item's last field is its 14-day median; a file written before it has none", function()
+    local Market = Boot(EX2)
+    local fields = "45,20,60,49,49,40,60,4,480,0,93,86,72,42,20,42,0,900,70,0,24"
+    assert_eq(Market.Decode(fields .. ",52;;").med14, 52)
+    assert_eq(Market.Decode(fields .. ";;").med14, nil)
+    assert_eq(Market.Decode(fields .. ",;;").med14, nil)
+  end)
+
   it("EX19 a tooltip-only item's one curve row is used at any hour; a shortlisted item keeps 24 rows", function()
     local Market = Boot(BIG)
     local SellProb = AHProfit.Engine.SellProb

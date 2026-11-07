@@ -330,7 +330,7 @@ def test_FM31_the_statistics_are_computed_from_the_filtered_closes(monkeypatch):
     monkeypatch.setattr(prices, "drop_suspect", filtered)
     intel, _ = market.analyze_market(MemoryHistory(), M, NOW, MarketSettings())
     rod = intel.items[6217]
-    assert (rod.med7, rod.med30) == (7, 7) and rod.p10_30 == 4000                 # medians from the filtered closes
+    assert (rod.med7, rod.med14, rod.med30) == (7, 7, 7) and rod.p10_30 == 4000   # medians from the filtered closes
     assert seen and all(n > 0 for n, *_ in seen if n)
 
 

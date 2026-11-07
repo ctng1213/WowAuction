@@ -91,4 +91,22 @@ export change.
 
 ## 4. Decisions made during execution
 
-(none yet)
+- **M36: the whole-plan snapshot moves too** (not only in M37–M38): `w1.expected.json` embeds the exported
+  `MarketIntelligence.lua`, whose item strings gain `med14` as their last field. Reviewed: the 12 exported items
+  differ only by that field (each has a value), the checksum by the same 49 characters, nothing else.
+- **M36: the market file's export version stays 4**: a trailing field is read as nil by an older file's decoder and
+  ignored by an older addon (`Market.Decode` drops unknown fields), so neither side needs to refuse the other.
+- **M36: TT25's first example fits on one line.** The mockup wrapped "40c (50 min) · 11% lower than 7d median" in a
+  browser font; the addon's width estimate (SPEC §4.3: characters × the font size × 0.55, a coin counting two) gives
+  302 px, under 320. The row now shows that, and a gold price ("2g 95s 67c (50 min) · …") for the continuation.
+
+## 5. Progress
+
+Branch `ctn-RCP-000-tooltip-and-flips`: the spec merge (1544b20), then M36 (the commit after it).
+
+- **M36 built** (tasks 1–5): `med14` and schema 11 published beside 10; the market file's last field; the tooltip's new
+  lines (`UI/TooltipView.lua`, `UI/Tooltip.lua`); TT8–TT21 and UI17 rewritten, TT25–TT31, EX20, BZ37 tested; the UI17
+  golden and the whole-plan snapshot updated and reviewed; SPEC §4.3 and §2.4 built, mockup §3b marked built.
+  Verified: Lua 484, visual 23, Python 1887, snapshot matches.
+- **M36 task 6 open**: `cdk diff` shown to the user, deploy on their "deploy", then release v0.1.3 (v0.1.2 is out).
+- **Next**: M37 (flips sell later), then M38 (two-week half-life).

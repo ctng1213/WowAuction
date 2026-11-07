@@ -63,7 +63,7 @@ def test_BZ18_a_newer_schema_is_refused_with_its_status_line(world):
 
 def test_FM71_a_document_whose_hash_differs_from_the_pointer_is_refused(world):
     store, origin, db = world
-    pointer = json.loads(store.get(f"intel/{M}/latest-10.json").data)
+    pointer = json.loads(store.get(f"intel/{M}/latest-{INTEL_SCHEMA_VERSION}.json").data)
     store.put(pointer["key"], gzip.compress(b'{"torn": true}', mtime=0))
     result = cloud_intel.poll(db, origin, ORIGIN, M, 5_000)
     assert result.state == "failed" and "hash differs" in result.reason
@@ -77,7 +77,7 @@ def test_FM71_a_document_whose_hash_differs_from_the_pointer_is_refused(world):
     (f"https://evil.example/intel/{M}/{'a' * 64}.json.gz", "outside intel/")])
 def test_SEC16_the_pointer_may_only_name_this_markets_document(world, key, reason):
     store, origin, db = world
-    store.put(f"intel/{M}/latest-10.json", json.dumps({"key": key, "sha256": "a" * 64}).encode())
+    store.put(f"intel/{M}/latest-{INTEL_SCHEMA_VERSION}.json", json.dumps({"key": key, "sha256": "a" * 64}).encode())
     result = cloud_intel.poll(db, origin, ORIGIN, M, 5_000)
     assert result.state == "failed" and reason in result.reason
     assert len(origin.requests) == 1                                          # the bad key is never fetched
@@ -89,15 +89,15 @@ def test_SEC16_an_inflating_document_another_markets_and_a_redirect_are_refused(
     bomb = gzip.compress(b"{" + b" " * 5000 + b"}", mtime=0)
     digest = hashlib.sha256(bomb).hexdigest()
     store.put(f"intel/{M}/{digest}.json.gz", bomb)
-    store.put(f"intel/{M}/latest-10.json", json.dumps({"key": f"intel/{M}/{digest}.json.gz", "sha256": digest}).encode())
+    store.put(f"intel/{M}/latest-{INTEL_SCHEMA_VERSION}.json", json.dumps({"key": f"intel/{M}/{digest}.json.gz", "sha256": digest}).encode())
     assert "inflates past 1000" in cloud_intel.poll(db, origin, ORIGIN, M, 5_000).reason
     monkeypatch.setattr(cloud_intel, "MAX_BYTES", 64 * 1024 * 1024)
     other = MarketIntelligence("forever.pvp.horde.us", 1, 1, 4, {})
     publish(store, other)
-    pointer = json.loads(store.get("intel/forever.pvp.horde.us/latest-10.json").data)
+    pointer = json.loads(store.get(f"intel/forever.pvp.horde.us/latest-{INTEL_SCHEMA_VERSION}.json").data)
     moved = pointer["key"].replace("forever.pvp.horde.us", M)
     store.put(moved, store.get(pointer["key"]).data)
-    store.put(f"intel/{M}/latest-10.json", json.dumps({**pointer, "key": moved}).encode())
+    store.put(f"intel/{M}/latest-{INTEL_SCHEMA_VERSION}.json", json.dumps({**pointer, "key": moved}).encode())
     assert "not forever.normal.horde.us's" in cloud_intel.poll(db, origin, ORIGIN, M, 5_000).reason
 
     def redirect(request):

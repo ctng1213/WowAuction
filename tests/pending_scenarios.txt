@@ -65,4 +65,4 @@ A92
 D99-D102
 
 # M36-M37 tooltip redesign and flips that sell later (docs/plans/tooltip-and-flips.md)
-TT25-TT31 EX20 BZ37 R29
+R29

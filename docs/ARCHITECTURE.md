@@ -111,7 +111,7 @@ flowchart TD
   BAPI[Blizzard: auctions + commodities of the house<br/>src blizzard, kind book, ids] -->|every 15 min, new Last-Modified only| Raw[(S3 raw/ envelope)]
   Raw -->|daily 09:00 UTC| Ingest[collect/observations.ingest_snapshot<br/>into state/history.db from S3]
   Ingest --> Analysis[analysis/market.py, unchanged: the baselines]
-  Analysis --> Doc[(S3 intel/: MarketIntelligence JSON by sha256, schema 10<br/>(11 planned M36: + med14, both published)<br/>+ latest-schema.json written last)]
+  Analysis --> Doc[(S3 intel/: MarketIntelligence JSON by sha256, schema 10<br/>(11 since M36: + med14; 10 and 11 published)<br/>+ latest-schema.json written last)]
   Raw -->|hourly, S3 event| Hourly[reprice_item + last_hour + recent ring<br/>over the latest document, no database]
   Hourly --> Doc
   Doc -->|CloudFront, public| Poll[collect/cloud_intel.py<br/>every 15 min, If-None-Match, sha256, schema]
@@ -320,3 +320,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-06: M31 built: the analyzer (`ahcloud/daily.py`, `hourly.py`, `publish.py`, `analyzer.py`) and its stack resources; the hourly mode reprices through `analysis.market.reprice_item` (not `with_scan`, which doesn't reprice); the daily run carries the hourly fields.
 - 2026-11-06: M32a built: AHSync reads the published summary (`collect/cloud_intel.py`, `app/cloud_job.py`), stages it with the re-plan and rewrites the addon files; ages count back from the document's `ages_at_ms`; in-game scans reprice.
 - 2026-11-07: tooltip and flips spec merge (`docs/plans/tooltip-and-flips.md`, M36–M38 planned): the summary's schema 11 (`med14`, published beside 10 during the transition) drawn on §2's document node; no component or flow changes.
+- 2026-11-07: M36 built: the summary is schema 11 (`med14`), published beside schema 10 (`ahcloud.publish.PUBLISHED_SCHEMAS`); the market file carries `med14` as its last field; the addon tooltip is laid out anew (no component or flow changes).
