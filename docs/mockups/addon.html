@@ -93,6 +93,21 @@
   .tooltip hr { border: none; border-top: 1px solid #2c3550; margin: 6px 0; }
   .tooltip .tt-hdr { display: flex; justify-content: space-between; gap: 12px; color: var(--title); }
   .tooltip .tt-age { color: var(--muted); } .tooltip .tt-age.old { color: var(--amber); }
+  /* 5. Minimap button */
+  .mm-scene { position: relative; width: 190px; height: 190px; }
+  .mm-map { position: absolute; left: 18px; top: 18px; width: 140px; height: 140px; border-radius: 50%;
+            background: radial-gradient(circle at 40% 35%, #6f7b4a, #3c4a2a 60%, #26301c); border: 3px solid #2a2418;
+            box-shadow: 0 0 0 2px #8a7440, inset 0 0 18px rgba(0,0,0,.6); }
+  .mm-map::after { content: ""; position: absolute; left: 64px; top: 64px; border: 6px solid transparent;
+                   border-bottom: 10px solid #ffe36b; transform: rotate(20deg); }
+  .mm-btn { position: absolute; width: 31px; height: 31px; border-radius: 50%; background: #0d0d0f center / 23px no-repeat;
+            border: 3px solid #b39143; box-shadow: 0 0 0 1px #000, 0 2px 4px rgba(0,0,0,.7); }
+  .mm-btn.hover { box-shadow: 0 0 0 1px #000, 0 0 8px 2px rgba(255,209,0,.55); }
+  .mm-btn.ghost { opacity: .45; border-style: dashed; }
+  .mm-dot { position: absolute; right: -3px; top: -3px; width: 9px; height: 9px; border-radius: 50%;
+            background: var(--amber); border: 1px solid #000; }
+  .mm-hint { color: #aaa; font-size: 11px; }
+  .mm-label { font: 11px system-ui, sans-serif; color: var(--muted); text-align: center; margin-top: 4px; }
   .tooltip .tt-do > span:first-child { color: #fff; } .tooltip .tt-do .lbl { color: #8fd3ff; }
   .tooltip .tt-line.dim > span:last-child { color: var(--muted); }
   .tooltip .tt-only { color: var(--muted); }
@@ -250,6 +265,53 @@
   <div style="padding-right:6px" id="pf-full-view"></div>
   <div class="footer" id="pf-full-footer"></div>
 </div>
+
+<h2>5. Minimap button</h2>
+<p class="note">A round button on the minimap's rim with the AHSync logo (the app icon's gold coin, cropped round), so the window is one click away without typing <code>/ahp</code>. <b>Left- or right-click</b> opens or closes the window, as <code>/ahp</code> does. <b>Drag</b> moves it around the rim; the position is kept for the account (<code>AHProfitDB.minimap.angle</code>, default 225°, bottom left). <b>Hover</b> shows the data age and how many of the plan's actions are due now on this character, with their expected net, from the same view model as the window (no arithmetic in frame code). An <b>amber dot</b> appears when the window would show a problem: data over 24 h old, no market file, or files from another AHSync version. <code>/ahp minimap</code> hides or shows it. No library (no LibDBIcon); in combat a click opens nothing, as <code>/ahp</code> doesn't.</p>
+<div class="stage">
+  <div>
+    <div class="mm-scene">
+      <div class="mm-map"></div>
+      <div class="mm-btn" style="left:16px;top:130px;background-image:url(../../ahsync_app/icon.png)"></div>
+    </div>
+    <div class="mm-label">At rest (225°)</div>
+  </div>
+  <div>
+    <div class="mm-scene">
+      <div class="mm-map"></div>
+      <div class="mm-btn hover" style="left:16px;top:130px;background-image:url(../../ahsync_app/icon.png)"></div>
+    </div>
+    <div class="mm-label">Hover</div>
+  </div>
+  <div class="tooltip" style="width:250px">
+    <div class="tt-hdr"><span>AHProfit</span><span class="tt-age">data 9 min old</span></div>
+    <div class="tt-line"><span>Now on Willie</span><span>3 actions · +<span data-m="21000"></span></span></div>
+    <hr>
+    <div class="mm-hint">Click: open AHProfit · Drag: move</div>
+  </div>
+  <div>
+    <div class="mm-scene">
+      <div class="mm-map"></div>
+      <div class="mm-btn" style="left:16px;top:130px;background-image:url(../../ahsync_app/icon.png)"><span class="mm-dot"></span></div>
+    </div>
+    <div class="mm-label">A problem: amber dot</div>
+  </div>
+  <div class="tooltip" style="width:250px">
+    <div class="tt-hdr"><span>AHProfit</span><span class="tt-age old">data 30 h old</span></div>
+    <div class="amber">Prices may be out of date: start AHSync, then /reload</div>
+    <hr>
+    <div class="mm-hint">Click: open AHProfit · Drag: move</div>
+  </div>
+  <div>
+    <div class="mm-scene">
+      <div class="mm-map"></div>
+      <div class="mm-btn ghost" style="left:52px;top:150px;background-image:url(../../ahsync_app/icon.png)"></div>
+      <div class="mm-btn" style="left:150px;top:44px;background-image:url(../../ahsync_app/icon.png)"></div>
+    </div>
+    <div class="mm-label">Dragged along the rim (to 30°)</div>
+  </div>
+</div>
+<p class="note">Tooltip lines: the header and age are the window's badge text (amber over 24 h). "Now on &lt;character&gt;" counts the actions due now for the logged-in character and their expected net, the rows and total of the window's Today list at its Min chance; with none it reads "nothing due now". Without a plan file: "no plan yet: run AHSync". Without a market file the problem line replaces it, in amber, as in the window's footer.</p>
 
 <script>
 const TOTAL_GOLD = 314000; // copper across all characters; risk % is measured against this

@@ -518,6 +518,9 @@ local function InstallCore()
   local root = UI.New("Frame", nil, nil)
   root.name, root.width, root.height = "UIParent", 1920, 1080
   Define("UIParent", root)
+  local minimap = UI.New("Frame", nil, root)          -- 140 px, centred near the top right, as the default UI's
+  minimap.name, minimap.width, minimap.height, minimap.centerX, minimap.centerY = "Minimap", 140, 140, 1800, 960
+  Define("Minimap", minimap)
   Define("CreateFrame", function(frameType, name, parent)
     local frame = UI.New(frameType or "Frame", nil, parent or root)
     frame.type = frameType

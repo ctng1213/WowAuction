@@ -126,9 +126,17 @@ end
 ---@param minChance number  Percent
 ---@return table[]  ViewModel.Today rows
 function WindowLines.TodayRows(charId, minChance)
+  return WindowLines.Today(charId, minChance).rows
+end
+
+--- The same Today list with its count and expected total, for the minimap tooltip (UI20).
+---@param charId string
+---@param minChance number  Percent
+---@return table            ViewModel.Today's result: { rows, hidden, total (signed money text), count }
+function WindowLines.Today(charId, minChance)
   local nowMs = Adapter.NowMs()
   local gold = VM.TotalGold((DB.Get() or {}).characters)
-  return VM.Today(CharacterActions(charId, nowMs), nowMs, Adapter.LocalOffsetMs(nowMs), minChance, LookOf, gold).rows
+  return VM.Today(CharacterActions(charId, nowMs), nowMs, Adapter.LocalOffsetMs(nowMs), minChance, LookOf, gold)
 end
 
 --- Everything this character holds, place by place (bags, bank, mail).

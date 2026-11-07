@@ -109,12 +109,18 @@ end
 
 --- Show a tooltip of several lines on a frame: wrapped text lines and two-column lines (the Portfolio tab's excluded
 --- rows, UI19), each already coloured as RGB.
----@param owner table   The frame hovered
----@param title string  First line
----@param lines table[] { text, rgb, wrap } or { left, right, leftRgb, rightRgb }
-function Adapter.ShowTooltipLines(owner, title, lines)
+---@param owner table           The frame hovered
+---@param title string          First line
+---@param lines table[]         { text, rgb, wrap } or { left, right, leftRgb, rightRgb }
+---@param titleRight table|nil  { text, rgb }: a value on the title's line, right-aligned (the minimap's data age, UI20)
+function Adapter.ShowTooltipLines(owner, title, lines, titleRight)
   GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
-  GameTooltip:SetText(title)
+  if titleRight then
+    local rgb = titleRight.rgb
+    GameTooltip:AddDoubleLine(title, titleRight.text, 1, 0.82, 0, rgb[1], rgb[2], rgb[3])
+  else
+    GameTooltip:SetText(title)
+  end
   for _, line in ipairs(lines) do
     if line.text then
       GameTooltip:AddLine(line.text, line.rgb[1], line.rgb[2], line.rgb[3], line.wrap == true)
@@ -207,6 +213,12 @@ end
 ---@param text string
 function Adapter.Print(text)
   DEFAULT_CHAT_FRAME:AddMessage("|cffffd100AHProfit:|r " .. text)
+end
+
+--- The minimap frame, the minimap button's parent (SPEC §4.3, UI22).
+---@return table  Minimap
+function Adapter.Minimap()
+  return Minimap
 end
 
 --- Whether the player is in combat right now.

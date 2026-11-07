@@ -49,3 +49,5 @@ UI\WindowLines.lua
 UI\MainWindow.lua
 UI\Tooltip.lua
 UI\AHPanel.lua
+UI\MinimapView.lua
+UI\MinimapButton.lua

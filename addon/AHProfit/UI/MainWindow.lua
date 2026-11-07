@@ -692,6 +692,13 @@ function MainWindow.TodayRows(charId)
   return WindowLines.TodayRows(charId, view.minChance)
 end
 
+--- This character's Today list with its count and expected total at the window's Min chance (the minimap tooltip, UI20).
+---@param charId string
+---@return table  WindowLines.Today's result
+function MainWindow.Today(charId)
+  return WindowLines.Today(charId, view.minChance)
+end
+
 --- Switch tabs and redraw from the top.
 ---@param tab string  A MainWindow.TABS key
 function MainWindow.ShowTab(tab)
@@ -723,10 +730,12 @@ function MainWindow.Refresh()
   MainWindow.Render()
 end
 
---- Open or close the window; /ahp portfolio opens the Portfolio tab (SPEC §4.3).
+--- Open or close the window; /ahp portfolio opens the Portfolio tab, /ahp minimap hides or shows the minimap button
+--- (SPEC §4.3).
 ---@param args string  The rest of the slash command line
 function MainWindow.Toggle(args)
   if args == "perf" then return MainWindow.Perf() end
+  if args == "minimap" then return AHProfit.MinimapButton.ToggleShown() end   -- UI23
   if not ui then Build() end
   if args == "portfolio" then
     view.tab, view.offset = args, 0

@@ -15,7 +15,7 @@ describe("Adapter", function()
     Stubs.Reset()
     assert_eq(Stubs.TocFiles(), { "Core/Adapter.lua", "Core/AdapterAH.lua", "Core/AdapterDiagnostics.lua", "Data/BonusSuffixes.lua", "Data/Disenchant.lua", "Core/Events.lua", "Core/DB.lua",
       "Capture/Characters.lua", "Capture/Professions.lua", "Capture/Inventory.lua", "Capture/Auctions.lua", "Capture/Mail.lua", "Scan/Replicate.lua", "Core/Diagnostics.lua",
-      "Engine/Fees.lua", "Engine/SellProb.lua", "Engine/Disenchant.lua", "Engine/Craft.lua", "Engine/Prices.lua", "Engine/Timing.lua", "Engine/Portfolio.lua", "Engine/Graph.lua", "Capture/Posts.lua", "Capture/Crafts.lua", "Capture/Gather.lua", "Core/Market.lua", "Core/Plan.lua", "Recommend/Live.lua", "Capture/Purchases.lua", "Recommend/Options.lua", "Recommend/Reserves.lua", "Recommend/Reselect.lua", "Recommend/Adapt.lua", "UI/ViewModel.lua", "UI/PlanView.lua", "UI/PortfolioView.lua", "UI/CraftView.lua", "UI/FlipView.lua", "UI/InventoryView.lua", "UI/TooltipView.lua", "UI/RowMenu.lua", "UI/WindowLines.lua", "UI/MainWindow.lua", "UI/Tooltip.lua", "UI/AHPanel.lua" })
+      "Engine/Fees.lua", "Engine/SellProb.lua", "Engine/Disenchant.lua", "Engine/Craft.lua", "Engine/Prices.lua", "Engine/Timing.lua", "Engine/Portfolio.lua", "Engine/Graph.lua", "Capture/Posts.lua", "Capture/Crafts.lua", "Capture/Gather.lua", "Core/Market.lua", "Core/Plan.lua", "Recommend/Live.lua", "Capture/Purchases.lua", "Recommend/Options.lua", "Recommend/Reserves.lua", "Recommend/Reselect.lua", "Recommend/Adapt.lua", "UI/ViewModel.lua", "UI/PlanView.lua", "UI/PortfolioView.lua", "UI/CraftView.lua", "UI/FlipView.lua", "UI/InventoryView.lua", "UI/TooltipView.lua", "UI/RowMenu.lua", "UI/WindowLines.lua", "UI/MainWindow.lua", "UI/Tooltip.lua", "UI/AHPanel.lua", "UI/MinimapView.lua", "UI/MinimapButton.lua" })
   end)
 
   it("item key of a plain item link is its item id", function()
@@ -188,6 +188,16 @@ describe("Adapter", function()
     local Adapter = Boot()
     Adapter.StoreSaved("AHProfitDB", { formatVersion = 1 })
     assert_eq(Adapter.LoadSaved("AHProfitDB"), { formatVersion = 1 })
+  end)
+
+  it("the minimap is the client's Minimap frame, and a tooltip's title line can carry a value on its right", function()
+    local Adapter = Boot()
+    assert_eq(Adapter.Minimap() == Minimap, true)
+    Adapter.ShowTooltipLines(UIParent, "AHProfit", { { text = "hint", rgb = { 1, 1, 1 } } },
+                             { text = "data 2 h old", rgb = { 0.5, 0.5, 0.5 } })
+    assert_eq({ Stubs.tooltip.doubles[1], Stubs.tooltip.lines }, { { "AHProfit", "data 2 h old", 0.5, 0.5, 0.5 }, { "hint" } })
+    Adapter.ShowTooltipLines(UIParent, "Plain", {})
+    assert_eq({ Stubs.tooltip.lines[1], #Stubs.tooltip.doubles }, { "Plain", 0 })
   end)
 
   it("A93 on the live Forever client item info, item details and gathering spells come from C_Item and C_Spell", function()
