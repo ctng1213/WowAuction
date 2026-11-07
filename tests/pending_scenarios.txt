@@ -63,3 +63,6 @@ BZ22-BZ30 BZ35 BZ36
 K8
 A92
 D99-D102
+
+# M36-M37 tooltip redesign and flips that sell later (docs/plans/tooltip-and-flips.md)
+R29

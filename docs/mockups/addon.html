@@ -189,6 +189,7 @@
 </div>
 
 <h2>3. Tooltip and right-click menu</h2>
+<p class="note"><b>Since M36 the tooltip's lines are section 3b's</b> (Market Price, Price history, Market Inventory, Best Buy / Best Sell Price, the Disenchant breakdown, Inventory; no Activity line). The variants below still show the Do line's cases (unchanged) and the right-click menu; their market lines are the M13 layout.</p>
 <p class="note">Hovering an item adds an <b>AHProfit</b> block under the item's own lines (UI8). It is drawn with two-column lines like <code>GameTooltip:AddDoubleLine</code>, label left and value right, at most 320 wide. All prices are per unit; differences are green above the current price and red below. The first line after the header is <b>Do</b>: what to do with this item, with the verb in its badge colour. The variants below cover every case. Lines that would pass 320 are shortened: hour ranges become "Sat 17–21", and a long Do value continues on a second line with an empty label (variants 1, 2, 4, 8, 9 and 14). A Best-time line is never dropped: when now is the best time it says "now" (variants 9 and 14). Right-clicking any row in the window or the AH panel opens the keep menu (SPEC §3.4.3, A25): keep all of the item for this character, keep at least a number of units (only what you hold above it is suggested), or sell normally again. SPEC GAP: the blacklist rules (§3.4.2) are not in the addon's menu yet.</p>
 <div class="stage" id="tt-variants"></div>
 <div class="stage" style="margin-top:18px">
@@ -212,6 +213,61 @@
   <tr><td>Activity</td><td>Sales per day, units listed now and days of supply, in muted text.</td></tr>
   <tr><td>No market data</td><td>Two lines only: the header with the data age, and "no market data yet".</td></tr>
 </table>
+
+
+<h2>3b. Tooltip layout (approved 2026-11-07, built M36)</h2>
+<p class="note"><b>Order:</b> Do, Market Price, Price history, Market Inventory, Sales Rate, Best Buy Price, Best Sell Price, Disenchant with its mats (gear only), Inventory. <b>Market Price</b>: the lowest listing at the newest observation with its age ("now" at the AH), then how it compares with the 7-day median: "11% lower than 7d median" (red), "12% higher than 7d median" (green), "at 7d median" when the difference rounds to 0%; when the line would pass 320 wide the comparison continues on its own line (variant 1); (price − 7d median) ÷ 7d median, whole percent half up; left out when there is no 7-day median. <b>Price history</b>: the 30, 14 and 7-day medians, each after its span in brackets ("(30d) 55c"), oldest to newest so a rise reads left to right, then the shift: <b>rising</b> when the 7-day median is at least 10% above the 30-day one, <b>falling</b> at least 10% below, else <b>steady</b>; until 30 days of data exist the missing medians read "—" and no word is shown. Price history is a title line with the word on its right, and the medians on the line under it, so the line fits 320 wide even with gold prices. <b>Market Inventory</b>: units listed now. <b>Sales Rate</b>: units sold per day (the 7-day estimate, §3.3.6), then days of supply, units listed ÷ sold per day (one decimal under 10 days, whole above); "— sold/day" when the sales are unknown, "0 sold/day" with no days of supply when nothing sold. <b>Disenchant</b> (gear you or an alt can disenchant): a title line with how the total compares with the AH price on its right ("69% lower than AH price", red below, green above), then one line per possible mat: its chance, its average quantity (the middle of its range: 1–2 is 1.5, 2–5 is 3.5; shown with one decimal only when it has one) and latest price, and its share, chance × average quantity × price; then a sum line with no label: the total, the expected value of one disenchant, on the right under the shares, which add up to it (rounded only for display). A mat with no price reads "no price" in amber and adds nothing. These are latest prices before the AH cut; the plan's disenchant decision uses expected sale values, so a Do: DISENCHANT net can be lower. <b>Best Buy / Best Sell Price</b>: the expected price at the best window and its day and time in words (Morning 6–12, Afternoon 12–18, Evening 18–23, Night 23–6, a night after midnight named by the evening before), <b>shown from the first data</b>, followed by the window's strength: <span class="amber">early</span> (in orange: under 3 weeks of data at that hour of the week), pattern (3–5 weeks) or established (6 or more); the cloud analytics (M33/M34) will sharpen them. When a line would pass 320 wide the strength continues on its own line (variant 3). <b>Inventory</b>: what you hold across your characters, with where. The Activity line is dropped; its sales per day and days of supply move to Sales Rate.</p>
+<div class="stage">
+  <div><div class="tt-cap">1. A plain item today: Lesser Healing Potion; its windows rest on under 3 weeks, so they say "early".</div><div class="tooltip">
+    <div class="tt-hdr"><span>AHProfit</span><span class="tt-age">data 32 min old <span class="pos">●</span></span></div>
+    <div class="tt-line tt-do"><span><span class="lbl">Do:</span> <span class="v-grey">HOLD</span> until Fri</span><span>no window pays this week</span></div>
+    <div class="tt-line"><span>Market Price</span><span><span data-m="40"></span> (50 min)</span></div>
+    <div class="tt-line dim"><span></span><span><span class="neg">11% lower than 7d median</span></span></div>
+    <div class="tt-line"><span>Price history</span><span><span><span class="neg">falling</span></span></span></div>
+    <div class="tt-line dim"><span></span><span>(30d) <span data-m="55"></span> · (14d) <span data-m="52"></span> · (7d) <span data-m="45"></span></span></div>
+    <div class="tt-line"><span>Market Inventory</span><span>433 listed</span></div>
+    <div class="tt-line"><span>Sales Rate</span><span>55 sold/day · 7.9 days of supply</span></div>
+    <div class="tt-line"><span>Best Buy Price</span><span><span data-m="38"></span> · Tuesday Morning · <span class="amber">early</span></span></div>
+    <div class="tt-line"><span>Best Sell Price</span><span><span data-m="58"></span> · Saturday Evening · <span class="amber">early</span></span></div>
+    <div class="tt-line"><span>Inventory</span><span>4 · bags 4</span></div>
+  </div></div>
+  <div><div class="tt-cap">2. Gear today: Embossed Leather Gloves, with Disenchant; a long Do value continues on its own line.</div><div class="tooltip">
+    <div class="tt-hdr"><span>AHProfit</span><span class="tt-age">data 32 min old <span class="pos">●</span></span></div>
+    <div class="tt-line tt-do"><span><span class="lbl">Do:</span> <span class="v-post">POST</span> 29 now at <span data-m="99"></span></span><span><span class="pos">+<span data-m="2349"></span></span> · 50%</span></div>
+    <div class="tt-line dim"><span></span><span>then nothing</span></div>
+    <div class="tt-line"><span>Market Price</span><span><span data-m="100"></span> (1 h) · <span class="pos">2% higher than 7d median</span></span></div>
+    <div class="tt-line"><span>Price history</span><span><span>steady</span></span></div>
+    <div class="tt-line dim"><span></span><span>(30d) <span data-m="101"></span> · (14d) <span data-m="100"></span> · (7d) <span data-m="98"></span></span></div>
+    <div class="tt-line"><span>Market Inventory</span><span>3,243 listed</span></div>
+    <div class="tt-line"><span>Sales Rate</span><span>120 sold/day · 27 days of supply</span></div>
+    <div class="tt-line"><span>Best Buy Price</span><span><span data-m="90"></span> · Monday Night · <span class="amber">early</span></span></div>
+    <div class="tt-line"><span>Best Sell Price</span><span><span data-m="125"></span> · Friday Evening · <span class="amber">early</span></span></div>
+    <div class="tt-line"><span>Disenchant</span><span><span class="neg">37% lower than AH price</span></span></div>
+    <div class="tt-line dim"><span style="padding-left:10px;color:var(--muted)">80% · 1.5 Strange Dust @ <span data-m="25"></span></span><span><span data-m="30"></span></span></div>
+    <div class="tt-line dim"><span style="padding-left:10px;color:var(--muted)">20% · 1.5 Lesser Magic Essence @ <span data-m="110"></span></span><span><span data-m="33"></span></span></div>
+    <div class="tt-line"><span></span><span style="color:#fff"><span data-m="63"></span></span></div>
+    <div class="tt-line"><span>Inventory</span><span>29 · bags 4, bank 1, mail 24</span></div>
+  </div></div>
+  <div><div class="tt-cap">3. Weeks later: Mithril Spurs, gold prices, every line; its windows have 3 and 6+ weeks behind them.</div><div class="tooltip">
+    <div class="tt-hdr"><span>AHProfit</span><span class="tt-age">data 32 min old <span class="pos">●</span></span></div>
+    <div class="tt-line tt-do"><span><span class="lbl">Do:</span> <span class="v-post">POST</span> Sat 10:00</span><span><span data-m="45000"></span> · 85%</span></div>
+    <div class="tt-line dim"><span></span><span>for the Saturday Evening peak</span></div>
+    <div class="tt-line"><span>Market Price</span><span><span data-m="29500"></span> (2 h) · <span class="neg">5% lower than 7d median</span></span></div>
+    <div class="tt-line"><span>Price history</span><span><span><span class="pos">rising</span></span></span></div>
+    <div class="tt-line dim"><span></span><span>(30d) <span data-m="24800"></span> · (14d) <span data-m="26300"></span> · (7d) <span data-m="31000"></span></span></div>
+    <div class="tt-line"><span>Market Inventory</span><span>18 listed</span></div>
+    <div class="tt-line"><span>Sales Rate</span><span>3 sold/day · 6.0 days of supply</span></div>
+    <div class="tt-line"><span>Best Buy Price</span><span><span data-m="24000"></span> · Tuesday Afternoon · <span>pattern</span></span></div>
+    <div class="tt-line"><span>Best Sell Price</span><span><span data-m="45000"></span> · Saturday Evening</span></div>
+    <div class="tt-line dim"><span></span><span>established</span></div>
+    <div class="tt-line"><span>Disenchant</span><span><span class="neg">69% lower than AH price</span></span></div>
+    <div class="tt-line dim"><span style="padding-left:10px;color:var(--muted)">75% · 3.5 Vision Dust @ <span data-m="2200"></span></span><span><span data-m="5775"></span></span></div>
+    <div class="tt-line dim"><span style="padding-left:10px;color:var(--muted)">20% · 1.5 Greater Mystic Essence @ <span data-m="8000"></span></span><span><span data-m="2400"></span></span></div>
+    <div class="tt-line dim"><span style="padding-left:10px;color:var(--muted)">5% · 1 Large Radiant Shard @ <span data-m="17000"></span></span><span><span data-m="850"></span></span></div>
+    <div class="tt-line"><span></span><span style="color:#fff"><span data-m="9025"></span></span></div>
+    <div class="tt-line"><span>Inventory</span><span>3 · bags 2, bank 1</span></div>
+  </div></div>
+</div>
 
 <h2>4. States</h2>
 <p class="note">Left: no <code>MarketIntelligence.lua</code> yet (UI4). Middle: data more than 24 h old, so the badge turns amber (UI5). Right: no <code>PortfolioPlan.lua</code> (or one from another version). The addon's own options still work, and only the desktop's cross-character advice is hidden (SPEC §5.2). Below: files written by an AHSync older than the addon (FM34; FM35 is the reverse and says to run <code>tools/deploy.py</code>). The footer always carries the market file's problem first, then the plan file's, so a blank tab is never silent.</p>
@@ -587,9 +643,9 @@ function inv(n, q, who, where, qty, paid, worth, plan) {
 // Two-column tooltip lines (GameTooltip:AddDoubleLine). Differences: green above the price now, red below.
 const up = p => `<span class="pos">(+${p}%)</span>`, dn = p => `<span class="neg">(−${p}%)</span>`;
 const verb = (cls, t) => `<span class="lbl">Do:</span> <span class="v-${cls}">${t}</span>`;
-const copperRod = age => [['Market', `${money(4200)} (${age}) · ${money(4500)} 30-day ${up(7)}`], ['Best time to sell', `Fri 18–21 · ${money(4500)} ${up(7)} · pattern`],
+const copperRod = age => [['Market', `${money(4200)} (${age}) · ${money(4500)} 30d ${up(7)}`], ['Best time to sell', `Fri 18–21 · ${money(4500)} ${up(7)} · pattern`],
   ['Best time to buy', `Mon 03–07 · ${money(3800)} ${dn(10)} · early`], ['Activity', '6/day · 14 listed · 2.3 d supply', 1]];
-const COPPER_BAR = [['Market', `${money(1000)} (2 h) · ${money(950)} 30-day ${dn(5)}`], ['Best time to sell', `Sat 18–21 · ${money(1200)} ${up(20)} · established`],
+const COPPER_BAR = [['Market', `${money(1000)} (2 h) · ${money(950)} 30d ${dn(5)}`], ['Best time to sell', `Sat 18–21 · ${money(1200)} ${up(20)} · established`],
   ['Best time to buy', `Wed 04–08 · ${money(920)} ${dn(8)} · pattern`], ['Activity', '40/day · 150 listed · 3.8 d supply', 1]];
 // [caption, item, quality, data age, stale, Do lines [[left, right]], body lines [[label, value, muted]]]
 const TT = [
@@ -597,12 +653,12 @@ const TT = [
     [[`${verb('post', 'POST')} 5 now at ${money(4100)}`, `<span class="pos">+${money(6306)}</span> · 58% chance`], ['', 'then nothing']], copperRod('2 h')],
   ['2. Bag item planned for a later peak', 'Mithril Spurs', 3, '2 h', false,
     [[`${verb('post', 'POST')} Sat 10:00`, `${money(45000)} · <span class="pos">+53%</span> vs now · 85%`], ['', 'for the 18:00 peak']],
-    [['Market', `${money(29500)} (2 h) · ${money(38000)} 30-day ${up(29)}`], ['Disenchant', `${money(18000)} ${dn(39)}`],
+    [['Market', `${money(29500)} (2 h) · ${money(38000)} 30d ${up(29)}`], ['Disenchant', `${money(18000)} ${dn(39)}`],
      ['Best time to sell', `Sat 18–21 · ${money(45000)} ${up(53)} · pattern`], ['Best time to buy', `Tue 20–23 · ${money(28000)} ${dn(5)} · pattern`],
      ['Activity', '3/day · 4 listed · 1.3 d supply', 1]]],
   ['3. Hold', 'Mageweave Cloth', 1, '2 h', false,
     [[`${verb('grey', 'HOLD')} until next Tue`, 'no window pays this week']],
-    [['Market', `${money(110)} (2 h) · ${money(115)} 30-day ${up(5)}`], ['Best time to sell', `Tue 20–22 · ${money(120)} ${up(9)} · pattern`],
+    [['Market', `${money(110)} (2 h) · ${money(115)} 30d ${up(5)}`], ['Best time to sell', `Tue 20–22 · ${money(120)} ${up(9)} · pattern`],
      ['Best time to buy', `Sun 03–07 · ${money(102)} ${dn(7)} · early`], ['Activity', '55/day · 120 listed · 2.2 d supply', 1]]],
   ['4. Craft mat in bags (on Brugan, who knows the recipe)', 'Copper Bar', 1, '2 h', false,
     [[`${verb('craft', 'CRAFT')} 5 Copper Rod`, `<span class="pos">+${money(971)}</span> · 90%`], ['', `mats ${money(248)} · then post Sat 10:00`]], COPPER_BAR],
@@ -610,33 +666,33 @@ const TT = [
     [[`${verb('mail', 'MAIL')} 6 to Brugan`, 'for crafting Copper Rod']], COPPER_BAR],
   ['6. Disenchant', 'Scouting Gloves of the Monkey', 2, '2 h', false,
     [[verb('de', 'DISENCHANT'), `<span class="pos">+${money(625)}</span> · mats ${money(1425)} · 100%`]],
-    [['Market', `${money(800)} (2 h) · ${money(1100)} 30-day ${up(38)}`], ['Disenchant', `${money(1425)} ${up(78)}`],
+    [['Market', `${money(800)} (2 h) · ${money(1100)} 30d ${up(38)}`], ['Disenchant', `${money(1425)} ${up(78)}`],
      ['Best time to sell', `Sat 17–21 · ${money(1230)} ${up(54)} · early`], ['Best time to buy', `Mon 03–07 · ${money(710)} ${dn(11)} · early`],
      ['Activity', '210/day · 400 listed · 1.9 d supply', 1]]],
   ['7. AH listing on your Shopping list (hovering a browse row)', 'Copper Bar', 1, '2 h', false,
     [[`${verb('buy', 'BUY')} ≤ ${money(1000)} · for Copper Rod`, 'funded · 6 needed']],
-    [['Market', `${money(980)} now · ${money(950)} 30-day ${dn(3)}`], ['Best time to sell', `Sat 18–21 · ${money(1200)} ${up(22)} · established`],
+    [['Market', `${money(980)} now · ${money(950)} 30d ${dn(3)}`], ['Best time to sell', `Sat 18–21 · ${money(1200)} ${up(22)} · established`],
      ['Best time to buy', `Wed 04–08 · ${money(920)} ${dn(6)} · pattern`], ['Activity', '40/day · 150 listed · 3.8 d supply', 1]]],
   ['8. Unfunded alternative (on Brugan)', 'Lesser Mana Potion', 1, '2 h', false,
     [[`${verb('kept', 'UNFUNDED')} craft · +${money(80)}`, '<span class="amber">exceeds risk tolerance</span>'], ['', `needs ${money(4500)}, ${money(2440)} left`]],
-    [['Market', `${money(520)} (2 h) · ${money(540)} 30-day ${up(4)}`], ['Best time to sell', `Sat 19–22 · ${money(580)} ${up(12)} · pattern`],
+    [['Market', `${money(520)} (2 h) · ${money(540)} 30d ${up(4)}`], ['Best time to sell', `Sat 19–22 · ${money(580)} ${up(12)} · pattern`],
      ['Best time to buy', `Thu 02–06 · ${money(490)} ${dn(6)} · early`], ['Activity', '10/day · 25 listed · 2.5 d supply', 1]]],
   ['9. Kept item', 'Refreshing Spring Water', 1, '2 h', false,
     [[`${verb('kept', 'KEPT')} for yourself`, 'keep at least 10'], ['', 'right-click to change']],
-    [['Market', `${money(25)} (2 h) · ${money(24)} 30-day ${dn(4)}`], ['Best time to sell', `Sun 19–22 · ${money(27)} ${up(8)} · early`],
+    [['Market', `${money(25)} (2 h) · ${money(24)} 30d ${dn(4)}`], ['Best time to sell', `Sun 19–22 · ${money(27)} ${up(8)} · early`],
      ['Best time to buy', `now · cheaper than Tue 03–07 (${money(26)})`], ['Activity', '30/day · 200 listed · 6.7 d supply', 1]]],
   ['10. Vendor', 'Broken Fang', 0, '2 h', false,
     [[`${verb('grey', 'VENDOR')} ${money(12)} each`, 'nothing better']],
-    [['Market', `none listed · ${money(10)} 30-day`], ['Activity', '0/day · 0 listed', 1]]],
+    [['Market', `none listed · ${money(10)} 30d`], ['Activity', '0/day · 0 listed', 1]]],
   ['11. No market data', 'Glimmering Mail Pauldrons', 2, '2 h', false, [], [['<span class="tt-only">no market data yet</span>', '']]],
   ['12. Stale data (more than 24 h old)', 'Copper Rod', 1, '2 d', true,
     [[`${verb('post', 'POST')} 5 now at ${money(4100)}`, `<span class="pos">+${money(6306)}</span> · 58% chance`], ['', 'then nothing']], copperRod('2 d')],
   ['13. AH listing on none of your lists: no Do line', 'Bolt of Linen Cloth', 1, '2 h', false, [],
-    [['Market', `${money(1150)} now · ${money(1200)} 30-day ${up(4)}`], ['Best time to sell', `Sat 17–21 · ${money(1300)} ${up(13)} · established`],
+    [['Market', `${money(1150)} now · ${money(1200)} 30d ${up(4)}`], ['Best time to sell', `Sat 17–21 · ${money(1300)} ${up(13)} · established`],
      ['Best time to buy', `Tue 08–12 · ${money(1080)} ${dn(6)} · pattern`], ['Activity', '26/day · 45 listed · 1.7 d supply', 1]]],
   ['14. Bag item inside its best sell window (Fri 18:30)', 'Copper Rod', 1, '2 h', false,
     [[`${verb('post', 'POST')} 5 now at ${money(4100)}`, `<span class="pos">+${money(6306)}</span> · 58% chance`], ['', 'then nothing · best time to sell is now']],
-    [['Market', `${money(4200)} (2 h) · ${money(4500)} 30-day ${up(7)}`], ['Best time to sell', `now (Fri 18–21) · ${money(4500)} · pattern`],
+    [['Market', `${money(4200)} (2 h) · ${money(4500)} 30d ${up(7)}`], ['Best time to sell', `now (Fri 18–21) · ${money(4500)} · pattern`],
      ['Best time to buy', `Mon 03–07 · ${money(3800)} ${dn(10)} · early`], ['Activity', '6/day · 14 listed · 2.3 d supply', 1]]],
 ];
 function ttip([cap, n, q, age, stale, dos, body]) {

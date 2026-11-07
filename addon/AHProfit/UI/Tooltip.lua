@@ -46,9 +46,18 @@ local function Dot(name)
   return string.format(" |T%s:7:7:0:0:8:8:0:8:0:8:%d:%d:%d|t", FLAT, c[1] * 255, c[2] * 255, c[3] * 255)
 end
 
---- An item's disenchant value per item, when one of your characters can disenchant it.
+--- An item's name, from the client's cache.
 ---@param key number
----@return boolean, number|nil  can disenchant, expected value (float copper)
+---@return string
+local function NameOf(key)
+  return (Adapter.ItemInfo(VM.BaseItemId(key))) or ("Item " .. key)
+end
+
+--- An item's disenchant value per item, when one of your characters can disenchant it, and its possible mats at
+--- their latest prices for the tooltip's breakdown (TT29).
+---@param key number
+---@return boolean, number|nil, table[]|nil  can disenchant, expected value at the mats' sale values (float copper, the
+---                                          Do line's), and { chance, min, max, name, price (the mat's cur or nil) }
 local function DisenchantValue(key)
   local quality, ilvl, classId = Adapter.ItemDetails(VM.BaseItemId(key))
   local kind = DE_KINDS[classId]
@@ -57,12 +66,13 @@ local function DisenchantValue(key)
   if not skill or not Disenchant.CanDisenchant(skill, AHProfit.Options.BestSkill(DB.Get() or {}, "Enchanting")) then
     return false, nil
   end
-  local values = {}
+  local values, mats = {}, {}
   for i, o in ipairs(outcomes) do
     local mat = Market.Item(o[1])
     values[i] = mat and mat.sellValue or 0
+    mats[i] = { chance = o[2], min = o[3], max = o[4], name = NameOf(o[1]), price = mat and mat.cur or nil }
   end
-  return true, Disenchant.ExpectedValue(outcomes, values)
+  return true, Disenchant.ExpectedValue(outcomes, values), mats
 end
 
 --- A window's expected price, as the plan prices it (`plan.slot_price`: level × how with the trend to its best hour,
@@ -82,13 +92,12 @@ end
 ---@param item table
 ---@param cur number|nil
 ---@param nowMs number
----@param offsetMs number
----@return table|nil, table|nil  sell, buy
-local function Windows(item, cur, nowMs, offsetMs)
+---@return table|nil, table|nil  sell, buy: { slot (the best hour), price, weeks, now }, the buy with cheaperNow
+local function Windows(item, cur, nowMs)
   local sell, buy = nil, nil
   local s = item.sellWindows[1]
   local sp = s and WindowPrice(item, s, nowMs)
-  if sp then sell = { label = TV.Hours(s, offsetMs), price = sp, weeks = s.weeks, now = TV.InWindow(s, nowMs) } end
+  if sp then sell = { slot = s.best, price = sp, weeks = s.weeks, now = TV.InWindow(s, nowMs) } end
   local b = item.buyWindows[1]
   local bp = b and WindowPrice(item, b, nowMs)
   if bp then
@@ -97,7 +106,7 @@ local function Windows(item, cur, nowMs, offsetMs)
       local p = WindowPrice(item, w, nowMs)
       if not p or cur == nil or cur >= p then cheaper = false end
     end
-    buy = { label = TV.Hours(b, offsetMs), price = bp, weeks = b.weeks, cheaperNow = cheaper }
+    buy = { slot = b.best, price = bp, weeks = b.weeks, now = TV.InWindow(b, nowMs), cheaperNow = cheaper }
   end
   return sell, buy
 end
@@ -140,13 +149,6 @@ local function UsedBy(charId)
     end
     return false
   end
-end
-
---- An item's name, from the client's cache.
----@param key number
----@return string
-local function NameOf(key)
-  return (Adapter.ItemInfo(VM.BaseItemId(key))) or ("Item " .. key)
 end
 
 --- The Shopping list's buy of an item for this character: its units, the lowest cap and what it is for (A65, A40).
@@ -206,6 +208,35 @@ local function HeldOf(db, charId, key)
   return all, bags
 end
 
+--- Units of an item held across your characters, by place: bags, bank, mail, then your active auctions (TT30).
+---@param db table
+---@param key number
+---@param nowMs number
+---@return table  { total, places = { { where, qty } } } with only the places that hold some
+local function HoldingsOf(db, key, nowMs)
+  local by = {}
+  for _, places in pairs(db.inventory or {}) do
+    for _, where in ipairs(VM.PLACES) do
+      for _, row in ipairs(Inventory.Decode(places[where])) do
+        if row.key == key then by[where] = (by[where] or 0) + row.qty end
+      end
+    end
+  end
+  for _, entry in pairs(db.ownAuctions or {}) do
+    for _, a in ipairs(AHProfit.Capture.Auctions.Active(entry, nowMs)) do
+      if a.key == key then by.AH = (by.AH or 0) + a.units end
+    end
+  end
+  local out = { total = 0, places = {} }
+  for _, where in ipairs({ "bags", "bank", "mail", "AH" }) do
+    if by[where] then
+      out.total = out.total + by[where]
+      out.places[#out.places + 1] = { where, by[where] }
+    end
+  end
+  return out
+end
+
 --- What to do with the item, for the Do line (SPEC §4.3).
 ---@param key number
 ---@param item table
@@ -230,6 +261,7 @@ end
 ---@param nowMs number
 ---@return table[]|nil  TooltipView.Lines
 function Tooltip.Lines(key, nowMs)
+  local offsetMs = Adapter.LocalOffsetMs(nowMs)
   local generatedAt = Market.Times()
   if not generatedAt then return nil end
   local age = VM.Age(generatedAt, nowMs)
@@ -238,12 +270,13 @@ function Tooltip.Lines(key, nowMs)
   local panel = AHProfit.AHPanel and AHProfit.AHPanel.Frames()
   local atAH = panel ~= nil and panel.frame:IsShown()
   local cur, ageText, listed = PriceNow(key, item, nowMs, atAH)
-  local sell, buy = Windows(item, cur, nowMs, Adapter.LocalOffsetMs(nowMs))
-  local canDE, deValue = DisenchantValue(key)
+  local sell, buy = Windows(item, cur, nowMs)
+  local canDE, deValue, mats = DisenchantValue(key)
   local facts = { atAH = atAH, deValue = deValue, sell = sell, buy = buy }
-  return TV.Lines({ age = age, doing = DoFor(key, item, nowMs, facts), market = { cur = cur, ageText = ageText,
-    med30 = item.med30 }, canDisenchant = canDE, deValue = deValue, sell = sell, buy = buy,
-    activity = { soldPerDay = item.soldPerDay, listed = listed } })
+  return TV.Lines({ age = age, doing = DoFor(key, item, nowMs, facts), offsetMs = offsetMs, sell = sell, buy = buy,
+    market = { cur = cur, ageText = ageText, med7 = item.med7, med14 = item.med14, med30 = item.med30, listed = listed,
+              soldPerDay = item.soldPerDay },
+    mats = canDE and mats or nil, holdings = HoldingsOf(DB.Get() or {}, key, nowMs) })
 end
 
 --- One line as drawn: label and value text with their colour escapes and coins.

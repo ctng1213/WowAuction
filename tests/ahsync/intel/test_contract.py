@@ -91,17 +91,26 @@ def test_BZ15_schema_10_round_trips_its_cloud_fields_and_writes_schema_9_without
                                catalog={2589: ("Linen Cloth", 1, 7, 13, None)}, coverage=((497_900, 497_950),),
                                settings={"default_sell_prob": 0.25})
     text = to_json(intel)
-    assert intel.schema_version == INTEL_SCHEMA_VERSION == 10
+    assert intel.schema_version == INTEL_SCHEMA_VERSION
     assert from_json(text) == intel and to_json(from_json(text)) == text
     old = json.loads(to_json(intel, schema=9))
     assert old["schema_version"] == 9 and not {"catalog", "coverage", "settings"} & set(old)
     assert not {"last_hour", "recent_closes", "recent_sold", "recent_listed", "recent_units"} & set(old["items"]["2589"])
     assert from_json(json.dumps(old)) == replace(intel, schema_version=9, items={2589: ITEM}, catalog={}, coverage=(),
                                                  settings={})
-    with pytest.raises(ValueError, match="cannot write schema 11"):
-        to_json(intel, schema=11)
+    with pytest.raises(ValueError, match="cannot write schema 12"):
+        to_json(intel, schema=12)
     with pytest.raises(ValueError, match="cannot write schema 8"):
         to_json(intel, schema=8)
+
+
+def test_BZ37_schema_11_carries_med14_and_schema_10_is_written_without_it():
+    intel = MarketIntelligence("forever.normal.horde.us", 1_000, 2_000, 1, {2589: replace(ITEM, med14=52)})
+    assert INTEL_SCHEMA_VERSION == 11 and json.loads(to_json(intel))["items"]["2589"]["med14"] == 52
+    assert from_json(to_json(intel)) == intel
+    old = json.loads(to_json(intel, schema=10))
+    assert old["schema_version"] == 10 and "med14" not in old["items"]["2589"]
+    assert from_json(json.dumps(old)).items[2589].med14 is None                  # an older document: "—" in game
 
 
 def test_a_schema_9_document_reads_with_empty_cloud_fields():

@@ -2,77 +2,122 @@
 126 AHProfit | data 2 h old
 258 Do: POST 5 now at 41s | +63s 6c · 58% chance
  82  | then nothing
-214 Market | 42s (2 h) · 45s 30-day (+7%)
-286 Best time to sell | Fri 18–21 · 45s (+7%) · pattern
-275 Best time to buy | Mon 03–07 · 38s (−10%) · early
-236 Activity | 6/day · 14 listed · 2.3 d supply
+286 Market Price | 42s (2 h) · 5% higher than 7d median
+126 Price history | falling
+209  | (30d) 45s · (14d) 43s · (7d) 40s
+154 Market Inventory | 14 listed
+242 Sales Rate | 6 sold/day · 2.3 days of supply
+242 Best Buy Price | 38s · Sunday Night · early
+269 Best Sell Price | 45s · Friday Evening · pattern
+121 Inventory | 5 · bags 5
 -- 2 bag item planned for a later peak
 126 AHProfit | data 2 h old
 269 Do: POST Sat 10:00 | 4g 50s · +53% vs now · 85%
 115  | for the 18:00 peak
-264 Market | 2g 95s (2 h) · 3g 80s 30-day (+29%)
-154 Disenchant | 1g 80s (−39%)
-313 Best time to sell | Sat 18–21 · 4g 50s (+53%) · pattern
-302 Best time to buy | Tue 20–23 · 2g 80s (−5%) · pattern
-231 Activity | 3/day · 4 listed · 1.3 d supply
+302 Market Price | 2g 95s (2 h) · 5% lower than 7d median
+126 Price history | falling
+275  | (30d) 3g 80s · (14d) 3g 30s · (7d) 3g 10s
+148 Market Inventory | 4 listed
+242 Sales Rate | 3 sold/day · 1.3 days of supply
+291 Best Buy Price | 2g 80s · Tuesday Evening · pattern
+302 Best Sell Price | 4g 50s · Saturday Evening · pattern
+198 Disenchant | 69% lower than AH price
+231   75% · 3.5 Vision Dust @ 22s | 57s 75c
+264   20% · 1.5 Greater Mystic Essence @ 80s | 24s
+275   5% · 1 Large Radiant Shard @ 1g 70s | 8s 50c
+ 66  | 90s 25c
+121 Inventory | 1 · bags 1
 -- 3 hold
 126 AHProfit | data 2 h old
 275 Do: HOLD until next Tue | no window pays this week
-258 Market | 1s 10c (2 h) · 1s 15c 30-day (+5%)
-308 Best time to sell | Tue 20–22 · 1s 20c (+9%) · pattern
-286 Best time to buy | Sun 03–07 · 1s 2c (−7%) · early
-247 Activity | 55/day · 120 listed · 2.2 d supply
+302 Market Price | 1s 10c (2 h) · 2% lower than 7d median
+121 Price history | steady
+275  | (30d) 1s 15c · (14d) 1s 14c · (7d) 1s 12c
+159 Market Inventory | 120 listed
+247 Sales Rate | 55 sold/day · 2.2 days of supply
+269 Best Buy Price | 1s 2c · Saturday Night · early
+297 Best Sell Price | 1s 20c · Tuesday Evening · pattern
+132 Inventory | 30 · bags 30
 -- 4 craft mat in bags (on Brugan, who knows the recipe)
 126 AHProfit | data 2 h old
 220 Do: CRAFT 5 Copper Rod | +9s 71c · 90%
 209  | mats 2s 48c · then post Sat 10:00
-236 Market | 10s (2 h) · 9s 50c 30-day (−5%)
-313 Best time to sell | Sat 18–21 · 12s (+20%) · established
-302 Best time to buy | Wed 04–08 · 9s 20c (−8%) · pattern
-247 Activity | 40/day · 150 listed · 3.8 d supply
+286 Market Price | 10s (2 h) · 4% higher than 7d median
+121 Price history | steady
+275  | (30d) 9s 50c · (14d) 9s 55c · (7d) 9s 60c
+159 Market Inventory | 150 listed
+247 Sales Rate | 40 sold/day · 3.8 days of supply
+280 Best Buy Price | 9s 20c · Tuesday Night · pattern
+302 Best Sell Price | 12s · Saturday Evening · established
+132 Inventory | 10 · bags 10
 -- 5 mail step (on Amaya, who holds the bars)
 126 AHProfit | data 2 h old
 253 Do: MAIL 6 to Brugan | for crafting Copper Rod
-236 Market | 10s (2 h) · 9s 50c 30-day (−5%)
-313 Best time to sell | Sat 18–21 · 12s (+20%) · established
-302 Best time to buy | Wed 04–08 · 9s 20c (−8%) · pattern
-247 Activity | 40/day · 150 listed · 3.8 d supply
+286 Market Price | 10s (2 h) · 4% higher than 7d median
+121 Price history | steady
+275  | (30d) 9s 50c · (14d) 9s 55c · (7d) 9s 60c
+159 Market Inventory | 150 listed
+247 Sales Rate | 40 sold/day · 3.8 days of supply
+280 Best Buy Price | 9s 20c · Tuesday Night · pattern
+302 Best Sell Price | 12s · Saturday Evening · established
+132 Inventory | 10 · bags 10
 -- 6 disenchant
 126 AHProfit | data 2 h old
 275 Do: DISENCHANT | +6s 25c · mats 14s 25c · 100%
-214 Market | 8s (2 h) · 11s 30-day (+38%)
-159 Disenchant | 14s 25c (+78%)
-308 Best time to sell | Sat 17–21 · 12s 30c (+54%) · early
-297 Best time to buy | Mon 03–07 · 7s 10c (−11%) · early
-253 Activity | 210/day · 400 listed · 1.9 d supply
+280 Market Price | 8s (2 h) · 20% lower than 7d median
+121 Price history | steady
+236  | (30d) 11s · (14d) 10s 50c · (7d) 10s
+159 Market Inventory | 400 listed
+253 Sales Rate | 210 sold/day · 1.9 days of supply
+264 Best Buy Price | 7s 10c · Sunday Night · early
+308 Best Sell Price | 12s 30c · Saturday Afternoon · early
+203 Disenchant | 78% higher than AH price
+214   75% · 2.5 Soul Dust @ 6s | 11s 25c
+253   20% · 1.5 Lesser Mystic Essence @ 10s | 3s
+ 66  | 14s 25c
+121 Inventory | 1 · bags 1
 -- 7 AH listing on your Shopping list
 126 AHProfit | data 2 h old
 280 Do: BUY ≤ 10s · for Copper Rod | funded · 6 needed
-247 Market | 9s 80c now · 9s 50c 30-day (−3%)
-313 Best time to sell | Sat 18–21 · 12s (+22%) · established
-302 Best time to buy | Wed 04–08 · 9s 20c (−6%) · pattern
-247 Activity | 40/day · 150 listed · 3.8 d supply
+297 Market Price | 9s 80c now · 2% higher than 7d median
+121 Price history | steady
+275  | (30d) 9s 50c · (14d) 9s 55c · (7d) 9s 60c
+159 Market Inventory | 150 listed
+247 Sales Rate | 40 sold/day · 3.8 days of supply
+280 Best Buy Price | 9s 20c · Tuesday Night · pattern
+302 Best Sell Price | 12s · Saturday Evening · established
 -- 8 unfunded alternative (on Brugan)
 126 AHProfit | data 2 h old
 280 Do: UNFUNDED craft · +80c | exceeds risk tolerance
 159  | needs 45s, 24s 40c left
-258 Market | 5s 20c (2 h) · 5s 40c 30-day (+4%)
-313 Best time to sell | Sat 19–22 · 5s 80c (+12%) · pattern
-291 Best time to buy | Thu 02–06 · 4s 90c (−6%) · early
-242 Activity | 10/day · 25 listed · 2.5 d supply
+302 Market Price | 5s 20c (2 h) · 2% lower than 7d median
+121 Price history | steady
+275  | (30d) 5s 40c · (14d) 5s 35c · (7d) 5s 30c
+154 Market Inventory | 25 listed
+247 Sales Rate | 10 sold/day · 2.5 days of supply
+280 Best Buy Price | 4s 90c · Wednesday Night · early
+302 Best Sell Price | 5s 80c · Saturday Evening · pattern
 -- 9 kept item
 126 AHProfit | data 2 h old
 220 Do: KEPT for yourself | keep at least 10
 132  | right-click to change
-214 Market | 25c (2 h) · 24c 30-day (−4%)
-275 Best time to sell | Sun 19–22 · 27c (+8%) · early
-297 Best time to buy | now · cheaper than Tue 03–07 (26c)
-247 Activity | 30/day · 200 listed · 6.7 d supply
+286 Market Price | 25c (2 h) · 4% higher than 7d median
+121 Price history | steady
+209  | (30d) 24c · (14d) 24c · (7d) 24c
+159 Market Inventory | 200 listed
+247 Sales Rate | 30 sold/day · 6.7 days of supply
+242 Best Buy Price | 26c · Monday Night · early
+258 Best Sell Price | 27c · Sunday Evening · early
+132 Inventory | 13 · bags 13
 -- 10 vendor
 126 AHProfit | data 2 h old
 203 Do: VENDOR 12c each | nothing better
-187 Market | none listed · 10c 30-day
-148 Activity | 0/day · 0 listed
+143 Market Price | none listed
+ 72 Price history | 
+176  | (30d) 10c · (14d) — · (7d) —
+148 Market Inventory | 0 listed
+126 Sales Rate | 0 sold/day
+121 Inventory | 4 · bags 4
 -- 11 no market data
 126 AHProfit | data 2 h old
  99 no market data yet | 
@@ -80,21 +125,32 @@
 126 AHProfit | data 2 d old (amber)
 258 Do: POST 5 now at 41s | +63s 6c · 58% chance
  82  | then nothing
-214 Market | 42s (2 h) · 45s 30-day (+7%)
-286 Best time to sell | Fri 18–21 · 45s (+7%) · pattern
-275 Best time to buy | Mon 03–07 · 38s (−10%) · early
-236 Activity | 6/day · 14 listed · 2.3 d supply
+286 Market Price | 42s (2 h) · 5% higher than 7d median
+126 Price history | falling
+209  | (30d) 45s · (14d) 43s · (7d) 40s
+154 Market Inventory | 14 listed
+242 Sales Rate | 6 sold/day · 2.3 days of supply
+242 Best Buy Price | 38s · Sunday Night · early
+269 Best Sell Price | 45s · Friday Evening · pattern
+121 Inventory | 5 · bags 5
 -- 13 AH listing on none of your lists
 126 AHProfit | data 2 h old
-231 Market | 11s 50c now · 12s 30-day (+4%)
-313 Best time to sell | Sat 17–21 · 13s (+13%) · established
-308 Best time to buy | Tue 08–12 · 10s 80c (−6%) · pattern
-242 Activity | 26/day · 45 listed · 1.7 d supply
+297 Market Price | 11s 50c now · 3% lower than 7d median
+121 Price history | steady
+264  | (30d) 12s · (14d) 11s 90c · (7d) 11s 80c
+154 Market Inventory | 45 listed
+247 Sales Rate | 26 sold/day · 1.7 days of supply
+297 Best Buy Price | 10s 80c · Tuesday Morning · pattern
+313 Best Sell Price | 13s · Saturday Afternoon · established
 -- 14 bag item inside its best sell window (Fri 18:30)
 126 AHProfit | data 2 h old
 258 Do: POST 5 now at 41s | +63s 6c · 58% chance
 231  | then nothing · best time to sell is now
-214 Market | 42s (2 h) · 45s 30-day (+7%)
-286 Best time to sell | now (Fri 18–21) · 45s · pattern
-275 Best time to buy | Mon 03–07 · 38s (−10%) · early
-236 Activity | 6/day · 14 listed · 2.3 d supply
+286 Market Price | 42s (2 h) · 5% higher than 7d median
+126 Price history | falling
+209  | (30d) 45s · (14d) 43s · (7d) 40s
+154 Market Inventory | 14 listed
+242 Sales Rate | 6 sold/day · 2.3 days of supply
+242 Best Buy Price | 38s · Sunday Night · early
+209 Best Sell Price | 45s · now · pattern
+121 Inventory | 5 · bags 5

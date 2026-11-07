@@ -1,4 +1,4 @@
---- The tooltip's 14 variants (SPEC §4.3, docs/mockups/addon.html section 3; TT8-TT21, UI17) as the facts
+--- The tooltip's 14 variants (SPEC §4.3, docs/mockups/addon.html sections 3 and 3b; TT8-TT21, TT25-TT31, UI17) as the facts
 --- UI/Tooltip.lua gathers, for TooltipView's specs and the UI17 layout check. Monday 10:38 UTC, local time UTC,
 --- the market file 2 h old. Each variant's Do comes from TooltipView.DoOf over plain plan actions, so the specs
 --- check which action applies as well as its words.
@@ -31,17 +31,35 @@ function TW.Ctx(more)
   return ctx
 end
 
+--- A window at a weekday and hour (UTC = local here), as UI/Tooltip.lua gathers it.
+---@param day number    0 = Monday
+---@param hour number
+---@param price number  Copper
+---@param weeks number
+---@param now boolean|nil
+---@return table        { slot, price, weeks, now }
+local function Win(day, hour, price, weeks, now)
+  return { slot = day * 24 + hour, price = price, weeks = weeks, now = now }
+end
+
+--- Units held in bags.
+---@param n number
+---@return table  TooltipView's holdings
+local function Bags(n)
+  return { total = n, places = { { "bags", n } } }
+end
+
 --- One variant's facts.
 ---@param TV table        AHProfit.TooltipView
 ---@param doCtx table|nil TW.Ctx's, or nil for no Do line
----@param body table      { cur, ageText, med30, deValue, sell, buy, sold, listed }
+---@param body table      { cur, ageText, med7, med14, med30, listed, sold (per day), sell, buy, mats, holdings }
 ---@param age table|nil   { text, amber }; default "data 2 h old"
 ---@return table          TooltipView.Lines' facts
 local function Facts(TV, doCtx, body, age)
-  return { age = age or { text = "data 2 h old", amber = false }, doing = doCtx and TV.DoOf(doCtx),
-           market = { cur = body.cur, ageText = body.ageText or "2 h", med30 = body.med30 },
-           canDisenchant = body.deValue ~= nil, deValue = body.deValue, sell = body.sell, buy = body.buy,
-           activity = { soldPerDay = body.sold, listed = body.listed } }
+  return { age = age or { text = "data 2 h old", amber = false }, doing = doCtx and TV.DoOf(doCtx), offsetMs = 0,
+           market = { cur = body.cur, ageText = body.ageText or "2 h", med7 = body.med7, med14 = body.med14,
+                      med30 = body.med30, listed = body.listed, soldPerDay = body.sold },
+           sell = body.sell, buy = body.buy, mats = body.mats, holdings = body.holdings }
 end
 
 --- Copper Rod in Brugan's bags, posting 5 now at 41 s (variants 1, 12 and 14).
@@ -55,15 +73,15 @@ local function CopperRod(TV, age, friday)
   local post = { id = "p", kind = "post", key = TW.ROD, qty = 5, price = 4100, at = now, net = 6306, chance = 58 }
   local inside = TV.InWindow(sell, now)
   return Facts(TV, TW.Ctx({ key = TW.ROD, held = 5, actions = { post }, nowMs = now, sellNow = inside }),
-    { cur = 4200, med30 = 4500, sell = { label = TV.Hours(sell, 0), price = 4500, weeks = 4, now = inside },
-      buy = { label = "Mon 03–07", price = 3800, weeks = 2 }, sold = 6, listed = 14 }, age)
+    { cur = 4200, med7 = 4000, med14 = 4300, med30 = 4500, listed = 14, sold = 6, sell = Win(4, 18, 4500, 4, inside),
+      buy = Win(0, 3, 3800, 2), holdings = Bags(5) }, age)
 end
 
 --- Copper Bar's market lines (variants 4 and 5).
 ---@return table
 local function CopperBarBody()
-  return { cur = 1000, med30 = 950, sell = { label = "Sat 18–21", price = 1200, weeks = 7 },
-           buy = { label = "Wed 04–08", price = 920, weeks = 4 }, sold = 40, listed = 150 }
+  return { cur = 1000, med7 = 960, med14 = 955, med30 = 950, listed = 150, sold = 40, sell = Win(5, 18, 1200, 7),
+           buy = Win(2, 4, 920, 4), holdings = Bags(10) }
 end
 
 --- The 14 variants, in the mockup's order.
@@ -77,42 +95,46 @@ function TW.Variants(TV, VM)
                          chance = 90, peak = TW.At(5, 18) } }
   local mail = { id = "m", kind = "mail", key = TW.BAR, qty = 6, at = TW.NOW, to = "Brugan-Grommash" }
   local mailCraft = { id = "k2", kind = "craft", key = TW.ROD, qty = 5, at = TW.NOW + TW.HOUR, net = 971, parent = "m" }
+  local spurMats = { { chance = 0.75, min = 2, max = 5, name = "Vision Dust", price = 2200 },
+                     { chance = 0.2, min = 1, max = 2, name = "Greater Mystic Essence", price = 8000 },
+                     { chance = 0.05, min = 1, max = 1, name = "Large Radiant Shard", price = 17000 } }
+  local gloveMats = { { chance = 0.75, min = 2, max = 3, name = "Soul Dust", price = 600 },
+                      { chance = 0.2, min = 1, max = 2, name = "Lesser Mystic Essence", price = 1000 } }
   return {
     { "1 bag item with a planned post", CopperRod(TV) },
     { "2 bag item planned for a later peak", Facts(TV, TW.Ctx({ key = 7910, held = 1, actions = { { id = "s", kind = "post",
         key = 7910, qty = 1, price = 45000, at = TW.At(5, 10), net = 15000, chance = 85, peak = TW.At(5, 18) } } }),
-      { cur = 29500, med30 = 38000, deValue = 18000, sell = { label = "Sat 18–21", price = 45000, weeks = 4 },
-        buy = { label = "Tue 20–23", price = 28000, weeks = 4 }, sold = 3, listed = 4 }) },
+      { cur = 29500, med7 = 31000, med14 = 33000, med30 = 38000, listed = 4, sold = 3, sell = Win(5, 18, 45000, 4),
+        buy = Win(1, 20, 28000, 4), mats = spurMats, holdings = Bags(1) }) },
     { "3 hold", Facts(TV, TW.Ctx({ key = 4338, held = 30, actions = { { id = "h", kind = "hold", key = 4338, qty = 30,
         at = TW.At(8, 20) } } }),
-      { cur = 110, med30 = 115, sell = { label = "Tue 20–22", price = 120, weeks = 4 },
-        buy = { label = "Sun 03–07", price = 102, weeks = 2 }, sold = 55, listed = 120 }) },
+      { cur = 110, med7 = 112, med14 = 114, med30 = 115, listed = 120, sold = 55, sell = Win(1, 20, 120, 4), buy = Win(6, 3, 102, 2),
+        holdings = Bags(30) }) },
     { "4 craft mat in bags (on Brugan, who knows the recipe)",
       Facts(TV, TW.Ctx({ key = TW.BAR, held = 10, actions = craftChain }), CopperBarBody()) },
     { "5 mail step (on Amaya, who holds the bars)", Facts(TV, TW.Ctx({ key = TW.BAR, held = 6, actions = { mail },
         allActions = { mail, mailCraft } }), CopperBarBody()) },
     { "6 disenchant", Facts(TV, TW.Ctx({ key = 7005, held = 1, deValue = 1425, actions = { { id = "d", kind = "de",
         key = 7005, qty = 1, at = TW.NOW, net = 625, chance = 100 } } }),
-      { cur = 800, med30 = 1100, deValue = 1425, sell = { label = "Sat 17–21", price = 1230, weeks = 2 },
-        buy = { label = "Mon 03–07", price = 710, weeks = 2 }, sold = 210, listed = 400 }) },
+      { cur = 800, med7 = 1000, med14 = 1050, med30 = 1100, listed = 400, sold = 210, sell = Win(5, 17, 1230, 2),
+        buy = Win(0, 3, 710, 2), mats = gloveMats, holdings = Bags(1) }) },
     { "7 AH listing on your Shopping list", Facts(TV, TW.Ctx({ key = TW.BAR, listing = true,
         shopping = { qty = 6, price = 1000, purpose = "for Copper Rod" } }),
-      { cur = 980, ageText = "now", med30 = 950, sell = { label = "Sat 18–21", price = 1200, weeks = 7 },
-        buy = { label = "Wed 04–08", price = 920, weeks = 4 }, sold = 40, listed = 150 }) },
+      { cur = 980, ageText = "now", med7 = 960, med14 = 955, med30 = 950, listed = 150, sold = 40, sell = Win(5, 18, 1200, 7),
+        buy = Win(2, 4, 920, 4) }) },
     { "8 unfunded alternative (on Brugan)", Facts(TV, TW.Ctx({ key = 3385, held = 0, unfunded = { strategy = "craft",
         net = 80, reason = "Exceeds risk tolerance (needs 45s, 24s 40c left)" } }),
-      { cur = 520, med30 = 540, sell = { label = "Sat 19–22", price = 580, weeks = 4 },
-        buy = { label = "Thu 02–06", price = 490, weeks = 2 }, sold = 10, listed = 25 }) },
+      { cur = 520, med7 = 530, med14 = 535, med30 = 540, listed = 25, sold = 10, sell = Win(5, 19, 580, 4), buy = Win(3, 2, 490, 2) }) },
     { "9 kept item", Facts(TV, TW.Ctx({ key = 159, held = 13, reserve = 10 }),
-      { cur = 25, med30 = 24, sell = { label = "Sun 19–22", price = 27, weeks = 2 },
-        buy = { label = "Tue 03–07", price = 26, weeks = 2, cheaperNow = true }, sold = 30, listed = 200 }) },
+      { cur = 25, med7 = 24, med14 = 24, med30 = 24, listed = 200, sold = 30, sell = Win(6, 19, 27, 2), buy = Win(1, 3, 26, 2),
+        holdings = Bags(13) }) },
     { "10 vendor", Facts(TV, TW.Ctx({ key = 3300, held = 4, own = { kind = "vendor", price = 12 } }),
-      { med30 = 10, sold = 0, listed = 0 }) },
+      { med30 = 10, listed = 0, sold = 0, holdings = Bags(4) }) },
     { "11 no market data", { age = { text = "data 2 h old", amber = false }, noData = true } },
     { "12 stale data (more than 24 h old)", CopperRod(TV, VM.Age(TW.NOW - 2 * TW.DAY, TW.NOW)) },
     { "13 AH listing on none of your lists", Facts(TV, TW.Ctx({ key = 2996, listing = true }),
-      { cur = 1150, ageText = "now", med30 = 1200, sell = { label = "Sat 17–21", price = 1300, weeks = 6 },
-        buy = { label = "Tue 08–12", price = 1080, weeks = 4 }, sold = 26, listed = 45 }) },
+      { cur = 1150, ageText = "now", med7 = 1180, med14 = 1190, med30 = 1200, listed = 45, sold = 26, sell = Win(5, 17, 1300, 6),
+        buy = Win(1, 8, 1080, 4) }) },
     { "14 bag item inside its best sell window (Fri 18:30)", CopperRod(TV, nil, true) },
   }
 end

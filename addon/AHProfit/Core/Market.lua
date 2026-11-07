@@ -18,9 +18,10 @@ AHProfit.EXPORT_VERSION = 4            -- 4: K, G and the portfolio snapshot (EX
 Market.CACHE_LIMIT = 500           -- decoded items kept before the cache starts again
 Market.FIELDS = { "cur", "curQty", "curAgeMin", "med7", "med30", "p10", "p90", "trend10", "sold10", "listed10",
                   "supply", "conf", "seasonality", "postPrice", "refStack", "sellValue", "volumeUnknown",
-                  "chance1000", "typicalSupply", "suspect", "closes30" }   -- typicalSupply: median daily listed
-                                                                -- units (EX10); suspect: 1 when AHSync hasn't confirmed cur
-                                                                -- (A58); closes30: hourly closes in 30 days (TT23)
+                  "chance1000", "typicalSupply", "suspect", "closes30", "med14" }   -- typicalSupply: median daily
+                                                                -- listed units (EX10); suspect: 1 when AHSync hasn't confirmed
+                                                                -- cur (A58); closes30: hourly closes in 30 days (TT23); med14:
+                                                                -- the 14-day median (EX20), nil in an older file
 
 local state = nil                  -- { status, market = { I, C, observationsUntil, curveHour }, file } once checked
 local cache, cached = {}, 0

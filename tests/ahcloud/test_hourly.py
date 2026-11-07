@@ -108,5 +108,5 @@ def test_a_republish_of_the_same_state_writes_the_same_bytes(tmp_path):
     data, intel_store = world(tmp_path, (A_MS, SNAP_A), (B_MS, SNAP_B))
     run_hourly(data, intel_store, M)
     doc, pointer = read_latest(intel_store, M)
-    again = publish(LocalStore(tmp_path / "other"), doc)[0]
+    again = publish(LocalStore(tmp_path / "other"), doc)[-1]   # the current schema's
     assert again.sha256 == pointer.sha256 and to_json(replace(doc)) == to_json(doc)

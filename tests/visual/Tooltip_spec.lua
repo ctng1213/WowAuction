@@ -1,4 +1,4 @@
--- UI17: the tooltip's 14 variants fit the 320 px the SPEC allows (SPEC §4.3, §8.4), from TooltipView's lines. The
+-- UI17: the tooltip's 14 variants fit the 320 px the SPEC allows (SPEC §4.3, §8.4; mockup §3b), from TooltipView's lines. The
 -- tooltip is the client's GameTooltip, not a frame tree of ours, so its snapshot is the lines with their widths.
 
 local Stubs = require("wow_stubs")
@@ -6,7 +6,7 @@ local Layout = require("layout")
 local TW = require("tooltip_world")
 
 describe("Tooltip layout", function()
-  it("UI17 the 14 variants: every line within 320 px, long Do values on a value-only line, hour ranges, amber when stale", function()
+  it("UI17 the 14 variants: every line within 320 px, long Do values on a value-only line, days in words, amber when stale", function()
     Stubs.Reset()
     Stubs.Login()
     local TV, VM = AHProfit.TooltipView, AHProfit.ViewModel
@@ -18,8 +18,8 @@ describe("Tooltip layout", function()
         local width = TV.Width(VM.WithCoins(l.label), VM.WithCoins(l.value))
         assert_eq(width <= TV.WIDTH, true, v[1] .. ": " .. l.label .. " | " .. l.value .. " is " .. width .. " px")
         out[#out + 1] = string.format("%3d %s | %s%s", math.floor(width + 0.5), l.label, l.value, l.amber and " (amber)" or "")
-        if l.label:match("^Best time") and not l.value:match("^now ·") then
-          assert_eq(l.value:match("^%a%a%a %d%d–%d%d") ~= nil or l.value:match("^now %(%a%a%a %d%d–%d%d%)") ~= nil, true, l.value)
+        if l.label:match("^Best %a+ Price$") then                          -- a day and time of day in words, or now (TT28)
+          assert_eq(l.value:match(" · %a+day %a+") ~= nil or l.value:match(" · now") ~= nil, true, l.value)
         end
         if i == 3 and lines[2].isDo and l.label == "" then continued[#continued + 1] = n end
       end

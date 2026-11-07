@@ -1,5 +1,5 @@
 -- Specs for addon/AHProfit/UI/Tooltip.lua: the AHProfit block on item tooltips, gathered from the addon files and
--- the live state and drawn as two-column lines (SPEC §4.3 Tooltip; A21, TT4, TT6, TT22, R21). The lines' words are
+-- the live state and drawn as two-column lines (SPEC §4.3 Tooltip; A21, TT4, TT6, TT22, TT24, TT27, TT30, R21). The lines' words are
 -- TooltipView's (tests/addon/UI/TooltipView_spec.lua).
 
 local Stubs = require("wow_stubs")
@@ -46,24 +46,28 @@ end
 describe("Tooltip", function()
   it("A21 hovering Linen in the bags adds the AHProfit block from the market file, the addon's own option first", function()
     local tip = Boot()
-    assert_eq(Texts(2589), { "AHProfit | data 2 h old", "Market | 45c (2 h) · 49c 30-day (+9%)",
-      "Best time to sell | Sat 18–22 · 55c (+22%) · established", "Activity | 48/day · 93 listed · 1.9 d supply" })
+    assert_eq(Texts(2589), { "AHProfit | data 2 h old", "Market Price | 45c (2 h) · 8% lower than 7d median",
+      "Price history | steady", " | (30d) 49c · (14d) — · (7d) 49c", "Market Inventory | 93 listed",
+      "Sales Rate | 48 sold/day · 1.9 days of supply",
+      "Best Sell Price | 55c · Saturday Evening · established" })        -- (45 − 49) ÷ 49 = −8.2%; no med14 in this file
     Stubs.world.containers = { [0] = { size = 1, slots = { [1] = { id = 2589, count = 20 } } } }
     Stubs.FireEvent("BAG_UPDATE_DELAYED")
     Stubs.Advance(1)
     local texts = Texts(2589)
-    assert_eq({ texts[2], texts[3] }, { "Do: POST 20 now at 45c | +8s 40c · 90% chance", " | then nothing" })
+    assert_eq({ texts[2], texts[3], texts[#texts] },
+              { "Do: POST 20 now at 45c | +8s 40c · 90% chance", " | then nothing", "Inventory | 20 · bags 20" })
     Stubs.HoverItem(2589)
     local header, market = tip.doubles[1], tip.doubles[4]
     assert_eq({ header[1]:match("AHProfit"), header[2]:match("data 2 h old|r |T.-WHITE8X8:7:7:0:0:8:8:0:8:0:8:61:219:79|t$") ~= nil },
               { "AHProfit", true })                                        -- a green dot: the data is fresh
     assert_eq(tip.doubles[2][1]:match("^|c%x+Do: |r|c(%x+)POST|r"), "ffffd100")   -- the verb in POST's gold
-    assert_eq(market[2]:match("|c(%x+)%(%+9%%%)|r"), "ff3ddb4f")                   -- the green delta
+    assert_eq(market[2]:match("|c(%x+)8%% lower than 7d median|r"), "ffff493d")   -- red: below the 7-day median
+    assert_eq(tip.doubles[3][1], " ")                                              -- the value-only line's label (TT24)
   end)
 
   it("TT6 the price at best time includes the trend up to the window's best hour", function()
     Boot(nil, 20)                                                   -- +2%/day; Sat 19:00 UTC is 2.42 days away
-    assert_eq(ValueOf(2589, "Best time to sell"), "Sat 18–22 · 58c (+29%) · established")   -- floor(49 × 1.12 × 1.0484 + 0.5)
+    assert_eq(ValueOf(2589, "Best Sell Price"), "58c · Saturday Evening · established")   -- floor(49 × 1.12 × 1.0484 + 0.5)
     local Prices = AHProfit.Engine.Prices
     assert_eq({ Prices.SlotPrice(49, 1.12, 2, 2), Prices.SlotPrice(49, 1.12, 9, 2), Prices.SlotPrice(49, 1.12, -9, 2) },
               { 57, 60, 49 })                                       -- clamped to ±5%/day
@@ -72,19 +76,32 @@ describe("Tooltip", function()
 
   it("R21 the price at best time starts from the 7-day median", function()
     Boot(60, nil, 80)
-    assert_eq(ValueOf(2589, "Best time to sell"), "Sat 18–22 · 67c (+49%) · established")   -- 60c × 1.12 = 67.2c
+    assert_eq(ValueOf(2589, "Best Sell Price"), "67c · Saturday Evening · established")   -- 60c × 1.12 = 67.2c
   end)
 
   it("TT22 the price at best time stays within what the last 30 days traded at", function()
     Boot(60)                                                        -- p90 60c: 67.2c is clamped to max(60c, 60c)
-    assert_eq(ValueOf(2589, "Best time to sell"), "Sat 18–22 · 60c (+33%) · established")
+    assert_eq(ValueOf(2589, "Best Sell Price"), "60c · Saturday Evening · established")
   end)
 
   it("A21 a newer in-game scan's price replaces the file's, and the deltas follow it", function()
     Boot()
     AHProfit.Scan.Replicate.LastBook = function() return { at = NOW, book = { [2589] = { [40] = { [101] = 1 } } } } end
-    assert_eq(ValueOf(2589, "Market"), "40c now · 49c 30-day (+23%)")
-    assert_eq(ValueOf(2589, "Activity"), "48/day · 20 listed · 0.4 d supply")    -- the scan's 20 units
+    assert_eq(ValueOf(2589, "Market Price"), "40c now · 18% lower than 7d median")   -- (40 − 49) ÷ 49 = −18.4%
+    assert_eq(ValueOf(2589, "Market Inventory"), "20 listed")                         -- the scan's 20 units (TT27)
+    assert_eq(ValueOf(2589, "Sales Rate"), "48 sold/day · 0.4 days of supply")      -- 20 ÷ 48 (TT32)
+  end)
+
+  it("TT30 what you hold of an item across your characters, by place: bags, bank, mail, then the AH", function()
+    Boot()
+    local Inventory = AHProfit.Capture.Inventory
+    AHProfitDB.inventory = { ["Amaya-Grommash"] = { bags = Inventory.Encode({ { key = 2589, qty = 4 } }),
+                                                    bank = Inventory.Encode({ { key = 2589, qty = 1 } }) },
+                             ["Brugan-Grommash"] = { mail = Inventory.Encode({ { key = 2589, qty = 24 } }) } }
+    AHProfitDB.ownAuctions = { ["Brugan-Grommash"] = { ends = "2589,20," .. (NOW + HOUR) .. ",45" } }
+    assert_eq(ValueOf(2589, "Inventory"), "49 · bags 4, bank 1, mail 24, AH 20")
+    AHProfitDB.ownAuctions = { ["Brugan-Grommash"] = { ends = "2589,20," .. (NOW - HOUR) .. ",45" } }   -- ended: not held
+    assert_eq(ValueOf(2589, "Inventory"), "29 · bags 4, bank 1, mail 24")
   end)
 
   it("A21 an item without market data shows two lines; a broken lookup adds nothing", function()

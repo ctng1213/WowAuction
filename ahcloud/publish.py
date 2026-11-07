@@ -67,7 +67,12 @@ def settings_from_dict(values: dict[str, object]) -> MarketSettings:
     return MarketSettings.from_dict(values)
 
 
-def publish(store: Store, intel: MarketIntelligence, schemas: tuple[int, ...] = (INTEL_SCHEMA_VERSION,)) -> list[Pointer]:
+# The schemas published side by side (SPEC §2.4, BZ37): the current one, and the previous while installs that read only
+# it are still out there (v0.1.1 reads 10). Drop the old one once every release in use reads the new one.
+PUBLISHED_SCHEMAS = (INTEL_SCHEMA_VERSION - 1, INTEL_SCHEMA_VERSION)
+
+
+def publish(store: Store, intel: MarketIntelligence, schemas: tuple[int, ...] = PUBLISHED_SCHEMAS) -> list[Pointer]:
     """Write the document in each schema asked for, then each pointer (SPEC §2.4, BZ15, BZ18).
 
     Args:

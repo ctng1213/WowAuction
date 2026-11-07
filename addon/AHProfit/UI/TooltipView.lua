@@ -1,4 +1,4 @@
--- UI/TooltipView.lua: the item tooltip's AHProfit block as view-model lines (SPEC §4.3 Tooltip; TT8-TT21, UI17).
+-- UI/TooltipView.lua: the item tooltip's AHProfit block as view-model lines (SPEC §4.3 Tooltip; TT8-TT31, UI17).
 -- Pure: the facts UI/Tooltip.lua gathers (the market file and a newer scan, this character's plan actions, its
 -- reservations, the live reselection's unfunded rows, the addon's own option) come in; two-column lines of text with
 -- colour names come out, every price per unit. Deltas keep views.delta_percent's rule (TT1-TT5); the two-column text
@@ -15,6 +15,7 @@ TooltipView.WIDTH = 320          -- px the block may take (SPEC §4.3)
 TooltipView.FONT = 10            -- px: the block's lines use the small tooltip font
 TooltipView.GAP = 16             -- px between a double line's two columns
 TooltipView.WEEKDAYS = { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" }
+TooltipView.DAYS = { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" }
 -- The Do verb's badge colour (SPEC §4.3): POST gold, BUY blue, CRAFT orange, DISENCHANT purple, VENDOR and HOLD grey,
 -- MAIL light blue, KEPT and UNFUNDED muted.
 TooltipView.VERB_COLOR = { POST = "post", BUY = "buy", CRAFT = "craft", DISENCHANT = "de", VENDOR = "grey",
@@ -103,76 +104,152 @@ local function Line(label, value, spans)
   return { label = label, value = value, spans = spans or {} }
 end
 
---- The Market line: the price now with its age, then the 30-day median and its delta.
----@param m table  { cur (copper or nil), ageText ("now" at the AH, else "2 h"), med30 }
----@return table   A line
-function TooltipView.MarketLine(m)
-  local head = "none listed"
-  if m.cur then head = ViewModel.Money(m.cur) .. (m.ageText == "now" and " now" or (" (" .. m.ageText .. ")")) end
-  if not m.med30 then return Line("Market", head) end
-  local delta, colour = TooltipView.Delta(m.med30, m.cur)
-  local value = head .. " · " .. ViewModel.Money(m.med30) .. " 30-day" .. (delta and (" (" .. delta .. ")") or "")
-  return Line("Market", value, delta and { { "(" .. delta .. ")", colour } } or nil)
-end
-
---- A value with its delta: "14s 25c (+78%)".
+--- A value, then a tail after " · " when the line fits 320 px, else the tail on a value-only line below (SPEC §4.3
+--- "Fitting 320 px", TT31).
 ---@param label string
----@param price number    Copper
----@param cur number|nil
----@return table          A line
-local function PriceLine(label, price, cur)
-  local delta, colour = TooltipView.Delta(price, cur)
-  return Line(label, ViewModel.Money(price) .. (delta and (" (" .. delta .. ")") or ""),
-              delta and { { "(" .. delta .. ")", colour } } or nil)
-end
-
---- Best time to sell: "Fri 18–21 · 45s (+7%) · pattern", or "now (Fri 18–21) · 45s · pattern" inside it (TT21).
----@param s table        { label, price, weeks, now }
----@param cur number|nil
----@return table
-function TooltipView.SellLine(s, cur)
-  local strength = TooltipView.Strength(s.weeks)
-  if s.now then
-    return Line("Best time to sell", "now (" .. s.label .. ") · " .. ViewModel.Money(s.price) .. " · " .. strength)
+---@param value string
+---@param spans table|nil      Coloured parts of the value
+---@param tail string|nil      Appended text; nil for none
+---@param tailSpans table|nil  Coloured parts of the tail
+---@return table[]             One line, or the line and its continuation
+local function Fit(label, value, spans, tail, tailSpans)
+  if not tail then return { Line(label, value, spans) } end
+  local joined = value .. " · " .. tail
+  if TooltipView.Width(label, ViewModel.WithCoins(joined)) <= TooltipView.WIDTH then
+    local all = {}
+    for _, s in ipairs(spans or {}) do all[#all + 1] = s end
+    for _, s in ipairs(tailSpans or {}) do all[#all + 1] = s end
+    return { Line(label, joined, all) }
   end
-  local delta, colour = TooltipView.Delta(s.price, cur)
-  local value = s.label .. " · " .. ViewModel.Money(s.price) .. (delta and (" (" .. delta .. ")") or "") .. " · " .. strength
-  return Line("Best time to sell", value, delta and { { "(" .. delta .. ")", colour } } or nil)
+  return { Line(label, value, spans), Line("", tail, tailSpans) }
 end
 
---- Best time to buy: the top window, or "now · cheaper than Tue 20–23 (7s 10c)" when the price now is below every
---- buy window's expected price, shortened to "now · under …" when that would pass 320 px (TT14, TT16).
----@param b table        { label, price, weeks, cheaperNow }
----@param cur number|nil
----@return table
-function TooltipView.BuyLine(b, cur)
-  if b.cheaperNow then
-    local tail = b.label .. " (" .. ViewModel.Money(b.price) .. ")"
-    local value = "now · cheaper than " .. tail
-    if TooltipView.Width("Best time to buy", ViewModel.WithCoins(value)) > TooltipView.WIDTH then
-      value = "now · under " .. tail
+--- Market Price (TT25): the lowest listing with its age, then how it compares with the 7-day median.
+---@param m table  { cur (copper or nil), ageText ("now" at the AH, else "2 h"), med7 }
+---@return table[] Lines
+function TooltipView.MarketPriceLines(m)
+  if not m.cur then return { Line("Market Price", "none listed") } end
+  local head = ViewModel.Money(m.cur) .. (m.ageText == "now" and " now" or (" (" .. m.ageText .. ")"))
+  local delta = TooltipView.DeltaPercent(m.cur, m.med7)
+  if delta == nil then return { Line("Market Price", head) } end
+  if delta == 0 then return Fit("Market Price", head, nil, "at 7d median") end
+  local text = math.abs(delta) .. "% " .. (delta > 0 and "higher" or "lower") .. " than 7d median"
+  return Fit("Market Price", head, nil, text, { { text, delta > 0 and "pos" or "neg" } })
+end
+
+--- The shift from the 30-day to the 7-day median (TT26): rising at 7d >= 1.10 x 30d, falling at 7d <= 0.90 x 30d.
+---@param med7 number|nil
+---@param med30 number|nil
+---@return string|nil, string|nil  "rising" | "falling" | "steady", and its colour; nil without both medians
+function TooltipView.Shift(med7, med30)
+  if not (med7 and med30) then return nil, nil end
+  if med7 * 10 >= med30 * 11 then return "rising", "pos" end      -- integers: no float rounding at the boundary
+  if med7 * 10 <= med30 * 9 then return "falling", "neg" end
+  return "steady", nil
+end
+
+--- Price history (TT26): a title line with the shift, then the medians oldest first, "—" for one that is missing.
+---@param m table  { med7, med14, med30 }
+---@return table[] Two lines
+function TooltipView.PriceHistoryLines(m)
+  local word, colour = TooltipView.Shift(m.med7, m.med30)
+  local title = Line("Price history", word or "", colour and { { word, colour } } or nil)
+  --- One median as shown: "(30d) 55c", or "(30d) —" when it is missing.
+  ---@param span string   "30d" | "14d" | "7d"
+  ---@param v number|nil  Copper
+  ---@return string
+  local function Median(span, v) return "(" .. span .. ") " .. (v and ViewModel.Money(v) or "—") end
+  return { title, Line("", Median("30d", m.med30) .. " · " .. Median("14d", m.med14) .. " · " .. Median("7d", m.med7)) }
+end
+
+--- Sales Rate (TT32): units sold per day, then days of supply (listed ÷ sold per day; one decimal under 10 days).
+---@param soldPerDay number|nil  Units a day; nil when unknown
+---@param listed number          Units listed now
+---@return table                 A line
+function TooltipView.SalesRateLine(soldPerDay, listed)
+  if soldPerDay == nil then return Line("Sales Rate", "— sold/day") end
+  local text = ViewModel.RoundHalfUp(soldPerDay) .. " sold/day"
+  if soldPerDay <= 0 then return Line("Sales Rate", text) end
+  local tenths = ViewModel.RoundHalfUp(listed * 10 / soldPerDay)
+  local days = tenths < 100 and (math.floor(tenths / 10) .. "." .. tenths % 10) or tostring(ViewModel.RoundHalfUp(listed / soldPerDay))
+  return Line("Sales Rate", text .. " · " .. days .. " days of supply")
+end
+
+--- A local hour of the week in words (SPEC §4.3): Morning 06-12, Afternoon 12-18, Evening 18-23, Night 23-06, an
+--- hour after midnight belonging to the evening before (Tue 02:00 is "Monday Night").
+---@param slot number      UTC hour of the week, 0 = Monday 00:00
+---@param offsetMs number  Local time minus UTC
+---@return string          e.g. "Saturday Evening"
+function TooltipView.DayPart(slot, offsetMs)
+  local local_ = (slot + math.floor(offsetMs / HOUR_MS)) % 168
+  local day, hour = math.floor(local_ / 24), local_ % 24
+  if hour < 6 then return TooltipView.DAYS[(day + 6) % 7 + 1] .. " Night" end
+  local part = hour < 12 and "Morning" or hour < 18 and "Afternoon" or hour < 23 and "Evening" or "Night"
+  return TooltipView.DAYS[day + 1] .. " " .. part
+end
+
+--- Best Buy / Best Sell Price (TT28): the window's expected price, its best hour in words ("now" while it holds now)
+--- and its strength, "early" in orange.
+---@param label string     "Best Buy Price" | "Best Sell Price"
+---@param w table          { price, slot (the best hour), weeks, now }
+---@param offsetMs number
+---@return table[]         Lines
+function TooltipView.BestLines(label, w, offsetMs)
+  local strength = TooltipView.Strength(w.weeks)
+  local value = ViewModel.Money(w.price) .. " · " .. (w.now and "now" or TooltipView.DayPart(w.slot, offsetMs))
+  return Fit(label, value, nil, strength, strength == "early" and { { strength, "amber" } } or nil)
+end
+
+--- An average quantity: whole when it is, else one decimal ("1.5", "3.5", "1").
+---@param lo number
+---@param hi number
+---@return string
+local function Quantity(lo, hi)
+  local avg = (lo + hi) / 2
+  if avg == math.floor(avg) then return tostring(avg) end
+  return string.format("%.1f", avg)
+end
+
+--- Disenchant (TT29): a title with the expected value against the AH price, a line per possible mat with its share
+--- (chance x average quantity x the mat's latest price), and an unlabelled total, the sum of the unrounded shares.
+---@param mats table[]   { chance (0-1), min, max, name, price (copper, the mat's latest; nil = no price) }
+---@param cur number|nil The item's price now
+---@return table[]       Lines
+function TooltipView.DisenchantLines(mats, cur)
+  local total, lines = 0, {}
+  for _, m in ipairs(mats) do
+    local label = "  " .. ViewModel.RoundHalfUp(m.chance * 100) .. "% · " .. Quantity(m.min, m.max) .. " " .. m.name
+    local line
+    if m.price then
+      local share = m.chance * (m.min + m.max) / 2 * m.price
+      total = total + share
+      line = Line(label .. " @ " .. ViewModel.Money(m.price), ViewModel.Money(ViewModel.RoundHalfUp(share)))
+    else
+      line = Line(label, "no price")
+      line.valueColor = "amber"
     end
-    return Line("Best time to buy", value)
+    line.labelMuted = true
+    lines[#lines + 1] = line
   end
-  local delta, colour = TooltipView.Delta(b.price, cur)
-  local value = b.label .. " · " .. ViewModel.Money(b.price) .. (delta and (" (" .. delta .. ")") or "") .. " · "
-    .. TooltipView.Strength(b.weeks)
-  return Line("Best time to buy", value, delta and { { "(" .. delta .. ")", colour } } or nil)
+  local delta = TooltipView.DeltaPercent(total, cur)
+  local title = Line("Disenchant", "")
+  if delta then
+    local text = delta == 0 and "same as AH price"
+      or (math.abs(delta) .. "% " .. (delta > 0 and "higher" or "lower") .. " than AH price")
+    title = Line("Disenchant", text, delta ~= 0 and { { text, delta > 0 and "pos" or "neg" } } or nil)
+  end
+  table.insert(lines, 1, title)
+  lines[#lines + 1] = Line("", ViewModel.Money(ViewModel.RoundHalfUp(total)))
+  return lines
 end
 
---- Activity, muted: "6/day · 14 listed · 2.3 d supply"; "0/day · 0 listed" when nothing sells (SPEC §3.3.6).
----@param a table  { soldPerDay (units, nil unknown), listed (units now) }
----@return table
-function TooltipView.ActivityLine(a)
-  local listed = a.listed or 0
-  local parts = { (a.soldPerDay and ViewModel.RoundHalfUp(a.soldPerDay) or "—") .. "/day", listed .. " listed" }
-  if a.soldPerDay and a.soldPerDay > 0 then
-    local tenths = ViewModel.RoundHalfUp(listed * 10 / a.soldPerDay)
-    parts[3] = math.floor(tenths / 10) .. "." .. tenths % 10 .. " d supply"
-  end
-  local line = Line("Activity", table.concat(parts, " · "))
-  line.muted = true
-  return line
+--- Inventory (TT30): the units you hold across your characters and where, in the order bags, bank, mail, AH.
+---@param h table  { total, places = { { where, qty } } }
+---@return table   A line
+function TooltipView.InventoryLine(h)
+  local parts = {}
+  for _, p in ipairs(h.places) do parts[#parts + 1] = p[1] .. " " .. p[2] end
+  return Line("Inventory", h.total .. " · " .. table.concat(parts, ", "))
 end
 
 --- A Do line's verb, the rest of its left text, its value and the value-only lines under it (SPEC §4.3 Do).
@@ -248,13 +325,15 @@ function TooltipView.DoLines(d, cur)
   return lines
 end
 
---- The whole block (SPEC §4.3 Tooltip, TT8-TT21): the header with the data age, the Do line first, then Market,
---- Disenchant (only when one of your characters can), Best time to sell and to buy (never dropped; none without
---- windows, W7) and Activity. Without market data: the header and "no market data yet" (TT18).
----@param f table  { age = { text, amber }, noData, doing (DoOf's), market = { cur, ageText, med30 }, canDisenchant,
----                deValue, sell = { label, price, weeks, now } or nil, buy = { label, price, weeks, cheaperNow } or nil,
----                activity = { soldPerDay, listed } }
----@return table[] Lines { label, value, spans, muted, header, amber, isDo, verb, rest, verbColor, valueColor }
+--- The whole block (SPEC §4.3 Tooltip, TT25-TT31): the header with the data age, the Do line first, then Market
+--- Price, Price history, Market Inventory, Sales Rate, Best Buy and Best Sell Price (none without windows), Disenchant (only when
+--- one of your characters can) and Inventory (only when you hold some). Without market data: the header and "no
+--- market data yet" (TT18).
+---@param f table  { age = { text, amber }, noData, doing (DoOf's), market = { cur, ageText, med7, med14, med30, listed,
+---                soldPerDay },
+---                offsetMs, buy = { price, slot, weeks, now } or nil, sell = { price, slot, weeks, now } or nil,
+---                mats = DisenchantLines' mats or nil, holdings = { total, places } or nil }
+---@return table[] Lines { label, value, spans, muted, header, amber, isDo, verb, rest, verbColor, valueColor, labelMuted }
 function TooltipView.Lines(f)
   local header = Line("AHProfit", f.age.text)
   header.header, header.amber = true, f.age.amber
@@ -265,15 +344,19 @@ function TooltipView.Lines(f)
     lines[2] = only
     return lines
   end
-  local cur = f.market.cur
-  if f.doing then
-    for _, line in ipairs(TooltipView.DoLines(f.doing, cur)) do lines[#lines + 1] = line end
-  end
-  lines[#lines + 1] = TooltipView.MarketLine(f.market)
-  if f.canDisenchant and f.deValue then lines[#lines + 1] = PriceLine("Disenchant", ViewModel.RoundHalfUp(f.deValue), cur) end
-  if f.sell then lines[#lines + 1] = TooltipView.SellLine(f.sell, cur) end
-  if f.buy then lines[#lines + 1] = TooltipView.BuyLine(f.buy, cur) end
-  lines[#lines + 1] = TooltipView.ActivityLine(f.activity or {})
+  --- Append lines to the block.
+  ---@param more table[]  Lines, in order
+  local function Add(more) for _, line in ipairs(more) do lines[#lines + 1] = line end end
+  local m = f.market
+  if f.doing then Add(TooltipView.DoLines(f.doing, m.cur)) end
+  Add(TooltipView.MarketPriceLines(m))
+  Add(TooltipView.PriceHistoryLines(m))
+  lines[#lines + 1] = Line("Market Inventory", ViewModel.Thousands(m.listed or 0) .. " listed")
+  lines[#lines + 1] = TooltipView.SalesRateLine(m.soldPerDay, m.listed or 0)
+  if f.buy then Add(TooltipView.BestLines("Best Buy Price", f.buy, f.offsetMs or 0)) end
+  if f.sell then Add(TooltipView.BestLines("Best Sell Price", f.sell, f.offsetMs or 0)) end
+  if f.mats then Add(TooltipView.DisenchantLines(f.mats, m.cur)) end
+  if f.holdings and f.holdings.total > 0 then lines[#lines + 1] = TooltipView.InventoryLine(f.holdings) end
   return lines
 end
 
