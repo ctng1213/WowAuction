@@ -3,14 +3,14 @@ from __future__ import annotations
 
 import pytest
 
-from ahcloud.daily import DB_KEY, LAST_INGESTED, carry_state, compact_prefix, key_time_ms, run_daily
+from ahcloud.daily import DB_KEY, LAST_INGESTED, REFUSED, carry_state, compact_prefix, key_time_ms, run_daily
 from ahcloud.hourly import run_hourly
 from ahcloud.publish import read_latest
 from ahcloud.store import LocalStore, PreconditionFailed
 from ahsync.collect.blizzard import raw_key
 from ahsync.db.sqlite import Database, DatabaseError
-from tests.support.cloud_world import (A_MS, B_MS, C_MS, HOUR, LINEN, M, SNAP_A, SNAP_B, SNAP_C, SPAULDERS,
-                                       FakeCatalog)
+from tests.support.cloud_world import (A_MS, B, B_MS, C_MS, HOUR, LINEN, M, SNAP_A, SNAP_B, SNAP_C, SPAULDERS,
+                                       FakeCatalog, house, linen)
 
 
 def stores(tmp_path, *snaps):
@@ -157,6 +157,23 @@ def test_BZ16_an_item_the_search_does_not_know_is_asked_again_after_a_week(tmp_p
     again = FakeCatalog()
     run_daily(data, intel, again, M, tmp_path / "run")
     assert again.ranges == []                                                # not asked again within the week
+
+
+def test_FM74_a_refused_snapshot_is_set_aside_and_the_rest_is_published(tmp_path, caplog):
+    bad = house(B, [], [{**linen(2455, 10), "time_left": "EXPIRED"}])
+    data, intel = stores(tmp_path, (A_MS, SNAP_A), (B_MS, bad), (C_MS, SNAP_C))
+    outcome = run_daily(data, intel, FakeCatalog(), M, tmp_path / "run")
+    assert (outcome.state, outcome.ingested, outcome.refused, outcome.built_ms) == ("published", 2, 1, C_MS)
+    assert read_latest(intel, M)[0].built_ms == C_MS
+    assert raw_key(M, B_MS) in caplog.text and "unknown time_left" in caplog.text
+    db = history(data, tmp_path)
+    try:
+        assert db.get_meta(REFUSED) == f"[{B_MS}]"
+        assert {r[0] for r in db.conn.execute("SELECT scan_id FROM scans")} == {f"blizzard:{M}:{A_MS}", f"blizzard:{M}:{C_MS}"}
+    finally:
+        db.close()
+    again = run_daily(data, intel, FakeCatalog(), M, tmp_path / "run")
+    assert (again.state, again.ingested, again.refused) == ("republished", 0, 0)       # B is not tried again
 
 
 def test_FM72_a_damaged_database_fails_the_run(tmp_path):

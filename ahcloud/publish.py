@@ -97,23 +97,28 @@ def publish(store: Store, intel: MarketIntelligence, schemas: tuple[int, ...] = 
 
 
 def read_latest(store: Store, market: str) -> tuple[MarketIntelligence, Pointer] | None:
-    """The newest published document of this schema, checked against its pointer.
+    """The newest published document, checked against its pointer: this schema's, else the previous one's.
+
+    Right after a schema bump only the older pointer exists until a daily run publishes the new one; reading it
+    (with `from_json`'s defaults for the new fields) keeps the hourly prices moving meanwhile (FM75).
 
     Args:
         store: The intel store.
         market: Market id.
 
     Returns:
-        (the intelligence, its pointer); None before the first publish.
+        (the intelligence, lifted to this schema, and its pointer); None before the first publish.
 
     Raises:
         ValueError: The document is missing or its hash differs from the pointer's (a torn or tampered write).
     """
-    found = store.get(pointer_key(market))
+    found = next((f for f in (store.get(pointer_key(market, s)) for s in reversed(PUBLISHED_SCHEMAS)) if f), None)
     if found is None:
         return None
     pointer = Pointer(**json.loads(found.data))
     document = store.get(pointer.key)
     if document is None or hashlib.sha256(document.data).hexdigest() != pointer.sha256:
         raise ValueError(f"{pointer.key}: missing, or not the document the pointer names")
-    return from_json(gzip.decompress(document.data).decode("utf-8")), pointer
+    intel = from_json(gzip.decompress(document.data).decode("utf-8"))
+    # additive schemas: an older document is a current one with the new fields at their defaults (FM75)
+    return dataclasses.replace(intel, schema_version=max(intel.schema_version, INTEL_SCHEMA_VERSION)), pointer

@@ -4,11 +4,11 @@ from __future__ import annotations
 from dataclasses import replace
 
 from ahcloud.hourly import number, run_hourly, shift_ring
-from ahcloud.publish import publish, read_latest, settings_to_dict
+from ahcloud.publish import PUBLISHED_SCHEMAS, pointer_key, publish, read_latest, settings_to_dict
 from ahcloud.store import LocalStore
 from ahsync.collect.blizzard import raw_key
 from ahsync.engine.sellprob import MarketSettings
-from ahsync.intel.contract import ItemIntel, MarketIntelligence, to_json
+from ahsync.intel.contract import INTEL_SCHEMA_VERSION, ItemIntel, MarketIntelligence, to_json
 
 from tests.support.cloud_world import (A_MS, B_MS, C_MS, HOUR, LINEN, M, SNAP_A, SNAP_B, SNAP_C, SPAULDERS)
 
@@ -88,6 +88,20 @@ def test_no_document_yet_means_nothing_to_layer_over(tmp_path):
     data = LocalStore(tmp_path / "data")
     data.put(raw_key(M, B_MS), SNAP_B)
     assert run_hourly(data, LocalStore(tmp_path / "intel"), M).state == "no_base"
+
+
+def test_FM75_after_a_schema_bump_the_hourly_run_layers_over_the_previous_schema(tmp_path):
+    data, intel_store = LocalStore(tmp_path / "data"), LocalStore(tmp_path / "intel")
+    for stamp_ms, envelope in ((A_MS, SNAP_A), (B_MS, SNAP_B)):
+        data.put(raw_key(M, stamp_ms), envelope)
+    publish(intel_store, DAILY, (INTEL_SCHEMA_VERSION - 1,))           # the last daily run was on the older schema
+    assert intel_store.get(pointer_key(M)) is None
+    outcome = run_hourly(data, intel_store, M)
+    assert (outcome.state, outcome.observations_until_ms) == ("published", B_MS)
+    for schema in PUBLISHED_SCHEMAS:
+        assert intel_store.get(pointer_key(M, schema)) is not None
+    doc = read_latest(intel_store, M)[0]
+    assert (doc.built_ms, doc.items[LINEN].cur_qty) == (BUILT, 10)
 
 
 def test_the_first_snapshot_has_no_last_hour(tmp_path):

@@ -276,8 +276,10 @@ def parse_snapshot(market: str, auctions_body: bytes, commodities_body: bytes, a
         suffixes: Bonus id -> random suffix id (collect.provider.load_bonus_suffixes).
 
     Returns:
-        The parsed snapshot; its observation is None for an empty house. The observation is not checked here:
-        `collect.observations.ingest_snapshot` refuses it whole when `snapshot_problems` finds anything (FM33).
+        The parsed snapshot; its observation is None for an empty house. A record Blizzard repeats field for
+        field counts once (BZ38: its answer can list one auction twice); two different records with one id are
+        both kept. The observation is not checked here: `collect.observations.ingest_snapshot` refuses it whole
+        when `snapshot_problems` finds anything (FM33).
 
     Raises:
         BlizzardError: A body is not JSON, or a record is malformed (the snapshot is refused whole).
@@ -285,12 +287,13 @@ def parse_snapshot(market: str, auctions_body: bytes, commodities_body: bytes, a
     regular, commodities = _auctions_of(auctions_body, "auctions"), _auctions_of(commodities_body, "commodities")
     if regular is None or commodities is None:
         return ParsedSnapshot(None, 0, True)
-    auctions, bid_only = [], 0
+    auctions, bid_only, seen = [], 0, set()
     for record in regular + commodities:
         auction = _auction(record, suffixes)
         if auction is None:
             bid_only += 1
-        else:
+        elif auction not in seen:                  # Blizzard's echo of the same record (BZ38)
+            seen.add(auction)
             auctions.append(auction)
     return ParsedSnapshot(SnapshotObservation(market, SOURCE, at_ms, tuple(auctions)), bid_only, False)
 

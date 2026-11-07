@@ -71,4 +71,7 @@ def handler(event: Any, context: Any) -> dict:
     client = BlizzardClient(UrllibTransport(), clock, found.client_id, found.secret)
     result = run_daily(data, intel, client, market, WORKDIR, fresh=mode == "rebuild")
     emit(market, f"daily_{result.state}", clock.now_ms())
-    return {"mode": mode, "state": result.state, "ingested": result.ingested, "items": result.items}
+    if result.refused:
+        emit(market, "daily_refused", clock.now_ms())
+    return {"mode": mode, "state": result.state, "ingested": result.ingested, "items": result.items,
+            "refused": result.refused}

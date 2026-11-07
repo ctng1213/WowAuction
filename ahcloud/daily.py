@@ -9,6 +9,7 @@ analyze with `now_ms` = the newest ingested snapshot, so a rebuild from raw give
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
@@ -18,8 +19,10 @@ from ahcloud.hourly import advance, snapshot
 from ahcloud.publish import publish, read_latest, settings_to_dict
 from ahcloud.store import Store
 from ahsync.analysis.market import analyze_market
-from ahsync.collect.blizzard import FALLBACK_NAMESPACE, SEARCH_SPAN, STATIC_NAMESPACE, BlizzardClient, catalog_row, raw_key
+from ahsync.collect.blizzard import (FALLBACK_NAMESPACE, SEARCH_SPAN, STATIC_NAMESPACE, BlizzardClient, BlizzardError,
+                                     catalog_row, raw_key)
 from ahsync.collect.observations import ingest_snapshot
+from ahsync.collect.provider import snapshot_problems
 from ahsync.collect.snapshots import SnapshotStore
 from ahsync.db.sqlite import Database
 from ahsync.engine.item_key import KEY_SUFFIX_FACTOR
@@ -35,6 +38,8 @@ CLOUD_BOOK_DAYS = 2                     # the cloud needs only the newest book a
 COMPACT_DAYS = 3                        # compact snapshots kept: a day's id volume reads 6 h before it; lifetimes 25 h
 MISSING_RETRY_MS = 7 * DAY_MS           # an id the item search didn't know is asked again after a week (BZ16)
 LAST_INGESTED = "last_ingested_at_ms"   # meta key: the newest snapshot in history.db (BZ12)
+REFUSED = "refused_snapshots"           # meta key: snapshot times refused whole, never tried again (FM74)
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -45,6 +50,7 @@ class DailyOutcome:
     ingested: int = 0                   # snapshots ingested this run
     built_ms: int | None = None
     items: int = 0                      # items in the document
+    refused: int = 0                    # snapshots refused whole this run (FM74)
 
 
 def key_time_ms(key: str) -> int:
@@ -259,19 +265,22 @@ def _ingest_and_publish(db: Database, data: Store, intel_store: Store, client: B
         What it did.
     """
     last = int(db.get_meta(LAST_INGESTED) or 0)
+    refused = set(json.loads(db.get_meta(REFUSED) or "[]"))
     after = raw_key(market, last - DAY_MS) if last else ""            # older raw is ingested or pruned (BZ14)
-    pending = [k for k in data.list(f"raw/{market}/", start_after=after)
-               if db.conn.execute("SELECT 1 FROM scans WHERE scan_id = ?", (f"{SRC}:{market}:{key_time_ms(k)}",)).fetchone() is None]
+    pending = [k for k in data.list(f"raw/{market}/", start_after=after) if key_time_ms(k) not in refused
+               and db.conn.execute("SELECT 1 FROM scans WHERE scan_id = ?", (f"{SRC}:{market}:{key_time_ms(k)}",)).fetchone() is None]
     if not pending and not last:
         return DailyOutcome("empty")
     store = SnapshotStore(workdir / "snapshots")
     if pending and etag is not None:                                 # a rebuild starts the compact store afresh
         download_compact(data, store.root, market, (key_time_ms(pending[0]) // DAY_MS) * DAY_MS - MAX_GAP_MS)
-    for key in pending:
-        observation = snapshot(data, key, market)
-        if observation is not None:                                 # an empty house ingests nothing (BZ5)
-            ingest_snapshot(db, store, observation)
-        last = max(last, key_time_ms(key))
+    new_refusals = ingest_pending(db, data, store, market, pending)
+    if new_refusals:
+        with db.transaction():
+            db.set_meta(REFUSED, json.dumps(sorted(refused | set(new_refusals))))
+    last = max([last] + [key_time_ms(k) for k in pending if key_time_ms(k) not in new_refusals])
+    if not last:                                                    # everything so far was refused
+        return DailyOutcome("empty", refused=len(new_refusals))
     keys = sorted({k for (k,) in db.conn.execute("SELECT DISTINCT key FROM current WHERE market = ?", (market,))})
     fill_catalog(db, client, keys, last)
     prune(db, last, 90, CLOUD_BOOK_DAYS)
@@ -293,7 +302,41 @@ def _ingest_and_publish(db: Database, data: Store, intel_store: Store, client: B
     db.conn.execute("VACUUM INTO ?", (str(copy),))
     data.put(DB_KEY, copy.read_bytes(), if_match=etag)
     publish(intel_store, intel)
-    return DailyOutcome("published" if pending else "republished", len(pending), intel.built_ms, len(intel.items))
+    ingested = len(pending) - len(new_refusals)
+    return DailyOutcome("published" if ingested else "republished", ingested, intel.built_ms, len(intel.items),
+                        len(new_refusals))
+
+
+def ingest_pending(db: Database, data: Store, store: SnapshotStore, market: str, pending: list[str]) -> list[int]:
+    """Ingest raw snapshots in order, setting aside any that is refused whole (FM33, FM74).
+
+    A refused snapshot is stored nowhere (`ingest_snapshot` checks before writing) and logged with its key and
+    reason; the rest go on, so one bad answer from Blizzard never stops the cloud.
+
+    Args:
+        db: The history database.
+        data: The data store (raw/).
+        store: The local compact snapshot store.
+        market: Market id.
+        pending: Raw keys without a `scans` row, in time order.
+
+    Returns:
+        The times of the snapshots refused, ascending.
+    """
+    refused = []
+    for key in pending:
+        try:
+            observation = snapshot(data, key, market)
+        except BlizzardError as error:
+            problems = [str(error)]
+        else:
+            problems = snapshot_problems(observation) if observation is not None else []
+        if problems:
+            log.warning("refused %s: %s", key, "; ".join(problems))
+            refused.append(key_time_ms(key))
+        elif observation is not None:                               # an empty house ingests nothing (BZ5)
+            ingest_snapshot(db, store, observation)
+    return refused
 
 
 def carry_state(base: MarketIntelligence, prior: MarketIntelligence | None) -> MarketIntelligence:

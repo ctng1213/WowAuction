@@ -129,6 +129,15 @@ def test_BZ5_an_empty_house_ingests_nothing():
     assert not bz.parse_snapshot(M, body([]), body([]), B_MS, SUFFIXES).empty   # an empty list is a real answer
 
 
+def test_BZ38_a_record_blizzard_repeats_field_for_field_counts_once():
+    echo = {"id": 6690572, "item": {"id": 7281}, "bid": 100, "buyout": 200, "quantity": 1, "time_left": "LONG"}
+    parsed = observation(bz.parse_snapshot(M, body([echo, SPAULDERS, echo]), body([LINEN]), B_MS, SUFFIXES))
+    assert [a.id for a in parsed.auctions] == [6690572, 39643, 2455] and snapshot_problems(parsed) == []
+    other = {**echo, "id": 6690573}
+    clash = observation(bz.parse_snapshot(M, body([other, {**other, "quantity": 2}]), body([]), B_MS, SUFFIXES))
+    assert len(clash.auctions) == 2 and snapshot_problems(clash) == ["an auction id appears twice"]   # FM33
+
+
 def test_BZ6_the_token_is_cached_renewed_before_expiry_and_never_logged(caplog):
     caplog.set_level(logging.DEBUG)
     clock, http = FakeClock(B_MS), ScriptedHttp()
