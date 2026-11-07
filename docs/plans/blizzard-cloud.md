@@ -106,6 +106,20 @@ The user's decisions of 2026-11-06:
 
 Pinned exactly with the resolved tree in `requirements-infra.txt`. **CI:** `tests/infra/` is skipped when `aws_cdk` is not importable, so the existing `test` job on Windows and macOS is unchanged; the stack tests run where the infra requirements are installed (the user's Mac, and later a CI job if wanted).
 
+**Dependency review: `boto3` and `botocore[crt]` for the local cloud path (Opus, 2026-11-07; the `dependency-review` skill).**
+
+1. **Need.** Decision 17's local runs against the real buckets (`python -m ahcloud rebuild|analyze --store s3://…`) and the emergency rebuild when the Lambda's 15 min are not enough. `ahcloud/aws.py` already imports boto3 (preinstalled in the Lambda), but no requirements file installs it on a machine; signing S3 requests by hand is far more than a few dozen lines. `botocore[crt]` is needed for the credentials `aws login` writes (found on the user's Mac: `MissingDependencyException`).
+2. **Candidates.** boto3 (proposed: the SDK the code already uses); the AWS CLI through a subprocess (a second path and parsing of its output, against AR9's single adapter).
+3. **Maintenance.** AWS's own SDK, released several times a week (1.43.126 current); not one person's project.
+4. **Compatibility.** Python 3.9+; macOS, Windows and Linux. **Conflict:** botocore needs `python-dateutil` < 3 while `requirements-infra.txt` pins 4.0.0, so `requirements-cloud.txt` gets its own virtual environment (said in the file).
+5. **Licence.** Apache-2.0 (boto3, botocore, s3transfer, awscrt), MIT (jmespath, urllib3, six), dual Apache/BSD (python-dateutil). Permissive; nothing is distributed to users.
+6. **Security.** `pip-audit`: no known vulnerabilities in the 8 resolved packages. It talks only to AWS with the user's own credentials; no untrusted input is parsed beyond AWS's responses.
+7. **Runtime cost.** About 30 MB installed (botocore's service models), `import boto3` about 0.1 s. Not in the app or the Lambda asset.
+8. **Packaging.** Wheels only; awscrt ships prebuilt binary wheels. Never bundled: `tools/build_lambda.py` stages only `ahsync/` and `ahcloud/`.
+9. **Exit.** Already behind one seam (`ahcloud/aws.py`, AR9). Removing it drops only the local s3:// path; folders still work.
+
+Pinned exactly in `requirements-cloud.txt`.
+
 **Decided during execution (Opus, M30, 2026-11-06).**
 
 - **Two buckets, data and intel.** CDK's `S3BucketOrigin.with_origin_access_control` grants the distribution `s3:GetObject` on the whole bucket and has no prefix option; scoping it to `intel/*` would mean hand-written policy fighting the helper. A separate intel bucket makes the public/private line a bucket boundary. The analyzer (M31) writes the intel bucket; the collector has no access to it. SEC17's row and SPEC §2.4 changed.

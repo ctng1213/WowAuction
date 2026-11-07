@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import pytest
 
-from ahcloud.daily import DB_KEY, LAST_INGESTED, REFUSED, carry_state, compact_prefix, key_time_ms, run_daily
+from ahcloud.daily import DB_KEY, LAST_INGESTED, REBUILD_REPLAY_MS, REFUSED, carry_state, compact_prefix, key_time_ms, run_daily
 from ahcloud.hourly import run_hourly
 from ahcloud.publish import read_latest
 from ahcloud.store import LocalStore, PreconditionFailed
 from ahsync.collect.blizzard import raw_key
 from ahsync.db.sqlite import Database, DatabaseError
+
+DAY_MS = 86_400_000
 from tests.support.cloud_world import (A_MS, B, B_MS, C_MS, HOUR, LINEN, M, SNAP_A, SNAP_B, SNAP_C, SPAULDERS,
                                        FakeCatalog, house, linen)
 
@@ -211,6 +213,32 @@ def test_the_daily_run_keeps_the_hourly_rings_it_did_not_build(tmp_path):
 
 def test_raw_keys_carry_their_snapshot_time():
     assert key_time_ms(raw_key(M, B_MS)) == B_MS - B_MS % 1000
+
+
+class RacingStore(LocalStore):
+    """A data store where another run uploads the database the first time the rebuild lists the raw."""
+
+    raced = False
+
+    def list(self, prefix: str, start_after: str = "") -> list[str]:
+        if prefix.startswith("raw/") and not self.raced:
+            self.raced = True
+            self.put(DB_KEY, b"the daily run's database")
+        return super().list(prefix, start_after)
+
+
+def test_FM76_a_rebuild_replays_only_the_retention_window_and_never_overwrites_blind(tmp_path):
+    old_ms = A_MS - 100 * DAY_MS
+    data, intel = stores(tmp_path, (old_ms, _shifted(SNAP_A, old_ms)), (A_MS, SNAP_A), (B_MS, SNAP_B))
+    run_daily(data, intel, FakeCatalog(), M, tmp_path / "run")
+    outcome = run_daily(data, intel, FakeCatalog(), M, tmp_path / "run", fresh=True)
+    assert (outcome.state, outcome.ingested) == ("published", 2)                 # the 100-day-old snapshot is left out
+    assert REBUILD_REPLAY_MS == 90 * DAY_MS + DAY_MS + 36 * HOUR
+    racing = RacingStore(tmp_path / "data")
+    with pytest.raises(PreconditionFailed):
+        run_daily(racing, intel, FakeCatalog(), M, tmp_path / "run", fresh=True)
+    assert racing.get(DB_KEY).data == b"the daily run's database"               # kept, not overwritten
+    assert run_daily(racing, intel, FakeCatalog(), M, tmp_path / "run", fresh=True).state == "published"
 
 
 def test_FM72_a_rebuild_from_raw_gives_the_byte_identical_document(tmp_path):

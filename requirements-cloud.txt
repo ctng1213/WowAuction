@@ -1,0 +1,14 @@
+# Running the cloud job on your machine against the real buckets (SPEC §2.4, plan decision 17):
+#   python -m ahcloud rebuild|analyze --store s3://<data bucket> --intel s3://<intel bucket>
+# ahcloud/aws.py is the only importer; the Lambda runtime has boto3 already, so nothing here goes into the asset.
+# botocore[crt] is needed for credentials from `aws login`. Use its own virtual environment: botocore needs
+# python-dateutil < 3, and requirements-infra.txt pins 4.0.0. Dependency review: plan §1, "Dependency review: boto3".
+# Pinned exactly, with the resolved tree (2026-11-07, Python 3.12):
+boto3==1.43.126
+botocore[crt]==1.43.126
+awscrt==0.38.0
+jmespath==1.1.0
+python-dateutil==2.9.0.post0
+s3transfer==0.19.3
+six==1.17.0
+urllib3==2.8.0

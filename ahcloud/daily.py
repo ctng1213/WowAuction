@@ -38,6 +38,10 @@ CLOUD_BOOK_DAYS = 2                     # the cloud needs only the newest book a
 COMPACT_DAYS = 4                        # compact snapshots kept: a late snapshot (a day old) reaches 2 h + 36 h before its day
 MISSING_RETRY_MS = 7 * DAY_MS           # an id the item search didn't know is asked again after a week (BZ16)
 LAST_INGESTED = "last_ingested_at_ms"   # meta key: the newest snapshot in history.db (BZ12)
+RETENTION_DAYS = 90                     # history kept in the cloud (SPEC §2.4); the raw stays forever (BZ14)
+# A first run or a rebuild replays only this much raw before the newest snapshot: what the retention keeps, plus the
+# oldest kept day's own 24 h and the 36 h its lifetimes read before it (FM76). Older raw would be pruned anyway.
+REBUILD_REPLAY_MS = RETENTION_DAYS * DAY_MS + DAY_MS + LIFETIME_LOOKBACK_MS
 REFUSED = "refused_snapshots"           # meta key: snapshot times refused whole, never tried again (FM74)
 log = logging.getLogger(__name__)
 
@@ -225,8 +229,9 @@ def run_daily(data: Store, intel_store: Store, client: BlizzardClient, market: s
         market: Market id.
         workdir: A folder for this run only (emptied first).
         settings: The analysis settings (the code's defaults; they travel in the document).
-        fresh: Rebuild (FM72): ignore the stored database and compact snapshots and replay every raw snapshot;
-            the new database replaces the old one unconditionally.
+        fresh: Rebuild (FM72): ignore the stored database and compact snapshots and replay the raw of the last
+            REBUILD_REPLAY_MS (FM76); the upload is still conditional on the database's ETag at the start, so a
+            daily run that uploaded meanwhile makes the rebuild fail rather than be overwritten.
 
     Returns:
         What it did.
@@ -237,18 +242,19 @@ def run_daily(data: Store, intel_store: Store, client: BlizzardClient, market: s
     """
     shutil.rmtree(workdir, ignore_errors=True)
     workdir.mkdir(parents=True)
-    found = None if fresh else data.get(DB_KEY)
-    if found:
+    found = data.get(DB_KEY)
+    if found and not fresh:
         (workdir / "history.db").write_bytes(found.data)
     db = Database.open(workdir / "history.db", 0, None)
     try:
-        return _ingest_and_publish(db, data, intel_store, client, market, workdir, settings, found.etag if found else None)
+        return _ingest_and_publish(db, data, intel_store, client, market, workdir, settings,
+                                   (found.etag if found else None, fresh))
     finally:
         db.close()
 
 
 def _ingest_and_publish(db: Database, data: Store, intel_store: Store, client: BlizzardClient, market: str,
-                        workdir: Path, settings: MarketSettings, etag: str | None) -> DailyOutcome:
+                        workdir: Path, settings: MarketSettings, state: tuple[str | None, bool]) -> DailyOutcome:
     """The run's body, with the database open (see run_daily).
 
     Args:
@@ -259,20 +265,24 @@ def _ingest_and_publish(db: Database, data: Store, intel_store: Store, client: B
         market: Market id.
         workdir: This run's folder.
         settings: The analysis settings.
-        etag: The database's ETag as downloaded; None for a new database.
+        state: (the stored database's ETag, None without one; whether this is a rebuild).
 
     Returns:
         What it did.
     """
+    etag, fresh = state
     last = int(db.get_meta(LAST_INGESTED) or 0)
     refused = set(json.loads(db.get_meta(REFUSED) or "[]"))
     after = raw_key(market, last - DAY_MS) if last else ""            # older raw is ingested or pruned (BZ14)
-    pending = [k for k in data.list(f"raw/{market}/", start_after=after) if key_time_ms(k) not in refused
+    listed = data.list(f"raw/{market}/", start_after=after)
+    if not last and listed:                                           # a first run or a rebuild: the window only (FM76)
+        listed = [k for k in listed if key_time_ms(k) >= key_time_ms(listed[-1]) - REBUILD_REPLAY_MS]
+    pending = [k for k in listed if key_time_ms(k) not in refused
                and db.conn.execute("SELECT 1 FROM scans WHERE scan_id = ?", (f"{SRC}:{market}:{key_time_ms(k)}",)).fetchone() is None]
     if not pending and not last:
         return DailyOutcome("empty")
     store = SnapshotStore(workdir / "snapshots")
-    if pending and etag is not None:                                 # a rebuild starts the compact store afresh
+    if pending and etag is not None and not fresh:                   # a rebuild starts the compact store afresh
         first_day = (key_time_ms(pending[0]) - SALES_PAIR_MAX_GAP_MS) // DAY_MS          # id_days' first day
         download_compact(data, store.root, market, first_day * DAY_MS - LIFETIME_LOOKBACK_MS)
     new_refusals = ingest_pending(db, data, store, market, pending)
@@ -284,7 +294,7 @@ def _ingest_and_publish(db: Database, data: Store, intel_store: Store, client: B
         return DailyOutcome("empty", refused=len(new_refusals))
     keys = sorted({k for (k,) in db.conn.execute("SELECT DISTINCT key FROM current WHERE market = ?", (market,))})
     fill_catalog(db, client, keys, last)
-    prune(db, last, 90, CLOUD_BOOK_DAYS)
+    prune(db, last, RETENTION_DAYS, CLOUD_BOOK_DAYS)
     store.prune(market, SRC, last - COMPACT_DAYS * DAY_MS)
     with db.transaction():
         db.set_meta(LAST_INGESTED, str(last))
