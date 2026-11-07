@@ -159,12 +159,15 @@ end
 --- tooltip font so a line fits 320 px.
 --- UNVERIFIED: GameTooltip's TextLeft<n>/TextRight<n> font strings and GameTooltipTextSmall exist on Forever, as on
 --- Classic; without them the lines keep the tooltip's own font.
+--- An empty label (a value-only line) is added as one space: on the live Forever client a line whose left text is ""
+--- has no height, so its value drew over the line above and the next line overlapped it (TT24).
 ---@param tooltip table  The tooltip shown
 ---@param lines table[]  { left, right, leftRgb = { r, g, b }, rightRgb } each, text already coloured
 function Adapter.AddTooltipLines(tooltip, lines)
   for _, line in ipairs(lines) do
     local l, r = line[3], line[4]
-    tooltip:AddDoubleLine(line[1], line[2], l[1], l[2], l[3], r[1], r[2], r[3])
+    local left = line[1] == "" and " " or line[1]
+    tooltip:AddDoubleLine(left, line[2], l[1], l[2], l[3], r[1], r[2], r[3])
     local n = tooltip.NumLines and tooltip:NumLines()
     local name = n and tooltip.GetName and tooltip:GetName()
     if name and GameTooltipTextSmall then

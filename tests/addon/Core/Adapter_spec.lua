@@ -200,6 +200,16 @@ describe("Adapter", function()
     assert_eq({ Stubs.tooltip.lines[1], #Stubs.tooltip.doubles }, { "Plain", 0 })
   end)
 
+  it("TT24 a tooltip line with an empty label gets a one-space left text, so it keeps its height", function()
+    local Adapter = Boot()
+    local added = {}
+    local tooltip = { AddDoubleLine = function(_, left, right) added[#added + 1] = { left, right } end,
+                      Show = function() end }
+    local rgb = { 1, 1, 1 }
+    Adapter.AddTooltipLines(tooltip, { { "Do: POST", "+23s · 50% chance", rgb, rgb }, { "", "then nothing", rgb, rgb } })
+    assert_eq(added, { { "Do: POST", "+23s · 50% chance" }, { " ", "then nothing" } })
+  end)
+
   it("A93 on the live Forever client item info, item details and gathering spells come from C_Item and C_Spell", function()
     local Adapter = Boot()
     local classic = { { Adapter.ItemInfo(2589) }, { Adapter.ItemDetails(2589) }, { Adapter.LootCast(2575) } }

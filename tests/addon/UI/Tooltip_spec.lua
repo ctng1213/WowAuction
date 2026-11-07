@@ -46,7 +46,7 @@ end
 describe("Tooltip", function()
   it("A21 hovering Linen in the bags adds the AHProfit block from the market file, the addon's own option first", function()
     local tip = Boot()
-    assert_eq(Texts(2589), { "AHProfit | data 2 h old", "Market | 45c (2 h) · 49c 30-day (+9%)",
+    assert_eq(Texts(2589), { "AHProfit | data 2 h old", "Market | 45c (2 h) · 49c 30d (+9%)",
       "Best time to sell | Sat 18–22 · 55c (+22%) · established", "Activity | 48/day · 93 listed · 1.9 d supply" })
     Stubs.world.containers = { [0] = { size = 1, slots = { [1] = { id = 2589, count = 20 } } } }
     Stubs.FireEvent("BAG_UPDATE_DELAYED")
@@ -83,7 +83,7 @@ describe("Tooltip", function()
   it("A21 a newer in-game scan's price replaces the file's, and the deltas follow it", function()
     Boot()
     AHProfit.Scan.Replicate.LastBook = function() return { at = NOW, book = { [2589] = { [40] = { [101] = 1 } } } } end
-    assert_eq(ValueOf(2589, "Market"), "40c now · 49c 30-day (+23%)")
+    assert_eq(ValueOf(2589, "Market"), "40c now · 49c 30d (+23%)")
     assert_eq(ValueOf(2589, "Activity"), "48/day · 20 listed · 0.4 d supply")    -- the scan's 20 units
   end)
 

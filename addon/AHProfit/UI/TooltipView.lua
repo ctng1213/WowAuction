@@ -111,7 +111,7 @@ function TooltipView.MarketLine(m)
   if m.cur then head = ViewModel.Money(m.cur) .. (m.ageText == "now" and " now" or (" (" .. m.ageText .. ")")) end
   if not m.med30 then return Line("Market", head) end
   local delta, colour = TooltipView.Delta(m.med30, m.cur)
-  local value = head .. " · " .. ViewModel.Money(m.med30) .. " 30-day" .. (delta and (" (" .. delta .. ")") or "")
+  local value = head .. " · " .. ViewModel.Money(m.med30) .. " 30d" .. (delta and (" (" .. delta .. ")") or "")
   return Line("Market", value, delta and { { "(" .. delta .. ")", colour } } or nil)
 end
 
