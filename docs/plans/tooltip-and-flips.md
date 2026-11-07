@@ -101,14 +101,31 @@ export change.
 - **M36: TT25's first example fits on one line.** The mockup wrapped "40c (50 min) · 11% lower than 7d median" in a
   browser font; the addon's width estimate (SPEC §4.3: characters × the font size × 0.55, a coin counting two) gives
   302 px, under 320. The row now shows that, and a gold price ("2g 95s 67c (50 min) · …") for the continuation.
+- **M37: the snapshot's Wool flip becomes a Buy for later.** In `w1`, Wool Cloth (20 at 3s) relisted now at 9s 89c
+  (expected net 127s 91c); with no posting-now option its best use is buying now for the window 5.5 h later at 10s
+  15c, which the portfolio funds as a Buy for later (expected net 113s 47c). Reviewed: no other action changed; the
+  flip, portfolio, today and week views changed only for Wool.
 
 ## 5. Progress
 
-Branch `ctn-RCP-000-tooltip-and-flips`: the spec merge (1544b20), then M36 (the commit after it).
-
-- **M36 built** (tasks 1–5): `med14` and schema 11 published beside 10; the market file's last field; the tooltip's new
-  lines (`UI/TooltipView.lua`, `UI/Tooltip.lua`); TT8–TT21 and UI17 rewritten, TT25–TT31, EX20, BZ37 tested; the UI17
-  golden and the whole-plan snapshot updated and reviewed; SPEC §4.3 and §2.4 built, mockup §3b marked built.
-  Verified: Lua 484, visual 23, Python 1887, snapshot matches.
-- **M36 task 6 open**: `cdk diff` shown to the user, deploy on their "deploy", then release v0.1.3 (v0.1.2 is out).
-- **Next**: M37 (flips sell later), then M38 (two-week half-life).
+- **M36 shipped**: PR #29 merged (6faa4f0) with the Sales Rate line (TT32, added by the user); the cloud deployed
+  2026-11-07 07:38 UTC (both Lambdas' code only); the user is tagging v0.1.3.
+- **M37 in progress** on branch `ctn-RCP-000-flips-sell-later` (from main 6faa4f0). Design (the code read 2026-11-07):
+  - `engine/flips.flip_steps` gives cap 0 to every option that is not a window starting after now (`o.window[0] >
+    now_ms`): posting now, a window already open, and thin-data items (no windows) never flip. Capping keeps option
+    indexes aligned for `flip_actions`, which recomputes `post_options`. `plan.choose_option` already lets windows
+    compete among themselves without a posting-now option (R26 needs no change).
+  - Removed with it: `flips.relisted`, the `grounded` parameter, `candidates._ungrounded_flip` and its pool split
+    (the "No listing left to price against" excluded flip existed only for thin-data relists), `flips.flip_now_offer`
+    and its shared scenario (FN1), the addon's `Live.FlipCandidates` flip-now rows, `Prices.FlipNow` and FlipView's
+    flip-now path (A69). Kept: `prices.relist_price` (crafts posted now, R28's craft half), EX11/A59 window offers.
+  - Order: SCENARIOS rows first (R24–R28 rewritten, R29, A69 and FN1 retired), then flips.py + candidates.py, then
+    the addon, then SPEC §3.4 / §4.3 Flip text, then the whole-plan snapshot (reviewed).
+  - **Done (uncommitted)**: SCENARIOS R24/R25/R27/R28 rewritten, R26's flip half removed, FN1 and A69 retired (note
+    after R29); `flips.later_only`, relist path and `flip_now_offer` removed; `candidates._ungrounded_flip` and
+    `_flip_opportunity(no_listing)` removed; `portfolio_worlds.linen_book` has a Sunday window (PF4's figures now 166/106
+    net, 103/163 gold); test_flips R24/R25/R27/R28/R29 rewritten, FN1 test removed. Engine tests: 834 pass.
+  - **Done**: FN1's shared entries removed (48 lines of prices.json), the addon's flip-now path (`Prices.FlipNow`,
+    `Live.FlipCandidates`, `FlipView` NowFlipRow) and its specs removed; SPEC §3.4, §3.4D.6 and §4.0 built; R29 off
+    pending; snapshot updated and reviewed (§4). Verified: Lua 479, visual 23, Python full suite, coverage 100%.
+- **Next after M37**: M38 (two-week half-life).

@@ -425,33 +425,9 @@ def _flip(f: SellFacts, char_id: str, gi: GenInputs, run: Run, u: Universe, ledg
             ledger[window] = ledger.get(window, 0.0) + step.stack
 
 
-def _ungrounded_flip(f: SellFacts, char_id: str, gi: GenInputs, run: Run, u: Universe, ledger: dict) -> None:
-    """The flip the grounding rule turns down, listed with its reason (SPEC §3.4C.2, §3.4D.6, R28).
-
-    An item whose only listing is the one bought, on thin data, has no price to relist at; when the flip would
-    pay at the ungrounded post price, its first auction is added as one excluded batch ("No listing left to
-    price against"). Nothing is added to the ledger: it is never funded.
-
-    Args:
-        f: The item (no grounded flip).
-        char_id: Who would buy.
-        gi: Generation inputs.
-        run: The run.
-        u: The universe.
-        ledger: The generation ledger; read only.
-    """
-    if not thin(f) or len(auctions(f.book, f.cur, f.cur_qty)) != 1:
-        return
-    opts = post_options(f, run.now_ms, run.s)
-    value = timed_value(opts, run)
-    seen = {(f.key, window_id(o)): ledger[(f.key, window_id(o))] for o in opts if (f.key, window_id(o)) in ledger}
-    steps = list(flip_steps(f, run.now_ms, run.s, run.fs, seen, value, cost_value=True, grounded=False))
-    if steps:
-        u.opportunities.append(_flip_opportunity(f, opts, steps, char_id, value, seen, gi, run, u, no_listing=True))
-
-
 def buys(left: PlanWorld, world: PlanWorld, gi: GenInputs, run: Run, u: Universe, ledger: dict) -> None:
-    """Flips (flip now included) and buys for later, from one pool of first batches (SPEC §3.4D.3, PF28).
+    """Flips (each selling in a later window, R29) and buys for later, from one pool of first batches (SPEC §3.4D.3,
+    PF28).
 
     Generation leaves out an item whose newest price is more than 24 h old, and a Buy for later whose item's best
     selling window has fewer than pattern_full_weeks ÷ 2 weeks. Every other item gets its first batch; only the
@@ -469,14 +445,12 @@ def buys(left: PlanWorld, world: PlanWorld, gi: GenInputs, run: Run, u: Universe
     if not gi.chars:
         return
     char_id = flip_char(gi)
-    pool, ungrounded = [], []
+    pool = []
     for key in sorted(left.facts):
         if key not in left.no_buy and not stale(gi, key):
             rank = _flip_first(left.facts[key], char_id, ledger, run)
             if rank is not None:
                 pool.append((rank, "flip", key, 0))
-            else:
-                ungrounded.append(key)
     for key in sorted(world.facts):
         f = world.facts[key]
         if key in world.no_buy or stale(gi, key) or f.level is None or not f.buy_windows or not f.windows:
@@ -496,12 +470,10 @@ def buys(left: PlanWorld, world: PlanWorld, gi: GenInputs, run: Run, u: Universe
         opp = _later_opportunity(f, buy_ms, choice, char_id, ledger, gi, run, u) if choice is not None else None
         if opp is not None:
             u.opportunities.append(opp)
-    for key in ungrounded:                          # outside the pool: excluded, they never take a slot
-        _ungrounded_flip(left.facts[key], char_id, gi, run, u, ledger)
 
 
 def _flip_opportunity(f: SellFacts, opts: Sequence[PostOption], steps: list, char_id: str, value: OptionValue,
-                      seen: dict, gi: GenInputs, run: Run, u: Universe, no_listing: bool = False) -> Opportunity:
+                      seen: dict, gi: GenInputs, run: Run, u: Universe) -> Opportunity:
     """One item's flip as batches, one per auction.
 
     Args:
@@ -514,7 +486,6 @@ def _flip_opportunity(f: SellFacts, opts: Sequence[PostOption], steps: list, cha
         gi: Generation inputs.
         run: The run.
         u: The universe (resources are added).
-        no_listing: The steps relist into an empty book on thin data: the batches are excluded (R28).
 
     Returns:
         The Opportunity.
@@ -536,7 +507,7 @@ def _flip_opportunity(f: SellFacts, opts: Sequence[PostOption], steps: list, cha
                           buy_ms=run.now_ms, sale_ms=sale, capacity_claims=(CapacityClaim(f.key, window_id(o), step.stack),),
                           window_end_ms=window_end(o))
         weeks = o.weeks if later and o.window is not None and o.weeks < PATTERN_WEEKS else None
-        batches.append(Batch(cand, eligibility_of(f.key, units, f, gi, o, untrusted_weeks=weeks, no_listing=no_listing),
+        batches.append(Batch(cand, eligibility_of(f.key, units, f, gi, o, untrusted_weeks=weeks),
                              claims_of([(f"ah:{f.key}", step.stack), (cap_rid(f.key, o), step.stack)])))
 
     def realize(n: int) -> list[PlanAction]:

@@ -9,7 +9,6 @@ local Live = {}
 AHProfit.Live = Live
 
 local searched = {}            -- item id -> { price, units, at } from AH search results this session (A24)
-local candidates = {}          -- { at, margin, list }: Live.FlipCandidates for the last book it was worked out for
 local searchListeners = {}     -- called after a search result is noted
 
 --- Units listed at one price of a book.
@@ -75,48 +74,13 @@ function Live.OnSearch(fn)
   searchListeners[#searchListeners + 1] = fn
 end
 
---- Forget search results and worked-out flip candidates (tests).
+--- Forget search results (tests).
 function Live.Reset()
-  searched, candidates = {}, {}
+  searched = {}
 end
 
 --- The two cheapest prices of one item's book, without building its levels.
 ---@param prices table  unit price -> slots
----@return number|nil, number|nil  Cheapest and second cheapest price
-local function TwoCheapest(prices)
-  local first, second
-  for price in pairs(prices) do
-    if not first or price < first then
-      first, second = price, first
-    elseif not second or price < second then
-      second = price
-    end
-  end
-  return first, second
-end
-
---- Items in the live book whose cheapest level could be bought and relisted now just under the next one (A69):
---- (second − 1) × (1 − cut) ≥ (1 + margin) × cheapest, the test with a chance of 1, so the Flip tab prices only
---- these. Worked out once per book, not per redraw.
----@param observationsUntil number|nil  The market file's newest observation, ms
----@param margin number                 Config min_flip_margin
----@return table[]  { key, cheapest, second, units (at the cheapest) } by key; empty without a newer book
-function Live.FlipCandidates(observationsUntil, margin)
-  local last = Live.Book(observationsUntil)
-  if not last then return {} end
-  if candidates.at == last.at and candidates.margin == margin then return candidates.list end
-  local keep, list = (1 + margin) / (1 - AHProfit.Engine.Fees.AH_CUT), {}
-  for key, prices in pairs(last.book) do
-    local first, second = TwoCheapest(prices)
-    if second and key > 0 and second - 1 >= keep * first then
-      list[#list + 1] = { key = key, cheapest = first, second = second, units = LevelUnits(prices[first]) }
-    end
-  end
-  table.sort(list, function(a, b) return a.key < b.key end)
-  candidates = { at = last.at, margin = margin, list = list }
-  return list
-end
-
 --- Units listed at or below a price.
 ---@param levels table[]  From Live.Levels
 ---@param price number

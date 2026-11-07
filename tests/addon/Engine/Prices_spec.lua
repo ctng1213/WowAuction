@@ -35,7 +35,7 @@ local function Run(Prices, s)
     return Prices.SlotPrice(a.level, a.how_best, a.trend7, a.days_ahead, a.max_trend_total, Value(a.p10),
       Value(a.med7), Value(a.p90), Value(a.closes))
   end
-  return Prices.FlipNow(a.p, a.units, a.cheapest, a.relist, a.fallback, a.deposit, a.min_flip_margin)
+  error("unknown shared call " .. tostring(s.call))
 end
 
 describe("Prices shared scenarios", function()

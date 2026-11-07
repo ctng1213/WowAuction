@@ -17,14 +17,15 @@ from tests.support.portfolio_worlds import (BAR, DAY, ESSENCE, HOUR, LINEN, MOND
 
 def test_PF4_a_flips_batches_end_at_the_first_that_loses_and_each_needs_the_one_before():
     opp = opportunity(universe(empty_world(facts={LINEN: linen_book()})), f"flip:{LINEN}:")
-    assert [b.candidate.batch for b in opp.batches] == [1, 2]                  # the 12c stack doesn't pay
+    assert [b.candidate.batch for b in opp.batches] == [1, 2]                  # the 12c stack doesn't pay: 266 < 288
     first, second = (b.candidate for b in opp.batches)
-    assert first.expected_net > 0 and second.expected_net > 0                  # relisted under 8c, then under 12c
-    gold = first.gold_needed                                                   # 1s for the stack, 1c of deposit
+    assert (first.expected_net, second.expected_net) == (166, 106)            # 20 × 14 × 0.95 = 266 on Sunday: − 100, − 160
+    gold = first.gold_needed                                                   # 1s for the stack, 3c of deposit
     funded = plans.plan(empty_world(facts={LINEN: linen_book()}), NOW, gold={"Amaya-G": gold})
     assert [a.qty for a in funded.actions if a.kind == "buy"] == [20]          # batch 1 only
-    assert [a.reason for a in funded.alternatives] == ["Insufficient gold (needs 1s 61c, all characters hold 1s 1c)"]
-    assert second.gold_needed == 161
+    assert [a.window_start_ms is not None for a in funded.actions if a.kind == "post"] == [True]   # later, never now (R29)
+    assert [a.reason for a in funded.alternatives] == ["Insufficient gold (needs 1s 63c, all characters hold 1s 3c)"]
+    assert second.gold_needed == 163
 
 
 def test_PF20_a_buy_for_later_needs_its_selling_window_to_be_a_pattern():
@@ -179,7 +180,7 @@ def test_a_kept_buy_can_lose_its_room_to_the_kept_flips_before_it(monkeypatch):
 
 def test_a_kept_flip_whose_room_is_gone_adds_nothing():
     f = linen_book()
-    full = {(LINEN, None): 9999.0}
+    full = {(LINEN, plan.window_id(o)): 9999.0 for o in plan.post_options(f, NOW, S)}   # its Sunday window is full
     u = Universe([], {})
     cand._flip(f, "Amaya-G", gen_inputs(), RUN, u, full)
     assert u.opportunities == []
@@ -187,8 +188,8 @@ def test_a_kept_flip_whose_room_is_gone_adds_nothing():
 
 def test_PF30_a_window_sale_needs_price_history_and_every_sale_a_known_sales_rate():
     thin = linen_book(closes_30d=4)                                            # a suffix green's 4 closes
-    flip = opportunity(universe(empty_world(facts={LINEN: thin})), f"flip:{LINEN}:")
-    assert (flip.batches[0].eligibility.window_closes, static_reason(flip.batches[0].eligibility, 7)) == (None, None)
+    assert not [o for o in universe(empty_world(facts={LINEN: thin})).opportunities if o.opp.startswith("flip:")]
+    # thin data has no windows, and a flip sells only in a later window (R29): no flip, and no excluded row
     how = [1.0] * 168
     how[WED * 24 + 21], how[SUN * 24 + 19] = 0.6, 1.3              # thin: the Sunday sale is capped at the level
     essence = facts(ESSENCE, 1000, how=tuple(how), ref_stack=4, closes_30d=4, supply_now=40,
