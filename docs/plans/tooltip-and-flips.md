@@ -129,3 +129,4 @@ export change.
     `Live.FlipCandidates`, `FlipView` NowFlipRow) and its specs removed; SPEC §3.4, §3.4D.6 and §4.0 built; R29 off
     pending; snapshot updated and reviewed (§4). Verified: Lua 479, visual 23, Python full suite, coverage 100%.
 - **Next after M37**: M38 (two-week half-life).
+- **M38 built (2026-11-07)**: `pattern_half_life_weeks` defaults to 2 (`config.py`, `MarketSettings`, SPEC §3.3.4 and the config example). No W-scenario depended on the default (W4 sets its own 4). The whole-plan snapshot moved and its diff was reviewed: 1,031 fields, almost all the item details' heatmaps and pattern levels and the windows' timing; the plan holds the same actions with the same quantities and prices, only two Wool Cloth rows ordered earlier in Today and Week. The cloud carries 2 after the next deploy (approved).

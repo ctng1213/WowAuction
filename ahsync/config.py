@@ -77,7 +77,7 @@ class Config:
     daily_refresh_time: str = "06:00"
     post_lead_hours: int = 8
     sell_window_hours: int = 8
-    pattern_half_life_weeks: float = 4
+    pattern_half_life_weeks: float = 2           # 2 while Forever's economy settles; back to 4 around Jan 2027 (SPEC §3.3.4, M38)
     window_threshold: float = 0.90
     peak_tolerance: float = 0.10
     week_start: str = "Mon"

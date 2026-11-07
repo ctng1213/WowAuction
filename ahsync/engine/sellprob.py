@@ -537,7 +537,7 @@ class MarketSettings:
     own_record_weight: float = 4
     default_undercut_share: float = 0.5
     sell_window_hours: int = 8
-    pattern_half_life_weeks: float = 4      # recency half-life of the weekly patterns (SPEC §3.3.4)
+    pattern_half_life_weeks: float = 2      # recency half-life of the weekly patterns (SPEC §3.3.4; 2 since M38)
     window_threshold: float = 0.90          # share of the best slot a window slot needs (SPEC §3.3.4)
     default_sell_prob_cheapest: float = 0.5 # P without volume when you'd be the cheapest seller (SPEC §3.3.2, PD1)
     volume_prior: VolumePrior = VolumePrior()   # the sales-rate prior (SPEC §3.3.1, V41)
