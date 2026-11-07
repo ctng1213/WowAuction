@@ -28,6 +28,7 @@ class FakeRunner:
                  fail_times: int = 0, fail_code: int = 1) -> None:
         self.calls: list[list[str]] = []
         self.envs: list[dict[str, str]] = []
+        self.timeouts: list = []
         self.tags, self.identity_team, self.expires, self.fail = tags, identity_team, expires, fail
         self.untrusted = untrusted        # the chain to Apple's root is missing: -v lists nothing
         self.kind = kind                  # the certificate the .p12 holds
@@ -35,9 +36,10 @@ class FakeRunner:
         self.fail_code = fail_code
         self.failed = 0
 
-    def __call__(self, args, *, input_text=None, extra_env=None, capture=False) -> build.Result:
+    def __call__(self, args, *, input_text=None, extra_env=None, capture=False, timeout_s=None) -> build.Result:
         """Record and answer one command."""
         self.calls.append(list(args))
+        self.timeouts.append(timeout_s)
         self.envs.append(dict(extra_env or {}))
         line = " ".join(args)
         if self.fail and self.fail in line and (not self.fail_times or self.failed < self.fail_times):
@@ -231,9 +233,10 @@ def test_DR18_an_apple_development_certificate_is_named_with_what_to_export_inst
 def test_DR18_the_keychain_is_deleted_also_when_notarization_fails(tmp_path):
     runner = FakeRunner(fail="notarytool")
     world, lines = make_world(tmp_path, runner, "macos", FAKE_SECRETS)
+    world.sleep = lambda s: None                                           # the retry's wait (FM73)
     assert build.main(["build", "0.4.0", "--mode", "sign"], world) == 1
     assert runner.calls[-1][:2] == ["security", "delete-keychain"]
-    assert lines[-1] == "::error::notarytool submit failed (exit 1)"
+    assert lines[-1] == "::error::notarytool submit failed (exit 1) after 2 attempts"
     assert not any("make_dmg" in " ".join(c) for c in runner.calls)
     assert_no_credential(runner, lines)
 
@@ -443,3 +446,32 @@ def test_FM64_a_staple_that_always_fails_stops_the_build_after_four_attempts(tmp
         build.build_command(world, "0.4.0", "sign")
     assert sum(" ".join(c).endswith(dmg_staple) for c in runner.calls) == 4 and waits == [15, 30, 60]
     assert runner.calls[-1][:2] == ["security", "delete-keychain"]
+
+
+
+def test_FM73_a_stalled_notarization_is_stopped_after_20_minutes_and_tried_once_more(tmp_path):
+    runner = FakeRunner()
+    world, lines = make_world(tmp_path, runner, "macos", FAKE_SECRETS)
+    waits: list[float] = []
+    world.sleep = waits.append
+    answers = iter([build.Result(124), build.Result(0)])                   # the first submission stalls (CI 42314968556)
+
+    def stalls_once(args, **kwargs):
+        runner(args, **kwargs)
+        return next(answers) if "notarytool" in args else build.Result(0)
+
+    world.run = stalls_once
+    build.notarize(world, "dist/AHSync-0.1.1-macos-arm64.dmg")
+    notary = [i for i, c in enumerate(runner.calls) if "notarytool" in c]
+    assert len(notary) == 2 and [runner.timeouts[i] for i in notary] == [build.NOTARY_ATTEMPT_S] * 2
+    assert waits == [build.NOTARY_RETRY_WAIT_S] and any("retry 1 of 1 in 30 s" in line for line in lines)
+    assert_no_credential(runner, lines)
+
+
+def test_FM73_a_notarization_that_stalls_twice_stops_the_build(tmp_path):
+    runner = FakeRunner()
+    world, _ = make_world(tmp_path, runner, "macos", FAKE_SECRETS)
+    world.sleep = lambda s: None
+    world.run = lambda args, **kwargs: build.Result(124)
+    with pytest.raises(build.BuildError, match=r"notarytool submit failed \(exit 124\) after 2 attempts"):
+        build.notarize(world, "dist/AHSync-0.1.1-macos-arm64.dmg")
