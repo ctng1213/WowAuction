@@ -45,4 +45,17 @@ describe("WindowLines", function()
     assert_eq(AHProfit.WindowLines.Lines("portfolio", NOW, 314000, 50).lines[1].item, "Linen Cloth")
     assert_eq(AHProfit.Events.Errors(), {}, "login and capture raised nothing on the live client")
   end)
+  it("A95 the Craft tab says when none pays only at the default chance, because sales rates are unknown", function()
+    Stubs.Reset()
+    Stubs.Login()
+    local WL = AHProfit.WindowLines
+    local recipes = { { product = 2318 }, { product = 4239 } }
+    local unknown = { [2318] = { volumeUnknown = true, chance = 0.5 }, [4239] = { volumeUnknown = true, chance = 0.5 } }
+    assert_eq(WL.CraftEmptyText(recipes, function(k) return unknown[k] end),
+              "None of your recipes pays at a 50% chance to sell: sales rates aren't known yet for this market.")
+    local known = { [2318] = { volumeUnknown = false, chance = 0.9 }, [4239] = { volumeUnknown = false, chance = 0.8 } }
+    assert_eq(WL.CraftEmptyText(recipes, function(k) return known[k] end), "None of your recipes pays right now.")
+    assert_eq(WL.CraftEmptyText({}, function() return nil end),
+              "No recipes seen on this character yet. Open each profession window once.")
+  end)
 end)

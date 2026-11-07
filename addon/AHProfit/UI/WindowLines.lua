@@ -200,6 +200,23 @@ local function FlipLines(charId, nowMs, offset, gold)
            empty = "No flips right now: none in AHSync's plan, and no market offer under its buy price." }
 end
 
+--- What the Craft tab says when no row shows (A95): no recipes yet; none pays; or none pays at the default chance
+--- because the products' sales rates are unknown, so the verdict rests on a placeholder, not a measurement.
+---@param recipes table[]   Known recipes ({ product, ... })
+---@param itemOf function   key -> market item or nil
+---@return string
+function WindowLines.CraftEmptyText(recipes, itemOf)
+  if #recipes == 0 then return "No recipes seen on this character yet. Open each profession window once." end
+  for _, r in ipairs(recipes) do
+    local item = itemOf(r.product)
+    if item and item.volumeUnknown then
+      return "None of your recipes pays at a " .. VM.RoundHalfUp((item.chance or 0) * 100)
+        .. "% chance to sell: sales rates aren't known yet for this market."
+    end
+  end
+  return "None of your recipes pays right now."
+end
+
 --- The Craft tab: AHSync's planned crafts, then the addon's own options for the other known recipes (A27, A63).
 ---@param charId string
 ---@param nowMs number
@@ -220,8 +237,7 @@ local function CraftLines(charId, nowMs, offset, gold)
                 listed = Listed(charId, nowMs), nowMs = nowMs, budget = AHProfit.Adapt.Cap() }   -- the live cap (A64)
   local rows = VM.CraftRows(Options.CraftOptions(own, units, ctx), LookOf, gold, actions, nowMs, offset)
   for i = #plannedRows, 1, -1 do table.insert(rows, 1, plannedRows[i]) end
-  local empty = #recipes == 0 and "No recipes seen on this character yet. Open each profession window once."
-    or "None of your recipes pays right now."
+  local empty = WindowLines.CraftEmptyText(recipes, Market.Item)
   return { lines = VM.WithNotes(rows), footer = VM.CraftFooter(rows, #recipes), empty = empty }
 end
 
