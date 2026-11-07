@@ -210,6 +210,37 @@ describe("Adapter", function()
     assert_eq(added, { { "Do: POST", "+23s · 50% chance" }, { " ", "then nothing" } })
   end)
 
+  it("TT33 the item tooltip hook reads the link from the tooltip's data, and a GetItem that raises adds nothing", function()
+    local Adapter = Boot()
+    local postCalls = {}
+    Stubs.Define("Enum", { TooltipDataType = { Item = 0 } })
+    Stubs.Define("TooltipDataProcessor", { AddTooltipPostCall = function(kind, fn) postCalls[kind] = fn end })
+    local seen = {}
+    local function OnItem(tooltip, link) seen[#seen + 1] = { tooltip.name, link } end
+    assert_eq(Adapter.HookItemTooltip(OnItem), true)
+    local linen = "|cffffffff|Hitem:2589::::::::|h[Linen Cloth]|h|r"
+    local calls = 0
+    local raises = function() calls = calls + 1; error("attempt to call a nil value") end   -- CompareItem's tooltips
+    local compare = { name = "ShoppingTooltip1", GetItem = raises }
+    postCalls[0](compare, { type = 0, id = 2589, hyperlink = linen })
+    assert_eq(calls, 0, "with a hyperlink in the data, GetItem is never called")
+    postCalls[0](compare, { type = 0, id = 2589 })                       -- no hyperlink, and GetItem raises
+    assert_eq(calls, 1)
+    postCalls[0]({ name = "GameTooltip", GetItem = function() return "Wool Cloth", "|Hitem:2592|h" end }, {})
+    postCalls[0]({ name = "EmbeddedItemTooltip" }, { type = 0 })          -- neither a hyperlink nor a GetItem
+    postCalls[0](compare, setmetatable({}, { __index = raises }))         -- data the client won't let us read
+    assert_eq(seen, { { "ShoppingTooltip1", linen }, { "GameTooltip", "|Hitem:2592|h" } })
+    postCalls[0](compare, { hyperlink = linen })                          -- fn itself failing raises nothing
+    local broken = function() error("AddDoubleLine on a forbidden tooltip") end
+    assert_eq(Adapter.HookItemTooltip(broken), true)
+    postCalls[0](compare, { hyperlink = linen })
+    TooltipDataProcessor = nil                                            -- Classic's OnTooltipSetItem hook
+    seen = {}
+    assert_eq(Adapter.HookItemTooltip(OnItem), true)
+    Stubs.tooltip.hooks.OnTooltipSetItem({ name = "GameTooltip", GetItem = raises })
+    assert_eq(seen, {})
+  end)
+
   it("A93 on the live Forever client item info, item details and gathering spells come from C_Item and C_Spell", function()
     local Adapter = Boot()
     local classic = { { Adapter.ItemInfo(2589) }, { Adapter.ItemDetails(2589) }, { Adapter.LootCast(2575) } }
