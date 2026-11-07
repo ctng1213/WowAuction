@@ -131,6 +131,9 @@ def test_EX11_flip_offers_cover_candidates_only_and_never_vendor_sold_or_suspect
     assert int(price) >= 4000 and int(expected) > 2500 * 1.2 and 0 <= int(slot) < 168
     assert plan.flip_offers(cheap, ITEMS, {ROD}, NOW, cfg) == {}                                         # vendor-sold
     assert plan.flip_offers({ROD: replace(cheap[ROD], cur_suspect=True)}, ITEMS, set(), NOW, cfg) == {}  # FM5
+    assert plan.flip_offers({ROD: replace(cheap[ROD], closes_30d=23)}, ITEMS, set(), NOW, cfg) == {}     # thin (R28)
+    assert list(plan.flip_offers({ROD: replace(cheap[ROD], closes_30d=24)}, ITEMS, set(), NOW, cfg)) == [ROD]
+    assert list(plan.flip_offers({ROD: replace(cheap[ROD], closes_30d=None)}, ITEMS, set(), NOW, cfg)) == [ROD]
 
 
 def test_R24_a_stack_dumped_below_the_next_price_level_is_a_flip_candidate_without_a_window():
