@@ -23,6 +23,8 @@ The user's decisions of 2026-11-06 and 07 (mockup `docs/mockups/addon.html` §3b
    document gains `med14` (schema 11; the cloud publishes schemas 10 and 11 during the transition, so installs on
    v0.1.1 keep reading 10) and the market file's item string gains it as a new last field.
 5. **Market Inventory**: units listed now ("433 listed"; a newer in-game scan's count replaces the file's).
+   **Sales Rate** (added by the user 2026-11-07, mockup §3b, before v0.1.3): "55 sold/day · 7.9 days of supply", right
+   after Market Inventory; days of supply = listed ÷ sold per day, one decimal under 10 days.
 6. **Best Buy / Best Sell Price** are shown from the first data: the window's expected price (`slot_price`, as
    today), its day and time of day in words, and its strength. **early** (under 3 weeks at that hour of the week) is
    orange; **pattern** (3–5) and **established** (6+) plain. Times of day, local: Morning 06–12, Afternoon 12–18,

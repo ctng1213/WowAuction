@@ -1957,6 +1957,7 @@ Market Price      1s (1 h) · 2% higher than 7d median
 Price history                                 steady
             (30d) 1s 1c · (14d) 1s · (7d) 98c
 Market Inventory                        3,243 listed
+Sales Rate        120 sold/day · 27 days of supply
 Best Buy Price            90c · Monday Night · early
 Best Sell Price        1s 25c · Friday Evening · early
 Disenchant                  37% lower than AH price
@@ -1966,10 +1967,11 @@ Disenchant                  37% lower than AH price
 Inventory                29 · bags 4, bank 1, mail 24
 ```
 
-- **Order:** Do, Market Price, Price history, Market Inventory, Best Buy Price, Best Sell Price, Disenchant (only when one of your characters can disenchant it), Inventory (only when you hold some). The Activity line goes.
+- **Order:** Do, Market Price, Price history, Market Inventory, Sales Rate, Best Buy Price, Best Sell Price, Disenchant (only when one of your characters can disenchant it), Inventory (only when you hold some). The Activity line goes; its sales per day and days of supply are Sales Rate's.
 - **Market Price** (TT25): the lowest listing at the newest observation with its age ("now" at the AH), then `(price − med7) ÷ med7` as a whole percent half up: "11% lower than 7d median" (red), "2% higher than 7d median" (green), "at 7d median" at 0%; no comparison without a current price or a 7-day median; "none listed" when nothing is listed.
 - **Price history** (TT26): a title line with the shift on its right, **rising** (green) when med7 ≥ 1.10 × med30, **falling** (red) when med7 ≤ 0.90 × med30, else **steady**; the line below lists "(30d) 55c · (14d) 52c · (7d) 45c", oldest first, a missing median as "—", and then no shift word.
 - **Market Inventory** (TT27): units listed now ("433 listed"), from a newer in-game scan when there is one.
+- **Sales Rate** (TT32; the user, 2026-11-07): units sold per day (`sold/day`, the 7-day estimate, §3.3.6), half up, then days of supply, the units listed ÷ sold per day, with one decimal under 10 days and whole from 10 ("55 sold/day · 7.9 days of supply", "120 sold/day · 27 days of supply"); "— sold/day" when the sales are unknown, "0 sold/day" alone when nothing sold.
 - **Best Buy / Best Sell Price** (TT28): the top window's expected price (`slot_price`, as built), its best hour named as a day and time of day in local time (Morning 06–12, Afternoon 12–18, Evening 18–23, Night 23–06; an hour after midnight belongs to the evening before, so Tue 02:00 is "Monday Night"), and its strength, **early** in orange (under 3 weeks), pattern or established plain. Shown from the first data; an item without windows has neither line. "now" replaces the day while the window holds now (as built).
 - **Disenchant** (TT29): a title line with "N% lower than AH price" (red) or "N% higher than AH price" (green) on its right, the expected value of one disenchant against the price now, half up (none without a current price); one line per possible mat, "80% · 1.5 Strange Dust @ 25c", its share `chance × (min + max) ÷ 2 × cur` on the right (the average quantity shows a decimal only when it has one); a mat with no current price reads "no price" in amber and adds nothing; then a value-only line with the total, the sum of the unrounded shares. Latest prices before the AH cut; the plan's DISENCHANT decision keeps its expected sale values.
 - **Inventory** (TT30): the units you hold across your characters and where ("29 · bags 4, bank 1, mail 24").

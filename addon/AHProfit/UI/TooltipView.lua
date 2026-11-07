@@ -162,6 +162,19 @@ function TooltipView.PriceHistoryLines(m)
   return { title, Line("", Median("30d", m.med30) .. " · " .. Median("14d", m.med14) .. " · " .. Median("7d", m.med7)) }
 end
 
+--- Sales Rate (TT32): units sold per day, then days of supply (listed ÷ sold per day; one decimal under 10 days).
+---@param soldPerDay number|nil  Units a day; nil when unknown
+---@param listed number          Units listed now
+---@return table                 A line
+function TooltipView.SalesRateLine(soldPerDay, listed)
+  if soldPerDay == nil then return Line("Sales Rate", "— sold/day") end
+  local text = ViewModel.RoundHalfUp(soldPerDay) .. " sold/day"
+  if soldPerDay <= 0 then return Line("Sales Rate", text) end
+  local tenths = ViewModel.RoundHalfUp(listed * 10 / soldPerDay)
+  local days = tenths < 100 and (math.floor(tenths / 10) .. "." .. tenths % 10) or tostring(ViewModel.RoundHalfUp(listed / soldPerDay))
+  return Line("Sales Rate", text .. " · " .. days .. " days of supply")
+end
+
 --- A local hour of the week in words (SPEC §4.3): Morning 06-12, Afternoon 12-18, Evening 18-23, Night 23-06, an
 --- hour after midnight belonging to the evening before (Tue 02:00 is "Monday Night").
 ---@param slot number      UTC hour of the week, 0 = Monday 00:00
@@ -313,10 +326,11 @@ function TooltipView.DoLines(d, cur)
 end
 
 --- The whole block (SPEC §4.3 Tooltip, TT25-TT31): the header with the data age, the Do line first, then Market
---- Price, Price history, Market Inventory, Best Buy and Best Sell Price (none without windows), Disenchant (only when
+--- Price, Price history, Market Inventory, Sales Rate, Best Buy and Best Sell Price (none without windows), Disenchant (only when
 --- one of your characters can) and Inventory (only when you hold some). Without market data: the header and "no
 --- market data yet" (TT18).
----@param f table  { age = { text, amber }, noData, doing (DoOf's), market = { cur, ageText, med7, med14, med30, listed },
+---@param f table  { age = { text, amber }, noData, doing (DoOf's), market = { cur, ageText, med7, med14, med30, listed,
+---                soldPerDay },
 ---                offsetMs, buy = { price, slot, weeks, now } or nil, sell = { price, slot, weeks, now } or nil,
 ---                mats = DisenchantLines' mats or nil, holdings = { total, places } or nil }
 ---@return table[] Lines { label, value, spans, muted, header, amber, isDo, verb, rest, verbColor, valueColor, labelMuted }
@@ -338,6 +352,7 @@ function TooltipView.Lines(f)
   Add(TooltipView.MarketPriceLines(m))
   Add(TooltipView.PriceHistoryLines(m))
   lines[#lines + 1] = Line("Market Inventory", ViewModel.Thousands(m.listed or 0) .. " listed")
+  lines[#lines + 1] = TooltipView.SalesRateLine(m.soldPerDay, m.listed or 0)
   if f.buy then Add(TooltipView.BestLines("Best Buy Price", f.buy, f.offsetMs or 0)) end
   if f.sell then Add(TooltipView.BestLines("Best Sell Price", f.sell, f.offsetMs or 0)) end
   if f.mats then Add(TooltipView.DisenchantLines(f.mats, m.cur)) end

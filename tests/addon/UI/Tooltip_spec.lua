@@ -48,6 +48,7 @@ describe("Tooltip", function()
     local tip = Boot()
     assert_eq(Texts(2589), { "AHProfit | data 2 h old", "Market Price | 45c (2 h) · 8% lower than 7d median",
       "Price history | steady", " | (30d) 49c · (14d) — · (7d) 49c", "Market Inventory | 93 listed",
+      "Sales Rate | 48 sold/day · 1.9 days of supply",
       "Best Sell Price | 55c · Saturday Evening · established" })        -- (45 − 49) ÷ 49 = −8.2%; no med14 in this file
     Stubs.world.containers = { [0] = { size = 1, slots = { [1] = { id = 2589, count = 20 } } } }
     Stubs.FireEvent("BAG_UPDATE_DELAYED")
@@ -88,6 +89,7 @@ describe("Tooltip", function()
     AHProfit.Scan.Replicate.LastBook = function() return { at = NOW, book = { [2589] = { [40] = { [101] = 1 } } } } end
     assert_eq(ValueOf(2589, "Market Price"), "40c now · 18% lower than 7d median")   -- (40 − 49) ÷ 49 = −18.4%
     assert_eq(ValueOf(2589, "Market Inventory"), "20 listed")                         -- the scan's 20 units (TT27)
+    assert_eq(ValueOf(2589, "Sales Rate"), "48 sold/day · 0.4 days of supply")      -- 20 ÷ 48 (TT32)
   end)
 
   it("TT30 what you hold of an item across your characters, by place: bags, bank, mail, then the AH", function()
