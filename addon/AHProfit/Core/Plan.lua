@@ -53,6 +53,12 @@ local function State()
   return state
 end
 
+--- Whether a usable plan file was loaded (the minimap tooltip's "no plan yet", UI20).
+---@return boolean  true when PortfolioPlan.lua passed its checks
+function Plan.HasPlan()
+  return State().status == "ok"
+end
+
 --- Why there is no plan, for the UI's status line. A missing plan is normal: the addon's
 --- own recommendations work without it (SPEC §5.2).
 ---@return string|nil  nil when the plan is usable or simply absent; otherwise a message

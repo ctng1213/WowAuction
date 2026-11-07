@@ -215,6 +215,7 @@ AHProfitDB = {
   rules = { [2589] = { rule = "no_buy", setAt = 1760000000000 } },   -- set in game; "none" = cleared (§3.4.2)
   reserves = { ["Amaya-Grommash"] = "2589,10;4306,-1" },  -- "key,qty" kept for yourself; qty -1 = all (§3.4.3)
   mailSeen = { ["sold:2589:20:48:1760000000000"] = 1762678400000 },  -- auction mails already turned into events (A48)
+  minimap = { angle = 225, hidden = false },   -- the minimap button's place on the rim, degrees, and /ahp minimap (§4.3); AHSync ignores it
 }
 ```
 
@@ -1870,6 +1871,8 @@ The window's tabs, each shown in the mockup:
 | Inventory | what the character you're playing holds: item, where (bags, bank, mail), quantity, worth, Chance · Volume, and its plan as a note under the row (AHSync's, marked "(AHSync)", or the addon's own: "Post now at 45c", "For crafting Copper Rod", "Bound · not planned"), best worth first (A22). Paid joins it with tracking (M6b), and listed auctions with On the AH |
 | Inventory (your auctions) | the character's active auctions as rows with Where "AH": units, worth if sold (price × units × 0.95), note "listed at 80c each · ends in 11 h", from the last own-auctions snapshot; one past its end is left out (A50) |
 | Reservations | what the character keeps for itself (§3.4.3): item, Keeping (All or a number), Held, Free; click a row to change or clear it (A26) |
+
+**Minimap button** (UI20–UI23; `UI/MinimapView.lua` decides, `UI/MinimapButton.lua` draws; mockup §5). A round button on the minimap's rim with the AHSync logo (`Media/MinimapIcon.tga`, the app icon's coin cropped round). A left- or right-click opens or closes the window, as `/ahp` does. Dragging moves it freely (the frame's own `StartMoving`, no `OnUpdate`); on release it snaps to the rim at the angle of its centre from the minimap's, kept for the account in `AHProfitDB.minimap.angle` (degrees, whole, 0 = east, counter-clockwise; default 225, bottom left). Hovering shows "AHProfit" with the window's data age (amber over 24 h) and "Now on <name>": the count and expected net of the window's Today list for the character you're playing at its Min chance ("3 actions · +2g 10s"), "nothing due now" with none, "no plan yet: run AHSync" without a usable plan file (missing, another version or damaged), "couldn't read the plan" when that fails (caught); in combat the Today list isn't computed and the line is left out (§5.1); without usable market data the market problem replaces it, in amber. An amber dot marks the button while the data is over 24 h old, the market file is unusable, or the plan file is unusable (another version, or damaged); one timer at login shows it when the data crosses 24 h, since the files only change at `/reload`. A round minimap is assumed: with a square-minimap addon the button sits on the circle, off the corners. `/ahp minimap` hides or shows it (`AHProfitDB.minimap.hidden`). No library.
 
 Right-clicking a row opens a menu: Search the AH, Mark as skipped, Blacklist: don't buy or craft, Blacklist: ignore completely, and Keep (start fresh) on a "not selling" item.
 

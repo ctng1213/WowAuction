@@ -151,8 +151,10 @@ end
 --- Create a texture child.
 ---@param name string|nil
 ---@return table
-function Methods:CreateTexture(name)
-  return UI.New("Texture", name, self)
+function Methods:CreateTexture(name, layer, _, sublevel)
+  local texture = UI.New("Texture", name, self)
+  texture.layer, texture.sublevel = layer, sublevel
+  return texture
 end
 --- Record a texture file.
 ---@param file string|number
@@ -180,6 +182,9 @@ Methods.RegisterForDrag = Record("drag")
 Methods.RegisterForClicks = Record("clicks")
 Methods.SetFrameStrata = Record("strata")
 Methods.SetFrameLevel = Record("level")
+Methods.SetFixedFrameStrata = Record("fixedStrata")
+Methods.SetFixedFrameLevel = Record("fixedLevel")
+Methods.SetUserPlaced = Record("userPlaced")
 Methods.SetBackdrop = Record("backdrop")
 Methods.SetBackdropColor = Record("backdropColor")
 Methods.SetBackdropBorderColor = Record("backdropBorderColor")
@@ -196,6 +201,10 @@ Methods.SetMaxLetters = Record("maxLetters")
 function Methods:SetFocus() self.focused = true end
 --- EditBox:ClearFocus: recorded only.
 function Methods:ClearFocus() self.focused = false end
+
+--- The frame's centre, as a test placed it (centerX, centerY); nil, nil until then, as for a frame not laid out.
+---@return number|nil x, number|nil y
+function Methods:GetCenter() return self.centerX, self.centerY end
 
 --- Start moving (dragging) the frame: recorded only.
 function Methods:StartMoving() self.moving = true end
