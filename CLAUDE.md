@@ -26,6 +26,7 @@ python tools/build.py build 0.0.0   # local build: PyInstaller, then Inno Setup 
 python tools/promote.py v0.1.0      # make a tested pre-release the latest release (or the Promote release workflow)
 python tools/record_blizzard.py record   # record Blizzard's Forever auction API into fixtures (creds: env or ~/.ahsync/blizzard)
 python -m ahcloud collect --house 113 --store data/cloud   # run the cloud collector locally (same code as the Lambda)
+python -m ahcloud rebuild --store s3://<data> --intel s3://<intel>   # rebuild the cloud state from raw (needs requirements-cloud.txt; infra/README.md)
 python tools/build_lambda.py        # stage ahsync/ + ahcloud/ as the Lambda asset in build/lambda
 cd infra && cdk deploy -c house=<id> -c alert_email=<you>   # deploy the cloud job (infra/README.md; needs requirements-infra.txt)
 ```
