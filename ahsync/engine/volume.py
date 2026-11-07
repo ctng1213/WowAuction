@@ -20,7 +20,9 @@ SUPPLY_DAYS = 30            # median_daily_supply looks back this far (SPEC §3.
 MAX_GAP_MS = 6 * HOUR_MS
 SALES_PAIR_MAX_GAP_MS = 2 * HOUR_MS     # hourly sales rates need books this close (SPEC §3.3 sales_how)
 CROSS_SOURCE_MIN_GAP_MS = 15 * 60_000   # books of different sources closer than this never pair (SPEC §3.3.1, V39)
-VOLUME_METHOD_VERSION = 5     # bump when the estimation changes; stored data is then recomputed (SPEC §3.3.6)
+VOLUME_METHOD_VERSION = 4     # the book method (group diffs): bump when it changes; stored rows are recomputed (SPEC §3.3.6)
+ID_METHOD_VERSION = 5         # the id method (auction lifetimes, M33a); its own number, so a change to it never marks
+                              # the desktop's book rows stale (stored with every id row; a cloud `rebuild` recomputes them)
 KINDS = ("ids", "groups", "own")       # volume kinds in trust order (SPEC §3.3.1)
 LEGACY_KIND = {"ahf": "groups", "books": "groups", "mail": "own"}   # rows stored without a cover (V24)
 # Time-left bands [lo, hi) in hours, by WoW band code (SPEC §3.3.1). UNVERIFIED for Forever (§6 item 5).

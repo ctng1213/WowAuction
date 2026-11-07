@@ -14,7 +14,7 @@ from ahsync.collect.local_scans import (HOUR_MS, book_days, recompute_book_volum
 from ahsync.collect.provider import SnapshotObservation, snapshot_problems
 from ahsync.collect.snapshots import SnapshotStore
 from ahsync.db.sqlite import BookScan, Database
-from ahsync.engine.volume import (LIFETIME_LOOKBACK_MS, MAX_GAP_MS, SALES_PAIR_MAX_GAP_MS, VOLUME_METHOD_VERSION, IdBook, covered_seconds,
+from ahsync.engine.volume import (ID_METHOD_VERSION, LIFETIME_LOOKBACK_MS, MAX_GAP_MS, SALES_PAIR_MAX_GAP_MS, IdBook, covered_seconds,
                                   gap_hours, group_book, life_flows, lifetimes, new_listing_positions,
                                   sold_by_hour)
 
@@ -113,7 +113,7 @@ def recompute_id_days(db: Database, store: SnapshotStore, market: str, src: str,
                     tally = ended.setdefault(key, [0.0, 0.0, 0.0])
                     for i, value in enumerate((f.ended, f.expired_listings, f.matched)):
                         tally[i] += value
-        db.replace_volume_day(market, day, src, {k: tuple(v) for k, v in sorted(volume.items())}, VOLUME_METHOD_VERSION,
+        db.replace_volume_day(market, day, src, {k: tuple(v) for k, v in sorted(volume.items())}, ID_METHOD_VERSION,
                               ("ids", covered_seconds(gaps)) if gaps else None)
         db.replace_lifetimes_day(market, day, src, {k: tuple(v) for k, v in sorted(ended.items())})
         db.replace_new_listings_day(market, day, src, merge_positions(positions.get(g, {}) for g in gaps))

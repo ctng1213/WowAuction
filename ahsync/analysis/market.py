@@ -15,7 +15,7 @@ from ahsync.engine import confidence, fees, patterns, prices, profile, sellprob
 from ahsync.engine.capacity import GEAR_CLASSES
 from ahsync.engine.profile import Profile
 from ahsync.engine.sellprob import MarketSettings, Supply
-from ahsync.engine.volume import (VOLUME_METHOD_VERSION, Cover, DailyVolume, Volume, daily_volume, median_daily_supply,
+from ahsync.engine.volume import (ID_METHOD_VERSION, VOLUME_METHOD_VERSION, Cover, DailyVolume, Volume, daily_volume, median_daily_supply,
                                   observed_turnover)
 from ahsync.history.reads import HistoryReader, HistoryWindow, ItemHistory, ItemInfo
 from ahsync.intel.contract import IntelWindow, ItemIntel, MarketIntelligence, ages_reference_ms
@@ -440,4 +440,5 @@ def analyze_market(history: HistoryReader, market: str, now_ms: int, settings: M
         except Exception as error:                 # noqa: BLE001  one bad item never stops the analysis (FM8)
             failed[item.key] = f"{type(error).__name__}: {error}"
     seen = [now_ms - i.cur_age_ms for i in out.values() if i.cur_age_ms is not None]
-    return MarketIntelligence(market, now_ms, max(seen) if seen else None, VOLUME_METHOD_VERSION, out), failed
+    method = max(VOLUME_METHOD_VERSION, ID_METHOD_VERSION)       # the newer of the two volume methods (informational)
+    return MarketIntelligence(market, now_ms, max(seen) if seen else None, method, out), failed
