@@ -214,6 +214,12 @@ no craft pays at it (found from the Craft tab, PR #31).
 
 **Decided by the user 2026-11-07, after the measurements (`docs/plans/blizzard-cloud-sales.md`) and the mockup rounds: M33b's scope grows.** Commodity cancels leave `sold` (BZ40; the measured floor, 10.8%, cleared the 10% bar), sell-through is kept per 7/14/30-day lookback (BZ41), and the tooltip's market lines take one shape (TT34–TT40, approved mockup `docs/mockups/sell-through.html`): Market Price (Price history folds in), Market Inventory as a stock against its typical, Sell Chance Now (a 24 h posting-now forecast at the market price, with measured history) in place of Sales Rate, Best Buy/Sell Time with a percentage and their strength word, Disenchant Value with its comparison first, and the market's coverage in the header. One qualifier rule (rising/falling only when consistent across lookbacks, else high/low/steady against 7 days) for Market Price and Market Inventory. The dashboard's item detail mirrors the same lines when M33b is built; its mockup is updated then. Still deferred: the recent-activity multiplier, sold-price medians replacing ask medians, class priors beyond the n ÷ (n + 30) borrow, the 24 h inventory average.
 
+**The 0.1.6 batch (started 2026-11-07 at the user's request): M33b's decided parts, plus four small items.** M33b's decided parts are BZ40, BZ41 and TT34–TT40 (the block above) and the dashboard item detail's mirror of them. Its data-bound parts wait for a week of lifetimes and are **not** in this batch: the tier edges and the blend (BZ28), the band bounds (BZ24), the relist decision. The small items: (a) the addon Portfolio footer's overlap, minimal fix; (b) a note on a cloud market's Data coverage card, "collected to · analysed to · next analysis" (the user rejected extending `coverage` hourly: the heatmap shows only what the daily analysis used); (c) the app window opens on a bundled loading page instead of white or an error page; (d) **Vendor Price** in the tooltip, right above Inventory (the user, 2026-11-07, mid-planning). Proposal mockup for (a)–(d): `docs/mockups/batch-0-1-6.html`; once approved, each lands in its home (SPEC, SCENARIOS, `sell-through.html`, `addon.html`, `dashboard.html`) in the milestone that builds it. **Approved by the user 2026-11-07**: the mockup page as drawn (Vendor Price "each + held total"; the coverage note's wording; the loading page; the footer), this plan, and the batch's standing approval (one branch, commit and MR per verified milestone; the user merges; each `cdk deploy` still asked). The spec merge for (b)–(d) (SPEC §3.5 Status, §3.7.1, §4.3; SCENARIOS TT41, D104, DR32, pending) is in the plan's commit; (a) changes A79's footer number in M41a. Decided by Opus at planning (consistent with SPEC, recorded so the wrap-up lists them):
+
+- **Where the new numbers are made.** Sell Chance Now, the per-lookback sell-through, the typical supply over 7 and 14 days and the best windows' percentages are made by the analysis (the cloud's daily and hourly runs; a local market's full refresh) and travel in **schema 13** (M34 becomes schema 14) and the market file (`EXPORT_VERSION` 6). The addon does not rerun the simulation on an in-game scan: the line names the price it was computed at ("74% at 19c"), so it stays true beside a newer Market Price. The qualifier word (TT34) and the coverage percent (TT40) are the addon's own arithmetic in `UI/TooltipView.lua` from exported values, tested there.
+- **A market without lifetimes** (a local AHF or AHledger market) has no sell-through: its lookbacks read "—" and Sell Chance Now uses the queue model alone, as Sales Rate's "—" did.
+- **The cloud keeps publishing 10–13** (`PUBLISHED_SCHEMAS`); 0.1.6 reads 13 and falls back to 12 (FM75's rule), so a release before the cloud deploy still works, with the new lines at "—".
+
 ## 2. Working rules
 
 CLAUDE.md "How work is run" applies. In short: one worktree per milestone; `tools/verify.ps1` (tests, invariants, the whole-plan snapshot byte-identical unless this plan says it moves) before a commit; one commit per verified milestone with the attribution trailer; the plan's §1 gains any decision made during execution; LESSONS gains any wrong assumption found; SPEC and SCENARIOS are updated in the same commit as the code that makes them true, and a milestone's "planned" becomes "built" with module names.
@@ -329,6 +335,45 @@ Done when: FM77 passes; the alarm exists in the account and is OK; the dead-lett
 4. **Sonnet**: the scenario tests D99, D100, A92, BZ25; the headless render of the real dashboard for a cloud-market world (no console errors, no `undefined` or `NaN`); the golden snapshots if the addon's UI changes.
 
 Done when: D99, D100, A92, BZ25 pass; the real dashboard renders the pill as the mockup; WP1 byte-identical.
+
+### The 0.1.6 batch: M33b-1, M33b-2, M41a–c, M33b-3, then the release
+
+Order: M33b-1 first so the cloud starts recording cancels while the rest is built; the small items while the deploy settles; then the tooltip, the dashboard mirror and the release. Every milestone: its own worktree and branch, `tools/verify.ps1` (`-Bench` where marked), WP1 byte-identical (its world is not a cloud market), one commit, the user merges.
+
+**M33b-1 — Commodity cancels and sell-through by lookback** (BZ40, BZ41; `-Bench`)
+
+1. **Opus**: `engine/volume.lifetimes` marks a commodity cancel (BZ40: vanished while it could not have expired, a cheaper auction of the item survived the gap unchanged); `lifetimes_d1` gains `cancelled` and, per posting day, the tier-1 listings posted and those bought within 24 h (desktop schema migration; the cloud's compact store the same); `ID_METHOD_VERSION` 6. Reason: a new engine rule and a migration with two writers.
+2. **Opus**: sell-through per 7/14/30-day lookback (BZ41: measured for commodities; left early × (1 − the market's commodity cancel share) for gear, est.; under 30 listings blended with the item class by n ÷ (n + 30), "class est."; nothing to borrow, None), the market's cancel share in the document, the typical supply over 7 and 14 days, Sell Chance Now (the posting-now simulation over 24 h at `cur`, gear est.), each sell window's 24 h chance and each buy window's found-at-or-below share; `ItemIntel` schema 13, `ADDED_IN[13]`, `PUBLISHED_SCHEMAS` 10–13; invariants (§8.7: sell-through in [0, 1]; cancelled + sold + expired = ended for commodities; the class blend between its two inputs). Reason: new formulas and a contract change.
+3. **Sonnet**: the BZ40 and BZ41 scenario tests with the rows' numbers; pending IDs removed. Reason: routine, numbers given.
+4. **User**: `cdk deploy` (or Opus with approval). **Opus** reads the next daily document back: schema 13 present, a commodity's `cancelled` non-zero.
+
+Done when BZ40, BZ41 and the invariants pass, the bench is inside its budgets, and the cloud publishes 13.
+
+**M41a — The Portfolio footer** (approved mockup `batch-0-1-6.html` §2)
+
+1. **Sonnet**: `UI/PortfolioView.lua`'s footer right side becomes "77c unallocated" (the capacity is in the header) and its left side reads "funded profit +7g 8s 60c · cost …" ("funded profit 0c" when nothing is funded; the user, 2026-11-07, after approval; A77, A79, UI19 and SPEC §4's Portfolio footer change with it); `UI/WindowLines.lua` lets the left text wrap instead of overlapping; the UI scenario row updated; `tools/visual.py --update`; `addon.html` updated. Reason: routine UI. **Opus** reviews the golden diff against the mockup.
+
+**M41b — The coverage note** (D104; approved mockup `batch-0-1-6.html` §3)
+
+1. **Opus**: the D104 row first, then `engine/coverage.py` makes the note ("Blizzard data collected to Sat 20:16 · analysed to Sat 06:00 · next analysis Sun 01:00": the summary's `observations_until_ms`, the end of `coverage`, the next 09:00 UTC, all local time); the status payload carries it; the dashboard draws it under a cloud market's card; `dashboard.html` updated. Reason: a displayed text with a time rule (§8.5). Headless render.
+
+**M41c — The loading page** (DR32; approved mockup `batch-0-1-6.html` §4)
+
+1. **Opus**: `debug-issue` first: confirm the white or error flash comes from loading the dashboard URL before the server listens (the expected versus actual, from `ahsync_app/window.py`'s start order). Then the window opens on a bundled page that polls the dashboard and loads it once it answers, the 30 s note after; DR32 test with a fake webview and clock; SPEC §3.7. Reason: the app's start order is a contract with the server's start.
+2. **User**: a check on Windows and macOS at the pre-release (the webviews differ).
+
+**M33b-2 — The tooltip's market lines** (TT34–TT41; approved mockups `sell-through.html`, `batch-0-1-6.html` §1)
+
+1. **Opus**, after a `wow-adapter` consult (Vendor Price: does Forever's own tooltip print a sell price; the tooltip's line budget): `export/market_lua.py` adds the schema 13 fields (`EXPORT_VERSION` 6, the addon's twin); `UI/TooltipView.lua` builds the lines in one shape (TT34–TT39), the header's coverage (TT40) and Vendor Price above Inventory (TT41, from `Adapter.ItemInfo`'s sell price, else the saved row); `UI/Tooltip.lua` only draws; Price history and Sales Rate go. Reason: an export contract and every displayed number in the tooltip.
+2. **Sonnet**: the TT34–TT41 Lua tests with the rows' numbers; `tools/visual.py --update`. **Opus** reviews the goldens against the mockups; `sell-through.html` and `addon.html` marked built.
+
+**M33b-3 — The dashboard item detail mirrors the lines**
+
+1. **Opus**: the item detail's mockup in `dashboard.html` first, **approved by the user** before code; then the D rows; `engine/item_detail.py` makes the same lines from the same intel fields; the JavaScript draws them. Reason: displayed numbers (§8.5). Headless render.
+
+**Release v0.1.6**
+
+1. **User**: the pre-release from the merged `main`, an in-game check of the tooltip and the footer, the window's start on both platforms; `python tools/promote.py v0.1.6`. **Opus** then writes the wrap-up (decisions made in execution, LESSONS entries, the mockup page `batch-0-1-6.html` archived into its homes).
 
 ## 4. The user's actions, in order
 
