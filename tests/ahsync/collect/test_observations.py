@@ -122,7 +122,8 @@ def test_a_days_lifetimes_do_not_depend_on_which_other_days_are_recomputed(db, t
     with db.transaction():
         recompute_id_days(db, store, M, "blizzard", {D - 1, D})
     assert day_rows(db, D) == alone
-    assert alone[1] == [(LINEN, 1.0, 0.75, 0.0)]     # its window narrows to (D−3 h, D+1 h]; gone by D: 3/4 expired
+    assert alone[1] == [(LINEN, 1.0, 1.0, 0.0)]      # its window narrows to (D−3 h, D+1 h]; gone by D, and no listing
+    #   ever left early here, so selling never competed: wholly expired (BZ44; the old overlap split said 3/4)
 
 
 def test_a_lifetime_credited_hour_keeps_its_rate_when_the_next_day_starts(db, tmp_path):
@@ -155,5 +156,58 @@ def test_a_late_snapshot_recomputes_every_day_its_lifetimes_reach(tmp_path):
     t = D * DAY + 20 * HOUR
     for at in (t, t + 20 * HOUR, t + 60 * HOUR):                  # D 20:00, D+1 16:00, D+3 08:00
         store.put(snap(at))
-    assert id_days(store, M, "blizzard", t) == {D, D + 1}        # to the last snapshot within 36 h, not D+3
-    assert id_days(store, M, "blizzard", D * DAY + HOUR) == {D - 1, D}   # its book pairs reach D−1 23:00; D+1 is 39 h on
+    assert id_days(store, M, "blizzard", t) == {D, D + 1, D + 2, D + 3}   # to the last snapshot within 66 h (D+3, 60 h
+    #   on): its gaps feed the early-leave rate of endings up to a day after them (BZ44), whose windows reach 30 h on
+    assert id_days(store, M, "blizzard", D * DAY + HOUR) == {D - 1, D, D + 1}   # book pairs reach D−1 23:00; D+1 is 39 h
+
+
+
+def leaving_world(ending: dict[int, tuple[Auction, ...]]) -> dict[int, tuple[Auction, ...]]:
+    """Hourly snapshots from D−2 00:00 to D+1 12:00 in which 1-unit 24 h Linen listings appear and leave early every
+    other hour (so the early-leave rate is not 0, BZ44), merged with an ending auction's own snapshots."""
+    world: dict[int, tuple[Auction, ...]] = {}
+    for h in range(0, 2 * 24 + 36):
+        at = D * DAY - 2 * DAY + h * HOUR
+        world[at] = (Auction(1000 + h, LINEN, 1, 50, 4),) if h % 2 == 0 else ()
+    for at, auctions in ending.items():
+        world[at] = world.get(at, ()) + auctions
+    return world
+
+
+def stored(tmp_path, world: dict[int, tuple[Auction, ...]], name: str) -> SnapshotStore:
+    """A snapshot store holding a world."""
+    store = SnapshotStore(tmp_path / name)
+    for at in sorted(world):
+        store.put(snap(at, *world[at]))
+    return store
+
+
+def test_BZ44_a_days_rows_with_a_nonzero_rate_are_the_same_ingested_one_by_one_or_recomputed(tmp_path):
+    m = D * DAY
+    world = leaving_world({m + 10 * HOUR: (Auction(1, LINEN, 10, 50, 2),), m + 11 * HOUR: (Auction(1, LINEN, 10, 50, 2),)})
+    incremental = Database.open(tmp_path / "a.db", FakeClock().now_ms(), None)
+    one_by_one = SnapshotStore(tmp_path / "one")
+    for at in sorted(world):
+        ingest_snapshot(incremental, one_by_one, snap(at, *world[at]))
+    rebuilt = Database.open(tmp_path / "b.db", FakeClock().now_ms(), None)
+    with rebuilt.transaction():
+        recompute_id_days(rebuilt, stored(tmp_path, world, "all"), M, "blizzard", {D})
+    linen = [r for r in day_rows(rebuilt, D)[1] if r[0] == LINEN]
+    assert 0.0 < linen[0][2] < linen[0][1]                        # not all expired: listings do leave early here
+    assert day_rows(incremental, D) == day_rows(rebuilt, D)        # later snapshots never change day D (causal rate)
+
+
+def test_BZ44_an_hour_pooled_across_midnight_is_the_same_in_any_recompute_order_with_a_nonzero_rate(tmp_path):
+    m = D * DAY
+    world = leaving_world({m - 110 * 60_000: (Auction(1, LINEN, 10, 50, 2),), m - 50 * 60_000: (Auction(1, LINEN, 10, 50, 2),),
+                           m - 10 * 60_000: (Auction(1, LINEN, 8, 50, 1),), m + 40 * 60_000: ()})
+    hour = m - HOUR                                               # 23:00, credited by a gap of each day
+    rates = []
+    for name, order in (("a", (D, D - 1)), ("b", (D - 1, D))):
+        db = Database.open(tmp_path / f"{name}.db", FakeClock().now_ms(), None)
+        store = stored(tmp_path, world, name)
+        for day in order:
+            with db.transaction():
+                recompute_id_days(db, store, M, "blizzard", {day})
+        rates.append(db.conn.execute("SELECT sold_per_hour FROM sales_h1 WHERE key = ? AND t = ?", (LINEN, hour)).fetchone())
+    assert rates[0] == rates[1] and rates[0] is not None

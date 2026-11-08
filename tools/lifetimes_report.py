@@ -130,8 +130,8 @@ def fate_table(lt: Lifetimes, known: frozenset[int]) -> list[str]:
     for label, cohort in (("posting known", [e for e in lt.endings if e.auction in known]),
                           ("posting unknown", [e for e in lt.endings if e.auction not in known])):
         n = len(cohort)
-        sold = sum(1 for e in cohort if e.expired == 0.0)
-        expired = sum(1 for e in cohort if e.expired == 1.0)
+        sold = sum(1 for e in cohort if e.overlap == 0.0)          # could not have expired (the raw overlap)
+        expired = sum(1 for e in cohort if e.overlap == 1.0)
         share = sum(e.expired for e in cohort) / n if n else 0.0
         rows.append(f"| {label} | {n} | {sold} | {expired} | {n - sold - expired} | {share:.3f} |")
     return rows
@@ -174,7 +174,7 @@ def relist_rows(lt: Lifetimes, gear: frozenset[int], shift: int = 3) -> list[str
     index = {t: i for i, t in enumerate(times)}
     rows = []
     for label, pick in (("gear", lambda k: k in gear), ("other", lambda k: k not in gear)):
-        early = [e for e in lt.endings if pick(e.key) and e.expired < 1.0]
+        early = [e for e in lt.endings if pick(e.key) and e.overlap < 1.0]   # may have left early (the raw overlap)
         later = [e for e in early if index[e.gap[1]] + shift < len(times)]
         if not later:
             continue

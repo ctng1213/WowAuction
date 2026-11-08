@@ -495,7 +495,8 @@ def test_BZ22_lifetimes_name_each_listings_fate():
         (3, ORE, posted + 30 * MINUTE - 1, posted + 30 * MINUTE + 20 * MINUTE, 1 << 62, lambda at: 2)])  # short at 18:00
     assert snaps[24].auctions[0].band == SHORT and snaps[3].auctions[1].band == LONG
     fates = {e.auction: (e.expired, e.gap) for e in lifetimes(snaps).endings}
-    assert fates[1] == (1.0, (thu_1700 + 24 * HOUR_MS, thu_1700 + 25 * HOUR_MS))            # its end fell in 17:00-18:00
+    assert fates[1][1] == (thu_1700 + 24 * HOUR_MS, thu_1700 + 25 * HOUR_MS)                 # its end fell in 17:00-18:00
+    assert 0.99 < fates[1][0] < 1.0      # BZ44: one early leave in about 26 listing-hours leaves a 1% chance it sold
     assert fates[2] == (0.0, (thu_1700 + 3 * HOUR_MS, thu_1700 + 4 * HOUR_MS))               # sold, 5-6 h left
     assert fates[3][0] == 1.0                                                                 # treated as 2 h: expired
 
@@ -692,3 +693,4 @@ def test_BZ40_an_item_whose_last_auction_vanishes_in_the_first_kept_gap_is_still
     assert lt.commodities == frozenset({silk})
     flow = life_flows(lt)[(at, at + HOUR_MS)][silk]
     assert flow.commodity and flow.cancels == 0.0                               # nothing cheaper survived: both sold
+

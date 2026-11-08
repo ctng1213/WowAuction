@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
+from ahsync.engine.expiry import (RATE_WINDOW_MS, EarlyLeaveRates, expired_fraction, expired_given_vanished,
+                                  tally_early_leaves)
 from ahsync.engine.prices import median
 
 HOUR_MS = 3_600_000
@@ -21,7 +23,7 @@ MAX_GAP_MS = 6 * HOUR_MS
 SALES_PAIR_MAX_GAP_MS = 2 * HOUR_MS     # hourly sales rates need books this close (SPEC §3.3 sales_how)
 CROSS_SOURCE_MIN_GAP_MS = 15 * 60_000   # books of different sources closer than this never pair (SPEC §3.3.1, V39)
 VOLUME_METHOD_VERSION = 4     # the book method (group diffs): bump when it changes; stored rows are recomputed (SPEC §3.3.6)
-ID_METHOD_VERSION = 6         # the id method (auction lifetimes, M33a); its own number, so a change to it never marks
+ID_METHOD_VERSION = 7         # the id method (7: selling and expiring compete in the split, BZ44) (auction lifetimes, M33a); its own number, so a change to it never marks
                               # the desktop's book rows stale (stored with every id row; a cloud `rebuild` recomputes them)
 KINDS = ("ids", "groups", "own")       # volume kinds in trust order (SPEC §3.3.1)
 LEGACY_KIND = {"ahf": "groups", "books": "groups", "mail": "own"}   # rows stored without a cover (V24)
@@ -252,6 +254,8 @@ class Ending:
                                   # measured, never subtracted (SPEC §2.4 item 5; the user, 2026-11-07)
     cancelled: bool = False       # a commodity that left early while a cheaper one of its item stayed: no sale (BZ40)
     tier1: bool | None = None     # posted at or below the lowest other price; None when its posting wasn't seen (BZ41)
+    overlap: float = 0.0          # the gap's overlap with its expiry window alone, 0-1 (`expired_fraction`): 0 = it
+                                  # could not have expired; `expired` weighs selling against it (BZ44)
 
 
 @dataclass(frozen=True)
@@ -291,7 +295,9 @@ class LifeFlow:
 DURATION_MS = {4: 24 * HOUR_MS, 3: 8 * HOUR_MS, 2: 2 * HOUR_MS, 1: 2 * HOUR_MS}
 # How far before a day its lifetimes must start so the day's result is exact (SPEC §2.4): an ending in the day was last
 # seen at most MAX_GAP_MS before it, posted at most 24 h before that, and its posting gap began up to MAX_GAP_MS earlier.
-LIFETIME_LOOKBACK_MS = 24 * HOUR_MS + 2 * MAX_GAP_MS
+# How far before a day its pass starts: an ending's whole life (24 h) and its posting and narrowing gaps, plus the
+# early-leave rate's window before it (BZ44), whose gaps need their own auctions' lives, plus that window's first gap.
+LIFETIME_LOOKBACK_MS = 24 * HOUR_MS + 3 * MAX_GAP_MS + RATE_WINDOW_MS
 
 
 def band_window(at_ms: int, band: int) -> tuple[int, int]:
@@ -323,21 +329,6 @@ def narrow(window: tuple[int, int], at_ms: int, band: int) -> tuple[tuple[int, i
     lo, hi = band_window(at_ms, band)
     start, end = max(window[0], lo), min(window[1], hi)
     return ((start, end), False) if start < end else ((lo, hi), True)
-
-
-def expired_fraction(window: tuple[int, int], absent_ms: int) -> float:
-    """The share of an auction that expired, given it was gone by a time (SPEC §2.4 item 4, kind 1's band rule).
-
-    Args:
-        window: Its expiry window, (start, end] ms, the expiry equally likely anywhere in it.
-        absent_ms: The first snapshot it was missing from.
-
-    Returns:
-        clamp((absent − start) ÷ (end − start), 0, 1): 0 when the gap is wholly before the window (sold), 1 when
-        the window ends inside or before the gap (expired).
-    """
-    start, end = window
-    return min(1.0, max(0.0, (absent_ms - start) / (end - start)))
 
 
 def match_relists(vanished: list[tuple], new: list[Auction], gap: tuple[int, int]) -> list[Ending]:
@@ -491,17 +482,23 @@ def lifetimes(books: Iterable[IdBook], max_gap_ms: int = MAX_GAP_MS, keep_from_m
     live: dict[int, list] = {}                     # auction id -> [key, units, expiry window, price, commodity, tier1]
     gaps, endings, fills, listed, seen = [], [], [], [], {}
     clashes, prev_at, prev_keys, commodities = 0, None, frozenset(), set()
+    tallies: list[tuple[int, dict]] = []          # (gap end, key -> (exposure ms, early leaves)) per gap (BZ44)
+    pooled_commodities: set[int] = set()          # every pass snapshot's commodities: the rate's pools (BZ44)
+    windows: dict[int, tuple[int, int]] = {}      # auction -> its expiry window when it vanished
     for book in books:
         linked = prev_at is not None and 0 < book.at_ms - prev_at <= max_gap_ms
         gap = (prev_at, book.at_ms) if linked else None
         keep = linked and (keep_from_ms is None or book.at_ms >= keep_from_ms)   # earlier gaps only build windows
         current = sorted(book.auctions, key=lambda a: a.id)
+        pooled_commodities.update(a.key for a in current if a.commodity)
         vanished = []
         if linked:
             vanished = vanished_in(live, current, book.at_ms)
+            tallies.append((book.at_ms, tally_early_leaves(live, vanished, book.at_ms - prev_at, book.at_ms)))
             for auction, *_ in vanished:
                 if keep and live[auction][4]:
                     commodities.add(live[auction][0])  # its last auctions may vanish here, never seen in a kept book
+                windows[auction] = live[auction][2]
                 del live[auction]
         else:
             live = {}                              # a hole: nothing is known across it
@@ -538,6 +535,10 @@ def lifetimes(books: Iterable[IdBook], max_gap_ms: int = MAX_GAP_MS, keep_from_m
             seen[gap] = prev_keys | keys
             endings.extend(match_relists(vanished, new, gap))
         prev_at, prev_keys = book.at_ms, keys
+    rates = EarlyLeaveRates(tallies, pooled_commodities)
+    endings = [replace(e, overlap=e.expired, expired=expired_given_vanished(windows[e.auction], e.gap,
+                                                                           rates.rate(e.key, e.gap[1])))
+               if 0.0 < e.expired else e for e in endings]
     return Lifetimes(tuple(gaps), seen, tuple(endings), tuple(fills), tuple(listed), clashes, frozenset(commodities))
 
 
