@@ -17,7 +17,7 @@ needs an item (SPEC §5.1 lazy decode):
   thousandths, stHow one letter per lookback (m measured, e est., c class est., - none; "" when all are none),
   sellChance1000 the 24 h posting-now chance at cur (Sell Chance Now), commodity 1 or 0 ("" unknown). Each market
   carries coverage30, the hours observed in the 720 before generatedAt's hour (the tooltip header's coverage).
-  The fields a local market never has come last, so the trailing-empty rule keeps the file within its 2 MB.
+  The fields a local market never has come last, so the trailing-empty rule keeps the file small.
 - A window is "start:hours:best:how1000:weeks[:pct1000]" (UTC slots, how_avg in thousandths; pct1000 a selling
   window's 24 h chance or a buying window's found share, in thousandths, left out when unknown; M33b),
   windows joined by "/", best first. Shortlist items carry every window the intelligence
@@ -58,7 +58,7 @@ EXPORT_VERSION = 6              # 6: the tooltip's market lines: sell-through, s
                                 # (TT23, PP4); 2: a mail's recipient (EX16)
 HOUR_MS = 3_600_000
 MINUTE_MS = 60_000
-STALE_PRICE_MS = 7 * 86_400_000   # older prices are left out unless shortlisted (EX5: the 2 MB budget)
+STALE_PRICE_MS = 7 * 86_400_000   # older prices are left out unless shortlisted (EX5: the file's budget)
 CHUNK = 2000                   # items per generated function: each has its own constant table (A3)
 TOOLTIP_COLUMNS = tuple(CURVE_AHEAD.index(a) for a in CURVE_AHEAD_TOOLTIP)
 EMPTY_GRAPH = Graph((), (), (), (), ())      # a market without known recipes or disenchantable items

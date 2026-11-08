@@ -257,7 +257,7 @@ def test_EX17_EX18_the_published_candidates_graph_and_snapshot_reach_both_files(
     assert f'"stock:Brugan-G:2840;{BAR};Holding;6;6;3000;3157;{now};post",' in plan
 
 
-def test_FM40_the_export_drops_the_lowest_alternatives_until_the_file_fits_2_MB():
+def test_FM40_the_export_drops_the_lowest_alternatives_until_the_file_fits_its_budget():
     cands, result, adjusted = mx.selection()
     status = dict(result.reasons)
     base = [(candidate_text(c, status.get(c.cand_id, "")), status.get(c.cand_id, ""), adjusted[c.cand_id])
@@ -275,7 +275,7 @@ def test_FM40_the_export_drops_the_lowest_alternatives_until_the_file_fits_2_MB(
     unpadded = build(0)({M: [t for t, _s, _a in rows[M][:112]]})
     pad = limit - len(unpadded.encode("utf-8"))
     full = build(pad)({M: [t for t, _s, _a in rows[M]]})
-    assert 2.0 * 1024 * 1024 < len(full) < 2.11 * 1024 * 1024           # "would be 2.1 MB"
+    assert limit < len(full) < limit + 0.11 * 1024 * 1024               # "would be 3.1 MB" (3 MB budget since M33b)
     text, kept = addon_files.fit_market(build(pad), rows, limit)
     assert len(kept[M]) == 112 and len(text.encode("utf-8")) <= limit
     assert kept[M] == [t for t, _s, _a in rows[M][:112]]               # the 38 lowest alternatives went, no funded row
