@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
+from ahsync.engine.expiry import early_leave_rates, expired_fraction, expired_given_vanished, tally_early_leaves
 from ahsync.engine.prices import median
 
 HOUR_MS = 3_600_000
@@ -21,7 +22,7 @@ MAX_GAP_MS = 6 * HOUR_MS
 SALES_PAIR_MAX_GAP_MS = 2 * HOUR_MS     # hourly sales rates need books this close (SPEC §3.3 sales_how)
 CROSS_SOURCE_MIN_GAP_MS = 15 * 60_000   # books of different sources closer than this never pair (SPEC §3.3.1, V39)
 VOLUME_METHOD_VERSION = 4     # the book method (group diffs): bump when it changes; stored rows are recomputed (SPEC §3.3.6)
-ID_METHOD_VERSION = 6         # the id method (auction lifetimes, M33a); its own number, so a change to it never marks
+ID_METHOD_VERSION = 7         # the id method (7: selling and expiring compete in the split, BZ42) (auction lifetimes, M33a); its own number, so a change to it never marks
                               # the desktop's book rows stale (stored with every id row; a cloud `rebuild` recomputes them)
 KINDS = ("ids", "groups", "own")       # volume kinds in trust order (SPEC §3.3.1)
 LEGACY_KIND = {"ahf": "groups", "books": "groups", "mail": "own"}   # rows stored without a cover (V24)
@@ -325,21 +326,6 @@ def narrow(window: tuple[int, int], at_ms: int, band: int) -> tuple[tuple[int, i
     return ((start, end), False) if start < end else ((lo, hi), True)
 
 
-def expired_fraction(window: tuple[int, int], absent_ms: int) -> float:
-    """The share of an auction that expired, given it was gone by a time (SPEC §2.4 item 4, kind 1's band rule).
-
-    Args:
-        window: Its expiry window, (start, end] ms, the expiry equally likely anywhere in it.
-        absent_ms: The first snapshot it was missing from.
-
-    Returns:
-        clamp((absent − start) ÷ (end − start), 0, 1): 0 when the gap is wholly before the window (sold), 1 when
-        the window ends inside or before the gap (expired).
-    """
-    start, end = window
-    return min(1.0, max(0.0, (absent_ms - start) / (end - start)))
-
-
 def match_relists(vanished: list[tuple], new: list[Auction], gap: tuple[int, int]) -> list[Ending]:
     """Endings of one gap, each matched to a new listing of the same item and units if one is free (BZ27).
 
@@ -491,6 +477,9 @@ def lifetimes(books: Iterable[IdBook], max_gap_ms: int = MAX_GAP_MS, keep_from_m
     live: dict[int, list] = {}                     # auction id -> [key, units, expiry window, price, commodity, tier1]
     gaps, endings, fills, listed, seen = [], [], [], [], {}
     clashes, prev_at, prev_keys, commodities = 0, None, frozenset(), set()
+    exposure: dict[int, float] = {}               # key -> listing-ms in gaps wholly before the expiry window (BZ42)
+    leaves: dict[int, int] = {}                   # key -> listings that vanished in such a gap
+    windows: dict[int, tuple[int, int]] = {}      # auction -> its expiry window when it vanished
     for book in books:
         linked = prev_at is not None and 0 < book.at_ms - prev_at <= max_gap_ms
         gap = (prev_at, book.at_ms) if linked else None
@@ -499,9 +488,11 @@ def lifetimes(books: Iterable[IdBook], max_gap_ms: int = MAX_GAP_MS, keep_from_m
         vanished = []
         if linked:
             vanished = vanished_in(live, current, book.at_ms)
+            tally_early_leaves(live, vanished, book.at_ms - prev_at, book.at_ms, exposure, leaves)
             for auction, *_ in vanished:
                 if keep and live[auction][4]:
                     commodities.add(live[auction][0])  # its last auctions may vanish here, never seen in a kept book
+                windows[auction] = live[auction][2]
                 del live[auction]
         else:
             live = {}                              # a hole: nothing is known across it
@@ -538,6 +529,9 @@ def lifetimes(books: Iterable[IdBook], max_gap_ms: int = MAX_GAP_MS, keep_from_m
             seen[gap] = prev_keys | keys
             endings.extend(match_relists(vanished, new, gap))
         prev_at, prev_keys = book.at_ms, keys
+    rates = early_leave_rates(exposure, leaves, commodities)
+    endings = [replace(e, expired=expired_given_vanished(windows[e.auction], e.gap, rates.get(e.key, 0.0)))
+               if 0.0 < e.expired else e for e in endings]
     return Lifetimes(tuple(gaps), seen, tuple(endings), tuple(fills), tuple(listed), clashes, frozenset(commodities))
 
 

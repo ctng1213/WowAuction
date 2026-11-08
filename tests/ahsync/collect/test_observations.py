@@ -122,7 +122,8 @@ def test_a_days_lifetimes_do_not_depend_on_which_other_days_are_recomputed(db, t
     with db.transaction():
         recompute_id_days(db, store, M, "blizzard", {D - 1, D})
     assert day_rows(db, D) == alone
-    assert alone[1] == [(LINEN, 1.0, 0.75, 0.0)]     # its window narrows to (D−3 h, D+1 h]; gone by D: 3/4 expired
+    assert alone[1] == [(LINEN, 1.0, 1.0, 0.0)]      # its window narrows to (D−3 h, D+1 h]; gone by D, and no listing
+    #   ever left early here, so selling never competed: wholly expired (BZ42; the old overlap split said 3/4)
 
 
 def test_a_lifetime_credited_hour_keeps_its_rate_when_the_next_day_starts(db, tmp_path):
