@@ -183,10 +183,10 @@ local function FlipLines(charId, nowMs, offset, gold)
   local live = {}
   for _, a in ipairs(Options.WithoutGoneBuys(planned, LevelsOf)) do live[a.id] = true end
   local rows, gone = {}, {}
-  for _, r in ipairs(VM.FlipRows(planned, LookOf, LevelsOf, gold, offset)) do
+  for _, r in ipairs(VM.FlipRows(planned, LookOf, LevelsOf, gold, offset, nowMs)) do
     if live[r.id] then rows[#rows + 1] = r else gone[#gone + 1] = VM.GoneFlip(r) end   -- listed, greyed (A66)
   end
-  local footer = VM.FlipFooter(rows, VM.FlipRows(planned, LookOf, LevelsOf, gold, offset))
+  local footer = VM.FlipFooter(rows, VM.FlipRows(planned, LookOf, LevelsOf, gold, offset, nowMs))
   for _, r in ipairs(gone) do rows[#rows + 1] = r end
   local flipped = {}
   for _, a in ipairs(planned) do if a.kind == "buy" then flipped[a.key] = true end end

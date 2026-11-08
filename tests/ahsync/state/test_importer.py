@@ -259,6 +259,29 @@ def test_S13_the_addon_names_items_ahfs_list_leaves_out_and_ahf_always_wins(db):
     assert rows(db, "SELECT name, updated FROM items WHERE key = 6948") == [("Hearthstone (AHF)", T + HOUR)]
 
 
+def test_BZ25_the_games_vendor_price_and_class_fill_the_local_catalog_and_the_summary_wins(db):
+    stone, wool, fang = 3486, 2592, 3300
+    names = {stone: "1,Heavy Grinding Stone,50,7", wool: "1,Wool Cloth,,7", fang: "0,Broken Fang"}
+
+    def item(key: int) -> list[tuple]:
+        """The catalog row's class, vendor price and its source."""
+        return rows(db, "SELECT class, vendor_sell, vendor_src FROM items WHERE key = ?", (key,))
+
+    apply_db(db, {"itemNames": names})
+    assert item(stone) == [(7, 50, "game")] and item(wool) == [(7, None, None)] and item(fang) == [(None, None, None)]
+    apply_db(db, {"itemNames": {**names, wool: "1,Wool Cloth,0,7"}})          # 0: can't be sold, still a price
+    assert item(wool) == [(7, 0, "game")]
+    with db.transaction():
+        db.merge_catalog({stone: ("Heavy Grinding Stone", 1, 7, 55, 20, "forever")}, T)
+    assert item(stone) == [(7, 55, None)]                                      # the summary's price wins
+    apply_db(db, {"itemNames": names})
+    assert item(stone) == [(7, 55, None)]                                      # and the game never overwrites it
+    db.upsert_items([(wool, wool, "Wool Cloth", 1, 5, 7, 0, 10, None, 20)], T)  # AHF's list without a price
+    assert item(wool) == [(7, None, None)]
+    apply_db(db, {"itemNames": {**names, wool: "1,Wool Cloth,33,7"}})          # the game fills the gap again
+    assert item(wool) == [(7, 33, "game")]
+
+
 def test_S14_reserves_follow_the_newest_file_and_a_bad_entry_keeps_the_stored_ones(db):
     def save(updated: int, reserves) -> ApplyResult:
         """Apply a file with Amaya at this updated time and these reserves."""

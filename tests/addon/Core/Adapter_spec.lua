@@ -13,7 +13,7 @@ end
 describe("Adapter", function()
   it("the .toc lists the Core and Capture files in load order", function()
     Stubs.Reset()
-    assert_eq(Stubs.TocFiles(), { "Core/Adapter.lua", "Core/AdapterAH.lua", "Core/AdapterDiagnostics.lua", "Data/BonusSuffixes.lua", "Data/Disenchant.lua", "Core/Events.lua", "Core/DB.lua",
+    assert_eq(Stubs.TocFiles(), { "Core/Adapter.lua", "Core/AdapterAH.lua", "Core/AdapterDiagnostics.lua", "Data/BonusSuffixes.lua", "Data/Disenchant.lua", "Core/Events.lua", "Core/DB.lua", "Core/ItemNames.lua",
       "Capture/Characters.lua", "Capture/Professions.lua", "Capture/Inventory.lua", "Capture/Auctions.lua", "Capture/Mail.lua", "Scan/Replicate.lua", "Core/Diagnostics.lua",
       "Engine/Fees.lua", "Engine/SellProb.lua", "Engine/Disenchant.lua", "Engine/Craft.lua", "Engine/Prices.lua", "Engine/Timing.lua", "Engine/Portfolio.lua", "Engine/Graph.lua", "Capture/Posts.lua", "Capture/Crafts.lua", "Capture/Gather.lua", "Core/Market.lua", "Core/Plan.lua", "Recommend/Live.lua", "Capture/Purchases.lua", "Recommend/Options.lua", "Recommend/Reserves.lua", "Recommend/Reselect.lua", "Recommend/Adapt.lua", "UI/ViewModel.lua", "UI/PlanView.lua", "UI/PortfolioView.lua", "UI/CraftView.lua", "UI/FlipView.lua", "UI/InventoryView.lua", "UI/TooltipView.lua", "UI/RowMenu.lua", "UI/WindowLines.lua", "UI/MainWindow.lua", "UI/Tooltip.lua", "UI/AHPanel.lua", "UI/MinimapView.lua", "UI/MinimapButton.lua" })
   end)
@@ -243,12 +243,15 @@ describe("Adapter", function()
 
   it("A93 on the live Forever client item info, item details and gathering spells come from C_Item and C_Spell", function()
     local Adapter = Boot()
-    local classic = { { Adapter.ItemInfo(2589) }, { Adapter.ItemDetails(2589) }, { Adapter.LootCast(2575) } }
+    local classic = { { Adapter.ItemInfo(2589) }, { Adapter.ItemDetails(2589) }, { Adapter.LootCast(2575) },
+                      { Adapter.ItemSellAndClass(2589) } }
     Stubs.Reset()
     Stubs.LiveForeverClient()
     Stubs.LoadAddon({ "Core/Adapter.lua", "Core/AdapterAH.lua", "Core/AdapterDiagnostics.lua" })
     Adapter = AHProfit.Adapter
-    assert_eq({ { Adapter.ItemInfo(2589) }, { Adapter.ItemDetails(2589) }, { Adapter.LootCast(2575) } }, classic)
+    assert_eq({ { Adapter.ItemInfo(2589) }, { Adapter.ItemDetails(2589) }, { Adapter.LootCast(2575) },
+                { Adapter.ItemSellAndClass(2589) } }, classic)
+    assert_eq(classic[4], { 3, 7 })                                      -- A92: unit sell price, class
     assert_eq(classic[1][1], "Linen Cloth")
     assert_eq({ Adapter.LootCast(133) }, {}, "a spell that opens no loot window is still nothing")
     assert_eq(Adapter.DescribeSkillLines(), "none: no Skills tab API")

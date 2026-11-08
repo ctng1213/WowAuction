@@ -11,6 +11,7 @@ Data\BonusSuffixes.lua
 Data\Disenchant.lua
 Core\Events.lua
 Core\DB.lua
+Core\ItemNames.lua
 Capture\Characters.lua
 Capture\Professions.lua
 Capture\Inventory.lua

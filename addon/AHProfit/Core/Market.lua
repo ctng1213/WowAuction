@@ -13,15 +13,15 @@ AHProfit.Market = Market
 Market.SCHEMA_VERSION = 1          -- must equal ahsync/export/market_lua.py MARKET_SCHEMA_VERSION (FM17)
 -- The build of both generated files' format; must equal ahsync/export/market_lua.py EXPORT_VERSION. A file of
 -- another build says which side is stale (FM34, FM35). Core/Plan.lua, which loads after this file, reads it too.
-AHProfit.EXPORT_VERSION = 4            -- 4: K, G and the portfolio snapshot (EX17, EX18); 3: market items end in
-                                       -- closes30 (TT23, PP4); 2: a mail's recipient (C22, EX16)
+AHProfit.EXPORT_VERSION = 5            -- 5: market items end in salesDays (EX21); 4: K, G and the portfolio
+                                       -- snapshot (EX17, EX18); 3: closes30 (TT23, PP4); 2: a mail's recipient (C22)
 Market.CACHE_LIMIT = 500           -- decoded items kept before the cache starts again
 Market.FIELDS = { "cur", "curQty", "curAgeMin", "med7", "med30", "p10", "p90", "trend10", "sold10", "listed10",
                   "supply", "conf", "seasonality", "postPrice", "refStack", "sellValue", "volumeUnknown",
-                  "chance1000", "typicalSupply", "suspect", "closes30", "med14" }   -- typicalSupply: median daily
-                                                                -- listed units (EX10); suspect: 1 when AHSync hasn't confirmed
-                                                                -- cur (A58); closes30: hourly closes in 30 days (TT23); med14:
-                                                                -- the 14-day median (EX20), nil in an older file
+                  "chance1000", "typicalSupply", "suspect", "closes30", "med14", "salesDays" }   -- typicalSupply:
+                                  -- median daily listed units (EX10); suspect: 1 when AHSync hasn't confirmed cur (A58);
+                                  -- closes30: hourly closes in 30 days (TT23); med14: the 14-day median (EX20);
+                                  -- salesDays: days of the last 7 with sales data behind sold10 (EX21, TT32)
 
 local state = nil                  -- { status, market = { I, C, observationsUntil, curveHour }, file } once checked
 local cache, cached = {}, 0

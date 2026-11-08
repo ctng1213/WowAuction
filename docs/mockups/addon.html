@@ -216,7 +216,7 @@
 
 
 <h2>3b. Tooltip layout (approved 2026-11-07, built M36)</h2>
-<p class="note"><b>Order:</b> Do, Market Price, Price history, Market Inventory, Sales Rate, Best Buy Price, Best Sell Price, Disenchant with its mats (gear only), Inventory. <b>Market Price</b>: the lowest listing at the newest observation with its age ("now" at the AH), then how it compares with the 7-day median: "11% lower than 7d median" (red), "12% higher than 7d median" (green), "at 7d median" when the difference rounds to 0%; when the line would pass 320 wide the comparison continues on its own line (variant 1); (price − 7d median) ÷ 7d median, whole percent half up; left out when there is no 7-day median. <b>Price history</b>: the 30, 14 and 7-day medians, each after its span in brackets ("(30d) 55c"), oldest to newest so a rise reads left to right, then the shift: <b>rising</b> when the 7-day median is at least 10% above the 30-day one, <b>falling</b> at least 10% below, else <b>steady</b>; until 30 days of data exist the missing medians read "—" and no word is shown. Price history is a title line with the word on its right, and the medians on the line under it, so the line fits 320 wide even with gold prices. <b>Market Inventory</b>: units listed now. <b>Sales Rate</b>: units sold per day (the 7-day estimate, §3.3.6), then days of supply, units listed ÷ sold per day (one decimal under 10 days, whole above); "— sold/day" when the sales are unknown, "0 sold/day" with no days of supply when nothing sold. <b>Disenchant</b> (gear you or an alt can disenchant): a title line with how the total compares with the AH price on its right ("69% lower than AH price", red below, green above), then one line per possible mat: its chance, its average quantity (the middle of its range: 1–2 is 1.5, 2–5 is 3.5; shown with one decimal only when it has one) and latest price, and its share, chance × average quantity × price; then a sum line with no label: the total, the expected value of one disenchant, on the right under the shares, which add up to it (rounded only for display). A mat with no price reads "no price" in amber and adds nothing. These are latest prices before the AH cut; the plan's disenchant decision uses expected sale values, so a Do: DISENCHANT net can be lower. <b>Best Buy / Best Sell Price</b>: the expected price at the best window and its day and time in words (Morning 6–12, Afternoon 12–18, Evening 18–23, Night 23–6, a night after midnight named by the evening before), <b>shown from the first data</b>, followed by the window's strength: <span class="amber">early</span> (in orange: under 3 weeks of data at that hour of the week), pattern (3–5 weeks) or established (6 or more); the cloud analytics (M33/M34) will sharpen them. When a line would pass 320 wide the strength continues on its own line (variant 3). <b>Inventory</b>: what you hold across your characters, with where. The Activity line is dropped; its sales per day and days of supply move to Sales Rate.</p>
+<p class="note"><b>Order:</b> Do, Market Price, Price history, Market Inventory, Sales Rate, Best Buy Price, Best Sell Price, Disenchant with its mats (gear only), Inventory. <b>Market Price</b>: the lowest listing at the newest observation with its age ("now" at the AH), then how it compares with the 7-day median: "11% lower than 7d median" (red), "12% higher than 7d median" (green), "at 7d median" when the difference rounds to 0%; when the line would pass 320 wide the comparison continues on its own line (variant 1); (price − 7d median) ÷ 7d median, whole percent half up; left out when there is no 7-day median. <b>Price history</b>: the 30, 14 and 7-day medians, each after its span in brackets ("(30d) 55c"), oldest to newest so a rise reads left to right, then the shift: <b>rising</b> when the 7-day median is at least 10% above the 30-day one, <b>falling</b> at least 10% below, else <b>steady</b>; until 30 days of data exist the missing medians read "—" and no word is shown. Price history is a title line with the word on its right, and the medians on the line under it, so the line fits 320 wide even with gold prices. <b>Market Inventory</b>: units listed now. <b>Sales Rate</b>: units sold per day (the 7-day estimate, §3.3.6); while fewer than 7 of the last 7 days have sales data, the count follows, muted ("55 sold/day · 2 days of data", variant 1; M40, TT32); "— sold/day" when the sales are unknown, "0 sold/day" when nothing sold. Days of supply went in M40. <b>Disenchant</b> (gear you or an alt can disenchant): a title line with how the total compares with the AH price on its right ("69% lower than AH price", red below, green above), then one line per possible mat: its chance, its average quantity (the middle of its range: 1–2 is 1.5, 2–5 is 3.5; shown with one decimal only when it has one) and latest price, and its share, chance × average quantity × price; then a sum line with no label: the total, the expected value of one disenchant, on the right under the shares, which add up to it (rounded only for display). A mat with no price reads "no price" in amber and adds nothing. These are latest prices before the AH cut; the plan's disenchant decision uses expected sale values, so a Do: DISENCHANT net can be lower. <b>Best Buy / Best Sell Price</b>: the expected price at the best window and its day and time in words (Morning 6–12, Afternoon 12–18, Evening 18–23, Night 23–6, a night after midnight named by the evening before), <b>shown from the first data</b>, followed by the window's strength: <span class="amber">early</span> (in orange: under 3 weeks of data at that hour of the week), pattern (3–5 weeks) or established (6 or more); the cloud analytics (M33/M34) will sharpen them. When a line would pass 320 wide the strength continues on its own line (variant 3). <b>Inventory</b>: what you hold across your characters, then each place: "Total: 29 · Bags: 4 · Bank: 1 · Mail: 24", places with none left out (M40, TT30). The Activity line is dropped; its sales per day move to Sales Rate.</p>
 <div class="stage">
   <div><div class="tt-cap">1. A plain item today: Lesser Healing Potion; its windows rest on under 3 weeks, so they say "early".</div><div class="tooltip">
     <div class="tt-hdr"><span>AHProfit</span><span class="tt-age">data 32 min old <span class="pos">●</span></span></div>
@@ -226,10 +226,10 @@
     <div class="tt-line"><span>Price history</span><span><span><span class="neg">falling</span></span></span></div>
     <div class="tt-line dim"><span></span><span>(30d) <span data-m="55"></span> · (14d) <span data-m="52"></span> · (7d) <span data-m="45"></span></span></div>
     <div class="tt-line"><span>Market Inventory</span><span>433 listed</span></div>
-    <div class="tt-line"><span>Sales Rate</span><span>55 sold/day · 7.9 days of supply</span></div>
+    <div class="tt-line"><span>Sales Rate</span><span>55 sold/day<span class="muted"> · 2 days of data</span></span></div>
     <div class="tt-line"><span>Best Buy Price</span><span><span data-m="38"></span> · Tuesday Morning · <span class="amber">early</span></span></div>
     <div class="tt-line"><span>Best Sell Price</span><span><span data-m="58"></span> · Saturday Evening · <span class="amber">early</span></span></div>
-    <div class="tt-line"><span>Inventory</span><span>4 · bags 4</span></div>
+    <div class="tt-line"><span>Inventory</span><span>Total: 4 · Bags: 4</span></div>
   </div></div>
   <div><div class="tt-cap">2. Gear today: Embossed Leather Gloves, with Disenchant; a long Do value continues on its own line.</div><div class="tooltip">
     <div class="tt-hdr"><span>AHProfit</span><span class="tt-age">data 32 min old <span class="pos">●</span></span></div>
@@ -239,14 +239,14 @@
     <div class="tt-line"><span>Price history</span><span><span>steady</span></span></div>
     <div class="tt-line dim"><span></span><span>(30d) <span data-m="101"></span> · (14d) <span data-m="100"></span> · (7d) <span data-m="98"></span></span></div>
     <div class="tt-line"><span>Market Inventory</span><span>3,243 listed</span></div>
-    <div class="tt-line"><span>Sales Rate</span><span>120 sold/day · 27 days of supply</span></div>
+    <div class="tt-line"><span>Sales Rate</span><span>120 sold/day</span></div>
     <div class="tt-line"><span>Best Buy Price</span><span><span data-m="90"></span> · Monday Night · <span class="amber">early</span></span></div>
     <div class="tt-line"><span>Best Sell Price</span><span><span data-m="125"></span> · Friday Evening · <span class="amber">early</span></span></div>
     <div class="tt-line"><span>Disenchant</span><span><span class="neg">37% lower than AH price</span></span></div>
     <div class="tt-line dim"><span style="padding-left:10px;color:var(--muted)">80% · 1.5 Strange Dust @ <span data-m="25"></span></span><span><span data-m="30"></span></span></div>
     <div class="tt-line dim"><span style="padding-left:10px;color:var(--muted)">20% · 1.5 Lesser Magic Essence @ <span data-m="110"></span></span><span><span data-m="33"></span></span></div>
     <div class="tt-line"><span></span><span style="color:#fff"><span data-m="63"></span></span></div>
-    <div class="tt-line"><span>Inventory</span><span>29 · bags 4, bank 1, mail 24</span></div>
+    <div class="tt-line"><span>Inventory</span><span>Total: 29 · Bags: 4 · Bank: 1 · Mail: 24</span></div>
   </div></div>
   <div><div class="tt-cap">3. Weeks later: Mithril Spurs, gold prices, every line; its windows have 3 and 6+ weeks behind them.</div><div class="tooltip">
     <div class="tt-hdr"><span>AHProfit</span><span class="tt-age">data 32 min old <span class="pos">●</span></span></div>
@@ -256,7 +256,7 @@
     <div class="tt-line"><span>Price history</span><span><span><span class="pos">rising</span></span></span></div>
     <div class="tt-line dim"><span></span><span>(30d) <span data-m="24800"></span> · (14d) <span data-m="26300"></span> · (7d) <span data-m="31000"></span></span></div>
     <div class="tt-line"><span>Market Inventory</span><span>18 listed</span></div>
-    <div class="tt-line"><span>Sales Rate</span><span>3 sold/day · 6.0 days of supply</span></div>
+    <div class="tt-line"><span>Sales Rate</span><span>3 sold/day</span></div>
     <div class="tt-line"><span>Best Buy Price</span><span><span data-m="24000"></span> · Tuesday Afternoon · <span>pattern</span></span></div>
     <div class="tt-line"><span>Best Sell Price</span><span><span data-m="45000"></span> · Saturday Evening</span></div>
     <div class="tt-line dim"><span></span><span>established</span></div>
@@ -265,7 +265,7 @@
     <div class="tt-line dim"><span style="padding-left:10px;color:var(--muted)">20% · 1.5 Greater Mystic Essence @ <span data-m="8000"></span></span><span><span data-m="2400"></span></span></div>
     <div class="tt-line dim"><span style="padding-left:10px;color:var(--muted)">5% · 1 Large Radiant Shard @ <span data-m="17000"></span></span><span><span data-m="850"></span></span></div>
     <div class="tt-line"><span></span><span style="color:#fff"><span data-m="9025"></span></span></div>
-    <div class="tt-line"><span>Inventory</span><span>3 · bags 2, bank 1</span></div>
+    <div class="tt-line"><span>Inventory</span><span>Total: 3 · Bags: 2 · Bank: 1</span></div>
   </div></div>
 </div>
 
@@ -572,12 +572,13 @@ const VIEWS = {
   },
   Flip: {
     ctl: '',
-    footer: `<span>3 flips · capital needed ${money(36300)} · 1 gone</span><span>Budget ${money(314000)}</span>`,
-    note: `<b>Flip</b>: buy now, sell at a later peak (SPEC §3.4C.2). These are the flips AHSync's plan has for the character you're playing: it sizes them with its queue simulation, which the addon never runs (SPEC §4.0). <b>Buy</b> is the most to pay each; <b>When</b> is the peak the post is for (post 8 h before). A live scan greys a flip that is gone or now costs more and moves it to the bottom, so every FLIP buy on Shopping is still here (A66); it needs no capital and the footer counts it. Risk above 25% of your gold is amber. The dashboard adds Seasonality Strength and Expected ROI columns.`,
+    footer: `<span>3 flips · capital needed ${money(36300)} · 1 gone · 1 own idea (one stack each)</span><span>Budget ${money(314000)}</span>`,
+    note: `<b>Flip</b>: buy now, sell at a later peak (SPEC §3.4C.2). These are the flips AHSync's plan has for the character you're playing: it sizes them with its queue simulation, which the addon never runs (SPEC §4.0). <b>Buy</b> is the most to pay each; <b>When</b> is the peak the post is for (post 8 h before); the grey line says how far it is ("in 2 days", UI24). The addon's own ideas (A59), one stack each, list after the plan's flips with "addon's own idea · buy at or below … · sell …, in N days" (M40). A live scan greys a flip that is gone or now costs more and moves it to the bottom, so every FLIP buy on Shopping is still here (A66); it needs no capital and the footer counts it. Risk above 25% of your gold is amber. The dashboard adds Seasonality Strength and Expected ROI columns.`,
     html: () => `<table>${head([['Item'], ['Qty', 1], ['Buy', 1], ['Sell', 1], ['When'], ['Profit', 1], ['Chance', 1], ['Risk', 1]])}
-      ${fl('Mithril Spurs', 3, 1, 30000, 45000, 'Sat 18:00', 7342, 'post Sat 10:00, for the 18:00 peak · on the AH now from 2g 95s')}
-      ${fl('Silk Cloth', 1, 40, 70, 105, 'Sat 19:00', 730, 'post Sat 11:00, for the 19:00 peak')}
-      ${fl('Elixir of Agility', 1, 5, 700, 1300, 'Wed 20:00', 958, 'post Wed 12:00, for the 20:00 peak')}
+      ${fl('Mithril Spurs', 3, 1, 30000, 45000, 'Sat 18:00', 7342, 'post Sat 10:00, for the 18:00 peak · in 2 days · on the AH now from 2g 95s')}
+      ${fl('Silk Cloth', 1, 40, 70, 105, 'Sat 19:00', 730, 'post Sat 11:00, for the 19:00 peak · in 2 days')}
+      ${fl('Elixir of Agility', 1, 5, 700, 1300, 'Wed 20:00', 958, 'post Wed 12:00, for the 20:00 peak · in 6 days')}
+      ${fl('Linen Cloth', 1, 20, 40, 61, 'Sat 18:00', 260, "addon's own idea · buy at or below 44c · sell Sat 18:00, in 2 days")}
       <tr class="row gone"><td>${item('Lesser Healing Potion', 1)}</td><td colspan="7" class="muted">gone: nothing on the AH at or below 50c now</td></tr>
     </table>`
   },

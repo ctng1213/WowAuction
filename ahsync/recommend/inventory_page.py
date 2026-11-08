@@ -30,12 +30,13 @@ def windows_of(windows: tuple[IntelWindow, ...]) -> tuple[Window, ...]:
     return tuple(Window(w.start_slot, w.hours, 0.0, w.how_avg, w.weeks, w.best_slot) for w in windows)
 
 
-def detail_facts(look: ItemLook, s: ItemIntel) -> DetailFacts:
-    """An item's detail facts from its intelligence.
+def detail_facts(look: ItemLook, s: ItemIntel, info: ItemInfo | None = None) -> DetailFacts:
+    """An item's detail facts from its intelligence and its catalog row.
 
     Args:
         look: Its name and quality.
         s: Its intelligence.
+        info: Its catalog row (the vendor price and where it came from, BZ25); None when the catalog lacks it.
 
     Returns:
         The DetailFacts.
@@ -44,7 +45,7 @@ def detail_facts(look: ItemLook, s: ItemIntel) -> DetailFacts:
                        min(7, sum(s.days_by_source.values())), s.units_on_ah, s.listed_per_day, s.conf, s.seasonality,
                        unpack(s.how, s.how_weeks), unpack(s.sales_how, s.sales_weeks),
                        unpack(s.supply_how, s.supply_weeks), windows_of(s.sell_windows), s.observed_listing_turnover,
-                       s.volume_kind)
+                       s.volume_kind, info.vendor_sell if info else None, bool(info and info.vendor_src == "game"))
 
 
 def craft_uses(state: StateReader, char_ids: list[str], actions: list[ViewAction],
@@ -127,5 +128,5 @@ def inventory_page(state: StateReader, char_ids: list[str], actions: list[ViewAc
                            values, craft_uses(state, char_ids, actions, looks), state.item_rules(), offset_ms,
                            state.reserves(char_ids))
     view = inventory_view(holdings, world, char_ids)                                 # D75: by_char
-    details = {str(k): item_detail(detail_facts(looks[k], stats[k]), offset_ms) for k in sorted(keys) if k in stats}
+    details = {str(k): item_detail(detail_facts(looks[k], stats[k], items.get(k)), offset_ms) for k in sorted(keys) if k in stats}
     return {**view, "details": details, "help": COLUMN_HELP}

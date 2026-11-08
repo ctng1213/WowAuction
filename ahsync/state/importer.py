@@ -513,7 +513,8 @@ def apply_data(db: Database, data: sv.AHProfitData, realms: Mapping[str, str], n
         work.mark(untracked.record(db.conn, held))           # what no event explains (FM21, D51)
         work.rules(data.rules)
         work.reserves(data)
-        db.add_item_names((n.key, sv.base_item_id(n.key), n.name, n.quality) for n in data.item_names)
+        db.add_item_names((n.key, sv.base_item_id(n.key), n.name, n.quality, n.sell_price, n.class_id)
+                          for n in data.item_names)
     advanced = _advance_ingested_until(db, work.pruning.candidates())
     return ApplyResult(frozenset(work.dirty), data.problems + tuple(work.problems), advanced, work.scans_stored,
                        work.events_stored)

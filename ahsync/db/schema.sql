@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS meta(
 
 CREATE TABLE IF NOT EXISTS items(
     key INTEGER PRIMARY KEY, item_id INTEGER NOT NULL, name TEXT, quality INTEGER, ilvl INTEGER,
-    class INTEGER, subclass INTEGER, vendor_buy INTEGER, vendor_sell INTEGER, stack INTEGER, updated INTEGER
+    class INTEGER, subclass INTEGER, vendor_buy INTEGER, vendor_sell INTEGER, stack INTEGER, updated INTEGER,
+    vendor_src TEXT                -- 'game': vendor_sell came from the addon's itemNames (A92, BZ25); else NULL
 );
 
 -- src: 'ahf' | 'local'. Prices may be NULL (nothing listed), never 0 for "none".

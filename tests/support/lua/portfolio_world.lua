@@ -162,10 +162,10 @@ function World.Install(opts)
   local market = { observationsUntil = World.NOW - World.HOUR, curveHour = math.floor(World.NOW / World.HOUR),
                    I = o.items or {}, C = {}, K = K, G = o.G or World.G() }
   local markets = { [World.M] = market }
-  _G.AHProfitMarket = { schemaVersion = 1, exportVersion = 4, generatedAt = World.NOW,
+  _G.AHProfitMarket = { schemaVersion = 1, exportVersion = 5, generatedAt = World.NOW,
                         charMarkets = { [World.AMAYA] = World.M, [World.BRUGAN] = World.M }, markets = markets,
                         checksum = MarketChecksum(markets) }
-  local plan = { schemaVersion = 1, exportVersion = 4, generatedAt = World.NOW, basedOnUntil = World.NOW,
+  local plan = { schemaVersion = 1, exportVersion = 5, generatedAt = World.NOW, basedOnUntil = World.NOW,
                  ingestedUntil = { [World.AMAYA] = World.NOW }, actions = { [World.AMAYA] = o.actions }, rules = {},
                  portfolio = { [World.M] = o.snapshot or (World.NOW .. ";300;150;50;8;20;20;7;1;355800;41800;64940;62500") },
                  gold = { [World.AMAYA] = "210000," .. World.NOW, [World.BRUGAN] = "104000," .. World.NOW },

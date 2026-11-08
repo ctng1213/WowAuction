@@ -74,9 +74,9 @@ def test_the_summary_and_market_activity_lines():
     assert detail["activity"] == [
         ["Est. sales per day", "48 AHF · 7 of 7 days covered"], ["Current supply", "93 units"],
         ["Supply/volume", "1.9 days"], ["Volume confidence", "90%"], ["Seasonality strength", "78"],
-        ["Newly listed per day", "61/day"], ["Listing turnover (info only, not sales)", "—"]]
+        ["Newly listed per day", "61/day"], ["Listing turnover (info only, not sales)", "—"], ["Vendor price", "unknown"]]
     turnover = item_detail.item_detail(facts(turnover_per_day=320.0), 0)["activity"]
-    assert turnover[-1] == ["Listing turnover (info only, not sales)", "320/day"]      # V37
+    assert turnover[-2] == ["Listing turnover (info only, not sales)", "320/day"]      # V37
 
 
 def test_an_item_without_data_shows_dashes_never_zero():
@@ -86,10 +86,19 @@ def test_an_item_without_data_shows_dashes_never_zero():
                                            supply=empty), 0)
     assert detail["summary"] == "med30 — · trend −1.2%/day · no weekly data yet"     # −12.5 tenths, half up
     assert detail["answers"] == {"price": "—", "sales": "—", "best": "—"}
-    assert [value for _, value in detail["activity"]] == ["—", "—", "—", "—", "— · too little evidence", "—", "—"]
+    assert [value for _, value in detail["activity"]] == ["—", "—", "—", "—", "— · too little evidence", "—", "—",
+                                                          "unknown"]
     assert {c["level"] for r in detail["heat"]["price"] for c in r["cells"]} == {None}
 
 
 def test_a_flat_profile_with_data_sits_in_the_middle_level():
     rows = item_detail.heatmap(prof({}), 0)
     assert {c["level"] for r in rows for c in r["cells"]} == {2}
+
+
+def test_BZ25_the_item_detail_says_where_its_vendor_price_came_from():
+    vendor = lambda **c: item_detail.item_detail(facts(**c), 0)["activity"][-1]     # noqa: E731
+    assert vendor(vendor_sell=50, vendor_from_game=True) == ["Vendor price", "50c · from the game"]
+    assert vendor(vendor_sell=150) == ["Vendor price", "1s 50c"]                   # AHF's list or the cloud summary
+    assert vendor(vendor_sell=0, vendor_from_game=True) == ["Vendor price", "none: can't be sold to a merchant · from the game"]
+    assert vendor() == ["Vendor price", "unknown"]                                 # in neither: no deposit counted

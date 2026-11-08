@@ -28,7 +28,7 @@ from ahsync.state.gathering import GatheringStore
 from ahsync.state.positions import PositionStore
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 25
+SCHEMA_VERSION = 26
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
@@ -260,6 +260,8 @@ MIGRATIONS: dict[int, str] = {
             PRIMARY KEY(market, key, day, src)
         ) WITHOUT ROWID;
     """,
+    # 26: 'game' when the vendor price came from the addon's itemNames, for the item detail (SPEC §2.4, A92, BZ25).
+    26: "ALTER TABLE items ADD COLUMN vendor_src TEXT",
 }
 BACKUP_KEEP = 3
 BACKUP_PREFIX = "ahsync-"
@@ -793,16 +795,17 @@ class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, JournalRea
                 "stack, updated) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET "
                 "item_id = excluded.item_id, name = excluded.name, quality = excluded.quality, "
                 "ilvl = excluded.ilvl, class = excluded.class, subclass = excluded.subclass, "
-                "vendor_buy = excluded.vendor_buy, vendor_sell = excluded.vendor_sell, "
-                "stack = excluded.stack, updated = excluded.updated", data)
+                "vendor_buy = excluded.vendor_buy, vendor_sell = excluded.vendor_sell, vendor_src = NULL, "
+                "stack = excluded.stack, updated = excluded.updated", data)    # the game refills a gap at the next read
         return len(data)
 
     def merge_catalog(self, catalog: Mapping[int, tuple], updated_ms: int) -> None:
         """Make a cloud document's catalog the local catalog (SPEC §2.4, BZ39); inside the caller's transaction.
 
         The document's name, quality, class and vendor price win where it has them; a value it lacks (None) never
-        erases a local one, and the local stack, item level, subclass and vendor buy price stay. A row whose
-        values are already the same is not rewritten.
+        erases a local one, and the local stack, item level, subclass and vendor buy price stay. A vendor price it
+        has is its own, no longer the game's (vendor_src cleared, BZ25). A row whose values are already the same is
+        not rewritten.
 
         Args:
             catalog: Item key -> (name, quality, item_class, vendor_sell, stack, source), as the document's.
@@ -814,8 +817,10 @@ class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, JournalRea
             "INSERT INTO items(key, item_id, name, quality, class, vendor_sell, updated) VALUES (?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(key) DO UPDATE SET name = COALESCE(excluded.name, items.name), "
             "quality = COALESCE(excluded.quality, items.quality), class = COALESCE(excluded.class, items.class), "
-            "vendor_sell = COALESCE(excluded.vendor_sell, items.vendor_sell), updated = excluded.updated "
+            "vendor_sell = COALESCE(excluded.vendor_sell, items.vendor_sell), "
+            "vendor_src = CASE WHEN excluded.vendor_sell IS NULL THEN items.vendor_src END, updated = excluded.updated "
             "WHERE items.name IS NOT COALESCE(excluded.name, items.name) "
+            "OR (excluded.vendor_sell IS NOT NULL AND items.vendor_src IS NOT NULL) "
             "OR items.quality IS NOT COALESCE(excluded.quality, items.quality) "
             "OR items.class IS NOT COALESCE(excluded.class, items.class) "
             "OR items.vendor_sell IS NOT COALESCE(excluded.vendor_sell, items.vendor_sell)", rows)

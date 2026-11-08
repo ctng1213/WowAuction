@@ -8,6 +8,7 @@ local Adapter = AHProfit.Adapter
 local Events = AHProfit.Events
 local DB = AHProfit.DB
 local Characters = AHProfit.Capture.Characters
+local ItemNames = AHProfit.ItemNames
 
 local Inventory = {}
 AHProfit.Capture.Inventory = Inventory
@@ -15,6 +16,7 @@ AHProfit.Capture.Inventory = Inventory
 local bankOpen = false
 local mailOpen = false
 local listeners = {}       -- functions called after a snapshot is stored (A31)
+local unpriced = {}        -- item key -> true: its itemNames row lacks a sell price or class the client may yet give
 
 --- Call fn after every stored bags, bank, mail or own-auctions snapshot, so views follow what you hold (A31, A42).
 ---@param fn function  Called with the location ("bags", "bank", "mail" or "auctions")
@@ -49,18 +51,59 @@ function Inventory.Encode(items)
   return DB.EncodeRows(rows)
 end
 
---- Remember the names of the items in a snapshot (SPEC §2.2.1 itemNames). AHF's item list
---- leaves out items that can't be sold, such as soulbound ones, so AHSync names them from these.
----@param db table       The database; db.itemNames[key] = "quality,name" changes
+local OnNameInfo
+
+--- Write one item's itemNames row with what the client gives now; a value it doesn't give keeps the row's old one,
+--- so a known price is never overwritten with "" (A92).
+---@param names table    db.itemNames
+---@param key number     Item key
+---@param quality number 0-7
+---@param name string
+---@return boolean       true when the sell price or class is still unknown
+local function WriteName(names, key, quality, name)
+  local _, _, oldSell, oldClass = ItemNames.Parse(names[key])
+  local sell, class = Adapter.ItemSellAndClass(ItemNames.BaseId(key))
+  sell, class = sell or oldSell, class or oldClass
+  names[key] = ItemNames.Format(quality, name, sell, class)
+  return sell == nil or class == nil
+end
+
+--- Remember the items in a snapshot: name and quality from the link, merchant price and class from the client
+--- (SPEC §2.2.1 itemNames; A92). AHF's item list leaves out items that can't be sold, such as soulbound ones, so
+--- AHSync names them from these, and the cloud summary lacks some items' vendor prices, so AHSync prices them from
+--- these. A row the client couldn't complete is filled once GET_ITEM_INFO_RECEIVED fires.
+---@param db table       The database; db.itemNames[key] = "quality,name,sellPrice,classId" changes
 ---@param items table[]  { key, name, quality } as read by the Adapter
 function Inventory.RememberNames(db, items)
   local names = db.itemNames or {}
   db.itemNames = names
+  local waiting = false
   for _, item in ipairs(items) do
-    if item.name then
-      names[item.key] = (item.quality or 1) .. "," .. item.name
+    if item.name and WriteName(names, item.key, item.quality or 1, item.name) then
+      unpriced[item.key], waiting = true, true
     end
   end
+  -- UNVERIFIED: GET_ITEM_INFO_RECEIVED fires when an uncached item's info arrives (as Classic).
+  if waiting then Events.Register("GET_ITEM_INFO_RECEIVED", OnNameInfo) end
+end
+
+--- Fill the rows still missing a sell price or class from the client, once; what it still lacks waits for the next
+--- snapshot, so nothing keeps listening (A92).
+function Inventory.FillNames()
+  local db = DB.Get()
+  local waiting = unpriced
+  unpriced = {}
+  if not (db and db.itemNames) then return end
+  for key in pairs(waiting) do
+    local quality, name = ItemNames.Parse(db.itemNames[key])
+    if quality then WriteName(db.itemNames, key, quality, name) end
+  end
+end
+
+--- GET_ITEM_INFO_RECEIVED while a row lacks its price: stop listening, then fill once, debounced (no re-arming).
+function OnNameInfo()
+  Events.Unregister("GET_ITEM_INFO_RECEIVED", OnNameInfo)
+  Events.Debounce("inventory.names", Inventory.FillNames)
 end
 
 --- Read an encoded location back (the addon's own options use the bags, SPEC §4.0).

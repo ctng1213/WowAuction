@@ -200,7 +200,7 @@ describe("MainWindow", function()
     local row = FirstRow("flip")
     assert_eq({ row.item, row.qty, row.buy, row.sell, row.when, row.profit, row.chance:match("^%d+%%"), row.risk },
               { "Linen Cloth", "×20", VM.WithCoins("40c"), VM.WithCoins("55c"), "Sat 18:00", VM.WithCoins("+2s 10c"), "88%", "8.0%" })
-    assert_eq(ui.rows[2].note:GetText(), "post Sat 10:00, for the 18:00 peak · on the AH now from 38c")
+    assert_eq(ui.rows[2].note:GetText(), "post Sat 10:00, for the 18:00 peak · in 2 days · on the AH now from 38c")
     assert_eq(ui.footer:GetText(), VM.WithCoins("1 flip · capital needed 8s · 1 gone"))
   end)
 
@@ -478,7 +478,7 @@ describe("MainWindow", function()
   it("A23 the Disenchant tab is always there, even with no enchanter on the account", function()
     Stubs.Reset()
     local gloves, dust = "800,1,30,1100,1100,,,0,,,1,50,,,1,,0,500;;", "600,20,30,600,600,,,0,2100,,90,80,,,20,600,0,800;;"
-    _G.AHProfitMarket = { schemaVersion = 1, exportVersion = 4, generatedAt = NOW, charMarkets = {},
+    _G.AHProfitMarket = { schemaVersion = 1, exportVersion = 5, generatedAt = NOW, charMarkets = {},
       markets = { [UIWorld.MARKET] = { observationsUntil = NOW, curveHour = 0, I = { [6585] = gloves, [10940] = dust }, C = {},
                                        D = { [6585] = "1,2,18,a" } } } }
     AHProfitMarket.checksum = "3:" .. (#gloves + #dust + #"1,2,18,a")
@@ -630,7 +630,7 @@ describe("MainWindow", function()
     Stubs.Reset()
     UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48) }, NOW - UIWorld.HOUR)
     UIWorld.Plan({})
-    AHProfitMarket.exportVersion, AHProfitPlan.exportVersion = 5, 5
+    AHProfitMarket.exportVersion, AHProfitPlan.exportVersion = 6, 6
     Stubs.Login()
     Stubs.Slash("/ahp")
     assert_eq(AHProfit.MainWindow.Frames().footer:GetText(), "This addon is older than AHSync's files: run tools/deploy.py, then /reload")

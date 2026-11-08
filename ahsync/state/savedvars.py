@@ -12,6 +12,7 @@ Parse only: storing the records is the database layer's job.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -27,6 +28,7 @@ GLOBAL_NAME = "AHProfitDB"
 LOCATIONS = ("bags", "bank", "mail")          # SPEC §3.2 inventory.location
 SCAN_KINDS = ("full", "partial")
 RULES = ("no_buy", "ignore", "keep", "none")  # SPEC §3.4.2
+ITEM_NAME_TAIL = re.compile(r"(.+),(\d*),(\d*)", re.ASCII | re.DOTALL)   # "name,sellPrice,classId" (A92), fullmatch
 RESERVE_ALL = -1                              # SPEC §3.4.3: a reserve that keeps every unit
 PURCHASE_SOURCES = ("ah", "vendor")
 MAIL_OUTCOMES = ("sold", "expired", "cancelled", "won")
@@ -182,11 +184,14 @@ class Event:
 
 @dataclass(frozen=True, slots=True)
 class ItemName:
-    """An item's name and quality as the addon read them from its link (SPEC §2.2.1 itemNames)."""
+    """An item's name and quality from its link, and what the game says a merchant pays and its class (SPEC §2.2.1
+    itemNames, A92)."""
 
     key: int
     name: str
-    quality: int          # 0 poor ... 7
+    quality: int                     # 0 poor ... 7
+    sell_price: int | None = None    # copper a merchant pays for one; 0 = can't be sold to one; None = unknown
+    class_id: int | None = None      # WoW item class (2 weapon, 4 armor, ...); None = unknown
 
 
 @dataclass(frozen=True, slots=True)
@@ -596,7 +601,9 @@ def _item_name(key: object, value: object) -> list[ItemName]:
 
     Args:
         key: Its key, the item key.
-        value: "quality,name"; the name may itself contain commas.
+        value: "quality,name,sellPrice,classId" (A92), the two numbers "" when unknown, or "quality,name" from an
+            addon before A92. The name may itself contain commas, so the row is read from both ends, as
+            Core/ItemNames.lua reads it.
 
     Returns:
         One ItemName.
@@ -604,10 +611,13 @@ def _item_name(key: object, value: object) -> list[ItemName]:
     Raises:
         _RowError: When the quality isn't 0-7 or the name is empty.
     """
-    quality, _, name = _str(value, "item name").partition(",")
+    quality, _, rest = _str(value, "item name").partition(",")
+    tail = ITEM_NAME_TAIL.fullmatch(rest)
+    name, sell, class_id = (tail.group(1), tail.group(2), tail.group(3)) if tail else (rest, "", "")
     if not quality.isdigit() or not 0 <= int(quality) <= 7 or not name:
-        raise _RowError(f"item name {value!r} is not \"quality,name\"")
-    return [ItemName(_int(key, "item key"), name, int(quality))]
+        raise _RowError(f"item name {value!r} is not \"quality,name,sellPrice,classId\"")
+    return [ItemName(_int(key, "item key"), name, int(quality), int(sell) if sell else None,
+                     int(class_id) if class_id else None)]
 
 
 def _rejected_row(row: object) -> RejectedRow:

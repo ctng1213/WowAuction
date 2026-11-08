@@ -96,6 +96,21 @@ function Adapter.ItemInfo(itemId)
   return name, quality, sellPrice
 end
 
+--- An item's merchant price and class from the client, for AHSync's local catalog (A92). Only the unit price is
+--- right here: the tooltip's "Sell Price" line is for the hovered stack (seen 2026-11-07).
+--- UNVERIFIED: on Forever, C_Item.GetItemInfo's 11th return is the sell price and C_Item.GetItemInfoInstant's 6th the
+--- class id, as Classic's globals' are; and a random-suffix item ("… of the Bear") sells to a merchant for its base
+--- item's price, so callers ask with the base id.
+---@param itemId number  Base item id
+---@return number|nil    What a merchant pays for one, copper (0 = can't be sold to one); nil while not cached
+---@return number|nil    Item class id; nil when the client gives none
+function Adapter.ItemSellAndClass(itemId)
+  local info, instant = ItemInfoApi(), ItemInstantApi()
+  local sell = info and select(11, info(itemId)) or nil
+  local class = instant and select(6, instant(itemId)) or nil
+  return sell, class
+end
+
 --- Show a header or cell tooltip next to a frame (GameTooltip).
 ---@param owner table   The frame hovered
 ---@param title string  First line

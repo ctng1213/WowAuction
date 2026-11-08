@@ -108,6 +108,21 @@ def own_auctions_line(probe: str | None) -> str:
     return f"{probe}: no end is saved, so the dashboard shows each auction's time-left band"
 
 
+def item_names_line(item_names: tuple) -> str:
+    """How complete the addon's itemNames rows are (A92): the game's vendor price and class per item.
+
+    Args:
+        item_names: data.item_names.
+
+    Returns:
+        One line, e.g. "item rows: 196 · vendor price 190 · class 196 · neither 4".
+    """
+    priced = sum(1 for n in item_names if n.sell_price is not None)
+    classed = sum(1 for n in item_names if n.class_id is not None)
+    neither = sum(1 for n in item_names if n.sell_price is None and n.class_id is None)
+    return f"item rows: {len(item_names)} · vendor price {priced} · class {classed} · neither {neither}"
+
+
 def report_diagnostics(data: AHProfitData, verbose: bool) -> None:
     """Print what the addon saw last session: client, missing APIs, errors, raw skill and merchant rows.
 
@@ -185,6 +200,7 @@ def report(path: Path, verbose: bool = False) -> int:
     if no_reagents:
         print(f"  {len(no_reagents)} recipe(s) with no reagents (suspicious): {no_reagents[:10]}")
     print(f"vendor reagents seen: {len(data.vendor_reagents)}")
+    print(item_names_line(data.item_names))       # A92: "neither" on every row means an addon from before it
     if not data.vendor_reagents:
         gaps.append("vendor")
     events = Counter(e.type for e in data.events)
