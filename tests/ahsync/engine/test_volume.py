@@ -612,8 +612,9 @@ def test_VI5_lifetimes_account_for_every_unit_once():
         for e in lt.endings:
             assert 0.0 <= e.expired <= 1.0, context
         gone = sum(e.qty for e in lt.endings) + sum(f[2] for f in lt.fills)
-        total = sum(f.sold + f.expired + f.cancelled for by_key in flows.values() for f in by_key.values())
-        assert total == pytest.approx(gone), context                            # sold + expired + cancelled = what left
+        total = sum(f.sold - f.unseen + f.expired + f.cancelled for by_key in flows.values() for f in by_key.values())
+        assert total == pytest.approx(gone), context              # observed sold + expired + cancelled = what left
+        assert all(0.0 <= f.unseen <= f.sold + 1e-9 for by_key in flows.values() for f in by_key.values()), context
         for e in lt.endings:
             assert not e.cancelled or (e.expired == 0.0 and e.key != 15210), context   # BZ40: commodities, early only
         for by_key in flows.values():
