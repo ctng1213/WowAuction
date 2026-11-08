@@ -1098,7 +1098,7 @@ How cases are generated, and how many: SPEC §8.7.
 
 ## 6. Simulated markets (SU, SM, SD, SX; SPEC §8.10)
 
-The market simulator (`tools/sim/`, planned; `docs/plans/market-simulator.md`) writes Blizzard-shaped raw snapshots and a truth log of every post, buy, cancel, expiry and relist, and runs the unchanged cloud analysis and plan on them. The four families and what each asserts are SPEC §8.10's. Numbers here are a scenario's planted truth; tolerances are stated in the row. Every world is generated from a fixed seed, printed on failure.
+The market simulator (`tools/sim/`; built MS1: SU1–SU9, SU13–SU15, SM8; `docs/plans/market-simulator.md`) writes Blizzard-shaped raw snapshots and a truth log of every post, buy, cancel, expiry and relist, and runs the unchanged cloud analysis and plan on them. The four families and what each asserts are SPEC §8.10's. Numbers here are a scenario's planted truth; tolerances are stated in the row. Every world is generated from a fixed seed, printed on failure.
 
 **Unit sequences** (exact, checkable by hand):
 

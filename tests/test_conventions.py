@@ -18,9 +18,10 @@ APP_SRC = ROOT / "ahsync_app"                # the app shell (SPEC §3.7.1), hel
 APP_TESTS = ROOT / "tests" / "ahsync_app"
 CLOUD_SRC = ROOT / "ahcloud"                # the cloud job (SPEC §2.4), held to the same conventions (M30)
 INFRA_SRC = ROOT / "infra"                  # the CDK app (M30)
+SIM_SRC = ROOT / "tools" / "sim"            # the market simulator (SPEC §8.10)
 GENERATED_DIRS = ("cdk.out",)                # synth output inside infra/, gitignored
 PY_TREES = ((PY_SRC, PY_TESTS), (APP_SRC, APP_TESTS), (CLOUD_SRC, ROOT / "tests" / "ahcloud"),
-            (INFRA_SRC, ROOT / "tests" / "infra"))   # (source package, its mirrored tests)
+            (INFRA_SRC, ROOT / "tests" / "infra"), (SIM_SRC, ROOT / "tests" / "tools" / "sim"))   # (source, its tests)
 TOOLS = ROOT / "tools"
 CONVENTION_TOOLS = ("build.py", "promote.py", "record_blizzard.py", "build_lambda.py",   # tests in tests/tools/ (M26-M30)
                     "lifetimes_report.py", "sales_report.py")                        # M33
@@ -72,7 +73,7 @@ def python_sources() -> list[Path]:
     static = PY_SRC / "web" / "static"
     ahsync = sorted(p for p in PY_SRC.rglob("*.py") if static not in p.parents)
     app = sorted(APP_SRC.rglob("*.py")) if APP_SRC.exists() else []
-    cloud = [p for root in (CLOUD_SRC, INFRA_SRC) for p in tree_sources(root)]
+    cloud = [p for root in (CLOUD_SRC, INFRA_SRC, SIM_SRC) for p in tree_sources(root)]
     tools = [TOOLS / name for name in CONVENTION_TOOLS if (TOOLS / name).exists()]
     return ahsync + app + cloud + tools
 

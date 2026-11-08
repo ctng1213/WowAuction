@@ -2598,7 +2598,7 @@ The invariants prove the formula is sensible. Only your real sales can show whet
 
 Scenarios K1–K7: [SCENARIOS.md §4](SCENARIOS.md#4-calibration-k1k3).
 
-### 8.10 Simulated markets (planned: `tools/sim/`, `docs/plans/market-simulator.md`)
+### 8.10 Simulated markets (`docs/plans/market-simulator.md`; **built MS1**: `tools/sim/truth.py`, `market.py`, `emulator.py`, `runner.py`; SU1–SU9, SU13–SU15, SM8)
 
 A market simulator generates markets whose truth is known: it writes raw snapshots exactly as the collector stores them (§2.4: Blizzard's record shapes, commodities and regular auctions apart, Blizzard's band bounds) and a truth log of every post, buy, cancel, expiry and relist, then runs the unchanged cloud job in-process (`run_hourly` per snapshot, `run_daily` once a simulated day, the catalog's item search answered by a fake client) and AHSync's plan on its documents. Synthetic characters follow the plan inside the simulated market through the real addon import (SavedVariables written by the test builder, read by `state/importer.py`), so their posts and buys move the market and competitors react. Everything runs locally: no AWS, WoW, network or credentials. One seeded `random.Random` per run; the same seed gives byte-identical raw, truth and reports (§8.6).
 
