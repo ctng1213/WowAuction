@@ -65,3 +65,11 @@ D101 D102
 # and M33b-2 (TT34-TT40).
 # The 0.1.6 batch's small items (docs/mockups/batch-0-1-6.html; plan blizzard-cloud.md §1): built, M41b (D104),
 # M41c (DR32) and M33b-2 (TT41).
+
+# Market simulator (docs/plans/market-simulator.md; SD25 dropped, SD35-SD38 are the learned catalog's)
+SU10-SU12
+SM1-SM7
+SM9-SM17
+SD1-SD24
+SD26-SD34
+SX1-SX10
