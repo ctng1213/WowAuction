@@ -61,7 +61,7 @@ Scenarios to add: a re-plan and a dashboard request in one process parse the sum
 
 ### SM2a: publish only the schema a release can read (Opus: which releases are in use decides it)
 
-1. `ahcloud.publish.OLDEST_PUBLISHED` 10 → 13; `read_latest` also tries the schema before the oldest published one, so a bump still finds the last daily run's document (FM75). BZ45.
+1. `ahcloud.publish.OLDEST_PUBLISHED` 10 → 13; `read_latest` also tries the schema before the oldest published one, so a bump still finds the last daily run's document (FM75). BZ46.
 2. A `cdk deploy` (the user's approval at the time). The stale `latest-10/11/12.json` pointers expire with the bucket's 7-day rule.
 3. Expected: the cloud's writes 19 → 5 MB an hour, the summary bucket about 3.2 → 0.8 GB at steady state, three fewer 88 MB serializations an hour in the Lambda.
 

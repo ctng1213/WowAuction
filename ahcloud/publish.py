@@ -68,7 +68,7 @@ def settings_from_dict(values: dict[str, object]) -> MarketSettings:
 
 
 # The schemas published side by side, oldest first (SPEC §2.4, BZ37): the current one, and every older one a release in
-# use still reads. Only 13 since SM2a (BZ45): the releases that read 10 to 12 (v0.1.1 to v0.1.5) refuse a document over
+# use still reads. Only 13 since SM2a (BZ46): the releases that read 10 to 12 (v0.1.1 to v0.1.5) refuse a document over
 # 64 MiB, and those documents passed 79 MiB on 2026-11-08, so they served no one. Drop a schema once every release in
 # use reads a newer one.
 OLDEST_PUBLISHED = 13
