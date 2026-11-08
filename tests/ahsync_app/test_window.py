@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from ahsync_app.window import PyWebview, Window, WindowUnavailable
+from ahsync_app.window import STILL_WORKING_MS, PyWebview, Window, WindowUnavailable
 
 HOME = "http://localhost:8765"
 STATIC = Path(__file__).resolve().parents[2] / "ahsync" / "web" / "static"
@@ -22,10 +22,11 @@ class Webview:
         self.run_first = False         # True: the loop runs, then raises while winding down
         self.on_closing = None
 
-    def create(self, url, title, width, height, on_closing) -> None:
+    def create(self, url, title, width, height, on_closing, html=None) -> None:
         if self.fail_create:
             raise self.fail_create
         self.calls.append(("create", url, title, width, height))
+        self.html = html
         self.on_closing = on_closing
 
     def start(self, on_started) -> None:
@@ -55,10 +56,11 @@ class Webview:
 def test_DR29_one_hidden_window_shows_on_each_open_loads_only_when_elsewhere_and_hides_on_close():
     view, browsed = Webview(), []
     window = Window(view, browsed.append)
-    assert window.create(HOME) and view.calls == [("create", HOME, "AHSync", 1200, 800)]
+    assert window.create() and view.calls == [("create", None, "AHSync", 1200, 800)]   # the loading page (DR32)
     assert window.state.shown is False
 
     def while_the_loop_runs() -> None:
+        window.answered()                               # the dashboard listens
         window.open(HOME)                               # the first open reloads: the create may have been refused
         window.open(HOME)                               # already there: shown, not reloaded
         assert view.calls[1:] == [("load", HOME), ("show",), ("show",)]
@@ -81,7 +83,7 @@ def test_DR29_one_hidden_window_shows_on_each_open_loads_only_when_elsewhere_and
 def test_after_the_loop_ends_nothing_is_destroyed_and_a_late_error_is_not_a_fallback(caplog):
     view, browsed = Webview(), []
     window = Window(view, browsed.append)
-    window.create(HOME)
+    window.create()
     window.start(lambda: None)                          # the loop ended (the OS closed the session)
     window.quit()
     assert ("destroy",) not in view.calls and window.state.available is True
@@ -89,7 +91,7 @@ def test_after_the_loop_ends_nothing_is_destroyed_and_a_late_error_is_not_a_fall
     late = Webview(fail_start=RuntimeError("teardown"))
     late.run_first = True
     window = Window(late, browsed.append)
-    window.create(HOME)
+    window.create()
     window.start(lambda: None)                          # no WindowUnavailable: the window was there
     assert window.state.available is True and "app window loop ended: RuntimeError" in caplog.text
 
@@ -97,13 +99,13 @@ def test_after_the_loop_ends_nothing_is_destroyed_and_a_late_error_is_not_a_fall
 def test_FM56_a_webview_that_cannot_start_hands_every_open_to_the_browser(caplog):
     view, browsed = Webview(fail_start=RuntimeError("no WebView2")), []
     window = Window(view, browsed.append)
-    assert window.create(HOME)
+    assert window.create()
     with pytest.raises(WindowUnavailable):
         window.start(lambda: None)
     window.open(HOME)
     window.open(f"{HOME}/#status")
     window.quit()
-    assert browsed == [HOME, f"{HOME}/#status"] and view.calls == [("create", HOME, "AHSync", 1200, 800)]
+    assert browsed == [HOME, f"{HOME}/#status"] and view.calls == [("create", None, "AHSync", 1200, 800)]
     assert window.state.available is False
     assert caplog.text.count("app window unavailable (RuntimeError)") == 1
 
@@ -111,11 +113,11 @@ def test_FM56_a_webview_that_cannot_start_hands_every_open_to_the_browser(caplog
 def test_FM56_a_create_that_fails_or_a_refused_renderer_falls_back_too(caplog):
     browsed: list[str] = []
     window = Window(Webview(fail_create=ImportError("no pythonnet")), browsed.append)
-    assert window.create(HOME) is False and window.state.available is False
+    assert window.create() is False and window.state.available is False
     window.open(HOME)
     assert browsed == [HOME]
     refused = Window(Webview(fail_start=WindowUnavailable("renderer mshtml")), browsed.append)
-    refused.create(HOME)
+    refused.create()
     with pytest.raises(WindowUnavailable):
         refused.start(lambda: None)
     assert refused.state.available is False and "app window unavailable (WindowUnavailable)" in caplog.text
@@ -124,7 +126,7 @@ def test_FM56_a_create_that_fails_or_a_refused_renderer_falls_back_too(caplog):
 def test_without_a_webview_every_open_goes_to_the_browser():
     browsed: list[str] = []
     window = Window(None, browsed.append)
-    assert window.create(HOME) is False
+    assert window.create() is False
     window.open(HOME)
     assert window.closing() is False and browsed == [HOME]
 
@@ -197,3 +199,22 @@ def test_a_page_that_never_finished_loading_counts_as_none_so_the_next_show_load
     assert adapter.current_url() is None                          # white window: never asks pywebview, never waits
     loaded.set()
     assert adapter.current_url() == "http://localhost:8765/"
+
+
+def test_DR32_before_the_server_answers_an_open_shows_the_loading_page_and_the_url_loads_once_it_does():
+    view, browsed = Webview(), []
+    window = Window(view, browsed.append)
+    assert window.create() and "Starting AHSync…" in view.html and "Still working." in view.html
+    assert f"}},{STILL_WORKING_MS})" in view.html and STILL_WORKING_MS == 30_000   # the note after 30 s
+    window.open(HOME)
+    window.open(f"{HOME}/#status")                      # the newest request wins
+    assert view.calls[1:] == [("show",), ("show",)] and window.state.shown
+    window.answered()
+    window.answered()                                   # once
+    assert view.calls[3:] == [("load", f"{HOME}/#status")]
+    window.open(f"{HOME}/#status")
+    assert view.calls[-1] == ("show",) and view.calls.count(("load", f"{HOME}/#status")) == 1
+    window.restarting()                                 # setup's server stops; the dashboard's comes next
+    window.open(HOME)
+    assert view.calls[-1] == ("show",) and window.state.wanted == HOME
+    assert browsed == []

@@ -285,7 +285,7 @@ class Session:
         Returns:
             True when the loop ran (or Ctrl-C ended it); False when there is no window (FM56).
         """
-        if not self.window.create(self.page()):
+        if not self.window.create():
             return False
         try:
             self.window.start(self.begin)  # blocks until the worker's end destroys the window
@@ -371,6 +371,7 @@ class Session:
             if saved is not True:
                 return saved
             self.setup = False
+            self.window.restarting()       # setup's server stopped; the dashboard's starts in run()
             self.config = load_settings(self.dirs.config_file, self.world)
             self.redactor.add(self.config.api_key if self.config else None)
             self.port = (self.config or Config()).dashboard_port
@@ -533,12 +534,15 @@ class Session:
         A window or tray failure is logged and never ends AHSync.
         """
         try:
+            first = not self.setup and not self.state.autostart and not self.state.opened   # a manual launch's show
+            waiting = first or bool(self.window.state.wanted)
+            if waiting and not self.window.state.ready and self.world.port_open(self.port):
+                self.window.answered()     # loads what was asked for while the loading page showed (DR32)
             if take_show_request(self.dirs.data_dir):
                 self.state.shows += 1
                 self.window.open(self.page())
-            if (not self.setup and not self.state.autostart and not self.state.opened
-                    and self.world.port_open(self.port)):
-                self.state.opened = True
+            if first and (self.window.state.created or self.window.state.ready):   # the browser waits for an answer
+                self.state.opened = True   # the window shows the loading page at once (DR32)
                 self.window.open(self.home())
             if self.tray is not None:
                 self.tray.refresh()
@@ -606,6 +610,7 @@ def wait_for_setup(app: SetupApp, session: Session) -> bool | int:
     url = session.page()
     print(f"Setup: {url}", file=world.out)
     remove_stop_file(data_dir / STOP_FILE)    # the lock owner clears a stale request, as run() does (FM36)
+    session.window.answered()                 # setup's server listens already
     try:
         if not state.autostart:
             session.window.open(url)
