@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Proposal: the 0.1.6 batch's small items</title>
+<style>
+  :root { --bg: #0f1115; --panel: #171a21; --text: #e6e6e6; --muted: #8f8a7d; --label: #8fd3ff; --gold: #ffd100;
+          --pos: #4cd964; --neg: #ff5c5c; --amber: #ffb347; --line: #2a2f3a; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.45 -apple-system, "Segoe UI", sans-serif; margin: 24px; max-width: 1180px; }
+  h1 { font-size: 20px; margin: 0 0 4px; } h2 { font-size: 16px; margin: 28px 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+  p.note { color: #c9c4b6; max-width: 1000px; } .muted { color: var(--muted); } .pos { color: var(--pos); } .neg { color: var(--neg); } .amber { color: var(--amber); }
+  .pair { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+  .cap { font-size: 12px; color: var(--muted); margin: 0 0 6px; max-width: 520px; }
+  .tooltip { width: 320px; background: #0b0e1a; border: 1px solid #5a6a8a; border-radius: 4px; padding: 8px 10px; font-size: 12px; }
+  .tt-hdr { display: flex; justify-content: space-between; color: var(--gold); margin-bottom: 2px; }
+  .tt-line { display: flex; justify-content: space-between; gap: 8px; } .tt-line > span:first-child { color: var(--label); white-space: nowrap; }
+  .tt-line > span:last-child { text-align: right; margin-left: auto; } .tt-line.dim > span:first-child { color: transparent; }
+  .new { outline: 1px dashed var(--amber); outline-offset: 1px; }
+  .win { width: 640px; background: #10131b; border: 1px solid #3a4152; border-radius: 4px; font-size: 12px; }
+  .win .hdr { padding: 6px 10px; color: var(--muted); border-bottom: 1px solid var(--line); }
+  .win .rows { height: 40px; padding: 6px 10px; color: var(--muted); }
+  .foot { display: flex; gap: 12px; padding: 6px 10px; border-top: 1px solid var(--line); }
+  .foot .l { flex: 1 1 auto; } .foot .r { flex: 0 0 auto; white-space: nowrap; color: var(--muted); }
+  .overlap { position: relative; height: 18px; padding: 6px 10px; border-top: 1px solid var(--line); }
+  .overlap span { position: absolute; top: 6px; white-space: nowrap; } .overlap .r { right: 10px; color: var(--muted); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; width: 760px; }
+  .card-h { display: flex; justify-content: space-between; gap: 12px; padding: 8px 14px; border-bottom: 1px solid var(--line); }
+  .card .body { padding: 12px 14px; color: var(--muted); font-size: 12px; height: 60px; }
+  .card .cnote { padding: 8px 14px; border-top: 1px solid var(--line); font-size: 13px; }
+  .app { width: 520px; height: 300px; background: #0f1115; border: 1px solid #3a4152; border-radius: 6px; display: flex; flex-direction: column;
+         align-items: center; justify-content: center; gap: 14px; }
+  .brand { font-size: 28px; font-weight: 700; color: var(--text); letter-spacing: .5px; } .brand span { color: var(--gold); }
+  .pulse { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); animation: p 1.2s ease-in-out infinite; }
+  @keyframes p { 0%, 100% { opacity: .25; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.2); } }
+</style>
+</head>
+<body>
+<h1>Proposal: the 0.1.6 batch's small items</h1>
+<p class="note"><b>Approved by the user, 2026-11-07, as drawn.</b> Four small changes that ship with M33b's market lines. Dashed outlines mark what changes. Each section names where the approved version lands (SPEC, SCENARIOS and the mockup it belongs to).</p>
+
+<h2>1. Vendor Price in the tooltip, right above Inventory (the user, 2026-11-07)</h2>
+<p class="note">From the game's own sell price (<code>GetItemInfo</code>, captured as A92), else the summary's catalog. A one-line fact, like Inventory: no qualifier and no values line. <b>Shown</b> when the price is known and above 0. <b>Left out</b> when unknown, and for an item that can't be sold to a vendor (0). When you hold more than one, the total for what you hold follows, so it reads against the Inventory line under it.</p>
+<div class="pair">
+  <div><p class="cap">Linen Cloth, 20 in bags (vendor 2c each).</p><div class="tooltip">
+    <div class="tt-hdr"><span>AHProfit</span><span class="muted">data 12 min old · 5% coverage</span></div>
+    <div class="tt-line"><span>Market Price</span><span>19c now · steady</span></div>
+    <div class="tt-line dim"><span>.</span><span>(7d) 21c · (14d) 21c · (30d) 21c</span></div>
+    <div class="tt-line"><span>Sell Chance Now</span><span>74% at 19c</span></div>
+    <div class="tt-line dim"><span>.</span><span>(7d) 79% · (14d) 79% · (30d) 79%</span></div>
+    <div class="tt-line new"><span>Vendor Price</span><span>2c each · 40c for 20</span></div>
+    <div class="tt-line"><span>Inventory</span><span>Total: 20 · Bags: 20</span></div>
+  </div></div>
+  <div><p class="cap">Embossed Leather Gloves, one held (vendor 24c).</p><div class="tooltip">
+    <div class="tt-hdr"><span>AHProfit</span><span class="muted">data 12 min old · 5% coverage</span></div>
+    <div class="tt-line"><span>Disenchant Value</span><span><span class="neg">37% below AH</span> · 63c</span></div>
+    <div class="tt-line dim"><span style="color:var(--muted)">  80% · 1.5 Strange Dust @ 25c</span><span>30c</span></div>
+    <div class="tt-line new"><span>Vendor Price</span><span>24c</span></div>
+    <div class="tt-line"><span>Inventory</span><span>Total: 1 · Bags: 1</span></div>
+  </div></div>
+  <div><p class="cap">Not held (or one held): the price alone, as for one unit. No price known, or 0: no line.</p><div class="tooltip">
+    <div class="tt-hdr"><span>AHProfit</span><span class="muted">data 12 min old · 5% coverage</span></div>
+    <div class="tt-line"><span>Market Price</span><span>1s 20c now · steady</span></div>
+    <div class="tt-line dim"><span>.</span><span>(7d) 1s 15c · (14d) 1s 15c · (30d) 1s 15c</span></div>
+    <div class="tt-line new"><span>Vendor Price</span><span>5c</span></div>
+  </div></div>
+</div>
+<p class="note muted">Lands in: SPEC §4.3 (the line), a new TT row (TT41), <code>sell-through.html</code>. Built with the market lines (M33b-2). Open for the WoW expert: whether Forever's own tooltip already prints a "Sell Price" line. If it does, ours would repeat it, and the line is dropped.</p>
+
+<h2>2. The Portfolio footer: no overlap (the user, 2026-11-07, minimal fix)</h2>
+<div class="pair">
+  <div><p class="cap">Now (v0.1.5): the left text runs into the right.</p><div class="win"><div class="hdr">portfolio 4 positions · capacity 1g 85s 85c · 77c unallocated · snapshot 20:16</div><div class="rows">…rows…</div>
+    <div class="overlap"><span>funded +7g 8s 60c · cost 1g 85s 8c · 370% on cash · 2 hidden (chance &lt; 50%)</span><span class="r">capacity 1g 85s 85c · 77c unallocated</span></div></div></div>
+  <div><p class="cap">Proposed: the capacity leaves the footer (the header already shows it); the left text wraps if it is still too wide.</p><div class="win"><div class="hdr">portfolio 4 positions · capacity 1g 85s 85c · 77c unallocated · snapshot 20:16</div><div class="rows">…rows…</div>
+    <div class="foot new"><span class="l">funded +7g 8s 60c · cost 1g 85s 8c · 370% on cash · 2 hidden (chance &lt; 50%)</span><span class="r">77c unallocated</span></div></div></div>
+</div>
+<p class="note muted">Lands in: <code>addon.html</code> and the golden snapshots. A fuller footer redesign waits for M34.</p>
+
+<h2>3. Data coverage card for a cloud market: what the analysis has used (the user, 2026-11-07)</h2>
+<p class="note">The heatmap keeps showing only the hours the daily analysis used (the user declined to have the hourly run extend it). A note under the card says how far the collection runs ahead of the analysis. Times are local (here Pacific: the daily run is 09:00 UTC = 01:00).</p>
+<div class="card"><div class="card-h"><b>Data coverage</b><span class="muted">last 30 days · blizzard (cloud)</span></div>
+  <div class="body">…heatmap and totals, as built (D99)…</div>
+  <div class="cnote new">Blizzard data collected to Sat 20:16 · analysed to Sat 06:00 · next analysis Sun 01:00</div></div>
+<p class="note muted"><b>collected</b> = the newest snapshot in the summary (prices, hourly); <b>analysed</b> = the end of the daily run's hours (rates, windows, patterns); <b>next analysis</b> = the next 09:00 UTC. A local market has no note. Engine-made text (<code>engine/coverage.py</code>), a new D row (D104). Lands in: <code>dashboard.html</code> (Status, States: data coverage).</p>
+
+<h2>4. The app window opens on a loading page (the user, 2026-11-07)</h2>
+<p class="note">The window opens on a page bundled with the app instead of the dashboard's address, so it never shows white or the webview's own error page while the dashboard starts. It switches to the dashboard as soon as the dashboard answers. Cause to confirm first (the debugging rule): the window loads the dashboard URL before the server listens.</p>
+<div class="pair">
+  <div><p class="cap">The first 30 s.</p><div class="app new"><div class="brand">AH<span>Sync</span></div><div class="pulse"></div><div>Starting AHSync…</div></div></div>
+  <div><p class="cap">After 30 s still waiting.</p><div class="app new"><div class="brand">AH<span>Sync</span></div><div class="pulse"></div><div>Starting AHSync…</div>
+    <div class="muted" style="font-size:12px;max-width:360px;text-align:center">Still working. The first refresh after an update can take a minute.</div></div></div>
+</div>
+<p class="note muted">The page only waits and polls; it shows no error of its own. If the dashboard never comes up, the page keeps waiting with the 30 s note; the tray and Status work as today. Lands in: SPEC §3.7 (the window) and a DR row (DR32); this page is its mockup of record.</p>
+</body>
+</html>
