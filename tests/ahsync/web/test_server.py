@@ -721,7 +721,7 @@ def test_D81_the_gathering_page_under_all_characters():
     # M18: the historical cells (the mockup's "2s · +10% · … · Sat 17:00 · 2s 24c (+2% vs now)")
     assert [copper[k] for k in ("ah_price", "qty", "median", "deviation", "rate", "character", "net", "window",
                                 "window_price", "window_delta")] == ["2s 20c", "64", "2s", "+10%", "38", "Brugan",
-                                                                     "79s 38c", "Sat 17:00", "2s 24c", "+2% vs now"]
+                                                                     "79s 14c", "Sat 17:00", "2s 24c", "+2% vs now"]
     sorted_by = dict(re.findall(r"\['([^']+)', [01], '([a-z_]+)'\]", js[js.index("const GA_COLS"):js.index("const GA_CLASSES")]))
     assert {sorted_by[c] for c in ("Median 30d", "Deviation", "Sell window", "Sell window price")} <= set(copper["sort"])
     assert copper["note"] == "Brugan: 3 sessions, 1 h 50 min" and p["selected"] == str(gw.COPPER)
@@ -848,7 +848,7 @@ def test_D85_the_rate_card_posts_save_and_clear_and_reloads_the_rebuilt_payload(
     # What the page redraws from: Brugan's 15 on Copper Ore, then cleared; Earthroot's active override.
     manual = gathering_view(gw.world(manual={**gw.MANUAL, (gw.BRUGAN, gw.COPPER): 15}))
     copper = next(r for r in gw.view_rows(manual, "") if r["item"] == "Copper Ore")
-    assert (copper["rate"], copper["rate_sub"], copper["net"], copper["note"]) == ("15", "manual", "31s 33c",
+    assert (copper["rate"], copper["rate_sub"], copper["net"], copper["note"]) == ("15", "manual", "31s 24c",
                                                                                    "Brugan: manual rate")
     back = next(r for r in gw.view_rows(gathering_view(gw.world()), "") if r["item"] == "Copper Ore")
     assert (back["rate"], back["rate_sub"]) == ("38", "")

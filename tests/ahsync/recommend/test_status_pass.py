@@ -41,7 +41,7 @@ def db(tmp_path):
         week = week_start_ms(NOW)
         rows = [("buy1", "buy", NOW - 25 * HOUR, None, None, None),                              # 25 h old
                 ("post1", "post", MONDAY + TUE * DAY + 12 * HOUR, MONDAY + TUE * DAY + 20 * HOUR,
-                 MONDAY + TUE * DAY + 23 * HOUR, 800.0),                                          # the missed Tue peak
+                 MONDAY + TUE * DAY + 23 * HOUR, 780.0),       # the missed Tue peak; 90% of it is 702c (M8's replacement: 715.2c)
                 ("post2", "post", NOW - HOUR, MONDAY + 3 * DAY + 20 * HOUR, MONDAY + 3 * DAY + 23 * HOUR, 700.0)]   # late
         for action_id, kind, slot, start, end, anchor in rows:
             database.conn.execute(
@@ -66,7 +66,7 @@ def test_IU10_the_idle_status_pass_marks_missed_without_history_and_the_plan_fil
     s = statuses(db)
     assert (s["buy1"][1], s["post1"][1], s["post2"][1]) == ("missed", "missed", "late")
     kind, status, replaces, anchor, start = s["post1:r"]
-    assert (kind, status, replaces, anchor, start) == ("post", "pending", "post1", 800.0, MONDAY + WED * DAY + 20 * HOUR)
+    assert (kind, status, replaces, anchor, start) == ("post", "pending", "post1", 780.0, MONDAY + WED * DAY + 20 * HOUR)
     assert counts == {"late": 1, "missed": 2, "replaced": 1, "positions": 0}
     assert status_pass(db, CFG, NOW) == {"late": 0, "missed": 0, "replaced": 0, "positions": 0}   # nothing to change
     exported = {r[0]: r[10] for r in db.addon_actions(["Amaya-G"])}                   # what PortfolioPlan.lua gets
@@ -99,4 +99,5 @@ def test_M8_a_missed_posts_replacement_uses_the_stored_sell_record(db, tmp_path)
     assert db.stored_sell_records(M) == {LINEN: Record(0, 1, 1, 1, False, False)}
     status_pass(db, CFG, NOW)
     cut = db.conn.execute("SELECT price FROM actions WHERE action_id = 'post1:r'").fetchone()[0]
-    assert (base, cut) == (49, 46)                                          # 49c, cut 5% by the record: 46.55 down to 46
+    assert (base, cut) == (49, 46)              # 49c, cut 5% by the record: 46.55 down to 46; E = 0.8 × 20 × 46 × 0.95
+    #   + 0.2 × (20 × 10c vendor − 1s 20c deposit) = 715.2c, above 90% of the 7s 80c anchor

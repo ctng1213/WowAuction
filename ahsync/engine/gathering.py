@@ -346,11 +346,10 @@ def deposit_per_unit(vendor_sell: int | None) -> float:
         vendor_sell: The vendor sell price per unit, copper; None when unknown.
 
     Returns:
-        Float copper (15% of the vendor price for 24 h, exact for 20 units); 0.0 when the vendor price is unknown.
+        Float copper: 60% of the vendor price for 24 h, and at least the 1s minimum ÷ 20 (5c) a unit, which an
+        unknown vendor price also gets (SPEC §3.4 Fees).
     """
-    if not vendor_sell:
-        return 0.0
-    return deposit_copper(vendor_sell, DEPOSIT_STACK, DEPOSIT_HOURS) / DEPOSIT_STACK
+    return deposit_copper(vendor_sell or 0, DEPOSIT_STACK, DEPOSIT_HOURS) / DEPOSIT_STACK
 
 
 def chance_to_sell(market_chance: float | None, sold_per_day: float | None, price: int | None,

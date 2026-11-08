@@ -131,11 +131,19 @@ def test_D68_a_post_is_judged_by_its_payout_its_lost_deposit_or_not_at_all_while
     assert judge("posted", 120.0, PostResult("expired", None, 3)) == Judged(120.0, -3.0, "expired")
     assert judge("posted", 250.0, PostResult(None, None, 5)) == Judged(250.0, None, "not sold yet", OPEN_POST)
     assert judge("posted", 250.0, PostResult("sold", None, 5)).note == "sold · not paid out yet"   # gold still in the mailbox
-    assert judge("posted", None, PostResult("cancelled", None, 5)) == Judged(None, 0.0, "cancelled")
+    assert judge("posted", None, PostResult("cancelled", None, 5)) == Judged(None, -5.0, "cancelled")
     assert post_value(PostResult("expired", None, None)) == 0.0                                    # deposit not captured
     assert judge("disenchanted", 150.0, None) == Judged(150.0, None, "mats sold separately")
     assert judge("crafted", None, None) == Judged(None, None, "")                                # no chain: no numbers
     assert [judge(k, None, None) for k in ("bought", "bought_vendor", "paid_out", "mailed")] == [None] * 4
+
+
+
+def test_T24_a_cancelled_post_loses_its_deposit_as_an_expired_one_does():
+    cancelled = judge("posted", 250.0, PostResult("cancelled", None, 5))
+    assert cancelled == Judged(250.0, -5.0, "cancelled")
+    assert post_value(PostResult("cancelled", None, None)) == 0.0                                  # deposit not captured
+    assert post_value(PostResult("cancelled", None, 5)) == post_value(PostResult("expired", None, 5))
 
 
 def test_D69_a_chain_carrier_realizes_what_its_posts_made_so_far():

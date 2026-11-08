@@ -79,29 +79,29 @@ def test_GA5_a_lost_profession_keeps_his_rate_in_his_own_view_only():
     assert (copper["rate"], copper["character"], copper["net"], copper["skill_amber"]) == ("—", "—", "—", True)
     mine = rows(p, gw.BRUGAN)["Copper Ore"]
     assert not mine["eligible"]                                             # hidden with the toggle on
-    assert (mine["rate"], mine["character"], mine["net"]) == ("38", "Brugan", "79s 38c")   # toggle off: his history
+    assert (mine["rate"], mine["character"], mine["net"]) == ("38", "Brugan", "79s 14c")   # toggle off: his history
     assert rows(p, gw.AMAYA)["Copper Ore"]["rate"] == "—"                  # no fallback for anyone
 
 
 def test_GA6_copper_ores_net_gold_per_hour_and_gross_only_on_the_detail():
     p = gathering_view(gw.world())
     copper = rows(p)["Copper Ore"]
-    assert (copper["net"], copper["sort"]["net"], copper["net_dot"]) == ("79s 38c", 7938, False)
-    assert copper["net_title"] == "38/hr × 208.89c net per unit (gross 38 × 220c = 83s 60c) · chance 85%"
+    assert (copper["net"], copper["sort"]["net"], copper["net_dot"]) == ("79s 14c", 7914, False)
+    assert copper["net_title"] == "38/hr × 208.25c net per unit (gross 38 × 220c = 83s 60c) · chance 85%"
     assert "83s 60c" not in {v for k, v in copper.items() if k != "net_title" and isinstance(v, str)}   # not a cell
     card = gw.view_card(p, "", str(gw.COPPER))
-    assert card["lines"] == [["Gross gold/hr", "38 × 2s 20c = 83s 60c"], ["Net gold/hr", "38 × 208.89c = 79s 38c"]]
-    assert p["details"][str(gw.COPPER)]["net_unit"] == "2s 20c − 5% cut 11.00c − (1 − 85%) × 0.75c deposit = 208.89c"
+    assert card["lines"] == [["Gross gold/hr", "38 × 2s 20c = 83s 60c"], ["Net gold/hr", "38 × 208.25c = 79s 14c"]]
+    assert p["details"][str(gw.COPPER)]["net_unit"] == "2s 20c − 5% cut 11.00c − (1 − 85%) × 5.00c deposit = 208.25c"
 
 
 def test_GA7_no_sales_data_uses_the_default_chance_with_the_dot_then_day_one_copper():
     tin = rows(gathering_view(gw.world()))["Tin Ore"]
-    assert (tin["net"], tin["net_dot"]) == ("10s 38c", True)
+    assert (tin["net"], tin["net_dot"]) == ("10s 15c", True)
     assert "chance is the default: no sales data yet (50%, as you'd be the cheapest)" in tin["net_title"]
     assert tin["note"] == "no sales data yet: default chance · Brugan: 1 session, 30 min"
     day_one = gathering_view(gw.world(day_one=True))
     copper = rows(day_one)["Copper Ore"]
-    assert (copper["net"], copper["net_dot"]) == ("79s 28c", True)          # 38 × (209 − 0.5 × 0.75) = 7,927.75
+    assert (copper["net"], copper["net_dot"]) == ("78s 47c", True)          # 38 × (209 − 0.5 × 5) = 7,847
     assert day_one["default_note"] == "Every Net gold/hr here uses the default chance (50%): no sales data yet."
     assert gathering_view(gw.world())["default_note"] == ""
 
@@ -127,7 +127,7 @@ def test_GA9_net_gold_per_hour_sorts_both_ways_with_blank_rows_last():
     assert sort_like_the_page(view, "net", False) == ["Silverleaf", "Peacebloom", "Linen Cloth", "Earthroot", "Tin Ore",
                                                       "Light Leather", "Copper Ore", *blanks]
     assert [{r["item"]: r for r in view}[n]["net"] for n in ("Light Leather", "Earthroot", "Linen Cloth")] == \
-        ["18s 90c", "6s 83c", "5s 3c"]
+        ["18s 73c", "6s 75c", "4s 97c"]
     assert all(r["sort"]["net"] is None for r in view if r["item"] in blanks)
 
 
@@ -223,7 +223,7 @@ def test_the_full_detail_title_and_the_price_card_with_history():
     assert copper["price"][0] == ["Current AH price", "2s 20c", "· 26 h old", "amber", None]
     assert copper["market"] == {"chance": "85%", "confidence": 80, "dot": "high", "sales": "30 AHF", "supply": "64",
                                 "days": "2.1 days", "chance_note": ""}
-    assert copper["deposit"].startswith("Deposit: 15% of the 5c vendor price per unit for 24 h") and \
+    assert copper["deposit"].startswith("Deposit: 5c a unit for 24 h (60% of the 5c vendor price, at least 1s a 20-unit auction)") and \
         "only the 15% chance it expires" in copper["deposit"]
     snapper = p["details"][str(gw.MUD_SNAPPER)]
     assert snapper["net_unit"] is None and snapper["price"][0] == ["Current AH price", "—",
@@ -299,7 +299,7 @@ def test_missing_prices_professions_and_an_empty_catalog():
     assert q["fresh"][0] == ["AH prices 4 d old", "amber"] and q["fresh"][1] == ["professions not synced yet", ""]
     qrow = gw.view_rows(q, "")[0]
     assert qrow["qty"] == "—" and qrow["price_title"].startswith("seen 4 d ago (Blizzard scan ")
-    assert q["details"]["1"]["deposit"].startswith("Deposit: 15% of the 0c vendor price")
+    assert q["details"]["1"]["deposit"].startswith("Deposit: 5c a unit for 24 h (60% of the 0c vendor price")
     assert "Prices are 4 d old (amber over 24 h)" in q["note"]
     empty = gathering_view(gv.GatheringWorld([], {}, {}, [], gw.NOW))
     assert empty["selected"] == "" and empty["header"].startswith("0 in the catalog")
@@ -350,23 +350,23 @@ def test_GA17_a_session_without_duration_counts_on_the_freshness_line_but_gives_
 
 def test_GA21_a_manual_rate_replaces_the_observed_one_until_cleared():
     earth = rows(gathering_view(gw.world()))["Earthroot"]
-    assert (earth["rate"], earth["rate_sub"], earth["net"], earth["note"]) == ("12", "manual", "6s 83c",
+    assert (earth["rate"], earth["rate_sub"], earth["net"], earth["note"]) == ("12", "manual", "6s 75c",
                                                                                "Amaya: manual rate")   # 682.65
     cleared = rows(gathering_view(gw.world(manual={})))["Earthroot"]
     assert (cleared["rate"], cleared["rate_sub"], cleared["net"], cleared["note"]) == (
-        "10", "", "5s 69c", "Amaya: 2 sessions, 48 min")                                          # 568.875
+        "10", "", "5s 63c", "Amaya: 2 sessions, 48 min")                                          # 562.5
 
 
 def test_GA22_a_fallback_is_display_only_and_his_own_rate_replaces_it_even_if_lower():
     linen = rows(gathering_view(gw.world()), gw.BRUGAN)["Linen Cloth"]
-    assert (linen["rate"], linen["fallback"], linen["character"], linen["net"]) == ("14", True, "Amaya", "5s 3c")
+    assert (linen["rate"], linen["fallback"], linen["character"], linen["net"]) == ("14", True, "Amaya", "4s 97c")
     assert linen["rate_title"] == ("Amaya's observed rate; Brugan has none yet. Replaced by Brugan's own rate once "
                                    "Brugan has one, even if lower." + gv.CLICK_HINT)
     mine = ((gw.BRUGAN, gw.at(MON, "05:55"), gw.at(MON, "06:00"), gw.at(MON, "06:30"),
              {"monster": [(gw.LINEN, 4), (gw.RUINED_SCRAPS, 16)]}),)
     p = gathering_view(gw.world(extra=mine))
     own = rows(p, gw.BRUGAN)["Linen Cloth"]
-    assert (own["rate"], own["fallback"], own["character"], own["net"]) == ("8", False, "Brugan", "2s 88c")
+    assert (own["rate"], own["fallback"], own["character"], own["net"]) == ("8", False, "Brugan", "2s 84c")
     assert (rows(p)["Linen Cloth"]["rate"], rows(p)["Linen Cloth"]["character"]) == ("14", "Amaya")
 
 
@@ -376,7 +376,7 @@ def test_GA23_under_all_characters_a_tie_goes_to_the_first_character_id_manual_i
     assert (leather["rate"], leather["character"], leather["rate_sub"]) == ("21", "Amaya", "manual")
     higher = rows(gathering_view(gw.world(manual={**gw.MANUAL, (gw.AMAYA, gw.LIGHT_LEATHER): 30})))["Light Leather"]
     assert (higher["rate"], higher["character"], higher["rate_sub"], higher["net"]) == ("30", "Amaya", "manual",
-                                                                                      "26s 99c")   # 30 × 89.98
+                                                                                      "26s 75c")   # 30 × 89.17
 
 
 def test_GA24_the_open_candidates_line_until_15_minutes_after_its_last_loot():
@@ -428,7 +428,7 @@ def test_GA26_earthroots_active_override_and_light_leather_for_amaya():
 
 def test_GA27_brugans_manual_copper_ore_rate():
     copper = rows(gathering_view(gw.world(manual={**gw.MANUAL, (gw.BRUGAN, gw.COPPER): 15})))["Copper Ore"]
-    assert (copper["rate"], copper["rate_sub"], copper["net"], copper["note"]) == ("15", "manual", "31s 33c",
+    assert (copper["rate"], copper["rate_sub"], copper["net"], copper["note"]) == ("15", "manual", "31s 24c",
                                                                                    "Brugan: manual rate")
 
 
@@ -455,7 +455,7 @@ def test_D87_the_freshness_line_and_stale_prices():
     assert {r["price_title"] for r in gw.view_rows(p, "") if r["ah_price"] != "—"} == {
         "seen 26 h ago (AHF scan Sun 08:38) · stale: over 24 h"}
     assert "Prices are 26 h old (amber over 24 h): every gold/hr uses them as they are." in p["note"]
-    assert rows(p)["Copper Ore"]["net"] == "79s 38c"                               # the stale price, as it is
+    assert rows(p)["Copper Ore"]["net"] == "79s 14c"                               # the stale price, as it is
 
 
 def reading(detail: dict) -> str:
@@ -558,7 +558,7 @@ def test_D83_copper_ores_detail_in_panel_order():
     assert (d["market"]["chance"], d["market"]["sales"], d["market"]["supply"], d["market"]["days"]) == (
         "85%", "30 AHF", "64", "2.1 days")
     assert gw.view_card(p, "", gw.COPPER)["lines"][0] == ["Gross gold/hr", "38 × 2s 20c = 83s 60c"]
-    assert d["net_unit"] == "2s 20c − 5% cut 11.00c − (1 − 85%) × 0.75c deposit = 208.89c" and d["history"] == ""
+    assert d["net_unit"] == "2s 20c − 5% cut 11.00c − (1 − 85%) × 5.00c deposit = 208.25c" and d["history"] == ""
     assert d["heat"] and reading(d).startswith("now 2s 20c") and len(d["windows"]) == 3 and d["timing"]
     earthroot = p["details"][str(gw.EARTHROOT)]
     assert earthroot["title"] == "Earthroot: price, timing and your rate" and earthroot["heat"] is None
@@ -576,7 +576,7 @@ def test_D84_day_one_keeps_every_row_and_the_compact_detail():
     for column in gv.HISTORY_COLUMNS:
         assert p["help"][column].endswith('needs price history: "—" until weeks of data arrive')
     r = rows(p)
-    assert (r["Copper Ore"]["net"], r["Tin Ore"]["net"], r["Copper Ore"]["net_dot"]) == ("79s 28c", "10s 38c", True)
+    assert (r["Copper Ore"]["net"], r["Tin Ore"]["net"], r["Copper Ore"]["net_dot"]) == ("78s 47c", "10s 15c", True)
     assert (r["Copper Ore"]["ah_price"], r["Copper Ore"]["qty"], r["Copper Ore"]["rate"]) == ("2s 20c", "64", "38")
     d = p["details"][str(gw.COPPER)]
     assert d["price"][3] == ["Chance to sell", "50%", "default: no sales data yet", "", "low"]

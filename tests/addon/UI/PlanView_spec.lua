@@ -69,10 +69,11 @@ describe("PlanView", function()
     owned[1].parent, owned[2].parent = nil, "k"                    -- every mat owned: no buys, Each and Total "—"
     local mine = VM.Today(owned, NOW, 0, 50, Look, GOLD).rows[1]
     assert_eq({ mine.each, mine.total, mine.risk }, { "—", "—", "0.0%" })
-    -- A post risks its deposit (SPEC §3.4 Risk): 76 × 138c × 15% for 24 h = 1573c of 314000c = 0.5%.
+    -- A post risks its deposit (SPEC §3.4 Risk): 76 × 138c × 60% for 24 h = 6292.8 → 6292c of 314000c = 2.0%.
     local _, _, deposit = VM.RowMoney({ kind = "post", qty = 76, price = 2500, duration = 24 }, nil, { vendorSell = 138 })
-    local _, _, unknown = VM.RowMoney({ kind = "post", qty = 1, price = 5 }, nil, nil)   -- no vendor price: 0
-    assert_eq({ deposit, VM.Risk(deposit, GOLD), unknown }, { 1573, "0.5%", 0 })
+    local _, _, unknown = VM.RowMoney({ kind = "post", qty = 1, price = 5 }, nil, nil)   -- no item facts: none shown
+    local _, _, minimum = VM.RowMoney({ kind = "post", qty = 1, price = 5, duration = 2 }, nil, {})   -- no vendor price
+    assert_eq({ deposit, VM.Risk(deposit, GOLD), unknown, minimum }, { 6292, "2.0%", 0, 100 })
   end)
 
   it("A73 holds and vendor sales are no rows on Today and count toward no total", function()

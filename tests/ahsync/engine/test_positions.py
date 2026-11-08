@@ -165,13 +165,14 @@ def test_a_disenchant_uses_its_unit_and_an_unknown_payout_sells_from_what_is_hel
     assert (q.unpaid, q.waiting, q.held) == (1, 0.0, 3)
 
 
-def test_expired_posts_lose_their_deposit_cancelled_ones_dont_and_both_bring_the_units_back():
+def test_PO14_expired_and_cancelled_posts_both_lose_their_deposit_and_bring_the_units_back():
     s = seed("A:1:0", A, BAR, 4, 500, T)
-    posts = [Move(T + HOUR, "p1", "post", A, BAR, 2, "p1", deposit=40), Move(T + HOUR, "p2", "post", A, BAR, 2, "p2")]
+    posts = [Move(T + HOUR, "p1", "post", A, BAR, 2, "p1", deposit=40),
+             Move(T + HOUR, "p2", "post", A, BAR, 2, "p2", deposit=30)]
     ends = [Move(T + 2 * HOUR, "m1", "expired", A, BAR, 2, "p1", "m1"),
             Move(T + 2 * HOUR, "m2", "cancelled", A, BAR, 2, "p2", "m2")]
     [p] = track([s], [*posts, *ends], world(), NOW)
-    assert (p.held, p.listed, p.state, p.realized) == (4, 0, HOLDING, -40.0)
+    assert (p.held, p.listed, p.state, p.realized) == (4, 0, HOLDING, -70.0)      # 40c + 30c, both kept by the AH
 
 
 def test_events_before_a_position_opened_or_of_other_characters_or_items_leave_it_alone():

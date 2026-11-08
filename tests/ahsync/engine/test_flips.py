@@ -87,9 +87,10 @@ def test_a_flip_buys_the_cheap_auctions_and_posts_for_the_peak():
 
 
 def test_R9_flip_buys_stay_within_the_budget():
-    # 25s: each auction of 20 at 60c costs 12s plus a 30c deposit, so two fit (24s 60c) and the third doesn't.
-    actions = plans.actions(world({SILK: silk()}), NOW, gold={"Amaya-G": 2500})
-    assert sum(a.qty for a in actions if a.kind == "buy") * 60 == 2400 <= 2500
+    # 30s: each auction of 20 at 60c costs 12s plus a 1s 20c deposit (60% of 20 × 10c), so two fit (26s 40c) and the
+    # third (39s 60c) doesn't.
+    actions = plans.actions(world({SILK: silk()}), NOW, gold={"Amaya-G": 3000})
+    assert sum(a.qty for a in actions if a.kind == "buy") * 60 == 2400 <= 3000
 
 
 def test_R16_two_characters_never_fill_the_same_demand():
@@ -100,15 +101,16 @@ def test_R16_two_characters_never_fill_the_same_demand():
 
 
 def test_R19_the_exposure_budget_caps_a_buy_not_a_share_of_your_gold_per_buy():
-    # All your gold is 30 g; risk tolerance 30% makes the exposure budget 9 g. Silk (stack 20) is listed as 10 at
-    # 40 s and 20 at 41 s: the first auction (4 g) is funded, the second (8 g 20 s) doesn't fit the 5 g left.
+    # All your gold is 30 g; risk tolerance 30% makes the exposure budget 9 g. Silk (stack 20, no vendor price: the 1s
+    # minimum deposit) is listed as 10 at 40 s and 20 at 41 s: the first auction (4 g + 1 s) is funded, the second
+    # (8 g 20 s + 1 s) doesn't fit the 4 g 99 s left.
     expensive = silk(book=((4000, 10, 4, 1), (4100, 20, 4, 1)), cur=4000, cur_qty=10, level=10000, post_price=10000,
                      vendor_sell=0)
     result = plans.plan(world({SILK: expensive}), NOW, gold={"Amaya-G": 300_000}, ps=PortfolioSettings())
     [buy] = [a for a in result.actions if a.kind == "buy"]
     assert (buy.qty, buy.price) == (10, 4000) and result.accounting.risk_budget == 90_000
     [why] = [a.reason for a in result.alternatives]
-    assert why == "Exceeds risk tolerance (needs 8g 20s, 5g left)"
+    assert why == "Exceeds risk tolerance (needs 8g 21s, 4g 99s left)"
 
 
 def test_no_flip_without_a_selling_window_or_a_paying_auction():
@@ -168,7 +170,7 @@ def test_the_best_window_wins_and_spent_gold_ends_later_flips():
     two_windows = silk(windows=(PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18, 6), PlanWindow(2 * 24 + 20, 2, 2 * 24 + 21, 6)))
     buy, *posts = flip(two_windows)
     assert {p.peak_ms for p in posts} == {MONDAY + SAT * DAY + 18 * HOUR}     # Wed (1.0×) never beats Sat (1.5×)
-    gold = {"A": 1230}                                                       # one auction of 20 at 60c and its deposit
+    gold = {"A": 1320}                                                       # one auction of 20 at 60c and its 1s 20c deposit
     actions = plans.actions(world({SILK: silk(), LINEN: silk(key=LINEN)}), NOW, gold=gold)
     assert [a.key for a in actions if a.kind == "buy"] == [LINEN]             # equal ratios: the earlier id
 

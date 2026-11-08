@@ -153,8 +153,8 @@ def test_D22_mat_buys_and_mail_carry_no_net_the_craft_carries_the_chains_profit(
 
 
 def test_chains_spend_from_their_crafters_gold_and_stop_at_the_exposure_budget():
-    crafts = plan_world(world(products={ROD: product(ROD, 4000, vendor_sell=0)}), {"Brugan-G": 4000})
-    assert sum(a.qty for a in crafts if a.kind == "craft") == 2                # two crafts' bars (2 × 2 × 10s)
+    crafts = plan_world(world(products={ROD: product(ROD, 4000, vendor_sell=0)}), {"Brugan-G": 4200})
+    assert sum(a.qty for a in crafts if a.kind == "craft") == 2                # 2 × (2 × 10s of bars + the 1s deposit)
     poor = plan_world(world(products={ROD: product(ROD, 4000, vendor_sell=0)}), {"Brugan-G": 8000},
                       PortfolioSettings())                                    # 30% of 80s = 24s: one craft's 20s
     assert sum(a.qty for a in poor if a.kind == "craft") == 1
@@ -228,7 +228,7 @@ def test_an_intermediate_from_your_own_stock_buys_nothing_and_spent_gold_ends_la
     assert [(a.kind, a.key) for a in runed if a.kind == "buy"] == [("buy", DUST)]   # the rod's bars were yours
     two = (ROD_RECIPE, craft.Recipe(2664, RUNED, 1, 1, ((BAR, 2),), ("Brugan-G",)))
     products = {ROD: product(ROD, 4000, vendor_sell=0), RUNED: product(RUNED, 9000, vendor_sell=0)}
-    actions = plan_world(world(two, products=products), {"Brugan-G": 2000})          # one craft's bars
+    actions = plan_world(world(two, products=products), {"Brugan-G": 2100})          # one craft's bars and 1s deposit
     assert [a.key for a in actions if a.kind == "craft"] == [RUNED]                  # the better one per copper
 
 
@@ -295,11 +295,12 @@ def test_C24_the_crafts_are_funded_from_the_gold_of_the_crafter_gather_picks():
     w = world((both,), products={ROD: product(ROD, 9000, supply_now=200, vendor_sell=0)})
     lots = (Lot("Brugan-G", BAR, 2),)                                                # Brugan holds the 2 owned bars
     result = plans.plan(WeekInputs(lots, {}, replace(w, market=replace(market, owned={BAR: 2.0}))), NOW,
-                        gold={"Amaya-G": 100_000, "Brugan-G": 10_000})                # 10g and 1g
+                        gold={"Amaya-G": 100_000, "Brugan-G": 10_100})                # 10g and 1g 1s
     made = next(a for a in result.actions if a.kind == "craft")
-    # Brugan's 1g buys 10 bars: with his 2 owned that is 6 crafts, though Amaya's 10g could have bought more.
+    # Brugan's 1g 1s buys 10 bars and the rods' one post's 1s minimum deposit: with his 2 owned bars that is 6 crafts,
+    # though Amaya's 10g could have bought more.
     assert (made.char_id, made.qty) == ("Brugan-G", 6)
-    assert dict(result.selection.reserved) == {"Brugan-G": 10_000} and not [a for a in result.actions if a.kind == "mail"]
+    assert dict(result.selection.reserved) == {"Brugan-G": 10_100} and not [a for a in result.actions if a.kind == "mail"]
     assert {a.reason for a in result.alternatives} == {"Insufficient gold on Brugan (needs 20s, has 0c)"}
 
 

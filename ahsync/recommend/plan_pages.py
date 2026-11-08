@@ -52,12 +52,13 @@ def _deposit(a: PlanAction, items: dict[int, ItemInfo]) -> int | None:
         items: Item metadata (the vendor sell price).
 
     Returns:
-        Copper; None for anything but a post with a duration and a known item.
+        Copper; None for anything but a post with a duration. An item without a vendor price, or missing from
+        `items`, pays the 1s minimum (P27), as the addon's Today rows do.
     """
-    info = items.get(a.key)
-    if a.kind != "post" or a.duration_h is None or info is None:
+    if a.kind != "post" or a.duration_h is None:
         return None
-    return fees.deposit_copper(info.vendor_sell or 0, a.qty, a.duration_h)
+    info = items.get(a.key)
+    return fees.deposit_copper((info.vendor_sell if info else None) or 0, a.qty, a.duration_h)
 
 
 def item_looks(keys: set[int], stats: dict[int, ItemIntel], items: dict[int, ItemInfo],
