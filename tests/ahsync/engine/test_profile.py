@@ -131,7 +131,7 @@ def test_W13_profiles_pack_in_thousandths_half_up():
     values = (1.2346, 0.0625, 0.8) + (1.0,) * 165
     prof = Profile(values, (7,) * 168, (True,) * 168)
     text, weeks = pack(prof)
-    assert text.startswith("1235,63,800,1000,") and weeks == ",".join(["7"] * 168)
+    assert (text, weeks) == ("1235,63,800,1000*165", "7*168")                     # run-length coded (BZ46)
     back = unpack(text, weeks)
     assert back.values[:3] == (1.235, 0.063, 0.8) and back.confident[0]
     assert pack(back) == (text, weeks)
@@ -148,3 +148,14 @@ def test_unpack_values_reads_the_same_ratios_without_the_weeks():
     assert profile.unpack_values("") is None
     with pytest.raises(ValueError):
         profile.unpack_values("1,2,3")
+
+
+def test_BZ46_profiles_are_run_length_coded_and_read_in_either_form():
+    plain_text = ",".join(["760", "880"] + ["1000"] * 166)
+    assert profile.expand("760,880,1000*166") == plain_text.split(",")
+    assert profile.plain("760,880,1000*166") == plain_text and profile.plain("") == ""
+    assert profile.unpack("760,880,1000*166", "7*168") == profile.unpack(plain_text, ",".join(["7"] * 168))
+    assert profile.unpack_values("1000*168") == (1.0,) * 168
+    for bad in ("1000*169", "1000*0", "1000*-2", "1000*x", "1000*100,1000*100", "1000*99999999999", "1000*167"):
+        with pytest.raises(ValueError):
+            profile.expand(bad)                                     # a run never grows past 168 slots (SEC16)
