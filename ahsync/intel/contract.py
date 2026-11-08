@@ -25,7 +25,7 @@ INTEL_SCHEMA_VERSION = 14      # 2: weekly patterns, windows, strength, curve (A
                                # commodity cancel share, per item commodity, sell-through per lookback, typical supply
                                # over 7 and 14 days, Sell Chance Now, each sell window's 24 h chance and each buy
                                # window's found share (SPEC §2.4, §4.3, BZ40, BZ41, TT36-TT38); 14: the compact form,
-                               # no new field: profiles run-length coded and items as rows under `item_fields` (BZ46)
+                               # no new field: profiles run-length coded and items as rows under `item_fields` (BZ47)
 # Fields each schema added, so to_json can write the previous schema for older readers (SPEC §2.4, BZ18).
 ADDED_IN = {10: {"document": ("catalog", "coverage", "settings", "ages_at_ms"),
                  "item": ("last_hour", "recent_closes", "recent_sold", "recent_listed", "recent_units")},
@@ -35,7 +35,7 @@ ADDED_IN = {10: {"document": ("catalog", "coverage", "settings", "ages_at_ms"),
                  "item": ("commodity", "sell_through", "sell_through_how", "supply7", "supply14", "sell_chance"),
                  "window": ("chance24", "found_share")},
             14: {"document": (), "item": ()}}
-COMPACT_SINCE = 14             # the schema from which profiles are run-length coded and items written as rows (BZ46)
+COMPACT_SINCE = 14             # the schema from which profiles are run-length coded and items written as rows (BZ47)
 PROFILE_FIELDS = ("how", "how_weeks", "sales_how", "sales_weeks", "supply_how", "supply_weeks")
 
 
@@ -229,7 +229,7 @@ def to_json(intel: MarketIntelligence, schema: int | None = None) -> str:
             writes the intelligence's own schema. Schema changes are additive, so an older reader reads it whole.
             From schema 14 each item is a row of `item_fields`' values and the profiles are written as the record
             holds them (run-length coded when `profile.pack` made them); an older schema gets them plain and each
-            item as an object (BZ46).
+            item as an object (BZ47).
 
     Returns:
         JSON text with sorted keys; item and catalog keys become strings.
@@ -263,7 +263,7 @@ def to_json(intel: MarketIntelligence, schema: int | None = None) -> str:
 
 
 def _profile_form(items, form) -> None:
-    """Rewrite each item's packed profile strings in one form, in place (BZ46).
+    """Rewrite each item's packed profile strings in one form, in place (BZ47).
 
     Args:
         items: The items as dicts (asdict's), changed in place.
@@ -297,7 +297,7 @@ def from_json(text: str) -> MarketIntelligence:
                                   and len(set(names)) == len(names)):
         raise ValueError("item_fields must be a list of distinct field names")
     for key, item in body["items"].items():
-        if names is not None:                  # schema 14's rows (BZ46); a row of the wrong length is refused
+        if names is not None:                  # schema 14's rows (BZ47); a row of the wrong length is refused
             if not isinstance(item, list):
                 raise ValueError(f"item {key} is not a row")
             item = dict(zip(names, item, strict=True))

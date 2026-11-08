@@ -224,7 +224,7 @@ def _slot(t_ms: int) -> int:
 
 
 def pack(prof: Profile) -> tuple[str, str]:
-    """A profile as the intelligence stores it: ratios in thousandths and weeks, run-length coded (SPEC §5.0, W13, BZ46).
+    """A profile as the intelligence stores it: ratios in thousandths and weeks, run-length coded (SPEC §5.0, W13, BZ47).
 
     Args:
         prof: The profile.
@@ -240,7 +240,7 @@ def pack(prof: Profile) -> tuple[str, str]:
 
 
 def _runs(slots: Sequence[str]) -> str:
-    """Slot texts run-length coded (BZ46).
+    """Slot texts run-length coded (BZ47).
 
     Args:
         slots: One text per slot.
@@ -261,7 +261,7 @@ def _runs(slots: Sequence[str]) -> str:
 
 
 def expand(text: str) -> list[str]:
-    """A packed profile string's 168 slot texts, from either form: plain (schema 13 and older) or run-length (BZ46).
+    """A packed profile string's 168 slot texts, from either form: plain (schema 13 and older) or run-length (BZ47).
 
     Args:
         text: From pack, or a plain list of 168 comma-separated integers; not "".
@@ -291,7 +291,7 @@ def expand(text: str) -> list[str]:
 
 
 def plain(text: str) -> str:
-    """A packed profile string in the plain form schema 13 and older readers expect (BZ46).
+    """A packed profile string in the plain form schema 13 and older readers expect (BZ47).
 
     Args:
         text: Plain or run-length coded; "" for no profile.
@@ -306,7 +306,7 @@ def plain(text: str) -> str:
 
 
 def unpack(values_text: str, weeks_text: str) -> Profile:
-    """A packed profile back as a Profile, from either form (W13, BZ46).
+    """A packed profile back as a Profile, from either form (W13, BZ47).
 
     Args:
         values_text: From pack: 168 integers in thousandths, or "".
