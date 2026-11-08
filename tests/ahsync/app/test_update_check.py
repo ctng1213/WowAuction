@@ -61,6 +61,23 @@ def test_DR15_once_a_day_with_the_etag_and_never_the_ahf_key(db):
     assert (update_check.read_meta(db)["tag"], update_check.read_meta(db)["etag"]) == ("v0.4.1", '"e2"')
 
 
+
+def test_DR33_a_check_at_start_asks_within_the_day(db):
+    transport, clock = FakeTransport.serve_github(), FakeClock(FRI_0600)
+    assert update_check.check(db, transport, clock, "0.3.1", Config())
+    newer = (FakeTransport.serve_github().routes[f"{GITHUB_REPO}/releases/latest"]
+             .replace(b"0.4.0", b"0.4.1"))
+    transport.serve_etag(f"{GITHUB_REPO}/releases/latest", newer, '"e2"')
+    clock.set(FRI_0600 + 12 * HOUR)                                       # Fri 18:00: AHSync starts
+    assert update_check.check(db, transport, clock, "0.3.1", Config(), at_start=True) and len(transport.requests) == 2
+    meta = update_check.read_meta(db)
+    assert (meta["tag"], meta["checked_ms"]) == ("v0.4.1", str(FRI_0600 + 12 * HOUR))
+    clock.set(FRI_0600 + 12 * HOUR + 10 * 60_000)                         # Fri 18:10: the next job
+    assert not update_check.check(db, transport, clock, "0.3.1", Config()) and len(transport.requests) == 2
+    assert not update_check.check(db, transport, clock, "0.0.0", Config(), at_start=True)
+    assert not update_check.check(db, transport, clock, "0.3.1", Config(update_check=False), at_start=True)
+    assert len(transport.requests) == 2
+
 @pytest.mark.parametrize("fault, logged, text", [
     ("offline", "update check: offline", "not checked: offline since Fri 06:00"),
     (404, "update check: 404", "not checked: no release yet"),

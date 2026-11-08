@@ -1,4 +1,4 @@
-"""The daily update check against GitHub Releases, and the update state kept in `meta` (SPEC §3.7.8; DR13–DR15, FM52).
+"""The update check against GitHub Releases (at every start, then daily), and the update state kept in `meta` (SPEC §3.7.8; DR13–DR15, FM52).
 
 One plain GET through the transport, never through `ApiClient`: GitHub must never see the AHF key (DR15), and a
 failure is one log line and a wait until tomorrow (FM52), not the client's retries. What the check and the
@@ -84,26 +84,31 @@ def read_state(db: Database, version: str, config: Config) -> UpdateState:
                        meta.get("updated_to"), number("updated_ms"), meta.get("left_beta") == "1")
 
 
-def due(db: Database, version: str, config: Config, now_ms: int) -> bool:
-    """Whether a check should be sent now: never from source or with `update_check` off; at most once a day (DR15).
+def due(db: Database, version: str, config: Config, now_ms: int, at_start: bool = False) -> bool:
+    """Whether a check should be sent now: never from source or with `update_check` off; else at every start,
+    then once a day (DR15, DR33).
 
     Args:
         db: The database.
         version: The running version.
         config: `update_check`.
         now_ms: Now, UTC ms.
+        at_start: True for the first check after AHSync started, which skips the day's wait.
 
     Returns:
         True when a request should go out.
     """
     if is_dev(version) or not config.update_check:
         return False
+    if at_start:
+        return True
     checked = read_state(db, version, config).checked_ms
     return checked is None or now_ms - checked >= DAY_MS
 
 
-def check(db: Database, transport: Transport, clock: Clock, version: str, config: Config) -> bool:
-    """Ask GitHub for the release this channel offers, when one is due (SPEC §3.7.8; DR13–DR15, DR25, FM52).
+def check(db: Database, transport: Transport, clock: Clock, version: str, config: Config,
+          at_start: bool = False) -> bool:
+    """Ask GitHub for the release this channel offers, when one is due (SPEC §3.7.8; DR13–DR15, DR25, DR33, FM52).
 
     Args:
         db: The database.
@@ -111,6 +116,7 @@ def check(db: Database, transport: Transport, clock: Clock, version: str, config
         clock: Now.
         version: The running version.
         config: The channel and `update_check`.
+        at_start: True for the first check after AHSync started: it asks even within a day of the last (DR33).
 
     Returns:
         True when a request was sent.
@@ -119,7 +125,7 @@ def check(db: Database, transport: Transport, clock: Clock, version: str, config
         `update.*` in meta; one log line per check.
     """
     now = clock.now_ms()
-    if not due(db, version, config, now):
+    if not due(db, version, config, now, at_start):
         return False
     beta = config.update_channel == "beta"
     meta = read_meta(db)

@@ -403,7 +403,7 @@ def serve_dashboard(data_dir: Path, config: Config, clock: Clock, refresh: Refre
 
 def update_job(db: Database, transport: Transport, clock: Clock, data_dir: Path, live: LiveConfig,
                app_hooks: AppHooks) -> Callable[[], None]:
-    """The scheduler's update job: settle the last install, the daily check, then the download (SPEC §3.7.8, §3.7.9).
+    """The scheduler's update job: settle the last install, the check (at start, then daily), then the download (SPEC §3.7.8, §3.7.9).
 
     Args:
         db: run()'s database (the job runs on its thread).
@@ -414,13 +414,17 @@ def update_job(db: Database, transport: Transport, clock: Clock, data_dir: Path,
         app_hooks: The platform's asset name, signature check, can-replace test and cleanup after an update (M27).
 
     Returns:
-        The job; it sends nothing unless a day has passed since the last check or download try.
+        The job; its first run checks whatever the time since the last check (DR33); after that it sends
+        nothing unless a day has passed since the last check or download try.
     """
+    started = [True]
+
     def job() -> None:
         """Settle the last install, check, download, then note whether the app may replace itself (M27, FM54)."""
         settings = live.current
         installer.settle(db, data_dir, version.VERSION, clock.now_ms(), app_hooks.forget_previous)
-        update_check.check(db, transport, clock, version.VERSION, settings)
+        update_check.check(db, transport, clock, version.VERSION, settings, at_start=started[0])
+        started[0] = False
         updater.download(db, transport, clock, data_dir, version.VERSION, settings, app_hooks.asset_name,
                          app_hooks.verify_update)
         update_check.write_meta(db, {"cant_replace": None if app_hooks.can_replace() else "1"})
