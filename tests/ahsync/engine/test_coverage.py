@@ -4,7 +4,7 @@ from __future__ import annotations
 import calendar
 from collections import Counter
 
-from ahsync.engine.coverage import age_text, coverage, ranges_to_hours, share_text, span_text, step
+from ahsync.engine.coverage import age_text, analysed_until_hour, cloud_note, coverage, ranges_to_hours, share_text, span_text, step
 
 HOUR = 3_600_000
 END = calendar.timegm((2026, 10, 22, 14, 0, 0)) // 3600     # Thu 22 Oct 14:00, local written as UTC (the mockup's)
@@ -208,3 +208,19 @@ def test_D99_a_cloud_markets_row_comes_from_the_summarys_coverage():
     assert card["union"]["hours"] == blizzard["hours"] and rows(card)["local"]["hours"] == 0
     assert card["none"]["gap_text"] == "longest gap 87 d 23 h (9 Aug 15:00 – 5 Nov 14:00)"   # before the first hour, as D91
     assert [cell(card, "Fri", h)["by_src"]["blizzard"] for h in (2, 3, 4, 5, 6)] == [1, 0, 0, 0, 1]   # the 3 h hole
+
+
+def test_D104_a_cloud_markets_note_says_how_far_collection_runs_ahead_of_analysis():
+    pacific = -8 * HOUR
+    prices = 1_794_111_360_000                                 # 2026-11-08 04:16 UTC = Sat 20:16 Pacific
+    analysed = analysed_until_hour([(1_793_491_200_000 // HOUR, 1_794_060_000_000 // HOUR - 1)])   # to 13:00
+    assert analysed * HOUR == 1_794_060_000_000            # 2026-11-07 14:00 UTC = Sat 06:00 Pacific
+    now = 1_794_112_200_000                                    # Sat 20:30 Pacific
+    assert cloud_note(prices, analysed, now, pacific) == (
+        "Blizzard data collected to Sat 20:16 · analysed to Sat 06:00 · next analysis Sun 01:00")
+    sun_0900_utc = 1_794_128_400_000                          # 2026-11-08 09:00 UTC
+    assert cloud_note(prices, analysed, sun_0900_utc - 60_000, pacific).endswith("next analysis Sun 01:00")
+    assert cloud_note(prices, analysed, sun_0900_utc, pacific).endswith("next analysis Mon 01:00")   # strictly after now
+    assert cloud_note(prices, None, now, pacific) == (
+        "Blizzard data collected to Sat 20:16 · analysed to — · next analysis Sun 01:00")
+    assert cloud_note(None, analysed, now, pacific) is None and analysed_until_hour([]) is None

@@ -12,7 +12,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
 from ahsync.engine.app_view import app_card
-from ahsync.engine.coverage import coverage
+from ahsync.engine.coverage import cloud_note, coverage
 from ahsync.engine.history_view import ratio_text
 from ahsync.engine.sell_record import Calibration
 from ahsync.engine.tracking import ProfitSums
@@ -63,6 +63,7 @@ class MarketFacts:
     cloud_built_ms: int | None = None    # the summary's baselines (its built_ms); None before the first summary
     cloud_prices_ms: int | None = None   # its prices' time (observations_until_ms)
     cloud_next_ms: int | None = None     # when AHSync asks for a newer one
+    cloud_analysed_hour: int | None = None   # where its analysis ends: the end of its coverage, an hour number (D104)
 
 
 @dataclass(frozen=True)
@@ -677,4 +678,6 @@ def status_view(rows: Sequence[StatusRow], facts: StatusFacts, now_ms: int, offs
     return {"alerts": alerts(rows, facts, now_ms, offset_ms), "cards": cards, "app_card": card,
             "calibration": calibration_view(facts.calibration, facts.profit),
             "coverage": [{"market": m.market, **coverage(m.coverage_hours, now_ms // HOUR_MS, offset_ms,
-                                                         m.coverage_sources, m.partial_scan)} for m in facts.markets]}
+                                                         m.coverage_sources, m.partial_scan),
+                          "cloud_note": cloud_note(m.cloud_prices_ms, m.cloud_analysed_hour, now_ms, offset_ms)
+                          if m.cloud_on else None} for m in facts.markets]}

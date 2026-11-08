@@ -355,6 +355,7 @@ const covTable = c => '<div class="scrollx"><table><thead><tr><th>Source</th><th
 const covCard = c => `<div class="card" style="margin-top:14px"><div class="card-h"><b>${esc(c.title)}</b><span class="muted">${esc(c.sub)}</span></div>` +
   `<div class="grid2" style="padding:12px 14px;align-items:start"><div><div class="muted" style="font-size:12px;margin-bottom:6px">${esc(c.heading)}</div>${covHeat(c)}</div>` +
   `<div>${covTable(c)}</div></div>` +
+  (c.cloud_note ? `<div style="padding:8px 14px;border-top:1px solid var(--border);font-size:13px">${esc(c.cloud_note)}</div>` : '') +
   `<div class="foot note" style="display:block"><div>${esc(c.reading)}</div><div style="margin-top:4px">${esc(c.rule)}</div></div></div>`;
 // Status: the sell-probability calibration section (SPEC §8.8); every text and width comes from engine/status_view.py.
 const calBar = (pct, color) => `<div class="bar" style="width:160px"><i style="width:${Number(pct)}%;background:${color}"></i></div>`;

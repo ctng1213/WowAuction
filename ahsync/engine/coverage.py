@@ -12,7 +12,9 @@ from collections.abc import Iterable, Mapping, Sequence
 from ahsync.engine.views import SOURCE_URLS
 
 HOUR_MS = 3_600_000
+DAY_MS = 86_400_000
 WINDOW_HOURS = 2160                       # 90 days
+DAILY_RUN_HOUR_UTC = 9                    # the cloud's daily analysis (infra/market_stack MarketConfig.daily_hour_utc)
 SOURCE_ORDER = ("local", "ahledger", "ahf")
 SOURCE_ALIASES = {"ahledger_h1": "ahledger"}   # the table and the backfill show as one source
 LABELS = {"local": "your scans", "ahledger": "AHledger", "ahf": "auctionhouse.fyi",
@@ -321,3 +323,56 @@ def coverage(hours_by_src: Mapping[str, Iterable[int]], window_end_hour: int, of
                 "their sum",
         "reading": READING, "rule": _rule(partial, offset_ms),
     }
+
+
+def _short(ms: int, offset_ms: int) -> str:
+    """A moment as weekday and local time, e.g. "Sat 20:16".
+
+    Args:
+        ms: UTC ms.
+        offset_ms: Local time minus UTC, ms.
+
+    Returns:
+        The text.
+    """
+    t = time.gmtime((ms + offset_ms) // 1000)
+    return f"{DAYS[t.tm_wday]} {time.strftime('%H:%M', t)}"
+
+
+def analysed_until_hour(ranges: Iterable[tuple[int, int]]) -> int | None:
+    """Where a cloud summary's analysis ends: the end of its last observed hour (SPEC §3.5, D104).
+
+    Args:
+        ranges: The summary's `coverage`, (first hour, last hour) ranges of hour numbers.
+
+    Returns:
+        The last hour + 1, an hour number; None without coverage.
+    """
+    ends = [last for _, last in ranges]
+    return max(ends) + 1 if ends else None
+
+
+def cloud_note(prices_ms: int | None, analysed_hour: int | None, now_ms: int, offset_ms: int) -> str | None:
+    """The note under a cloud market's Data coverage card: how far collection runs ahead of analysis (D104).
+
+    The heatmap shows only the hours the daily analysis used (the user, 2026-11-07); the note says that newer prices
+    exist and when they will be analysed.
+
+    Args:
+        prices_ms: The summary's newest snapshot (`observations_until_ms`), UTC ms; None before any summary.
+        analysed_hour: `analysed_until_hour` of its coverage, or None.
+        now_ms: Now, UTC ms.
+        offset_ms: Local time minus UTC, ms.
+
+    Returns:
+        "Blizzard data collected to Sat 20:16 · analysed to Sat 06:00 · next analysis Sun 01:00" (the next daily
+        run strictly after now, DAILY_RUN_HOUR_UTC); "analysed to —" without coverage; None without a summary.
+    """
+    if prices_ms is None:
+        return None
+    run = now_ms // DAY_MS * DAY_MS + DAILY_RUN_HOUR_UTC * HOUR_MS
+    if run <= now_ms:
+        run += DAY_MS
+    analysed = "—" if analysed_hour is None else _short(analysed_hour * HOUR_MS, offset_ms)
+    return (f"Blizzard data collected to {_short(prices_ms, offset_ms)} · analysed to {analysed} · "
+            f"next analysis {_short(run, offset_ms)}")

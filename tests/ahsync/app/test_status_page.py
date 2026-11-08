@@ -142,3 +142,24 @@ def test_D99_a_cloud_markets_coverage_card_shows_the_summarys_hours(tmp_path):
         assert rows["local"]["hours"] == 0
     finally:
         db.close()
+
+
+def test_D104_the_status_payload_carries_a_cloud_markets_note_and_no_note_for_a_local_one(tmp_path):
+    from ahsync.config import CloudConfig
+    from ahsync.intel.contract import MarketIntelligence
+    now = FakeClock().now_ms()
+    end = now // HOUR
+    db = Database.open(tmp_path / "ahsync.db", now, None)
+    try:
+        with db.transaction():
+            db.stage_intel(MarketIntelligence(M, now - 6 * HOUR, now - 18 * 60_000, 5, {},
+                                              coverage=((end - 48, end - 38), (end - 34, end - 7))))
+        db.publish_refresh([M], with_intel=[M])
+        cloud = Config(markets=(M,), cloud=CloudConfig("https://x.cloudfront.net"),
+                       sources={M: MarketSources("blizzard", ("blizzard",), {})})
+        note = status_page.status_page(db, cloud, now, 0)["coverage"][0]["cloud_note"]
+        assert note.startswith("Blizzard data collected to ") and " · analysed to " in note
+        assert status_page.status_facts(db, cloud, now).markets[0].cloud_analysed_hour == end - 6   # last hour + 1
+        assert status_page.status_page(db, Config(markets=(M,)), now, 0)["coverage"][0]["cloud_note"] is None
+    finally:
+        db.close()
