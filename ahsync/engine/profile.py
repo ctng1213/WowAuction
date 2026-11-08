@@ -270,11 +270,16 @@ def expand(text: str) -> list[str]:
         168 texts, one per slot.
 
     Raises:
-        ValueError: When the text is not 168 slots, or a run's count is not a positive integer; a run is never
-            expanded past 168, so a hostile count costs nothing (SEC16).
+        ValueError: When the text is not 168 slots, or a run's count is not a positive integer. At most 169
+            tokens are split off and a run is never expanded past 168, so a hostile string costs nothing (SEC16).
     """
-    slots: list[str] = []
-    for token in text.split(","):
+    if "*" not in text:                        # the plain form: a split is enough
+        slots = text.split(",", SLOTS)
+        if len(slots) != SLOTS:
+            raise ValueError(f"a packed profile needs {SLOTS} slots, got {len(slots)}")
+        return slots
+    slots = []
+    for token in text.split(",", SLOTS):
         value, star, count = token.partition("*")
         n = int(count) if star else 1
         if n < 1 or len(slots) + n > SLOTS:

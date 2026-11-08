@@ -293,8 +293,13 @@ def from_json(text: str) -> MarketIntelligence:
                                 f"this reads up to {INTEL_SCHEMA_VERSION})")
     items = {}
     names = body.get("item_fields")
+    if names is not None and not (isinstance(names, list) and all(isinstance(n, str) for n in names)
+                                  and len(set(names)) == len(names)):
+        raise ValueError("item_fields must be a list of distinct field names")
     for key, item in body["items"].items():
         if names is not None:                  # schema 14's rows (BZ46); a row of the wrong length is refused
+            if not isinstance(item, list):
+                raise ValueError(f"item {key} is not a row")
             item = dict(zip(names, item, strict=True))
         item["book"] = tuple(tuple(row) for row in item["book"])
         if body["schema_version"] < 3:         # version 2's unpacked profiles are dropped: the next refresh rebuilds them
