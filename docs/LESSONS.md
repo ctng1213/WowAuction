@@ -21,6 +21,7 @@ Rule (CLAUDE.md "How work is run"): whoever discovers the mistake writes the ent
 - **2026-10-22 · Every hour-of-week slot has weeks of data.** The heatmap reading line printed a fallback ratio (0.99) for a slot with no data while its cell said "no data". Found by rendering the real dashboard headless. Changed: `gathering_history.reading` says "slot: no data", GA31.
 - **2026-10-19 · A thin item can have a sell window.** Items with under 24 closes got windows and premiums from noise (0-week slots, 35× ratios). Found on the live database. Changed: W16, TT22, TT23, PP4, R28 (SPEC §3.3.4, §3.4D).
 - **2026-10-19 · Partial commodity fills are sales.** Group diffs by (key, price) counted a stack partly sold as fully sold, doubling market-wide sales. Found on a 28-minute live scan pair. Changed: unit-level diff, VOLUME_METHOD_VERSION 4, V42/V43.
+- **2026-11-08 · A cancelled auction returns its deposit.** Assumed (SPEC §3.4.1, D68, positions' replay): a cancel realized 0 and only an expiry lost the deposit. True: the AH keeps the deposit of a cancelled auction as well. Found by: the user's in-game check while planning the market simulator. Changed: a cancelled post realizes −deposit (T24), a position loses it (PO14), History's Deposits lost counts cancels (D48).
 
 ## Tooling and process
 

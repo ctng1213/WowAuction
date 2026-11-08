@@ -288,13 +288,11 @@ def post_value(p: PostResult) -> float | None:
         p: The post.
 
     Returns:
-        Copper: its payout's realized profit once paid, −deposit when it expired (0 when the deposit is unknown),
-        0 when cancelled; None while it is up or sold but not paid out.
+        Copper: its payout's realized profit once paid, −deposit when it expired or was cancelled (the AH keeps
+        a cancelled post's deposit, T24; 0 when the deposit is unknown); None while it is up or sold but not paid out.
     """
-    if p.outcome == "expired":
+    if p.outcome in ("expired", "cancelled"):
         return -float(p.deposit or 0)
-    if p.outcome == "cancelled":
-        return 0.0
     return p.realized if p.outcome == "sold" else None
 
 

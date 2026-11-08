@@ -61,7 +61,7 @@ def test_D48_the_tiles_total_the_last_30_days():
     tiles = history_view(JOURNAL, LOOKS, NAMES, NOW, 0)["tiles"]
     assert tiles == [["Sold (30 d)", "1 auctions", "38s 95c after the cut"],      # 41s × 0.95
                      ["Expired (30 d)", "1 auctions", "1 cancelled"],
-                     ["Deposits lost", "15c", "30 days"],
+                     ["Deposits lost", "30c", "30 days"],        # the expired post's 15c and the cancelled one's 15c
                      ["Plan actions", "2 done", "1 missed · 1 skipped"],
                      ["Realized profit", "+19s 15c", "1 payouts · after cost and deposit"],
                      ["Expected (resolved)", "0c", "0 resolved plan events"],

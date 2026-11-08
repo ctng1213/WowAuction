@@ -188,7 +188,7 @@ def _tiles(rows: Sequence[tuple], sums: ProfitSums) -> list[list[str]]:
         return [r for r in rows if r[2] in kinds]
     sold, expired, paid = of("sold"), of("expired"), of("paid_out")
     after_cut = sum((r[5] or 0) * r[4] for r in sold) * (1 - fees.AH_CUT)
-    lost = sum(r[8] or 0 for r in expired)
+    lost = sum(r[8] or 0 for r in of("expired", "cancelled"))      # the AH keeps a cancel's deposit (T24)
     done = [r for r in rows if r[6] is not None and r[6][0] == "done"]           # events that completed an action
     realized = [r[8] for r in paid if r[8] is not None]
     return [["Sold (30 d)", f"{len(sold)} auctions", f"{money(after_cut)} after the cut"],

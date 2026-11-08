@@ -12,7 +12,7 @@ also knows, so a local position in game and AHSync's exported one are the same r
 - `track` replays, in time order, every event that moves the positions' units, and splits each one over the
   positions of that character and item oldest first (FIFO): a post lists units, its sold mail moves them to "sold,
   not paid out", its payout takes their cost out of committed capital and realizes `money − deposit − cost` (T17,
-  PO4, PO9, PO11); an expired post brings them back and loses its deposit; a disenchant or a craft uses them (their
+  PO4, PO9, PO11); an expired or cancelled post brings them back and loses its deposit (PO14); a disenchant or a craft uses them (their
   cost leaves); a craft turns a Processing position's mats into its product, carrying the cost; a sent mail moves
   them to the recipient, in transit until a snapshot of hers is newer (T22, PO7). Then it reconciles: when the
   newest snapshots of a character show fewer units than its positions hold and no later event explains it, the
@@ -350,7 +350,7 @@ class _Replay:
         self.mails[m.event_id] = [(b, n, d) for b, n, d in takes if n]
 
     def back(self, m: Move) -> None:
-        """An expired or cancelled mail: its units come back; an expiry loses its deposit (D68).
+        """An expired or cancelled mail: its units come back and its deposit is lost (D68, PO14).
 
         Args:
             m: The mail.
@@ -359,8 +359,7 @@ class _Replay:
             b.touch(m.at_ms, m.event_id)                 # unlinked: it still explains units the snapshot lacks
         for b, _ in self.posts.get(m.post_id or "", []):
             b.held += b.listed.pop(m.post_id, 0)
-            deposit = b.deposits.pop(m.post_id, 0.0)
-            b.realized -= deposit if m.kind == "expired" else 0.0
+            b.realized -= b.deposits.pop(m.post_id, 0.0)
 
     def payout(self, m: Move) -> None:
         """Gold taken from a sold mail: the units' cost leaves committed capital as the gold joins your cash (T17).
