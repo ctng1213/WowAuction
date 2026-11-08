@@ -140,11 +140,12 @@ class IntelStore:
         Args:
             intel: The intelligence.
             body: Its gzipped JSON as downloaded (a cloud document, BZ43), stored as it is, a BLOB in the TEXT
-                column; None writes to_json(intel) as text.
+                column; None stores gzip(to_json(intel)) the same way (a local market's, BZ47).
         """
+        if body is None:
+            body = gzip.compress(to_json(intel).encode("utf-8"), mtime=0)
         self.conn.execute("INSERT OR REPLACE INTO intel_new(market, schema_version, body, built) VALUES (?, ?, ?, ?)",
-                          (intel.market, intel.schema_version, to_json(intel) if body is None else body,
-                           intel.built_ms))
+                          (intel.market, intel.schema_version, body, intel.built_ms))
 
     def hold_intel(self, intel: MarketIntelligence) -> None:
         """Hold a just-published document as the market's parsed record, so the export and the dashboard reuse it.
@@ -224,7 +225,7 @@ class IntelStore:
         return None if row is None else tuple(row)
 
     def _parse_intel(self, market: str) -> MarketIntelligence:
-        """Read and parse the published body: JSON text, or a cloud document's gzip as downloaded (BZ43).
+        """Read and parse the published body: gzipped JSON (BZ43, BZ47), or JSON text an older AHSync stored.
 
         Args:
             market: Market id.
