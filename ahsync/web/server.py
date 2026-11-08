@@ -39,6 +39,7 @@ from ahsync.engine.updates import UpdateState
 from ahsync.config import (CHANNELS, Config, ConfigError, is_cloud_market, market_sources, write_risk_tolerance,
                            write_setting)
 from ahsync.db.sqlite import Database
+from ahsync.intel.store import IntelCache
 from ahsync.engine.app_view import BAD_LOCATION_TEXT
 from ahsync.engine.gathering import catalog, eligible, why_not_eligible
 from ahsync.engine.status_view import cloud_freshness
@@ -175,7 +176,7 @@ def body_field(body: bytes, name: str) -> object:
     return data.get(name) if isinstance(data, dict) else None
 
 
-def open_server_db(path: Path) -> Database:
+def open_server_db(path: Path, intel_cache: IntelCache | None = None) -> Database:
     """Open a second connection to data/ahsync.db for the server's thread.
 
     The main thread's connection can't be shared across threads; WAL mode (set by
@@ -184,13 +185,14 @@ def open_server_db(path: Path) -> Database:
 
     Args:
         path: data/ahsync.db, already opened (and migrated) by Database.open.
+        intel_cache: The main connection's IntelCache, so both share one parsed summary (BZ42); None: its own.
 
     Returns:
         A Database usable from the server thread; writes wait up to 5 s for a lock.
     """
     conn = sqlite3.connect(path, isolation_level=None, check_same_thread=False)
     conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
-    return Database(conn, path)
+    return Database(conn, path, intel_cache)
 
 
 @dataclass

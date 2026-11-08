@@ -12,6 +12,7 @@ The user's decisions of 2026-11-08:
 2. **Measure first (SM0), then the app-only changes (SM1), then the format (SM2).** SM1 needs no cloud change and helps at any summary size; SM2 needs a cloud deploy.
 3. **Older apps keep working.** The cloud keeps publishing schemas 10–13 alongside the new one, as it does today (`latest-<schema>.json`).
 4. **The plan, the budget and the order are approved** (the user, 2026-11-08): a cloud market's process peak ≤ 600 MB with the 88 MB summary of 2026-11-08, measured by SM0 (2); SM2 is decided after SM1's measurement.
+5. **Step 2 stores the gzip** (Opus, during SM1, 2026-11-08): the downloaded text was measured worse; see SM1's note.
 
 Facts measured on 2026-11-08 (the 88 MB schema 13 document, Python 3.12, `tracemalloc`):
 
@@ -53,6 +54,8 @@ Facts measured on 2026-11-08 (the 88 MB schema 13 document, Python 3.12, `tracem
 4. Expected: steady about 1.5 × S + base, peak about 3 × S + base. Measured with SM0 (2) and recorded.
 
 Scenarios to add: a re-plan and a dashboard request in one process parse the summary once; a staged cloud document is stored byte for byte as downloaded; a new summary replaces the cached one.
+
+**Built (SM1, 2026-11-08).** Steps 1 and 3 as planned. Step 2 changed during execution: storing the downloaded *text* made the peak worse (footprint 599 → 670 MB), because SQLite's own copies of an 88 MB row (staging, then the swap into `intel`) dominate; the stored body is the downloaded **gzip** instead (5 MB). Measured with `tools/bench.py --summary` on the 88 MB document: peak 991 → **510 MB** resident (footprint 461 MB), the hourly poll, re-plan and export 2.2 → 0.8 s. A bug found on the way: the dashboard's connection kept the day's first summary (BZ42, LESSONS). Known limit: AHSync 0.1.8 or older, run on a database where 0.1.9 stored a gzip body, fails to read the summary until its next poll stores a new one (within the hour).
 
 ### SM2: the compact summary, schema 14 (Opus: contract change, cloud and app together)
 

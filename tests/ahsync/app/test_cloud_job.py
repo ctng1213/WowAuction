@@ -59,3 +59,28 @@ def test_SEC16_the_real_transport_is_replaced_by_a_bounded_one_that_refuses_redi
     assert isinstance(real, UrllibTransport) and real._max_bytes == cloud_intel.MAX_BYTES
     fake = object()
     assert cloud_job.cloud_transport(fake) is fake
+
+
+def test_BZ43_a_new_summary_is_parsed_once_and_stored_as_downloaded(db, published, monkeypatch):  # noqa: F811
+    import gzip
+
+    from ahsync.intel import contract, store
+    from ahsync.web.server import open_server_db
+    document, cloud, cfg = published
+    parses = []
+    real = contract.from_json
+    monkeypatch.setattr(cloud_intel, "from_json", lambda text: parses.append("poll") or real(text))
+    monkeypatch.setattr(store, "from_json", lambda text: parses.append("store") or real(text))
+    monkeypatch.setattr(store, "to_json", lambda *_a: pytest.fail("re-serialized"))   # stored as downloaded
+    dashboard = open_server_db(db.path, db.intel_cache)
+    try:
+        assert cloud_job.poll_cloud(db, Origin(cloud), FakeClock(NOW + HOUR), cfg) == [M]
+        assert dashboard.read_intel(M) is db.read_intel(M) and parses == ["poll"]
+        pointer = cloud.get(f"intel/{M}/latest-{contract.INTEL_SCHEMA_VERSION}.json")
+        import json
+        downloaded = cloud.get(json.loads(pointer.data)["key"]).data
+        assert db.conn.execute("SELECT body FROM intel WHERE market = ?", (M,)).fetchone()[0] == downloaded
+        db.intel_cache.forget(M)                                      # a restart reads the stored gzip
+        assert db.read_intel(M) == document and gzip.decompress(downloaded)
+    finally:
+        dashboard.close()

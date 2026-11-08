@@ -246,7 +246,8 @@ def rebuild_gathering(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0
 
 
 def replan_all(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0,
-               documents: dict[str, MarketIntelligence] | None = None) -> list[str]:
+               documents: dict[str, MarketIntelligence] | None = None,
+               bodies: dict[str, bytes] | None = None) -> list[str]:
     """The incremental update: re-plan every market from its published intelligence (SPEC §3.1.1, IU13).
 
     It runs after a SavedVariables read, so what you did in game (bought, crafted, posted, moved
@@ -261,6 +262,8 @@ def replan_all(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0,
         offset_ms: Local time minus UTC, for the plan pages.
         documents: Market -> a newly fetched cloud document (collect.cloud_intel), staged and published with this
             re-plan after its own drop_staging, so it can't be lost (SPEC §2.4, BZ17); None for a plain re-plan.
+        bodies: Market -> that document's gzip as downloaded, stored as it is instead of re-serialized JSON
+            (5 MB instead of 88 MB through SQLite on 2026-11-08); each is popped once stored (BZ43).
 
     Returns:
         The markets re-planned (those with published intelligence); [] when it failed, in which
@@ -274,9 +277,12 @@ def replan_all(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0,
         for market in markets:
             with db.transaction():
                 if market in documents:
-                    db.stage_intel(documents[market])
+                    db.stage_intel(documents[market], (bodies or {}).pop(market, None))
                 stage_document(db, intels[market], now_ms, offset_ms, cfg)
         db.publish_refresh(markets, with_intel=set(documents))   # only a new document replaces the stored one
+        for market in markets:
+            if market in documents:
+                db.hold_intel(documents[market])       # the export and the dashboard reuse it unparsed (BZ43)
     except Exception as error:                         # noqa: BLE001  keep the last good plan (SPEC §5.2 rule 4)
         log.error("re-plan failed: %s: %s", type(error).__name__, error)
         db.drop_staging()
