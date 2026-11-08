@@ -1,4 +1,4 @@
-"""How an auction that vanished splits between sold and expired (SPEC §2.4 Auction lifetimes, BZ22, BZ26, BZ42).
+"""How an auction that vanished splits between sold and expired (SPEC §2.4 Auction lifetimes, BZ22, BZ26, BZ44).
 
 Pure. `engine.volume.lifetimes` follows each auction to the gap it vanished in; this module says how much of it
 expired: the overlap of the gap with its expiry window (`expired_fraction`, the first pass and the cancel rule's
@@ -27,12 +27,12 @@ def expired_fraction(window: tuple[int, int], absent_ms: int) -> float:
     return min(1.0, max(0.0, (absent_ms - start) / (end - start)))
 
 
-PRIOR_LEAVES = 5.0   # pseudo early leaves pulling a thin item's early-leave rate toward its market's (BZ42)
-RATE_WINDOW_MS = 24 * 3_600_000   # an ending's rate reads the gaps that ended in the day before it (BZ42)
+PRIOR_LEAVES = 5.0   # pseudo early leaves pulling a thin item's early-leave rate toward its market's (BZ44)
+RATE_WINDOW_MS = 24 * 3_600_000   # an ending's rate reads the gaps that ended in the day before it (BZ44)
 
 
 def expired_given_vanished(window: tuple[int, int], gap: tuple[int, int], rate_per_ms: float) -> float:
-    """The share of an auction that expired, given it vanished in a gap that overlaps its expiry window (BZ42).
+    """The share of an auction that expired, given it vanished in a gap that overlaps its expiry window (BZ44).
 
     Selling and expiring compete: the expiry is equally likely anywhere in the window after the auction was last
     seen, and until then a buyer takes the whole listing at the item's early-leave rate (constant). The share is
@@ -68,7 +68,7 @@ def expired_given_vanished(window: tuple[int, int], gap: tuple[int, int], rate_p
 
 
 class EarlyLeaveRates:
-    """Items' early-leave rates for endings, from the gaps that ended in the RATE_WINDOW_MS before each (BZ42).
+    """Items' early-leave rates for endings, from the gaps that ended in the RATE_WINDOW_MS before each (BZ44).
 
     Causal: only gaps ending in (end − RATE_WINDOW_MS, end] count, so every lifetimes pass that holds an ending (its
     lookback covers the window, `engine.volume.LIFETIME_LOOKBACK_MS`) gives it the same rate, and a later snapshot
@@ -129,7 +129,7 @@ class EarlyLeaveRates:
 
 def tally_early_leaves(live: dict[int, list], vanished: list[tuple], gap_ms: int,
                        at_ms: int) -> dict[int, tuple[int, int]]:
-    """One gap's early-leave tally: listings that could not expire in it, and those of them that left (BZ42).
+    """One gap's early-leave tally: listings that could not expire in it, and those of them that left (BZ44).
 
     Args:
         live: Auction id -> state as of the gap's start (its expiry window third).

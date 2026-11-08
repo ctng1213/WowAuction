@@ -1,6 +1,7 @@
 """Benchmark the full refresh against its budgets (SPEC §3.1.2).
 
 Usage: python tools/bench.py [--items 9000] [--hours 2160]
+       python tools/bench.py --summary <document.json.gz>
 
 Builds a generated world in a temporary database (no network, nothing in data/):
 `--items` priced items with `--hours` hourly closes, listed units and sales rates
@@ -14,22 +15,37 @@ slowed by memory tracing and the peak is the process's own (it includes the
 interpreter, so it is conservative); then both addon files are written into a
 temporary AddOns folder. Budgets: full refresh ≤ 120 s for about 9k items, ≤ 512 MB
 peak, MarketIntelligence.lua ≤ 3 MB and PortfolioPlan.lua ≤ 200 KB (SPEC §3.1.2, §3.5).
+
+`--summary` measures a cloud market instead (SPEC §2.4, plan summary-memory SM0): a real
+published document is served from a temporary store, and a fresh process runs what the
+app does each hour: the poll (fetch, parse, stage, re-plan, both addon files), then the
+dashboard's read of the summary on its own connection, then the next hour's summary and
+the dashboard's read again. It prints the resident size and the peak after each step.
+Budget: a cloud market's process peak ≤ 600 MB with the 88 MB summary of 2026-11-08.
 """
 from __future__ import annotations
 
 import argparse
+import gzip
 import random
 import subprocess
 import sys
 import tempfile
 import time
+from dataclasses import replace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from ahsync.config import Config  # noqa: E402
+from ahcloud.publish import publish  # noqa: E402
+from ahcloud.store import LocalStore  # noqa: E402
+from ahsync.app.cloud_job import poll_cloud  # noqa: E402
+from ahsync.collect.client import HttpRequest, HttpResponse  # noqa: E402
+from ahsync.config import CloudConfig, Config, MarketSources  # noqa: E402
 from ahsync.db.sqlite import Database  # noqa: E402
 from ahsync.app.refresh import refresh_all  # noqa: E402
+from ahsync.intel.contract import INTEL_SCHEMA_VERSION, from_json  # noqa: E402
+from ahsync.web.server import open_server_db  # noqa: E402
 from ahsync.export.addon_files import (DATA_FOLDER, MARKET_FILE, MAX_MARKET_BYTES, MAX_PLAN_BYTES,  # noqa: E402
                                        PLAN_FILE, export_market, export_plan)
 
@@ -37,6 +53,8 @@ M = "forever.pvp.horde.us"
 HOUR, DAY = 3_600_000, 86_400_000
 NOW = 20_500 * DAY
 BUDGET_S, BUDGET_MB = 120.0, 512.0
+SUMMARY_BUDGET_MB = 600.0                      # a cloud market's process peak (plan summary-memory §1 item 4)
+ORIGIN = "https://bench.cloudfront.net"
 SEED = 42
 
 
@@ -136,6 +154,35 @@ def positions(db: Database, stock: list[tuple[str, int, int, int]]) -> None:
                         [(e, e, n, each, NOW - DAY) for e, _c, _k, n, each in rows])
 
 
+def windows_memory_counters():
+    """This process's memory counters on Windows.
+
+    Returns:
+        A PROCESS_MEMORY_COUNTERS structure (PeakWorkingSetSize and WorkingSetSize in bytes).
+
+    Raises:
+        OSError: GetProcessMemoryInfo failed.
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    class Counters(ctypes.Structure):
+        """PROCESS_MEMORY_COUNTERS."""
+        _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD)] + [
+            (name, ctypes.c_size_t) for name in (
+                "PeakWorkingSetSize", "WorkingSetSize", "QuotaPeakPagedPoolUsage", "QuotaPagedPoolUsage",
+                "QuotaPeakNonPagedPoolUsage", "QuotaNonPagedPoolUsage", "PagefileUsage", "PeakPagefileUsage")]
+    kernel32 = ctypes.windll.kernel32
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel32.K32GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(Counters), wintypes.DWORD]
+    kernel32.K32GetProcessMemoryInfo.restype = wintypes.BOOL
+    counters = Counters()
+    counters.cb = ctypes.sizeof(counters)
+    if not kernel32.K32GetProcessMemoryInfo(kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb):
+        raise OSError(ctypes.get_last_error(), "GetProcessMemoryInfo failed")
+    return counters
+
+
 def peak_memory_mb() -> float:
     """This process's peak memory so far.
 
@@ -143,27 +190,189 @@ def peak_memory_mb() -> float:
         Peak working set (Windows) or maximum resident set size (elsewhere), in MB.
     """
     if sys.platform == "win32":
-        import ctypes
-        from ctypes import wintypes
-
-        class Counters(ctypes.Structure):
-            """PROCESS_MEMORY_COUNTERS."""
-            _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD)] + [
-                (name, ctypes.c_size_t) for name in (
-                    "PeakWorkingSetSize", "WorkingSetSize", "QuotaPeakPagedPoolUsage", "QuotaPagedPoolUsage",
-                    "QuotaPeakNonPagedPoolUsage", "QuotaNonPagedPoolUsage", "PagefileUsage", "PeakPagefileUsage")]
-        kernel32 = ctypes.windll.kernel32
-        kernel32.GetCurrentProcess.restype = wintypes.HANDLE
-        kernel32.K32GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(Counters), wintypes.DWORD]
-        kernel32.K32GetProcessMemoryInfo.restype = wintypes.BOOL
-        counters = Counters()
-        counters.cb = ctypes.sizeof(counters)
-        if not kernel32.K32GetProcessMemoryInfo(kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb):
-            raise OSError(ctypes.get_last_error(), "GetProcessMemoryInfo failed")
-        return counters.PeakWorkingSetSize / 1_048_576
+        return windows_memory_counters().PeakWorkingSetSize / 1_048_576
     import resource
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     return peak / 1_048_576 if sys.platform == "darwin" else peak / 1024      # bytes on macOS, KB on Linux
+
+
+def resident_memory_mb() -> float:
+    """This process's resident memory now.
+
+    Returns:
+        Working set (Windows) or resident set size from `ps` (elsewhere), in MB.
+    """
+    if sys.platform == "win32":
+        return windows_memory_counters().WorkingSetSize / 1_048_576
+    import os
+    out = subprocess.run(["ps", "-o", "rss=", "-p", str(os.getpid())], capture_output=True, text=True, check=True)
+    return int(out.stdout.strip()) / 1024
+
+
+def macos_footprint_mb() -> tuple[float, float]:
+    """This process's physical footprint on macOS, what Activity Monitor's Memory column shows.
+
+    Unlike the resident size it leaves out pages the allocator freed and marked reclaimable, which macOS keeps
+    counting as resident until it needs them.
+
+    Returns:
+        (now, the process's lifetime peak), in MB.
+
+    Raises:
+        OSError: proc_pid_rusage failed.
+    """
+    import ctypes
+    import os
+    names = ("user_time", "system_time", "pkg_idle_wkups", "interrupt_wkups", "pageins", "wired_size",
+             "resident_size", "phys_footprint", "proc_start_abstime", "proc_exit_abstime", "child_user_time",
+             "child_system_time", "child_pkg_idle_wkups", "child_interrupt_wkups", "child_pageins",
+             "child_elapsed_abstime", "diskio_bytesread", "diskio_byteswritten", "cpu_time_qos_default",
+             "cpu_time_qos_maintenance", "cpu_time_qos_background", "cpu_time_qos_utility", "cpu_time_qos_legacy",
+             "cpu_time_qos_user_initiated", "cpu_time_qos_user_interactive", "billed_system_time",
+             "serviced_system_time", "logical_writes", "lifetime_max_phys_footprint", "instructions", "cycles",
+             "billed_energy", "serviced_energy", "interval_max_phys_footprint", "runnable_time")
+
+    class RUsageInfoV4(ctypes.Structure):
+        """struct rusage_info_v4 (sys/resource.h)."""
+        _fields_ = [("uuid", ctypes.c_uint8 * 16)] + [(name, ctypes.c_uint64) for name in names]
+    info = RUsageInfoV4()
+    if ctypes.CDLL("/usr/lib/libproc.dylib").proc_pid_rusage(os.getpid(), 4, ctypes.byref(info)) != 0:
+        raise OSError("proc_pid_rusage failed")
+    return info.phys_footprint / 1_048_576, info.lifetime_max_phys_footprint / 1_048_576
+
+
+def memory_line() -> str:
+    """The memory figures the summary mode prints after each step.
+
+    Returns:
+        "resident R MB, peak P MB", plus "footprint F MB, peak G MB" on macOS.
+    """
+    line = f"resident {resident_memory_mb():.0f} MB, peak {peak_memory_mb():.0f} MB"
+    if sys.platform == "darwin":
+        now, peak = macos_footprint_mb()
+        line += f"; footprint {now:.0f} MB, peak {peak:.0f} MB"
+    return line
+
+
+class StoreOrigin:
+    """A transport serving a LocalStore's objects at ORIGIN, as CloudFront serves the intel bucket."""
+
+    def __init__(self, store: LocalStore) -> None:
+        """Serve this store.
+
+        Args:
+            store: The store holding the published documents and pointers.
+        """
+        self.store = store
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        """Answer one GET.
+
+        Args:
+            request: The request; its URL starts with ORIGIN.
+
+        Returns:
+            200 with the object and its ETag, 304 when If-None-Match matches it, 404 when it is missing.
+        """
+        found = self.store.get(request.url.removeprefix(ORIGIN + "/"))
+        if found is None:
+            return HttpResponse(404, {}, b"")
+        etag = f'"{found.etag}"'
+        if request.headers.get("If-None-Match") == etag:
+            return HttpResponse(304, {"etag": etag}, b"")
+        return HttpResponse(200, {"etag": etag}, found.data)
+
+
+class BenchClock:
+    """A clock that stays where it is set and never sleeps."""
+
+    def __init__(self, now_ms: int) -> None:
+        """Start at a time.
+
+        Args:
+            now_ms: UTC ms.
+        """
+        self.now = now_ms
+
+    def now_ms(self) -> int:
+        """Now.
+
+        Returns:
+            The time set, UTC ms.
+        """
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        """Do not wait.
+
+        Args:
+            seconds: Ignored.
+        """
+
+    def local_offset_ms(self, at_ms: int) -> int:
+        """UTC as local time.
+
+        Args:
+            at_ms: Ignored.
+
+        Returns:
+            0.
+        """
+        return 0
+
+
+def publish_summaries(document: Path, tmp: Path) -> tuple[str, int]:
+    """Publish a real document, and the next hour's copy of it, into two stores for the child process.
+
+    Args:
+        document: A published `<sha256>.json.gz` (any schema this AHSync reads).
+        tmp: The temporary folder; the stores go to tmp/hour1 and tmp/hour2.
+
+    Returns:
+        (the document's market, its observations_until_ms).
+    """
+    intel = from_json(gzip.decompress(document.read_bytes()).decode("utf-8"))
+    publish(LocalStore(tmp / "hour1"), intel, (INTEL_SCHEMA_VERSION,))
+    later = replace(intel, built_ms=intel.built_ms + HOUR, observations_until_ms=intel.observations_until_ms + HOUR)
+    publish(LocalStore(tmp / "hour2"), later, (INTEL_SCHEMA_VERSION,))
+    return intel.market, intel.observations_until_ms
+
+
+def summary_only(tmp: Path, market: str, now_ms: int) -> int:
+    """Run the app's hourly cloud steps in this (fresh) process and compare the peak with the budget.
+
+    Args:
+        tmp: The folder publish_summaries wrote; the database and the WoW install go there too.
+        market: The document's market.
+        now_ms: Its observations_until_ms: the first poll's time.
+
+    Returns:
+        Process exit code: 0 within budget, 1 over it or when a poll did not publish.
+    """
+    install = tmp / "wow"
+    install.joinpath(*DATA_FOLDER).mkdir(parents=True, exist_ok=True)
+    cfg = Config(markets=(market,), wow_path=str(install), cloud=CloudConfig(ORIGIN),
+                 sources={market: MarketSources("blizzard", ("blizzard",), {})})
+    db_path = tmp / "bench.db"
+    db = Database.open(db_path, now_ms, None)
+    dashboard = open_server_db(db_path, db.intel_cache)           # as run() opens it (BZ42)
+    clock, ok = BenchClock(now_ms), True
+    print(f"bench: start, resident {resident_memory_mb():.0f} MB", flush=True)
+    for hour in (1, 2):
+        clock.now = now_ms + (hour - 1) * HOUR
+        started = time.perf_counter()
+        ok = poll_cloud(db, StoreOrigin(LocalStore(tmp / f"hour{hour}")), clock, cfg) == [market] and ok
+        print(f"bench: hour {hour} poll, re-plan and export {time.perf_counter() - started:.1f} s, {memory_line()}",
+              flush=True)
+        ok = dashboard.read_intel(market) is not None and ok
+        print(f"bench: hour {hour} dashboard read, {memory_line()}", flush=True)
+    dashboard.close()
+    db.close()
+    peak = peak_memory_mb()
+    ok = ok and peak <= SUMMARY_BUDGET_MB
+    print(f"bench: cloud market peak {peak:.0f} MB (budget {SUMMARY_BUDGET_MB:.0f} MB) -> "
+          f"{'OK' if ok else 'OVER BUDGET'}")
+    return 0 if ok else 1
 
 
 def refresh_only(db_path: Path) -> int:
@@ -231,9 +440,19 @@ def main() -> int:
     parser.add_argument("--items", type=int, default=9000)
     parser.add_argument("--hours", type=int, default=2160)
     parser.add_argument("--refresh", type=Path, help=argparse.SUPPRESS)       # the child process's database
+    parser.add_argument("--summary", type=Path, help="a published document.json.gz: measure a cloud market")
+    parser.add_argument("--summary-child", nargs=3, help=argparse.SUPPRESS)    # tmp, market, now_ms
     args = parser.parse_args()
     if args.refresh:
         return refresh_only(args.refresh)
+    if args.summary_child:
+        tmp, market, now_ms = args.summary_child
+        return summary_only(Path(tmp), market, int(now_ms))
+    if args.summary:
+        with tempfile.TemporaryDirectory() as tmp:
+            market, now_ms = publish_summaries(args.summary, Path(tmp))
+            print(f"bench: published {args.summary.name} for {market} as schema {INTEL_SCHEMA_VERSION}", flush=True)
+            return subprocess.run([sys.executable, __file__, "--summary-child", tmp, market, str(now_ms)]).returncode
     with tempfile.TemporaryDirectory() as tmp:
         db_path = Path(tmp) / "bench.db"
         db = Database.open(db_path, NOW, None)

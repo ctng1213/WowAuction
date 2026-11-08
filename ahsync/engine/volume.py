@@ -23,7 +23,7 @@ MAX_GAP_MS = 6 * HOUR_MS
 SALES_PAIR_MAX_GAP_MS = 2 * HOUR_MS     # hourly sales rates need books this close (SPEC §3.3 sales_how)
 CROSS_SOURCE_MIN_GAP_MS = 15 * 60_000   # books of different sources closer than this never pair (SPEC §3.3.1, V39)
 VOLUME_METHOD_VERSION = 4     # the book method (group diffs): bump when it changes; stored rows are recomputed (SPEC §3.3.6)
-ID_METHOD_VERSION = 7         # the id method (7: selling and expiring compete in the split, BZ42) (auction lifetimes, M33a); its own number, so a change to it never marks
+ID_METHOD_VERSION = 7         # the id method (7: selling and expiring compete in the split, BZ44) (auction lifetimes, M33a); its own number, so a change to it never marks
                               # the desktop's book rows stale (stored with every id row; a cloud `rebuild` recomputes them)
 KINDS = ("ids", "groups", "own")       # volume kinds in trust order (SPEC §3.3.1)
 LEGACY_KIND = {"ahf": "groups", "books": "groups", "mail": "own"}   # rows stored without a cover (V24)
@@ -255,7 +255,7 @@ class Ending:
     cancelled: bool = False       # a commodity that left early while a cheaper one of its item stayed: no sale (BZ40)
     tier1: bool | None = None     # posted at or below the lowest other price; None when its posting wasn't seen (BZ41)
     overlap: float = 0.0          # the gap's overlap with its expiry window alone, 0-1 (`expired_fraction`): 0 = it
-                                  # could not have expired; `expired` weighs selling against it (BZ42)
+                                  # could not have expired; `expired` weighs selling against it (BZ44)
 
 
 @dataclass(frozen=True)
@@ -296,7 +296,7 @@ DURATION_MS = {4: 24 * HOUR_MS, 3: 8 * HOUR_MS, 2: 2 * HOUR_MS, 1: 2 * HOUR_MS}
 # How far before a day its lifetimes must start so the day's result is exact (SPEC §2.4): an ending in the day was last
 # seen at most MAX_GAP_MS before it, posted at most 24 h before that, and its posting gap began up to MAX_GAP_MS earlier.
 # How far before a day its pass starts: an ending's whole life (24 h) and its posting and narrowing gaps, plus the
-# early-leave rate's window before it (BZ42), whose gaps need their own auctions' lives, plus that window's first gap.
+# early-leave rate's window before it (BZ44), whose gaps need their own auctions' lives, plus that window's first gap.
 LIFETIME_LOOKBACK_MS = 24 * HOUR_MS + 3 * MAX_GAP_MS + RATE_WINDOW_MS
 
 
@@ -482,8 +482,8 @@ def lifetimes(books: Iterable[IdBook], max_gap_ms: int = MAX_GAP_MS, keep_from_m
     live: dict[int, list] = {}                     # auction id -> [key, units, expiry window, price, commodity, tier1]
     gaps, endings, fills, listed, seen = [], [], [], [], {}
     clashes, prev_at, prev_keys, commodities = 0, None, frozenset(), set()
-    tallies: list[tuple[int, dict]] = []          # (gap end, key -> (exposure ms, early leaves)) per gap (BZ42)
-    pooled_commodities: set[int] = set()          # every pass snapshot's commodities: the rate's pools (BZ42)
+    tallies: list[tuple[int, dict]] = []          # (gap end, key -> (exposure ms, early leaves)) per gap (BZ44)
+    pooled_commodities: set[int] = set()          # every pass snapshot's commodities: the rate's pools (BZ44)
     windows: dict[int, tuple[int, int]] = {}      # auction -> its expiry window when it vanished
     for book in books:
         linked = prev_at is not None and 0 < book.at_ms - prev_at <= max_gap_ms

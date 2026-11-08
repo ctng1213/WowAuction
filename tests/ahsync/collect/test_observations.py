@@ -123,7 +123,7 @@ def test_a_days_lifetimes_do_not_depend_on_which_other_days_are_recomputed(db, t
         recompute_id_days(db, store, M, "blizzard", {D - 1, D})
     assert day_rows(db, D) == alone
     assert alone[1] == [(LINEN, 1.0, 1.0, 0.0)]      # its window narrows to (D−3 h, D+1 h]; gone by D, and no listing
-    #   ever left early here, so selling never competed: wholly expired (BZ42; the old overlap split said 3/4)
+    #   ever left early here, so selling never competed: wholly expired (BZ44; the old overlap split said 3/4)
 
 
 def test_a_lifetime_credited_hour_keeps_its_rate_when_the_next_day_starts(db, tmp_path):
@@ -157,14 +157,14 @@ def test_a_late_snapshot_recomputes_every_day_its_lifetimes_reach(tmp_path):
     for at in (t, t + 20 * HOUR, t + 60 * HOUR):                  # D 20:00, D+1 16:00, D+3 08:00
         store.put(snap(at))
     assert id_days(store, M, "blizzard", t) == {D, D + 1, D + 2, D + 3}   # to the last snapshot within 66 h (D+3, 60 h
-    #   on): its gaps feed the early-leave rate of endings up to a day after them (BZ42), whose windows reach 30 h on
+    #   on): its gaps feed the early-leave rate of endings up to a day after them (BZ44), whose windows reach 30 h on
     assert id_days(store, M, "blizzard", D * DAY + HOUR) == {D - 1, D, D + 1}   # book pairs reach D−1 23:00; D+1 is 39 h
 
 
 
 def leaving_world(ending: dict[int, tuple[Auction, ...]]) -> dict[int, tuple[Auction, ...]]:
     """Hourly snapshots from D−2 00:00 to D+1 12:00 in which 1-unit 24 h Linen listings appear and leave early every
-    other hour (so the early-leave rate is not 0, BZ42), merged with an ending auction's own snapshots."""
+    other hour (so the early-leave rate is not 0, BZ44), merged with an ending auction's own snapshots."""
     world: dict[int, tuple[Auction, ...]] = {}
     for h in range(0, 2 * 24 + 36):
         at = D * DAY - 2 * DAY + h * HOUR
@@ -182,7 +182,7 @@ def stored(tmp_path, world: dict[int, tuple[Auction, ...]], name: str) -> Snapsh
     return store
 
 
-def test_BZ42_a_days_rows_with_a_nonzero_rate_are_the_same_ingested_one_by_one_or_recomputed(tmp_path):
+def test_BZ44_a_days_rows_with_a_nonzero_rate_are_the_same_ingested_one_by_one_or_recomputed(tmp_path):
     m = D * DAY
     world = leaving_world({m + 10 * HOUR: (Auction(1, LINEN, 10, 50, 2),), m + 11 * HOUR: (Auction(1, LINEN, 10, 50, 2),)})
     incremental = Database.open(tmp_path / "a.db", FakeClock().now_ms(), None)
@@ -197,7 +197,7 @@ def test_BZ42_a_days_rows_with_a_nonzero_rate_are_the_same_ingested_one_by_one_o
     assert day_rows(incremental, D) == day_rows(rebuilt, D)        # later snapshots never change day D (causal rate)
 
 
-def test_BZ42_an_hour_pooled_across_midnight_is_the_same_in_any_recompute_order_with_a_nonzero_rate(tmp_path):
+def test_BZ44_an_hour_pooled_across_midnight_is_the_same_in_any_recompute_order_with_a_nonzero_rate(tmp_path):
     m = D * DAY
     world = leaving_world({m - 110 * 60_000: (Auction(1, LINEN, 10, 50, 2),), m - 50 * 60_000: (Auction(1, LINEN, 10, 50, 2),),
                            m - 10 * 60_000: (Auction(1, LINEN, 8, 50, 1),), m + 40 * 60_000: ()})

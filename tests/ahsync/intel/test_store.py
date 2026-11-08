@@ -1,6 +1,8 @@
 """Tests for ahsync/intel/store.py: staged market intelligence."""
 from __future__ import annotations
 
+import gzip
+
 import pytest
 
 from ahsync.db.sqlite import Database
@@ -54,3 +56,74 @@ def test_the_published_intelligence_is_parsed_once_until_a_refresh_publishes_ano
         db.stage_intel(MarketIntelligence(M, 20, 15, 1, {}))
     db.publish_refresh([M])
     assert db.read_intel(M).built_ms == 20 and db.read_intel(M) is not first
+
+
+def test_BZ42_the_dashboard_reads_the_hours_summary_not_the_first_of_the_day(db):
+    from ahsync.intel.contract import MarketIntelligence
+    from ahsync.web.server import open_server_db
+    dashboard = open_server_db(db.path, db.intel_cache)
+    try:
+        nine = MarketIntelligence(M, 9 * 3_600_000, 9 * 3_600_000, 1, {})
+        with db.transaction():
+            db.stage_intel(nine)
+        db.publish_refresh([M])
+        assert dashboard.read_intel(M).observations_until_ms == 9 * 3_600_000
+        with db.transaction():
+            db.stage_intel(MarketIntelligence(M, 9 * 3_600_000, 10 * 3_600_000, 1, {}))   # same baselines
+        db.publish_refresh([M])
+        assert dashboard.read_intel(M).observations_until_ms == 10 * 3_600_000
+        assert dashboard.read_intel(M) is db.read_intel(M)                 # one parsed summary per process
+    finally:
+        dashboard.close()
+
+
+def test_BZ43_a_held_summary_is_published_without_parsing_it_again(db, monkeypatch):
+    from ahsync.intel import store
+    from ahsync.intel.contract import MarketIntelligence, to_json
+    intel = MarketIntelligence(M, 10, 5, 1, {})
+    text = gzip.compress(to_json(intel).encode("utf-8"))
+    with db.transaction():
+        db.stage_intel(intel, text)
+    db.publish_refresh([M])
+    db.hold_intel(intel)
+    monkeypatch.setattr(store, "from_json", lambda _text: pytest.fail("parsed again"))
+    assert db.read_intel(M) is intel
+    assert db.conn.execute("SELECT body FROM intel WHERE market = ?", (M,)).fetchone()[0] == text
+
+
+def test_BZ43_forgetting_a_market_drops_its_record_before_the_next_parse(db):
+    from ahsync.intel.contract import MarketIntelligence
+    from ahsync.intel.store import IntelCache
+    first, second = MarketIntelligence(M, 1, 1, 1, {}), MarketIntelligence(M, 2, 2, 1, {})
+    cache = IntelCache()
+    cache.get(M, (1, 1), lambda: first)
+    seen = []
+    cache.get(M, (2, 1), lambda: seen.append(dict(cache._records)) or second)
+    assert seen == [{}] and cache.get(M, (2, 1), lambda: pytest.fail("parsed again")) is second
+    cache.forget(M)
+    assert cache._records == {} and cache._facts == {}
+
+
+def test_BZ43_the_dashboard_reads_the_summarys_facts_while_a_new_one_is_fetched(db, monkeypatch):
+    from ahsync.intel import store
+    from ahsync.intel.contract import MarketIntelligence
+    from ahsync.web.server import open_server_db
+    intel = MarketIntelligence(M, 9, 10, 1, {}, coverage=((1, 2),))
+    with db.transaction():
+        db.stage_intel(intel)
+    db.publish_refresh([M])
+    db.hold_intel(intel)
+    db.intel_cache.release(M)                                         # a poll found a new pointer
+    monkeypatch.setattr(store, "from_json", lambda _text: pytest.fail("parsed again"))
+    dashboard = open_server_db(db.path, db.intel_cache)
+    try:
+        assert dashboard.intel_facts(M) == store.IntelFacts(9, 10, ((1, 2),))
+        assert db.intel_cache._records == {}                          # the record stays dropped
+    finally:
+        dashboard.close()
+
+
+def test_a_stored_body_that_is_not_gzip_is_a_value_error(db):
+    sql(db, "INSERT INTO intel(market, schema_version, body, built) VALUES (?, ?, ?, ?)", (M, 1, b"not gzip", 5))
+    with pytest.raises(ValueError, match="stored summary"):
+        db.read_intel(M)

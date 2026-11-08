@@ -233,7 +233,7 @@ def test_FM76_a_rebuild_replays_only_the_retention_window_and_never_overwrites_b
     run_daily(data, intel, FakeCatalog(), M, tmp_path / "run")
     outcome = run_daily(data, intel, FakeCatalog(), M, tmp_path / "run", fresh=True)
     assert (outcome.state, outcome.ingested) == ("published", 2)                 # the 100-day-old snapshot is left out
-    assert REBUILD_REPLAY_MS == 90 * DAY_MS + DAY_MS + 66 * HOUR   # the lookback grew from 36 h with BZ42's rate window
+    assert REBUILD_REPLAY_MS == 90 * DAY_MS + DAY_MS + 66 * HOUR   # the lookback grew from 36 h with BZ44's rate window
     racing = RacingStore(tmp_path / "data")
     with pytest.raises(PreconditionFailed):
         run_daily(racing, intel, FakeCatalog(), M, tmp_path / "run", fresh=True)

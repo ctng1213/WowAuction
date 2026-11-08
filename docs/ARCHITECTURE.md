@@ -115,7 +115,7 @@ flowchart TD
   Raw -->|hourly, S3 event| Hourly[reprice_item + last_hour + recent ring<br/>over the latest document, no database]
   Hourly --> Doc
   Doc -->|CloudFront, public| Poll[collect/cloud_intel.py<br/>every 15 min, If-None-Match, sha256, schema]
-  Poll --> IntelLocal[(intel store: staged, then live)]
+  Poll --> IntelLocal[(intel store: staged, then live;<br/>a cloud document kept as its downloaded gzip,<br/>parsed once per process, SM1)]
   IntelLocal -->|incremental update| Plan[recommend/portfolio.py]
   Scans[Your scans] -->|overlay cur only, IU6| Plan
 ```
@@ -167,7 +167,7 @@ sequenceDiagram
 |---|---|---|---|
 | Market history | `candles_h1`, `candles_d1`, `current`, `scans`, `book_entries`, `volume_d1`, `volume_cover`, `sales_h1`, `lifetimes_d1`, `new_listings_d1`, `observed_hours`, `ahledger_rows`, `source_state`, `sync_state`, `fetch_failures` | `collect/` | `history/reads.py` |
 | Items | `items` | `collect/` | everywhere, via the catalog |
-| Intelligence | `intel` (+ `_new` staging) | `analysis/` via `intel/store.py` | `recommend/`, `export/` |
+| Intelligence | `intel` (+ `_new` staging; a cloud document's body is its gzip as downloaded, SM1) | `analysis/` via `intel/store.py`, `collect/cloud_intel.py` | `recommend/`, `export/`, `web/` (one parsed record per process, `IntelCache`) |
 | Player state | inventory, journal (`purchases`, `posts`, `auction_mail`, `payouts`, `crafts`, `disenchants`, `mail_sent`), `professions`, `recipes`, `known_recipes`, `characters`, `cost_basis`, `gather_events`, `farming_sessions`, `manual_rates`, `positions`, `position_lots` | `state/` | `recommend/`, `app/` |
 | Plan and pages | `actions`, `alternatives`, `export_candidates`, `portfolio_snapshot`, `views` (+ `_new` staging), `item_rules`, `reserves`, `sell_records` | `recommend/` | `export/`, `web/` |
 | Operations | `status`, `meta` (the `update.*` keys, M25), backups on disk, raw snapshots on disk, `<data>/updates/` (the verified download, M25) | all | Status page |
@@ -329,3 +329,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-07: M33b-1 built: commodity cancels leave `sold` and sell-through is kept per lookback (`engine/sell_through.py`); the `lifetimes_d1` table gains cancels and tier-1 endings (schema 27), and the summary is schema 13 (published beside 10-12) with the inputs of the tooltip's new market lines. No component or flow changes.
 - 2026-11-08: MS0 spec merge: the market simulator is planned (SPEC §8.10, SCENARIOS §6, `docs/plans/market-simulator.md`): test tooling under `tools/sim/` that feeds simulated raw snapshots to the unchanged cloud job and plan; no component, flow or contract changes.
 - 2026-11-08: MS1 built: the market simulator's core (`tools/sim/`: the truth log, the seeded market model, Blizzard's snapshots and raw envelopes, the cloud job run in-process with a catalog stand-in); test tooling only, no component, flow or contract changes.
+- 2026-11-08: SM1 built: a cloud summary is stored as its downloaded gzip and parsed once per process, the scheduler's and the dashboard's connections sharing one record (`intel/store.py` `IntelCache`; BZ42, BZ43).

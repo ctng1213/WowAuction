@@ -22,6 +22,7 @@ from typing import IO, Protocol
 
 from ahsync import version
 from ahsync.app import installer
+from ahsync.app.update_check import ManualCheck
 from ahsync.app.updater import UPDATES_DIR
 from ahsync.__main__ import (API_KEY_TOPIC, LOCK_FILE, STOP_FILE, InstanceLock, Runtime, remove_stop_file,
                              setup_logging)
@@ -240,6 +241,7 @@ class Session:
         self.code = 0
         self._begun = threading.Lock()
         self.dashboard = None              # run()'s DashboardApp, once it serves (dashboard_ready)
+        self.update_checks = ManualCheck()  # the tray's Check for updates, run by run()'s update job (DR34)
         self.toggles: list[threading.Thread] = []   # the tray's toggle threads (off_the_tray)
         self.update_facts: tuple[UpdateState, int | None] = (UpdateState(version.VERSION), None)
 
@@ -389,7 +391,7 @@ class Session:
                                                 self.verify_update, self.dashboard_ready,
                                                 can_replace=lambda: platform.can_replace(exe),
                                                 forget_previous=lambda: platform.forget_previous(exe),
-                                                restart=self.restart_from_dashboard))
+                                                restart=self.restart_from_dashboard, update_checks=self.update_checks))
 
     def verify_update(self, path: Path) -> str | None:
         """The platform's signature check of a download against the running app (SPEC §3.7.9; DR23).
@@ -465,7 +467,8 @@ class Session:
         available = tag_version(update.tag) if newer(update.tag, update.version) and downloaded is None else None
         return TrayState(configured=not self.setup, version=version.VERSION,
                          autostart=autostart.is_enabled(self.world.platform), auto_update=update.auto_update,
-                         channel=update.channel, available=available, downloaded=downloaded, synced_ms=synced)
+                         channel=update.channel, available=available, downloaded=downloaded, synced_ms=synced,
+                         check=self.update_checks.tray_state())
 
     def offset_ms(self) -> int:
         """Local time minus UTC now, for the hover text.
@@ -499,10 +502,12 @@ class Session:
         """A tray update item: the toggles go through the dashboard's handlers, as the Status card's do (SEC15).
 
         Args:
-            action: tray.AUTO_UPDATE, BETA, DOWNLOAD or RESTART_UPDATE.
+            action: tray.AUTO_UPDATE, BETA, DOWNLOAD, RESTART_UPDATE or CHECK_UPDATES.
         """
         update, _synced = self.update_facts
-        if action == tray.DOWNLOAD and update.url:
+        if action == tray.CHECK_UPDATES:
+            self.update_checks.request()         # the update job runs at the scheduler's next tick (DR34)
+        elif action == tray.DOWNLOAD and update.url:
             self.world.opener(update.url)        # the release page, in the browser (SPEC §3.7.1)
         elif action == tray.RESTART_UPDATE:
             self.restart_to_update()

@@ -496,7 +496,7 @@ def test_BZ22_lifetimes_name_each_listings_fate():
     assert snaps[24].auctions[0].band == SHORT and snaps[3].auctions[1].band == LONG
     fates = {e.auction: (e.expired, e.gap) for e in lifetimes(snaps).endings}
     assert fates[1][1] == (thu_1700 + 24 * HOUR_MS, thu_1700 + 25 * HOUR_MS)                 # its end fell in 17:00-18:00
-    assert 0.99 < fates[1][0] < 1.0      # BZ42: one early leave in about 26 listing-hours leaves a 1% chance it sold
+    assert 0.99 < fates[1][0] < 1.0      # BZ44: one early leave in about 26 listing-hours leaves a 1% chance it sold
     assert fates[2] == (0.0, (thu_1700 + 3 * HOUR_MS, thu_1700 + 4 * HOUR_MS))               # sold, 5-6 h left
     assert fates[3][0] == 1.0                                                                 # treated as 2 h: expired
 

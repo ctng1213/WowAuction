@@ -504,6 +504,38 @@ def test_DR33_the_update_jobs_first_run_checks_whatever_the_last_check(tmp_path,
     finally:
         db.close()
 
+
+def test_DR34_a_manual_check_asks_now_retries_the_download_and_says_what_it_found(tmp_path, monkeypatch):
+    import calendar
+
+    import ahsync.__main__ as app_main
+    from ahsync.__main__ import LiveConfig, update_job
+    from ahsync.app.update_check import ManualCheck, read_meta, write_meta
+    from ahsync.web.server import AppHooks
+    from tests.support.fake_transport import FakeTransport
+
+    monkeypatch.setattr(app_main.version, "VERSION", "0.3.1")
+    now = calendar.timegm((2026, 11, 6, 9, 0, 0)) * 1000
+    db = Database.open(tmp_path / "ahsync.db", now, None)
+    manual = ManualCheck()
+    hooks = AppHooks(lambda _db, _config: {}, lambda e: ("set", e), "AHSync-{}-windows-x64-setup.exe".format,
+                     lambda _path: None, lambda _app: None, update_checks=manual)
+    try:
+        transport = FakeTransport.serve_github()
+        job = update_job(db, transport, FakeClock(now), tmp_path, LiveConfig(Config()), hooks)
+        job()                                                         # the start's check finds v0.4.0 and downloads
+        write_meta(db, {"downloaded": None, "downloaded_path": None, "download_tried_ms": now - 3_600_000})
+        sent = len(transport.requests)
+        job()                                                         # 10 min later: nothing is due
+        assert len(transport.requests) == sent
+        manual.request()
+        assert manual.tray_state() == "checking"
+        job()                                                         # the tray asked: check and download again
+        assert len(transport.requests) > sent and read_meta(db)["downloaded"] == "0.4.0"
+        assert manual.tray_state() == ""                              # the menu offers Restart to update
+    finally:
+        db.close()
+
 def test_DR20_the_update_job_checks_then_downloads_and_the_shell_gets_the_dashboard(tmp_path, monkeypatch):
     import calendar
 

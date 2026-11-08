@@ -148,3 +148,26 @@ def test_FM52_a_beta_answer_that_is_not_a_list_is_github_unavailable(db):
     update_check.check(db, transport, FakeClock(FRI_0600), "0.3.1", Config(update_channel="beta"))
     assert line(db, config=Config(update_channel="beta"))["text"] == "not checked: GitHub unavailable since Fri 06:00"
     assert update_check.read_meta(db)["tag"] == "v0.4.0"                 # the last answer is kept
+
+
+
+def test_DR34_a_manual_check_is_requested_run_and_finished_once():
+    manual = update_check.ManualCheck()
+    assert (manual.requested(), manual.begin(), manual.tray_state()) == (False, False, "")
+    manual.request()
+    manual.request()                                                  # two clicks: one check
+    assert manual.requested() and manual.tray_state() == "checking"
+    assert manual.begin() and not manual.requested() and not manual.begin()
+    manual.request()                                                  # a click while it runs: nothing more
+    assert not manual.requested() and manual.tray_state() == "checking"
+    manual.finish("up_to_date")
+    assert manual.tray_state() == "up_to_date" and not manual.requested()
+
+
+def test_DR34_a_manual_checks_outcome_comes_from_the_stored_state(db):
+    config = Config()
+    assert update_check.outcome(db, "0.3.1", config) == "up_to_date"
+    update_check.write_meta(db, {"tag": "v0.4.0"})
+    assert update_check.outcome(db, "0.3.1", config) == ""                       # the menu's item 4 offers it
+    update_check.write_meta(db, {"failure": "offline", "failed_since_ms": FRI_0600})
+    assert update_check.outcome(db, "0.3.1", config) == "failed"

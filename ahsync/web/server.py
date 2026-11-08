@@ -34,11 +34,12 @@ from ahsync.app.refresh import rebuild_gathering, replan_all
 from ahsync.app.status_page import status_page
 from ahsync.clock import Clock
 from ahsync import version
-from ahsync.app.update_check import read_state, write_meta
+from ahsync.app.update_check import ManualCheck, read_state, write_meta
 from ahsync.engine.updates import UpdateState
 from ahsync.config import (CHANNELS, Config, ConfigError, is_cloud_market, market_sources, write_risk_tolerance,
                            write_setting)
 from ahsync.db.sqlite import Database
+from ahsync.intel.store import IntelCache
 from ahsync.engine.app_view import BAD_LOCATION_TEXT
 from ahsync.engine.gathering import catalog, eligible, why_not_eligible
 from ahsync.engine.status_view import cloud_freshness
@@ -84,6 +85,7 @@ class AppHooks:
     can_replace: Callable[[], bool] = lambda: True                 # whether the app may replace itself (FM54, M27)
     forget_previous: Callable[[], None] = lambda: None             # cleanup after an update that worked (M27)
     restart: Callable[[Database, Config], bool] = lambda db, config: False   # Restart to update: True once stopping
+    update_checks: ManualCheck = field(default_factory=ManualCheck)  # Check for updates in the tray (DR34)
 
 
 @dataclass(frozen=True)
@@ -175,7 +177,7 @@ def body_field(body: bytes, name: str) -> object:
     return data.get(name) if isinstance(data, dict) else None
 
 
-def open_server_db(path: Path) -> Database:
+def open_server_db(path: Path, intel_cache: IntelCache | None = None) -> Database:
     """Open a second connection to data/ahsync.db for the server's thread.
 
     The main thread's connection can't be shared across threads; WAL mode (set by
@@ -184,13 +186,14 @@ def open_server_db(path: Path) -> Database:
 
     Args:
         path: data/ahsync.db, already opened (and migrated) by Database.open.
+        intel_cache: The main connection's IntelCache, so both share one parsed summary (BZ42); None: its own.
 
     Returns:
         A Database usable from the server thread; writes wait up to 5 s for a lock.
     """
     conn = sqlite3.connect(path, isolation_level=None, check_same_thread=False)
     conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
-    return Database(conn, path)
+    return Database(conn, path, intel_cache)
 
 
 @dataclass
@@ -369,7 +372,7 @@ class DashboardApp:
         Returns:
             engine.status_view.cloud_freshness's pill; None before the first summary.
         """
-        intel = self.db.read_intel(market)
+        intel = self.db.intel_facts(market)       # the facts only: no parse during a fetch (BZ43)
         now = self.clock.now_ms()
         if intel is None:
             return None

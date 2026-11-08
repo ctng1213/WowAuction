@@ -116,7 +116,7 @@ def _cloud_facts(db: Database, cfg: Config, market: str) -> dict:
         MarketFacts' cloud fields (cloud_on, the published document's built and prices times, the next poll) and
         "cloud_coverage", the document's observed-hour ranges for the Data coverage card (D99; not a MarketFacts field).
     """
-    intel = db.read_intel(market)
+    intel = db.intel_facts(market)               # not the parsed summary: none is parsed during a fetch (BZ43)
     _etag, _updated, fetched, _held = db.source_state(market, "cloud")
     return {"cloud_on": True, "cloud_coverage": intel.coverage if intel else (), "cloud_built_ms": intel.built_ms if intel else None,
             "cloud_prices_ms": (intel.observations_until_ms or intel.built_ms) if intel else None,

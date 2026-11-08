@@ -74,6 +74,7 @@ class SchedulerHooks:
     ahledger_poll: Callable[[], None] | None = None   # AHledger price tables, every 30 min; None disables it (SRC10)
     ahledger_backfill: Callable[[], object] | None = None   # one slice of the backfill, every 5 s; None disables it
     update: Callable[[], None] | None = None          # update check and download, every 10 min; None: no app shell
+    update_requested: Callable[[], bool] = _never     # Check for updates in the tray: run `update` now (DR34)
     cloud_poll: Callable[[], object] | None = None    # the cloud market's summary, every poll_minutes; None: no [cloud]
     savedvars_changed: Callable[[Path], None] = _nothing_for   # SavedVariables re-read (ingest.apply.ingest_file)
 
@@ -267,7 +268,7 @@ class Scheduler:
         if self.hooks.ahledger_poll is not None and now >= self.next_ahledger:
             self.next_ahledger = now + AHLEDGER_POLL_MS
             self._run("ahledger_poll", self.hooks.ahledger_poll, ran)
-        if self.hooks.update is not None and now >= self.next_update:
+        if self.hooks.update is not None and (now >= self.next_update or self.hooks.update_requested()):
             self.next_update = now + UPDATE_POLL_MS
             self._run("update", self.hooks.update, ran)
         if self.hooks.cloud_poll is not None and now >= self.next_cloud:

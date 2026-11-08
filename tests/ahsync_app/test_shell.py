@@ -781,7 +781,7 @@ class FakeDashboard:
         self.calls.append(("channel", channel))
 
 
-def test_DR12_DR13_DR20_the_tray_s_update_items_follow_the_updater_and_toggle_through_the_dashboard(tmp_path, caplog):
+def test_DR12_DR13_DR20_DR34_the_tray_s_update_items_follow_the_updater_and_toggle_through_the_dashboard(tmp_path, caplog):
     from ahsync.engine.updates import UpdateState
 
     app = FakeApp(tmp_path, until=lambda _d: False)
@@ -796,6 +796,8 @@ def test_DR12_DR13_DR20_the_tray_s_update_items_follow_the_updater_and_toggle_th
         state = tray_icon.state()
         assert (state.available, state.downloaded, state.auto_update, state.synced_ms) == ("0.4.0", None, False,
                                                                                           1_762_000_000_000)
+        tray_icon.dispatch("check_updates")                         # asks run()'s update job (DR34)
+        assert tray_icon.state().check == "checking" and app.hooks[0].update_checks.requested()
         tray_icon.dispatch("download")
         tray_icon.dispatch("auto_update")
         time.sleep(0.05)                                            # each toggle runs on its own thread

@@ -1,4 +1,4 @@
-"""Tests for ahsync/engine/expiry.py: selling and expiring compete when an auction vanishes (SPEC §2.4, BZ42)."""
+"""Tests for ahsync/engine/expiry.py: selling and expiring compete when an auction vanishes (SPEC §2.4, BZ44)."""
 from __future__ import annotations
 
 import pytest
@@ -11,7 +11,7 @@ HOUR_MS = 3_600_000
 SEED_VI7 = 4242
 
 
-def test_BZ42_selling_and_expiring_compete_when_an_auction_vanishes_in_its_expiry_hour():
+def test_BZ44_selling_and_expiring_compete_when_an_auction_vanishes_in_its_expiry_hour():
     h = HOUR_MS
     rate = 0.1 / h                                    # the item's listings leave early at 0.1 an hour
     assert expired_given_vanished((0, h), (0, h), rate) == pytest.approx(0.95163, abs=1e-5)   # (1 − e^−0.1) ÷ 0.1

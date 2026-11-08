@@ -42,6 +42,7 @@ from ahsync.recommend.status_pass import status_pass
 from ahsync.recommend.tracking_pass import tracking_pass
 from ahsync.app import installer, update_check, updater
 from ahsync.app.scheduler import SavedVarsWatcher, Scheduler, SchedulerHooks, file_mtime_ms, find_savedvars
+from ahsync.intel.store import IntelCache
 from ahsync.web.server import (AppHooks, DashboardApp, DashboardServer, new_token, open_server_db, start_dashboard,
                                stop_dashboard)
 
@@ -368,7 +369,8 @@ class RefreshRequests:
 def serve_dashboard(data_dir: Path, config: Config, clock: Clock, refresh: RefreshRequests,
                     out: IO[str], config_path: Path | None = None,
                     on_config: Callable[[Config], None] | None = None,
-                    app_hooks: AppHooks | None = None) -> tuple[DashboardServer, Database] | None:
+                    app_hooks: AppHooks | None = None,
+                    intel_cache: IntelCache | None = None) -> tuple[DashboardServer, Database] | None:
     """Start the dashboard on its own thread (SPEC §3.1 "serve dashboard"); a failure is logged, never fatal.
 
     Args:
@@ -380,12 +382,13 @@ def serve_dashboard(data_dir: Path, config: Config, clock: Clock, refresh: Refre
         config_path: config.toml, which the Risk tolerance dropdown rewrites (SEC11); None: it can't.
         on_config: Told the new settings after the dashboard changed one; None: nobody else is told.
         app_hooks: The app shell's paths (GET /api/app, POST /api/autostart); None: they answer 404.
+        intel_cache: run()'s connection's IntelCache, so the dashboard shares its parsed summary (BZ42).
 
     Returns:
         (server, its database connection) to stop and close at exit, or None when the
         port can't be bound (for example, already in use).
     """
-    server_db = open_server_db(data_dir / "ahsync.db")
+    server_db = open_server_db(data_dir / "ahsync.db", intel_cache)
     app = DashboardApp(server_db, config, clock, refresh.request_refresh, new_token(), config.dashboard_port,
                        config_path=config_path, config_changed=on_config or (lambda _config: None), app_hooks=app_hooks)
     try:
@@ -414,20 +417,28 @@ def update_job(db: Database, transport: Transport, clock: Clock, data_dir: Path,
         app_hooks: The platform's asset name, signature check, can-replace test and cleanup after an update (M27).
 
     Returns:
-        The job; its first run checks whatever the time since the last check (DR33); after that it sends
-        nothing unless a day has passed since the last check or download try.
+        The job; its first run checks whatever the time since the last check (DR33), and so does a run the tray's
+        Check for updates asked for, which also retries a failed download (DR34); otherwise it sends nothing unless
+        a day has passed since the last check or download try.
     """
     started = [True]
 
     def job() -> None:
         """Settle the last install, check, download, then note whether the app may replace itself (M27, FM54)."""
         settings = live.current
-        installer.settle(db, data_dir, version.VERSION, clock.now_ms(), app_hooks.forget_previous)
-        update_check.check(db, transport, clock, version.VERSION, settings, at_start=started[0])
-        started[0] = False
-        updater.download(db, transport, clock, data_dir, version.VERSION, settings, app_hooks.asset_name,
-                         app_hooks.verify_update)
-        update_check.write_meta(db, {"cant_replace": None if app_hooks.can_replace() else "1"})
+        asked = app_hooks.update_checks.begin()
+        found = "failed"
+        try:
+            installer.settle(db, data_dir, version.VERSION, clock.now_ms(), app_hooks.forget_previous)
+            update_check.check(db, transport, clock, version.VERSION, settings, at_start=started[0] or asked)
+            started[0] = False
+            updater.download(db, transport, clock, data_dir, version.VERSION, settings, app_hooks.asset_name,
+                             app_hooks.verify_update, retry=asked)
+            update_check.write_meta(db, {"cant_replace": None if app_hooks.can_replace() else "1"})
+            found = update_check.outcome(db, version.VERSION, settings)
+        finally:
+            if asked:
+                app_hooks.update_checks.finish(found)   # the menu stops saying "Checking for updates…"
 
     return job
 
@@ -526,13 +537,14 @@ def _run_configured(data_dir: Path, config: Config, runtime: Runtime, config_pat
         live = LiveConfig(config)
         if runtime.serve_dashboard:
             dashboard = serve_dashboard(data_dir, config, clock, refresh_requests, runtime.out, config_path, live.replace,
-                                        runtime.app_hooks)
+                                        runtime.app_hooks, db.intel_cache)
         ahledger = AhledgerSource(ApiClient(runtime.transport, clock, "", api_base=AHLEDGER_BASE, per_minute=300,
                                             redactor=redactor, paced=True), db, clock)          # keyless, its own limit (SRC10)
         ctx = SyncContext(api, db, clock, result.caps, config.retention_days, addresses, ahledger)
         hooks = build_hooks(ctx, config, backup_dir, refresh_requests.take, live)
         if runtime.app_hooks is not None:        # only the app shell checks for updates (SPEC §3.7.8)
-            hooks = replace(hooks, update=update_job(db, runtime.transport, clock, data_dir, live, runtime.app_hooks))
+            hooks = replace(hooks, update=update_job(db, runtime.transport, clock, data_dir, live, runtime.app_hooks),
+                            update_requested=runtime.app_hooks.update_checks.requested)
         if config.cloud.intel_url:               # the cloud market's summary (SPEC §2.4, BZ17)
             summaries = cloud_transport(runtime.transport)
             hooks = replace(hooks, cloud_poll=lambda: poll_cloud(db, summaries, clock, live.current))
