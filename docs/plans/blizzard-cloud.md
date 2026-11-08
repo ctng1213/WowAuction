@@ -351,7 +351,7 @@ Done when BZ40, BZ41 and the invariants pass, the bench is inside its budgets, a
 
 **M41a — The Portfolio footer** (approved mockup `batch-0-1-6.html` §2)
 
-1. **Sonnet**: `UI/PortfolioView.lua`'s footer right side becomes "77c unallocated" (the capacity is in the header); `UI/WindowLines.lua` lets the left text wrap instead of overlapping; the UI scenario row updated; `tools/visual.py --update`; `addon.html` updated. Reason: routine UI. **Opus** reviews the golden diff against the mockup.
+1. **Sonnet**: `UI/PortfolioView.lua`'s footer right side becomes "77c unallocated" (the capacity is in the header) and its left side reads "funded profit +7g 8s 60c · cost …" ("funded profit 0c" when nothing is funded; the user, 2026-11-07, after approval; A77, A79, UI19 and SPEC §4's Portfolio footer change with it); `UI/WindowLines.lua` lets the left text wrap instead of overlapping; the UI scenario row updated; `tools/visual.py --update`; `addon.html` updated. Reason: routine UI. **Opus** reviews the golden diff against the mockup.
 
 **M41b — The coverage note** (D104; approved mockup `batch-0-1-6.html` §3)
 
