@@ -137,7 +137,7 @@ def window_candidate(i: ItemIntel, min_flip_margin: float, max_trend_total: floa
     level = price_level(i)
     if not (i.cur and level and i.sell_windows) or i.cur_suspect:
         return False
-    slots = i.how.split(",") if i.how else None             # only the windows' best hours are read (§3.1.2 re-plan)
+    slots = profile.expand(i.how) if i.how else None        # only the windows' best hours are read (§3.1.2 re-plan)
     best = max((int(slots[w.best_slot]) / profile.PACK_SCALE if slots else 1.0) for w in i.sell_windows)
     trend = 1 + min(max_trend_total, max(0.0, min(TREND_CLAMP_PCT, i.trend7)) / 100 * 7)
     peak = level * best * trend

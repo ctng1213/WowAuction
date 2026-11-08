@@ -224,22 +224,89 @@ def _slot(t_ms: int) -> int:
 
 
 def pack(prof: Profile) -> tuple[str, str]:
-    """A profile as the intelligence stores it: ratios in thousandths and weeks, comma-separated (SPEC §5.0, W13).
+    """A profile as the intelligence stores it: ratios in thousandths and weeks, run-length coded (SPEC §5.0, W13, BZ47).
 
     Args:
         prof: The profile.
 
     Returns:
-        (values text, weeks text); ("", "") when no slot has any data.
+        (values text, weeks text), each 168 comma-separated integers with a run of n equal ones written `v*n`
+        (`1000*168` for a flat profile); ("", "") when no slot has any data.
     """
     if not any(prof.weeks):
         return "", ""
-    values = ",".join(str(math.floor(v * PACK_SCALE + 0.5)) for v in prof.values)
-    return values, ",".join(str(w) for w in prof.weeks)
+    return (_runs([str(math.floor(v * PACK_SCALE + 0.5)) for v in prof.values]),
+            _runs([str(w) for w in prof.weeks]))
+
+
+def _runs(slots: Sequence[str]) -> str:
+    """Slot texts run-length coded (BZ47).
+
+    Args:
+        slots: One text per slot.
+
+    Returns:
+        Comma-separated, a run of n > 1 equal texts written `v*n`.
+    """
+    out = []
+    run, count = slots[0], 0
+    for text in slots:
+        if text == run:
+            count += 1
+            continue
+        out.append(run if count == 1 else f"{run}*{count}")
+        run, count = text, 1
+    out.append(run if count == 1 else f"{run}*{count}")
+    return ",".join(out)
+
+
+def expand(text: str) -> list[str]:
+    """A packed profile string's 168 slot texts, from either form: plain (schema 13 and older) or run-length (BZ47).
+
+    Args:
+        text: From pack, or a plain list of 168 comma-separated integers; not "".
+
+    Returns:
+        168 texts, one per slot.
+
+    Raises:
+        ValueError: When the text is not 168 slots, or a run's count is not a positive integer. At most 169
+            tokens are split off and a run is never expanded past 168, so a hostile string costs nothing (SEC16).
+    """
+    if "*" not in text:                        # the plain form: a split is enough
+        slots = text.split(",", SLOTS)
+        if len(slots) != SLOTS:
+            raise ValueError(f"a packed profile needs {SLOTS} slots, got {len(slots)}")
+        return slots
+    slots = []
+    for token in text.split(",", SLOTS):
+        value, star, count = token.partition("*")
+        n = int(count) if star else 1
+        if n < 1 or len(slots) + n > SLOTS:
+            raise ValueError(f"a packed profile needs {SLOTS} slots, got a run of {n} after {len(slots)}")
+        slots.extend([value] * n)
+    if len(slots) != SLOTS:
+        raise ValueError(f"a packed profile needs {SLOTS} slots, got {len(slots)}")
+    return slots
+
+
+def plain(text: str) -> str:
+    """A packed profile string in the plain form schema 13 and older readers expect (BZ47).
+
+    Args:
+        text: Plain or run-length coded; "" for no profile.
+
+    Returns:
+        168 comma-separated integers; "" for "".
+
+    Raises:
+        ValueError: As expand.
+    """
+    return ",".join(expand(text)) if text else text
 
 
 def unpack(values_text: str, weeks_text: str) -> Profile:
-    """A packed profile back as a Profile (W13).
+    """A packed profile back as a Profile, from either form (W13, BZ47).
 
     Args:
         values_text: From pack: 168 integers in thousandths, or "".
@@ -253,10 +320,8 @@ def unpack(values_text: str, weeks_text: str) -> Profile:
     """
     if not values_text:
         return Profile(tuple([1.0] * SLOTS), tuple([0] * SLOTS), tuple([False] * SLOTS))
-    values = tuple(int(n) / PACK_SCALE for n in values_text.split(","))
-    weeks = tuple(int(n) for n in weeks_text.split(","))
-    if len(values) != SLOTS or len(weeks) != SLOTS:
-        raise ValueError(f"a packed profile needs {SLOTS} slots, got {len(values)} and {len(weeks)}")
+    values = tuple(int(n) / PACK_SCALE for n in expand(values_text))
+    weeks = tuple(int(n) for n in expand(weeks_text))
     return Profile(values, weeks, tuple(w >= MIN_WEEKS for w in weeks))
 
 
@@ -274,7 +339,4 @@ def unpack_values(values_text: str) -> tuple[float, ...] | None:
     """
     if not values_text:
         return None
-    values = tuple([n / PACK_SCALE for n in map(int, values_text.split(","))])
-    if len(values) != SLOTS:
-        raise ValueError(f"a packed profile needs {SLOTS} slots, got {len(values)}")
-    return values
+    return tuple([n / PACK_SCALE for n in map(int, expand(values_text))])

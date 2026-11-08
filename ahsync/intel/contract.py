@@ -10,9 +10,11 @@ bytes (AR1). A document from a newer schema is refused (AR2).
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 
-INTEL_SCHEMA_VERSION = 13      # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
+from ahsync.engine import profile
+
+INTEL_SCHEMA_VERSION = 14      # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
                                # 5: median_daily_supply (V23); 6: observed_listing_turnover (V37); 7: volume_kind (D57);
                                # 8: closes_30d (TT23); 9: each window's forecast: expected price, executable quantity,
                                # confidence, and buying windows ranked by actionable value (W14, W15); 10: the cloud
@@ -22,7 +24,8 @@ INTEL_SCHEMA_VERSION = 13      # 2: weekly patterns, windows, strength, curve (A
                                # (SPEC §2.4, BZ23, BZ29); 13: the tooltip's market lines (M33b): the market's
                                # commodity cancel share, per item commodity, sell-through per lookback, typical supply
                                # over 7 and 14 days, Sell Chance Now, each sell window's 24 h chance and each buy
-                               # window's found share (SPEC §2.4, §4.3, BZ40, BZ41, TT36-TT38)
+                               # window's found share (SPEC §2.4, §4.3, BZ40, BZ41, TT36-TT38); 14: the compact form,
+                               # no new field: profiles run-length coded and items as rows under `item_fields` (BZ47)
 # Fields each schema added, so to_json can write the previous schema for older readers (SPEC §2.4, BZ18).
 ADDED_IN = {10: {"document": ("catalog", "coverage", "settings", "ages_at_ms"),
                  "item": ("last_hour", "recent_closes", "recent_sold", "recent_listed", "recent_units")},
@@ -30,7 +33,10 @@ ADDED_IN = {10: {"document": ("catalog", "coverage", "settings", "ages_at_ms"),
             12: {"document": (), "item": ("expired_share", "undercut_share")},
             13: {"document": ("cancel_share",),
                  "item": ("commodity", "sell_through", "sell_through_how", "supply7", "supply14", "sell_chance"),
-                 "window": ("chance24", "found_share")}}
+                 "window": ("chance24", "found_share")},
+            14: {"document": (), "item": ()}}
+COMPACT_SINCE = 14             # the schema from which profiles are run-length coded and items written as rows (BZ47)
+PROFILE_FIELDS = ("how", "how_weeks", "sales_how", "sales_weeks", "supply_how", "supply_weeks")
 
 
 class IntelVersionError(ValueError):
@@ -221,6 +227,9 @@ def to_json(intel: MarketIntelligence, schema: int | None = None) -> str:
         intel: The intelligence.
         schema: Write as this schema: the fields added after it are left out and `schema_version` says it. None
             writes the intelligence's own schema. Schema changes are additive, so an older reader reads it whole.
+            From schema 14 each item is a row of `item_fields`' values and the profiles are written as the record
+            holds them (run-length coded when `profile.pack` made them); an older schema gets them plain and each
+            item as an object (BZ47).
 
     Returns:
         JSON text with sorted keys; item and catalog keys become strings.
@@ -244,8 +253,25 @@ def to_json(intel: MarketIntelligence, schema: int | None = None) -> str:
                 for window in item["sell_windows"] + item["buy_windows"]:
                     for name in ADDED_IN[version].get("window", ()):
                         window.pop(name)
+    if target < COMPACT_SINCE:                 # an older reader expects plain profiles; 14 keeps the record's own form
+        _profile_form(body["items"].values(), profile.plain)
+    else:
+        names = body["item_fields"] = sorted(f.name for f in fields(ItemIntel))
+        body["items"] = {key: [item[name] for name in names] for key, item in body["items"].items()}
     body["schema_version"] = target
     return json.dumps(body, sort_keys=True, separators=(",", ":"))
+
+
+def _profile_form(items, form) -> None:
+    """Rewrite each item's packed profile strings in one form, in place (BZ47).
+
+    Args:
+        items: The items as dicts (asdict's), changed in place.
+        form: How to rewrite one string: profile.plain.
+    """
+    for item in items:
+        for name in PROFILE_FIELDS:
+            item[name] = form(item[name])
 
 
 def from_json(text: str) -> MarketIntelligence:
@@ -266,7 +292,15 @@ def from_json(text: str) -> MarketIntelligence:
         raise IntelVersionError(f"intelligence from a newer AHSync (schema {body['schema_version']}, "
                                 f"this reads up to {INTEL_SCHEMA_VERSION})")
     items = {}
+    names = body.get("item_fields")
+    if names is not None and not (isinstance(names, list) and all(isinstance(n, str) for n in names)
+                                  and len(set(names)) == len(names)):
+        raise ValueError("item_fields must be a list of distinct field names")
     for key, item in body["items"].items():
+        if names is not None:                  # schema 14's rows (BZ47); a row of the wrong length is refused
+            if not isinstance(item, list):
+                raise ValueError(f"item {key} is not a row")
+            item = dict(zip(names, item, strict=True))
         item["book"] = tuple(tuple(row) for row in item["book"])
         if body["schema_version"] < 3:         # version 2's unpacked profiles are dropped: the next refresh rebuilds them
             for name in ("how", "how_weeks", "sales_how", "sales_weeks", "supply_how", "supply_weeks"):
