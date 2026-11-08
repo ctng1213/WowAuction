@@ -140,7 +140,7 @@ class IntelStore:
         Args:
             intel: The intelligence.
             body: Its gzipped JSON as downloaded (a cloud document, BZ43), stored as it is, a BLOB in the TEXT
-                column; None stores gzip(to_json(intel)) the same way (a local market's, BZ47).
+                column; None stores gzip(to_json(intel)) the same way (a local market's, BZ48).
         """
         if body is None:
             body = gzip.compress(to_json(intel).encode("utf-8"), mtime=0)
@@ -225,7 +225,7 @@ class IntelStore:
         return None if row is None else tuple(row)
 
     def _parse_intel(self, market: str) -> MarketIntelligence:
-        """Read and parse the published body: gzipped JSON (BZ43, BZ47), or JSON text an older AHSync stored.
+        """Read and parse the published body: gzipped JSON (BZ43, BZ48), or JSON text an older AHSync stored.
 
         Args:
             market: Market id.

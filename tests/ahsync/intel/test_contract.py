@@ -153,7 +153,7 @@ def test_BZ41_schema_13_carries_the_market_lines_and_schema_12_is_written_withou
     assert back.sell_through == (None, None, None) and back.sell_windows[0].chance24 is None
 
 
-def test_BZ46_schema_14_writes_items_as_rows_and_schema_13_as_objects_with_plain_profiles():
+def test_BZ47_schema_14_writes_items_as_rows_and_schema_13_as_objects_with_plain_profiles():
     how, weeks = profile.pack(profile.Profile((0.76, 0.88) + (1.0,) * 166, (7,) * 168, (True,) * 168))
     intel = MarketIntelligence("m", 1, None, 1, {2589: replace(ITEM, how=how, how_weeks=weeks)})
     body = json.loads(to_json(intel))

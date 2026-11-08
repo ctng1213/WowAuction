@@ -176,7 +176,7 @@ def test_AR5_the_intelligence_holds_the_weekly_patterns_windows_and_curve():
     intel, failed = market.analyze_market(SevenWeeks(), M, W_NOW, MarketSettings())
     bar = intel.items[2840]
     assert failed == {}
-    assert bar.how_weeks == bar.sales_weeks == bar.supply_weeks == "7*168"                 # run-length (BZ46)
+    assert bar.how_weeks == bar.sales_weeks == bar.supply_weeks == "7*168"                 # run-length (BZ47)
     assert unpack(bar.how, bar.how_weeks).values[4] == 0.8          # Mon 04:00, packed in thousandths
     # Smoothed sales are 5.6 on Tue 18-20 (2 + 8 + 8 + 8 + 2 over 5 slots), 4.4 next to them: under 0.9 × 5.6.
     assert [(w.start_slot, w.hours, w.best_slot, w.weeks) for w in bar.sell_windows] == [(TUE + 18, 3, TUE + 18, 7)]

@@ -61,7 +61,7 @@ Scenarios to add: a re-plan and a dashboard request in one process parse the sum
 
 ### SM2a: publish only the schema a release can read (Opus: which releases are in use decides it)
 
-1. `ahcloud.publish.OLDEST_PUBLISHED` 10 → 13; `read_latest` also tries the schema before the oldest published one, so a bump still finds the last daily run's document (FM75). BZ45.
+1. `ahcloud.publish.OLDEST_PUBLISHED` 10 → 13; `read_latest` also tries the schema before the oldest published one, so a bump still finds the last daily run's document (FM75). BZ46.
 2. A `cdk deploy` (the user's approval at the time). The stale `latest-10/11/12.json` pointers expire with the bucket's 7-day rule.
 3. Expected: the cloud's writes 19 → 5 MB an hour, the summary bucket about 3.2 → 0.8 GB at steady state, three fewer 88 MB serializations an hour in the Lambda.
 
@@ -75,7 +75,7 @@ Scenarios to add: a re-plan and a dashboard request in one process parse the sum
 
 ### SM2c: a local market's summary stored gzipped (Opus: the staging contract)
 
-1. `stage_intel` with no downloaded body stores `gzip(to_json(intel))` too, as a cloud document's is (SM1 step 2). On the user's Mac the AHF market's row is 18.8 MB of text; SQLite copies such a row through staging and the swap, which SM1 measured as the larger cost. **Built (SM2c, 2026-11-08)**, BZ47: an older AHSync's text row still reads. After a downgrade, 0.1.9 could read the gzip (`_parse_intel` takes a BLOB since SM1) but not its schema 14, and refuses the row until its own next full refresh, as SM1's note says for 0.1.8; the SPEC has no downgrade path (§3.7).
+1. `stage_intel` with no downloaded body stores `gzip(to_json(intel))` too, as a cloud document's is (SM1 step 2). On the user's Mac the AHF market's row is 18.8 MB of text; SQLite copies such a row through staging and the swap, which SM1 measured as the larger cost. **Built (SM2c, 2026-11-08)**, BZ48: an older AHSync's text row still reads. After a downgrade, 0.1.9 could read the gzip (`_parse_intel` takes a BLOB since SM1) but not its schema 14, and refuses the row until its own next full refresh, as SM1's note says for 0.1.8; the SPEC has no downgrade path (§3.7).
 
 Needs: a `cdk deploy` (the user's approval at the time), and a rebuild is not needed (the format is written per publish).
 

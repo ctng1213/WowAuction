@@ -129,7 +129,7 @@ def test_a_stored_body_that_is_not_gzip_is_a_value_error(db):
         db.read_intel(M)
 
 
-def test_BZ47_a_local_markets_summary_is_stored_gzipped_and_an_older_text_row_still_reads(db):
+def test_BZ48_a_local_markets_summary_is_stored_gzipped_and_an_older_text_row_still_reads(db):
     from ahsync.intel.contract import MarketIntelligence, to_json
     intel = MarketIntelligence(M, 10, 5, 1, {})
     with db.transaction():

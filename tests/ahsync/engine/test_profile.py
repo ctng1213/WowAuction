@@ -131,7 +131,7 @@ def test_W13_profiles_pack_in_thousandths_half_up():
     values = (1.2346, 0.0625, 0.8) + (1.0,) * 165
     prof = Profile(values, (7,) * 168, (True,) * 168)
     text, weeks = pack(prof)
-    assert (text, weeks) == ("1235,63,800,1000*165", "7*168")                     # run-length coded (BZ46)
+    assert (text, weeks) == ("1235,63,800,1000*165", "7*168")                     # run-length coded (BZ47)
     back = unpack(text, weeks)
     assert back.values[:3] == (1.235, 0.063, 0.8) and back.confident[0]
     assert pack(back) == (text, weeks)
@@ -150,7 +150,7 @@ def test_unpack_values_reads_the_same_ratios_without_the_weeks():
         profile.unpack_values("1,2,3")
 
 
-def test_BZ46_profiles_are_run_length_coded_and_read_in_either_form():
+def test_BZ47_profiles_are_run_length_coded_and_read_in_either_form():
     plain_text = ",".join(["760", "880"] + ["1000"] * 166)
     assert profile.expand("760,880,1000*166") == plain_text.split(",")
     assert profile.plain("760,880,1000*166") == plain_text and profile.plain("") == ""
