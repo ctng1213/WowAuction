@@ -477,6 +477,33 @@ def test_FM50_a_start_that_finds_a_key_clears_setup_s_line_and_only_that_one(tmp
         db.close()
 
 
+
+def test_DR33_the_update_jobs_first_run_checks_whatever_the_last_check(tmp_path, monkeypatch):
+    import calendar
+
+    import ahsync.__main__ as app_main
+    from ahsync.__main__ import LiveConfig, update_job
+    from ahsync.app.update_check import write_meta
+    from ahsync.web.server import AppHooks
+    from tests.support.fake_transport import FakeTransport
+
+    monkeypatch.setattr(app_main.version, "VERSION", "0.3.1")
+    now = calendar.timegm((2026, 11, 6, 18, 0, 0)) * 1000
+    db = Database.open(tmp_path / "ahsync.db", now, None)
+    hooks = AppHooks(lambda _db, _config: {}, lambda e: ("set", e), "AHSync-{}-windows-x64-setup.exe".format,
+                     lambda _path: None, lambda _app: None)
+    try:
+        write_meta(db, {"checked_ms": now - 12 * 3_600_000, "tag": "v0.3.1"})
+        transport = FakeTransport.serve_github()
+        job = update_job(db, transport, FakeClock(now), tmp_path, LiveConfig(Config(auto_update=False)), hooks)
+        job()
+        checks = [r for r in transport.requests if "api.github.com" in r.url]
+        assert len(checks) == 1
+        job()
+        assert len([r for r in transport.requests if "api.github.com" in r.url]) == 1
+    finally:
+        db.close()
+
 def test_DR20_the_update_job_checks_then_downloads_and_the_shell_gets_the_dashboard(tmp_path, monkeypatch):
     import calendar
 
