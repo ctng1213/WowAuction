@@ -7,12 +7,20 @@ import pytest
 
 from dataclasses import replace
 
+from ahsync.engine import profile
 from ahsync.intel.contract import (
     INTEL_SCHEMA_VERSION, IntelVersionError, IntelWindow, ItemIntel, MarketIntelligence, from_json, to_json,
 )
 
 ITEM = ItemIntel(2589, 45, 40, 3_600_000, 50, 52, 40, 60, 1.5, 38.0, 4.0, 40.0, "books", {"books": 7}, 44, 20, 0.8,
                  False, 41.8, 61, 93, 7_200_000, ((45, 20, 3, 2), (50, 20, 4, 1)))
+
+
+def item_of(text: str, key: str = "2589") -> dict:
+    """One item of a document as an object, from schema 14's rows or an older schema's objects."""
+    body = json.loads(text)
+    row = body["items"][key]
+    return dict(zip(body["item_fields"], row)) if "item_fields" in body else row
 
 
 def test_AR2_intelligence_round_trips_and_a_newer_schema_is_refused():
@@ -42,7 +50,7 @@ def test_patterns_windows_and_curve_round_trip():
 
 
 def test_a_version_1_document_reads_with_no_patterns():
-    body = json.loads(to_json(MarketIntelligence("m", 1, None, 1, {2589: ITEM})))
+    body = json.loads(to_json(MarketIntelligence("m", 1, None, 1, {2589: ITEM}), schema=13))   # items as objects
     body["schema_version"] = 1
     for name in ("how", "how_weeks", "sales_how", "sales_weeks", "supply_how", "supply_weeks", "seasonality",
                  "sell_windows", "buy_windows", "curve", "curve_hour"):
@@ -52,7 +60,7 @@ def test_a_version_1_document_reads_with_no_patterns():
 
 
 def test_a_version_2_document_drops_its_unpacked_profiles():
-    body = json.loads(to_json(MarketIntelligence("m", 1, None, 1, {2589: ITEM})))
+    body = json.loads(to_json(MarketIntelligence("m", 1, None, 1, {2589: ITEM}), schema=13))
     body["schema_version"] = 2
     body["items"]["2589"].update(how=[1.0] * 168, how_weeks=[7] * 168)
     item = from_json(json.dumps(body)).items[2589]
@@ -63,7 +71,7 @@ def test_W15_windows_carry_their_forecast_and_a_version_8_document_reads_it_as_n
     window = IntelWindow(42, 3, 43, 1.12, 7, 112, 46, 70)
     intel = MarketIntelligence("m", 1, None, 1, {2589: replace(ITEM, sell_windows=(window,), buy_windows=(window,))})
     assert from_json(to_json(intel)) == intel
-    body = json.loads(to_json(intel))
+    body = json.loads(to_json(intel, schema=13))
     body["schema_version"] = 8
     for name in ("sell_windows", "buy_windows"):
         for w in body["items"]["2589"][name]:
@@ -106,7 +114,7 @@ def test_BZ15_schema_10_round_trips_its_cloud_fields_and_writes_schema_9_without
 
 def test_BZ37_schema_11_carries_med14_and_schema_10_is_written_without_it():
     intel = MarketIntelligence("forever.normal.horde.us", 1_000, 2_000, 1, {2589: replace(ITEM, med14=52)})
-    assert INTEL_SCHEMA_VERSION >= 11 and json.loads(to_json(intel))["items"]["2589"]["med14"] == 52
+    assert INTEL_SCHEMA_VERSION >= 11 and item_of(to_json(intel))["med14"] == 52
     assert from_json(to_json(intel)) == intel
     old = json.loads(to_json(intel, schema=10))
     assert old["schema_version"] == 10 and "med14" not in old["items"]["2589"]
@@ -116,8 +124,7 @@ def test_BZ37_schema_11_carries_med14_and_schema_10_is_written_without_it():
 def test_BZ23_schema_12_carries_expired_share_and_schema_11_is_written_without_it():
     intel = MarketIntelligence("forever.normal.horde.us", 1_000, 2_000, 1,
                                {2589: replace(ITEM, expired_share=0.25, undercut_share=0.3)})
-    body = json.loads(to_json(intel))
-    assert INTEL_SCHEMA_VERSION >= 12 and body["items"]["2589"]["expired_share"] == 0.25
+    assert INTEL_SCHEMA_VERSION >= 12 and item_of(to_json(intel))["expired_share"] == 0.25
     assert from_json(to_json(intel)) == intel
     old = json.loads(to_json(intel, schema=11))
     assert old["schema_version"] == 11 and "expired_share" not in old["items"]["2589"]
@@ -144,3 +151,22 @@ def test_BZ41_schema_13_carries_the_market_lines_and_schema_12_is_written_withou
     assert "chance24" not in old["items"]["2589"]["sell_windows"][0] and "found_share" not in old["items"]["2589"]["buy_windows"][0]
     back = from_json(json.dumps(old)).items[2589]
     assert back.sell_through == (None, None, None) and back.sell_windows[0].chance24 is None
+
+
+def test_BZ47_schema_14_writes_items_as_rows_and_schema_13_as_objects_with_plain_profiles():
+    how, weeks = profile.pack(profile.Profile((0.76, 0.88) + (1.0,) * 166, (7,) * 168, (True,) * 168))
+    intel = MarketIntelligence("m", 1, None, 1, {2589: replace(ITEM, how=how, how_weeks=weeks)})
+    body = json.loads(to_json(intel))
+    assert body["item_fields"] == sorted(body["item_fields"]) and len(body["items"]["2589"]) == len(body["item_fields"])
+    assert (item_of(to_json(intel))["how"], item_of(to_json(intel))["how_weeks"]) == ("760,880,1000*166", "7*168")
+    assert from_json(to_json(intel)) == intel
+    old = json.loads(to_json(intel, schema=13))
+    assert "item_fields" not in old and old["items"]["2589"]["how"] == ",".join(["760", "880"] + ["1000"] * 166)
+    assert old["items"]["2589"]["how_weeks"] == ",".join(["7"] * 168)
+    assert profile.unpack(from_json(json.dumps(old)).items[2589].how, weeks) == profile.unpack(how, weeks)
+    row = body["items"]["2589"]
+    for bad_row, bad_fields in ((row[:-1], body["item_fields"]), (dict.fromkeys(body["item_fields"]), body["item_fields"]),
+                                (row, body["item_fields"][:-1] + body["item_fields"][:1]), (row, "fields")):
+        with pytest.raises(ValueError):                              # a short, non-list or mislabelled row is refused
+            from_json(json.dumps({**body, "items": {"2589": bad_row}, "item_fields": bad_fields}))
+

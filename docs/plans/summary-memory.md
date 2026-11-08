@@ -75,9 +75,11 @@ Scenarios to add: a re-plan and a dashboard request in one process parse the sum
 
 ### SM2c: a local market's summary stored gzipped (Opus: the staging contract)
 
-1. `stage_intel` with no downloaded body stores `gzip(to_json(intel))` too, as a cloud document's is (SM1 step 2). On the user's Mac the AHF market's row is 18.8 MB of text; SQLite copies such a row through staging and the swap, which SM1 measured as the larger cost.
+1. `stage_intel` with no downloaded body stores `gzip(to_json(intel))` too, as a cloud document's is (SM1 step 2). On the user's Mac the AHF market's row is 18.8 MB of text; SQLite copies such a row through staging and the swap, which SM1 measured as the larger cost. **Built (SM2c, 2026-11-08)**, BZ48: an older AHSync's text row still reads. After a downgrade, 0.1.9 could read the gzip (`_parse_intel` takes a BLOB since SM1) but not its schema 14, and refuses the row until its own next full refresh, as SM1's note says for 0.1.8; the SPEC has no downgrade path (§3.7).
 
 Needs: a `cdk deploy` (the user's approval at the time), and a rebuild is not needed (the format is written per publish).
+
+**Built (SM2b, 2026-11-08).** Steps 1, 2 and 4 as planned; step 3 (leaving out null and default fields) dropped: once items are rows a null costs 4 bytes and gzip takes most of it. `engine.profile.pack` writes the run-length form and `expand` reads either (a run past 168 slots is refused before it is expanded); `to_json` writes 14 as the record holds it and 13 plain, so writing 13 from the compact record of the 09:00 document gives back the original 13 document byte for byte. Measured on that document converted to 14: **21.3 MB decompressed, 3.73 MB gzipped** (88 MB and 4.95 MB as 13); parse 0.52 s (0.57 s); `tools/bench.py --summary` peak **510 → 270 MB** resident (footprint 461 → 232 MB), the hourly poll, re-plan and export 0.8–1.0 s. Order: merge, `cdk deploy`, wait for `latest-14.json`, then the release (§1 item 7). For about a day after the deploy, until the daily run writes a compact record, the hourly 14 documents carry plain profiles (rows only, about 65 MB); no released app reads 14 yet.
 
 ## 4. Open questions for the user
 

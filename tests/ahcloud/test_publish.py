@@ -52,7 +52,7 @@ def test_BZ37_the_cloud_publishes_every_schema_a_release_reads_side_by_side(tmp_
 def test_BZ46_the_cloud_publishes_only_schema_13_which_every_release_that_can_read_the_summary_reads(tmp_path):
     store = LocalStore(tmp_path)
     *_, new = pointers = publish(store, INTEL)
-    assert [p.schema for p in pointers] == [13] and store.get(pointer_key(M, 12)) is None
+    assert [p.schema for p in pointers] == [13, 14] and store.get(pointer_key(M, 12)) is None    # 14 since SM2b
     for pointer in pointers:
         assert json.loads(store.get(pointer_key(M, pointer.schema)).data)["key"] == pointer.key
         assert json.loads(gzip.decompress(store.get(pointer.key).data))["schema_version"] == pointer.schema
