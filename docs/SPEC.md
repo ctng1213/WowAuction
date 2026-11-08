@@ -423,6 +423,7 @@ A full refresh builds into staging tables and swaps them in with one transaction
 | CPU when idle | ≈ 0% (timers and one file stat every 5 s) |
 | Memory when idle | ≤ 150 MB |
 | Memory during a full refresh | ≤ 512 MB peak (streaming, item by item; 400 MB until 2026-11-07, raised by the user when the 9k-item bench reached 443 MB) |
+| Memory with a cloud market | ≤ 600 MB process peak through two hourly summaries of the real market's 88 MB document of 2026-11-08 (the user, 2026-11-08; plan `summary-memory`). Measured 2026-11-08 by `tools/bench.py --summary`: **991 MB, over budget** (the app itself showed 1,039 MB); SM1 brings it inside |
 | Full refresh time | ≤ 120 s for one market of about 9k items with 90 days of hourly history (it runs once a day in the background; weekly patterns and the 24 × 8 curve for every item, §5.0) |
 | Incremental update | ≤ 1 s (a whole re-plan from the published intelligence: 0.96 s measured on a real 15k-item market, 2026-10-18; applying a full in-game scan's 12k prices adds 0.13 s, IU6). With the portfolio optimizer (M10), measured 2026-10-19 on a copy of the live database: 0.99–1.00 s per re-plan once the published intelligence is parsed (it is kept between re-plans until a refresh publishes another), 1.33 s for the first re-plan after a refresh. SPEC GAP: that is at the budget, not inside it; the rest is the plan's facts for every flip candidate (0.26 s), each flip candidate's first batch for the pool (0.23 s), the crafts (0.13 s), the kept flips (0.10 s), selection (0.04 s), the other pages and the publish (about 0.1 s) |
 | Dashboard request | ≤ 50 ms (precomputed JSON, paged at 100 rows) |
@@ -436,7 +437,7 @@ Storage rules:
 - AHF files are streamed and decompressed one hour at a time, never all at once.
 - `item_stats` is replaced atomically, so the dashboard never sees half a refresh.
 
-`tools/bench.py` runs a full refresh on a generated 9k-item world with 90 days of hourly closes, listed units and sales rates for every item (the worst case), in a fresh process without memory tracing, and reports its time and the process peak memory against these budgets. The incremental update is not benchmarked yet.
+`tools/bench.py` runs a full refresh on a generated 9k-item world with 90 days of hourly closes, listed units and sales rates for every item (the worst case), in a fresh process without memory tracing, and reports its time and the process peak memory against these budgets. `tools/bench.py --summary <document.json.gz>` measures a cloud market instead: a fresh process polls a real published document (fetch, parse, stage, re-plan, both addon files), the dashboard reads it on its own connection, then the same for the next hour's copy, printing the resident size and the peak after each step. The incremental update is not benchmarked otherwise.
 
 ### 3.2 Storage: SQLite
 

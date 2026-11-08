@@ -43,6 +43,8 @@ Facts measured on 2026-11-08 (the 88 MB schema 13 document, Python 3.12, `tracem
 2. **A repeatable measurement**: `tools/bench.py --summary <document.json.gz>` (new option) runs the cloud path in a fresh process on a real document: poll, stage, re-plan, export, then a second poll of the same size, and reports the peak and the resident size after each step. It becomes the check SM1 and SM2 are measured with.
 3. **The budget** (approved, §1 item 4): a cloud market's process peak ≤ 600 MB with the 88 MB summary, measured by (2). SPEC §5.1 gains the row.
 
+**Measured (SM0, 2026-11-08)**, `tools/bench.py --summary` on the 88 MB schema 13 document, macOS, Python 3.12: start 37 MB; hour 1 poll, re-plan and export 2.2 s, resident 454 MB, peak 635 MB; the dashboard's read 630 MB; hour 2 poll 2.6 s, resident 911 MB, peak **991 MB**; the dashboard's read 911 MB. The app showed 1,039 MB after its first start with the same document. The running app's 4-hour sample is added here when it ends.
+
 ### SM1: hold one copy, never re-serialize (Opus: cross-connection caching and the staging contract)
 
 1. **One parsed summary per process.** The `read_intel` cache moves from the connection to a process-wide cache keyed by (market, built, schema), so both connections share one frozen record. Safe because `MarketIntelligence` is frozen and callers never change it (its docstring says so); the cache is guarded by a lock for the two threads. The freshness pill reads only `built` from the `intel` row.

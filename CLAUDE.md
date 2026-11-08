@@ -18,6 +18,7 @@ python tools/deploy.py --restart  # ...then restart AHSync and wait until it has
 python tools/savedvars_report.py  # after /reload in game: what the addon captured, and what is missing
 python tools/gen_bonus_suffixes.py  # refresh addon/AHProfit/Data/BonusSuffixes.lua from AHF /items (no key)
 python tools/visual.py         # UI layout snapshots vs golden (--update to accept, --html to view)
+python tools/bench.py --summary <document.json.gz>   # a cloud market's memory through two hourly summaries (budget 600 MB)
 python tools/snapshot.py       # whole-plan snapshot vs tests/fixtures/worlds/w1.expected.json (--update to accept, prints a diff summary)
 python tools/gen_world.py      # regenerate the snapshot's fixture world w1.json (fixed seed), then snapshot.py --update
 python tools/lifetimes_report.py --raw <raw/market folder> --out docs/plans/blizzard-cloud-lifetimes.md   # M33 step 1: band, fate and relist distributions
