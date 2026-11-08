@@ -211,3 +211,20 @@ def test_BZ44_an_hour_pooled_across_midnight_is_the_same_in_any_recompute_order_
                 recompute_id_days(db, store, M, "blizzard", {day})
         rates.append(db.conn.execute("SELECT sold_per_hour FROM sales_h1 WHERE key = ? AND t = ?", (LINEN, hour)).fetchone())
     assert rates[0] == rates[1] and rates[0] is not None
+
+
+def test_BZ45_an_hour_pooled_by_two_days_keeps_its_unseen_estimate_in_any_recompute_order(tmp_path):
+    m, minute = D * DAY, 60_000
+    linen = lambda qty: Auction(1, LINEN, qty, 50, 4, True)                    # noqa: E731  a commodity listing
+    # posted in (m − 8 h, m − 6:50], first seen then; a 5.5 h gap (crossing day D's kept start, m − 6 h) sells 6
+    world = {m - 8 * HOUR: (), m - 410 * minute: (linen(20),), m - 80 * minute: (linen(14),), m + 10 * minute: (linen(14),)}
+    hour = m - 2 * HOUR                                           # credited by the 5.5 h gap and the next one
+    rates = []
+    for name, order in (("a", (D, D - 1)), ("b", (D - 1, D))):
+        db = Database.open(tmp_path / f"{name}.db", FakeClock().now_ms(), None)
+        store = stored(tmp_path, world, name)
+        for day in order:
+            with db.transaction():
+                recompute_id_days(db, store, M, "blizzard", {day})
+        rates.append(db.conn.execute("SELECT sold_per_hour FROM sales_h1 WHERE key = ? AND t = ?", (LINEN, hour)).fetchone())
+    assert rates[0] == rates[1] and rates[0][0] > 0.6             # 0.6 is the observed rate alone: the estimate is in

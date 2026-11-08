@@ -16,6 +16,7 @@ from dataclasses import dataclass, field, replace
 from ahsync.engine.expiry import (RATE_WINDOW_MS, EarlyLeaveRates, expired_fraction, expired_given_vanished,
                                   tally_early_leaves)
 from ahsync.engine.prices import median
+from ahsync.engine.unseen import unseen_sales
 
 HOUR_MS = 3_600_000
 SUPPLY_DAYS = 30            # median_daily_supply looks back this far (SPEC §3.3.6)
@@ -23,7 +24,7 @@ MAX_GAP_MS = 6 * HOUR_MS
 SALES_PAIR_MAX_GAP_MS = 2 * HOUR_MS     # hourly sales rates need books this close (SPEC §3.3 sales_how)
 CROSS_SOURCE_MIN_GAP_MS = 15 * 60_000   # books of different sources closer than this never pair (SPEC §3.3.1, V39)
 VOLUME_METHOD_VERSION = 4     # the book method (group diffs): bump when it changes; stored rows are recomputed (SPEC §3.3.6)
-ID_METHOD_VERSION = 7         # the id method (7: selling and expiring compete in the split, BZ44) (auction lifetimes, M33a); its own number, so a change to it never marks
+ID_METHOD_VERSION = 8         # the id method (7: selling and expiring compete in the split, BZ44; 8: unseen sales, BZ45) (auction lifetimes, M33a); its own number, so a change to it never marks
                               # the desktop's book rows stale (stored with every id row; a cloud `rebuild` recomputes them)
 KINDS = ("ids", "groups", "own")       # volume kinds in trust order (SPEC §3.3.1)
 LEGACY_KIND = {"ahf": "groups", "books": "groups", "mail": "own"}   # rows stored without a cover (V24)
@@ -271,6 +272,7 @@ class Lifetimes:
     listed: tuple[tuple[int, int, int, tuple[int, int], int, int | None], ...]
     clashes: int                  # sightings whose band contradicted the expiry window (checks the band bounds, BZ24)
     commodities: frozenset[int] = frozenset()   # item keys seen in Blizzard's commodities list (BZ40, BZ41)
+    first_seen: tuple[tuple[int, int, tuple[int, int], bool], ...] = ()   # (auction, key, posting gap, commodity), kept or not (BZ45)
 
 
 @dataclass(frozen=True, slots=True)
@@ -288,6 +290,7 @@ class LifeFlow:
     t1_ended: float = 0.0         # ended listings that were posted at the lowest price (BZ41)
     t1_left: float = 0.0          # of those, the share that left early and was not a cancel, summed (BZ41)
     commodity: bool = False       # the item was seen in the commodities list (BZ41: measured, not estimated)
+    unseen: float = 0.0           # of `sold`, units estimated sold before their listings were first seen (BZ45)
 
 
 # How long an auction runs, from its band when first seen just after posting (SPEC §2.4; §2.2's 2, 8 and 24 h).
@@ -295,8 +298,7 @@ class LifeFlow:
 DURATION_MS = {4: 24 * HOUR_MS, 3: 8 * HOUR_MS, 2: 2 * HOUR_MS, 1: 2 * HOUR_MS}
 # How far before a day its lifetimes must start so the day's result is exact (SPEC §2.4): an ending in the day was last
 # seen at most MAX_GAP_MS before it, posted at most 24 h before that, and its posting gap began up to MAX_GAP_MS earlier.
-# How far before a day its pass starts: an ending's whole life (24 h) and its posting and narrowing gaps, plus the
-# early-leave rate's window before it (BZ44), whose gaps need their own auctions' lives, plus that window's first gap.
+# A day's pass starts this early: an ending's life, posting and narrowing gaps, then its early-leave rate's window (BZ44).
 LIFETIME_LOOKBACK_MS = 24 * HOUR_MS + 3 * MAX_GAP_MS + RATE_WINDOW_MS
 
 
@@ -480,7 +482,7 @@ def lifetimes(books: Iterable[IdBook], max_gap_ms: int = MAX_GAP_MS, keep_from_m
         The Lifetimes; auctions still listed at the end have no ending.
     """
     live: dict[int, list] = {}                     # auction id -> [key, units, expiry window, price, commodity, tier1]
-    gaps, endings, fills, listed, seen = [], [], [], [], {}
+    gaps, endings, fills, listed, first_seen, seen = [], [], [], [], [], {}
     clashes, prev_at, prev_keys, commodities = 0, None, frozenset(), set()
     tallies: list[tuple[int, dict]] = []          # (gap end, key -> (exposure ms, early leaves)) per gap (BZ44)
     pooled_commodities: set[int] = set()          # every pass snapshot's commodities: the rate's pools (BZ44)
@@ -514,6 +516,7 @@ def lifetimes(books: Iterable[IdBook], max_gap_ms: int = MAX_GAP_MS, keep_from_m
                     tier1 = other is None or a.price <= other
                     if keep:
                         listed.append((a.id, a.key, a.qty, gap, a.price, other))
+                    first_seen.append((a.id, a.key, gap, a.commodity))
                     posted = (prev_at + DURATION_MS[a.band], book.at_ms + DURATION_MS[a.band])
                     window, clash = narrow(posted, book.at_ms, a.band)
                     clashes += clash and a.band != 1   # short at first sight is expected to clash (SPEC §2.4 item 2)
@@ -539,7 +542,7 @@ def lifetimes(books: Iterable[IdBook], max_gap_ms: int = MAX_GAP_MS, keep_from_m
     endings = [replace(e, overlap=e.expired, expired=expired_given_vanished(windows[e.auction], e.gap,
                                                                            rates.rate(e.key, e.gap[1])))
                if 0.0 < e.expired else e for e in endings]
-    return Lifetimes(tuple(gaps), seen, tuple(endings), tuple(fills), tuple(listed), clashes, frozenset(commodities))
+    return Lifetimes(tuple(gaps), seen, tuple(endings), tuple(fills), tuple(listed), clashes, frozenset(commodities), tuple(first_seen))
 
 
 def life_flows(lt: Lifetimes) -> dict[tuple[int, int], dict[int, LifeFlow]]:
@@ -552,7 +555,8 @@ def life_flows(lt: Lifetimes) -> dict[tuple[int, int], dict[int, LifeFlow]]:
         gap -> item key -> LifeFlow, for every item listed in either snapshot of the gap (zeros included, so an
         observed hour with no sale reads 0, not missing). An ending's units split into expired (its expired
         share) and left early, which is sold unless it was a commodity cancel (BZ40); tier-1 endings are tallied
-        for the sell-through (BZ41).
+        for the sell-through (BZ41); `sold` includes the commodity units estimated sold before first sight, also
+        kept as `unseen` (BZ45).
     """
     totals: dict[tuple[int, int], dict[int, list[float]]] = {
         gap: {key: [0.0] * 10 for key in sorted(lt.seen[gap])} for gap in lt.gaps}
@@ -574,8 +578,13 @@ def life_flows(lt: Lifetimes) -> dict[tuple[int, int], dict[int, LifeFlow]]:
         totals[gap][key][0] += units
     for _, key, units, gap, *_ in lt.listed:
         totals[gap][key][2] += units
-    return {gap: {key: LifeFlow(*row, commodity=key in lt.commodities) for key, row in by_key.items()}
-            for gap, by_key in totals.items()}
+    early = {(e.auction, e.gap): e.qty * (1.0 - e.expired) for e in lt.endings if not e.cancelled}
+    unseen = unseen_sales(lt.gaps, lt.first_seen, lt.fills, early)
+    for gap, by_key in unseen.items():
+        for key, units in by_key.items():
+            totals[gap][key][0] += units                       # sold includes the estimate (BZ45)
+    return {gap: {key: LifeFlow(*row, commodity=key in lt.commodities, unseen=unseen.get(gap, {}).get(key, 0.0))
+                  for key, row in by_key.items()} for gap, by_key in totals.items()}
 
 
 def gap_hours(gap: tuple[int, int]) -> list[int]:
