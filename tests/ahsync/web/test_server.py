@@ -1044,6 +1044,41 @@ def test_FM59_binding_the_dashboard_looks_up_no_name(db, refreshes, monkeypatch)
     finally:
         stop_dashboard(server)
 
+def test_SEC15_restart_to_update_stops_only_with_a_verified_update_and_a_good_write(db, refreshes, tmp_path, caplog):
+    from ahsync.app.installer import waiting_install
+    from ahsync.app.update_check import write_meta
+
+    stops: list[bool] = []
+    setup = tmp_path / "updates" / "AHSync-0.4.0-windows-x64-setup.exe"
+
+    def restart_hook(db_: Database, config: Config) -> bool:
+        """The shell's answer: stop only when a verified, newer update waits that may install itself."""
+        if waiting_install(db_, "0.3.1", config, setup.parent, lambda v: f"AHSync-{v}-windows-x64-setup.exe") is None:
+            return False
+        stops.append(True)
+        return True
+
+    app = DashboardApp(db, Config(markets=(M,)), FakeClock(), refreshes, token="tok-123", port=8765,
+                       config_path=tmp_path / "config.toml",
+                       app_hooks=AppHooks(lambda _db, _config: {}, lambda e: ("set", e), restart=restart_hook))
+    restart = "/api/update/restart"
+    assert app.handle("POST", restart, write_headers(), b"{}").status == 409             # nothing downloaded
+    setup.parent.mkdir()
+    setup.write_bytes(b"installer")
+    write_meta(db, {"tag": "v0.4.0", "checked_ms": 5, "downloaded": "0.4.0", "downloaded_path": str(setup)})
+    with caplog.at_level(logging.WARNING, logger="ahsync.web"):
+        assert app.handle("POST", restart, write_headers(origin="http://evil.example"), b"{}").status == 403
+        assert app.handle("POST", restart, write_headers(token=""), b"{}").status == 403
+        assert app.handle("GET", restart, GOOD).status == 405
+    assert stops == [] and "tok-123" not in caplog.text                                  # nothing stopped
+    reply = app.handle("POST", restart, write_headers(), b"{}")
+    assert (reply.status, json.loads(reply.body), stops) == (200, {"restarting": True}, [True])
+    write_meta(db, {"cant_replace": "1"})                                                # FM54: it can't install itself
+    assert app.handle("POST", restart, write_headers(), b"{}").status == 409
+    no_shell = DashboardApp(db, Config(markets=(M,)), FakeClock(), refreshes, token="tok-123", port=8765)
+    assert no_shell.handle("POST", restart, write_headers(), b"{}").status == 404        # python -m ahsync
+
+
 def test_the_update_toggles_rewrite_one_line_each_and_are_checked_like_every_write(db, refreshes, tmp_path,
                                                                                          caplog):
     from ahsync.app.update_check import read_meta, write_meta
@@ -1081,7 +1116,7 @@ def test_the_update_toggles_rewrite_one_line_each_and_are_checked_like_every_wri
     assert post("/api/update/channel", b'{"channel": "nightly"}') == (400, {"error": "bad_request",
                                                                             "message": "channel must be stable or beta"})
     assert post("/api/update/channel", b'["beta"]')[0] == 400
-    assert app.handle("POST", "/api/update/restart", write_headers(), b"{}").status == 404   # M27 builds it
+    assert app.handle("POST", "/api/update/restart", write_headers(), b"{}").status == 409   # nothing waits (SEC15)
     assert post("/api/update/channel", b'{"channel": "beta"}') == (200, {"set": True, "channel": "beta"})
     assert "left_beta" not in read_meta(db)
 

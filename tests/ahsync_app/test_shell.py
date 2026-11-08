@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 from ahsync.__main__ import LOCK_FILE, InstanceLock, Runtime
-from ahsync.config import load_config
+from ahsync.config import Config, load_config
 from ahsync.db.sqlite import Database
 from ahsync_app import shell
 from ahsync_app.platform.base import AppDirs, Platform
@@ -38,6 +38,7 @@ class FolderPlatform(Platform):
         self.wow = root / "World of Warcraft" / "_classic_beta_"
         self.restricted: list[Path] = []
         self.autostarts: list[Path] = []
+        self.applied: list[tuple[Path, Path]] = []
 
     def app_dirs(self) -> AppDirs:
         return AppDirs(self.root / "config.toml", self.root / "data")
@@ -53,6 +54,12 @@ class FolderPlatform(Platform):
 
     def autostart_enable(self, exe: Path, args: tuple[str, ...] = ()) -> None:
         self.autostarts.append(exe)
+
+    def verify_update(self, path: Path, exe: Path) -> str | None:
+        return None                                    # Windows' answer: the hash is the check
+
+    def apply_update(self, path: Path, exe: Path) -> None:
+        self.applied.append((path, exe))
 
 
 def status_line(data_dir: Path, topic: str):
@@ -807,5 +814,83 @@ def test_DR12_DR13_DR20_the_tray_s_update_items_follow_the_updater_and_toggle_th
     view.check()
     assert app.opened == [page]                                     # the release page, in the browser
     assert dashboard.calls == [("auto_update", True), ("channel", "beta"), ("channel", "stable")]
-    assert "Restart to update installs from M27" in caplog.text
-    assert app.hooks[0].verify_update(tmp_path / "x.exe") is None     # no signature check until M27: the hash only
+    assert "restart to update" in caplog.text                       # the stop the install follows (M27)
+    assert app.hooks[0].verify_update(tmp_path / "x.exe") is None     # the platform's check (Windows: the hash only)
+
+
+class Installing(FolderPlatform):
+    """Records each install with whether another process could take the lock at that moment."""
+
+    def update_asset_name(self, version: str) -> str:
+        return f"AHSync-{version}-windows-x64-setup.exe"
+
+    def apply_update(self, path: Path, exe: Path) -> None:
+        from ahsync.__main__ import LOCK_FILE, InstanceLock
+        lock = InstanceLock(self.app_dirs().data_dir / LOCK_FILE)
+        free = lock.acquire()
+        if free:
+            lock.release()
+        self.applied.append((path.name, exe.name, free))
+
+
+def offer_update(data: Path) -> Path:
+    """Leave DR20's verified 0.4.0 installer waiting, as the download half does (the shell runs 0.0.0 + this patch)."""
+    from ahsync.app.update_check import write_meta
+    setup = data / "updates" / "AHSync-0.4.0-windows-x64-setup.exe"
+    setup.parent.mkdir(parents=True, exist_ok=True)
+    setup.write_bytes(b"installer")
+    db = Database.open(data / "ahsync.db", FakeClock().now_ms(), None)
+    write_meta(db, {"tag": "v0.4.0", "checked_ms": 5, "downloaded": "0.4.0", "downloaded_path": str(setup)})
+    db.close()
+    return setup
+
+
+def pending(data: Path) -> str | None:
+    """update.pending in the app's database."""
+    from ahsync.app.update_check import read_meta
+    db = Database.open(data / "ahsync.db", FakeClock().now_ms(), None)
+    try:
+        return read_meta(db).get("pending")
+    finally:
+        db.close()
+
+
+def test_DR22_a_waiting_update_installs_at_the_next_start_before_ahsync_runs(tmp_path, monkeypatch):
+    monkeypatch.setattr(shell.version, "VERSION", "0.3.1")
+    app = FakeApp(tmp_path, Installing(tmp_path))
+    app.configure(tmp_path / "wow")
+    data = app.platform.app_dirs().data_dir
+    setup = offer_update(data)
+    assert shell.start(True, app.world()) == 0
+    assert app.calls == [] and app.platform.applied == [(setup.name, "AHSync.exe", False)]   # run() never started;
+    assert pending(data) == "0.4.0"                       # the lock is still ours: the installer waits for it
+
+
+def test_FM78_a_plain_or_stop_file_quit_never_installs(tmp_path, monkeypatch):
+    monkeypatch.setattr(shell.version, "VERSION", "0.3.1")
+    app = FakeApp(tmp_path, Installing(tmp_path), until=lambda data: offer_update(data) is not None)
+    app.configure(tmp_path / "wow")
+    assert shell.start(True, app.world()) == 0            # downloaded during the run, then run() returned 0
+    assert app.calls_done and app.platform.applied == []  # the uninstaller's or an installer's stop: no install
+    assert pending(app.platform.app_dirs().data_dir) is None
+
+
+def test_DR22_restart_to_update_installs_once_run_returns_and_the_lock_is_free(tmp_path, monkeypatch):
+    monkeypatch.setattr(shell.version, "VERSION", "0.3.1")
+    answers: list[bool] = []
+
+    def restart_after_download(data: Path) -> bool:
+        """The update arrives during the run; then the Status card's button asks for the restart."""
+        if not answers:
+            offer_update(data)
+            db = Database.open(data / "ahsync.db", FakeClock().now_ms(), None)
+            try:
+                answers.append(app.hooks[0].restart(db, Config()))
+            finally:
+                db.close()
+        return False                                      # run() returns on the stop the restart set
+
+    app = FakeApp(tmp_path, Installing(tmp_path), until=restart_after_download)
+    app.configure(tmp_path / "wow")
+    assert shell.start(True, app.world()) == 0
+    assert answers == [True] and app.platform.applied == [("AHSync-0.4.0-windows-x64-setup.exe", "AHSync.exe", True)]

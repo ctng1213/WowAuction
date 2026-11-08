@@ -123,7 +123,7 @@ def test_D98_the_app_card_s_lines_in_order_with_their_controls():
                                                     "Data folder", "WoW folder", "Addon"]
     update, auto, beta, login, key, data, wow, addon = card["lines"]
     assert update["parts"][0] == ["AHSync 0.4.0", DOWNLOADED["url"]] and update["class"] == "amber"
-    assert update["button"] == {"text": "Restart to update", "enabled": False, "post": "/api/update/restart"}
+    assert update["button"] == {"text": "Restart to update", "enabled": True, "post": "/api/update/restart"}
     assert auto["control"] == {"checked": True, "enabled": True, "text": "install updates automatically",
                                "post": "/api/update/auto", "field": ["enabled", True, False],
                                "title": app_view.AUTO_TITLE}

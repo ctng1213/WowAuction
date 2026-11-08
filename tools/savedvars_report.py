@@ -57,13 +57,31 @@ def local_time(ms: int) -> str:
     return datetime.fromtimestamp(ms / 1000).strftime("%Y-%m-%d %H:%M")
 
 
-def report_character(data: AHProfitData, char_id: str, gaps: list[str]) -> None:
+def gap_lines(gaps: list[tuple[str, str | None]]) -> list[tuple[str, str]]:
+    """One hint per missing piece, naming the characters it applies to (the user, 2026-11-07: "recipes" alone did
+    not say it meant De, who hadn't logged in).
+
+    Args:
+        gaps: (hint key, character name or None) in the order found.
+
+    Returns:
+        (hint key, "De, Willie" or ""), each key once, in first-seen order.
+    """
+    names: dict[str, list[str]] = {}
+    for key, name in gaps:
+        names.setdefault(key, [])
+        if name and name not in names[key]:
+            names[key].append(name)
+    return [(key, ", ".join(who)) for key, who in names.items()]
+
+
+def report_character(data: AHProfitData, char_id: str, gaps: list[tuple[str, str | None]]) -> None:
     """Print one character's captured data and note what is missing.
 
     Args:
         data: The parsed file.
         char_id: "Name-Realm".
-        gaps: Collects (hint key) for each missing piece; printed once at the end.
+        gaps: Collects (hint key, the character's name) for each missing piece; printed once at the end.
     """
     char = next(c for c in data.characters if c.char_id == char_id)
     print(f"\n{char_id}  level {char.level} {char.class_token} {char.faction}  gold {gold(char.gold_copper)}"
@@ -73,14 +91,14 @@ def report_character(data: AHProfitData, char_id: str, gaps: list[str]) -> None:
     print("  professions: " + (", ".join(f"{p.profession} {p.skill}/{p.max_skill}" for p in professions) or "none"))
     print(f"  known recipes: {known}")
     if not professions:
-        gaps.append("professions")
+        gaps.append(("professions", char.name))
     if professions and not known:
-        gaps.append("recipes")
+        gaps.append(("recipes", char.name))
     for location in LOCATIONS:
         snapshot = next((i for i in data.inventories if i.char_id == char_id and i.location == location), None)
         if snapshot is None:
             print(f"  {location:5}: not captured")
-            gaps.append(location)
+            gaps.append((location, char.name))
             continue
         units = sum(r.qty for r in snapshot.rows)
         bound = sum(1 for r in snapshot.rows if r.bound)
@@ -190,7 +208,7 @@ def report(path: Path, verbose: bool = False) -> int:
         print(f"  cannot read it: {error}")
         return 1
     print(f"format {data.format_version}, addon {data.addon_version}; {len(data.characters)} character(s)")
-    gaps: list[str] = []
+    gaps: list[tuple[str, str | None]] = []
     for char in data.characters:
         report_character(data, char.char_id, gaps)
     by_profession = Counter(r.profession for r in data.recipes)
@@ -202,7 +220,7 @@ def report(path: Path, verbose: bool = False) -> int:
     print(f"vendor reagents seen: {len(data.vendor_reagents)}")
     print(item_names_line(data.item_names))       # A92: "neither" on every row means an addon from before it
     if not data.vendor_reagents:
-        gaps.append("vendor")
+        gaps.append(("vendor", None))
     events = Counter(e.type for e in data.events)
     print("events: " + (", ".join(f"{t} {n}" for t, n in sorted(events.items())) or "none"))
     names = {n.key: n.name for n in data.item_names}
@@ -217,8 +235,8 @@ def report(path: Path, verbose: bool = False) -> int:
             print(f"  - {problem}")
     if gaps:
         print("\nstill missing (do this in game, then /reload and re-run):")
-        for key in dict.fromkeys(gaps):
-            print(f"  - {key}: {HINTS[key]}")
+        for key, names in gap_lines(gaps):
+            print(f"  - {key}{f' ({names})' if names else ''}: {HINTS[key]}")
     return 0
 
 

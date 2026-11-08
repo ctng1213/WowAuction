@@ -61,7 +61,7 @@ PAGES = ("portfolio", "today", "week", "on_ah", "disenchant", "craft", "flip", "
          "rules", "characters", "status")
 GET_PATHS = ("/", "/api/markets", "/api/items", "/api/app")
 POST_PATHS = ("/api/refresh", "/api/skip", "/api/rule", "/api/reserve", "/api/risk_tolerance", "/api/manual_rate",
-              "/api/autostart", "/api/update/auto", "/api/update/channel")
+              "/api/autostart", "/api/update/auto", "/api/update/channel", "/api/update/restart")
 MANUAL_RATE_MAX = 10_000                           # SPEC §3.4E.5: a whole number 1-10,000 items per hour
 RISK_CHOICES = (0.1, 0.2, 0.3, 0.4, 0.5)          # SPEC §3.5: the Portfolio page's Risk tolerance dropdown
 RULES = ("no_buy", "ignore", "keep", "none")       # SPEC §3.4.2: what the dashboard may set
@@ -81,6 +81,9 @@ class AppHooks:
     asset_name: Callable[[str], str] = lambda version: ""          # version -> this OS's release asset (§3.7.9)
     verify_update: Callable[[Path], str | None] = lambda path: None   # None: may install; else why not (§3.7.9)
     dashboard_ready: Callable[[object], None] = lambda app: None   # gets the DashboardApp, for the tray's toggles
+    can_replace: Callable[[], bool] = lambda: True                 # whether the app may replace itself (FM54, M27)
+    forget_previous: Callable[[], None] = lambda: None             # cleanup after an update that worked (M27)
+    restart: Callable[[Database, Config], bool] = lambda db, config: False   # Restart to update: True once stopping
 
 
 @dataclass(frozen=True)
@@ -420,6 +423,8 @@ class DashboardApp:
             return self.update_auto(body)
         if path == "/api/update/channel":
             return self.update_channel(body)
+        if path == "/api/update/restart":
+            return self.update_restart()
         return self.skip(body)
 
     def _manual_rate_request(self, body: bytes) -> tuple[str, int, int | None] | str:
@@ -616,6 +621,20 @@ class DashboardApp:
             rewritten (the setting unchanged).
         """
         return self._set_setting("auto_update", enabled, "true" if enabled else "false", {"enabled": enabled})
+
+    def update_restart(self) -> Response:
+        """Restart to update from the Status card (SPEC §3.7.9; SEC15): stop, and the shell installs on the way out.
+
+        Returns:
+            200 {"restarting": true} once the stop is asked; 409 {"error": "no_update"} when no verified update
+            waits that may install itself; 404 without the app shell.
+        """
+        if self.app_hooks is None:
+            return json_response(404, {"error": "not_found"})
+        if not self.app_hooks.restart(self.db, self.config):
+            return json_response(409, {"error": "no_update"})
+        log.info("restart to update asked from the dashboard")
+        return json_response(200, {"restarting": True})
 
     def update_channel(self, body: bytes) -> Response:
         """Choose the update channel from the Status card (SPEC §3.7.10; SEC15).

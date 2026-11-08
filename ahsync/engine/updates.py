@@ -16,6 +16,7 @@ TAG = re.compile(r"v([0-9]+)\.([0-9]+)\.([0-9]+)")      # vMAJOR.MINOR.PATCH, AS
 VERSION = re.compile(r"([0-9]+)\.([0-9]+)\.([0-9]+)")
 RELEASE_PAGE = "https://github.com/ctng1213/WowAuction/releases/tag/"   # + tag: never a URL from the answer
 OFFLINE, NOT_FOUND, UNAVAILABLE = "offline", "not_found", "unavailable"    # a check that got no release (FM52)
+INSTALL_FAILED = "install"          # download_failed after an install that left the old version running (FM55)
 
 
 @dataclass(frozen=True)
@@ -210,7 +211,8 @@ def update_text(state: UpdateState, now_ms: int, offset_ms: int) -> dict:
     if ready(state):
         return waiting(state)
     if state.download_failed is not None and state.tag is not None:
-        return line(f"Update to {tag_version(state.tag)} failed: {state.download_failed} · still on {state.version} "
+        reason = "" if state.download_failed == INSTALL_FAILED else f": {state.download_failed}"   # FM55 names none
+        return line(f"Update to {tag_version(state.tag)} failed{reason} · still on {state.version} "
                     f"· tries again tomorrow", "amber")
     if state.checked_ms is None:
         return line("not checked yet", "muted")

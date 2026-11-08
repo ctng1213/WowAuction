@@ -37,7 +37,7 @@ flowchart LR
     Engine[engine/<br/>pure formulas and views]
     Export[export/<br/>addon data files]
     Web[web/ + app/<br/>dashboard server, refresh, scheduler]
-    Shell[ahsync_app/ shell, setup, window, tray, start at login built M22–M24;<br/>update check and download built M25, install planned M27<br/>around run; SPEC §3.7]
+    Shell[ahsync_app/ shell, setup, window, tray, start at login built M22–M24;<br/>update check and download built M25, install built M27<br/>around run; SPEC §3.7]
   end
 
   subgraph Cloud["Market cloud (AWS us-east-1; planned M30–M31, SPEC §2.4)"]
@@ -158,7 +158,7 @@ sequenceDiagram
   Note over S,R: SavedVariables changed -> state import -> re-plan -> pages -> export
   S->>P: hourly status pass (positions re-evaluated, Status lines)
   W->>W: GET pages serve stored JSON (<= 50 ms); POST only for risk tolerance and manual rates, Host/Origin/token checked
-  Note over S,W: built M23: GET /setup, GET /api/app, POST /api/setup (web/setup_app.py, same checks); built M24: POST /api/autostart (AppHooks from the shell); planned M25–M27 (§3.7): /api/update/{restart,auto,channel}
+  Note over S,W: built M23: GET /setup, GET /api/app, POST /api/setup (web/setup_app.py, same checks); built M24: POST /api/autostart (AppHooks from the shell); built M25–M27 (§3.7): /api/update/{restart,auto,channel}
 ```
 
 ## 5. Storage families (SQLite)
@@ -172,7 +172,7 @@ sequenceDiagram
 | Plan and pages | `actions`, `alternatives`, `export_candidates`, `portfolio_snapshot`, `views` (+ `_new` staging), `item_rules`, `reserves`, `sell_records` | `recommend/` | `export/`, `web/` |
 | Operations | `status`, `meta` (the `update.*` keys, M25), backups on disk, raw snapshots on disk, `<data>/updates/` (the verified download, M25) | all | Status page |
 
-## 6. Distribution and runtime (M22–M24 built; M25–M27 planned, SPEC §3.7)
+## 6. Distribution and runtime (M22–M27 built, SPEC §3.7)
 
 Each part is marked built in the milestone that lands it; the rest is **planned**. The rule: one shared core, a thin layer per OS. `ahsync/` stays standard-library only; `ahsync_app/` is the one package allowed third-party imports (pystray, Pillow, pyobjc), and `ahsync_app/platform/` is the one place that knows the OS (convention test DR16).
 
@@ -233,7 +233,7 @@ flowchart LR
   Fakes -.inject.-> Mac
 ```
 
-**Built (M22):** `base.py` (the protocol; the update members raise until M27), `app_dirs`, `wow_candidates`, `restrict_file` and `run_location_problem` in both modules, and `current()`; the guardrail DR16 in `tests/test_conventions.py`. **Built (M24):** the start-at-login members (Windows: the Run key through an injected `RunKey`; macOS: the LaunchAgent file alone) and `ahsync_app/autostart.py` over them.
+**Built (M22):** `base.py` (the protocol; the update members raised until M27, built since with `can_replace` and `forget_previous`), `app_dirs`, `wow_candidates`, `restrict_file` and `run_location_problem` in both modules, and `current()`; the guardrail DR16 in `tests/test_conventions.py`. **Built (M24):** the start-at-login members (Windows: the Run key through an injected `RunKey`; macOS: the LaunchAgent file alone) and `ahsync_app/autostart.py` over them.
 
 Both OS modules are tested on every OS by injection (DR9–DR11, DR22, DR23), so a Windows-only CI run still tests the macOS adapter.
 
@@ -270,7 +270,7 @@ sequenceDiagram
 
 Channel rule (DR25, DR26): the stable channel sees only promoted releases (`releases/latest` skips pre-releases); the beta channel takes the highest `vX.Y.Z` of the list, pre-releases included; switching back never downgrades.
 
-**Built (M25):** the check (`app/update_check.py`, one plain GET through the transport, never `ApiClient`: no AHF key, no retries), the texts (`engine/updates.py`), the download and hash check (`app/updater.py`; the platform's `update_asset_name`; `verify_update` accepts until M27), the state in `meta` `update.*`, read by `GET /api/app`, the Status card (`app_view.app_card` in the Status payload), the top bar's pill and the tray (`DashboardApp.tray_facts`); the toggles `POST /api/update/auto` and `/api/update/channel`, shared with the tray through `AppHooks.dashboard_ready`. Planned (M27): the signature check, `update.pending`, `apply_update` and the result line.
+**Built (M25):** the check (`app/update_check.py`, one plain GET through the transport, never `ApiClient`: no AHF key, no retries), the texts (`engine/updates.py`), the download and hash check (`app/updater.py`; the platform's `update_asset_name`; `verify_update` accepted until M27), the state in `meta` `update.*`, read by `GET /api/app`, the Status card (`app_view.app_card` in the Status payload), the top bar's pill and the tray (`DashboardApp.tray_facts`); the toggles `POST /api/update/auto` and `/api/update/channel`, shared with the tray through `AppHooks.dashboard_ready`. **Built (M27):** the install half. `ahsync_app/shell.install_waiting` runs at a start before `run()`, or after `Session.run()` returns and the lock is released when Restart to update was asked (never on any other quit, FM78), reopening the database with `open_server_db` (no migration); it sets `update.pending` through `app/installer.install` and hands the verified download to the platform's `apply_update` (Windows: silent Inno Setup with relaunch; macOS: the `swap.sh` helper with roll-back). `installer.settle` runs first in every update job and records `updated_to`/`updated_ms` or the failed install at the next start. The platform gained `can_replace(exe)` (FM54, `update.cant_replace`) and `forget_previous(exe)`, so the protocol has thirteen members; `verify_update(path, exe)` does the macOS `codesign` and Team ID check. Restart to update (the tray, `POST /api/update/restart`) sets the stop event, so the same path runs.
 
 ### 6.4 CI, build, release and promote
 
@@ -325,3 +325,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-07: M39 built: a CloudWatch alarm for 3 hours without a published market summary (`NoMarketSummary`, FM77); no component or flow changes.
 - 2026-11-07: M32b built: a cloud market's freshness pill (D100) and its Data coverage row from the summary's coverage (D99); A92 and BZ25 split off as M32c. No component or flow changes.
 - 2026-11-07: M40 and M32c part 2 built: two contract changes on the addon boundary. The market file (`EXPORT_VERSION` 5) ends each item in `salesDays`; the addon's `itemNames` rows carry the game's vendor price and class, which the importer writes into the local catalog's gaps (`items.vendor_src`, schema 26), the cloud summary and AHF's list still winning. No component or flow changes.
+- 2026-11-07: M27 built: the app installs its own updates. At the next start (or on Restart to update, after `run()` returns and the lock is released), `ahsync_app/shell.install_waiting` hands a verified download to the platform (Windows: silent Inno Setup with relaunch; macOS: the `swap.sh` helper with roll-back); the update job's `installer.settle` records the result at the next start. Restart to update (tray, `POST /api/update/restart`) stops the app the same way. No other component or flow changes.

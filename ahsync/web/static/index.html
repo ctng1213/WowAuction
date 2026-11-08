@@ -297,7 +297,20 @@ function drawAppCard(card, app) {
     if (line.button) {
       const button = el('button', 'btn primary', line.button.text);
       button.type = 'button';
-      button.disabled = !line.button.enabled;   // M27 installs: until then the button is drawn, not wired
+      button.disabled = !line.button.enabled;
+      button.onclick = async () => {             // Restart to update (SPEC §3.7.9): AHSync stops and installs
+        button.disabled = true;
+        button.textContent = 'restarting…';
+        let answer = null;
+        try { answer = await post(line.button.post, {}); } catch (e) { answer = null; }
+        if (answer && answer.status === 200) {
+          notice('AHSync is closing to install the update; it opens again by itself in a minute.', 'ok');
+        } else {                                   // 409: nothing waits any more; the reload shows why
+          button.disabled = false;
+          button.textContent = line.button.text;
+          load('status');
+        }
+      };
       value.append(' ', button);
     }
     list.append(el('dt', '', line.label), value);

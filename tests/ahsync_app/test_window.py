@@ -184,3 +184,16 @@ def test_DR31_the_loop_starts_with_ahsync_out_of_the_dock(tmp_path, monkeypatch)
     adapter.start(lambda: calls.append("started"))
     assert calls == [("dock", False), "started"]    # pywebview made it a Dock app; hidden window: none
 
+
+
+def test_a_page_that_never_finished_loading_counts_as_none_so_the_next_show_loads_it_again(tmp_path):
+    import threading
+    from types import SimpleNamespace
+
+    loaded = threading.Event()
+    adapter = PyWebview(tmp_path)
+    adapter.handle = SimpleNamespace(events=SimpleNamespace(loaded=loaded),
+                                     get_current_url=lambda: "http://localhost:8765/")
+    assert adapter.current_url() is None                          # white window: never asks pywebview, never waits
+    loaded.set()
+    assert adapter.current_url() == "http://localhost:8765/"

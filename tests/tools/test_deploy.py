@@ -90,3 +90,16 @@ def test_the_lock_check_takes_and_releases_the_lock(tmp_path):
         lock.release()
     assert deploy.lock_is_free(tmp_path / "ahsync.lock") is True
     assert deploy.file_mtime(tmp_path / "ahsync.lock") is not None and deploy.file_mtime(tmp_path / "none") is None
+
+
+def test_the_wow_folder_comes_from_the_flag_a_config_the_usual_folders_then_the_default(tmp_path):
+    repo, app = tmp_path / "repo.toml", tmp_path / "app.toml"
+    forever = tmp_path / "World of Warcraft" / "_forever_"
+    assert deploy.wow_path_from_config("/x/wow", (repo, app), (forever,)) == Path("/x/wow")
+    app.write_text(f'wow_path = "{(tmp_path / "from-app").as_posix()}"\n', encoding="utf-8")
+    assert deploy.wow_path_from_config(None, (repo, app), (forever,)) == tmp_path / "from-app"   # the installed app's
+    repo.write_text(f'wow_path = "{(tmp_path / "from-repo").as_posix()}"\n', encoding="utf-8")
+    assert deploy.wow_path_from_config(None, (repo, app), (forever,)) == tmp_path / "from-repo"  # a source run's first
+    forever.mkdir(parents=True)
+    assert deploy.wow_path_from_config(None, (), (tmp_path / "missing", forever)) == forever     # the first that exists
+    assert deploy.wow_path_from_config(None, (), ()) == Path(deploy.Config().wow_path)
