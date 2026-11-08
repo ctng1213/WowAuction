@@ -122,5 +122,5 @@ Frame AHProfitWindow 640,320 640x440
     Texture - 1262,402 8x240
     Texture - 1263,402 6x115
   Texture - 642,731 636x1
-  FontString - 652,740 259x10 "funded +92   62   · cost 2   52   · 37% on cash"
-  FontString - 1015,740 253x10 "capacity 6   49   40   · 24   40   unallocated"
+  FontString - 652,740 489x10 "funded profit +92   62   · cost 2   52   · 37% on cash"
+  FontString - 1153,740 116x10 "24   40   unallocated"

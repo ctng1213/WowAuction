@@ -83,5 +83,5 @@ Frame AHProfitWindow 640,320 640x440
     Frame AHProfitWindowHeaderpfToday 650,402 606x20 (hidden)
     Frame AHProfitWindowHeaderpfWeek 650,402 606x20 (hidden)
   Texture - 642,731 636x1
-  FontString - 652,740 281x10 "1 action · expected +10   · 1 hidden (chance < 50%)"
+  FontString - 652,740 549x10 "1 action · expected +10   · 1 hidden (chance < 50%)"
   FontString - 1213,740 55x10 "Budget 0  "

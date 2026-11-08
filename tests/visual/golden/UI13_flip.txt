@@ -74,5 +74,5 @@ Frame AHProfitWindow 680,360 560x360
     Frame AHProfitWindowHeaderpfToday 690,442 526x20 (hidden)
     Frame AHProfitWindowHeaderpfWeek 690,442 526x20 (hidden)
   Texture - 682,691 556x1
-  FontString - 692,700 187x10 "2 flips · capital needed 11   50  "
+  FontString - 692,700 469x10 "2 flips · capital needed 11   50  "
   FontString - 1173,700 55x10 "Budget 1  "

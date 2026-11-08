@@ -13,8 +13,8 @@ describe("WindowLines", function()
     World.Boot(Stubs, World.Mockup())
     local out = AHProfit.WindowLines.Lines("portfolio", World.NOW, 314000, 50)
     assert_eq({ out.own, out.top.text:sub(1, 17), out.right, out.lines[1].label, out.footer },
-              { nil, "portfolio 35g 58s", "capacity 6g 49s 40c · 24s 40c unallocated", "Positions",
-                "funded +92s 62c · cost 2g 52s · 37% on cash" })
+              { nil, "portfolio 35g 58s", "24s 40c unallocated", "Positions",
+                "funded profit +92s 62c · cost 2g 52s · 37% on cash" })
     World.Unname(Stubs)
   end)
 

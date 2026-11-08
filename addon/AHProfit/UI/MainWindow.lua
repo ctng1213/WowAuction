@@ -405,6 +405,8 @@ local function BuildFooter(frame)
   ui.footer:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 12, 10)
   ui.budget = frame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   ui.budget:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 10)
+  ui.footer:SetPoint("BOTTOMRIGHT", ui.budget, "BOTTOMLEFT", -12, 0)   -- wraps rather than run into the right (0.1.6)
+  ui.footer:SetJustifyH("LEFT")
 end
 
 --- Build the window the first time it opens.
