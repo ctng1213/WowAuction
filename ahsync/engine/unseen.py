@@ -28,8 +28,9 @@ def unseen_sales(gaps: Iterable[tuple[int, int]], first_seen: Iterable[tuple[int
 
     Returns:
         gap -> item key -> units, float: each commodity listing's units sold in its first observed gap × half its
-        posting gap ÷ that gap's length, credited to the first observed gap; a listing whose next gap isn't a kept
-        linked gap gets nothing.
+        posting gap ÷ that gap's length, at most × 1 (the user, 2026-11-08: after missed refreshes a long posting
+        gap would turn one buyout into hundreds of phantom sales), credited to the first observed gap; a listing
+        whose next gap isn't a kept linked gap gets nothing.
     """
     after = {g[0]: g for g in gaps}
     sold: dict[tuple[int, tuple[int, int]], float] = dict(sold_endings)
@@ -43,5 +44,6 @@ def unseen_sales(gaps: Iterable[tuple[int, int]], first_seen: Iterable[tuple[int
         units = sold.get((auction, seen), 0.0)
         if units > 0.0:
             row = out.setdefault(seen, {})
-            row[key] = row.get(key, 0.0) + units * (posted[1] - posted[0]) / 2 / (seen[1] - seen[0])
+            share = min(1.0, (posted[1] - posted[0]) / 2 / (seen[1] - seen[0]))   # never longer than it was watched
+            row[key] = row.get(key, 0.0) + units * share
     return out

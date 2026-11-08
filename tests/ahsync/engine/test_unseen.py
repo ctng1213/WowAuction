@@ -20,6 +20,9 @@ def test_BZ45_a_listing_sold_before_its_first_snapshot_at_the_rate_it_sells_once
     assert unseen_sales(short, [(1, LINEN, short[0], True)], [(1, LINEN, 8, short[1])], {})[short[1]][LINEN] == pytest.approx(8 * 20 / 120)
     assert unseen_sales(gaps, [(2, GLOVES, (0, H), False)], [], {(2, (H, 2 * H)): 1.0}) == {}
     assert unseen_sales([(0, H)], listed, [], {}) == {}   # its next gap isn't linked: nothing
+    outage = [(0, 6 * H), (6 * H, 7 * H)]                  # five refreshes missed, then a 200-unit buyout
+    capped = unseen_sales(outage, [(1, LINEN, outage[0], True)], [], {(1, outage[1]): 200.0})
+    assert capped == {outage[1]: {LINEN: 200.0}}           # 200 × 3 h ÷ 1 h = 600, capped at what it was seen to sell
 
 
 def test_BZ45_the_estimate_is_part_of_sold_and_kept_apart_as_unseen():
