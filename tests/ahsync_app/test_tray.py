@@ -20,23 +20,39 @@ def test_DR12_the_menu_is_a_pure_function_of_the_state():
                       downloaded="0.4.0")
     items = tray.menu(ready)
     assert labels(items) == ["Open dashboard", "Status", "Start at login", "Restart to update (0.4.0)",
-                             "Install updates automatically", "Get beta updates", "---", "Quit AHSync"]
-    assert [i.checked for i in items] == [None, None, True, None, True, False, None, None]
-    assert [i.action for i in items] == ["open", "status", "autostart", "restart_update", "auto_update", "beta", "",
-                                         "quit"]
+                             "Check for updates", "Install updates automatically", "Get beta updates", "---",
+                             "Quit AHSync"]
+    assert [i.checked for i in items] == [None, None, True, None, None, True, False, None, None]
+    assert [i.action for i in items] == ["open", "status", "autostart", "restart_update", "check_updates",
+                                         "auto_update", "beta", "", "quit"]
 
     notify = TrayState(configured=True, version="0.3.1", autostart=True, auto_update=False, channel="stable",
                        available="0.4.0")
     items = tray.menu(notify)
     assert labels(items)[3] == "AHSync 0.4.0 available · download" and items[3].action == "download"
-    assert items[4].checked is False
+    assert items[5].checked is False
 
     current = TrayState(configured=True, version="0.3.1", autostart=False, auto_update=True, channel="beta",
                         available="0.4.0")                          # auto_update on: nothing to click until downloaded
-    assert labels(tray.menu(current)) == ["Open dashboard", "Status", "Start at login",
+    assert labels(tray.menu(current)) == ["Open dashboard", "Status", "Start at login", "Check for updates",
                                           "Install updates automatically", "Get beta updates", "---", "Quit AHSync"]
     assert tray.menu(current)[4].checked is True and tray.menu(current)[2].checked is False
 
+
+
+def test_DR34_check_for_updates_says_what_the_check_found():
+    def item(**changes) -> tray.MenuItem:
+        state = TrayState(configured=True, version="0.3.1", autostart=False, auto_update=True, channel="stable")
+        found = [i for i in tray.menu(TrayState(**{**state.__dict__, **changes})) if i.action == "check_updates"]
+        assert len(found) == 1
+        return found[0]
+    assert (item().label, item().enabled) == ("Check for updates", True)
+    assert (item(check="checking").label, item(check="checking").enabled) == ("Checking for updates…", False)
+    assert item(check="up_to_date").label == "Up to date · check again"
+    assert item(check="failed").label == "Couldn't check · try again"
+    assert item(check="up_to_date", downloaded="0.4.0").label == "Check for updates"     # item 4 offers it
+    assert item(check="up_to_date", auto_update=False, available="0.4.0").label == "Check for updates"
+    assert not item(version="0.0.0").enabled and not item(configured=False).enabled      # never asks (DR24)
 
 def test_during_setup_status_has_nothing_to_show():
     setup = TrayState(configured=False, version="0.0.0", autostart=False, auto_update=True, channel="stable")

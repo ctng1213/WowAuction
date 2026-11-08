@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from collections.abc import Mapping
 
 from ahsync.clock import Clock
@@ -15,7 +16,7 @@ from ahsync.collect.client import USER_AGENT, HttpRequest, Transport, TransportE
 from ahsync.config import Config
 from ahsync.db.sqlite import Database
 from ahsync.engine.app_view import is_dev
-from ahsync.engine.updates import NOT_FOUND, OFFLINE, UNAVAILABLE, UpdateState, pick_release
+from ahsync.engine.updates import NOT_FOUND, OFFLINE, UNAVAILABLE, UpdateState, newer, pick_release
 
 log = logging.getLogger("ahsync.update")
 
@@ -178,3 +179,77 @@ def failed(db: Database, meta: Mapping[str, str], now_ms: int, failure: str, wha
     since = meta.get("failed_since_ms") or now_ms             # the first failure since the last answer
     write_meta(db, {"checked_ms": now_ms, "failure": failure, "failed_since_ms": since})
     return True
+
+
+class ManualCheck:
+    """Check for updates from the tray (SPEC §3.7.1 item 5; DR34): asked on the tray's thread, run by the update job
+    on the scheduler's, and read back by the menu. Safe across threads; clicks while one is asked or running merge.
+    """
+
+    def __init__(self) -> None:
+        """Nothing asked yet."""
+        self._lock = threading.Lock()
+        self._state = ""                       # "", "requested", "running", "up_to_date" or "failed"
+
+    def request(self) -> None:
+        """Ask for a check now (the tray's click)."""
+        with self._lock:
+            if self._state not in ("requested", "running"):
+                self._state = "requested"
+
+    def requested(self) -> bool:
+        """Whether a check waits to run: the scheduler's hook, read at each tick.
+
+        Returns:
+            True from a click until the update job begins it.
+        """
+        with self._lock:
+            return self._state == "requested"
+
+    def begin(self) -> bool:
+        """Take the waiting check, if any (the update job, as it starts).
+
+        Returns:
+            True when a check was asked: this run checks whatever the time since the last one.
+        """
+        with self._lock:
+            if self._state != "requested":
+                return False
+            self._state = "running"
+            return True
+
+    def finish(self, found: str) -> None:
+        """Record what the asked check found.
+
+        Args:
+            found: outcome()'s value: "up_to_date", "failed", or "" when the menu offers a release.
+        """
+        with self._lock:
+            self._state = found
+
+    def tray_state(self) -> str:
+        """What the menu's item says (tray.menu).
+
+        Returns:
+            "checking" from a click until the job ends; then "up_to_date", "failed" or "" (also before any click).
+        """
+        with self._lock:
+            return "checking" if self._state in ("requested", "running") else self._state
+
+
+def outcome(db: Database, version: str, config: Config) -> str:
+    """What a check found, for the menu (DR34).
+
+    Args:
+        db: The database.
+        version: The running version.
+        config: The channel and `auto_update`.
+
+    Returns:
+        "failed" when the check could not ask GitHub; "" when a newer release is known (the menu's update item
+        offers it); else "up_to_date".
+    """
+    state = read_state(db, version, config)
+    if state.failure is not None:
+        return "failed"
+    return "" if newer(state.tag, version) else "up_to_date"
