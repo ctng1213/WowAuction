@@ -77,7 +77,8 @@ def id_days(store: SnapshotStore, market: str, src: str, at_ms: int) -> set[int]
 def recompute_id_days(db: Database, store: SnapshotStore, market: str, src: str, days: set[int]) -> set[int]:
     """Some days' id volume, ended listings and hourly sales of one source, from auction lifetimes (SPEC §2.4).
 
-    One `lifetimes` pass per day, over the snapshots from LIFETIME_LOOKBACK_MS (36 h) before it to MAX_GAP_MS
+    One `lifetimes` pass per day, over the snapshots from LIFETIME_LOOKBACK_MS (66 h: an ending's life and posting gaps,
+    plus the day of gaps its early-leave rate reads, BZ42) before it to MAX_GAP_MS
     after it, keeping only the records of gaps that end from MAX_GAP_MS before the day on, so memory is one day's.
     A gap counts for the day of its later snapshot (its cover too); its sold units are credited to its clock hours,
     which replace those hours' book-pair rates in `sales_h1` (ids rank above groups, §3.3.1); every gap crediting

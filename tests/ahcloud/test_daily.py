@@ -233,7 +233,7 @@ def test_FM76_a_rebuild_replays_only_the_retention_window_and_never_overwrites_b
     run_daily(data, intel, FakeCatalog(), M, tmp_path / "run")
     outcome = run_daily(data, intel, FakeCatalog(), M, tmp_path / "run", fresh=True)
     assert (outcome.state, outcome.ingested) == ("published", 2)                 # the 100-day-old snapshot is left out
-    assert REBUILD_REPLAY_MS == 90 * DAY_MS + DAY_MS + 36 * HOUR
+    assert REBUILD_REPLAY_MS == 90 * DAY_MS + DAY_MS + 66 * HOUR   # the lookback grew from 36 h with BZ42's rate window
     racing = RacingStore(tmp_path / "data")
     with pytest.raises(PreconditionFailed):
         run_daily(racing, intel, FakeCatalog(), M, tmp_path / "run", fresh=True)
@@ -249,3 +249,11 @@ def test_FM72_a_rebuild_from_raw_gives_the_byte_identical_document(tmp_path):
     outcome = run_daily(data, intel, FakeCatalog(), M, tmp_path / "run", fresh=True)
     assert (outcome.state, outcome.ingested) == ("published", 3)
     assert read_latest(intel, M)[1].sha256 == incremental.sha256              # raw is the source of truth
+
+
+def test_the_compact_store_keeps_every_snapshot_a_late_snapshots_recompute_reads():
+    from ahcloud.daily import COMPACT_DAYS
+    from ahsync.engine.volume import LIFETIME_LOOKBACK_MS, SALES_PAIR_MAX_GAP_MS
+    # a snapshot a day late recomputes from the day 2 h before it; that day can start a further day earlier
+    worst = DAY_MS + SALES_PAIR_MAX_GAP_MS + DAY_MS + LIFETIME_LOOKBACK_MS
+    assert COMPACT_DAYS * DAY_MS >= worst

@@ -8,6 +8,8 @@ selling and expiring compete (`expired_given_vanished`).
 from __future__ import annotations
 
 import math
+from bisect import bisect_right
+from collections.abc import Sequence
 
 
 def expired_fraction(window: tuple[int, int], absent_ms: int) -> float:
@@ -26,6 +28,7 @@ def expired_fraction(window: tuple[int, int], absent_ms: int) -> float:
 
 
 PRIOR_LEAVES = 5.0   # pseudo early leaves pulling a thin item's early-leave rate toward its market's (BZ42)
+RATE_WINDOW_MS = 24 * 3_600_000   # an ending's rate reads the gaps that ended in the day before it (BZ42)
 
 
 def expired_given_vanished(window: tuple[int, int], gap: tuple[int, int], rate_per_ms: float) -> float:
@@ -64,49 +67,85 @@ def expired_given_vanished(window: tuple[int, int], gap: tuple[int, int], rate_p
     return p_expired / (p_expired + max(0.0, p_sold))
 
 
-def early_leave_rates(exposure: dict[int, float], leaves: dict[int, int], commodities: set[int]) -> dict[int, float]:
-    """Each item's early-leave rate: listings that vanished while they could not yet expire, per listing-ms (BZ42).
+class EarlyLeaveRates:
+    """Items' early-leave rates for endings, from the gaps that ended in the RATE_WINDOW_MS before each (BZ42).
 
-    A thin item is pulled toward its market's pooled rate (commodities and the rest pooled apart) by PRIOR_LEAVES
-    pseudo leaves: rate = (leaves + PRIOR_LEAVES) ÷ (exposure + PRIOR_LEAVES ÷ pooled rate).
-
-    Args:
-        exposure: Item key -> listing-ms observed in gaps wholly before the listing's expiry window.
-        leaves: Item key -> listings that vanished in such a gap (cancels left out).
-        commodities: Item keys seen in Blizzard's commodities list.
-
-    Returns:
-        Item key -> rate, listings per listing-ms; 0 for every item of a pool that saw no exposure or no leave.
+    Causal: only gaps ending in (end − RATE_WINDOW_MS, end] count, so every lifetimes pass that holds an ending (its
+    lookback covers the window, `engine.volume.LIFETIME_LOOKBACK_MS`) gives it the same rate, and a later snapshot
+    never changes it. A thin item is pulled toward its market's pooled rate (commodities and the rest pooled apart)
+    by PRIOR_LEAVES pseudo leaves: (leaves + PRIOR_LEAVES) ÷ (exposure + PRIOR_LEAVES × pooled exposure ÷ pooled
+    leaves); an item with no exposure in the window takes the pooled rate. Window sums come from integer prefix
+    sums (exposure in whole ms), so they are exact whatever gaps came before the window.
     """
-    pools: dict[bool, list[float]] = {True: [0.0, 0.0], False: [0.0, 0.0]}
-    for key in sorted(exposure):
-        pool = pools[key in commodities]
-        pool[0] += leaves.get(key, 0)
-        pool[1] += exposure[key]
-    rates = {}
-    for key in sorted(exposure):
-        n, e = pools[key in commodities]
-        pooled = n / e if e > 0 else 0.0
-        rates[key] = (leaves.get(key, 0) + PRIOR_LEAVES) / (exposure[key] + PRIOR_LEAVES / pooled) if pooled > 0 else 0.0
-    return rates
+
+    def __init__(self, tallies: Sequence[tuple[int, dict[int, tuple[int, int]]]], commodities: set[int]) -> None:
+        """Index a pass's per-gap tallies.
+
+        Args:
+            tallies: (gap end ms, item key -> (listing-ms exposed, early leaves)) per linked gap, ascending, from
+                `tally_early_leaves`.
+            commodities: Item keys seen in Blizzard's commodities list.
+        """
+        self.commodities = commodities
+        self.times = [at for at, _ in tallies]
+        self.pools = {True: [(0, 0)], False: [(0, 0)]}
+        self.own: dict[int, tuple[list[int], list[tuple[int, int]]]] = {}
+        for at, per_key in tallies:
+            sums = {True: [0, 0], False: [0, 0]}
+            for key, (exposed, left) in sorted(per_key.items()):
+                pool = sums[key in commodities]
+                pool[0] += exposed
+                pool[1] += left
+                times, cum = self.own.setdefault(key, ([], [(0, 0)]))
+                times.append(at)
+                cum.append((cum[-1][0] + exposed, cum[-1][1] + left))
+            for flag, (exposed, left) in sums.items():
+                last = self.pools[flag][-1]
+                self.pools[flag].append((last[0] + exposed, last[1] + left))
+
+    def rate(self, key: int, end_ms: int) -> float:
+        """An item's rate for an ending.
+
+        Args:
+            key: The ending's item key.
+            end_ms: The ending's gap end, UTC ms.
+
+        Returns:
+            Listings per listing-ms; 0 when the item's pool saw no exposure or no leave in the window.
+        """
+        start = end_ms - RATE_WINDOW_MS
+        pool = self.pools[key in self.commodities]
+        lo, hi = bisect_right(self.times, start), bisect_right(self.times, end_ms)
+        pool_exposed, pool_left = pool[hi][0] - pool[lo][0], pool[hi][1] - pool[lo][1]
+        if pool_exposed <= 0 or pool_left == 0:
+            return 0.0
+        own_exposed = own_left = 0
+        if key in self.own:
+            times, cum = self.own[key]
+            i, j = bisect_right(times, start), bisect_right(times, end_ms)
+            own_exposed, own_left = cum[j][0] - cum[i][0], cum[j][1] - cum[i][1]
+        return (own_left + PRIOR_LEAVES) / (own_exposed + PRIOR_LEAVES * pool_exposed / pool_left)
 
 
-def tally_early_leaves(live: dict[int, list], vanished: list[tuple], gap_ms: int, at_ms: int,
-                        exposure: dict[int, float], leaves: dict[int, int]) -> None:
-    """Add one gap to the early-leave tallies: listings that could not expire in it, and those of them that left.
+def tally_early_leaves(live: dict[int, list], vanished: list[tuple], gap_ms: int,
+                       at_ms: int) -> dict[int, tuple[int, int]]:
+    """One gap's early-leave tally: listings that could not expire in it, and those of them that left (BZ42).
 
     Args:
         live: Auction id -> state as of the gap's start (its expiry window third).
-        vanished: The gap's endings from `vanished_in`.
+        vanished: The gap's endings from `vanished_in` (a cancel is censored: exposure, no leave).
         gap_ms: The gap's length, ms.
         at_ms: The gap's end.
-        exposure: Key -> listing-ms; updated.
-        leaves: Key -> listings; updated.
+
+    Returns:
+        Item key -> (listing-ms exposed, whole ms; listings that left early), by key.
     """
     gone = {auction: cancelled for auction, _, _, _, cancelled, _ in vanished}
+    tally: dict[int, list] = {}
     for auction, state in sorted(live.items()):
         if state[2][0] < at_ms:                       # it could expire in this gap: not evidence of a sale rate
             continue
-        exposure[state[0]] = exposure.get(state[0], 0.0) + gap_ms
-        if auction in gone and not gone[auction]:
-            leaves[state[0]] = leaves.get(state[0], 0) + 1
+        row = tally.setdefault(state[0], [0, 0])
+        row[0] += gap_ms
+        row[1] += auction in gone and not gone[auction]
+    return {key: (row[0], row[1]) for key, row in sorted(tally.items())}

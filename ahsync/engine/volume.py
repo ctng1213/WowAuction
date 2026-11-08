@@ -13,7 +13,8 @@ import math
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field, replace
 
-from ahsync.engine.expiry import early_leave_rates, expired_fraction, expired_given_vanished, tally_early_leaves
+from ahsync.engine.expiry import (RATE_WINDOW_MS, EarlyLeaveRates, expired_fraction, expired_given_vanished,
+                                  tally_early_leaves)
 from ahsync.engine.prices import median
 
 HOUR_MS = 3_600_000
@@ -253,6 +254,8 @@ class Ending:
                                   # measured, never subtracted (SPEC §2.4 item 5; the user, 2026-11-07)
     cancelled: bool = False       # a commodity that left early while a cheaper one of its item stayed: no sale (BZ40)
     tier1: bool | None = None     # posted at or below the lowest other price; None when its posting wasn't seen (BZ41)
+    overlap: float = 0.0          # the gap's overlap with its expiry window alone, 0-1 (`expired_fraction`): 0 = it
+                                  # could not have expired; `expired` weighs selling against it (BZ42)
 
 
 @dataclass(frozen=True)
@@ -292,7 +295,9 @@ class LifeFlow:
 DURATION_MS = {4: 24 * HOUR_MS, 3: 8 * HOUR_MS, 2: 2 * HOUR_MS, 1: 2 * HOUR_MS}
 # How far before a day its lifetimes must start so the day's result is exact (SPEC §2.4): an ending in the day was last
 # seen at most MAX_GAP_MS before it, posted at most 24 h before that, and its posting gap began up to MAX_GAP_MS earlier.
-LIFETIME_LOOKBACK_MS = 24 * HOUR_MS + 2 * MAX_GAP_MS
+# How far before a day its pass starts: an ending's whole life (24 h) and its posting and narrowing gaps, plus the
+# early-leave rate's window before it (BZ42), whose gaps need their own auctions' lives, plus that window's first gap.
+LIFETIME_LOOKBACK_MS = 24 * HOUR_MS + 3 * MAX_GAP_MS + RATE_WINDOW_MS
 
 
 def band_window(at_ms: int, band: int) -> tuple[int, int]:
@@ -477,18 +482,19 @@ def lifetimes(books: Iterable[IdBook], max_gap_ms: int = MAX_GAP_MS, keep_from_m
     live: dict[int, list] = {}                     # auction id -> [key, units, expiry window, price, commodity, tier1]
     gaps, endings, fills, listed, seen = [], [], [], [], {}
     clashes, prev_at, prev_keys, commodities = 0, None, frozenset(), set()
-    exposure: dict[int, float] = {}               # key -> listing-ms in gaps wholly before the expiry window (BZ42)
-    leaves: dict[int, int] = {}                   # key -> listings that vanished in such a gap
+    tallies: list[tuple[int, dict]] = []          # (gap end, key -> (exposure ms, early leaves)) per gap (BZ42)
+    pooled_commodities: set[int] = set()          # every pass snapshot's commodities: the rate's pools (BZ42)
     windows: dict[int, tuple[int, int]] = {}      # auction -> its expiry window when it vanished
     for book in books:
         linked = prev_at is not None and 0 < book.at_ms - prev_at <= max_gap_ms
         gap = (prev_at, book.at_ms) if linked else None
         keep = linked and (keep_from_ms is None or book.at_ms >= keep_from_ms)   # earlier gaps only build windows
         current = sorted(book.auctions, key=lambda a: a.id)
+        pooled_commodities.update(a.key for a in current if a.commodity)
         vanished = []
         if linked:
             vanished = vanished_in(live, current, book.at_ms)
-            tally_early_leaves(live, vanished, book.at_ms - prev_at, book.at_ms, exposure, leaves)
+            tallies.append((book.at_ms, tally_early_leaves(live, vanished, book.at_ms - prev_at, book.at_ms)))
             for auction, *_ in vanished:
                 if keep and live[auction][4]:
                     commodities.add(live[auction][0])  # its last auctions may vanish here, never seen in a kept book
@@ -529,8 +535,9 @@ def lifetimes(books: Iterable[IdBook], max_gap_ms: int = MAX_GAP_MS, keep_from_m
             seen[gap] = prev_keys | keys
             endings.extend(match_relists(vanished, new, gap))
         prev_at, prev_keys = book.at_ms, keys
-    rates = early_leave_rates(exposure, leaves, commodities)
-    endings = [replace(e, expired=expired_given_vanished(windows[e.auction], e.gap, rates.get(e.key, 0.0)))
+    rates = EarlyLeaveRates(tallies, pooled_commodities)
+    endings = [replace(e, overlap=e.expired, expired=expired_given_vanished(windows[e.auction], e.gap,
+                                                                           rates.rate(e.key, e.gap[1])))
                if 0.0 < e.expired else e for e in endings]
     return Lifetimes(tuple(gaps), seen, tuple(endings), tuple(fills), tuple(listed), clashes, frozenset(commodities))
 

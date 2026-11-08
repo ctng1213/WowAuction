@@ -35,7 +35,8 @@ DB_KEY = "state/history.db"
 SRC = "blizzard"
 DAY_MS, HOUR_MS = 86_400_000, 3_600_000
 CLOUD_BOOK_DAYS = 2                     # the cloud needs only the newest book and the day's pairs (SPEC §2.4)
-COMPACT_DAYS = 4                        # compact snapshots kept: a late snapshot (a day old) reaches 2 h + 36 h before its day
+COMPACT_DAYS = 5                        # compact snapshots kept: a late snapshot (a day old) recomputes from the day 2 h
+                                        # before it, whose pass reads LIFETIME_LOOKBACK_MS (66 h) earlier: 116 h at worst
 MISSING_RETRY_MS = 7 * DAY_MS           # an id the item search didn't know is asked again after a week (BZ16)
 LAST_INGESTED = "last_ingested_at_ms"   # meta key: the newest snapshot in history.db (BZ12)
 RETENTION_DAYS = 90                     # history kept in the cloud (SPEC §2.4); the raw stays forever (BZ14)
