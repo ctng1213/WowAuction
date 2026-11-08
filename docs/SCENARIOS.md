@@ -18,6 +18,7 @@ Rules a scenario checks are defined in SPEC.md. When a scenario and the spec dis
 3. [Views and tooltip](#3-views-and-tooltip-d16d22-tt1tt21) (SPEC §8.5)
 4. [Calibration](#4-calibration-k1k3) (SPEC §8.8)
 5. [Invariants](#5-invariants-spec-87) (SPEC §8.7)
+6. [Simulated markets](#6-simulated-markets-su-sm-sd-sx-spec-810) (SPEC §8.10; planned, `docs/plans/market-simulator.md`)
 
 ## 1. Core scenarios
 
@@ -1094,3 +1095,104 @@ How cases are generated, and how many: SPEC §8.7.
 | PF25 | Selection: the funded rows' gold never exceeds the remaining capacity, nor any character's spendable gold; no owned unit or capacity is claimed twice; every item and window stays within its liquidity cap; each list's funded rows ≤ its limit; every total equals the sum of its funded rows and no excluded row counts in one; a chain's steps are funded together or not at all. Generated cases with a fixed seed |
 | PF26 | Timing: adjusted profit equals the expected net within the immediate window; beyond it, a longer wait never raises it; for a positive net, 0 < adjusted ≤ net. Generated cases with a fixed seed |
 | PF27 | Determinism: the same candidates in any input order give the same funded ids, quantities and order, in Python and Lua alike (LP1); running twice gives byte-identical output |
+
+## 6. Simulated markets (SU, SM, SD, SX; SPEC §8.10)
+
+The market simulator (`tools/sim/`, planned; `docs/plans/market-simulator.md`) writes Blizzard-shaped raw snapshots and a truth log of every post, buy, cancel, expiry and relist, and runs the unchanged cloud analysis and plan on them. The four families and what each asserts are SPEC §8.10's. Numbers here are a scenario's planted truth; tolerances are stated in the row. Every world is generated from a fixed seed, printed on failure.
+
+**Unit sequences** (exact, checkable by hand):
+
+| ID | Given | Then |
+|---|---|---|
+| SU1 | a commodity auction of 14 units, cheapest of its item; the next snapshot shows 10 | 4 sold, the auction alive |
+| SU2 | the cheapest commodity auction of an item is cancelled; no cheaper one exists | counted sold (the known bias: the API names no seller) |
+| SU3 | a commodity auction vanishes early while a strictly cheaper auction of its item stays with its units unchanged | a cancel (BZ40): neither sold nor expired |
+| SU4 | an auction bought 5 min before its expiry | counted expired (the known error of the vanish rule) |
+| SU5 | a 24 h auction followed across 12 h left; another first seen `SHORT` | `VERY_LONG` turns `LONG` at 12 h; the `SHORT` one is treated as a 2 h auction |
+| SU6 | a gap over 6 h, and a 3 h gap across an evening peak in which 6 units sold | the long gap links nothing and leaves the day's coverage; the 3 h gap credits 2 units to each of its hours (BZ30); the day total is exact; the hourly error against truth is reported |
+| SU7 | a snapshot that repeats one record field for field; another with one id and two different records | counted once (BZ38); refused whole (FM33) |
+| SU8 | an auction posted at 23:30 that sells at 00:40 | its sale is credited to the later day |
+| SU9 | the same seed and scenario, run twice | byte-identical raw, truth and report |
+| SU10 | our agent posts 20 units at 55 c for 24 h | the next snapshot lists our auction at 55 c, `VERY_LONG` |
+| SU11 | our agent buys 20 of a 50-unit floor at 10 c | the floor shows 30 units after; our cost is the book walk, 2 s |
+| SU12 | every event of a small run (buy, post, sale, payout, expiry, cancel, mail, vendor) | after each, cash + inventory at cost + listed at cost + mailbox gold + mailbox items = start − AH cuts − deposits lost; each event moves exactly one pair of buckets |
+| SU13 | a `VERY_LONG` commodity auction of 200 units first seen 10 h old, 150 an hour later, then gone | sold 50 + 150, expired 0; the ending counted once |
+| SU14 | a commodity auction vanishes early while a cheaper one is new, or was bought from, or has an equal price | sold in each case, never a cancel (BZ40's edges) |
+| SU15 | 10,000 commodity fills with the measured 0.2% that are not cheapest-first | the false-cancel rate is at most 0.5%, and reported |
+
+**Inference against truth** (tolerance stated):
+
+| ID | Given | Then |
+|---|---|---|
+| SM1 | a steady commodity market, 14 days | sold/day within ±5% of truth; expired share within ±3 points |
+| SM2 | an undercut war: two bots cancel and repost 1 c lower every hour; new listings planted at 0.90, 0.98, 1.00 and 1.10 of the floor with known shares | sold/day within ±10%; the commodity cancel share recovered within ±3 points; `u(p)` within ±0.05 |
+| SM3 | gear cancelled at a true 20% while commodities cancel at 10.8% | gear sell-through overstated by the stated amount, marked est. (the known bias, as a number for M33b) |
+| SM4 | relists at a true 0%, 15% and 40% | the excess-rate estimator recovers each within ±5 points |
+| SM5 | a known true P per price tier; the tier edges and the blend cap as parameters | the blend moves from the model to the evidence as listings grow |
+| SM6 | a maintenance gap Tue 08:00–12:00 and a gap over Thursday's 19:00–23:00 peak | sold/day within ±15% of truth on both days with `sales_how` weighting; a flat share is shown to miss |
+| SM7 | a thin item (1 listing a day), an item new on day 5, an item gone on day 9 | the thin-data rules hold; "needs N more days" until each horizon fills |
+| SM8 | rebuild against incremental runs over the same raw, with a refused snapshot, a duplicated record and a skipped daily run | byte-identical documents (FM72) |
+| SM9 | a buyer model 25 points more optimistic than the engine from week 3, corrected in week 6 | K8 warns within 2 weeks and clears within 2 weeks of the correction; Brier per week reported |
+| SM10 | a gear item listed at 15 g for 30 h; its real sales are 2 g posts that sell within the hour | the close against the true sold price is reported (fails by design while closes are asks) |
+| SM11 | SM10's 30 closes at 15 g, but its sales really happen at about 15 g | the post price within 5% of the true sold price (keeps the sold-price fix honest) |
+| SM12 | Tue and Thu 19:00–22:00 at 3× demand, the price flat ±2%, 4 weeks | both windows found by week 3, the peak within ±1 h; the trust gate holds in week 1 |
+| SM13 | SM12, then from week 5 the peak moves to Sat 20:00–23:00 | the top window's rank flips by week 7 |
+| SM14 | a seller posts 1,000 units nightly at 2× the market and all expire; others sell 20 a day | sold/day 20 ± 10%; expired share about 0.98; the turnover is never counted as sales |
+| SM15 | a thin item with 5 endings and a true P of 0.9 in a class pooled at 0.3 (400 endings) | blended about 0.39, marked "class est." (fails by design; the error is reported) |
+| SM16 | five planted regimes over 45 days with ±3% daily noise | the right label from day 30; a flat series mislabelled in at most 10% of seeds |
+| SM17 | an item that sells 1 a day, while our agent sells 10 a day of it for a week | our share of sold/day and listed/day reported (fails by design: the API names no seller) |
+
+**Decision quality** (the decision report; the pass band is the report's mark, not a test failure):
+
+| ID | Given | The report shows (pass band) |
+|---|---|---|
+| SD1 | 30 steady days, then demand and price rise 3% a day for 3 weeks with sales rising too | labelled within 5 days; no buy on the first, suspect snapshot; profit captured from the rise against the oracle (fails by design until M34b) |
+| SD2 | SD1's price path made by a manipulator buying out the floor, sales flat | no momentum buying |
+| SD3 | the price doubles for under 24 h, then reverts | zero buys; a holding is sold into the spike |
+| SD4 | SD1 for 10 days, then demand collapses | holdings cut while sales fade; gold given back from the peak |
+| SD5 | sold/day falls 40% or more overnight and stays down | no new buys within 12 h at 100+ a day, 36 h at about 25, 4 days at about 10; units bought after the drop at most a day of the new rate; price cuts from day 3 |
+| SD6 | an item's demand goes to zero | "not selling" after 3 failed posts; no buys after day 2; stock cleared to the floor, vendor or disenchant by day 7 |
+| SD7 | one quiet day at half the sales, then normal | no selling below the plan; buying shrinks by at most 25% for one day |
+| SD8 | new content moves demand from item A to item B | buying of A stops; B found once it has enough data |
+| SD9 | a monster drop selling 100+ a day at a 15%+ margin among about 50 items | in Gathering's top 5 by gold per hour within 2 days; the found stock sells at the planned pace |
+| SD10 | a commodity craft (100+ a day) and a crafted gear item (10+ a day), each at 15%+ | both in the plan's top 5 within 2 days; realized margin within 5 points of planned |
+| SD11 | decoys beside SD9 and SD10: a margin without sales, sales without a margin, a margin from one outlier ask, a stale mat price | none funded; false positives counted |
+| SD12 | a farmer floods a mat and a craft margin opens | the craft funded within 2 days |
+| SD13 | the product of a chain in progress drops 30% | re-planned: mats sold raw or held rather than a losing craft |
+| SD14 | a weekly cheap Tuesday morning and raid-night peaks | the flip captured and sized within the window's cap, week after week |
+| SD15 | our posts become a large share of an item's supply | `max_supply_share` holds; realized price against our own volume |
+| SD16 | bots undercut each of our posts within an hour | never below the floor; the next post capped at `curOthers − 1`; gold tied up and stranded stock at most the naive trader's |
+| SD17 | a big buy of a thin floor | the cost walks the book; the profit holds after our own price impact |
+| SD18 | bot farmers crowd our farm route and its price falls 40% | Gathering's rank drops; stock farmed before is sold early |
+| SD19 | little gold: a steady deal against a slow item with a bigger margin | the exposure caps hold; gold goes to the steady deal |
+| SD20 | an item with a high deposit and a low chance to sell | its negative expected value caught; not posted |
+| SD21 | a noisy steady market over 14 days | actions that reverse an earlier one, counted |
+| SD22 | our agent misses 30% of chain steps | re-planned from what is held; no orphaned craft |
+| SD23 | our mat buy walks its book up 20% and our post adds 50% to the product's supply | realized margin within 10 points of planned; the craft count stops in time |
+| SD24 | five greens that disenchant into the same dust | the dust from all funded disenchants within dust's cap; realized dust price at least 85% of planned |
+| SD26 | 8 g of sales left in the mailbox for 12 h | "Risk budget exhausted" shown as it should be; gold-hours lost measured against prompt collection |
+| SD27 | our post keeps expiring while it is the cheapest | −5% and half the quantity per streak, never below the floor; stranded stock and lost deposits at most the naive relister's |
+| SD28 | a held flip's price drops 20% and stays down | the exit fires within 12 h; drawdown at most holding to the target |
+| SD29 | SD28's dip for one snapshot only | nothing changes; the planned post stands |
+| SD30 | a missed Tuesday peak with Wednesday 5% and Thursday 18% below it | Wednesday chosen; without Wednesday, a hold until next week |
+| SD31 | a brand-new item with a 300% apparent margin and no sales | nothing funded on any surface: the plan, the addon's flip offers, the market file (EX11) |
+| SD32 | every price drifts −2% a day for 30 days, demand steady | over-paying measured (fails by design: the clamps sit above tomorrow's price) |
+| SD33 | +2% a day for 30 days | money left on the table against the oracle |
+| SD34 | a mat's price halves at 10:00; the baselines refresh at 09:00 the next day | hourly prices follow at once; the cost of the stale baselines measured |
+
+SD25 (gold stranded on another character) was dropped by the user (2026-11-08). SD35–SD38 are the learned catalog's (`docs/plans/learned-catalog.md`).
+
+**Stress** (run by hand or with `-Bench`):
+
+| ID | Given | Then |
+|---|---|---|
+| SX1 | a full-size house (85,000 auctions a snapshot, 12,000 items), 14 and 30 days | the daily and hourly runs' wall time and peak memory on this machine, against Lambda's 15 min and 2 GB |
+| SX2 | the market file for 12,000 items | within the 3 MB budget |
+| SX3 | a 90-day run | retention and pruning hold |
+| SX4 | one item with 50,000 auctions and 10,000 prices, prices near 10¹⁰ copper, every auction `SHORT`; and 50,000 thin random-suffix keys | nothing breaks; memory stays bounded; the thin-data rule applies to most keys |
+| SX5 | dropped, duplicated and late S3 events in random order | the same final document |
+| SX6 | the paper-trading loop at full size | within the full refresh's budget |
+| SX7 | SD1, SD5, SD9 and SD10 over 50 seeds each | the sign of our profit against the baseline the same in at least 90% of seeds; the oracle share's spread across seeds at most 0.2 |
+| SX8 | refreshes every 40–95 min, two in one clock hour twice a day, a 3 h 10 min stall, an endpoint mismatch (BZ9) | no doubled hour in the ring; the 3 h alarm fires once; sold/day within ±10% |
+| SX9 | a schema bump mid-run with an older desktop install | both pointers served; no hourly outage |
+| SX10 | a daylight-saving change on the Monday week rollover | 168 distinct hours; the missed-peak anchor resets once |
