@@ -83,6 +83,11 @@ def test_SEC16_the_pointer_may_only_name_this_markets_document(world, key, reaso
     assert len(origin.requests) == 1                                          # the bad key is never fetched
 
 
+
+def test_SEC16_a_summary_of_a_real_markets_size_is_read():
+    body = b"{" + b" " * (100 * 1024 * 1024) + b"}"           # 100 MB: the real market's was 88 MB on 2026-11-08
+    assert len(cloud_intel.inflate(gzip.compress(body, compresslevel=1, mtime=0))) == len(body)
+
 def test_SEC16_an_inflating_document_another_markets_and_a_redirect_are_refused(world, monkeypatch):
     store, origin, db = world
     monkeypatch.setattr(cloud_intel, "MAX_BYTES", 1000)
@@ -91,7 +96,7 @@ def test_SEC16_an_inflating_document_another_markets_and_a_redirect_are_refused(
     store.put(f"intel/{M}/{digest}.json.gz", bomb)
     store.put(f"intel/{M}/latest-{INTEL_SCHEMA_VERSION}.json", json.dumps({"key": f"intel/{M}/{digest}.json.gz", "sha256": digest}).encode())
     assert "inflates past 1000" in cloud_intel.poll(db, origin, ORIGIN, M, 5_000).reason
-    monkeypatch.setattr(cloud_intel, "MAX_BYTES", 64 * 1024 * 1024)
+    monkeypatch.setattr(cloud_intel, "MAX_BYTES", 256 * 1024 * 1024)
     other = MarketIntelligence("forever.pvp.horde.us", 1, 1, 4, {})
     publish(store, other)
     pointer = json.loads(store.get(f"intel/forever.pvp.horde.us/latest-{INTEL_SCHEMA_VERSION}.json").data)
