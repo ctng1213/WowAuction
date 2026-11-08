@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 
 from ahsync.engine import gathering_history as gh
-from ahsync.engine.fees import AH_CUT, DEPOSIT_BP
+from ahsync.engine.fees import AH_CUT, DEPOSIT_BP, MIN_DEPOSIT_COPPER
 from ahsync.engine.gathering import (CATEGORIES, GATHERING_PROFESSIONS, SESSION_CONFIRM_UNITS, SESSION_GAP_MINUTES,
                                      CatalogItem, Observed, Rate, best_rate, chance_to_sell, deposit_per_unit,
                                      effective_rate, eligible, gross_per_hour, minutes_of, net_per_hour, net_per_unit,
@@ -803,8 +803,9 @@ def _detail(b: _Base, w: GatheringWorld, day_one: bool) -> dict:
             "market": {"chance": m.chance, "confidence": m.confidence, "dot": "low" if b.default else m.dot,
                        "sales": m.sales, "supply": m.supply, "days": m.days, "chance_note": m.chance_note},
             "net_unit": net_unit,
-            "deposit": (f"Deposit: {DEPOSIT_BP[24] // 100}% of the {money(f.vendor_sell or 0)} vendor price per unit "
-                        f"for 24 h, refunded on a sale, so only the {100 - percent}% chance it expires costs it. "
+            "deposit": (f"Deposit: {money(deposit_per_unit(f.vendor_sell))} a unit for 24 h ({DEPOSIT_BP[24] // 100}% of "
+                        f"the {money(f.vendor_sell or 0)} vendor price, at least {money(MIN_DEPOSIT_COPPER)} a 20-unit "
+                        f"auction), refunded on a sale, so only the {100 - percent}% chance it expires costs it. "
                         f"Estimates: a listed price is not a sale."),
             "history": NO_HISTORY_LINE if day_one else "", **history}
 

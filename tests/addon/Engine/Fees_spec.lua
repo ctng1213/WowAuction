@@ -11,11 +11,14 @@ local function Boot()
 end
 
 describe("Fees", function()
-  it("deposit is floored basis points of vendor value", function()
+  it("P27 the deposit is a floored share of the vendor value and at least 1s an auction", function()
     local Fees = Boot()
-    assert_eq(Fees.DepositCopper(500, 20, 24), 1500)
-    assert_eq(Fees.DepositCopper(500, 20, 8), 500)
-    assert_eq(Fees.DepositCopper(7, 3, 2), 0)
+    assert_eq(Fees.DepositCopper(1173, 1, 8), 234)
+    for _, h in ipairs({ 2, 8, 24 }) do assert_eq(Fees.DepositCopper(75, 1, h), 100) end
+    assert_eq(Fees.DepositCopper(500, 20, 24), 6000)
+    assert_eq(Fees.DepositCopper(500, 20, 2), 500)
+    assert_eq(Fees.DepositCopper(0, 20, 24), 100)
+    assert_eq(Fees.DepositCopper(500, 0, 24), 0)
   end)
 
   it("an unknown duration raises", function()

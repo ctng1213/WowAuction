@@ -6,11 +6,13 @@ import pytest
 from ahsync.engine.fees import AH_CUT, deposit_copper, sale_net, shortest_duration_covering
 
 
-def test_deposit_is_floored_basis_points_of_vendor_value():
-    # 20 units × 5 s vendor = 100 s; 24 h = 15% → 15 s (P9's deposit)
-    assert deposit_copper(500, 20, 24) == 1500
-    assert deposit_copper(500, 20, 8) == 500
-    assert deposit_copper(7, 3, 2) == 0          # 21 × 1.25% = 0.2625 → 0
+def test_P27_the_deposit_is_a_floored_share_of_the_vendor_value_and_at_least_1s_an_auction():
+    assert deposit_copper(1173, 1, 8) == 234     # Oiled Blunderbuss, in game: 20% of 11s 73c = 234.6 → 2s 34c
+    assert [deposit_copper(75, 1, h) for h in (2, 8, 24)] == [100, 100, 100]   # Healing Potion: 3c, 15c, 45c → 1s
+    assert deposit_copper(500, 20, 24) == 6000   # 20 × 5s = 1g; 60% → 60s
+    assert deposit_copper(500, 20, 2) == 500     # 5% → 5s
+    assert deposit_copper(0, 20, 24) == 100      # vendor price unknown: the minimum
+    assert deposit_copper(500, 0, 24) == 0       # no units, no auction
 
 
 def test_unknown_duration_raises():

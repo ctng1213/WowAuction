@@ -24,7 +24,8 @@ def at(day: int, hour: int, week: int = 0) -> int:
 
 
 def raid_nights(wed: float, thu: float, **changes) -> SellFacts:
-    """An item with Tue, Wed and Thu 20:00-23:00 windows peaking at 20:00; level 10s; no vendor value or deposit."""
+    """An item with Tue, Wed and Thu 20:00-23:00 windows peaking at 20:00; level 10s; no vendor value, so a post's
+    deposit is the 1s minimum (P27), lost only by the share that doesn't sell."""
     how = [1.0] * 168
     how[WED * 24 + 20], how[THU * 24 + 20] = wed, thu
     windows = tuple(PlanWindow(d * 24 + 20, 3, d * 24 + 20, 6) for d in (TUE, WED, THU))
@@ -48,7 +49,7 @@ def chances(monkeypatch):
 
 def test_M1_a_missed_tuesday_peak_moves_to_wednesday(chances):
     chances[WED] = 0.88
-    f = raid_nights(wed=1.1364, thu=1.0)                           # 0.88 × 11s 36c × 0.95 = 9s 50c: 95% of 10s
+    f = raid_nights(wed=1.1510, thu=1.0)                           # 0.88 × 11s 51c × 0.95 − 0.12 × 1s = 9s 50c: 95%
     r = missed.replan_missed(ANCHOR, at(TUE, 23), 1, f, at(TUE, 23, 0) + 30 * 60_000, WEEK_END, S, 0.5, 0.10)
     assert (r.kind, r.at_ms, r.window[0]) == ("post", at(WED, 12), at(WED, 20))   # posted 8 h before the 20:00 peak
     assert round(r.net) == 950 and r.p == 0.88 and r.tried[0].failed == ""
@@ -68,7 +69,7 @@ def test_M3_a_replacement_is_always_compared_with_the_original_not_the_last_repl
 
 def test_M4_a_close_window_that_is_unlikely_to_sell_is_skipped_for_the_next(chances):
     chances[WED] = 0.40
-    f = raid_nights(wed=2.5263, thu=1.0)                           # Wed: 0.40 × 25s 26c × 0.95 = 9s 60c (96%)
+    f = raid_nights(wed=2.6842, thu=1.0)                           # Wed: 0.40 × 26s 84c × 0.95 − 0.60 × 1s = 9s 60c (96%)
     r = missed.replan_missed(ANCHOR, at(TUE, 23), 1, f, at(TUE, 23) + 60_000, WEEK_END, S, 0.5, 0.10)
     assert [t.failed for t in r.tried] == ["unlikely to sell", ""] and r.window[0] == at(THU, 20)
 

@@ -90,8 +90,8 @@ def test_the_page_joins_the_catalog_with_current_prices_intelligence_and_profess
     copper = rows["Copper Ore"]
     assert (copper["ah_price"], copper["qty"], copper["rate"], copper["net"]) == ("2s 20c", "64", "—", "—")  # no rates yet
     assert copper["price_title"] == "seen 26 h ago (AHF scan Sun 08:38) · stale: over 24 h"
-    assert payload["details"][str(gw.COPPER)]["net_unit"] == ("2s 20c − 5% cut 11.00c − (1 − 85%) × 0.75c deposit = "
-                                                              "208.89c")
+    assert payload["details"][str(gw.COPPER)]["net_unit"] == ("2s 20c − 5% cut 11.00c − (1 − 85%) × 5.00c deposit = "
+                                                              "208.25c")
     tin = rows["Tin Ore"]
     assert (tin["ah_price"], tin["qty"], tin["note"]) == ("—", "0", "no listing in the newest scan")
     brugan = [r["item"] for r in gw.view_rows(payload, gw.BRUGAN) if r["eligible"]]
