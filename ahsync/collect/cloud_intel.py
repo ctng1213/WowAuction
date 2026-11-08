@@ -22,7 +22,8 @@ from ahsync.intel.contract import INTEL_SCHEMA_VERSION, IntelVersionError, Marke
 
 log = logging.getLogger("ahsync.cloud_intel")
 SRC = "cloud"                                  # source_state's row for the summary (its ETag and last fetch)
-MAX_BYTES = 64 * 1024 * 1024                   # a document over this, compressed or not, is refused (SEC16)
+MAX_BYTES = 256 * 1024 * 1024                  # a document over this, compressed or not, is refused (SEC16);
+                                               # 64 MB until 0.1.8: the real market's reached 88 MB on 2026-11-08
 USER_AGENT = "AHSync/0.1"
 
 
