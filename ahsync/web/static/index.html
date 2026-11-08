@@ -138,6 +138,11 @@
   /* Gathering: 12 columns fit a 1280 px window (tighter cells; headers and Category may wrap), as in the mockup */
   .ga th, .ga td { padding: 6px 7px; } .ga th { white-space: normal; vertical-align: bottom; }
   .ga td:nth-child(2) { white-space: normal; min-width: 70px; } .ga .sub { max-width: 220px; }
+  table.lines { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  table.lines th { color: var(--muted); font-weight: normal; text-align: right; padding: 3px 6px; border-bottom: 1px solid var(--border); }
+  table.lines th:first-child, table.lines td:first-child { text-align: left; }
+  table.lines td { padding: 4px 6px; border-bottom: 1px dashed var(--border); text-align: right; white-space: nowrap; }
+  table.lines td:first-child { color: var(--muted); } table.lines td.sub { padding-left: 18px; } table.lines td.word { text-align: left; }
   .breakdown span.amber { color: var(--amber); } .breakdown span.pos { color: var(--pos); } .breakdown span.neg { color: var(--neg); }
   /* Gathering's heatmap marks (SPEC §3.4E.7): now, the top window, windows 2 and 3; the legend draws the same swatches */
   .heat .ga-now { outline: 2px solid var(--accent); outline-offset: -2px; position: relative; z-index: 1; }
@@ -238,8 +243,15 @@ const LEVEL_CLASS = { 0: 'h0', 1: 'h1', 2: 'h2', 3: 'h3', 4: 'h4' };
 const heatHtml = (rows, kind) => `<div class="heat ${kind}"><div class="lbl"></div>${HOUR_LABELS.map(h => `<div class="lbl">${h}</div>`).join('')}` +
   (rows || []).map(r => `<div class="lbl">${esc(r.day)}</div>` + r.cells.map(c => `<div class="${LEVEL_CLASS[c.level] || 'hn'}" title="${esc(c.title)}"></div>`).join('')).join('') + '</div>';
 const breakdown = lines => `<div class="breakdown">${lines.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>`;
+// The item detail's market lines (D105): every text, word and class comes from engine/market_lines.py.
+const linesTable = rows => '<table class="lines"><thead><tr><th>Line</th><th>Now</th><th>7d</th><th>14d</th><th>30d</th><th></th></tr></thead><tbody>' +
+  rows.map(r => `<tr><td title="${esc(r.help)}"${r.indent ? ' class="sub"' : ''}>${esc(r.label)}</td>` +
+    `<td>${r.now.map(([t, c]) => `<span class="${VALUE_CLASS[c] || ''}">${esc(t)}</span>`).join('')}</td>` +
+    `<td>${esc(r.d7)}</td><td>${esc(r.d14)}</td><td>${esc(r.d30)}</td><td class="word ${VALUE_CLASS[r.word_class] || ''}">${esc(r.word)}</td></tr>`).join('') +
+  '</tbody></table>';
 const detailHtml = d => !d ? '<div class="empty" style="border-top:1px solid var(--border)">No market data for this item yet.</div>' :
   `<div class="card-h" style="border-top:1px solid var(--border)"><b>${esc(d.name)}: when it sells best</b><span class="muted">${esc(d.summary)}</span></div><div class="detail"><div>` +
+  (d.lines ? `<div class="h">${esc(d.lines.heading)}</div>${linesTable(d.lines.rows)}` : '') +
   `<div class="h">Best selling windows (forecast for the coming week, local time)</div>` +
   (d.windows.length ? d.windows.map((w, i) => `<div class="window"><span class="rank">${i + 1}</span><b>${esc(w.when)}</b><span class="${esc(w.uplift_class)}">${esc(w.uplift)}</span><span class="muted">${esc(w.strength)}</span></div>`).join('')
     : '<div class="muted">No windows yet: too little weekly data. The plan posts now.</div>') +

@@ -24,6 +24,7 @@ from ahsync.engine.characters_view import CharacterSheet, characters_view
 from ahsync.engine.plan_chains import Arriving
 from ahsync.engine.positions import committed
 from ahsync.engine.views import GOLD_PAGES, gold_pill
+from ahsync.export.addon_files import coverage30
 from ahsync.recommend.gathering_page import gathering_page
 from ahsync.recommend.history_page import history_page
 from ahsync.recommend.inventory_page import inventory_page
@@ -52,7 +53,8 @@ class RefreshResult:
 
 
 def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], intel_items: dict, items: dict,
-                now_ms: int, offset_ms: int, cfg: Config, built_ms: int) -> tuple[dict, list, int | None]:
+                now_ms: int, offset_ms: int, cfg: Config, built_ms: int, coverage30: int | None = None
+                ) -> tuple[dict, list, int | None]:
     """Plan the market's characters, stage the plan, its alternatives and what the addon files carry of it (M11), and
     build its Portfolio (M13), Today, Week, Flip and Inventory pages (SPEC §3.4C, §3.4D, §3.5).
 
@@ -66,6 +68,7 @@ def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], in
         offset_ms: Local time minus UTC, for the pages' days and times.
         cfg: Config.
         built_ms: The intelligence's built_ms.
+        coverage30: The market's observed hours of the last 720 (the item detail's market lines, D105).
 
     Returns:
         (page name -> payload, for the caller to stage; the funded plan's actions (engine.plan.PlanAction), for the
@@ -101,7 +104,7 @@ def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], in
     pages["portfolio"] = portfolio_page(characters, plan, [r[0] for r in rows], intel_items, items, now_ms,
                                         offset_ms, cfg, built_ms, held)                            # SPEC §3.5, M13
     pages["inventory"] = inventory_page(db, [c for c, _ in characters], [a for a in shown if a.status == "pending"],
-                                        intel_items, items, offset_ms)
+                                        intel_items, items, offset_ms, coverage30)                # D105
     return pages, actions, plan.accounting.remaining_capacity if plan else None
 
 
@@ -124,7 +127,8 @@ def refresh_market(db: Database, market: str, now_ms: int, cfg: Config, result: 
         log.warning("refresh: item %s on %s failed: %s", key, market, error)
     with db.transaction():
         db.stage_intel(intel)
-        _stage_recommendations(db, market, intel.items, now_ms, offset_ms, cfg, intel.built_ms)
+        _stage_recommendations(db, market, intel.items, now_ms, offset_ms, cfg, intel.built_ms,
+                               coverage30(db, intel, now_ms))
     result.items += len(intel.items)
 
 
@@ -169,11 +173,12 @@ def stage_document(db: Database, intel: MarketIntelligence, now_ms: int, offset_
     else:
         db.clear_status(f"cloud_settings:{intel.market}")
     scanned = scanned_intel(db, intel, planning)                                            # IU6
-    _stage_recommendations(db, intel.market, scanned.items, now_ms, offset_ms, planning, ages_reference_ms(scanned))
+    _stage_recommendations(db, intel.market, scanned.items, now_ms, offset_ms, planning, ages_reference_ms(scanned),
+                           coverage30(db, intel, now_ms))
 
 
 def _stage_recommendations(db: Database, market: str, stats: dict, now_ms: int, offset_ms: int, cfg: Config,
-                           built_ms: int) -> None:
+                           built_ms: int, coverage30: int | None = None) -> None:
     """Stage a market's plan and every page built from its intelligence and character state (SPEC §3.5).
 
     Args:
@@ -184,12 +189,14 @@ def _stage_recommendations(db: Database, market: str, stats: dict, now_ms: int, 
         offset_ms: Local time minus UTC.
         cfg: Config.
         built_ms: The intelligence's built_ms (price ages, SPEC §3.4D.6).
+        coverage30: The market's observed hours of the last 720 (the item detail's market lines, D105).
     """
     items = db.items()
     characters = db.characters_in(market)
     char_ids = [c for c, _ in characters]
     total_gold = sum(g for _, g in characters)
-    pages, planned, capacity = _stage_plan(db, market, characters, stats, items, now_ms, offset_ms, cfg, built_ms)
+    pages, planned, capacity = _stage_plan(db, market, characters, stats, items, now_ms, offset_ms, cfg, built_ms,
+                                           coverage30)
     pages["disenchant"] = disenchant_page(db, char_ids, stats, items, total_gold, now_ms, cfg, capacity)   # D71
     pages["craft"] = craft_page(db, char_ids, stats, items, total_gold, now_ms, cfg, planned, offset_ms,
                                 capacity)                                                      # D45, D56

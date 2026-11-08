@@ -3823,8 +3823,7 @@
        ["Volume confidence", "75%"],
        ["Seasonality strength", "— · too little evidence"],
        ["Newly listed per day", "49/day"],
-       ["Listing turnover (info only, not sales)", "169/day"],
-       ["Vendor price", "15c"]
+       ["Listing turnover (info only, not sales)", "169/day"]
       ],
       "answers": {
        "best": "—",
@@ -4007,9 +4006,67 @@
         }
        ]
       },
+      "lines": {
+       "coverage": "— coverage",
+       "heading": "Market lines (the tooltip's; the market's data covers — of the last 30 days)",
+       "rows": [
+        {
+         "d14": "1s 20c",
+         "d30": "1s 20c",
+         "d7": "1s 20c",
+         "help": "The lowest listing now, against the medians of the hourly lowest listing over 7, 14 and 30 days.",
+         "indent": false,
+         "label": "Market Price",
+         "now": [
+          ["1s 19c (1 h)", ""]
+         ],
+         "word": "steady",
+         "word_class": ""
+        },
+        {
+         "d14": "198",
+         "d30": "198",
+         "d7": "198",
+         "help": "Units on the AH now, against the typical units listed over 7, 14 and 30 days: a stock, never sales.",
+         "indent": false,
+         "label": "Market Inventory",
+         "now": [
+          ["200 listed", ""]
+         ],
+         "word": "steady",
+         "word_class": ""
+        },
+        {
+         "d14": "—",
+         "d30": "—",
+         "d7": "—",
+         "help": "Now: the chance a 24 h auction posted now at the market price sells before it expires. 7, 14 and 30 days: the share of listings at the lowest price that sold.",
+         "indent": false,
+         "label": "Sell Chance Now",
+         "now": [
+          ["100% at 1s 19c", ""]
+         ],
+         "word": "",
+         "word_class": ""
+        },
+        {
+         "d14": "",
+         "d30": "",
+         "d7": "",
+         "help": "What a merchant pays for one.",
+         "indent": false,
+         "label": "Vendor Price",
+         "now": [
+          ["15c", ""]
+         ],
+         "word": "",
+         "word_class": ""
+        }
+       ]
+      },
       "name": "Light Leather",
       "quality": 1,
-      "summary": "med30 1s 20c · trend −0.2%/day · 1 weeks of data",
+      "summary": "med30 1s 20c · trend −0.2%/day · 1 weeks of data · — coverage",
       "windows": []
      },
      "2589": {
@@ -4020,8 +4077,7 @@
        ["Volume confidence", "75%"],
        ["Seasonality strength", "37"],
        ["Newly listed per day", "591/day"],
-       ["Listing turnover (info only, not sales)", "249/day"],
-       ["Vendor price", "13c"]
+       ["Listing turnover (info only, not sales)", "249/day"]
       ],
       "answers": {
        "best": "Sat 16:00–22:00",
@@ -4204,9 +4260,80 @@
         }
        ]
       },
+      "lines": {
+       "coverage": "— coverage",
+       "heading": "Market lines (the tooltip's; the market's data covers — of the last 30 days)",
+       "rows": [
+        {
+         "d14": "50c",
+         "d30": "50c",
+         "d7": "50c",
+         "help": "The lowest listing now, against the medians of the hourly lowest listing over 7, 14 and 30 days.",
+         "indent": false,
+         "label": "Market Price",
+         "now": [
+          ["50c (1 h)", ""]
+         ],
+         "word": "steady",
+         "word_class": ""
+        },
+        {
+         "d14": "301",
+         "d30": "302",
+         "d7": "302",
+         "help": "Units on the AH now, against the typical units listed over 7, 14 and 30 days: a stock, never sales.",
+         "indent": false,
+         "label": "Market Inventory",
+         "now": [
+          ["320 listed", ""]
+         ],
+         "word": "steady",
+         "word_class": ""
+        },
+        {
+         "d14": "—",
+         "d30": "—",
+         "d7": "—",
+         "help": "Now: the chance a 24 h auction posted now at the market price sells before it expires. 7, 14 and 30 days: the share of listings at the lowest price that sold.",
+         "indent": false,
+         "label": "Sell Chance Now",
+         "now": [
+          ["100% at 50c", ""]
+         ],
+         "word": "",
+         "word_class": ""
+        },
+        {
+         "d14": "",
+         "d30": "",
+         "d7": "",
+         "help": "The best selling window's expected price, its best hour, and the chance a 24 h post then sells.",
+         "indent": false,
+         "label": "Best Sell Time",
+         "now": [
+          ["51c · Sat 18:00 · 100%", ""]
+         ],
+         "word": "established",
+         "word_class": ""
+        },
+        {
+         "d14": "",
+         "d30": "",
+         "d7": "",
+         "help": "What a merchant pays for one.",
+         "indent": false,
+         "label": "Vendor Price",
+         "now": [
+          ["13c", ""]
+         ],
+         "word": "",
+         "word_class": ""
+        }
+       ]
+      },
       "name": "Linen Cloth",
       "quality": 1,
-      "summary": "med30 50c · trend −0.2%/day · 6 weeks of data",
+      "summary": "med30 50c · trend −0.2%/day · 6 weeks of data · — coverage",
       "windows": [
        {
         "strength": "established · 6 weeks",
@@ -4224,8 +4351,7 @@
        ["Volume confidence", "75%"],
        ["Seasonality strength", "— · too little evidence"],
        ["Newly listed per day", "150/day"],
-       ["Listing turnover (info only, not sales)", "231/day"],
-       ["Vendor price", "5c"]
+       ["Listing turnover (info only, not sales)", "231/day"]
       ],
       "answers": {
        "best": "—",
@@ -4408,9 +4534,67 @@
         }
        ]
       },
+      "lines": {
+       "coverage": "— coverage",
+       "heading": "Market lines (the tooltip's; the market's data covers — of the last 30 days)",
+       "rows": [
+        {
+         "d14": "2s 50c",
+         "d30": "2s 50c",
+         "d7": "2s 50c",
+         "help": "The lowest listing now, against the medians of the hourly lowest listing over 7, 14 and 30 days.",
+         "indent": false,
+         "label": "Market Price",
+         "now": [
+          ["2s 48c (1 h)", ""]
+         ],
+         "word": "steady",
+         "word_class": ""
+        },
+        {
+         "d14": "292",
+         "d30": "292",
+         "d7": "292",
+         "help": "Units on the AH now, against the typical units listed over 7, 14 and 30 days: a stock, never sales.",
+         "indent": false,
+         "label": "Market Inventory",
+         "now": [
+          ["320 listed", ""]
+         ],
+         "word": "steady",
+         "word_class": ""
+        },
+        {
+         "d14": "—",
+         "d30": "—",
+         "d7": "—",
+         "help": "Now: the chance a 24 h auction posted now at the market price sells before it expires. 7, 14 and 30 days: the share of listings at the lowest price that sold.",
+         "indent": false,
+         "label": "Sell Chance Now",
+         "now": [
+          ["100% at 2s 48c", ""]
+         ],
+         "word": "",
+         "word_class": ""
+        },
+        {
+         "d14": "",
+         "d30": "",
+         "d7": "",
+         "help": "What a merchant pays for one.",
+         "indent": false,
+         "label": "Vendor Price",
+         "now": [
+          ["5c", ""]
+         ],
+         "word": "",
+         "word_class": ""
+        }
+       ]
+      },
       "name": "Copper Ore",
       "quality": 1,
-      "summary": "med30 2s 50c · trend −0.2%/day · 1 weeks of data",
+      "summary": "med30 2s 50c · trend −0.2%/day · 1 weeks of data · — coverage",
       "windows": []
      },
      "2835": {
@@ -4421,8 +4605,7 @@
        ["Volume confidence", "75%"],
        ["Seasonality strength", "— · too little evidence"],
        ["Newly listed per day", "76/day"],
-       ["Listing turnover (info only, not sales)", "346/day"],
-       ["Vendor price", "2c"]
+       ["Listing turnover (info only, not sales)", "346/day"]
       ],
       "answers": {
        "best": "—",
@@ -4605,9 +4788,67 @@
         }
        ]
       },
+      "lines": {
+       "coverage": "— coverage",
+       "heading": "Market lines (the tooltip's; the market's data covers — of the last 30 days)",
+       "rows": [
+        {
+         "d14": "30c",
+         "d30": "30c",
+         "d7": "30c",
+         "help": "The lowest listing now, against the medians of the hourly lowest listing over 7, 14 and 30 days.",
+         "indent": false,
+         "label": "Market Price",
+         "now": [
+          ["30c (1 h)", ""]
+         ],
+         "word": "steady",
+         "word_class": ""
+        },
+        {
+         "d14": "398",
+         "d30": "398",
+         "d7": "398",
+         "help": "Units on the AH now, against the typical units listed over 7, 14 and 30 days: a stock, never sales.",
+         "indent": false,
+         "label": "Market Inventory",
+         "now": [
+          ["400 listed", ""]
+         ],
+         "word": "steady",
+         "word_class": ""
+        },
+        {
+         "d14": "—",
+         "d30": "—",
+         "d7": "—",
+         "help": "Now: the chance a 24 h auction posted now at the market price sells before it expires. 7, 14 and 30 days: the share of listings at the lowest price that sold.",
+         "indent": false,
+         "label": "Sell Chance Now",
+         "now": [
+          ["100% at 30c", ""]
+         ],
+         "word": "",
+         "word_class": ""
+        },
+        {
+         "d14": "",
+         "d30": "",
+         "d7": "",
+         "help": "What a merchant pays for one.",
+         "indent": false,
+         "label": "Vendor Price",
+         "now": [
+          ["2c", ""]
+         ],
+         "word": "",
+         "word_class": ""
+        }
+       ]
+      },
       "name": "Rough Stone",
       "quality": 1,
-      "summary": "med30 30c · trend +0.0%/day · 1 weeks of data",
+      "summary": "med30 30c · trend +0.0%/day · 1 weeks of data · — coverage",
       "windows": []
      },
      "2840": {
@@ -4618,8 +4859,7 @@
        ["Volume confidence", "75%"],
        ["Seasonality strength", "40"],
        ["Newly listed per day", "99/day"],
-       ["Listing turnover (info only, not sales)", "99/day"],
-       ["Vendor price", "10c"]
+       ["Listing turnover (info only, not sales)", "99/day"]
       ],
       "answers": {
        "best": "—",
@@ -4802,9 +5042,67 @@
         }
        ]
       },
+      "lines": {
+       "coverage": "— coverage",
+       "heading": "Market lines (the tooltip's; the market's data covers — of the last 30 days)",
+       "rows": [
+        {
+         "d14": "7s 94c",
+         "d30": "7s 95c",
+         "d7": "7s 94c",
+         "help": "The lowest listing now, against the medians of the hourly lowest listing over 7, 14 and 30 days.",
+         "indent": false,
+         "label": "Market Price",
+         "now": [
+          ["7s 92c (1 h)", ""]
+         ],
+         "word": "steady",
+         "word_class": ""
+        },
+        {
+         "d14": "121",
+         "d30": "121",
+         "d7": "122",
+         "help": "Units on the AH now, against the typical units listed over 7, 14 and 30 days: a stock, never sales.",
+         "indent": false,
+         "label": "Market Inventory",
+         "now": [
+          ["120 listed", ""]
+         ],
+         "word": "steady",
+         "word_class": ""
+        },
+        {
+         "d14": "—",
+         "d30": "—",
+         "d7": "—",
+         "help": "Now: the chance a 24 h auction posted now at the market price sells before it expires. 7, 14 and 30 days: the share of listings at the lowest price that sold.",
+         "indent": false,
+         "label": "Sell Chance Now",
+         "now": [
+          ["100% at 7s 92c", ""]
+         ],
+         "word": "",
+         "word_class": ""
+        },
+        {
+         "d14": "",
+         "d30": "",
+         "d7": "",
+         "help": "What a merchant pays for one.",
+         "indent": false,
+         "label": "Vendor Price",
+         "now": [
+          ["10c", ""]
+         ],
+         "word": "",
+         "word_class": ""
+        }
+       ]
+      },
       "name": "Copper Bar",
       "quality": 1,
-      "summary": "med30 7s 95c · trend −0.3%/day · 6 weeks of data",
+      "summary": "med30 7s 95c · trend −0.3%/day · 6 weeks of data · — coverage",
       "windows": []
      },
      "4239": {
@@ -4815,8 +5113,7 @@
        ["Volume confidence", "75%"],
        ["Seasonality strength", "— · too little evidence"],
        ["Newly listed per day", "1/day"],
-       ["Listing turnover (info only, not sales)", "0/day"],
-       ["Vendor price", "1s"]
+       ["Listing turnover (info only, not sales)", "0/day"]
       ],
       "answers": {
        "best": "—",
@@ -4999,9 +5296,120 @@
         }
        ]
       },
+      "lines": {
+       "coverage": "— coverage",
+       "heading": "Market lines (the tooltip's; the market's data covers — of the last 30 days)",
+       "rows": [
+        {
+         "d14": "14s 98c",
+         "d30": "14s 98c",
+         "d7": "14s 98c",
+         "help": "The lowest listing now, against the medians of the hourly lowest listing over 7, 14 and 30 days.",
+         "indent": false,
+         "label": "Market Price",
+         "now": [
+          ["8s (1 h)", ""]
+         ],
+         "word": "low",
+         "word_class": "amber"
+        },
+        {
+         "d14": "3",
+         "d30": "3",
+         "d7": "3",
+         "help": "Units on the AH now, against the typical units listed over 7, 14 and 30 days: a stock, never sales.",
+         "indent": false,
+         "label": "Market Inventory",
+         "now": [
+          ["2 listed", ""]
+         ],
+         "word": "low",
+         "word_class": "amber"
+        },
+        {
+         "d14": "—",
+         "d30": "—",
+         "d7": "—",
+         "help": "Now: the chance a 24 h auction posted now at the market price sells before it expires. 7, 14 and 30 days: the share of listings at the lowest price that sold.",
+         "indent": false,
+         "label": "Sell Chance Now",
+         "now": [
+          ["100% at 8s", ""]
+         ],
+         "word": "",
+         "word_class": ""
+        },
+        {
+         "d14": "",
+         "d30": "",
+         "d7": "",
+         "help": "One disenchant's materials at their prices now, against the item's price now.",
+         "indent": false,
+         "label": "Disenchant Value",
+         "now": [
+          ["178% above AH", "pos"],
+          [" · 22s 28c", ""]
+         ],
+         "word": "",
+         "word_class": ""
+        },
+        {
+         "d14": "",
+         "d30": "",
+         "d7": "",
+         "help": "",
+         "indent": true,
+         "label": "75% · 5 Strange Dust @ 5s 94c",
+         "now": [
+          ["22s 28c", ""]
+         ],
+         "word": "",
+         "word_class": ""
+        },
+        {
+         "d14": "",
+         "d30": "",
+         "d7": "",
+         "help": "",
+         "indent": true,
+         "label": "20% · 1.5 10998",
+         "now": [
+          ["no price", "amber"]
+         ],
+         "word": "",
+         "word_class": ""
+        },
+        {
+         "d14": "",
+         "d30": "",
+         "d7": "",
+         "help": "",
+         "indent": true,
+         "label": "5% · 1 10978",
+         "now": [
+          ["no price", "amber"]
+         ],
+         "word": "",
+         "word_class": ""
+        },
+        {
+         "d14": "",
+         "d30": "",
+         "d7": "",
+         "help": "What a merchant pays for one.",
+         "indent": false,
+         "label": "Vendor Price",
+         "now": [
+          ["1s", ""]
+         ],
+         "word": "",
+         "word_class": ""
+        }
+       ]
+      },
       "name": "Embossed Leather Gloves",
       "quality": 2,
-      "summary": "med30 14s 98c · trend +0.1%/day · 1 weeks of data",
+      "summary": "med30 14s 98c · trend +0.1%/day · 1 weeks of data · — coverage",
       "windows": []
      },
      "4306": {
@@ -5012,8 +5420,7 @@
        ["Volume confidence", "75%"],
        ["Seasonality strength", "— · too little evidence"],
        ["Newly listed per day", "147/day"],
-       ["Listing turnover (info only, not sales)", "46/day"],
-       ["Vendor price", "1s 50c"]
+       ["Listing turnover (info only, not sales)", "46/day"]
       ],
       "answers": {
        "best": "Wed 22:00–Sun 02:00",
@@ -5196,9 +5603,80 @@
         }
        ]
       },
+      "lines": {
+       "coverage": "— coverage",
+       "heading": "Market lines (the tooltip's; the market's data covers — of the last 30 days)",
+       "rows": [
+        {
+         "d14": "20s 1c",
+         "d30": "20s 1c",
+         "d7": "20s 4c",
+         "help": "The lowest listing now, against the medians of the hourly lowest listing over 7, 14 and 30 days.",
+         "indent": false,
+         "label": "Market Price",
+         "now": [
+          ["20s 60c (1 h)", ""]
+         ],
+         "word": "steady",
+         "word_class": ""
+        },
+        {
+         "d14": "60",
+         "d30": "60",
+         "d7": "60",
+         "help": "Units on the AH now, against the typical units listed over 7, 14 and 30 days: a stock, never sales.",
+         "indent": false,
+         "label": "Market Inventory",
+         "now": [
+          ["80 listed", ""]
+         ],
+         "word": "high",
+         "word_class": "amber"
+        },
+        {
+         "d14": "—",
+         "d30": "—",
+         "d7": "—",
+         "help": "Now: the chance a 24 h auction posted now at the market price sells before it expires. 7, 14 and 30 days: the share of listings at the lowest price that sold.",
+         "indent": false,
+         "label": "Sell Chance Now",
+         "now": [
+          ["100% at 20s 60c", ""]
+         ],
+         "word": "",
+         "word_class": ""
+        },
+        {
+         "d14": "",
+         "d30": "",
+         "d7": "",
+         "help": "The best selling window's expected price, its best hour, and the chance a 24 h post then sells.",
+         "indent": false,
+         "label": "Best Sell Time",
+         "now": [
+          ["20s 40c · Sat 02:00 · 100%", ""]
+         ],
+         "word": "early",
+         "word_class": "amber"
+        },
+        {
+         "d14": "",
+         "d30": "",
+         "d7": "",
+         "help": "What a merchant pays for one.",
+         "indent": false,
+         "label": "Vendor Price",
+         "now": [
+          ["1s 50c", ""]
+         ],
+         "word": "",
+         "word_class": ""
+        }
+       ]
+      },
       "name": "Silk Cloth",
       "quality": 1,
-      "summary": "med30 20s 1c · trend −0.2%/day · 2 weeks of data",
+      "summary": "med30 20s 1c · trend −0.2%/day · 2 weeks of data · — coverage",
       "windows": [
        {
         "strength": "early pattern · 1 weeks",
