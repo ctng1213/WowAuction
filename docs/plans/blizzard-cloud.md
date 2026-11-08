@@ -245,7 +245,7 @@ no craft pays at it (found from the Craft tab, PR #31).
 **Decided during execution (Opus, M33b-3, 2026-11-08).** The user approved variant A of `docs/mockups/item-detail-lines.html` (a table). D105 added (the dashboard's scenario, its row written with the code since the mockup round came first). `engine/market_lines.py` repeats the tooltip's rules in Python (`qualifier`, `percent` through thousandths, `coverage_text`, `age_text`, `strength`) with TT34 and TT40's numbers tested on both sides; the market's coverage reaches the detail through `refresh` (the export's `coverage30`). Disenchant Value shows for every item the table can disenchant (a market page; the tooltip shows it only when one of your characters can). Vendor price moved from Market activity into the table. WP1 moves only in the Inventory page's item details (lines added, Vendor price moved, the summary's coverage), reviewed.
 
 **Decided after v0.1.7 (the user, 2026-11-08).** SEC16's bound is **256 MB** (it was 64 MB): the real market's summary reached 88 MB decompressed at the 09:09 UTC daily run and every app refused it (LESSONS 2026-11-08). Ships in 0.1.8. Follow-up, not built: a smaller summary format, since the size grows with the items seen.
-- **Summary schema 14 went to BZ46** (`unseen_per_day`, the market simulator's batch, 2026-11-08), so M34's horizons and regimes become **schema 15**.
+- **Summary schema 15 went to BZ49** (`unseen_per_day`, the market simulator's batch, 2026-11-08; 14 is the compact form, BZ47), so M34's horizons and regimes become **schema 16**.
 
 ## 2. Working rules
 

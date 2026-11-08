@@ -40,7 +40,7 @@ def _volumes(item: ItemHistory) -> dict[int, dict[str, Volume]]:
 
 
 def unseen_per_day(item: ItemHistory, week: range, volume: DailyVolume) -> float | None:
-    """Of sold/day, the units a day estimated sold before their listings were first seen (SPEC §2.4, BZ45, BZ46).
+    """Of sold/day, the units a day estimated sold before their listings were first seen (SPEC §2.4, BZ45, BZ49).
 
     The main id source's unseen share of its sold units over the week, applied to sold/day, so it is averaged
     exactly as sold/day is (coverage, the prior).

@@ -42,12 +42,24 @@ def test_BZ18_a_transition_publishes_the_previous_schema_too(tmp_path):
 
 def test_BZ37_the_cloud_publishes_every_schema_a_release_reads_side_by_side(tmp_path):
     store = LocalStore(tmp_path)
-    *older, new = pointers = publish(store, INTEL)
-    assert [p.schema for p in pointers] == [10, 11, 12, 13, 14] and len({p.key for p in pointers}) == 5   # v0.1.2 reads 10
+    pointers = publish(store, INTEL, schemas=(10, 11))
+    assert [p.schema for p in pointers] == [10, 11] and len({p.key for p in pointers}) == 2
+    for pointer in pointers:
+        assert json.loads(store.get(pointer_key(M, pointer.schema)).data)["key"] == pointer.key
+        assert json.loads(gzip.decompress(store.get(pointer.key).data))["schema_version"] == pointer.schema
+
+
+def test_BZ46_the_cloud_publishes_only_schema_13_which_every_release_that_can_read_the_summary_reads(tmp_path):
+    store = LocalStore(tmp_path)
+    *_, new = pointers = publish(store, INTEL)
+    assert [p.schema for p in pointers] == [13, 14, 15] and store.get(pointer_key(M, 12)) is None   # 15: BZ49
     for pointer in pointers:
         assert json.loads(store.get(pointer_key(M, pointer.schema)).data)["key"] == pointer.key
         assert json.loads(gzip.decompress(store.get(pointer.key).data))["schema_version"] == pointer.schema
     assert read_latest(store, M) == (INTEL, new)                                   # AHSync reads its own schema
+    older = LocalStore(tmp_path / "older")
+    (only,) = publish(older, INTEL, schemas=(12,))                                 # the last daily run, before a bump
+    assert read_latest(older, M)[1] == only                                        # FM75
 
 
 def test_a_document_that_does_not_match_its_pointer_is_refused(tmp_path):

@@ -127,3 +127,18 @@ def test_a_stored_body_that_is_not_gzip_is_a_value_error(db):
     sql(db, "INSERT INTO intel(market, schema_version, body, built) VALUES (?, ?, ?, ?)", (M, 1, b"not gzip", 5))
     with pytest.raises(ValueError, match="stored summary"):
         db.read_intel(M)
+
+
+def test_BZ48_a_local_markets_summary_is_stored_gzipped_and_an_older_text_row_still_reads(db):
+    from ahsync.intel.contract import MarketIntelligence, to_json
+    intel = MarketIntelligence(M, 10, 5, 1, {})
+    with db.transaction():
+        db.stage_intel(intel)
+    db.publish_refresh([M])
+    stored = db.conn.execute("SELECT body FROM intel WHERE market = ?", (M,)).fetchone()[0]
+    assert gzip.decompress(stored).decode("utf-8") == to_json(intel)
+    assert db.read_intel(M) == intel
+    db.conn.execute("UPDATE intel SET body = ? WHERE market = ?", (to_json(intel), M))      # an older AHSync's row
+    db.intel_cache.forget(M)
+    assert db.read_intel(M) == intel
+
