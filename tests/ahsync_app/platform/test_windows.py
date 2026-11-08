@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from ahsync_app.platform.windows import WindowsPlatform
 
 LOCAL = r"C:\Users\u\AppData\Local"
@@ -99,6 +101,10 @@ def test_DR22_the_silent_installer_starts_detached_and_relaunches_the_old_app_wh
     exe = Path(r"C:\Users\u\AppData\Local\Programs\AHSync\AHSync.exe")
     assert platform.verify_update(setup, exe) is None                       # the hash is the check: unsigned
     platform.apply_update(setup, exe)
-    assert spawned == [(f'cmd /c ""{setup}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS '
+    assert spawned == [(f'cmd /d /s /c ""{setup}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCLOSEAPPLICATIONS '
                         f'|| start "" "{exe}""', setup.parent / "install.log")]
     assert platform.can_replace(exe) is True                                  # a per-user install
+    for odd in (Path(r"C:\Users\a%PATH%b\setup.exe"), Path('C:\\Users\\a"b\\setup.exe')):   # cmd would expand or end it
+        with pytest.raises(OSError):
+            platform.apply_update(odd, exe)
+    assert len(spawned) == 1

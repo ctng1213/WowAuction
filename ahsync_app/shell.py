@@ -22,6 +22,7 @@ from typing import IO, Protocol
 
 from ahsync import version
 from ahsync.app import installer
+from ahsync.app.updater import UPDATES_DIR
 from ahsync.__main__ import (API_KEY_TOPIC, LOCK_FILE, STOP_FILE, InstanceLock, Runtime, remove_stop_file,
                              setup_logging)
 from ahsync.collect.client import Redactor
@@ -76,6 +77,7 @@ class ShellState:
     addon: AddonResult | None = None   # this start's addon install (setup's, after a setup); None: none yet
     opened: bool = False               # the dashboard has been shown for this launch
     shows: int = 0                     # show requests handled (second launches)
+    restart_update: bool = False       # Restart to update asked: install as the app stops (SPEC §3.7.9)
 
 
 @dataclass(frozen=True)
@@ -166,39 +168,49 @@ def start(autostart_launch: bool, world: ShellWorld) -> int:
         if not autostart_launch:       # the login entry starts at once when turned on: stay silent (FM48)
             request_show(dirs.data_dir)
         return 0
+    state = ShellState(autostart_launch)
     try:
-        code = Session(dirs, lock, ShellState(autostart_launch), world).run()
+        if install_waiting(dirs, world):
+            return 0                   # the installer or swap helper takes over once this process ends (DR22, DR23)
+        code = Session(dirs, lock, state, world).run()
     finally:
         lock.release()
-    if code == 0:
-        install_on_quit(dirs, world)   # after run() returned and the lock is released (SPEC §3.7.9; DR22, DR23)
+    if code == 0 and state.restart_update:
+        install_waiting(dirs, world)   # Restart to update: run() returned and the lock is free (DR22)
     return code
 
 
-def install_on_quit(dirs: AppDirs, world: ShellWorld) -> bool:
-    """Start installing a verified update that waits, as the app quits (SPEC §3.7.9; DR22, DR23, FM54).
+def install_waiting(dirs: AppDirs, world: ShellWorld) -> bool:
+    """Start installing a verified update that waits: at the next start, or as Restart to update stops the app
+    (SPEC §3.7.9; DR22, DR23, FM54, FM78).
 
-    Nothing is running any more: `run()` has returned and the lock is free. The installer or the swap helper starts
-    detached and the process exits right after; a failure to start is logged and the app simply quits.
+    At a start, nothing runs yet; after Restart to update, `run()` has returned and the lock is free. A plain quit and
+    a stop-file quit (the uninstaller, an installer run by hand) never reach here (FM78). The installer or the swap
+    helper starts detached and the process exits right after; any failure is logged and the app goes on.
 
     Args:
         dirs: The per-user folders (data/ahsync.db, config.toml).
         world: The platform and the running executable.
 
     Returns:
-        True when an install was started.
+        True when an install was started (the caller exits).
     """
     path = dirs.data_dir / "ahsync.db"
     config = load_settings(dirs.config_file, world)
     if config is None or not path.exists():
         return False
     try:
-        db = open_server_db(path)      # run() has just closed it: no migration, no staging cleanup
+        db = open_server_db(path)      # no migration, no staging cleanup: it only reads and writes update.* meta
     except (DatabaseError, sqlite3.Error, OSError):
-        log.warning("the update was not installed: the database could not be read")
+        log.warning("no update installed: the database could not be read")
         return False
+    platform = world.platform
     try:
-        return installer.install(db, version.VERSION, config, lambda asset: world.platform.apply_update(asset, world.exe))
+        return installer.install(db, version.VERSION, config, dirs.data_dir / UPDATES_DIR, platform.update_asset_name,
+                                 lambda asset: platform.apply_update(asset, world.exe))
+    except Exception as error:         # never a traceback at start or quit (M1)
+        log.warning("no update installed: %s: %s", type(error).__name__, error)
+        return False
     finally:
         db.close()
 
@@ -376,7 +388,7 @@ class Session:
                                                 self.verify_update, self.dashboard_ready,
                                                 can_replace=lambda: platform.can_replace(exe),
                                                 forget_previous=lambda: platform.forget_previous(exe),
-                                                restart=self.restart_to_update))
+                                                restart=self.restart_from_dashboard))
 
     def verify_update(self, path: Path) -> str | None:
         """The platform's signature check of a download against the running app (SPEC §3.7.9; DR23).
@@ -390,9 +402,28 @@ class Session:
         return self.world.platform.verify_update(path, self.world.exe)
 
     def restart_to_update(self) -> None:
-        """Restart to update (the tray item or POST /api/update/restart): stop; start() installs on the way out."""
+        """Restart to update (the tray item, offered only while an update waits): stop; start() installs on the way
+        out, re-checking that it still may."""
         log.info("restart to update")
+        self.state.restart_update = True
         self.stop.set()
+
+    def restart_from_dashboard(self, db: Database, config: Config) -> bool:
+        """POST /api/update/restart: stop and install, only when a verified update waits that may install itself.
+
+        Args:
+            db: The dashboard's database.
+            config: The running settings.
+
+        Returns:
+            True when the stop was asked; False when nothing may install (the endpoint answers 409).
+        """
+        platform = self.world.platform
+        if installer.waiting_install(db, version.VERSION, config, self.dirs.data_dir / UPDATES_DIR,
+                                     platform.update_asset_name) is None:
+            return False
+        self.restart_to_update()
+        return True
 
     def dashboard_ready(self, app: object) -> None:
         """Keep run()'s dashboard: the tray reads the update state through it and toggles through its handlers.

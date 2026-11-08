@@ -11,7 +11,9 @@ from ahsync_app.platform.base import APP_NAME, WOW_NAMES, AppDirs, Platform, Pro
 WOW_ROOTS = (PureWindowsPath(r"C:\Program Files (x86)\World of Warcraft"), PureWindowsPath(r"C:\Program Files\World of Warcraft"))
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"   # under HKEY_CURRENT_USER (SPEC §3.7.5)
 RUN_VALUE = APP_NAME
-SILENT = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS"   # Inno Setup's silent upgrade (DR22)
+# Inno Setup's silent upgrade (DR22). /NOCLOSEAPPLICATIONS keeps the script's CloseApplications=no: its [Code] stops
+# AHSync through the stop file, since Restart Manager would hang on the window cancelling its close.
+SILENT = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCLOSEAPPLICATIONS"
 
 
 class RunKey(Protocol):
@@ -217,10 +219,13 @@ class WindowsPlatform(Platform):
             exe: The running `AHSync.exe`.
 
         Raises:
-            OSError: When `cmd` can't be started.
+            OSError: When a path holds `%` or `"` (cmd would expand or end it, even inside quotes) or `cmd` can't start.
         """
-        # cmd strips the outer quotes of `/c "…"`, leaving the quoted paths intact (spaces in a user name).
-        self.processes.spawn(f'cmd /c ""{path}" {SILENT} || start "" "{exe}""', path.parent / "install.log")
+        if any(c in str(p) for p in (path, exe) for c in '%"'):
+            raise OSError("an install path holds % or \"; install it from the release page")
+        # /s: cmd strips exactly the outer quotes of `/c "…"`, leaving the quoted paths intact (spaces in a user
+        # name); /d: no AutoRun commands.
+        self.processes.spawn(f'cmd /d /s /c ""{path}" {SILENT} || start "" "{exe}""', path.parent / "install.log")
 
     def ca_bundle(self) -> Path | None:
         """None: Python's `ssl` loads the Windows certificate store itself (FM58).

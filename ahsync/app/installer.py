@@ -1,10 +1,11 @@
-"""Automatic updates, the install half: install a verified download after quitting, and settle the result at the
-next start (SPEC §3.7.9; DR22, DR23, FM54, FM55).
+"""Automatic updates, the install half: install a verified download at the next start or on Restart to update, and
+settle the result (SPEC §3.7.9; DR22, DR23, FM54, FM55, FM78).
 
 The download half (`app/updater.py`) leaves a verified asset in `<data>/updates/` and `update.downloaded` in meta.
-On quit, once `run()` has returned and the lock is released, `install` marks it `update.pending` and hands it to the
-platform, which starts the installer or the swap helper detached; the app then exits. At the next start the update
-job's `settle` compares `update.pending` with the version that is running: the same version means it worked, any
+At the next start, before `run()` (or when Restart to update stops the app), `install` marks it `update.pending` and
+hands it to the platform, which starts the installer or the swap helper detached; the app then exits. A plain quit,
+the stop file (the uninstaller, an installer run by hand, `tools/deploy.py --restart`) never installs (FM78). Once the
+new version runs, the update job's `settle` compares `update.pending` with it: the same version means it worked, any
 other that it failed, and either way `updates/` is emptied.
 """
 from __future__ import annotations
@@ -18,54 +19,67 @@ from ahsync.app.update_check import read_meta, read_state, write_meta
 from ahsync.app.updater import UPDATES_DIR
 from ahsync.config import Config
 from ahsync.db.sqlite import Database
-from ahsync.engine.updates import INSTALL_FAILED, ready
+from ahsync.engine.updates import INSTALL_FAILED, newer, ready
 
 log = logging.getLogger("ahsync.update")
 
 
-def waiting_install(db: Database, version: str, config: Config) -> Path | None:
-    """The verified asset to install on quit, if one is waiting and may install itself (SPEC §3.7.9).
+def waiting_install(db: Database, version: str, config: Config, updates_dir: Path,
+                    asset_name: Callable[[str], str]) -> Path | None:
+    """The verified asset to install, if one is waiting and may install itself (SPEC §3.7.9).
 
     Args:
         db: The database (`update.*` in meta).
         version: The running version.
         config: The channel and `auto_update` (the same test as the Update line's "installs at the next start").
+        updates_dir: `<data>/updates/`, the only folder an install is taken from.
+        asset_name: Version -> this OS's asset, as the download named it.
 
     Returns:
-        The asset's path; None when nothing waits, the channel no longer offers it (DR30), the app can't replace
-        itself where it is (FM54) or the file is gone.
+        The asset's path; None while the last install is unsettled (`update.pending`), when nothing newer than the
+        running version waits, the channel no longer offers it (DR30), the app can't replace itself where it is
+        (FM54), or the stored path is not that asset in `updates/` (the database is not trusted with a path).
     """
-    state = read_state(db, version, config)
-    path = read_meta(db).get("downloaded_path")
-    if not ready(state) or state.cant_replace or not path or not Path(path).exists():
+    meta = read_meta(db)
+    if meta.get("pending") is not None:
         return None
-    return Path(path)
+    state = read_state(db, version, config)
+    if not ready(state) or state.cant_replace or not newer(state.tag, version) or state.downloaded is None:
+        return None
+    expected = updates_dir / asset_name(state.downloaded)
+    stored = meta.get("downloaded_path")
+    if stored is None or Path(stored) != expected or not expected.exists():
+        return None
+    return expected
 
 
-def install(db: Database, version: str, config: Config, apply: Callable[[Path], None]) -> bool:
-    """Start installing the waiting update, after `run()` has returned and the lock is released (DR22, DR23).
+def install(db: Database, version: str, config: Config, updates_dir: Path, asset_name: Callable[[str], str],
+            apply: Callable[[Path], None]) -> bool:
+    """Start installing the waiting update; the caller exits right after (DR22, DR23).
 
     Args:
         db: The database.
         version: The running version.
         config: As `waiting_install`.
+        updates_dir: As `waiting_install`.
+        asset_name: As `waiting_install`.
         apply: The platform's `apply_update` for the running executable: starts the installer or the swap helper.
 
     Returns:
         True when the install was started (the caller exits); False when nothing waits or it couldn't start.
 
     Side effects:
-        `update.pending` is set before `apply` and cleared again when `apply` raises.
+        `update.pending` is set before `apply` and cleared again when `apply` fails in any way.
     """
-    path = waiting_install(db, version, config)
+    path = waiting_install(db, version, config, updates_dir, asset_name)
     if path is None:
         return False
     target = read_state(db, version, config).downloaded
     write_meta(db, {"pending": target})
     try:
         apply(path)
-    except OSError as error:
-        log.warning("the update to %s could not start: %s", target, type(error).__name__)
+    except Exception as error:                      # never a traceback at start or quit: the app runs on (M1)
+        log.warning("the update to %s could not start: %s: %s", target, type(error).__name__, error)
         write_meta(db, {"pending": None})
         return False
     log.info("installing the update to %s", target)

@@ -16,6 +16,11 @@ NOW = 1_762_000_000_000
 SETUP = "AHSync-0.4.0-windows-x64-setup.exe"
 
 
+def asset(version: str) -> str:
+    """Windows' asset name for a version."""
+    return f"AHSync-{version}-windows-x64-setup.exe"
+
+
 @pytest.fixture
 def waiting(tmp_path):
     """A database with DR20's verified 0.4.0 installer waiting in <data>/updates/, running 0.3.1."""
@@ -38,7 +43,7 @@ def line(db: Database, version: str) -> dict:
 def test_DR22_the_install_starts_after_the_stop_and_the_next_start_records_it(waiting):
     db, data, folder = waiting
     applied: list[Path] = []
-    assert installer.install(db, "0.3.1", Config(), applied.append)
+    assert installer.install(db, "0.3.1", Config(), folder, asset, applied.append)
     assert applied == [folder / SETUP] and read_meta(db)["pending"] == "0.4.0"
     forgotten = []
     assert installer.settle(db, data, "0.4.0", NOW + 60_000, lambda: forgotten.append(True)) == "updated"   # 0.4.0 runs
@@ -71,7 +76,7 @@ def test_DR22_an_installer_still_held_is_left_and_removed_at_a_later_start(waiti
 
 def test_FM55_an_install_that_left_the_old_version_says_so_and_tries_again_tomorrow(waiting):
     db, data, folder = waiting
-    assert installer.install(db, "0.3.1", Config(), lambda path: None)
+    assert installer.install(db, "0.3.1", Config(), folder, asset, lambda path: None)
     assert installer.settle(db, data, "0.3.1", NOW, lambda: None) == "failed"      # still 0.3.1 at the next start
     meta = read_meta(db)
     assert "pending" not in meta and "downloaded" not in meta and meta["download_tried_ms"] == str(NOW)
@@ -80,9 +85,9 @@ def test_FM55_an_install_that_left_the_old_version_says_so_and_tries_again_tomor
 
 
 def test_FM54_an_app_that_cannot_replace_itself_installs_nothing(waiting):
-    db, _data, _folder = waiting
+    db, _data, folder = waiting
     write_meta(db, {"cant_replace": "1"})
-    assert not installer.install(db, "0.3.1", Config(), lambda path: pytest.fail("nothing may start"))
+    assert not installer.install(db, "0.3.1", Config(), folder, asset, lambda path: pytest.fail("nothing may start"))
     assert "pending" not in read_meta(db)
     assert line(db, "0.3.1") == {"text": "Update downloaded · AHSync can't replace itself here; install it from the "
                                  "release page", "url": "https://github.com/ctng1213/WowAuction/releases/tag/v0.4.0",
@@ -91,11 +96,29 @@ def test_FM54_an_app_that_cannot_replace_itself_installs_nothing(waiting):
 
 def test_nothing_waits_or_it_cannot_start_and_the_app_simply_quits(waiting):
     db, _data, folder = waiting
-    assert not installer.install(db, "0.3.1", Config(auto_update=False), lambda path: pytest.fail("not wanted"))
-    def refused(path: Path) -> None:
-        """The installer could not be started."""
-        raise OSError("blocked")
-    assert not installer.install(db, "0.3.1", Config(), refused)
-    assert "pending" not in read_meta(db)
+    never = lambda path: pytest.fail("nothing may start")                         # noqa: E731
+    assert not installer.install(db, "0.3.1", Config(auto_update=False), folder, asset, never)
+    for error in (OSError("blocked"), ValueError("odd"), NotImplementedError()):   # any failure: the app goes on
+        def refused(path: Path, error=error) -> None:
+            """The installer could not be started."""
+            raise error
+        assert not installer.install(db, "0.3.1", Config(), folder, asset, refused)
+        assert "pending" not in read_meta(db)
     (folder / SETUP).unlink()
-    assert installer.waiting_install(db, "0.3.1", Config()) is None             # the file is gone
+    assert installer.waiting_install(db, "0.3.1", Config(), folder, asset) is None   # the file is gone
+
+
+def test_DR22_only_a_newer_settled_download_in_updates_ever_installs(waiting, tmp_path):
+    db, _data, folder = waiting
+    never = lambda path: pytest.fail("nothing may start")                         # noqa: E731
+    assert installer.waiting_install(db, "0.3.1", Config(), folder, asset) == folder / SETUP
+    assert not installer.install(db, "0.4.0", Config(), folder, asset, never)      # already 0.4.0: not newer
+    write_meta(db, {"pending": "0.4.0"})                                            # the last install isn't settled
+    assert not installer.install(db, "0.3.1", Config(), folder, asset, never)
+    write_meta(db, {"pending": None})
+    elsewhere = tmp_path / SETUP
+    elsewhere.write_bytes(b"not ours")
+    write_meta(db, {"downloaded_path": str(elsewhere)})                             # a path outside updates/
+    assert not installer.install(db, "0.3.1", Config(), folder, asset, never)
+    write_meta(db, {"downloaded_path": str(folder / SETUP)})
+    assert not installer.install(db, "0.3.1", Config(), folder, lambda v: f"other-{v}.exe", never)   # not the asset

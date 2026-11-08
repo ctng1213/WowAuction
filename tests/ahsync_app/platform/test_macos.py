@@ -164,8 +164,9 @@ def test_DR23_the_zip_is_unpacked_by_ditto_and_must_carry_the_running_app_s_team
 
 
 def test_DR23_the_swap_helper_is_written_and_started_detached_over_the_bundle_from_the_executable(tmp_path):
-    runner = FakeCodesign({})
+    runner = FakeCodesign({"Applications": "ABCDE12345", "updates": "ABCDE12345"})
     platform, exe, zip_path = mac_with(tmp_path, runner)
+    (zip_path.parent / "AHSync.app").mkdir()                                  # verified and unpacked at download
     platform.apply_update(zip_path, exe)
     script = zip_path.parent / "swap.sh"
     assert script.read_text(encoding="utf-8").startswith("#!/bin/sh")
@@ -213,3 +214,41 @@ def test_FM55_the_swap_helper_puts_the_previous_app_back_when_the_move_or_the_op
     else:
         assert done.returncode == 1 and running == "0.3.1"                # the previous app is back
         assert opened.read_text().splitlines()[-1] == str(bundle)        # and opened
+
+
+def test_DR23_an_unpacked_app_that_no_longer_verifies_or_a_non_bundle_app_never_installs(tmp_path):
+    runner = FakeCodesign({"Applications": "ABCDE12345", "updates": "ZZZZZ99999"})   # re-checked at install time
+    platform, exe, zip_path = mac_with(tmp_path, runner)
+    (zip_path.parent / "AHSync.app").mkdir()
+    with pytest.raises(OSError):
+        platform.apply_update(zip_path, exe)
+    assert runner.spawned == []
+    from ahsync_app.platform.macos import bundle_of
+    python = tmp_path / ".pyenv" / "versions" / "3.12.16" / "bin" / "python3"            # a source run
+    assert bundle_of(python) is None and bundle_of(exe) == tmp_path / "Applications" / "AHSync.app"
+    assert platform.can_replace(python) is False and platform.check_app(zip_path.parent, python) is not None
+    with pytest.raises(OSError):
+        platform.apply_update(zip_path, python)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the swap helper is a /bin/sh script (macOS)")
+def test_the_swap_helper_refuses_a_path_that_is_not_an_app_and_gives_up_on_a_pid_that_never_ends(tmp_path):
+    from ahsync_app.platform.macos import SWAP
+    script = tmp_path / "swap.sh"
+    script.write_text(SWAP)
+    folder = tmp_path / "Applications"
+    folder.mkdir()
+    (folder / "keep").write_text("mine")
+    for bundle in (str(folder), "", "/"):                                    # never moved or removed
+        done = subprocess.run(["/bin/sh", str(script), "999999", bundle, str(tmp_path / "new.app")],
+                              capture_output=True, timeout=30)
+        assert done.returncode == 1 and (folder / "keep").read_text() == "mine"
+    bundle = tmp_path / "AHSync.app"
+    bundle.mkdir()
+    alive = subprocess.Popen(["sleep", "30"])
+    try:
+        done = subprocess.run(["/bin/sh", str(script), str(alive.pid), str(bundle), str(tmp_path / "new.app"), "2"],
+                              capture_output=True, timeout=30)
+    finally:
+        alive.kill()
+    assert done.returncode == 1 and bundle.is_dir() and not (tmp_path / "AHSync.app.previous").exists()

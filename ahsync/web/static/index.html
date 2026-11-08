@@ -303,7 +303,9 @@ function drawAppCard(card, app) {
         button.textContent = 'restarting…';
         let answer = null;
         try { answer = await post(line.button.post, {}); } catch (e) { answer = null; }
-        if (!answer || answer.status !== 200) {    // 409: nothing waits any more; the reload shows why
+        if (answer && answer.status === 200) {
+          notice('AHSync is closing to install the update; it opens again by itself in a minute.', 'ok');
+        } else {                                   // 409: nothing waits any more; the reload shows why
           button.disabled = false;
           button.textContent = line.button.text;
           load('status');

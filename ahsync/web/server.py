@@ -34,7 +34,6 @@ from ahsync.app.refresh import rebuild_gathering, replan_all
 from ahsync.app.status_page import status_page
 from ahsync.clock import Clock
 from ahsync import version
-from ahsync.app.installer import waiting_install
 from ahsync.app.update_check import read_state, write_meta
 from ahsync.engine.updates import UpdateState
 from ahsync.config import (CHANNELS, Config, ConfigError, is_cloud_market, market_sources, write_risk_tolerance,
@@ -84,7 +83,7 @@ class AppHooks:
     dashboard_ready: Callable[[object], None] = lambda app: None   # gets the DashboardApp, for the tray's toggles
     can_replace: Callable[[], bool] = lambda: True                 # whether the app may replace itself (FM54, M27)
     forget_previous: Callable[[], None] = lambda: None             # cleanup after an update that worked (M27)
-    restart: Callable[[], None] = lambda: None                     # Restart to update: stop, then install (M27)
+    restart: Callable[[Database, Config], bool] = lambda db, config: False   # Restart to update: True once stopping
 
 
 @dataclass(frozen=True)
@@ -632,10 +631,9 @@ class DashboardApp:
         """
         if self.app_hooks is None:
             return json_response(404, {"error": "not_found"})
-        if waiting_install(self.db, version.VERSION, self.config) is None:
+        if not self.app_hooks.restart(self.db, self.config):
             return json_response(409, {"error": "no_update"})
         log.info("restart to update asked from the dashboard")
-        self.app_hooks.restart()
         return json_response(200, {"restarting": True})
 
     def update_channel(self, body: bytes) -> Response:

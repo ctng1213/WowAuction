@@ -63,8 +63,8 @@ def spawn_detached(args: Sequence[str] | str, log: Path | None = None) -> None:
 class Processes:
     """How a platform runs commands, injected so tests record them instead (DR22, DR23)."""
 
-    run: Callable[[Sequence[str]], Ran] = run_command
-    spawn: Callable[..., None] = spawn_detached
+    run: Callable[[Sequence[str]], Ran] = lambda args: run_command(args)          # looked up at each call, so a
+    spawn: Callable[..., None] = lambda args, log=None: spawn_detached(args, log)   # test guard can forbid them
     pid: int = field(default_factory=os.getpid)
 
 
