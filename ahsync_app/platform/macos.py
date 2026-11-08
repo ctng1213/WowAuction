@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import plistlib
+import re
 import shutil
 import uuid
 from collections.abc import Callable
@@ -19,6 +20,7 @@ KEY_FILE_MODE = 0o600
 AGENT_LABEL = "com.wowauction.ahsync"
 CA_BUNDLE = "/etc/ssl/cert.pem"     # the system's PEM bundle (FM58)
 APP_BUNDLE = f"{APP_NAME}.app"
+TEAM_ID = re.compile(r"[A-Z0-9]{10}")    # an Apple Developer Team ID, e.g. ABCDE12345
 SWAP_SCRIPT = "swap.sh"
 # The swap helper (SPEC §3.7.9; DR23, FM55): waits for AHSync to end, moves the running bundle aside, moves the new
 # one in and opens it; when either move or the open fails it puts the previous app back and opens that. Its arguments
@@ -209,11 +211,14 @@ class MacPlatform(Platform):
             None when it is; else NOT_SIGNED (also when the running app isn't a bundle, so has no team to match).
         """
         bundle = bundle_of(exe)
-        if bundle is None:
+        ours = self.team_id(bundle) if bundle is not None else None
+        if ours is None or not TEAM_ID.fullmatch(ours):
             return NOT_SIGNED
-        signed = self.processes.run(["codesign", "--verify", "--deep", "--strict", str(app)]).code == 0
-        team = self.team_id(app) if signed else None
-        return None if team is not None and team == self.team_id(bundle) else NOT_SIGNED
+        # The requirement makes codesign itself demand an Apple-issued certificate of our team, not just a bundle that
+        # matches its own embedded requirement (a self-signed one would; the security review, 2026-11-07).
+        requirement = f'=anchor apple generic and certificate leaf[subject.OU] = "{ours}"'
+        signed = self.processes.run(["codesign", "--verify", "--deep", "--strict", f"-R{requirement}", str(app)]).code == 0
+        return None if signed and self.team_id(app) == ours else NOT_SIGNED
 
     def team_id(self, bundle: Path) -> str | None:
         """A bundle's TeamIdentifier, from `codesign -dv` (it writes to stderr).

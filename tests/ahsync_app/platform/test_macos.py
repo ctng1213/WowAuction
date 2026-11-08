@@ -154,10 +154,13 @@ def test_DR23_the_zip_is_unpacked_by_ditto_and_must_carry_the_running_app_s_team
     platform, exe, zip_path = mac_with(tmp_path, ours)
     assert platform.verify_update(zip_path, exe) is None
     assert ours.calls[0] == ["ditto", "-xk", str(zip_path), str(zip_path.parent)]          # never zipfile
+    verify = next(c for c in ours.calls if c[:2] == ["codesign", "--verify"])
+    assert verify[4] == '-R=anchor apple generic and certificate leaf[subject.OU] = "ABCDE12345"'   # Apple-issued, ours
     assert (zip_path.parent / "AHSync.app").is_dir()
     for runner in (FakeCodesign({"Applications": "ABCDE12345", "updates": "ZZZZZ99999"}),   # someone else's
                    FakeCodesign({"Applications": "ABCDE12345", "updates": "ABCDE12345"}, valid=False),
-                   FakeCodesign({"Applications": "ABCDE12345", "updates": None})):          # ad hoc
+                   FakeCodesign({"Applications": "ABCDE12345", "updates": None}),           # ad hoc
+                   FakeCodesign({"Applications": "short", "updates": "short"})):            # no real team of our own
         other, exe2, zip2 = mac_with(tmp_path / str(len(runner.teams)) / str(runner.valid) / str(runner.teams["updates"]), runner)
         assert other.verify_update(zip2, exe2) == NOT_SIGNED
         assert not (zip2.parent / "AHSync.app").exists()                                    # the refused app is removed
