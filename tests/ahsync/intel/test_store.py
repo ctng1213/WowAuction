@@ -92,11 +92,38 @@ def test_BZ43_a_held_summary_is_published_without_parsing_it_again(db, monkeypat
 
 
 def test_BZ43_forgetting_a_market_drops_its_record_before_the_next_parse(db):
+    from ahsync.intel.contract import MarketIntelligence
     from ahsync.intel.store import IntelCache
-    cache, parsed = IntelCache(), []
-    cache.get(M, (1, 1), lambda: parsed.append("a") or "first")
+    first, second = MarketIntelligence(M, 1, 1, 1, {}), MarketIntelligence(M, 2, 2, 1, {})
+    cache = IntelCache()
+    cache.get(M, (1, 1), lambda: first)
     seen = []
-    cache.get(M, (2, 1), lambda: seen.append(dict(cache._records)) or "second")
-    assert seen == [{}] and cache.get(M, (2, 1), lambda: pytest.fail("parsed again")) == "second"
+    cache.get(M, (2, 1), lambda: seen.append(dict(cache._records)) or second)
+    assert seen == [{}] and cache.get(M, (2, 1), lambda: pytest.fail("parsed again")) is second
     cache.forget(M)
-    assert cache._records == {}
+    assert cache._records == {} and cache._facts == {}
+
+
+def test_BZ43_the_dashboard_reads_the_summarys_facts_while_a_new_one_is_fetched(db, monkeypatch):
+    from ahsync.intel import store
+    from ahsync.intel.contract import MarketIntelligence
+    from ahsync.web.server import open_server_db
+    intel = MarketIntelligence(M, 9, 10, 1, {}, coverage=((1, 2),))
+    with db.transaction():
+        db.stage_intel(intel)
+    db.publish_refresh([M])
+    db.hold_intel(intel)
+    db.intel_cache.release(M)                                         # a poll found a new pointer
+    monkeypatch.setattr(store, "from_json", lambda _text: pytest.fail("parsed again"))
+    dashboard = open_server_db(db.path, db.intel_cache)
+    try:
+        assert dashboard.intel_facts(M) == store.IntelFacts(9, 10, ((1, 2),))
+        assert db.intel_cache._records == {}                          # the record stays dropped
+    finally:
+        dashboard.close()
+
+
+def test_a_stored_body_that_is_not_gzip_is_a_value_error(db):
+    sql(db, "INSERT INTO intel(market, schema_version, body, built) VALUES (?, ?, ?, ?)", (M, 1, b"not gzip", 5))
+    with pytest.raises(ValueError, match="stored summary"):
+        db.read_intel(M)

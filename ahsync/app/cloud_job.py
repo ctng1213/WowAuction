@@ -51,11 +51,11 @@ def poll_cloud(db: Database, transport: Transport, clock: Clock, config: Config)
     now = clock.now_ms()
     found = {m: cloud_intel.poll(db, transport, config.cloud.intel_url, m, now)
              for m in config.markets if is_cloud_market(config, m)}
-    new = {m: r for m, r in found.items() if r.state == "new"}
+    bodies = {m: r.body for m, r in found.items() if r.state == "new" and r.body is not None}
+    new = {m: replace(r, body=None) for m, r in found.items() if r.state == "new"}
+    del found                                        # replan_all drops each gzip once stored (BZ43)
     if not new:
         return []
-    bodies = {m: r.body for m, r in new.items() if r.body is not None}
-    new = {m: replace(r, body=None) for m, r in new.items()}       # replan_all drops each text once stored (BZ43)
     replanned = replan_all(db, now, config, clock.local_offset_ms(now), documents={m: r.intel for m, r in new.items()},
                            bodies=bodies)
     done = [m for m in sorted(new) if m in replanned]

@@ -371,7 +371,7 @@ class DashboardApp:
         Returns:
             engine.status_view.cloud_freshness's pill; None before the first summary.
         """
-        intel = self.db.read_intel(market)
+        intel = self.db.intel_facts(market)       # the facts only: no parse during a fetch (BZ43)
         now = self.clock.now_ms()
         if intel is None:
             return None

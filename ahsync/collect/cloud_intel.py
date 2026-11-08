@@ -170,7 +170,7 @@ def poll(db: Database, transport: Transport, intel_url: str, market: str, now_ms
         if pointer.get("sha256") == held:
             remember(db, market, headers.get("etag"), held, now_ms)
             return PollResult("unchanged")
-        db.intel_cache.forget(market)                 # never two parsed summaries at once (BZ43)
+        db.intel_cache.release(market)                # never two parsed summaries at once (BZ43)
         intel, body = fetch_document(transport, intel_url, market, pointer)
     except IntelVersionError as error:
         db.set_status(f"cloud_schema:{market}", "error", "cloud_schema", {"market": market, "detail": str(error)}, now_ms)
