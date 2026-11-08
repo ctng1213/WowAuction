@@ -454,10 +454,11 @@ class FakeWebview:
         self.destroyed = threading.Event()
         self.starts = 0
         self.error: BaseException | None = None   # a failed check in the script (the window would swallow it)
+        self.html = None
 
-    def create(self, url, title, width, height, on_closing) -> None:
+    def create(self, url, title, width, height, on_closing, html=None) -> None:
         self.calls.append(("create", url, title, width, height))
-        self.on_closing = on_closing
+        self.on_closing, self.html = on_closing, html
 
     def start(self, on_started) -> None:
         self.starts += 1
@@ -546,7 +547,7 @@ def test_DR29_the_window_is_a_view_on_the_dashboard_and_closing_it_never_stops_a
 
     def script(view: FakeWebview) -> None:
         wait_for(lambda: ("show",) in view.calls, "the manual launch never showed the window")
-        assert view.calls[:3] == [("create", home, "AHSync", 1200, 800), ("load", home), ("show",)]
+        assert view.calls[:3] == [("create", None, "AHSync", 1200, 800), ("load", home), ("show",)]   # loading page first
         tray_icon = FakeTray.made[0]
         tray_icon.dispatch("status")
         assert view.calls[-2:] == [("load", f"{home}/#status"), ("show",)]
@@ -570,7 +571,7 @@ def test_DR29_an_autostart_launch_keeps_the_window_hidden_until_it_is_asked_for(
 
     def script(view: FakeWebview) -> None:
         time.sleep(0.05)                               # several ticks with the dashboard answering
-        assert view.calls == [("create", "http://localhost:8765", "AHSync", 1200, 800)]
+        assert view.calls == [("create", None, "AHSync", 1200, 800)]                 # the loading page, hidden
         shell.request_show(app.platform.app_dirs().data_dir)   # a second launch (FM48)
         wait_for(lambda: ("show",) in view.calls, "the show request never showed the window")
         FakeTray.made[0].dispatch("quit")
@@ -894,3 +895,27 @@ def test_DR22_restart_to_update_installs_once_run_returns_and_the_lock_is_free(t
     app.configure(tmp_path / "wow")
     assert shell.start(True, app.world()) == 0
     assert answers == [True] and app.platform.applied == [("AHSync-0.4.0-windows-x64-setup.exe", "AHSync.exe", True)]
+
+
+def test_DR32_the_window_opens_on_the_loading_page_and_loads_the_dashboard_once_it_answers(tmp_path):
+    app = FakeApp(tmp_path, until=lambda _d: False)
+    app.configure(tmp_path / "wow")
+    app.port_after = 10**9                              # the dashboard does not answer yet
+    home = "http://localhost:8765"
+
+    def script(view: FakeWebview) -> None:
+        wait_for(lambda: ("show",) in view.calls, "the manual launch never showed the loading page")
+        assert view.calls[0] == ("create", None, "AHSync", 1200, 800)       # the bundled page, never the URL
+        assert view.html is not None and "Starting AHSync" in view.html
+        FakeTray.made[0].dispatch("open")                                    # Open dashboard while starting
+        time.sleep(0.02)
+        assert not [c for c in view.calls if c[0] == "load"]                 # nothing loads before it answers
+        app.port_after = app.probes                                          # now it answers
+        wait_for(lambda: ("load", home) in view.calls, "the dashboard never loaded once it answered")
+        time.sleep(0.02)
+        assert [c for c in view.calls if c[0] == "load"] == [("load", home)]   # and only once
+        FakeTray.made[0].dispatch("quit")
+
+    view = FakeWebview(script)
+    assert shell.start(False, windowed(app, view)) == 0
+    view.check()
