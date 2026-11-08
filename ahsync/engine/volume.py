@@ -21,7 +21,7 @@ MAX_GAP_MS = 6 * HOUR_MS
 SALES_PAIR_MAX_GAP_MS = 2 * HOUR_MS     # hourly sales rates need books this close (SPEC §3.3 sales_how)
 CROSS_SOURCE_MIN_GAP_MS = 15 * 60_000   # books of different sources closer than this never pair (SPEC §3.3.1, V39)
 VOLUME_METHOD_VERSION = 4     # the book method (group diffs): bump when it changes; stored rows are recomputed (SPEC §3.3.6)
-ID_METHOD_VERSION = 5         # the id method (auction lifetimes, M33a); its own number, so a change to it never marks
+ID_METHOD_VERSION = 6         # the id method (auction lifetimes, M33a); its own number, so a change to it never marks
                               # the desktop's book rows stale (stored with every id row; a cloud `rebuild` recomputes them)
 KINDS = ("ids", "groups", "own")       # volume kinds in trust order (SPEC §3.3.1)
 LEGACY_KIND = {"ahf": "groups", "books": "groups", "mail": "own"}   # rows stored without a cover (V24)
@@ -189,6 +189,7 @@ class Auction:
     qty: int          # units left in it (a commodity auction shrinks as it partly sells)
     price: int        # unit buyout, copper
     band: int         # time-left code 1-4
+    commodity: bool = False   # from Blizzard's commodities list: bought cheapest first (BZ40); False when unknown
 
 
 @dataclass(frozen=True)
@@ -249,6 +250,8 @@ class Ending:
     expired: float                # the share of it that expired, 0-1; the rest left early, counted sold
     matched: bool                 # a new listing of the same key and units appeared in the gap: a possible relist,
                                   # measured, never subtracted (SPEC §2.4 item 5; the user, 2026-11-07)
+    cancelled: bool = False       # a commodity that left early while a cheaper one of its item stayed: no sale (BZ40)
+    tier1: bool | None = None     # posted at or below the lowest other price; None when its posting wasn't seen (BZ41)
 
 
 @dataclass(frozen=True)
@@ -263,6 +266,7 @@ class Lifetimes:
     # first seen after a linked gap; the price against the book feeds the undercut share (SPEC §2.4, BZ29)
     listed: tuple[tuple[int, int, int, tuple[int, int], int, int | None], ...]
     clashes: int                  # sightings whose band contradicted the expiry window (checks the band bounds, BZ24)
+    commodities: frozenset[int] = frozenset()   # item keys seen in Blizzard's commodities list (BZ40, BZ41)
 
 
 @dataclass(frozen=True, slots=True)
@@ -275,6 +279,11 @@ class LifeFlow:
     ended: float = 0.0            # listings that ended
     expired_listings: float = 0.0
     matched: float = 0.0          # ended listings matched to a new listing of the same key and units (BZ27)
+    cancelled: float = 0.0        # units of commodity cancels (BZ40): in neither sold nor expired
+    cancels: float = 0.0          # listings cancelled (BZ40)
+    t1_ended: float = 0.0         # ended listings that were posted at the lowest price (BZ41)
+    t1_left: float = 0.0          # of those, the share that left early and was not a cancel, summed (BZ41)
+    commodity: bool = False       # the item was seen in the commodities list (BZ41: measured, not estimated)
 
 
 # How long an auction runs, from its band when first seen just after posting (SPEC §2.4; §2.2's 2, 8 and 24 h).
@@ -331,7 +340,7 @@ def expired_fraction(window: tuple[int, int], absent_ms: int) -> float:
     return min(1.0, max(0.0, (absent_ms - start) / (end - start)))
 
 
-def match_relists(vanished: list[tuple[int, int, int, float]], new: list[Auction], gap: tuple[int, int]) -> list[Ending]:
+def match_relists(vanished: list[tuple], new: list[Auction], gap: tuple[int, int]) -> list[Ending]:
     """Endings of one gap, each matched to a new listing of the same item and units if one is free (BZ27).
 
     A cancel looks like a sale and the API names no seller; the only clue is a new id for the same key (item and
@@ -340,7 +349,8 @@ def match_relists(vanished: list[tuple[int, int, int, float]], new: list[Auction
     one ending, lowest ids first; only an ending that may have left early (expired < 1) is matched.
 
     Args:
-        vanished: (auction, key, units, expired share) of the auctions gone in the gap, by auction id.
+        vanished: (auction, key, units, expired share, cancelled, tier1) of the auctions gone in the gap, by
+            auction id (`cancelled` and `tier1` as Ending's).
         new: The auctions first seen after it, by auction id.
         gap: (earlier ms, later ms).
 
@@ -351,12 +361,12 @@ def match_relists(vanished: list[tuple[int, int, int, float]], new: list[Auction
     for a in new:
         free.setdefault((a.key, a.qty), []).append(a.id)
     endings = []
-    for auction, key, qty, expired in vanished:
+    for auction, key, qty, expired, cancelled, tier1 in vanished:
         ids = free.get((key, qty))
         matched = bool(ids) and expired < 1.0
         if matched:
             ids.pop(0)
-        endings.append(Ending(auction, key, qty, gap, expired, matched))
+        endings.append(Ending(auction, key, qty, gap, expired, matched, cancelled, tier1))
     return endings
 
 
@@ -426,6 +436,38 @@ def position_milli(price: int, lowest: int) -> int:
     return (2 * price * 1000 + lowest) // (2 * lowest)
 
 
+def vanished_in(live: dict[int, list], current: Sequence[Auction], at_ms: int) -> list[tuple]:
+    """The auctions gone from a snapshot, each with its expired share and whether it was a cancel (BZ22, BZ40).
+
+    A commodity that left early (expired share 0: it could not have expired) while a cheaper auction of its item
+    survived the gap with its units unchanged was cancelled: commodity buys take the cheapest units first (measured,
+    `docs/plans/blizzard-cloud-sales.md`), so a buyer would have taken the cheaper one. Equal prices are no proof.
+
+    Args:
+        live: Auction id -> [key, units, expiry window, unit price, commodity, tier1], as of the earlier snapshot.
+        current: The later snapshot's auctions, by id.
+        at_ms: The later snapshot's time.
+
+    Returns:
+        (auction, key, units, expired share, cancelled, tier1) per auction gone, by auction id.
+    """
+    kept: dict[int, int] = {}                      # key -> cheapest price among auctions unchanged across the gap
+    ids = set()
+    for a in current:
+        ids.add(a.id)
+        state = live.get(a.id)
+        if state is not None and state[1] == a.qty and a.price < kept.get(a.key, a.price + 1):
+            kept[a.key] = a.price
+    out = []
+    for auction, (key, units, window, price, commodity, tier1) in sorted(live.items()):
+        if auction in ids:
+            continue
+        expired = expired_fraction(window, at_ms)
+        cancelled = commodity and expired == 0.0 and kept.get(key, price) < price
+        out.append((auction, key, units, expired, cancelled, tier1))
+    return out
+
+
 def lifetimes(books: Iterable[IdBook], max_gap_ms: int = MAX_GAP_MS, keep_from_ms: int | None = None) -> Lifetimes:
     """Follow every auction id from first sight to its end (SPEC §2.4 Auction lifetimes, BZ22, BZ26, BZ27).
 
@@ -433,8 +475,9 @@ def lifetimes(books: Iterable[IdBook], max_gap_ms: int = MAX_GAP_MS, keep_from_m
     after a linked gap was posted in it, so its expiry window is that gap plus the duration its band implies
     (DURATION_MS); one seen in the first snapshot, or after a hole, gets its band's window. Every later sighting
     narrows the window (`narrow`; Blizzard's band bounds, ID_BAND_HOURS). A drop in units is a partial fill, sold
-    in that gap. An auction gone in a gap expired by `expired_fraction` and otherwise left early (sold), with a
-    possible relist counted (`match_relists`).
+    in that gap. An auction gone in a gap expired by `expired_fraction` and otherwise left early (sold), unless it
+    was a commodity cancel (`vanished_in`, BZ40), with a possible relist counted (`match_relists`). A listing first
+    seen after a linked gap is marked tier 1 when posted at or below its item's lowest other price (BZ41).
 
     Args:
         books: Snapshots of one market, oldest first; read once, so a generator keeps one in memory at a time.
@@ -445,38 +488,43 @@ def lifetimes(books: Iterable[IdBook], max_gap_ms: int = MAX_GAP_MS, keep_from_m
     Returns:
         The Lifetimes; auctions still listed at the end have no ending.
     """
-    live: dict[int, list] = {}                     # auction id -> [key, units, expiry window]
+    live: dict[int, list] = {}                     # auction id -> [key, units, expiry window, price, commodity, tier1]
     gaps, endings, fills, listed, seen = [], [], [], [], {}
-    clashes, prev_at, prev_keys = 0, None, frozenset()
+    clashes, prev_at, prev_keys, commodities = 0, None, frozenset(), set()
     for book in books:
         linked = prev_at is not None and 0 < book.at_ms - prev_at <= max_gap_ms
         gap = (prev_at, book.at_ms) if linked else None
         keep = linked and (keep_from_ms is None or book.at_ms >= keep_from_ms)   # earlier gaps only build windows
         current = sorted(book.auctions, key=lambda a: a.id)
-        ids = {a.id for a in current}
         vanished = []
         if linked:
-            vanished = [(i, s[0], s[1], expired_fraction(s[2], book.at_ms)) for i, s in sorted(live.items()) if i not in ids]
+            vanished = vanished_in(live, current, book.at_ms)
             for auction, *_ in vanished:
+                if keep and live[auction][4]:
+                    commodities.add(live[auction][0])  # its last auctions may vanish here, never seen in a kept book
                 del live[auction]
         else:
             live = {}                              # a hole: nothing is known across it
         new = []
-        lowest = lowest_two(current) if keep else {}
+        lowest = lowest_two(current) if linked else {}   # every posting's tier, kept or not (BZ41)
         for a in current:
             state = live.get(a.id)
             if state is None:
+                tier1 = None
                 if linked:
                     new.append(a)
+                    other = lowest_other(lowest[a.key], a.id)
+                    tier1 = other is None or a.price <= other
                     if keep:
-                        listed.append((a.id, a.key, a.qty, gap, a.price, lowest_other(lowest[a.key], a.id)))
+                        listed.append((a.id, a.key, a.qty, gap, a.price, other))
                     posted = (prev_at + DURATION_MS[a.band], book.at_ms + DURATION_MS[a.band])
                     window, clash = narrow(posted, book.at_ms, a.band)
                     clashes += clash and a.band != 1   # short at first sight is expected to clash (SPEC §2.4 item 2)
                 else:
                     window = band_window(book.at_ms, a.band)
-                live[a.id] = [a.key, a.qty, window]
+                live[a.id] = [a.key, a.qty, window, a.price, a.commodity, tier1]
                 continue
+            state[4] = state[4] or a.commodity       # a snapshot stored before M33b reads False (review, M33b-1)
             if a.qty < state[1]:
                 if keep:
                     fills.append((a.id, a.key, state[1] - a.qty, gap))
@@ -485,11 +533,12 @@ def lifetimes(books: Iterable[IdBook], max_gap_ms: int = MAX_GAP_MS, keep_from_m
             clashes += clash
         keys = frozenset(a.key for a in current)
         if keep:
+            commodities.update(a.key for a in current if a.commodity)
             gaps.append(gap)
             seen[gap] = prev_keys | keys
             endings.extend(match_relists(vanished, new, gap))
         prev_at, prev_keys = book.at_ms, keys
-    return Lifetimes(tuple(gaps), seen, tuple(endings), tuple(fills), tuple(listed), clashes)
+    return Lifetimes(tuple(gaps), seen, tuple(endings), tuple(fills), tuple(listed), clashes, frozenset(commodities))
 
 
 def life_flows(lt: Lifetimes) -> dict[tuple[int, int], dict[int, LifeFlow]]:
@@ -501,22 +550,31 @@ def life_flows(lt: Lifetimes) -> dict[tuple[int, int], dict[int, LifeFlow]]:
     Returns:
         gap -> item key -> LifeFlow, for every item listed in either snapshot of the gap (zeros included, so an
         observed hour with no sale reads 0, not missing). An ending's units split into expired (its expired
-        share) and left early, which is sold.
+        share) and left early, which is sold unless it was a commodity cancel (BZ40); tier-1 endings are tallied
+        for the sell-through (BZ41).
     """
     totals: dict[tuple[int, int], dict[int, list[float]]] = {
-        gap: {key: [0.0] * 6 for key in sorted(lt.seen[gap])} for gap in lt.gaps}
+        gap: {key: [0.0] * 10 for key in sorted(lt.seen[gap])} for gap in lt.gaps}
     for e in lt.endings:
         row = totals[e.gap][e.key]
-        row[0] += e.qty * (1.0 - e.expired)
+        left = 0.0 if e.cancelled else 1.0 - e.expired       # a cancel is neither sold nor expired (BZ40)
+        row[0] += e.qty * left
         row[1] += e.qty * e.expired
         row[3] += 1.0
         row[4] += e.expired
         row[5] += 1.0 if e.matched else 0.0
+        if e.cancelled:
+            row[6] += e.qty
+            row[7] += 1.0
+        if e.tier1:
+            row[8] += 1.0
+            row[9] += left
     for _, key, units, gap in lt.fills:
         totals[gap][key][0] += units
     for _, key, units, gap, *_ in lt.listed:
         totals[gap][key][2] += units
-    return {gap: {key: LifeFlow(*row) for key, row in by_key.items()} for gap, by_key in totals.items()}
+    return {gap: {key: LifeFlow(*row, commodity=key in lt.commodities) for key, row in by_key.items()}
+            for gap, by_key in totals.items()}
 
 
 def gap_hours(gap: tuple[int, int]) -> list[int]:

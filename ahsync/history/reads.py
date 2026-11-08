@@ -69,8 +69,9 @@ class ItemHistory:
     book: tuple[int, list[tuple[int, int, int, int]]] | None   # newest complete book: (at ms, [(price, stack, band, count)])
     # day -> source -> (kind, seconds observed per UTC hour or None for the whole day); market-wide, shared
     volume_cover: dict[int, dict[str, tuple[str, tuple[int, ...] | None]]] = field(default_factory=dict)
-    # day -> (ended, expired, matched) listings from auction lifetimes, summed over id sources (SPEC §2.4)
-    lifetimes: dict[int, tuple[float, float, float]] = field(default_factory=dict)
+    # day -> (ended, expired, matched, cancels, cancelled units, t1_ended, t1_left, commodity 0/1) from auction
+    # lifetimes, summed over id sources (SPEC §2.4, BZ40, BZ41)
+    lifetimes: dict[int, tuple[float, ...]] = field(default_factory=dict)
     # day -> position (thousandths of the lowest other price) -> new units, summed over id sources (SPEC §3.3.2, BZ29)
     new_listings: dict[int, dict[int, float]] = field(default_factory=dict)
 
@@ -197,7 +198,8 @@ class HistoryReads:
             "ORDER BY key, day, src", (market, window.volume_from_day)))
         cover = self.volume_cover(market, window.volume_from_day)
         ends = _Groups(self.conn.execute(
-            "SELECT key, day, ended, expired, matched FROM lifetimes_d1 WHERE market = ? AND day >= ? "
+            "SELECT key, day, ended, expired, matched, cancels, cancelled, t1_ended, t1_left, commodity FROM lifetimes_d1 "
+            "WHERE market = ? AND day >= ? "
             "ORDER BY key, day, src", (market, window.volume_from_day)))
         news = _Groups(self.conn.execute(
             "SELECT key, day, positions FROM new_listings_d1 WHERE market = ? AND day >= ? ORDER BY key, day, src",
@@ -554,18 +556,20 @@ def _positions_by_day(rows: list[tuple]) -> dict[int, dict[int, float]]:
     return out
 
 
-def _lifetimes_by_day(rows: list[tuple]) -> dict[int, tuple[float, float, float]]:
+def _lifetimes_by_day(rows: list[tuple]) -> dict[int, tuple[float, ...]]:
     """Stored ended-listing rows summed per day over their sources (SPEC §2.4).
 
     Args:
-        rows: (day, ended, expired, matched) rows, by day.
+        rows: (day, ended, expired, matched, cancels, cancelled, t1_ended, t1_left, commodity) rows, by day.
 
     Returns:
-        day -> (ended, expired, matched).
+        day -> (ended, expired, matched, cancels, cancelled, t1_ended, t1_left, commodity): sums, the flag 1 when any
+        source saw the item as a commodity.
     """
-    out: dict[int, tuple[float, float, float]] = {}
+    out: dict[int, tuple[float, ...]] = {}
     for day, *values in rows:
-        out[day] = tuple(a + b for a, b in zip(out.get(day, (0.0, 0.0, 0.0)), values))
+        old = out.get(day, (0.0,) * len(values))
+        out[day] = tuple(a + b for a, b in zip(old[:-1], values[:-1])) + (max(old[-1], values[-1]),)
     return out
 
 

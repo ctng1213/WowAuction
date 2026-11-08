@@ -2,7 +2,8 @@
 
 Hourly snapshots of a whole AH are tens of millions of auction rows a month, too many for the database, so each
 snapshot is one gzipped JSON file under `<root>/<market>/<src>/<at ms>.json.gz`, listed in an `index.json` beside
-it. Every write is a temp file plus rename (SPEC §5.2 rule 3): a crash leaves the old index or a file the index
+it. Each auction is a row `[id, key, units, unit price, band]`, with a sixth value 1 for a commodity (BZ40; rows
+written before M33b have none and read as not a commodity). Every write is a temp file plus rename (SPEC §5.2 rule 3): a crash leaves the old index or a file the index
 doesn't list yet, which the next `put` of that snapshot adds. The store is the id-diff estimator's input; the
 grouped books and volume rows derived from it live in the database.
 """
@@ -81,7 +82,8 @@ class SnapshotStore:
         if obs.at_ms in times:
             return False
         folder.mkdir(parents=True, exist_ok=True)
-        body = json.dumps({"at": obs.at_ms, "auctions": [[a.id, a.key, a.qty, a.price, a.band] for a in obs.auctions]},
+        body = json.dumps({"at": obs.at_ms, "auctions": [[a.id, a.key, a.qty, a.price, a.band] + ([1] if a.commodity else [])
+                                                          for a in obs.auctions]},
                           separators=(",", ":")).encode("utf-8")
         _write_atomic(folder / f"{obs.at_ms}.json.gz", gzip.compress(body, mtime=0))
         _write_atomic(folder / "index.json", json.dumps(sorted(times + [obs.at_ms])).encode("utf-8"))
@@ -102,7 +104,7 @@ class SnapshotStore:
             FileNotFoundError: Not stored.
         """
         data = json.loads(gzip.decompress((self._folder(market, src) / f"{at_ms}.json.gz").read_bytes()))
-        return IdBook(data["at"], tuple(Auction(*row) for row in data["auctions"]))
+        return IdBook(data["at"], tuple(Auction(*row[:5], len(row) > 5 and row[5] == 1) for row in data["auctions"]))
 
     def prune(self, market: str, src: str, before_ms: int) -> int:
         """Delete a folder's snapshots older than a cutoff (SPEC §3.2 book retention).

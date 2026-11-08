@@ -117,7 +117,7 @@ def test_BZ23_schema_12_carries_expired_share_and_schema_11_is_written_without_i
     intel = MarketIntelligence("forever.normal.horde.us", 1_000, 2_000, 1,
                                {2589: replace(ITEM, expired_share=0.25, undercut_share=0.3)})
     body = json.loads(to_json(intel))
-    assert INTEL_SCHEMA_VERSION == 12 and body["items"]["2589"]["expired_share"] == 0.25
+    assert INTEL_SCHEMA_VERSION >= 12 and body["items"]["2589"]["expired_share"] == 0.25
     assert from_json(to_json(intel)) == intel
     old = json.loads(to_json(intel, schema=11))
     assert old["schema_version"] == 11 and "expired_share" not in old["items"]["2589"]
@@ -129,3 +129,18 @@ def test_a_schema_9_document_reads_with_empty_cloud_fields():
     body = json.loads(to_json(MarketIntelligence("m", 1, None, 1, {2589: ITEM}), schema=9))
     intel = from_json(json.dumps(body))
     assert (intel.catalog, intel.coverage, intel.settings, intel.items[2589].last_hour) == ({}, (), {}, None)
+
+
+def test_BZ41_schema_13_carries_the_market_lines_and_schema_12_is_written_without_them():
+    sell = IntelWindow(114, 4, 115, 1.1, 1, 24, 20, 40, chance24=0.81)
+    buy = IntelWindow(31, 3, 31, 0.9, 1, 17, 20, 40, found_share=0.64)
+    item = replace(ITEM, commodity=True, sell_through=(0.79, 0.79, None), sell_through_how="mm-", supply7=14_859,
+                   supply14=14_859, sell_chance=0.744, sell_windows=(sell,), buy_windows=(buy,))
+    intel = replace(MarketIntelligence("forever.normal.horde.us", 1_000, 2_000, 1, {2589: item}), cancel_share=0.108)
+    assert from_json(to_json(intel)) == intel
+    old = json.loads(to_json(intel, schema=12))
+    assert old["schema_version"] == 12 and "cancel_share" not in old
+    assert not {"commodity", "sell_through", "sell_through_how", "supply7", "supply14", "sell_chance"} & set(old["items"]["2589"])
+    assert "chance24" not in old["items"]["2589"]["sell_windows"][0] and "found_share" not in old["items"]["2589"]["buy_windows"][0]
+    back = from_json(json.dumps(old)).items[2589]
+    assert back.sell_through == (None, None, None) and back.sell_windows[0].chance24 is None

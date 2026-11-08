@@ -16,7 +16,7 @@ import base64
 import gzip
 import json
 import zlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
@@ -235,12 +235,13 @@ def _auctions_of(body: bytes, name: str) -> list[dict] | None:
     return records if isinstance(records, list) else None
 
 
-def _auction(record: dict, suffixes: dict[int, int]) -> Auction | None:
+def _auction(record: dict, suffixes: dict[int, int], commodity: bool = False) -> Auction | None:
     """One record as an Auction.
 
     Args:
         record: A regular or commodity auction record.
         suffixes: Bonus id -> random suffix id.
+        commodity: The record came from the commodities list (bought cheapest first, BZ40).
 
     Returns:
         The auction; None for a regular auction with a bid and no buyout (no asking price, BZ3).
@@ -261,7 +262,8 @@ def _auction(record: dict, suffixes: dict[int, int]) -> Auction | None:
         return None
     if not isinstance(auction_id, int) or not isinstance(item.get("id"), int) or not isinstance(quantity, int):
         raise BlizzardError(f"auction {auction_id}: missing id, item or quantity")
-    return Auction(auction_id, item_key(item["id"], item.get("bonus_lists") or (), suffixes), quantity, price, band)
+    return Auction(auction_id, item_key(item["id"], item.get("bonus_lists") or (), suffixes), quantity, price, band,
+                   commodity)
 
 
 def parse_snapshot(market: str, auctions_body: bytes, commodities_body: bytes, at_ms: int,
@@ -288,12 +290,12 @@ def parse_snapshot(market: str, auctions_body: bytes, commodities_body: bytes, a
     if regular is None or commodities is None:
         return ParsedSnapshot(None, 0, True)
     auctions, bid_only, seen = [], 0, set()
-    for record in regular + commodities:
-        auction = _auction(record, suffixes)
+    for record, commodity in [(r, False) for r in regular] + [(r, True) for r in commodities]:
+        auction = _auction(record, suffixes, commodity)
         if auction is None:
             bid_only += 1
-        elif auction not in seen:                  # Blizzard's echo of the same record (BZ38)
-            seen.add(auction)
+        elif replace(auction, commodity=False) not in seen:   # Blizzard's echo of the same record (BZ38), in either list
+            seen.add(replace(auction, commodity=False))
             auctions.append(auction)
     return ParsedSnapshot(SnapshotObservation(market, SOURCE, at_ms, tuple(auctions)), bid_only, False)
 

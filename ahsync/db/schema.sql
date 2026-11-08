@@ -51,10 +51,14 @@ CREATE TABLE IF NOT EXISTS volume_cover(
 ) WITHOUT ROWID;
 
 -- Listings that ended per item and day from auction lifetimes (SPEC §2.4, M33a): ended, how many of them expired, and
--- how many matched a new listing of the same key and units (a possible relist, measured only), in listings.
+-- how many matched a new listing of the same key and units (a possible relist, measured only), in listings; then
+-- (M33b) commodity cancels in listings and units (BZ40), and the endings of listings posted at the lowest price with
+-- the share of them that left early and was no cancel, summed (BZ41), and 1 for an item in the commodities list.
 CREATE TABLE IF NOT EXISTS lifetimes_d1(
     market TEXT NOT NULL, key INTEGER NOT NULL, day INTEGER NOT NULL, src TEXT NOT NULL,
     ended REAL NOT NULL, expired REAL NOT NULL, matched REAL NOT NULL,
+    cancels REAL NOT NULL DEFAULT 0, cancelled REAL NOT NULL DEFAULT 0, t1_ended REAL NOT NULL DEFAULT 0,
+    t1_left REAL NOT NULL DEFAULT 0, commodity INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY(market, key, day, src)
 ) WITHOUT ROWID;
 

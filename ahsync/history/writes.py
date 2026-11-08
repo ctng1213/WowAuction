@@ -62,18 +62,21 @@ class HistoryWrites:
              for key, (sold, expired, listed) in sorted(rows.items())])
 
     def replace_lifetimes_day(self, market: str, day: int, src: str,
-                              rows: dict[int, tuple[float, float, float]]) -> None:
+                              rows: dict[int, tuple[float, ...]]) -> None:
         """Write one day's ended listings for one source whole (idempotent; SPEC §2.4 Auction lifetimes).
 
         Args:
             market: Market id.
             day: Day number.
             src: The id source, e.g. "blizzard".
-            rows: key -> (ended, expired, matched), each in listings.
+            rows: key -> (ended, expired, matched, cancels, cancelled units, t1_ended, t1_left, commodity 0/1), in
+                listings except cancelled (BZ40, BZ41).
         """
         self.conn.execute("DELETE FROM lifetimes_d1 WHERE market = ? AND day = ? AND src = ?", (market, day, src))
         self.conn.executemany(
-            "INSERT INTO lifetimes_d1(market, key, day, src, ended, expired, matched) VALUES (?, ?, ?, ?, ?, ?, ?)", [(market, key, day, src, *row) for key, row in sorted(rows.items())])
+            "INSERT INTO lifetimes_d1(market, key, day, src, ended, expired, matched, cancels, cancelled, t1_ended, "
+            "t1_left, commodity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [(market, key, day, src, *row[:7], int(row[7])) for key, row in sorted(rows.items())])
 
     def replace_new_listings_day(self, market: str, day: int, src: str, rows: dict[int, dict[int, float]]) -> None:
         """Write one day's new-listing positions for one source whole (idempotent; SPEC §3.3.2 u(p), BZ29).

@@ -310,3 +310,42 @@ def window_label(window: Window) -> str:
     if start_label[:3] == end_label[:3]:
         end_label = end_label[4:]
     return f"{start_label}–{end_label}"
+
+
+
+def found_share(closes: Sequence[tuple[int, int]], start_slot: int, hours: int, price: int | None, now_ms: int,
+                half_life_weeks: float) -> float | None:
+    """How often a buying window offered its price: Best Buy Time's percentage (SPEC §4.3 TT38).
+
+    Each occurrence of the window (its run of hours in one week, the one in progress now included) with hourly
+    closes has a lowest close there; the share of those occurrences at or below the price, each weighted by
+    `recency_weight` of its age in whole weeks back from the newest occurrence that has started.
+
+    Args:
+        closes: (hour ms, close copper) pairs.
+        start_slot: The window's first hour of the week (0 = Mon 00:00 UTC).
+        hours: Its length in hours.
+        price: Its expected price, copper; None without a forecast.
+        now_ms: Now; closes after it are ignored.
+        half_life_weeks: pattern_half_life_weeks.
+
+    Returns:
+        Σ weight of the weeks found at or below the price ÷ Σ weight of the weeks seen, 0-1; None without a price or
+        before any week has a close in the window.
+    """
+    if price is None:
+        return None
+    now_hour = now_ms // HOUR_MS
+    newest = now_hour - (slot_of(now_hour) - start_slot) % SLOTS      # the newest occurrence's first hour
+    lowest: dict[int, int] = {}
+    for t, close in closes:
+        hour = t // HOUR_MS
+        into = (slot_of(hour) - start_slot) % SLOTS
+        if t > now_ms or into >= hours:
+            continue
+        age = (newest - (hour - into)) // SLOTS
+        lowest[age] = min(close, lowest.get(age, close))
+    if not lowest:
+        return None
+    weights = {age: recency_weight(age, half_life_weeks) for age in lowest}
+    return sum(w for age, w in weights.items() if lowest[age] <= price) / sum(weights.values())

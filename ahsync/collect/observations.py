@@ -110,9 +110,11 @@ def recompute_id_days(db: Database, store: SnapshotStore, market: str, src: str,
                 row[1] += f.expired
                 row[2] += f.listed
                 if f.ended:
-                    tally = ended.setdefault(key, [0.0, 0.0, 0.0])
-                    for i, value in enumerate((f.ended, f.expired_listings, f.matched)):
+                    tally = ended.setdefault(key, [0.0] * 8)
+                    for i, value in enumerate((f.ended, f.expired_listings, f.matched, f.cancels, f.cancelled,
+                                               f.t1_ended, f.t1_left)):
                         tally[i] += value
+                    tally[7] = max(tally[7], float(f.commodity))
         db.replace_volume_day(market, day, src, {k: tuple(v) for k, v in sorted(volume.items())}, ID_METHOD_VERSION,
                               ("ids", covered_seconds(gaps)) if gaps else None)
         db.replace_lifetimes_day(market, day, src, {k: tuple(v) for k, v in sorted(ended.items())})

@@ -314,3 +314,18 @@ def test_schema_26_adds_where_a_vendor_price_came_from_and_keeps_the_items(tmp_p
     assert migrated.get_meta("schema_version") == str(db_module.SCHEMA_VERSION)
     assert migrated.conn.execute("SELECT key, vendor_sell, vendor_src FROM items").fetchall() == [(3486, 50, None)]
     migrated.close()
+
+def test_schema_27_keeps_the_ended_listings_and_adds_cancels_and_lowest_price_endings(tmp_path):
+    db = Database.open(tmp_path / "v26.db", T0, None)                  # a schema-26 database: before BZ40 and BZ41
+    db.conn.executescript(
+        "DROP TABLE lifetimes_d1; CREATE TABLE lifetimes_d1(market TEXT NOT NULL, key INTEGER NOT NULL, day INTEGER NOT NULL, "
+        "src TEXT NOT NULL, ended REAL NOT NULL, expired REAL NOT NULL, matched REAL NOT NULL, "
+        "PRIMARY KEY(market, key, day, src)) WITHOUT ROWID; "
+        "INSERT INTO lifetimes_d1 VALUES ('m', 2589, 20400, 'blizzard', 40, 10, 2);")
+    db.set_meta("schema_version", "26")
+    db.close()
+    migrated = Database.open(tmp_path / "v26.db", T0, None)
+    assert migrated.get_meta("schema_version") == str(db_module.SCHEMA_VERSION)
+    assert migrated.conn.execute("SELECT * FROM lifetimes_d1").fetchall() == [
+        ("m", 2589, 20400, "blizzard", 40, 10, 2, 0, 0, 0, 0, 0)]
+    migrated.close()
