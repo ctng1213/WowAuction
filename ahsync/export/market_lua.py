@@ -5,14 +5,21 @@ needs an item (SPEC §5.1 lazy decode):
 
     I[key] = "cur,curQty,curAgeMin,med7,med30,p10,p90,trend10,sold10,listed10,supply,conf,
               seasonality,postPrice,refStack,sellValue,volumeUnknown,chance1000,typicalSupply,suspect,closes30,
-              med14;sellWindows;buyWindows"
+              med14,salesDays,supply7,supply14,sellChance1000,st7,st14,st30,stHow,commodity;sellWindows;buyWindows"
+    (trailing empty fields are left out: a missing field is unavailable, as an empty one)
     C[key] = the sell-probability curve, one character per point (SPEC §3.1.1)
 
 - Numbers are integers; an empty field is unavailable, never 0. Money is copper,
   ages are minutes before generatedAt, trend is tenths of a % per day, sales and
   listings per day are in tenths, and chance1000 is the chance a reference stack posted now
   sells, in thousandths (the addon's own sell options use it, A15).
-- A window is "start:hours:best:how1000:weeks" (UTC slots, how_avg in thousandths),
+- M33b (EXPORT_VERSION 6; SPEC §4.3 TT35-TT40): st7, st14 and st30 are the sell-through at the lowest price in
+  thousandths, stHow one letter per lookback (m measured, e est., c class est., - none; "" when all are none),
+  sellChance1000 the 24 h posting-now chance at cur (Sell Chance Now), commodity 1 or 0 ("" unknown). Each market
+  carries coverage30, the hours observed in the 720 before generatedAt's hour (the tooltip header's coverage).
+  The fields a local market never has come last, so the trailing-empty rule keeps the file within its 2 MB.
+- A window is "start:hours:best:how1000:weeks[:pct1000]" (UTC slots, how_avg in thousandths; pct1000 a selling
+  window's 24 h chance or a buying window's found share, in thousandths, left out when unknown; M33b),
   windows joined by "/", best first. Shortlist items carry every window the intelligence
   holds (top_sell_windows, top_buy_windows); tooltip-only items (not on the shortlist) only
   the top selling and the top buying window (EX19).
@@ -46,7 +53,8 @@ from ahsync.intel.contract import IntelWindow, ItemIntel, MarketIntelligence, ag
 MARKET_SCHEMA_VERSION = 1      # the addon refuses any other (FM17)
 # Bumped on ANY change to either addon file's format, additive or not, so an addon and an AHSync of
 # different builds say which side is stale (SPEC §3.5, FM34, FM35). Equals AHProfit.EXPORT_VERSION (Core/Market.lua).
-EXPORT_VERSION = 5              # 5: market items end in salesDays (EX21); 4: K, G and the portfolio snapshot (EX17, EX18); 3: closes30
+EXPORT_VERSION = 6              # 6: the tooltip's market lines: sell-through, supply 7/14, Sell Chance Now, windows'
+                                # percentages, coverage30 (M33b); 5: market items end in salesDays (EX21); 4: K, G and the portfolio snapshot (EX17, EX18); 3: closes30
                                 # (TT23, PP4); 2: a mail's recipient (EX16)
 HOUR_MS = 3_600_000
 MINUTE_MS = 60_000
@@ -93,6 +101,18 @@ def _num(value: int | None) -> str:
     return "" if value is None else str(value)
 
 
+def _milli(value: float | None) -> str:
+    """A share in thousandths, rounded half up; "" when unavailable.
+
+    Args:
+        value: 0-1, or None.
+
+    Returns:
+        floor(value × 1000 + 0.5) as text, or "".
+    """
+    return "" if value is None else str(round_half_up(value * 1000))
+
+
 def _tenths(value: float | None) -> str:
     """A float field in tenths, rounded half up; "" when unavailable.
 
@@ -106,7 +126,7 @@ def _tenths(value: float | None) -> str:
 
 
 def windows_text(windows: Sequence[IntelWindow]) -> str:
-    """Windows as "start:hours:best:how1000:weeks", joined by "/".
+    """Windows as "start:hours:best:how1000:weeks[:pct1000]", joined by "/".
 
     Args:
         windows: Best first.
@@ -115,7 +135,8 @@ def windows_text(windows: Sequence[IntelWindow]) -> str:
         The text; "" for none.
     """
     return "/".join(f"{w.start_slot}:{w.hours}:{w.best_slot}:{round_half_up(w.how_avg * 1000)}:{w.weeks}"
-                    for w in windows)
+                    + (f":{_milli(pct)}" if (pct := w.chance24 if w.chance24 is not None else w.found_share) is not None
+                       else "") for w in windows)
 
 
 def item_text(s: ItemIntel, full: bool = True) -> str:
@@ -137,8 +158,11 @@ def item_text(s: ItemIntel, full: bool = True) -> str:
               str(round_half_up(s.chance * 1000)), _num(s.median_daily_supply),          # EX10
               "1" if s.cur_suspect else "0", _num(s.closes_30d),                      # A58; TT23
               _num(s.med14),                                                          # EX20
-              _num(sum(s.days_by_source.values()) if s.days_by_source else None)]     # EX21: salesDays, last
-    return f"{','.join(fields)};{windows_text(s.sell_windows[:top])};{windows_text(s.buy_windows[:top])}"
+              _num(sum(s.days_by_source.values()) if s.days_by_source else None),     # EX21: salesDays
+              _num(s.supply7), _num(s.supply14), _milli(s.sell_chance),               # M33b, TT36, TT37
+              *(_milli(r) for r in s.sell_through), "" if s.sell_through_how == "---" else s.sell_through_how,
+              "" if s.commodity is None else ("1" if s.commodity else "0")]           # M33b, TT37-TT39
+    return f"{','.join(fields).rstrip(',')};{windows_text(s.sell_windows[:top])};{windows_text(s.buy_windows[:top])}"
 
 
 def trim_curve(curve: str, full: bool) -> str:
@@ -317,7 +341,8 @@ def market_lua(intels: Sequence[MarketIntelligence], shortlists: Mapping[str, se
                char_markets: Mapping[str, str], generated_ms: int,
                disenchantable: Mapping[int, str] | None = None, vendor: Mapping[int, int] | None = None,
                flips: Mapping[str, Mapping[int, str]] | None = None, window_hours: int = 8,
-               candidates: Mapping[str, Sequence[str]] | None = None, graphs: Mapping[str, Graph] | None = None) -> str:
+               candidates: Mapping[str, Sequence[str]] | None = None, graphs: Mapping[str, Graph] | None = None,
+               coverage30: Mapping[str, int] | None = None) -> str:
     """The whole MarketIntelligence.lua (SPEC §3.5, EX2).
 
     Args:
@@ -332,6 +357,7 @@ def market_lua(intels: Sequence[MarketIntelligence], shortlists: Mapping[str, se
         window_hours: sell_window_hours, for the shortlist's supply factors (EX13).
         candidates: Market -> its K strings in export order (portfolio_lua.candidate_text, EX17); none when absent.
         graphs: Market -> its dependency graph (EX18); an empty one when absent.
+        coverage30: Market -> hours observed in the last 720 (TT40); 0 when absent.
 
     Returns:
         Lua source defining the global AHProfitMarket.
@@ -353,7 +379,7 @@ def market_lua(intels: Sequence[MarketIntelligence], shortlists: Mapping[str, se
         rows = _supply_rows(intel, shortlists.get(intel.market, set()) & exported, window_hours)
         entries.append(f"  [{lua_string(intel.market)}] = {{ observationsUntil = {until}, "
                        f"curveHour = {intel.built_ms // HOUR_MS}, I = I{n}, C = C{n}, D = D{n}, F = {{ {offers} }}, "
-                       f"S = {{ {rows} }}, K = K{n}, G = G{n} }},")
+                       f"S = {{ {rows} }}, K = K{n}, G = G{n}, coverage30 = {(coverage30 or {}).get(intel.market, 0)} }},")
     chars = ", ".join(f"[{lua_string(c)}] = {lua_string(m)}" for c, m in sorted(char_markets.items()))
     vendors = ", ".join(f"[{key}] = {price}" for key, price in sorted((vendor or {}).items()))
     lines += ["AHProfitMarket = {", f"  schemaVersion = {MARKET_SCHEMA_VERSION},",

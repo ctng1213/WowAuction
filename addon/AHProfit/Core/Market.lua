@@ -13,15 +13,19 @@ AHProfit.Market = Market
 Market.SCHEMA_VERSION = 1          -- must equal ahsync/export/market_lua.py MARKET_SCHEMA_VERSION (FM17)
 -- The build of both generated files' format; must equal ahsync/export/market_lua.py EXPORT_VERSION. A file of
 -- another build says which side is stale (FM34, FM35). Core/Plan.lua, which loads after this file, reads it too.
-AHProfit.EXPORT_VERSION = 5            -- 5: market items end in salesDays (EX21); 4: K, G and the portfolio
+AHProfit.EXPORT_VERSION = 6            -- 6: the tooltip's market lines (M33b); 5: market items end in salesDays (EX21); 4: K, G and the portfolio
                                        -- snapshot (EX17, EX18); 3: closes30 (TT23, PP4); 2: a mail's recipient (C22)
 Market.CACHE_LIMIT = 500           -- decoded items kept before the cache starts again
 Market.FIELDS = { "cur", "curQty", "curAgeMin", "med7", "med30", "p10", "p90", "trend10", "sold10", "listed10",
                   "supply", "conf", "seasonality", "postPrice", "refStack", "sellValue", "volumeUnknown",
-                  "chance1000", "typicalSupply", "suspect", "closes30", "med14", "salesDays" }   -- typicalSupply:
+                  "chance1000", "typicalSupply", "suspect", "closes30", "med14", "salesDays", "supply7", "supply14",
+                  "sellChance1000", "st7", "st14", "st30", "stHow", "commodity" }   -- typicalSupply:
                                   -- median daily listed units (EX10); suspect: 1 when AHSync hasn't confirmed cur (A58);
                                   -- closes30: hourly closes in 30 days (TT23); med14: the 14-day median (EX20);
-                                  -- salesDays: days of the last 7 with sales data behind sold10 (EX21, TT32)
+                                  -- salesDays: days of the last 7 with sales data behind sold10 (EX21, TT32);
+                                  -- M33b (TT35-TT39): supply over 7 and 14 days, Sell Chance Now in thousandths,
+                                  -- sell-through in thousandths per lookback, stHow its letters (m, e, c, -; text, not
+                                  -- a number), commodity 1 or 0; trailing empty fields are left out
 
 local state = nil                  -- { status, market = { I, C, observationsUntil, curveHour }, file } once checked
 local cache, cached = {}, 0
@@ -119,14 +123,14 @@ function Market.Problem()
   })[status]
 end
 
---- Split "a:b:c:d:e/..." windows.
+--- Split "a:b:c:d:e:f/..." windows (f, the percentage, since M33b; empty when unknown).
 ---@param text string  Windows, best first
----@return table[]     { start, hours, best, how, weeks } each; how as a ratio
+---@return table[]     { start, hours, best, how, weeks, pct } each; how as a ratio, pct in thousandths or nil
 local function DecodeWindows(text)
   local out = {}
-  for s, h, b, r, w in text:gmatch("(%d+):(%d+):(%d+):(%d+):(%d+)") do
+  for s, h, b, r, w, p in text:gmatch("(%d+):(%d+):(%d+):(%d+):(%d+):?(%d*)") do
     out[#out + 1] = { start = tonumber(s), hours = tonumber(h), best = tonumber(b), how = tonumber(r) / 1000,
-                      weeks = tonumber(w) }
+                      weeks = tonumber(w), pct = tonumber(p) }
   end
   return out
 end
@@ -139,7 +143,9 @@ function Market.Decode(text)
   local item, i = {}, 0
   for field in (numbers .. ","):gmatch("([^,]*),") do
     i = i + 1
-    if Market.FIELDS[i] then item[Market.FIELDS[i]] = tonumber(field) end   -- a newer AHSync's extra fields: ignored
+    local name = Market.FIELDS[i]                    -- a newer AHSync's extra fields: ignored
+    if name == "stHow" then item.stHow = field ~= "" and field or nil
+    elseif name then item[name] = tonumber(field) end
   end
   item.trend = item.trend10 and item.trend10 / 10
   item.soldPerDay = item.sold10 and item.sold10 / 10
@@ -181,6 +187,14 @@ function Market.Curve(key)
   local full = #text == 24 * #SellProb.CURVE_AHEAD
   return { rows = SellProb.DecodeCurve(text, full and #SellProb.CURVE_AHEAD or 3),
            aheadPoints = full and SellProb.CURVE_AHEAD or { 0, 5, 20 }, refreshMs = s.market.curveHour * 3600000 }
+end
+
+--- The hours this market was observed in the last 30 days, for the tooltip header's coverage (TT40).
+---@return number|nil  Hours of the last 720; nil without usable data or in a file from before M33b
+function Market.Coverage30()
+  local s = State()
+  if s.status ~= "ok" then return nil end
+  return s.market.coverage30
 end
 
 --- When the file was written and the newest observation it holds, for the age badge.

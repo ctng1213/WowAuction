@@ -1,4 +1,5 @@
---- The tooltip's 14 variants (SPEC §4.3, docs/mockups/addon.html sections 3 and 3b; TT8-TT21, TT25-TT31, UI17) as the facts
+--- The tooltip's 14 variants (SPEC §4.3, docs/mockups/addon.html sections 3 and 3b, sell-through.html; TT8-TT21,
+--- TT27-TT31, TT34-TT41, UI17) as the facts
 --- UI/Tooltip.lua gathers, for TooltipView's specs and the UI17 layout check. Monday 10:38 UTC, local time UTC,
 --- the market file 2 h old. Each variant's Do comes from TooltipView.DoOf over plain plan actions, so the specs
 --- check which action applies as well as its words.
@@ -37,9 +38,11 @@ end
 ---@param price number  Copper
 ---@param weeks number
 ---@param now boolean|nil
----@return table        { slot, price, weeks, now }
-local function Win(day, hour, price, weeks, now)
-  return { slot = day * 24 + hour, price = price, weeks = weeks, now = now }
+---@param pct1000 number|nil  The window's percentage in thousandths (TT38)
+---@return table        { slot, price, weeks, now, pct1000, est }
+---@param est boolean|nil     A selling window of an item that is no commodity (TT38)
+local function Win(day, hour, price, weeks, now, pct1000, est)
+  return { slot = day * 24 + hour, price = price, weeks = weeks, now = now, pct1000 = pct1000, est = est }
 end
 
 --- Units held in bags.
@@ -52,15 +55,20 @@ end
 --- One variant's facts.
 ---@param TV table        AHProfit.TooltipView
 ---@param doCtx table|nil TW.Ctx's, or nil for no Do line
----@param body table      { cur, ageText, med7, med14, med30, listed, sold (per day), salesDays, sell, buy, mats,
----                       holdings }
+---@param body table      { cur, ageText, med7, med14, med30, listed, supply ({ 7d, 14d, 30d } or nil), chance
+---                       (thousandths), commodity, st ({ 7d, 14d, 30d } thousandths), stHow, sell, buy, mats,
+---                       vendor (copper per unit), holdings }
 ---@param age table|nil   { text, amber }; default "data 2 h old"
 ---@return table          TooltipView.Lines' facts
 local function Facts(TV, doCtx, body, age)
-  return { age = age or { text = "data 2 h old", amber = false }, doing = doCtx and TV.DoOf(doCtx), offsetMs = 0,
+  local supply = body.supply or {}
+  return { age = age or { text = "data 2 h old", amber = false }, coverage = 33, doing = doCtx and TV.DoOf(doCtx),
+           offsetMs = 0,
            market = { cur = body.cur, ageText = body.ageText or "2 h", med7 = body.med7, med14 = body.med14,
-                      med30 = body.med30, listed = body.listed, soldPerDay = body.sold, salesDays = body.salesDays },
-           sell = body.sell, buy = body.buy, mats = body.mats, holdings = body.holdings }
+                      med30 = body.med30, listed = body.listed, supply7 = supply[1], supply14 = supply[2],
+                      supply30 = supply[3], chance1000 = body.chance, chancePrice = body.cur, commodity = body.commodity,
+                      st = body.st or {}, stHow = body.stHow },
+           sell = body.sell, buy = body.buy, mats = body.mats, vendor = body.vendor, holdings = body.holdings }
 end
 
 --- Copper Rod in Brugan's bags, posting 5 now at 41 s (variants 1, 12 and 14).
@@ -74,9 +82,10 @@ local function CopperRod(TV, age, friday)
   local post = { id = "p", kind = "post", key = TW.ROD, qty = 5, price = 4100, at = now, net = 6306, chance = 58 }
   local inside = TV.InWindow(sell, now)
   return Facts(TV, TW.Ctx({ key = TW.ROD, held = 5, actions = { post }, nowMs = now, sellNow = inside }),
-    { cur = 4200, med7 = 4000, med14 = 4300, med30 = 4500, listed = 14, sold = 6, salesDays = 2,
-      sell = Win(4, 18, 4500, 4, inside),
-      buy = Win(0, 3, 3800, 2), holdings = Bags(5) }, age)
+    { cur = 4200, med7 = 4000, med14 = 4300, med30 = 4500, listed = 14, supply = { 12, 12, 11 }, chance = 744,
+      commodity = 1, st = { 790, 785, 780 }, stHow = "mmm",
+      sell = Win(4, 18, 4500, 4, inside, 810),
+      buy = Win(0, 3, 3800, 2, nil, 640), vendor = 300, holdings = Bags(5) }, age)
 end
 
 --- Copper Bar's market lines (variants 4 and 5).
@@ -118,8 +127,9 @@ function TW.Variants(TV, VM)
         allActions = { mail, mailCraft } }), CopperBarBody()) },
     { "6 disenchant", Facts(TV, TW.Ctx({ key = 7005, held = 1, deValue = 1425, actions = { { id = "d", kind = "de",
         key = 7005, qty = 1, at = TW.NOW, net = 625, chance = 100 } } }),
-      { cur = 800, med7 = 1000, med14 = 1050, med30 = 1100, listed = 400, sold = 210, sell = Win(5, 17, 1230, 2),
-        buy = Win(0, 3, 710, 2), mats = gloveMats, holdings = Bags(1) }) },
+      { cur = 800, med7 = 1000, med14 = 1050, med30 = 1100, listed = 400, supply = { 420, 430, 450 }, chance = 50,
+        commodity = 0, st = { 62, 62, 62 }, stHow = "eee", sell = Win(5, 17, 1230, 2, nil, 90, true),
+        buy = Win(0, 3, 710, 2), mats = gloveMats, vendor = 24, holdings = Bags(1) }) },
     { "7 AH listing on your Shopping list", Facts(TV, TW.Ctx({ key = TW.BAR, listing = true,
         shopping = { qty = 6, price = 1000, purpose = "for Copper Rod" } }),
       { cur = 980, ageText = "now", med7 = 960, med14 = 955, med30 = 950, listed = 150, sold = 40, sell = Win(5, 18, 1200, 7),
@@ -131,7 +141,7 @@ function TW.Variants(TV, VM)
       { cur = 25, med7 = 24, med14 = 24, med30 = 24, listed = 200, sold = 30, sell = Win(6, 19, 27, 2), buy = Win(1, 3, 26, 2),
         holdings = Bags(13) }) },
     { "10 vendor", Facts(TV, TW.Ctx({ key = 3300, held = 4, own = { kind = "vendor", price = 12 } }),
-      { med30 = 10, listed = 0, sold = 0, holdings = Bags(4) }) },
+      { med30 = 10, listed = 0, vendor = 3, holdings = Bags(4) }) },
     { "11 no market data", { age = { text = "data 2 h old", amber = false }, noData = true } },
     { "12 stale data (more than 24 h old)", CopperRod(TV, VM.Age(TW.NOW - 2 * TW.DAY, TW.NOW)) },
     { "13 AH listing on none of your lists", Facts(TV, TW.Ctx({ key = 2996, listing = true }),

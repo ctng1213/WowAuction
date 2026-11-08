@@ -169,11 +169,11 @@ def test_EX14_both_addon_files_carry_export_version_4_after_schema_version_outsi
     now = FakeClock().now_ms()
     cfg, folder = plan_with_one_action(db, tmp_path, now)
     assert addon_files.export_market(db, cfg, now, lambda s: None) and addon_files.export_plan(db, cfg, now, lambda s: None)
-    assert addon_files.EXPORT_VERSION == 5                  # 5: salesDays (EX21); 4: K, G, the portfolio (EX17, EX18)
+    assert addon_files.EXPORT_VERSION == 6                  # 6: the market lines (M33b); 5: salesDays (EX21); 4: K, G (EX17)
     for name in ("MarketIntelligence.lua", "PortfolioPlan.lua"):
         header = (folder / name).read_text(encoding="utf-8").splitlines()
         at = header.index("  schemaVersion = 1,")
-        assert header[at + 1] == "  exportVersion = 5,"
+        assert header[at + 1] == "  exportVersion = 6,"
     plan = (folder / "PortfolioPlan.lua").read_text(encoding="utf-8")
     action = f"a1;post;{LINEN};20;55;{now};1046;;;pending;80;;;;"
     # The action string and Brugan's gold ("100," with no snapshot time): the export version counts in neither.
@@ -192,8 +192,8 @@ def test_EX15_each_written_addon_file_is_logged_with_its_size_time_and_contents(
     market_bytes = (folder / "MarketIntelligence.lua").stat().st_size
     plan_bytes = (folder / "PortfolioPlan.lua").stat().st_size
     assert [r.getMessage() for r in caplog.records if r.levelname == "INFO"] == [
-        f"wrote MarketIntelligence.lua: {market_bytes} bytes, generatedAt {now}, exportVersion 5, 1 items",
-        f"wrote PortfolioPlan.lua: {plan_bytes} bytes, generatedAt {now}, exportVersion 5, 1 open actions"]
+        f"wrote MarketIntelligence.lua: {market_bytes} bytes, generatedAt {now}, exportVersion 6, 1 items",
+        f"wrote PortfolioPlan.lua: {plan_bytes} bytes, generatedAt {now}, exportVersion 6, 1 open actions"]
 
     caplog.clear()
 
@@ -319,3 +319,20 @@ def test_a_recipe_loop_is_cut_in_the_exported_graph_and_logged(db, tmp_path, cap
     assert f"recipe loop on {M}: item 2770 is not followed back into spell 2657 (C13)" in caplog.text
     text = (tmp_path / "Interface" / "AddOns" / "AHProfit_Data" / "MarketIntelligence.lua").read_text(encoding="utf-8")
     assert 'U[2770]="2657"' not in text and 'U[2840]="7818,9001"' in text and "K[1]" not in text
+
+
+def test_coverage30_counts_a_cloud_summarys_hours_or_the_local_observed_hours_in_the_last_720(tmp_path):
+    hour = 3_600_000
+    now = 500_000 * hour + 20 * 60_000                       # 20 min into hour 500000: the window is 499280-499999
+    db = Database.open(tmp_path / "c.db", now, None)
+    try:
+        cloud = MarketIntelligence("m", now, now, 1, {}, coverage=((499_000, 499_300), (499_990, 500_000)))
+        assert addon_files.coverage30(db, cloud, now) == 21 + 10    # 499280-499300 and 499990-499999; the hour now not yet
+        with db.transaction():
+            db.add_observed_hours("m", "local", [499_279, 499_280, 499_500])
+            db.add_observed_hours("m", "ahf", [499_500, 499_999])
+        local = MarketIntelligence("m", now, now, 1, {})
+        assert addon_files.coverage30(db, local, now) == 3           # union of sources; 499279 is outside
+        assert addon_files.coverage30(db, MarketIntelligence("n", now, now, 1, {}), now) == 0
+    finally:
+        db.close()

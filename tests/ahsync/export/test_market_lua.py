@@ -31,13 +31,13 @@ def test_EX2_the_file_holds_compact_item_strings_curves_and_a_checked_header():
     text = market_lua.market_lua([intel(LINEN_INTEL, EMPTY, replace(EMPTY, key=OTHER))], {M: {SHORT}},
                                  {"Amaya-Grommash": M}, BUILT)
     assert f'I[{LINEN}]="45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900,,0,,,7;138:4:139:1120:7;"' in text
-    assert f'I[{SHORT}]=",,,,,,,0,,,,6,,,1,,1,250,,0,,,;;"' in text and f"I[{OTHER}]" not in text
+    assert f'I[{SHORT}]=",,,,,,,0,,,,6,,,1,,1,250,,0;;"' in text and f"I[{OTHER}]" not in text
     linen_curve = market_lua.trim_curve(CURVE, False)
     assert f'C[{LINEN}]="{linen_curve}"' in text and f"C[{SHORT}]" not in text
-    strings = len("45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900,,0,,,7;138:4:139:1120:7;") + 3 + len(",,,,,,,0,,,,6,,,1,,1,250,,0,,,;;")
+    strings = len("45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900,,0,,,7;138:4:139:1120:7;") + 3 + len(",,,,,,,0,,,,6,,,1,,1,250,,0;;")
     assert f'checksum = "3:{strings}"' in text and "schemaVersion = 1," in text and f"generatedAt = {BUILT}," in text
     assert f'charMarkets = {{ ["Amaya-Grommash"] = "{M}" }}' in text
-    assert f'["{M}"] = {{ observationsUntil = {BUILT - HOUR}, curveHour = {BUILT // HOUR}, I = I1, C = C1, D = D1, F = {{  }}, S = {{  }}, K = K1, G = G1 }},' in text
+    assert f'["{M}"] = {{ observationsUntil = {BUILT - HOUR}, curveHour = {BUILT // HOUR}, I = I1, C = C1, D = D1, F = {{  }}, S = {{  }}, K = K1, G = G1, coverage30 = 0 }},' in text
 
 
 def test_AR6_the_shortlist_keeps_the_full_curve_and_others_get_the_0_5_20_columns_unchanged():
@@ -112,13 +112,13 @@ def test_EX10_each_item_ends_in_its_typical_daily_supply():
 def test_EX20_each_item_ends_in_its_14_day_median():
     from ahsync.export.market_lua import item_text
     numbers = item_text(replace(LINEN_INTEL, med14=52)).split(";")[0].split(",")
-    assert (numbers[-2], numbers[-3], len(numbers)) == ("52", "", 23)              # after closes30, before salesDays
-    assert item_text(LINEN_INTEL).split(";")[0].split(",")[-2] == ""                 # unknown: empty, never 0
+    assert (numbers[21], numbers[20], len(numbers)) == ("52", "", 23)              # after closes30, before salesDays
+    assert item_text(LINEN_INTEL).split(";")[0].split(",")[21] == ""                 # unknown: empty, never 0
 
 
 def test_EX21_each_item_ends_in_its_days_of_sales_data():
     from ahsync.export.market_lua import item_text
-    last = lambda intel: item_text(intel).split(";")[0].split(",")[-1]            # noqa: E731
+    last = lambda intel: (item_text(intel).split(";")[0].split(",") + [""] * 23)[22]   # noqa: E731  salesDays; trailing empties left out
     assert last(replace(LINEN_INTEL, days_by_source={"blizzard": 2})) == "2"       # thin: 2 of the last 7 days
     assert last(replace(LINEN_INTEL, days_by_source={"ahf": 4, "blizzard": 3})) == "7"
     assert last(replace(LINEN_INTEL, days_by_source={})) == ""                     # no sales data: empty, never 0
@@ -168,3 +168,19 @@ def test_ages_count_back_from_the_export_for_a_cloud_document_too():
     assert aged_at(cloud, 5_200_000).items[2589].cur_age_ms == 1_200_000        # 10 min old + 10 min since
     desktop = replace(cloud, ages_at_ms=None)
     assert aged_at(desktop, 1_600_000).items[2589].cur_age_ms == 1_200_000      # a desktop document counts from built
+
+
+def test_the_tooltips_market_lines_travel_after_sales_days():
+    from ahsync.export.market_lua import item_text
+    item = replace(LINEN_INTEL, sell_through=(0.7872, 0.79, None), sell_through_how="mc-", supply7=14_859,
+                   supply14=14_860, sell_chance=0.7444, commodity=True,
+                   sell_windows=(IntelWindow(138, 4, 139, 1.12, 7, chance24=0.8125),),
+                   buy_windows=(IntelWindow(3, 3, 4, 0.85, 7, found_share=0.64),))
+    numbers, sell, buy = item_text(item).split(";")
+    assert numbers.split(",")[23:] == ["14859", "14860", "744", "787", "790", "", "mc-", "1"]   # thousandths, half up
+    assert (sell, buy) == ("138:4:139:1120:7:813", "3:3:4:850:7:640")
+    gear = item_text(replace(LINEN_INTEL, commodity=False)).split(";")[0].split(",")
+    assert gear[26] == "" and gear[30] == "0"                                    # no rates; not a commodity
+    assert item_text(LINEN_INTEL).split(";")[0].endswith(",7")                   # trailing empty fields are left out
+    text = market_lua.market_lua([intel(item)], {}, {}, BUILT, coverage30={M: 33})
+    assert "coverage30 = 33 }," in text and "exportVersion = 6," in text

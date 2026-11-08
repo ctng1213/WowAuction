@@ -92,12 +92,16 @@ end
 ---@param item table
 ---@param cur number|nil
 ---@param nowMs number
----@return table|nil, table|nil  sell, buy: { slot (the best hour), price, weeks, now }, the buy with cheaperNow
+---@return table|nil, table|nil  sell, buy: { slot (the best hour), price, weeks, now, pct1000 }, the sell with est
+---                               (no commodity, TT38), the buy with cheaperNow
 local function Windows(item, cur, nowMs)
   local sell, buy = nil, nil
   local s = item.sellWindows[1]
   local sp = s and WindowPrice(item, s, nowMs)
-  if sp then sell = { slot = s.best, price = sp, weeks = s.weeks, now = TV.InWindow(s, nowMs) } end
+  if sp then
+    sell = { slot = s.best, price = sp, weeks = s.weeks, now = TV.InWindow(s, nowMs), pct1000 = s.pct,
+             est = item.commodity == 0 }
+  end
   local b = item.buyWindows[1]
   local bp = b and WindowPrice(item, b, nowMs)
   if bp then
@@ -106,7 +110,8 @@ local function Windows(item, cur, nowMs)
       local p = WindowPrice(item, w, nowMs)
       if not p or cur == nil or cur >= p then cheaper = false end
     end
-    buy = { slot = b.best, price = bp, weeks = b.weeks, now = TV.InWindow(b, nowMs), cheaperNow = cheaper }
+    buy = { slot = b.best, price = bp, weeks = b.weeks, now = TV.InWindow(b, nowMs), cheaperNow = cheaper,
+            pct1000 = b.pct }
   end
   return sell, buy
 end
@@ -237,18 +242,30 @@ local function HoldingsOf(db, key, nowMs)
   return out
 end
 
+--- An item's vendor price per unit: the client's, else the saved itemNames row's (A92); nil when unknown (TT41).
+--- Never registers for GET_ITEM_INFO_RECEIVED: a tooltip on screen has its item cached, and the client redraws a
+--- first-seen link itself.
+---@param key number
+---@return number|nil  Copper
+local function VendorOf(key)
+  local price = select(3, Adapter.ItemInfo(VM.BaseItemId(key)))
+  if price ~= nil then return price end
+  local row = ((DB.Get() or {}).itemNames or {})[key]
+  return row and select(3, AHProfit.ItemNames.Parse(row)) or nil
+end
+
 --- What to do with the item, for the Do line (SPEC §4.3).
 ---@param key number
 ---@param item table
 ---@param nowMs number
----@param facts table  { atAH, cur, deValue, sell, buy }
+---@param facts table  { atAH, cur, deValue, sell, buy, vendor (copper per unit or nil) }
 ---@return table|nil   TooltipView.DoOf's
 local function DoFor(key, item, nowMs, facts)
   local db, info = DB.Get() or {}, Adapter.PlayerInfo()
   local charId = info.name .. "-" .. info.realm
   local held, inBags = HeldOf(db, charId, key)
   local actions = Plan.CharacterActions(charId)
-  local own = held > 0 and Options.SellOne(key, held, item, select(3, Adapter.ItemInfo(VM.BaseItemId(key))), nowMs, charId) or nil
+  local own = held > 0 and Options.SellOne(key, held, item, facts.vendor, nowMs, charId) or nil
   return TV.DoOf({ key = key, held = held, reserve = Reserves.Get(db, charId)[key], listing = facts.atAH and inBags == 0,
                    shopping = ShoppingOf(actions, key), actions = actions, allActions = Plan.AllActions,
                    unfunded = UnfundedOf(key), own = own, deValue = facts.deValue, usedBy = UsedBy(charId),
@@ -272,10 +289,14 @@ function Tooltip.Lines(key, nowMs)
   local cur, ageText, listed = PriceNow(key, item, nowMs, atAH)
   local sell, buy = Windows(item, cur, nowMs)
   local canDE, deValue, mats = DisenchantValue(key)
-  local facts = { atAH = atAH, deValue = deValue, sell = sell, buy = buy }
-  return TV.Lines({ age = age, doing = DoFor(key, item, nowMs, facts), offsetMs = offsetMs, sell = sell, buy = buy,
+  local vendor = VendorOf(key)
+  local facts = { atAH = atAH, deValue = deValue, sell = sell, buy = buy, vendor = vendor }
+  return TV.Lines({ age = age, coverage = Market.Coverage30(), doing = DoFor(key, item, nowMs, facts),
+    offsetMs = offsetMs, sell = sell, buy = buy, vendor = vendor,
     market = { cur = cur, ageText = ageText, med7 = item.med7, med14 = item.med14, med30 = item.med30, listed = listed,
-              soldPerDay = item.soldPerDay, salesDays = item.salesDays },
+              supply7 = item.supply7, supply14 = item.supply14, supply30 = item.typicalSupply,
+              chance1000 = item.sellChance1000, chancePrice = item.cur, commodity = item.commodity,
+              st = { item.st7, item.st14, item.st30 }, stHow = item.stHow },
     mats = canDE and mats or nil, holdings = HoldingsOf(DB.Get() or {}, key, nowMs) })
 end
 
@@ -284,15 +305,19 @@ end
 ---@return string, string, table, table  left, right, left RGB, right RGB
 function Tooltip.Draw(line)
   local left, right = line.label, VM.WithCoins(line.value)
-  if line.header then
-    return Paint(left, "title"), Paint(line.value, line.amber and "amber" or "muted") .. Dot(line.amber and "amber" or "pos"),
-           RGB.title, RGB.value
+  if line.header then         -- the age and its dot amber when stale; the coverage always muted (TT19, TT40)
+    local coverage = line.coverage and Paint(" · " .. line.coverage, "muted") or ""
+    return Paint(left, "title"), Paint(line.value, line.amber and "amber" or "muted") .. Dot(line.amber and "amber" or "pos")
+           .. coverage, RGB.title, RGB.value
   end
   if line.isDo then left = Paint("Do: ", "label") .. Paint(line.verb, line.verbColor) .. Paint(line.rest, "value") end
   for _, span in ipairs(line.spans) do
     local text = VM.WithCoins(span[1])
     local at = right:find(text, 1, true)
     if at then right = right:sub(1, at - 1) .. Paint(text, span[2]) .. right:sub(at + #text) end
+  end
+  if line.tail and right:sub(-#line.tail[1]) == line.tail[1] then   -- a qualifier at the end, never found by text
+    right = right:sub(1, -#line.tail[1] - 1) .. Paint(line.tail[1], line.tail[2])
   end
   local valueRgb = (line.muted and RGB.muted) or (line.valueColor and RGB[line.valueColor]) or RGB.value
   return left, right, line.labelMuted and RGB.muted or RGB.label, valueRgb
