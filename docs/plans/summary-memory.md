@@ -11,6 +11,7 @@ The user's decisions of 2026-11-08:
 1. **Nothing the app shows or plans changes.** Every page, tooltip line, plan and export is byte-identical before and after each milestone: the whole-plan snapshot (WP1), the visual goldens and the addon files do not move.
 2. **Measure first (SM0), then the app-only changes (SM1), then the format (SM2).** SM1 needs no cloud change and helps at any summary size; SM2 needs a cloud deploy.
 3. **Older apps keep working.** The cloud keeps publishing schemas 10–13 alongside the new one, as it does today (`latest-<schema>.json`).
+4. **The plan, the budget and the order are approved** (the user, 2026-11-08): a cloud market's process peak ≤ 600 MB with the 88 MB summary of 2026-11-08, measured by SM0 (2); SM2 is decided after SM1's measurement.
 
 Facts measured on 2026-11-08 (the 88 MB schema 13 document, Python 3.12, `tracemalloc`):
 
@@ -40,7 +41,7 @@ Facts measured on 2026-11-08 (the 88 MB schema 13 document, Python 3.12, `tracem
 
 1. **The running app**, sampled every 2 minutes for 4 hours from 2026-11-08 10:55 Pacific (four hourly summaries): does the resident size fall back between summaries, stay at the first start's peak, or climb? Recorded here.
 2. **A repeatable measurement**: `tools/bench.py --summary <document.json.gz>` (new option) runs the cloud path in a fresh process on a real document: poll, stage, re-plan, export, then a second poll of the same size, and reports the peak and the resident size after each step. It becomes the check SM1 and SM2 are measured with.
-3. **Proposed budget for the user to approve**: a cloud market's process peak ≤ 600 MB with today's 88 MB summary, measured by (2). SPEC §5.1 gains the row.
+3. **The budget** (approved, §1 item 4): a cloud market's process peak ≤ 600 MB with the 88 MB summary, measured by (2). SPEC §5.1 gains the row.
 
 ### SM1: hold one copy, never re-serialize (Opus: cross-connection caching and the staging contract)
 
@@ -63,5 +64,4 @@ Needs: a `cdk deploy` (the user's approval at the time), and a rebuild is not ne
 
 ## 4. Open questions for the user
 
-1. **The budget** in SM0 (3): 600 MB with today's summary, or another number?
-2. **Order**: SM2 can wait until SM1's measurement shows whether it is still needed soon; or run both now.
+None: answered 2026-11-08 (§1 item 4).
