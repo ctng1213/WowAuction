@@ -13,7 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from ahsync.engine.app_view import hover_text
+from ahsync.engine.app_view import hover_text, is_dev
 from ahsync_app.gui_thread import on_gui_thread
 
 log = logging.getLogger("ahsync.app")
@@ -24,6 +24,7 @@ OPEN = "open"
 STATUS = "status"
 AUTOSTART = "autostart"
 RESTART_UPDATE = "restart_update"
+CHECK_UPDATES = "check_updates"
 DOWNLOAD = "download"
 AUTO_UPDATE = "auto_update"
 BETA = "beta"
@@ -42,6 +43,7 @@ class TrayState:
     available: str | None = None         # a newer release known, not downloaded (M25)
     downloaded: str | None = None        # a downloaded, verified release (M27)
     synced_ms: int | None = None         # the last sync, UTC ms (the hover text)
+    check: str = ""                      # Check for updates: "", "checking", "up_to_date" or "failed" (DR34)
 
 
 @dataclass(frozen=True)
@@ -66,8 +68,8 @@ def menu(state: TrayState) -> list[MenuItem]:
 
     Returns:
         Open dashboard, Status, Start at login, the update item (Restart to update while one is downloaded; with
-        auto_update off and a newer release known, "AHSync <v> available · download"; else none), Install updates
-        automatically, Get beta updates, a separator, Quit AHSync.
+        auto_update off and a newer release known, "AHSync <v> available · download"; else none), Check for
+        updates (DR34), Install updates automatically, Get beta updates, a separator, Quit AHSync.
     """
     items = [MenuItem("Open dashboard", OPEN), MenuItem("Status", STATUS, enabled=state.configured),
              MenuItem("Start at login", AUTOSTART, checked=state.autostart)]
@@ -75,10 +77,30 @@ def menu(state: TrayState) -> list[MenuItem]:
         items.append(MenuItem(f"Restart to update ({state.downloaded})", RESTART_UPDATE))
     elif state.available and not state.auto_update:
         items.append(MenuItem(f"AHSync {state.available} available · download", DOWNLOAD))
+    items.append(check_item(state, offered=items[-1].action in (RESTART_UPDATE, DOWNLOAD)))
     items += [MenuItem("Install updates automatically", AUTO_UPDATE, checked=state.auto_update),
               MenuItem("Get beta updates", BETA, checked=state.channel == "beta"),
               SEPARATOR, MenuItem("Quit AHSync", QUIT)]
     return items
+
+
+def check_item(state: TrayState, offered: bool) -> MenuItem:
+    """The Check for updates item (SPEC §3.7.1 item 5; DR34).
+
+    Args:
+        state: The app's state now.
+        offered: Whether the menu already offers a release (Restart to update, or the download item).
+
+    Returns:
+        "Checking for updates…" (disabled) while a check runs; after one, "Up to date · check again" or
+        "Couldn't check · try again" unless a release is offered; else "Check for updates". Disabled during setup
+        and in a dev build, which never asks (DR24).
+    """
+    if state.check == "checking":
+        return MenuItem("Checking for updates…", CHECK_UPDATES, enabled=False)
+    label = {"up_to_date": "Up to date · check again", "failed": "Couldn't check · try again"}.get(state.check)
+    return MenuItem(label if label and not offered else "Check for updates", CHECK_UPDATES,
+                    enabled=state.configured and not is_dev(state.version))
 
 
 def hover(state: TrayState, offset_ms: int) -> str:

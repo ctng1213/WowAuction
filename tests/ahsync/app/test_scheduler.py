@@ -264,6 +264,18 @@ def test_DR15_the_update_job_runs_at_start_then_every_10_minutes_and_only_when_w
     assert "update" not in Scheduler(clock, SchedulerHooks(), None).tick()   # python -m ahsync: no app shell
 
 
+
+def test_DR34_a_requested_check_runs_the_update_job_at_the_next_tick():
+    clock = FakeClock()
+    calls, asked = {"n": 0}, {"now": False}
+    scheduler = Scheduler(clock, SchedulerHooks(update=lambda: calls.update(n=calls["n"] + 1),
+                                                update_requested=lambda: asked["now"]), None)
+    scheduler.tick()                                                          # at start
+    clock.advance(60_000)
+    assert "update" not in scheduler.tick()
+    asked["now"] = True                                                       # Check for updates in the tray
+    assert "update" in scheduler.tick() and calls["n"] == 2
+
 def test_BZ17_the_cloud_poll_runs_at_the_first_tick_then_every_poll_minutes():
     clock = FakeClock()
     polls: list[int] = []

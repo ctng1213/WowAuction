@@ -34,7 +34,7 @@ from ahsync.app.refresh import rebuild_gathering, replan_all
 from ahsync.app.status_page import status_page
 from ahsync.clock import Clock
 from ahsync import version
-from ahsync.app.update_check import read_state, write_meta
+from ahsync.app.update_check import ManualCheck, read_state, write_meta
 from ahsync.engine.updates import UpdateState
 from ahsync.config import (CHANNELS, Config, ConfigError, is_cloud_market, market_sources, write_risk_tolerance,
                            write_setting)
@@ -85,6 +85,7 @@ class AppHooks:
     can_replace: Callable[[], bool] = lambda: True                 # whether the app may replace itself (FM54, M27)
     forget_previous: Callable[[], None] = lambda: None             # cleanup after an update that worked (M27)
     restart: Callable[[Database, Config], bool] = lambda db, config: False   # Restart to update: True once stopping
+    update_checks: ManualCheck = field(default_factory=ManualCheck)  # Check for updates in the tray (DR34)
 
 
 @dataclass(frozen=True)

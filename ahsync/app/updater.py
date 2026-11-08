@@ -35,7 +35,7 @@ class DownloadFailed(Exception):
 
 
 def download(db: Database, transport: Transport, clock: Clock, data_dir: Path, version: str, config: Config,
-             asset_name: Callable[[str], str], verify: Callable[[Path], str | None]) -> bool:
+             asset_name: Callable[[str], str], verify: Callable[[Path], str | None], retry: bool = False) -> bool:
     """Download and verify the newer release, when one is known and due (SPEC §3.7.9; DR20, DR21, DR24, FM53).
 
     Args:
@@ -47,6 +47,7 @@ def download(db: Database, transport: Transport, clock: Clock, data_dir: Path, v
         config: `auto_update`.
         asset_name: Version -> this OS's asset, e.g. "AHSync-0.4.0-windows-x64-setup.exe" (the platform's).
         verify: The platform's signature check: None when the file may be installed, else the reason.
+        retry: True for a check asked from the tray (DR34): a failed download is tried again now, not a day later.
 
     Returns:
         True when a download was attempted.
@@ -63,7 +64,7 @@ def download(db: Database, transport: Transport, clock: Clock, data_dir: Path, v
     target = tag_version(state.tag)
     tried = read_meta(db).get("download_tried_ms", "")
     now = clock.now_ms()
-    if tried.isdigit() and now - int(tried) < DAY_MS:
+    if not retry and tried.isdigit() and now - int(tried) < DAY_MS:
         return False                                       # one try a day: "tries again tomorrow"
     write_meta(db, {"download_tried_ms": now})
     try:

@@ -417,20 +417,28 @@ def update_job(db: Database, transport: Transport, clock: Clock, data_dir: Path,
         app_hooks: The platform's asset name, signature check, can-replace test and cleanup after an update (M27).
 
     Returns:
-        The job; its first run checks whatever the time since the last check (DR33); after that it sends
-        nothing unless a day has passed since the last check or download try.
+        The job; its first run checks whatever the time since the last check (DR33), and so does a run the tray's
+        Check for updates asked for, which also retries a failed download (DR34); otherwise it sends nothing unless
+        a day has passed since the last check or download try.
     """
     started = [True]
 
     def job() -> None:
         """Settle the last install, check, download, then note whether the app may replace itself (M27, FM54)."""
         settings = live.current
-        installer.settle(db, data_dir, version.VERSION, clock.now_ms(), app_hooks.forget_previous)
-        update_check.check(db, transport, clock, version.VERSION, settings, at_start=started[0])
-        started[0] = False
-        updater.download(db, transport, clock, data_dir, version.VERSION, settings, app_hooks.asset_name,
-                         app_hooks.verify_update)
-        update_check.write_meta(db, {"cant_replace": None if app_hooks.can_replace() else "1"})
+        asked = app_hooks.update_checks.begin()
+        found = "failed"
+        try:
+            installer.settle(db, data_dir, version.VERSION, clock.now_ms(), app_hooks.forget_previous)
+            update_check.check(db, transport, clock, version.VERSION, settings, at_start=started[0] or asked)
+            started[0] = False
+            updater.download(db, transport, clock, data_dir, version.VERSION, settings, app_hooks.asset_name,
+                             app_hooks.verify_update, retry=asked)
+            update_check.write_meta(db, {"cant_replace": None if app_hooks.can_replace() else "1"})
+            found = update_check.outcome(db, version.VERSION, settings)
+        finally:
+            if asked:
+                app_hooks.update_checks.finish(found)   # the menu stops saying "Checking for updates…"
 
     return job
 
@@ -535,7 +543,8 @@ def _run_configured(data_dir: Path, config: Config, runtime: Runtime, config_pat
         ctx = SyncContext(api, db, clock, result.caps, config.retention_days, addresses, ahledger)
         hooks = build_hooks(ctx, config, backup_dir, refresh_requests.take, live)
         if runtime.app_hooks is not None:        # only the app shell checks for updates (SPEC §3.7.8)
-            hooks = replace(hooks, update=update_job(db, runtime.transport, clock, data_dir, live, runtime.app_hooks))
+            hooks = replace(hooks, update=update_job(db, runtime.transport, clock, data_dir, live, runtime.app_hooks),
+                            update_requested=runtime.app_hooks.update_checks.requested)
         if config.cloud.intel_url:               # the cloud market's summary (SPEC §2.4, BZ17)
             summaries = cloud_transport(runtime.transport)
             hooks = replace(hooks, cloud_poll=lambda: poll_cloud(db, summaries, clock, live.current))
