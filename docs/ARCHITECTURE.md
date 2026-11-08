@@ -111,7 +111,7 @@ flowchart TD
   BAPI[Blizzard: auctions + commodities of the house<br/>src blizzard, kind book, ids] -->|every 15 min, new Last-Modified only| Raw[(S3 raw/ envelope)]
   Raw -->|daily 09:00 UTC| Ingest[collect/observations.ingest_snapshot<br/>into state/history.db from S3]
   Ingest --> Analysis[analysis/market.py, unchanged: the baselines]
-  Analysis --> Doc[(S3 intel/: MarketIntelligence JSON by sha256, schema 10<br/>(11 since M36: + med14; 10 and 11 published)<br/>+ latest-schema.json written last)]
+  Analysis --> Doc[(S3 intel/: MarketIntelligence JSON by sha256, schema 13<br/>(only 13 published since SM2a)<br/>+ latest-schema.json written last)]
   Raw -->|hourly, S3 event| Hourly[reprice_item + last_hour + recent ring<br/>over the latest document, no database]
   Hourly --> Doc
   Doc -->|CloudFront, public| Poll[collect/cloud_intel.py<br/>every 15 min, If-None-Match, sha256, schema]
@@ -330,3 +330,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-08: MS0 spec merge: the market simulator is planned (SPEC §8.10, SCENARIOS §6, `docs/plans/market-simulator.md`): test tooling under `tools/sim/` that feeds simulated raw snapshots to the unchanged cloud job and plan; no component, flow or contract changes.
 - 2026-11-08: MS1 built: the market simulator's core (`tools/sim/`: the truth log, the seeded market model, Blizzard's snapshots and raw envelopes, the cloud job run in-process with a catalog stand-in); test tooling only, no component, flow or contract changes.
 - 2026-11-08: SM1 built: a cloud summary is stored as its downloaded gzip and parsed once per process, the scheduler's and the dashboard's connections sharing one record (`intel/store.py` `IntelCache`; BZ42, BZ43).
+- 2026-11-08: SM2a built: the cloud publishes only schema 13 (`ahcloud.publish.OLDEST_PUBLISHED`), since the releases that read 10 to 12 refuse documents of the summary's size; no component or flow changes.
