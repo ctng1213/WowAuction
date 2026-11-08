@@ -68,10 +68,14 @@ def settings_from_dict(values: dict[str, object]) -> MarketSettings:
 
 
 # The schemas published side by side, oldest first (SPEC §2.4, BZ37): the current one, and every older one a release in
-# use still reads. v0.1.1 and v0.1.2 read 10 and no release reads 11 yet, so 10 stays until one does; drop a schema
-# once every release in use reads a newer one.
-OLDEST_PUBLISHED = 10
+# use still reads. Only 13 since SM2a (BZ45): the releases that read 10 to 12 (v0.1.1 to v0.1.5) refuse a document over
+# 64 MiB, and those documents passed 79 MiB on 2026-11-08, so they served no one. Drop a schema once every release in
+# use reads a newer one.
+OLDEST_PUBLISHED = 13
 PUBLISHED_SCHEMAS = tuple(range(OLDEST_PUBLISHED, INTEL_SCHEMA_VERSION + 1))
+# What read_latest tries, newest first: the published ones, then the one before them, which is what the last daily run
+# wrote just after a bump (FM75).
+_READ_SCHEMAS = (*reversed(PUBLISHED_SCHEMAS), OLDEST_PUBLISHED - 1)
 
 
 def publish(store: Store, intel: MarketIntelligence, schemas: tuple[int, ...] = PUBLISHED_SCHEMAS) -> list[Pointer]:
@@ -114,7 +118,7 @@ def read_latest(store: Store, market: str) -> tuple[MarketIntelligence, Pointer]
     Raises:
         ValueError: The document is missing or its hash differs from the pointer's (a torn or tampered write).
     """
-    found = next((f for f in (store.get(pointer_key(market, s)) for s in reversed(PUBLISHED_SCHEMAS)) if f), None)
+    found = next((f for f in (store.get(pointer_key(market, s)) for s in _READ_SCHEMAS) if f), None)
     if found is None:
         return None
     pointer = Pointer(**json.loads(found.data))
