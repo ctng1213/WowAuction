@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from ahsync.engine.market_lines import LineFacts, coverage_text, market_lines
 from ahsync.engine.patterns import SLOTS, WEEKDAYS, Window
 from ahsync.engine.profile import Profile
 from ahsync.engine.views import market_activity, money, round_half_up
@@ -41,6 +42,7 @@ class DetailFacts:
     kind: str | None = None           # the main source's kind, "ids" | "groups" | "own"; it picks the label (D57)
     vendor_sell: int | None = None    # copper a merchant pays for one; None = unknown (BZ25)
     vendor_from_game: bool = False    # the price came from the addon's itemNames, not AHF or the cloud summary
+    lines: LineFacts | None = None    # the market lines' facts (D105); None leaves them out
 
 
 def local_slot(slot: int, offset_ms: int) -> int:
@@ -222,8 +224,7 @@ def _activity_lines(f: DetailFacts) -> list[tuple[str, str]]:
         ("Seasonality strength", "— · too little evidence" if f.seasonality is None else str(f.seasonality)),
         ("Newly listed per day", listed),
         ("Listing turnover (info only, not sales)", turnover),
-        ("Vendor price", vendor_text(f.vendor_sell, f.vendor_from_game)),
-    ]
+    ] + ([] if f.lines else [("Vendor price", vendor_text(f.vendor_sell, f.vendor_from_game))])   # in the lines (D105)
 
 
 def vendor_text(vendor_sell: int | None, from_game: bool) -> str:
@@ -251,12 +252,14 @@ def item_detail(f: DetailFacts, offset_ms: int) -> dict:
 
     Returns:
         {"name", "quality", "summary", "windows", "answers", "activity": [[label, value]],
-         "heat": {"price", "sales", "supply"}}.
+         "heat": {"price", "sales", "supply"}, "lines": market_lines's payload or None (D105)}.
     """
     trend = round_half_up(f.trend7 * 10)
     weeks = max(f.how.weeks)
     summary = [f"med30 {money(f.med30)}", f"trend {'+' if trend >= 0 else '−'}{abs(trend) // 10}.{abs(trend) % 10}%/day",
                f"{weeks} weeks of data" if weeks else "no weekly data yet"]
+    if f.lines:
+        summary.append(coverage_text(f.lines.coverage30))
     return {
         "name": f.name, "quality": f.quality, "summary": " · ".join(summary),
         "windows": _window_rows(f.sell_windows, offset_ms),
@@ -264,4 +267,5 @@ def item_detail(f: DetailFacts, offset_ms: int) -> dict:
         "activity": [list(line) for line in _activity_lines(f)],
         "heat": {"price": heatmap(f.how, offset_ms), "sales": heatmap(f.sales, offset_ms, 1),
                  "supply": heatmap(f.supply, offset_ms, 1)},
+        "lines": market_lines(f.lines, offset_ms) if f.lines else None,
     }

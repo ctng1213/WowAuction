@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Proposal: the item detail mirrors the tooltip's market lines (M33b-3)</title>
+<style>
+  :root { color-scheme: dark;
+    --bg: #0e0d0b; --surface: #181612; --surface-2: #221f19; --border: #3d3424; --border-hi: #8a6d2f;
+    --text: #ece3cc; --muted: #9b917b; --accent: #ffd100; --pos: #3ddc4f; --neg: #ff4a3d; --amber: #ffb02e;
+    --serif: "Friz Quadrata TT", "Palatino Linotype", "Book Antiqua", Georgia, serif; }
+  * { box-sizing: border-box; }
+  body { margin: 24px; max-width: 1240px; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  h1 { font: 22px var(--serif); color: var(--accent); margin: 0 0 4px; } h2 { font: 17px var(--serif); color: var(--accent); margin: 28px 0 8px; }
+  p.note { color: #c9c4b6; max-width: 1050px; } .muted { color: var(--muted); } .pos { color: var(--pos); } .neg { color: var(--neg); } .amber { color: var(--amber); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-top: 10px; }
+  .card-h { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); background: linear-gradient(#241f16, #1a1711); }
+  .card-h b { flex: 1; font: 15px var(--serif); color: var(--accent); font-weight: normal; }
+  .detail { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 14px; }
+  .h { color: var(--muted); font-size: 12px; margin: 12px 0 4px; } .h:first-child { margin-top: 0; }
+  .new { outline: 1px dashed var(--amber); outline-offset: 3px; }
+  table.lines { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  table.lines th { color: var(--muted); font-weight: normal; text-align: right; padding: 3px 6px; border-bottom: 1px solid var(--border); }
+  table.lines th:first-child, table.lines td:first-child { text-align: left; }
+  table.lines td { padding: 4px 6px; border-bottom: 1px dashed var(--border); text-align: right; white-space: nowrap; }
+  table.lines td:first-child { color: var(--muted); } table.lines td.word { text-align: left; }
+  .breakdown div { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; border-bottom: 1px dashed var(--border); font-size: 13px; }
+  .breakdown span { color: var(--muted); } .breakdown b { font-weight: 600; text-align: right; }
+  .stack div { display: flex; justify-content: space-between; gap: 12px; padding: 1px 0; font-size: 13px; }
+  .stack .t { color: var(--muted); } .stack .v { justify-content: flex-end; color: var(--text); padding-bottom: 5px; border-bottom: 1px dashed var(--border); }
+  .rest { color: var(--muted); font-size: 12px; border: 1px dashed var(--border); border-radius: 4px; padding: 10px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+</style>
+</head>
+<body>
+<h1>Proposal: the item detail mirrors the tooltip's market lines</h1>
+<p class="note"><b>Approved by the user, 2026-11-08: variant A; built in M33b-3.</b> M33b-3 (plan §1: "the dashboard's item detail mirrors the same lines"). The same numbers as the approved tooltip (<a href="sell-through.html">sell-through.html</a>), made by the engine (<code>engine/item_detail.py</code>, SPEC §8.5), placed at the top of the detail's left column above the best selling windows. Dashed outlines mark what is new. The rest of the detail (windows, the three answers, Market activity, the heatmaps) stays as it is, except Vendor price, which moves out of Market activity into the new block. Linen Cloth's values are the tooltip mockup's (house 114, first days).</p>
+
+<h2>A. A table: one row per line, the lookbacks in columns (recommended)</h2>
+<p class="note">The dashboard has the width, so each line is one row: its value now, then 7, 14 and 30 days, then its word. Hovering a row's name gives its definition (the tooltip mockup's §3 texts).</p>
+<div class="card">
+  <div class="card-h"><b>Linen Cloth: when it sells best</b><span class="muted">med30 21c · trend −0.4%/day · 1 week of data · 5% coverage</span></div>
+  <div class="detail"><div>
+    <div class="new">
+      <div class="h">Market lines (the tooltip's; the market's data covers 5% of the last 30 days)</div>
+      <table class="lines">
+        <tr><th>Line</th><th>Now</th><th>7d</th><th>14d</th><th>30d</th><th></th></tr>
+        <tr><td title="The lowest listing now, against the medians of the hourly lowest listing">Market Price</td><td>19c now</td><td>21c</td><td>21c</td><td>21c</td><td class="word">steady</td></tr>
+        <tr><td title="Units on the AH now, against the typical units listed (a stock, never sales)">Market Inventory</td><td>24,808 listed</td><td>14,859</td><td>14,859</td><td>14,859</td><td class="word amber">high</td></tr>
+        <tr><td title="Now: the chance a 24 h auction posted now at the market price sells. 7/14/30d: the share of listings at the lowest price that sold">Sell Chance Now</td><td>74% at 19c</td><td>79%</td><td>79%</td><td>79%</td><td class="word"></td></tr>
+        <tr><td title="The best buying window's expected price, its best hour, and how often it offered that price">Best Buy Time</td><td>17c · Tue 07:00 · 64%</td><td></td><td></td><td></td><td class="word amber">early</td></tr>
+        <tr><td title="The best selling window's expected price, its best hour, and the chance a 24 h post then sells">Best Sell Time</td><td>24c · Fri 18:00 · 81%</td><td></td><td></td><td></td><td class="word amber">early</td></tr>
+        <tr><td title="What a merchant pays for one">Vendor Price</td><td>2c</td><td></td><td></td><td></td><td class="word"></td></tr>
+      </table>
+    </div>
+    <div class="h">Best selling windows (forecast for the coming week, local time)</div>
+    <div class="rest">… as today …</div>
+    <div class="h">Market activity</div>
+    <div class="rest">… as today, without Vendor price …</div>
+  </div><div>
+    <div class="h">Price by hour of the week (<code>how</code>), local time</div>
+    <div class="rest">… heatmaps as today …</div>
+  </div></div>
+</div>
+
+<h2>A, for gear: Embossed Leather Gloves (cancels estimated; a disenchant)</h2>
+<div class="card">
+  <div class="card-h"><b>Embossed Leather Gloves: when it sells best</b><span class="muted">med30 1s · trend 0.0%/day · 1 week of data · 5% coverage</span></div>
+  <div class="detail"><div>
+    <div class="new">
+      <div class="h">Market lines (the tooltip's; the market's data covers 5% of the last 30 days)</div>
+      <table class="lines">
+        <tr><th>Line</th><th>Now</th><th>7d</th><th>14d</th><th>30d</th><th></th></tr>
+        <tr><td>Market Price</td><td>1s now</td><td>1s</td><td>1s</td><td>1s</td><td class="word">steady</td></tr>
+        <tr><td>Market Inventory</td><td>1,713 listed</td><td>2,751</td><td>2,751</td><td>2,751</td><td class="word amber">low</td></tr>
+        <tr><td>Sell Chance Now</td><td>5% at 1s</td><td>6%</td><td>6%</td><td>6%</td><td class="word amber">est.</td></tr>
+        <tr><td>Best Sell Time</td><td>1s 10c · Sat 19:00 · 9% est.</td><td></td><td></td><td></td><td class="word amber">early</td></tr>
+        <tr><td>Disenchant Value</td><td><span class="neg">37% below AH</span> · 63c</td><td></td><td></td><td></td><td class="word"></td></tr>
+        <tr><td>&nbsp;&nbsp;80% · 1.5 Strange Dust @ 25c</td><td>30c</td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>&nbsp;&nbsp;20% · 1.5 Lesser Magic Essence @ 1s 10c</td><td>33c</td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>Vendor Price</td><td>24c · from the game</td><td></td><td></td><td></td><td class="word"></td></tr>
+      </table>
+    </div>
+    <div class="h">Best selling windows …</div><div class="rest">… as today …</div>
+  </div><div><div class="rest">… heatmaps as today …</div></div></div>
+</div>
+
+<h2>B. The tooltip's shape, as is</h2>
+<p class="note">The same stacked lines as the tooltip (title with its word, values right-aligned under it). Familiar from the game, but it leaves the dashboard's width unused and the lookbacks are harder to compare down a column.</p>
+<div class="card" style="max-width:620px">
+  <div class="card-h"><b>Linen Cloth: when it sells best</b><span class="muted">… · 5% coverage</span></div>
+  <div style="padding:14px"><div class="new stack">
+    <div class="h">Market lines (the tooltip's)</div>
+    <div><span class="t">Market Price</span><span>19c now · steady</span></div><div class="v">(7d) 21c · (14d) 21c · (30d) 21c</div>
+    <div><span class="t">Market Inventory</span><span>24,808 listed now · <span class="amber">high</span></span></div><div class="v">(7d) 14,859 · (14d) 14,859 · (30d) 14,859</div>
+    <div><span class="t">Sell Chance Now</span><span>74% at 19c</span></div><div class="v">(7d) 79% · (14d) 79% · (30d) 79%</div>
+    <div><span class="t">Best Buy Time</span><span class="amber">early</span></div><div class="v">17c · Tuesday Morning · 64%</div>
+    <div><span class="t">Best Sell Time</span><span class="amber">early</span></div><div class="v">24c · Friday Evening · 81%</div>
+    <div><span class="t">Vendor Price</span><span>2c</span></div>
+  </div></div>
+</div>
+
+<h2>What stays out</h2>
+<p class="note">Do and Inventory (the tooltip's personal lines: the dashboard has Today and Inventory pages for them), and "· 40c for 20" on Vendor Price (no "what you hold" on a market page). The best hours use the dashboard's short form ("Tue 07:00") as its windows list does; the tooltip keeps its words ("Tuesday Morning"). Times are local.</p>
+</body>
+</html>
