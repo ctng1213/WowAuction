@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from ahsync.config import Config, is_cloud_market, market_sources
 from ahsync.db.sqlite import Database
-from ahsync.engine.coverage import ranges_to_hours
+from ahsync.engine.coverage import analysed_until_hour, ranges_to_hours
 from ahsync.engine.sell_record import calibration
 from ahsync.engine.history_view import judged_rows
 from ahsync.engine.tracking import ProfitSums, profit_sums
@@ -120,7 +120,8 @@ def _cloud_facts(db: Database, cfg: Config, market: str) -> dict:
     _etag, _updated, fetched, _held = db.source_state(market, "cloud")
     return {"cloud_on": True, "cloud_coverage": intel.coverage if intel else (), "cloud_built_ms": intel.built_ms if intel else None,
             "cloud_prices_ms": (intel.observations_until_ms or intel.built_ms) if intel else None,
-            "cloud_next_ms": None if fetched is None else fetched + cfg.cloud.poll_minutes * 60_000}
+            "cloud_next_ms": None if fetched is None else fetched + cfg.cloud.poll_minutes * 60_000,
+            "cloud_analysed_hour": analysed_until_hour(intel.coverage) if intel else None}
 
 
 def status_facts(db: Database, cfg: Config, now_ms: int) -> StatusFacts:
