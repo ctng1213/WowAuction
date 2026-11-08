@@ -30,6 +30,7 @@ class ItemInfo:
     vendor_buy: int | None
     vendor_sell: int | None
     stack: int | None
+    vendor_src: str | None = None    # 'game' when vendor_sell came from the addon (A92, BZ25); else None
 
 
 @dataclass(frozen=True)
@@ -158,7 +159,8 @@ class HistoryReads:
         Returns:
             Item key -> ItemInfo, as an ItemCatalog.
         """
-        rows = self.conn.execute("SELECT key, name, quality, ilvl, class, vendor_buy, vendor_sell, stack FROM items")
+        rows = self.conn.execute("SELECT key, name, quality, ilvl, class, vendor_buy, vendor_sell, stack, vendor_src "
+                                 "FROM items")
         return ItemCatalog(((r[0], ItemInfo(r[0], r[1] or str(r[0]), *r[2:])) for r in rows), load_suffix_names())
 
     def market_history(self, market: str, window: HistoryWindow) -> Iterator[ItemHistory]:

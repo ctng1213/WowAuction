@@ -15,6 +15,8 @@ Decisions made during execution are appended here.
 
 7. **Decided by the user 2026-11-07, during M40c: Flip cells drop copper from 1g** (UI25). At the approved 64 and 76 px, "15g 12s 1c" and "+6g 55s 1c" still cut off (about 6.6 px a character at the window font, a coin counting two, measured from the user's screenshot), so Buy, Sell and Profit round to the silver from 1g; under 1g they keep their copper. The user's concern, buy and sell reading alike, cannot arise: the 20% flip margin keeps them at least 26s apart at 1g and up. Buy was included: it has the same problem.
 
+8. **M32c part 2's review (wow-adapter, 2026-11-07), as acted on:** the live client's path (`C_Item`) gets its own check in A93's spec; random-suffix items are marked as priced from their base item (UNVERIFIED); the Python row parser matches the whole row in ASCII, as Lua does; `tools/savedvars_report.py` prints how many item rows carry a vendor price and class. Declined: skipping rows already complete (each snapshot re-asks the client, so a wrong value heals while the 11th return is UNVERIFIED; the cost is inside the budget), filtering the fill by item id (one fill, no re-arming, is the design), and restoring the stubs' item tables at each reset (shared fixture worlds add names when they load).
+
 ## 2. Working rules
 
 CLAUDE.md's. One branch (`ctn-RCP-000-addon-vendor-tooltip`), one commit per milestone, each verified with the full suite, the Lua runner, the snapshot and `tools/visual.py`; one PR at the end. A UI change updates the goldens in its commit, the diff reviewed against `docs/mockups/addon.html`.

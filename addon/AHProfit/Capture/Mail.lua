@@ -26,7 +26,7 @@ local sending = {}             -- one list of unconfirmed mail_sent events per S
 function Mail.KeyByName(db, name)
   local best
   for key, text in pairs(db.itemNames or {}) do
-    local item = text:match("^%d+,(.+)$")
+    local _, item = AHProfit.ItemNames.Parse(text)                -- "quality,name[,sellPrice,classId]" (A92)
     if item == name and (not best or key < best) then best = key end
   end
   return best

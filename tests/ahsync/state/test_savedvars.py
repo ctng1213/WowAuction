@@ -10,6 +10,7 @@ from ahsync.state.savedvars import (
     OwnAuctionSnapshot, Profession, Reagent, Recipe, RejectedRow, SavedVarsError, SavedVarsParseError, Scan,
     UnsupportedFormatError, base_item_id, is_unknown_suffix, read_ahprofit, read_ahprofit_file,
 )
+from tests.support.savedvars_builder import savedvars_text
 
 ROOT = Path(__file__).resolve().parents[3]
 A1_GOLDEN = ROOT / "tests" / "fixtures" / "savedvars" / "a1.lua"
@@ -40,6 +41,7 @@ def test_A1_capture_writes_savedvariables_that_ingest_parses_back_to_the_same_re
     assert (data.format_version, data.addon_version, data.refresh_requested_at_ms) == (1, "0.1.0", None)
     names = {n.key: (n.name, n.quality) for n in data.item_names}           # every item seen in an inventory
     assert len(names) == 10 and names[6948] == ("Hearthstone", 1) and names[-6585] == ("Scouting Gloves", 1)
+    assert {n.key: (n.sell_price, n.class_id) for n in data.item_names}[2589] == (3, 7)   # A92: from the game
     assert data.characters == (
         Character(AMAYA, "Amaya", "Grommash", "Horde", "MAGE", 60, 1234567, 1760000000000),
         Character(BRUGAN, "Brugan", "Grommash", "Horde", "WARRIOR", 40, 456789, 1760003600000),
@@ -309,3 +311,12 @@ def test_A41_the_addons_ends_field_in_own_auctions_is_ignored():
     data = read_ahprofit(db_text('["ownAuctions"] = { ["Amaya-Grommash"] = { at = 5, rows = "4471,80,1,3,1", ends = "4471,1,9" } },'))
     assert data.problems == () and [(s.char_id, len(s.rows)) for s in data.own_auctions] == [(AMAYA, 1)]
 
+
+
+def test_A92_an_item_name_row_reads_from_both_ends_and_older_rows_still_read():
+    data = read_ahprofit(savedvars_text({"itemNames": {3486: "1,Heavy Grinding Stone,50,7", 99: "2,Sword, Long,120,2",
+                                                      2592: "1,Wool Cloth,,7", 6948: "1,Hearthstone,0,",
+                                                      3300: "0,Broken Fang"}}))
+    got = {n.key: (n.name, n.quality, n.sell_price, n.class_id) for n in data.item_names}
+    assert got == {3486: ("Heavy Grinding Stone", 1, 50, 7), 99: ("Sword, Long", 2, 120, 2),
+                   2592: ("Wool Cloth", 1, None, 7), 6948: ("Hearthstone", 1, 0, None), 3300: ("Broken Fang", 0, None, None)}

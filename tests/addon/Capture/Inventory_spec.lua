@@ -21,13 +21,36 @@ describe("Inventory", function()
     Stubs.ITEM_NAMES[3300] = "Broken Fang"
     Stubs.Login()
     Stubs.ITEM_NAMES[3300] = nil
-    assert_eq(AHProfitDB.itemNames, { [6948] = "1,Hearthstone", [3300] = "0,Broken Fang" })
+    assert_eq(AHProfitDB.itemNames, { [6948] = "1,Hearthstone,0,7", [3300] = "0,Broken Fang,12,7" })   -- A92
     assert_eq({ AHProfit.Adapter.ItemNameFromLink("|cffffffff|Hitem:2840::::::::60::::|h[]|h|r") }, {})
     assert_eq({ AHProfit.Adapter.ItemNameFromLink("|cff123456|Hitem:2840|h[Copper Bar]|h|r") }, { "Copper Bar" })
     assert_eq({ AHProfit.Adapter.ItemNameFromLink(nil) }, {})
     -- Forever's form: the quality as a tag, not a colour.
     assert_eq({ AHProfit.Adapter.ItemNameFromLink("|cnIQ2:|Hitem:14117::::::28644::14::::|h[Aboriginal Gloves of Frost Protection]|h|r") },
               { "Aboriginal Gloves of Frost Protection", 2 })
+  end)
+
+  it("A92 each item's row adds its merchant price and class; one the client lacks is filled when its info arrives", function()
+    Stubs.Reset()
+    Stubs.ITEM_NAMES[3486], Stubs.ITEM_SELL[3486] = "Heavy Grinding Stone", 50
+    Stubs.Login()
+    local Inventory = AHProfit.Capture.Inventory
+    Inventory.RememberNames(AHProfitDB, { { key = 3486, name = "Heavy Grinding Stone", quality = 1 } })
+    assert_eq(AHProfitDB.itemNames[3486], "1,Heavy Grinding Stone,50,7")
+    assert_eq(Stubs.IsRegistered("GET_ITEM_INFO_RECEIVED"), false)            -- nothing missing: nothing listens
+    Stubs.world.uncached[2592] = true                                            -- Wool: not in the client's cache yet
+    Inventory.RememberNames(AHProfitDB, { { key = 2592, name = "Wool Cloth", quality = 1 } })
+    assert_eq(AHProfitDB.itemNames[2592], "1,Wool Cloth,,7")                   -- unknown is "", never 0
+    assert_eq(Stubs.IsRegistered("GET_ITEM_INFO_RECEIVED"), true)
+    Stubs.world.uncached[2592], Stubs.ITEM_SELL[2592] = nil, 33
+    Stubs.FireEvent("GET_ITEM_INFO_RECEIVED", 2592)
+    assert_eq(Stubs.IsRegistered("GET_ITEM_INFO_RECEIVED"), false)            -- one fill, never re-armed
+    Stubs.Advance(0.5)
+    assert_eq(AHProfitDB.itemNames[2592], "1,Wool Cloth,33,7")
+    Stubs.world.uncached[3486] = true                                            -- a known price is never erased
+    Inventory.RememberNames(AHProfitDB, { { key = 3486, name = "Heavy Grinding Stone", quality = 1 } })
+    assert_eq(AHProfitDB.itemNames[3486], "1,Heavy Grinding Stone,50,7")
+    Stubs.ITEM_NAMES[3486], Stubs.ITEM_SELL[3486], Stubs.ITEM_SELL[2592] = nil, nil, nil
   end)
 
   it("decodes an encoded place back into rows", function()

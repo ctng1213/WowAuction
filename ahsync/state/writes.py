@@ -303,25 +303,35 @@ class IngestWrites:
         self.conn.execute("UPDATE actions SET status = 'skipped' WHERE action_id = ?", (action_id,))
         return row[0]
 
-    def add_item_names(self, rows: Iterable[tuple[int, int, str, int]]) -> int:
-        """Name items AHF's item list doesn't have, e.g. soulbound ones (SPEC §2.2.1 itemNames, S13).
+    def add_item_names(self, rows: Iterable[tuple[int, int, str, int, int | None, int | None]]) -> int:
+        """Name items AHF's item list doesn't have, and fill vendor prices and classes nobody else gave (SPEC §2.2.1
+        itemNames, S13, A92, BZ25).
 
-        An addon-named row has no `updated` time: AHF's /items rows always replace it, and it
-        never replaces theirs.
+        An addon-named row has no `updated` time: AHF's /items rows always replace its name, and it never replaces
+        theirs. The game's vendor price and class only fill a NULL: AHF's list and the cloud summary win where they
+        have one (`upsert_items`, `merge_catalog`), and a price the game filled is marked vendor_src 'game'.
 
         Args:
-            rows: (item key, base item id, name, quality).
+            rows: (item key, base item id, name, quality, vendor sell copper or None, item class or None).
 
         Returns:
-            Rows inserted or renamed.
+            Rows inserted or changed.
         """
         count = 0
-        for key, item_id, name, quality in rows:
+        for key, item_id, name, quality, sell, item_class in rows:
             count += self.conn.execute(
-                "INSERT INTO items(key, item_id, name, quality) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET "
-                "name = excluded.name, quality = excluded.quality WHERE items.updated IS NULL "
-                "AND (items.name IS NOT excluded.name OR items.quality IS NOT excluded.quality)",
-                (key, item_id, name, quality)).rowcount
+                "INSERT INTO items(key, item_id, name, quality, class, vendor_sell, vendor_src) "
+                "VALUES (?, ?, ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE 'game' END) ON CONFLICT(key) DO UPDATE SET "
+                "name = CASE WHEN items.updated IS NULL THEN excluded.name ELSE items.name END, "
+                "quality = CASE WHEN items.updated IS NULL THEN excluded.quality ELSE items.quality END, "
+                "class = COALESCE(items.class, excluded.class), "
+                "vendor_src = CASE WHEN items.vendor_sell IS NULL AND excluded.vendor_sell IS NOT NULL THEN 'game' "
+                "ELSE items.vendor_src END, "
+                "vendor_sell = COALESCE(items.vendor_sell, excluded.vendor_sell) "
+                "WHERE (items.updated IS NULL AND (items.name IS NOT excluded.name OR items.quality IS NOT excluded.quality)) "
+                "OR (items.class IS NULL AND excluded.class IS NOT NULL) "
+                "OR (items.vendor_sell IS NULL AND excluded.vendor_sell IS NOT NULL)",
+                (key, item_id, name, quality, item_class, sell, sell)).rowcount
         return count
 
     def upsert_item_rule(self, key: int, rule: str, set_at_ms: int, source: str) -> bool:

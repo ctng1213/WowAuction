@@ -39,6 +39,8 @@ class DetailFacts:
     sell_windows: tuple[Window, ...] = ()     # best first
     turnover_per_day: float | None = None   # observed listing turnover: info only, never sales (§3.3.6, V37)
     kind: str | None = None           # the main source's kind, "ids" | "groups" | "own"; it picks the label (D57)
+    vendor_sell: int | None = None    # copper a merchant pays for one; None = unknown (BZ25)
+    vendor_from_game: bool = False    # the price came from the addon's itemNames, not AHF or the cloud summary
 
 
 def local_slot(slot: int, offset_ms: int) -> int:
@@ -220,7 +222,24 @@ def _activity_lines(f: DetailFacts) -> list[tuple[str, str]]:
         ("Seasonality strength", "— · too little evidence" if f.seasonality is None else str(f.seasonality)),
         ("Newly listed per day", listed),
         ("Listing turnover (info only, not sales)", turnover),
+        ("Vendor price", vendor_text(f.vendor_sell, f.vendor_from_game)),
     ]
+
+
+def vendor_text(vendor_sell: int | None, from_game: bool) -> str:
+    """The item detail's vendor price line (SPEC §2.4 "Vendor prices locally too", BZ25).
+
+    Args:
+        vendor_sell: Copper a merchant pays for one; 0 = it can't be sold to one; None = unknown.
+        from_game: Whether the price came from the game (the addon's itemNames), not AHF or the cloud summary.
+
+    Returns:
+        "1s 50c", "1s 50c · from the game", "none: can't be sold to a merchant", or "unknown" (no deposit counted).
+    """
+    if vendor_sell is None:
+        return "unknown"
+    text = money(vendor_sell) if vendor_sell > 0 else "none: can't be sold to a merchant"
+    return f"{text} · from the game" if from_game else text
 
 
 def item_detail(f: DetailFacts, offset_ms: int) -> dict:

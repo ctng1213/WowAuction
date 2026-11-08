@@ -3823,7 +3823,8 @@
        ["Volume confidence", "75%"],
        ["Seasonality strength", "— · too little evidence"],
        ["Newly listed per day", "49/day"],
-       ["Listing turnover (info only, not sales)", "169/day"]
+       ["Listing turnover (info only, not sales)", "169/day"],
+       ["Vendor price", "15c"]
       ],
       "answers": {
        "best": "—",
@@ -4019,7 +4020,8 @@
        ["Volume confidence", "75%"],
        ["Seasonality strength", "37"],
        ["Newly listed per day", "591/day"],
-       ["Listing turnover (info only, not sales)", "249/day"]
+       ["Listing turnover (info only, not sales)", "249/day"],
+       ["Vendor price", "13c"]
       ],
       "answers": {
        "best": "Sat 16:00–22:00",
@@ -4222,7 +4224,8 @@
        ["Volume confidence", "75%"],
        ["Seasonality strength", "— · too little evidence"],
        ["Newly listed per day", "150/day"],
-       ["Listing turnover (info only, not sales)", "231/day"]
+       ["Listing turnover (info only, not sales)", "231/day"],
+       ["Vendor price", "5c"]
       ],
       "answers": {
        "best": "—",
@@ -4418,7 +4421,8 @@
        ["Volume confidence", "75%"],
        ["Seasonality strength", "— · too little evidence"],
        ["Newly listed per day", "76/day"],
-       ["Listing turnover (info only, not sales)", "346/day"]
+       ["Listing turnover (info only, not sales)", "346/day"],
+       ["Vendor price", "2c"]
       ],
       "answers": {
        "best": "—",
@@ -4614,7 +4618,8 @@
        ["Volume confidence", "75%"],
        ["Seasonality strength", "40"],
        ["Newly listed per day", "99/day"],
-       ["Listing turnover (info only, not sales)", "99/day"]
+       ["Listing turnover (info only, not sales)", "99/day"],
+       ["Vendor price", "10c"]
       ],
       "answers": {
        "best": "—",
@@ -4810,7 +4815,8 @@
        ["Volume confidence", "75%"],
        ["Seasonality strength", "— · too little evidence"],
        ["Newly listed per day", "1/day"],
-       ["Listing turnover (info only, not sales)", "0/day"]
+       ["Listing turnover (info only, not sales)", "0/day"],
+       ["Vendor price", "1s"]
       ],
       "answers": {
        "best": "—",
@@ -5006,7 +5012,8 @@
        ["Volume confidence", "75%"],
        ["Seasonality strength", "— · too little evidence"],
        ["Newly listed per day", "147/day"],
-       ["Listing turnover (info only, not sales)", "46/day"]
+       ["Listing turnover (info only, not sales)", "46/day"],
+       ["Vendor price", "1s 50c"]
       ],
       "answers": {
        "best": "Wed 22:00–Sun 02:00",

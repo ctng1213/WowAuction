@@ -362,17 +362,17 @@ end
 --- the client's item cache, then the key itself.
 ---@param key number           Item key
 ---@param item table|nil       Market.Item(key)
----@param saved string|nil     AHProfitDB.itemNames[key], "quality,name"
+---@param saved string|nil     AHProfitDB.itemNames[key], "quality,name,sellPrice,classId" (or "quality,name")
 ---@param cachedName string|nil   Adapter.ItemInfo name
 ---@param cachedQuality number|nil Adapter.ItemInfo quality
----@param vendorSell number|nil    Adapter.ItemInfo sell price, copper (a post's deposit)
+---@param vendorSell number|nil    Adapter.ItemInfo sell price, copper (a post's deposit); else the saved row's
 ---@return table               { name, quality, conf, soldPerDay, volumeUnknown, vendorSell }
 function ViewModel.Look(key, item, saved, cachedName, cachedQuality, vendorSell)
-  local quality, name = (saved or ""):match("^(%d),(.+)$")
+  local quality, name, savedSell = AHProfit.ItemNames.Parse(saved)
   name = name or cachedName or ("Item " .. key)
-  quality = tonumber(quality) or cachedQuality or 1
+  quality = quality or cachedQuality or 1
   return { name = name, quality = quality, conf = item and item.conf, soldPerDay = item and item.soldPerDay,
-           volumeUnknown = (item and item.volumeUnknown) or false, vendorSell = vendorSell }
+           volumeUnknown = (item and item.volumeUnknown) or false, vendorSell = vendorSell or savedSell }
 end
 
 --- The lines a list shows from a scroll offset, and where its scroll bar's thumb sits (UI2).
@@ -394,8 +394,7 @@ end
 ---@param key number  Item key, or -itemId for an unknown random suffix
 ---@return number
 function ViewModel.BaseItemId(key)
-  if key < 0 then return -key end
-  return key % 2147483648
+  return AHProfit.ItemNames.BaseId(key)
 end
 
 --- All your characters' gold, for risk %.
