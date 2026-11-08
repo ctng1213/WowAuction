@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Proposal: the tooltip's market lines, one shape (M33b)</title>
+<style>
+  :root { --bg: #0f1115; --text: #e6e6e6; --muted: #8f8a7d; --label: #8fd3ff; --gold: #ffd100;
+          --pos: #4cd964; --neg: #ff5c5c; --amber: #ffb347; --line: #2a2f3a; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.45 -apple-system, "Segoe UI", sans-serif; margin: 24px; max-width: 1180px; }
+  h1 { font-size: 20px; margin: 0 0 4px; } h2 { font-size: 16px; margin: 28px 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+  p.note { color: #c9c4b6; max-width: 1000px; } .muted { color: var(--muted); } .pos { color: var(--pos); } .neg { color: var(--neg); } .amber { color: var(--amber); }
+  .pair { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+  .cap { font-size: 12px; color: var(--muted); margin: 0 0 6px; max-width: 340px; }
+  .tooltip { width: 320px; background: #0b0e1a; border: 1px solid #5a6a8a; border-radius: 4px; padding: 8px 10px; font-size: 12px; }
+  .tt-hdr { display: flex; justify-content: space-between; color: var(--gold); margin-bottom: 2px; }
+  .tt-line { display: flex; justify-content: space-between; gap: 8px; } .tt-line > span:first-child { color: var(--label); white-space: nowrap; }
+  .tt-line > span:last-child { text-align: right; margin-left: auto; } .tt-line.dim > span:first-child { color: transparent; }
+  .lbl { color: var(--gold); } .v-post { color: var(--pos); }
+  .new { outline: 1px dashed var(--amber); outline-offset: 1px; }
+  table { border-collapse: collapse; font-size: 13px; } td { padding: 4px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td:first-child { color: var(--label); white-space: nowrap; }
+</style>
+</head>
+<body>
+<h1>Proposal: the tooltip's market lines, one shape</h1>
+<p class="note"><b>Approved by the user, 2026-11-07, for M33b.</b> Every market line has one shape: a title with a short qualifier on its right, and its values on the line under it. Dashed outlines mark what changes from v0.1.4 (shown at the end for reference). Values are real where the cloud has them (house 114, first 31 hours, so the 7, 14 and 30 day values still hold the same 2 days); the Sell Chance Now and best-time percentages are illustrative until M33b computes them.</p>
+
+<h2>1. Linen Cloth (a commodity), in your bags with a planned post</h2>
+<div class="pair">
+  
+  <div><p class="cap">Approved (the user, 2026-11-07).</p><div class="tooltip">
+    <div class="tt-hdr new"><span>AHProfit</span><span class="muted">data 12 min old · 5% coverage</span></div>
+    <div class="tt-line"><span><span class="lbl">Do:</span> <span class="v-post">POST</span> 20 now at 18c</span><span><span class="pos">+3s 60c</span> · 88%</span></div>
+    <div class="tt-line dim"><span>.</span><span>then nothing</span></div>
+    <div class="tt-line new"><span>Market Price</span><span>19c now · steady</span></div>
+    <div class="tt-line dim new"><span>.</span><span>(7d) 21c · (14d) 21c · (30d) 21c</span></div>
+    <div class="tt-line new"><span>Market Inventory</span><span>24,808 listed now · <span class="amber">high</span></span></div>
+    <div class="tt-line dim new"><span>.</span><span>(7d) 14,859 · (14d) 14,859 · (30d) 14,859</span></div>
+    <div class="tt-line new"><span>Sell Chance Now</span><span>74% at 19c</span></div>
+    <div class="tt-line dim new"><span>.</span><span>(7d) 79% · (14d) 79% · (30d) 79%</span></div>
+    <div class="tt-line new"><span>Best Buy Time</span><span class="amber">early</span></div>
+    <div class="tt-line dim new"><span>.</span><span>17c · Tuesday Morning · 64%</span></div>
+    <div class="tt-line new"><span>Best Sell Time</span><span class="amber">early</span></div>
+    <div class="tt-line dim new"><span>.</span><span>24c · Friday Evening · 81%</span></div>
+    <div class="tt-line"><span>Inventory</span><span>Total: 20 · Bags: 20</span></div>
+  </div></div>
+</div>
+
+<h2>2. Embossed Leather Gloves (gear: the cancel share is estimated)</h2>
+<div class="pair">
+  
+  <div><p class="cap">Approved (the user, 2026-11-07).</p><div class="tooltip">
+    <div class="tt-hdr new"><span>AHProfit</span><span class="muted">data 12 min old · 5% coverage</span></div>
+    <div class="tt-line new"><span>Market Price</span><span>1s now · steady</span></div>
+    <div class="tt-line dim new"><span>.</span><span>(7d) 1s · (14d) 1s · (30d) 1s</span></div>
+    <div class="tt-line new"><span>Market Inventory</span><span>1,713 listed now · <span class="amber">low</span></span></div>
+    <div class="tt-line dim new"><span>.</span><span>(7d) 2,751 · (14d) 2,751 · (30d) 2,751</span></div>
+    <div class="tt-line new"><span>Sell Chance Now</span><span>5% at 1s · <span class="amber">est.</span></span></div>
+    <div class="tt-line dim new"><span>.</span><span>(7d) 6% · (14d) 6% · (30d) 6%</span></div>
+    <div class="tt-line new"><span>Best Sell Time</span><span class="amber">early</span></div>
+    <div class="tt-line dim new"><span>.</span><span>1s 10c · Saturday Evening · 9% <span class="amber">est.</span></span></div>
+    <div class="tt-line new"><span>Disenchant Value</span><span><span class="neg">37% below AH</span> · 63c</span></div>
+    <div class="tt-line dim new"><span style="color:var(--muted)">  80% · 1.5 Strange Dust @ 25c</span><span>30c</span></div>
+    <div class="tt-line dim new"><span style="color:var(--muted)">  20% · 1.5 Lesser Magic Essence @ 1s 10c</span><span>33c</span></div>
+  </div></div>
+</div>
+
+<h2>3. What each line means</h2>
+<table>
+  <tr><td>Coverage (header)</td><td>The user, 2026-11-07: "data 12 min old · 5% coverage". The hours the market was observed in the longest lookback the lines use, 30 days, ÷ 720: house 114 has about 33 observed hours, so 5%. A missed hour counts against it; it reaches 100% after 30 full days. It describes the market's data; the best times keep their own strength word, which describes the item's pattern (a rarely listed item can stay early under 100% coverage). The market file carries it (from the summary's observed hours); "—" for a market without them.</td></tr>
+  <tr><td>The qualifier word</td><td>One rule for Market Price and Market Inventory (Sell Chance has none: its value now says it), from the value now against its 7, 14 and 30 days: <b>rising</b> when now &gt; 7d &gt; 14d &gt; 30d, each step at least 5% up (consistently growing); <b>falling</b> the mirror; otherwise, in flux, against 7d: <b>high</b> at 10% or more above, <b>low</b> at 10% or more below, else <b>steady</b>. (Market Price today says rising/falling when 7d is 10% off 30d; this replaces it, so the lines agree: decided by the user, 2026-11-07, with "steady" as the word.) Linen's inventory: 24,808 now against 14,859 in every window is not a climb, so it reads high; the gloves' 1,713 against 2,751 reads low.</td></tr>
+  <tr><td>Market Price</td><td>Right: the lowest listing now (or its age, "19c (2 h)") and the qualifier word. Values: the medians of the hourly lowest listing over 7, 14 and 30 days. Price history folds into it (its title line and values are this line now).</td></tr>
+  <tr><td>Market Inventory</td><td>A stock, not a flow: units on the AH at a moment, never units sold. Right: units listed in the newest snapshot ("listed now") and the qualifier word. Values: the typical units listed over 7, 14 and 30 days (the median of each day's median listed units, as <code>median_daily_supply</code> computes for 30 days today).</td></tr>
+  <tr><td>Sell Chance Now</td><td>Always for a <b>24 h post</b>, the usual auction length (the user, 2026-11-07: the line doesn't say it; the definition and the hover do). Right: <b>now</b>, the forecast that a 24 h auction posted now at the current market price (the lowest listing, here 19c) sells within 24 h: the engine's posting-now simulation, run over 24 h instead of 8, with today's competing listings, the measured undercutters and the measured sales; no qualifier word. The now values drawn (74%, 5%) are illustrative; the history values are measured. Values: over 7, 14 and 30 days, the measured share of listings posted at the lowest price that were bought within 24 h: the share that <b>left early</b> (gone while it could not have expired) times the share of early leaves that were <b>sales, not cancels</b>. For commodities the cancels are measured (a listing that vanished while a cheaper one stayed untouched was not bought; Forever's commodity buys take the cheapest units first, 4,574 of 4,583 fills). For gear no rule tells a cancel from a sale, so the cancel share is <b>estimated</b> (the commodity market's measured share until your own posts calibrate it) and the line says <span class="amber">est.</span>: gloves 7% left early × (1 − 11% cancels) ≈ 6%. Under 30 listings in a window it borrows from the item's class and says "class est."; with nothing to borrow, "—".</td></tr>
+  <tr><td>Best Sell Time</td><td>Renamed from Best Sell Price (the user, 2026-11-07). The top selling window's expected price and its best hour, as built, then a percentage: the chance a 24 h auction posted for that window at that price sells before it expires (the Sell Chance Now model, run for that hour and price), in the same shape as the other lines (the user, 2026-11-07): the title with its strength on the right (early in orange under 3 weeks of that window seen for this item, pattern 3–5, established 6+), and on the line under, the price, the time and the percentage. Gear says est. as Sell Chance does.</td></tr>
+  <tr><td>Best Buy Time</td><td>Renamed from Best Buy Price. The top buying window's expected price and its best hour, as built, then a percentage: the chance of finding it at or below that price then, the share of recent weeks whose lowest listing in that window was at or below it (recency-weighted like the windows, half-life 2 weeks); "—" before a week of data.</td></tr>
+  <tr><td>Disenchant Value</td><td>Renamed from Disenchant (the user, 2026-11-07), in the shared shape: the title with, on its right, the expected value of one disenchant at the mats' current AH prices and its difference from the market price, "37% below AH · 63c" (the comparison first, red below, green above; (63 − 100) ÷ 100, then the value); on the lines under, one per possible mat, "80% · 1.5 Strange Dust @ 25c" and its share 30c, as built (TT29). The separate total line goes: the total is on the title line.</td></tr>
+  <tr><td>Do (unchanged)</td><td>The same model, for <b>your</b> units at the post's price within the post's window (8 h now, or the selling window). Sell Chance now is that model for one listing at the current market price over 24 h, so the two can differ.</td></tr>
+</table>
+<p class="note">Not drawn, to keep the change small: the same three blocks on the dashboard's item detail (as lines, the same values), and Sell Chance at other price tiers (within 5%, within 15%) on the dashboard only.</p>
+
+<h2>4. Before: v0.1.4, for reference</h2>
+<details><summary class="muted">Show the v0.1.4 tooltips</summary>
+<div class="pair">
+  <div><p class="cap">v0.1.4: Linen Cloth.</p><div class="tooltip">
+    <div class="tt-hdr"><span>AHProfit</span><span class="muted">data 12 min old</span></div>
+    <div class="tt-line"><span><span class="lbl">Do:</span> <span class="v-post">POST</span> 20 now at 18c</span><span><span class="pos">+3s 60c</span> · 88%</span></div>
+    <div class="tt-line dim"><span>.</span><span>then nothing</span></div>
+    <div class="tt-line"><span>Market Price</span><span>19c (12 min) · <span class="neg">10% lower than 7d median</span></span></div>
+    <div class="tt-line"><span>Price history</span><span>steady</span></div>
+    <div class="tt-line dim"><span>.</span><span>(30d) 21c · (14d) 21c · (7d) 21c</span></div>
+    <div class="tt-line"><span>Market Inventory</span><span>24,808 listed</span></div>
+    <div class="tt-line"><span>Sales Rate</span><span>43565 sold/day · <span class="muted">2 days of data</span></span></div>
+    <div class="tt-line"><span>Best Buy Price</span><span>17c · Tuesday Morning · <span class="amber">early</span></span></div>
+    <div class="tt-line"><span>Best Sell Price</span><span>24c · Friday Evening · <span class="amber">early</span></span></div>
+    <div class="tt-line"><span>Inventory</span><span>Total: 20 · Bags: 20</span></div>
+  </div></div>
+  <div><p class="cap">v0.1.4: Embossed Leather Gloves.</p><div class="tooltip">
+    <div class="tt-hdr"><span>AHProfit</span><span class="muted">data 12 min old</span></div>
+    <div class="tt-line"><span>Market Price</span><span>1s (12 min) · at 7d median</span></div>
+    <div class="tt-line"><span>Price history</span><span>steady</span></div>
+    <div class="tt-line dim"><span>.</span><span>(30d) 1s · (14d) 1s · (7d) 1s</span></div>
+    <div class="tt-line"><span>Market Inventory</span><span>1,713 listed</span></div>
+    <div class="tt-line"><span>Sales Rate</span><span>1790 sold/day · <span class="muted">2 days of data</span></span></div>
+    <div class="tt-line"><span>Best Sell Price</span><span>1s 10c · Saturday Evening · <span class="amber">early</span></span></div>
+    <div class="tt-line"><span>Disenchant</span><span><span class="neg">37% lower than AH price</span></span></div>
+    <div class="tt-line dim"><span style="color:var(--muted)">  80% · 1.5 Strange Dust @ 25c</span><span>30c</span></div>
+    <div class="tt-line dim"><span style="color:var(--muted)">  20% · 1.5 Lesser Magic Essence @ 1s 10c</span><span>33c</span></div>
+    <div class="tt-line dim"><span>.</span><span>63c</span></div>
+  </div></div>
+</div>
+</details>
+</body>
+</html>

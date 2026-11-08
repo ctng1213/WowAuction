@@ -23,7 +23,7 @@ PY_TREES = ((PY_SRC, PY_TESTS), (APP_SRC, APP_TESTS), (CLOUD_SRC, ROOT / "tests"
             (INFRA_SRC, ROOT / "tests" / "infra"))   # (source package, its mirrored tests)
 TOOLS = ROOT / "tools"
 CONVENTION_TOOLS = ("build.py", "promote.py", "record_blizzard.py", "build_lambda.py",   # tests in tests/tools/ (M26-M30)
-                    "lifetimes_report.py")                                           # M33
+                    "lifetimes_report.py", "sales_report.py")                        # M33
 TOOL_TESTS = ROOT / "tests" / "tools"
 LUA_SRC = ROOT / "addon" / "AHProfit"
 LUA_TESTS = ROOT / "tests" / "addon"
