@@ -115,7 +115,7 @@ flowchart TD
   Raw -->|hourly, S3 event| Hourly[reprice_item + last_hour + recent ring<br/>over the latest document, no database]
   Hourly --> Doc
   Doc -->|CloudFront, public| Poll[collect/cloud_intel.py<br/>every 15 min, If-None-Match, sha256, schema]
-  Poll --> IntelLocal[(intel store: staged, then live;<br/>a cloud document kept as its downloaded gzip,<br/>parsed once per process, SM1)]
+  Poll --> IntelLocal[(intel store: staged, then live;<br/>a cloud document kept as its downloaded gzip,<br/>a local one gzipped (SM2c),<br/>parsed once per process, SM1)]
   IntelLocal -->|incremental update| Plan[recommend/portfolio.py]
   Scans[Your scans] -->|overlay cur only, IU6| Plan
 ```
@@ -167,7 +167,7 @@ sequenceDiagram
 |---|---|---|---|
 | Market history | `candles_h1`, `candles_d1`, `current`, `scans`, `book_entries`, `volume_d1`, `volume_cover`, `sales_h1`, `lifetimes_d1`, `new_listings_d1`, `observed_hours`, `ahledger_rows`, `source_state`, `sync_state`, `fetch_failures` | `collect/` | `history/reads.py` |
 | Items | `items` | `collect/` | everywhere, via the catalog |
-| Intelligence | `intel` (+ `_new` staging; a cloud document's body is its gzip as downloaded, SM1) | `analysis/` via `intel/store.py`, `collect/cloud_intel.py` | `recommend/`, `export/`, `web/` (one parsed record per process, `IntelCache`) |
+| Intelligence | `intel` (+ `_new` staging; a cloud document's body is its gzip as downloaded, SM1; a local one's gzipped, SM2c) | `analysis/` via `intel/store.py`, `collect/cloud_intel.py` | `recommend/`, `export/`, `web/` (one parsed record per process, `IntelCache`) |
 | Player state | inventory, journal (`purchases`, `posts`, `auction_mail`, `payouts`, `crafts`, `disenchants`, `mail_sent`), `professions`, `recipes`, `known_recipes`, `characters`, `cost_basis`, `gather_events`, `farming_sessions`, `manual_rates`, `positions`, `position_lots` | `state/` | `recommend/`, `app/` |
 | Plan and pages | `actions`, `alternatives`, `export_candidates`, `portfolio_snapshot`, `views` (+ `_new` staging), `item_rules`, `reserves`, `sell_records` | `recommend/` | `export/`, `web/` |
 | Operations | `status`, `meta` (the `update.*` keys, M25), backups on disk, raw snapshots on disk, `<data>/updates/` (the verified download, M25) | all | Status page |
@@ -332,3 +332,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-08: SM1 built: a cloud summary is stored as its downloaded gzip and parsed once per process, the scheduler's and the dashboard's connections sharing one record (`intel/store.py` `IntelCache`; BZ42, BZ43).
 - 2026-11-08: SM2a built: the cloud publishes only schema 13 (`ahcloud.publish.OLDEST_PUBLISHED`), since the releases that read 10 to 12 refuse documents of the summary's size; no component or flow changes.
 - 2026-11-08: SM2b built: the summary is schema 14, the compact form (items as rows under `item_fields`, run-length profile strings), published beside 13; no component or flow changes.
+- 2026-11-08: SM2c built: a local market's summary is stored gzipped in `intel.body`, as a cloud one is; no component or flow changes.

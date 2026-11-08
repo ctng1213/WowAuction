@@ -75,7 +75,7 @@ Scenarios to add: a re-plan and a dashboard request in one process parse the sum
 
 ### SM2c: a local market's summary stored gzipped (Opus: the staging contract)
 
-1. `stage_intel` with no downloaded body stores `gzip(to_json(intel))` too, as a cloud document's is (SM1 step 2). On the user's Mac the AHF market's row is 18.8 MB of text; SQLite copies such a row through staging and the swap, which SM1 measured as the larger cost.
+1. `stage_intel` with no downloaded body stores `gzip(to_json(intel))` too, as a cloud document's is (SM1 step 2). On the user's Mac the AHF market's row is 18.8 MB of text; SQLite copies such a row through staging and the swap, which SM1 measured as the larger cost. **Built (SM2c, 2026-11-08)**, BZ48: an older AHSync's text row still reads. After a downgrade, 0.1.9 could read the gzip (`_parse_intel` takes a BLOB since SM1) but not its schema 14, and refuses the row until its own next full refresh, as SM1's note says for 0.1.8; the SPEC has no downgrade path (§3.7).
 
 Needs: a `cdk deploy` (the user's approval at the time), and a rebuild is not needed (the format is written per publish).
 
