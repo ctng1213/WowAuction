@@ -257,7 +257,7 @@ def app_card(app: dict, api_key_text: str, size_text: str) -> dict:
                 "control": {"checked": checked, "enabled": enabled, "text": text, "post": post, "field": field,
                             "title": title}, "button": None}
 
-    restart = {"text": "Restart to update", "enabled": False, "post": "/api/update/restart"} if update["restart"] else None
+    restart = {"text": "Restart to update", "enabled": True, "post": "/api/update/restart"} if update["restart"] else None
     return {"title": "AHSync app", "pill": app["version_text"], "lines": [
         {"label": "Update", "parts": link_parts(update), "class": update["class"], "control": None, "button": restart},
         checkbox("Auto-update", app["auto_update"], "install updates automatically", "/api/update/auto",

@@ -318,9 +318,16 @@ class PyWebview:
         self.handle.destroy()
 
     def current_url(self) -> str | None:
-        """The page shown now.
+        """The page shown now, without waiting for one that never finished loading.
+
+        pywebview's `get_current_url` waits up to 20 s for the page's loaded event and then raises; seen on the
+        user's Mac (2026-11-07) as a white window that stayed white until a restart. A page that hasn't finished
+        loading counts as none, so the next show loads it again.
 
         Returns:
-            pywebview's current URL; None before the first load.
+            pywebview's current URL; None before the first load or while the page hasn't finished loading.
         """
+        loaded = getattr(getattr(self.handle, "events", None), "loaded", None)
+        if loaded is not None and not loaded.is_set():
+            return None
         return self.handle.get_current_url()

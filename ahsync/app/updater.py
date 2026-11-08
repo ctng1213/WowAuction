@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import shutil
 from collections.abc import Callable
 from pathlib import Path
 
@@ -125,11 +126,13 @@ def discard(db: Database, folder: Path) -> None:
     """
     if folder.exists():
         for item in folder.iterdir():
-            if item.is_file():
-                try:
+            try:
+                if item.is_dir() and not item.is_symlink():
+                    shutil.rmtree(item)                    # macOS: the unpacked AHSync.app (M27)
+                else:
                     item.unlink()
-                except OSError:
-                    log.info("an update file is still in use: %s", item.name)
+            except OSError:
+                log.info("an update file is still in use: %s", item.name)
     write_meta(db, {"downloaded": None, "downloaded_path": None})
 
 

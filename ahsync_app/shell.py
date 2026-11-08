@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import IO, Protocol
 
 from ahsync import version
+from ahsync.app import installer
 from ahsync.__main__ import (API_KEY_TOPIC, LOCK_FILE, STOP_FILE, InstanceLock, Runtime, remove_stop_file,
                              setup_logging)
 from ahsync.collect.client import Redactor
@@ -166,9 +167,40 @@ def start(autostart_launch: bool, world: ShellWorld) -> int:
             request_show(dirs.data_dir)
         return 0
     try:
-        return Session(dirs, lock, ShellState(autostart_launch), world).run()
+        code = Session(dirs, lock, ShellState(autostart_launch), world).run()
     finally:
         lock.release()
+    if code == 0:
+        install_on_quit(dirs, world)   # after run() returned and the lock is released (SPEC §3.7.9; DR22, DR23)
+    return code
+
+
+def install_on_quit(dirs: AppDirs, world: ShellWorld) -> bool:
+    """Start installing a verified update that waits, as the app quits (SPEC §3.7.9; DR22, DR23, FM54).
+
+    Nothing is running any more: `run()` has returned and the lock is free. The installer or the swap helper starts
+    detached and the process exits right after; a failure to start is logged and the app simply quits.
+
+    Args:
+        dirs: The per-user folders (data/ahsync.db, config.toml).
+        world: The platform and the running executable.
+
+    Returns:
+        True when an install was started.
+    """
+    path = dirs.data_dir / "ahsync.db"
+    config = load_settings(dirs.config_file, world)
+    if config is None or not path.exists():
+        return False
+    try:
+        db = open_server_db(path)      # run() has just closed it: no migration, no staging cleanup
+    except (DatabaseError, sqlite3.Error, OSError):
+        log.warning("the update was not installed: the database could not be read")
+        return False
+    try:
+        return installer.install(db, version.VERSION, config, lambda asset: world.platform.apply_update(asset, world.exe))
+    finally:
+        db.close()
 
 
 class Session:
@@ -339,11 +371,15 @@ class Session:
             autostart.self_heal(self.world.platform, self.world.exe)
         info = partial(app_payload, self.world, self.state, False, config.wow_path if config else "",
                        bool(config and config.api_key))
-        return run_until_stopped(self, AppHooks(info, self.set_autostart, self.world.platform.update_asset_name,
-                                                self.verify_update, self.dashboard_ready))
+        platform, exe = self.world.platform, self.world.exe
+        return run_until_stopped(self, AppHooks(info, self.set_autostart, platform.update_asset_name,
+                                                self.verify_update, self.dashboard_ready,
+                                                can_replace=lambda: platform.can_replace(exe),
+                                                forget_previous=lambda: platform.forget_previous(exe),
+                                                restart=self.restart_to_update))
 
     def verify_update(self, path: Path) -> str | None:
-        """The platform's signature check of a download; until M27 builds it, nothing beyond the hash (SPEC §3.7.9).
+        """The platform's signature check of a download against the running app (SPEC §3.7.9; DR23).
 
         Args:
             path: The downloaded file, its hash checked.
@@ -351,10 +387,12 @@ class Session:
         Returns:
             None when it may be installed; else the reason.
         """
-        try:
-            return self.world.platform.verify_update(path)
-        except NotImplementedError:
-            return None
+        return self.world.platform.verify_update(path, self.world.exe)
+
+    def restart_to_update(self) -> None:
+        """Restart to update (the tray item or POST /api/update/restart): stop; start() installs on the way out."""
+        log.info("restart to update")
+        self.stop.set()
 
     def dashboard_ready(self, app: object) -> None:
         """Keep run()'s dashboard: the tray reads the update state through it and toggles through its handlers.
@@ -435,7 +473,7 @@ class Session:
         if action == tray.DOWNLOAD and update.url:
             self.world.opener(update.url)        # the release page, in the browser (SPEC §3.7.1)
         elif action == tray.RESTART_UPDATE:
-            log.info("Restart to update installs from M27")
+            self.restart_to_update()
         elif self.dashboard is None:
             log.info("tray item %s waits until AHSync runs", action)
         elif action == tray.AUTO_UPDATE:
@@ -474,7 +512,7 @@ class Session:
             if self.tray is not None:
                 self.tray.refresh()
         except Exception as error:
-            log.warning("window or tray update failed: %s", type(error).__name__)
+            log.warning("window or tray update failed: %s: %s", type(error).__name__, error)
 
 
 def serve_setup(session: Session) -> bool | int:

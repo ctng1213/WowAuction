@@ -48,21 +48,57 @@ FILES_PROGRESS_S = 10
 FILES_WAIT_S = 15 * 60             # catch-up plus the first full refresh
 
 
-def wow_path_from_config(arg: str | None) -> Path:
-    """Decide which WoW client folder to deploy into.
+def wow_path_from_config(arg: str | None, config_files: tuple[Path, ...] | None = None,
+                         candidates: tuple[Path, ...] | None = None) -> Path:
+    """Decide which WoW client folder to deploy into or read SavedVariables from.
+
+    In order: --wow-path; the repo's config.toml (a source run); the installed app's own config.toml (its per-user
+    folder: %LOCALAPPDATA%\\AHSync, ~/Library/Application Support/AHSync); the first of this OS's usual WoW folders
+    that exists; the SPEC §3.6 default. So a Mac with only the app installed finds `_forever_` without a flag.
 
     Args:
         arg: The --wow-path value, or None.
+        config_files: The config files to try, in order; None: the repo's, then the app's.
+        candidates: The usual WoW folders, in order; None: this OS's (`platform.wow_candidates()`).
 
     Returns:
         The client folder (the one holding Interface/ and WTF/).
     """
     if arg:
         return Path(arg)
-    config_file = ROOT / "config.toml"
-    if config_file.exists():
-        return Path(load_config(config_file, os.environ, Path.home()).wow_path)
+    for config_file in (config_files if config_files is not None else (ROOT / "config.toml", *app_config_file())):
+        if config_file.exists():
+            return Path(load_config(config_file, os.environ, Path.home()).wow_path)
+    for folder in (candidates if candidates is not None else os_wow_candidates()):
+        if folder.is_dir():
+            return folder
     return Path(Config().wow_path)
+
+
+def app_config_file() -> tuple[Path, ...]:
+    """The installed app's config.toml in its per-user folder (SPEC §3.7.3), when this OS has one.
+
+    Returns:
+        One path; empty on an OS the app doesn't support.
+    """
+    try:
+        from ahsync_app.platform import current
+        return (current().app_dirs().config_file,)
+    except RuntimeError:
+        return ()
+
+
+def os_wow_candidates() -> tuple[Path, ...]:
+    """This OS's usual WoW client folders, the release first (SPEC §3.7.3).
+
+    Returns:
+        The folders; empty on an OS the app doesn't support.
+    """
+    try:
+        from ahsync_app.platform import current
+        return tuple(current().wow_candidates())
+    except RuntimeError:
+        return ()
 
 
 @dataclass

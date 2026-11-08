@@ -88,3 +88,17 @@ def test_DR20_windows_takes_the_setup_exe():
 
 def test_FM58_windows_needs_no_ca_bundle():
     assert WindowsPlatform({}, Path("C:/Users/u")).ca_bundle() is None   # Python reads the Windows store
+
+
+def test_DR22_the_silent_installer_starts_detached_and_relaunches_the_old_app_when_it_fails():
+    from ahsync_app.platform.base import Processes
+    spawned = []
+    platform = WindowsPlatform({"LOCALAPPDATA": LOCAL}, Path("C:/Users/u"), run_key=object(),
+                               processes=Processes(lambda args: None, lambda args, log=None: spawned.append((args, log)), 1))
+    setup = Path(r"C:\Users\u\AppData\Local\AHSync\data\updates\AHSync-0.4.0-windows-x64-setup.exe")
+    exe = Path(r"C:\Users\u\AppData\Local\Programs\AHSync\AHSync.exe")
+    assert platform.verify_update(setup, exe) is None                       # the hash is the check: unsigned
+    platform.apply_update(setup, exe)
+    assert spawned == [(f'cmd /c ""{setup}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS '
+                        f'|| start "" "{exe}""', setup.parent / "install.log")]
+    assert platform.can_replace(exe) is True                                  # a per-user install

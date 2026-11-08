@@ -38,6 +38,7 @@ class FolderPlatform(Platform):
         self.wow = root / "World of Warcraft" / "_classic_beta_"
         self.restricted: list[Path] = []
         self.autostarts: list[Path] = []
+        self.applied: list[tuple[Path, Path]] = []
 
     def app_dirs(self) -> AppDirs:
         return AppDirs(self.root / "config.toml", self.root / "data")
@@ -53,6 +54,12 @@ class FolderPlatform(Platform):
 
     def autostart_enable(self, exe: Path, args: tuple[str, ...] = ()) -> None:
         self.autostarts.append(exe)
+
+    def verify_update(self, path: Path, exe: Path) -> str | None:
+        return None                                    # Windows' answer: the hash is the check
+
+    def apply_update(self, path: Path, exe: Path) -> None:
+        self.applied.append((path, exe))
 
 
 def status_line(data_dir: Path, topic: str):
@@ -807,5 +814,37 @@ def test_DR12_DR13_DR20_the_tray_s_update_items_follow_the_updater_and_toggle_th
     view.check()
     assert app.opened == [page]                                     # the release page, in the browser
     assert dashboard.calls == [("auto_update", True), ("channel", "beta"), ("channel", "stable")]
-    assert "Restart to update installs from M27" in caplog.text
-    assert app.hooks[0].verify_update(tmp_path / "x.exe") is None     # no signature check until M27: the hash only
+    assert "restart to update" in caplog.text                       # the stop the install follows (M27)
+    assert app.hooks[0].verify_update(tmp_path / "x.exe") is None     # the platform's check (Windows: the hash only)
+
+
+def test_DR22_a_verified_update_installs_only_after_run_returns_and_the_lock_is_free(tmp_path):
+    from ahsync.__main__ import LOCK_FILE, InstanceLock
+    from ahsync.app.update_check import read_meta, write_meta
+
+    class Installing(FolderPlatform):
+        """Records, at the moment of the install, whether another process could take the lock."""
+
+        def apply_update(self, path: Path, exe: Path) -> None:
+            lock = InstanceLock(self.app_dirs().data_dir / LOCK_FILE)
+            free = lock.acquire()
+            if free:
+                lock.release()
+            self.applied.append((path.name, exe.name, free))
+
+    app = FakeApp(tmp_path, Installing(tmp_path))
+    app.configure(tmp_path / "wow")
+    data = app.platform.app_dirs().data_dir
+    setup = data / "updates" / "AHSync-0.4.0-windows-x64-setup.exe"
+    setup.parent.mkdir(parents=True)
+    setup.write_bytes(b"installer")
+    db = Database.open(data / "ahsync.db", FakeClock().now_ms(), None)
+    write_meta(db, {"tag": "v0.4.0", "checked_ms": 5, "downloaded": "0.4.0", "downloaded_path": str(setup)})
+    db.close()
+    assert shell.start(False, app.world()) == 0
+    assert app.calls_done and app.platform.applied == [(setup.name, "AHSync.exe", True)]   # run() over, lock free
+    db = Database.open(data / "ahsync.db", FakeClock().now_ms(), None)
+    try:
+        assert read_meta(db)["pending"] == "0.4.0"
+    finally:
+        db.close()
