@@ -156,6 +156,7 @@ def test_BZ46_profiles_are_run_length_coded_and_read_in_either_form():
     assert profile.plain("760,880,1000*166") == plain_text and profile.plain("") == ""
     assert profile.unpack("760,880,1000*166", "7*168") == profile.unpack(plain_text, ",".join(["7"] * 168))
     assert profile.unpack_values("1000*168") == (1.0,) * 168
-    for bad in ("1000*169", "1000*0", "1000*-2", "1000*x", "1000*100,1000*100", "1000*99999999999", "1000*167"):
+    for bad in ("1000*169", "1000*0", "1000*-2", "1000*x", "1000*100,1000*100", "1000*99999999999", "1000*167",
+                "1," * 10_000, ",".join(["1000"] * 169), ",".join(["1000"] * 167)):
         with pytest.raises(ValueError):
             profile.expand(bad)                                     # a run never grows past 168 slots (SEC16)

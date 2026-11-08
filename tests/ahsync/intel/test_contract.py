@@ -164,7 +164,9 @@ def test_BZ46_schema_14_writes_items_as_rows_and_schema_13_as_objects_with_plain
     assert "item_fields" not in old and old["items"]["2589"]["how"] == ",".join(["760", "880"] + ["1000"] * 166)
     assert old["items"]["2589"]["how_weeks"] == ",".join(["7"] * 168)
     assert profile.unpack(from_json(json.dumps(old)).items[2589].how, weeks) == profile.unpack(how, weeks)
-    body["items"]["2589"].pop()
-    with pytest.raises(ValueError):
-        from_json(json.dumps(body))                                  # a row of the wrong length is refused
+    row = body["items"]["2589"]
+    for bad_row, bad_fields in ((row[:-1], body["item_fields"]), (dict.fromkeys(body["item_fields"]), body["item_fields"]),
+                                (row, body["item_fields"][:-1] + body["item_fields"][:1]), (row, "fields")):
+        with pytest.raises(ValueError):                              # a short, non-list or mislabelled row is refused
+            from_json(json.dumps({**body, "items": {"2589": bad_row}, "item_fields": bad_fields}))
 
