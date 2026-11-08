@@ -11,8 +11,8 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, replace
 
-from ahsync.engine import confidence, fees, patterns, prices, profile, sellprob
-from ahsync.engine.capacity import GEAR_CLASSES
+from ahsync.engine import confidence, fees, patterns, prices, profile, sell_through, sellprob
+from ahsync.engine.capacity import GEAR_CLASSES, slot_of
 from ahsync.engine.profile import Profile
 from ahsync.engine.sellprob import MarketSettings, Supply
 from ahsync.engine.volume import (ID_METHOD_VERSION, VOLUME_METHOD_VERSION, Cover, DailyVolume, Volume, daily_volume, median_daily_supply,
@@ -24,6 +24,7 @@ HOUR_MS = 3_600_000
 DAY_MS = 86_400_000
 HISTORY_DAYS = 90
 BOOK_MAX_AGE_MS = 24 * HOUR_MS          # SPEC §3.3.2: the newest scan, if under 24 h old
+SELL_CHANCE_HOURS = 24                  # Sell Chance Now and a selling window's chance: a 24 h post (SPEC §4.3 TT37)
 
 
 def _volumes(item: ItemHistory) -> dict[int, dict[str, Volume]]:
@@ -260,11 +261,111 @@ def reprice_item(i: ItemIntel, quote: Quote, now_ms: int, settings: MarketSettin
     book = quote.book or ()
     return replace(i, cur=quote.price, cur_qty=quote.qty, cur_age_ms=0, post_price=price, ref_stack=ref,
                    chance=chance, volume_unknown=unknown, sell_value=sell_value, book_age_ms=0, book=tuple(book),
+                   sell_chance=sell_chance_now(quote, base, now_ms, settings),
+                   sell_windows=sell_window_chances(i.sell_windows, quote, base, now_ms, settings),
                    units_on_ah=sum(stack * count for _, stack, _, count in book),
                    cur_suspect=prices.suspect_price(quote.price, i.p10_30, i.p90_30, recent_closes))
 
 
-def expired_share(lifetimes: dict[int, tuple[float, float, float]], now_ms: int) -> float | None:
+def sell_chance_now(quote: Quote, base: NowBase, now_ms: int, settings: MarketSettings) -> float | None:
+    """Sell Chance Now: a 24 h post of the reference stack at the lowest listing sells before it expires (TT37).
+
+    The posting-now simulation (§3.3.2) at the current market price instead of the post price, over 24 h instead of
+    sell_window_hours, with the book, the measured sales and u(p) at the post-now position (§6 item 12).
+
+    Args:
+        quote: The current price, units and book.
+        base: The item's baselines.
+        now_ms: Now, UTC ms.
+        settings: Market-wide defaults.
+
+    Returns:
+        P in [0, 1]; None without a listing or without measured sales ("—").
+    """
+    if quote.price is None or base.sold_per_day is None:
+        return None
+    return _chance_24h(quote, base, quote.price, now_ms, settings)
+
+
+def _chance_24h(quote: Quote, base: NowBase, price: int, at_ms: int, settings: MarketSettings) -> float:
+    """The posting simulation for a 24 h post of the reference stack (TT37, TT38).
+
+    Args:
+        quote: The current price, units and book.
+        base: The item's baselines (sold_per_day not None).
+        price: The post's price, copper.
+        at_ms: When it is posted, UTC ms (the demand's hours start there).
+        settings: Market-wide defaults; sell_window_hours is replaced by SELL_CHANCE_HOURS.
+
+    Returns:
+        P in [0, 1].
+    """
+    supply = Supply(base.sold_per_day, base.listed_per_day, quote.book, quote.price, quote.qty)
+    day = replace(settings, sell_window_hours=SELL_CHANCE_HOURS)
+    return sellprob.posting_chance(supply, price, ref_stack(list(quote.book or ())), at_ms, day, base.sales_values,
+                                   base.undercut_share)[0]
+
+
+def next_slot_ms(slot: int, now_ms: int) -> int:
+    """The start of the next hour (now's included) that falls on an hour of the week.
+
+    Args:
+        slot: Hour of the week, 0 = Mon 00:00 UTC.
+        now_ms: Now, UTC ms.
+
+    Returns:
+        That hour's start, UTC ms.
+    """
+    hour = now_ms // HOUR_MS
+    return (hour + (slot - slot_of(hour)) % 168) * HOUR_MS
+
+
+def window_lines(i: ItemIntel, quote: Quote, base: NowBase, closes: list[tuple[int, int]], now_ms: int,
+                 settings: MarketSettings) -> dict:
+    """The best windows' percentages for the tooltip's Best Sell / Best Buy Time (SPEC §4.3 TT38).
+
+    Args:
+        i: The item's intelligence, its windows built.
+        quote: The current price, units and book.
+        base: The item's baselines.
+        closes: Its hourly closes, outliers dropped.
+        now_ms: Now.
+        settings: Market-wide defaults.
+
+    Returns:
+        {"sell_windows", "buy_windows"}: each selling window with chance24 (a 24 h post at its expected price at
+        its next best hour; None without a price or sales), each buying window with found_share.
+    """
+    sell = sell_window_chances(i.sell_windows, quote, base, now_ms, settings)
+    buy = tuple(replace(w, found_share=patterns.found_share(closes, w.start_slot, w.hours, w.expected_price, now_ms,
+                                                            settings.pattern_half_life_weeks))
+                for w in i.buy_windows)
+    return {"sell_windows": sell, "buy_windows": buy}
+
+
+def sell_window_chances(windows: tuple[IntelWindow, ...], quote: Quote, base: NowBase, now_ms: int,
+                        settings: MarketSettings) -> tuple[IntelWindow, ...]:
+    """Each selling window's chance (TT38): a 24 h post at its expected price at its next best hour, on this book.
+
+    The daily analysis, the hourly repricing and your scans all call it, so it follows the book as Sell Chance Now
+    does (review, M33b-1).
+
+    Args:
+        windows: The item's selling windows.
+        quote: The current price, units and book.
+        base: The item's baselines.
+        now_ms: Now.
+        settings: Market-wide defaults.
+
+    Returns:
+        The windows with chance24 set; None without an expected price or measured sales.
+    """
+    return tuple(replace(w, chance24=None if w.expected_price is None or base.sold_per_day is None else
+                         _chance_24h(quote, base, w.expected_price, next_slot_ms(w.best_slot, now_ms), settings))
+                 for w in windows)
+
+
+def expired_share(lifetimes: dict[int, tuple[float, ...]], now_ms: int) -> float | None:
     """The share of the listings that ended in the last 30 days that expired (SPEC §2.4, BZ23).
 
     Args:
@@ -350,7 +451,7 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
         max(ref, settings.min_gear_units) if gear else ref,
         settings.max_supply_share_gear if gear else settings.max_supply_share,
         volume.volume_score, book_age, settings.max_trend_total)
-    return ItemIntel(
+    intel = ItemIntel(
         key, cur.price if cur else None, cur.qty if cur else None, now_ms - cur.at if cur else None,
         med7, med30, p10, p90,
         trend, volume.sold_per_day, volume.expired_per_day, volume.listed_per_day,
@@ -361,7 +462,59 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
         median_daily_supply=typical,
         observed_listing_turnover=observed_turnover(item.hourly_supply, now_ms), med14=med14,
         volume_kind=volume.main_kind, closes_30d=len(last30),
-        expired_share=expired_share(item.lifetimes, now_ms), undercut_share=undercut)
+        expired_share=expired_share(item.lifetimes, now_ms), undercut_share=undercut,
+        commodity=any(row[sell_through.COMMODITY] for row in item.lifetimes.values()) if item.lifetimes else None,
+        supply7=median_daily_supply(item.hourly_supply, now_ms, 7),
+        supply14=median_daily_supply(item.hourly_supply, now_ms, 14),
+        sell_chance=sell_chance_now(quote, base, now_ms, settings))
+    return replace(intel, **window_lines(intel, quote, base, hourly, now_ms, settings))
+
+
+def lifetime_sums(lifetimes: dict[int, tuple[float, ...]], now_ms: int
+                  ) -> tuple[tuple[sell_through.Tally, ...], tuple[float, float]]:
+    """What the market pass needs from one item's lifetimes, so the rows themselves need not be kept (BZ40, BZ41).
+
+    Args:
+        lifetimes: The item's day -> stored lifetimes row.
+        now_ms: Now.
+
+    Returns:
+        (its Tally per lookback in LOOKBACKS order, its (cancels, left early) for the cancel share).
+    """
+    return (tuple(sell_through.tally(lifetimes, now_ms, d) for d in sell_through.LOOKBACKS),
+            sell_through.cancel_counts(lifetimes, now_ms))
+
+
+def with_sell_through(items: dict[int, ItemIntel],
+                      sums: dict[int, tuple[tuple[sell_through.Tally, ...], tuple[float, float]]],
+                      classes: dict[int, int | None]) -> tuple[dict[int, ItemIntel], float | None]:
+    """Every item's sell-through per lookback, from the whole market (SPEC §2.4, BZ40, BZ41).
+
+    Market-wide inputs first: the commodity cancel share over 30 days and each class's pooled rate per lookback;
+    then each item's own or borrowed rate.
+
+    Args:
+        items: Item key -> its intelligence.
+        sums: Item key -> `lifetime_sums`, for the items that have lifetimes.
+        classes: Item key -> item class, None when unknown.
+
+    Returns:
+        (the items with sell_through and sell_through_how set, the market's commodity cancel share or None).
+    """
+    cancels = sell_through.cancel_share(sums[k][1] for k in sorted(sums))
+    none = sell_through.Tally(0.0, 0.0, False)
+    tallies = {days: {k: sums[k][0][n] if k in sums else none for k in sorted(items)}
+               for n, days in enumerate(sell_through.LOOKBACKS)}
+    pooled = {days: sell_through.class_rates(((classes.get(k), t) for k, t in sorted(by_key.items())), cancels)
+              for days, by_key in tallies.items()}
+    out = {}
+    for key, i in sorted(items.items()):
+        c = classes.get(key)
+        rates = [sell_through.sell_through(tallies[d][key], cancels, None if c is None else pooled[d].get(c))
+                 for d in sell_through.LOOKBACKS]
+        out[key] = replace(i, sell_through=tuple(r.rate for r in rates),
+                           sell_through_how="".join(r.how or "-" for r in rates))
+    return out, cancels
 
 
 def with_scan(intel: MarketIntelligence, prices: dict[int, tuple[int, int, int]],
@@ -392,12 +545,15 @@ def with_scan(intel: MarketIntelligence, prices: dict[int, tuple[int, int, int]]
         rows = tuple(book[1]) if book else i.book
         base = NowBase(i.med7, i.p90_30, i.closes_30d or 0, i.sold_per_day, i.listed_per_day,
                        profile.unpack(i.sales_how, i.sales_weeks).values, vendor_sell.get(key, 0), i.undercut_share)
-        post, ref, chance, unknown, sell_value = now_fields(Quote(price, qty, rows or None), base, at, settings)
+        quote = Quote(price, qty, rows or None)
+        post, ref, chance, unknown, sell_value = now_fields(quote, base, at, settings)
         items[key] = replace(i, cur=price, cur_qty=qty, cur_age_ms=reference - at, book=rows,
                              book_age_ms=reference - book[0] if book else i.book_age_ms,
                              units_on_ah=sum(stack * count for _, stack, _, count in rows) if book else i.units_on_ah,
                              cur_suspect=prices_suspect(price, i.p10_30, i.p90_30), post_price=post, ref_stack=ref,
-                             chance=chance, volume_unknown=unknown, sell_value=sell_value)
+                             chance=chance, volume_unknown=unknown, sell_value=sell_value,
+                             sell_chance=sell_chance_now(quote, base, at, settings),
+                             sell_windows=sell_window_chances(i.sell_windows, quote, base, at, settings))
     return replace(intel, items=items)
 
 
@@ -432,6 +588,7 @@ def analyze_market(history: HistoryReader, market: str, now_ms: int, settings: M
     items = history.items()
     out: dict[int, ItemIntel] = {}
     failed: dict[int, str] = {}
+    sums: dict[int, tuple[tuple[sell_through.Tally, ...], tuple[float, float]]] = {}
     for item in history.market_history(market, history_window(now_ms, source_rank)):   # one bulk read per market (AR7)
         if item.key < 0:          # some suffix of the item, which one unknown: stored, never valued (SPEC §2.2.1, AR8)
             continue
@@ -439,6 +596,12 @@ def analyze_market(history: HistoryReader, market: str, now_ms: int, settings: M
             out[item.key] = analyze_item(item, items.get(item.key), now_ms, settings)
         except Exception as error:                 # noqa: BLE001  one bad item never stops the analysis (FM8)
             failed[item.key] = f"{type(error).__name__}: {error}"
+            continue
+        if item.lifetimes:
+            sums[item.key] = lifetime_sums(item.lifetimes, now_ms)     # the rows are not kept (bounded memory)
+    classes = {k: items[k].item_class if k in items else None for k in out}
+    out, cancels = with_sell_through(out, sums, classes)
     seen = [now_ms - i.cur_age_ms for i in out.values() if i.cur_age_ms is not None]
     method = max(VOLUME_METHOD_VERSION, ID_METHOD_VERSION)       # the newer of the two volume methods (informational)
-    return MarketIntelligence(market, now_ms, max(seen) if seen else None, method, out), failed
+    return replace(MarketIntelligence(market, now_ms, max(seen) if seen else None, method, out),
+                   cancel_share=cancels), failed

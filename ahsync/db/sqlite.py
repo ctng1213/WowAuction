@@ -28,7 +28,7 @@ from ahsync.state.gathering import GatheringStore
 from ahsync.state.positions import PositionStore
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 26
+SCHEMA_VERSION = 27
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
@@ -262,6 +262,22 @@ MIGRATIONS: dict[int, str] = {
     """,
     # 26: 'game' when the vendor price came from the addon's itemNames, for the item detail (SPEC §2.4, A92, BZ25).
     26: "ALTER TABLE items ADD COLUMN vendor_src TEXT",
+    # 27: commodity cancels and the lowest-price endings per item and day, from auction lifetimes (BZ40, BZ41, M33b).
+    # Old rows read 0 until a daily run or a rebuild recomputes their day. A table rebuild, not ADD COLUMN, so it runs
+    # on a table that already has them.
+    27: """
+        CREATE TABLE lifetimes_d1_new(
+            market TEXT NOT NULL, key INTEGER NOT NULL, day INTEGER NOT NULL, src TEXT NOT NULL,
+            ended REAL NOT NULL, expired REAL NOT NULL, matched REAL NOT NULL,
+            cancels REAL NOT NULL DEFAULT 0, cancelled REAL NOT NULL DEFAULT 0, t1_ended REAL NOT NULL DEFAULT 0,
+            t1_left REAL NOT NULL DEFAULT 0, commodity INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY(market, key, day, src)
+        ) WITHOUT ROWID;;
+        INSERT INTO lifetimes_d1_new(market, key, day, src, ended, expired, matched)
+            SELECT market, key, day, src, ended, expired, matched FROM lifetimes_d1;;
+        DROP TABLE lifetimes_d1;;
+        ALTER TABLE lifetimes_d1_new RENAME TO lifetimes_d1
+    """,
 }
 BACKUP_KEEP = 3
 BACKUP_PREFIX = "ahsync-"

@@ -595,9 +595,10 @@ def random_world(rng) -> list[IdBook]:
             elif rng.random() < 0.3:
                 live[i][1] = max(1, live[i][1] - rng.randint(0, 5))
         for _ in range(rng.randint(0, 3)):
-            live[next_id] = [rng.choice([LINEN, ORE, 15210]), rng.randint(1, 20)]
+            live[next_id] = [rng.choice([LINEN, ORE, 15210]), rng.randint(1, 20), rng.choice([90, 100, 110])]
             next_id += 1
-        snaps.append(IdBook(at, tuple(Auction(i, k, q, 100, rng.randint(1, 4)) for i, (k, q) in sorted(live.items()))))
+        snaps.append(IdBook(at, tuple(Auction(i, k, q, p, rng.randint(1, 4), k != 15210)       # gear is no commodity
+                                      for i, (k, q, p) in sorted(live.items()))))
         at += rng.choice([HOUR_MS, HOUR_MS, 2 * HOUR_MS, 7 * HOUR_MS])
     return snaps
 
@@ -610,12 +611,15 @@ def test_VI5_lifetimes_account_for_every_unit_once():
         for e in lt.endings:
             assert 0.0 <= e.expired <= 1.0, context
         gone = sum(e.qty for e in lt.endings) + sum(f[2] for f in lt.fills)
-        total = sum(f.sold + f.expired for by_key in flows.values() for f in by_key.values())
-        assert total == pytest.approx(gone), context                            # sold + expired = what left
+        total = sum(f.sold + f.expired + f.cancelled for by_key in flows.values() for f in by_key.values())
+        assert total == pytest.approx(gone), context                            # sold + expired + cancelled = what left
+        for e in lt.endings:
+            assert not e.cancelled or (e.expired == 0.0 and e.key != 15210), context   # BZ40: commodities, early only
         for by_key in flows.values():
             for f in by_key.values():
-                assert min(f.sold, f.expired, f.listed, f.matched) >= 0, context
-                assert f.expired_listings <= f.ended + 1e-9 and f.matched <= f.ended, context
+                assert min(f.sold, f.expired, f.listed, f.matched, f.cancelled, f.t1_left) >= 0, context
+                assert f.expired_listings + f.cancels <= f.ended + 1e-9 and f.matched <= f.ended, context
+                assert f.t1_left <= f.t1_ended + 1e-9 and f.t1_ended <= f.ended, context   # BZ41's share in [0, 1]
         bought: dict[int, int] = {}
         for auction, _, units, _ in lt.fills:
             bought[auction] = bought.get(auction, 0) + units
@@ -630,3 +634,61 @@ def test_VI5_lifetimes_account_for_every_unit_once():
         rates = sold_by_hour(flows)
         credited = sum(r for by_hour in rates.values() for r in by_hour.values())
         assert credited >= 0, context
+
+
+def test_BZ40_a_commodity_cancel_is_no_sale():
+    silk, gloves = 4306, 4243                            # Silk Cloth (a commodity); Embossed Leather Gloves (not)
+    at = THU_1702
+    a, b = Auction(1, silk, 5, 315, VERY_LONG, True), Auction(2, silk, 20, 320, LONG, True)
+    cheap, dear = Auction(3, gloves, 1, 100, VERY_LONG), Auction(4, gloves, 1, 120, VERY_LONG)
+    snaps = [IdBook(at, (a, b, cheap, dear)),
+             IdBook(at + HOUR_MS, (a, cheap)),                                  # B gone, A unchanged; 1s 20c gone
+             IdBook(at + 2 * HOUR_MS, (Auction(1, silk, 3, 315, VERY_LONG, True), cheap))]   # A loses 2
+    lt = lifetimes(snaps)
+    assert [(e.auction, e.expired, e.cancelled) for e in lt.endings] == [(2, 0.0, True), (4, 0.0, False)]
+    assert lt.commodities == frozenset({silk})
+    first, second = life_flows(lt)[(at, at + HOUR_MS)], life_flows(lt)[(at + HOUR_MS, at + 2 * HOUR_MS)]
+    assert (first[silk].sold, first[silk].expired, first[silk].cancelled, first[silk].cancels) == (0.0, 0.0, 20.0, 1.0)
+    assert first[silk].commodity and not first[gloves].commodity
+    assert (first[gloves].sold, first[gloves].cancelled) == (1.0, 0.0)          # gear: left early, cancels included
+    assert second[silk].sold == 2.0                                             # A's partial fill is a sale
+
+
+def test_BZ40_an_equal_price_or_a_changed_cheaper_auction_is_no_proof():
+    silk, at = 4306, THU_1702
+    a, b = Auction(1, 4306, 5, 320, VERY_LONG, True), Auction(2, 4306, 20, 320, LONG, True)
+    equal = lifetimes([IdBook(at, (a, b)), IdBook(at + HOUR_MS, (a,))])
+    assert [e.cancelled for e in equal.endings] == [False]                      # same price: a buyer could take either
+    cheaper = Auction(1, silk, 5, 315, VERY_LONG, True)
+    bought = lifetimes([IdBook(at, (cheaper, b)), IdBook(at + HOUR_MS, (Auction(1, silk, 4, 315, VERY_LONG, True),))])
+    assert [e.cancelled for e in bought.endings] == [False]                     # the cheaper one was bought from too
+
+
+def test_BZ41_a_listing_posted_at_the_lowest_price_is_tier_one():
+    at = THU_1702
+    old = Auction(1, LINEN, 20, 125, VERY_LONG, True)
+    snaps = [IdBook(at, (old,)),
+             IdBook(at + HOUR_MS, (old, Auction(2, LINEN, 20, 120, VERY_LONG, True), Auction(3, LINEN, 5, 130, VERY_LONG, True))),
+             IdBook(at + 2 * HOUR_MS, (old,))]
+    lt = lifetimes(snaps)
+    assert [(e.auction, e.tier1) for e in lt.endings] == [(2, True), (3, False)]
+    flow = life_flows(lt)[(at + HOUR_MS, at + 2 * HOUR_MS)][LINEN]
+    assert (flow.t1_ended, flow.t1_left, flow.ended) == (1.0, 1.0, 2.0)          # 3 was dearer: not tier 1
+    assert lifetimes([IdBook(at, (old,)), IdBook(at + HOUR_MS, ())]).endings[0].tier1 is None   # posting unseen
+
+
+def test_BZ40_a_snapshot_stored_before_m33b_still_finds_the_cancel():
+    silk, at = 4306, THU_1702
+    old = IdBook(at, (Auction(1, silk, 5, 315, VERY_LONG), Auction(2, silk, 20, 320, LONG)))   # no commodity flag
+    new = IdBook(at + HOUR_MS, (Auction(1, silk, 5, 315, VERY_LONG, True), Auction(2, silk, 20, 320, LONG, True)))
+    lt = lifetimes([old, new, IdBook(at + 2 * HOUR_MS, (Auction(1, silk, 5, 315, VERY_LONG, True),))])
+    assert [e.cancelled for e in lt.endings] == [True]
+
+
+def test_BZ40_an_item_whose_last_auction_vanishes_in_the_first_kept_gap_is_still_a_commodity():
+    silk, at = 4306, THU_1702
+    before = IdBook(at, (Auction(1, silk, 5, 315, VERY_LONG, True), Auction(2, silk, 20, 320, LONG, True)))
+    lt = lifetimes([before, IdBook(at + HOUR_MS, ())], keep_from_ms=at + HOUR_MS)
+    assert lt.commodities == frozenset({silk})
+    flow = life_flows(lt)[(at, at + HOUR_MS)][silk]
+    assert flow.commodity and flow.cancels == 0.0                               # nothing cheaper survived: both sold

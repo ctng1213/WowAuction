@@ -78,7 +78,7 @@ def test_BZ1_the_two_endpoints_are_one_snapshot():
     assert fetch.at_ms is not None
     parsed = bz.parse_snapshot(M, fetch.auctions, fetch.commodities, fetch.at_ms, SUFFIXES)
     assert observation(parsed).market == M and observation(parsed).src == "blizzard" and observation(parsed).at_ms == B_MS
-    assert observation(parsed).auctions == (Auction(39643, 8180, 1, 1500, 1), Auction(2455, 2589, 14, 125, 4))
+    assert observation(parsed).auctions == (Auction(39643, 8180, 1, 1500, 1), Auction(2455, 2589, 14, 125, 4, True))
     assert snapshot_problems(observation(parsed)) == []
 
 
@@ -238,7 +238,7 @@ def test_BZ7_an_envelope_opens_back_into_its_snapshot():
     stamp, a, c = bz.open_envelope(bz.raw_envelope(2, 113, B, B_MS, regular, commodities))
     assert stamp == B and json.loads(a) == json.loads(regular) and json.loads(c) == json.loads(commodities)
     parsed = bz.parse_snapshot(M, a, c, bz.http_date_ms(stamp), SUFFIXES)
-    assert observation(parsed).auctions == (Auction(39643, 8180, 1, 1500, 1), Auction(2455, 2589, 14, 125, 4))
+    assert observation(parsed).auctions == (Auction(39643, 8180, 1, 1500, 1), Auction(2455, 2589, 14, 125, 4, True))
     for bad in (b"not gzip", gzip.compress(b"{}"), gzip.compress(b"[1]")):
         with pytest.raises(bz.BlizzardError, match="not a raw envelope"):
             bz.open_envelope(bad)
@@ -268,3 +268,8 @@ def test_BZ16_the_catalog_comes_from_ranged_item_searches():
         bz.BlizzardClient(search, FakeClock(B_MS), CLIENT_ID, SECRET).search_items(1, 1001)
     with pytest.raises(bz.BlizzardError, match="without an id"):
         bz.catalog_row({"id": 1})
+
+
+def test_BZ38_a_record_in_both_lists_still_counts_once():
+    parsed = observation(bz.parse_snapshot(M, body([LINEN]), body([LINEN]), B_MS, SUFFIXES))
+    assert [a.id for a in parsed.auctions] == [2455] and snapshot_problems(parsed) == []

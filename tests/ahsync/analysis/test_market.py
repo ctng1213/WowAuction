@@ -374,8 +374,10 @@ def test_BZ32_a_newer_book_moves_the_now_fields_and_no_baseline():
     assert later.post_price is not None and later.post_price <= i.post_price
     baselines = ("med7", "med30", "p10_30", "p90_30", "trend7", "sold_per_day", "expired_per_day", "listed_per_day",
                  "how", "how_weeks", "sales_how", "sales_weeks", "supply_how", "supply_weeks", "seasonality",
-                 "sell_windows", "buy_windows", "curve", "curve_hour", "conf", "median_daily_supply", "closes_30d")
+                 "buy_windows", "curve", "curve_hour", "conf", "median_daily_supply", "closes_30d")
     assert all(getattr(later, f) == getattr(i, f) for f in baselines)
+    plain = lambda ws: [market.replace(w, chance24=None) for w in ws]       # a window's 24 h chance follows the book
+    assert plain(later.sell_windows) == plain(i.sell_windows)
     assert to_json(intel) != to_json(market.replace(intel, items={**intel.items, 6217: later}))
 
 
@@ -404,3 +406,43 @@ def test_BZ29_the_simulation_uses_the_measured_share_not_the_default():
     assert measured > default
     assert default == sellprob.posting_chance(supply, 120, 20, 0, settings, None, settings.default_undercut_share)[0]
 
+
+
+def test_sell_chance_now_is_a_24h_post_at_the_lowest_listing():
+    book = ((90, 12, 4, 1), (95, 20, 4, 2))
+    base = market.NowBase(100, 120, 200, 10.0, 10.0, tuple([1.0] * 168), 8)
+    quote = market.Quote(90, 12, book)
+    day = MarketSettings(sell_window_hours=24)
+    supply = sellprob.Supply(10.0, 10.0, book, 90, 12)
+    expected = sellprob.posting_chance(supply, 90, market.ref_stack(list(book)), NOW, day, base.sales_values, None)[0]
+    assert market.sell_chance_now(quote, base, NOW, MarketSettings()) == expected      # 24 h, whatever the post window
+    assert market.sell_chance_now(quote, market.NowBase(100, 120, 200, None, None, (), 8), NOW, MarketSettings()) is None
+    assert market.sell_chance_now(market.Quote(None, None, None), base, NOW, MarketSettings()) is None
+
+
+def test_next_slot_is_this_hour_or_the_next_one_on_that_hour_of_the_week():
+    hour = NOW // HOUR
+    slot = (hour // 24 + 3) % 7 * 24 + hour % 24
+    assert market.next_slot_ms(slot, NOW) == hour * HOUR
+    assert market.next_slot_ms((slot + 167) % 168, NOW) == (hour + 167) * HOUR
+
+
+def test_BZ41_the_market_pass_borrows_from_the_class_and_reports_the_cancel_share():
+    day = NOW // 86_400_000
+    linen = {day: (100.0, 10.0, 0.0, 9.0, 180.0, 94.0, 74.0, 1)}                # 90 left early, 9 cancels
+    thin = {day: (12.0, 6.0, 0.0, 0.0, 0.0, 12.0, 3.0, 1)}
+    items = {2589: bare_intel(2589), 2592: bare_intel(2592), 999: bare_intel(999)}
+    sums = {2589: market.lifetime_sums(linen, NOW), 2592: market.lifetime_sums(thin, NOW)}
+    out, cancels = market.with_sell_through(items, sums, {2589: 7, 2592: 7, 999: None})
+    assert cancels == pytest.approx(9 / (90 + 6))                                # both are commodities
+    assert out[2589].sell_through[0] == pytest.approx(74 / 94) and out[2589].sell_through_how == "mmm"
+    class_rate = (74 + 3) / (94 + 12)
+    assert out[2592].sell_through[0] == pytest.approx((3 + 30 * class_rate) / 42) and out[2592].sell_through_how == "ccc"
+    assert out[999].sell_through == (None, None, None) and out[999].sell_through_how == "---"
+
+
+def bare_intel(key: int):
+    """A bare ItemIntel for the market pass."""
+    from ahsync.intel.contract import ItemIntel
+    return ItemIntel(key, None, None, None, None, None, None, None, 0.0, None, None, None, None, {}, None, 1, 0.5, True,
+                     None, 0, None, None)

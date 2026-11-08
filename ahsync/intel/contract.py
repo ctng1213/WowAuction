@@ -12,19 +12,25 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 
-INTEL_SCHEMA_VERSION = 12      # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
+INTEL_SCHEMA_VERSION = 13      # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
                                # 5: median_daily_supply (V23); 6: observed_listing_turnover (V37); 7: volume_kind (D57);
                                # 8: closes_30d (TT23); 9: each window's forecast: expected price, executable quantity,
                                # confidence, and buying windows ranked by actionable value (W14, W15); 10: the cloud
                                # document's catalog, coverage and settings, and per item last_hour and the recent ring
                                # (SPEC §2.4, BZ15, BZ32); 11: per item med14, the 14-day median (SPEC §4.3, BZ37);
                                # 12: per item expired_share and the measured undercut_share, from auction lifetimes
-                               # (SPEC §2.4, BZ23, BZ29)
+                               # (SPEC §2.4, BZ23, BZ29); 13: the tooltip's market lines (M33b): the market's
+                               # commodity cancel share, per item commodity, sell-through per lookback, typical supply
+                               # over 7 and 14 days, Sell Chance Now, each sell window's 24 h chance and each buy
+                               # window's found share (SPEC §2.4, §4.3, BZ40, BZ41, TT36-TT38)
 # Fields each schema added, so to_json can write the previous schema for older readers (SPEC §2.4, BZ18).
 ADDED_IN = {10: {"document": ("catalog", "coverage", "settings", "ages_at_ms"),
                  "item": ("last_hour", "recent_closes", "recent_sold", "recent_listed", "recent_units")},
             11: {"document": (), "item": ("med14",)},
-            12: {"document": (), "item": ("expired_share", "undercut_share")}}
+            12: {"document": (), "item": ("expired_share", "undercut_share")},
+            13: {"document": ("cancel_share",),
+                 "item": ("commodity", "sell_through", "sell_through_how", "supply7", "supply14", "sell_chance"),
+                 "window": ("chance24", "found_share")}}
 
 
 class IntelVersionError(ValueError):
@@ -48,6 +54,11 @@ class IntelWindow:
     expected_price: int | None = None     # copper: level × how_avg × trend factor, clamped (§3.3.4 forecast)
     exec_qty: int | None = None           # units the market can take there: the window's liquidity cap
     conf: int | None = None               # confidence %, the window's weeks as the pattern component (§3.3.5)
+    # Schema 13 (SPEC §4.3 TT38): a selling window's chance that a 24 h post at its expected price, at its best hour,
+    # sells before it expires; a buying window's share of recent weeks (half-life weighted) whose lowest listing in
+    # it was at or below its expected price. None without the inputs, and before schema 13.
+    chance24: float | None = None
+    found_share: float | None = None
 
 
 @dataclass(frozen=True)
@@ -114,6 +125,16 @@ class ItemIntel:
     # u(p) at the post-now price: the share of the last 7 days' new units listed at or below that position against the
     # book (SPEC §3.3.2, BZ29); the chance and the curve used it. None without that history (the default applied).
     undercut_share: float | None = None
+    # Schema 13 (M33b; SPEC §2.4, §4.3). Seen in Blizzard's commodities list (None without auction lifetimes).
+    commodity: bool | None = None
+    # Sell-through at the lowest price over 7, 14 and 30 days, 0-1, None for "—" (BZ41); how each was had, one
+    # character per lookback: m measured, e est. (cancels estimated), c class est., - none.
+    sell_through: tuple[float | None, float | None, float | None] = (None, None, None)
+    sell_through_how: str = "---"
+    supply7: int | None = None            # typical listed units over 7 and 14 days (median_daily_supply, TT36)
+    supply14: int | None = None
+    # Sell Chance Now (TT37): a 24 h post of the reference stack at cur sells before it expires; None without sales.
+    sell_chance: float | None = None
 
 
 @dataclass(frozen=True)
@@ -136,6 +157,8 @@ class MarketIntelligence:
     # The time every item's cur_age_ms and book_age_ms count back from (schema 10): a cloud document's prices'
     # time, which moves hourly while built_ms doesn't. None means built_ms (a desktop-built document).
     ages_at_ms: int | None = None
+    # The commodity listings that left early and were cancelled, over 30 days, 0-1 (BZ40, schema 13); None without.
+    cancel_share: float | None = None
 
 
 def price_level(i: ItemIntel) -> int | None:
@@ -218,6 +241,9 @@ def to_json(intel: MarketIntelligence, schema: int | None = None) -> str:
             for item in body["items"].values():
                 for name in ADDED_IN[version]["item"]:
                     item.pop(name)
+                for window in item["sell_windows"] + item["buy_windows"]:
+                    for name in ADDED_IN[version].get("window", ()):
+                        window.pop(name)
     body["schema_version"] = target
     return json.dumps(body, sort_keys=True, separators=(",", ":"))
 
@@ -250,9 +276,11 @@ def from_json(text: str) -> MarketIntelligence:
                 item[name] = tuple(IntelWindow(**w) for w in item[name])
         if item.get("last_hour") is not None:
             item["last_hour"] = tuple(item["last_hour"])
+        if "sell_through" in item:
+            item["sell_through"] = tuple(item["sell_through"])
         items[int(key)] = ItemIntel(**item)
     catalog = {int(k): tuple(v) for k, v in body.get("catalog", {}).items()}
     coverage = tuple(tuple(r) for r in body.get("coverage", ()))
     return MarketIntelligence(body["market"], body["built_ms"], body["observations_until_ms"],
                               body["volume_method_version"], items, body["schema_version"], catalog, coverage,
-                              dict(body.get("settings", {})), body.get("ages_at_ms"))
+                              dict(body.get("settings", {})), body.get("ages_at_ms"), body.get("cancel_share"))

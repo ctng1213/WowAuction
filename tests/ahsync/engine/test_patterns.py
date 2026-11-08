@@ -6,7 +6,7 @@ from dataclasses import replace
 
 import pytest
 
-from ahsync.engine.patterns import (
+from ahsync.engine.patterns import (found_share, 
     Forecast, ForecastFacts, Window, buy_value, buy_windows, recency_weight, sell_net_price, sell_scores, sell_windows,
     slot_label, weighted_median, window_forecast, window_label,
 )
@@ -219,3 +219,28 @@ def test_window_forecasts_follow_supply_trend_and_clamps():
     assert window_forecast(w, facts(closes_30d=4)).price == 100                          # thin: capped at the level
     assert window_forecast(w, facts(closes_30d=None)).conf == 45                          # unknown count: 0 closes
     assert sell_net_price([], 100) == pytest.approx(95.0)
+
+
+def test_found_share_weighs_the_weeks_a_buy_window_offered_its_price():
+    tue_0700 = (20_396 * 24 + 7) * 3_600_000            # day 20396 is a Tuesday: slot 31
+    week = 7 * 86_400_000
+    now = tue_0700 + 2 * 3_600_000
+    closes = [(tue_0700, 17), (tue_0700 + 3_600_000, 25),          # this week: lowest 17, at the price
+              (tue_0700 - week, 19), (tue_0700 - week + 3_600_000, 18),   # a week ago: lowest 18, above it
+              (tue_0700 - 2 * week + 3_600_000, 16),                   # two weeks ago: 16
+              (tue_0700 + 5 * 3_600_000, 1), (tue_0700 - 8 * 3_600_000, 1)]   # outside the window: ignored
+    # weights 1, 0.7071, 0.5 (half-life 2 weeks): (1 + 0.5) / 2.2071
+    assert found_share(closes, 31, 3, 17, now, 2) == pytest.approx(1.5 / (1 + 0.5 ** 0.5 + 0.5))
+    assert found_share(closes, 31, 3, None, now, 2) is None
+    assert found_share(closes, 100, 3, 17, now, 2) is None         # no close in the window yet: "—"
+    assert found_share([(now + 1, 1)], 31, 3, 17, now, 2) is None  # the future is ignored
+
+
+def test_found_share_counts_a_window_in_progress_as_its_own_week():
+    tue_0700 = (20_396 * 24 + 7) * 3_600_000            # slot 31; the window runs 07:00-10:00
+    week = 7 * 86_400_000
+    now = tue_0700 + 90 * 60_000                         # Tue 08:30: the window is in progress
+    closes = [(tue_0700, 30), (tue_0700 + 3_600_000, 30),                                  # this week so far: 30
+              (tue_0700 - week, 30), (tue_0700 - week + 3_600_000, 30), (tue_0700 - week + 7_200_000, 10)]   # last: 10
+    # last week's 09:00 hour belongs to last week's occurrence, not this one: (0 + 0.7071) / 1.7071
+    assert found_share(closes, 31, 3, 17, now, 2) == pytest.approx(0.5 ** 0.5 / (1 + 0.5 ** 0.5))

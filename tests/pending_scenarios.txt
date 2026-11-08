@@ -62,7 +62,7 @@ K8
 D101 D102
 
 # M33b the market lines in one shape and commodity cancels (docs/mockups/sell-through.html)
-BZ40 BZ41 TT34 TT35 TT36 TT37 TT38 TT39 TT40
+TT34 TT35 TT36 TT37 TT38 TT39 TT40
 
 # The 0.1.6 batch's small items (docs/mockups/batch-0-1-6.html; plan blizzard-cloud.md §1)
 TT41 D104 DR32
