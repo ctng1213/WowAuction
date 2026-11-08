@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 
-INTEL_SCHEMA_VERSION = 13      # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
+INTEL_SCHEMA_VERSION = 14      # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
                                # 5: median_daily_supply (V23); 6: observed_listing_turnover (V37); 7: volume_kind (D57);
                                # 8: closes_30d (TT23); 9: each window's forecast: expected price, executable quantity,
                                # confidence, and buying windows ranked by actionable value (W14, W15); 10: the cloud
@@ -22,7 +22,8 @@ INTEL_SCHEMA_VERSION = 13      # 2: weekly patterns, windows, strength, curve (A
                                # (SPEC §2.4, BZ23, BZ29); 13: the tooltip's market lines (M33b): the market's
                                # commodity cancel share, per item commodity, sell-through per lookback, typical supply
                                # over 7 and 14 days, Sell Chance Now, each sell window's 24 h chance and each buy
-                               # window's found share (SPEC §2.4, §4.3, BZ40, BZ41, TT36-TT38)
+                               # window's found share (SPEC §2.4, §4.3, BZ40, BZ41, TT36-TT38); 14: per item
+                               # unseen_per_day, the part of sold_per_day estimated sold before first sight (BZ45, BZ46)
 # Fields each schema added, so to_json can write the previous schema for older readers (SPEC §2.4, BZ18).
 ADDED_IN = {10: {"document": ("catalog", "coverage", "settings", "ages_at_ms"),
                  "item": ("last_hour", "recent_closes", "recent_sold", "recent_listed", "recent_units")},
@@ -30,7 +31,8 @@ ADDED_IN = {10: {"document": ("catalog", "coverage", "settings", "ages_at_ms"),
             12: {"document": (), "item": ("expired_share", "undercut_share")},
             13: {"document": ("cancel_share",),
                  "item": ("commodity", "sell_through", "sell_through_how", "supply7", "supply14", "sell_chance"),
-                 "window": ("chance24", "found_share")}}
+                 "window": ("chance24", "found_share")},
+            14: {"document": (), "item": ("unseen_per_day",)}}
 
 
 class IntelVersionError(ValueError):
@@ -135,6 +137,9 @@ class ItemIntel:
     supply14: int | None = None
     # Sell Chance Now (TT37): a 24 h post of the reference stack at cur sells before it expires; None without sales.
     sell_chance: float | None = None
+    # Schema 14 (BZ46). Of sold_per_day, the units a day estimated sold before their listings were first seen (BZ45);
+    # None when the main volume source isn't auction ids or nothing was estimated.
+    unseen_per_day: float | None = None
 
 
 @dataclass(frozen=True)

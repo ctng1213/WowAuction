@@ -74,6 +74,8 @@ class ItemHistory:
     lifetimes: dict[int, tuple[float, ...]] = field(default_factory=dict)
     # day -> position (thousandths of the lowest other price) -> new units, summed over id sources (SPEC §3.3.2, BZ29)
     new_listings: dict[int, dict[int, float]] = field(default_factory=dict)
+    # day -> source -> of its sold, the units estimated sold before first sight (id sources only, BZ45, V44)
+    unseen: dict[int, dict[str, float]] = field(default_factory=dict)
 
 
 class ItemCatalog(dict):
@@ -194,7 +196,7 @@ class HistoryReads:
             f"ORDER BY key, at DESC, CASE src {rank} ELSE {len(window.source_rank)} END, src",
             (market, *window.source_rank)))
         vol = _Groups(self.conn.execute(
-            "SELECT key, day, src, sold, expired, listed FROM volume_d1 WHERE market = ? AND day >= ? "
+            "SELECT key, day, src, sold, expired, listed, unseen FROM volume_d1 WHERE market = ? AND day >= ? "
             "ORDER BY key, day, src", (market, window.volume_from_day)))
         cover = self.volume_cover(market, window.volume_from_day)
         ends = _Groups(self.conn.execute(
@@ -217,13 +219,14 @@ class HistoryReads:
         for key in keys:
             candles = h1.take(key)
             current = cur.take(key)
+            volume = vol.take(key)
             yield ItemHistory(
                 key, _best_per_time([(t, c, src) for t, c, _, src in candles if c is not None], ranked),
                 _best_per_time([(t, q or 0, src) for t, _, q, src in candles], ranked),
                 [tuple(r) for r in sales.take(key)], _best_per_time(d1.take(key), ranked),
-                CurrentPrice(*current[0]) if current else None, _volume_by_day(vol.take(key)),
+                CurrentPrice(*current[0]) if current else None, _volume_by_day([r[:5] for r in volume]),
                 _newest_book(books.take(key), rank), cover, _lifetimes_by_day(ends.take(key)),
-                _positions_by_day(news.take(key)))
+                _positions_by_day(news.take(key)), _unseen_by_day(volume))
 
     def priced_keys(self, market: str, since_ms: int) -> list[int]:
         """Item keys with any price data in a market since a time.
@@ -585,6 +588,22 @@ def _volume_by_day(rows: list[tuple]) -> dict[int, dict[str, tuple[float, float,
     out: dict[int, dict[str, tuple[float, float, float]]] = {}
     for day, src, sold, expired, listed in rows:
         out.setdefault(day, {})[src] = (sold or 0.0, expired or 0.0, listed or 0.0)
+    return out
+
+
+def _unseen_by_day(rows: list[tuple]) -> dict[int, dict[str, float]]:
+    """Stored unseen-sales estimates as day -> source -> units, for the rows that have one (BZ45, V44).
+
+    Args:
+        rows: (day, src, sold, expired, listed, unseen) rows; unseen None before schema 28 or for a non-id source.
+
+    Returns:
+        The nested mapping, rows without an estimate left out.
+    """
+    out: dict[int, dict[str, float]] = {}
+    for day, src, *_, unseen in rows:
+        if unseen is not None:
+            out.setdefault(day, {})[src] = unseen
     return out
 
 

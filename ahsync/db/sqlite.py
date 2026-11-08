@@ -28,7 +28,7 @@ from ahsync.state.gathering import GatheringStore
 from ahsync.state.positions import PositionStore
 from ahsync.state.reads import StateReads
 
-SCHEMA_VERSION = 27
+SCHEMA_VERSION = 28
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
@@ -277,6 +277,10 @@ MIGRATIONS: dict[int, str] = {
             SELECT market, key, day, src, ended, expired, matched FROM lifetimes_d1;;
         DROP TABLE lifetimes_d1;;
         ALTER TABLE lifetimes_d1_new RENAME TO lifetimes_d1
+    """,
+    # 28: of an id day's sold, the units estimated sold before first sight, for the item detail (BZ45, V44).
+    28: """
+        ALTER TABLE volume_d1 ADD COLUMN unseen REAL
     """,
 }
 BACKUP_KEEP = 3

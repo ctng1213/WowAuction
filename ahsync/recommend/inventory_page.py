@@ -105,7 +105,7 @@ def detail_facts(look: ItemLook, s: ItemIntel, info: ItemInfo | None = None, lin
                        unpack(s.how, s.how_weeks), unpack(s.sales_how, s.sales_weeks),
                        unpack(s.supply_how, s.supply_weeks), windows_of(s.sell_windows), s.observed_listing_turnover,
                        s.volume_kind, info.vendor_sell if info else None, bool(info and info.vendor_src == "game"),
-                       lines)
+                       lines, s.unseen_per_day)
 
 
 def craft_uses(state: StateReader, char_ids: list[str], actions: list[ViewAction],

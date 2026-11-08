@@ -446,3 +446,18 @@ def bare_intel(key: int):
     from ahsync.intel.contract import ItemIntel
     return ItemIntel(key, None, None, None, None, None, None, None, 0.0, None, None, None, None, {}, None, 1, 0.5, True,
                      None, 0, None, None)
+
+
+def test_BZ46_unseen_per_day_is_sold_per_days_unseen_share_over_the_week_of_the_id_source():
+    from types import SimpleNamespace
+
+    from ahsync.analysis.market import unseen_per_day
+    from ahsync.engine.volume import DailyVolume
+    week = range(20_394, 20_401)
+    item = SimpleNamespace(volume={d: {"blizzard": (100.0, 10.0, 50.0), "books": (130.0, 0.0, 0.0)} for d in week},
+                           unseen={d: {"blizzard": 12.0} for d in week})
+    ids = DailyVolume(98.0, 10.0, 50.0, {"blizzard": 7}, 0.8, "blizzard", "ids")
+    assert unseen_per_day(item, week, ids) == 98.0 * 84 / 700                    # 11.76: 12% of the week's sold, unseen
+    assert unseen_per_day(item, week, DailyVolume(98.0, 10.0, 50.0, {"books": 7}, 0.6, "books", "groups")) is None
+    assert unseen_per_day(SimpleNamespace(volume=item.volume, unseen={}), week, ids) is None   # nothing estimated
+    assert unseen_per_day(item, week, DailyVolume(None, None, None)) is None
