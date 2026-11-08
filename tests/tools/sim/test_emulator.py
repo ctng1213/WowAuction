@@ -120,8 +120,8 @@ def test_SU8_a_sale_after_midnight_is_credited_to_the_later_day():
     midnight = (T // DAY_MS + 1) * DAY_MS
     a = lv(1, LINEN, 20, 50, midnight - 30 * MINUTE_MS, 24)
     lt = lifetimes([snap(midnight - HOUR_MS), snap(midnight - MINUTE_MS, a), snap(midnight + 50 * MINUTE_MS)])
-    sold = [(gap, f[LINEN].sold) for gap, f in life_flows(lt).items() if f[LINEN].sold]   # truth: bought at 00:40
-    assert sold == [((midnight - MINUTE_MS, midnight + 50 * MINUTE_MS), 20.0)]
+    sold = [(gap, f[LINEN].sold - f[LINEN].unseen) for gap, f in life_flows(lt).items() if f[LINEN].sold]   # 00:40
+    assert sold == [((midnight - MINUTE_MS, midnight + 50 * MINUTE_MS), 20.0)]   # observed; BZ45's estimate is there too
     assert sold[0][0][1] // DAY_MS == midnight // DAY_MS                  # a gap counts for its later snapshot's day
     # (its hourly rate is spread over both clock hours the gap touches, sold_by_hour: a rate, not a day's units)
 
