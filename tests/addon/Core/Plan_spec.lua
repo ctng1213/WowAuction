@@ -129,7 +129,7 @@ describe("Plan", function()
   end)
 
   it("FM35 a plan from a newer AHSync says to deploy the addon", function()
-    local Plan = LoginWithRows(function(plan) plan.exportVersion = 6 end)
+    local Plan = LoginWithRows(function(plan) plan.exportVersion = 7 end)
     assert_eq({ Plan.Actions(A), #AHProfitDB.scans }, { {}, 3 })
     assert_eq(Plan.Problem(), "This addon is older than AHSync's files: run tools/deploy.py, then /reload")
   end)

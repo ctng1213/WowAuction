@@ -17,6 +17,7 @@ from pathlib import Path
 from ahsync.config import Config
 from ahsync.db.sqlite import Database
 from ahsync.engine import disenchant
+from ahsync.engine.coverage import ranges_to_hours
 from ahsync.engine.de_table import DE_TABLE
 from ahsync.engine.graph import Graph, build, graph_recipe
 from ahsync.engine.plan_views import record_line
@@ -34,8 +35,10 @@ PLAN_FILE = "PortfolioPlan.lua"
 ATTEMPTS = 3
 RETRY_WAIT_S = 5               # 3 attempts, 5 s apart: 10 s in all (SPEC §5.2)
 SCAN_DAYS_MS = 7 * 86_400_000  # targeted scans this recent put an item on the shortlist (EX1)
-MAX_MARKET_BYTES = 2 * 1024 * 1024
+MAX_MARKET_BYTES = 3 * 1024 * 1024   # 3 MB since M33b (the user, 2026-11-08; 2 MB before: SPEC §3.1.2)
 MAX_PLAN_BYTES = 200 * 1024
+HOUR_MS = 3_600_000
+COVERAGE_HOURS = 720           # the tooltip header's coverage: the last 30 days (TT40)
 
 log = logging.getLogger(__name__)
 
@@ -176,6 +179,7 @@ def export_market(db: Database, cfg: Config, now_ms: int, sleep: Callable[[float
     de = disenchantable(db)
     graphs = {i.market: market_graph(db, i, shortlists[i.market], de) for i in intels}             # EX18
     rows = {i.market: candidate_rows(db, i.market) for i in intels}                                # EX17
+    covered = {i.market: coverage30(db, i, now_ms) for i in intels}                                # TT40
 
     def build_text(kept: dict[str, list[str]]) -> str:
         """The whole file with these candidates.
@@ -187,13 +191,32 @@ def export_market(db: Database, cfg: Config, now_ms: int, sleep: Callable[[float
             MarketIntelligence.lua's text.
         """
         return market_lua(intels, shortlists, char_markets, now_ms, de, vendor, flips, cfg.sell_window_hours, kept,
-                          graphs)
+                          graphs, covered)
     text, kept = fit_market(build_text, rows, MAX_MARKET_BYTES)
     _trim_status(db, rows, kept, MAX_MARKET_BYTES, now_ms)
     ok = _write(db, folder / MARKET_FILE, text, MAX_MARKET_BYTES, now_ms, sleep, replace)
     if ok:
         _log_written(MARKET_FILE, text, now_ms, f"{item_count(text)} items")
     return ok
+
+
+def coverage30(db: Database, intel: MarketIntelligence, now_ms: int) -> int:
+    """The hours a market was observed in the last 30 days, for the tooltip header's coverage (SPEC §4.3, TT40).
+
+    Args:
+        db: Database.
+        intel: The market's published intelligence.
+        now_ms: Now (generatedAt); the window is the 720 whole hours before its hour.
+
+    Returns:
+        A cloud summary's observed hours in the window (its `coverage`), else the hours any local source observed
+        completely (`observed_hours`, as the Data coverage card counts them).
+    """
+    end = now_ms // HOUR_MS
+    if intel.coverage:
+        return sum(1 for h in ranges_to_hours(intel.coverage) if end - COVERAGE_HOURS <= h < end)
+    by_src = db.observed_hours(intel.market, end - COVERAGE_HOURS, end - 1)
+    return len(set().union(*by_src.values())) if by_src else 0
 
 
 def candidate_rows(db: Database, market: str) -> list[tuple[str, str, float]]:
