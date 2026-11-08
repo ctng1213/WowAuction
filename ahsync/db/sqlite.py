@@ -21,7 +21,7 @@ from ahsync.engine.item_key import KEY_SUFFIX_FACTOR
 from ahsync.state.writes import IngestWrites
 from ahsync.history.reads import CurrentPrice, HistoryReads  # noqa: F401  (CurrentPrice re-exported)
 from ahsync.history.writes import HistoryWrites
-from ahsync.intel.store import IntelStore
+from ahsync.intel.store import IntelCache, IntelStore
 from ahsync.recommend.store import RecommendStore
 from ahsync.state.journal import JournalReads
 from ahsync.state.gathering import GatheringStore
@@ -423,15 +423,17 @@ class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, JournalRea
                PositionStore, GatheringStore):
     """A connection to data/ahsync.db with AHSync's queries and upserts."""
 
-    def __init__(self, conn: sqlite3.Connection, path: Path) -> None:
+    def __init__(self, conn: sqlite3.Connection, path: Path, intel_cache: IntelCache | None = None) -> None:
         """Wrap an open connection. Use Database.open instead.
 
         Args:
             conn: Connection in autocommit mode (isolation_level=None).
             path: The database file.
+            intel_cache: The process's parsed intelligence, shared with its other connections (BZ42); None: a new one.
         """
         self.conn = conn
         self.path = path
+        self.intel_cache = intel_cache or IntelCache()
         self._depth = 0
 
     # ------------------------------------------------------------ lifecycle
@@ -967,8 +969,9 @@ class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, JournalRea
             markets: The markets this refresh rebuilt.
             with_intel: False for a re-plan, which staged no intelligence: the live one stays (IU13); or the markets
                 whose intelligence was staged (a cloud document, SPEC §2.4), the others' staying live. Pages and
-                alternatives (SPEC §3.4D) are swapped either way, like the plan. The parsed-intelligence cache is
-                cleared for every market whose intelligence is swapped (an hourly document keeps its built_ms).
+                alternatives (SPEC §3.4D) are swapped either way, like the plan. The process's parsed intelligence
+                is dropped for every market whose intelligence is swapped, for every connection (an hourly document
+                keeps its built_ms, BZ42).
         """
         with self.transaction():
             for market in markets:
@@ -984,7 +987,7 @@ class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, JournalRea
                          ("portfolio_snapshot", "portfolio_snapshot_new", "market, data"))
                 swapped = with_intel is True or (not isinstance(with_intel, bool) and market in with_intel)
                 if swapped:
-                    self.__dict__.get("_intel_cache", {}).pop(market, None)
+                    self.intel_cache.forget(market)
                 for live, staged, cols in (swaps if swapped else swaps[1:]):
                     self.conn.execute(f"DELETE FROM {live} WHERE market = ?", (market,))
                     self.conn.execute(f"INSERT INTO {live}({cols}) SELECT {cols} FROM {staged} WHERE market = ?",

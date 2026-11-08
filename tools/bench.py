@@ -209,6 +209,51 @@ def resident_memory_mb() -> float:
     return int(out.stdout.strip()) / 1024
 
 
+def macos_footprint_mb() -> tuple[float, float]:
+    """This process's physical footprint on macOS, what Activity Monitor's Memory column shows.
+
+    Unlike the resident size it leaves out pages the allocator freed and marked reclaimable, which macOS keeps
+    counting as resident until it needs them.
+
+    Returns:
+        (now, the process's lifetime peak), in MB.
+
+    Raises:
+        OSError: proc_pid_rusage failed.
+    """
+    import ctypes
+    import os
+    names = ("user_time", "system_time", "pkg_idle_wkups", "interrupt_wkups", "pageins", "wired_size",
+             "resident_size", "phys_footprint", "proc_start_abstime", "proc_exit_abstime", "child_user_time",
+             "child_system_time", "child_pkg_idle_wkups", "child_interrupt_wkups", "child_pageins",
+             "child_elapsed_abstime", "diskio_bytesread", "diskio_byteswritten", "cpu_time_qos_default",
+             "cpu_time_qos_maintenance", "cpu_time_qos_background", "cpu_time_qos_utility", "cpu_time_qos_legacy",
+             "cpu_time_qos_user_initiated", "cpu_time_qos_user_interactive", "billed_system_time",
+             "serviced_system_time", "logical_writes", "lifetime_max_phys_footprint", "instructions", "cycles",
+             "billed_energy", "serviced_energy", "interval_max_phys_footprint", "runnable_time")
+
+    class RUsageInfoV4(ctypes.Structure):
+        """struct rusage_info_v4 (sys/resource.h)."""
+        _fields_ = [("uuid", ctypes.c_uint8 * 16)] + [(name, ctypes.c_uint64) for name in names]
+    info = RUsageInfoV4()
+    if ctypes.CDLL("/usr/lib/libproc.dylib").proc_pid_rusage(os.getpid(), 4, ctypes.byref(info)) != 0:
+        raise OSError("proc_pid_rusage failed")
+    return info.phys_footprint / 1_048_576, info.lifetime_max_phys_footprint / 1_048_576
+
+
+def memory_line() -> str:
+    """The memory figures the summary mode prints after each step.
+
+    Returns:
+        "resident R MB, peak P MB", plus "footprint F MB, peak G MB" on macOS.
+    """
+    line = f"resident {resident_memory_mb():.0f} MB, peak {peak_memory_mb():.0f} MB"
+    if sys.platform == "darwin":
+        now, peak = macos_footprint_mb()
+        line += f"; footprint {now:.0f} MB, peak {peak:.0f} MB"
+    return line
+
+
 class StoreOrigin:
     """A transport serving a LocalStore's objects at ORIGIN, as CloudFront serves the intel bucket."""
 
@@ -310,18 +355,17 @@ def summary_only(tmp: Path, market: str, now_ms: int) -> int:
                  sources={market: MarketSources("blizzard", ("blizzard",), {})})
     db_path = tmp / "bench.db"
     db = Database.open(db_path, now_ms, None)
-    dashboard = open_server_db(db_path)
+    dashboard = open_server_db(db_path, db.intel_cache)           # as run() opens it (BZ42)
     clock, ok = BenchClock(now_ms), True
     print(f"bench: start, resident {resident_memory_mb():.0f} MB", flush=True)
     for hour in (1, 2):
         clock.now = now_ms + (hour - 1) * HOUR
         started = time.perf_counter()
         ok = poll_cloud(db, StoreOrigin(LocalStore(tmp / f"hour{hour}")), clock, cfg) == [market] and ok
-        print(f"bench: hour {hour} poll, re-plan and export {time.perf_counter() - started:.1f} s, resident "
-              f"{resident_memory_mb():.0f} MB, peak {peak_memory_mb():.0f} MB", flush=True)
+        print(f"bench: hour {hour} poll, re-plan and export {time.perf_counter() - started:.1f} s, {memory_line()}",
+              flush=True)
         ok = dashboard.read_intel(market) is not None and ok
-        print(f"bench: hour {hour} dashboard read, resident {resident_memory_mb():.0f} MB, "
-              f"peak {peak_memory_mb():.0f} MB", flush=True)
+        print(f"bench: hour {hour} dashboard read, {memory_line()}", flush=True)
     dashboard.close()
     db.close()
     peak = peak_memory_mb()

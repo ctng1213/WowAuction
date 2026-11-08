@@ -36,6 +36,7 @@ class PollResult:
     reason: str = ""                           # why it failed, for the log and Status
     etag: str | None = None                    # the pointer's ETag, for "new": remember() it once staged
     sha256: str | None = None                  # the document's hash, for "new"
+    body: bytes | None = None                  # the document's gzip as downloaded, for "new": stored as it is (BZ43)
 
 
 def pointer_url(intel_url: str, market: str) -> str:
@@ -107,7 +108,8 @@ def _get(transport: Transport, url: str, etag: str | None = None) -> tuple[int, 
     return response.status, response.headers, response.body
 
 
-def fetch_document(transport: Transport, intel_url: str, market: str, pointer: dict) -> MarketIntelligence:
+def fetch_document(transport: Transport, intel_url: str, market: str,
+                   pointer: dict) -> tuple[MarketIntelligence, bytes]:
     """The document a pointer names, checked (SEC16, FM71, AR2).
 
     Args:
@@ -117,7 +119,7 @@ def fetch_document(transport: Transport, intel_url: str, market: str, pointer: d
         pointer: The parsed pointer.
 
     Returns:
-        The intelligence.
+        (the intelligence, its gzip as downloaded and checked).
 
     Raises:
         ValueError: The key, the size, the hash, the content or the market is wrong (the message says which).
@@ -137,7 +139,7 @@ def fetch_document(transport: Transport, intel_url: str, market: str, pointer: d
     intel = from_json(inflate(data).decode("utf-8"))
     if intel.market != market:
         raise ValueError(f"the document is {intel.market}'s, not {market}'s")
-    return intel
+    return intel, data
 
 
 def poll(db: Database, transport: Transport, intel_url: str, market: str, now_ms: int) -> PollResult:
@@ -168,7 +170,8 @@ def poll(db: Database, transport: Transport, intel_url: str, market: str, now_ms
         if pointer.get("sha256") == held:
             remember(db, market, headers.get("etag"), held, now_ms)
             return PollResult("unchanged")
-        intel = fetch_document(transport, intel_url, market, pointer)
+        db.intel_cache.release(market)                # never two parsed summaries at once (BZ43)
+        intel, body = fetch_document(transport, intel_url, market, pointer)
     except IntelVersionError as error:
         db.set_status(f"cloud_schema:{market}", "error", "cloud_schema", {"market": market, "detail": str(error)}, now_ms)
         return PollResult("failed", reason=str(error))
@@ -179,7 +182,7 @@ def poll(db: Database, transport: Transport, intel_url: str, market: str, now_ms
         return PollResult("failed", reason=reason)
     db.clear_status(f"cloud_schema:{market}")
     db.clear_status(f"cloud_fetch:{market}")
-    return PollResult("new", intel, etag=headers.get("etag"), sha256=pointer["sha256"])
+    return PollResult("new", intel, etag=headers.get("etag"), sha256=pointer["sha256"], body=body)
 
 
 def remember(db: Database, market: str, etag: str | None, sha256: str | None, now_ms: int) -> None:

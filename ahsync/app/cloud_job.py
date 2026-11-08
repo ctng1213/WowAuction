@@ -8,6 +8,7 @@ after a new document, so hourly prices reach the game at the next /reload.
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 
 from ahsync.app.refresh import replan_all
 from ahsync.clock import Clock
@@ -50,10 +51,13 @@ def poll_cloud(db: Database, transport: Transport, clock: Clock, config: Config)
     now = clock.now_ms()
     found = {m: cloud_intel.poll(db, transport, config.cloud.intel_url, m, now)
              for m in config.markets if is_cloud_market(config, m)}
-    new = {m: r for m, r in found.items() if r.state == "new"}
+    bodies = {m: r.body for m, r in found.items() if r.state == "new" and r.body is not None}
+    new = {m: replace(r, body=None) for m, r in found.items() if r.state == "new"}
+    del found                                        # replan_all drops each gzip once stored (BZ43)
     if not new:
         return []
-    replanned = replan_all(db, now, config, clock.local_offset_ms(now), documents={m: r.intel for m, r in new.items()})
+    replanned = replan_all(db, now, config, clock.local_offset_ms(now), documents={m: r.intel for m, r in new.items()},
+                           bodies=bodies)
     done = [m for m in sorted(new) if m in replanned]
     for market in done:
         cloud_intel.remember(db, market, new[market].etag, new[market].sha256, now)

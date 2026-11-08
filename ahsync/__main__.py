@@ -42,6 +42,7 @@ from ahsync.recommend.status_pass import status_pass
 from ahsync.recommend.tracking_pass import tracking_pass
 from ahsync.app import installer, update_check, updater
 from ahsync.app.scheduler import SavedVarsWatcher, Scheduler, SchedulerHooks, file_mtime_ms, find_savedvars
+from ahsync.intel.store import IntelCache
 from ahsync.web.server import (AppHooks, DashboardApp, DashboardServer, new_token, open_server_db, start_dashboard,
                                stop_dashboard)
 
@@ -368,7 +369,8 @@ class RefreshRequests:
 def serve_dashboard(data_dir: Path, config: Config, clock: Clock, refresh: RefreshRequests,
                     out: IO[str], config_path: Path | None = None,
                     on_config: Callable[[Config], None] | None = None,
-                    app_hooks: AppHooks | None = None) -> tuple[DashboardServer, Database] | None:
+                    app_hooks: AppHooks | None = None,
+                    intel_cache: IntelCache | None = None) -> tuple[DashboardServer, Database] | None:
     """Start the dashboard on its own thread (SPEC §3.1 "serve dashboard"); a failure is logged, never fatal.
 
     Args:
@@ -380,12 +382,13 @@ def serve_dashboard(data_dir: Path, config: Config, clock: Clock, refresh: Refre
         config_path: config.toml, which the Risk tolerance dropdown rewrites (SEC11); None: it can't.
         on_config: Told the new settings after the dashboard changed one; None: nobody else is told.
         app_hooks: The app shell's paths (GET /api/app, POST /api/autostart); None: they answer 404.
+        intel_cache: run()'s connection's IntelCache, so the dashboard shares its parsed summary (BZ42).
 
     Returns:
         (server, its database connection) to stop and close at exit, or None when the
         port can't be bound (for example, already in use).
     """
-    server_db = open_server_db(data_dir / "ahsync.db")
+    server_db = open_server_db(data_dir / "ahsync.db", intel_cache)
     app = DashboardApp(server_db, config, clock, refresh.request_refresh, new_token(), config.dashboard_port,
                        config_path=config_path, config_changed=on_config or (lambda _config: None), app_hooks=app_hooks)
     try:
@@ -526,7 +529,7 @@ def _run_configured(data_dir: Path, config: Config, runtime: Runtime, config_pat
         live = LiveConfig(config)
         if runtime.serve_dashboard:
             dashboard = serve_dashboard(data_dir, config, clock, refresh_requests, runtime.out, config_path, live.replace,
-                                        runtime.app_hooks)
+                                        runtime.app_hooks, db.intel_cache)
         ahledger = AhledgerSource(ApiClient(runtime.transport, clock, "", api_base=AHLEDGER_BASE, per_minute=300,
                                             redactor=redactor, paced=True), db, clock)          # keyless, its own limit (SRC10)
         ctx = SyncContext(api, db, clock, result.caps, config.retention_days, addresses, ahledger)
