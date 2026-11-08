@@ -89,5 +89,5 @@ Frame AHProfitWindow 680,360 560x360
     Frame AHProfitWindowHeaderpfToday 690,442 526x20 (hidden)
     Frame AHProfitWindowHeaderpfWeek 690,442 526x20 (hidden)
   Texture - 682,691 556x1
-  FontString - 692,700 138x10 "3 actions · expected +9  "
+  FontString - 692,700 436x10 "3 actions · expected +9  "
   FontString - 1140,700 88x10 "Budget 10   40  "

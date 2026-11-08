@@ -73,5 +73,5 @@ Frame AHProfitWindow 640,320 640x440
     Frame AHProfitWindowHeaderpfToday 650,402 606x20 (hidden)
     Frame AHProfitWindowHeaderpfWeek 650,402 606x20 (hidden)
   Texture - 642,731 636x1
-  FontString - 652,740 55x10 "funded 0  "
+  FontString - 652,740 544x10 "funded profit 0  "
   FontString - 1208,740 61x10 "3 positions"

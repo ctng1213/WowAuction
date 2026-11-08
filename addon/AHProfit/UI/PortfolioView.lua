@@ -425,7 +425,8 @@ end
 ---                        Market.Item; default none), totalGold, liveGold, charId, skills, dataStale, windowHoursOf,
 ---                        problem (status line or nil) }
 ---@return table           { top, problem, empty, positions = { rows, foot }, today = { rows, foot },
----                        week = { rows, foot }, footer = { funded, capacity } }
+---                        week = { rows, foot }, footer = { funded, capacity (the right side: what stays unallocated,
+---                        or the positions count) } }
 function PortfolioView.Build(result, snapshot, positions, ctx)
   local lookOf = ctx.lookOf or function(key) return { name = ctx.nameOf(key), quality = 1 } end
   local rowCtx = { snapshot = snapshot, nowMs = ctx.nowMs, offsetMs = ctx.offsetMs, lookOf = lookOf,
@@ -459,13 +460,13 @@ function PortfolioView.Build(result, snapshot, positions, ctx)
     out[name] = { rows = rows, foot = PortfolioView.SectionFoot(sec.funded) }
   end
   local pct = PortfolioView.PoolPct(all)
-  out.footer = { funded = "funded " .. ViewModel.SignedMoney(result.net) .. " · cost " .. ViewModel.Money(result.gold)
+  -- The capacity is in the top line; the footer keeps what is left of it (the user, 2026-11-07, 0.1.6).
+  out.footer = { funded = "funded profit " .. ViewModel.SignedMoney(result.net) .. " · cost " .. ViewModel.Money(result.gold)
                    .. (pct and (" · " .. pct .. "% on cash") or ""),
-                 capacity = "capacity " .. ViewModel.Money(snapshot.capacity) .. " · "
-                   .. ViewModel.Money(result.capacityLeft) .. " unallocated" }
+                 capacity = ViewModel.Money(result.capacityLeft) .. " unallocated" }
   if empty then
     local n = #out.positions.rows
-    out.footer = { funded = "funded " .. ViewModel.Money(0), capacity = n .. (n == 1 and " position" or " positions") }
+    out.footer = { funded = "funded profit " .. ViewModel.Money(0), capacity = n .. (n == 1 and " position" or " positions") }
   end
   return out
 end

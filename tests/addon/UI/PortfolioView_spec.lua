@@ -61,7 +61,7 @@ describe("PortfolioView", function()
   it("A77 Linen at 50c no longer pays: its row leaves Today and the freed gold stays unallocated", function()
     World.Boot(Stubs)
     local before = Tab()
-    assert_eq({ before.footer.funded, before.today.foot }, { "funded +92s 62c · cost 2g 52s · 37% on cash",
+    assert_eq({ before.footer.funded, before.today.foot }, { "funded profit +92s 62c · cost 2g 52s · 37% on cash",
       "funded: cost 20s 60c · profit +12s 8c · 59% on cash" }, "A79's numbers before the scan")
     World.Scan(Stubs, { [World.LINEN] = World.Book({ { 50, 20 } }) })
     Stubs.Advance(1)
@@ -70,8 +70,8 @@ describe("PortfolioView", function()
     assert_eq(Statuses(tab.today), { c[1].id .. ":Funded", c[2].id .. ":Funded",
       c[4].id .. ":Required profession unavailable: Enchanting 150", c[5].id .. ":Insufficient liquidity" },
       "Linen is gone; the bracers need Enchanting 150 and the elixir has no liquidity, so neither takes its 7s 60c")
-    assert_eq(tab.footer.funded:sub(1, #"funded +90s 59c · cost 2g 44s 40c"), "funded +90s 59c · cost 2g 44s 40c")
-    assert_eq(tab.footer.capacity, "capacity 6g 49s 40c · 32s unallocated", "24s 40c + Linen's 7s 60c")
+    assert_eq(tab.footer.funded:sub(1, #"funded profit +90s 59c · cost 2g 44s 40c"), "funded profit +90s 59c · cost 2g 44s 40c")
+    assert_eq(tab.footer.capacity, "32s unallocated", "24s 40c + Linen's 7s 60c")
     assert_eq({ tab.today.rows[3].muted, tab.today.rows[1].strategy, tab.today.rows[1].pct }, { true, "Flip", "78%" })
   end)
 
@@ -160,8 +160,8 @@ describe("PortfolioView", function()
       "row CRAFT Bolt of Silk Cloth → +1s 32c (6.35 d · 46.75%) Funded",
       "row BUY Greater Magic Essence → +8s 18c (6.35 d · 46.75%) Forecast too uncertain (1 week of data)",
       "foot funded: cost 2g 31s 40c · profit +80s 54c · 35% on cash" })
-    assert_eq({ out.footer, tab.footer.capacity }, { "funded +92s 62c · cost 2g 52s · 37% on cash",
-                                                     "capacity 6g 49s 40c · 24s 40c unallocated" })
+    assert_eq({ out.footer, tab.footer.capacity }, { "funded profit +92s 62c · cost 2g 52s · 37% on cash",
+                                                     "24s 40c unallocated" })
     local bracers, elixir = out.lines[15], out.lines[16]
     assert_eq({ bracers.statusKind, elixir.statusKind, bracers.muted, bracers.tall, out.lines[9].tall },
               { "neg", "amber", true, true, false }, "a profession is red, liquidity amber; long reasons wrap")
@@ -189,14 +189,14 @@ describe("PortfolioView", function()
     assert_eq({ texts[18], texts[19], texts[20], texts[21] }, { "section Needs a decision",
       "row DECIDE Heavy Leather — NOT SELLING", "note Your record (30 d): 0 of 3 sold · expired 3× while cheapest",
       "note right-click: Blacklist or Keep" })
-    assert_eq(out.footer, "funded +92s 62c · cost 2g 52s · 37% on cash · 1 hidden (chance < 50%)")
+    assert_eq(out.footer, "funded profit +92s 62c · cost 2g 52s · 37% on cash · 1 hidden (chance < 50%)")
     opts.candidates[2].chance1000 = 400                               -- now a funded row is below 50% too
     World.Boot(Stubs, opts)
     local tab = Tab()
     out = Lines(tab, 50)
     assert_eq({ out.footer, tab.footer.capacity, #AHProfit.Adapt.Current().funded },
-              { "funded +92s 62c · cost 2g 52s · 37% on cash · 2 hidden (chance < 50%)",
-                "capacity 6g 49s 40c · 24s 40c unallocated", 7 }, "hidden, still funded and counted")
+              { "funded profit +92s 62c · cost 2g 52s · 37% on cash · 2 hidden (chance < 50%)",
+                "24s 40c unallocated", 7 }, "hidden, still funded and counted")
     World.Unname(Stubs)
   end)
 
@@ -211,7 +211,7 @@ describe("PortfolioView", function()
     assert_eq(tab.top.text, "Amaya 14g 30s · portfolio 35g 58s · 30% risk · capacity 0c · snapshot 10:38")
     assert_eq({ tab.empty.title, tab.empty.text }, { "Nothing funded: risk budget exhausted",
       "10g 88s committed of a 10g 67s 40c limit. New rows come back as positions sell." })
-    assert_eq({ tab.footer.funded, tab.footer.capacity }, { "funded 0c", "3 positions" })
+    assert_eq({ tab.footer.funded, tab.footer.capacity }, { "funded profit 0c", "3 positions" })
     local texts = Texts(out.lines)
     assert_eq({ #texts, texts[1], texts[6], texts[7] },
               { 7, "section Positions", "foot committed 70s · est. +10s 72c · +9% on committed capital · % leaves out Wool Cloth (found stock only)",

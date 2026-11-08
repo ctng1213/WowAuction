@@ -255,7 +255,7 @@ describe("MainWindow layout", function()
     Stubs.Slash("/ahp")
     local ui = AHProfit.MainWindow.Frames()
     Layout.Golden("UI19_empty", ui.frame)
-    assert_eq({ ui.footer:GetText(), ui.budget:GetText() }, { AHProfit.ViewModel.WithCoins("funded 0c"), "3 positions" })
+    assert_eq({ ui.footer:GetText(), ui.budget:GetText() }, { AHProfit.ViewModel.WithCoins("funded profit 0c"), "3 positions" })
     local c = World.Candidates()
     c[#c + 1] = { id = "craft:3385:" .. World.BRUGAN .. ":-/-/now:1", strategy = "craft", char = World.BRUGAN, key = 3385,
                   qty = 10, gold = 4500, net = 80, sale = World.TONIGHT }
