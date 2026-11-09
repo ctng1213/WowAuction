@@ -135,3 +135,11 @@ def test_MCP13_before_the_first_refresh_every_tool_says_so(tmp_path: Path):
                                        "after its first full refresh.")
     assert get_page(empty, {"page": "status"})["page"] == "status"          # built on request, like the dashboard's
     db.conn.close()
+
+
+def test_a_search_that_matches_nothing_still_takes_a_valid_sort_and_nested_cuts_keep_their_paths(ctx):
+    none = get_page(ctx, {"page": "gathering", "search": "zzz-no-such-item", "sort": "price"})
+    assert none["data"]["rows"] == [] and "rows" not in none["cut"]
+    portfolio = get_page(ctx, {"page": "portfolio", "limit": 1})
+    assert all("[" in path or "." not in path or not path.startswith("rows") for path in portfolio["cut"])
+    assert len(set(portfolio["cut"])) == len(portfolio["cut"])

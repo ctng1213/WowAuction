@@ -26,6 +26,7 @@ from ahsync.db.sqlite import Database
 from ahsync.intel.store import IntelCache
 from ahsync.mcp import protocol
 from ahsync.mcp.protocol import ToolError
+from ahsync.mcp.stats import MarketStats
 from ahsync.mcp.tools import HANDLERS, ToolContext
 from ahsync.web.server import BIND_ADDRESS, BUSY_TIMEOUT_MS, DashboardServer, Response, json_response
 
@@ -36,6 +37,8 @@ ENDPOINT = "/mcp"
 MAX_REQUEST_BYTES = 64 * 1024
 MAX_RESULT_BYTES = 256 * 1024          # SPEC §3.8.3: every tool result
 REQUEST_TIMEOUT_S = 30
+STOPPED = "AHSync's AI assistant access was just turned off. Press Enable on its Status page to turn it back on."
+NOT_STARTED = "AHSync couldn't start the assistant server ({why}). Try Enable again."
 PORT_IN_USE = ("Port {port} is in use by another program. Set mcp_port in AHSync's settings to a free port, "
                "then Enable again.")
 
@@ -64,6 +67,7 @@ class McpApp:
     port: int
     context: Callable[[], ToolContext]
     lock: threading.Lock = field(default_factory=threading.Lock)
+    stopped: bool = False              # set by McpServer.stop under the lock: calls still in flight answer "off"
 
     def allowed(self, headers: Mapping[str, str]) -> bool:
         """Whether a request may be answered: the key, a local `Host`, and no browser `Origin` (SEC19).
@@ -139,6 +143,8 @@ class McpApp:
         started = time.monotonic()
         try:
             with self.lock:
+                if self.stopped:
+                    return protocol.tool_error(STOPPED)
                 value = HANDLERS[name](self.context(), args)
         except ToolError as error:
             return protocol.tool_error(error.message)
@@ -146,7 +152,7 @@ class McpApp:
             log.warning("assistant tool %s failed reading the database: %s", name, error)
             return protocol.tool_error("AHSync's database is busy; ask again in a moment.")
         out = protocol.tool_result(value)
-        size = len(out["content"][0]["text"].encode("utf-8"))
+        size = len(out["content"][0]["text"].encode("utf-8"))   # bytes, as run_query counts them
         log.info("assistant tool %s answered in %d ms (%d bytes)", name, (time.monotonic() - started) * 1000, size)
         if size > MAX_RESULT_BYTES:
             return protocol.tool_error(f"The answer is {size // 1024} KB, over the {MAX_RESULT_BYTES // 1024} KB "
@@ -300,7 +306,9 @@ class McpServer:
         self.db_path, self.data_dir, self.config, self.clock = db_path, data_dir, config, clock
         self.intel_cache = intel_cache
         self._http: _HttpServer | None = None
+        self._app: McpApp | None = None
         self._db: Database | None = None
+        self.stats = MarketStats()
         self.started_ms: int | None = None
 
     @property
@@ -328,14 +336,16 @@ class McpServer:
             port: Overrides config.mcp_port (0 picks a free one, for tests).
 
         Raises:
-            McpStartError: The port is in use or can't be bound; nothing is left behind.
+            McpStartError: The port is in use or can't be bound, or the table or mcp.json can't be made; nothing is
+                left behind (a failed start stops what it began).
         """
         if self.running:
             return
         port = self.config.mcp_port if port is None else port
         self._db = open_read_only(self.db_path, self.intel_cache)
-        db, config, clock = self._db, self.config, self.clock
-        app = McpApp(secrets.token_hex(32), port, lambda: ToolContext(db, config, clock))
+        self.stats = MarketStats()                                  # a fresh table for this run
+        db, config, clock, stats, path = self._db, self.config, self.clock, self.stats, self.db_path
+        app = McpApp(secrets.token_hex(32), port, lambda: ToolContext(db, config, clock, path, stats))
         try:
             self._http = _HttpServer(app, port)
         except OSError as error:
@@ -344,20 +354,38 @@ class McpServer:
             log.warning("the assistant server couldn't bind port %d: %s", port, error)
             raise McpStartError(PORT_IN_USE.format(port=port)) from None
         app.port = self._http.server_address[1]
-        write_key_file(self.data_dir, app.port, app.key)
+        self._app = app
+        try:
+            self.stats.build(self._db, self.config.markets)        # Enable's memory (SPEC §3.8.1, §3.8.4)
+            write_key_file(self.data_dir, app.port, app.key)
+        except (sqlite3.Error, OSError, ValueError) as error:
+            log.warning("the assistant server couldn't start: %s", error)
+            self.stop()
+            raise McpStartError(NOT_STARTED.format(why=type(error).__name__)) from None
         self.started_ms = self.clock.now_ms()
         threading.Thread(target=self._http.serve_forever, name="ahsync-mcp", daemon=True).start()
         log.info("assistant server listening on 127.0.0.1:%d", app.port)
 
     def stop(self) -> None:
-        """Stop serving, close the port and the connection, and delete mcp.json (MCP2)."""
+        """Stop serving, close the port, free the table, close the connection, and delete mcp.json (MCP2).
+
+        The table and the connection are released under the app's lock, after marking it stopped: a call still in
+        flight then answers "off" instead of rebuilding the table after Disable.
+        """
         remove_key_file(self.data_dir)
         if self._http is not None:
-            self._http.shutdown()
+            if self.started_ms is not None:        # serving: shutdown() waits for a loop that never ran otherwise
+                self._http.shutdown()
             self._http.server_close()
             self._http = None
             log.info("assistant server stopped")
-        if self._db is not None:
-            self._db.conn.close()
-            self._db = None
+        lock = self._app.lock if self._app is not None else threading.Lock()
+        with lock:
+            if self._app is not None:
+                self._app.stopped = True
+            self.stats.close()                                      # Disable frees it (MCP2)
+            if self._db is not None:
+                self._db.conn.close()
+                self._db = None
+        self._app = None
         self.started_ms = None

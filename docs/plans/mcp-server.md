@@ -126,6 +126,9 @@ The table is rebuilt in memory only when a newer refresh is published.
   - SEC: a missing or wrong key, a foreign `Host`, a browser `Origin`.
 
 ### MC2: the data tools (Opus: a trust boundary)
+- `item_group_stats` (the user, 2026-11-09): every item of one group with its `market_stats` row, in one call. This is the bulk read the user's questions need (fish, herbs, meat).
+  - Groups come from the item's class: cloth, leather, metal and stone, cooking (raw fish and meat share one subclass), herbs, elemental, enchanting, parts, other.
+  - The gathering catalog adds fishing, herbalism, mining and skinning, its curated farmable lists; `fishing` is the fish alone.
 - `query` with the authorizer, the allowlist, the limits and the timeout.
 - `market_stats`, flattened from the published intelligence and rebuilt only on a newer refresh.
 - `describe_data`, with each table's units and example queries. Sonnet writes the table descriptions once the allowlist is fixed: routine work.
@@ -149,6 +152,7 @@ None left. The user answered on 2026-11-08:
 - nothing is off limits while the access is read-only;
 - `market_stats` lives in memory only;
 - the server runs inside AHSync, started and stopped by an Enable / Disable button whose press is the agreement to its memory (decisions 2, 6, 7).
+- 2026-11-09: a bulk read by item group (`item_group_stats`, MC2); Claude's own plans are the next batch (§9).
 
 ## 8. Acceptance (the whole batch)
 
@@ -160,3 +164,24 @@ None left. The user answered on 2026-11-08:
 - With the server disabled, Claude is told where to enable it; with AHSync closed, Claude is told to start it. Disable frees the memory, measured against the budget.
 - No tool can change the database (the SEC scenarios pass), no response exceeds its bounds, and the port is open only on 127.0.0.1, only while enabled, and only to requests with the key.
 - `tools/verify.ps1` passes. The whole-plan snapshot and every golden are unchanged.
+
+## 9. The follow-up batch: Claude's plans (decided by the user, 2026-11-09; designed after MC3)
+
+Claude may add its own actions to the plan, which the addon shows and tracks like the engine's. The user's decisions:
+
+1. **One pipeline, a new origin.**
+   - Claude's actions are plan actions with an origin of `claude`; the engine's are `engine`. The existing `source` column already means a buy's vendor or AH, so origin is its own column.
+   - They reach the addon through `PortfolioPlan.lua`, as every action does, and the addon and dashboard label them.
+   - Picks live in their own table, because the engine rebuilds the plan at every refresh: each rebuild merges them back in until they are done or expire.
+2. **Claude first; the engine plans around it.**
+   - The engine treats Claude's actions as already in the plan: their gold, risk and market capacity are taken first.
+   - The engine fills only the room left. With no room, it adds nothing.
+   - It plans no action on an item Claude's actions already name.
+3. **Straight in, removable.**
+   - A pick goes into the plan without an approval step.
+   - When the user takes one out (Skip, or a new remove), the engine replans to fill the hole.
+4. **Tracking comes free.** The addon's best-effort capture and AHSync's matching of events to actions already track any plan action. The batch adds totals per origin, e.g. "Claude's picks: 6 done, +1g 20s realized", and a read tool so Claude can see how its picks did.
+5. **To design then:**
+   - the write tool's checks (known items, whole copper, sane prices, a cap on count, an expiry);
+   - the label in the addon and on the dashboard (mockup first);
+   - the security review of the first tool that writes.

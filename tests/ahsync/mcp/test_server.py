@@ -130,7 +130,7 @@ def test_protocol_answers_notifications_bad_json_and_unknown_tools(running):
                                            "params": {"name": "drop_table", "arguments": {}}})
     assert json.loads(body)["error"] == {"code": -32602, "message": "Unknown tool: drop_table"}
     status, _, body = _send(running, body={"jsonrpc": "2.0", "id": 3, "method": "tools/list"})
-    assert [t["name"] for t in json.loads(body)["result"]["tools"]] == ["list_markets", "get_page", "item"]
+    assert [t["name"] for t in json.loads(body)["result"]["tools"]] == ["list_markets", "describe_data", "query", "item_group_stats", "get_page", "item"]
     big = "x" * (64 * 1024 + 1)
     assert _send(running, body=big)[0] == 413
 
@@ -144,3 +144,32 @@ def test_a_tool_error_or_an_oversized_answer_is_a_result_the_assistant_reads(run
     result = json.loads(_send(running, body=CALL)[2])["result"]
     assert result["isError"] is True
     assert result["content"][0]["text"].startswith("The answer is 300 KB, over the 256 KB limit")
+
+
+def test_a_call_in_flight_at_stop_answers_off_and_never_rebuilds_the_table(world, tmp_path):
+    srv = McpServer(world.db_path, tmp_path, world.config, world.clock())
+    srv.start(port=0)
+    app, stats = srv._app, srv.stats
+    assert stats.size_bytes() > 0
+    srv.stop()                                                            # Disable while a request waits on the lock
+    answer = app.call("query", {"sql": "SELECT 1"})
+    assert answer["isError"] and answer["content"][0]["text"] == mcp_server.STOPPED
+    assert stats.size_bytes() == 0 and stats.uri is None                  # still freed (MCP2)
+
+
+def test_a_start_that_fails_after_binding_releases_everything(world, tmp_path, monkeypatch):
+    import sqlite3
+    srv = McpServer(world.db_path, tmp_path, world.config, world.clock())
+
+    def broken(self, db, markets):
+        raise sqlite3.OperationalError("disk I/O error")
+
+    monkeypatch.setattr(mcp_server.MarketStats, "build", broken)
+    with pytest.raises(McpStartError) as error:
+        srv.start(port=0)
+    assert str(error.value) == "AHSync couldn't start the assistant server (OperationalError). Try Enable again."
+    assert not srv.running and not (tmp_path / KEY_FILE).exists()
+    monkeypatch.undo()
+    srv.start(port=0)                                                     # nothing left to block the next Enable
+    assert srv.running
+    srv.stop()

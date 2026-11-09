@@ -7,6 +7,7 @@ listener, and stops when Claude closes stdin. Standard library only, so it start
 
 from __future__ import annotations
 
+import http.client
 import json
 import urllib.error
 import urllib.request
@@ -91,7 +92,7 @@ def forward(msg: dict, data_dir: Path, post: Post) -> dict:
         status, body = post(f"http://127.0.0.1:{port}/mcp", json.dumps(msg).encode("utf-8"), headers, CALL_TIMEOUT_S)
     except TimeoutError:
         return protocol.result(msg_id, protocol.tool_error(TOO_SLOW))
-    except OSError:
+    except (OSError, http.client.HTTPException):            # refused, reset, or cut off mid-answer
         return protocol.result(msg_id, protocol.tool_error(NOT_RUNNING))
     if status != 200:                      # a key from an older start, or another program on the port
         return protocol.result(msg_id, protocol.tool_error(NOT_RUNNING))
@@ -124,6 +125,25 @@ def respond(line: str, data_dir: Path, version: str, post: Post) -> dict | None:
     return local if local is not None else forward(msg, data_dir, post)
 
 
+INTERNAL_ERROR = -32603
+
+
+def _id_of(line: str) -> object:
+    """A request's id, read as best it can be.
+
+    Args:
+        line: One message.
+
+    Returns:
+        Its id; None when it can't be read.
+    """
+    try:
+        msg = json.loads(line)
+    except ValueError:
+        return None
+    return msg.get("id") if isinstance(msg, dict) else None
+
+
 def run(lines: Iterable[str], out: TextIO, data_dir: Path, version: str, post: Post = http_post) -> None:
     """Serve Claude until stdin closes: one response line per request, in order.
 
@@ -135,7 +155,10 @@ def run(lines: Iterable[str], out: TextIO, data_dir: Path, version: str, post: P
         post: How to POST.
     """
     for line in lines:
-        answer = respond(line, data_dir, version, post)
+        try:
+            answer = respond(line, data_dir, version, post)
+        except Exception:                  # never die on one message: Claude would lose the connector (MCP6)
+            answer = protocol.error(_id_of(line), INTERNAL_ERROR, "Internal error in the AHSync bridge")
         if answer is not None:
             out.write(json.dumps(answer, ensure_ascii=False, separators=(",", ":")) + "\n")
             out.flush()
