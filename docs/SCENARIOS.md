@@ -1114,7 +1114,7 @@ How cases are generated, and how many: SPEC §8.7.
 
 ## 6. Simulated markets (SU, SM, SD, SX; SPEC §8.10)
 
-The market simulator (`tools/sim/`; built MS1: SU1–SU9, SU13–SU15, SM8; MS2: SM1–SM5, SM10, SM11, `tools/sim_report.py inference`; `docs/plans/market-simulator.md`) writes Blizzard-shaped raw snapshots and a truth log of every post, buy, cancel, expiry and relist, and runs the unchanged cloud analysis and plan on them. The four families and what each asserts are SPEC §8.10's. Numbers here are a scenario's planted truth; tolerances are stated in the row. Every world is generated from a fixed seed, printed on failure.
+The market simulator (`tools/sim/`; built MS1: SU1–SU9, SU13–SU15, SM8; MS2: SM1–SM5, SM10, SM11, `tools/sim_report.py inference`; MS3: SU10–SU12, `tools/sim_report.py decision`; `docs/plans/market-simulator.md`) writes Blizzard-shaped raw snapshots and a truth log of every post, buy, cancel, expiry and relist, and runs the unchanged cloud analysis and plan on them. The four families and what each asserts are SPEC §8.10's. Numbers here are a scenario's planted truth; tolerances are stated in the row. Every world is generated from a fixed seed, printed on failure.
 
 **Unit sequences** (exact, checkable by hand):
 
@@ -1131,7 +1131,7 @@ The market simulator (`tools/sim/`; built MS1: SU1–SU9, SU13–SU15, SM8; MS2:
 | SU9 | the same seed and scenario, run twice | byte-identical raw, truth and report |
 | SU10 | our agent posts 20 units at 55 c for 24 h | the next snapshot lists our auction at 55 c, `VERY_LONG` |
 | SU11 | our agent buys 20 of a 50-unit floor at 10 c | the floor shows 30 units after; our cost is the book walk, 2 s |
-| SU12 | every event of a small run (buy, post, sale, payout, expiry, cancel, mail, vendor) | after each, cash + inventory at cost + listed at cost + mailbox gold + mailbox items = start − AH cuts − deposits lost; each event moves exactly one pair of buckets |
+| SU12 | every event of a small run (buy, post, sale, payout collected, expiry, cancel, mail, vendor) | after each, cash + bags + listed + deposits held + mailbox gold + mailbox items, stock at cost, = start + realized gains − AH cuts − deposits lost, to the copper; each event moves value only between the buckets it names (restated MS3, plan §1.34: the row's first form, = start − AH cuts − deposits lost, cannot hold once anything sells above its cost) |
 | SU13 | a `VERY_LONG` commodity auction of 200 units first seen 10 h old, 150 an hour later, then gone | sold 50 + 150, expired 0; the ending counted once |
 | SU14 | a commodity auction vanishes early while a cheaper one is new, or was bought from, or has an equal price | sold in each case, never a cancel (BZ40's edges) |
 | SU15 | 10,000 commodity fills with the measured 0.2% that are not cheapest-first | the false-cancel rate is at most 0.5%, and reported |
