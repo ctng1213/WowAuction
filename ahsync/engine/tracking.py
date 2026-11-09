@@ -73,6 +73,10 @@ class OpenPost:
     stack: int
     price: int
     at_ms: int
+    sold_units: int = 0            # units its sold mails have taken so far (a commodity sells in parts, T25)
+    returned_units: int = 0        # units its expired or cancelled mail brought back
+    returned_as: str = "expired"   # that mail's outcome, which the post resolves as unless it all sold
+    duration_h: int | None = None  # how long it was listed for; an expiry comes then (None: unknown)
 
 
 @dataclass(frozen=True)
@@ -90,12 +94,14 @@ class AuctionMail:
 
 @dataclass(frozen=True)
 class Resolution:
-    """A post's outcome, from a mail."""
+    """What one mail did to its post: its units, and the post's outcome once they make its stack (T25)."""
 
     mail_id: str
     post_id: str
-    outcome: str
+    outcome: str | None            # sold | expired | cancelled once sold + returned = stack; None while it is up
     at_ms: int
+    sold_units: int = 0            # the post's units sold, this mail included
+    returned_units: int = 0        # the post's units returned, this mail included
 
 
 def _open_for(a: OpenAction, e: DoneEvent) -> bool:
@@ -220,27 +226,77 @@ def realize(payouts: Sequence[Payout], sold: Sequence[SoldMail], cost_each: dict
 
 
 def resolve_posts(posts: Sequence[OpenPost], mails: Sequence[AuctionMail]) -> list[Resolution]:
-    """Resolve posts by their auction mail, oldest mail first (SPEC §3.4.1 post outcomes, T4, T5).
+    """Resolve posts by their auction mail, by units, oldest mail first (SPEC §3.4.1 post outcomes, T4, T5, T25).
+
+    A commodity sells in parts, each buyer's units a sold mail, and what is left comes back in one expired or
+    cancelled mail, so a post counts its units: it resolves once its sold and returned units make its stack, as sold
+    when none came back, else as the returning mail's outcome. A whole stack resolves as before.
 
     Args:
-        posts: Posts with no outcome yet.
+        posts: Posts with no outcome yet, with the units their mail has already taken.
         mails: Auction mail not yet used.
 
     Returns:
-        One resolution per mail that resolved a post: a sold mail the oldest open post with the same character,
-        item, stack and price; an expired or cancelled mail, the oldest with the same character, item and stack.
+        One Resolution per mail that took a post's units, mails oldest first and, at the same time, largest first:
+        a sold mail the oldest open post with the same character, item and price and as many units left; an
+        expired or cancelled one an open post with the same character and item (any price) and enough units left,
+        an expired mail preferring the post whose listing ran out within an hour of it, then one with exactly its
+        units left, then the oldest.
     """
     open_posts = sorted(posts, key=lambda p: (p.at_ms, p.post_id))
+    units = {p.post_id: [p.sold_units, p.returned_units] for p in open_posts}
+    returned_as = {p.post_id: p.returned_as for p in open_posts}
     out = []
-    for m in sorted(mails, key=lambda m: (m.at_ms, m.event_id)):
+    # A purchase that spans two of your posts writes a mail for each at the same time; the older post's share is
+    # taken first, and a bigger mail can't fit a smaller remainder, so same-time mails go largest first (T25).
+    for m in sorted(mails, key=lambda m: (m.at_ms, -m.qty, m.event_id)):
         if m.outcome not in RESOLVING:
             continue
-        fits = [p for p in open_posts if (p.char_id, p.key, p.stack) == (m.char_id, m.key, m.qty) and p.at_ms <= m.at_ms
-                and (m.outcome != "sold" or p.price == m.price)]
-        if fits:
-            open_posts.remove(fits[0])
-            out.append(Resolution(m.event_id, fits[0].post_id, m.outcome, m.at_ms))
+        post = _post_for(m, open_posts, units)
+        if post is None:
+            continue
+        taken = units[post.post_id]
+        taken[0 if m.outcome == "sold" else 1] += m.qty
+        if m.outcome != "sold":
+            returned_as[post.post_id] = m.outcome
+        done = sum(taken) == post.stack
+        if done:
+            open_posts.remove(post)
+        outcome = ("sold" if taken[1] == 0 else returned_as[post.post_id]) if done else None
+        out.append(Resolution(m.event_id, post.post_id, outcome, m.at_ms, taken[0], taken[1]))
     return out
+
+
+def _post_for(m: AuctionMail, posts: Sequence[OpenPost], units: dict[str, list[int]]) -> OpenPost | None:
+    """The open post one mail's units belong to (resolve_posts).
+
+    Args:
+        m: The mail.
+        posts: Open posts, oldest first.
+        units: Post id -> [units sold, units returned] so far.
+
+    Returns:
+        The post; None when none has the units left.
+    """
+    left = {p.post_id: p.stack - sum(units[p.post_id]) for p in posts}
+    fits = [p for p in posts if (p.char_id, p.key) == (m.char_id, m.key) and p.at_ms <= m.at_ms
+            and left[p.post_id] >= m.qty and (m.outcome != "sold" or p.price == m.price)]
+    if m.outcome != "sold":                                   # stable: oldest first within each
+        fits.sort(key=lambda p: (not _ran_out(p, m), left[p.post_id] != m.qty))
+    return fits[0] if fits else None
+
+
+def _ran_out(p: OpenPost, m: AuctionMail) -> bool:
+    """Whether an expired mail comes when a post's listing ran out (within an hour of its post time + duration).
+
+    Args:
+        p: An open post.
+        m: The mail.
+
+    Returns:
+        True for an expired mail and a post of known duration that ended within an hour of it.
+    """
+    return m.outcome == "expired" and p.duration_h is not None and abs(p.at_ms + p.duration_h * HOUR_MS - m.at_ms) <= HOUR_MS
 
 
 # ---- Expected against realized profit, per History row (SPEC §3.4.1 "Expected and realized", D68-D70) ----
@@ -256,6 +312,9 @@ class PostResult:
     realized: float | None         # its payout's realized profit, copper (T17); None until paid
     deposit: int | None            # copper; None when not captured
     chain_id: str | None = None    # the chain of the action it matched, when that action is a chain's follow-up
+    stack: int = 1                 # units posted
+    returned_units: int = 0        # units its expired or cancelled mail brought back (T25); 0 before they were counted
+    unpaid: int = 0                # its sold mails not taken from the mailbox yet (a commodity sells in parts, T26)
 
 
 @dataclass(frozen=True)
@@ -288,11 +347,15 @@ def post_value(p: PostResult) -> float | None:
         p: The post.
 
     Returns:
-        Copper: its payout's realized profit once paid, −deposit when it expired or was cancelled (the AH keeps
-        a cancelled post's deposit, T24; 0 when the deposit is unknown); None while it is up or sold but not paid out.
+        Copper: its payouts' realized profit once all are paid; when it expired or was cancelled, that less the
+        deposit's share of the units that came back (all of it when none sold: the AH keeps a cancelled post's
+        deposit, T24; 0 when the deposit is unknown; T26); None while it is up or a sale is not paid out yet.
     """
+    if p.unpaid:
+        return None
     if p.outcome in ("expired", "cancelled"):
-        return -float(p.deposit or 0)
+        share = p.returned_units / p.stack if 0 < p.returned_units < p.stack else 1.0
+        return (p.realized or 0.0) - float(p.deposit or 0) * share
     return p.realized if p.outcome == "sold" else None
 
 
@@ -309,7 +372,7 @@ def _judge_post(expected: float | None, p: PostResult) -> Judged:
     """
     value = post_value(p)
     if value is None:
-        note = "sold · not paid out yet" if p.outcome == "sold" else "not sold yet"
+        note = "sold · not paid out yet" if p.outcome == "sold" or p.unpaid else "not sold yet"
         return Judged(expected, None, note, OPEN_POST, p.chain_id)
     note = p.outcome if p.outcome in ("expired", "cancelled") else ""
     return Judged(expected, value, note, None, p.chain_id)
@@ -333,7 +396,7 @@ def _judge_chain(expected: float | None, c: ChainFacts) -> Judged:
     still = len(values) < len(c.posts) or c.open_posts > 0 or not c.posts
     if not values:
         return Judged(expected, None, "nothing sold yet", OPEN_CHAIN, c.chain_id, True)
-    paid = sum(1 for p in c.posts if p.outcome == "sold" and p.realized is not None)
+    paid = sum(1 for p in c.posts if p.realized is not None and post_value(p) is not None)   # all its sales paid
     return Judged(expected, sum(values) * c.share, f"{paid} of {len(c.posts)} posts paid",
                   OPEN_CHAIN if still else None, c.chain_id, True)
 

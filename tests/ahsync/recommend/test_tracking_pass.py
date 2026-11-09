@@ -246,3 +246,22 @@ def test_T20_the_pass_splits_a_disenchant_by_the_results_lowest_price_now(db):
                             [(10940, 120, T, "ahf"), (10940, 100, T, "local"), (10938, 700, T, "ahf")])
     tracking_pass(db)
     assert db.cost_basis() == {10938: (1, 2100), 10940: (3, 900)}             # the dust's cheapest is 1s
+
+
+def test_T25_a_commodity_post_resolves_by_units_across_passes(db):
+    silk = 4306
+    with db.transaction():
+        db.conn.execute("INSERT INTO posts(post_id, event_id, char_id, key, stack, price, at, confirmed) "
+                        "VALUES ('big', 'big', ?, ?, 110, 139, ?, 1)", (AMAYA, silk, T))
+        db.conn.executemany("INSERT INTO auction_mail(event_id, char_id, key, qty, price, outcome, at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                            [("s30", AMAYA, silk, 30, 139, "sold", T + DAY), ("x70", AMAYA, silk, 70, None, "cancelled", T + 2 * DAY)])
+    assert tracking_pass(db)["resolved"] == 2
+    assert rows(db, "SELECT sold_units, returned_units, outcome, resolved_at FROM posts") == [(30, 70, None, None)]
+    with db.transaction():
+        db.conn.execute("INSERT INTO auction_mail(event_id, char_id, key, qty, price, outcome, at) "
+                        "VALUES ('s10', ?, ?, 10, 139, 'sold', ?)", (AMAYA, silk, T + 2 * DAY + HOUR))
+    tracking_pass(db)                                        # the next pass: the cancel came back in an earlier one
+    assert rows(db, "SELECT sold_units, returned_units, outcome, resolved_at FROM posts") == [
+        (40, 70, "cancelled", T + 2 * DAY + HOUR)]
+    assert rows(db, "SELECT event_id, post_id FROM auction_mail ORDER BY event_id") == [
+        ("s10", "big"), ("s30", "big"), ("x70", "big")]

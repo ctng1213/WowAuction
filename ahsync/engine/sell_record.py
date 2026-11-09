@@ -40,14 +40,16 @@ class ResolvedPost:
     at_ms: int                     # when it was posted
     resolved_at_ms: int            # when its outcome was known
     outcome: str                   # sold | expired | cancelled
+    stack: int = 1                 # units posted
+    sold_units: int | None = None  # units it sold (a commodity sells in parts, T25); None: all if sold, else none
 
 
 @dataclass(frozen=True)
 class Record:
     """An item's sell record."""
 
-    sold: int
-    expired: int
+    sold: float                    # posts' worth sold: each post counts its share of units sold (O19)
+    expired: float                 # posts' worth returned
     streak: int                    # lowest or unknown expiries in a row since the last sale
     lowest_expiries: int           # expiries while you were the cheapest (or unknown), for the record line
     undercut_last: bool            # the latest expiry was undercut: cap the next post below the cheapest other
@@ -91,18 +93,33 @@ def sell_record(posts: Sequence[ResolvedPost], closes: Sequence[tuple[int, int]]
                      key=lambda p: (p.resolved_at_ms, p.post_id))
     if not counted:
         return None
-    sold = expired = streak = lowest = 0
+    sold, expired, streak, lowest = 0.0, 0.0, 0, 0
     undercut_last = False
     for p in counted:
-        if p.outcome == "sold":
-            sold, streak = sold + 1, 0
+        share = sold_share(p)
+        sold, expired = sold + share, expired + 1.0 - share
+        if share > 0:                       # any units sold end a streak, as a sale does (O19)
+            streak = 0
             continue
-        expired += 1
         undercut_last = cause(p, closes) == "undercut"
         if not undercut_last:
             streak, lowest = streak + 1, lowest + 1
     threshold = s.keep_retry_streak if keep_at_ms is not None else s.struggle_streak
     return Record(sold, expired, streak, lowest, undercut_last, streak >= threshold)
+
+
+def sold_share(p: ResolvedPost) -> float:
+    """The share of a post's units that sold (O19).
+
+    Args:
+        p: A resolved post.
+
+    Returns:
+        sold_units ÷ stack in [0, 1]; without a unit count, 1 for a sale and 0 otherwise.
+    """
+    if p.sold_units is None or p.stack <= 0:
+        return 1.0 if p.outcome == "sold" else 0.0
+    return min(1.0, max(0.0, p.sold_units / p.stack))
 
 
 @dataclass(frozen=True)

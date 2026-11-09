@@ -172,3 +172,55 @@ def test_D70_the_sums_count_resolved_plan_events_once():
             Judged(90.0, 95.0, "", None, "gone")]                    # a follow-up whose carrier is not among the rows
     assert profit_sums(rows) == ProfitSums(657.0, 502.0, 3, 1, 2)
     assert profit_sums([]) == ProfitSums(0.0, 0.0, 0, 0, 0)
+
+
+def test_T25_a_commodity_post_resolves_by_units_whatever_order_its_mails_arrive_in():
+    mon, tue = post("big", T, price=139, stack=110), post("small", T + DAY, price=139, stack=20)
+    mails = [mail("sold", price=139, qty=30, at=T + DAY + HOUR, event_id="s30"),
+             mail("expired", qty=70, at=T + 2 * DAY + 8 * HOUR, event_id="x70"),
+             mail("sold", price=139, qty=10, at=T + 2 * DAY + 8 * HOUR + 40 * 60_000, event_id="s10")]
+    out = resolve_posts([mon, tue], mails)
+    assert [(r.mail_id, r.post_id, r.outcome, r.sold_units, r.returned_units) for r in out] == [
+        ("s30", "big", None, 30, 0), ("x70", "big", None, 30, 70), ("s10", "big", "expired", 40, 70)]
+    assert out[-1].at_ms == T + 2 * DAY + 8 * HOUR + 40 * 60_000                 # resolved by its last mail
+    # a return goes to the post with exactly its units left before the oldest with enough
+    out = resolve_posts([mon, tue], [mail("expired", qty=20, at=T + 2 * DAY, event_id="x20")])
+    assert [(r.post_id, r.outcome) for r in out] == [("small", "expired")]
+    # all sold in parts: sold; a sale too big for what is left resolves nothing
+    out = resolve_posts([tue], [mail("sold", price=139, qty=12, event_id="a"), mail("sold", price=139, qty=8, event_id="b",
+                                                                                   at=T + 4 * DAY)])
+    assert [(r.post_id, r.outcome, r.sold_units) for r in out] == [("small", None, 12), ("small", "sold", 20)]
+    assert resolve_posts([tue], [mail("sold", price=139, qty=21)]) == []
+    # a post already partly resolved carries its units in
+    half = OpenPost("half", AMAYA, LINEN, 20, 48, T, sold_units=5, returned_units=0)
+    assert [(r.outcome, r.sold_units, r.returned_units) for r in resolve_posts([half], [mail("cancelled", qty=15)])] == [
+        ("cancelled", 5, 15)]
+    back = OpenPost("back", AMAYA, LINEN, 20, 48, T, sold_units=0, returned_units=15, returned_as="cancelled")
+    assert [r.outcome for r in resolve_posts([back], [mail("sold", price=48, qty=5)])] == ["cancelled"]   # an earlier pass
+
+
+def test_T26_a_partly_sold_post_realizes_its_payouts_less_the_deposit_share_of_what_came_back():
+    from ahsync.engine.tracking import PostResult, judge, post_value
+    paid = PostResult("expired", 3_500.0 + 1_170.0, 814, None, 110, 70, 0)           # both sold mails paid
+    assert post_value(paid) == 4_670.0 - 518.0                                       # 814 × 70 ÷ 110 lost
+    waiting = PostResult("expired", 3_500.0, 814, None, 110, 70, 1)                  # one sale still in the mailbox
+    assert post_value(waiting) is None
+    assert judge("posted", 4_000.0, waiting).note == "sold · not paid out yet"
+    assert post_value(PostResult("expired", None, 814, None, 110, 110, 0)) == -814.0     # none sold: all of it
+    assert post_value(PostResult("expired", None, 20, None)) == -20.0                    # before units were counted
+
+
+
+def test_T25_an_expiry_goes_to_the_post_that_ran_out_and_one_purchases_mails_fill_the_older_post_first():
+    # M2: A 110 (Mon, 24 h) has sold 30 and B 70 (Tue, 24 h) none; A's 70 come back Tuesday as A runs out
+    a = OpenPost("A", AMAYA, LINEN, 110, 139, T, sold_units=30, duration_h=24)
+    b = OpenPost("B", AMAYA, LINEN, 70, 150, T + DAY, duration_h=24)
+    out = resolve_posts([a, b], [mail("expired", qty=70, at=T + DAY + 600_000, event_id="x")])
+    assert [(r.post_id, r.returned_units) for r in out] == [("A", 70)]               # not B, though B has exactly 70
+    # M1: one purchase of 18 takes A's last 10 and 8 of B's: both mails at the same time
+    a, b = post("A", T, price=139, stack=10), post("B", T + HOUR, price=139, stack=30)
+    same = T + 2 * DAY
+    out = resolve_posts([a, b], [mail("sold", price=139, qty=8, at=same, event_id="a8"),
+                                 mail("sold", price=139, qty=10, at=same, event_id="b10"),
+                                 mail("expired", qty=22, at=same + DAY, event_id="x22")])
+    assert [(r.mail_id, r.post_id, r.outcome) for r in out] == [("b10", "A", "sold"), ("a8", "B", None), ("x22", "B", "expired")]

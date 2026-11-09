@@ -102,15 +102,20 @@ def _resolve(db: Database) -> int:
         db: Database (inside a transaction).
 
     Returns:
-        Posts resolved.
+        Mails that took a post's units (a post resolves once its units make its stack, T25).
     """
     posts = [OpenPost(*r) for r in db.conn.execute(
-        "SELECT post_id, char_id, key, stack, price, at FROM posts WHERE outcome IS NULL AND confirmed = 1")]
+        "SELECT p.post_id, p.char_id, p.key, p.stack, p.price, p.at, p.sold_units, p.returned_units, "
+        "COALESCE((SELECT MAX(m.outcome) FROM auction_mail m WHERE m.post_id = p.post_id "
+        "AND m.outcome IN ('expired', 'cancelled')), 'expired'), p.duration_h FROM posts p "
+        "WHERE p.outcome IS NULL AND p.confirmed = 1")]
     mails = [AuctionMail(*r) for r in db.conn.execute(
         "SELECT event_id, char_id, key, qty, price, outcome, at FROM auction_mail WHERE post_id IS NULL")]
     resolutions = resolve_posts(posts, mails)
-    for r in resolutions:
-        db.conn.execute("UPDATE posts SET outcome = ?, resolved_at = ? WHERE post_id = ?", (r.outcome, r.at_ms, r.post_id))
+    for r in resolutions:                                                     # T25: units first, outcome once whole
+        db.conn.execute("UPDATE posts SET sold_units = ?, returned_units = ?, outcome = ?, "
+                        "resolved_at = CASE WHEN ? IS NULL THEN NULL ELSE ? END WHERE post_id = ?",
+                        (r.sold_units, r.returned_units, r.outcome, r.outcome, r.at_ms, r.post_id))
         db.conn.execute("UPDATE auction_mail SET post_id = ? WHERE event_id = ?", (r.post_id, r.mail_id))
     return len(resolutions)
 

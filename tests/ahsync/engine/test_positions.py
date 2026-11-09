@@ -11,7 +11,7 @@ M = "forever.pvp.horde.us"
 HOUR, DAY = 3_600_000, 86_400_000
 T = 1_728_259_200_000                      # Mon 00:00 UTC
 NOW = T + 10 * HOUR
-BAR, ROD, RUNED, DUST, ESSENCE = 2840, 6217, 6218, 10940, 10938
+BAR, ROD, RUNED, DUST, ESSENCE, SILK = 2840, 6217, 6218, 10940, 10938, 4306
 MAGEWEAVE, LEATHER, COIF, THICK, ORE, IRON_BAR = 4338, 2319, 7920, 4304, 2772, 3575
 
 
@@ -193,3 +193,29 @@ def test_a_position_without_lots_commits_nothing_and_a_merged_one_is_never_recon
     assert (p.cost_left, p.state) == (0, COMPLETED)
     assert strategy_of("craft:1:A:-/-/now:2") == "craft"
     assert fact_action(HOLDING, 3, 0, 0, 0.0, None, 0) == ""
+
+
+def test_PO15_each_sold_mail_moves_only_its_own_units_of_a_commodity_post():
+    s = seed("A:1:0", A, SILK, 110, 65 * 110, T)
+    post = Move(T + HOUR, "p", "post", A, SILK, 110, "p", deposit=814)
+    sold30 = Move(T + 2 * HOUR, "s30", "sold", A, SILK, 30, "p", "s30", money=139)
+    [p] = track([s], [post, sold30], world(), NOW)
+    assert (p.held, p.listed) == (0, 80)                                     # 30 sold; the other 80 still up
+    sold10 = Move(T + 3 * HOUR, "s10", "sold", A, SILK, 10, "p", "s10", money=139)
+    back = Move(T + 4 * HOUR, "x70", "expired", A, SILK, 70, "p", "x70")
+    [q] = track([s], [post, sold30, sold10, back], world(), NOW)
+    assert (q.held, q.listed, q.realized) == (70, 0, -518.0)                 # 814 × 70 ÷ 110 lost with the return
+
+    # a post drawn from two positions: the oldest's units go first, then the next one's
+    s1, s2 = seed("A:1:0", A, SILK, 50, 65 * 50, T), seed("A:2:0", A, SILK, 60, 65 * 60, T + 1)
+    sold60 = Move(T + 2 * HOUR, "s60", "sold", A, SILK, 60, "p", "s60", money=139)
+    first, second = track([s1, s2], [post, sold60, sold10], world(), NOW)
+    assert (first.listed, second.listed) == (0, 40)                          # 50 + 10, then 10 more from the second
+    # T25's own order: the expiry's mail before the last sale's; then that sale's payout
+    late10 = Move(T + 4 * HOUR + 30 * 60_000, "s10", "sold", A, SILK, 10, "p", "s10", money=139)
+    pay10 = Move(T + 5 * HOUR, "o10", "payout", A, SILK, 10, mail_id="s10", money=1320)
+    [late] = track([s], [post, sold30, back, late10, pay10], world(), NOW)
+    assert (late.held, late.listed, late.sold) == (70, 0, 40)                # the late 10 still sold, the 70 came back
+    back50 = Move(T + 4 * HOUR, "x50", "expired", A, SILK, 50, "p", "x50")
+    first, second = track([s1, s2], [post, sold60, back50], world(), NOW)
+    assert (first.held, first.listed, second.held, second.listed) == (0, 0, 50, 0)   # the first had nothing left up

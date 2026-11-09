@@ -172,7 +172,7 @@ class StateReader(Protocol):
             Item key -> "no_buy" | "ignore" | "keep".
         """
 
-    def post_outcomes(self, char_ids: list[str], since_ms: int) -> list[tuple[int, str, int, int, int, str]]:
+    def post_outcomes(self, char_ids: list[str], since_ms: int) -> list[tuple[int, str, int, int, int, str, int, int]]:
         """The characters' posts with an outcome, posted since a time (SPEC §3.3.3).
 
         Args:
@@ -180,7 +180,8 @@ class StateReader(Protocol):
             since_ms: Earliest post time.
 
         Returns:
-            (item key, post id, price, posted at, resolved at, outcome), by key then resolution time.
+            (item key, post id, price, posted at, resolved at, outcome, units posted, units sold), by key then
+            resolution time.
         """
 
     def keep_times(self) -> dict[int, int]:
@@ -319,7 +320,7 @@ class StateReads:
         """
         return dict(self.conn.execute("SELECT key, rule FROM item_rules WHERE rule != 'none' ORDER BY key").fetchall())
 
-    def post_outcomes(self, char_ids: list[str], since_ms: int) -> list[tuple[int, str, int, int, int, str]]:
+    def post_outcomes(self, char_ids: list[str], since_ms: int) -> list[tuple[int, str, int, int, int, str, int, int]]:
         """The characters' posts with an outcome, posted since a time (SPEC §3.3.3).
 
         Args:
@@ -327,13 +328,14 @@ class StateReads:
             since_ms: Earliest post time.
 
         Returns:
-            (item key, post id, price, posted at, resolved at, outcome), by key then resolution time.
+            (item key, post id, price, posted at, resolved at, outcome, units posted, units sold), by key then
+            resolution time.
         """
         if not char_ids:
             return []
         marks = ",".join("?" * len(char_ids))
         return [tuple(r) for r in self.conn.execute(
-            f"SELECT key, post_id, price, at, resolved_at, outcome FROM posts WHERE char_id IN ({marks}) AND at >= ? "
+            f"SELECT key, post_id, price, at, resolved_at, outcome, stack, sold_units FROM posts WHERE char_id IN ({marks}) AND at >= ? "
             f"AND outcome IS NOT NULL AND resolved_at IS NOT NULL ORDER BY key, resolved_at, post_id",
             (*char_ids, since_ms))]
 

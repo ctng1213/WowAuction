@@ -253,7 +253,7 @@ def test_V38_book_rows_move_to_integer_scan_ids_and_read_the_same(tmp_path):
 
 def test_schema_22_adds_positions_and_each_actions_candidate_and_keeps_the_plan(tmp_path):
     db = Database.open(tmp_path / "v21.db", T0, None)                  # a schema-21 database: before positions (M14)
-    db.conn.executescript("ALTER TABLE volume_d1 DROP COLUMN unseen; ALTER TABLE items DROP COLUMN vendor_src; DROP TABLE positions; DROP TABLE position_lots; ALTER TABLE actions DROP COLUMN cand_id; "
+    db.conn.executescript("ALTER TABLE volume_d1 DROP COLUMN unseen; ALTER TABLE posts DROP COLUMN sold_units; ALTER TABLE posts DROP COLUMN returned_units; ALTER TABLE items DROP COLUMN vendor_src; DROP TABLE positions; DROP TABLE position_lots; ALTER TABLE actions DROP COLUMN cand_id; "
                           "ALTER TABLE plan_new DROP COLUMN cand_id; "
                           "INSERT INTO actions(action_id, kind, status) VALUES ('a1', 'buy', 'pending');")
     db.set_meta("schema_version", "21")
@@ -267,7 +267,7 @@ def test_schema_22_adds_positions_and_each_actions_candidate_and_keeps_the_plan(
 
 def test_schema_23_adds_the_gathering_tables_and_keeps_the_events(tmp_path):
     db = Database.open(tmp_path / "v22.db", T0, None)                  # a schema-22 database: before Gathering (M17)
-    db.conn.executescript("ALTER TABLE volume_d1 DROP COLUMN unseen; ALTER TABLE items DROP COLUMN vendor_src; DROP TABLE gather_events; DROP TABLE farming_sessions; DROP TABLE farming_session_items; "
+    db.conn.executescript("ALTER TABLE volume_d1 DROP COLUMN unseen; ALTER TABLE posts DROP COLUMN sold_units; ALTER TABLE posts DROP COLUMN returned_units; ALTER TABLE items DROP COLUMN vendor_src; DROP TABLE gather_events; DROP TABLE farming_sessions; DROP TABLE farming_session_items; "
                           "DROP TABLE manual_rates; "
                           "INSERT INTO crafts(event_id, char_id, spell_id, count, at) VALUES ('e1', 'A-R', 1, 1, 5);")
     db.set_meta("schema_version", "22")
@@ -284,7 +284,7 @@ def test_schema_23_adds_the_gathering_tables_and_keeps_the_events(tmp_path):
 def test_schema_24_adds_the_ahledger_and_coverage_tables_and_fills_observed_hours(tmp_path):
     db = Database.open(tmp_path / "v23.db", T0, None)                  # a schema-23 database: before AHledger (M19)
     db.conn.executescript(
-        "ALTER TABLE volume_d1 DROP COLUMN unseen; ALTER TABLE items DROP COLUMN vendor_src; DROP TABLE ahledger_rows; DROP TABLE source_state; DROP TABLE observed_hours; "
+        "ALTER TABLE volume_d1 DROP COLUMN unseen; ALTER TABLE posts DROP COLUMN sold_units; ALTER TABLE posts DROP COLUMN returned_units; ALTER TABLE items DROP COLUMN vendor_src; DROP TABLE ahledger_rows; DROP TABLE source_state; DROP TABLE observed_hours; "
         "INSERT INTO scans(scan_id, market, src, at, kind, coverage) VALUES "
         "('full', 'm', 'local', 7200000 + 600000, 'full', 1), ('part', 'm', 'local', 10800000, 'partial', 0.4), "
         "('thin', 'm', 'local', 14400000, 'full', 0.9), ('books', 'm', 'ahf', 18000000, 'full', 1); "
@@ -306,7 +306,7 @@ def test_schema_24_adds_the_ahledger_and_coverage_tables_and_fills_observed_hour
 
 def test_schema_26_adds_where_a_vendor_price_came_from_and_keeps_the_items(tmp_path):
     db = Database.open(tmp_path / "v25.db", T0, None)                  # a schema-25 database: before A92's column
-    db.conn.executescript("ALTER TABLE volume_d1 DROP COLUMN unseen; ALTER TABLE items DROP COLUMN vendor_src; "
+    db.conn.executescript("ALTER TABLE volume_d1 DROP COLUMN unseen; ALTER TABLE posts DROP COLUMN sold_units; ALTER TABLE posts DROP COLUMN returned_units; ALTER TABLE items DROP COLUMN vendor_src; "
                           "INSERT INTO items(key, item_id, name, vendor_sell) VALUES (3486, 3486, 'Heavy Grinding Stone', 50);")
     db.set_meta("schema_version", "25")
     db.close()
@@ -318,7 +318,7 @@ def test_schema_26_adds_where_a_vendor_price_came_from_and_keeps_the_items(tmp_p
 def test_schema_27_keeps_the_ended_listings_and_adds_cancels_and_lowest_price_endings(tmp_path):
     db = Database.open(tmp_path / "v26.db", T0, None)                  # a schema-26 database: before BZ40 and BZ41
     db.conn.executescript(
-        "ALTER TABLE volume_d1 DROP COLUMN unseen; "
+        "ALTER TABLE volume_d1 DROP COLUMN unseen; ALTER TABLE posts DROP COLUMN sold_units; ALTER TABLE posts DROP COLUMN returned_units; "
         "DROP TABLE lifetimes_d1; CREATE TABLE lifetimes_d1(market TEXT NOT NULL, key INTEGER NOT NULL, day INTEGER NOT NULL, "
         "src TEXT NOT NULL, ended REAL NOT NULL, expired REAL NOT NULL, matched REAL NOT NULL, "
         "PRIMARY KEY(market, key, day, src)) WITHOUT ROWID; "
@@ -334,7 +334,7 @@ def test_schema_27_keeps_the_ended_listings_and_adds_cancels_and_lowest_price_en
 
 def test_V44_schema_28_adds_the_unseen_estimate_to_daily_volume_and_keeps_the_rows(tmp_path):
     db = Database.open(tmp_path / "v27.db", T0, None)                  # a schema-27 database: before BZ45's display
-    db.conn.executescript("ALTER TABLE volume_d1 DROP COLUMN unseen; "
+    db.conn.executescript("ALTER TABLE volume_d1 DROP COLUMN unseen; ALTER TABLE posts DROP COLUMN sold_units; ALTER TABLE posts DROP COLUMN returned_units; "
                           "INSERT INTO volume_d1(market, key, day, listed, sold, expired, src) "
                           "VALUES ('m', 2589, 20400, 30, 52, 8, 'blizzard');")
     db.set_meta("schema_version", "27")
@@ -347,4 +347,18 @@ def test_V44_schema_28_adds_the_unseen_estimate_to_daily_volume_and_keeps_the_ro
         migrated.replace_volume_day("m", 20401, "books", {2589: (61.0, 4.0, 30.0)})
     rows = migrated.conn.execute("SELECT src, sold, unseen FROM volume_d1 WHERE day = 20401 ORDER BY src").fetchall()
     assert rows == [("blizzard", 50.0, 6.2), ("books", 61.0, None)]
+    migrated.close()
+
+
+def test_T25_schema_29_adds_units_sold_and_returned_to_posts_and_keeps_them(tmp_path):
+    db = Database.open(tmp_path / "v28.db", T0, None)                  # a schema-28 database: posts counted whole
+    db.conn.executescript("ALTER TABLE posts DROP COLUMN sold_units; ALTER TABLE posts DROP COLUMN returned_units; "
+                          "INSERT INTO posts(post_id, char_id, key, stack, price, at, outcome) "
+                          "VALUES ('p', 'A-R', 4306, 110, 139, 1, NULL);")
+    db.set_meta("schema_version", "28")
+    db.close()
+    migrated = Database.open(tmp_path / "v28.db", T0, None)
+    assert migrated.get_meta("schema_version") == str(db_module.SCHEMA_VERSION)
+    assert migrated.conn.execute("SELECT stack, sold_units, returned_units, outcome FROM posts").fetchall() == [
+        (110, 0, 0, None)]                                             # still open: its mail resolves it next pass
     migrated.close()
