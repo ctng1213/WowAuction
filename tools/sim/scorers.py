@@ -108,6 +108,23 @@ class Ledger:
         lot.units, lot.cost = lot.units + units, lot.cost + cost
         self.events += 1
 
+    def craft(self, char: str, reagents: tuple[tuple[int, int], ...], product: int, units: int) -> None:
+        """A craft: its reagents leave the bags and their cost goes with the units it made (bags → bags).
+
+        Args:
+            char: Who crafts.
+            reagents: (key, units) used.
+            product: The item made.
+            units: Units made.
+
+        Raises:
+            ValueError: A reagent short in the bags.
+        """
+        cost = sum(self.bags[(char, key)].take(n) for key, n in reagents)
+        lot = self.bags.setdefault((char, product), Lot())
+        lot.units, lot.cost = lot.units + units, lot.cost + cost
+        self.events += 1
+
     def post(self, char: str, key: int, units: int, auction: int, deposit: int) -> None:
         """An auction posted: bags → listed, and the deposit cash → deposits held.
 

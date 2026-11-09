@@ -9,8 +9,9 @@ Each simulated day the characters log in at LOGIN_HOUR_UTC, an hour after the cl
 mail that has arrived, then AHSync runs as in production (plan §1.5): the SavedVariables file is parsed and
 applied (`state/importer.apply_data`), the tracking pass matches events to actions and rebuilds the cost basis,
 and `replan_all` plans with the latest document. The characters then carry out the plan's pending actions: buys
-and vendor sales now, posts now or at their window's start, mail now. Crafts, disenchants and holds are counted,
-not carried out (MS3; SD10 and SD24 need them).
+and vendor sales now, posts now or at their window's start, mail now, crafts now with the recipes their spec
+knows (MS4b-2: the reagents' cost goes with the product; a fixed yield). Disenchants and holds are counted, not
+carried out (SD24 needs disenchants).
 
 Mail as in the game: a sale's gold arrives SALE_MAIL_DELAY_MS after the sale, an expired or cancelled auction's
 items at once. Postage is not modelled.
@@ -43,7 +44,19 @@ SALE_MAIL_DELAY_MS = HOUR_MS           # a sale's gold reaches the mailbox an ho
 DUE_SLACK_MS = HOUR_MS                 # a buy whose slot is within this of now is done now
 OUR_PREFIX = "we:"                     # our auctions' seller names on the market
 CLIENT_BANDS = ((30 * 60_000, 1), (2 * HOUR_MS, 2), (8 * HOUR_MS, 3))   # the game client's time-left bands
-UNDONE_KINDS = ("craft", "de", "hold")
+UNDONE_KINDS = ("de", "hold")
+
+
+@dataclass(frozen=True)
+class Recipe:
+    """A recipe a character knows, as the addon writes its definition (SPEC §2.2.1 recipes)."""
+
+    spell: int
+    profession: str
+    product: int
+    reagents: tuple[tuple[int, int], ...]   # (key, units) a craft uses
+    yield_min: int = 1
+    yield_max: int = 1
 
 
 @dataclass(frozen=True)
@@ -55,6 +68,7 @@ class CharacterSpec:
     bags: tuple[tuple[int, int], ...] = ()   # (key, units) held at the start, found stock at cost 0
     faction: str = "Horde"
     cls: str = "MAGE"
+    recipes: tuple[Recipe, ...] = ()   # what it can craft, its professions at skill 300 (MS4b-2)
 
     @property
     def char_id(self) -> str:
@@ -73,6 +87,7 @@ class Login:
     at_ms: int
     actions: tuple[dict, ...]          # the pending and late actions, as `Session.pending` reads them
     offers: dict[int, str]             # the market file's flip offers (EX11): item key -> its offer
+    prices: dict[int, int] = field(default_factory=dict)   # the planned document's cheapest price per item, copper
 
 
 @dataclass(order=True)
@@ -341,6 +356,29 @@ class Trader:
         """
         self.ledger.vendor_sell(char, key, units, self.items[key].vendor_sell)
 
+    def craft(self, char: str, product: int, crafts: int, now_ms: int) -> int:
+        """Craft an item with a recipe the character knows, as many times as asked and its bags allow.
+
+        Args:
+            char: Who crafts.
+            product: The item to make.
+            crafts: Crafts asked for.
+            now_ms: Now (the craft event's time).
+
+        Returns:
+            Crafts done: 0 without a recipe for it or its reagents. Each makes the recipe's yield_min units (a fixed
+            yield, so a run is deterministic); the addon's "craft" event records the spell and the count.
+        """
+        recipe = next((r for r in sorted(self.specs[char].recipes, key=lambda r: r.spell) if r.product == product), None)
+        if recipe is None:
+            return 0
+        done = min([crafts] + [self.held(char, key) // n for key, n in recipe.reagents])
+        if done <= 0:
+            return 0
+        self.ledger.craft(char, tuple((key, n * done) for key, n in recipe.reagents), product, done * recipe.yield_min)
+        self._event(char, now_ms, "craft", spell=recipe.spell, count=done)
+        return done
+
     def held(self, char: str, key: int) -> int:
         """Units of an item in a character's bags.
 
@@ -411,7 +449,8 @@ class Session:
         self.replans += 1
         actions = self.pending()
         offers = flip_offers(documents[-1].items, self.db.items(), set(vendor_prices(self.db)), now_ms, self.cfg)
-        self.logins.append(Login(now_ms, tuple(actions), offers))
+        prices = {key: i.cur for key, i in sorted(documents[-1].items.items()) if i.cur is not None}
+        self.logins.append(Login(now_ms, tuple(actions), offers, prices))
         for action in actions:
             self._carry_out(market, action, now_ms)
 
@@ -457,6 +496,9 @@ class Session:
             self._post(market, action)
         elif kind == "post":
             t._wake(action["window_start_ms"], "post", action["action_id"])
+        elif kind == "craft" and due:
+            if not t.craft(action["char_id"], action["key"], action["qty"], now_ms):
+                t.counts["undone:craft"] = t.counts.get("undone:craft", 0) + 1
         elif kind == "vendor" and t.held(action["char_id"], action["key"]):
             t.vendor_sell(action["char_id"], action["key"], min(action["qty"], t.held(action["char_id"], action["key"])))
         elif kind == "mail" and t.held(action["char_id"], action["key"]):
@@ -502,7 +544,25 @@ class Session:
             rows = [f"{a.key},{a.price},{a.units},{client_band(a.expires_ms - now_ms)},1" for a in mine if a]
             ends = [f"{a.key},{a.units},{a.expires_ms // 1000 * 1000},{a.price}" for a in mine if a]
             db["ownAuctions"][char] = {"at": at, "rows": ";".join(rows), "ends": ";".join(ends)}
+        self._recipes(db)
         return db
+
+    def _recipes(self, db: dict) -> None:
+        """The characters' professions, the recipes' definitions and who knows them, as the addon writes them
+        (SPEC §2.2.1; MS4b-2).
+
+        Args:
+            db: The AHProfitDB table; gains "professions", "recipes" and "knownRecipes".
+        """
+        db["professions"], db["recipes"], db["knownRecipes"] = {}, {}, {}
+        for char, spec in sorted(self.trader.specs.items()):
+            for r in sorted(spec.recipes, key=lambda r: r.spell):
+                db["professions"].setdefault(char, {})[r.profession] = {"skill": 300, "max": 300}
+                db["recipes"].setdefault(r.profession, {})[r.spell] = {
+                    "product": r.product, "yieldMin": r.yield_min, "yieldMax": r.yield_max, "skill": 1, "cooldown": 0,
+                    "reagents": ";".join(f"{key},{n}" for key, n in r.reagents)}
+            if spec.recipes:
+                db["knownRecipes"][char] = ";".join(str(r.spell) for r in sorted(spec.recipes, key=lambda r: r.spell))
 
 
 def market_auction(market: Market, auction_id: int) -> Live | None:
