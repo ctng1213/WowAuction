@@ -144,7 +144,11 @@ def main(argv: list[str] | None = None) -> int:
     """
     parser = argparse.ArgumentParser(prog="ahsync_app", description="AHSync, the app: tray, window, setup")
     parser.add_argument("--autostart", action="store_true", help="started at login: open nothing")
+    parser.add_argument("--mcp", action="store_true", help="run the AI assistant bridge Claude launches (SPEC §3.8.2)")
     args = parser.parse_args(argv)
+    if args.mcp:                                   # macOS: Claude starts the app's binary as its bridge
+        from ahsync.mcp.__main__ import main as bridge
+        return bridge([])
     os.environ.update(tls_ca_env(os.environ, ssl.get_default_verify_paths(), platform.current().ca_bundle()))
     return start(args.autostart, real_world(sys.stderr))
 

@@ -97,3 +97,11 @@ def test_FM58_main_sets_ssl_cert_file_before_the_shell_starts(monkeypatch, tmp_p
     monkeypatch.setattr(app_main, "start", lambda _autostart, world: seen.update(env=world.env) or 0)
     assert app_main.main([]) == 0
     assert app_main.os.environ["SSL_CERT_FILE"] == str(bundle) == seen["env"]["SSL_CERT_FILE"]
+
+
+def test_mcp_runs_the_ai_assistant_bridge_before_anything_else(monkeypatch):
+    import ahsync.mcp.__main__ as bridge_main
+    seen = []
+    monkeypatch.setattr(bridge_main, "main", lambda argv: seen.append(argv) or 0)
+    monkeypatch.setattr(app_main, "start", lambda *a: (_ for _ in ()).throw(AssertionError("the shell started")))
+    assert app_main.main(["--mcp"]) == 0 and seen == [[]]

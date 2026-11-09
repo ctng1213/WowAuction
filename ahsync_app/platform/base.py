@@ -171,6 +171,17 @@ class Platform:
         """
         raise NotImplementedError
 
+    def bridge_command(self, exe: Path) -> tuple[str, ...]:
+        """The AI assistant bridge Claude launches, in a packaged app (SPEC §3.8.2).
+
+        Args:
+            exe: The running app's executable.
+
+        Returns:
+            The program and its arguments.
+        """
+        raise NotImplementedError
+
     def can_replace(self, exe: Path) -> bool:
         """Whether the app can replace itself where it is installed (SPEC §3.7.9; FM54).
 

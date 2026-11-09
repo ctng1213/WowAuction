@@ -118,6 +118,18 @@ class WindowsPlatform(Platform):
         self.run_key = run_key if run_key is not None else WinRegRunKey()
         self.processes = processes or Processes()
 
+    def bridge_command(self, exe: Path) -> tuple[str, ...]:
+        """`ahsync-mcp.exe`, the console bridge installed next to AHSync.exe: the app is windowed, so it has no
+        stdin or stdout of its own (SPEC §3.8.2).
+
+        Args:
+            exe: AHSync.exe.
+
+        Returns:
+            (the bridge's full path,).
+        """
+        return (str(PureWindowsPath(str(exe)).parent / "ahsync-mcp.exe"),)
+
     def app_dirs(self) -> AppDirs:
         """`%LOCALAPPDATA%\\AHSync\\config.toml` and `…\\data`: machine-local, not Roaming (SPEC §3.7.3, DR1).
 

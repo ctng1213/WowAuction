@@ -255,3 +255,8 @@ def test_the_swap_helper_refuses_a_path_that_is_not_an_app_and_gives_up_on_a_pid
     finally:
         alive.kill()
     assert done.returncode == 1 and bundle.is_dir() and not (tmp_path / "AHSync.app.previous").exists()
+
+
+def test_the_ai_assistant_bridge_is_the_app_binary_with_mcp():
+    exe = Path("/Applications/AHSync.app/Contents/MacOS/AHSync")
+    assert MacPlatform(Path("/Users/u")).bridge_command(exe) == (str(exe), "--mcp")

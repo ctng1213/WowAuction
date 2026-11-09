@@ -67,6 +67,17 @@ class MacPlatform(Platform):
         self.processes = processes or Processes()
         self.writable = writable
 
+    def bridge_command(self, exe: Path) -> tuple[str, ...]:
+        """The app's own binary started with `--mcp`: a bundle's binary has stdin and stdout (SPEC §3.8.2).
+
+        Args:
+            exe: The binary inside AHSync.app.
+
+        Returns:
+            (its path, "--mcp").
+        """
+        return (str(exe), "--mcp")
+
     def app_dirs(self) -> AppDirs:
         """`~/Library/Application Support/AHSync/config.toml` and `…/data` (SPEC §3.7.3, DR1).
 
