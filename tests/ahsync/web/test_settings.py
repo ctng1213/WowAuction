@@ -170,7 +170,7 @@ def test_MCP21_each_status_build_looks_again_and_changes_nothing(dash):
     config = claude / "claude_desktop_config.json"
     app.claude_config = lambda: find_claude_config({"APPDATA": str(data / "Roaming")}, data, "win32")
     assert _post(app, {"enabled": True})[0] == 200
-    assert _card(app)["setup"]["desktop"]["steps"][0] == {"text": "Create this file:", "code": str(config)}
+    assert _card(app)["setup"]["desktop"]["steps"][1] == {"text": "Create this file:", "code": str(config)}
     assert not config.exists() and sorted(p.name for p in claude.iterdir()) == []     # never created
     config.write_text(json.dumps({"mcpServers": {"ahsync": {"command": r"C:\AHSync\ahsync-mcp.exe"}}}),
                       encoding="utf-8")
@@ -181,6 +181,7 @@ def test_MCP21_each_status_build_looks_again_and_changes_nothing(dash):
     assert sorted(p.name for p in claude.iterdir()) == ["claude_desktop_config.json"]
     for text, status in (("", "todo"), ("{}", "todo"), ('{"a": 1}', "todo"), ('{"mcpServers": {}}', "todo"),
                          (json.dumps({"mcpServers": {"ahsync": {"command": r"C:\Old.exe"}}}), "todo"),
+                         ('{"preferences": {"mcpServers": {}}}', "warn"),
                          ('{"mcpServers": [', "warn"), ('{"mcpServers": []}', "warn"), (" " * 1_000_001, "warn")):
         config.write_text(text, encoding="utf-8")
         before = (config.read_bytes(), config.stat().st_mtime_ns)

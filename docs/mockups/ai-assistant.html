@@ -102,11 +102,13 @@
     <div class="h">Connect Claude (once)</div>
     <div class="tabs"><span class="tab on">Claude Desktop</span><span class="tab">Claude Code</span></div>
     <div class="step">
-      <!-- MC3b (2026-11-09): made from what AHSync finds of Claude's config; this is the "no file yet" state. -->
+      <!-- MC3b (2026-11-09): made from what AHSync finds of Claude's config; this is the "no file yet" state.
+           MC3c: the Store build's file is in Claude-Data; every edit is quit, open, change, Check again, reopen. -->
       <p style="margin:0 0 8px">Claude Desktop has no config file yet. Create it:</p>
       <ol>
+      <li>Quit Claude Desktop completely first (right-click its icon by the clock, then Quit). It saves its settings into this file while it runs.</li>
       <li>Create this file:
-<pre><button class="btn copy">Copy</button>C:\Users\you\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude_desktop_config.json</pre></li>
+<pre><button class="btn copy">Copy</button>C:\Users\you\AppData\Local\Claude-Data\claude_pzs8sxrjxfjjc\claude_desktop_config.json</pre></li>
       <li>Paste this into it and save. In Notepad, choose Save as type: All files, so it isn't saved as .txt.
 <pre><button class="btn copy">Copy</button>{
   "mcpServers": {
@@ -115,11 +117,12 @@
     }
   }
 }</pre></li>
-      <li>Quit Claude Desktop completely (right-click its icon by the clock, then Quit), then reopen it. In a new chat, AHSync is listed among Claude's connectors.</li>
+      <li>Press Check again below. This card should then say ✓ Claude Desktop is set up for AHSync.</li>
+      <li>Reopen Claude Desktop. In a new chat, AHSync is listed among Claude's connectors.</li>
       <li>Turn on <b>web search</b> in Claude, so it can check Wowhead for fishing levels and farming spots.</li>
     </ol>
       <button class="btn" style="margin-top:8px">Check again</button>
-      <p class="muted" style="font-size:12px;margin:8px 0 0">Once the file is right, the tab reads: <span style="color:#7fbf6a">✓ Claude Desktop is set up for AHSync. If you just changed the file, quit Claude Desktop completely and reopen it.</span> A file that already has <code>mcpServers</code> gets just the <code>"ahsync"</code> entry to add; an old entry gets the one to replace it with; a broken file gets the line it breaks on.</p>
+      <p class="muted" style="font-size:12px;margin:8px 0 0">Once the file is right, the tab reads: <span style="color:#7fbf6a">✓ Claude Desktop is set up for AHSync. If you just changed the file, quit Claude Desktop completely and reopen it.</span> A file that already has <code>mcpServers</code> gets just the <code>"ahsync"</code> entry to add, right after the <code>{</code> that follows it; a file without one gets the block to add right after its very first <code>{</code>; an <code>mcpServers</code> put inside another section, such as <code>"preferences"</code>, is named, with how to move it to the top level; an old entry gets the one to replace it with; a broken file gets the line it breaks on.</p>
     </div>
     <div class="privacy">What Claude reads is sent to Anthropic to answer you: prices, your characters, their gold, professions and trades.</div>
     <div class="ask"><span class="muted">Try asking:</span><ul>
