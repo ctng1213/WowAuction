@@ -190,8 +190,27 @@ def inventory_page(state: StateReader, char_ids: list[str], actions: list[ViewAc
                            state.reserves(char_ids))
     view = inventory_view(holdings, world, char_ids)                                 # D75: by_char
     names = {k: i.name for k, i in items.items()}
-    details = {str(k): item_detail(detail_facts(looks[k], stats[k], items.get(k),
-                                                line_facts(stats[k], items.get(k), de_mats(items.get(k), stats, names),
-                                                           coverage30)), offset_ms)
+    details = {str(k): detail_of(k, looks[k], stats, items, names, offset_ms, coverage30)
                for k in sorted(keys) if k in stats}
     return {**view, "details": details, "help": COLUMN_HELP}
+
+
+def detail_of(key: int, look: ItemLook, stats: dict[int, ItemIntel], items: dict[int, ItemInfo], names: dict[int, str],
+              offset_ms: int, coverage30: int | None) -> dict:
+    """One item's detail as the dashboard shows it (D105): Inventory's, and the AI assistant's `item` (SPEC §3.8.3).
+
+    Args:
+        key: Item key; must be in stats.
+        look: The item's ItemLook (item_looks).
+        stats: Item key -> intelligence (the item's, and its disenchant materials' prices).
+        items: Item metadata.
+        names: Item key -> name (the disenchant materials').
+        offset_ms: Local time minus UTC.
+        coverage30: The market's observed hours of the last 720, for the market lines.
+
+    Returns:
+        engine.item_detail.item_detail's payload.
+    """
+    info = items.get(key)
+    lines = line_facts(stats[key], info, de_mats(info, stats, names), coverage30)
+    return item_detail(detail_facts(look, stats[key], info, lines), offset_ms)
