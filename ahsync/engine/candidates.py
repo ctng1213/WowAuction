@@ -396,7 +396,7 @@ def _flip_first(f: SellFacts, char_id: str, ledger: dict, run: Run) -> tuple | N
         return None
     o = opts[step.option]
     later = f.p10 is not None and f.cur is not None and f.cur < f.p10 and o.window is not None
-    sale, cost = sale_ms(o, run.now_ms), step.price * step.stack
+    sale, cost = sale_ms(o, run.now_ms), step.cost
     cand = candidate_id("buy_later" if later else "flip", f.key, char_id,
                         route_text({}, "now", timing_tag(sale, run.now_ms)), 1)
     return first_rank(cost + fees.deposit_copper(f.vendor_sell, step.stack, o.duration_h), step.expected - cost,
@@ -499,7 +499,7 @@ def _flip_opportunity(f: SellFacts, opts: Sequence[PostOption], steps: list, cha
         o = opts[step.option]
         u.add_resource(cap_rid(f.key, o), o.cap, name)
         units += step.stack
-        sale, cost = sale_ms(o, run.now_ms), step.price * step.stack
+        sale, cost = sale_ms(o, run.now_ms), step.cost
         cand = make_candidate(strategy, f.key, char_id, route_text({}, "now", timing_tag(sale, run.now_ms)), n, gi,
                           out_qty=step.stack, gold_buys=cost,
                           gold_deposits=fees.deposit_copper(f.vendor_sell, step.stack, o.duration_h),
