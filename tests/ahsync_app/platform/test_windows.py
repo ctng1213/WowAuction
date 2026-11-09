@@ -108,3 +108,9 @@ def test_DR22_the_silent_installer_starts_detached_and_relaunches_the_old_app_wh
         with pytest.raises(OSError):
             platform.apply_update(odd, exe)
     assert len(spawned) == 1
+
+
+def test_the_ai_assistant_bridge_is_the_console_exe_next_to_ahsync_exe():
+    exe = Path(r"C:\Users\u\AppData\Local\Programs\AHSync\AHSync.exe")
+    assert WindowsPlatform({}, Path(r"C:\Users\u")).bridge_command(exe) == (
+        r"C:\Users\u\AppData\Local\Programs\AHSync\ahsync-mcp.exe",)

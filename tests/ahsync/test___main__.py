@@ -596,3 +596,33 @@ def test_FM62_a_second_setup_logging_shares_the_handler_and_scrubs_its_secrets_w
     assert "SECRETKEY123" not in text and "ValueError: bad key ***" in text
     lines = [line.split(": ", 1)[1] for line in text.splitlines() if " WARNING " in line or " ERROR " in line]
     assert lines == ["shell line", "run line with ***", "traceback", "after run"]
+
+
+def test_MCP3_ahsync_starts_the_assistant_when_left_enabled_and_clears_a_stale_key_file_when_not(tmp_path):
+    from ahsync.__main__ import start_assistant
+    from ahsync.mcp.server import KEY_FILE, McpServer, write_key_file
+    Database.open(tmp_path / "ahsync.db", FakeClock().now_ms(), None).close()
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    config = Config(mcp_port=port)
+
+    class Card:
+        """Stands in for the dashboard: only the failed start's reason."""
+
+        mcp_error = None
+
+    write_key_file(tmp_path, 9, "dead" * 16)                             # left behind by a crash
+    off = McpServer(tmp_path / "ahsync.db", tmp_path, config, FakeClock())
+    start_assistant(off, Card(), enabled=False)
+    assert not off.running and not (tmp_path / KEY_FILE).exists()
+    on = McpServer(tmp_path / "ahsync.db", tmp_path, config, FakeClock())
+    start_assistant(on, Card(), enabled=True)
+    try:
+        assert on.running and json.loads((tmp_path / KEY_FILE).read_text(encoding="utf-8"))["port"] == port
+        card = Card()
+        second = McpServer(tmp_path / "ahsync.db", tmp_path / "other", config, FakeClock())
+        start_assistant(second, card, enabled=True)                      # its port is taken: the card says why
+        assert not second.running and card.mcp_error.startswith(f"Port {port} is in use")
+    finally:
+        on.stop()

@@ -1,6 +1,7 @@
 # PyInstaller recipe for AHSync, one for both OSes (SPEC §3.7.12). Run by tools/build.py from the repo root:
 #   python -m PyInstaller --noconfirm packaging/ahsync.spec
-# Onedir and windowed. Windows: dist/AHSync/AHSync.exe (+ _internal/), packaged by Inno Setup.
+# Onedir and windowed. Windows: dist/AHSync/AHSync.exe and the console bridge ahsync-mcp.exe (+ _internal/),
+# packaged by Inno Setup.
 # macOS: dist/AHSync.app (LSUIElement: no Dock icon), packaged as a dmg and a zip.
 # Signing (macOS): tools/build.py sets AHSYNC_CODESIGN_IDENTITY and AHSYNC_ENTITLEMENTS in mode "sign";
 # unset, PyInstaller signs ad hoc. This file is outside DR16's scan (it is a recipe, not code).
@@ -52,7 +53,27 @@ exe = EXE(                            # noqa: F821
     codesign_identity=identity if MAC else None,
     entitlements_file=entitlements if MAC else None,
 )
-coll = COLLECT(exe, a.binaries, a.datas, name="AHSync", upx=False)   # noqa: F821
+if MAC:
+    coll = COLLECT(exe, a.binaries, a.datas, name="AHSync", upx=False)   # noqa: F821
+else:
+    # The AI assistant bridge Claude launches (SPEC §3.8.2): a console program next to AHSync.exe, since the windowed
+    # app has no stdin or stdout. On macOS the app's binary is the bridge, started with --mcp.
+    b = Analysis(                     # noqa: F821
+        [str(ROOT / "ahsync" / "mcp" / "__main__.py")],
+        pathex=[str(ROOT)],
+        excludes=["tkinter", "pytest", "webview", "pystray", "clr"],
+    )
+    bridge = EXE(                     # noqa: F821
+        PYZ(b.pure),                  # noqa: F821
+        b.scripts,
+        [],
+        exclude_binaries=True,
+        name="ahsync-mcp",
+        console=True,
+        upx=False,
+        icon=str(ROOT / "ahsync_app" / "icon.png"),
+    )
+    coll = COLLECT(exe, a.binaries, a.datas, bridge, b.binaries, b.datas, name="AHSync", upx=False)   # noqa: F821
 
 if MAC:
     app = BUNDLE(                     # noqa: F821

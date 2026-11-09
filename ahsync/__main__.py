@@ -43,6 +43,7 @@ from ahsync.recommend.tracking_pass import tracking_pass
 from ahsync.app import installer, update_check, updater
 from ahsync.app.scheduler import SavedVarsWatcher, Scheduler, SchedulerHooks, file_mtime_ms, find_savedvars
 from ahsync.intel.store import IntelCache
+from ahsync.mcp.server import McpServer, McpStartError, remove_key_file
 from ahsync.web.server import (AppHooks, DashboardApp, DashboardServer, new_token, open_server_db, start_dashboard,
                                stop_dashboard)
 
@@ -370,7 +371,7 @@ def serve_dashboard(data_dir: Path, config: Config, clock: Clock, refresh: Refre
                     out: IO[str], config_path: Path | None = None,
                     on_config: Callable[[Config], None] | None = None,
                     app_hooks: AppHooks | None = None,
-                    intel_cache: IntelCache | None = None) -> tuple[DashboardServer, Database] | None:
+                    intel_cache: IntelCache | None = None) -> tuple[DashboardServer, Database, McpServer] | None:
     """Start the dashboard on its own thread (SPEC §3.1 "serve dashboard"); a failure is logged, never fatal.
 
     Args:
@@ -385,12 +386,16 @@ def serve_dashboard(data_dir: Path, config: Config, clock: Clock, refresh: Refre
         intel_cache: run()'s connection's IntelCache, so the dashboard shares its parsed summary (BZ42).
 
     Returns:
-        (server, its database connection) to stop and close at exit, or None when the
+        (server, its database connection, the AI assistant server) to stop and close at exit, or None when the
         port can't be bound (for example, already in use).
     """
     server_db = open_server_db(data_dir / "ahsync.db", intel_cache)
+    assistant = McpServer(data_dir / "ahsync.db", data_dir, config, clock, intel_cache)
+    command = (app_hooks.mcp_command(data_dir) if app_hooks is not None and app_hooks.mcp_command is not None
+               else (sys.executable, "-m", "ahsync.mcp", "--data-dir", str(data_dir)))
     app = DashboardApp(server_db, config, clock, refresh.request_refresh, new_token(), config.dashboard_port,
-                       config_path=config_path, config_changed=on_config or (lambda _config: None), app_hooks=app_hooks)
+                       config_path=config_path, config_changed=on_config or (lambda _config: None), app_hooks=app_hooks,
+                       mcp=assistant, mcp_command=command)
     try:
         server = start_dashboard(app, config.dashboard_port)
     except OSError as error:
@@ -401,7 +406,26 @@ def serve_dashboard(data_dir: Path, config: Config, clock: Clock, refresh: Refre
     print(f"Dashboard: http://localhost:{app.port}", file=out)
     if app_hooks is not None:
         app_hooks.dashboard_ready(app)           # the shell's tray toggles go through the dashboard's own handlers
-    return server, server_db
+    start_assistant(assistant, app, config.mcp_enabled)
+    return server, server_db, assistant
+
+
+def start_assistant(assistant: McpServer, app: DashboardApp, enabled: bool) -> None:
+    """Start the AI assistant server when the user left it enabled; else clear a stale mcp.json (SPEC §3.8.1, MCP3).
+
+    Args:
+        assistant: The server (not started).
+        app: The dashboard, whose card shows a failed start's reason (MCP4).
+        enabled: config.toml's mcp_enabled.
+    """
+    if not enabled:
+        remove_key_file(assistant.data_dir)      # a crash may have left one: the bridge must read "off"
+        return
+    try:
+        assistant.start()
+    except McpStartError as error:
+        app.mcp_error = str(error)
+        logging.getLogger("ahsync").warning("the AI assistant server didn't start: %s", error)
 
 
 def update_job(db: Database, transport: Transport, clock: Clock, data_dir: Path, live: LiveConfig,
@@ -557,6 +581,7 @@ def _run_configured(data_dir: Path, config: Config, runtime: Runtime, config_pat
         if dashboard is not None:
             stop_dashboard(dashboard[0])
             dashboard[1].close()
+            dashboard[2].stop()                  # frees the assistant's table and deletes mcp.json
         if db is not None:
             db.close()
         release_log()

@@ -825,7 +825,7 @@ Retired at M37 (flips sell later, R29): FN1 (the addon's flip seen in a live boo
 | AR9 | the import graph, and the Lambda asset | `ahcloud/` imports only `ahsync.collect.blizzard`, `collect.observations`, `collect.snapshots`, `collect.provider`, `analysis`, `intel.contract`, `db`, `history` and its own modules; `boto3` is imported only in `ahcloud/aws.py`; nothing in `ahsync/` imports `ahcloud/` or `infra/`; `infra/` imports `aws_cdk` and nothing from `ahsync/`; the asset `tools/build_lambda.py` stages holds `ahsync/data/` (the bonus suffixes, suffix names and the frozen catalog) and no third-party package | the cloud is a thin wrapper over the same pipeline |
 | SRC20 | `source_kind("blizzard")`; a market with `rank = ["blizzard"]` and `primary = "blizzard"` | kind `book`; the one-close rule prefers it over `ahledger` and ties with `local` by rank; Status follows it | a complete snapshot is a complete book |
 
-**AI assistant access (MCP)** (`ahsync/mcp/`, `engine/app_view`, `web/server`; SPEC §3.8; planned MC1–MC3, every ID pending):
+**AI assistant access (MCP)** (`ahsync/mcp/`, `engine/mcp_view`, `web/settings`; SPEC §3.8; built MC1–MC3):
 
 | # | Scenario | Then |
 |---|---|---|

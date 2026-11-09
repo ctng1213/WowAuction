@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import sys
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -391,7 +392,8 @@ class Session:
                                                 self.verify_update, self.dashboard_ready,
                                                 can_replace=lambda: platform.can_replace(exe),
                                                 forget_previous=lambda: platform.forget_previous(exe),
-                                                restart=self.restart_from_dashboard, update_checks=self.update_checks))
+                                                restart=self.restart_from_dashboard, update_checks=self.update_checks,
+                                                mcp_command=self.bridge_command()))
 
     def verify_update(self, path: Path) -> str | None:
         """The platform's signature check of a download against the running app (SPEC §3.7.9; DR23).
@@ -403,6 +405,18 @@ class Session:
             None when it may be installed; else the reason.
         """
         return self.world.platform.verify_update(path, self.world.exe)
+
+    def bridge_command(self) -> Callable[[Path], tuple[str, ...]] | None:
+        """How the Status card names the AI assistant bridge (SPEC §3.8.1).
+
+        Returns:
+            The platform's packaged bridge in a frozen build; None from source (run() then names
+            `python -m ahsync.mcp --data-dir <data>`).
+        """
+        if not getattr(sys, "frozen", False):
+            return None
+        platform, exe = self.world.platform, self.world.exe
+        return lambda _data_dir: platform.bridge_command(exe)
 
     def restart_to_update(self) -> None:
         """Restart to update (the tray item, offered only while an update waits): stop; start() installs on the way

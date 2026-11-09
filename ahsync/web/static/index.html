@@ -93,6 +93,18 @@
   .chip.buy { border-left-color: #69ccf0; } .chip.post { border-left-color: var(--accent); } .chip.de { border-left-color: #b55cff; } .chip.craft { border-left-color: #ff8000; } .chip.mail { border-left-color: var(--info); } .chip.hold { border-left-color: var(--amber); border-style: dashed; border-left-style: solid; }
   .chip .t { color: var(--muted); } .chip .who { float: right; color: var(--muted); } .chip.done { opacity: .6; } .chip.done .t::before { content: "✓ "; color: var(--pos); }
   .chip.missed { border-left-color: var(--neg); opacity: .8; } .chip.missed .t::before { content: "✗ missed "; color: var(--neg); }
+  .mcp-body { padding: 12px 14px; font-size: 13px; } .mcp-intro { margin: 0 0 10px; }
+  .mcp-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; } .mcp-error { margin: 10px 0 0; }
+  .mcp-kv { padding: 10px 0 0; } .mcp-h { color: var(--muted); font-size: 12px; margin: 14px 0 6px; text-transform: uppercase; letter-spacing: .6px; }
+  .mcp-tabs { display: flex; gap: 4px; margin-bottom: -1px; }
+  .mcp-tab { padding: 4px 12px; border: 1px solid var(--border); border-bottom: 0; border-radius: 4px 4px 0 0; font-size: 12px; color: var(--muted); background: #0f0d0a; cursor: pointer; }
+  .mcp-tab.on { color: var(--accent); background: #15120d; }
+  .mcp-step { border: 1px solid var(--border); border-radius: 0 4px 4px 4px; background: #15120d; padding: 10px 12px; }
+  .mcp-step ol { margin: 0; padding-left: 18px; } .mcp-step li { margin: 4px 0; }
+  .mcp-step pre { margin: 6px 0; padding: 8px 10px; background: #0b0a08; border: 1px solid var(--border); border-radius: 4px; font: 12px/1.4 Consolas, "SF Mono", monospace; color: #e8dcc0; overflow-x: auto; position: relative; white-space: pre; }
+  .mcp-step pre .copy { position: sticky; float: right; left: 0; }
+  .mcp-privacy { margin-top: 12px; padding: 8px 12px; border-left: 4px solid var(--info); background: #12161a; border-radius: 4px; }
+  .mcp-ask { margin-top: 10px; } .mcp-ask ul { margin: 4px 0 0; padding-left: 18px; }
   .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; padding: 0 12px 12px; }
   .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; padding: 12px 14px; margin: 0; }
   .kv dt { color: var(--muted); } .kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
@@ -331,6 +343,82 @@ function drawAppCard(card, app) {
     list.append(el('dt', '', line.label), value);
   }
   box.append(head, list);
+  grid.append(box);
+}
+
+// Status: the "AI assistant (Claude)" card (SPEC §3.8.1; docs/mockups/ai-assistant.html): every text, number and
+// snippet comes from engine/mcp_view.mcp_card; the page draws it, posts Enable / Disable and copies a snippet.
+function drawMcpCard(card, mcp) {
+  const grid = card.querySelector('.grid2');
+  if (!mcp || !grid) return;
+  const el = (tag, cls, text) => {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+  const box = el('div', 'card mcp'), head = el('div', 'card-h'), body = el('div', 'mcp-body');
+  head.append(el('b', '', mcp.title), el('span', 'pill ' + (['ok', 'warn'].includes(mcp.pill_class) ? mcp.pill_class : ''), mcp.pill));
+  const intro = el('p', 'mcp-intro');
+  intro.append(el('span', '', mcp.intro + ' '), el('span', 'muted', mcp.intro_sub));
+  const actions = el('div', 'mcp-actions');
+  const button = el('button', 'btn' + (mcp.button.primary ? ' primary' : ''), mcp.button.text);
+  button.type = 'button';
+  button.disabled = !mcp.button.enabled;
+  button.onclick = async () => {               // Enable starts the server (the agreement to its memory); Disable frees it
+    button.disabled = true;
+    button.textContent = mcp.button.value ? 'Starting…' : 'Stopping…';
+    try { await post('/api/mcp', { enabled: mcp.button.value }); } catch (e) { /* the reload shows the real state */ }
+    load('status');
+  };
+  actions.append(button, el('span', 'muted', mcp.note));
+  body.append(intro, actions);
+  if (mcp.error) body.append(el('p', 'amber mcp-error', mcp.error));
+  if (mcp.lines.length) {
+    const list = el('dl', 'kv mcp-kv');
+    for (const [k, v] of mcp.lines) list.append(el('dt', '', k), el('dd', '', v));
+    body.append(list);
+  }
+  if (mcp.setup) {
+    body.append(el('div', 'mcp-h', 'Connect Claude (once)'));
+    const tabs = el('div', 'mcp-tabs'), panel = el('div', 'mcp-step');
+    const show = name => {
+      const part = mcp.setup[name];
+      panel.replaceChildren();
+      const steps = el('ol');
+      part.steps.forEach((s, i) => {
+        const li = el('li', '', s);
+        if ((name === 'desktop' && i === 1) || (name === 'code' && i === 0)) {
+          const pre = el('pre', '', part.snippet), copy = el('button', 'btn copy', 'Copy');
+          copy.type = 'button';
+          copy.onclick = async () => {
+            try { await navigator.clipboard.writeText(part.snippet); copy.textContent = 'Copied'; } catch (e) { copy.textContent = 'Select and copy'; }
+          };
+          pre.prepend(copy);
+          li.append(pre);
+        }
+        steps.append(li);
+      });
+      panel.append(steps);
+      tabs.querySelectorAll('span').forEach(t => t.classList.toggle('on', t.dataset.tab === name));
+    };
+    for (const [name, label] of [['desktop', 'Claude Desktop'], ['code', 'Claude Code']]) {
+      const tab = el('span', 'mcp-tab', label);
+      tab.dataset.tab = name;
+      tab.onclick = () => show(name);
+      tabs.append(tab);
+    }
+    body.append(tabs, panel);
+    show('desktop');
+  }
+  body.append(el('div', 'mcp-privacy', mcp.privacy));
+  if (mcp.ask.length) {
+    const ask = el('div', 'mcp-ask'), list = el('ul');
+    mcp.ask.forEach(q => list.append(el('li', '', q)));
+    ask.append(el('span', 'muted', 'Try asking:'), list);
+    body.append(ask);
+  }
+  box.append(head, body);
   grid.append(box);
 }
 
@@ -763,7 +851,7 @@ const LIVE = {
       `<div class="grid2">${(d.cards || []).map(statusCard).join('')}</div>` +
       (d.coverage || []).map(covCard).join('') +
       calibrationHtml(d.calibration),
-    bind: (_id, card) => drawAppCard(card, (state.data.status || {}).app_card),
+    bind: (_id, card) => { drawAppCard(card, (state.data.status || {}).app_card); drawMcpCard(card, (state.data.status || {}).mcp_card); },
     filters: [],
   },
   disenchant: {

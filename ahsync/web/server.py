@@ -26,6 +26,7 @@ import sqlite3
 import threading
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
+from typing import Any
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -46,6 +47,9 @@ from ahsync.engine.status_view import cloud_freshness
 from ahsync.engine.views import source_credit
 from ahsync.export.addon_files import export_plan
 from ahsync.recommend.gathering_page import CATALOG_PATH, read_catalog
+from ahsync.web.responses import Response, body_field, json_response   # noqa: F401  re-exported
+from ahsync.web.settings import (AUTOSTART_BAD_LOCATION, AUTOSTART_NOT_SET, AUTOSTART_SET,   # noqa: F401  re-exported
+                                  SettingsEndpoints)
 
 log = logging.getLogger("ahsync.web")
 
@@ -62,14 +66,13 @@ PAGES = ("portfolio", "today", "week", "on_ah", "disenchant", "craft", "flip", "
          "rules", "characters", "status")
 GET_PATHS = ("/", "/api/markets", "/api/items", "/api/app")
 POST_PATHS = ("/api/refresh", "/api/skip", "/api/rule", "/api/reserve", "/api/risk_tolerance", "/api/manual_rate",
-              "/api/autostart", "/api/update/auto", "/api/update/channel", "/api/update/restart")
+              "/api/autostart", "/api/update/auto", "/api/update/channel", "/api/update/restart", "/api/mcp")
 MANUAL_RATE_MAX = 10_000                           # SPEC §3.4E.5: a whole number 1-10,000 items per hour
 RISK_CHOICES = (0.1, 0.2, 0.3, 0.4, 0.5)          # SPEC §3.5: the Portfolio page's Risk tolerance dropdown
 RULES = ("no_buy", "ignore", "keep", "none")       # SPEC §3.4.2: what the dashboard may set
 VIEWS_PREFIX = "/api/views/"
 
 
-AUTOSTART_SET, AUTOSTART_BAD_LOCATION, AUTOSTART_NOT_SET = "set", "bad_location", "not_set"   # set_autostart's outcomes
 
 
 @dataclass(frozen=True)
@@ -86,16 +89,7 @@ class AppHooks:
     forget_previous: Callable[[], None] = lambda: None             # cleanup after an update that worked (M27)
     restart: Callable[[Database, Config], bool] = lambda db, config: False   # Restart to update: True once stopping
     update_checks: ManualCheck = field(default_factory=ManualCheck)  # Check for updates in the tray (DR34)
-
-
-@dataclass(frozen=True)
-class Response:
-    """One HTTP response, built by DashboardApp.handle and written by the handler."""
-
-    status: int
-    body: bytes
-    content_type: str = "application/json; charset=utf-8"
-    headers: tuple[tuple[str, str], ...] = ()
+    mcp_command: Callable[[Path], tuple[str, ...]] | None = None    # data dir -> the bridge Claude launches (§3.8.1)
 
 
 def new_token() -> str:
@@ -105,21 +99,6 @@ def new_token() -> str:
         43 URL-safe characters (256 random bits), safe to embed in HTML as is.
     """
     return secrets.token_urlsafe(32)
-
-
-def json_response(status: int, payload: object, headers: tuple[tuple[str, str], ...] = ()) -> Response:
-    """Build a JSON response.
-
-    Args:
-        status: HTTP status code.
-        payload: JSON-serializable body.
-        headers: Extra headers, e.g. (("Allow", "POST"),).
-
-    Returns:
-        The response with a compact UTF-8 JSON body.
-    """
-    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    return Response(status, body, headers=headers)
 
 
 def host_allowed(host: str, port: int) -> bool:
@@ -160,23 +139,6 @@ def write_refusal(path: str, host: str, headers: Mapping[str, str], token: str) 
     return None
 
 
-def body_field(body: bytes, name: str) -> object:
-    """One field of a JSON object body.
-
-    Args:
-        body: The request body.
-        name: The field.
-
-    Returns:
-        Its value; None when the body isn't a JSON object or lacks it.
-    """
-    try:
-        data = json.loads(body.decode("utf-8"))
-    except (ValueError, UnicodeDecodeError):
-        return None
-    return data.get(name) if isinstance(data, dict) else None
-
-
 def open_server_db(path: Path, intel_cache: IntelCache | None = None) -> Database:
     """Open a second connection to data/ahsync.db for the server's thread.
 
@@ -197,7 +159,7 @@ def open_server_db(path: Path, intel_cache: IntelCache | None = None) -> Databas
 
 
 @dataclass
-class DashboardApp:
+class DashboardApp(SettingsEndpoints):
     """The dashboard's request handling, with every outside dependency injected."""
 
     db: Database
@@ -211,6 +173,9 @@ class DashboardApp:
     config_changed: Callable[[Config], None] = lambda _config: None   # tells the scheduler the new settings
     catalog_path: Path = CATALOG_PATH     # the gathering catalog, for POST /api/manual_rate's checks (SEC12)
     app_hooks: AppHooks | None = None     # the app shell's paths (/api/app, /api/autostart); None: they answer 404
+    mcp: Any = None                       # the AI assistant server (mcp.server.McpServer); None: no card, /api/mcp 404
+    mcp_command: tuple[str, ...] = ()     # the bridge Claude launches, for the card's setup snippets (SPEC §3.8.1)
+    mcp_error: str | None = None          # why the last Enable failed (MCP4); None after a start or a Disable
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def __post_init__(self) -> None:
@@ -391,6 +356,8 @@ class DashboardApp:
             with self._lock:
                 app = self.app_hooks.app_info(self.db, self.config) if self.app_hooks is not None else None
                 payload = status_page(self.db, self.config, now, self.clock.local_offset_ms(now), app)
+                if self.mcp is not None:
+                    payload["mcp_card"] = self.mcp_card(now)
         except sqlite3.Error as error:
             log.warning("building the status page failed: %s", error)
             return json_response(503, {"error": "database_busy"})
@@ -428,6 +395,8 @@ class DashboardApp:
             return self.update_channel(body)
         if path == "/api/update/restart":
             return self.update_restart()
+        if path == "/api/mcp":
+            return self.set_mcp(body)
         return self.skip(body)
 
     def _manual_rate_request(self, body: bytes) -> tuple[str, int, int | None] | str:
@@ -568,140 +537,6 @@ class DashboardApp:
         self.config_changed(self.config)
         log.info("risk tolerance set to %s from the dashboard", value)
         return self._store_and_replan(lambda _now: self.db.clear_status("risk_tolerance") or True, "the risk tolerance")
-
-    def autostart(self, body: bytes) -> Response:
-        """Turn start at login on or off from the Status card (SPEC §3.7.5; SEC14, DR11, FM51).
-
-        The app shell does the write and keeps the Status line `autostart_not_set`; this only reads the body
-        and maps the outcome.
-
-        Args:
-            body: JSON {"enabled": true | false}.
-
-        Returns:
-            200 {"set": true, "enabled": <the real state>}; 400 bad_request for a non-bool, 400 bad_location for a
-            translocated app; 500 autostart_not_set when the entry can't be written; 404 without the app shell.
-        """
-        if self.app_hooks is None:
-            return json_response(404, {"error": "not_found"})
-        try:
-            enabled = json.loads(body.decode("utf-8")).get("enabled")
-        except (ValueError, AttributeError):
-            enabled = None
-        if not isinstance(enabled, bool):
-            return json_response(400, {"error": "bad_request", "message": "enabled must be true or false"})
-        outcome, now_enabled = self.app_hooks.set_autostart(enabled)
-        if outcome == AUTOSTART_BAD_LOCATION:
-            return json_response(400, {"error": "bad_location", "message": BAD_LOCATION_TEXT})
-        if outcome != AUTOSTART_SET:
-            return json_response(500, {"error": "autostart_not_set"})
-        return json_response(200, {"set": True, "enabled": now_enabled})
-
-    def update_auto(self, body: bytes) -> Response:
-        """Turn automatic updates on or off from the Status card (SPEC §3.7.9; SEC15).
-
-        Args:
-            body: JSON {"enabled": true | false}.
-
-        Returns:
-            set_auto_update()'s answer; 400 for a non-bool; 404 without the app shell.
-        """
-        if self.app_hooks is None:
-            return json_response(404, {"error": "not_found"})
-        enabled = body_field(body, "enabled")
-        if not isinstance(enabled, bool):
-            return json_response(400, {"error": "bad_request", "message": "enabled must be true or false"})
-        return self.set_auto_update(enabled)
-
-    def set_auto_update(self, enabled: bool) -> Response:
-        """Rewrite `auto_update` (the endpoint's and the tray's way in).
-
-        Args:
-            enabled: The new value.
-
-        Returns:
-            200 {"set": true, "enabled": enabled}; 500 {"error": "config_not_written"} when config.toml can't be
-            rewritten (the setting unchanged).
-        """
-        return self._set_setting("auto_update", enabled, "true" if enabled else "false", {"enabled": enabled})
-
-    def update_restart(self) -> Response:
-        """Restart to update from the Status card (SPEC §3.7.9; SEC15): stop, and the shell installs on the way out.
-
-        Returns:
-            200 {"restarting": true} once the stop is asked; 409 {"error": "no_update"} when no verified update
-            waits that may install itself; 404 without the app shell.
-        """
-        if self.app_hooks is None:
-            return json_response(404, {"error": "not_found"})
-        if not self.app_hooks.restart(self.db, self.config):
-            return json_response(409, {"error": "no_update"})
-        log.info("restart to update asked from the dashboard")
-        return json_response(200, {"restarting": True})
-
-    def update_channel(self, body: bytes) -> Response:
-        """Choose the update channel from the Status card (SPEC §3.7.10; SEC15).
-
-        Args:
-            body: JSON {"channel": "stable" | "beta"}.
-
-        Returns:
-            set_update_channel()'s answer; 400 for any other value; 404 without the app shell.
-        """
-        if self.app_hooks is None:
-            return json_response(404, {"error": "not_found"})
-        channel = body_field(body, "channel")
-        if channel not in CHANNELS or not isinstance(channel, str):
-            return json_response(400, {"error": "bad_request", "message": "channel must be stable or beta"})
-        return self.set_update_channel(channel)
-
-    def set_update_channel(self, channel: str) -> Response:
-        """Rewrite `update_channel`, and ask GitHub again at the next update job (DR26).
-
-        Leaving the beta is remembered, so an install ahead of the latest stable release says it stays on its
-        version (never a downgrade); joining it forgets that.
-
-        Args:
-            channel: "stable" or "beta".
-
-        Returns:
-            200 {"set": true, "channel": channel}; 500 {"error": "config_not_written"}.
-        """
-        before = self.config.update_channel
-        response = self._set_setting("update_channel", channel, f'"{channel}"', {"channel": channel})
-        if response.status == 200 and channel != before:
-            try:
-                with self._lock:
-                    write_meta(self.db, {"checked_ms": None, "etag": None, "tag": None, "url": None,
-                                         "prerelease": None, "left_beta": "1" if channel == "stable" else None})
-            except sqlite3.Error:
-                log.warning("the update state was not reset after the channel change")
-        return response
-
-    def _set_setting(self, name: str, value: object, formatted: str, answer: dict) -> Response:
-        """Rewrite one config.toml line and tell the running settings (SPEC §3.5; SEC15).
-
-        Args:
-            name: The key.
-            value: Its new value.
-            formatted: The value as TOML.
-            answer: Added to {"set": true} on success.
-
-        Returns:
-            200 {"set": true, **answer}; 500 {"error": "config_not_written"}.
-        """
-        try:
-            if self.config_path is None:
-                raise OSError("this run has no config.toml to write")
-            with self._lock:                      # one writer: the endpoint and the tray can both get here
-                write_setting(self.config_path, name, value, formatted)
-                self.config = replace(self.config, **{name: value})
-                self.config_changed(self.config)
-        except (OSError, ConfigError) as error:
-            log.warning("%s not saved: %s", name, type(error).__name__)
-            return json_response(500, {"error": "config_not_written"})
-        log.info("%s set to %s from the dashboard", name, formatted)
-        return json_response(200, {"set": True, **answer})
 
     def tray_facts(self) -> tuple[UpdateState, int | None] | None:
         """The update state and the last sync, without waiting: the tray asks every second and must not stall on a

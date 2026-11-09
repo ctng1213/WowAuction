@@ -173,3 +173,29 @@ def test_a_start_that_fails_after_binding_releases_everything(world, tmp_path, m
     srv.start(port=0)                                                     # nothing left to block the next Enable
     assert srv.running
     srv.stop()
+
+
+def test_MCP16_a_refresh_with_the_server_enabled_publishes_exactly_what_it_does_without(world, tmp_path):
+    import shutil
+    import sqlite3
+    from ahsync.app.refresh import refresh_all
+    from ahsync.db.sqlite import Database
+    outputs = []
+    for name, enabled in (("on", True), ("off", False)):
+        folder = tmp_path / name
+        folder.mkdir()
+        shutil.copy(world.db_path, folder / "ahsync.db")
+        srv = McpServer(folder / "ahsync.db", folder, world.config, world.clock())
+        if enabled:
+            srv.start(port=0)
+            _send(srv, body={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                             "params": {"name": "query", "arguments": {"sql": "SELECT count(*) FROM market_stats"}}})
+        db = Database.open(folder / "ahsync.db", world.now_ms, None)
+        assert not refresh_all(db, world.now_ms, world.config).error
+        db.close()
+        srv.stop()
+        conn = sqlite3.connect(folder / "ahsync.db")
+        outputs.append((conn.execute("SELECT page, market, body FROM views ORDER BY page, market").fetchall(),
+                        conn.execute("SELECT * FROM actions ORDER BY action_id").fetchall()))
+        conn.close()
+    assert outputs[0] == outputs[1] and outputs[0][0]
