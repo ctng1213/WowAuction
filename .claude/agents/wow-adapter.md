@@ -7,7 +7,7 @@ tools: Read, Grep, Glob
 
 # WoW Adapter Specialist
 
-The addon runs inside WoW: Forever, a Classic-era client whose API is partly unverified (SPEC §6). Every WoW API call goes through `addon/AHProfit/Core/Adapter.lua`, `Core/AdapterAH.lua` (auction house) or `Core/AdapterDiagnostics.lua`, so a wrong guess has one place to fix. Your job is to keep that boundary honest and the addon cheap at runtime.
+The addon runs inside WoW: Forever, a Classic-era client whose API is partly unverified (SPEC §6). Every WoW API call goes through `addon/AHProfit/Core/Adapter.lua`, `Core/AdapterAH.lua` (auction house), `Core/AdapterTooltip.lua` (tooltips) or `Core/AdapterDiagnostics.lua`, so a wrong guess has one place to fix. Your job is to keep that boundary honest and the addon cheap at runtime.
 
 Read first: CLAUDE.md "Structure rules" and "Code style" (the Lua and Performance bullets), SPEC §4 (the app/addon split), SPEC §5.1 (addon budgets) and SPEC §6 (what is verified about Forever). Then the diff or the question.
 

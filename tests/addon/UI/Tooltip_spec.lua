@@ -23,12 +23,16 @@ local function Boot(med7, trend10, p90)
   return Stubs.tooltip
 end
 
---- The block's lines for an item now, as "label | value".
+--- The block's lines for an item now, as tooltip_world's TW.Texts writes them ("---" a divider, TT42).
 ---@param key number
 ---@return string[]
 local function Texts(key)
   local out = {}
-  for i, l in ipairs(AHProfit.Tooltip.Lines(key, NOW)) do out[i] = l.label .. " | " .. l.value end
+  for i, l in ipairs(AHProfit.Tooltip.Lines(key, NOW)) do
+    if l.divider then out[i] = "---"
+    elseif l.joined or l.indent then out[i] = AHProfit.TooltipView.JoinedText(l)
+    else out[i] = l.label .. " | " .. l.value end
+  end
   return out
 end
 
@@ -58,24 +62,26 @@ end
 describe("Tooltip", function()
   it("A21 hovering Linen in the bags adds the AHProfit block from the market file, the addon's own option first", function()
     local tip = Boot()
-    assert_eq(Texts(2589), { "AHProfit | data 2 h old", "Market Price | 45c (2 h) · steady",
-      " | (7d) 49c · (14d) — · (30d) 49c", "Market Inventory | 93 listed now", " | (7d) — · (14d) — · (30d) —",
-      "Sell Chance Now | — at 45c", " | (7d) — · (14d) — · (30d) —", "Best Sell Time | established",
-      " | 55c · Saturday Evening · —", "Vendor Price | 3c" })   -- (45 − 49) ÷ 49 = −8.2%: steady; a file from before M33b; the stub sells Linen at 3c
+    assert_eq(Texts(2589), { "AHProfit | data 2 h old", "---", "Market Price  45c (2 h) · steady",
+      "   (7d) 49c · (14d) — · (30d) 49c", "Market Inventory  93 listed now", "   (7d) — · (14d) — · (30d) —",
+      "Sell Chance Now  — at 45c", "   (7d) — · (14d) — · (30d) —", "---", "Best Sell Time  established",
+      "   55c · Saturday Evening · —", "---", "Vendor Price  3c" })   -- (45 − 49) ÷ 49 = −8.2%: steady; a file from before M33b; the stub sells Linen at 3c
     Stubs.world.containers = { [0] = { size = 1, slots = { [1] = { id = 2589, count = 20 } } } }
     Stubs.FireEvent("BAG_UPDATE_DELAYED")
     Stubs.Advance(1)
     local texts = Texts(2589)
-    assert_eq({ texts[2], texts[3], texts[#texts] },
-              { "Do: POST 20 now at 45c | +8s 40c · 90% chance", " | then nothing", "Inventory | Total: 20 · Bags: 20" })
+    assert_eq({ texts[3], texts[4], texts[#texts] },
+              { "Do: POST 20 now at 45c | +8s 40c · 90% chance", " | then nothing", "Inventory  Total: 20 · Bags: 20" })
     Stubs.HoverItem(2589)
-    local header, market = tip.doubles[1], tip.doubles[4]
+    local header, market = tip.doubles[1], tip.doubles[6]
     assert_eq({ header[1]:match("AHProfit"), header[2]:match("data 2 h old|r |T.-WHITE8X8:7:7:0:0:8:8:0:8:0:8:61:219:79|t|c") ~= nil },
               { "AHProfit", true })                                        -- a green dot: the data is fresh
-    assert_eq(tip.doubles[2][1]:match("^|c%x+Do: |r|c(%x+)POST|r"), "ffffd100")   -- the verb in POST's gold
-    assert_eq(market[2]:match("steady$"), "steady")                               -- steady: no colour of its own
+    assert_eq({ tip.doubles[2][1], tip.doubles[2][2] }, { " ", " " })            -- a divider: a spacer line (TT42)
+    assert_eq(tip.doubles[3][1]:match("^|c%x+Do: |r|c(%x+)POST|r"), "ffffd100")   -- the verb in POST's gold
+    assert_eq({ market[1]:match("^|cffffd100Market Price|r  "), market[1]:match("steady$"), market[2] },
+              { "|cffffd100Market Price|r  ", "steady", "" })   -- joined: the title in price gold, steady plain (TT42)
     assert_eq(header[2]:match("|t|c%x+ · — coverage|r$") ~= nil, true)   -- the dot follows the age, then the coverage (TT40)
-    assert_eq(tip.doubles[3][1], " ")                                              -- the value-only line's label (TT24)
+    assert_eq(tip.doubles[4][1], " ")                                              -- the value-only line's label (TT24)
   end)
 
   it("TT6 the price at best time includes the trend up to the window's best hour", function()
@@ -148,6 +154,6 @@ describe("Tooltip", function()
                      peak = NOW + 34 * HOUR } })
     AHProfit.Plan.Reset()
     local texts = Texts(2589)
-    assert_eq({ texts[2], texts[3] }, { "Do: POST Fri 10:53 | 55c · +22% vs now · 92%", " | for the 18:53 peak" })
+    assert_eq({ texts[3], texts[4] }, { "Do: POST Fri 10:53 | 55c · +22% vs now · 92%", " | for the 18:53 peak" })
   end)
 end)

@@ -1,8 +1,10 @@
 -- UI/TooltipView.lua: the item tooltip's AHProfit block as view-model lines (SPEC §4.3 Tooltip; TT8-TT31, UI17).
 -- Pure: the facts UI/Tooltip.lua gathers (the market file and a newer scan, this character's plan actions, its
--- reservations, the live reselection's unfunded rows, the addon's own option) come in; two-column lines of text with
--- colour names come out, every price per unit. Deltas keep views.delta_percent's rule (TT1-TT5); the two-column text
--- rules are the addon's own (the dashboard has the item page). UI/Tooltip.lua only draws the lines.
+-- reservations, the live reselection's unfunded rows, the addon's own option) come in; lines of text with colour
+-- names come out, every price per unit. The header and the Do lines are two-column; the market lines are a title in
+-- its section's colour with its value right after it, the lines under it indented, and a divider between sections
+-- (TT42). Deltas keep views.delta_percent's rule (TT1-TT5); the text rules are the addon's own (the dashboard has the
+-- item page). UI/Tooltip.lua only draws the lines.
 
 local AHProfit = AHProfit
 local ViewModel = AHProfit.ViewModel
@@ -14,6 +16,9 @@ local HOUR_MS, DAY_MS = 3600000, 86400000
 TooltipView.WIDTH = 320          -- px the block may take (SPEC §4.3)
 TooltipView.FONT = 10            -- px: the block's lines use the small tooltip font
 TooltipView.GAP = 16             -- px between a double line's two columns
+TooltipView.JOIN = "  "          -- between a joined line's title and its value (TT42)
+TooltipView.INDENT = "   "       -- before a line under a title (TT42)
+-- UNVERIFIED: that a tooltip font string draws leading spaces rather than trimming them, as on Classic.
 TooltipView.WEEKDAYS = { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" }
 TooltipView.DAYS = { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" }
 -- The Do verb's badge colour (SPEC §4.3): POST gold, BUY blue, CRAFT orange, DISENCHANT purple, VENDOR and HOLD grey,
@@ -104,6 +109,44 @@ local function Line(label, value, spans)
   return { label = label, value = value, spans = spans or {} }
 end
 
+--- A market line's title (TT42): its value right after the title, the title in its section's colour.
+---@param line table      A line
+---@param section string  "price" | "stock" | "chance" | "time" | "de" | "own"
+---@return table          The same line
+local function Section(line, section)
+  line.joined, line.section = true, section
+  return line
+end
+
+--- A line under a title (TT42): indented from the left edge.
+---@param line table  A line
+---@return table      The same line
+local function Under(line)
+  line.indent = true
+  return line
+end
+
+--- A joined or indented line's text without colours, as drawn: indent, title, joiner, value (TT42).
+---@param line table  A line
+---@return string
+function TooltipView.JoinedText(line)
+  local text = line.indent and TooltipView.INDENT or ""
+  if line.label ~= "" then text = text .. line.label .. (line.joiner or TooltipView.JOIN) end
+  return text .. line.value
+end
+
+--- A line's estimated width in px (SPEC §4.3: at most 320): a joined or indented line as one text, a divider none,
+--- else the double line's two columns.
+---@param line table  A line
+---@return number
+function TooltipView.LineWidth(line)
+  if line.divider then return 0 end
+  if line.joined or line.indent then
+    return ViewModel.TextWidth(ViewModel.WithCoins(TooltipView.JoinedText(line)), TooltipView.FONT)
+  end
+  return TooltipView.Width(ViewModel.WithCoins(line.label), ViewModel.WithCoins(line.value))
+end
+
 --- The qualifier word for Market Price and Market Inventory (SPEC §4.3, TT34): rising when now > 7d > 14d > 30d
 --- with each step at least 5% up, falling the mirror; otherwise, against the 7-day value, high at 10% or more above,
 --- low at 10% or more below, else steady. Integers only, so no float rounding at a boundary.
@@ -136,7 +179,7 @@ local function Titled(label, value, word, colour)
   return line
 end
 
---- The 7, 14 and 30 day values under a title, right-aligned: "(7d) 21c · (14d) 21c · (30d) 21c" (TT35-TT37).
+--- The 7, 14 and 30 day values under a title, indented: "(7d) 21c · (14d) 21c · (30d) 21c" (TT35-TT37, TT42).
 ---@param show function  One value as text; called only with a value
 ---@param v7 any
 ---@param v14 any
@@ -148,7 +191,7 @@ local function Lookbacks(show, v7, v14, v30)
   ---@param v any
   ---@return string
   local function One(span, v) return "(" .. span .. ") " .. (v ~= nil and show(v) or "—") end
-  return Line("", One("7d", v7) .. " · " .. One("14d", v14) .. " · " .. One("30d", v30))
+  return Under(Line("", One("7d", v7) .. " · " .. One("14d", v14) .. " · " .. One("30d", v30)))
 end
 
 --- A share in thousandths as a whole percent, half up (SPEC §3.3): 744 -> "74%", 62 -> "6%".
@@ -163,9 +206,10 @@ end
 ---@return table[] Lines
 function TooltipView.MarketPriceLines(m)
   local values = Lookbacks(ViewModel.Money, m.med7, m.med14, m.med30)
-  if not m.cur then return { Line("Market Price", "none listed"), values } end
+  if not m.cur then return { Section(Line("Market Price", "none listed"), "price"), values } end
   local head = ViewModel.Money(m.cur) .. (m.ageText == "now" and " now" or (" (" .. m.ageText .. ")"))
-  return { Titled("Market Price", head, TooltipView.Qualifier(m.cur, m.med7, m.med14, m.med30)), values }
+  local word, colour = TooltipView.Qualifier(m.cur, m.med7, m.med14, m.med30)
+  return { Section(Titled("Market Price", head, word, colour), "price"), values }
 end
 
 --- Market Inventory (TT36): a stock, the units listed now and the qualifier, then the typical units listed over 7,
@@ -175,7 +219,7 @@ end
 function TooltipView.MarketInventoryLines(m)
   local listed = m.listed or 0
   local word, colour = TooltipView.Qualifier(listed, m.supply7, m.supply14, m.supply30)
-  return { Titled("Market Inventory", ViewModel.Thousands(listed) .. " listed now", word, colour),
+  return { Section(Titled("Market Inventory", ViewModel.Thousands(listed) .. " listed now", word, colour), "stock"),
            Lookbacks(ViewModel.Thousands, m.supply7, m.supply14, m.supply30) }
 end
 
@@ -189,7 +233,7 @@ function TooltipView.SellChanceLines(m)
   local head = (m.chance1000 and TooltipView.Percent(m.chance1000) or "—") .. at
   local est = m.stHow and m.stHow:find("c", 1, true) and "class est." or (m.commodity == 0 and "est." or nil)
   local st = m.st or {}
-  return { Titled("Sell Chance Now", head, est, est and "amber" or nil),
+  return { Section(Titled("Sell Chance Now", head, est, est and "amber" or nil), "chance"),
            Lookbacks(TooltipView.Percent, st[1], st[2], st[3]) }
 end
 
@@ -207,7 +251,7 @@ function TooltipView.DayPart(slot, offsetMs)
   return TooltipView.DAYS[day + 1] .. " " .. part
 end
 
---- Best Buy / Best Sell Time (TT38): the window's strength on the right (early in orange), then its expected price,
+--- Best Buy / Best Sell Time (TT38): the window's strength after the title (early in orange), then its expected price,
 --- its best hour in words ("now" while it holds) and its percentage ("—" without one), "est." for a selling window of
 --- an item that is no commodity.
 ---@param label string     "Best Buy Time" | "Best Sell Time"
@@ -216,12 +260,12 @@ end
 ---@return table[]         Two lines
 function TooltipView.BestLines(label, w, offsetMs)
   local strength = TooltipView.Strength(w.weeks)
-  local title = Line(label, strength)
+  local title = Section(Line(label, strength), "time")
   if strength == "early" then title.tail = { strength, "amber" } end
   local pct = w.pct1000 and TooltipView.Percent(w.pct1000) or "—"
   local value = ViewModel.Money(w.price) .. " · " .. (w.now and "now" or TooltipView.DayPart(w.slot, offsetMs)) .. " · "
     .. pct .. (w.est and " est." or "")
-  return { title, Line("", value) }
+  return { title, Under(Line("", value)) }
 end
 
 --- An average quantity: whole when it is, else one decimal ("1.5", "3.5", "1").
@@ -236,24 +280,26 @@ end
 
 --- Disenchant Value (TT39): a title with the comparison against the AH price first, then the expected value of one
 --- disenchant at the mats' current prices (the sum of the unrounded shares); a line per possible mat with its share
---- (chance x average quantity x the mat's latest price).
+--- (chance x average quantity x the mat's latest price), indented: "80% · 1.5 Strange Dust @ 25c = 30c" (TT42).
 ---@param mats table[]   { chance (0-1), min, max, name, price (copper, the mat's latest; nil = no price) }
 ---@param cur number|nil The item's price now
 ---@return table[]       Lines
 function TooltipView.DisenchantLines(mats, cur)
   local total, lines = 0, {}
   for _, m in ipairs(mats) do
-    local label = "  " .. ViewModel.RoundHalfUp(m.chance * 100) .. "% · " .. Quantity(m.min, m.max) .. " " .. m.name
+    local label = ViewModel.RoundHalfUp(m.chance * 100) .. "% · " .. Quantity(m.min, m.max) .. " " .. m.name
     local line
     if m.price then
       local share = m.chance * (m.min + m.max) / 2 * m.price
       total = total + share
       line = Line(label .. " @ " .. ViewModel.Money(m.price), ViewModel.Money(ViewModel.RoundHalfUp(share)))
+      line.joiner = " = "
     else
       line = Line(label, "no price")
-      line.valueColor = "amber"
+      line.valueColor, line.joiner = "amber", " · "
     end
-    line.labelMuted = true
+    line.labelMuted, line.joined = true, true
+    Under(line)
     lines[#lines + 1] = line
   end
   local value = ViewModel.Money(ViewModel.RoundHalfUp(total))
@@ -263,7 +309,7 @@ function TooltipView.DisenchantLines(mats, cur)
     local text = delta == 0 and "same as AH" or (math.abs(delta) .. "% " .. (delta > 0 and "above" or "below") .. " AH")
     title = Line("Disenchant Value", text .. " · " .. value, delta ~= 0 and { { text, delta > 0 and "pos" or "neg" } } or nil)
   end
-  table.insert(lines, 1, title)
+  table.insert(lines, 1, Section(title, "de"))
   return lines
 end
 
@@ -275,9 +321,10 @@ end
 function TooltipView.VendorLine(price, held)
   if not price or price <= 0 then return nil end
   if held > 1 then
-    return Line("Vendor Price", ViewModel.Money(price) .. " each · " .. ViewModel.Money(price * held) .. " for " .. held)
+    return Section(Line("Vendor Price", ViewModel.Money(price) .. " each · " .. ViewModel.Money(price * held) .. " for "
+      .. held), "own")
   end
-  return Line("Vendor Price", ViewModel.Money(price))
+  return Section(Line("Vendor Price", ViewModel.Money(price)), "own")
 end
 
 --- The header's coverage (TT40): the hours the market was observed in the last 30 days ÷ 720, half up to a whole
@@ -297,7 +344,7 @@ local PLACE_LABEL = { bags = "Bags", bank = "Bank", mail = "Mail", AH = "AH" }
 function TooltipView.InventoryLine(h)
   local parts = { "Total: " .. h.total }
   for _, p in ipairs(h.places) do parts[#parts + 1] = (PLACE_LABEL[p[1]] or p[1]) .. ": " .. p[2] end
-  return Line("Inventory", table.concat(parts, " · "))
+  return Section(Line("Inventory", table.concat(parts, " · ")), "own")
 end
 
 --- A Do line's verb, the rest of its left text, its value and the value-only lines under it (SPEC §4.3 Do).
@@ -373,16 +420,17 @@ function TooltipView.DoLines(d, cur)
   return lines
 end
 
---- The whole block (SPEC §4.3 Tooltip, TT31, TT34-TT41): the header with the data age and the market's coverage, the
+--- The whole block (SPEC §4.3 Tooltip, TT31, TT34-TT42): the header with the data age and the market's coverage, the
 --- Do line first, then Market Price, Market Inventory, Sell Chance Now, Best Buy and Best Sell Time (none without
 --- windows), Disenchant Value (only when one of your characters can), Vendor Price (when known) and Inventory (only
---- when you hold some). Without market data: the header and "no market data yet" (TT18).
+--- when you hold some), with a divider before each section: Do, the market lines, the best times, Disenchant Value,
+--- and Vendor Price with Inventory (TT42). Without market data: the header and "no market data yet" (TT18).
 ---@param f table  { age = { text, amber }, coverage (hours or nil), noData, doing (DoOf's), market = { cur, ageText,
 ---                med7, med14, med30, listed, supply7, supply14, supply30, chance1000, chancePrice, commodity, st,
 ---                stHow }, offsetMs, buy = { price, slot, weeks, now, pct1000 } or nil, sell = (the same, est) or
 ---                nil, mats = DisenchantLines' mats or nil, vendor (copper or nil), holdings = { total, places } or nil }
 ---@return table[] Lines { label, value, spans, tail, muted, header, amber, coverage, isDo, verb, rest, verbColor,
----                valueColor, labelMuted }
+---                valueColor, labelMuted, joined, joiner, indent, section } and dividers { divider = true }
 function TooltipView.Lines(f)
   local header = Line("AHProfit", f.age.text)
   header.header, header.amber = true, f.age.amber
@@ -394,22 +442,29 @@ function TooltipView.Lines(f)
     return lines
   end
   header.coverage = TooltipView.CoverageText(f.coverage)
-  --- Append lines to the block.
-  ---@param more table[]  Lines, in order
-  local function Add(more) for _, line in ipairs(more) do lines[#lines + 1] = line end end
+  --- Append a section to the block after a divider (TT42); an empty section adds nothing.
+  ---@param ... table[]  The section's line lists, in order
+  local function Add(...)
+    local first = true
+    for _, list in ipairs({ ... }) do
+      for _, line in ipairs(list) do
+        if first then lines[#lines + 1] = { label = "", value = "", spans = {}, divider = true } end
+        first = false
+        lines[#lines + 1] = line
+      end
+    end
+  end
   local m = f.market
   if f.doing then Add(TooltipView.DoLines(f.doing, m.cur)) end
-  Add(TooltipView.MarketPriceLines(m))
-  Add(TooltipView.MarketInventoryLines(m))
-  Add(TooltipView.SellChanceLines({ chance1000 = m.chance1000, price = m.chancePrice, commodity = m.commodity,
+  Add(TooltipView.MarketPriceLines(m), TooltipView.MarketInventoryLines(m),
+      TooltipView.SellChanceLines({ chance1000 = m.chance1000, price = m.chancePrice, commodity = m.commodity,
                                     st = m.st, stHow = m.stHow }))
-  if f.buy then Add(TooltipView.BestLines("Best Buy Time", f.buy, f.offsetMs or 0)) end
-  if f.sell then Add(TooltipView.BestLines("Best Sell Time", f.sell, f.offsetMs or 0)) end
+  Add(f.buy and TooltipView.BestLines("Best Buy Time", f.buy, f.offsetMs or 0) or {},
+      f.sell and TooltipView.BestLines("Best Sell Time", f.sell, f.offsetMs or 0) or {})
   if f.mats then Add(TooltipView.DisenchantLines(f.mats, m.cur)) end
   local held = f.holdings and f.holdings.total or 0
   local vendor = TooltipView.VendorLine(f.vendor, held)
-  if vendor then lines[#lines + 1] = vendor end
-  if held > 0 then lines[#lines + 1] = TooltipView.InventoryLine(f.holdings) end
+  Add(vendor and { vendor } or {}, held > 0 and { TooltipView.InventoryLine(f.holdings) } or {})
   return lines
 end
 

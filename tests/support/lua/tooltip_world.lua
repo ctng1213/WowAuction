@@ -151,12 +151,17 @@ function TW.Variants(TV, VM)
   }
 end
 
---- A block's lines as "label | value" texts, the way the specs and the UI17 golden compare them.
+--- A block's lines as the specs compare them: a two-column line as "label | value", a joined or indented line as
+--- drawn (TooltipView.JoinedText), a divider as "---" (TT42).
 ---@param lines table[]  TooltipView.Lines'
 ---@return string[]
 function TW.Texts(lines)
   local out = {}
-  for i, l in ipairs(lines) do out[i] = l.label .. " | " .. l.value end
+  for i, l in ipairs(lines) do
+    if l.divider then out[i] = "---"
+    elseif l.joined or l.indent then out[i] = AHProfit.TooltipView.JoinedText(l)
+    else out[i] = l.label .. " | " .. l.value end
+  end
   return out
 end
 

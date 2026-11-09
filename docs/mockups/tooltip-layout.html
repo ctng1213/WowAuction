@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Proposal: tooltip values next to their titles, sections set apart</title>
+<style>
+  :root { --bg: #0f1115; --text: #e6e6e6; --muted: #8f8a7d; --label: #8fd3ff; --gold: #ffd100;
+          --pos: #4cd964; --neg: #ff5c5c; --amber: #ffb347; --line: #2a2f3a;
+          /* Section colours (variant A and C): one per kind of line. Amber and red stay warnings only. */
+          --s-price: #ffd100; --s-stock: #8fd3ff; --s-chance: #6fe08a; --s-time: #c9a6ff; --s-de: #ff9ad5; --s-own: #d8d2c2; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.45 -apple-system, "Segoe UI", sans-serif; margin: 24px; max-width: 1240px; }
+  h1 { font-size: 20px; margin: 0 0 4px; } h2 { font-size: 16px; margin: 30px 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+  p.note { color: #c9c4b6; max-width: 1050px; } .muted { color: var(--muted); } .pos { color: var(--pos); } .neg { color: var(--neg); } .amber { color: var(--amber); }
+  .row { display: flex; gap: 22px; flex-wrap: wrap; align-items: flex-start; }
+  .cap { font-size: 12px; color: var(--muted); margin: 0 0 6px; max-width: 300px; min-height: 32px; }
+  .tooltip { width: 300px; background: #0b0e1a; border: 1px solid #5a6a8a; border-radius: 4px; padding: 8px 10px; font-size: 12px; }
+  .hdr { display: flex; justify-content: space-between; color: var(--gold); margin-bottom: 2px; }
+  /* Today's shape: title left, value anchored right */
+  .l { display: flex; justify-content: space-between; gap: 8px; } .l > span:first-child { color: var(--label); white-space: nowrap; }
+  .l > span:last-child { text-align: right; margin-left: auto; } .l.dim > span:first-child { color: transparent; }
+  /* Proposed shape: the value right after its title; the lookbacks indented under it */
+  .n { white-space: nowrap; } .n .t { margin-right: 6px; } .n.lb { padding-left: 12px; color: #c4c0b4; }
+  .t { color: var(--label); } .do { color: var(--gold); } .v-post { color: var(--pos); }
+  .c-price { color: var(--s-price); } .c-stock { color: var(--s-stock); } .c-chance { color: var(--s-chance); }
+  .c-time { color: var(--s-time); } .c-de { color: var(--s-de); } .c-own { color: var(--s-own); }
+  .rule { height: 1px; background: #55648a; margin: 5px 0; }
+  .gap { height: 7px; }
+  .new { outline: 1px dashed var(--amber); outline-offset: 1px; }
+  table { border-collapse: collapse; font-size: 13px; } td { padding: 4px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td:first-child { white-space: nowrap; }
+</style>
+</head>
+<body>
+<h1>Proposal: tooltip values next to their titles, sections set apart</h1>
+<p class="note"><b>Approved by the user, 2026-11-08: variant C</b> (TT42). As built, a mat line joins its share with " = " ("75% · 3.5 Vision Dust @ 22s = 57s 75c") instead of the arrow drawn here, since WoW's fonts may lack "→" (they lack "▾" and "●"); the rule's look is to be checked in the game.</p>
+<p class="note"><b>For review, 2026-11-08.</b> Your notes: the item's own numbers (Market Price, Market Inventory, Sell Chance Now, Disenchant Value, Vendor Price, Inventory) sit too far from their titles, because the value is anchored to the tooltip's right edge; and the sections run together. Proposed: <b>the value right after its title</b>, with its 7, 14 and 30 day values on the line under it, indented; and the sections set apart <b>by colour (A), by divider lines (B), or both (C)</b>. The best-time lines (Best Buy Time, Best Sell Time) keep their shape, as you asked, but their strength word moves next to the title too, so no line in the market block is anchored right any more. The Do line at the top is unchanged. Same values as the approved tooltip (<a href="sell-through.html">sell-through.html</a>).</p>
+
+<h2>1. Linen Cloth, in your bags with a planned post</h2>
+<div class="row" id="linen"></div>
+
+<h2>2. Embossed Leather Gloves (gear, with Disenchant Value)</h2>
+<div class="row" id="gloves"></div>
+
+<h2>3. Notes on building it</h2>
+<table>
+  <tr><td>Value next to the title</td><td>Easy: one tooltip line with both texts, the title in its colour, instead of a left and a right text. Long values still fit: the widest, "24,808 listed now · high", is about the same width as today's line.</td></tr>
+  <tr><td>Section colours (A)</td><td>Easy: only the title's colour changes. Price gold, supply blue, chance green, best times violet, disenchant pink, your own items (Vendor Price, Inventory) off-white. Amber and red keep meaning "warning" ("high", "early", "37% below AH") and are never a section colour.</td></tr>
+  <tr><td>Divider lines (B)</td><td><b>Needs checking in the game.</b> WoW's tooltip has no built-in rule: the addon would draw a thin texture across a spacer line, through the Adapter, marked UNVERIFIED until seen working on Forever. If it can't be done cleanly, the fallback is a half-height blank line between sections, shown here as B′.</td></tr>
+  <tr><td>Where the lines go</td><td>Between the header and Do, after Do, then between the market block (price, supply, chance), the best times, Disenchant Value and your own items. Not between a title and its lookback line.</td></tr>
+</table>
+
+<script>
+  // One tooltip, drawn in each style. kind: price | stock | chance | time | de | own; `w` = warning word (amber), `wn` = red word.
+  const LINEN = {
+    hdr: 'data 12 min old · 5% coverage',
+    do: ['<span class="do">Do:</span> <span class="v-post">POST</span> 20 now at 18c', '<span class="pos">+3s 60c</span> · 88%', 'then nothing'],
+    groups: [
+      [['price', 'Market Price', '19c now · steady', '(7d) 21c · (14d) 21c · (30d) 21c'],
+       ['stock', 'Market Inventory', '24,808 listed now · <span class="amber">high</span>', '(7d) 14,859 · (14d) 14,859 · (30d) 14,859'],
+       ['chance', 'Sell Chance Now', '74% at 19c', '(7d) 79% · (14d) 79% · (30d) 79%']],
+      [['time', 'Best Buy Time', '<span class="amber">early</span>', '17c · Tuesday Morning · 64%'],
+       ['time', 'Best Sell Time', '<span class="amber">early</span>', '24c · Friday Evening · 81%']],
+      [['own', 'Vendor Price', '2c each · 40c for 20', null],
+       ['own', 'Inventory', 'Total: 20 · Bags: 20', null]],
+    ],
+  };
+  const GLOVES = {
+    hdr: 'data 12 min old · 5% coverage',
+    do: null,
+    groups: [
+      [['price', 'Market Price', '1s now · steady', '(7d) 1s · (14d) 1s · (30d) 1s'],
+       ['stock', 'Market Inventory', '1,713 listed now · <span class="amber">low</span>', '(7d) 2,751 · (14d) 2,751 · (30d) 2,751'],
+       ['chance', 'Sell Chance Now', '5% at 1s · <span class="amber">est.</span>', '(7d) 6% · (14d) 6% · (30d) 6%']],
+      [['time', 'Best Sell Time', '<span class="amber">early</span>', '1s 10c · Saturday Evening · 9% <span class="amber">est.</span>']],
+      [['de', 'Disenchant Value', '<span class="neg">37% below AH</span> · 63c', ['80% · 1.5 Strange Dust @ 25c → 30c', '20% · 1.5 Lesser Magic Essence @ 1s 10c → 33c']]],
+      [['own', 'Vendor Price', '24c', null]],
+    ],
+  };
+
+  const header = d => `<div class="hdr"><span>AHProfit</span><span class="muted">${d.hdr}</span></div>`;
+
+  // Today: title left, value right; lookbacks right-aligned under it.
+  function today(d) {
+    let h = header(d);
+    if (d.do) h += `<div class="l"><span>${d.do[0]}</span><span>${d.do[1]}</span></div><div class="l dim"><span>.</span><span>${d.do[2]}</span></div>`;
+    d.groups.flat().forEach(([k, t, v, lb]) => {
+      h += `<div class="l"><span>${t}</span><span>${v}</span></div>`;
+      if (Array.isArray(lb)) lb.forEach(x => { const [a, b] = x.split(' → '); h += `<div class="l dim"><span style="color:var(--muted)">  ${a}</span><span>${b}</span></div>`; });
+      else if (lb) h += `<div class="l dim"><span>.</span><span>${lb}</span></div>`;
+    });
+    return h;
+  }
+
+  // Proposed: value after the title; colour = section colours on titles; sep = 'rule' | 'gap' | null.
+  function proposed(d, colour, sep) {
+    const cut = sep === 'rule' ? '<div class="rule"></div>' : sep === 'gap' ? '<div class="gap"></div>' : '';
+    let h = header(d) + cut;
+    if (d.do) h += `<div class="l"><span>${d.do[0]}</span><span>${d.do[1]}</span></div><div class="l dim"><span>.</span><span>${d.do[2]}</span></div>` + cut;
+    d.groups.forEach((g, gi) => {
+      if (gi) h += cut;
+      g.forEach(([k, t, v, lb]) => {
+        h += `<div class="n"><span class="t${colour ? ' c-' + k : ''}">${t}</span>${v}</div>`;
+        if (Array.isArray(lb)) lb.forEach(x => { h += `<div class="n lb">${x}</div>`; });
+        else if (lb) h += `<div class="n lb">${lb}</div>`;
+      });
+    });
+    return h;
+  }
+
+  const VARIANTS = [
+    ['Today (approved 2026-11-07), for reference: values anchored right.', today],
+    ['A. Values next to titles, sections by title colour.', d => proposed(d, true, null)],
+    ['B. Values next to titles, divider lines between sections (needs checking in game).', d => proposed(d, false, 'rule')],
+    ['B′. B\'s fallback: a half-height gap instead of a line.', d => proposed(d, false, 'gap')],
+    ['C. Both: title colours and divider lines.', d => proposed(d, true, 'rule')],
+  ];
+  for (const [id, data] of [['linen', LINEN], ['gloves', GLOVES]]) {
+    document.getElementById(id).innerHTML = VARIANTS.map(([cap, f]) => `<div><p class="cap">${cap}</p><div class="tooltip">${f(data)}</div></div>`).join('');
+  }
+</script>
+</body>
+</html>

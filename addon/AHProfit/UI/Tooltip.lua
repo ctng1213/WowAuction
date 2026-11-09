@@ -1,7 +1,8 @@
 -- UI/Tooltip.lua: the AHProfit block under an item's tooltip (SPEC §4.3 Tooltip, TT8-TT21, UI17). It gathers the
 -- facts (the market file and a newer in-game scan's price, this character's plan actions and reservations, the live
 -- reselection's unfunded rows, the addon's own option) and UI/TooltipView.lua makes the lines; this file only finds
--- the item and draws them, label left and value right. A few cache lookups per hover, never a reselection of its own
+-- the item and draws them: the header and Do two-column, the market lines joined (TT42). A few cache lookups per
+-- hover, never a reselection of its own
 -- (SPEC §5.1: the live state is built once, the first time anything asks).
 
 local AHProfit = AHProfit
@@ -26,7 +27,12 @@ local DE_KINDS = { [2] = "weapon", [4] = "armor" }
 local RGB = { label = { 0.56, 0.83, 1 }, value = { 1, 1, 1 }, title = { 1, 0.82, 0 }, muted = { 0.56, 0.54, 0.49 },
               amber = { 1, 0.69, 0.18 }, pos = { 0.24, 0.86, 0.31 }, neg = { 1, 0.29, 0.24 }, post = { 1, 0.82, 0 },
               buy = { 0.37, 0.71, 1 }, craft = { 1, 0.6, 0.24 }, de = { 0.7, 0.48, 1 }, grey = { 0.67, 0.67, 0.67 },
-              mail = { 0.56, 0.83, 1 } }
+              mail = { 0.56, 0.83, 1 },
+              -- A market section's title colour (TT42; docs/mockups/tooltip-layout.html, variant C). Amber and red
+              -- stay warnings, never a section.
+              price = { 1, 0.82, 0 }, stock = { 0.56, 0.83, 1 }, chance = { 0.44, 0.88, 0.54 },
+              time = { 0.79, 0.65, 1 }, own = { 0.85, 0.82, 0.76 }, sectionDe = { 1, 0.6, 0.84 } }
+local SECTION_RGB = { price = "price", stock = "stock", chance = "chance", time = "time", de = "sectionDe", own = "own" }
 local FLAT = "Interface\\Buttons\\WHITE8X8"
 
 --- A colour escape around a text.
@@ -300,17 +306,11 @@ function Tooltip.Lines(key, nowMs)
     mats = canDE and mats or nil, holdings = HoldingsOf(DB.Get() or {}, key, nowMs) })
 end
 
---- One line as drawn: label and value text with their colour escapes and coins.
+--- A line's value with its coins and its coloured spans and tail.
 ---@param line table  A TooltipView line
----@return string, string, table, table  left, right, left RGB, right RGB
-function Tooltip.Draw(line)
-  local left, right = line.label, VM.WithCoins(line.value)
-  if line.header then         -- the age and its dot amber when stale; the coverage always muted (TT19, TT40)
-    local coverage = line.coverage and Paint(" · " .. line.coverage, "muted") or ""
-    return Paint(left, "title"), Paint(line.value, line.amber and "amber" or "muted") .. Dot(line.amber and "amber" or "pos")
-           .. coverage, RGB.title, RGB.value
-  end
-  if line.isDo then left = Paint("Do: ", "label") .. Paint(line.verb, line.verbColor) .. Paint(line.rest, "value") end
+---@return string
+local function ValueText(line)
+  local right = VM.WithCoins(line.value)
   for _, span in ipairs(line.spans) do
     local text = VM.WithCoins(span[1])
     local at = right:find(text, 1, true)
@@ -319,8 +319,33 @@ function Tooltip.Draw(line)
   if line.tail and right:sub(-#line.tail[1]) == line.tail[1] then   -- a qualifier at the end, never found by text
     right = right:sub(1, -#line.tail[1] - 1) .. Paint(line.tail[1], line.tail[2])
   end
+  return right
+end
+
+--- One line as drawn: left and right text with their colour escapes and coins. A joined or indented line is all in
+--- its left text, coloured as its value, with the title painted in its section's colour (TT42); a divider is a
+--- spacer the Adapter draws a rule across.
+---@param line table  A TooltipView line
+---@return string, string, table, table, string|nil  left, right, left RGB, right RGB, "divider" for a divider
+function Tooltip.Draw(line)
+  if line.divider then return " ", " ", RGB.value, RGB.value, "divider" end
+  local left = line.label
+  if line.header then         -- the age and its dot amber when stale; the coverage always muted (TT19, TT40)
+    local coverage = line.coverage and Paint(" · " .. line.coverage, "muted") or ""
+    return Paint(left, "title"), Paint(line.value, line.amber and "amber" or "muted") .. Dot(line.amber and "amber" or "pos")
+           .. coverage, RGB.title, RGB.value
+  end
   local valueRgb = (line.muted and RGB.muted) or (line.valueColor and RGB[line.valueColor]) or RGB.value
-  return left, right, line.labelMuted and RGB.muted or RGB.label, valueRgb
+  if line.joined or line.indent then
+    local text = line.indent and TV.INDENT or ""
+    if line.label ~= "" then
+      local colour = line.labelMuted and "muted" or SECTION_RGB[line.section] or "label"
+      text = text .. Paint(line.label, colour) .. (line.joiner or TV.JOIN)
+    end
+    return text .. ValueText(line), "", valueRgb, valueRgb
+  end
+  if line.isDo then left = Paint("Do: ", "label") .. Paint(line.verb, line.verbColor) .. Paint(line.rest, "value") end
+  return left, ValueText(line), line.labelMuted and RGB.muted or RGB.label, valueRgb
 end
 
 --- Add the block to a tooltip that shows an item; failures are swallowed (never break a tooltip).
