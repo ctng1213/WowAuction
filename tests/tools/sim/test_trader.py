@@ -14,7 +14,7 @@ from ahsync.state.savedvars import read_ahprofit  # noqa: E402
 from sim.emulator import capture, id_book  # noqa: E402
 from sim.market import DAY_MS, HOUR_MS, MINUTE_MS, Item, Market, World  # noqa: E402
 from sim.runner import simulate  # noqa: E402
-from sim.trader import (OUR_PREFIX, SALE_MAIL_DELAY_MS, CharacterSpec, NaiveTrader, Recipe, Trader,  # noqa: E402
+from sim.trader import (OUR_PREFIX, SALE_MAIL_DELAY_MS, CharacterSpec, Farm, NaiveTrader, Recipe, Trader,  # noqa: E402
                         client_band)
 from tests.support.savedvars_builder import savedvars_text  # noqa: E402
 
@@ -163,5 +163,35 @@ def test_SU16_a_craft_uses_its_reagents_moves_their_cost_and_reaches_ahsync_thro
         apply_data(trader.session.db, data, trader.session.cfg.realms, START + 2 * HOUR_MS, trader.session.cfg.markets)
         [known] = trader.session.db.known_recipes([char])
         assert (known.spell, known.profession, known.product, tuple(known.reagents)) == (3839, "Tailoring", bolt, ((silk, 4),))
+    finally:
+        trader.close()
+
+
+def test_SU17_a_farming_session_writes_the_addons_gather_events_and_ahsync_derives_its_rates(tmp_path):
+    from ahsync.engine.gathering import observed_rates
+    from ahsync.state.importer import apply_data
+    silk, fire = 4306, 7068
+    world = World(1, START, 1, (Item(silk, "Silk Cloth", True, 100, 0, 0, vendor_sell=38),
+                                Item(fire, "Elemental Fire", True, 600, 0, 0, vendor_sell=100)))
+    farm = Farm(14, 40, ((silk, 60), (fire, 15)))
+    trader = Trader(world, (CharacterSpec("Amaya", 0, farms=(farm,)),), tmp_path / "ahsync", login_hours=())
+    try:
+        char, end = "Amaya-Simulated", START + 14 * HOUR_MS + 40 * MINUTE_MS
+        trader.farm(char, farm, end)
+        gathers = [e for e in trader.events if e["type"] == "gather"]
+        assert len(gathers) == 21 and {e["source"] for e in gathers} == {"monster"} and len({e["login"] for e in gathers}) == 1
+        assert (gathers[0]["at"], gathers[-1]["at"]) == (START + 14 * HOUR_MS, end)
+        looted = {}
+        for e in gathers:
+            for row in e["loot"].split(";"):
+                key, units = map(int, row.split(","))
+                looted[key] = looted.get(key, 0) + units
+        assert looted == {silk: 40, fire: 10} and trader.held(char, silk) == 40 and trader.ledger.balanced()
+        data = read_ahprofit(savedvars_text(trader.session.savedvars(Market(world), end + 20 * MINUTE_MS)))
+        apply_data(trader.session.db, data, trader.session.cfg.realms, end + 20 * MINUTE_MS, trader.session.cfg.markets)
+        [found] = trader.session.db.farming_sessions([char])
+        assert found.end_ms - found.start_ms == 40 * MINUTE_MS
+        rates = observed_rates([found])
+        assert (rates[(char, silk)].items_per_hour, rates[(char, fire)].items_per_hour) == (60, 15)
     finally:
         trader.close()
