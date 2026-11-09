@@ -128,3 +128,15 @@ def test_a_trader_follows_the_plan_through_the_real_import(tmp_path):
     with pytest.raises(sqlite3.ProgrammingError):
         db.conn.execute("SELECT 1")
     Trader(world, (AMAYA,)).close()                  # a trader without AHSync has nothing to close
+
+
+def test_a_trader_installed_later_logs_in_only_from_then(tmp_path):
+    from sim.inference import START_MS
+    world = World(1, START_MS, 3, ())
+    late = Trader(world, (CharacterSpec("Amaya", 100),), tmp_path / "late", login_hours=(10,),
+                  first_login_ms=START_MS + 2 * DAY_MS)
+    try:
+        assert sorted(at for at, _, kind, _ in late._wakes if kind == "login") == [
+            START_MS + 2 * DAY_MS + 10 * HOUR_MS, START_MS + 3 * DAY_MS + 10 * HOUR_MS]
+    finally:
+        late.close()

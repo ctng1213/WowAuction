@@ -36,6 +36,8 @@ Rule (CLAUDE.md "How work is run"): whoever discovers the mistake writes the ent
 
 ## Tooling and process
 
+- **2026-11-09 · A steady price slide makes the plan over-pay.** Assumed (SD32's row, the plan's §3): buying into a 30-day fall fails by design, the post-price clamps sitting above tomorrow's price. True: a 2%-a-day slide keeps the cheapest price only 6–8% under the 7-day median and the 10th percentile, so no flip clears the 20% margin and the plan buys nothing (seeds 1 and 2); SD32 is "not exercised" in that world. Found by: Opus running MS4b-1. Changed: SD32's row and plan §1.43; a drop large enough to open the margin is SD5's and SD28's.
+
 - **2026-11-09 · A decision row can run on the daily summaries.** Assumed (MS4a): SD15 ran without the hourly mode, to keep it fast. True: production plans with a new summary every hour, and on daily ones a 10:00 login reads prices up to 29 h old, so the row measured the cadence, not the plan (8 snapshots listing our stock instead of 40). Found by: Opus tracing SD15. Changed: SD15 runs hourly; a row about selling pace or reaction runs on production's cadence (`tools/sim/decision.py`).
 
 - **2026-10-20 · A bench over 120 s means a code regression.** Measured 125–137 s across M13 and M14 and suspected the new code. True: the unchanged M13 code measured the same on the same day; the next day both read 100 s. The machine's load moves the bench by 30%. Found by timing HEAD and the branch back to back. Changed: compare against HEAD on the same machine before blaming a change (plan §2.3).
