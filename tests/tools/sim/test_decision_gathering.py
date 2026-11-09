@@ -5,7 +5,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / ".." / "tools"))
-from sim.decision_gathering import DEAL, MARKET_ITEMS, drop_world, monster_drops, our_sales, sd9  # noqa: E402
+from sim.decision_gathering import (DEAL, DEAL_FAIR, DEAL_RATE, FARM_MINUTES, FARMS_A_DAY, MARKET_ITEMS,  # noqa: E402
+                                    drop_world, monster_drops, our_sales, sd9)
 from sim.truth import Event, Truth  # noqa: E402
 
 
@@ -19,6 +20,14 @@ def test_the_world_puts_the_deal_among_about_50_catalog_monster_drops_and_farms_
     keys = [i.key for i in world.items]
     assert len(world.items) == MARKET_ITEMS and keys[0] == DEAL and DEAL in {k for k, _ in monster_drops()}
     assert farm.loot[0] == (DEAL, 12) and len(farm.loot) == 8 and all(k in keys for k, _ in farm.loot)
+
+
+def test_the_other_farmed_drops_sell_as_fast_as_farmed_and_two_out_earn_the_deal():
+    world, farm = drop_world(1, 2)
+    items = {i.key: i for i in world.items}
+    others = farm.loot[1:]
+    assert all(items[k].buys_per_day >= rate * FARM_MINUTES * FARMS_A_DAY / 60 for k, rate in others)  # plan §1.47
+    assert sum(rate * items[k].fair_price > DEAL_RATE * DEAL_FAIR for k, rate in others) == 2
 
 
 def test_our_sales_count_only_units_others_bought_from_us():
