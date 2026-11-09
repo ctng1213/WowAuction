@@ -33,67 +33,67 @@ end
 describe("TooltipView", function()
   it("TT8 a bag item with a planned post: Do first, then the market lines, both best prices and what you hold", function()
     local texts, lines = Variant(1)
-    assert_eq(texts, { "AHProfit | data 2 h old", "Do: POST 5 now at 41s | +63s 6c · 58% chance", " | then nothing", "Market Price | 42s (2 h) · steady", " | (7d) 40s · (14d) 43s · (30d) 45s", "Market Inventory | 14 listed now · high", " | (7d) 12 · (14d) 12 · (30d) 11", "Sell Chance Now | 74% at 42s", " | (7d) 79% · (14d) 79% · (30d) 78%", "Best Buy Time | early", " | 38s · Sunday Night · 64%", "Best Sell Time | pattern", " | 45s · Friday Evening · 81%", "Vendor Price | 3s each · 15s for 5", "Inventory | Total: 5 · Bags: 5" })
-    assert_eq({ lines[1].amber, lines[2].verb, lines[2].verbColor, lines[2].spans[1] },
+    assert_eq(texts, { "AHProfit | data 2 h old", "---", "Do: POST 5 now at 41s | +63s 6c · 58% chance", " | then nothing", "---", "Market Price  42s (2 h) · steady", "   (7d) 40s · (14d) 43s · (30d) 45s", "Market Inventory  14 listed now · high", "   (7d) 12 · (14d) 12 · (30d) 11", "Sell Chance Now  74% at 42s", "   (7d) 79% · (14d) 79% · (30d) 78%", "---", "Best Buy Time  early", "   38s · Sunday Night · 64%", "Best Sell Time  pattern", "   45s · Friday Evening · 81%", "---", "Vendor Price  3s each · 15s for 5", "Inventory  Total: 5 · Bags: 5" })
+    assert_eq({ lines[1].amber, lines[3].verb, lines[3].verbColor, lines[3].spans[1] },     -- lines[2]: a divider
               { false, "POST", "post", { "+63s 6c", "pos" } })
-    assert_eq({ lines[1].coverage, lines[4].tail, lines[6].tail, lines[10].tail, lines[12].tail },
+    assert_eq({ lines[1].coverage, lines[6].tail, lines[8].tail, lines[13].tail, lines[15].tail },
               { "5% coverage", nil, { "high", "amber" }, { "early", "amber" }, nil })   -- steady and pattern: plain
   end)
 
   it("TT9 a post for a later peak, and the disenchant breakdown when a character can", function()
-    assert_eq(Variant(2), { "AHProfit | data 2 h old", "Do: POST Sat 10:00 | 4g 50s · +53% vs now · 85%", " | for the 18:00 peak", "Market Price | 2g 95s (2 h) · steady", " | (7d) 3g 10s · (14d) 3g 30s · (30d) 3g 80s", "Market Inventory | 4 listed now", " | (7d) — · (14d) — · (30d) —", "Sell Chance Now | — at 2g 95s", " | (7d) — · (14d) — · (30d) —", "Best Buy Time | pattern", " | 2g 80s · Tuesday Evening · —", "Best Sell Time | pattern", " | 4g 50s · Saturday Evening · —", "Disenchant Value | 69% below AH · 90s 25c", "  75% · 3.5 Vision Dust @ 22s | 57s 75c", "  20% · 1.5 Greater Mystic Essence @ 80s | 24s", "  5% · 1 Large Radiant Shard @ 1g 70s | 8s 50c", "Inventory | Total: 1 · Bags: 1" })
+    assert_eq(Variant(2), { "AHProfit | data 2 h old", "---", "Do: POST Sat 10:00 | 4g 50s · +53% vs now · 85%", " | for the 18:00 peak", "---", "Market Price  2g 95s (2 h) · steady", "   (7d) 3g 10s · (14d) 3g 30s · (30d) 3g 80s", "Market Inventory  4 listed now", "   (7d) — · (14d) — · (30d) —", "Sell Chance Now  — at 2g 95s", "   (7d) — · (14d) — · (30d) —", "---", "Best Buy Time  pattern", "   2g 80s · Tuesday Evening · —", "Best Sell Time  pattern", "   4g 50s · Saturday Evening · —", "---", "Disenchant Value  69% below AH · 90s 25c", "   75% · 3.5 Vision Dust @ 22s = 57s 75c", "   20% · 1.5 Greater Mystic Essence @ 80s = 24s", "   5% · 1 Large Radiant Shard @ 1g 70s = 8s 50c", "---", "Inventory  Total: 1 · Bags: 1" })
   end)
 
   it("TT10 a hold until next week", function()
-    assert_eq(Variant(3), { "AHProfit | data 2 h old", "Do: HOLD until next Tue | no window pays this week", "Market Price | 1s 10c (2 h) · steady", " | (7d) 1s 12c · (14d) 1s 14c · (30d) 1s 15c", "Market Inventory | 120 listed now", " | (7d) — · (14d) — · (30d) —", "Sell Chance Now | — at 1s 10c", " | (7d) — · (14d) — · (30d) —", "Best Buy Time | early", " | 1s 2c · Saturday Night · —", "Best Sell Time | pattern", " | 1s 20c · Tuesday Evening · —", "Inventory | Total: 30 · Bags: 30" })
+    assert_eq(Variant(3), { "AHProfit | data 2 h old", "---", "Do: HOLD until next Tue | no window pays this week", "---", "Market Price  1s 10c (2 h) · steady", "   (7d) 1s 12c · (14d) 1s 14c · (30d) 1s 15c", "Market Inventory  120 listed now", "   (7d) — · (14d) — · (30d) —", "Sell Chance Now  — at 1s 10c", "   (7d) — · (14d) — · (30d) —", "---", "Best Buy Time  early", "   1s 2c · Saturday Night · —", "Best Sell Time  pattern", "   1s 20c · Tuesday Evening · —", "---", "Inventory  Total: 30 · Bags: 30" })
   end)
 
   it("TT11 a mat in the crafter's bags: the craft it goes into, its mats and when it posts", function()
     local texts, lines = Variant(4)
-    assert_eq(texts, { "AHProfit | data 2 h old", "Do: CRAFT 5 Copper Rod | +9s 71c · 90%", " | mats 2s 48c · then post Sat 10:00", "Market Price | 10s (2 h) · steady", " | (7d) 9s 60c · (14d) 9s 55c · (30d) 9s 50c", "Market Inventory | 150 listed now", " | (7d) — · (14d) — · (30d) —", "Sell Chance Now | — at 10s", " | (7d) — · (14d) — · (30d) —", "Best Buy Time | pattern", " | 9s 20c · Tuesday Night · —", "Best Sell Time | established", " | 12s · Saturday Evening · —", "Inventory | Total: 10 · Bags: 10" })
-    assert_eq(lines[2].verbColor, "craft")
+    assert_eq(texts, { "AHProfit | data 2 h old", "---", "Do: CRAFT 5 Copper Rod | +9s 71c · 90%", " | mats 2s 48c · then post Sat 10:00", "---", "Market Price  10s (2 h) · steady", "   (7d) 9s 60c · (14d) 9s 55c · (30d) 9s 50c", "Market Inventory  150 listed now", "   (7d) — · (14d) — · (30d) —", "Sell Chance Now  — at 10s", "   (7d) — · (14d) — · (30d) —", "---", "Best Buy Time  pattern", "   9s 20c · Tuesday Night · —", "Best Sell Time  established", "   12s · Saturday Evening · —", "---", "Inventory  Total: 10 · Bags: 10" })
+    assert_eq(lines[3].verbColor, "craft")
   end)
 
   it("TT12 the same mat on the character who mails it", function()
     local texts, lines = Variant(5)
     local craft = Variant(4)
-    assert_eq({ texts[2], lines[2].verbColor }, { "Do: MAIL 6 to Brugan | for crafting Copper Rod", "mail" })
-    for i = 3, #texts do assert_eq(texts[i], craft[i + 1]) end
+    assert_eq({ texts[3], lines[3].verbColor }, { "Do: MAIL 6 to Brugan | for crafting Copper Rod", "mail" })
+    for i = 4, #texts do assert_eq(texts[i], craft[i + 1]) end
   end)
 
   it("TT13 a disenchant: what it nets at the mats' sale values, and the breakdown at their latest prices", function()
     local texts, lines = Variant(6)
-    assert_eq(texts, { "AHProfit | data 2 h old", "Do: DISENCHANT | +6s 25c · mats 14s 25c · 100%", "Market Price | 8s (2 h) · low", " | (7d) 10s · (14d) 10s 50c · (30d) 11s", "Market Inventory | 400 listed now · steady", " | (7d) 420 · (14d) 430 · (30d) 450", "Sell Chance Now | 5% at 8s · est.", " | (7d) 6% · (14d) 6% · (30d) 6%", "Best Buy Time | early", " | 7s 10c · Sunday Night · —", "Best Sell Time | early", " | 12s 30c · Saturday Afternoon · 9% est.", "Disenchant Value | 78% above AH · 14s 25c", "  75% · 2.5 Soul Dust @ 6s | 11s 25c", "  20% · 1.5 Lesser Mystic Essence @ 10s | 3s", "Vendor Price | 24c", "Inventory | Total: 1 · Bags: 1" })
-    assert_eq({ lines[2].verbColor, lines[13].spans[1], lines[14].labelMuted, lines[3].tail, lines[7].tail },
+    assert_eq(texts, { "AHProfit | data 2 h old", "---", "Do: DISENCHANT | +6s 25c · mats 14s 25c · 100%", "---", "Market Price  8s (2 h) · low", "   (7d) 10s · (14d) 10s 50c · (30d) 11s", "Market Inventory  400 listed now · steady", "   (7d) 420 · (14d) 430 · (30d) 450", "Sell Chance Now  5% at 8s · est.", "   (7d) 6% · (14d) 6% · (30d) 6%", "---", "Best Buy Time  early", "   7s 10c · Sunday Night · —", "Best Sell Time  early", "   12s 30c · Saturday Afternoon · 9% est.", "---", "Disenchant Value  78% above AH · 14s 25c", "   75% · 2.5 Soul Dust @ 6s = 11s 25c", "   20% · 1.5 Lesser Mystic Essence @ 10s = 3s", "---", "Vendor Price  24c", "Inventory  Total: 1 · Bags: 1" })
+    assert_eq({ lines[3].verbColor, lines[17].spans[1], lines[18].labelMuted, lines[5].tail, lines[9].tail },
               { "de", { "78% above AH", "pos" }, true, { "low", "amber" }, { "est.", "amber" } })
   end)
 
   it("TT14 an AH listing on the Shopping list; then cheaper now than every buy window", function()
     local texts, lines = Variant(7)
-    assert_eq(texts, { "AHProfit | data 2 h old", "Do: BUY ≤ 10s · for Copper Rod | funded · 6 needed", "Market Price | 9s 80c now · steady", " | (7d) 9s 60c · (14d) 9s 55c · (30d) 9s 50c", "Market Inventory | 150 listed now", " | (7d) — · (14d) — · (30d) —", "Sell Chance Now | — at 9s 80c", " | (7d) — · (14d) — · (30d) —", "Best Buy Time | pattern", " | 9s 20c · Tuesday Night · —", "Best Sell Time | established", " | 12s · Saturday Evening · —" })
-    assert_eq(lines[2].verbColor, "buy")
+    assert_eq(texts, { "AHProfit | data 2 h old", "---", "Do: BUY ≤ 10s · for Copper Rod | funded · 6 needed", "---", "Market Price  9s 80c now · steady", "   (7d) 9s 60c · (14d) 9s 55c · (30d) 9s 50c", "Market Inventory  150 listed now", "   (7d) — · (14d) — · (30d) —", "Sell Chance Now  — at 9s 80c", "   (7d) — · (14d) — · (30d) —", "---", "Best Buy Time  pattern", "   9s 20c · Tuesday Night · —", "Best Sell Time  established", "   12s · Saturday Evening · —" })
+    assert_eq(lines[3].verbColor, "buy")
     local TV = AHProfit.TooltipView
     local now = TV.Lines({ age = { text = "data 2 h old" }, market = { cur = 900, ageText = "now", med7 = 960, listed = 150 },
       doing = TV.DoOf(TW.Ctx({ key = TW.BAR, listing = true, shopping = { qty = 6, price = 1000, purpose = "for Copper Rod" },
                                buyNow = true })) })
-    assert_eq(TW.Texts(now)[3], " | best time to buy is now")
+    assert_eq(TW.Texts(now)[4], " | best time to buy is now")
   end)
 
   it("TT15 an unfunded alternative: why the portfolio left it out, in amber", function()
     local texts, lines = Variant(8)
-    assert_eq(texts, { "AHProfit | data 2 h old", "Do: UNFUNDED craft · +80c | exceeds risk tolerance", " | needs 45s, 24s 40c left", "Market Price | 5s 20c (2 h) · steady", " | (7d) 5s 30c · (14d) 5s 35c · (30d) 5s 40c", "Market Inventory | 25 listed now", " | (7d) — · (14d) — · (30d) —", "Sell Chance Now | — at 5s 20c", " | (7d) — · (14d) — · (30d) —", "Best Buy Time | early", " | 4s 90c · Wednesday Night · —", "Best Sell Time | pattern", " | 5s 80c · Saturday Evening · —" })
-    assert_eq({ lines[2].verbColor, lines[2].valueColor }, { "muted", "amber" })
+    assert_eq(texts, { "AHProfit | data 2 h old", "---", "Do: UNFUNDED craft · +80c | exceeds risk tolerance", " | needs 45s, 24s 40c left", "---", "Market Price  5s 20c (2 h) · steady", "   (7d) 5s 30c · (14d) 5s 35c · (30d) 5s 40c", "Market Inventory  25 listed now", "   (7d) — · (14d) — · (30d) —", "Sell Chance Now  — at 5s 20c", "   (7d) — · (14d) — · (30d) —", "---", "Best Buy Time  early", "   4s 90c · Wednesday Night · —", "Best Sell Time  pattern", "   5s 80c · Saturday Evening · —" })
+    assert_eq({ lines[3].verbColor, lines[3].valueColor }, { "muted", "amber" })
     assert_eq({ AHProfit.TooltipView.SplitReason("Insufficient liquidity: 3/day, 40 planned") },
               { "insufficient liquidity", "3/day, 40 planned" })
   end)
 
   it("TT16 a kept item: keep at least or keep all, and what you hold", function()
-    assert_eq(Variant(9), { "AHProfit | data 2 h old", "Do: KEPT for yourself | keep at least 10", " | right-click to change", "Market Price | 25c (2 h) · steady", " | (7d) 24c · (14d) 24c · (30d) 24c", "Market Inventory | 200 listed now", " | (7d) — · (14d) — · (30d) —", "Sell Chance Now | — at 25c", " | (7d) — · (14d) — · (30d) —", "Best Buy Time | early", " | 26c · Monday Night · —", "Best Sell Time | early", " | 27c · Sunday Evening · —", "Inventory | Total: 13 · Bags: 13" })
+    assert_eq(Variant(9), { "AHProfit | data 2 h old", "---", "Do: KEPT for yourself | keep at least 10", " | right-click to change", "---", "Market Price  25c (2 h) · steady", "   (7d) 24c · (14d) 24c · (30d) 24c", "Market Inventory  200 listed now", "   (7d) — · (14d) — · (30d) —", "Sell Chance Now  — at 25c", "   (7d) — · (14d) — · (30d) —", "---", "Best Buy Time  early", "   26c · Monday Night · —", "Best Sell Time  early", "   27c · Sunday Evening · —", "---", "Inventory  Total: 13 · Bags: 13" })
     assert_eq(AHProfit.TooltipView.DoOf(TW.Ctx({ key = 159, held = 13, reserve = -1 })).all, true)
   end)
 
   it("TT17 a vendor item with nothing listed and no windows: no best price lines", function()
-    assert_eq(Variant(10), { "AHProfit | data 2 h old", "Do: VENDOR 12c each | nothing better", "Market Price | none listed", " | (7d) — · (14d) — · (30d) 10c", "Market Inventory | 0 listed now", " | (7d) — · (14d) — · (30d) —", "Sell Chance Now | —", " | (7d) — · (14d) — · (30d) —", "Vendor Price | 3c each · 12c for 4", "Inventory | Total: 4 · Bags: 4" })
+    assert_eq(Variant(10), { "AHProfit | data 2 h old", "---", "Do: VENDOR 12c each | nothing better", "---", "Market Price  none listed", "   (7d) — · (14d) — · (30d) 10c", "Market Inventory  0 listed now", "   (7d) — · (14d) — · (30d) —", "Sell Chance Now  —", "   (7d) — · (14d) — · (30d) —", "---", "Vendor Price  3c each · 12c for 4", "Inventory  Total: 4 · Bags: 4" })
   end)
 
   it("TT18 no market data: the header and one line", function()
@@ -109,12 +109,12 @@ describe("TooltipView", function()
   end)
 
   it("TT20 an AH listing on none of your lists has no Do line", function()
-    assert_eq(Variant(13), { "AHProfit | data 2 h old", "Market Price | 11s 50c now · steady", " | (7d) 11s 80c · (14d) 11s 90c · (30d) 12s", "Market Inventory | 45 listed now", " | (7d) — · (14d) — · (30d) —", "Sell Chance Now | — at 11s 50c", " | (7d) — · (14d) — · (30d) —", "Best Buy Time | pattern", " | 10s 80c · Tuesday Morning · —", "Best Sell Time | established", " | 13s · Saturday Afternoon · —" })
+    assert_eq(Variant(13), { "AHProfit | data 2 h old", "---", "Market Price  11s 50c now · steady", "   (7d) 11s 80c · (14d) 11s 90c · (30d) 12s", "Market Inventory  45 listed now", "   (7d) — · (14d) — · (30d) —", "Sell Chance Now  — at 11s 50c", "   (7d) — · (14d) — · (30d) —", "---", "Best Buy Time  pattern", "   10s 80c · Tuesday Morning · —", "Best Sell Time  established", "   13s · Saturday Afternoon · —" })
   end)
 
   it("TT21 inside the best sell window: Best Sell Price says now, and the Do line says so", function()
     local texts = Variant(14)
-    assert_eq({ texts[3], texts[13] }, { " | then nothing · best time to sell is now", " | 45s · now · 81%" })
+    assert_eq({ texts[4], texts[16] }, { " | then nothing · best time to sell is now", "   45s · now · 81%" })
     local TV = AHProfit.TooltipView
     local window = { start = 4 * 24 + 18, hours = 3 }
     assert_eq({ TV.InWindow(window, TW.At(4, 18, 30)), TV.InWindow(window, TW.At(4, 21)), TV.InWindow(window, TW.At(4, 17, 59)) },
@@ -140,9 +140,9 @@ describe("TooltipView", function()
                 "Thursday Night", "Sunday Night" })
     assert_eq({ TV.DayPart(4 * 24 + 4, 2 * TW.HOUR), TV.DayPart(0, -TW.HOUR) }, { "Friday Morning", "Sunday Night" })
     local early = TV.BestLines("Best Sell Time", { price = 58, slot = 5 * 24 + 19, weeks = 1 }, 0)
-    assert_eq({ TW.Texts(early), early[1].tail }, { { "Best Sell Time | early", " | 58c · Saturday Evening · —" }, { "early", "amber" } })
+    assert_eq({ TW.Texts(early), early[1].tail }, { { "Best Sell Time  early", "   58c · Saturday Evening · —" }, { "early", "amber" } })
     assert_eq(TW.Texts(TV.BestLines("Best Buy Time", { price = 38, slot = 24 + 2, weeks = 4 }, 0)),
-              { "Best Buy Time | pattern", " | 38c · Monday Night · —" })
+              { "Best Buy Time  pattern", "   38c · Monday Night · —" })
   end)
   it("TT30 Inventory: what you hold and where, none without holdings", function()
     local TV = Boot()
@@ -167,30 +167,30 @@ describe("TooltipView", function()
   it("TT35 Market Price: the price now and its word, then the 7, 14 and 30-day medians; no Price history line", function()
     local TV = Boot()
     assert_eq(TW.Texts(TV.MarketPriceLines({ cur = 19, ageText = "now", med7 = 21, med14 = 21, med30 = 21 })),
-              { "Market Price | 19c now · steady", " | (7d) 21c · (14d) 21c · (30d) 21c" })      -- 19 / 21 = -9.5%
+              { "Market Price  19c now · steady", "   (7d) 21c · (14d) 21c · (30d) 21c" })      -- 19 / 21 = -9.5%
     assert_eq(TW.Texts(TV.MarketPriceLines({ cur = 19, ageText = "2 h", med7 = 21, med14 = 21, med30 = 21 }))[1],
-              "Market Price | 19c (2 h) · steady")
-    assert_eq(TW.Texts(TV.MarketPriceLines({ ageText = "2 h", med30 = 10 })), { "Market Price | none listed", " | (7d) — · (14d) — · (30d) 10c" })
+              "Market Price  19c (2 h) · steady")
+    assert_eq(TW.Texts(TV.MarketPriceLines({ ageText = "2 h", med30 = 10 })), { "Market Price  none listed", "   (7d) — · (14d) — · (30d) 10c" })
   end)
 
   it("TT36 Market Inventory: a stock against its typical over 7, 14 and 30 days", function()
     local TV = Boot()
     local linen = TV.MarketInventoryLines({ listed = 24808, supply7 = 14859, supply14 = 14859, supply30 = 14859 })
     assert_eq({ TW.Texts(linen), linen[1].tail },
-              { { "Market Inventory | 24,808 listed now · high", " | (7d) 14,859 · (14d) 14,859 · (30d) 14,859" }, { "high", "amber" } })
+              { { "Market Inventory  24,808 listed now · high", "   (7d) 14,859 · (14d) 14,859 · (30d) 14,859" }, { "high", "amber" } })
     assert_eq(TW.Texts(TV.MarketInventoryLines({ listed = 1713, supply7 = 2751, supply14 = 2751, supply30 = 2751 }))[1],
-              "Market Inventory | 1,713 listed now · low")
+              "Market Inventory  1,713 listed now · low")
   end)
 
   it("TT37 Sell Chance Now: a 24 h post at the market price, then the measured sell-through; no Sales Rate line", function()
     local TV = Boot()
     assert_eq(TW.Texts(TV.SellChanceLines({ chance1000 = 744, price = 19, commodity = 1, st = { 790, 790, 790 }, stHow = "mmm" })),
-              { "Sell Chance Now | 74% at 19c", " | (7d) 79% · (14d) 79% · (30d) 79%" })
+              { "Sell Chance Now  74% at 19c", "   (7d) 79% · (14d) 79% · (30d) 79%" })
     local gloves = TV.SellChanceLines({ chance1000 = 50, price = 100, commodity = 0, st = { 62, 62, 62 }, stHow = "eee" })
     assert_eq({ TW.Texts(gloves), gloves[1].tail },
-              { { "Sell Chance Now | 5% at 1s · est.", " | (7d) 6% · (14d) 6% · (30d) 6%" }, { "est.", "amber" } })
+              { { "Sell Chance Now  5% at 1s · est.", "   (7d) 6% · (14d) 6% · (30d) 6%" }, { "est.", "amber" } })
     assert_eq(TW.Texts(TV.SellChanceLines({ price = 19, commodity = 1, st = {} })),
-              { "Sell Chance Now | — at 19c", " | (7d) — · (14d) — · (30d) —" })
+              { "Sell Chance Now  — at 19c", "   (7d) — · (14d) — · (30d) —" })
     assert_eq(TV.SellChanceLines({ chance1000 = 300, price = 19, commodity = 1, st = { 410 }, stHow = "c--" })[1].value,
               "30% at 19c · class est.")
     assert_eq({ TV.Percent(744), TV.Percent(745), TV.Percent(62), TV.Percent(0) }, { "74%", "75%", "6%", "0%" })
@@ -199,12 +199,12 @@ describe("TooltipView", function()
   it("TT38 Best Buy and Best Sell Time: the strength word, then the price, the hour and the percentage", function()
     local TV = Boot()
     local buy = TV.BestLines("Best Buy Time", { price = 17, slot = 24 + 7, weeks = 1, pct1000 = 640 }, 0)
-    assert_eq({ TW.Texts(buy), buy[1].tail }, { { "Best Buy Time | early", " | 17c · Tuesday Morning · 64%" }, { "early", "amber" } })
+    assert_eq({ TW.Texts(buy), buy[1].tail }, { { "Best Buy Time  early", "   17c · Tuesday Morning · 64%" }, { "early", "amber" } })
     assert_eq(TW.Texts(TV.BestLines("Best Sell Time", { price = 24, slot = 4 * 24 + 18, weeks = 1, pct1000 = 810 }, 0)),
-              { "Best Sell Time | early", " | 24c · Friday Evening · 81%" })
+              { "Best Sell Time  early", "   24c · Friday Evening · 81%" })
     local established = TV.BestLines("Best Sell Time", { price = 24, slot = 4 * 24 + 18, weeks = 7, pct1000 = 90, est = true }, 0)
     assert_eq({ TW.Texts(established), established[1].tail },
-              { { "Best Sell Time | established", " | 24c · Friday Evening · 9% est." }, nil })
+              { { "Best Sell Time  established", "   24c · Friday Evening · 9% est." }, nil })
   end)
 
   it("TT39 Disenchant Value: the comparison first, then the value; a line per mat and no total line", function()
@@ -212,8 +212,8 @@ describe("TooltipView", function()
     local dust = { chance = 0.8, min = 1, max = 2, name = "Strange Dust", price = 25 }
     local essence = { chance = 0.2, min = 1, max = 2, name = "Lesser Magic Essence", price = 110 }
     local lines = TV.DisenchantLines({ dust, essence }, 100)
-    assert_eq(TW.Texts(lines), { "Disenchant Value | 37% below AH · 63c", "  80% · 1.5 Strange Dust @ 25c | 30c",
-                                 "  20% · 1.5 Lesser Magic Essence @ 1s 10c | 33c" })
+    assert_eq(TW.Texts(lines), { "Disenchant Value  37% below AH · 63c", "   80% · 1.5 Strange Dust @ 25c = 30c",
+                                 "   20% · 1.5 Lesser Magic Essence @ 1s 10c = 33c" })
     assert_eq({ lines[1].spans[1], lines[2].labelMuted }, { { "37% below AH", "neg" }, true })
     local above = TV.DisenchantLines({ dust, essence }, 56)
     assert_eq({ above[1].value, above[1].spans[1] }, { "13% above AH · 63c", { "13% above AH", "pos" } })   -- 12.5%, half up
@@ -244,13 +244,13 @@ describe("TooltipView", function()
     local TV = Boot()
     local labels = {}
     for _, l in ipairs(TV.Lines(TW.Variants(TV, AHProfit.ViewModel)[2][2])) do
-      if l.label ~= "" and l.label:sub(1, 2) ~= "  " then labels[#labels + 1] = l.label:match("^Do:") and "Do" or l.label end
+      if l.label ~= "" and not l.indent then labels[#labels + 1] = l.label:match("^Do:") and "Do" or l.label end
     end
     assert_eq(labels, { "AHProfit", "Do", "Market Price", "Market Inventory", "Sell Chance Now", "Best Buy Time",
                         "Best Sell Time", "Disenchant Value", "Inventory" })
     for n, v in ipairs(TW.Variants(TV, AHProfit.ViewModel)) do
       for _, l in ipairs(TV.Lines(v[2])) do
-        assert_eq(TV.Width(AHProfit.ViewModel.WithCoins(l.label), AHProfit.ViewModel.WithCoins(l.value)) <= TV.WIDTH, true,
+        assert_eq(TV.LineWidth(l) <= TV.WIDTH, true,
                   "variant " .. n .. ": " .. l.label .. " | " .. l.value)
       end
     end

@@ -13,7 +13,7 @@ end
 describe("Adapter", function()
   it("the .toc lists the Core and Capture files in load order", function()
     Stubs.Reset()
-    assert_eq(Stubs.TocFiles(), { "Core/Adapter.lua", "Core/AdapterAH.lua", "Core/AdapterDiagnostics.lua", "Data/BonusSuffixes.lua", "Data/Disenchant.lua", "Core/Events.lua", "Core/DB.lua", "Core/ItemNames.lua",
+    assert_eq(Stubs.TocFiles(), { "Core/Adapter.lua", "Core/AdapterAH.lua", "Core/AdapterDiagnostics.lua", "Core/AdapterTooltip.lua", "Data/BonusSuffixes.lua", "Data/Disenchant.lua", "Core/Events.lua", "Core/DB.lua", "Core/ItemNames.lua",
       "Capture/Characters.lua", "Capture/Professions.lua", "Capture/Inventory.lua", "Capture/Auctions.lua", "Capture/Mail.lua", "Scan/Replicate.lua", "Core/Diagnostics.lua",
       "Engine/Fees.lua", "Engine/SellProb.lua", "Engine/Disenchant.lua", "Engine/Craft.lua", "Engine/Prices.lua", "Engine/Timing.lua", "Engine/Portfolio.lua", "Engine/Graph.lua", "Capture/Posts.lua", "Capture/Crafts.lua", "Capture/Gather.lua", "Core/Market.lua", "Core/Plan.lua", "Recommend/Live.lua", "Capture/Purchases.lua", "Recommend/Options.lua", "Recommend/Reserves.lua", "Recommend/Reselect.lua", "Recommend/Adapt.lua", "UI/ViewModel.lua", "UI/PlanView.lua", "UI/PortfolioView.lua", "UI/CraftView.lua", "UI/FlipView.lua", "UI/InventoryView.lua", "UI/TooltipView.lua", "UI/RowMenu.lua", "UI/WindowLines.lua", "UI/MainWindow.lua", "UI/Tooltip.lua", "UI/AHPanel.lua", "UI/MinimapView.lua", "UI/MinimapButton.lua" })
   end)
@@ -190,55 +190,9 @@ describe("Adapter", function()
     assert_eq(Adapter.LoadSaved("AHProfitDB"), { formatVersion = 1 })
   end)
 
-  it("the minimap is the client's Minimap frame, and a tooltip's title line can carry a value on its right", function()
+  it("the minimap is the client's Minimap frame", function()
     local Adapter = Boot()
     assert_eq(Adapter.Minimap() == Minimap, true)
-    Adapter.ShowTooltipLines(UIParent, "AHProfit", { { text = "hint", rgb = { 1, 1, 1 } } },
-                             { text = "data 2 h old", rgb = { 0.5, 0.5, 0.5 } })
-    assert_eq({ Stubs.tooltip.doubles[1], Stubs.tooltip.lines }, { { "AHProfit", "data 2 h old", 0.5, 0.5, 0.5 }, { "hint" } })
-    Adapter.ShowTooltipLines(UIParent, "Plain", {})
-    assert_eq({ Stubs.tooltip.lines[1], #Stubs.tooltip.doubles }, { "Plain", 0 })
-  end)
-
-  it("TT24 a tooltip line with an empty label gets a one-space left text, so it keeps its height", function()
-    local Adapter = Boot()
-    local added = {}
-    local tooltip = { AddDoubleLine = function(_, left, right) added[#added + 1] = { left, right } end,
-                      Show = function() end }
-    local rgb = { 1, 1, 1 }
-    Adapter.AddTooltipLines(tooltip, { { "Do: POST", "+23s · 50% chance", rgb, rgb }, { "", "then nothing", rgb, rgb } })
-    assert_eq(added, { { "Do: POST", "+23s · 50% chance" }, { " ", "then nothing" } })
-  end)
-
-  it("TT33 the item tooltip hook reads the link from the tooltip's data, and a GetItem that raises adds nothing", function()
-    local Adapter = Boot()
-    local postCalls = {}
-    Stubs.Define("Enum", { TooltipDataType = { Item = 0 } })
-    Stubs.Define("TooltipDataProcessor", { AddTooltipPostCall = function(kind, fn) postCalls[kind] = fn end })
-    local seen = {}
-    local function OnItem(tooltip, link) seen[#seen + 1] = { tooltip.name, link } end
-    assert_eq(Adapter.HookItemTooltip(OnItem), true)
-    local linen = "|cffffffff|Hitem:2589::::::::|h[Linen Cloth]|h|r"
-    local calls = 0
-    local raises = function() calls = calls + 1; error("attempt to call a nil value") end   -- CompareItem's tooltips
-    local compare = { name = "ShoppingTooltip1", GetItem = raises }
-    postCalls[0](compare, { type = 0, id = 2589, hyperlink = linen })
-    assert_eq(calls, 0, "with a hyperlink in the data, GetItem is never called")
-    postCalls[0](compare, { type = 0, id = 2589 })                       -- no hyperlink, and GetItem raises
-    assert_eq(calls, 1)
-    postCalls[0]({ name = "GameTooltip", GetItem = function() return "Wool Cloth", "|Hitem:2592|h" end }, {})
-    postCalls[0]({ name = "EmbeddedItemTooltip" }, { type = 0 })          -- neither a hyperlink nor a GetItem
-    postCalls[0](compare, setmetatable({}, { __index = raises }))         -- data the client won't let us read
-    assert_eq(seen, { { "ShoppingTooltip1", linen }, { "GameTooltip", "|Hitem:2592|h" } })
-    postCalls[0](compare, { hyperlink = linen })                          -- fn itself failing raises nothing
-    local broken = function() error("AddDoubleLine on a forbidden tooltip") end
-    assert_eq(Adapter.HookItemTooltip(broken), true)
-    postCalls[0](compare, { hyperlink = linen })
-    TooltipDataProcessor = nil                                            -- Classic's OnTooltipSetItem hook
-    seen = {}
-    assert_eq(Adapter.HookItemTooltip(OnItem), true)
-    Stubs.tooltip.hooks.OnTooltipSetItem({ name = "GameTooltip", GetItem = raises })
-    assert_eq(seen, {})
   end)
 
   it("A93 on the live Forever client item info, item details and gathering spells come from C_Item and C_Spell", function()

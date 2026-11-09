@@ -7,6 +7,7 @@
 Core\Adapter.lua
 Core\AdapterAH.lua
 Core\AdapterDiagnostics.lua
+Core\AdapterTooltip.lua
 Data\BonusSuffixes.lua
 Data\Disenchant.lua
 Core\Events.lua
