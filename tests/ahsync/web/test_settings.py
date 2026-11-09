@@ -92,8 +92,8 @@ def test_MCP1_enable_starts_the_server_builds_the_table_and_remembers_it(dash):
     on = _card(app)
     assert (on["pill"], on["button"]["text"], on["lines"][1][0]) == ("running", "Disable", "Memory in use")
     assert on["lines"][1][1].endswith(f"market table of {assistant.stats.count():,} items")
-    assert json.loads(on["setup"]["desktop"]["snippet"]) == {"mcpServers": {"ahsync": {
-        "command": "C:\\AHSync\\ahsync-mcp.exe"}}}
+    assert on["setup"]["desktop"]["status"] == "missing"                  # the test's dashboard finds no Claude
+    assert on["setup"]["code"]["steps"][0]["code"] == "claude mcp add ahsync -- C:\\AHSync\\ahsync-mcp.exe"
 
 
 def test_MCP2_disable_stops_the_server_frees_the_table_and_remembers_it(dash):
@@ -143,3 +143,62 @@ def test_without_a_server_there_is_no_card_and_the_endpoint_is_404(dash):
     reply = app.handle("GET", "/api/views/status", {"Host": "127.0.0.1:8765"}, b"")
     assert "mcp_card" not in json.loads(reply.body)["data"]
     assert _post(app, {"enabled": True}) == (404, {"error": "not_found"})
+
+
+def test_MCP20_the_status_page_shows_nothing_of_claudes_file_but_the_ahsync_command(dash, caplog):
+    from ahsync.mcp.claude_config import find_claude_config
+    app, _assistant, _config, data = dash
+    claude = data / "Roaming" / "Claude"
+    claude.mkdir(parents=True)
+    (claude / "claude_desktop_config.json").write_text(json.dumps({"mcpServers": {
+        "github": {"command": "gh-mcp", "env": {"TOKEN": "ghp_secret123"}},
+        "ahsync": {"command": r"C:\Old\ahsync-mcp.exe", "env": {"X": "hidden"}}}}), encoding="utf-8")
+    app.claude_config = lambda: find_claude_config({"APPDATA": str(data / "Roaming")}, data, "win32")
+    assert _post(app, {"enabled": True})[0] == 200
+    with caplog.at_level("DEBUG"):
+        reply = app.handle("GET", "/api/views/status", {"Host": "127.0.0.1:8765"}, b"")
+    page = reply.body.decode("utf-8") + caplog.text
+    assert r"C:\\Old\\ahsync-mcp.exe" in page                      # the ahsync entry's command, JSON-escaped
+    assert not any(secret in page for secret in ("github", "gh-mcp", "TOKEN", "ghp_secret123", "hidden"))
+
+
+def test_MCP21_each_status_build_looks_again_and_changes_nothing(dash):
+    from ahsync.mcp.claude_config import find_claude_config
+    app, _assistant, _config, data = dash
+    claude = data / "Roaming" / "Claude"
+    claude.mkdir(parents=True)
+    config = claude / "claude_desktop_config.json"
+    app.claude_config = lambda: find_claude_config({"APPDATA": str(data / "Roaming")}, data, "win32")
+    assert _post(app, {"enabled": True})[0] == 200
+    assert _card(app)["setup"]["desktop"]["steps"][0] == {"text": "Create this file:", "code": str(config)}
+    assert not config.exists() and sorted(p.name for p in claude.iterdir()) == []     # never created
+    config.write_text(json.dumps({"mcpServers": {"ahsync": {"command": r"C:\AHSync\ahsync-mcp.exe"}}}),
+                      encoding="utf-8")
+    before = (config.read_bytes(), config.stat().st_mtime_ns)
+    for _ in range(2):
+        assert _card(app)["setup"]["desktop"]["status"] == "ok"                       # the change shows at once
+    assert (config.read_bytes(), config.stat().st_mtime_ns) == before
+    assert sorted(p.name for p in claude.iterdir()) == ["claude_desktop_config.json"]
+    for text, status in (("", "todo"), ("{}", "todo"), ('{"a": 1}', "todo"), ('{"mcpServers": {}}', "todo"),
+                         (json.dumps({"mcpServers": {"ahsync": {"command": r"C:\Old.exe"}}}), "todo"),
+                         ('{"mcpServers": [', "warn"), ('{"mcpServers": []}', "warn"), (" " * 1_000_001, "warn")):
+        config.write_text(text, encoding="utf-8")
+        before = (config.read_bytes(), config.stat().st_mtime_ns)
+        for _ in range(2):
+            assert _card(app)["setup"]["desktop"]["status"] == status, text[:40]
+        assert (config.read_bytes(), config.stat().st_mtime_ns) == before             # every state: read-only
+        assert sorted(p.name for p in claude.iterdir()) == ["claude_desktop_config.json"]
+
+
+def test_MCP21_a_finder_that_fails_still_lets_the_status_page_answer(dash, caplog):
+    app, _assistant, _config, _data = dash
+
+    def broken():
+        raise RuntimeError("ghp_secret123 in a message")
+    app.claude_config = broken
+    assert _post(app, {"enabled": True})[0] == 200
+    reply = app.handle("GET", "/api/views/status", {"Host": "127.0.0.1:8765"}, b"")
+    setup = json.loads(reply.body)["data"]["mcp_card"]["setup"]["desktop"]
+    assert (reply.status, setup["status"]) == (200, "warn")
+    assert setup["message"].startswith("AHSync couldn't read this file (something went wrong while AHSync looked")
+    assert "RuntimeError" in caplog.text and "ghp_secret123" not in caplog.text + reply.body.decode("utf-8")
