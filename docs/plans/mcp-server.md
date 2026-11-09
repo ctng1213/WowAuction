@@ -2,7 +2,7 @@
 
 Written for: the user, who approves it, and the Opus session that runs the batch. **Status: draft for review, 2026-11-08. Nothing here is approved yet.** Tasks are tagged **Opus** (judgement) or **Sonnet** (routine), each with a one-line reason.
 
-**What this batch is.** A local, read-only [MCP](https://modelcontextprotocol.io) server that ships with AHSync. An assistant that speaks MCP (Claude Desktop, Claude Code) starts it on your computer and uses it to read your data. The assistant does the thinking: it ranks, compares, spots trends and looks things up on the web. The server gives it complete, current, well-described data. It never changes anything, and it opens no network port.
+**What this batch is.** A local, read-only [MCP](https://modelcontextprotocol.io) server that runs inside AHSync, started and stopped by a button on the Status page. An assistant that speaks MCP (Claude Desktop, Claude Code) connects to it on your computer and uses it to read your data. The assistant does the thinking: it ranks, compares, spots trends and looks things up on the web. The server gives it complete, current, well-described data. It never changes anything, and it listens only on your own computer (127.0.0.1), only while you have it enabled.
 
 ## 0. The questions it must answer (the user, 2026-11-08)
 
@@ -25,14 +25,23 @@ How the assistant answers is left to it.
 ## 1. Proposed decisions (for the user to approve or change)
 
 1. **Read-only.** No tool skips an action, sets a rule, changes a setting or starts a refresh. Writes keep going through the dashboard's token-checked POSTs (SPEC §3.5 Security). Letting an assistant act on your plan needs its own design, later.
-2. **Local only, over stdio.** The assistant launches the server as a child process and talks to it over stdin and stdout. There is no listener, so nothing on the network can reach it, and the server never goes online itself.
+2. **The server runs inside AHSync; Claude reaches it through a bridge** (the user's option B, 2026-11-08). Pressing **Enable** starts it inside the app, on its own local port. The port is `127.0.0.1` only (config `mcp_port`, default 8766, separate from the dashboard's) and exists only while the server runs.
+   - Claude Desktop and Claude Code both launch a small bridge that ships with AHSync, `ahsync-mcp`. It speaks MCP to Claude over stdin and stdout, forwards each message to the app's local port, and passes back the answer.
+   - The bridge reads the server's access key from AHSync's own data folder, so no key appears in Claude's config or on screen.
+   - The app's port accepts only requests that carry the key, a `Host` of `127.0.0.1`/`localhost`, and no browser `Origin`. That makes it as safe as the dashboard against a website probing it (SEC scenarios).
+   - The server never goes online itself.
 3. **Claude first; ChatGPT not in v1.** Claude Desktop and Claude Code run local stdio servers directly. ChatGPT accepts only remote HTTPS MCP servers, in Developer Mode, so your data would have to go through a tunnel or hosted relay, and plan eligibility is unclear. That needs its own decision and security review.
 4. **Data first; the engine's answers alongside.** SQL over your data, with the current market numbers as a table (`market_stats`), is the main tool. The dashboard's pages are there too (`get_page`, `item`). When the assistant uses them, its numbers match the dashboard's exactly.
 5. **Standard library only.** AHSync's core takes no third-party packages (CLAUDE.md), and the MCP subset needed is small: JSON-RPC 2.0, one message per line, with `initialize`, `tools/list`, `tools/call` and `ping`. A new edge package, `ahsync/mcp/`, holds it.
-6. **It works while AHSync is closed.** The server reads the last published refresh straight from the database, opened read-only. It neither needs nor takes the app's single-instance lock, and it starts no tray or window.
-7. **Opt-in, from the Status page** (the user, 2026-11-08). A setting, "Let an AI assistant read my AHSync data", is off by default. While it's off, every tool call answers "AI assistant access is off: turn it on in AHSync's Status page", and nothing is read. The server checks it on each call, so turning it off takes effect at once.
-   - The setting is written through the dashboard's token-checked POST, which gets its own SEC scenario.
-   - The same Status card shows the Claude setup snippet and the privacy note.
+6. **It works while AHSync runs, and only when enabled.** The server reads the last published refresh through its own read-only connection to the database, on its own thread, so a slow query never holds up a refresh or the dashboard.
+   - With AHSync closed, the bridge tells Claude "AHSync isn't running: start it, then ask again".
+   - With access disabled, the bridge tells Claude where to turn it on.
+7. **An Enable / Disable button on the Status page, and pressing Enable is your agreement to the memory it uses** (the user, 2026-11-08). The button is off by default.
+   - **Enable** starts the server and builds `market_stats` in AHSync's memory; the card then shows the server running and how much memory it holds.
+   - **Disable** stops the server, closes its port and frees that memory at once. Claude's next request gets "AI assistant access is off: turn it on in AHSync's Status page".
+   - The choice is remembered: an enabled server starts again with AHSync, and a disabled one stays off.
+   - Both presses go through the dashboard's token-checked POST, with their own SEC scenarios.
+   - The same card shows the Claude setup and the privacy note.
 8. **Nothing is off limits** (the user, 2026-11-08). The access is read-only, so the assistant may read everything the allowlist in §4 names.
 9. **ChatGPT is a follow-up batch** (the user, 2026-11-08). This batch is Claude only.
 
@@ -66,13 +75,14 @@ How the assistant answers is left to it.
 The table is rebuilt in memory only when a newer refresh is published.
 
 **Storage and memory.**
-- **No duplicate storage:** `market_stats` exists only in the MCP server's memory, while an assistant has the server running. Nothing is written to the database or to disk.
-- **The app is unaffected:** the AHSync app doesn't build or hold it.
+- **No duplicate storage:** `market_stats` lives only in AHSync's memory, only while the server is enabled. Nothing is written to the database or to disk.
+- **Rebuilt after each refresh:** the table is rebuilt when a refresh publishes, swapped in whole, with the old one freed.
+- **Disabled means none:** with the server disabled, AHSync holds none of it.
 - **Measured on the user's database (2026-11-08):**
   - the market's published intelligence is 1.2 MB compressed;
   - reading it takes about 0.4 s and peaks around 42 MB while parsing;
   - the flattened table keeps only the fields above, so it holds a fraction of that.
-- MC2 measures the server's steady memory and adds it to `tools/bench.py`. With it, "cheap against its 30-day median with at least 2 sales a day" or "the fish my character can sell" is one query. No new engine code is needed: the fields are the published intelligence, as built.
+- MC2 measures the app's memory with the server enabled against disabled, both at rest and across a refresh, and adds the difference to `tools/bench.py` as a budget. The card shows the figure, so the agreement you give is to a known amount. With it, "cheap against its 30-day median with at least 2 sales a day" or "the fish my character can sell" is one query. No new engine code is needed: the fields are the published intelligence, as built.
 
 ## 4. Security (SQL tool)
 
@@ -93,7 +103,8 @@ The table is rebuilt in memory only when a newer refresh is published.
 
 - **Claude Desktop:** an entry under `mcpServers` in its config file, with `command` set to the AHSync MCP executable. **Claude Code:** `claude mcp add`. AHSync shows the exact snippet with your install's path, ready to copy.
 - **Web search:** the assistant needs web access for the Wowhead cross-checks. That's Claude Desktop's web search setting, or Claude Code's own web tools.
-- **Windows packaging (risk):** the Windows build is a windowed executable with no console, so it has no usable stdin or stdout. MC3 adds a small console executable, `ahsync-mcp.exe`, next to the app in the installer. The macOS app's binary can be started with `--mcp`, but this needs checking in MC3.
+- **The bridge:** `ahsync-mcp.exe`, a small console program next to the app in the Windows installer. The app itself is windowed, with no console, so it can't talk over stdin and stdout. On macOS the bridge is the app's binary started with `--mcp`, which needs checking in MC3.
+- **Bridge behaviour:** the bridge is a thin relay with no data of its own. It starts in milliseconds and exits when Claude closes it.
 - **ChatGPT (not in v1):** only remote HTTPS MCP servers, added in Developer Mode. For a local server OpenAI offers a separate tunnel client, or a tunnel such as ngrok works. Sources differ on which plans may add custom servers, so check OpenAI's current help article before planning.
 
 ## 6. Milestones
@@ -103,9 +114,16 @@ The table is rebuilt in memory only when a newer refresh is published.
 - Add the MCP and SEC scenarios and list them in `pending_scenarios.txt`.
 - Draw the component in ARCHITECTURE.md.
 
-### MC1: the server and the dashboard's answers (Opus: the protocol and the views contract)
-- `ahsync/mcp/` holds the stdio JSON-RPC loop, the `initialize` context (§0), `list_markets`, `get_page` and `item`; run it from source with `python -m ahsync.mcp`.
-- Tests: a fake stdin and stdout drive `initialize`, `tools/list`, each tool, bad input, a missing database and an empty one (no refresh yet).
+### MC1: the server, the bridge and the dashboard's answers (Opus: the protocol, the threading and the port's protections)
+- `ahsync/mcp/` holds the JSON-RPC handling, the `initialize` context (§0), `list_markets`, `get_page` and `item`.
+- The app's local endpoint lives on its own thread, started and stopped by the app, and checks the key, `Host` and `Origin`.
+- The bridge relays between stdin and stdout and the endpoint; run it from source with `python -m ahsync.mcp`.
+- Tests:
+  - the bridge with a fake endpoint, and the endpoint with fake requests;
+  - `initialize`, `tools/list`, each tool and bad input;
+  - a missing database, and an empty one (no refresh yet);
+  - AHSync not running, and access disabled;
+  - SEC: a missing or wrong key, a foreign `Host`, a browser `Origin`.
 
 ### MC2: the data tools (Opus: a trust boundary)
 - `query` with the authorizer, the allowlist, the limits and the timeout.
@@ -116,21 +134,29 @@ The table is rebuilt in memory only when a newer refresh is published.
 
 ### MC3: packaging and setup (Opus: the build and the setting's write path; Sonnet: the copy text)
 - Add the console helper on Windows and `--mcp` on macOS, in `tools/build.py` and CI.
-- The Status page gets an "AI assistant (Claude)" card: the on/off setting (default off, `POST` with token, SEC scenario), the copyable Claude Desktop and Claude Code setup, and the privacy note. Its mockup must be approved first.
-- The server refuses every tool call while the setting is off (an MCP scenario).
+- The Status page gets an "AI assistant (Claude)" card (mockup `docs/mockups/ai-assistant.html`, to be approved first):
+  - the Enable / Disable button (default off, `POST` with token, SEC scenarios);
+  - the server's state: off, starting, running (with its port and memory), or failed (for example, the port in use);
+  - the copyable Claude Desktop and Claude Code setup, and the privacy note.
+- An enabled server starts again with the app; a disabled one stays off (MCP scenarios).
 - Manual check: Claude Desktop answers the §0 questions from a real database.
 
 ## 7. Open questions for the user
 
-None left. The user answered on 2026-11-08: the card goes on the Status page; ChatGPT is a follow-up batch; nothing is off limits while the access is read-only; `market_stats` lives in memory only, behind an opt-in setting (decisions 7–9).
+None left. The user answered on 2026-11-08:
+- the card goes on the Status page;
+- ChatGPT is a follow-up batch;
+- nothing is off limits while the access is read-only;
+- `market_stats` lives in memory only;
+- the server runs inside AHSync, started and stopped by an Enable / Disable button whose press is the agreement to its memory (decisions 2, 6, 7).
 
 ## 8. Acceptance (the whole batch)
 
-- With AHSync installed and closed, Claude Desktop, configured with the copied snippet and with web search on, answers the user's three questions:
+- With AHSync running and the server enabled, Claude Desktop, configured with the copied snippet and with web search on, answers the user's three questions:
   - the most profitable fish right now that a given character can catch, with Fishing requirements checked on Wowhead;
   - recent price trends to take advantage of, from `market_stats` and the history;
   - where to farm a named item.
 - Each answer says which refresh its numbers come from.
-- With the Status setting off, every tool call is refused with the message saying where to turn it on.
-- No tool can change the database (the SEC scenarios pass), no response exceeds its bounds, and the server never opens a port.
+- With the server disabled, Claude is told where to enable it; with AHSync closed, Claude is told to start it. Disable frees the memory, measured against the budget.
+- No tool can change the database (the SEC scenarios pass), no response exceeds its bounds, and the port is open only on 127.0.0.1, only while enabled, and only to requests with the key.
 - `tools/verify.ps1` passes. The whole-plan snapshot and every golden are unchanged.
