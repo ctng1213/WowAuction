@@ -59,7 +59,7 @@ SKILL_OPTIONS = [["", "Any", None, None], ["1-75", "1–75", 1, 75], ["75-150", 
 # Header tooltips (the mockup's GA_HELP and Gathering's columns). Character and Sell window mean something else
 # here than on the plan pages, so the page carries its own texts; views.COLUMN_HELP keeps the plan's.
 GATHERING_HELP = {
-    "Item": "The item, in its quality colour. Click to open it on auctionhouse.fyi",
+    "Item": "The item, in its quality colour",
     "Category": "Where it comes from: Fishing, Herbalism, Mining, Skinning or Monster (corpses). An item can be in two",
     "Skill": 'Skill the gathering source requires. "—" for monster drops. Amber: none of your characters has it',
     "AH Price": 'Cheapest buyout per unit in the newest scan; hover for its age. "—" = no listing',

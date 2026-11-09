@@ -178,7 +178,7 @@ function money(c, signed) {
   return sign + parts.join(' ');
 }
 const net = c => c === null ? money(null) : `<span class="${c < 0 ? 'neg' : 'pos'}">${money(c, true)}</span>`;
-const item = (n, q) => `<a class="q${q}" href="https://auctionhouse.fyi/" title="Open on auctionhouse.fyi">${n}</a>`;
+const item = (n, q) => `<span class="q${q}">${n}</span>`;   // plain, no link (D107)
 const act = a => `<span class="act ${a}">${a === 'de' ? 'DE' : a.toUpperCase()}</span>`;
 // Confidence % (SPEC §3.3.5); letters stand in for this mockup's example values. Dot: ≥ 75 high, ≥ 45 medium, else low.
 const conf = c => {
@@ -238,7 +238,7 @@ const WEEK_CHANCE = {
 // Header tooltips (SPEC §3.5): one text per column name, so a column reads the same on every page.
 const HELP = {
   'Action': 'What to do: BUY, POST, DE (disenchant), CRAFT, VENDOR, MAIL or HOLD',
-  'Item': 'The item, in its quality colour. Click to open it on auctionhouse.fyi',
+  'Item': 'The item, in its quality colour',
   'Qty': 'Units (or crafts) this row is about',
   'Each': 'Per unit: the price you pay, or post at',
   'Total': 'Each × quantity',
