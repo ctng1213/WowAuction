@@ -767,11 +767,11 @@ const LIVE = {
     lede: 'AH items worth buying to disenchant (SPEC §3.4A). <b>Always shown, as research</b>, even when none of your characters can disenchant: a notice then says so, and the rows stay out of the funded plan (Portfolio) until one can. Chance (with its confidence dot) and the market activity columns describe the <b>mats</b>, since they\'re what you sell. A "—" means the data can\'t support a number; it is never a guess and never 0. In every table, the <b>dot after a chance is its confidence</b> (<span class="dot h"></span>≥ 75% · <span class="dot m"></span>≥ 45% · <span class="dot l"></span>below); hover a chance for the exact %.',
     // Research only (D71): the engine's notice when no character has Enchanting; the rows are the same either way.
     notice: d => d.notice ? `<div class="alert info" style="margin:0;border-radius:0;border-width:0 0 1px 4px"><span class="grow"><b>${esc(d.notice.title)}:</b> ${esc(d.notice.text)}</span></div>` : '',
-    cols: [['Item', 0, null], ['ilvl', 1, 'ilvl'], ['Buy', 1, 'buy'], ['Expected mats', 0, null], ['EV', 1, 'ev'], ['Profit', 1, 'profit'],
-           ...MARKET_COLS, ['Risk', 1, 'risk'], ['Price age', 1, 'price_age']],
-    row: r => `<tr><td>${item(r.item, r.quality)}</td><td class="num">${esc(r.ilvl)}</td><td class="num">${dash(r.buy)}</td>` +
-              `<td class="muted">${esc(r.mats)}</td><td class="num">${dash(r.ev)}</td>${profitCell(r)}${marketCells(r)}${riskCell(r)}` +
-              `<td class="num">${dash(r.price_age)}</td></tr>`,
+    cols: [['Item', 0, null], ['Market Price', 1, 'buy'], ['Expected Profit', 1, 'profit'], ['Expected Value', 1, 'ev'], ['Expected mats', 0, null],
+           ...MARKET_COLS, ['Risk', 1, 'risk'], ['Price age', 1, 'price_age'], ['ilvl', 1, 'ilvl']],
+    row: r => `<tr><td>${item(r.item, r.quality)}</td><td class="num">${dash(r.buy)}</td>${profitCell(r)}<td class="num">${dash(r.ev)}</td>` +
+              `<td class="muted">${esc(r.mats)}</td>${marketCells(r)}${riskCell(r)}` +
+              `<td class="num">${dash(r.price_age)}</td><td class="num">${esc(r.ilvl)}</td></tr>`,
     filters: [
       { id: 'search', label: null, kind: 'search', placeholder: 'Search items…', test: (r, v) => !v || String(r.item).toLowerCase().includes(v.toLowerCase()) },
       // Thresholds are copper constants compared with the row's engine-made sort.profit (no arithmetic).

@@ -253,11 +253,11 @@ const HELP = {
   'Record (30 d)': 'Your own posts of this item over 30 days, and how the plan adjusted',
   'Owned': 'Units you hold, on which character, and what you paid',
   'ilvl': 'Item level: sets the disenchant results',
-  'Buy': 'Cheapest buyout on the AH now',
+  'Market Price': 'Cheapest buyout on the AH now',
   'Expected mats': 'Average disenchant results for this quality and item level',
-  'EV': 'Expected value of the mats: average results × their sell value',
-  'Profit': 'EV − buy price, after fees',
-  'Price age': 'How long ago the buy price was seen. Older prices are less likely to still be there',
+  'Expected Value': 'Expected value of the mats: average results × their sell value',
+  'Expected Profit': 'Expected Value − Market Price, after fees',
+  'Price age': 'How long ago the market price was seen. Older prices are less likely to still be there',
   'Product': 'What the recipe makes',
   'Recipe known by': 'The character who knows it, and their skill',
   'Source': 'Where the mats come from: Owned, AH, Mixed, + crafted (another character makes a reagent first)',
@@ -975,7 +975,7 @@ const PAGES = {
     <h1>Disenchant</h1><p class="lede">AH items worth buying to disenchant (SPEC §3.4A). <b>Always shown, as research</b>, even when none of your characters can disenchant: a notice then says so, and the rows stay out of the funded plan (Portfolio) until one can. Here Amaya has Enchanting 142, so the notice below is an example state. Chance (with its confidence dot) and the market activity columns describe the <b>mats</b>, since they're what you sell.</p>
     <div class="card">${filters('<span class="select">Min profit: 2s ▾</span><span class="select">Quality: Uncommon+ ▾</span>')}
     <div class="alert info" style="margin:0;border-radius:0;border-width:0 0 1px 4px"><span class="grow"><b>Research only:</b> no character has Enchanting yet. These rows enter the funded plan once one does.</span><span class="muted" style="font-size:12px">example state</span></div>
-    ${table([['Item'], ['ilvl', 1], ['Buy', 1], ['Expected mats'], ['EV', 1], ['Profit', 1], ...MARKET, ['Risk', 1], ['Price age', 1]], [
+    ${table([['Item'], ['Market Price', 1], ['Expected Profit', 1], ['Expected Value', 1], ['Expected mats'], ...MARKET, ['Risk', 1], ['Price age', 1], ['ilvl', 1]], [
       deRow('Ridge Cleaver of the Bear', 29, 1500, '1.2 Lesser Astral Essence · 0.6 Soul Dust', 2310, 810, 'm', '2 h', 88),
       deRow('Scouting Gloves of the Monkey', 25, 800, '2.5 Strange Dust (75%) · Lesser Magic (20%)', 1425, 625, 'm', '2 h', 100),
       deRow('Bandit Cinch', 18, 300, '1.6 Strange Dust', 912, 612, 'h', '20 min', 100),
@@ -1253,7 +1253,7 @@ function ahRow(n, q, who, qty, each, costEach, how, deposit, left, position, P) 
   return `<tr><td>${item(n, q)}</td><td>${who}</td><td class="num">${qty}</td><td class="num">${money(each)}</td><td class="num">${money(each * qty)}</td><td class="num">${paid(costEach)}</td><td class="num">${money(costEach * qty)}<span class="sub">${how}</span></td><td class="num">${money(deposit)}</td><td class="num">${net(profit)}</td><td>${left}</td><td>${position}</td>${market(n, P)}</tr>`;
 }
 function deRow(n, ilvl, buy, mats, ev, profit, c, age, P) {
-  return `<tr><td>${item(n, 2)}</td><td class="num">${ilvl}</td><td class="num">${money(buy)}</td><td class="muted">${mats}</td><td class="num">${money(ev)}</td><td class="num">${net(profit)}</td>${market(n, P)}<td class="num">${risk(buy)}</td><td class="num ${age.includes('d') ? 'amber' : ''}">${age}</td></tr>`;
+  return `<tr><td>${item(n, 2)}</td><td class="num">${money(buy)}</td><td class="num">${net(profit)}</td><td class="num">${money(ev)}</td><td class="muted">${mats}</td>${market(n, P)}<td class="num">${risk(buy)}</td><td class="num ${age.includes('d') ? 'amber' : ''}">${age}</td><td class="num">${ilvl}</td></tr>`;
 }
 function crRow(n, q, who, src, crafts, matsEach, value, profit, P, cd, note) {
   const matsTotal = matsEach === null ? null : matsEach * crafts;
