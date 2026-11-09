@@ -20,6 +20,7 @@ from ahsync.engine.plan import TREND_CLAMP_PCT, Lot, PlanAction, PlanWindow, Sel
 from ahsync.engine.prices import MIN_HOURLY_CLOSES
 from ahsync.engine.sell_record import Record, ResolvedPost, sell_record
 from ahsync.engine.views import round_half_up
+from ahsync.engine.volume import BAND_HOURS
 from ahsync.engine.week import WeekInputs
 from ahsync.history.reads import ItemInfo
 from ahsync.intel.contract import ItemIntel, price_level, supply_level
@@ -98,7 +99,7 @@ def sell_records(db: Database, char_ids: list[str], market: str, now_ms: int, cf
 
 
 def sell_facts(i: ItemIntel, info: ItemInfo | None, de: tuple[float, str] | None,
-               record: Record | None = None) -> SellFacts:
+               record: Record | None = None, own: tuple[tuple[int, int | None], ...] = ()) -> SellFacts:
     """What the plan knows about one item, from its intelligence (SPEC §3.4C).
 
     Args:
@@ -106,19 +107,50 @@ def sell_facts(i: ItemIntel, info: ItemInfo | None, de: tuple[float, str] | None
         info: Its metadata (vendor price, class), or None.
         de: (EV per unit, enchanter) when someone can disenchant it.
         record: Your sell record of it (SPEC §3.3.3), or None.
+        own: Your auctions of it listed now, (units, end ms or None), as own_listed returns them (R31).
 
     Returns:
-        The SellFacts; cost basis 0 until tracking records it (M6b).
+        The SellFacts; cost basis 0 until tracking records it (M6b). Others' supply is the listed supply less your
+        own units (a book names no seller, so it counts yours), never below 0; the 30-day median, when nothing is
+        listed now, is taken as it is.
     """
+    supply = supply_level(i)                                                                # V23
+    if supply is not None and i.units_on_ah is not None:      # R31: a listed book counts yours; a median doesn't
+        supply = max(0, supply - sum(units for units, _ in own))
     return SellFacts(
         i.key, price_level(i), i.trend7, i.post_price, i.sold_per_day, i.listed_per_day, i.ref_stack,
         _pattern(i.how, i.how_weeks, FLAT), _pattern(i.sales_how, i.sales_weeks, FLAT),
         tuple(PlanWindow(w.start_slot, w.hours, w.best_slot, w.weeks) for w in i.sell_windows), i.book or None, i.cur,
         i.cur_qty, (info.vendor_sell if info else None) or 0, de[0] if de else None, de[1] if de else None, 0.0,
-        supply_level(i), _pattern(i.supply_how, i.supply_weeks, ()),                        # V23
+        supply, _pattern(i.supply_how, i.supply_weeks, ()),
         bool(info and info.item_class in GEAR_CLASSES), i.conf, record, i.med7, i.p90_30, i.p10_30,
         tuple(PlanWindow(w.start_slot, w.hours, w.best_slot, w.weeks) for w in i.buy_windows), i.closes_30d,
-        i.undercut_share, bool(i.commodity))
+        i.undercut_share, bool(i.commodity), own)
+
+
+def own_listed(state: StateReader, char_ids: list[str],
+               now_ms: int | None) -> dict[int, tuple[tuple[int, int | None], ...]]:
+    """Your auctions listed now, per item, across your characters (SPEC §3.4 Liquidity, R31).
+
+    Args:
+        state: Character state (the addon's last view of your auctions).
+        char_ids: Character ids.
+        now_ms: Now; an auction that ended before it is left out. None keeps every one.
+
+    Returns:
+        Item key -> ((units, end ms or None when unknown), ...), sorted. An auction without an end time ends at the
+        latest when its time-left band, counted from the character's last read of its auctions, runs out; without
+        that read too, its end stays unknown.
+    """
+    seen = state.auctions_read_ms(char_ids)
+    out: dict[int, list[tuple[int, int | None]]] = {}
+    for char_id, key, _, stack, band, count, _, end_ms in state.own_auctions(char_ids):
+        read_ms = seen.get(char_id)
+        if end_ms is None and read_ms is not None:
+            end_ms = read_ms + int(BAND_HOURS.get(band, BAND_HOURS[4])[1] * HOUR_MS)
+        if now_ms is None or end_ms is None or end_ms > now_ms:
+            out.setdefault(key, []).append((stack * count, end_ms))
+    return {key: tuple(sorted(rows, key=lambda r: (r[0], r[1] is None, r[1] or 0))) for key, rows in out.items()}
 
 
 def window_candidate(i: ItemIntel, min_flip_margin: float, max_trend_total: float = 0.15) -> bool:
@@ -214,7 +246,8 @@ def flip_offers(stats: dict[int, ItemIntel], items: dict[int, ItemInfo], vendor_
 
 
 def week_inputs(state: StateReader, characters: list[tuple[str, int]], stats: dict[int, ItemIntel],
-                items: dict[int, ItemInfo], cfg: Config, records: dict[int, Record] | None = None) -> WeekInputs:
+                items: dict[int, ItemInfo], cfg: Config, records: dict[int, Record] | None = None,
+                now_ms: int | None = None) -> WeekInputs:
     """The weekly plan's inputs for one market (SPEC §3.4C, §3.4D.3).
 
     Facts are built only for items the plan can use: your stock, your recipes' products and mats, flip
@@ -227,6 +260,7 @@ def week_inputs(state: StateReader, characters: list[tuple[str, int]], stats: di
         items: Item metadata.
         cfg: Config (margin, trend clamp).
         records: Item key -> your sell record (SPEC §3.3.3); None for none.
+        now_ms: Now: your auctions that ended before it don't count against a cap (R31); None counts them all.
 
     Returns:
         WeekInputs (gold is the portfolio's accounting, SPEC §3.4D.1).
@@ -243,8 +277,9 @@ def week_inputs(state: StateReader, characters: list[tuple[str, int]], stats: di
     wanted = {lot.key for lot in lots} | {r.product for r in recipes} | {k for r in recipes for k, _ in r.reagents}
     wanted |= {k for k, i in stats.items() if flip_candidate(i, cfg.min_flip_margin, cfg.max_trend_total)}
     wanted |= DE_MATS
-    facts = {k: sell_facts(stats[k], items.get(k), de_offer(items.get(k), stats, enchanters), (records or {}).get(k))
-             for k in sorted(wanted) if k in stats}
+    mine = own_listed(state, char_ids, now_ms)                                                  # R31
+    facts = {k: sell_facts(stats[k], items.get(k), de_offer(items.get(k), stats, enchanters), (records or {}).get(k),
+                           mine.get(k, ())) for k in sorted(wanted) if k in stats}
     world = CraftWorld(recipes, by_product, craft_market(state, char_ids, stats, items),
                        {k: f for k, f in facts.items() if k in {r.product for r in recipes}})
     rules = state.item_rules()

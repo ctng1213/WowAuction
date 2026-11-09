@@ -99,7 +99,7 @@ def cloths() -> tuple[Item, ...]:
 
 
 def plan_run(world: World, folder: Path, characters: tuple[CharacterSpec, ...] = TRADER,
-             hourly: bool = False) -> Trader:
+             hourly: bool = False, login_hours: tuple[int, ...] = LOGIN_HOURS) -> Trader:
     """A world traded by the plan with the SD rows' logins; its database closed afterwards.
 
     Args:
@@ -108,11 +108,12 @@ def plan_run(world: World, folder: Path, characters: tuple[CharacterSpec, ...] =
         characters: Our characters.
         hourly: Run the cloud's hourly mode too, so a login plans with the newest hourly document (a row about
             reacting within hours needs it; it triples the run's time).
+        login_hours: The UTC hours our characters log in.
 
     Returns:
         The trader, its session's logins kept.
     """
-    trader = Trader(world, characters, folder / "ahsync", login_hours=LOGIN_HOURS)
+    trader = Trader(world, characters, folder / "ahsync", login_hours=login_hours)
     try:
         simulate(world, folder / "run", RunSettings(hourly=hourly), agent=trader)
     finally:
@@ -201,6 +202,19 @@ def silk_posts(login: Login) -> list[tuple[int, int, bool]]:
             for a in login.actions if a["key"] == SILK and a["kind"] == "post"]
 
 
+def silk_actions(login: Login) -> list[tuple[str, int, int, bool]]:
+    """Silk's planned buys and posts at a login, sorted.
+
+    Args:
+        login: The login.
+
+    Returns:
+        (kind, units, unit price, due now) per action.
+    """
+    return sorted((a["kind"], a["qty"], a["price"], (a["window_start_ms"] or a["slot_ms"]) <= login.at_ms + HOUR_MS)
+                  for a in login.actions if a["key"] == SILK and a["kind"] in ("buy", "post"))
+
+
 def sd28(folder: Path, seed: int = 1, days: int = DIP_DAY + 3, dip_day: int = DIP_DAY, hourly: bool = True
          ) -> list[Line]:
     """SD28: a held flip's price drops 20% at noon and stays down; the plan against holding to its target.
@@ -239,28 +253,43 @@ def sd28(folder: Path, seed: int = 1, days: int = DIP_DAY + 3, dip_day: int = DI
                  "reported", True)]
 
 
+BLIP_PRICE = 131                        # SD29: 80% of Silk's 164 c
+
+
 def sd29(folder: Path, seed: int = 1, days: int = DIP_DAY + 2, dip_day: int = DIP_DAY, hourly: bool = True
          ) -> list[Line]:
     """SD29: SD28's dip seen by one snapshot only: 30 auctions of 20 at 80% posted at noon, cancelled at 12:50.
+
+    A login at 13:00 plans with the document of the snapshot that saw it (FM5 is what stands between them). Other
+    sellers copy the cheapest price they see, so the dip leaves real cheaper auctions behind (plan §1.40): the
+    evening login's undercut of them is reported, the confirmed-floor milestone's evidence, not marked.
 
     Args:
         folder: An empty folder.
         seed: The world's seed.
         days: The world's length.
         dip_day: The day of the dip.
-        hourly: Plan with the hourly documents.
+        hourly: Plan with the hourly documents (the 13:00 login sees the dip only in an hourly one).
 
     Returns:
-        The held Silk's planned posts at the first login after the dip, against the same login without it.
+        The 13:00 login's Silk buys and posts with the dip against the same login without it (unchanged is met;
+        the dip moves the plan through its price, or through the 600 units it adds to supply), and the held Silk's
+        posts at the evening login with the dip and without it.
     """
     dip = START_MS + dip_day * DAY_MS + 12 * HOUR_MS
-    blip = tuple(Planted(dip + n * 1000, SILK, 20, 131, 24, dip + 50 * 60_000) for n in range(30))
-    plain = plan_run(held_silk(seed, days, dip_day), folder / "plain", hourly=hourly)
-    dipped = plan_run(held_silk(seed, days, dip_day, extra=blip), folder / "dip", hourly=hourly)
-    first = [next((l for l in t.session.logins if l.at_ms > dip), None) for t in (plain, dipped)]
+    blip = tuple(Planted(dip + n * 1000, SILK, 20, BLIP_PRICE, 24, dip + 50 * 60_000) for n in range(30))
+    hours = (10, 13, 20)
+    plain = plan_run(held_silk(seed, days, dip_day), folder / "plain", hourly=hourly, login_hours=hours)
+    dipped = plan_run(held_silk(seed, days, dip_day, extra=blip), folder / "dip", hourly=hourly, login_hours=hours)
+    seen = [next((l for l in t.session.logins if l.at_ms > dip), None) for t in (plain, dipped)]
+    calm, moved = ([] if l is None else silk_actions(l) for l in seen)
+    evening = dip + 8 * HOUR_MS
+    first = [next((l for l in t.session.logins if l.at_ms >= evening), None) for t in (plain, dipped)]
     without, with_dip = (sorted(silk_posts(l)) if l is not None else [] for l in first)
-    return [Line("SD29", "the held Silk's posts at the next login: with the dip; without",
-                 f"{with_dip}; {without}", "unchanged", with_dip == without)]
+    return [Line("SD29", "the 13:00 login's Silk buys and posts (units, c, now): with the dip; without",
+                 f"{moved}; {calm}", "unchanged", None not in seen and moved == calm),
+            Line("SD29", "the held Silk's posts at the evening login: with the dip; without (others' copies of it)",
+                 f"{with_dip}; {without}", "reported", True)]
 
 
 MAGEWEAVE = 4338                        # SM17/SD15's thin item, of which we hold a lot
@@ -311,8 +340,9 @@ def sd15(folder: Path, seed: int = 1, days: int = 14) -> list[Line]:
 
     Returns:
         SM17: the engine's sold/day against the truth's, and our part of it (fails by design: the API names no
-        seller). SD15: the snapshots where our listings broke the liquidity rule (none), and our sale price
-        against the market's.
+        seller). SD15: the snapshots where our listings broke the liquidity rule (none); our pace, so that holding
+        everything can't pass: our sales the last 7 days at least the share of listings the rule allows us,
+        share ÷ (1 + share) (a third at 0.5); and our sale price against the market's.
     """
     mage = commodity(MAGEWEAVE, "Mageweave Cloth", 2000, 60, 2, cancel_share=0.06, max_units=1, stacks=((5, 1.0),),
                      buyer_level=1.3)
@@ -320,7 +350,7 @@ def sd15(folder: Path, seed: int = 1, days: int = 14) -> list[Line]:
     trader = Trader(world, (CharacterSpec("Amaya", 100 * GOLD, bags=((MAGEWEAVE, 300),)),), folder / "ahsync",
                     login_hours=LOGIN_HOURS)
     try:
-        run = simulate(world, folder / "run", agent=trader)
+        run = simulate(world, folder / "run", RunSettings(hourly=True), agent=trader)   # production's cadence
     finally:
         trader.close()
     now, i = run.snapshots[-1], run.documents[-1].items[MAGEWEAVE]
@@ -331,10 +361,13 @@ def sd15(folder: Path, seed: int = 1, days: int = 14) -> list[Line]:
     others = [e for e in week if not seller[e.auction].startswith(OUR_PREFIX)]
     limit = trader.session.cfg.max_supply_share
     over, listed = over_liquidity(run.truth, MAGEWEAVE, run.snapshots, OUR_PREFIX, limit)
+    allowed = limit / (1 + limit)                     # ours ≤ share × others' is this share of all listings
     return [Line("SM17", "sold/day: the engine; the truth, of it ours", f"{i.sold_per_day or 0:.2f}; {sold:.2f}, {mine:.2f}",
                  "reported (no seller in the API)", True),
             Line("SD15", f"snapshots where our listed units broke max(1 stack, {limit} × others'), of those listing ours",
                  f"{over} of {listed}", "0", over == 0),
+            Line("SD15", "our share of the units sold, the last 7 days", f"{mine / sold:.0%}" if sold else "—",
+                 f"≥ {allowed:.0%}", bool(sold) and mine / sold >= allowed),
             Line("SD15", "mean sale price (c): ours; others'; units ours held at the end",
                  f"{_mean_price(ours)}; {_mean_price(others)}; {trader.held('Amaya-Simulated', MAGEWEAVE)}",
                  "reported", True)]

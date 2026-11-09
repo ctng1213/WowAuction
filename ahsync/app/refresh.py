@@ -53,8 +53,8 @@ class RefreshResult:
 
 
 def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], intel_items: dict, items: dict,
-                now_ms: int, offset_ms: int, cfg: Config, built_ms: int, coverage30: int | None = None
-                ) -> tuple[dict, list, int | None]:
+                now_ms: int, offset_ms: int, cfg: Config, built_ms: int, coverage30: int | None = None,
+                prices_ms: int | None = None) -> tuple[dict, list, int | None]:
     """Plan the market's characters, stage the plan, its alternatives and what the addon files carry of it (M11), and
     build its Portfolio (M13), Today, Week, Flip and Inventory pages (SPEC §3.4C, §3.4D, §3.5).
 
@@ -69,6 +69,7 @@ def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], in
         cfg: Config.
         built_ms: The intelligence's built_ms.
         coverage30: The market's observed hours of the last 720 (the item detail's market lines, D105).
+        prices_ms: A cloud document's prices time (price ages, BZ50); None for a desktop-built one.
 
     Returns:
         (page name -> payload, for the caller to stage; the funded plan's actions (engine.plan.PlanAction), for the
@@ -83,7 +84,7 @@ def _stage_plan(db: Database, market: str, characters: list[tuple[str, int]], in
     db.store_sell_records(market, records)                                           # for the status pass (M8)
     positions = current(db, now_ms)                                                  # SPEC §3.4D.9, M14
     plan = plan_portfolio(db, characters, intel_items, items, now_ms, cfg, records, built_ms,
-                          committed([p for p in positions if p.char_id in char_ids]))     # D.1: open positions
+                          committed([p for p in positions if p.char_id in char_ids]), prices_ms)   # D.1, BZ50
     actions = plan.actions if plan else []
     rows = plan_rows(actions, market, now_ms, plan.action_cands if plan else ())
     db.stage_plan(rows)
@@ -174,11 +175,11 @@ def stage_document(db: Database, intel: MarketIntelligence, now_ms: int, offset_
         db.clear_status(f"cloud_settings:{intel.market}")
     scanned = scanned_intel(db, intel, planning)                                            # IU6
     _stage_recommendations(db, intel.market, scanned.items, now_ms, offset_ms, planning, ages_reference_ms(scanned),
-                           coverage30(db, intel, now_ms))
+                           coverage30(db, intel, now_ms), scanned.ages_at_ms)
 
 
 def _stage_recommendations(db: Database, market: str, stats: dict, now_ms: int, offset_ms: int, cfg: Config,
-                           built_ms: int, coverage30: int | None = None) -> None:
+                           built_ms: int, coverage30: int | None = None, prices_ms: int | None = None) -> None:
     """Stage a market's plan and every page built from its intelligence and character state (SPEC §3.5).
 
     Args:
@@ -190,13 +191,14 @@ def _stage_recommendations(db: Database, market: str, stats: dict, now_ms: int, 
         cfg: Config.
         built_ms: The intelligence's built_ms (price ages, SPEC §3.4D.6).
         coverage30: The market's observed hours of the last 720 (the item detail's market lines, D105).
+        prices_ms: A cloud document's prices time, ages_at_ms (price ages, BZ50); None for a desktop-built one.
     """
     items = db.items()
     characters = db.characters_in(market)
     char_ids = [c for c, _ in characters]
     total_gold = sum(g for _, g in characters)
     pages, planned, capacity = _stage_plan(db, market, characters, stats, items, now_ms, offset_ms, cfg, built_ms,
-                                           coverage30)
+                                           coverage30, prices_ms)
     pages["disenchant"] = disenchant_page(db, char_ids, stats, items, total_gold, now_ms, cfg, capacity)   # D71
     pages["craft"] = craft_page(db, char_ids, stats, items, total_gold, now_ms, cfg, planned, offset_ms,
                                 capacity)                                                      # D45, D56

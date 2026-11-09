@@ -79,8 +79,9 @@ def main_mat_unknown(outcomes: tuple, values: list[float], stats: dict[int, Item
     return items[main].name if main in items else str(main)
 
 
-def price_ages(stats: dict[int, ItemIntel], now_ms: int, built_ms: int) -> dict[int, int | None]:
-    """How old each item's newest price is now (SPEC §3.4D.6 "Forecast too stale").
+def price_ages(stats: dict[int, ItemIntel], now_ms: int, built_ms: int,
+               prices_ms: int | None = None) -> dict[int, int | None]:
+    """How old each item's newest price is now (SPEC §3.4D.6 "Forecast too stale", BZ50).
 
     Args:
         stats: Item key -> intelligence (cur_age_ms counts back from the document's reference time; a scan after
@@ -88,15 +89,21 @@ def price_ages(stats: dict[int, ItemIntel], now_ms: int, built_ms: int) -> dict[
         now_ms: Now.
         built_ms: The document's reference time (intel.contract.ages_reference_ms: built_ms for a desktop-built
             document, the prices' time for a cloud one).
+        prices_ms: A cloud document's prices time (ages_at_ms): its newest snapshot saw the whole auction house, so
+            an item it didn't list is known to be sold out then, not unseen; None for a desktop-built document.
 
     Returns:
-        Item key -> age ms now (intel.contract.age_now_ms); None without a price.
+        Item key -> age ms now (intel.contract.age_now_ms), never older than now − prices_ms; None without a price.
     """
-    return {key: age_now_ms(i.cur_age_ms, now_ms, built_ms) for key, i in stats.items()}
+    ages = {key: age_now_ms(i.cur_age_ms, now_ms, built_ms) for key, i in stats.items()}
+    if prices_ms is None:
+        return ages
+    return {key: None if age is None else min(age, max(0, now_ms - prices_ms)) for key, age in ages.items()}
 
 
 def gen_inputs(state: StateReader, characters: list[tuple[str, int]], stats: dict[int, ItemIntel],
-               items: dict[int, ItemInfo], now_ms: int, built_ms: int, cfg: Config) -> GenInputs:
+               items: dict[int, ItemInfo], now_ms: int, built_ms: int, cfg: Config,
+               prices_ms: int | None = None) -> GenInputs:
     """Generation's inputs beyond the plan's world (SPEC §3.4D.3).
 
     Args:
@@ -107,6 +114,7 @@ def gen_inputs(state: StateReader, characters: list[tuple[str, int]], stats: dic
         now_ms: Now.
         built_ms: The intelligence's built_ms.
         cfg: Config ([budgets]).
+        prices_ms: A cloud document's prices time (price_ages); None for a desktop-built one.
 
     Returns:
         GenInputs: skills in Enchanting and every known recipe's profession, disenchant facts, price ages,
@@ -119,12 +127,13 @@ def gen_inputs(state: StateReader, characters: list[tuple[str, int]], stats: dic
     cost = {k: paid / bought for k, (bought, paid) in state.cost_basis().items() if bought > 0}
     return GenInputs(tuple(char_ids), {c: cfg.budgets.get(c, g) for c, g in characters}, skills,
                      {r.spell: (r.profession, 0) for r in recipes}, de_infos(stats, items),
-                     price_ages(stats, now_ms, built_ms), {k: i.name for k, i in items.items()}, cost, built_ms)
+                     price_ages(stats, now_ms, built_ms, prices_ms), {k: i.name for k, i in items.items()}, cost, built_ms)
 
 
 def plan_portfolio(state: StateReader, characters: list[tuple[str, int]], stats: dict[int, ItemIntel],
                    items: dict[int, ItemInfo], now_ms: int, cfg: Config, records: dict[int, Record] | None = None,
-                   built_ms: int | None = None, committed: Sequence[OpenPosition] = ()) -> PortfolioPlan | None:
+                   built_ms: int | None = None, committed: Sequence[OpenPosition] = (),
+                   prices_ms: int | None = None) -> PortfolioPlan | None:
     """The funded plan for one market's characters (SPEC §3.4D).
 
     Args:
@@ -137,6 +146,7 @@ def plan_portfolio(state: StateReader, characters: list[tuple[str, int]], stats:
         records: Item key -> your sell record (SPEC §3.3.3); None for none.
         built_ms: The intelligence's built_ms; now when None.
         committed: The committed capital: the open positions' cost left (engine.positions.committed, §3.4D.1).
+        prices_ms: A cloud document's prices time (price_ages, BZ50); None for a desktop-built one.
 
     Returns:
         The PortfolioPlan; None without characters.
@@ -146,8 +156,8 @@ def plan_portfolio(state: StateReader, characters: list[tuple[str, int]], stats:
     """
     if not characters:
         return None
-    w = week_inputs(state, characters, stats, items, cfg, records)
-    gi = gen_inputs(state, characters, stats, items, now_ms, now_ms if built_ms is None else built_ms, cfg)
+    w = week_inputs(state, characters, stats, items, cfg, records, now_ms)
+    gi = gen_inputs(state, characters, stats, items, now_ms, now_ms if built_ms is None else built_ms, cfg, prices_ms)
     chars = [CharacterGold(c, g, cfg.budgets.get(c)) for c, g in characters]
     run = Run(now_ms, plan_settings(cfg), flip_settings(cfg), portfolio_settings(cfg), cfg.max_craft_depth)
     return portfolio_plan(w, gi, chars, committed, run)

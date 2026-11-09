@@ -47,7 +47,7 @@ def test_SM17_our_part_of_a_thin_items_sold_per_day_is_reported(tmp_path):
 
 def test_SD15_our_posts_as_a_large_share_of_supply_are_held_to_the_liquidity_rule(tmp_path):
     lines = sd15(tmp_path, days=3)
-    assert complete([l for l in lines if l.row == "SD15"], {"SD15"}) and len(lines) == 3
+    assert complete([l for l in lines if l.row == "SD15"], {"SD15"}) and len(lines) == 4
 
 
 def test_our_listings_are_checked_against_the_liquidity_rule_at_each_snapshot():

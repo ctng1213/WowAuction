@@ -148,6 +148,16 @@ class StateReader(Protocol):
             its post wasn't captured, soonest end ms or None), by character, key, price, stack, band.
         """
 
+    def auctions_read_ms(self, char_ids: list[str]) -> dict[str, int]:
+        """When the addon last read each character's own auctions (SPEC §2.2.1; R31 bounds an unknown end by it).
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            Character id -> capture time, UTC ms; characters never read are left out.
+        """
+
     def cost_basis(self) -> dict[int, tuple[int, int]]:
         """What you paid for items, account-wide.
 
@@ -471,6 +481,21 @@ class StateReads:
             f" AND p.price = a.price AND p.outcome IS NULL ORDER BY p.at DESC LIMIT 1), a.end_ms "
             f"FROM own_auctions a WHERE a.char_id IN ({marks}) ORDER BY a.char_id, a.key, a.price, a.stack, a.band",
             tuple(char_ids))]
+
+    def auctions_read_ms(self, char_ids: list[str]) -> dict[str, int]:
+        """When the addon last read each character's own auctions (SPEC §2.2.1; R31 bounds an unknown end by it).
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            Character id -> capture time, UTC ms; characters never read are left out.
+        """
+        if not char_ids:
+            return {}
+        marks = ",".join("?" * len(char_ids))
+        return {c: at for c, at in self.conn.execute(
+            f"SELECT char_id, at FROM snapshots WHERE char_id IN ({marks}) AND location = 'auctions'", tuple(char_ids))}
 
     def characters(self) -> list[tuple[str, str, str, str | None, int | None]]:
         """Every character, on any market or none (SPEC §3.5 Status).

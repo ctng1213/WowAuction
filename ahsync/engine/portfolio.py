@@ -84,7 +84,8 @@ class CapacityClaim:
     """Market capacity a candidate takes in the shared ledger (SPEC §3.4 market capacity, PL4)."""
 
     key: int                           # item key
-    window_ms: int | None              # the window's start ms; None for posting now (engine.plan.window_id)
+    window_ms: int | None              # its capacity group's key (engine.plan.window_id, R32): the first member's
+                                       # window start; None when the group holds posting now
     units: int
 
 
