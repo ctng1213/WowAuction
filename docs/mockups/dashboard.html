@@ -178,7 +178,7 @@ function money(c, signed) {
   return sign + parts.join(' ');
 }
 const net = c => c === null ? money(null) : `<span class="${c < 0 ? 'neg' : 'pos'}">${money(c, true)}</span>`;
-const item = (n, q) => `<a class="q${q}" href="https://auctionhouse.fyi/" title="Open on auctionhouse.fyi">${n}</a>`;
+const item = (n, q) => `<span class="q${q}">${n}</span>`;   // plain, no link (D107)
 const act = a => `<span class="act ${a}">${a === 'de' ? 'DE' : a.toUpperCase()}</span>`;
 // Confidence % (SPEC §3.3.5); letters stand in for this mockup's example values. Dot: ≥ 75 high, ≥ 45 medium, else low.
 const conf = c => {
@@ -238,7 +238,7 @@ const WEEK_CHANCE = {
 // Header tooltips (SPEC §3.5): one text per column name, so a column reads the same on every page.
 const HELP = {
   'Action': 'What to do: BUY, POST, DE (disenchant), CRAFT, VENDOR, MAIL or HOLD',
-  'Item': 'The item, in its quality colour. Click to open it on auctionhouse.fyi',
+  'Item': 'The item, in its quality colour',
   'Qty': 'Units (or crafts) this row is about',
   'Each': 'Per unit: the price you pay, or post at',
   'Total': 'Each × quantity',
@@ -253,11 +253,11 @@ const HELP = {
   'Record (30 d)': 'Your own posts of this item over 30 days, and how the plan adjusted',
   'Owned': 'Units you hold, on which character, and what you paid',
   'ilvl': 'Item level: sets the disenchant results',
-  'Buy': 'Cheapest buyout on the AH now',
+  'Market Price': 'Cheapest buyout on the AH now',
   'Expected mats': 'Average disenchant results for this quality and item level',
-  'EV': 'Expected value of the mats: average results × their sell value',
-  'Profit': 'EV − buy price, after fees',
-  'Price age': 'How long ago the buy price was seen. Older prices are less likely to still be there',
+  'Expected Value': 'Expected value of the mats: average results × their sell value',
+  'Expected Profit': 'Expected Value − Market Price, after fees',
+  'Price age': 'How long ago the market price was seen. Older prices are less likely to still be there',
   'Product': 'What the recipe makes',
   'Recipe known by': 'The character who knows it, and their skill',
   'Source': 'Where the mats come from: Owned, AH, Mixed, + crafted (another character makes a reagent first)',
@@ -632,7 +632,9 @@ const GA_HISTORY_COLS = ['Median 30d', 'Deviation', 'Sell window', 'Sell window 
 const gaDayOneTable = rows => gaTable(GA_COLS, rows, 3).replace(/<th class="([^"]*)" title="[^"]*">(Median 30d|Deviation|Sell window|Sell window price)<\/th>/g,
   (m, cls, t) => `<th class="${cls}" title="${gaHelpTitle(t)} · needs price history: &quot;—&quot; until weeks of data arrive">${t}</th>`);
 // Default sort: AH price, highest first; rows without a price last; ties by name.
-const gaSorted = list => [...list].sort((a, b) => (b.price ?? -1) - (a.price ?? -1) || a.n.localeCompare(b.n));
+// Default order: Net gold/hr under All characters, highest first; "—" last; ties by AH price, then name.
+const gaNetAll = it => { const r = gaRowRate(it, null); return r ? gaNetHr(it, r.rate, false) : null; };
+const gaSorted = list => [...list].sort((a, b) => (gaNetAll(b) ?? -Infinity) - (gaNetAll(a) ?? -Infinity) || (b.price ?? -1) - (a.price ?? -1) || a.n.localeCompare(b.n));
 const gaCheck = (label, on, extra) => `<label class="select${extra && extra.disabled ? ' muted' : ''}"${extra && extra.title ? ` title="${extra.title}"` : ''}><input type="checkbox"${on ? ' checked' : ''}${extra && extra.disabled ? ' disabled' : ''}> ${label}</label>`;
 // The one filter bar; who = null for All characters. search = the text in the search box.
 const gaFilters = (who, search) => `<div class="filters">${['Fishing', 'Herbalism', 'Mining', 'Skinning', 'Monster'].map(c => gaCheck(c, true)).join('')}
@@ -806,7 +808,7 @@ const GATHERING_PAGE = { count: GA_ITEMS.length, html: () => {
     <div class="card"><div class="card-h"><b>Farmable materials</b><span class="muted">${all.length} in the catalog · ${withRate} with a rate · desktop only: the addon only records loot</span></div>
     ${gaFilters(null)}
     ${gaTable(GA_COLS, all.map(it => gaRow(it, null, it.n === 'Copper Ore')), 3)}
-    <div class="foot"><span>${all.length} materials · sorted by AH Price, highest first; rows with "—" sort last</span><span class="muted">·</span><span class="amber">${nobody.length} no character can gather (amber Skill)</span><span class="muted">·</span><span class="muted">Character = whose rate: the highest among the characters who can gather it</span></div>
+    <div class="foot"><span>${all.length} materials · sorted by Net gold/hr, highest first, then AH Price; rows with "—" sort last</span><span class="muted">·</span><span class="amber">${nobody.length} no character can gather (amber Skill)</span><span class="muted">·</span><span class="muted">Character = whose rate: the highest among the characters who can gather it</span></div>
     <div class="foot note">Net gold/hr = items/hr × net per unit, where net per unit = post price − 5% AH cut − (1 − chance to sell) × deposit (24 h, refunded on a sale). Posts are priced at the current AH price. Gross gold/hr (items/hr × price) is on the detail below. ${stale ? `Prices are ${GA_PRICE_AGE_H} h old (amber over 24 h): every gold/hr uses them as they are.` : ''} Items the catalog doesn't know are never shown as farmable, even if you looted them; AHSync lists what you gathered that it couldn't place under Status.</div>
     ${gaDetail('Copper Ore')}</div>
 
@@ -975,7 +977,7 @@ const PAGES = {
     <h1>Disenchant</h1><p class="lede">AH items worth buying to disenchant (SPEC §3.4A). <b>Always shown, as research</b>, even when none of your characters can disenchant: a notice then says so, and the rows stay out of the funded plan (Portfolio) until one can. Here Amaya has Enchanting 142, so the notice below is an example state. Chance (with its confidence dot) and the market activity columns describe the <b>mats</b>, since they're what you sell.</p>
     <div class="card">${filters('<span class="select">Min profit: 2s ▾</span><span class="select">Quality: Uncommon+ ▾</span>')}
     <div class="alert info" style="margin:0;border-radius:0;border-width:0 0 1px 4px"><span class="grow"><b>Research only:</b> no character has Enchanting yet. These rows enter the funded plan once one does.</span><span class="muted" style="font-size:12px">example state</span></div>
-    ${table([['Item'], ['ilvl', 1], ['Buy', 1], ['Expected mats'], ['EV', 1], ['Profit', 1], ...MARKET, ['Risk', 1], ['Price age', 1]], [
+    ${table([['Item'], ['Market Price', 1], ['Expected Profit', 1], ['Expected Value', 1], ['Expected mats'], ...MARKET, ['Risk', 1], ['Price age', 1], ['ilvl', 1]], [
       deRow('Ridge Cleaver of the Bear', 29, 1500, '1.2 Lesser Astral Essence · 0.6 Soul Dust', 2310, 810, 'm', '2 h', 88),
       deRow('Scouting Gloves of the Monkey', 25, 800, '2.5 Strange Dust (75%) · Lesser Magic (20%)', 1425, 625, 'm', '2 h', 100),
       deRow('Bandit Cinch', 18, 300, '1.6 Strange Dust', 912, 612, 'h', '20 min', 100),
@@ -1253,7 +1255,7 @@ function ahRow(n, q, who, qty, each, costEach, how, deposit, left, position, P) 
   return `<tr><td>${item(n, q)}</td><td>${who}</td><td class="num">${qty}</td><td class="num">${money(each)}</td><td class="num">${money(each * qty)}</td><td class="num">${paid(costEach)}</td><td class="num">${money(costEach * qty)}<span class="sub">${how}</span></td><td class="num">${money(deposit)}</td><td class="num">${net(profit)}</td><td>${left}</td><td>${position}</td>${market(n, P)}</tr>`;
 }
 function deRow(n, ilvl, buy, mats, ev, profit, c, age, P) {
-  return `<tr><td>${item(n, 2)}</td><td class="num">${ilvl}</td><td class="num">${money(buy)}</td><td class="muted">${mats}</td><td class="num">${money(ev)}</td><td class="num">${net(profit)}</td>${market(n, P)}<td class="num">${risk(buy)}</td><td class="num ${age.includes('d') ? 'amber' : ''}">${age}</td></tr>`;
+  return `<tr><td>${item(n, 2)}</td><td class="num">${money(buy)}</td><td class="num">${net(profit)}</td><td class="num">${money(ev)}</td><td class="muted">${mats}</td>${market(n, P)}<td class="num">${risk(buy)}</td><td class="num ${age.includes('d') ? 'amber' : ''}">${age}</td><td class="num">${ilvl}</td></tr>`;
 }
 function crRow(n, q, who, src, crafts, matsEach, value, profit, P, cd, note) {
   const matsTotal = matsEach === null ? null : matsEach * crafts;

@@ -47,15 +47,17 @@ def filter_like_the_page(payload: dict, char: str = "", off: tuple[str, ...] = (
     return out
 
 
-def test_GA1_the_catalogs_16_rows_in_ah_price_order_and_nothing_else():
+def test_GA1_the_catalogs_16_rows_in_net_gold_per_hour_order_and_nothing_else():
     p = gathering_view(gw.world())
     view = gw.view_rows(p, "")
-    assert [(r["item"], r["ah_price"]) for r in view] == [
-        ("Silver Ore", "9s"), ("Briarthorn", "3s"), ("Tin Ore", "2s 75c"), ("Mageroyal", "2s 40c"),
-        ("Copper Ore", "2s 20c"), ("Medium Leather", "2s"), ("Light Leather", "95c"), ("Earthroot", "60c"),
-        ("Linen Cloth", "38c"), ("Wool Cloth", "30c"), ("Silverleaf", "24c"), ("Peacebloom", "18c"),
-        ("Small Egg", "12c"), ("Light Feather", "9c"), ("Raw Brilliant Smallfish", "8c"),
+    assert [(r["item"], r["net"]) for r in view][:7] == [
+        ("Copper Ore", "79s 14c"), ("Light Leather", "18s 73c"), ("Tin Ore", "10s 15c"), ("Earthroot", "6s 75c"),
+        ("Linen Cloth", "4s 97c"), ("Peacebloom", "4s 32c"), ("Silverleaf", "4s 24c")]
+    assert [(r["item"], r["ah_price"]) for r in view][7:] == [                    # no Net gold/hr: AH price order
+        ("Silver Ore", "9s"), ("Briarthorn", "3s"), ("Mageroyal", "2s 40c"), ("Medium Leather", "2s"),
+        ("Wool Cloth", "30c"), ("Small Egg", "12c"), ("Light Feather", "9c"), ("Raw Brilliant Smallfish", "8c"),
         ("Raw Longjaw Mud Snapper", "—")]
+    assert all(r["net"] == "—" for r in view[7:])
     r = rows(p)
     assert (r["Light Leather"]["category"], r["Light Leather"]["skill_text"], r["Light Leather"]["skill_sub"]) == \
         ("Skinning · Monster", "1", "or monster drop")
@@ -138,7 +140,7 @@ def test_GA10_filters_combine_categories_or_and_controls_and():
     assert filter_like_the_page(p, off=others, min_price=30, search="cloth") == ["Linen Cloth", "Wool Cloth"]
     assert filter_like_the_page(p, gw.BRUGAN, search="leather") == ["Light Leather"]
     assert filter_like_the_page(p, skill="75-150") == ["Silver Ore", "Medium Leather"]
-    assert filter_like_the_page(p, min_price=100) == ["Silver Ore", "Briarthorn", "Tin Ore", "Mageroyal", "Copper Ore",
+    assert filter_like_the_page(p, min_price=100) == ["Copper Ore", "Tin Ore", "Silver Ore", "Briarthorn", "Mageroyal",
                                                      "Medium Leather"]
     assert p["filters"]["min_price"] == [["", "Any"], ["100", "1s"], ["1000", "10s"], ["5000", "50s"],
                                          ["10000", "1g"], ["custom", "Custom…"]]
@@ -150,7 +152,7 @@ def test_GA11_by_char_holds_three_complete_views_with_their_footers():
     assert list(p["by_char"]) == ["", gw.AMAYA, gw.BRUGAN]
     assert all(r["eligible"] for r in gw.view_rows(p, "")) and len(gw.view_rows(p, "")) == 16
     brugan = p["by_char"][gw.BRUGAN]
-    assert [r["item"] for r in gw.view_rows(p, gw.BRUGAN) if r["eligible"]] == ["Tin Ore", "Copper Ore", "Light Leather",
+    assert [r["item"] for r in gw.view_rows(p, gw.BRUGAN) if r["eligible"]] == ["Copper Ore", "Light Leather", "Tin Ore",
                                                                   "Linen Cloth", "Wool Cloth", "Small Egg",
                                                                   "Light Feather"]
     assert brugan["foot"] == [["7 of 16 shown", ""], [
@@ -176,8 +178,12 @@ def test_GA11_by_char_holds_three_complete_views_with_their_footers():
 
 def test_GA11_each_row_is_sent_once_and_a_view_carries_only_its_keys_and_the_cells_that_differ():
     p = gathering_view(gw.world())
-    assert [r["item"] for r in p["rows"]][:3] == ["Silver Ore", "Briarthorn", "Tin Ore"] and len(p["rows"]) == 16
-    assert all(view["keys"] == [r["key"] for r in p["rows"]] for view in p["by_char"].values())
+    assert [r["item"] for r in p["rows"]][:3] == ["Copper Ore", "Light Leather", "Tin Ore"] and len(p["rows"]) == 16
+    assert p["by_char"][""]["keys"] == [r["key"] for r in p["rows"]]
+    for char in p["by_char"]:                                              # each view in its own Net gold/hr order
+        nets = [r["sort"]["net"] for r in gw.view_rows(p, char)]
+        known = [n for n in nets if n is not None]
+        assert known == sorted(known, reverse=True) and nets == known + [None] * (len(nets) - len(known))
     assert p["by_char"][""]["cells"] == {}                                 # All characters is the shared row
     brugan = p["by_char"][gw.BRUGAN]["cells"]
     assert brugan[str(gw.SILVER)] == {"eligible": False}
@@ -284,7 +290,7 @@ def test_three_characters_group_the_hidden_rows_by_who_else_can_gather_them():
         "Mining": 300, "Skinning": 300, "Herbalism": 300, "Fishing": 1}}))
     assert everyone["by_char"][gw.BRUGAN]["foot"] == [["16 of 16 shown", ""]]
     assert [s[0] for s in everyone["by_char"][""]["foot"]] == [
-        '16 materials · sorted by AH Price, highest first; rows with "—" sort last',
+        '16 materials · sorted by Net gold/hr, highest first, then AH Price; rows with "—" sort last',
         "Character = whose rate: the highest among the characters who can gather it"]
 
 

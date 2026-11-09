@@ -57,6 +57,9 @@
   .filters .search { min-width: 180px; flex: 1; max-width: 260px; }
   .filters label { color: var(--muted); font-size: 12px; display: flex; gap: 6px; align-items: center; }
   .scrollx { overflow-x: auto; }
+  /* D108: a page's main table scrolls in its own box (fitTables sets its height), header row in place. */
+  .scrollx.fit { overflow: auto; } .scrollx.fit thead th { position: sticky; top: 0; z-index: 1; }
+  td.num .sub { white-space: nowrap; }
   table { border-collapse: collapse; width: 100%; }
   th { text-align: left; font-size: 12px; font-weight: 600; color: #d9b54a; padding: 8px 12px; border-bottom: 1px solid var(--border-hi); white-space: nowrap; background: #120f0b; letter-spacing: .3px; }
   th.sort { cursor: pointer; user-select: none; }
@@ -190,8 +193,8 @@ const TOKEN = document.querySelector('meta[name="ahsync-token"]').content;
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const QUALITIES = [0, 1, 2, 3, 4, 5];
 const qualityClass = q => QUALITIES.includes(q) ? `q${q}` : 'q1';
-// SPEC GAP: §3.5 says item names link to auctionhouse.fyi but gives no per-item URL; like the mockup, link to the site.
-const item = (name, quality) => `<a class="${qualityClass(quality)}" href="https://auctionhouse.fyi/" target="_blank" rel="noopener noreferrer" title="Open on auctionhouse.fyi">${esc(name)}</a>`;
+// An item's name in its quality colour, plain text (D107).
+const item = (name, quality) => `<span class="${qualityClass(quality)}">${esc(name)}</span>`;
 const DOTS = { high: 'h', medium: 'm', low: 'l' };
 // The market activity columns (SPEC §3.5): Chance (the dot inside it is the confidence; hover shows the exact %),
 // Est. Sales/Day, Current Supply, Supply/Volume. Every cell comes formatted from engine/views.py.
@@ -573,7 +576,7 @@ function gaPage(d, values, id) {
   const alert = gaOnly(values) && view.alert ? `<div class="alert info" style="margin:0;border-radius:0;border-width:0 0 1px 4px"><span class="grow"><b>${esc(view.alert.title)}</b><span class="sub">${esc(view.alert.text)}</span></span></div>` : '';
   return `<div class="ga"><div class="fresh" style="margin:10px 14px 0">${gaSegments(d.fresh).join(' · ')}</div>` +
     `<div class="card-h"><b>Farmable materials</b><span class="muted">${esc(d.header)}</span></div>${gaFilters(d, view, values)}${alert}` +
-    `<div class="scrollx"><table><thead><tr>${head}</tr></thead><tbody>${body}${last}</tbody></table></div>` +
+    `<div class="scrollx fit"><table><thead><tr>${head}</tr></thead><tbody>${body}${last}</tbody></table></div>` +
     `<div class="foot">${gaSegments(gaOnly(values) ? view.foot : view.foot_all).join('<span class="muted">·</span>')}</div>` +
     `<div class="foot note">${esc(d.note)}${d.default_note ? ` ${esc(d.default_note)}` : ''}</div>${gaDetail(d, rows, selected, values.character || "")}</div>`;
 }
@@ -767,11 +770,11 @@ const LIVE = {
     lede: 'AH items worth buying to disenchant (SPEC §3.4A). <b>Always shown, as research</b>, even when none of your characters can disenchant: a notice then says so, and the rows stay out of the funded plan (Portfolio) until one can. Chance (with its confidence dot) and the market activity columns describe the <b>mats</b>, since they\'re what you sell. A "—" means the data can\'t support a number; it is never a guess and never 0. In every table, the <b>dot after a chance is its confidence</b> (<span class="dot h"></span>≥ 75% · <span class="dot m"></span>≥ 45% · <span class="dot l"></span>below); hover a chance for the exact %.',
     // Research only (D71): the engine's notice when no character has Enchanting; the rows are the same either way.
     notice: d => d.notice ? `<div class="alert info" style="margin:0;border-radius:0;border-width:0 0 1px 4px"><span class="grow"><b>${esc(d.notice.title)}:</b> ${esc(d.notice.text)}</span></div>` : '',
-    cols: [['Item', 0, null], ['ilvl', 1, 'ilvl'], ['Buy', 1, 'buy'], ['Expected mats', 0, null], ['EV', 1, 'ev'], ['Profit', 1, 'profit'],
-           ...MARKET_COLS, ['Risk', 1, 'risk'], ['Price age', 1, 'price_age']],
-    row: r => `<tr><td>${item(r.item, r.quality)}</td><td class="num">${esc(r.ilvl)}</td><td class="num">${dash(r.buy)}</td>` +
-              `<td class="muted">${esc(r.mats)}</td><td class="num">${dash(r.ev)}</td>${profitCell(r)}${marketCells(r)}${riskCell(r)}` +
-              `<td class="num">${dash(r.price_age)}</td></tr>`,
+    cols: [['Item', 0, null], ['Market Price', 1, 'buy'], ['Expected Profit', 1, 'profit'], ['Expected Value', 1, 'ev'], ['Expected mats', 0, null],
+           ...MARKET_COLS, ['Risk', 1, 'risk'], ['Price age', 1, 'price_age'], ['ilvl', 1, 'ilvl']],
+    row: r => `<tr><td>${item(r.item, r.quality)}</td><td class="num">${dash(r.buy)}</td>${profitCell(r)}<td class="num">${dash(r.ev)}</td>` +
+              `<td class="muted">${esc(r.mats)}</td>${marketCells(r)}${riskCell(r)}` +
+              `<td class="num">${dash(r.price_age)}</td><td class="num">${esc(r.ilvl)}</td></tr>`,
     filters: [
       { id: 'search', label: null, kind: 'search', placeholder: 'Search items…', test: (r, v) => !v || String(r.item).toLowerCase().includes(v.toLowerCase()) },
       // Thresholds are copper constants compared with the row's engine-made sort.profit (no arithmetic).
@@ -900,6 +903,17 @@ function setBuilt(builtMs, pricesNewer, credit, freshness) {
 }
 
 // ---------- table ----------
+// D108: a main table's box ends FIT_GAP_PX above the window's bottom edge, measured as if the page were scrolled to
+// the top, so its sideways scrollbar shows without scrolling the page; never under FIT_MIN_PX. Layout only, no data.
+const FIT_MIN_PX = 300, FIT_GAP_PX = 16;
+function fitTables(root) {
+  root.querySelectorAll('.scrollx.fit').forEach(box => {
+    const top = box.getBoundingClientRect().top + window.scrollY;
+    box.style.maxHeight = `${Math.max(FIT_MIN_PX, window.innerHeight - top - FIT_GAP_PX)}px`;
+  });
+}
+window.addEventListener('resize', () => fitTables(document));
+
 function render(id) {
   const spec = LIVE[id], raw = state.data[id] || { rows: [], hidden: 0 };
   const card = document.getElementById('card');
@@ -908,6 +922,7 @@ function render(id) {
   const data = spec.pick ? spec.pick(raw, values) : raw;
   if (spec.render) {
     card.innerHTML = spec.render(data, values, id);
+    fitTables(card);
     if (spec.bind) spec.bind(id, card, values);
     bindControls(id, card, values);
     return;
@@ -925,8 +940,9 @@ function render(id) {
   const body = rows.length === 0
     ? `<div class="empty">Nothing to show for this market.</div>`
     : shown.length === 0 ? `<div class="empty">No rows match the filters.</div>`
-    : `<div class="scrollx"><table><thead><tr>${head}</tr></thead><tbody>${shown.map(r => rowHtml(spec, r, selected)).join('')}</tbody></table></div>`;
+    : `<div class="scrollx fit"><table><thead><tr>${head}</tr></thead><tbody>${shown.map(r => rowHtml(spec, r, selected)).join('')}</tbody></table></div>`;
   card.innerHTML = (spec.above ? spec.above(data) : '') + hidden + filterBar(id, rows) + (spec.notice ? spec.notice(data) : '') + body + (spec.below ? spec.below(data, values, selected) : '');
+  fitTables(card);
   card.querySelectorAll('tr[data-select]').forEach(tr => {
     tr.onclick = e => {
       if (e.target.closest('select, button, input, a')) return;      // a control in the row keeps its focus (D55)

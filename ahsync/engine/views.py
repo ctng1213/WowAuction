@@ -167,14 +167,14 @@ MARKET_COLUMNS = (("Chance", "chance"), ("Est. Sales/Day", "sales"), ("Current S
 
 # Header tooltips (SPEC §3.5): one text per column name, so a column reads the same on every page.
 COLUMN_HELP = {
-    "Item": "The item, in its quality colour. Click to open it on auctionhouse.fyi",
+    "Item": "The item, in its quality colour",
     "Product": "What the recipe makes",
     "ilvl": "Item level: sets the disenchant results",
-    "Buy": "Cheapest buyout on the AH now",
+    "Market Price": "Cheapest buyout on the AH now",
     "Expected mats": "Average disenchant results for this quality and item level",
-    "EV": "Expected value of the mats: average results × their sell value",
-    "Profit": "EV − buy price, after fees",
-    "Price age": "How long ago the buy price was seen. Older prices are less likely to still be there",
+    "Expected Value": "Expected value of the mats: average results × their sell value",
+    "Expected Profit": "Expected Value − Market Price, after fees",
+    "Price age": "How long ago the market price was seen. Older prices are less likely to still be there",
     "Recipe known by": "The character who knows it, and their skill",
     "Source": "Where the mats come from: Owned, AH, Mixed, + crafted (another character makes a reagent first)",
     "Crafts": "How many to make: stops where one more would lose money",

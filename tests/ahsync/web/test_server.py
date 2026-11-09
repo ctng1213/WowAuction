@@ -728,7 +728,7 @@ def test_D81_the_gathering_page_under_all_characters():
     assert p["by_char"][""]["toggle"] == {"label": "Only what a character can gather", "disabled": True,
                                           "title": "Pick a character first"}
     assert p["by_char"][""]["foot"] == [
-        ['16 materials · sorted by AH Price, highest first; rows with "—" sort last', ""],
+        ['16 materials · sorted by Net gold/hr, highest first, then AH Price; rows with "—" sort last', ""],
         ["4 no character can gather (amber Skill)", "amber"],
         ["Character = whose rate: the highest among the characters who can gather it", "muted"]]
     assert p["help"]["Character"].startswith("Whose observed or manual rate this is")
@@ -1172,3 +1172,27 @@ def test_D100_a_cloud_markets_view_carries_the_engines_freshness_pill(db):
     db.publish_refresh([M], with_intel=[M])
     body = json.loads(app.handle("GET", f"/api/views/craft?market={M}", GOOD).body)
     assert body["freshness"] == {"text": "prices 18 min old · baselines Sat 09:00", "stale": False}
+
+
+def test_D107_item_names_are_plain_text_in_their_quality_colour():
+    from ahsync.engine.gathering_view import GATHERING_HELP
+    page = INDEX_HTML.read_text(encoding="utf-8")
+    item = re.search(r"const item = \(name, quality\) => (.*);\n", page).group(1)
+    assert item == "`<span class=\"${qualityClass(quality)}\">${esc(name)}</span>`"
+    assert "auctionhouse.fyi" not in page                                # no name links there any more
+    assert COLUMN_HELP["Item"] == GATHERING_HELP["Item"] == "The item, in its quality colour"
+
+
+def test_D108_a_pages_main_table_scrolls_in_a_box_that_ends_above_the_windows_bottom():
+    page = INDEX_HTML.read_text(encoding="utf-8")
+    assert ".scrollx.fit { overflow: auto; } .scrollx.fit thead th { position: sticky; top: 0; z-index: 1; }" in page
+    assert "td.num .sub { white-space: nowrap; }" in page                 # "volume unknown" on one line
+    assert "const FIT_MIN_PX = 300, FIT_GAP_PX = 16;" in page
+    assert "Math.max(FIT_MIN_PX, window.innerHeight - top - FIT_GAP_PX)" in page
+    assert "window.addEventListener('resize', () => fitTables(document));" in page
+    render = page[page.index("function render(id)"):page.index("// The page's controls")]
+    assert render.count("fitTables(card);") == 2                           # both the table and the spec.render paths
+    assert "<div class=\"scrollx fit\"><table><thead><tr>${head}</tr></thead><tbody>${shown" in render
+    gathering = page[page.index("function gaPage"):page.index("// Gathering's own controls")]
+    assert "<div class=\"scrollx fit\"><table>" in gathering
+    assert page.count("scrollx fit") == 2                                  # only the main tables; small ones keep .scrollx
