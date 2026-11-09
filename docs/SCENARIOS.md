@@ -1140,7 +1140,7 @@ How cases are generated, and how many: SPEC §8.7.
 
 ## 6. Simulated markets (SU, SM, SD, SX; SPEC §8.10)
 
-The market simulator (`tools/sim/`; built MS1: SU1–SU9, SU13–SU15, SM8; MS2: SM1–SM5, SM10, SM11, `tools/sim_report.py inference`; MS3: SU10–SU12, `tools/sim_report.py decision`; `docs/plans/market-simulator.md`) writes Blizzard-shaped raw snapshots and a truth log of every post, buy, cancel, expiry and relist, and runs the unchanged cloud analysis and plan on them. The four families and what each asserts are SPEC §8.10's. Numbers here are a scenario's planted truth; tolerances are stated in the row. Every world is generated from a fixed seed, printed on failure.
+The market simulator (`tools/sim/`; built MS1: SU1–SU9, SU13–SU15, SM8; MS2: SM1–SM5, SM10, SM11, `tools/sim_report.py inference`; MS3: SU10–SU12, `tools/sim_report.py decision`; MS4a: SD15, SD28, SD29, SD31, SM17; `docs/plans/market-simulator.md`) writes Blizzard-shaped raw snapshots and a truth log of every post, buy, cancel, expiry and relist, and runs the unchanged cloud analysis and plan on them. The four families and what each asserts are SPEC §8.10's. Numbers here are a scenario's planted truth; tolerances are stated in the row. Every world is generated from a fixed seed, printed on failure.
 
 **Unit sequences** (exact, checkable by hand):
 
@@ -1182,7 +1182,7 @@ The market simulator (`tools/sim/`; built MS1: SU1–SU9, SU13–SU15, SM8; MS2:
 | SM14 | a seller posts 1,000 units nightly at 2× the market and all expire; others sell 20 a day | sold/day 20 ± 10%; expired share about 0.98; the turnover is never counted as sales |
 | SM15 | a thin item with 5 endings and a true P of 0.9 in a class pooled at 0.3 (400 endings) | blended about 0.39, marked "class est." (fails by design; the error is reported) |
 | SM16 | five planted regimes over 45 days with ±3% daily noise | the right label from day 30; a flat series mislabelled in at most 10% of seeds |
-| SM17 | an item that sells 1 a day, while our agent sells 10 a day of it for a week | our share of sold/day and listed/day reported (fails by design: the API names no seller) |
+| SM17 | an item that sells 1 a day, while our agent sells 10 a day of it for a week | our share of sold/day and listed/day reported (fails by design: the API names no seller) (MS4a, in SD15's world: the engine's 8.48 and 6.45 sold/day against a true 10.29 and 7.14, ours 1.86 and 0) |
 
 **Decision quality** (the decision report; the pass band is the report's mark, not a test failure):
 
@@ -1202,7 +1202,7 @@ The market simulator (`tools/sim/`; built MS1: SU1–SU9, SU13–SU15, SM8; MS2:
 | SD12 | a farmer floods a mat and a craft margin opens | the craft funded within 2 days |
 | SD13 | the product of a chain in progress drops 30% | re-planned: mats sold raw or held rather than a losing craft |
 | SD14 | a weekly cheap Tuesday morning and raid-night peaks | the flip captured and sized within the window's cap, week after week |
-| SD15 | our posts become a large share of an item's supply | `max_supply_share` holds; realized price against our own volume |
+| SD15 | our posts become a large share of an item's supply | `max_supply_share` holds; realized price against our own volume (MS4a: 300 Mageweave held, the market buying about 10 a day: no snapshot broke the liquidity rule, met, but the plan listed ours in 8 snapshots of seed 1's 330 and none of seed 2's, ending with 287 and 300 held; plan §1.39) |
 | SD16 | bots undercut each of our posts within an hour | never below the floor; the next post capped at `curOthers − 1`; gold tied up and stranded stock at most the naive trader's |
 | SD17 | a big buy of a thin floor | the cost walks the book; the profit holds after our own price impact |
 | SD18 | bot farmers crowd our farm route and its price falls 40% | Gathering's rank drops; stock farmed before is sold early |
@@ -1214,10 +1214,10 @@ The market simulator (`tools/sim/`; built MS1: SU1–SU9, SU13–SU15, SM8; MS2:
 | SD24 | five greens that disenchant into the same dust | the dust from all funded disenchants within dust's cap; realized dust price at least 85% of planned |
 | SD26 | 8 g of sales left in the mailbox for 12 h | "Risk budget exhausted" shown as it should be; gold-hours lost measured against prompt collection |
 | SD27 | our post keeps expiring while it is the cheapest | −5% and half the quantity per streak, never below the floor; stranded stock and lost deposits at most the naive relister's |
-| SD28 | a held flip's price drops 20% and stays down | the exit fires within 12 h; drawdown at most holding to the target |
-| SD29 | SD28's dip for one snapshot only | nothing changes; the planned post stands |
+| SD28 | a held flip's price drops 20% and stays down | the exit fires within 12 h; drawdown at most holding to the target (MS4a: the dump bought on day 21, Silk's price × 0.8 from noon on day 22, planned with the hourly documents: the plan sold part now 8 h later, drawdown 0 and 0.06 g against 0.12 and 0.16 g holding to the target, which stranded 142 and 269 units; met on seeds 1 and 2) |
+| SD29 | SD28's dip for one snapshot only | nothing changes; the planned post stands (MS4a: 30 auctions of 20 at 80% posted at noon and cancelled at 12:50: **missed** on seeds 1 and 2, the next login sold part of the held Silk now at 146 c and 134 c where without the dip it kept 164 c and 160 c; cause untraced, plan §1.39) |
 | SD30 | a missed Tuesday peak with Wednesday 5% and Thursday 18% below it | Wednesday chosen; without Wednesday, a hold until next week |
-| SD31 | a brand-new item with a 300% apparent margin and no sales | nothing funded on any surface: the plan, the addon's flip offers, the market file (EX11) |
+| SD31 | a brand-new item with a 300% apparent margin and no sales | nothing funded on any surface: the plan, the addon's flip offers, the market file (EX11) (MS4a, plan §1.39: on a 28-day market, an item new 2 days before its end, five auctions at 1 g then one at 25 s: met on seeds 1 and 2, no buy planned and no flip offered at any of the 4 logins after it appeared) |
 | SD32 | every price drifts −2% a day for 30 days, demand steady | over-paying measured (fails by design: the clamps sit above tomorrow's price) |
 | SD33 | +2% a day for 30 days | money left on the table against the oracle |
 | SD34 | a mat's price halves at 10:00; the baselines refresh at 09:00 the next day | hourly prices follow at once; the cost of the stale baselines measured |

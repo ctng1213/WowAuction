@@ -60,6 +60,9 @@ class Item:
     anchor: float = 0.0
     relist_share: float = 0.0         # share of cancels whose seller posts the same units again at once (a relist)
     bots: int = 0                     # undercut bots: each hour each cancels its auction and posts 1 c under the rest
+    # From each (UTC ms, price factor, demand factor) on, until the next, the fair price is × price factor and buyers
+    # arrive × demand factor (a lasting drop, a drift, a quiet day; SD rows). () = constant (every earlier world).
+    shifts: tuple[tuple[int, float, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -219,8 +222,8 @@ class Market:
         Args:
             item: The item.
         """
-        price = max(1, int(min(max(self._price(item, self._reference(item)), item.fair_price * FAIR_BAND[0]),
-                               item.fair_price * FAIR_BAND[1])))
+        price = max(1, int(min(max(self._price(item, self._reference(item)), self._fair(item) * FAIR_BAND[0]),
+                               self._fair(item) * FAIR_BAND[1])))
         hours = self.rng.choices([h for h, _ in item.durations], [w for _, w in item.durations])[0]
         cancels = self.rng.random() < item.cancel_share
         cancel_at = self.now_ms + int(self.rng.uniform(0, hours * HOUR_MS)) if cancels else None
@@ -239,8 +242,8 @@ class Market:
             Copper.
         """
         live = self.by_key[item.key]
-        floor = min(a.price for a in live.values()) if live else item.fair_price
-        return min(floor, max(1, int(item.fair_price * item.anchor))) if item.anchor > 0 else floor
+        floor = min(a.price for a in live.values()) if live else int(self._fair(item))
+        return min(floor, max(1, int(self._fair(item) * item.anchor))) if item.anchor > 0 else floor
 
     def _price(self, item: Item, floor: int) -> float:
         """A seller's price before the fair-price band, from the cheapest other auction's.
@@ -268,7 +271,7 @@ class Market:
         Args:
             item: The item.
         """
-        most = item.fair_price * item.buyer_level * math.exp(self.rng.gauss(0.0, item.buyer_spread))
+        most = self._fair(item) * item.buyer_level * math.exp(self.rng.gauss(0.0, item.buyer_spread))
         affordable = sorted((a for a in self.by_key[item.key].values() if a.price <= most), key=lambda a: (a.price, a.id))
         if not item.commodity:
             if affordable:
@@ -311,8 +314,8 @@ class Market:
             item: The item.
             ended: The auction just cancelled.
         """
-        price = max(1, int(min(max(self._price(item, self._reference(item)), item.fair_price * FAIR_BAND[0]),
-                               item.fair_price * FAIR_BAND[1])))
+        price = max(1, int(min(max(self._price(item, self._reference(item)), self._fair(item) * FAIR_BAND[0]),
+                               self._fair(item) * FAIR_BAND[1])))
         hours = self.rng.choices([h for h, _ in item.durations], [w for _, w in item.durations])[0]
         self.post(item.key, ended.units, price, hours, ended.seller)
 
@@ -327,9 +330,36 @@ class Market:
         if auction_id is not None and auction_id in self.by_key[key]:
             self._end(auction_id, "cancel", may_relist=False)
         live = self.by_key[key]
-        floor = min(a.price for a in live.values()) if live else item.fair_price
-        price = max(1, floor - 1, int(item.fair_price * FAIR_BAND[0]))
+        floor = min(a.price for a in live.values()) if live else int(self._fair(item))
+        price = max(1, floor - 1, int(self._fair(item) * FAIR_BAND[0]))
         self._bots[number][2] = self.post(key, item.stack if item.commodity else 1, price, 8, name).id
+
+    def _shift(self, item: Item, at_ms: int) -> tuple[float, float]:
+        """An item's price and demand factors at a time.
+
+        Args:
+            item: The item.
+            at_ms: UTC ms.
+
+        Returns:
+            (price factor, demand factor) of the last shift at or before at_ms; (1, 1) before the first.
+        """
+        factors = (1.0, 1.0)
+        for start, price, demand in item.shifts:
+            if start <= at_ms:
+                factors = (price, demand)
+        return factors
+
+    def _fair(self, item: Item) -> float:
+        """An item's fair price now, its shifts applied.
+
+        Args:
+            item: The item.
+
+        Returns:
+            Copper, float.
+        """
+        return item.fair_price * self._shift(item, self.now_ms)[0]
 
     def _schedule_arrival(self, item: Item, who: str, after_ms: int) -> None:
         """Queue an item's next seller or buyer: a Poisson process, thinned by the weekly profile for buyers.
@@ -339,7 +369,7 @@ class Market:
             who: "seller" or "buyer".
             after_ms: The time to start from, UTC ms.
         """
-        rate = item.listings_per_day if who == "seller" else item.buys_per_day
+        rate = item.listings_per_day if who == "seller" else item.buys_per_day * self._shift(item, after_ms)[1]
         if rate <= 0:
             return
         shaped = who == "buyer" and bool(item.weekly)
