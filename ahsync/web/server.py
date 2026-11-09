@@ -43,6 +43,7 @@ from ahsync.db.sqlite import Database
 from ahsync.intel.store import IntelCache
 from ahsync.engine.app_view import BAD_LOCATION_TEXT
 from ahsync.engine.gathering import catalog, eligible, why_not_eligible
+from ahsync.engine.mcp_view import NO_CLAUDE, ClaudeConfig
 from ahsync.engine.status_view import cloud_freshness
 from ahsync.engine.views import source_credit
 from ahsync.export.addon_files import export_plan
@@ -176,6 +177,7 @@ class DashboardApp(SettingsEndpoints):
     mcp: Any = None                       # the AI assistant server (mcp.server.McpServer); None: no card, /api/mcp 404
     mcp_command: tuple[str, ...] = ()     # the bridge Claude launches, for the card's setup snippets (SPEC §3.8.1)
     mcp_error: str | None = None          # why the last Enable failed (MCP4); None after a start or a Disable
+    claude_config: Callable[[], ClaudeConfig] = lambda: NO_CLAUDE   # finds Claude Desktop's config (§3.8.1, MC3b)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def __post_init__(self) -> None:
@@ -352,12 +354,13 @@ class DashboardApp(SettingsEndpoints):
             database can't be read right now.
         """
         now = self.clock.now_ms()
+        claude = self.find_claude()               # Claude's files, outside the lock (SPEC §3.8.1, MC3b)
         try:
             with self._lock:
                 app = self.app_hooks.app_info(self.db, self.config) if self.app_hooks is not None else None
                 payload = status_page(self.db, self.config, now, self.clock.local_offset_ms(now), app)
                 if self.mcp is not None:
-                    payload["mcp_card"] = self.mcp_card(now)
+                    payload["mcp_card"] = self.mcp_card(now, claude)
         except sqlite3.Error as error:
             log.warning("building the status page failed: %s", error)
             return json_response(503, {"error": "database_busy"})

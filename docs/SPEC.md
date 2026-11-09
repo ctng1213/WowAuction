@@ -1805,9 +1805,9 @@ More than one beta tester group or staged rollouts; Windows code signing; rollin
 ### 3.8 AI assistant access (MCP; built MC1–MC3)
 
 **Built (MC1)**: the server, the bridge and the dashboard tools: `ahsync/mcp/protocol.py` (the MCP subset, the tool definitions, the context), `tools.py` (`list_markets`, `get_page`, `item`), `server.py` (`McpServer`, the checks of SEC19, `mcp.json`), `bridge.py` and `python -m ahsync.mcp`; `item` shares `recommend.inventory_page.detail_of` with the Inventory page. The app doesn't start the server yet: the Status card's Enable comes with MC3. **Built (MC2)**: the data tools: `ahsync/mcp/stats.py` (`MarketStats`: the in-memory `market_stats`, built at start, rebuilt on a call after a newer refresh, freed at stop), `query.py` (the guard, `run_query`, `describe_data`, `item_group_stats`) and their handlers in `tools.py`. Measured on the user's data (2026-11-09): 10,236 items make a 1.7 MB table, built in 0.11 s from the already-parsed intelligence.
-**Built (MC3)**: Enable / Disable and the card: `engine/mcp_view.py` (`mcp_card`: every text, number and setup snippet; the off card's memory is an estimate, 170 bytes an item, measured in MC2), `web/settings.py` (`POST /api/mcp`, `SettingsEndpoints`, split off `web/server.py` with `web/responses.py` for size), the Status page's `drawMcpCard`, `ahsync/__main__.py` (`serve_dashboard` makes the server, `start_assistant` starts it when `mcp_enabled` or clears a stale `mcp.json`, `run()` stops it at exit), `Platform.bridge_command` and the shell's `bridge_command` (the card's path in a packaged app), `ahsync_app/__main__.py --mcp` (macOS), and `packaging/ahsync.spec`'s console `ahsync-mcp.exe` (Windows).
+**Built (MC3)**: Enable / Disable and the card: `engine/mcp_view.py` (`mcp_card`: every text, number and setup snippet; the off card's memory is an estimate, 170 bytes an item, measured in MC2), `web/settings.py` (`POST /api/mcp`, `SettingsEndpoints`, split off `web/server.py` with `web/responses.py` for size), the Status page's `drawMcpCard`, `ahsync/__main__.py` (`serve_dashboard` makes the server, `start_assistant` starts it when `mcp_enabled` or clears a stale `mcp.json`, `run()` stops it at exit), `Platform.bridge_command` and the shell's `bridge_command` (the card's path in a packaged app), `ahsync_app/__main__.py --mcp` (macOS), and `packaging/ahsync.spec`'s console `ahsync-mcp.exe` (Windows). **Built (MC3b)**: the card finds Claude Desktop's config and says what to change (§3.8.1): `ahsync/mcp/claude_config.py` (`find_claude_config`, read-only), `engine/mcp_view.desktop_setup`, and `serve_dashboard` passing the finder to the card.
 
-Approved by the user 2026-11-08: `docs/plans/mcp-server.md` (its §1 decisions), mockup `docs/mockups/ai-assistant.html`; scenarios MCP1–MCP17, SEC18–SEC20. Claude's own plans are the next batch (the plan's §9). A read-only [MCP](https://modelcontextprotocol.io) server inside AHSync lets an assistant that speaks MCP (Claude Desktop, Claude Code; ChatGPT is a later batch) read your data and answer your own questions. **The assistant does the analysis; AHSync gives it complete, current, well-described data** and never pre-chews answers: no new engine views or ranking fields are built for it.
+Approved by the user 2026-11-08: `docs/plans/mcp-server.md` (its §1 decisions), mockup `docs/mockups/ai-assistant.html`; scenarios MCP1–MCP17, SEC18–SEC20; MC3b (the user, 2026-11-09) adds MCP18–MCP21. Claude's own plans are the next batch (the plan's §9). A read-only [MCP](https://modelcontextprotocol.io) server inside AHSync lets an assistant that speaks MCP (Claude Desktop, Claude Code; ChatGPT is a later batch) read your data and answer your own questions. **The assistant does the analysis; AHSync gives it complete, current, well-described data** and never pre-chews answers: no new engine views or ranking fields are built for it.
 
 #### 3.8.1 Enable and Disable (the Status card)
 
@@ -1819,7 +1819,34 @@ Approved by the user 2026-11-08: `docs/plans/mcp-server.md` (its §1 decisions),
   - starting: the button disabled, reading "Starting…";
   - running: the Disable button, "running on this computer only · since Sun 13:10", the table's size and item count, which refresh Claude sees, and the number of characters;
   - couldn't start: the reason, for example "Port 8766 is in use by another program…" (MCP4).
-- **The setup**, shown while running: the Claude Desktop config snippet and the Claude Code command, each with this install's bridge path and a Copy button, and the advice to turn on web search. The privacy note is shown in every state: "What Claude reads is sent to Anthropic to answer you: prices, your characters, their gold, professions and trades."
+- **The setup**, shown while running: a Claude Desktop tab and a Claude Code tab. The Claude Code tab is the one-line `claude mcp add` command with this install's bridge path and a Copy button. The Claude Desktop tab is made from what AHSync finds on this computer (below). Both end with the advice to turn on web search. The privacy note is shown in every state: "What Claude reads is sent to Anthropic to answer you: prices, your characters, their gold, professions and trades."
+- **Finding Claude Desktop's config** (MC3b; the user, 2026-11-09: "Settings → Developer → Edit Config" doesn't exist in the Microsoft Store build, so the card names the file itself). AHSync tells you which file to change and exactly what to put in it, and **you** make the change: it never creates, writes or renames anything of Claude's (MCP21).
+  - **Where it looks**: a fixed list and nothing else (`ahsync/mcp/claude_config.py`, MCP18).
+    - Windows: `%APPDATA%\Claude\` (the installer from claude.ai), and the Microsoft Store build's own copy, `%LOCALAPPDATA%\Packages\Claude_<13 lowercase letters or digits>\LocalCache\Roaming\Claude\`. The 13 characters are the Store's fixed code for Anthropic as the publisher, the same on every PC, so they are matched by pattern, not hard-coded. A folder that resolves outside `%LOCALAPPDATA%\Packages` (a link) is ignored. **UNVERIFIED**: that the Store build reads its config from that copy; the MC3b manual check confirms it.
+    - macOS: `~/Library/Application Support/Claude/`.
+    - Anywhere else: nothing, which reads as "Claude Desktop not found".
+  - **Which folder**, when more than one exists: the one holding `claude_desktop_config.json`; when both or neither do, the one whose newest entry was changed last (the one Claude used last); on a tie, `%APPDATA%`. The card names the other folder in a note.
+  - **What it reads**: only `claude_desktop_config.json`, only while the Status page is built, at most 1 MB. It looks only at `mcpServers.ahsync`.
+  - **Privacy**: the card never shows the rest of the file. Other servers' entries can hold keys, so their names, commands and values appear nowhere: not in the card, the page's JSON or the log (MCP20). From the `ahsync` entry it shows only `command` and `args`.
+  - **The states and what the card asks** (`engine/mcp_view.desktop_setup`, MCP19). Each shows the file's full path with a Copy button, except "not found":
+
+    | Found | Card |
+    |---|---|
+    | no Claude folder | "Claude Desktop wasn't found on this computer. Install it from claude.ai/download, open it once, then press Check again." |
+    | the folder, no file | create the file, with the whole config to paste |
+    | a blank file | open it and paste the whole config |
+    | `{}` | replace everything in it with the whole config |
+    | a file without `mcpServers` | add the `"mcpServers": { … }` block just before its last `}`, and put a comma after the entry before it |
+    | `"mcpServers": {}` | put the `"ahsync": { … }` entry between its `{` and `}` (no comma) |
+    | `mcpServers` without `ahsync` | add the `"ahsync": { … }` entry just before the `}` that closes `"mcpServers"`, and put a comma after the entry before it |
+    | an `ahsync` entry whose `command` or `args` differ from this install's bridge (an old install, say) | replace that entry with the one shown, keeping the comma after it if there was one |
+    | the right entry | "✓ Claude Desktop is set up for AHSync. If you just changed the file, quit Claude Desktop completely and reopen it." |
+    | not valid JSON, too deep or with too long a number to parse, or a top level or `mcpServers` that isn't a `{ }` section | "This file isn't valid JSON near line N, so Claude Desktop can't read it either. Fix it, save, then press Check again." (no line number for a section of the wrong kind) |
+    | over 1 MB, or can't be read | "AHSync couldn't read this file (why). It needs this entry inside "mcpServers":" and the entry |
+
+    Every state but "set up", "not found" and "not valid" then says: quit Claude Desktop completely (Windows: right-click its tray icon → Quit; macOS: Claude → Quit) and reopen it; in a new chat AHSync is listed among Claude's connectors. On Windows the create step adds "In Notepad, choose Save as type: All files, so it isn't saved as .txt".
+  - **Check again** reloads the Status page, which looks again; nothing is cached between loads.
+  - **Never in the way.** The search runs before the dashboard's lock is taken, so a slow disk can't hold other requests. No file, folder or permission can break the Status page: anything unexpected is the "couldn't read" state, logged by its type only. An `ahsync` entry whose text can't be shown (a lone surrogate, valid JSON) counts as one AHSync can't read.
 
 #### 3.8.2 The server and the bridge
 

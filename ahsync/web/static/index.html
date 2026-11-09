@@ -103,6 +103,7 @@
   .mcp-step ol { margin: 0; padding-left: 18px; } .mcp-step li { margin: 4px 0; }
   .mcp-step pre { margin: 6px 0; padding: 8px 10px; background: #0b0a08; border: 1px solid var(--border); border-radius: 4px; font: 12px/1.4 Consolas, "SF Mono", monospace; color: #e8dcc0; overflow-x: auto; position: relative; white-space: pre; }
   .mcp-step pre .copy { position: sticky; float: right; left: 0; }
+  .mcp-msg { margin: 0 0 8px; } .mcp-note { margin: 8px 0 0; font-size: 12px; } .mcp-check { margin-top: 8px; }
   .mcp-privacy { margin-top: 12px; padding: 8px 12px; border-left: 4px solid var(--info); background: #12161a; border-radius: 4px; }
   .mcp-ask { margin-top: 10px; } .mcp-ask ul { margin: 4px 0 0; padding-left: 18px; }
   .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; padding: 0 12px 12px; }
@@ -382,24 +383,39 @@ function drawMcpCard(card, mcp) {
   if (mcp.setup) {
     body.append(el('div', 'mcp-h', 'Connect Claude (once)'));
     const tabs = el('div', 'mcp-tabs'), panel = el('div', 'mcp-step');
+    // Each tab: the engine's message (Claude Desktop: what AHSync found of its config), numbered steps whose path or
+    // snippet has a Copy button, a note, and Check again, which reloads the page so AHSync looks again (MCP21).
     const show = name => {
       const part = mcp.setup[name];
       panel.replaceChildren();
-      const steps = el('ol');
-      part.steps.forEach((s, i) => {
-        const li = el('li', '', s);
-        if ((name === 'desktop' && i === 1) || (name === 'code' && i === 0)) {
-          const pre = el('pre', '', part.snippet), copy = el('button', 'btn copy', 'Copy');
-          copy.type = 'button';
-          copy.onclick = async () => {
-            try { await navigator.clipboard.writeText(part.snippet); copy.textContent = 'Copied'; } catch (e) { copy.textContent = 'Select and copy'; }
-          };
-          pre.prepend(copy);
-          li.append(pre);
+      if (part.message) {
+        const tone = { ok: 'pos', warn: 'amber', missing: 'amber' }[part.status] || '';
+        panel.append(el('p', 'mcp-msg ' + tone, part.message));
+      }
+      if (part.steps.length) {
+        const steps = el('ol');
+        for (const s of part.steps) {
+          const li = el('li', '', s.text);
+          if (s.code) {
+            const pre = el('pre', '', s.code), copy = el('button', 'btn copy', 'Copy');
+            copy.type = 'button';
+            copy.onclick = async () => {
+              try { await navigator.clipboard.writeText(s.code); copy.textContent = 'Copied'; } catch (e) { copy.textContent = 'Select and copy'; }
+            };
+            pre.prepend(copy);
+            li.append(pre);
+          }
+          steps.append(li);
         }
-        steps.append(li);
-      });
-      panel.append(steps);
+        panel.append(steps);
+      }
+      if (part.note) panel.append(el('p', 'muted mcp-note', part.note));
+      if (name === 'desktop') {
+        const again = el('button', 'btn mcp-check', 'Check again');
+        again.type = 'button';
+        again.onclick = () => load('status');
+        panel.append(again);
+      }
       tabs.querySelectorAll('span').forEach(t => t.classList.toggle('on', t.dataset.tab === name));
     };
     for (const [name, label] of [['desktop', 'Claude Desktop'], ['code', 'Claude Code']]) {

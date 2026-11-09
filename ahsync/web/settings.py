@@ -12,7 +12,7 @@ from dataclasses import replace
 from ahsync.app.update_check import write_meta
 from ahsync.config import CHANNELS, ConfigError, write_setting
 from ahsync.engine.app_view import BAD_LOCATION_TEXT
-from ahsync.engine.mcp_view import McpFacts, mcp_card
+from ahsync.engine.mcp_view import NO_CLAUDE, ClaudeConfig, McpFacts, mcp_card
 from ahsync.web.responses import Response, body_field, json_response
 
 log = logging.getLogger("ahsync.web")
@@ -131,14 +131,35 @@ class SettingsEndpoints:
                 log.warning("the update state was not reset after the channel change")
         return response
 
-    def _mcp_facts(self, now_ms: int) -> McpFacts:
+    def find_claude(self) -> ClaudeConfig:
+        """Claude Desktop's config as found now, for the card's setup (SPEC §3.8.1, MC3b; never cached, MCP21).
+
+        Called outside the dashboard's lock: it lists folders and reads up to 1 MB, which a slow disk or network
+        share must not hold every other request behind.
+
+        Returns:
+            The finder's answer while the server runs (when the setup shows), else NO_CLAUDE; an unexpected
+            error is the "unreadable" state, logged by its type only (the file may hold other servers' keys).
+        """
+        if self.mcp is None or not self.mcp.running:
+            return NO_CLAUDE
+        try:
+            return self.claude_config()
+        except Exception as error:                  # noqa: BLE001  the Status page must still answer (MC3b review)
+            log.warning("looking for Claude Desktop's config failed: %s", type(error).__name__)
+            return ClaudeConfig(system="other", state="unreadable",
+                                reason="something went wrong while AHSync looked for it")
+
+    def _mcp_facts(self, now_ms: int, claude: ClaudeConfig) -> McpFacts:
         """What the AI assistant card shows (SPEC §3.8.1), read under the dashboard's lock.
 
         Args:
             now_ms: Now.
+            claude: find_claude()'s answer, found before the lock was taken.
 
         Returns:
-            The card's facts: the server's state, its table, the first market's refresh and the characters.
+            The card's facts: the server's state, its table, the first market's refresh, the characters and
+            Claude Desktop's config.
         """
         market = self.config.markets[0]
         intel = self.db.read_intel(market)
@@ -147,7 +168,7 @@ class SettingsEndpoints:
                         table_bytes=stats.size_bytes(), table_items=stats.count(),
                         intel_items=len(intel.items) if intel else 0, market=market,
                         refreshed_ms=intel.built_ms if intel else None, characters=len(self.db.characters()),
-                        command=self.mcp_command, offset_ms=self.clock.local_offset_ms(now_ms))
+                        command=self.mcp_command, offset_ms=self.clock.local_offset_ms(now_ms), claude=claude)
 
     def set_mcp(self, body: bytes) -> Response:
         """Enable or Disable the AI assistant server from the Status card (SPEC §3.8.1; MCP1, MCP2, MCP4, SEC18).
@@ -208,13 +229,14 @@ class SettingsEndpoints:
         log.info("%s set to %s from the dashboard", name, formatted)
         return json_response(200, {"set": True, **answer})
 
-    def mcp_card(self, now_ms: int) -> dict:
+    def mcp_card(self, now_ms: int, claude: ClaudeConfig = NO_CLAUDE) -> dict:
         """The Status page's AI assistant card (SPEC §3.8.1), under the dashboard's lock.
 
         Args:
             now_ms: Now.
+            claude: find_claude()'s answer, found before the lock; NO_CLAUDE when not looked for.
 
         Returns:
             engine.mcp_view.mcp_card's card.
         """
-        return mcp_card(self._mcp_facts(now_ms))
+        return mcp_card(self._mcp_facts(now_ms, claude))
