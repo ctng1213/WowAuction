@@ -111,16 +111,20 @@ function Adapter.ItemSellAndClass(itemId)
   return sell, class
 end
 
---- An item's quality, item level and class from the client (for the disenchant line).
---- UNVERIFIED: GetItemInfo's 3rd and 4th returns and GetItemInfoInstant's 6th, as on Classic (or C_Item's, A93).
+--- An item's quality, item level, class and bind type from the client (for the disenchant line, TT43).
+--- UNVERIFIED: GetItemInfo's 3rd, 4th and 14th returns and GetItemInfoInstant's 6th, as on Classic (or C_Item's,
+--- A93); the bind type 0 none, 1 on pickup, 2 on equip, 3 on use, 4 quest.
 ---@param itemId number
----@return number|nil quality, number|nil ilvl, number|nil classId (2 weapon, 4 armor)
+---@return number|nil quality, number|nil ilvl, number|nil classId (2 weapon, 4 armor), number|nil bindType
 function Adapter.ItemDetails(itemId)
   local info, instant = ItemInfoApi(), ItemInstantApi()
-  local quality, ilvl, classId
-  if info then quality, ilvl = select(3, info(itemId)) end
+  local quality, ilvl, classId, bindType
+  if info then
+    quality, ilvl = select(3, info(itemId))
+    bindType = select(14, info(itemId))
+  end
   if instant then classId = select(6, instant(itemId)) end
-  return quality, ilvl, classId
+  return quality, ilvl, classId, bindType
 end
 
 --- Hide the tooltip.

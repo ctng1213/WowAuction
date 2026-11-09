@@ -32,7 +32,8 @@ local function FakeTooltip(name, opts)
     tip.n = tip.n + 1
     tip.added[#tip.added + 1] = { left, right }
     if name then
-      Stubs.Define(name .. "TextLeft" .. tip.n, { side = "left", line = tip.n, SetFontObject = function() end })
+      Stubs.Define(name .. "TextLeft" .. tip.n, { side = "left", line = tip.n, SetFontObject = function() end,
+                                                  GetText = function() return left end })
       Stubs.Define(name .. "TextRight" .. tip.n, { side = "right", line = tip.n, SetFontObject = function() end })
     end
   end
@@ -112,6 +113,21 @@ describe("AdapterTooltip", function()
     assert_eq(Adapter.HookItemTooltip(OnItem), true)
     Stubs.tooltip.hooks.OnTooltipSetItem({ name = "GameTooltip", GetItem = raises })
     assert_eq(seen, {})
+  end)
+
+  it("TT43 an item tooltip says Soulbound in one of its first lines; else, or unreadable, it is not bound", function()
+    local Adapter = Boot()
+    Stubs.Define("ITEM_SOULBOUND", "Soulbound")
+    local tip = FakeTooltip("BoundTip")
+    for _, text in ipairs({ "Scouting Gloves", "Soulbound", "Hands" }) do tip:AddDoubleLine(text, "") end
+    local boe = FakeTooltip("BoeTip")
+    for _, text in ipairs({ "Scouting Gloves", "Binds when equipped", "Soulbound" }) do boe:AddDoubleLine(text, "") end
+    boe.n = 2                                                             -- a "Soulbound" past the tooltip's lines
+    assert_eq({ Adapter.TooltipSaysSoulbound(tip), Adapter.TooltipSaysSoulbound(boe),
+                Adapter.TooltipSaysSoulbound(FakeTooltip(nil)),
+                Adapter.TooltipSaysSoulbound(FakeTooltip("Locked", { forbidden = true })) }, { true, false, false, false })
+    Stubs.Define("ITEM_SOULBOUND", nil)
+    assert_eq(Adapter.TooltipSaysSoulbound(tip), false)                   -- a client without the global
   end)
 
   it("TT42 a divider is a spacer line with a 1 px rule from its left text to its right text", function()

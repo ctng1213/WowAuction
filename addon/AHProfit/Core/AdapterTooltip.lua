@@ -5,6 +5,8 @@
 local AHProfit = AHProfit
 local Adapter = AHProfit.Adapter
 
+local SOULBOUND_LINES = 6        -- the binding line sits right under the name, after a heroic or unique line or two
+
 --- The item link a tooltip shows: its tooltip data's hyperlink, else the tooltip's GetItem (TT33).
 --- On the live Forever client GetItem raises inside the client for some tooltips (the comparison tooltips of
 --- CompareItem, loot); the hook calls this under pcall, so a failure reads as no link.
@@ -41,6 +43,22 @@ function Adapter.HookItemTooltip(fn)
   if GameTooltip and GameTooltip.HookScript then
     GameTooltip:HookScript("OnTooltipSetItem", function(tooltip) OnItem(tooltip, nil) end)
     return true
+  end
+  return false
+end
+
+--- Whether an item tooltip says the item is bound to you: one of its first lines reads "Soulbound" (TT43).
+--- UNVERIFIED: that Forever's tooltips show the global ITEM_SOULBOUND ("Soulbound") as a left line near the top, as
+--- Classic's do; without it, or on an unnamed or forbidden tooltip, nothing reads as bound.
+---@param tooltip table  The item tooltip being shown
+---@return boolean
+function Adapter.TooltipSaysSoulbound(tooltip)
+  local name = tooltip.GetName and tooltip:GetName()
+  if not name or type(ITEM_SOULBOUND) ~= "string" or (tooltip.IsForbidden and tooltip:IsForbidden()) then return false end
+  local count = tooltip.NumLines and tooltip:NumLines() or 0
+  for n = 2, math.min(count, SOULBOUND_LINES) do
+    local text = _G[name .. "TextLeft" .. n]
+    if text and text.GetText and text:GetText() == ITEM_SOULBOUND then return true end
   end
   return false
 end

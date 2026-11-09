@@ -19,6 +19,9 @@ Stubs.ITEM_CLASSES = { [6585] = 4, [2852] = 4 }
 -- Item levels (GetItemInfo's 4th return); others 1.
 Stubs.ITEM_LEVELS = { [6585] = 18 }
 
+-- Bind types (GetItemInfo's 14th return: 1 on pickup, 2 on equip); others 0, none (TT43).
+Stubs.ITEM_BIND = {}
+
 -- What a merchant pays for some items, copper (GetItemInfo's 11th return); others 0.
 Stubs.ITEM_SELL = { [2589] = 3, [3300] = 12 }
 
@@ -434,7 +437,7 @@ local function InstallItems()
     if not name or Stubs.world.uncached[id] then return nil end
     local quality = ({ ["9d9d9d"] = 0, ffffff = 1, ["1eff00"] = 2 })[Stubs.ITEM_COLORS[id] or "ffffff"]
     return name, Stubs.ItemLink(id), quality, Stubs.ITEM_LEVELS[id] or 1, 1, "Type", "Subtype", 20, "", "icon",
-      Stubs.ITEM_SELL[id] or 0
+      Stubs.ITEM_SELL[id] or 0, Stubs.ITEM_CLASSES[id] or 7, 0, Stubs.ITEM_BIND[id] or 0
   end)
   Define("GetItemInfoInstant", function(id)
     return id, "Type", "Subtype", "", "icon", Stubs.ITEM_CLASSES[id] or 7, 0
