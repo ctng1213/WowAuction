@@ -1510,6 +1510,8 @@ markets = ["forever.pvp.horde.us"]
 wow_path = "C:/Program Files (x86)/World of Warcraft/_forever_"
 retention_days = 90
 dashboard_port = 8765
+mcp_enabled = false                           # planned (MC3, §3.8.1): the AI assistant server runs; set by the Status card's Enable / Disable
+mcp_port = 8766                               # planned (MC1, §3.8.2): the AI assistant server's 127.0.0.1 port, 1024-65535, not dashboard_port
 live_refresh_minutes = 15
 min_flip_margin = 0.20
 default_sell_prob = 0.25                      # P when there is no volume data and someone is cheaper (§3.3.2)
@@ -1800,6 +1802,86 @@ With `auto_update` true (the default) a newer release found by §3.7.8 is downlo
 More than one beta tester group or staged rollouts; Windows code signing; rolling back to an older version (the previous release stays downloadable); installing in the middle of a session; Linux; an Intel macOS build; a Settings page beyond setup; a tray "Setup…" item; a native folder picker in setup (the text field stays); remembering the window's size and position; migrating a developer's `./data`; an MSI, winget or any store.
 
 **Risks** (from the proposal §4): macOS is untested until the user's Mac runs the dmg (pystray, pywebview and pyobjc in a bundle, the two GUI libraries sharing one `NSApplication`, `LSUIElement`, entitlements, notarization, the LaunchAgent); Windows updates are verified by hash only, so the GitHub account's two-factor authentication is the guard (an Ed25519 signature over `SHA256SUMS` can be added inside `verify_update` later); runner images drift (`macos-15` pinned, revisit yearly); pywebview's Windows backend needs `pythonnet` inside PyInstaller and the WebView2 runtime on the machine (the browser fallback covers a missing runtime, FM56); `tools/test.ps1` under pwsh 7 on macOS may need small fixes at the first CI run. **Two AHSyncs on one machine** (recorded, not mitigated in v1; the user's decision of 2026-11-01): the lock is per data folder, so on the developer's own PC the source instance on `./data` and the installed app on `%LOCALAPPDATA%\AHSync` can run at once and both export into the same WoW AddOns folder, and `python -m ahsync_app` from source shares the installed app's data folder and would migrate its database forward with no way back. Friends run one install and never meet it; a `--data` override for the shell is the cheap fix if it bites.
+
+### 3.8 AI assistant access (MCP; planned MC1–MC3)
+
+Approved by the user 2026-11-08: `docs/plans/mcp-server.md` (its §1 decisions), mockup `docs/mockups/ai-assistant.html`; scenarios MCP1–MCP16, SEC18–SEC20. A read-only [MCP](https://modelcontextprotocol.io) server inside AHSync lets an assistant that speaks MCP (Claude Desktop, Claude Code; ChatGPT is a later batch) read your data and answer your own questions. **The assistant does the analysis; AHSync gives it complete, current, well-described data** and never pre-chews answers: no new engine views or ranking fields are built for it.
+
+#### 3.8.1 Enable and Disable (the Status card)
+
+- **Off by default.** The Status page's **AI assistant (Claude)** card has one button. **Enable** starts the server inside AHSync and builds the market table (§3.8.4) in AHSync's memory. Pressing it is the user's explicit agreement to that memory, and the card shows how much it is. **Disable** stops the server, closes its port and frees the memory at once (MCP1, MCP2).
+- **Remembered.** The choice is `mcp_enabled` in `config.toml` (§3.6). An enabled server starts again with AHSync; a disabled one stays off (MCP3).
+- **Written like every dashboard setting.** `POST /api/mcp {"enabled": true|false}` with the per-run token, `Host` and `Origin` checks of §3.5 Security (SEC18). It answers once the server has started or stopped, so the card redraws in its new state.
+- **The card's states**, every text and number made by `engine/app_view` like the AHSync app card:
+  - off: the Enable button and the memory it will use;
+  - starting: the button disabled, reading "Starting…";
+  - running: the Disable button, "running on this computer only · since Sun 13:10", the table's size and item count, which refresh Claude sees, and the number of characters;
+  - couldn't start: the reason, for example "Port 8766 is in use by another program…" (MCP4).
+- **The setup**, shown while running: the Claude Desktop config snippet and the Claude Code command, each with this install's bridge path and a Copy button, and the advice to turn on web search. The privacy note is shown in every state: "What Claude reads is sent to Anthropic to answer you: prices, your characters, their gold, professions and trades."
+
+#### 3.8.2 The server and the bridge
+
+- **The server** runs inside AHSync on its own thread, listening on `127.0.0.1:<mcp_port>` (default 8766, separate from the dashboard), only while enabled.
+  - It takes one JSON-RPC 2.0 request per `POST /mcp` and answers it as JSON (MCP's HTTP transport, without streaming); a notification gets `202` and no body.
+  - It accepts a request only with `Authorization: Bearer <key>`, a `Host` of `127.0.0.1:<mcp_port>` or `localhost:<mcp_port>`, and no `Origin`. Anything else gets `403` and no data; a browser page can't reach it (SEC19).
+- **The key.** Enable writes `mcp.json` = `{"port", "key"}` to AHSync's data folder: 32 random bytes as hex, new at every Enable, in the user's own folder. Disable deletes the file. The key is never logged, shown, or written anywhere else.
+- **The bridge**, `ahsync-mcp` (a console executable next to the app on Windows; the app's binary with `--mcp` on macOS; `python -m ahsync.mcp` from source), is what Claude launches. It speaks MCP to Claude over stdin and stdout, one JSON message per line.
+  - It answers `initialize`, `tools/list` and `ping` itself, from the same tool definitions the server uses, so Claude connects cleanly even while AHSync is closed or disabled.
+  - It forwards each `tools/call` to the server with the key read from `mcp.json` at that call (MCP5).
+  - Without `mcp.json` the call returns, as a tool error: "AHSync's AI assistant access is off, or AHSync isn't running. Start AHSync and press Enable on its Status page (AI assistant), then ask again." With the file but no server answering: "AHSync isn't running. Start it and ask again." (MCP6)
+  - The bridge holds no data, opens no listener, and exits when Claude closes its stdin.
+- **Context, not instructions.** `initialize` returns facts the assistant can't know, and no procedure (MCP7):
+  - the game is WoW: Forever, a Classic-era realm;
+  - item ids are Classic's, and a random-suffix item's key is its id + 2147483648 × the suffix (§2.1);
+  - money is integer copper, and times are UTC Unix milliseconds;
+  - numbers are from the last refresh, which `list_markets` dates.
+
+#### 3.8.3 The tools (all read-only)
+
+| Tool | Input | Output |
+|---|---|---|
+| `list_markets` | none | each market: name, newest refresh time, primary price source, item count (MCP8) |
+| `describe_data` | none | every table the `query` tool may read: columns, units, what a row means, example queries (MCP9) |
+| `query` | `sql`: one `SELECT` or `WITH … SELECT` | columns and rows, at most 500 rows and 256 KB, with `"truncated": true` when cut (MCP10, §3.8.5) |
+| `get_page` | `page` (one of the dashboard's pages), `market`, optional `character`, `sort` (a sort key of that page), `limit` (default 25, 1–200), `search` | the page's own fields (header, footers, notices, help texts) and its top `limit` rows, from the staged view the dashboard serves, sorted by the engine's sort keys like the dashboard (MCP11) |
+| `item` | `key` or `name`, `market`, optional `heatmaps` | the dashboard's item detail (`engine/item_detail`), heatmaps only when asked; an unknown item is a tool error naming it (MCP12) |
+
+- **Bounded.** Every tool result is at most 256 KB.
+- **Errors are data.** A bad argument, a missing market or no refresh yet is a tool result with `isError` and a plain sentence, never a protocol failure (MCP13).
+- **No heavy work.** A tool reads staged views, the published intelligence and the history tables; it never starts a refresh or a simulation (§3.1.2).
+
+#### 3.8.4 The market table (`market_stats`)
+
+- **What it is.** Each market's published intelligence is one JSON document per market (the `intel` table), which SQL can't search. While the server is enabled, AHSync flattens it into an in-memory SQLite table `market_stats`, one row per market and item. Columns:
+  - the item: `market`, `key`, `item_id`, `name`, `quality`, `ilvl`, `class`, `subclass`;
+  - prices: `cur` and `cur_age_ms`, `med7`, `med30`, `p10_30`, `p90_30`;
+  - `trend7` in % per day;
+  - flows: `sold_per_day`, `expired_per_day` and `listed_per_day`, with `volume_source`;
+  - `units_on_ah`, `chance`, `conf`, and `vendor_sell`.
+
+  The fields are the published intelligence as built, with no new formula (MCP14).
+- **Lifetime.**
+  - Built at Enable; rebuilt when a refresh publishes, and swapped in whole.
+  - Freed at Disable. Never written to disk or to the database.
+  - Its size (pages × page size) is the card's memory line. The memory budget lives in `tools/bench.py`.
+
+#### 3.8.5 The query tool's safety
+
+- **Read-only three ways:**
+  - its own connection opens the database with `mode=ro` and sets `PRAGMA query_only`;
+  - `market_stats` is attached before the guard is installed;
+  - a `sqlite3` authorizer then allows only `SELECT`, reads of allowlisted tables, and plain functions. It denies everything else, including writes, `ATTACH`, `PRAGMA`, `load_extension` and `sqlite_master`.
+- **One statement per call.**
+- **Bounded:** a progress handler stops a query after 2 s; at most 500 rows and 256 KB are returned (SEC20).
+- **The allowlist:** `market_stats`, `items`, `candles_h`, `candles_d`, `volume_d`, `sales_h`, `current`, `posts`, `sell_records`, `payouts`, `purchases`, `crafts`, `mail_sent`, `disenchants`, `auction_mail`, `gather_events`, `farming_sessions`, `farming_session_items`, `characters`, `professions`, `recipes`, `reagents`, `known_recipes`, `inventory`, `own_auctions` and `cost_basis`. Not `meta`, `sync_state`, `fetch_failures`, `status`, `source_state`, `views`, `intel` or any `*_new` staging table. No allowlisted column holds a credential: the API keys and Blizzard credentials live in the environment and `~/.ahsync` (MCP15).
+- **Privacy.** What the assistant reads goes to its provider. The card says so before and after Enable, and nothing else is off limits while access is read-only (the user, 2026-11-08).
+
+#### 3.8.6 Non-goals (this batch)
+
+- Write tools: skip, rules, reserves, settings, refresh.
+- ChatGPT and any remote access: a later batch, with its own security review.
+- A server running while AHSync is closed.
+- Any change to what the dashboard, tooltip or plan shows: the whole-plan snapshot and every golden stay byte-identical (MCP16).
 
 ## 4. AHProfit (addon)
 
@@ -2176,6 +2258,7 @@ ahsync/
   export/     market_lua.py (MarketIntelligence.lua), plan_lua.py (PortfolioPlan.lua), addon_files.py (atomic writes, the shortlist),
               addon_install.py (built M22: the addon install at start, moved from tools/deploy.py, §3.7.7)
   web/        server.py (built M23: GET /api/app; built M24: POST /api/autostart and AppHooks; built M25: POST /api/update/auto and /api/update/channel, tray_facts; built M27: /api/update/restart), setup_app.py (built M23: setup mode, GET /setup, POST /api/setup), static/ (built M23: setup.html)
+  mcp/        planned MC1–MC3 (§3.8): the AI assistant server (JSON-RPC, the tools, the in-memory market_stats, the query guard) and the bridge (`python -m ahsync.mcp`)
 ahsync_app/   (built M22: __main__.py, shell.py without window or tray, platform/; M23: setup mode in shell.py, app_info.py; built M23–M27: the rest, §3.7.1: the standalone app's shell; tests in tests/ahsync_app/; the only package with third-party imports, §5.0.1)
   __main__.py  the entry point (python -m ahsync_app runs the shell from source against the per-user folders)
   shell.py     the lifecycle: lock and the show file, addon install, setup mode, run() on a worker thread, the window's loop on the main thread with the tray detached, quit, apply a downloaded update

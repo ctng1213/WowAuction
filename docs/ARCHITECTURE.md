@@ -50,6 +50,9 @@ flowchart LR
   end
 
   Dashboard[localhost dashboard<br/>the app window, or a browser]
+  MCPS[mcp/ server, planned MC1–MC3<br/>in AHSync, 127.0.0.1:8766 while enabled<br/>read-only: pages, item, SQL + in-memory market_stats]
+  Bridge[ahsync-mcp bridge, planned MC1<br/>stdio for Claude, key from data/mcp.json]
+  Claude[Claude Desktop / Claude Code<br/>on the user's computer]
   GH[GitHub Releases, built M25<br/>update check, assets, SHA256SUMS]
 
   AHF -- until M35 --> Collect
@@ -75,6 +78,8 @@ flowchart LR
   DB --> Export --> DataFiles --> AEngine
   DataFiles --> Reselect --> UI
   DB --> Web --> Dashboard
+  DB -. read-only, planned MC1 .-> MCPS
+  Claude -. stdio .-> Bridge -. 127.0.0.1 + key .-> MCPS
 ```
 
 Boundaries that matter:
@@ -335,3 +340,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-08: SM2c built: a local market's summary is stored gzipped in `intel.body`, as a cloud one is; no component or flow changes.
 - 2026-11-08: BZ45's display (D106): the id pass stores each day's estimated unseen units (`volume_d1.unseen`, database schema 28) and the market summary carries `unseen_per_day` per item (summary schema 15, BZ49; published beside 13 and 14); the item detail reads it. A contract change on the summary; no component or flow changes. Deploy the cloud analyzer before the desktop release that reads schema 15.
 - 2026-11-08: MS2 built: the simulator's fitting from collected raw (`tools/sim/fit.py`), the SM rows' measures against truth (`tools/sim/inference.py`) and the inference report (`tools/sim_report.py`); test tooling only, no component, flow or contract changes.
+- 2026-11-08: MC0 (the AI assistant batch, `docs/plans/mcp-server.md`, SPEC §3.8): planned the `mcp/` server inside AHSync (127.0.0.1 only, only while enabled, read-only) and the `ahsync-mcp` bridge Claude launches; drawn dotted as planned.

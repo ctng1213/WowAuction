@@ -1,6 +1,6 @@
 # Plan: ask an AI assistant about your AHSync data (MCP server, MC0–MC3)
 
-Written for: the user, who approves it, and the Opus session that runs the batch. **Status: draft for review, 2026-11-08. Nothing here is approved yet.** Tasks are tagged **Opus** (judgement) or **Sonnet** (routine), each with a one-line reason.
+Written for: the user, who approves it, and the Opus session that runs the batch. **Status: approved by the user 2026-11-08, with standing approval for MC0–MC3** (option B and the mockup `docs/mockups/ai-assistant.html`). MC0, the spec merge, is SPEC §3.8 and scenarios MCP1–MCP16, SEC18–SEC20. Tasks are tagged **Opus** (judgement) or **Sonnet** (routine), each with a one-line reason.
 
 **What this batch is.** A local, read-only [MCP](https://modelcontextprotocol.io) server that runs inside AHSync, started and stopped by a button on the Status page. An assistant that speaks MCP (Claude Desktop, Claude Code) connects to it on your computer and uses it to read your data. The assistant does the thinking: it ranks, compares, spots trends and looks things up on the web. The server gives it complete, current, well-described data. It never changes anything, and it listens only on your own computer (127.0.0.1), only while you have it enabled.
 
@@ -22,7 +22,7 @@ When it starts (MCP's `initialize` result), the server gives the assistant **con
 
 How the assistant answers is left to it.
 
-## 1. Proposed decisions (for the user to approve or change)
+## 1. What is decided (do not re-litigate)
 
 1. **Read-only.** No tool skips an action, sets a rule, changes a setting or starts a refresh. Writes keep going through the dashboard's token-checked POSTs (SPEC §3.5 Security). Letting an assistant act on your plan needs its own design, later.
 2. **The server runs inside AHSync; Claude reaches it through a bridge** (the user's option B, 2026-11-08). Pressing **Enable** starts it inside the app, on its own local port. The port is `127.0.0.1` only (config `mcp_port`, default 8766, separate from the dashboard's) and exists only while the server runs.
