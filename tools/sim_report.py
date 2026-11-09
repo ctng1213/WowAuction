@@ -20,7 +20,7 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path[:0] = [str(Path(__file__).resolve().parents[1]), str(Path(__file__).resolve().parent)]
 
-from sim import decision, inference  # noqa: E402
+from sim import decision, decision_crafts, inference  # noqa: E402
 from sim.inference import Measure  # noqa: E402
 from sim.scorers import GOLD, Score  # noqa: E402
 
@@ -29,6 +29,15 @@ ROWS: dict[str, Callable[[Path, int], list[Measure]]] = {
     "SM5": inference.sm5, "SM10": inference.sm10, "SM11": inference.sm11}
 
 MARKS = {True: "met", False: "**missed**", None: "not exercised"}   # a decision line's mark
+
+
+def sd_rows() -> dict:
+    """Every SD row the decision report can run: decision.SD_ROWS and the craft rows (decision_crafts).
+
+    Returns:
+        Row ID -> its function (folder, seed) -> lines.
+    """
+    return {**decision.SD_ROWS, **decision_crafts.CRAFT_ROWS}
 
 
 def number(value: float | None) -> str:
@@ -104,7 +113,7 @@ def decision_report(rows: Sequence[str], seeds: Sequence[int], folder: Path) -> 
     """The decision report: the starter world's benchmarks and each SD row's lines (plan §1.6, §1.11).
 
     Args:
-        rows: "starter" and SD row IDs, each a key of decision.SD_ROWS.
+        rows: "starter" and SD row IDs, each a key of sd_rows().
         seeds: World seeds.
         folder: An empty folder for the runs.
 
@@ -132,7 +141,7 @@ def decision_report(rows: Sequence[str], seeds: Sequence[int], folder: Path) -> 
         for row in sd:
             for seed in seeds:
                 out += [f"| {l.row} | {seed} | {l.what} | {l.value} | {l.target} | {MARKS[l.met]} |"
-                        for l in decision.SD_ROWS[row](folder / f"{row}-{seed}", seed)]
+                        for l in sd_rows()[row](folder / f"{row}-{seed}", seed)]
     return "\n".join(out) + "\n"
 
 
@@ -152,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
                         "starter and SD rows for decision (default all)")
     parser.add_argument("--out", type=Path, help="write the markdown here instead of printing it")
     args = parser.parse_args(argv)
-    known = list(ROWS) if args.report == "inference" else ["starter", *decision.SD_ROWS]
+    known = list(ROWS) if args.report == "inference" else ["starter", *sd_rows()]
     rows = [r for r in args.rows.split(",") if r] or known
     unknown = [r for r in rows if r not in known]
     if unknown:
