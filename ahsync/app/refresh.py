@@ -19,7 +19,7 @@ from ahsync.collect.local_scans import recompute_stale_volume
 from ahsync.config import Config, is_cloud_market, market_settings, market_sources, portfolio_settings, with_document_settings
 from ahsync.db.sqlite import Database
 from ahsync.engine.sellprob import MarketSettings
-from ahsync.intel.contract import MarketIntelligence, ages_reference_ms
+from ahsync.intel.contract import MarketIntelligence, ages_reference_ms, buying_view
 from ahsync.engine.characters_view import CharacterSheet, characters_view
 from ahsync.engine.plan_chains import Arriving
 from ahsync.engine.positions import committed
@@ -199,8 +199,9 @@ def _stage_recommendations(db: Database, market: str, stats: dict, now_ms: int, 
     total_gold = sum(g for _, g in characters)
     pages, planned, capacity = _stage_plan(db, market, characters, stats, items, now_ms, offset_ms, cfg, built_ms,
                                            coverage30, prices_ms)
-    pages["disenchant"] = disenchant_page(db, char_ids, stats, items, total_gold, now_ms, cfg, capacity)   # D71
-    pages["craft"] = craft_page(db, char_ids, stats, items, total_gold, now_ms, cfg, planned, offset_ms,
+    buyable = buying_view(stats, prices_ms)                                                  # BZ51
+    pages["disenchant"] = disenchant_page(db, char_ids, buyable, items, total_gold, now_ms, cfg, capacity)   # D71
+    pages["craft"] = craft_page(db, char_ids, buyable, items, total_gold, now_ms, cfg, planned, offset_ms,
                                 capacity)                                                      # D45, D56
     pages["on_ah"] = on_ah_page(db, char_ids, stats, items, now_ms, cfg)                       # D18, D53
     pages["history"] = history_page(db, char_ids, stats, items, now_ms, offset_ms)            # D47

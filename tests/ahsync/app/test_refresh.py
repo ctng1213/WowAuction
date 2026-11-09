@@ -513,6 +513,28 @@ def test_BZ50_a_sold_out_items_price_is_not_stale_on_a_cloud_market(db):
         "Forecast too stale (prices 35 h old)"}                     # desktop-built: its own age stands
 
 
+def test_BZ51_nothing_is_bought_from_an_item_the_newest_snapshot_didnt_list(db):
+    from dataclasses import replace
+    built = cloud_document(db)                                      # prices to NOW: the whole AH at NOW
+    document = replace(built, items={k: replace(i, cur_age_ms=0) for k, i in built.items.items()})   # all listed then
+
+    def rod_crafts(intel) -> tuple[int, list[str]]:
+        refresh.replan_all(db, NOW, cloud_cfg(), documents={M: intel})
+        funded = db.conn.execute("SELECT count(*) FROM actions WHERE kind = 'craft' AND key = ? AND status = 'pending'",
+                                 (ROD,)).fetchone()[0]
+        craft, _ = db.view("craft", M)
+        return funded, [r["product"] for r in craft["rows"]]
+
+    assert rod_crafts(document) == (1, ["Copper Rod"])              # bars listed now: the rod is crafted
+    gone = replace(document, items={**document.items, BAR: replace(document.items[BAR], cur_age_ms=30 * HOUR)})
+    funded, rows = rod_crafts(gone)
+    assert (funded, rows) == (0, [])                                 # no bar to buy: no rod, on the plan or the page
+    craft, _ = db.view("craft", M)
+    assert "lacks mats" in craft["footer"]
+    desktop = replace(gone, ages_at_ms=None, built_ms=NOW)          # a desktop-built document: its book stands
+    assert rod_crafts(desktop)[0] == 1
+
+
 def test_BZ39_the_summarys_catalog_becomes_the_local_catalog(db):
     from dataclasses import replace
     from ahsync.engine import fees

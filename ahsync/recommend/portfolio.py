@@ -22,7 +22,7 @@ from ahsync.engine.portfolio import (CharacterGold, OpenPosition, PortfolioSetti
 from ahsync.engine.position_views import PositionView
 from ahsync.engine.sell_record import Record
 from ahsync.history.reads import ItemInfo
-from ahsync.intel.contract import ItemIntel, age_now_ms
+from ahsync.intel.contract import ItemIntel, age_now_ms, buying_view
 from ahsync.recommend.pages import DE_KIND
 from ahsync.recommend.plan import week_inputs
 from ahsync.recommend.positions_pass import position_json
@@ -156,6 +156,7 @@ def plan_portfolio(state: StateReader, characters: list[tuple[str, int]], stats:
     """
     if not characters:
         return None
+    stats = buying_view(stats, prices_ms)                       # BZ51: nothing to buy of an item no longer listed
     w = week_inputs(state, characters, stats, items, cfg, records, now_ms)
     gi = gen_inputs(state, characters, stats, items, now_ms, now_ms if built_ms is None else built_ms, cfg, prices_ms)
     chars = [CharacterGold(c, g, cfg.budgets.get(c)) for c, g in characters]

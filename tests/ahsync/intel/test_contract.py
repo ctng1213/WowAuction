@@ -103,6 +103,21 @@ def test_R33_others_supply_is_the_listed_supply_less_yours_and_never_the_median_
     assert others_supply(replace(linen, units_on_ah=None), 30) is None
 
 
+def test_BZ51_the_buying_view_empties_the_book_of_an_item_the_newest_snapshot_didnt_list():
+    from dataclasses import replace
+
+    from ahsync.intel.contract import buying_view
+    linen = ItemIntel(2589, 45, 20, 0, 49, 49, 40, 60, 0.0, 48.0, 0.0, 61.0, "ahf", {"ahf": 7}, 45, 20, 0.9,
+                      False, 42.0, 86, 93, None, ((45, 20, 3, 1),))
+    gone, scanned, never = replace(linen, cur_age_ms=30 * 3_600_000), replace(linen, cur_age_ms=-600_000), \
+        replace(linen, cur=None, cur_age_ms=None)
+    view = buying_view({1: linen, 2: gone, 3: scanned, 4: never}, 1_000)
+    assert view[1] is linen and view[3] is scanned and view[4] is never          # listed then, or scanned since
+    assert (view[2].cur, view[2].cur_qty, view[2].book, view[2].units_on_ah) == (None, None, (), 0)
+    assert (view[2].med7, view[2].post_price) == (49, 45)                         # selling it still has its prices
+    assert buying_view({2: gone}, None)[2] is gone                                # desktop-built: unchanged
+
+
 def test_BZ15_schema_10_round_trips_its_cloud_fields_and_writes_schema_9_without_them():
     item = replace(ITEM, last_hour=(4.0, 1.0, 0.0), recent_closes="125,,120", recent_sold="4,,2",
                    recent_listed="0,,10", recent_units="10,,18")
