@@ -66,21 +66,59 @@ def auctions(book: Sequence[tuple[int, int, int, int]] | None, cur: int | None, 
     return sorted(found)
 
 
-def _remaining_book(f: SellFacts, bought: int) -> SellFacts:
-    """The item with the auctions you bought taken out of the competition.
+def buyable(f: SellFacts) -> list[tuple[int, int, int]]:
+    """What a flip can buy, step by step, cheapest first (SPEC §3.4C.2, R30).
+
+    Gear is bought by the auction. A commodity is bought by the unit (Forever lets a buyer take any number of a
+    commodity auction's units): its units, cheapest first across every auction, are taken in steps of the reference
+    stack, so a step may end inside an auction or span several at different prices, and the last may be smaller.
+    The optimizer funds as many steps as the risk budget and the character's gold allow (§3.4D.1).
 
     Args:
         f: The item.
-        bought: How many of the cheapest auctions you bought.
 
     Returns:
-        A copy whose book (or cur and cur_qty) no longer has them.
+        (the highest unit price in the step, units, cost in copper) per step, in buying order.
+    """
+    whole = auctions(f.book, f.cur, f.cur_qty)
+    if not f.commodity:
+        return [(price, stack, price * stack) for price, stack, _ in whole]
+    size, out = max(1, f.ref_stack), []
+    units = cost = top = 0
+    for price, stack, _ in whole:
+        while stack:
+            take = min(stack, size - units)
+            units, cost, top, stack = units + take, cost + take * price, price, stack - take
+            if units == size:
+                out.append((top, units, cost))
+                units = cost = 0
+    if units:
+        out.append((top, units, cost))
+    return out
+
+
+def _remaining_book(f: SellFacts, bought: int) -> SellFacts:
+    """The item with the units you bought, cheapest first, taken out of the competition.
+
+    Args:
+        f: The item.
+        bought: Units bought: the first steps of `buyable`, so whole auctions for gear.
+
+    Returns:
+        A copy whose book (or cur and cur_qty) no longer has them; a partly bought auction keeps the units left.
     """
     if f.book is None:
-        return replace(f, cur=None, cur_qty=None) if bought else f
+        if not bought:
+            return f
+        left_units = (f.cur_qty or 0) - bought
+        return replace(f, cur=f.cur if left_units > 0 else None, cur_qty=left_units if left_units > 0 else None)
     left: dict[tuple[int, int, int], int] = {}
-    for auction in auctions(f.book, None, None)[bought:]:
-        left[auction] = left.get(auction, 0) + 1
+    for price, stack, band in auctions(f.book, None, None):
+        taken = min(stack, bought)
+        bought -= taken
+        if stack > taken:
+            auction = (price, stack - taken, band)
+            left[auction] = left.get(auction, 0) + 1
     return replace(f, book=tuple((p, s, b, n) for (p, s, b), n in sorted(left.items())))
 
 
@@ -131,10 +169,12 @@ def _best_window(f: SellFacts, opts: list[PostOption], used: list[float], stage:
 
 @dataclass(frozen=True)
 class FlipStep:
-    """One auction a flip buys, and where its units are posted (a Flip batch, SPEC §3.4D.3)."""
+    """One step a flip buys (an auction of gear, a reference stack of a commodity's units) and where its units are
+    posted (a Flip batch, SPEC §3.4D.3)."""
 
-    price: int                         # unit price paid, copper
+    price: int                         # the highest unit price paid in it, copper ("buy at or below")
     stack: int                         # units
+    cost: int                          # copper paid for them (a commodity step may span several prices)
     option: int                        # index into post_options of the item
     post_price: int                    # the unit price it is posted at: its later window's
     expected: float                    # the post's expected value, float copper
@@ -166,9 +206,8 @@ def flip_steps(f: SellFacts, now_ms: int, s: PlanSettings, fs: FlipSettings, led
     opts = later_only(post_options(f, now_ms, s), now_ms)
     used = [ledger.get((f.key, window_id(o)), 0.0) for o in opts]
     stage = _Stage(0, 0.0, 0, 0, {})
-    for n, (price, stack, _) in enumerate(auctions(f.book, f.cur, f.cur_qty)):
-        cost = price * stack
-        left = _remaining_book(f, n + 1)
+    for price, stack, cost in buyable(f):
+        left = _remaining_book(f, stage.units + stack)
         best_unit = max([o.price * (1 - fees.AH_CUT) for i, o in enumerate(opts) if used[i] + stack <= o.cap],
                         default=None)
         if best_unit is None or max(best_unit, alternative(f)[1]) * stack < (1 + fs.min_flip_margin) * cost:
@@ -184,7 +223,7 @@ def flip_steps(f: SellFacts, now_ms: int, s: PlanSettings, fs: FlipSettings, led
         slot[0], slot[1], slot[2], slot[3] = slot[0] + stack, slot[1] + e, slot[2] + p * stack, slot[3] + cost
         stage = replace(stage, cost=stage.cost + cost, expected=stage.expected + e, units=stage.units + stack,
                         top_price=price)
-        yield FlipStep(price, stack, i, opts[i].price, e, p)
+        yield FlipStep(price, stack, cost, i, opts[i].price, e, p)
 
 
 def build_flip(f: SellFacts, now_ms: int, s: PlanSettings, fs: FlipSettings, ledger: dict, spend_limit: int | None = None,
@@ -208,7 +247,7 @@ def build_flip(f: SellFacts, now_ms: int, s: PlanSettings, fs: FlipSettings, led
     """
     stage = _Stage(0, 0.0, 0, 0, {})
     for n, step in enumerate(flip_steps(f, now_ms, s, fs, ledger, value, cost_value)):
-        cost = step.price * step.stack
+        cost = step.cost
         if (spend_limit is not None and stage.cost + cost > spend_limit) or (max_auctions is not None and n >= max_auctions):
             break
         slot = stage.posts.setdefault((step.option, step.post_price), [0, 0.0, 0.0, 0])
