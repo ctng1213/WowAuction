@@ -344,6 +344,7 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-08: MC0 (the AI assistant batch, `docs/plans/mcp-server.md`, SPEC §3.8): planned the `mcp/` server inside AHSync (127.0.0.1 only, only while enabled, read-only) and the `ahsync-mcp` bridge Claude launches; drawn dotted as planned.
 - 2026-11-08: MC1 built: `ahsync/mcp/` (the protocol, `list_markets`, `get_page`, `item`, the server with its SEC19 checks and `mcp.json`, the stdio bridge); the app starts it at MC3.
 - 2026-11-09: MC2 built: the data tools (`mcp/stats.py`: the in-memory `market_stats`; `mcp/query.py`: the guarded `query`, `describe_data`, `item_group_stats`); no new component or flow.
+- 2026-11-09: MS4b-3 built: the simulator's characters farm (gather events) and SD9 reads the Gathering page (`tools/sim/decision_gathering.py`); test tooling only, no component, flow or contract changes.
 - 2026-11-09: MS4b-2 built: the simulator's characters carry out crafts and SD10/SD11 are scored (`tools/sim/decision_crafts.py`); test tooling only, no component, flow or contract changes.
 - 2026-11-09: MS4b-1 built: SD5, SD7, SD32, SD33 in the simulator's decision report (`tools/sim/decision.py`; a trader's first login); test tooling only, no component, flow or contract changes.
 - 2026-11-09: MS4a built: the decision report's SD rows in the simulator (`tools/sim/decision.py`; price and demand shifts in `market.py`; hourly documents and login hours for the trader); test tooling only, no component, flow or contract changes.
