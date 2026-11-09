@@ -11,6 +11,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Protocol
 
 from ahcloud.daily import run_daily
 from ahcloud.hourly import run_hourly
@@ -38,6 +39,26 @@ class RunSettings:
     skip_refresh: float = 0.0                          # chance an hour has no Blizzard refresh
     skip_daily: frozenset[int] = frozenset()           # simulated day numbers (0 = the start's day) with no daily run
     faults: dict[int, str] = field(default_factory=dict)   # snapshot number -> one of FAULTS
+
+
+class Agent(Protocol):
+    """Anyone acting on the market between snapshots: our trader (`trader.Trader`)."""
+
+    def next_wake(self) -> int | None:
+        """When it next acts.
+
+        Returns:
+            UTC ms; None for never.
+        """
+
+    def act(self, market: Market, documents: list[MarketIntelligence], now_ms: int) -> None:
+        """Act at a wake.
+
+        Args:
+            market: The market, run up to now_ms.
+            documents: The daily documents published so far.
+            now_ms: The wake's time, UTC ms.
+        """
 
 
 @dataclass
@@ -83,13 +104,14 @@ class SimCatalog:
         return [r for key, r in sorted(self.records.items()) if first_id <= key <= last_id]
 
 
-def simulate(world: World, folder: Path, settings: RunSettings = RunSettings()) -> Run:
+def simulate(world: World, folder: Path, settings: RunSettings = RunSettings(), agent: Agent | None = None) -> Run:
     """Run a world through the cloud job and keep what it published.
 
     Args:
         world: The scenario.
         folder: An empty folder for the stores, the run's scratch space and `truth.jsonl`.
         settings: Cadence and faults.
+        agent: Who else acts on the market between snapshots (our trader, `trader.py`), or None.
 
     Returns:
         The run: truth, snapshot times and every daily document.
@@ -106,6 +128,9 @@ def simulate(world: World, folder: Path, settings: RunSettings = RunSettings()) 
         while daily_at <= at_ms:
             _daily(run, catalog, world, daily_at, settings)
             daily_at += DAY_MS
+        while agent is not None and (wake := agent.next_wake()) is not None and wake <= at_ms:
+            market.run_until(wake)
+            agent.act(market, run.documents, wake)
         market.run_until(at_ms)
         store_snapshot(data, world.market, at_ms, _snapshot(market, at_ms, settings.faults.get(number)))
         run.snapshots.append(at_ms)
