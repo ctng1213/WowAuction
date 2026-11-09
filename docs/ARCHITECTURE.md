@@ -349,3 +349,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-09: MS4a built: the decision report's SD rows in the simulator (`tools/sim/decision.py`; price and demand shifts in `market.py`; hourly documents and login hours for the trader); test tooling only, no component, flow or contract changes.
 - 2026-11-09: MC3 built: the Status card's Enable / Disable (`POST /api/mcp`, `web/settings.py`), `run()` starting the assistant server when `mcp_enabled`, and the bridge packaged (`ahsync-mcp.exe` on Windows, `--mcp` on macOS).
 - 2026-11-09: MC3b built: the AI assistant card reads Claude Desktop's config, read-only, to say which file to change (`mcp/claude_config.py`, SPEC §3.8.1); no new component or flow.
+- 2026-11-09: MC3c built: the finder looks in the Microsoft Store build's `Claude-Data` folder first and names an `mcpServers` put inside another section (SPEC §3.8.1, MCP22–MCP23); no new component or flow.

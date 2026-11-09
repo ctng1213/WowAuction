@@ -191,3 +191,58 @@ def test_MCP19_folders_and_files_it_may_not_open(tmp_path, monkeypatch):
     monkeypatch.setattr(os, "scandir", refuse)                     # Packages can't be listed: only %APPDATA%
     found = find_claude_config(windows_env(tmp_path), tmp_path, "win32")
     assert (found.path, found.other_folder) == (str(folder / "claude_desktop_config.json"), None)
+
+
+def data_folder(tmp_path: Path, name: str = "claude_pzs8sxrjxfjjc") -> Path:
+    r"""The Store build's data folder, %LOCALAPPDATA%\Claude-Data\<name>, created."""
+    folder = tmp_path / "Local" / "Claude-Data" / name
+    folder.mkdir(parents=True)
+    return folder
+
+
+def test_MCP22_claude_data_wins_over_a_newer_file_made_by_mistake(tmp_path):
+    data = data_folder(tmp_path)
+    touch(data / "claude_desktop_config.json", 1_000_000_000, '{"coworkUserFilesPath": "x", "preferences": {}}')
+    store = store_folder(tmp_path)
+    touch(store / "claude_desktop_config.json", 2_000_000_000, '{"mcpServers": {"ahsync": {"command": "a"}}}')
+    found = find_claude_config(windows_env(tmp_path), tmp_path, "win32")
+    assert (found.state, found.path, found.other_folder) == (
+        "no_servers", str(data / "claude_desktop_config.json"), str(store))
+
+
+def test_MCP22_claude_data_wins_without_a_config_and_its_case_does_not_matter(tmp_path):
+    data = data_folder(tmp_path, "Claude_PZS8SXRJXFJJC")
+    touch(appdata_folder(tmp_path) / "claude_desktop_config.json", 2_000_000_000, "{}")
+    found = find_claude_config(windows_env(tmp_path), tmp_path, "win32")
+    assert (found.state, found.path) == ("no_file", str(data / "claude_desktop_config.json"))
+
+
+def test_MCP22_names_off_the_pattern_and_links_outside_are_ignored(tmp_path):
+    data_folder(tmp_path, "claude_x")
+    assert find_claude_config(windows_env(tmp_path), tmp_path, "win32").state == "not_found"
+    outside = tmp_path / "Elsewhere"
+    outside.mkdir()
+    link = tmp_path / "Local" / "Claude-Data" / "claude_pzs8sxrjxfjjc"
+    try:
+        if os.name == "nt":
+            import _winapi
+            _winapi.CreateJunction(str(outside), str(link))
+        else:
+            link.symlink_to(outside, target_is_directory=True)
+    except OSError as error:
+        pytest.skip(f"can't make a link here: {error}")
+    assert find_claude_config(windows_env(tmp_path), tmp_path, "win32").state == "not_found"
+
+
+def test_MCP23_mcpservers_inside_another_section_is_named_and_nothing_else_of_it(tmp_path):
+    path = tmp_path / "claude_desktop_config.json"
+    path.write_text(json.dumps({"coworkUserFilesPath": r"C:\Users\you\Claude", "preferences": {
+        "sidebarMode": "chat", "mcpServers": {"ahsync": {"command": r"C:\A.exe"}}}}), encoding="utf-8")
+    found = read_config(path)
+    assert (found.state, found.section, found.entry) == ("nested", "preferences", ())
+    assert not any(text in repr(found) for text in ("sidebarMode", "chat", "coworkUserFilesPath", "A.exe"))
+    path.write_text(json.dumps({"preferences": {"mcpServers": {}}, "mcpServers": {"ahsync": {"command": r"C:\B"}}}),
+                    encoding="utf-8")
+    assert (read_config(path).state, read_config(path).entry) == ("entry", (r"C:\B",))
+    path.write_text(r'{"\ud800": {"mcpServers": {}}}', encoding="utf-8")      # a name that can't be shown
+    assert read_config(path).state == "no_servers"
