@@ -17,6 +17,9 @@ from ahsync.engine.plan import OptionValue, PlanAction, PlanSettings, PostOption
     choose_option, post_chance, post_options, slot_price, window_id
 
 
+MAX_LOTS = 50                          # a commodity auction is split into at most this many lots (the re-plan's budget)
+
+
 @dataclass(frozen=True)
 class FlipSettings:
     """The config values flips need."""
@@ -66,20 +69,49 @@ def auctions(book: Sequence[tuple[int, int, int, int]] | None, cur: int | None, 
     return sorted(found)
 
 
-def _remaining_book(f: SellFacts, bought: int) -> SellFacts:
-    """The item with the auctions you bought taken out of the competition.
+def lots(f: SellFacts) -> list[tuple[int, int, int]]:
+    """What a flip can buy, cheapest first: whole auctions, or a commodity's auctions in lots (SPEC §3.4C.2, R30).
+
+    A commodity buyer takes any number of an auction's units, so each commodity auction is split into lots of the
+    reference stack, or larger when that would make more than MAX_LOTS of one auction, its remainder last; the
+    optimizer then funds as many lots as the risk budget and the character's gold allow (§3.4D.1), and a large
+    auction is never all or nothing.
 
     Args:
         f: The item.
-        bought: How many of the cheapest auctions you bought.
 
     Returns:
-        A copy whose book (or cur and cur_qty) no longer has them.
+        (unit price, units, band) per lot, in buying order; the auctions themselves when f is not a commodity.
+    """
+    whole = auctions(f.book, f.cur, f.cur_qty)
+    if not f.commodity:
+        return whole
+    out = []
+    for price, stack, band in whole:
+        size = max(1, f.ref_stack, -(-stack // MAX_LOTS))
+        out += [(price, min(size, stack - start), band) for start in range(0, stack, size)]
+    return out
+
+
+def _remaining_book(f: SellFacts, bought: int, found: list[tuple[int, int, int]] | None = None) -> SellFacts:
+    """The item with the lots you bought taken out of the competition.
+
+    Args:
+        f: The item.
+        bought: How many of the first lots (`lots`) you bought.
+        found: lots(f), when the caller has it already.
+
+    Returns:
+        A copy whose book (or cur and cur_qty) no longer has them. A partly bought commodity auction's unbought
+        lots stay as auctions of their own: the competition reads units by price and band, which splitting keeps.
     """
     if f.book is None:
-        return replace(f, cur=None, cur_qty=None) if bought else f
+        if not bought:
+            return f
+        left_units = sum(units for _, units, _ in (found if found is not None else lots(f))[bought:])
+        return replace(f, cur=f.cur if left_units else None, cur_qty=left_units or None)
     left: dict[tuple[int, int, int], int] = {}
-    for auction in auctions(f.book, None, None)[bought:]:
+    for auction in (found if found is not None else lots(f))[bought:]:
         left[auction] = left.get(auction, 0) + 1
     return replace(f, book=tuple((p, s, b, n) for (p, s, b), n in sorted(left.items())))
 
@@ -166,9 +198,10 @@ def flip_steps(f: SellFacts, now_ms: int, s: PlanSettings, fs: FlipSettings, led
     opts = later_only(post_options(f, now_ms, s), now_ms)
     used = [ledger.get((f.key, window_id(o)), 0.0) for o in opts]
     stage = _Stage(0, 0.0, 0, 0, {})
-    for n, (price, stack, _) in enumerate(auctions(f.book, f.cur, f.cur_qty)):
+    found = lots(f)
+    for n, (price, stack, _) in enumerate(found):
         cost = price * stack
-        left = _remaining_book(f, n + 1)
+        left = _remaining_book(f, n + 1, found)
         best_unit = max([o.price * (1 - fees.AH_CUT) for i, o in enumerate(opts) if used[i] + stack <= o.cap],
                         default=None)
         if best_unit is None or max(best_unit, alternative(f)[1]) * stack < (1 + fs.min_flip_margin) * cost:

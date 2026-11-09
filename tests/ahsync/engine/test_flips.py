@@ -221,6 +221,29 @@ def test_R29_a_flip_sells_only_in_a_window_that_starts_later():
     opts = flips.later_only(plan.post_options(both, NOW, s), NOW)
     assert all(o.window is not None and o.window[0] > NOW for o in opts if o.cap > 0) and any(o.cap > 0 for o in opts)
 
+def test_R30_a_commodity_flip_buys_part_of_an_auction_within_the_risk_budget():
+    s = replace(S, default_undercut_share=0.0)
+    dumped = dict(windows=(PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18, 6),), book=((10, 200, 4, 1), (50, 20, 1, 5)),
+                  p90=75, how=tuple(1.5 if h == SAT * 24 + 18 else 1.0 for h in range(168)), cur_qty=200,
+                  sold_per_day=600.0)
+    linen = dumped_linen(commodity=True, **dumped)
+    assert [o.cap for o in flips.later_only(plan.post_options(linen, NOW, s), NOW)] == [0, 60]   # Saturday: 60 units
+    assert flips.lots(linen)[:2] == [(10, 20, 4), (10, 20, 4)] and len(flips.lots(linen)) == 10 + 5
+    buy, post = flip(linen, s)
+    assert (buy.qty, buy.price, post.qty, post.price) == (60, 10, 60, 72)           # three lots of the 200
+    assert flip(dumped_linen(**dumped), s) == []                                     # one 200-unit lot: no room
+    huge = flips.lots(replace(linen, book=((10, 10_000, 4, 1),), ref_stack=1))
+    assert len(huge) == flips.MAX_LOTS and huge[0] == (10, 200, 4)                   # a 10,000 stack: 50 lots of 200
+    bare = replace(linen, book=None, cur=10, cur_qty=200)                            # no book: cur and cur_qty alone
+    assert (flips._remaining_book(bare, 0) is bare, flips._remaining_book(bare, 3).cur_qty) == (True, 140)
+    assert flips._remaining_book(bare, 10).cur is None                               # every lot bought
+    for tolerance, units, gold in ((0.3, 20, 320), (0.5, 60, 960)):                  # a lot: 200 c + 120 c deposit
+        out = plans.plan(world({LINEN: linen}), NOW, s=s, gold={"Amaya-G": 2000},
+                         ps=PortfolioSettings(risk_tolerance=tolerance))
+        assert [(a.kind, a.qty) for a in out.actions if a.kind in ("buy", "post")] == [("buy", units), ("post", units)]
+        assert out.selection.gold == gold <= 2000 * tolerance
+
+
 def test_R28_thin_data_is_no_flip_and_no_excluded_row():
     s = replace(S, default_undercut_share=0.0)
     spaulders = dumped_linen(key=7005, level=1_500_000, med7=1_500_000, p90=1_500_000, post_price=1_500_000,

@@ -96,6 +96,8 @@ class SellFacts:
     buy_windows: tuple[PlanWindow, ...] = ()       # buying windows, cheapest first (Buy for later, §3.4D.3)
     closes_30d: int | None = None                  # hourly closes in 30 days; thin data caps forecasts at the level (TT23)
     undercut_share: float | None = None            # the document's measured u(p) (BZ29); None for the default
+    commodity: bool = False                        # seen in Blizzard's commodities list: a buyer takes any number of
+                                                   # an auction's units, so a flip buys lots, not whole auctions (R30)
 
 
 @dataclass(frozen=True)
