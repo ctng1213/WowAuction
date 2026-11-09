@@ -170,7 +170,7 @@ sequenceDiagram
 
 | Family | Tables | Written by | Read by |
 |---|---|---|---|
-| Market history | `candles_h1`, `candles_d1`, `current`, `scans`, `book_entries`, `volume_d1`, `volume_cover`, `sales_h1`, `lifetimes_d1`, `new_listings_d1`, `observed_hours`, `ahledger_rows`, `source_state`, `sync_state`, `fetch_failures` | `collect/` | `history/reads.py` |
+| Market history | `candles_h1`, `candles_d1`, `current`, `scans`, `book_entries`, `volume_d1`, `volume_cover`, `sales_h1`, `lifetimes_d1`, `new_listings_d1`, `sold_prices_d1` (planned SP1: the price each sold auction left at), `observed_hours`, `ahledger_rows`, `source_state`, `sync_state`, `fetch_failures` | `collect/` | `history/reads.py` |
 | Items | `items` | `collect/` | everywhere, via the catalog |
 | Intelligence | `intel` (+ `_new` staging; a cloud document's body is its gzip as downloaded, SM1; a local one's gzipped, SM2c) | `analysis/` via `intel/store.py`, `collect/cloud_intel.py` | `recommend/`, `export/`, `web/` (one parsed record per process, `IntelCache`) |
 | Player state | inventory, journal (`purchases`, `posts`, `auction_mail`, `payouts`, `crafts`, `disenchants`, `mail_sent`), `professions`, `recipes`, `known_recipes`, `characters`, `cost_basis`, `gather_events`, `farming_sessions`, `manual_rates`, `positions`, `position_lots` | `state/` | `recommend/`, `app/` |
@@ -350,3 +350,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-09: MS4a built: the decision report's SD rows in the simulator (`tools/sim/decision.py`; price and demand shifts in `market.py`; hourly documents and login hours for the trader); test tooling only, no component, flow or contract changes.
 - 2026-11-09: MC3 built: the Status card's Enable / Disable (`POST /api/mcp`, `web/settings.py`), `run()` starting the assistant server when `mcp_enabled`, and the bridge packaged (`ahsync-mcp.exe` on Windows, `--mcp` on macOS).
 - 2026-11-09: MC3b built: the AI assistant card reads Claude Desktop's config, read-only, to say which file to change (`mcp/claude_config.py`, SPEC §3.8.1); no new component or flow.
+- 2026-11-09: sold-price fix spec merge (`docs/plans/sold-price.md`): planned `sold_prices_d1` in the market history, written at ingest beside `lifetimes_d1`, and summary schema 16's `sold_med7` and `sold_units7`, published and read by nothing until SP2.
