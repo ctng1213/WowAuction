@@ -18,7 +18,9 @@ from ahcloud.publish import read_latest
 from ahcloud.store import LocalStore
 from ahsync.collect.blizzard import QUALITY
 from ahsync.intel.contract import MarketIntelligence
-from sim.emulator import envelope, records, snapshot_times, store_snapshot, with_conflict, with_duplicate
+from ahsync.engine.volume import IdBook
+from sim.emulator import (capture, envelope, id_book, records, snapshot_times, store_snapshot, with_conflict,
+                         with_duplicate)
 from sim.market import DAY_MS, HOUR_MS, Market, World
 from sim.truth import Truth
 
@@ -112,6 +114,27 @@ def simulate(world: World, folder: Path, settings: RunSettings = RunSettings()) 
     _daily(run, catalog, world, daily_at, settings)      # the last snapshots, ingested as the next day's run would
     (folder / "truth.jsonl").write_bytes(run.truth.to_jsonl())
     return run
+
+
+def market_books(world: World, skip_refresh: float = 0.0) -> tuple[Truth, list[IdBook]]:
+    """The market alone, its snapshots as the cloud job would parse them (for fitting: no store, no cloud job).
+
+    Args:
+        world: The scenario.
+        skip_refresh: Chance an hour has no Blizzard refresh.
+
+    Returns:
+        (the truth, each snapshot's raw envelope parsed back into an IdBook, oldest first); the same schedule
+        and market draws as `simulate` with the same world and skip_refresh.
+    """
+    market = Market(world)
+    schedule = snapshot_times(world.start_ms, world.start_ms + world.days * DAY_MS,
+                              random.Random(world.seed + SCHEDULE_SEED_OFFSET), skip_refresh)
+    books = []
+    for at_ms in schedule:
+        market.run_until(at_ms)
+        books.append(id_book(capture(market.book(), at_ms), world.market))
+    return market.truth, books
 
 
 def rebuild(run: Run, world: World, folder: Path) -> MarketIntelligence:
