@@ -26,6 +26,8 @@ from ahsync.app.refresh import replan_all
 from ahsync.config import CloudConfig, Config, MarketSources
 from ahsync.db.sqlite import Database
 from ahsync.engine.fees import AH_CUT, deposit_copper
+from ahsync.export.addon_files import vendor_prices
+from ahsync.recommend.plan import flip_offers
 from ahsync.recommend.tracking_pass import tracking_pass
 from ahsync.state.importer import apply_data
 from ahsync.state.savedvars import read_ahprofit
@@ -64,6 +66,15 @@ class CharacterSpec:
         return f"{self.name}-{REALM}"
 
 
+@dataclass(frozen=True)
+class Login:
+    """What AHSync showed at one login, after its re-plan: what the decision rows read."""
+
+    at_ms: int
+    actions: tuple[dict, ...]          # the pending and late actions, as `Session.pending` reads them
+    offers: dict[int, str]             # the market file's flip offers (EX11): item key -> its offer
+
+
 @dataclass(order=True)
 class Mail:
     """A letter on its way to a character's mailbox."""
@@ -95,14 +106,20 @@ def market_config(world: World) -> Config:
 class Trader:
     """Our characters, their ledger and the addon's view of them, acting on one market."""
 
-    def __init__(self, world: World, characters: tuple[CharacterSpec, ...], folder: Path | None = None) -> None:
-        """Characters at the world's start; with a folder, AHSync's database there and a login every day.
+    def __init__(self, world: World, characters: tuple[CharacterSpec, ...], folder: Path | None = None,
+                 login_hours: tuple[int, ...] = (LOGIN_HOUR_UTC,), held_prices: dict[int, int] | None = None) -> None:
+        """Characters at the world's start; with a folder, AHSync's database there and logins every day.
 
         Args:
             world: The scenario.
             characters: Our characters.
             folder: An empty folder for AHSync's database; None for a trader driven by hand (SU10, SU11).
+            login_hours: UTC hours the characters log in each day.
+            held_prices: Item key -> the price every post of it uses, whatever the plan says (a benchmark that
+                holds to its target, SD28); None follows the plan.
         """
+        self.login_hours = login_hours
+        self.held_prices = held_prices or {}
         self.world, self.items = world, {item.key: item for item in world.items}
         self.specs = {c.char_id: c for c in characters}
         self.ledger = Ledger(0)
@@ -124,11 +141,13 @@ class Trader:
             self.schedule_logins()
 
     def schedule_logins(self) -> None:
-        """Queue a login at LOGIN_HOUR_UTC on every day of the world after its start."""
-        first = self.world.start_ms // DAY_MS * DAY_MS + LOGIN_HOUR_UTC * HOUR_MS
+        """Queue a login at each of login_hours on every day of the world, after its start."""
+        midnight = self.world.start_ms // DAY_MS * DAY_MS
         for day in range(self.world.days + 1):
-            if first + day * DAY_MS > self.world.start_ms:
-                self._wake(first + day * DAY_MS, "login", "")
+            for hour in sorted(self.login_hours):
+                at = midnight + day * DAY_MS + hour * HOUR_MS
+                if at > self.world.start_ms:
+                    self._wake(at, "login", "")
 
     # ------------------------------------------------------------- the runner's hook
 
@@ -360,6 +379,7 @@ class Session:
         self.db = Database.open(folder / "ahsync.db", trader.world.start_ms, None)
         self.document = None
         self.replans = 0
+        self.logins: list[Login] = []
 
     def login(self, market: Market, documents: list, now_ms: int) -> None:
         """A day's login: collect mail, let AHSync import and re-plan, then do the plan's due actions.
@@ -384,7 +404,10 @@ class Session:
         if replan_all(self.db, now_ms, self.cfg, documents={t.world.market: documents[-1]}) != [t.world.market]:
             raise RuntimeError(f"the re-plan failed at {now_ms}")
         self.replans += 1
-        for action in self.pending():
+        actions = self.pending()
+        offers = flip_offers(documents[-1].items, self.db.items(), set(vendor_prices(self.db)), now_ms, self.cfg)
+        self.logins.append(Login(now_ms, tuple(actions), offers))
+        for action in actions:
             self._carry_out(market, action, now_ms)
 
     def pending(self) -> list[dict]:
@@ -448,8 +471,9 @@ class Session:
         """
         t = self.trader
         units = min(action["qty"], t.held(action["char_id"], action["key"]))
-        if units > 0 and action["price"]:
-            t.post(market, action["char_id"], action["key"], units, action["price"], action["duration_h"] or 24)
+        price = t.held_prices.get(action["key"], action["price"])
+        if units > 0 and price:
+            t.post(market, action["char_id"], action["key"], units, price, action["duration_h"] or 24)
 
     def savedvars(self, market: Market, now_ms: int) -> dict:
         """The AHProfitDB table the addon would have written at this login.
@@ -506,14 +530,16 @@ class NaiveTrader(Trader):
     it at the document's med7 would pay after the cut and the deposit, and posts everything it holds at med7 for
     24 h."""
 
-    def __init__(self, world: World, characters: tuple[CharacterSpec, ...]) -> None:
-        """Characters with a login every day and no AHSync.
+    def __init__(self, world: World, characters: tuple[CharacterSpec, ...],
+                 login_hours: tuple[int, ...] = (LOGIN_HOUR_UTC,)) -> None:
+        """Characters with logins every day and no AHSync.
 
         Args:
             world: The scenario.
             characters: Our characters.
+            login_hours: UTC hours they log in each day.
         """
-        super().__init__(world, characters)
+        super().__init__(world, characters, login_hours=login_hours)
         self.schedule_logins()
 
     def login(self, market: Market, documents: list, now_ms: int) -> None:

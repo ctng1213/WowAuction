@@ -49,3 +49,13 @@ def test_the_oracle_resells_cheap_listings_and_its_stock_into_later_dearer_sales
     profit = oracle_profit(events, {7: 3}, frozenset({"we:a"}))
     assert profit == 3 * (190 - 50) + 2 * (95 - 50) + 2 * 95 + 1 * 95
     assert oracle_profit(events[:3]) == 3 * 140 and oracle_profit([Event(1, "buy", 1, 7, 1, 10, 0, "b")]) == 0
+
+
+def test_items_returned_before_any_sale_can_be_collected():
+    ledger = Ledger(0)
+    ledger.fund("a", 500)
+    ledger.buy("a", 7, 5, 100)
+    ledger.post("a", 7, 5, 1, 100)
+    ledger.returned("a", 7, 1)                                   # expired: no sale gold was ever mailed
+    ledger.collect("a", 0, {7: 5})
+    assert ledger.balanced() and ledger.bags[("a", 7)].units == 5 and ledger.deposits_lost == 100

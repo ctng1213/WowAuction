@@ -28,8 +28,19 @@ def test_the_inference_report_runs_the_chosen_rows_per_seed(tmp_path):
 
 def test_the_decision_report_lists_every_benchmark_per_seed(tmp_path):
     out = tmp_path / "decision.md"
-    assert rep.main(["decision", "--seeds", "1", "--out", str(out)]) == 0
+    assert rep.main(["decision", "--seeds", "1", "--rows", "starter", "--out", str(out)]) == 0
     text = out.read_text(encoding="utf-8")
     assert text.startswith("# Decision quality") and [line.split(" | ")[1] for line in text.splitlines()
                                                       if line.startswith("| 1 |")] == ["plan", "naive", "nothing",
                                                                                          "oracle"]
+
+    assert rep.main(["decision", "--rows", "SD99"]) == 2
+
+
+def test_an_sd_row_prints_its_lines_with_their_marks(tmp_path, monkeypatch):
+    from sim import decision
+    from sim.decision import Line
+    monkeypatch.setitem(decision.SD_ROWS, "SD31", lambda folder, seed: [Line("SD31", "buys", "0", "0", True),
+                                                                        Line("SD31", "offers", "2", "0", False)])
+    text = rep.decision_report(["SD31"], [1], tmp_path)
+    assert "| SD31 | 1 | buys | 0 | 0 | met |" in text and "| SD31 | 1 | offers | 2 | 0 | **missed** |" in text

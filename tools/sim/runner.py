@@ -71,6 +71,7 @@ class Run:
     documents: list[MarketIntelligence]                # each daily run's published document, in order
     data: LocalStore
     intel: LocalStore
+    published: list[MarketIntelligence] = field(default_factory=list)   # every document published, daily and hourly
 
 
 class SimCatalog:
@@ -111,7 +112,8 @@ def simulate(world: World, folder: Path, settings: RunSettings = RunSettings(), 
         world: The scenario.
         folder: An empty folder for the stores, the run's scratch space and `truth.jsonl`.
         settings: Cadence and faults.
-        agent: Who else acts on the market between snapshots (our trader, `trader.py`), or None.
+        agent: Who else acts on the market between snapshots (our trader, `trader.py`), or None; it is handed every
+            document published so far, the hourly ones too when settings.hourly.
 
     Returns:
         The run: truth, snapshot times and every daily document.
@@ -130,12 +132,15 @@ def simulate(world: World, folder: Path, settings: RunSettings = RunSettings(), 
             daily_at += DAY_MS
         while agent is not None and (wake := agent.next_wake()) is not None and wake <= at_ms:
             market.run_until(wake)
-            agent.act(market, run.documents, wake)
+            agent.act(market, run.published, wake)
         market.run_until(at_ms)
         store_snapshot(data, world.market, at_ms, _snapshot(market, at_ms, settings.faults.get(number)))
         run.snapshots.append(at_ms)
         if settings.hourly and run.documents:
             run_hourly(data, intel, world.market)
+            found = read_latest(intel, world.market)
+            if found is not None and found[0].observations_until_ms != run.published[-1].observations_until_ms:
+                run.published.append(found[0])
     _daily(run, catalog, world, daily_at, settings)      # the last snapshots, ingested as the next day's run would
     (folder / "truth.jsonl").write_bytes(run.truth.to_jsonl())
     return run
@@ -222,6 +227,7 @@ def _daily(run: Run, catalog: SimCatalog, world: World, at_ms: int, settings: Ru
     found = read_latest(run.intel, world.market)
     if found is not None:
         run.documents.append(found[0])
+        run.published.append(found[0])
 
 
 def _first_daily(start_ms: int) -> int:
