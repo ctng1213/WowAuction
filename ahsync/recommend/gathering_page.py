@@ -1,8 +1,8 @@
 """The Gathering page, built at the full refresh and at every re-plan after a SavedVariables read (SPEC §3.4E, §3.5).
 
 This module only gathers inputs at the edge: it reads the catalog data file
-(`ahsync/data/gathering_catalog.json`), each catalog item's newest `current` price and its
-intelligence (no history read, §3.1.1: med30, closes, `how`, the selling windows and seasonality
+(`ahsync/data/gathering_catalog.json`), each catalog item's newest price (`current`, or a cloud summary's when
+newer, GA35) and its intelligence (no history read, §3.1.1: med30, closes, `how`, the selling windows and seasonality
 strength come from it, M18), the characters' professions, their farming sessions and manual rates
 (M17), and the sources their gather events looted each item from (observed categories, M18).
 engine.gathering validates the catalog and engine.gathering_view makes every cell and text. A row
@@ -153,12 +153,35 @@ def load_catalog(db: GatheringReads, now_ms: int, path: Path = CATALOG_PATH) -> 
     return items
 
 
+def newest_price(cur: CurrentPrice | None, s: ItemIntel | None, prices_ms: int | None) -> CurrentPrice | None:
+    """The newer of an item's `current` row and a cloud summary's price (SPEC §3.4E.8, GA35).
+
+    A cloud market's prices reach AHSync only in its summary, never in `current`. The summary keeps an unlisted
+    item's last price with its age growing, so that price shows as it is, with its age.
+
+    Args:
+        cur: The item's newest current row across sources, or None when never seen.
+        s: Its intelligence (your scans since the summary applied, IU6), or None.
+        prices_ms: A cloud document's prices time (ages_at_ms), UTC ms; None for a desktop-built one.
+
+    Returns:
+        cur, or the summary's price as a "blizzard" row seen at prices_ms − cur_age_ms when that is newer; a tie
+        keeps cur (your scan, applied to both).
+    """
+    if prices_ms is None or s is None or s.cur_age_ms is None:
+        return cur
+    seen_ms = prices_ms - s.cur_age_ms
+    if cur is not None and cur.at >= seen_ms:
+        return cur
+    return CurrentPrice(s.key, s.cur, s.cur_qty, seen_ms, "blizzard")
+
+
 def price_facts(key: int, cur: CurrentPrice | None, s: ItemIntel | None, info: ItemInfo | None) -> PriceFacts:
-    """One catalog item's market facts from the newest `current` row and its intelligence.
+    """One catalog item's market facts from its newest price and its intelligence.
 
     Args:
         key: The item key.
-        cur: Its newest current price across sources, or None when never seen.
+        cur: Its newest price (newest_price), or None when never seen.
         s: Its intelligence, or None.
         info: Its item metadata (vendor price, quality), or None.
 
@@ -182,7 +205,7 @@ def price_facts(key: int, cur: CurrentPrice | None, s: ItemIntel | None, info: I
 
 def gathering_page(db: GatheringReads, market: str, char_ids: Sequence[str], stats: dict[int, ItemIntel],
                    items: dict[int, ItemInfo], now_ms: int, offset_ms: int, cfg: Config,
-                   path: Path = CATALOG_PATH) -> dict:
+                   path: Path = CATALOG_PATH, prices_ms: int | None = None) -> dict:
     """The Gathering payload, without the gold pill (SPEC §3.5 `gathering`).
 
     Args:
@@ -195,6 +218,7 @@ def gathering_page(db: GatheringReads, market: str, char_ids: Sequence[str], sta
         offset_ms: Local time minus UTC.
         cfg: Config (the default chances).
         path: The catalog file.
+        prices_ms: A cloud document's prices time (ages_at_ms), UTC ms; None for a desktop-built one (GA35).
 
     Returns:
         engine.gathering_view's payload, its rates from the stored sessions, the sessions since the last stored one
@@ -202,7 +226,8 @@ def gathering_page(db: GatheringReads, market: str, char_ids: Sequence[str], sta
         of the loot it can't place (`gathering_unplaced:<market>`, set or cleared, GA34).
     """
     catalog_items = load_catalog(db, now_ms, path)
-    facts = {it.key: price_facts(it.key, db.current_price(market, it.key), stats.get(it.key), items.get(it.key))
+    facts = {it.key: price_facts(it.key, newest_price(db.current_price(market, it.key), stats.get(it.key), prices_ms),
+                                 stats.get(it.key), items.get(it.key))
              for it in catalog_items}
     sheets = db.character_sheets(list(char_ids))
     skills = {sheet[0]: {name: skill for name, skill, _ in sheet[8]} for sheet in sheets}

@@ -1249,7 +1249,7 @@ The examples use the mockup's world: Monday 10:38; Brugan has Mining 68 and Skin
 |---|---|
 | Item, Category, Skill, eligibility | the catalog and the professions capture; no AH data |
 | Items/hr, Character, the rate card | the addon's loot events and the manual overrides; no AH data |
-| AH Price, AH Qty, Net gold/hr | the newest scan or AHF snapshot: one scan is enough, its age shows; the default chance (E.6) until sales data exist |
+| AH Price, AH Qty, Net gold/hr | the newest scan or AHF snapshot, or on a cloud market the summary's price when it is newer (GA35, `recommend/gathering_page.newest_price`; an item the summary no longer lists keeps its last price with its age): one scan is enough, its age shows; the default chance (E.6) until sales data exist |
 | Median 30d, Deviation, Sell window, Sell window price, the heatmap, the top windows, seasonality strength | price history (weeks of data); "—" until then, their header tooltips adding "needs price history" |
 
 AHF being offline changes nothing except that the price age is your own scan's. The day-one detail is compact: the price and rate lines, "Chance to sell 50% · default: no sales data yet", and one line in place of the history ("no price history yet: the heatmap, the top selling windows and seasonality strength appear as weeks of data arrive"). Day one, Copper Ore nets 38 × (209 − 0.5 × 5) = **78s 47c**.
