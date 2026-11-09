@@ -41,6 +41,34 @@ def test_MCP6_without_the_server_the_bridge_says_why_and_still_connects(tmp_path
     assert hello["result"]["serverInfo"] == {"name": "AHSync", "version": "0.1.12"}
 
 
+def test_MCP5_the_bridge_answers_the_handshake_itself_and_forwards_calls_with_the_key(tmp_path):
+    sent = []
+    answer = {"jsonrpc": "2.0", "id": 3, "result": {"content": [{"type": "text", "text": "{\"rows\":[[42]]}"}],
+                                                   "isError": False}}
+
+    def post(url, body, headers, timeout_s):
+        sent.append((url, json.loads(body), headers))
+        return 200, json.dumps(answer).encode()
+
+    out = io.StringIO()
+    call = {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+            "params": {"name": "query", "arguments": {"sql": "SELECT count(*) FROM items"}}}
+    write_key_file(tmp_path, 8766, "ab" * 32)
+    run([json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}}),
+         json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}), json.dumps(call)], out, tmp_path, "0.1.12",
+        post)
+    hello, listing, result = (json.loads(line) for line in out.getvalue().splitlines())
+    assert hello["result"]["protocolVersion"] == "2025-06-18" and hello["result"]["serverInfo"]["name"] == "AHSync"
+    tools = listing["result"]["tools"]
+    assert [t["name"] for t in tools] == ["list_markets", "describe_data", "query", "item_group_stats", "get_page",
+                                          "item"]
+    assert all(t["inputSchema"]["type"] == "object" for t in tools)
+    assert len(sent) == 1                                                 # only the call left the bridge
+    assert sent[0] == ("http://127.0.0.1:8766/mcp", call, {"Authorization": "Bearer " + "ab" * 32,
+                                                            "Content-Type": "application/json"})
+    assert result == answer                                               # unchanged
+
+
 def test_a_call_carries_the_key_read_at_that_call_and_passes_the_answer_back(tmp_path):
     seen = []
 

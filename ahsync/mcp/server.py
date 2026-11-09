@@ -26,6 +26,7 @@ from ahsync.db.sqlite import Database
 from ahsync.intel.store import IntelCache
 from ahsync.mcp import protocol
 from ahsync.mcp.protocol import ToolError
+from ahsync.mcp.stats import MarketStats
 from ahsync.mcp.tools import HANDLERS, ToolContext
 from ahsync.web.server import BIND_ADDRESS, BUSY_TIMEOUT_MS, DashboardServer, Response, json_response
 
@@ -301,6 +302,7 @@ class McpServer:
         self.intel_cache = intel_cache
         self._http: _HttpServer | None = None
         self._db: Database | None = None
+        self.stats = MarketStats()
         self.started_ms: int | None = None
 
     @property
@@ -334,8 +336,8 @@ class McpServer:
             return
         port = self.config.mcp_port if port is None else port
         self._db = open_read_only(self.db_path, self.intel_cache)
-        db, config, clock = self._db, self.config, self.clock
-        app = McpApp(secrets.token_hex(32), port, lambda: ToolContext(db, config, clock))
+        db, config, clock, stats, path = self._db, self.config, self.clock, self.stats, self.db_path
+        app = McpApp(secrets.token_hex(32), port, lambda: ToolContext(db, config, clock, path, stats))
         try:
             self._http = _HttpServer(app, port)
         except OSError as error:
@@ -344,6 +346,7 @@ class McpServer:
             log.warning("the assistant server couldn't bind port %d: %s", port, error)
             raise McpStartError(PORT_IN_USE.format(port=port)) from None
         app.port = self._http.server_address[1]
+        self.stats.build(self._db, self.config.markets)            # Enable's memory (SPEC §3.8.1, §3.8.4)
         write_key_file(self.data_dir, app.port, app.key)
         self.started_ms = self.clock.now_ms()
         threading.Thread(target=self._http.serve_forever, name="ahsync-mcp", daemon=True).start()
@@ -357,6 +360,7 @@ class McpServer:
             self._http.server_close()
             self._http = None
             log.info("assistant server stopped")
+        self.stats.close()                                          # Disable frees it (MCP2)
         if self._db is not None:
             self._db.conn.close()
             self._db = None

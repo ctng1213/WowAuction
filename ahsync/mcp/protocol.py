@@ -34,6 +34,34 @@ TOOLS = (
      "description": "The user's markets: each one's id, when its numbers were last refreshed, its primary price "
                     "source and how many items it prices. Call this first to know how fresh an answer is.",
      "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}},
+    {"name": "describe_data",
+     "description": "The tables the query tool can read: what a row is, each column with its unit, and example "
+                    "queries. market_stats holds every item's current market numbers (price now, 7 and 30 day "
+                    "medians and percentiles, trend, sales and listings per day, chance to sell, vendor price) with "
+                    "its class and subclass.",
+     "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}},
+    {"name": "query",
+     "description": "Run one read-only SQL query (SQLite: SELECT or WITH ... SELECT) over the tables describe_data "
+                    "lists. At most 500 rows or 256 KB come back, and a query stops after 2 seconds.",
+     "inputSchema": {"type": "object", "properties": {"sql": {"type": "string", "description": "One SELECT."}},
+                     "required": ["sql"], "additionalProperties": False}},
+    {"name": "item_group_stats",
+     "description": "Every item of one group with its market_stats row, in one call. Groups by item class (trade "
+                    "goods): cloth, leather, metal_stone, cooking (raw fish and meat share it), herb, elemental, "
+                    "enchanting, parts, other. Or the gathering catalog's farmable lists: fishing, herbalism, mining, "
+                    "skinning. Neither alone is complete for a kind like fish; the class and subclass come with "
+                    "each row.",
+     "inputSchema": {"type": "object", "properties": {
+         "group": {"type": "string", "enum": ["cloth", "leather", "metal_stone", "cooking", "herb", "elemental",
+                                              "enchanting", "parts", "other", "fishing", "herbalism", "mining",
+                                              "skinning"]},
+         "market": _MARKET,
+         "sort": {"type": "string", "description": "A market_stats column; default name."},
+         "ascending": {"type": "boolean", "description": "Lowest first (default for name; numbers sort highest "
+                                                         "first)."},
+         "min_sold_per_day": {"type": "number", "description": "Only items selling at least this many a day."},
+         "limit": {"type": "integer", "minimum": 1, "maximum": 500, "description": "Items returned, default 50."}},
+         "required": ["group"], "additionalProperties": False}},
     {"name": "get_page",
      "description": "One AHSync dashboard page as the dashboard shows it, with the engine's own numbers and its column "
                     "help texts: portfolio, today, week, on_ah, disenchant, craft, flip, gathering, inventory, "

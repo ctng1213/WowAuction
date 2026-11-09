@@ -30,7 +30,7 @@ def test_ping_tools_list_unknown_methods_and_notifications():
     assert protocol.local_answer({"jsonrpc": "2.0", "id": 3, "method": "ping"}, "0") == \
         {"jsonrpc": "2.0", "id": 3, "result": {}}
     listed = protocol.local_answer({"jsonrpc": "2.0", "id": 4, "method": "tools/list"}, "0")["result"]["tools"]
-    assert [t["name"] for t in listed] == ["list_markets", "get_page", "item"] == list(protocol.tool_names())
+    assert [t["name"] for t in listed] == ["list_markets", "describe_data", "query", "item_group_stats", "get_page", "item"] == list(protocol.tool_names())
     assert all(t["inputSchema"]["type"] == "object" and t["description"] for t in listed)
     assert protocol.local_answer({"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {}}, "0") is None
     assert protocol.local_answer({"jsonrpc": "2.0", "method": "notifications/initialized"}, "0") is None

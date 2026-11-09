@@ -9,13 +9,19 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import lru_cache
+from pathlib import Path
 
 from ahsync.app.status_page import status_page
 from ahsync.clock import Clock
 from ahsync.config import Config, market_sources
 from ahsync.db.sqlite import Database
 from ahsync.export.addon_files import coverage30
+from ahsync.engine.gathering import catalog
+from ahsync.mcp import query as data
 from ahsync.mcp.protocol import PAGES, ToolError
+from ahsync.mcp.stats import MarketStats
+from ahsync.recommend.gathering_page import read_catalog
 from ahsync.recommend.inventory_page import detail_of
 from ahsync.recommend.plan_pages import item_looks
 
@@ -27,11 +33,14 @@ NO_REFRESH = "No refresh has finished yet for {market}: AHSync fills its pages a
 
 @dataclass(frozen=True)
 class ToolContext:
-    """What every tool reads: the database on a read-only connection, the config and the clock."""
+    """What every tool reads: the database on a read-only connection, the config and the clock; the data tools also
+    the database file and the market table (SPEC §3.8.4)."""
 
     db: Database
     config: Config
     clock: Clock
+    db_path: Path | None = None
+    stats: MarketStats | None = None
 
 
 def _utc_text(ms: int | None) -> str | None:
@@ -314,7 +323,95 @@ def item(ctx: ToolContext, args: Mapping) -> dict:
             "detail": detail}
 
 
-# Tool name -> its function (SPEC §3.8.3; the query tools come with MC2).
+@lru_cache(maxsize=1)
+def catalog_keys() -> dict[str, frozenset[int]]:
+    """The gathering catalog's item keys per category (Fishing, Herbalism, Mining, Skinning, Monster).
+
+    Returns:
+        Category -> keys; empty when the catalog can't be read.
+    """
+    items, _ = catalog(read_catalog()[0])
+    out: dict[str, set[int]] = {}
+    for it in items:
+        for category in it.categories:
+            out.setdefault(category, set()).add(it.key)
+    return {k: frozenset(v) for k, v in out.items()}
+
+
+def _fresh_stats(ctx: ToolContext) -> MarketStats:
+    """The market table, rebuilt first when a newer refresh has been published (SPEC §3.8.4).
+
+    Args:
+        ctx: The context.
+
+    Returns:
+        The table.
+
+    Raises:
+        ToolError: The data tools aren't available (no table: the server is stopping).
+    """
+    if ctx.stats is None or ctx.db_path is None:
+        raise ToolError("The data tools aren't available; ask again in a moment.")
+    ctx.stats.refresh(ctx.db, ctx.config.markets)
+    return ctx.stats
+
+
+def describe_data(ctx: ToolContext, args: Mapping) -> dict:
+    """The tables the query tool may read, with units and examples (MCP9).
+
+    Args:
+        ctx: The context.
+        args: None used.
+
+    Returns:
+        query.describe_data's answer.
+    """
+    conn = data.open_reader(ctx.db_path, _fresh_stats(ctx))
+    try:
+        return data.describe_data(conn)
+    finally:
+        conn.close()
+
+
+def query(ctx: ToolContext, args: Mapping) -> dict:
+    """One read-only SQL query (MCP10, SEC20).
+
+    Args:
+        ctx: The context.
+        args: {"sql"}.
+
+    Returns:
+        query.run_query's answer.
+
+    Raises:
+        ToolError: The guard's refusals and the limits (SPEC §3.8.5).
+    """
+    conn = data.open_guarded(ctx.db_path, _fresh_stats(ctx))
+    try:
+        return data.run_query(conn, args.get("sql"))
+    finally:
+        conn.close()
+
+
+def item_group_stats(ctx: ToolContext, args: Mapping) -> dict:
+    """Every item of one group with its market_stats row (MCP17).
+
+    Args:
+        ctx: The context.
+        args: {"group", "market", "sort", "ascending", "min_sold_per_day", "limit"}.
+
+    Returns:
+        query.item_group_stats's answer.
+    """
+    conn = data.open_reader(ctx.db_path, _fresh_stats(ctx))
+    try:
+        return data.item_group_stats(conn, args, catalog_keys(), ctx.config.markets)
+    finally:
+        conn.close()
+
+
+# Tool name -> its function (SPEC §3.8.3).
 HANDLERS: dict[str, Callable[[ToolContext, Mapping], dict]] = {
-    "list_markets": list_markets, "get_page": get_page, "item": item,
+    "list_markets": list_markets, "describe_data": describe_data, "query": query,
+    "item_group_stats": item_group_stats, "get_page": get_page, "item": item,
 }

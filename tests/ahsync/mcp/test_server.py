@@ -130,7 +130,7 @@ def test_protocol_answers_notifications_bad_json_and_unknown_tools(running):
                                            "params": {"name": "drop_table", "arguments": {}}})
     assert json.loads(body)["error"] == {"code": -32602, "message": "Unknown tool: drop_table"}
     status, _, body = _send(running, body={"jsonrpc": "2.0", "id": 3, "method": "tools/list"})
-    assert [t["name"] for t in json.loads(body)["result"]["tools"]] == ["list_markets", "get_page", "item"]
+    assert [t["name"] for t in json.loads(body)["result"]["tools"]] == ["list_markets", "describe_data", "query", "item_group_stats", "get_page", "item"]
     big = "x" * (64 * 1024 + 1)
     assert _send(running, body=big)[0] == 413
 
