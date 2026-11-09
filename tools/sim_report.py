@@ -1,7 +1,7 @@
 """The simulator's reports (SPEC §8.10; docs/plans/market-simulator.md). MS2 builds the inference report.
 
     python tools/sim_report.py inference [--seeds 1,2,3] [--rows SM1,SM2] [--out report.md]
-    python tools/sim_report.py decision [--seeds 1,2,3] [--out report.md]
+    python tools/sim_report.py decision [--seeds 1,2,3] [--rows starter,SD31] [--out report.md]
 
 Every SM row built so far runs its world once per seed through the unchanged cloud job (`sim.inference`), and the
 report lists each measure: the engine's number, the truth's, the gap and the row's band. A row that fails by design
@@ -98,25 +98,39 @@ def score_line(seed: int, s: Score) -> str:
             f"{s.stranded_units} | {s.stranded_cost / GOLD:.2f} | {share} |")
 
 
-def decision_report(seeds: Sequence[int], folder: Path) -> str:
-    """The decision report: the starter world traded by the plan and each benchmark (plan §1.6).
+def decision_report(rows: Sequence[str], seeds: Sequence[int], folder: Path) -> str:
+    """The decision report: the starter world's benchmarks and each SD row's lines (plan §1.6, §1.11).
 
     Args:
+        rows: "starter" and SD row IDs, each a key of decision.SD_ROWS.
         seeds: World seeds.
         folder: An empty folder for the runs.
 
     Returns:
         Markdown.
+
+    Raises:
+        KeyError: An unknown row.
     """
-    out = ["# Decision quality", "",
-           "MS3's starter world (stock to sell, a Silk dump on day 3) traded by AHSync's plan through the real import, "
-           "by the naive trader and by nobody, against the oracle (plan §1.35: an optimistic yardstick). Gold made "
-           "is realized; unsold stock is listed as stranded at its cost.", "",
-           "| Seed | Benchmark | Made (g) | Gold-days | Drawdown (g) | Stranded units | Stranded cost (g) | Of the oracle |",
-           "|---|---|---|---|---|---|---|---|"]
-    for seed in seeds:
-        scores = decision.benchmark(decision.starter(seed), decision.STARTER_CHARACTERS, folder / f"starter-{seed}")
-        out += [score_line(seed, s) for s in scores]
+    out = ["# Decision quality", ""]
+    if "starter" in rows:
+        out += ["MS3's starter world (stock to sell, a Silk dump on day 3) traded by AHSync's plan through the real "
+                "import, by the naive trader and by nobody, against the oracle (plan §1.35: an optimistic yardstick). "
+                "Gold made is realized; unsold stock is listed as stranded at its cost.", "",
+                "| Seed | Benchmark | Made (g) | Gold-days | Drawdown (g) | Stranded units | Stranded cost (g) | Of the oracle |",
+                "|---|---|---|---|---|---|---|---|"]
+        for seed in seeds:
+            scores = decision.benchmark(decision.starter(seed), decision.STARTER_CHARACTERS, folder / f"starter-{seed}")
+            out += [score_line(seed, s) for s in scores]
+        out.append("")
+    sd = [r for r in rows if r != "starter"]
+    if sd:
+        out += ["The SD rows: each a report line against its target (plan §1.11); a mark, never a test failure.", "",
+                "| Row | Seed | Measure | Value | Target | Mark |", "|---|---|---|---|---|---|"]
+        for row in sd:
+            for seed in seeds:
+                out += [f"| {l.row} | {seed} | {l.what} | {l.value} | {l.target} | {'met' if l.met else '**missed**'} |"
+                        for l in decision.SD_ROWS[row](folder / f"{row}-{seed}", seed)]
     return "\n".join(out) + "\n"
 
 
@@ -132,18 +146,20 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("report", choices=["inference", "decision"])
     parser.add_argument("--seeds", default="1", help="comma-separated world seeds")
-    parser.add_argument("--rows", default=",".join(ROWS), help="comma-separated SM rows")
+    parser.add_argument("--rows", default="", help="comma-separated rows: SM rows for inference (default all); "
+                        "starter and SD rows for decision (default all)")
     parser.add_argument("--out", type=Path, help="write the markdown here instead of printing it")
     args = parser.parse_args(argv)
-    rows = [r for r in args.rows.split(",") if r]
-    unknown = [r for r in rows if r not in ROWS]
-    if unknown and args.report == "inference":
-        print(f"unknown rows: {', '.join(unknown)} (built: {', '.join(ROWS)})", file=sys.stderr)
+    known = list(ROWS) if args.report == "inference" else ["starter", *decision.SD_ROWS]
+    rows = [r for r in args.rows.split(",") if r] or known
+    unknown = [r for r in rows if r not in known]
+    if unknown:
+        print(f"unknown rows: {', '.join(unknown)} (built: {', '.join(known)})", file=sys.stderr)
         return 2
     seeds = [int(s) for s in args.seeds.split(",") if s]
     with tempfile.TemporaryDirectory() as scratch:
         text = (inference_report(rows, seeds, Path(scratch)) if args.report == "inference"
-                else decision_report(seeds, Path(scratch)))
+                else decision_report(rows, seeds, Path(scratch)))
     if args.out:
         args.out.write_text(text, encoding="utf-8")
     else:

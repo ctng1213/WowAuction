@@ -176,7 +176,7 @@ class Ledger:
             copper: Gold taken, copper; at most what waits.
             items: Item key -> units taken; at most what waits.
         """
-        self.mail_gold[char] -= copper
+        self.mail_gold[char] = self.mail_gold.get(char, 0) - copper      # 0 before any sale
         self.cash[char] = self.cash.get(char, 0) + copper
         for key, units in sorted(items.items()):
             cost = self.mail_items[(char, key)].take(units)
