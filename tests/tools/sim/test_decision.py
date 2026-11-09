@@ -6,8 +6,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
 
-from sim.decision import (STARTER_CHARACTERS, Line, benchmark, funded, over_liquidity, sd15,  # noqa: E402
-                          sd28, sd29, sd31, starter)
+from sim.decision import (STARTER_CHARACTERS, Line, benchmark, drift_world, funded, over_liquidity,  # noqa: E402
+                          sd5, sd7, sd15, sd28, sd29, sd31, sd32, sd33, starter)
 from sim.trader import Login  # noqa: E402
 from sim.truth import Event, Truth  # noqa: E402
 
@@ -58,3 +58,28 @@ def test_our_listings_are_checked_against_the_liquidity_rule_at_each_snapshot():
     assert over_liquidity(t, 7, [3, 5, 7], "we:", 0.5) == (2, 3)    # 5 ≤ max(5, 5); 10 > 5; 10 > max(5, 0)
     logins = [Login(1, ({"kind": "buy", "key": 7},), {}), Login(2, ({"kind": "post", "key": 7},), {})]
     assert funded(logins, 7) == logins[:1] and funded(logins, 7, "post") == logins[1:]
+
+
+def test_SD5_a_lasting_demand_drop_is_measured_per_cloth(tmp_path):
+    lines = sd5(tmp_path, days=3, drop_day=1, hourly=False)          # no dump, no login yet: every buy line untested
+    assert complete(lines, {"SD5"}) and len(lines) == 9
+    assert [l.met for l in lines if "last buy" in l.what] == [None, None, None]
+
+
+def test_SD7_one_quiet_day_is_compared_with_the_same_world_without_it(tmp_path):
+    lines = sd7(tmp_path, days=3, quiet_day=1, hourly=False)
+    assert complete(lines, {"SD7"}) and len(lines) == 6
+    assert {l.met for l in lines} == {None}                          # nothing posted or bought: not exercised
+
+
+def test_SD32_a_falling_drift_compounds_daily_after_day_20_and_untested_buying_is_not_exercised(tmp_path):
+    world = drift_world(1, -0.02, days=23)
+    assert [round(price, 4) for _, price, _ in world.items[0].shifts] == [0.98, 0.9604, 0.9412]
+    lines = sd32(tmp_path, days=3, hourly=False)
+    assert complete(lines, {"SD32"}) and lines[0].met is None and len(lines) == 2
+
+
+def test_SD33_a_rising_drift_reports_the_plans_share_of_the_oracle(tmp_path):
+    assert [round(price, 4) for _, price, _ in drift_world(1, 0.02, days=22).items[0].shifts] == [1.02, 1.0404]
+    lines = sd33(tmp_path, days=3, hourly=False)
+    assert complete(lines, {"SD33"}) and lines[0].met is None and len(lines) == 2

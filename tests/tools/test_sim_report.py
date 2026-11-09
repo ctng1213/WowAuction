@@ -41,6 +41,8 @@ def test_an_sd_row_prints_its_lines_with_their_marks(tmp_path, monkeypatch):
     from sim import decision
     from sim.decision import Line
     monkeypatch.setitem(decision.SD_ROWS, "SD31", lambda folder, seed: [Line("SD31", "buys", "0", "0", True),
-                                                                        Line("SD31", "offers", "2", "0", False)])
+                                                                        Line("SD31", "offers", "2", "0", False),
+                                                                        Line("SD31", "sales", "—", "≥ 1", None)])
     text = rep.decision_report(["SD31"], [1], tmp_path)
     assert "| SD31 | 1 | buys | 0 | 0 | met |" in text and "| SD31 | 1 | offers | 2 | 0 | **missed** |" in text
+    assert "| SD31 | 1 | sales | — | ≥ 1 | not exercised |" in text      # the world never tested it

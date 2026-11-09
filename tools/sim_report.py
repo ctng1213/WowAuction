@@ -28,6 +28,8 @@ ROWS: dict[str, Callable[[Path, int], list[Measure]]] = {
     "SM1": inference.sm1, "SM2": inference.sm2, "SM3": inference.sm3, "SM4": inference.sm4,
     "SM5": inference.sm5, "SM10": inference.sm10, "SM11": inference.sm11}
 
+MARKS = {True: "met", False: "**missed**", None: "not exercised"}   # a decision line's mark
+
 
 def number(value: float | None) -> str:
     """A measure's value as the report prints it.
@@ -129,7 +131,7 @@ def decision_report(rows: Sequence[str], seeds: Sequence[int], folder: Path) -> 
                 "| Row | Seed | Measure | Value | Target | Mark |", "|---|---|---|---|---|---|"]
         for row in sd:
             for seed in seeds:
-                out += [f"| {l.row} | {seed} | {l.what} | {l.value} | {l.target} | {'met' if l.met else '**missed**'} |"
+                out += [f"| {l.row} | {seed} | {l.what} | {l.value} | {l.target} | {MARKS[l.met]} |"
                         for l in decision.SD_ROWS[row](folder / f"{row}-{seed}", seed)]
     return "\n".join(out) + "\n"
 

@@ -107,7 +107,8 @@ class Trader:
     """Our characters, their ledger and the addon's view of them, acting on one market."""
 
     def __init__(self, world: World, characters: tuple[CharacterSpec, ...], folder: Path | None = None,
-                 login_hours: tuple[int, ...] = (LOGIN_HOUR_UTC,), held_prices: dict[int, int] | None = None) -> None:
+                 login_hours: tuple[int, ...] = (LOGIN_HOUR_UTC,), held_prices: dict[int, int] | None = None,
+                 first_login_ms: int | None = None) -> None:
         """Characters at the world's start; with a folder, AHSync's database there and logins every day.
 
         Args:
@@ -117,8 +118,11 @@ class Trader:
             login_hours: UTC hours the characters log in each day.
             held_prices: Item key -> the price every post of it uses, whatever the plan says (a benchmark that
                 holds to its target, SD28); None follows the plan.
+            first_login_ms: No login before this time: AHSync installed on a market the cloud has watched for a
+                while (SD5); None logs in from the world's start.
         """
         self.login_hours = login_hours
+        self.first_login_ms = first_login_ms
         self.held_prices = held_prices or {}
         self.world, self.items = world, {item.key: item for item in world.items}
         self.specs = {c.char_id: c for c in characters}
@@ -136,17 +140,18 @@ class Trader:
         self._wakes: list[tuple[int, int, str, str]] = []       # (at, seq, kind, ref)
         self._seq = 0
         self.samples: list[tuple[int, int, int]] = []        # (at, copper tied up, realized copper) per wake
+        self.truth = None                                      # the run's truth log, once a decision row ran it
         self.session = Session(self, folder) if folder is not None else None
         if self.session is not None:
             self.schedule_logins()
 
     def schedule_logins(self) -> None:
-        """Queue a login at each of login_hours on every day of the world, after its start."""
+        """Queue a login at each of login_hours on every day of the world, after its start and first_login_ms."""
         midnight = self.world.start_ms // DAY_MS * DAY_MS
         for day in range(self.world.days + 1):
             for hour in sorted(self.login_hours):
                 at = midnight + day * DAY_MS + hour * HOUR_MS
-                if at > self.world.start_ms:
+                if at > self.world.start_ms and (self.first_login_ms is None or at >= self.first_login_ms):
                     self._wake(at, "login", "")
 
     # ------------------------------------------------------------- the runner's hook
