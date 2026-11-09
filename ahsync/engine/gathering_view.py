@@ -472,7 +472,7 @@ def _row(b: _Base, r: Rate | None, view_char: str, w: GatheringWorld, hist: dict
 
 
 def _order(bases: Sequence[_Base]) -> list[_Base]:
-    """The default order: AH price, highest first; no listing last; ties by name, then key (GA1).
+    """The tie-break order: AH price, highest first; no listing last; ties by name, then key (GA1).
 
     Args:
         bases: The items.
@@ -481,6 +481,19 @@ def _order(bases: Sequence[_Base]) -> list[_Base]:
         The items sorted.
     """
     return sorted(bases, key=lambda b: (b.facts.price is None, -(b.facts.price or 0), b.item.name, b.item.key))
+
+
+def _by_net(rows: Sequence[dict]) -> list[dict]:
+    """A view's rows in the default order: Net gold/hr, highest first; "—" last; ties keep the given order (GA1).
+
+    Args:
+        rows: The view's rows, in the tie-break order (_order), each with its sort["net"] in copper or None.
+
+    Returns:
+        The rows sorted; the given order (a full tie-break ending in the item key) settles ties, so it is deterministic.
+    """
+    ranked = sorted(enumerate(rows), key=lambda ir: (ir[1]["sort"]["net"] is None, -(ir[1]["sort"]["net"] or 0), ir[0]))
+    return [r for _, r in ranked]
 
 
 def _view_rate(b: _Base, view_char: str, w: GatheringWorld) -> Rate | None:
@@ -510,7 +523,7 @@ def _foot_all(bases: Sequence[_Base], view_char: str) -> list[list[str]]:
         [text, class] segments, joined by " · " on the page.
     """
     nobody = sum(1 for b in bases if not b.eligible_chars)
-    segments = [[f'{len(bases)} materials · sorted by AH Price, highest first; rows with "—" sort last', ""]]
+    segments = [[f'{len(bases)} materials · sorted by Net gold/hr, highest first, then AH Price; rows with "—" sort last', ""]]
     if nobody:
         segments.append([f"{nobody} no character can gather (amber Skill)", "amber"])
     whose = ("the highest among the characters who can gather it" if view_char == ""
@@ -688,7 +701,7 @@ def _view(bases: Sequence[_Base], view_char: str, w: GatheringWorld, hist: Mappi
     """One complete view: its rows, both footers, the toggle, the alert and the rate cards (SPEC §3.5 by_char).
 
     Args:
-        bases: The items, in the default order.
+        bases: The items, in the tie-break order (_order).
         view_char: The character id, or "" for All characters.
         w: The world.
         hist: Item key -> its historical cells (the same in every view).
@@ -704,8 +717,8 @@ def _view(bases: Sequence[_Base], view_char: str, w: GatheringWorld, hist: Mappi
     else:
         toggle = {"label": "Only what a character can gather", "disabled": True, "title": "Pick a character first"}
     cards = [_rate_card(b, view_char, r, w) for b, r in zip(bases, rates)]
-    return {"rows": [{**_row(b, r, view_char, w, hist[b.item.key]), "card_lines": c["lines"]}
-                     for b, r, c in zip(bases, rates, cards)],
+    rows = [{**_row(b, r, view_char, w, hist[b.item.key]), "card_lines": c["lines"]} for b, r, c in zip(bases, rates, cards)]
+    return {"rows": _by_net(rows),
 
             "foot": _foot_toggle(bases, view_char) if view_char else _foot_all(bases, ""),
             "foot_all": _foot_all(bases, view_char), "toggle": toggle,
@@ -720,7 +733,7 @@ def _shared(views: Mapping[str, dict]) -> tuple[list[dict], dict, dict]:
         views: Character id ("" for All characters) -> its complete view (_view).
 
     Returns:
-        (the All-characters rows, in the default order; item key -> its rate card's blocks, every character's,
+        (the All-characters rows, in their default order (_by_net); item key -> its rate card's blocks, every character's,
         each with its "char"; character id -> {"keys": the view's item keys in order, "cells": item key -> only
         the row fields that differ from the shared row, "foot", "foot_all", "toggle", "alert"}).
     """

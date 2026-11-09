@@ -632,7 +632,9 @@ const GA_HISTORY_COLS = ['Median 30d', 'Deviation', 'Sell window', 'Sell window 
 const gaDayOneTable = rows => gaTable(GA_COLS, rows, 3).replace(/<th class="([^"]*)" title="[^"]*">(Median 30d|Deviation|Sell window|Sell window price)<\/th>/g,
   (m, cls, t) => `<th class="${cls}" title="${gaHelpTitle(t)} · needs price history: &quot;—&quot; until weeks of data arrive">${t}</th>`);
 // Default sort: AH price, highest first; rows without a price last; ties by name.
-const gaSorted = list => [...list].sort((a, b) => (b.price ?? -1) - (a.price ?? -1) || a.n.localeCompare(b.n));
+// Default order: Net gold/hr under All characters, highest first; "—" last; ties by AH price, then name.
+const gaNetAll = it => { const r = gaRowRate(it, null); return r ? gaNetHr(it, r.rate, false) : null; };
+const gaSorted = list => [...list].sort((a, b) => (gaNetAll(b) ?? -Infinity) - (gaNetAll(a) ?? -Infinity) || (b.price ?? -1) - (a.price ?? -1) || a.n.localeCompare(b.n));
 const gaCheck = (label, on, extra) => `<label class="select${extra && extra.disabled ? ' muted' : ''}"${extra && extra.title ? ` title="${extra.title}"` : ''}><input type="checkbox"${on ? ' checked' : ''}${extra && extra.disabled ? ' disabled' : ''}> ${label}</label>`;
 // The one filter bar; who = null for All characters. search = the text in the search box.
 const gaFilters = (who, search) => `<div class="filters">${['Fishing', 'Herbalism', 'Mining', 'Skinning', 'Monster'].map(c => gaCheck(c, true)).join('')}
@@ -806,7 +808,7 @@ const GATHERING_PAGE = { count: GA_ITEMS.length, html: () => {
     <div class="card"><div class="card-h"><b>Farmable materials</b><span class="muted">${all.length} in the catalog · ${withRate} with a rate · desktop only: the addon only records loot</span></div>
     ${gaFilters(null)}
     ${gaTable(GA_COLS, all.map(it => gaRow(it, null, it.n === 'Copper Ore')), 3)}
-    <div class="foot"><span>${all.length} materials · sorted by AH Price, highest first; rows with "—" sort last</span><span class="muted">·</span><span class="amber">${nobody.length} no character can gather (amber Skill)</span><span class="muted">·</span><span class="muted">Character = whose rate: the highest among the characters who can gather it</span></div>
+    <div class="foot"><span>${all.length} materials · sorted by Net gold/hr, highest first, then AH Price; rows with "—" sort last</span><span class="muted">·</span><span class="amber">${nobody.length} no character can gather (amber Skill)</span><span class="muted">·</span><span class="muted">Character = whose rate: the highest among the characters who can gather it</span></div>
     <div class="foot note">Net gold/hr = items/hr × net per unit, where net per unit = post price − 5% AH cut − (1 − chance to sell) × deposit (24 h, refunded on a sale). Posts are priced at the current AH price. Gross gold/hr (items/hr × price) is on the detail below. ${stale ? `Prices are ${GA_PRICE_AGE_H} h old (amber over 24 h): every gold/hr uses them as they are.` : ''} Items the catalog doesn't know are never shown as farmable, even if you looted them; AHSync lists what you gathered that it couldn't place under Status.</div>
     ${gaDetail('Copper Ore')}</div>
 

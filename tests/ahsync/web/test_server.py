@@ -728,7 +728,7 @@ def test_D81_the_gathering_page_under_all_characters():
     assert p["by_char"][""]["toggle"] == {"label": "Only what a character can gather", "disabled": True,
                                           "title": "Pick a character first"}
     assert p["by_char"][""]["foot"] == [
-        ['16 materials · sorted by AH Price, highest first; rows with "—" sort last', ""],
+        ['16 materials · sorted by Net gold/hr, highest first, then AH Price; rows with "—" sort last', ""],
         ["4 no character can gather (amber Skill)", "amber"],
         ["Character = whose rate: the highest among the characters who can gather it", "muted"]]
     assert p["help"]["Character"].startswith("Whose observed or manual rate this is")
