@@ -161,9 +161,7 @@ def test_R31_your_listed_auctions_are_not_others_supply_and_fill_the_caps(state)
                                 ("Amaya-G", BAR, 1300, 5, 1, 1, NOW, NOW - HOUR),           # ended an hour ago
                                 ("Amaya-G", DUST, 600, 7, 1, 1, NOW, None)])                # < 30 min left, read 1 h ago
         state.conn.execute("INSERT INTO snapshots(char_id, location, at) VALUES ('Amaya-G', 'auctions', ?)", (NOW - HOUR,))
-    bounded = NOW - HOUR + 2 * HOUR                                                           # read + the band's 2 h
-    assert plan.own_listed(state, [c for c, _ in CHARS], NOW) == {BAR: ((4, bounded), (10, NOW + 12 * HOUR))}
-    assert plan.own_listed(state, ["Brugan-G"], NOW) == {BAR: ((10, NOW + 12 * HOUR),)}
+    bounded = NOW - HOUR + 2 * HOUR                     # read + the band's 2 h (own_listed: tests/.../test_listings.py)
     w = plan.week_inputs(state, CHARS, STATS, ITEMS, Config(markets=(M,)), now_ms=NOW)
     assert (w.facts[BAR].supply_now, w.facts[BAR].own_listed) == (6, ((4, bounded), (10, NOW + 12 * HOUR)))   # 20 - 14
     assert plan.sell_facts(STATS[BAR], ITEMS[BAR], None, own=((30, None),)).supply_now == 0           # never below 0

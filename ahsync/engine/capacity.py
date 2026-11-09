@@ -51,7 +51,8 @@ def liquidity_cap(listed_units: float | None, max_supply_share: float, stack: in
 
     Args:
         listed_units: Others' listed units in the window (window_supply), or None when unknown.
-        max_supply_share: Config max_supply_share, 0-1 (0.5: at most about a third of the listings).
+        max_supply_share: Config max_supply_share, 0-1 (0.5: your units at most a third of the pool, yours
+            included, when listed_units is others' only, intel.contract.others_supply).
         stack: The fewest units a window always allows: the reference stack (gear: min_gear_units).
 
     Returns:

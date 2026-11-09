@@ -14,7 +14,7 @@ local Craft = AHProfit.Engine.Craft
 
 local Options = {}
 Options.SELL_WINDOW_HOURS = 8      -- config sell_window_hours (SPEC §3.6): the posting-now window
-Options.MAX_SUPPLY_SHARE = 0.5     -- config max_supply_share (SPEC §3.4 Liquidity)
+Options.MAX_SUPPLY_SHARE = 0.5     -- config max_supply_share: at most a third of the pool, yours included (SPEC §3.4 Liquidity)
 Options.DEFAULT_SELL_PROB = 0.25   -- config default_sell_prob (SPEC §3.3.2 fallbacks)
 Options.DEFAULT_SELL_PROB_CHEAPEST = 0.5   -- config default_sell_prob_cheapest: volume unknown, you'd be cheapest
 AHProfit.Options = Options
@@ -156,19 +156,23 @@ function Options.ProductNet(recipe, item, vendorSell)
   end, p
 end
 
---- The most crafts worth making for the posting-now window: its output may fill at most
+--- The most crafts worth making for the posting-now window: your units of the product may be at most
 --- max_supply_share of what others list, and always one reference stack (capacity.liquidity_cap,
 --- the posting-now window without a supply pattern; SPEC §3.4 Liquidity, A30).
---- Units of the product you already hold count against it (A36).
----@param recipe table      { yieldMin, yieldMax }
----@param item table|nil    The product's market item (supply, refStack)
----@param held number|nil   Units of the product you hold
----@param nowMs number|nil  Now, for the supply factor of this hour (A62); nil applies none
----@return number|nil       Crafts, 0 when what you hold fills the cap; nil (no cap) when neither the current nor
----                          the typical supply is known
-function Options.CraftCap(recipe, item, held, nowMs)
+--- Units of the product you already hold count against it (A36); your listed units are yours, not others'
+--- supply (intel.contract.others_supply, R33).
+---@param recipe table        { yieldMin, yieldMax }
+---@param item table|nil      The product's market item (supply, refStack)
+---@param held number|nil     Units of the product you hold, your listed ones included
+---@param nowMs number|nil    Now, for the supply factor of this hour (A62); nil applies none
+---@param listed number|nil   Units of it you have listed now: taken out of the supply listed now, never out of the
+---                            typical supply (no listing)
+---@return number|nil         Crafts, 0 when what you hold fills the cap; nil (no cap) when neither the current nor
+---                            the typical supply is known
+function Options.CraftCap(recipe, item, held, nowMs, listed)
   local supply = item and (item.supply or item.typicalSupply)          -- typical daily supply as a fallback (A57)
   if not supply then return nil end
+  if item.supply then supply = math.max(0, supply - (listed or 0)) end  -- R33: a book counts your auctions
   supply = supply * Options.SupplyFactor(item, nowMs)                  -- over the window, not just now (A62)
   local units = math.max(item.refStack or 1, math.floor(Options.MAX_SUPPLY_SHARE * supply)) - (held or 0)
   if units <= 0 then return 0 end
@@ -254,8 +258,8 @@ function Options.Crafts(recipes, units, ctx)
     for i, r in ipairs(left) do
       local net, p = Options.ProductNet(r, ctx.itemOf(r.product), ctx.vendorOf(r.product) or 0)
       local listed = (ctx.listed or {})[r.product]
-      local cap = Options.CraftCap(r, ctx.itemOf(r.product), (units[r.product] or 0) + (listed and listed.units or 0),
-                                   ctx.nowMs)
+      local mine = listed and listed.units or 0
+      local cap = Options.CraftCap(r, ctx.itemOf(r.product), (units[r.product] or 0) + mine, ctx.nowMs, mine)
       local option = Craft.Option(r, CraftMarket({ r }, owned, ctx), net, ctx.budget, cap)          -- A64
       option.p = p
       if option.crafts > 0 and (not best or option.profit > best.profit) then best, bestAt = option, i end
@@ -291,7 +295,7 @@ function Options.CraftOptions(recipes, units, ctx)
     local market = CraftMarket({ r }, units, ctx)
     local inBags, listed = units[r.product] or 0, (ctx.listed or {})[r.product]   -- your auctions count too (A42)
     local held = inBags + (listed and listed.units or 0)
-    local cap = Options.CraftCap(r, ctx.itemOf(r.product), held, ctx.nowMs)
+    local cap = Options.CraftCap(r, ctx.itemOf(r.product), held, ctx.nowMs, listed and listed.units or 0)
     local option = Craft.Option(r, market, net, ctx.budget, cap)                          -- A64
     if cap == 0 and held > 0 and not vendorSold then
       out[#out + 1] = { key = r.product, spell = r.spell, made = held, inBags = inBags,

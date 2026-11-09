@@ -148,6 +148,16 @@ describe("Options", function()
                 Options.CraftCap({ yieldMin = 1, yieldMax = 1 }, { supply = 6, refStack = 1 }, 3) }, { 2, 0 })
   end)
 
+  it("R33 the craft cap counts your listed units as yours, not others' supply", function()
+    local Options = Boot()
+    local one = { yieldMin = 1, yieldMax = 1 }
+    -- R31's Linen: 93 listed, 30 of them yours: max(20, floor(0.5 × 63)) = 31, less your 30 (before: 46 − 30 = 16)
+    assert_eq({ Options.CraftCap(one, { supply = 93, refStack = 20 }, 30, nil, 30),
+                Options.CraftCap(one, { supply = 93, refStack = 20 }, 30),               -- listed unknown: as before
+                Options.CraftCap(one, { typicalSupply = 50, refStack = 20 }, 30, nil, 30) },   -- no listing: max(20, 25)
+              { 1, 16, 0 })
+  end)
+
   it("A20 a mat a craft uses is not also offered for sale", function()
     local Options = Boot()
     local rod = { spell = 2663, product = 6217, yieldMin = 1, yieldMax = 1, reagents = { { 2840, 2 } }, crafters = 1 }

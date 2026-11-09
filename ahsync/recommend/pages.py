@@ -16,7 +16,8 @@ from ahsync.engine.plan import PlanAction
 from ahsync.engine.planned_crafts import chain_lines, craft_chains
 from ahsync.engine.sellprob import Supply
 from ahsync.history.reads import ItemInfo, suffix_names_of
-from ahsync.intel.contract import ItemIntel, supply_level
+from ahsync.intel.contract import ItemIntel, others_supply
+from ahsync.recommend.listings import listed_units
 from ahsync.state.reads import RecipeRow, StateReader
 
 DE_KIND = {2: "weapon", 4: "armor"}     # WoW item class -> DE table kind
@@ -38,17 +39,19 @@ def _market(stats: ItemIntel | None) -> views.MarketActivity:
                                  stats.volume_kind)
 
 
-def _mat_caps(mat_keys: set[int], stats: dict[int, ItemIntel], now_ms: int, cfg: Config) -> dict[int, float]:
-    """Each mat's liquidity cap for the posting-now window: a share of others' listings (SPEC §3.4 Liquidity).
+def _mat_caps(mat_keys: set[int], stats: dict[int, ItemIntel], now_ms: int, cfg: Config,
+              mine: dict[int, int]) -> dict[int, float]:
+    """Each item's liquidity cap for the posting-now window: a share of others' listings (SPEC §3.4 Liquidity, R33).
 
     Args:
-        mat_keys: Mats the disenchant buys would yield.
+        mat_keys: Items to cap (the mats disenchant buys would yield, or a craft's product).
         stats: Item key -> intelligence (listed supply and its pattern, reference stack).
         now_ms: Now; the window is the next sell_window_hours.
         cfg: Config (sell_window_hours, max_supply_share).
+        mine: Item key -> your units listed now: not others' supply (intel.contract.others_supply).
 
     Returns:
-        Mat key -> cap in units; one stack of 1 for a mat with no intelligence.
+        Item key -> how many units of yours may be listed in all; one stack of 1 for an item with no intelligence.
     """
     hours = sellprob.posting_now_window(now_ms, cfg.sell_window_hours)
     caps = {}
@@ -58,7 +61,7 @@ def _mat_caps(mat_keys: set[int], stats: dict[int, ItemIntel], now_ms: int, cfg:
             caps[key] = 1
             continue
         pattern = profile.unpack(s.supply_how, s.supply_weeks).values if s.supply_how else ()
-        listed = capacity.window_supply(supply_level(s), pattern, now_ms // HOUR_MS, hours)   # V23
+        listed = capacity.window_supply(others_supply(s, mine.get(key, 0)), pattern, now_ms // HOUR_MS, hours)  # V23
         caps[key] = capacity.liquidity_cap(listed, cfg.max_supply_share, s.ref_stack)
     return caps
 
@@ -101,7 +104,9 @@ def disenchant_page(state: StateReader, char_ids: list[str], stats: dict[int, It
         info = items[t.key]
         _, outcomes = disenchant.outcomes_for(DE_TABLE, info.quality, info.ilvl, DE_KIND[info.item_class])
         found.append((t, info, outcomes, {m: chance * (lo + hi) / 2 for m, chance, lo, hi in outcomes}))
-    caps = _mat_caps({m for *_, units in found for m in units}, stats, now_ms, cfg)
+    mine = listed_units(state, char_ids, now_ms)                                          # R33
+    caps = {k: max(0, cap - mine.get(k, 0)) for k, cap in _mat_caps({m for *_, units in found for m in units}, stats,
+                                                                        now_ms, cfg, mine).items()}
     taken, dropped = capacity.take_within_caps([capacity.Candidate(t.key, t.ev - t.buy_copper, units)
                                                 for t, _, _, units in found], caps)
     rows = []
@@ -215,8 +220,8 @@ def _held_and_listed(state: StateReader, char_ids: list[str]) -> dict[int, int]:
     return have
 
 
-def _craft_room(r: RecipeRow, stats: dict[int, ItemIntel], have: dict[int, int], now_ms: int, cfg: Config
-                ) -> tuple[int, str]:
+def _craft_room(r: RecipeRow, stats: dict[int, ItemIntel], have: dict[int, int], now_ms: int, cfg: Config,
+                mine: dict[int, int]) -> tuple[int, str]:
     """How many crafts the market can take now: the product's liquidity cap, less what you have (D45, A30, A36).
 
     Args:
@@ -225,11 +230,12 @@ def _craft_room(r: RecipeRow, stats: dict[int, ItemIntel], have: dict[int, int],
         have: Item key -> units you hold or have listed.
         now_ms: Now (the posting-now window).
         cfg: Config.
+        mine: Item key -> your units listed now (others' supply leaves them out, R33).
 
     Returns:
         (most crafts, at least 1 while any units are left; "held" when what you have fills the cap, else "").
     """
-    cap = _mat_caps({r.product}, stats, now_ms, cfg)[r.product]
+    cap = _mat_caps({r.product}, stats, now_ms, cfg, mine)[r.product]
     units = have.get(r.product, 0)
     avg_yield = (r.yield_min + r.yield_max) / 2
     if units >= cap:
@@ -321,10 +327,11 @@ def craft_page(state: StateReader, char_ids: list[str], stats: dict[int, ItemInt
     held = {(c, k): float(q) for c, k, q in state.owned_lots(char_ids)}
     places = _places(state, char_ids, now_ms)
     have = _held_and_listed(state, char_ids)
+    mine = listed_units(state, char_ids, now_ms)                                          # R33
     rows, skipped = [], {}
     chain_products = {c.final.key for c in craft_chains(planned)}
     for r in [r for r in recipes if r.product not in chain_products]:
-        left = _craft_room(r, stats, have, now_ms, cfg)
+        left = _craft_room(r, stats, have, now_ms, cfg, mine)
         net = _product_net(stats.get(r.product), r, items, now_ms, cfg)
         option = craft.craft_option(engine_recipes[r.spell], market, by_product, net,
                                     budget=room, max_depth=cfg.max_craft_depth,

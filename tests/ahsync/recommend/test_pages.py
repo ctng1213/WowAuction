@@ -164,3 +164,21 @@ def test_D71_with_no_enchanter_every_disenchantable_item_is_listed_as_research_w
         "Research only: no character has Enchanting yet. These rows enter the funded plan once one does."
     # Rows, their sort values and filter fields are the same as with an enchanter; only the notice differs.
     assert page["rows"] == with_enchanter["rows"] and with_enchanter["notice"] is None
+
+
+def test_R33_the_craft_and_disenchant_caps_count_your_listings_as_yours_not_others(state):
+    cfg, chars = Config(markets=(M,)), ["Amaya-G", "Brugan-G"]
+    rods = replace(STATS[ROD], units_on_ah=93, ref_stack=20)               # 93 listed, 30 of them yours
+    with state.transaction():
+        state.conn.execute("INSERT INTO own_auctions(char_id, key, price, stack, band, count, seen, end_ms) "
+                           "VALUES ('Brugan-G', ?, 4100, 10, 4, 3, ?, ?)", (ROD, NOW, NOW + 20 * 3_600_000))
+    [rod] = craft_page(state, chars, {**STATS, ROD: rods}, ITEMS, 500_000, NOW, cfg)["rows"]
+    assert rod["crafts"] == 1                       # max(20, floor(0.5 × 63)) = 31, less your 30 (before: 46 - 30)
+    median = replace(rods, units_on_ah=None, median_daily_supply=50)       # no listing: nothing to take yours from
+    page = craft_page(state, chars, {**STATS, ROD: median}, ITEMS, 500_000, NOW, cfg)
+    assert (page["rows"], page["footer"]) == ([], "0 recipes worth crafting · 1 not shown: 1 already held or listed")
+    assert disenchant_page(state, chars, STATS, ITEMS, 500_000, NOW, cfg)["rows"]          # Strange Dust has room
+    with state.transaction():
+        state.conn.execute("INSERT INTO own_auctions(char_id, key, price, stack, band, count, seen, end_ms) "
+                           "VALUES ('Amaya-G', ?, 600, 20, 4, 8, ?, ?)", (DUST, NOW, NOW + 20 * 3_600_000))
+    assert disenchant_page(state, chars, STATS, ITEMS, 500_000, NOW, cfg)["rows"] == []    # 160 of 200 are yours
