@@ -24,3 +24,12 @@ def test_the_inference_report_runs_the_chosen_rows_per_seed(tmp_path):
     assert text.startswith("# Inference against truth")
     assert text.count("| SM10 |") == 4 and text.count("| SM11 | 2 |") == 2 and "| pass |" in text
     assert rep.main(["inference", "--rows", "SM99"]) == 2
+
+
+def test_the_decision_report_lists_every_benchmark_per_seed(tmp_path):
+    out = tmp_path / "decision.md"
+    assert rep.main(["decision", "--seeds", "1", "--out", str(out)]) == 0
+    text = out.read_text(encoding="utf-8")
+    assert text.startswith("# Decision quality") and [line.split(" | ")[1] for line in text.splitlines()
+                                                      if line.startswith("| 1 |")] == ["plan", "naive", "nothing",
+                                                                                         "oracle"]

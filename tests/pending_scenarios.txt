@@ -67,7 +67,6 @@ D101 D102
 # M41c (DR32) and M33b-2 (TT41).
 
 # Market simulator (docs/plans/market-simulator.md; SD25 dropped, SD35-SD38 are the learned catalog's)
-SU10-SU12
 SM6-SM7
 SM9
 SM12-SM17
