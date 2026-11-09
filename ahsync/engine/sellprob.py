@@ -541,7 +541,7 @@ class MarketSettings:
     window_threshold: float = 0.90          # share of the best slot a window slot needs (SPEC §3.3.4)
     default_sell_prob_cheapest: float = 0.5 # P without volume when you'd be the cheapest seller (SPEC §3.3.2, PD1)
     volume_prior: VolumePrior = VolumePrior()   # the sales-rate prior (SPEC §3.3.1, V41)
-    max_supply_share: float = 0.5           # a window's liquidity cap: this share of others' listed units (W15)
+    max_supply_share: float = 0.5           # a window's liquidity cap: this share of others' listed units, a third of the pool (W15)
     max_supply_share_gear: float = 1.0      # the same for weapons and armor
     min_gear_units: int = 2                 # gear always gets this many per window
     max_trend_total: float = 0.15           # the most the trend may move a window's forecast (TT7)

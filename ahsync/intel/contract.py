@@ -197,6 +197,25 @@ def supply_level(i: ItemIntel) -> int | None:
     return i.units_on_ah if i.units_on_ah is not None else i.median_daily_supply
 
 
+def others_supply(i: ItemIntel, own_units: int) -> int | None:
+    """The supply a liquidity cap counts others' by: listed now less your own units (SPEC §3.4 Liquidity, R31, R33).
+
+    A book names no seller, so what is listed now counts your auctions; the 30-day median, used when nothing is
+    listed now, is no listing and is taken as it is.
+
+    Args:
+        i: The item's intelligence.
+        own_units: Your units listed now.
+
+    Returns:
+        Units, never below 0; None when neither supply is known.
+    """
+    supply = supply_level(i)
+    if supply is None or i.units_on_ah is None:
+        return supply
+    return max(0, supply - own_units)
+
+
 def ages_reference_ms(intel: MarketIntelligence) -> int:
     """The time a document's ages count back from (SPEC §2.4; price ages, §3.4D.6).
 

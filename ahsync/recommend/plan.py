@@ -20,10 +20,10 @@ from ahsync.engine.plan import TREND_CLAMP_PCT, Lot, PlanAction, PlanWindow, Sel
 from ahsync.engine.prices import MIN_HOURLY_CLOSES
 from ahsync.engine.sell_record import Record, ResolvedPost, sell_record
 from ahsync.engine.views import round_half_up
-from ahsync.engine.volume import BAND_HOURS
 from ahsync.engine.week import WeekInputs
 from ahsync.history.reads import ItemInfo
-from ahsync.intel.contract import ItemIntel, price_level, supply_level
+from ahsync.intel.contract import ItemIntel, others_supply, price_level
+from ahsync.recommend.listings import own_listed
 from ahsync.recommend.pages import DE_KIND, craft_market
 from ahsync.state.reads import StateReader
 
@@ -114,9 +114,7 @@ def sell_facts(i: ItemIntel, info: ItemInfo | None, de: tuple[float, str] | None
         own units (a book names no seller, so it counts yours), never below 0; the 30-day median, when nothing is
         listed now, is taken as it is.
     """
-    supply = supply_level(i)                                                                # V23
-    if supply is not None and i.units_on_ah is not None:      # R31: a listed book counts yours; a median doesn't
-        supply = max(0, supply - sum(units for units, _ in own))
+    supply = others_supply(i, sum(units for units, _ in own))                              # V23, R31
     return SellFacts(
         i.key, price_level(i), i.trend7, i.post_price, i.sold_per_day, i.listed_per_day, i.ref_stack,
         _pattern(i.how, i.how_weeks, FLAT), _pattern(i.sales_how, i.sales_weeks, FLAT),
@@ -126,31 +124,6 @@ def sell_facts(i: ItemIntel, info: ItemInfo | None, de: tuple[float, str] | None
         bool(info and info.item_class in GEAR_CLASSES), i.conf, record, i.med7, i.p90_30, i.p10_30,
         tuple(PlanWindow(w.start_slot, w.hours, w.best_slot, w.weeks) for w in i.buy_windows), i.closes_30d,
         i.undercut_share, bool(i.commodity), own)
-
-
-def own_listed(state: StateReader, char_ids: list[str],
-               now_ms: int | None) -> dict[int, tuple[tuple[int, int | None], ...]]:
-    """Your auctions listed now, per item, across your characters (SPEC §3.4 Liquidity, R31).
-
-    Args:
-        state: Character state (the addon's last view of your auctions).
-        char_ids: Character ids.
-        now_ms: Now; an auction that ended before it is left out. None keeps every one.
-
-    Returns:
-        Item key -> ((units, end ms or None when unknown), ...), sorted. An auction without an end time ends at the
-        latest when its time-left band, counted from the character's last read of its auctions, runs out; without
-        that read too, its end stays unknown.
-    """
-    seen = state.auctions_read_ms(char_ids)
-    out: dict[int, list[tuple[int, int | None]]] = {}
-    for char_id, key, _, stack, band, count, _, end_ms in state.own_auctions(char_ids):
-        read_ms = seen.get(char_id)
-        if end_ms is None and read_ms is not None:
-            end_ms = read_ms + int(BAND_HOURS.get(band, BAND_HOURS[4])[1] * HOUR_MS)
-        if now_ms is None or end_ms is None or end_ms > now_ms:
-            out.setdefault(key, []).append((stack * count, end_ms))
-    return {key: tuple(sorted(rows, key=lambda r: (r[0], r[1] is None, r[1] or 0))) for key, rows in out.items()}
 
 
 def window_candidate(i: ItemIntel, min_flip_margin: float, max_trend_total: float = 0.15) -> bool:

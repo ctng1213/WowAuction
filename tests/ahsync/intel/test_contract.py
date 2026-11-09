@@ -92,6 +92,17 @@ def test_V23_supply_level_is_listed_now_else_the_median_daily_supply():
     assert supply_level(replace(linen, units_on_ah=None)) is None
 
 
+def test_R33_others_supply_is_the_listed_supply_less_yours_and_never_the_median_less_yours():
+    from dataclasses import replace
+
+    from ahsync.intel.contract import others_supply
+    linen = ItemIntel(2589, 45, 20, 3_600_000, 49, 49, 40, 60, 0.0, 48.0, 0.0, 61.0, "ahf", {"ahf": 7}, 45, 20, 0.9,
+                      False, 42.0, 86, 93, None, ())
+    assert others_supply(linen, 30) == 63 and others_supply(linen, 120) == 0
+    assert others_supply(replace(linen, units_on_ah=None, median_daily_supply=50), 30) == 50
+    assert others_supply(replace(linen, units_on_ah=None), 30) is None
+
+
 def test_BZ15_schema_10_round_trips_its_cloud_fields_and_writes_schema_9_without_them():
     item = replace(ITEM, last_hour=(4.0, 1.0, 0.0), recent_closes="125,,120", recent_sold="4,,2",
                    recent_listed="0,,10", recent_units="10,,18")
