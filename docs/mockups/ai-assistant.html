@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Proposal: the Status page's AI assistant card (MCP, option B)</title>
+<style>
+  :root { color-scheme: dark;
+    --bg: #0e0d0b; --surface: #181612; --surface-2: #221f19; --border: #3d3424; --border-hi: #8a6d2f;
+    --text: #ece3cc; --muted: #9b917b; --accent: #ffd100; --pos: #3ddc4f; --neg: #ff4a3d; --amber: #ffb02e; --info: #69ccf0;
+    --serif: "Friz Quadrata TT", "Palatino Linotype", "Book Antiqua", Georgia, serif; }
+  * { box-sizing: border-box; }
+  body { margin: 24px; max-width: 1240px; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  h1 { font: 22px var(--serif); color: var(--accent); margin: 0 0 4px; } h2 { font: 17px var(--serif); color: var(--accent); margin: 32px 0 8px; }
+  p.note { color: #c9c4b6; max-width: 1050px; } .muted { color: var(--muted); } .pos { color: var(--pos); } .amber { color: var(--amber); }
+  .row { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+  .row > div { flex: 1 1 520px; min-width: 0; }
+  .cap { font-size: 12px; color: var(--muted); margin: 0 0 6px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; box-shadow: inset 0 0 0 1px #000, 0 3px 12px rgba(0,0,0,.5); }
+  .card-h { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); background: linear-gradient(#241f16, #1a1711); }
+  .card-h b { flex: 1; font: 15px var(--serif); color: var(--accent); font-weight: normal; }
+  .pill { padding: 2px 10px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: #0b0a08; white-space: nowrap; }
+  .pill.ok { color: var(--pos); border-color: #2c6b32; } .pill.muted { color: var(--muted); }
+  .body { padding: 12px 14px; }
+  .btn { display: inline-block; padding: 3px 12px; border: 1px solid #000; border-radius: 3px; font-size: 12px; cursor: pointer; color: var(--accent);
+         background: linear-gradient(#8a1a14, #4d0c09); box-shadow: inset 0 0 0 1px #b2392f, 0 1px 2px #000; text-shadow: 0 1px 1px #000; font-family: inherit; }
+  .btn.primary { background: linear-gradient(#6b5420, #3a2c10); box-shadow: inset 0 0 0 1px #c9a64a, 0 1px 2px #000; }
+  .switch { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: #100e0b; }
+  .switch input { margin-top: 3px; accent-color: #c9a64a; width: 16px; height: 16px; }
+  .switch b { font-weight: 600; } .switch .sub { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 12px 0 0; font-size: 13px; }
+  .kv dt { color: var(--muted); } .kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+  .h { color: var(--muted); font-size: 12px; margin: 14px 0 6px; text-transform: uppercase; letter-spacing: .6px; }
+  .tabs { display: flex; gap: 4px; margin-bottom: -1px; }
+  .tab { padding: 4px 12px; border: 1px solid var(--border); border-bottom: 0; border-radius: 4px 4px 0 0; font-size: 12px; color: var(--muted); background: #0f0d0a; }
+  .tab.on { color: var(--accent); background: #15120d; }
+  .step { border: 1px solid var(--border); border-radius: 0 4px 4px 4px; background: #15120d; padding: 10px 12px; font-size: 13px; }
+  .step ol { margin: 0; padding-left: 18px; } .step li { margin: 4px 0; }
+  pre { margin: 6px 0; padding: 8px 10px; background: #0b0a08; border: 1px solid var(--border); border-radius: 4px; font: 12px/1.4 Consolas, "SF Mono", monospace; color: #e8dcc0; overflow-x: auto; position: relative; }
+  pre .copy { position: absolute; top: 6px; right: 6px; }
+  code { font: 12px Consolas, "SF Mono", monospace; color: #e8dcc0; background: #0b0a08; padding: 0 4px; border-radius: 3px; }
+  .privacy { margin-top: 12px; padding: 8px 12px; border-left: 4px solid var(--info); background: #12161a; border-radius: 4px; font-size: 13px; }
+  .ask { margin-top: 12px; font-size: 13px; } .ask li { margin: 2px 0; }
+  .new { outline: 1px dashed var(--amber); outline-offset: 3px; }
+  .actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+  .pill.gold { color: var(--accent); border-color: var(--border-hi); } .pill.warn { color: var(--amber); border-color: #7a5a1b; }
+  .btn:disabled { opacity: .6; cursor: default; }
+  /* A sketch of Claude's chat, only to show what the user sees there. */
+  .chat { background: #262624; border-radius: 10px; padding: 14px; font: 14px/1.5 system-ui, sans-serif; color: #e8e6e3; }
+  .msg { margin: 8px 0; } .me { background: #3a3936; border-radius: 10px; padding: 8px 12px; display: inline-block; }
+  .tool { font-size: 12px; color: #a8a49c; border: 1px solid #44433f; border-radius: 6px; padding: 6px 10px; margin: 6px 0; }
+  table { border-collapse: collapse; font-size: 13px; margin-top: 6px; } td { padding: 4px 10px; border-bottom: 1px solid #2a2f3a; vertical-align: top; }
+  td:first-child { white-space: nowrap; color: var(--muted); }
+</style>
+</head>
+<body>
+<h1>Proposal: the Status page's AI assistant card</h1>
+<p class="note"><b>Approved by the user, 2026-11-08 (option B; SPEC §3.8.1)</b> (plan <code>docs/plans/mcp-server.md</code>, MC3). The only new screen in the batch is one card on the Status page, next to the "AHSync app" card. <b>Enable</b> starts the assistant server inside AHSync and builds its market table in AHSync's memory: pressing it is your agreement to that memory, and the card says how much it is. <b>Disable</b> stops the server, closes its port and frees the memory at once. The choice is remembered across restarts. Claude connects through a small bridge, <code>ahsync-mcp</code>, that ships with AHSync. Paths and the memory figure below are examples; the card shows your install's and the measured amount.</p>
+
+<h2>1. Off (the default), and starting</h2>
+<div class="row"><div>
+<p class="cap">What a new install shows. Nothing runs, nothing is held in memory, and nothing can be read.</p>
+<div class="card">
+  <div class="card-h"><b>AI assistant (Claude)</b><span class="pill muted">off</span></div>
+  <div class="body">
+    <p style="margin:0 0 10px;font-size:13px">Let Claude read your AHSync data to answer your questions. <span class="muted">Read-only: it can't change your plan, rules or settings. It runs on your computer only, and only while enabled.</span></p>
+    <div class="actions"><button class="btn primary">Enable</button><span class="muted">Starts the assistant server in AHSync and uses about 6 MB of memory while enabled.</span></div>
+    <div class="privacy">What Claude reads is sent to Anthropic to answer you: prices, your characters, their gold, professions and trades.</div>
+  </div>
+</div>
+</div>
+<div>
+<p class="cap">Right after Enable is pressed: the button waits while the server starts and its table is built (under a second).</p>
+<div class="card">
+  <div class="card-h"><b>AI assistant (Claude)</b><span class="pill gold">starting…</span></div>
+  <div class="body">
+    <p style="margin:0 0 10px;font-size:13px">Let Claude read your AHSync data to answer your questions. <span class="muted">Read-only: it can't change your plan, rules or settings. It runs on your computer only, and only while enabled.</span></p>
+    <div class="actions"><button class="btn primary" disabled>Starting…</button><span class="muted">Building the market table…</span></div>
+  </div>
+</div>
+<p class="cap" style="margin-top:14px">If it can't start, the card says why and stays off:</p>
+<div class="card">
+  <div class="card-h"><b>AI assistant (Claude)</b><span class="pill warn">couldn't start</span></div>
+  <div class="body">
+    <div class="actions"><button class="btn primary">Enable</button><span class="amber">Port 8766 is in use by another program. Set <code>mcp_port</code> in AHSync's settings to a free port, then Enable again.</span></div>
+  </div>
+</div>
+</div></div>
+
+<h2>2. Running, with the setup steps</h2>
+<div class="row"><div>
+<p class="cap">Windows, Claude Desktop tab. The snippet's path is this install's; Copy puts it on the clipboard. No key or password appears: the bridge finds AHSync by itself.</p>
+<div class="card">
+  <div class="card-h"><b>AI assistant (Claude)</b><span class="pill ok">running</span></div>
+  <div class="body">
+    <div class="actions"><button class="btn">Disable</button><span class="muted">Stops the server and frees its memory at once.</span></div>
+    <dl class="kv">
+      <dt>Server</dt><dd>running on this computer only · since Sun 13:10</dd>
+      <dt>Memory in use</dt><dd>6.1 MB · market table of 16,669 items</dd>
+      <dt>Data Claude sees</dt><dd>refresh of Sun 13:07 · forever.pvp.horde.us</dd>
+      <dt>Characters</dt><dd>4 · professions and skills included</dd>
+    </dl>
+    <div class="h">Connect Claude (once)</div>
+    <div class="tabs"><span class="tab on">Claude Desktop</span><span class="tab">Claude Code</span></div>
+    <div class="step"><ol>
+      <li>In Claude Desktop: <b>Settings → Developer → Edit Config</b>. It opens <code>claude_desktop_config.json</code>.</li>
+      <li>Add this inside it (or merge it into an existing <code>mcpServers</code>), then save:
+<pre><button class="btn copy">Copy</button>{
+  "mcpServers": {
+    "ahsync": {
+      "command": "C:\\Users\\you\\AppData\\Local\\Programs\\AHSync\\ahsync-mcp.exe"
+    }
+  }
+}</pre></li>
+      <li>Quit and reopen Claude Desktop. <b>AHSync</b> shows under its connectors.</li>
+      <li>Turn on <b>web search</b> in Claude, so it can check Wowhead for fishing levels and farming spots.</li>
+    </ol></div>
+    <div class="privacy">What Claude reads is sent to Anthropic to answer you: prices, your characters, their gold, professions and trades.</div>
+    <div class="ask"><span class="muted">Try asking:</span><ul>
+      <li>What fish are the most profitable to catch right now for Brugan?</li>
+      <li>Find recent price trends I can take advantage of.</li>
+      <li>Where are all the places to farm Thorium Ore?</li>
+    </ul></div>
+  </div>
+</div>
+</div>
+<div>
+<p class="cap">The Claude Code tab, and macOS (the bridge is the app's binary, started with <code>--mcp</code>).</p>
+<div class="card">
+  <div class="card-h"><b>AI assistant (Claude)</b><span class="pill ok">running</span></div>
+  <div class="body">
+    <div class="h" style="margin-top:0">Connect Claude (once)</div>
+    <div class="tabs"><span class="tab">Claude Desktop</span><span class="tab on">Claude Code</span></div>
+    <div class="step"><ol>
+      <li>Run this once in a terminal:
+<pre><button class="btn copy">Copy</button>claude mcp add ahsync -- "C:\Users\you\AppData\Local\Programs\AHSync\ahsync-mcp.exe"</pre></li>
+      <li>Start Claude Code and ask away. <code>/mcp</code> lists AHSync.</li>
+    </ol></div>
+    <div class="h">On macOS the Claude Desktop snippet reads</div>
+<pre><button class="btn copy">Copy</button>{
+  "mcpServers": {
+    "ahsync": {
+      "command": "/Applications/AHSync.app/Contents/MacOS/AHSync",
+      "args": ["--mcp"]
+    }
+  }
+}</pre>
+    <p class="muted" style="font-size:12px;margin:6px 0 0">Claude Desktop's config on macOS: <code>~/Library/Application Support/Claude/claude_desktop_config.json</code>. The setup is needed once; after that, Enable and Disable are all you press.</p>
+  </div>
+</div>
+</div></div>
+
+<h2>3. In Claude: disabled, AHSync closed, and running</h2>
+<div class="row"><div>
+<p class="cap">Disabled: the bridge answers with where to enable it. Nothing is read.</p>
+<div class="chat">
+  <div class="msg"><span class="me">What fish are the most profitable to catch right now for Brugan?</span></div>
+  <div class="tool">AHSync · query: not available</div>
+  <div class="msg">AHSync's assistant access is disabled. To let me read your data, open AHSync's dashboard → <b>Status</b> → <b>AI assistant (Claude)</b> and press <b>Enable</b>, then ask again.</div>
+</div>
+<p class="cap" style="margin-top:14px">AHSync closed: the bridge says so.</p>
+<div class="chat">
+  <div class="msg"><span class="me">Find recent price trends I can take advantage of.</span></div>
+  <div class="tool">AHSync · list_markets: not available</div>
+  <div class="msg">AHSync isn't running, so I can't read your data. Start AHSync (with assistant access enabled) and ask again.</div>
+</div>
+</div>
+<div>
+<p class="cap">Running: Claude reads the data, checks Wowhead itself, and says how fresh the numbers are. Its answer is illustrative.</p>
+<div class="chat">
+  <div class="msg"><span class="me">What fish are the most profitable to catch right now for Brugan?</span></div>
+  <div class="tool">AHSync · list_markets · describe_data · query ×2 &nbsp;|&nbsp; web search: wowhead fishing zones</div>
+  <div class="msg">From your Sun 13:07 refresh on forever.pvp.horde.us. Brugan has Fishing 75, so he can fish the starter zones and Westfall/Loch Modan waters. Of the fish that sell (1+ a day):
+    <table>
+      <tr><td>Raw Bristle Whisker Catfish</td><td>4s 10c · 38 sold/day · Westfall, Hillsbrad (needs ~75)</td></tr>
+      <tr><td>Oily Blackmouth</td><td>3s 20c · 52 sold/day · coastal pools (needs ~75)</td></tr>
+      <tr><td>Raw Longjaw Mud Snapper</td><td>48c · 120 sold/day · any starter water</td></tr>
+    </table>
+    Higher-value fish (Raw Mithril Head Trout, ~1g) need about 175.</div>
+</div>
+</div></div>
+
+<h2>4. What doesn't change</h2>
+<p class="note">No other page, tooltip or number moves. The card is the Status page's only new content; the server and the bridge have no screen. Enable and Disable go through the dashboard's token-checked POST, like the Risk tolerance dropdown, and the choice is stored with the app's other settings.</p>
+</body>
+</html>
