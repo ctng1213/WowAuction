@@ -57,7 +57,10 @@ def benchmark(world: World, characters: tuple[CharacterSpec, ...], folder: Path)
         for key, units in spec.bags:
             stock[key] = stock.get(key, 0) + units
     plan = Trader(world, characters, folder / "ahsync")
-    simulate(world, folder / "plan", agent=plan)
+    try:
+        simulate(world, folder / "plan", agent=plan)
+    finally:
+        plan.close()
     naive = NaiveTrader(world, characters)
     simulate(world, folder / "naive", agent=naive)
     nothing = Trader(world, characters)

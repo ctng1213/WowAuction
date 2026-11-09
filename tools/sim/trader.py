@@ -132,6 +132,11 @@ class Trader:
 
     # ------------------------------------------------------------- the runner's hook
 
+    def close(self) -> None:
+        """Close AHSync's database, if this trader has one (an open SQLite file can't be deleted on Windows)."""
+        if self.session is not None:
+            self.session.db.close()
+
     def next_wake(self) -> int | None:
         """When the trader next wants to act.
 

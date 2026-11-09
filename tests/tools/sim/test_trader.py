@@ -1,9 +1,12 @@
 """Tests for tools/sim/trader.py: our characters in the simulated market, through AHSync (SPEC §8.10; SU10-SU12)."""
 from __future__ import annotations
 
+import sqlite3
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
 
@@ -121,3 +124,7 @@ def test_a_trader_follows_the_plan_through_the_real_import(tmp_path):
     assert db.conn.execute("SELECT count(*) FROM payouts").fetchone()[0] == trader.counts["payout"]
     data = read_ahprofit(savedvars_text(trader.session.savedvars(Market(world), START)))
     assert not data.problems and [c.char_id for c in data.characters] == ["Amaya-Simulated"]
+    trader.close()                                   # Windows can't delete an open SQLite file (CI, PR #74)
+    with pytest.raises(sqlite3.ProgrammingError):
+        db.conn.execute("SELECT 1")
+    Trader(world, (AMAYA,)).close()                  # a trader without AHSync has nothing to close
