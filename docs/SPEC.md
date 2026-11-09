@@ -1511,7 +1511,7 @@ wow_path = "C:/Program Files (x86)/World of Warcraft/_forever_"
 retention_days = 90
 dashboard_port = 8765
 mcp_enabled = false                           # planned (MC3, §3.8.1): the AI assistant server runs; set by the Status card's Enable / Disable
-mcp_port = 8766                               # planned (MC1, §3.8.2): the AI assistant server's 127.0.0.1 port, 1024-65535, not dashboard_port
+mcp_port = 8766                               # built (MC1, §3.8.2): the AI assistant server's 127.0.0.1 port, 1024-65535, not dashboard_port
 live_refresh_minutes = 15
 min_flip_margin = 0.20
 default_sell_prob = 0.25                      # P when there is no volume data and someone is cheaper (§3.3.2)
@@ -1803,9 +1803,11 @@ More than one beta tester group or staged rollouts; Windows code signing; rollin
 
 **Risks** (from the proposal §4): macOS is untested until the user's Mac runs the dmg (pystray, pywebview and pyobjc in a bundle, the two GUI libraries sharing one `NSApplication`, `LSUIElement`, entitlements, notarization, the LaunchAgent); Windows updates are verified by hash only, so the GitHub account's two-factor authentication is the guard (an Ed25519 signature over `SHA256SUMS` can be added inside `verify_update` later); runner images drift (`macos-15` pinned, revisit yearly); pywebview's Windows backend needs `pythonnet` inside PyInstaller and the WebView2 runtime on the machine (the browser fallback covers a missing runtime, FM56); `tools/test.ps1` under pwsh 7 on macOS may need small fixes at the first CI run. **Two AHSyncs on one machine** (recorded, not mitigated in v1; the user's decision of 2026-11-01): the lock is per data folder, so on the developer's own PC the source instance on `./data` and the installed app on `%LOCALAPPDATA%\AHSync` can run at once and both export into the same WoW AddOns folder, and `python -m ahsync_app` from source shares the installed app's data folder and would migrate its database forward with no way back. Friends run one install and never meet it; a `--data` override for the shell is the cheap fix if it bites.
 
-### 3.8 AI assistant access (MCP; planned MC1–MC3)
+### 3.8 AI assistant access (MCP; MC1–MC2 built, MC3 planned)
 
-Approved by the user 2026-11-08: `docs/plans/mcp-server.md` (its §1 decisions), mockup `docs/mockups/ai-assistant.html`; scenarios MCP1–MCP16, SEC18–SEC20. A read-only [MCP](https://modelcontextprotocol.io) server inside AHSync lets an assistant that speaks MCP (Claude Desktop, Claude Code; ChatGPT is a later batch) read your data and answer your own questions. **The assistant does the analysis; AHSync gives it complete, current, well-described data** and never pre-chews answers: no new engine views or ranking fields are built for it.
+**Built (MC1)**: the server, the bridge and the dashboard tools: `ahsync/mcp/protocol.py` (the MCP subset, the tool definitions, the context), `tools.py` (`list_markets`, `get_page`, `item`), `server.py` (`McpServer`, the checks of SEC19, `mcp.json`), `bridge.py` and `python -m ahsync.mcp`; `item` shares `recommend.inventory_page.detail_of` with the Inventory page. The app doesn't start the server yet: the Status card's Enable comes with MC3. **Built (MC2)**: the data tools: `ahsync/mcp/stats.py` (`MarketStats`: the in-memory `market_stats`, built at start, rebuilt on a call after a newer refresh, freed at stop), `query.py` (the guard, `run_query`, `describe_data`, `item_group_stats`) and their handlers in `tools.py`. Measured on the user's data (2026-11-09): 10,236 items make a 1.7 MB table, built in 0.11 s from the already-parsed intelligence.
+
+Approved by the user 2026-11-08: `docs/plans/mcp-server.md` (its §1 decisions), mockup `docs/mockups/ai-assistant.html`; scenarios MCP1–MCP17, SEC18–SEC20. Claude's own plans are the next batch (the plan's §9). A read-only [MCP](https://modelcontextprotocol.io) server inside AHSync lets an assistant that speaks MCP (Claude Desktop, Claude Code; ChatGPT is a later batch) read your data and answer your own questions. **The assistant does the analysis; AHSync gives it complete, current, well-described data** and never pre-chews answers: no new engine views or ranking fields are built for it.
 
 #### 3.8.1 Enable and Disable (the Status card)
 
@@ -1829,7 +1831,8 @@ Approved by the user 2026-11-08: `docs/plans/mcp-server.md` (its §1 decisions),
   - It answers `initialize`, `tools/list` and `ping` itself, from the same tool definitions the server uses, so Claude connects cleanly even while AHSync is closed or disabled.
   - It forwards each `tools/call` to the server with the key read from `mcp.json` at that call (MCP5).
   - Without `mcp.json` the call returns, as a tool error: "AHSync's AI assistant access is off, or AHSync isn't running. Start AHSync and press Enable on its Status page (AI assistant), then ask again." With the file but no server answering: "AHSync isn't running. Start it and ask again." (MCP6)
-  - The bridge holds no data, opens no listener, and exits when Claude closes its stdin.
+  - The bridge holds no data, opens no listener, and exits when Claude closes its stdin. It never exits on a bad answer: a reset or cut-off response reads as "AHSync isn't running", and any other fault answers that one message with an internal error.
+- **Stopping.** Stop marks the server stopped and frees the table and its connection under the server's lock, so a call still in flight answers "AI assistant access was just turned off" and never rebuilds the table after Disable. A start that fails after binding (the table or `mcp.json` can't be made) stops what it began, so the next Enable starts clean.
 - **Context, not instructions.** `initialize` returns facts the assistant can't know, and no procedure (MCP7):
   - the game is WoW: Forever, a Classic-era realm;
   - item ids are Classic's, and a random-suffix item's key is its id + 2147483648 × the suffix (§2.1);
@@ -1843,7 +1846,8 @@ Approved by the user 2026-11-08: `docs/plans/mcp-server.md` (its §1 decisions),
 | `list_markets` | none | each market: name, newest refresh time, primary price source, item count (MCP8) |
 | `describe_data` | none | every table the `query` tool may read: columns, units, what a row means, example queries (MCP9) |
 | `query` | `sql`: one `SELECT` or `WITH … SELECT` | columns and rows, at most 500 rows and 256 KB, with `"truncated": true` when cut (MCP10, §3.8.5) |
-| `get_page` | `page` (one of the dashboard's pages), `market`, optional `character`, `sort` (a sort key of that page), `limit` (default 25, 1–200), `search` | the page's own fields (header, footers, notices, help texts) and its top `limit` rows, from the staged view the dashboard serves, sorted by the engine's sort keys like the dashboard (MCP11) |
+| `get_page` | `page` (one of the dashboard's pages), `market`, optional `character`, `sort` (a sort key of that page), `ascending`, `limit` (default 25, 1–200), `search` | the page's own fields (header, footers, notices, help texts) and its rows, from the staged view the dashboard serves (Status built on request), sorted by the engine's sort keys like the dashboard: rows without the key last, ties in the served order. Every list of records is cut to `limit` and `cut` names each cut list's full length; lists of plain values stay whole; per-item `details` are left out (the `item` tool's), and Gathering keeps the rate cards of the rows shown (MCP11) |
+| `item_group_stats` | `group` (cloth, leather, metal_stone, cooking, herb, elemental, enchanting, parts, other; or the gathering catalog's fishing, herbalism, mining, skinning), `market`, optional `sort` (a `market_stats` column), `ascending`, `min_sold_per_day`, `limit` (default 50, 1–500) | every item of the group with its `market_stats` row, sorted (no value last), `count` the group's full size (MCP17; the user, 2026-11-09: the bulk read for fish, herbs or meat) |
 | `item` | `key` or `name`, `market`, optional `heatmaps` | the dashboard's item detail (`engine/item_detail`), heatmaps only when asked; an unknown item is a tool error naming it (MCP12) |
 
 - **Bounded.** Every tool result is at most 256 KB.
@@ -1870,10 +1874,12 @@ Approved by the user 2026-11-08: `docs/plans/mcp-server.md` (its §1 decisions),
 - **Read-only three ways:**
   - its own connection opens the database with `mode=ro` and sets `PRAGMA query_only`;
   - `market_stats` is attached before the guard is installed;
-  - a `sqlite3` authorizer then allows only `SELECT`, reads of allowlisted tables, and plain functions. It denies everything else, including writes, `ATTACH`, `PRAGMA`, `load_extension` and `sqlite_master`.
+  - a `sqlite3` authorizer then allows only `SELECT`, reads of allowlisted tables, and an allowlist of plain functions. It denies everything else, including writes, `ATTACH`, `PRAGMA`, the `pragma_*` and `json_each` tables, `load_extension`, `zeroblob`, `randomblob`, `printf` and every `sqlite_*` table.
+  - A count is a read: SQLite reports `count(*)` over a table and over the query's own CTE alike, so the guard lists the database's real tables when it opens. A read of a real table outside the allowlist is refused; any other name is the query's own CTE.
+  - Limits: no value over 1 MB (`SQLITE_LIMIT_LENGTH`, which also stops a doubling CTE), no query over 10,000 characters, and no more attachments.
 - **One statement per call.**
 - **Bounded:** a progress handler stops a query after 2 s; at most 500 rows and 256 KB are returned (SEC20).
-- **The allowlist:** `market_stats`, `items`, `candles_h`, `candles_d`, `volume_d`, `sales_h`, `current`, `posts`, `sell_records`, `payouts`, `purchases`, `crafts`, `mail_sent`, `disenchants`, `auction_mail`, `gather_events`, `farming_sessions`, `farming_session_items`, `characters`, `professions`, `recipes`, `reagents`, `known_recipes`, `inventory`, `own_auctions` and `cost_basis`. Not `meta`, `sync_state`, `fetch_failures`, `status`, `source_state`, `views`, `intel` or any `*_new` staging table. No allowlisted column holds a credential: the API keys and Blizzard credentials live in the environment and `~/.ahsync` (MCP15).
+- **The allowlist:** `market_stats`, `items`, the price and sales history `candles_h1`, `candles_d1`, `volume_d1`, `sales_h1`, `lifetimes_d1`, `new_listings_d1`, `observed_hours`, `current`, `posts`, `sell_records`, `payouts`, `purchases`, `crafts`, `mail_sent`, `disenchants`, `auction_mail`, `gather_events`, `farming_sessions`, `farming_session_items`, `characters`, `professions`, `recipes`, `reagents`, `known_recipes`, `inventory`, `own_auctions` and `cost_basis`. Not `meta`, `sync_state`, `fetch_failures`, `status`, `source_state`, `views`, `intel` or any `*_new` staging table. No allowlisted column holds a credential: the API keys and Blizzard credentials live in the environment and `~/.ahsync` (MCP15).
 - **Privacy.** What the assistant reads goes to its provider. The card says so before and after Enable, and nothing else is off limits while access is read-only (the user, 2026-11-08).
 
 #### 3.8.6 Non-goals (this batch)
@@ -2258,7 +2264,7 @@ ahsync/
   export/     market_lua.py (MarketIntelligence.lua), plan_lua.py (PortfolioPlan.lua), addon_files.py (atomic writes, the shortlist),
               addon_install.py (built M22: the addon install at start, moved from tools/deploy.py, §3.7.7)
   web/        server.py (built M23: GET /api/app; built M24: POST /api/autostart and AppHooks; built M25: POST /api/update/auto and /api/update/channel, tray_facts; built M27: /api/update/restart), setup_app.py (built M23: setup mode, GET /setup, POST /api/setup), static/ (built M23: setup.html)
-  mcp/        planned MC1–MC3 (§3.8): the AI assistant server (JSON-RPC, the tools, the in-memory market_stats, the query guard) and the bridge (`python -m ahsync.mcp`)
+  mcp/        built MC1 (§3.8): protocol.py, tools.py, server.py, bridge.py, __main__.py; MC2–MC3 planned: the AI assistant server (JSON-RPC, the tools, the in-memory market_stats, the query guard) and the bridge (`python -m ahsync.mcp`)
 ahsync_app/   (built M22: __main__.py, shell.py without window or tray, platform/; M23: setup mode in shell.py, app_info.py; built M23–M27: the rest, §3.7.1: the standalone app's shell; tests in tests/ahsync_app/; the only package with third-party imports, §5.0.1)
   __main__.py  the entry point (python -m ahsync_app runs the shell from source against the per-user folders)
   shell.py     the lifecycle: lock and the show file, addon install, setup mode, run() on a worker thread, the window's loop on the main thread with the tray detached, quit, apply a downloaded update

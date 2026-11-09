@@ -60,6 +60,8 @@ class Config:
     wow_path: str = "C:/Program Files (x86)/World of Warcraft/_forever_"
     retention_days: int = 90
     dashboard_port: int = 8765
+    mcp_enabled: bool = False                   # the AI assistant server runs (SPEC §3.8.1); set by the Status card
+    mcp_port: int = 8766                        # its 127.0.0.1 port, 1024-65535, not dashboard_port (SPEC §3.8.2)
     live_refresh_minutes: int = 15
     min_flip_margin: float = 0.20
     default_sell_prob: float = 0.25
@@ -128,6 +130,7 @@ _TYPES: dict[str, tuple[tuple[type, ...], str]] = {
     "launch_wow_after_catchup": ((bool,), "true or false"),
     "ahledger_backfill": ((bool,), "true or false"),
     "update_check": ((bool,), "true or false"),
+    "mcp_enabled": ((bool,), "true or false"),
     "auto_update": ((bool,), "true or false"),
     "update_channel": ((str,), "stable or beta"),
     "realms": ((dict,), "a table"),
@@ -135,7 +138,7 @@ _TYPES: dict[str, tuple[tuple[type, ...], str]] = {
     "sources": ((dict,), "a table"),
     "cloud": ((dict,), "a table"),
 }
-for _name in ("retention_days", "dashboard_port", "live_refresh_minutes", "own_record_days",
+for _name in ("retention_days", "dashboard_port", "mcp_port", "live_refresh_minutes", "own_record_days",
               "struggle_streak", "keep_retry_streak", "post_lead_hours", "sell_window_hours",
               "max_craft_depth", "max_actions_per_day", "min_gear_units", "pattern_full_weeks",
               "immediate_hours", "top_buy_windows", "top_sell_windows", "today_limit", "week_limit",
@@ -243,6 +246,12 @@ def _check_values(text: str, values: dict) -> None:
         raise _fail(text, "daily_refresh_time", 'must be a time like "06:00"')
     if "week_start" in values and values["week_start"] not in WEEKDAYS:
         raise _fail(text, "week_start", "must be one of " + ", ".join(WEEKDAYS))
+    if "mcp_port" in values and not 1024 <= values["mcp_port"] <= 65535:
+        raise _fail(text, "mcp_port", "must be between 1024 and 65535")
+    if values.get("mcp_port", 8766) == values.get("dashboard_port", 8765):
+        if "mcp_port" in values:
+            raise _fail(text, "mcp_port", "must differ from dashboard_port")
+        raise _fail(text, "dashboard_port", "must differ from mcp_port (8766 unless set)")
     if "update_channel" in values and values["update_channel"] not in CHANNELS:
         raise _fail(text, "update_channel", "must be stable or beta")
     for realm, ruleset in values.get("realms", {}).items():

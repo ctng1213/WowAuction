@@ -53,6 +53,10 @@ def test_values_and_tables_are_read(tmp_path):
     ('[budgets]\n"A-B" = -1\n', "config.toml [budgets]: A-B must be a whole number of copper"),
     ("retention_days = \n", "config.toml line 1: "),
     ("[realms]\nretention_days = 1\n", "config.toml [realms]"),
+    ("mcp_port = 80\n", "config.toml line 1: mcp_port must be between 1024 and 65535"),
+    ("mcp_port = 8765\n", "config.toml line 1: mcp_port must differ from dashboard_port"),
+    ("dashboard_port = 8766\n", "config.toml line 1: dashboard_port must differ from mcp_port"),
+    ('mcp_enabled = "yes"\n', "config.toml line 1: mcp_enabled must be true or false"),
 ])
 def test_bad_values_name_the_line_and_reason(tmp_path, text, message):
     with pytest.raises(ConfigError) as error:
