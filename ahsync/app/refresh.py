@@ -211,7 +211,8 @@ def _stage_recommendations(db: Database, market: str, stats: dict, now_ms: int, 
     pages["rules"] = rules_page(db, char_ids, market, stats, items, now_ms, offset_ms, cfg)    # D50
     # SPEC §3.4E: staged at the full refresh and at every re-plan after a SavedVariables read (new professions or a
     # scan); research only, so nothing of it touches the plan (E.9).
-    pages["gathering"] = gathering_page(db, market, char_ids, stats, items, now_ms, offset_ms, cfg)   # D80
+    pages["gathering"] = gathering_page(db, market, char_ids, stats, items, now_ms, offset_ms, cfg,
+                                       prices_ms=prices_ms)                                   # D80, GA35
     pill = gold_pill([g for _, g in characters], now_ms, offset_ms)                            # D74
     for page, body in pages.items():
         db.stage_view(page, market, {**body, "gold": pill} if page in GOLD_PAGES else body, now_ms)
@@ -240,7 +241,8 @@ def rebuild_gathering(db: Database, now_ms: int, cfg: Config, offset_ms: int = 0
             continue
         scanned = scanned_intel(db, intel, cfg)
         characters = db.characters_in(market)
-        body = gathering_page(db, market, [c for c, _ in characters], scanned.items, db.items(), now_ms, offset_ms, cfg)
+        body = gathering_page(db, market, [c for c, _ in characters], scanned.items, db.items(), now_ms, offset_ms, cfg,
+                              prices_ms=scanned.ages_at_ms)                                    # GA35
         with db.transaction():
             db.replace_view("gathering", market, {**body, "gold": gold_pill([g for _, g in characters], now_ms,
                                                                                offset_ms)}, now_ms)

@@ -20,7 +20,7 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path[:0] = [str(Path(__file__).resolve().parents[1]), str(Path(__file__).resolve().parent)]
 
-from sim import decision, decision_crafts, inference  # noqa: E402
+from sim import decision, decision_crafts, decision_gathering, inference  # noqa: E402
 from sim.inference import Measure  # noqa: E402
 from sim.scorers import GOLD, Score  # noqa: E402
 
@@ -32,12 +32,12 @@ MARKS = {True: "met", False: "**missed**", None: "not exercised"}   # a decision
 
 
 def sd_rows() -> dict:
-    """Every SD row the decision report can run: decision.SD_ROWS and the craft rows (decision_crafts).
+    """Every SD row the decision report can run: decision.SD_ROWS, the craft rows and the gathering row.
 
     Returns:
         Row ID -> its function (folder, seed) -> lines.
     """
-    return {**decision.SD_ROWS, **decision_crafts.CRAFT_ROWS}
+    return {**decision.SD_ROWS, **decision_crafts.CRAFT_ROWS, **decision_gathering.GATHERING_ROWS}
 
 
 def number(value: float | None) -> str:

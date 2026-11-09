@@ -214,3 +214,26 @@ def test_price_facts_take_the_intelligence_supply_else_the_units_at_the_newest_p
     assert (unknown.market_chance, unknown.supply, unknown.cur_others) == (None, 10, 220)
     never = page.price_facts(gw.COPPER, None, None, None)
     assert (never.price, never.seen_ms, never.source, never.supply) == (None, None, None, None)
+
+
+def test_GA35_a_cloud_market_shows_the_newer_of_current_and_the_summarys_price(tmp_path):
+    prices_ms = gw.at(gw.MON, "10:00")
+    stats = {gw.COPPER: replace(COPPER_INTEL, cur=210, cur_age_ms=0),
+             gw.TIN: replace(COPPER_INTEL, key=gw.TIN, cur=90, cur_qty=4, cur_age_ms=12 * HOUR, book=((90, 4, 1, 1),)),
+             gw.SILVER: replace(COPPER_INTEL, key=gw.SILVER, cur=900, cur_qty=2, cur_age_ms=12 * HOUR,
+                                book=((900, 2, 1, 1),))}
+    db, path = FakeDb(), write_catalog(tmp_path, gw.catalog_rows())
+
+    def rows(prices):
+        payload = page.gathering_page(db, "m", [gw.AMAYA, gw.BRUGAN], stats, {}, gw.NOW, 0, Config(), path, prices)
+        return {r["item"]: (r["ah_price"], r["price_title"]) for r in gw.view_rows(payload, "")}
+
+    cloud = rows(prices_ms)
+    assert cloud["Copper Ore"] == ("2s 10c", "seen 38 min ago (Blizzard scan Mon 10:00)")
+    assert cloud["Tin Ore"] == ("—", "No listing in the newest scan")               # your Mon 10:26 scan is newer
+    assert cloud["Silver Ore"] == ("9s", "seen 12 h ago (Blizzard scan Sun 22:00)")  # its last price, with its age
+    db.prices[gw.COPPER] = CurrentPrice(gw.COPPER, 230, 5, gw.at(gw.MON, "10:30"), "local")
+    stats[gw.COPPER] = replace(stats[gw.COPPER], cur=230, cur_age_ms=-30 * 60_000)   # the scan applied (IU6)
+    assert rows(prices_ms)["Copper Ore"] == ("2s 30c", "seen 8 min ago (your scan)")  # a tie goes to your scan
+    desktop = rows(None)
+    assert desktop["Copper Ore"][0] == "2s 30c" and desktop["Silver Ore"][0] == "—"

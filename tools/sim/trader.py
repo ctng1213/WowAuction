@@ -60,6 +60,19 @@ class Recipe:
 
 
 @dataclass(frozen=True)
+class Farm:
+    """A daily farming session: loot from corpses at steady rates, as the addon's gather events record it (§3.4E.3)."""
+
+    hour: int                                   # UTC hour it starts each day
+    minutes: int                                # its length
+    loot: tuple[tuple[int, int], ...]           # (key, units an hour)
+    source: str = "monster"                     # the gather event's source
+
+
+FARM_EVENT_MS = 2 * 60_000                       # a loot window every 2 minutes while farming
+
+
+@dataclass(frozen=True)
 class CharacterSpec:
     """One of our characters at the start."""
 
@@ -69,6 +82,7 @@ class CharacterSpec:
     faction: str = "Horde"
     cls: str = "MAGE"
     recipes: tuple[Recipe, ...] = ()   # what it can craft, its professions at skill 300 (MS4b-2)
+    farms: tuple[Farm, ...] = ()       # its daily farming sessions (MS4b-3)
 
     @property
     def char_id(self) -> str:
@@ -88,6 +102,7 @@ class Login:
     actions: tuple[dict, ...]          # the pending and late actions, as `Session.pending` reads them
     offers: dict[int, str]             # the market file's flip offers (EX11): item key -> its offer
     prices: dict[int, int] = field(default_factory=dict)   # the planned document's cheapest price per item, copper
+    gathering: tuple[int, ...] = ()   # the Gathering page's items by net gold an hour, best first (rated ones only)
 
 
 @dataclass(order=True)
@@ -164,6 +179,11 @@ class Trader:
         """Queue a login at each of login_hours on every day of the world, after its start and first_login_ms."""
         midnight = self.world.start_ms // DAY_MS * DAY_MS
         for day in range(self.world.days + 1):
+            for char, spec in sorted(self.specs.items()):
+                for n, farm in enumerate(spec.farms):
+                    end = midnight + day * DAY_MS + farm.hour * HOUR_MS + farm.minutes * 60_000
+                    if self.world.start_ms < end - farm.minutes * 60_000:
+                        self._wake(end, "farm", f"{char}|{n}")
             for hour in sorted(self.login_hours):
                 at = midnight + day * DAY_MS + hour * HOUR_MS
                 if at > self.world.start_ms and (self.first_login_ms is None or at >= self.first_login_ms):
@@ -198,6 +218,9 @@ class Trader:
             self.login(market, documents, now_ms)
         elif kind == "post" and self.session is not None:
             self.session.post_due(market, ref, now_ms)
+        elif kind == "farm":
+            char, n = ref.split("|")
+            self.farm(char, self.specs[char].farms[int(n)], now_ms)
         self.sample(now_ms)
 
     def login(self, market: Market, documents: list, now_ms: int) -> None:
@@ -226,8 +249,8 @@ class Trader:
 
         Args:
             at_ms: When.
-            kind: "login" or "post".
-            ref: The post's action id; "" for a login.
+            kind: "login", "post" or "farm".
+            ref: The post's action id; "" for a login; "char|farm index" for a farming session.
         """
         self._seq += 1
         heapq.heappush(self._wakes, (at_ms, self._seq, kind, ref))
@@ -356,6 +379,40 @@ class Trader:
         """
         self.ledger.vendor_sell(char, key, units, self.items[key].vendor_sell)
 
+    def farm(self, char: str, farm: Farm, end_ms: int) -> None:
+        """A farming session that just ended: a gather event every FARM_EVENT_MS from its start, each with its share
+        of the loot, the units found at cost 0 (MS4b-3, SU17).
+
+        Args:
+            char: Who farmed.
+            farm: The session.
+            end_ms: When it ended.
+        """
+        start = end_ms - farm.minutes * 60_000
+        login = start // DAY_MS * DAY_MS                  # one login a day
+        events = farm.minutes * 60_000 // FARM_EVENT_MS + 1
+        totals = [(key, per_hour * farm.minutes // 60) for key, per_hour in farm.loot]
+        for i in range(events):                           # each item's total spread evenly, the first event's share first
+            loot = [(key, total * (i + 1) // events - total * i // events) for key, total in totals]
+            loot = [(key, units) for key, units in loot if units]
+            if loot:
+                self._gather(char, start + i * FARM_EVENT_MS, farm.source, login, loot)
+
+    def _gather(self, char: str, at_ms: int, source: str, login: int, loot: list[tuple[int, int]]) -> None:
+        """One loot window: its units into the bags as found stock, and the addon's gather event.
+
+        Args:
+            char: Who looted.
+            at_ms: When.
+            source: The gather event's source.
+            login: The character's login, ms.
+            loot: (key, units) looted.
+        """
+        for key, units in loot:
+            self.ledger.buy(char, key, units, 0)
+        self._event(char, at_ms, "gather", source=source, login=login,
+                    loot=";".join(f"{key},{units}" for key, units in sorted(loot)))
+
     def craft(self, char: str, product: int, crafts: int, now_ms: int) -> int:
         """Craft an item with a recipe the character knows, as many times as asked and its bags allow.
 
@@ -450,9 +507,22 @@ class Session:
         actions = self.pending()
         offers = flip_offers(documents[-1].items, self.db.items(), set(vendor_prices(self.db)), now_ms, self.cfg)
         prices = {key: i.cur for key, i in sorted(documents[-1].items.items()) if i.cur is not None}
-        self.logins.append(Login(now_ms, tuple(actions), offers, prices))
+        self.logins.append(Login(now_ms, tuple(actions), offers, prices, self.gathering(t.world.market)))
         for action in actions:
             self._carry_out(market, action, now_ms)
+
+    def gathering(self, market: str) -> tuple[int, ...]:
+        """The Gathering page's rated items by net gold an hour, as the dashboard sorts them (§3.4E.6).
+
+        Args:
+            market: Market id.
+
+        Returns:
+            Item keys, best first (ties by key); items without a rate or a price are left out.
+        """
+        view = self.db.view("gathering", market)
+        rows = [] if view is None else [r for r in view[0].get("rows", []) if r["sort"]["net"] is not None]
+        return tuple(r["key"] for r in sorted(rows, key=lambda r: (-r["sort"]["net"], r["key"])))
 
     def pending(self) -> list[dict]:
         """The plan's pending and late actions for our characters, by time then id.
