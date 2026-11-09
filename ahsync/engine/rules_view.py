@@ -31,14 +31,15 @@ def _owned(lots: Sequence[tuple[str, int, int]], key: int) -> str:
 
 
 def rules_view(rules: Sequence[tuple[int, str, int, str]], looks: dict[int, ItemLook],
-               outcomes: Sequence[tuple[int, str, int, int, int, str]], lots: Sequence[tuple[str, int, int]],
+               outcomes: Sequence[tuple[int, str, int, int, int, str, int, int]], lots: Sequence[tuple[str, int, int]],
                now_ms: int, offset_ms: int) -> dict:
     """The Rules page (SPEC §3.4.2, D50).
 
     Args:
         rules: Live item rules (key, rule, set_at ms, source "addon" | "dashboard"); cleared ones left out.
         looks: Item key -> look, with its sell record (records flag "not selling").
-        outcomes: Resolved posts (key, post id, price, posted at, resolved at, outcome) of the last 90 days.
+        outcomes: Resolved posts (key, post id, price, posted at, resolved at, outcome, units posted, units sold)
+            of the last 90 days.
         lots: (character id, item key, units) you hold.
         now_ms: Now.
         offset_ms: Local time minus UTC, ms.
@@ -50,7 +51,7 @@ def rules_view(rules: Sequence[tuple[int, str, int, str]], looks: dict[int, Item
     """
     ruled = {key for key, *_ in rules}
     expired: dict[int, int] = {}
-    for key, _, _, _, resolved, outcome in outcomes:
+    for key, _, _, _, resolved, outcome, *_ in outcomes:
         if outcome == "expired":
             expired[key] = max(expired.get(key, 0), resolved)
     decisions = [{"key": str(key), "item": look.name, "quality": look.quality, "record": record_line(look.record),

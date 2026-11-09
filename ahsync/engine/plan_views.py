@@ -12,6 +12,7 @@ Times are labelled in local time: the caller passes the UTC offset, so the engin
 """
 from __future__ import annotations
 
+import math
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
@@ -126,6 +127,19 @@ QTY_FRACTIONS = {1: "½", 2: "¼"}            # Latin-1 only: WoW's fonts lack �
 RECORD_WEIGHT, REPRICE_STEP = 4, 0.05       # config own_record_weight and reprice_step defaults (SPEC §3.6)
 
 
+def _posts(count: float) -> str:
+    """A record's count of posts' worth: whole as is, else one decimal (O19: a post counts its share sold).
+
+    Args:
+        count: Posts' worth.
+
+    Returns:
+        "2" or "1.4".
+    """
+    tenths = math.floor(count * 10 + 0.5)
+    return str(tenths // 10) if tenths % 10 == 0 else f"{tenths / 10:.1f}"
+
+
 def record_line(r: Record, p_after: float | None = None, weight: float = RECORD_WEIGHT, step: float = REPRICE_STEP) -> str:
     """The record line an item's rows show (SPEC §3.3.3, D42).
 
@@ -139,7 +153,7 @@ def record_line(r: Record, p_after: float | None = None, weight: float = RECORD_
         E.g. "Your record (30 d): 2 of 5 sold · expired 2× while cheapest · P 80% → 58% · price −10% · qty ¼".
         P before the blend is worked back from P' = (k·P + s) ÷ (k + s + x).
     """
-    parts = [f"Your record (30 d): {r.sold} of {r.sold + r.expired} sold"]
+    parts = [f"Your record (30 d): {_posts(r.sold)} of {_posts(r.sold + r.expired)} sold"]
     if r.lowest_expiries:
         parts.append(f"expired {r.lowest_expiries}× while cheapest")
     if p_after is not None:

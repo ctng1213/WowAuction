@@ -110,3 +110,17 @@ def test_buckets_include_their_lower_edge_and_the_last_includes_1():
     assert [(b.low, b.posts) for b in c.buckets] == [(0.0, 1), (0.2, 1), (0.6, 1), (0.8, 1)]
     assert calibration([]) == calibration(()) and calibration([]).brier is None
     assert Bucket(0.4, 0.6, 20, 0.5, 0.7).off_target                           # too pessimistic also warns
+
+
+def test_O19_your_record_counts_each_posts_share_of_units_sold():
+    from dataclasses import replace
+
+    from ahsync.engine import sellprob
+    posts = [replace(post(1, "expired", days_ago=6), stack=32, sold_units=0),
+             replace(post(2, "expired", days_ago=5), stack=110, sold_units=40),       # T25's Silk
+             replace(post(3, "sold", days_ago=4), stack=20, sold_units=20)]
+    r = sell_record(posts, lowest_closes(*posts), NOW, None, S)
+    assert (round(r.sold, 3), round(r.expired, 3), r.streak, r.lowest_expiries) == (1.364, 1.636, 0, 1)
+    assert round(sellprob.with_record(0.85, r.sold, r.expired, 4), 3) == 0.681      # counting posts: 1 sold, 2 expired: 0.629
+    partial_last = sell_record(posts[:2], lowest_closes(*posts[:2]), NOW, None, S)
+    assert partial_last.streak == 0                       # a post that sold any units ends a streak as a sale does

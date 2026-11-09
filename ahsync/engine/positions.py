@@ -339,9 +339,7 @@ class _Replay:
             m: The sold mail (money = price each).
         """
         if m.post_id in self.posts:
-            takes = [(b, b.listed.pop(m.post_id, 0), b.deposits.pop(m.post_id, 0.0)) for b, _ in self.posts[m.post_id]]
-            for b, _, _ in takes:
-                b.touch(m.at_ms, m.event_id)
+            takes = self._sell_listed(m)
         else:                                            # its post wasn't captured: the units were held
             takes = [(b, n, 0.0) for b, n in _take(self.books, m, m.key, m.units)]
         for b, n, _ in takes:
@@ -349,17 +347,52 @@ class _Replay:
             b.sold += n
         self.mails[m.event_id] = [(b, n, d) for b, n, d in takes if n]
 
+    def _sell_listed(self, m: Move) -> list[tuple[_Book, int, float]]:
+        """A sold mail's own units out of its post's listed units, positions in the order the post took them (PO15).
+
+        A commodity post sells in parts, a sold mail for each buyer's units, so each takes only its units and their
+        share of the post's deposit; whatever is left stays listed until its next mail.
+
+        Args:
+            m: The sold mail, linked to a known post.
+
+        Returns:
+            (position, units, deposit share) per position it took units from.
+        """
+        takes, left = [], m.units
+        for b, _ in self.posts[m.post_id]:
+            listed = b.listed.get(m.post_id, 0)
+            n = min(listed, left)
+            if not n:
+                continue
+            share = b.deposits.get(m.post_id, 0.0) * n / listed
+            b.listed[m.post_id], b.deposits[m.post_id] = listed - n, b.deposits.get(m.post_id, 0.0) - share
+            if not b.listed[m.post_id]:
+                del b.listed[m.post_id], b.deposits[m.post_id]
+            b.touch(m.at_ms, m.event_id)
+            takes.append((b, n, share))
+            left -= n
+        return takes
+
     def back(self, m: Move) -> None:
-        """An expired or cancelled mail: its units come back and its deposit is lost (D68, PO14).
+        """An expired or cancelled mail: its units come back and their share of the deposit is lost (D68, PO14, PO15).
 
         Args:
             m: The mail.
         """
         for b in [b for b in self.books if b.holder == m.char_id and b.key == m.key and b.seed.opened_at <= m.at_ms]:
             b.touch(m.at_ms, m.event_id)                 # unlinked: it still explains units the snapshot lacks
+        left = m.units                                   # only its own units: a late sale's may still follow (PO15)
         for b, _ in self.posts.get(m.post_id or "", []):
-            b.held += b.listed.pop(m.post_id, 0)
-            b.realized -= b.deposits.pop(m.post_id, 0.0)
+            listed = b.listed.get(m.post_id, 0)
+            n = min(listed, left)
+            if not n:
+                continue
+            lost = b.deposits.get(m.post_id, 0.0) * n / listed
+            b.listed[m.post_id], b.deposits[m.post_id] = listed - n, b.deposits.get(m.post_id, 0.0) - lost
+            if not b.listed[m.post_id]:
+                del b.listed[m.post_id], b.deposits[m.post_id]
+            b.held, b.realized, left = b.held + n, b.realized - lost, left - n
 
     def payout(self, m: Move) -> None:
         """Gold taken from a sold mail: the units' cost leaves committed capital as the gold joins your cash (T17).

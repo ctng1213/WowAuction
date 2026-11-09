@@ -63,7 +63,7 @@ def test_D47_the_journal_reads_every_kind_of_event_with_the_plan_action_it_match
     assert by_kind["mailed"][7] == B and by_kind["disenchanted"][7] == f"{DUST},2"
     assert by_kind["untracked"][4:8] == (3, None, None, -3)
     assert db.journal([], NOW) == []
-    assert by_kind["posted"][9:11] == (None, PostResult(None, None, 20, None))   # matched no action, still up
+    assert by_kind["posted"][9:11] == (None, PostResult(None, None, 20, None, 1, 0, 1))   # no action; a sale unpaid (T26)
     assert by_kind["posted"][11] == "p" and by_kind["untracked"][11] is None      # the event id (M14, PO9)
 
 
@@ -95,12 +95,34 @@ def test_D69_the_journal_gives_each_event_its_plan_facts(tmp_path):
                       [("u1", A, LINEN, 10, NOW - 7 * HOUR, "flip", 105.0), ("u2", A, CINCH, 1, NOW - 8 * HOUR, "debuy", 500.0),
                        ("u3", A, 2840, 14, NOW - 9 * HOUR, "bars", 0.0)])
     facts = {r[2] + str(r[3]) + str(r[0]): r[9:11] for r in db.journal([A], NOW - 30 * DAY)}
-    paid, up = PostResult("sold", 300.0, 2, "bars"), PostResult(None, None, 2, "bars")
-    chain = ChainFacts("bars", (paid, PostResult("sold", 350.0, 2, "bars"), up), 1)            # p3 is still to come
+    paid, up = PostResult("sold", 300.0, 2, "bars", 3), PostResult(None, None, 2, "bars")
+    chain = ChainFacts("bars", (paid, PostResult("sold", 350.0, 2, "bars", 3), up), 1)         # p3 is still to come
     assert facts[f"crafted{ROD}{NOW - 6 * HOUR}"] == (971.0, chain)
     assert facts[f"posted{ROD}{NOW - 5 * HOUR}"] == (300.0, paid)
     assert facts[f"posted{ROD}{NOW - 3 * HOUR}"] == (None, up)
     assert facts[f"bought{LINEN}{NOW - 7 * HOUR}"] == (105.0, ChainFacts("flip", (), 1, False, 0.5))   # half the buy
     assert facts[f"bought{CINCH}{NOW - 8 * HOUR}"] == (500.0, ChainFacts("debuy", (), 0, True))
     assert facts[f"bought2840{NOW - 9 * HOUR}"] == (0.0, None)                                  # a mat buy carries nothing
+    db.close()
+
+
+def test_T26_history_sums_a_partly_sold_posts_payouts_and_counts_its_unpaid_sales(tmp_path):
+    db = Database.open(tmp_path / "j.db", NOW, None)
+    with db.transaction():
+        c = db.conn
+        c.execute("INSERT INTO posts(post_id, event_id, char_id, key, stack, price, duration_h, deposit, at, confirmed, "
+                  "outcome, sold_units, returned_units) VALUES ('p', 'p', ?, 4306, 110, 139, 24, 814, ?, 1, 'expired', 40, 70)",
+                  (A, NOW - 3 * DAY))
+        c.executemany("INSERT INTO auction_mail(event_id, char_id, key, qty, price, outcome, at, post_id) "
+                      "VALUES (?, ?, 4306, ?, 139, ?, ?, 'p')",
+                      [("s30", A, 30, "sold", NOW - 2 * DAY), ("x70", A, 70, "expired", NOW - DAY), ("s10", A, 10, "sold", NOW - DAY)])
+        c.execute("INSERT INTO payouts(event_id, char_id, key, qty, money, at, mail_id, realized) "
+                  "VALUES ('o30', ?, 4306, 30, 0, ?, 's30', 3500.0)", (A, NOW - DAY))
+    [posted] = [r for r in db.journal([A], NOW - 30 * DAY) if r[2] == "posted"]
+    assert posted[10] == PostResult("expired", 3500.0, 814, None, 110, 70, 1)      # s10 not taken yet
+    with db.transaction():
+        db.conn.execute("INSERT INTO payouts(event_id, char_id, key, qty, money, at, mail_id, realized) "
+                        "VALUES ('o10', ?, 4306, 10, 0, ?, 's10', 1170.0)", (A, NOW))
+    [posted] = [r for r in db.journal([A], NOW - 30 * DAY) if r[2] == "posted"]
+    assert posted[10] == PostResult("expired", 4670.0, 814, None, 110, 70, 0)      # both payouts, summed
     db.close()

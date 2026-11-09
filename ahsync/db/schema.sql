@@ -99,6 +99,7 @@ CREATE TABLE IF NOT EXISTS auction_mail(
     outcome TEXT NOT NULL, at INTEGER NOT NULL, post_id TEXT   -- the post it resolved (SPEC §3.4.1)
 );
 CREATE INDEX IF NOT EXISTS auction_mail_char_key_at ON auction_mail(char_id, key, at, outcome);
+CREATE INDEX IF NOT EXISTS auction_mail_post ON auction_mail(post_id);   -- a post's mails (T25, T26)
 
 -- A disenchant and what it gave, "key,qty;..." by key (SPEC §2.2.1 disenchant, T18).
 CREATE TABLE IF NOT EXISTS disenchants(
@@ -151,12 +152,16 @@ CREATE TABLE IF NOT EXISTS payouts(
     event_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, key INTEGER NOT NULL, qty INTEGER, money INTEGER,
     at INTEGER NOT NULL, mail_id TEXT, realized REAL, deposit INTEGER   -- the invoice's deposit, when captured
 );
+CREATE INDEX IF NOT EXISTS payouts_mail ON payouts(mail_id);   -- the payout of a sold mail (T26)
 
+-- expected_net: the matched action's expected net, copied at match time (T23); NULL = none.
+-- sold_units / returned_units: the units its sold mails took and its expired or cancelled mail brought back; a
+-- commodity sells in parts, so a post resolves once they make its stack (T25).
 CREATE TABLE IF NOT EXISTS posts(
     post_id TEXT PRIMARY KEY, char_id TEXT NOT NULL, market TEXT, key INTEGER NOT NULL, stack INTEGER,
     price INTEGER, cost_each REAL, p_at_post REAL, duration_h INTEGER, deposit INTEGER, at INTEGER NOT NULL,
     outcome TEXT, resolved_at INTEGER, action_id TEXT, event_id TEXT UNIQUE, confirmed INTEGER NOT NULL DEFAULT 0,
-    expected_net REAL                    -- the matched action's expected net, copied at match time (T23); NULL = none
+    expected_net REAL, sold_units INTEGER NOT NULL DEFAULT 0, returned_units INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS purchases(

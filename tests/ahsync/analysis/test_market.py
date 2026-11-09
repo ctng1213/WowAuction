@@ -353,7 +353,7 @@ def test_SRC11_ahledgers_aggregates_are_stored_never_used(tmp_path):
     readers = sorted(str(p.relative_to(root)).replace("\\", "/") for p in root.rglob("*.py")
                      if "ahledger_rows" in p.read_text(encoding="utf-8"))
     assert readers == ["collect/ahledger.py", "collect/ahledger_backfill.py",   # the backfill reads only its keys (§2.3)
-                       "db/sqlite.py", "history/prune.py", "history/writes.py"]
+                       "db/migrations.py", "db/sqlite.py", "history/prune.py", "history/writes.py"]
 
 
 def test_BZ32_repricing_an_item_with_its_own_state_reproduces_the_daily_numbers():

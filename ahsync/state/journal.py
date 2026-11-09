@@ -22,7 +22,10 @@ JournalRow = tuple
 
 _PLAN = "a.status, COALESCE(a.done_qty, 0), a.qty"
 _NO_FACTS = "NULL, NULL, NULL, NULL"
-_PAID = "(SELECT o.realized FROM auction_mail m JOIN payouts o ON o.mail_id = m.event_id WHERE m.post_id = p.post_id)"
+_PAID = "(SELECT SUM(o.realized) FROM auction_mail m JOIN payouts o ON o.mail_id = m.event_id WHERE m.post_id = p.post_id)"
+# A post's sold mails not paid out yet (T26), and its units, after its other facts.
+_UNITS = ("p.stack, p.returned_units, (SELECT COUNT(*) FROM auction_mail m WHERE m.post_id = p.post_id AND m.outcome = 'sold' "
+          "AND NOT EXISTS (SELECT 1 FROM payouts o WHERE o.mail_id = m.event_id))")
 # A buy or craft whose action carries its chain's profit (SPEC §3.4 expected net): its chain id, its action's net.
 _CARRIER = ("CASE WHEN a.kind IN ('buy', 'craft') AND a.expected_net <> 0 THEN COALESCE(a.parent_id, a.action_id) END, "
             "a.expected_net")
@@ -34,7 +37,7 @@ _CHUNK = 500                    # chain ids per query, well inside SQLite's vari
 # (expected, -, -, -), the others none.
 _QUERIES = (
     (f"p.at, p.char_id, 'posted', p.key, p.stack, p.price, {_PLAN}, p.duration_h, p.deposit, p.expected_net, "
-     f"p.outcome, {_PAID}, a.parent_id, p.post_id FROM posts p LEFT JOIN actions a ON a.action_id = p.action_id "
+     f"p.outcome, {_PAID}, a.parent_id, p.post_id, {_UNITS} FROM posts p LEFT JOIN actions a ON a.action_id = p.action_id "
      "WHERE p.confirmed = 1", "p", "at"),
     (f"m.at, m.char_id, m.outcome, m.key, m.qty, m.price, NULL, NULL, NULL, p.at, p.deposit, {_NO_FACTS}, m.event_id "
      "FROM auction_mail m LEFT JOIN posts p ON p.post_id = m.post_id WHERE 1 = 1", "m", "at"),
@@ -61,7 +64,8 @@ def _facts(r: tuple, chains: dict[str, ChainFacts]) -> PostResult | ChainFacts |
     """The plan facts of one raw journal row (D68, D69).
 
     Args:
-        r: A raw row: the 11 row columns, then (expected, x, y, z) as _QUERIES describes.
+        r: A raw row: the 11 row columns, then (expected, x, y, z) as _QUERIES describes, then the event id; a
+            post's row then has its stack, returned units and unpaid sold mails (_UNITS).
         chains: Chain id -> its facts (share 1).
 
     Returns:
@@ -69,7 +73,7 @@ def _facts(r: tuple, chains: dict[str, ChainFacts]) -> PostResult | ChainFacts |
         net, i.e. matched units ÷ the action's units; 1 when either is missing); else None.
     """
     if r[2] == "posted":
-        return PostResult(r[12], r[13], r[10], r[14])
+        return PostResult(r[12], r[13], r[10], r[14], r[16] or 1, r[17] or 0, r[18] or 0)
     if r[2] in ("bought", "crafted") and r[12] is not None:
         c = chains[r[12]]
         share = r[11] / r[13] if r[11] is not None and r[13] else 1.0
@@ -122,9 +126,9 @@ class JournalReads:
         de: set[str] = set()
         for start in range(0, len(chain_ids), _CHUNK):
             part = chain_ids[start:start + _CHUNK]
-            for cid, action_id, kind, status, post_id, outcome, paid, deposit in self.conn.execute(
+            for cid, action_id, kind, status, post_id, outcome, paid, deposit, stack, back, unpaid in self.conn.execute(
                     f"SELECT COALESCE(a.parent_id, a.action_id), a.action_id, a.kind, a.status, p.post_id, p.outcome, "
-                    f"{_PAID}, p.deposit FROM actions a "
+                    f"{_PAID}, p.deposit, {_UNITS} FROM actions a "
                     "LEFT JOIN posts p ON p.action_id = a.action_id AND p.confirmed = 1 "
                     f"WHERE COALESCE(a.parent_id, a.action_id) IN ({','.join('?' * len(part))}) "
                     "AND a.kind IN ('post', 'de') ORDER BY p.at, p.post_id, a.action_id", part):
@@ -132,7 +136,7 @@ class JournalReads:
                     de.add(cid)
                     continue
                 if post_id is not None:
-                    posts[cid].append(PostResult(outcome, paid, deposit, cid))
+                    posts[cid].append(PostResult(outcome, paid, deposit, cid, stack or 1, back or 0, unpaid or 0))
                 if status in _OPEN:
                     open_posts[cid].add(action_id)
         return {cid: ChainFacts(cid, tuple(posts[cid]), len(open_posts[cid]), cid in de and not posts[cid])

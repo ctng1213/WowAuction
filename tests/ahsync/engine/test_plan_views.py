@@ -213,6 +213,10 @@ def test_D42_the_record_line_shows_the_record_and_works_p_back_from_p_prime():
     assert plan_views.record_line(stuck, 4 * 0.8 / 7) == \
         "Your record (30 d): 0 of 3 sold · expired 3× while cheapest · P 80% → 46% · price −14% · qty 1/8"
     assert plan_views.record_line(Record(2, 0, 0, 0, False, False)) == "Your record (30 d): 2 of 2 sold"
+    # O19: a post counts its share of units sold, so the count is posts' worth with one decimal when fractional
+    assert plan_views.record_line(Record(40 / 110 + 1, 1 + 70 / 110, 0, 1, False, False)) == (
+        "Your record (30 d): 1.4 of 3 sold · expired 1× while cheapest")
+    assert plan_views.record_line(Record(1.96, 0.04, 0, 0, False, False)) == "Your record (30 d): 2 of 2 sold"
     assert plan_views.record_line(Record(0, 5, 5, 5, False, True)).endswith("qty 1/32")
     looks = {**LOOKS, BAR: replace(LOOKS[BAR], record=stuck)}
     post = act("p", "post", 650, NOW, 4 * 0.8 / 7, key=BAR, qty=5, price=47)

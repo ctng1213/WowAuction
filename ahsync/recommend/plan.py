@@ -86,8 +86,9 @@ def sell_records(db: Database, char_ids: list[str], market: str, now_ms: int, cf
     s = record_settings(cfg)
     since = now_ms - s.days * DAY_MS
     posts: dict[int, list[ResolvedPost]] = {}
-    for key, post_id, price, at, resolved, outcome in db.post_outcomes(char_ids, since):
-        posts.setdefault(key, []).append(ResolvedPost(post_id, price, at, resolved, outcome))
+    for key, post_id, price, at, resolved, outcome, stack, sold_units in db.post_outcomes(char_ids, since):
+        units = sold_units if outcome != "sold" else stack             # O19: a sold post sold its stack
+        posts.setdefault(key, []).append(ResolvedPost(post_id, price, at, resolved, outcome, stack or 1, units))
     keeps = db.keep_times()
     out = {}
     for key, rows in sorted(posts.items()):
