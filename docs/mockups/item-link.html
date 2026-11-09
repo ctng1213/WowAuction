@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Proposal: what clicking an item name does on the dashboard</title>
+<style>
+  :root { color-scheme: dark;
+    --bg: #0e0d0b; --surface: #181612; --surface-2: #221f19; --border: #3d3424; --border-hi: #8a6d2f;
+    --text: #ece3cc; --muted: #9b917b; --accent: #ffd100; --pos: #3ddc4f; --neg: #ff4a3d; --amber: #ffb02e; --q2: #1eff00;
+    --serif: "Friz Quadrata TT", "Palatino Linotype", "Book Antiqua", Georgia, serif; }
+  * { box-sizing: border-box; }
+  body { margin: 24px; max-width: 1240px; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  h1 { font: 22px var(--serif); color: var(--accent); margin: 0 0 4px; } h2 { font: 17px var(--serif); color: var(--accent); margin: 32px 0 8px; }
+  p.note { color: #c9c4b6; max-width: 1050px; } .muted { color: var(--muted); } .pos { color: var(--pos); } .neg { color: var(--neg); } .amber { color: var(--amber); }
+  .q2 { color: var(--q2); }
+  a { color: inherit; text-decoration: underline; text-decoration-color: #4a3f2a; text-underline-offset: 2px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-top: 10px; }
+  .card-h { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); background: linear-gradient(#241f16, #1a1711); }
+  .card-h b { flex: 1; font: 15px var(--serif); color: var(--accent); font-weight: normal; }
+  .scrollx { overflow-x: auto; }
+  table.t { border-collapse: collapse; width: 100%; }
+  table.t th { text-align: left; font-size: 12px; font-weight: 600; color: #d9b54a; padding: 8px 12px; border-bottom: 1px solid var(--border-hi); white-space: nowrap; background: #120f0b; }
+  table.t td { padding: 7px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; vertical-align: top; }
+  table.t tbody tr:hover td { background: #2a2416; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .sub { display: block; color: var(--muted); font-size: 12px; white-space: normal; max-width: 520px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; } .dot.l { background: var(--muted); }
+  tr.selected td { background: #2a2416; } tr.selected td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  .rowclick tbody tr { cursor: pointer; }
+  .new { outline: 1px dashed var(--amber); outline-offset: 3px; }
+  .tip { display: inline-block; margin-left: 8px; padding: 2px 8px; font-size: 12px; color: var(--text); background: #0b0a08; border: 1px solid var(--border-hi); border-radius: 3px; }
+  .detail { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 14px; }
+  .h { color: var(--muted); font-size: 12px; margin: 12px 0 4px; } .h:first-child { margin-top: 0; }
+  table.lines { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  table.lines th { color: var(--muted); font-weight: normal; text-align: right; padding: 3px 6px; border-bottom: 1px solid var(--border); }
+  table.lines th:first-child, table.lines td:first-child { text-align: left; }
+  table.lines td { padding: 4px 6px; border-bottom: 1px dashed var(--border); text-align: right; white-space: nowrap; }
+  table.lines td:first-child { color: var(--muted); } table.lines td.word { text-align: left; }
+  .rest { color: var(--muted); font-size: 12px; border: 1px dashed var(--border); border-radius: 4px; padding: 10px; }
+  .empty { padding: 18px 14px; color: var(--muted); border-top: 1px solid var(--border); }
+  /* D: the table is its own scroll box, so its sideways scrollbar is always on screen. */
+  .box { overflow: auto; max-height: 300px; }
+  .box th { position: sticky; top: 0; z-index: 1; }
+  .box td.num .sub { white-space: nowrap; }
+</style>
+</head>
+<body>
+<h1>Proposal: what clicking an item name does on the dashboard</h1>
+<p class="note"><b>Decided by the user, 2026-11-08: A and D</b> (D107, D108). B was not taken (no site has a per-item page for Forever yet); C was dropped (Disenchant needs no detail view). D was built as a box that ends just above the window's bottom edge when the page is drawn (at least 300 px), so the scrollbar shows without scrolling the page.</p>
+<p class="note"><b>For review, 2026-11-08.</b> Today every item name on every dashboard page is a link with the hover "Open on auctionhouse.fyi", and it opens that site's <b>home page</b>, not the item (<code>index.html</code>'s <code>item()</code>; the code notes it as a SPEC gap: §3.5 says names link there but gives no per-item address). It dates from when auctionhouse.fyi was the main price source; prices now come mostly from AHledger and your scans. The rows below are your live Disenchant rows in the new column order (PR #68). Dashed outlines mark what changes. The choice applies to every page that shows item names; Disenchant is the example.</p>
+
+<h2>Today</h2>
+<div class="card"><div id="today" class="scrollx"></div></div>
+<p class="note muted">Hovering a name shows <span class="tip">Open on auctionhouse.fyi</span>; clicking it opens https://auctionhouse.fyi/ in your browser.</p>
+
+<h2>A. A plain name: no link (recommended now)</h2>
+<p class="note">The name keeps its quality colour and loses the underline and the click. Nothing leaves the app. The Item column's header hover changes from "…Click to open it on auctionhouse.fyi" to "The item, in its quality colour". Smallest change, and nothing misleading is left behind.</p>
+<div class="card"><div id="a" class="scrollx"></div></div>
+
+<h2>B. A link to the item's own page on another site</h2>
+<p class="note">The name opens that item's page, by item id. <b>Needs a site with a stable address per item</b>, and I haven't checked that any of them works for Forever's items: AHledger's per-item pages are unverified, and a database site such as Wowhead Classic (<code>/classic/item=&lt;id&gt;</code>) shows Classic data, not Forever's market. A suffix item (Grunt's Bracers of Defense) would open its base item. Shown with a placeholder site name.</p>
+<div class="card"><div id="b" class="scrollx"></div></div>
+<p class="note muted">Hovering a name shows <span class="tip">Open Copper Chain Belt on &lt;site&gt;</span>.</p>
+
+<h2>C. Click the row: the item detail opens under the table (recommended next)</h2>
+<p class="note">As on the pages where you can already select a row (Inventory, Gathering): the whole row is clickable and the selected row gets the gold edge. The detail below it is the approved item detail (<a href="item-detail-lines.html">item-detail-lines.html</a>, D105), whose Market lines include the <b>Disenchant Value</b> breakdown per mat, so you can see why a row's Expected Value is what it is. The name is plain, as in A. The detail's values here are an example made to match the row (47c from 1.2 dust at 25c and 0.3 essence at 57c).</p>
+<div class="card">
+  <div id="c" class="scrollx"></div>
+  <div class="new">
+    <div class="card-h" style="border-top:1px solid var(--border)"><b>Embossed Leather Gloves: when it sells best</b><span class="muted">med30 1s · trend 0.0%/day · 1 week of data · 5% coverage</span></div>
+    <div class="detail"><div>
+      <div class="h">Market lines (the tooltip's; the market's data covers 5% of the last 30 days)</div>
+      <table class="lines">
+        <tr><th>Line</th><th>Now</th><th>7d</th><th>14d</th><th>30d</th><th></th></tr>
+        <tr><td>Market Price</td><td>1s now</td><td>1s</td><td>1s</td><td>1s</td><td class="word">steady</td></tr>
+        <tr><td>Market Inventory</td><td>1,713 listed</td><td>2,751</td><td>2,751</td><td>2,751</td><td class="word amber">low</td></tr>
+        <tr><td>Sell Chance Now</td><td>5% at 1s</td><td>6%</td><td>6%</td><td>6%</td><td class="word amber">est.</td></tr>
+        <tr><td>Disenchant Value</td><td><span class="neg">53% below AH</span> · 47c</td><td></td><td></td><td></td><td class="word"></td></tr>
+        <tr><td>&nbsp;&nbsp;80% · 1.5 Strange Dust @ 25c</td><td>30c</td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>&nbsp;&nbsp;20% · 1.5 Lesser Magic Essence @ 57c</td><td>17c</td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>Vendor Price</td><td>24c · from the game</td><td></td><td></td><td></td><td class="word"></td></tr>
+      </table>
+      <div class="h">Best selling windows (forecast for the coming week, local time)</div><div class="rest">… as on the other pages …</div>
+    </div><div>
+      <div class="h">Price by hour of the week (<code>how</code>), local time</div><div class="rest">… heatmaps as on the other pages …</div>
+    </div></div>
+  </div>
+</div>
+<p class="note muted">With no row selected, the space under the table reads: "Select a row to see its market lines and what the disenchant is worth."</p>
+
+<h2>D. Separate follow-up: the table scrolls inside its own box</h2>
+<p class="note">Not about links. On Windows the sideways scrollbar sits under the last row, so you can't see it (Shift + wheel works). Here the table is its own scroll box, as tall as the window (300 px in this mockup), so its sideways scrollbar is always at the bottom of the screen and the header row stays put while you scroll down. The Chance cell's "volume unknown" stays on one line, so rows are two lines tall instead of three. It would apply to every long table. Try scrolling it.</p>
+<div class="card"><div id="d" class="box new"></div></div>
+
+<script>
+  const ROWS = [
+    ['Copper Chain Belt', '1s', '−53c', '47c', '1.2 Strange Dust · 0.3 Lesser Magic Essence', '800', '0.2%', 11],
+    ['Runed Copper Gauntlets', '1s', '−53c', '47c', '1.2 Strange Dust · 0.3 Lesser Magic Essence', '800', '0.2%', 12],
+    ['Handstitched Leather Belt', '1s', '−53c', '47c', '1.2 Strange Dust · 0.3 Lesser Magic Essence', '800', '0.2%', 10],
+    ['Embossed Leather Gloves', '1s', '−53c', '47c', '1.2 Strange Dust · 0.3 Lesser Magic Essence', '800', '0.2%', 13],
+    ['Handstitched Leather Vest', '1s', '−53c', '47c', '1.2 Strange Dust · 0.3 Lesser Magic Essence', '800', '0.2%', 10],
+    ['Greater Magic Wand', '3s', '−72c', '2s 28c', '1.1 Lesser Astral Essence · 1.0 Strange Dust · 0.1 Small Glimmering Shard', '642', '0.5%', 23],
+  ];
+  const COLS = [['Item'], ['Market Price', 1], ['Expected Profit', 1], ['Expected Value', 1], ['Expected mats'], ['Chance', 1],
+                ['Est. Sales/Day', 1], ['Current Supply', 1], ['Supply/Volume', 1], ['Risk', 1], ['Price age', 1], ['ilvl', 1]];
+  const NAMES = {
+    today: n => `<a class="q2" href="https://auctionhouse.fyi/" target="_blank" rel="noopener noreferrer" title="Open on auctionhouse.fyi">${n}</a>`,
+    a: n => `<span class="q2 new">${n}</span>`,
+    b: n => `<a class="q2 new" href="#" onclick="return false" title="Open ${n} on &lt;site&gt;">${n}</a>`,
+    c: n => `<span class="q2">${n}</span>`,
+    d: n => `<span class="q2">${n}</span>`,
+  };
+  const draw = (id, rows, selected) => {
+    const head = COLS.map(([t, n]) => `<th class="${n ? 'num' : ''}">${t}</th>`).join('');
+    const body = rows.map(([n, buy, profit, ev, mats, supply, risk, ilvl]) =>
+      `<tr${n === selected ? ' class="selected"' : ''}><td>${NAMES[id](n)}</td><td class="num">${buy}</td><td class="num"><span class="neg">${profit}</span></td>` +
+      `<td class="num">${ev}</td><td class="muted">${mats}</td><td class="num">50% <span class="dot l"></span><span class="sub">volume unknown</span></td>` +
+      `<td class="num">—</td><td class="num">${supply}</td><td class="num">—</td><td class="num"><span class="muted">${risk}</span></td><td class="num">1 h</td><td class="num">${ilvl}</td></tr>`).join('');
+    const el = document.getElementById(id);
+    el.innerHTML = `<table class="t${id === 'c' ? ' rowclick' : ''}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  };
+  draw('today', ROWS.slice(0, 3)); draw('a', ROWS.slice(0, 3)); draw('b', ROWS.slice(0, 3));
+  draw('c', ROWS.slice(2, 5), 'Embossed Leather Gloves');
+  draw('d', [...ROWS, ...ROWS, ...ROWS]);
+</script>
+</body>
+</html>

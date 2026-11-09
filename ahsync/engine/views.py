@@ -167,7 +167,7 @@ MARKET_COLUMNS = (("Chance", "chance"), ("Est. Sales/Day", "sales"), ("Current S
 
 # Header tooltips (SPEC §3.5): one text per column name, so a column reads the same on every page.
 COLUMN_HELP = {
-    "Item": "The item, in its quality colour. Click to open it on auctionhouse.fyi",
+    "Item": "The item, in its quality colour",
     "Product": "What the recipe makes",
     "ilvl": "Item level: sets the disenchant results",
     "Buy": "Cheapest buyout on the AH now",
