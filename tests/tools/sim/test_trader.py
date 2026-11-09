@@ -14,7 +14,7 @@ from ahsync.state.savedvars import read_ahprofit  # noqa: E402
 from sim.emulator import capture, id_book  # noqa: E402
 from sim.market import DAY_MS, HOUR_MS, MINUTE_MS, Item, Market, World  # noqa: E402
 from sim.runner import simulate  # noqa: E402
-from sim.trader import (OUR_PREFIX, SALE_MAIL_DELAY_MS, CharacterSpec, NaiveTrader, Trader,  # noqa: E402
+from sim.trader import (OUR_PREFIX, SALE_MAIL_DELAY_MS, CharacterSpec, NaiveTrader, Recipe, Trader,  # noqa: E402
                         client_band)
 from tests.support.savedvars_builder import savedvars_text  # noqa: E402
 
@@ -140,3 +140,28 @@ def test_a_trader_installed_later_logs_in_only_from_then(tmp_path):
             START_MS + 2 * DAY_MS + 10 * HOUR_MS, START_MS + 3 * DAY_MS + 10 * HOUR_MS]
     finally:
         late.close()
+
+
+def test_SU16_a_craft_uses_its_reagents_moves_their_cost_and_reaches_ahsync_through_the_addon_file(tmp_path):
+    from ahsync.state.importer import apply_data
+    silk, bolt = 4306, 4305
+    recipe = Recipe(3839, "Tailoring", bolt, ((silk, 4),))
+    world = World(1, START, 1, (Item(silk, "Silk Cloth", True, 100, 0, 0, vendor_sell=38),
+                                Item(bolt, "Bolt of Silk Cloth", True, 500, 0, 0, vendor_sell=200)))
+    trader = Trader(world, (CharacterSpec("Amaya", 10_000, recipes=(recipe,)),), tmp_path / "ahsync", login_hours=())
+    try:
+        char = "Amaya-Simulated"
+        trader.ledger.buy(char, silk, 10, 1_000)
+        assert trader.craft(char, bolt, 3, START + HOUR_MS) == 2                       # 10 Silk make 2 bolts
+        assert (trader.held(char, silk), trader.ledger.bags[(char, silk)].cost) == (2, 200)
+        assert (trader.held(char, bolt), trader.ledger.bags[(char, bolt)].cost) == (2, 800) and trader.ledger.balanced()
+        assert trader.craft(char, bolt, 5, START + HOUR_MS) == 0 and trader.craft(char, silk, 1, START) == 0
+        sv = trader.session.savedvars(Market(world), START + 2 * HOUR_MS)
+        assert [(e["type"], e["spell"], e["count"]) for e in sv["events"]] == [("craft", 3839, 2)]
+        data = read_ahprofit(savedvars_text(sv))
+        assert not data.problems
+        apply_data(trader.session.db, data, trader.session.cfg.realms, START + 2 * HOUR_MS, trader.session.cfg.markets)
+        [known] = trader.session.db.known_recipes([char])
+        assert (known.spell, known.profession, known.product, tuple(known.reagents)) == (3839, "Tailoring", bolt, ((silk, 4),))
+    finally:
+        trader.close()
