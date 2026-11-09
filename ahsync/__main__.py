@@ -43,6 +43,7 @@ from ahsync.recommend.tracking_pass import tracking_pass
 from ahsync.app import installer, update_check, updater
 from ahsync.app.scheduler import SavedVarsWatcher, Scheduler, SchedulerHooks, file_mtime_ms, find_savedvars
 from ahsync.intel.store import IntelCache
+from ahsync.mcp.claude_config import find_claude_config
 from ahsync.mcp.server import McpServer, McpStartError, remove_key_file
 from ahsync.web.server import (AppHooks, DashboardApp, DashboardServer, new_token, open_server_db, start_dashboard,
                                stop_dashboard)
@@ -395,7 +396,8 @@ def serve_dashboard(data_dir: Path, config: Config, clock: Clock, refresh: Refre
                else (sys.executable, "-m", "ahsync.mcp", "--data-dir", str(data_dir)))
     app = DashboardApp(server_db, config, clock, refresh.request_refresh, new_token(), config.dashboard_port,
                        config_path=config_path, config_changed=on_config or (lambda _config: None), app_hooks=app_hooks,
-                       mcp=assistant, mcp_command=command)
+                       mcp=assistant, mcp_command=command,
+                       claude_config=lambda: find_claude_config(os.environ, Path.home(), sys.platform))
     try:
         server = start_dashboard(app, config.dashboard_port)
     except OSError as error:

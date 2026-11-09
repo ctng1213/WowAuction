@@ -348,3 +348,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-09: MS4b-1 built: SD5, SD7, SD32, SD33 in the simulator's decision report (`tools/sim/decision.py`; a trader's first login); test tooling only, no component, flow or contract changes.
 - 2026-11-09: MS4a built: the decision report's SD rows in the simulator (`tools/sim/decision.py`; price and demand shifts in `market.py`; hourly documents and login hours for the trader); test tooling only, no component, flow or contract changes.
 - 2026-11-09: MC3 built: the Status card's Enable / Disable (`POST /api/mcp`, `web/settings.py`), `run()` starting the assistant server when `mcp_enabled`, and the bridge packaged (`ahsync-mcp.exe` on Windows, `--mcp` on macOS).
+- 2026-11-09: MC3b built: the AI assistant card reads Claude Desktop's config, read-only, to say which file to change (`mcp/claude_config.py`, SPEC §3.8.1); no new component or flow.
