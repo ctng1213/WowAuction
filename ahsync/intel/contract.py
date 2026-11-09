@@ -10,7 +10,7 @@ bytes (AR1). A document from a newer schema is refused (AR2).
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import asdict, dataclass, field, fields, replace
 
 from ahsync.engine import profile
 
@@ -214,6 +214,27 @@ def others_supply(i: ItemIntel, own_units: int) -> int | None:
     if supply is None or i.units_on_ah is None:
         return supply
     return max(0, supply - own_units)
+
+
+def buying_view(items: dict[int, ItemIntel], prices_ms: int | None) -> dict[int, ItemIntel]:
+    """The items as the plan may buy them: on a cloud market, one the newest snapshot didn't list has nothing to buy
+    (SPEC §3.4D.6, BZ51).
+
+    A cloud document's every snapshot is the whole auction house, and it keeps an unlisted item's last book with its
+    age growing (ahcloud.hourly), which is a price to show and to sell your own stock by (BZ50), not units for sale.
+
+    Args:
+        items: Item key -> intelligence (cur_age_ms counts back from the document's prices; a scan after them is
+            negative, IU6).
+        prices_ms: A cloud document's prices time (ages_at_ms); None for a desktop-built one, whose items stand.
+
+    Returns:
+        The items, each one older than the prices with no cheapest price, no units at it, no book and no listed supply.
+    """
+    if prices_ms is None:
+        return items
+    return {key: replace(i, cur=None, cur_qty=None, book=(), units_on_ah=0)
+            if i.cur is not None and i.cur_age_ms is not None and i.cur_age_ms > 0 else i for key, i in items.items()}
 
 
 def ages_reference_ms(intel: MarketIntelligence) -> int:
