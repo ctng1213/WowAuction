@@ -160,14 +160,15 @@ def timed_value(opts: Sequence[PostOption], run: Run) -> OptionValue:
 
 
 def cap_rid(key: int, o: PostOption) -> str:
-    """The resource id of a window's market capacity (the §3.4C.4 ledger's key).
+    """The resource id of a capacity group's market capacity (the §3.4C.4 ledger's key, R32).
 
     Args:
         key: Item key.
         o: The post option.
 
     Returns:
-        "cap:<key>:<window start ms>" or "cap:<key>:now".
+        "cap:<key>:<group key>" (plan.window_id: the group's first window start), or "cap:<key>:now" when the
+        group holds posting now.
     """
     w = window_id(o)
     return f"cap:{key}:{'now' if w is None else w}"

@@ -496,6 +496,23 @@ def test_BZ21_your_scan_applies_when_newer_than_the_documents_prices_not_just_it
     assert (newer.cur, newer.cur_qty, newer.cur_age_ms) == (cur + 7, 3, -600_000)   # newer than the prices: applied
 
 
+def test_BZ50_a_sold_out_items_price_is_not_stale_on_a_cloud_market(db):
+    from dataclasses import replace
+    document = cloud_document(db)                                   # prices to NOW: the whole AH at NOW
+    gone = replace(document, items={**document.items, BAR: replace(document.items[BAR], cur_age_ms=35 * HOUR)})
+    rows(db, "INSERT INTO inventory(char_id, location, key, qty, bound) VALUES (?, ?, ?, ?, ?)", (AMAYA, "bags", BAR, 20, 0))
+
+    def stale_bars(intel, now_ms: int) -> list[str]:
+        refresh.replan_all(db, now_ms, cloud_cfg(), documents={M: intel})
+        return [r for (r,) in db.conn.execute("SELECT reason FROM alternatives WHERE cand_id LIKE ?", (f"%:{BAR}:%",))
+                if r.startswith("Forecast too stale")]
+
+    assert stale_bars(gone, NOW) == []                              # absent from a fresh snapshot: 0 h old, planned
+    assert {r for r in stale_bars(gone, NOW + 30 * HOUR)} == {"Forecast too stale (prices 30 h old)"}   # no new summary
+    assert {r for r in stale_bars(replace(gone, ages_at_ms=None, built_ms=NOW), NOW)} == {
+        "Forecast too stale (prices 35 h old)"}                     # desktop-built: its own age stands
+
+
 def test_BZ39_the_summarys_catalog_becomes_the_local_catalog(db):
     from dataclasses import replace
     from ahsync.engine import fees

@@ -116,6 +116,15 @@ def test_price_ages_run_on_from_the_reference_and_a_later_scan_ages_from_its_own
         BAR: 3 * HOUR, DUST: 3 * HOUR // 2, ROD: None, SCOUTING: 2 * HOUR}   # 0 = seen at the reference, not "fresh"
 
 
+def test_BZ50_a_cloud_documents_prices_are_never_older_than_its_newest_snapshot():
+    # the same items; the document's prices (its newest whole-AH snapshot) are from 2 h ago
+    stats = {BAR: intel(BAR, 1000, age=35 * HOUR), DUST: intel(DUST, 600, age=-HOUR // 2), ROD: intel(ROD, None, age=None),
+             SCOUTING: intel(SCOUTING, 50, age=0)}
+    assert portfolio.price_ages(stats, NOW, NOW - 2 * HOUR, prices_ms=NOW - 2 * HOUR) == {
+        BAR: 2 * HOUR, DUST: 3 * HOUR // 2, ROD: None, SCOUTING: 2 * HOUR}   # bars: absent then, so 2 h, not 37 h
+    assert portfolio.price_ages(stats, NOW, NOW - 2 * HOUR)[BAR] == 37 * HOUR                     # desktop-built
+
+
 def test_generation_inputs_read_skills_recipes_and_cost_basis(state):
     gi = portfolio.gen_inputs(state, [("Amaya-G", 100_000), ("Brugan-G", 400_000)], STATS, ITEMS, NOW, NOW,
                               Config(markets=(M,), budgets={"Amaya-G": 5_000}))

@@ -158,7 +158,7 @@ def _best_window(f: SellFacts, opts: list[PostOption], used: list[float], stage:
     """
     scored = []
     for i, o in enumerate(opts):
-        mine = sum(slot[0] for (j, _), slot in stage.posts.items() if j == i)
+        mine = sum(slot[0] for (j, _), slot in stage.posts.items() if window_id(opts[j]) == window_id(o))   # R32
         if used[i] + mine + qty > o.cap:
             continue
         p = post_chance(f, o.price, qty, o.hours, used[i] + mine, s)

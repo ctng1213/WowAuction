@@ -128,6 +128,13 @@ def test_snapshot_times_per_place_leave_out_the_auctions_snapshot(db):
     assert db.snapshot_times([]) == {}
 
 
+def test_R31_the_auctions_read_time_per_character_bounds_an_unknown_end(db):
+    with db.transaction():
+        db.conn.executemany("INSERT INTO snapshots(char_id, location, at) VALUES (?, ?, ?)",
+                            [("A-R", "auctions", 9), ("A-R", "bags", 5), ("B-R", "bank", 7)])
+    assert db.auctions_read_ms(["A-R", "B-R"]) == {"A-R": 9} and db.auctions_read_ms([]) == {}
+
+
 def test_character_sheets_carry_professions_and_recipe_counts(db):
     sql(db, "INSERT INTO characters(id, class, level, faction, market, gold, updated) VALUES (?, ?, ?, ?, ?, ?, ?)",
         ("B-R", "WARRIOR", 34, "Horde", M, 9, 5), ("A-R", "MAGE", 38, "Horde", M, 7, 6))

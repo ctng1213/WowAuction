@@ -52,6 +52,24 @@ def test_R14_each_window_takes_half_of_what_others_list_for_200_linen():
     assert [a.kind for a in actions if a.kind != "post"] == ["hold"]   # the rest waits for later windows (> 7 days)
 
 
+def test_R31_your_own_auctions_count_against_a_windows_cap():
+    # 30 of yours listed (20 and 10, ending in 12 h, Sat 02:30): others list 93 - 30 = 63, cap max(20, floor(31.5)) = 31
+    f = linen(sold_per_day=200.0, supply_now=63, own_listed=((20, NOW + 12 * HOUR), (10, NOW + 12 * HOUR)))
+    assert [o.cap for o in plan.post_options(f, NOW, S)] == [1, 31]   # now overlaps your 30; Saturday is after they end
+    posts = [a for a in plan.sell_plan([Lot("Amaya-G", LINEN, 200)], {LINEN: f}, NOW, S) if a.kind == "post"]
+    assert [(a.at_ms, a.qty) for a in posts] == [(at(SAT, 10), 20)]   # nothing now; one stack Saturday (40 > 31)
+
+
+def test_R32_windows_whose_hours_overlap_share_one_cap():
+    f = linen(sold_per_day=200.0, windows=(window(FRI, 13, 4, 16), window(SAT, 17, 4, 18)))
+    opts = plan.post_options(f, NOW, S)
+    assert [(o.at_ms, o.cap) for o in opts[:3]] == [(NOW, 46), (NOW, 46), (at(SAT, 10), 46)]   # Friday's window posts now
+    assert plan.window_id(opts[0]) == plan.window_id(opts[1]) != plan.window_id(opts[2])   # one capacity group
+    posts = [a for a in plan.sell_plan([Lot("Amaya-G", LINEN, 200)], {LINEN: f}, NOW, S) if a.kind == "post"]
+    assert sum(a.qty for a in posts if a.at_ms == NOW) == 40                # 2 stacks across both (a 3rd > 46)
+    assert sum(a.qty for a in posts if a.at_ms == at(SAT, 10)) == 40
+
+
 def test_R6_owned_linen_is_spread_over_windows_within_their_caps_saturday_first():
     f = linen(windows=(window(SAT, 17, 4, 18), window(SUN, 19, 3, 20), window(WED, 20, 2, 21)))
     actions = plan.sell_plan([Lot("Amaya-G", LINEN, 200)], {LINEN: f}, NOW, S)

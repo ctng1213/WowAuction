@@ -150,3 +150,22 @@ def test_R25_the_second_level_too_close_is_no_candidate():
     assert not plan.now_candidate(close, 0.2)                                       # 41.9 < 1.2 × 45 = 54
     assert not plan.now_candidate(replace(close, book=((10, 20, 4, 1),), cur=10), 0.2)   # one level only
     assert not plan.now_candidate(replace(close, cur=10, cur_suspect=True), 0.2)    # FM5
+
+
+def test_R31_your_listed_auctions_are_not_others_supply_and_fill_the_caps(state):
+    with state.transaction():
+        state.conn.executemany("INSERT INTO own_auctions(char_id, key, price, stack, band, count, seen, end_ms) "
+                               "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                               [("Brugan-G", BAR, 1100, 5, 3, 2, NOW, NOW + 12 * HOUR),     # 10 listed until 12 h
+                                ("Amaya-G", BAR, 1200, 4, 2, 1, NOW, None),                 # 4, end unknown, 30 min-2 h
+                                ("Amaya-G", BAR, 1300, 5, 1, 1, NOW, NOW - HOUR),           # ended an hour ago
+                                ("Amaya-G", DUST, 600, 7, 1, 1, NOW, None)])                # < 30 min left, read 1 h ago
+        state.conn.execute("INSERT INTO snapshots(char_id, location, at) VALUES ('Amaya-G', 'auctions', ?)", (NOW - HOUR,))
+    bounded = NOW - HOUR + 2 * HOUR                                                           # read + the band's 2 h
+    assert plan.own_listed(state, [c for c, _ in CHARS], NOW) == {BAR: ((4, bounded), (10, NOW + 12 * HOUR))}
+    assert plan.own_listed(state, ["Brugan-G"], NOW) == {BAR: ((10, NOW + 12 * HOUR),)}
+    w = plan.week_inputs(state, CHARS, STATS, ITEMS, Config(markets=(M,)), now_ms=NOW)
+    assert (w.facts[BAR].supply_now, w.facts[BAR].own_listed) == (6, ((4, bounded), (10, NOW + 12 * HOUR)))   # 20 - 14
+    assert plan.sell_facts(STATS[BAR], ITEMS[BAR], None, own=((30, None),)).supply_now == 0           # never below 0
+    median = replace(STATS[BAR], units_on_ah=None, median_daily_supply=50)
+    assert plan.sell_facts(median, ITEMS[BAR], None, own=((30, None),)).supply_now == 50              # not a listing

@@ -45,7 +45,7 @@ class SelectionError(ValueError):
 class Resource:
     """Something a batch uses up: owned units, a window's market capacity, or units on the AH (SPEC §3.4D.3)."""
 
-    rid: str                   # "own:<char>:<key>", "cap:<key>:<window ms|now>" or "ah:<key>"
+    rid: str                   # "own:<char>:<key>", "cap:<key>:<capacity group key|now>" (R32) or "ah:<key>"
     limit: int                 # units available
     name: str                  # the item's name, for exclusion reasons
 

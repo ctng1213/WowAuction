@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from ahsync.engine import fees, sellprob
 from ahsync.engine.capacity import liquidity_cap, slot_of, window_supply
@@ -98,6 +98,8 @@ class SellFacts:
     undercut_share: float | None = None            # the document's measured u(p) (BZ29); None for the default
     commodity: bool = False                        # seen in Blizzard's commodities list: a buyer takes any number of
                                                    # an auction's units, so a flip buys lots, not whole auctions (R30)
+    own_listed: tuple[tuple[int, int | None], ...] = ()   # your auctions listed now: (units, end ms or None if
+                                                   # unknown); they fill the caps of the windows they overlap (R31)
 
 
 @dataclass(frozen=True)
@@ -134,6 +136,7 @@ class PostOption:
     cap: int                       # liquidity cap in units
     duration_h: int
     weeks: int = 0                 # the window's weeks of data; 0 for posting now (R26)
+    cap_key: int | None = -1       # its capacity group's key (window_id); -1 until post_options groups it (R32)
 
 
 
@@ -240,6 +243,39 @@ def post_options(f: SellFacts, now_ms: int, s: PlanSettings, thin_windows: bool 
         covering = -(-(best + HOUR_MS - post) // HOUR_MS)      # the listing stays up through the best hour
         out.append(PostOption(post, hours, price, (start, end, best), _cap(f, hours, now_ms, s),
                            fees.shortest_duration_covering(covering), weeks))
+    return capacity_groups(out, f.own_listed)
+
+
+def capacity_groups(opts: list[PostOption], own_listed: Sequence[tuple[int, int | None]]) -> list[PostOption]:
+    """Options whose hours overlap share one cap (SPEC §3.4 Liquidity, R31, R32).
+
+    Auctions listed at the same time compete for the same buyers, so the options are joined into groups wherever
+    their hours overlap, and each group's cap is the smallest of its options' caps, less your units already listed
+    during it (an auction of yours counts against every group that starts before it ends).
+
+    Args:
+        opts: The options, posting now first, then in time order.
+        own_listed: Your auctions listed now: (units, end ms or None when unknown, which counts as still listed).
+
+    Returns:
+        The options in the same order, each with its group's cap and key: the first member's window start, or None
+        when the group holds posting now.
+    """
+    group = list(range(len(opts)))
+    spans = [(o.hours[0], o.hours[-1]) for o in opts]
+    for i, (first, last) in enumerate(spans):
+        for j in range(i):
+            if first <= spans[j][1] and spans[j][0] <= last and group[i] != group[j]:
+                old = group[i]
+                group = [group[j] if g == old else g for g in group]
+    out = []
+    for i, o in enumerate(opts):
+        members = [k for k, g in enumerate(group) if g == group[i]]
+        start_ms = min(spans[k][0] for k in members) * HOUR_MS
+        mine = sum(units for units, end in own_listed if end is None or end > start_ms)
+        cap = max(0, min(opts[k].cap for k in members) - mine)
+        head = opts[members[0]]
+        out.append(replace(o, cap=cap, cap_key=head.window[0] if head.window else None))
     return out
 
 
@@ -423,8 +459,11 @@ def window_id(opt: PostOption) -> int | None:
         opt: A post option.
 
     Returns:
-        Its window's start ms; None for posting now.
+        Its capacity group's key once post_options has grouped it (R32); else its window's start ms, None for
+        posting now.
     """
+    if opt.cap_key != -1:
+        return opt.cap_key
     return opt.window[0] if opt.window else None
 
 
@@ -476,7 +515,8 @@ def stack_choices(lots: Sequence[Lot], f: SellFacts, opts: Sequence[PostOption],
             best = _best_post(f, list(opts), used, qty, s, value) if postable > 0 else None
             if best is not None and best[1] / qty > alt_value:
                 postable -= 1
-                used[best[0]] += qty
+                group = window_id(opts[best[0]])
+                used = [u + qty if window_id(o) == group else u for u, o in zip(used, opts)]    # R32
                 yield StackChoice(lot.char_id, qty, best[0], best[1], best[2])
             else:
                 yield stack_fallback(f, lot.char_id, qty)
