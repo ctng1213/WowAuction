@@ -177,3 +177,14 @@ def test_the_data_tools_need_the_market_table(world):
             HANDLERS[name](bare, args)
         assert error.value.message == "The data tools aren't available; ask again in a moment."
     db.conn.close()
+
+
+def test_results_are_valid_json_and_the_cut_counts_utf8_bytes(ctx):
+    import json as _json
+    odd = _call(ctx, "query", {"sql": "SELECT 1e999 AS inf, -1e999 AS neg, x'ff00' AS blob"})
+    assert odd["rows"] == [[None, None, "ff00"]]
+    _json.dumps(odd, allow_nan=False)                                    # strict JSON
+    count = "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 600) "
+    wide = _call(ctx, "query", {"sql": count + f"SELECT i, '{'é' * 1000}' AS pad FROM n"})
+    assert wide["truncated"]
+    assert sum(len(_json.dumps(r, ensure_ascii=False).encode("utf-8")) for r in wide["rows"]) <= 256 * 1024

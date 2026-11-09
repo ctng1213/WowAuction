@@ -1831,7 +1831,8 @@ Approved by the user 2026-11-08: `docs/plans/mcp-server.md` (its §1 decisions),
   - It answers `initialize`, `tools/list` and `ping` itself, from the same tool definitions the server uses, so Claude connects cleanly even while AHSync is closed or disabled.
   - It forwards each `tools/call` to the server with the key read from `mcp.json` at that call (MCP5).
   - Without `mcp.json` the call returns, as a tool error: "AHSync's AI assistant access is off, or AHSync isn't running. Start AHSync and press Enable on its Status page (AI assistant), then ask again." With the file but no server answering: "AHSync isn't running. Start it and ask again." (MCP6)
-  - The bridge holds no data, opens no listener, and exits when Claude closes its stdin.
+  - The bridge holds no data, opens no listener, and exits when Claude closes its stdin. It never exits on a bad answer: a reset or cut-off response reads as "AHSync isn't running", and any other fault answers that one message with an internal error.
+- **Stopping.** Stop marks the server stopped and frees the table and its connection under the server's lock, so a call still in flight answers "AI assistant access was just turned off" and never rebuilds the table after Disable. A start that fails after binding (the table or `mcp.json` can't be made) stops what it began, so the next Enable starts clean.
 - **Context, not instructions.** `initialize` returns facts the assistant can't know, and no procedure (MCP7):
   - the game is WoW: Forever, a Classic-era realm;
   - item ids are Classic's, and a random-suffix item's key is its id + 2147483648 × the suffix (§2.1);

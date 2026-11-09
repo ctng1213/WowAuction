@@ -126,3 +126,22 @@ def test_the_bridge_and_the_server_together(world, tmp_path):
     out = io.StringIO()
     run([json.dumps(CALL)], out, tmp_path, "0.0.0")                       # disabled: no mcp.json any more
     assert json.loads(out.getvalue())["result"]["content"][0]["text"] == OFF
+
+
+def test_a_cut_off_answer_or_a_bridge_fault_never_ends_the_bridge(tmp_path, monkeypatch):
+    import http.client
+    write_key_file(tmp_path, 8766, "11" * 32)
+
+    def cut_off(*_args):
+        raise http.client.IncompleteRead(b"{\"js", 96)                   # AHSync quit mid-answer
+
+    assert forward(CALL, tmp_path, cut_off)["result"]["content"][0]["text"] == NOT_RUNNING
+
+    def boom(*_args):
+        raise RuntimeError("unexpected")
+
+    monkeypatch.setattr(bridge, "respond", boom)
+    out = io.StringIO()
+    run([json.dumps(CALL), json.dumps({**CALL, "id": 10})], out, tmp_path, "0.0.0", _never)
+    answers = [json.loads(line) for line in out.getvalue().splitlines()]
+    assert [(a["id"], a["error"]["code"]) for a in answers] == [(9, -32603), (10, -32603)]   # one each, still running

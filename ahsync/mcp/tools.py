@@ -195,7 +195,7 @@ def _trim(value: object, limit: int, path: str, cut: dict) -> object:
         if len(value) > limit and any(isinstance(v, dict) for v in value):
             cut[path or "."] = len(value)
             value = value[:limit]
-        return [_trim(v, limit, path, cut) for v in value]
+        return [_trim(v, limit, f"{path}[{i}]", cut) for i, v in enumerate(value)]
     return value
 
 
@@ -243,11 +243,11 @@ def get_page(ctx: ToolContext, args: Mapping) -> dict:
     data = {k: v for k, v in _character_view(payload, args.get("character")).items() if k not in DROPPED}
     rows = data.get("rows")
     if isinstance(rows, list):
+        if args.get("sort"):
+            rows = _sorted_rows(rows, str(args["sort"]), bool(args.get("ascending")))
         search = str(args.get("search") or "").casefold()
         if search:
             rows = [r for r in rows if any(search in str(r.get(f, "")).casefold() for f in NAME_FIELDS)]
-        if args.get("sort"):
-            rows = _sorted_rows(rows, str(args["sort"]), bool(args.get("ascending")))
         data["rows"] = rows
     elif args.get("sort") or args.get("search"):
         raise ToolError("This page has no single list of rows to sort or search")

@@ -104,8 +104,8 @@ class MarketStats:
         holder.commit()
         with self._lock:
             old, self._holder, self.uri, self.built = self._holder, holder, uri, built
-        if old is not None:
-            old.close()
+            if old is not None:
+                old.close()
 
     def stale(self, db: Database, markets: Sequence[str]) -> bool:
         """Whether a newer refresh has been published since the table was built (or it was never built).
@@ -141,10 +141,11 @@ class MarketStats:
         Returns:
             Bytes; 0 when freed.
         """
-        if self._holder is None:
-            return 0
-        pages = self._holder.execute("PRAGMA page_count").fetchone()[0]
-        return pages * self._holder.execute("PRAGMA page_size").fetchone()[0]
+        with self._lock:                   # the Status card asks from another thread
+            if self._holder is None:
+                return 0
+            pages = self._holder.execute("PRAGMA page_count").fetchone()[0]
+            return pages * self._holder.execute("PRAGMA page_size").fetchone()[0]
 
     def count(self) -> int:
         """The table's rows.
@@ -152,9 +153,10 @@ class MarketStats:
         Returns:
             Rows; 0 when freed.
         """
-        if self._holder is None:
-            return 0
-        return self._holder.execute(f"SELECT count(*) FROM {TABLE}").fetchone()[0]
+        with self._lock:
+            if self._holder is None:
+                return 0
+            return self._holder.execute(f"SELECT count(*) FROM {TABLE}").fetchone()[0]
 
     def connect(self) -> sqlite3.Connection:
         """A new connection to the current table, for one call.
@@ -174,5 +176,5 @@ class MarketStats:
         """Free the table (Disable, a stop; MCP2)."""
         with self._lock:
             holder, self._holder, self.uri, self.built = self._holder, None, None, {}
-        if holder is not None:
-            holder.close()
+            if holder is not None:
+                holder.close()

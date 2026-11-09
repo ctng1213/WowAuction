@@ -8,6 +8,7 @@ it after 2 s, length limits cap any value, and the result is cut at 500 rows or 
 from __future__ import annotations
 
 import json
+import math
 import re
 import sqlite3
 import time
@@ -192,6 +193,22 @@ def _reason(error: sqlite3.Error, sql: str) -> str:
     return f"The query failed: {text}"
 
 
+def _cell(value: object) -> object:
+    """One result value as JSON can carry it: a blob as hex, an infinite or NaN float as None.
+
+    Args:
+        value: A value SQLite returned.
+
+    Returns:
+        The value to send.
+    """
+    if isinstance(value, bytes):
+        return value.hex()
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return value
+
+
 def run_query(conn: sqlite3.Connection, sql: object) -> dict:
     """Run one read-only query, cut to MAX_ROWS rows and MAX_BYTES bytes (MCP10, SEC20).
 
@@ -218,8 +235,8 @@ def run_query(conn: sqlite3.Connection, sql: object) -> dict:
         cursor = conn.execute(sql)
         columns = [d[0] for d in cursor.description or ()]
         for row in cursor:
-            item = [v.hex() if isinstance(v, bytes) else v for v in row]
-            size += len(json.dumps(item, ensure_ascii=False, default=str))
+            item = [_cell(v) for v in row]
+            size += len(json.dumps(item, ensure_ascii=False).encode("utf-8"))
             if len(rows) >= MAX_ROWS or size > MAX_BYTES:
                 truncated = True
                 break
