@@ -52,7 +52,10 @@ def test_the_placebo_estimates_relisting_as_the_excess_over_a_later_gap():
     books = [IdBook(t + k * H, ((Auction(1, LINEN, 5, 100, 4),) if k == 0 else ())
                     + ((Auction(10 + k, LINEN, 5, 90, 4),) if k == 1 else ())) for k in range(5)]
     rows = rep.relist_rows(lifetimes(books), frozenset())
-    assert rows == ["| other | 2 | 1.000 | 0.000 | 1.000 |"]       # 2 left early; the one with 3 later gaps matched only in its own
+    assert rows == ["| other | 1 | 0 | 1.0 | 1.000 | 0.000 | 1.000 |"]   # the one with 3 later gaps matched only in its own
+    found = rep.relist_estimate(lifetimes(books), lambda key: True)
+    assert (found.endings, found.late, found.early, found.relisted) == (1, 0, 1.0, 1.0)
+    assert rep.relist_estimate(lifetimes(books), lambda key: False) is None
 
 
 def test_stacks_bucket_and_gear_comes_from_the_catalog(tmp_path):

@@ -68,8 +68,9 @@ D101 D102
 
 # Market simulator (docs/plans/market-simulator.md; SD25 dropped, SD35-SD38 are the learned catalog's)
 SU10-SU12
-SM1-SM7
-SM9-SM17
+SM6-SM7
+SM9
+SM12-SM17
 SD1-SD24
 SD26-SD34
 SX1-SX10

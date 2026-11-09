@@ -15,6 +15,7 @@ import gzip
 import json
 import sys
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -151,13 +152,53 @@ def available(new_in: dict[int, Counter], gap_end_ms: int, e: Ending) -> bool:
     return new_in.get(gap_end_ms, Counter())[(e.key, e.qty)] > 0
 
 
-def relist_rows(lt: Lifetimes, gear: frozenset[int], shift: int = 3) -> list[str]:
-    """Relist matches against a placebo: a matching new listing in the vanish gap versus `shift` gaps later.
+@dataclass(frozen=True)
+class RelistEstimate:
+    """Relist matches against a placebo for a set of endings (SPEC §2.4 item 5)."""
+
+    endings: int                 # endings with a gap `shift` later, all counted
+    late: int                    # of those, vanished in a gap overlapping their expiry window (their last hour)
+    early: float                 # estimated early leavers among them: Σ (1 − BZ44's expired share)
+    rate: float                  # share with a new listing of the same key and units in the vanish gap
+    base: float                  # the same share `shift` gaps later (the placebo)
+    relisted: float              # estimated relisted share of the early leavers, 0-1
+
+
+def relist_estimate(lt: Lifetimes, pick: Callable[[int], bool], shift: int = 3) -> RelistEstimate | None:
+    """Relist matches against a placebo, for the endings of the items `pick` keeps.
 
     Both rates ask the same question, whether any new listing of the ending's key and units appeared in that gap.
+    If cancel-and-repost were common, the vanish gap would hold a match more often than a later gap. Every ending
+    counts in the matches (only a listing that left early can have a real one); the excess matches, ÷ (1 −
+    baseline), are divided by the estimated early leavers, each ending counting 1 − its BZ44 expired share, so
+    the expiries among the endings neither dilute the share nor need dropping (the user, 2026-11-08; SM4).
 
-    If cancel-and-repost were common, the vanish gap would hold a match more often than a later gap; the excess
-    over the baseline, ÷ (1 − baseline), estimates the relisted share of early leavers (SPEC §2.4 item 5).
+    Args:
+        lt: The lifetimes.
+        pick: Item key -> whether its endings count.
+        shift: How many gaps later the placebo looks.
+
+    Returns:
+        The estimate over the endings with a gap `shift` later; None when there is no such ending or no early
+        leaver is expected among them.
+    """
+    new_in: dict[int, Counter] = {}
+    for _, key, qty, gap, *_ in lt.listed:
+        new_in.setdefault(gap[1], Counter())[(key, qty)] += 1
+    times = [g[1] for g in lt.gaps]
+    index = {t: i for i, t in enumerate(times)}
+    later = [e for e in lt.endings if pick(e.key) and index[e.gap[1]] + shift < len(times)]
+    early = sum(1.0 - e.expired for e in later)
+    if not later or early <= 0:
+        return None
+    rate = sum(available(new_in, times[index[e.gap[1]]], e) for e in later) / len(later)   # the same test in both
+    base = sum(available(new_in, times[index[e.gap[1]] + shift], e) for e in later) / len(later)
+    excess = max(0.0, rate - base) * len(later) / (1.0 - base) if base < 1.0 else 0.0
+    return RelistEstimate(len(later), sum(e.overlap > 0 for e in later), early, rate, base, min(1.0, excess / early))
+
+
+def relist_rows(lt: Lifetimes, gear: frozenset[int], shift: int = 3) -> list[str]:
+    """The relist estimate for gear and for everything else, as report rows.
 
     Args:
         lt: The lifetimes.
@@ -165,23 +206,15 @@ def relist_rows(lt: Lifetimes, gear: frozenset[int], shift: int = 3) -> list[str
         shift: How many gaps later the placebo looks.
 
     Returns:
-        Markdown table rows: kind, endings that left early, match rate, placebo rate, estimated relisted share.
+        Markdown table rows: kind, endings, of those in their last hour, estimated early leavers, match rate,
+        placebo rate, estimated relisted share.
     """
-    new_in: dict[int, Counter] = {}
-    for _, key, qty, gap, *_ in lt.listed:
-        new_in.setdefault(gap[1], Counter())[(key, qty)] += 1
-    times = [g[1] for g in lt.gaps]
-    index = {t: i for i, t in enumerate(times)}
     rows = []
     for label, pick in (("gear", lambda k: k in gear), ("other", lambda k: k not in gear)):
-        early = [e for e in lt.endings if pick(e.key) and e.overlap < 1.0]   # may have left early (the raw overlap)
-        later = [e for e in early if index[e.gap[1]] + shift < len(times)]
-        if not later:
-            continue
-        rate = sum(available(new_in, times[index[e.gap[1]]], e) for e in later) / len(later)   # the same test in both
-        base = sum(available(new_in, times[index[e.gap[1]] + shift], e) for e in later) / len(later)
-        relisted = max(0.0, rate - base) / (1.0 - base) if base < 1.0 else 0.0
-        rows.append(f"| {label} | {len(early)} | {rate:.3f} | {base:.3f} | {relisted:.3f} |")
+        r = relist_estimate(lt, pick, shift)
+        if r is not None:
+            rows.append(f"| {label} | {r.endings} | {r.late} | {r.early:.1f} | {r.rate:.3f} | {r.base:.3f} | "
+                        f"{r.relisted:.3f} |")
     return rows
 
 
@@ -219,8 +252,9 @@ def report(books: list[IdBook], skipped: int, gear: frozenset[int]) -> str:
               "| cohort | endings | sold (0) | expired (1) | split | mean expired share |", "|---|---|---|---|---|---|",
               *fate_table(lt, seen.known), "",
               "## Relist matches against a placebo (same key and units, new in the same gap; 3 gaps later)", "",
-              "| kind | left early | matched in the gap | matched 3 gaps later | estimated relisted share |",
-              "|---|---|---|---|---|", *relist_rows(lt, gear), "",
+              "| kind | endings | in their last hour | est. early leavers | matched in the gap | matched 3 gaps later "
+              "| estimated relisted share |",
+              "|---|---|---|---|---|---|---|", *relist_rows(lt, gear), "",
               "| matched, by stack | endings |", "|---|---|"]
     stacks = Counter(stack_kind(e.qty) for e in lt.endings if e.matched)
     lines += [f"| {stack} | {n} |" for stack, n in sorted(stacks.items())]

@@ -1114,7 +1114,7 @@ How cases are generated, and how many: SPEC §8.7.
 
 ## 6. Simulated markets (SU, SM, SD, SX; SPEC §8.10)
 
-The market simulator (`tools/sim/`; built MS1: SU1–SU9, SU13–SU15, SM8; `docs/plans/market-simulator.md`) writes Blizzard-shaped raw snapshots and a truth log of every post, buy, cancel, expiry and relist, and runs the unchanged cloud analysis and plan on them. The four families and what each asserts are SPEC §8.10's. Numbers here are a scenario's planted truth; tolerances are stated in the row. Every world is generated from a fixed seed, printed on failure.
+The market simulator (`tools/sim/`; built MS1: SU1–SU9, SU13–SU15, SM8; MS2: SM1–SM5, SM10, SM11, `tools/sim_report.py inference`; `docs/plans/market-simulator.md`) writes Blizzard-shaped raw snapshots and a truth log of every post, buy, cancel, expiry and relist, and runs the unchanged cloud analysis and plan on them. The four families and what each asserts are SPEC §8.10's. Numbers here are a scenario's planted truth; tolerances are stated in the row. Every world is generated from a fixed seed, printed on failure.
 
 **Unit sequences** (exact, checkable by hand):
 
@@ -1140,17 +1140,17 @@ The market simulator (`tools/sim/`; built MS1: SU1–SU9, SU13–SU15, SM8; `doc
 
 | ID | Given | Then |
 |---|---|---|
-| SM1 | a steady commodity market, 14 days | sold/day within ±5% of truth; expired share within ±3 points |
-| SM2 | an undercut war: two bots cancel and repost 1 c lower every hour; new listings planted at 0.90, 0.98, 1.00 and 1.10 of the floor with known shares | sold/day within ±10%; the commodity cancel share recovered within ±3 points; `u(p)` within ±0.05 |
-| SM3 | gear cancelled at a true 20% while commodities cancel at 10.8% | gear sell-through overstated by the stated amount, marked est. (the known bias, as a number for M33b) |
-| SM4 | relists at a true 0%, 15% and 40% | the excess-rate estimator recovers each within ±5 points |
-| SM5 | a known true P per price tier; the tier edges and the blend cap as parameters | the blend moves from the model to the evidence as listings grow |
+| SM1 | a steady market of three commodities, 14 days, seeds 1–3, sellers shaped as the real raw (durations 10% 2 h, 77% 8 h, 13% 24 h; 43% of new listings at the cheapest price; 6% of posts cancelled) | sold/day without its unseen estimate within ±8% of the units a snapshot could see (bought after their listing's first snapshot, over the 7-day window's gaps, V41's prior applied; plan §1.28); expired share within ±3 points of the seen listings' (MS2: −0.4% to +7.5%, always high on the busier items, from cancels of the cheapest auction counted sold, SU2, which the API cannot tell apart, and BZ44's residual; ±5% held on 6 of 9, so the band is ±8%, the user 2026-11-08) |
+| SM2 | an undercut war: two bots cancel and repost 1 c under the floor every hour; new listings planted at 0.90, 0.98, 1.00 and 1.10 of the floor (10%, 20%, 40%, 30%); 10% of posts cancelled | sold/day within ±10%; the commodity cancel share recovered within ±3 points; `u(p)` within ±0.05 (fails by design, MS2, plan §1.30: sold/day seen +15–16%, the bots' cancels of the cheapest auction counted sold, SU2; the cancel share 0.04–0.05 against 0.15–0.17; `u(p)` at the post-now position 0.03–0.07 against 0.13–0.25, an undercutter being bought before any snapshot or first seen after the floor moved under it) |
+| SM3 | gear cancelled at a true 9–22% of its early leaves at the lowest price while commodities cancel at a true 10–11% | gear sell-through marked est.; its error reported in two parts for M33b: the unseen cancels, left early × (the gear share − the measured commodity share), +0.014 to +0.068 (the measured commodity share reads 0.055–0.074, cheapest cancels counting sold), and gear sales in their expiry gap counted mostly expired (BZ44), −0.02 to −0.064 |
+| SM4 | thirty gear items, 40% of posts cancelled and 0%, 27% or 66% of those relisted at once (a true 0%, about 15% and about 39% of early leaves) | the excess-rate estimator recovers each within ±5 points (MS2, plan §1.33: every ending's match counted, the excess divided by the estimated early leavers from each ending's expired share; seeds 1 and 2 pass, seed 3 reads 6.3 points low at both rates, untraced; before the change it read 21–46% low, its "may have left early" set holding expiries) |
+| SM5 | a real-shaped commodity, 8 days; each tier's true P from the truth; the tier edges and the blend's constants as parameters | the blend's weight on the evidence rises with listings (0.5 built, 0.9 planned at 300); tier 1's sell-through within ±0.05 of its true P; tiers 2–4 reported (MS2: tier 1 −0.006; tiers 3 and 4 read 0.03–0.06 high, expiries of listings that hardly sell credited by BZ44's item-wide early-leave rate) |
 | SM6 | a maintenance gap Tue 08:00–12:00 and a gap over Thursday's 19:00–23:00 peak | sold/day within ±15% of truth on both days with `sales_how` weighting; a flat share is shown to miss |
 | SM7 | a thin item (1 listing a day), an item new on day 5, an item gone on day 9 | the thin-data rules hold; "needs N more days" until each horizon fills |
 | SM8 | rebuild against incremental runs over the same raw, with a refused snapshot, a duplicated record and a skipped daily run | byte-identical documents (FM72) |
 | SM9 | a buyer model 25 points more optimistic than the engine from week 3, corrected in week 6 | K8 warns within 2 weeks and clears within 2 weeks of the correction; Brier per week reported |
-| SM10 | a gear item listed at 15 g for 30 h; its real sales are 2 g posts that sell within the hour | the close against the true sold price is reported (fails by design while closes are asks) |
-| SM11 | SM10's 30 closes at 15 g, but its sales really happen at about 15 g | the post price within 5% of the true sold price (keeps the sold-price fix honest) |
+| SM10 | a gear item listed at 15 g for 30 h; its real sales are 2 g posts that sell within the hour | the close against the true sold price is reported (fails by design while closes are asks: med7 15 g against a true 2 g) |
+| SM11 | SM10's 15 g listing, but its sales really happen at about 15 g (14 g 95 s) | the post price within 5% of the true sold price (keeps the sold-price fix honest) |
 | SM12 | Tue and Thu 19:00–22:00 at 3× demand, the price flat ±2%, 4 weeks | both windows found by week 3, the peak within ±1 h; the trust gate holds in week 1 |
 | SM13 | SM12, then from week 5 the peak moves to Sat 20:00–23:00 | the top window's rank flips by week 7 |
 | SM14 | a seller posts 1,000 units nightly at 2× the market and all expire; others sell 20 a day | sold/day 20 ± 10%; expired share about 0.98; the turnover is never counted as sales |

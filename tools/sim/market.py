@@ -8,7 +8,9 @@ history. Every event is written to the truth log.
 Buyers have a maximum price drawn around the item's fair price. A commodity buyer takes units from the cheapest
 auctions first, as Forever's commodity purchases do (measured, SPEC §2.4), except a small share that skips the
 cheapest (the measured 9 of 4,583); a gear buyer picks one of the three cheapest auctions it can afford, whole.
-Sellers post a stack at a price relative to the cheapest other auction, held inside a band around the fair price.
+Sellers post a stack at a price relative to the cheapest other auction, held inside a band around the fair price:
+uniform over `list_range`, or, for a market fitted from the collected raw (`fit.py`), drawn from a mix of
+positions (some exactly at the cheapest price, some just above, a few under it), with stack sizes drawn likewise.
 """
 from __future__ import annotations
 
@@ -21,6 +23,7 @@ from ahsync.engine.capacity import slot_of
 from sim.truth import Event, Truth
 
 MINUTE_MS, HOUR_MS, DAY_MS = 60_000, 3_600_000, 86_400_000
+BOT_MINUTE = 7                       # bot n acts at n × this many minutes past each hour
 GEAR_CHOICE = 3                      # a gear buyer picks among this many of the cheapest affordable auctions
 FAIR_BAND = (0.7, 1.6)               # a post's price stays within this × the fair price
 FIRST_AUCTION_ID = 1_000
@@ -42,11 +45,33 @@ class Item:
     quality: int = 1                  # 0 poor .. 4 epic
     weekly: tuple[float, ...] = ()    # 168 buyer-arrival multipliers by hour of week (UTC, Mon 00:00 first); () = flat
     buyer_spread: float = 0.15        # standard deviation of log(a buyer's maximum price ÷ the fair price)
+    buyer_level: float = 1.0          # a buyer's median maximum price ÷ the fair price
     list_range: tuple[float, float] = (0.97, 1.15)   # a post's price ÷ the cheapest other auction's
     durations: tuple[tuple[int, float], ...] = ((2, 0.1), (8, 0.3), (24, 0.6))   # (hours, weight)
     cancel_share: float = 0.0         # share of posts their seller cancels, at a uniform time in their life
     miss_cheapest: float = 0.002      # share of commodity buyers who take from the second-cheapest auction first
     max_units: int = 0                # a commodity buyer wants 1..max_units units; 0 = 1..stack
+    # A post's price ÷ the cheapest other auction's, as (weight, low, high) parts: a part with low == high posts at
+    # exactly that ratio, another uniformly in [low, high). () = uniform over list_range (MS1's hand-set sellers).
+    price_mix: tuple[tuple[float, float, float], ...] = ()
+    stacks: tuple[tuple[int, float], ...] = ()       # (units, weight) a commodity seller posts; () = always `stack`
+    # Sellers price off min(the cheapest other auction, anchor × the fair price): above it they price off their own
+    # sense of the item's worth, so the floor mean-reverts as real floors do (fitted markets). 0 = no anchor (MS1).
+    anchor: float = 0.0
+    relist_share: float = 0.0         # share of cancels whose seller posts the same units again at once (a relist)
+    bots: int = 0                     # undercut bots: each hour each cancels its auction and posts 1 c under the rest
+
+
+@dataclass(frozen=True)
+class Planted:
+    """One auction a scenario posts at a set time, outside the sellers' model (SM10's 15 g listing)."""
+
+    at_ms: int                        # when it is posted, UTC ms
+    key: int                          # item key; must be one of the world's items
+    units: int
+    price: int                        # unit price, copper
+    hours: int                        # duration: 2, 8 or 24
+    cancel_at_ms: int | None = None   # when its seller cancels it, or None
 
 
 @dataclass(frozen=True)
@@ -58,6 +83,7 @@ class World:
     days: int
     items: tuple[Item, ...]
     market: str = "forever.normal.horde.us"
+    planted: tuple[Planted, ...] = ()
 
 
 @dataclass
@@ -80,8 +106,9 @@ class _Queued:
 
     at_ms: int
     seq: int
-    kind: str = field(compare=False)    # "seller", "buyer", "expire" or "cancel"
-    ref: int = field(compare=False)     # item key for arrivals, auction id for expire and cancel
+    kind: str = field(compare=False)    # "seller", "buyer", "bot", "plant", "expire" or "cancel"
+    ref: int = field(compare=False)     # item key for arrivals, bot number for a bot, index into World.planted for
+                                        # a plant, auction id for expire and cancel
 
 
 class Market:
@@ -103,9 +130,15 @@ class Market:
         self._seq = 0
         self._next_id = FIRST_AUCTION_ID
         self._actors = 0
+        self._bots: list[list] = []                 # bot number -> [item key, name, its live auction id or None]
         for key in sorted(self.items):
             self._schedule_arrival(self.items[key], "seller", world.start_ms)
             self._schedule_arrival(self.items[key], "buyer", world.start_ms)
+            for _ in range(self.items[key].bots):
+                self._bots.append([key, self._actor("bot"), None])
+                self._push(world.start_ms + BOT_MINUTE * MINUTE_MS * len(self._bots), "bot", len(self._bots) - 1)
+        for number, planted in enumerate(world.planted):
+            self._push(planted.at_ms, "plant", number)
 
     def book(self) -> list[Live]:
         """Every live auction, by id.
@@ -131,6 +164,13 @@ class Market:
                 else:
                     self._buy_as_buyer(item)
                 self._schedule_arrival(item, event.kind, event.at_ms)
+            elif event.kind == "bot":
+                self._undercut(event.ref)
+                self._push(event.at_ms + HOUR_MS, "bot", event.ref)
+            elif event.kind == "plant":
+                planted = self.world.planted[event.ref]
+                self.post(planted.key, planted.units, planted.price, planted.hours, f"p{event.ref}",
+                          planted.cancel_at_ms)
             else:
                 self._end(event.ref, event.kind)
         self.now_ms = max(self.now_ms, at_ms)
@@ -179,15 +219,48 @@ class Market:
         Args:
             item: The item.
         """
-        live = self.by_key[item.key]
-        floor = min(a.price for a in live.values()) if live else item.fair_price
-        low, high = item.list_range
-        price = floor * self.rng.uniform(low, high)
-        price = max(1, int(min(max(price, item.fair_price * FAIR_BAND[0]), item.fair_price * FAIR_BAND[1])))
+        price = max(1, int(min(max(self._price(item, self._reference(item)), item.fair_price * FAIR_BAND[0]),
+                               item.fair_price * FAIR_BAND[1])))
         hours = self.rng.choices([h for h, _ in item.durations], [w for _, w in item.durations])[0]
         cancels = self.rng.random() < item.cancel_share
         cancel_at = self.now_ms + int(self.rng.uniform(0, hours * HOUR_MS)) if cancels else None
-        self.post(item.key, item.stack if item.commodity else 1, price, hours, self._actor("s"), cancel_at)
+        units = 1 if not item.commodity else (
+            self.rng.choices([u for u, _ in item.stacks], [w for _, w in item.stacks])[0] if item.stacks else item.stack)
+        self.post(item.key, units, price, hours, self._actor("s"), cancel_at)
+
+    def _reference(self, item: Item) -> int:
+        """The price a seller prices off: the cheapest other auction, or the fair price on an empty book, held
+        under the item's anchor.
+
+        Args:
+            item: The item.
+
+        Returns:
+            Copper.
+        """
+        live = self.by_key[item.key]
+        floor = min(a.price for a in live.values()) if live else item.fair_price
+        return min(floor, max(1, int(item.fair_price * item.anchor))) if item.anchor > 0 else floor
+
+    def _price(self, item: Item, floor: int) -> float:
+        """A seller's price before the fair-price band, from the cheapest other auction's.
+
+        Args:
+            item: The item.
+            floor: The cheapest other auction's unit price, copper (the fair price on an empty book).
+
+        Returns:
+            Copper: floor × a ratio uniform over list_range; with a price_mix, the ratio drawn from it and rounded
+            away from the floor to whole copper (a post above it is at least 1 c above, one under it at least 1 c
+            under), as a seller types a price.
+        """
+        if not item.price_mix:
+            return floor * self.rng.uniform(*item.list_range)
+        _, low, high = self.rng.choices(item.price_mix, [w for w, _, _ in item.price_mix])[0]
+        ratio = low if low == high else self.rng.uniform(low, high)
+        if ratio > 1:
+            return max(floor + 1, math.ceil(floor * ratio))
+        return floor if ratio == 1 else min(floor - 1, math.floor(floor * ratio))
 
     def _buy_as_buyer(self, item: Item) -> None:
         """One buyer of the model arrives: buys what it can afford, cheapest first for a commodity.
@@ -195,7 +268,7 @@ class Market:
         Args:
             item: The item.
         """
-        most = item.fair_price * math.exp(self.rng.gauss(0.0, item.buyer_spread))
+        most = item.fair_price * item.buyer_level * math.exp(self.rng.gauss(0.0, item.buyer_spread))
         affordable = sorted((a for a in self.by_key[item.key].values() if a.price <= most), key=lambda a: (a.price, a.id))
         if not item.commodity:
             if affordable:
@@ -213,19 +286,50 @@ class Market:
             if want == 0:
                 break
 
-    def _end(self, auction_id: int, kind: str) -> None:
-        """An auction expires or is cancelled, if it is still up.
+    def _end(self, auction_id: int, kind: str, may_relist: bool = True) -> None:
+        """An auction expires or is cancelled, if it is still up; a cancelling seller may relist (relist_share).
 
         Args:
             auction_id: The auction.
             kind: "expire" or "cancel".
+            may_relist: False for a bot, which reposts on its own schedule.
         """
         for key, live in self.by_key.items():
             auction = live.pop(auction_id, None)
             if auction is not None:
                 actor = auction.seller if kind == "cancel" else ""
                 self.truth.add(Event(self.now_ms, kind, auction_id, key, auction.units, auction.price, 0, actor))
+                item = self.items[key]
+                if kind == "cancel" and may_relist and item.relist_share > 0 and self.rng.random() < item.relist_share:
+                    self._relist(item, auction)
                 return
+
+    def _relist(self, item: Item, ended: Live) -> None:
+        """A cancelling seller posts the same units again at once, priced as a new post.
+
+        Args:
+            item: The item.
+            ended: The auction just cancelled.
+        """
+        price = max(1, int(min(max(self._price(item, self._reference(item)), item.fair_price * FAIR_BAND[0]),
+                               item.fair_price * FAIR_BAND[1])))
+        hours = self.rng.choices([h for h, _ in item.durations], [w for _, w in item.durations])[0]
+        self.post(item.key, ended.units, price, hours, ended.seller)
+
+    def _undercut(self, number: int) -> None:
+        """An undercut bot's hour: it cancels its auction and posts a stack 1 c under the cheapest other one.
+
+        Args:
+            number: The bot.
+        """
+        key, name, auction_id = self._bots[number]
+        item = self.items[key]
+        if auction_id is not None and auction_id in self.by_key[key]:
+            self._end(auction_id, "cancel", may_relist=False)
+        live = self.by_key[key]
+        floor = min(a.price for a in live.values()) if live else item.fair_price
+        price = max(1, floor - 1, int(item.fair_price * FAIR_BAND[0]))
+        self._bots[number][2] = self.post(key, item.stack if item.commodity else 1, price, 8, name).id
 
     def _schedule_arrival(self, item: Item, who: str, after_ms: int) -> None:
         """Queue an item's next seller or buyer: a Poisson process, thinned by the weekly profile for buyers.

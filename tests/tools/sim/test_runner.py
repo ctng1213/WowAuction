@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
 
 from ahsync.intel.contract import to_json  # noqa: E402
 from sim.market import DAY_MS, Item, World  # noqa: E402
-from sim.runner import RunSettings, SimCatalog, rebuild, simulate  # noqa: E402
+from sim.runner import RunSettings, SimCatalog, market_books, rebuild, simulate  # noqa: E402
 
 START = 1_793_923_200_000                    # Fri 2026-11-06 00:00 UTC
 ITEMS = (Item(2589, "Linen Cloth", True, 50, 300, 40, vendor_sell=13),
@@ -59,3 +59,11 @@ def test_SM8_a_rebuild_from_raw_gives_the_daily_runs_document_byte_for_byte_thro
     run = simulate(world, tmp_path / "run", settings)
     rebuilt = rebuild(run, world, tmp_path / "rebuild")
     assert to_json(rebuilt) == to_json(run.documents[-1]), f"seed {world.seed}"
+
+
+def test_the_market_alone_gives_the_snapshots_simulate_stores(tmp_path):
+    world = World(4, START, 1, ITEMS)
+    run = simulate(world, tmp_path)
+    truth, books = market_books(world)
+    assert truth.to_jsonl() == run.truth.to_jsonl() and [b.at_ms for b in books] == run.snapshots
+    assert books[0].auctions and all(a.key in {2589, 4306, 6585} for b in books for a in b.auctions)

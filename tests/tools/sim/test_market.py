@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
 
 from ahsync.engine.volume import lifetimes  # noqa: E402
 from sim.emulator import capture, id_book, snapshot_times  # noqa: E402
-from sim.market import DAY_MS, HOUR_MS, Item, Market, World  # noqa: E402
+from sim.market import DAY_MS, HOUR_MS, Item, Market, Planted, World  # noqa: E402
 
 M = "forever.normal.horde.us"
 START = 1_793_923_200_000                    # Fri 2026-11-06 00:00 UTC
@@ -84,3 +84,50 @@ def test_SU15_buyers_who_skip_the_cheapest_rarely_look_like_cancels():
     sold = sum(e.units for e in m.truth.events if e.kind == "buy")
     assert fills >= 10_000 and m.truth.endings(2589, START, START + 3 * DAY_MS)[2] == 0
     assert false_cancels / sold <= 0.005, f"false cancels {false_cancels} of {sold} units (seed {world.seed})"
+
+
+def test_a_price_mix_rounds_away_from_the_floor_and_an_anchor_holds_the_reference_under_fair():
+    item = Item(2589, "Linen Cloth", True, 100, 0, 0, price_mix=((1.0, 1.01, 1.01),), anchor=0.5)
+    m = Market(World(4, START, 1, (item,)))
+    assert m._reference(item) == 50                                       # an empty book: the fair price, anchored
+    m.post(2589, 5, 40, 24, "s")
+    assert m._reference(item) == 40                                       # the floor is under the anchor
+    assert m._price(item, 40) == 41                                       # 40.4 rounds up to 1 c over the floor
+    under = Item(2589, "Linen Cloth", True, 100, 0, 0, price_mix=((1.0, 0.99, 0.99),))
+    at = Item(2589, "Linen Cloth", True, 100, 0, 0, price_mix=((1.0, 1.0, 1.0),))
+    assert m._price(under, 40) == 39 and m._price(at, 40) == 40           # 39.6 rounds down to 1 c under
+
+
+def test_a_buyer_level_raises_what_buyers_pay_and_a_stack_mix_sets_what_sellers_post():
+    shy = Item(2589, "Linen Cloth", True, 100, 0, 0, buyer_spread=0.0, buyer_level=0.5, max_units=1)
+    m = Market(World(5, START, 1, (shy,)))
+    m.post(2589, 5, 60, 24, "s")
+    m._buy_as_buyer(shy)
+    assert not [e for e in m.truth.events if e.kind == "buy"]            # 60 c is over half of 100 c
+    stacked = Item(2589, "Linen Cloth", True, 100, 0, 0, stacks=((3, 1.0),))
+    m = Market(World(6, START, 1, (stacked,)))
+    m._post_as_seller(stacked)
+    assert m.book()[0].units == 3
+
+
+def test_a_cancelling_seller_relists_the_same_units_and_a_bot_undercuts_every_hour():
+    item = Item(2589, "Linen Cloth", True, 100, 0, 0, relist_share=1.0, durations=((8, 1.0),), bots=1, stack=7)
+    m = Market(World(7, START, 1, (item,)))
+    a = m.post(2589, 4, 100, 24, "s9", cancel_at_ms=START + 30 * 60_000)
+    m.run_until(START + 2 * HOUR_MS)
+    posts = [e for e in m.truth.events if e.kind == "post"]
+    relisted = [e for e in posts if e.actor == "s9" and e.auction != a.id]
+    assert len(relisted) == 1 and relisted[0].units == 4 and relisted[0].at_ms == START + 30 * 60_000
+    bot = [e for e in posts if e.actor.startswith("bot")]
+    assert [e.at_ms for e in bot] == [START + 7 * 60_000, START + 67 * 60_000] and all(e.units == 7 for e in bot)
+    assert sum(e.kind == "cancel" and e.actor.startswith("bot") for e in m.truth.events) == 1   # its old one
+    assert m.truth.relists(2589, START, START + 2 * HOUR_MS, 0)[1] == 2   # the bot's cancel and repost is one too
+
+
+def test_planted_auctions_are_posted_on_time_and_cancelled_when_told():
+    item = Item(6585, "Scouting Gloves", False, 900, 0, 0, stack=1)
+    planted = (Planted(START + HOUR_MS, 6585, 1, 150_000, 24, START + 3 * HOUR_MS),)
+    m = Market(World(8, START, 1, (item,), planted=planted))
+    m.run_until(START + 4 * HOUR_MS)
+    assert [(e.kind, e.at_ms, e.price, e.actor) for e in m.truth.events] == [
+        ("post", START + HOUR_MS, 150_000, "p0"), ("cancel", START + 3 * HOUR_MS, 150_000, "p0")]
