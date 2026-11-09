@@ -422,7 +422,8 @@ end
 
 --- The whole block (SPEC §4.3 Tooltip, TT31, TT34-TT42): the header with the data age and the market's coverage, the
 --- Do line first, then Market Price, Market Inventory, Sell Chance Now, Best Buy and Best Sell Time (none without
---- windows), Disenchant Value (only when one of your characters can), Vendor Price (when known) and Inventory (only
+--- windows), Disenchant Value (when one of your characters can, or the item is Bind on Equip and not soulbound,
+--- TT43; Tooltip.lua decides), Vendor Price (when known) and Inventory (only
 --- when you hold some), with a divider before each section: Do, the market lines, the best times, Disenchant Value,
 --- and Vendor Price with Inventory (TT42). Without market data: the header and "no market data yet" (TT18).
 ---@param f table  { age = { text, amber }, coverage (hours or nil), noData, doing (DoOf's), market = { cur, ageText,

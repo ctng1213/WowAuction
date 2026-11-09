@@ -1979,7 +1979,7 @@ Disenchant                  37% lower than AH price
 Inventory   Total: 29 · Bags: 4 · Bank: 1 · Mail: 24
 ```
 
-- **Order:** Do, Market Price, Price history, Market Inventory, Sales Rate, Best Buy Price, Best Sell Price, Disenchant (only when one of your characters can disenchant it), Inventory (only when you hold some). The Activity line goes; its sales per day are Sales Rate's (days of supply went in M40).
+- **Order:** Do, Market Price, Price history, Market Inventory, Sales Rate, Best Buy Price, Best Sell Price, Disenchant (when one of your characters can disenchant it, and always for a Bind on Equip item the tooltip doesn't show as Soulbound, TT43), Inventory (only when you hold some). The Activity line goes; its sales per day are Sales Rate's (days of supply went in M40).
 - **Market Price** (TT25): the lowest listing at the newest observation with its age ("now" at the AH), then `(price − med7) ÷ med7` as a whole percent half up: "11% lower than 7d median" (red), "2% higher than 7d median" (green), "at 7d median" at 0%; no comparison without a current price or a 7-day median; "none listed" when nothing is listed.
 - **Price history** (TT26): a title line with the shift on its right, **rising** (green) when med7 ≥ 1.10 × med30, **falling** (red) when med7 ≤ 0.90 × med30, else **steady**; the line below lists "(30d) 55c · (14d) 52c · (7d) 45c", oldest first, a missing median as "—", and then no shift word.
 - **Market Inventory** (TT27): units listed now ("433 listed"), from a newer in-game scan when there is one.

@@ -23,6 +23,7 @@ local Tooltip = {}
 AHProfit.Tooltip = Tooltip
 
 local DE_KINDS = { [2] = "weapon", [4] = "armor" }
+local BIND_ON_EQUIP = 2          -- GetItemInfo's bind type (TT43)
 -- The mockup's colours (docs/mockups/addon.html), as 0-1 RGB.
 local RGB = { label = { 0.56, 0.83, 1 }, value = { 1, 1, 1 }, title = { 1, 0.82, 0 }, muted = { 0.56, 0.54, 0.49 },
               amber = { 1, 0.69, 0.18 }, pos = { 0.24, 0.86, 0.31 }, neg = { 1, 0.29, 0.24 }, post = { 1, 0.82, 0 },
@@ -60,25 +61,28 @@ local function NameOf(key)
 end
 
 --- An item's disenchant value per item, when one of your characters can disenchant it, and its possible mats at
---- their latest prices for the tooltip's breakdown (TT29).
+--- their latest prices for the tooltip's breakdown (TT29); the breakdown also for a Bind on Equip item not yet bound
+--- to you, which you could sell or mail to an enchanter (TT43).
 ---@param key number
+---@param bound boolean|nil  The tooltip says the item is soulbound
 ---@return boolean, number|nil, table[]|nil  can disenchant, expected value at the mats' sale values (float copper, the
----                                          Do line's), and { chance, min, max, name, price (the mat's cur or nil) }
-local function DisenchantValue(key)
-  local quality, ilvl, classId = Adapter.ItemDetails(VM.BaseItemId(key))
+---                                          Do line's; nil unless you can), and { chance, min, max, name, price (the
+---                                          mat's cur or nil) } when the breakdown shows, else nil
+local function DisenchantValue(key, bound)
+  local quality, ilvl, classId, bindType = Adapter.ItemDetails(VM.BaseItemId(key))
   local kind = DE_KINDS[classId]
   if not (quality and ilvl and kind) then return false, nil end
   local skill, outcomes = Disenchant.OutcomesFor(Disenchant.Table(), quality, ilvl, kind)
-  if not skill or not Disenchant.CanDisenchant(skill, AHProfit.Options.BestSkill(DB.Get() or {}, "Enchanting")) then
-    return false, nil
-  end
+  if not skill then return false, nil end
+  local can = Disenchant.CanDisenchant(skill, AHProfit.Options.BestSkill(DB.Get() or {}, "Enchanting"))
+  if not (can or (bindType == BIND_ON_EQUIP and not bound)) then return false, nil end
   local values, mats = {}, {}
   for i, o in ipairs(outcomes) do
     local mat = Market.Item(o[1])
     values[i] = mat and mat.sellValue or 0
     mats[i] = { chance = o[2], min = o[3], max = o[4], name = NameOf(o[1]), price = mat and mat.cur or nil }
   end
-  return true, Disenchant.ExpectedValue(outcomes, values), mats
+  return can, can and Disenchant.ExpectedValue(outcomes, values) or nil, mats
 end
 
 --- A window's expected price, as the plan prices it (`plan.slot_price`: level × how with the trend to its best hour,
@@ -282,8 +286,9 @@ end
 --- The tooltip lines for an item (SPEC §4.3, TT8-TT21); nil without a market file.
 ---@param key number
 ---@param nowMs number
+---@param bound boolean|nil  The tooltip says the item is soulbound (TT43)
 ---@return table[]|nil  TooltipView.Lines
-function Tooltip.Lines(key, nowMs)
+function Tooltip.Lines(key, nowMs, bound)
   local offsetMs = Adapter.LocalOffsetMs(nowMs)
   local generatedAt = Market.Times()
   if not generatedAt then return nil end
@@ -294,7 +299,7 @@ function Tooltip.Lines(key, nowMs)
   local atAH = panel ~= nil and panel.frame:IsShown()
   local cur, ageText, listed = PriceNow(key, item, nowMs, atAH)
   local sell, buy = Windows(item, cur, nowMs)
-  local canDE, deValue, mats = DisenchantValue(key)
+  local _, deValue, mats = DisenchantValue(key, bound)
   local vendor = VendorOf(key)
   local facts = { atAH = atAH, deValue = deValue, sell = sell, buy = buy, vendor = vendor }
   return TV.Lines({ age = age, coverage = Market.Coverage30(), doing = DoFor(key, item, nowMs, facts),
@@ -303,7 +308,7 @@ function Tooltip.Lines(key, nowMs)
               supply7 = item.supply7, supply14 = item.supply14, supply30 = item.typicalSupply,
               chance1000 = item.sellChance1000, chancePrice = item.cur, commodity = item.commodity,
               st = { item.st7, item.st14, item.st30 }, stHow = item.stHow },
-    mats = canDE and mats or nil, holdings = HoldingsOf(DB.Get() or {}, key, nowMs) })
+    mats = mats, holdings = HoldingsOf(DB.Get() or {}, key, nowMs) })
 end
 
 --- A line's value with its coins and its coloured spans and tail.
@@ -354,7 +359,7 @@ end
 function Tooltip.OnItem(tooltip, link)
   local ok, lines = pcall(function()
     local key = Adapter.ItemKey(link)
-    return key and Tooltip.Lines(key, Adapter.NowMs())
+    return key and Tooltip.Lines(key, Adapter.NowMs(), Adapter.TooltipSaysSoulbound(tooltip))
   end)
   if not (ok and lines) then return end
   local drawn = {}

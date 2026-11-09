@@ -148,6 +148,32 @@ describe("Tooltip", function()
     Stubs.ITEM_NAMES[6585], Stubs.ITEM_COLORS[6585], Stubs.ITEM_CLASSES[6585] = "Scouting Gloves", nil, nil
   end)
 
+  it("TT43 Disenchant Value always shows for a Bind on Equip item not yet bound; soulbound ones need your Enchanting", function()
+    Boot()
+    Stubs.ITEM_NAMES[6585], Stubs.ITEM_COLORS[6585] = "Scouting Gloves", "1eff00"
+    Stubs.ITEM_CLASSES[6585], Stubs.ITEM_BIND[6585] = 4, 2
+    local gloves = "800,1,30,1100,1100,,,0,,,1,50,,,1,,0,500;;"
+    local dust = "300,20,30,300,300,,,0,,,1,50,,,20,285,0,900;;"
+    AHProfitMarket.markets[UIWorld.MARKET].I[6585], AHProfitMarket.markets[UIWorld.MARKET].I[10940] = gloves, dust
+    AHProfitMarket.checksum = "3:" .. (#AHProfitMarket.markets[UIWorld.MARKET].I[2589] + #gloves + #dust)
+    AHProfit.Market.Reset()
+    --- Whether the block has a Disenchant Value line, and the line under it.
+    ---@param bound boolean|nil
+    ---@return boolean, string|nil
+    local function Shown(bound)
+      local lines = AHProfit.Tooltip.Lines(6585, NOW, bound)
+      for i, l in ipairs(lines) do if l.label == "Disenchant Value" then return true, lines[i + 1].label end end
+      return false, nil
+    end
+    assert_eq({ Shown() }, { true, "75% · 2.5 Strange Dust @ 3s" })      -- BoE, nobody has Enchanting: shown
+    assert_eq(Shown(true), false)                                         -- worn, so soulbound: Enchanting needed
+    Stubs.ITEM_BIND[6585] = 1
+    assert_eq(Shown(), false)                                             -- Bind on Pickup
+    AHProfitDB.professions["Amaya-Grommash"] = { Enchanting = { skill = 100, max = 150 } }
+    assert_eq({ (Shown()), (Shown(true)) }, { true, true })                 -- with Enchanting, every binding (TT4)
+    Stubs.ITEM_NAMES[6585], Stubs.ITEM_COLORS[6585], Stubs.ITEM_CLASSES[6585], Stubs.ITEM_BIND[6585] = "Scouting Gloves", nil, nil, nil
+  end)
+
   it("the plan's action for this character comes before the addon's own option", function()
     Boot()
     UIWorld.Plan({ { id = "p", kind = "post", key = 2589, qty = 20, price = 55, at = NOW + 26 * HOUR, net = 1046, chance = 92,
