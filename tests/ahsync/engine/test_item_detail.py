@@ -102,3 +102,12 @@ def test_BZ25_the_item_detail_says_where_its_vendor_price_came_from():
     assert vendor(vendor_sell=150) == ["Vendor price", "1s 50c"]                   # AHF's list or the cloud summary
     assert vendor(vendor_sell=0, vendor_from_game=True) == ["Vendor price", "none: can't be sold to a merchant · from the game"]
     assert vendor() == ["Vendor price", "unknown"]                                 # in neither: no deposit counted
+
+
+def test_D106_a_cloud_markets_sales_line_says_how_much_of_it_is_estimated_unseen():
+    line = lambda **kw: item_detail.item_detail(facts(**kw), 0)["activity"][0]       # noqa: E731
+    cloud = dict(sold_per_day=52.4, source="blizzard", kind="ids")
+    assert line(**cloud, unseen_per_day=6.2) == ["Est. sales per day", "52 Blizzard · 7 of 7 days covered · about 6 a day unseen (est.)"]
+    assert line(**cloud, unseen_per_day=0.4) == ["Est. sales per day", "52 Blizzard · 7 of 7 days covered"]   # under 1 a day
+    assert line(**cloud) == ["Est. sales per day", "52 Blizzard · 7 of 7 days covered"]                     # none estimated
+    assert line()[1] == "48 AHF · 7 of 7 days covered"                                                     # AHF: as before

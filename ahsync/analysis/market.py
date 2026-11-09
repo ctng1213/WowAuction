@@ -39,6 +39,28 @@ def _volumes(item: ItemHistory) -> dict[int, dict[str, Volume]]:
     return {day: {src: Volume(*v) for src, v in sources.items()} for day, sources in item.volume.items()}
 
 
+def unseen_per_day(item: ItemHistory, week: range, volume: DailyVolume) -> float | None:
+    """Of sold/day, the units a day estimated sold before their listings were first seen (SPEC §2.4, BZ45, BZ49).
+
+    The main id source's unseen share of its sold units over the week, applied to sold/day, so it is averaged
+    exactly as sold/day is (coverage, the prior).
+
+    Args:
+        item: The item's history (its stored volume and unseen units by day and source).
+        week: The day numbers sold/day was taken over.
+        volume: The item's sold/day and its main source.
+
+    Returns:
+        Units per day; None when sold/day is unknown, the main source isn't auction ids, or nothing was estimated.
+    """
+    src = volume.main_source
+    if volume.sold_per_day is None or volume.main_kind != "ids" or src is None:
+        return None
+    sold = sum(item.volume.get(day, {}).get(src, (0.0,))[0] for day in week)
+    unseen = sum(item.unseen.get(day, {}).get(src, 0.0) for day in week)
+    return volume.sold_per_day * unseen / sold if sold > 0 and unseen > 0 else None
+
+
 def _covers(item: ItemHistory) -> dict[int, dict[str, Cover]]:
     """Stored volume covers as engine Covers.
 
@@ -466,7 +488,7 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
         commodity=any(row[sell_through.COMMODITY] for row in item.lifetimes.values()) if item.lifetimes else None,
         supply7=median_daily_supply(item.hourly_supply, now_ms, 7),
         supply14=median_daily_supply(item.hourly_supply, now_ms, 14),
-        sell_chance=sell_chance_now(quote, base, now_ms, settings))
+        sell_chance=sell_chance_now(quote, base, now_ms, settings), unseen_per_day=unseen_per_day(item, week, volume))
     return replace(intel, **window_lines(intel, quote, base, hourly, now_ms, settings))
 
 

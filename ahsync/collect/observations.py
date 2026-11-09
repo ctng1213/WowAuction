@@ -104,12 +104,14 @@ def recompute_id_days(db: Database, store: SnapshotStore, market: str, src: str,
         gaps = [g for g in sorted(flows) if g[1] // DAY_MS == day]
         volume: dict[int, list[float]] = {}
         ended: dict[int, list[float]] = {}
+        unseen: dict[int, float] = {}
         for gap in gaps:
             for key, f in flows[gap].items():
                 row = volume.setdefault(key, [0.0, 0.0, 0.0])
                 row[0] += f.sold
                 row[1] += f.expired
                 row[2] += f.listed
+                unseen[key] = unseen.get(key, 0.0) + f.unseen
                 if f.ended:
                     tally = ended.setdefault(key, [0.0] * 8)
                     for i, value in enumerate((f.ended, f.expired_listings, f.matched, f.cancels, f.cancelled,
@@ -117,7 +119,7 @@ def recompute_id_days(db: Database, store: SnapshotStore, market: str, src: str,
                         tally[i] += value
                     tally[7] = max(tally[7], float(f.commodity))
         db.replace_volume_day(market, day, src, {k: tuple(v) for k, v in sorted(volume.items())}, ID_METHOD_VERSION,
-                              ("ids", covered_seconds(gaps)) if gaps else None)
+                              ("ids", covered_seconds(gaps)) if gaps else None, unseen)
         db.replace_lifetimes_day(market, day, src, {k: tuple(v) for k, v in sorted(ended.items())})
         db.replace_new_listings_day(market, day, src, merge_positions(positions.get(g, {}) for g in gaps))
         hours = {h for gap in gaps for h in gap_hours(gap)}

@@ -14,7 +14,7 @@ from dataclasses import asdict, dataclass, field, fields
 
 from ahsync.engine import profile
 
-INTEL_SCHEMA_VERSION = 14      # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
+INTEL_SCHEMA_VERSION = 15      # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
                                # 5: median_daily_supply (V23); 6: observed_listing_turnover (V37); 7: volume_kind (D57);
                                # 8: closes_30d (TT23); 9: each window's forecast: expected price, executable quantity,
                                # confidence, and buying windows ranked by actionable value (W14, W15); 10: the cloud
@@ -25,7 +25,9 @@ INTEL_SCHEMA_VERSION = 14      # 2: weekly patterns, windows, strength, curve (A
                                # commodity cancel share, per item commodity, sell-through per lookback, typical supply
                                # over 7 and 14 days, Sell Chance Now, each sell window's 24 h chance and each buy
                                # window's found share (SPEC §2.4, §4.3, BZ40, BZ41, TT36-TT38); 14: the compact form,
-                               # no new field: profiles run-length coded and items as rows under `item_fields` (BZ47)
+                               # no new field: profiles run-length coded and items as rows under `item_fields` (BZ47);
+                               # 15: per item unseen_per_day, the part of sold_per_day estimated sold before first sight
+                               # (BZ45, BZ49)
 # Fields each schema added, so to_json can write the previous schema for older readers (SPEC §2.4, BZ18).
 ADDED_IN = {10: {"document": ("catalog", "coverage", "settings", "ages_at_ms"),
                  "item": ("last_hour", "recent_closes", "recent_sold", "recent_listed", "recent_units")},
@@ -34,7 +36,8 @@ ADDED_IN = {10: {"document": ("catalog", "coverage", "settings", "ages_at_ms"),
             13: {"document": ("cancel_share",),
                  "item": ("commodity", "sell_through", "sell_through_how", "supply7", "supply14", "sell_chance"),
                  "window": ("chance24", "found_share")},
-            14: {"document": (), "item": ()}}
+            14: {"document": (), "item": ()},
+            15: {"document": (), "item": ("unseen_per_day",)}}
 COMPACT_SINCE = 14             # the schema from which profiles are run-length coded and items written as rows (BZ47)
 PROFILE_FIELDS = ("how", "how_weeks", "sales_how", "sales_weeks", "supply_how", "supply_weeks")
 
@@ -141,6 +144,9 @@ class ItemIntel:
     supply14: int | None = None
     # Sell Chance Now (TT37): a 24 h post of the reference stack at cur sells before it expires; None without sales.
     sell_chance: float | None = None
+    # Schema 15 (BZ49). Of sold_per_day, the units a day estimated sold before their listings were first seen (BZ45);
+    # None when the main volume source isn't auction ids or nothing was estimated.
+    unseen_per_day: float | None = None
 
 
 @dataclass(frozen=True)
@@ -256,7 +262,8 @@ def to_json(intel: MarketIntelligence, schema: int | None = None) -> str:
     if target < COMPACT_SINCE:                 # an older reader expects plain profiles; 14 keeps the record's own form
         _profile_form(body["items"].values(), profile.plain)
     else:
-        names = body["item_fields"] = sorted(f.name for f in fields(ItemIntel))
+        dropped = {name for version, added in ADDED_IN.items() if version > target for name in added["item"]}
+        names = body["item_fields"] = sorted(f.name for f in fields(ItemIntel) if f.name not in dropped)
         body["items"] = {key: [item[name] for name in names] for key, item in body["items"].items()}
     body["schema_version"] = target
     return json.dumps(body, sort_keys=True, separators=(",", ":"))

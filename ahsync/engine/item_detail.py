@@ -43,6 +43,7 @@ class DetailFacts:
     vendor_sell: int | None = None    # copper a merchant pays for one; None = unknown (BZ25)
     vendor_from_game: bool = False    # the price came from the addon's itemNames, not AHF or the cloud summary
     lines: LineFacts | None = None    # the market lines' facts (D105); None leaves them out
+    unseen_per_day: float | None = None   # of sold_per_day, the units estimated sold before first sight (BZ45, D106)
 
 
 def local_slot(slot: int, offset_ms: int) -> int:
@@ -214,6 +215,9 @@ def _activity_lines(f: DetailFacts) -> list[tuple[str, str]]:
     """
     m = market_activity(None, f.conf, f.sold_per_day, f.source, f.units_on_ah, f.kind)
     sales = m.sales if f.sold_per_day is None else f"{m.sales} · {f.days_covered} of 7 days covered"
+    unseen = None if f.unseen_per_day is None else round_half_up(f.unseen_per_day)
+    if unseen:                                            # shown from 1 a day (D106); it is already in the rate
+        sales += f" · about {unseen} a day unseen (est.)"
     listed = "—" if f.listed_per_day is None else f"{round_half_up(f.listed_per_day)}/day"
     turnover = "—" if f.turnover_per_day is None else f"{round_half_up(f.turnover_per_day)}/day"
     return [

@@ -170,3 +170,12 @@ def test_BZ47_schema_14_writes_items_as_rows_and_schema_13_as_objects_with_plain
         with pytest.raises(ValueError):                              # a short, non-list or mislabelled row is refused
             from_json(json.dumps({**body, "items": {"2589": bad_row}, "item_fields": bad_fields}))
 
+
+
+def test_BZ49_unseen_per_day_round_trips_in_schema_15_and_is_left_out_of_older_rows():
+    intel = MarketIntelligence("m", 1_000, 900, 1, {2589: replace(ITEM, unseen_per_day=11.76)})
+    assert from_json(to_json(intel)).items[2589].unseen_per_day == 11.76
+    fourteen = json.loads(to_json(intel, schema=14))                     # the compact rows an older reader asks for
+    assert "unseen_per_day" not in fourteen["item_fields"] and len(fourteen["items"]["2589"]) == len(fourteen["item_fields"])
+    assert from_json(json.dumps(fourteen)).items[2589].unseen_per_day is None
+    assert "unseen_per_day" not in item_of(to_json(intel, schema=13))
