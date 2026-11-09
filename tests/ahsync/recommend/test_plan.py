@@ -70,6 +70,8 @@ def test_a_green_is_disenchanted_by_the_enchanter_who_can():
     assert plan.de_offer(ITEMS[GLOVES], STATS, []) is None and plan.de_offer(ITEMS[BAR], STATS, [("A", 300)]) is None
     assert plan.de_offer(None, STATS, [("A", 300)]) is None
     assert plan.sell_facts(STATS[GLOVES], ITEMS[GLOVES], offer).gear
+    assert not plan.sell_facts(STATS[GLOVES], ITEMS[GLOVES], offer).commodity          # None in the document: whole auctions
+    assert plan.sell_facts(replace(STATS[BAR], commodity=True), ITEMS[BAR], None).commodity   # R30: bought in lots
 
 
 def test_only_items_whose_peak_could_beat_their_cheapest_auction_are_flip_candidates():
