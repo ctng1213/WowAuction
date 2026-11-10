@@ -173,7 +173,7 @@ def _lifetime_stats(books: list[IdBook], keys: frozenset[int] | None, new: Count
                 s[2] += f.expired
                 s[3] += f.cancels
     fills: dict[int, list[int]] = {}
-    for _, key, units, _ in lt.fills:
+    for _, key, units, _, _ in lt.fills:
         fills.setdefault(key, []).append(units)
     hours = sum(later - earlier for earlier, later in lt.gaps) / HOUR_MS
     items = {key: ItemStats(key, key in lt.commodities, new[key], *sums.get(key, [0.0] * 4),

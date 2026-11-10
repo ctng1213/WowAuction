@@ -37,7 +37,7 @@ STAGING_TABLES = ("intel_new", "plan_new", "views_new", "alternatives_new", "exp
 CANDLE_TABLES = ("candles_h1", "candles_d1")
 # Tables and time columns prune may delete from (SPEC §3.2 retention). Guards the SQL built in delete_before.
 PRUNABLE = {
-    "candles_h1": "t", "candles_d1": "t", "sales_h1": "t", "volume_d1": "day", "volume_cover": "day", "lifetimes_d1": "day", "new_listings_d1": "day", "posts": "at", "purchases": "at",
+    "candles_h1": "t", "candles_d1": "t", "sales_h1": "t", "volume_d1": "day", "volume_cover": "day", "lifetimes_d1": "day", "new_listings_d1": "day", "sold_prices_d1": "day", "posts": "at", "purchases": "at",
     "crafts": "at", "disenchants": "at", "auction_mail": "at", "payouts": "at", "untracked": "at", "mail_sent": "at", "skips": "at", "actions": "run_at",
     "gather_events": "at",
     "fetch_failures": "hour", "observed_hours": "hour", "ahledger_rows": "updated",

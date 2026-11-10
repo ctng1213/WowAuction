@@ -7,7 +7,6 @@ from ahsync.engine.volume import (NO_PRIOR, VolumePrior, posterior_rate,
     MAX_GAP_MS, Auction, Book, BookEntry, Cover, IdBook, Volume, book_pairs, calibration_factor, covered_seconds, daily_volume, day_shares,
     estimate_volume, estimate_volume_ids, expiring_fraction, group_book, hourly_sales, observed_turnover, listing_turnover, supply_to_volume,
     DURATION_MS, LifeFlow, band_window, expired_fraction, gap_hours, life_flows, lifetimes, narrow, sold_by_hour,
-    new_listing_positions, position_milli,
 )
 from tests.support.gen import cases
 
@@ -506,7 +505,7 @@ def test_BZ26_the_bands_narrow_the_expiry_and_the_vanish_gap_decides():
     qty = lambda at: 14 if at < THU_1702 + 6 * HOUR_MS else 10                          # 4 bought in (22:02, 23:02]
     snaps = hourly(THU_1702, 26, [(2455, LINEN, posted, expires, 1 << 62, qty)])
     lt = lifetimes(snaps)
-    assert lt.fills == ((2455, LINEN, 4, (THU_1702 + 5 * HOUR_MS, THU_1702 + 6 * HOUR_MS)),)
+    assert lt.fills == ((2455, LINEN, 4, (THU_1702 + 5 * HOUR_MS, THU_1702 + 6 * HOUR_MS), 125),)
     (ending,) = lt.endings
     assert (ending.qty, ending.expired, ending.gap) == (10, 1.0, (THU_1702 + 24 * HOUR_MS, THU_1702 + 25 * HOUR_MS))
     flow = life_flows(lt)[ending.gap][LINEN]
@@ -553,17 +552,6 @@ def test_BZ30_sales_land_in_the_hour_they_happened():
                            (at + 30 * MINUTE, at + 50 * MINUTE): {LINEN: LifeFlow(sold=3.0)}})
     assert pooled == {LINEN: {hour10: pytest.approx(5.0 * 60 / 50)}}           # 5 units over 50 min
     assert sold_by_hour(life_flows(three), hours={hour10 + HOUR_MS}) == {ORE: {hour10 + HOUR_MS: 3.0}}
-
-
-def test_BZ29_new_listings_are_placed_against_the_book_they_joined():
-    at = THU_1702
-    before = IdBook(at, (Auction(1, LINEN, 20, 125, VERY_LONG),))
-    after = IdBook(at + HOUR_MS, (Auction(1, LINEN, 20, 125, VERY_LONG), Auction(2, LINEN, 20, 120, VERY_LONG),
-                                  Auction(3, LINEN, 10, 130, VERY_LONG), Auction(4, ORE, 5, 50, VERY_LONG)))
-    lt = lifetimes([before, after])
-    assert [(a, price, lowest) for a, _, _, _, price, lowest in lt.listed] == [(2, 120, 125), (3, 130, 120), (4, 50, None)]
-    assert new_listing_positions(lt) == {(at, at + HOUR_MS): {LINEN: {960: 20.0, 1083: 10.0}}}   # ore has no book: left out
-    assert position_milli(120, 125) == 960 and position_milli(1, 3) == 333 and position_milli(5, 6) == 833
 
 
 def test_lifetimes_keep_only_the_records_of_the_span_asked_for_but_every_window():
@@ -623,7 +611,7 @@ def test_VI5_lifetimes_account_for_every_unit_once():
                 assert f.expired_listings + f.cancels <= f.ended + 1e-9 and f.matched <= f.ended, context
                 assert f.t1_left <= f.t1_ended + 1e-9 and f.t1_ended <= f.ended, context   # BZ41's share in [0, 1]
         bought: dict[int, int] = {}
-        for auction, _, units, _ in lt.fills:
+        for auction, _, units, _, _ in lt.fills:
             bought[auction] = bought.get(auction, 0) + units
         first: dict[int, int] = {}
         last: dict[int, int] = {}

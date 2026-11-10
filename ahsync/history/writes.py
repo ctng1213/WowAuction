@@ -96,6 +96,21 @@ class HistoryWrites:
             [(market, key, day, src, ",".join(f"{pos}:{int(units)}" for pos, units in sorted(by_pos.items())))
              for key, by_pos in sorted(rows.items())])
 
+    def replace_sold_prices_day(self, market: str, day: int, src: str, rows: dict[int, dict[int, float]]) -> None:
+        """Write one day's sold prices for one source whole (idempotent; SPEC §2.4 Sold prices, BZ52).
+
+        Args:
+            market: Market id.
+            day: Day number.
+            src: The id source, e.g. "blizzard".
+            rows: key -> unit price copper -> units sold (float, written to 3 decimals, `"price:units,..."` by price).
+        """
+        self.conn.execute("DELETE FROM sold_prices_d1 WHERE market = ? AND day = ? AND src = ?", (market, day, src))
+        self.conn.executemany(
+            "INSERT INTO sold_prices_d1(market, key, day, src, prices) VALUES (?, ?, ?, ?, ?)",
+            [(market, key, day, src, ",".join(f"{price}:{units:.3f}" for price, units in sorted(by_price.items())))
+             for key, by_price in sorted(rows.items()) if by_price])
+
     def stale_volume_days(self, market: str, src: str, method: int) -> list[int]:
         """Days whose rows of an estimated source come from an older method (V24).
 

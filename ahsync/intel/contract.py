@@ -14,7 +14,7 @@ from dataclasses import asdict, dataclass, field, fields, replace
 
 from ahsync.engine import profile
 
-INTEL_SCHEMA_VERSION = 15      # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
+INTEL_SCHEMA_VERSION = 16      # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
                                # 5: median_daily_supply (V23); 6: observed_listing_turnover (V37); 7: volume_kind (D57);
                                # 8: closes_30d (TT23); 9: each window's forecast: expected price, executable quantity,
                                # confidence, and buying windows ranked by actionable value (W14, W15); 10: the cloud
@@ -27,7 +27,8 @@ INTEL_SCHEMA_VERSION = 15      # 2: weekly patterns, windows, strength, curve (A
                                # window's found share (SPEC §2.4, §4.3, BZ40, BZ41, TT36-TT38); 14: the compact form,
                                # no new field: profiles run-length coded and items as rows under `item_fields` (BZ47);
                                # 15: per item unseen_per_day, the part of sold_per_day estimated sold before first sight
-                               # (BZ45, BZ49)
+                               # (BZ45, BZ49); 16: per item sold_med7 and sold_units7, the units-weighted median of
+                               # the last 7 days' sold prices and its units (SPEC §2.4 Sold prices, BZ53, BZ54)
 # Fields each schema added, so to_json can write the previous schema for older readers (SPEC §2.4, BZ18).
 ADDED_IN = {10: {"document": ("catalog", "coverage", "settings", "ages_at_ms"),
                  "item": ("last_hour", "recent_closes", "recent_sold", "recent_listed", "recent_units")},
@@ -37,7 +38,8 @@ ADDED_IN = {10: {"document": ("catalog", "coverage", "settings", "ages_at_ms"),
                  "item": ("commodity", "sell_through", "sell_through_how", "supply7", "supply14", "sell_chance"),
                  "window": ("chance24", "found_share")},
             14: {"document": (), "item": ()},
-            15: {"document": (), "item": ("unseen_per_day",)}}
+            15: {"document": (), "item": ("unseen_per_day",)},
+            16: {"document": (), "item": ("sold_med7", "sold_units7")}}
 COMPACT_SINCE = 14             # the schema from which profiles are run-length coded and items written as rows (BZ47)
 PROFILE_FIELDS = ("how", "how_weeks", "sales_how", "sales_weeks", "supply_how", "supply_weeks")
 
@@ -147,6 +149,11 @@ class ItemIntel:
     # Schema 15 (BZ49). Of sold_per_day, the units a day estimated sold before their listings were first seen (BZ45);
     # None when the main volume source isn't auction ids or nothing was estimated.
     unseen_per_day: float | None = None
+    # Schema 16 (BZ53, BZ54). The units-weighted median of the last 7 days' sold prices, copper, and the units behind
+    # it; None and 0.0 without any (a desktop-built document has none). Published beside the ask medians, read by
+    # nothing until the sold-price switch (SPEC §2.4 Sold prices).
+    sold_med7: int | None = None
+    sold_units7: float = 0.0
 
 
 @dataclass(frozen=True)

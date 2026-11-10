@@ -170,7 +170,7 @@ sequenceDiagram
 
 | Family | Tables | Written by | Read by |
 |---|---|---|---|
-| Market history | `candles_h1`, `candles_d1`, `current`, `scans`, `book_entries`, `volume_d1`, `volume_cover`, `sales_h1`, `lifetimes_d1`, `new_listings_d1`, `sold_prices_d1` (planned SP1: the price each sold auction left at), `observed_hours`, `ahledger_rows`, `source_state`, `sync_state`, `fetch_failures` | `collect/` | `history/reads.py` |
+| Market history | `candles_h1`, `candles_d1`, `current`, `scans`, `book_entries`, `volume_d1`, `volume_cover`, `sales_h1`, `lifetimes_d1`, `new_listings_d1`, `sold_prices_d1` (built SP1a: the price each sold auction left at), `observed_hours`, `ahledger_rows`, `source_state`, `sync_state`, `fetch_failures` | `collect/` | `history/reads.py` |
 | Items | `items` | `collect/` | everywhere, via the catalog |
 | Intelligence | `intel` (+ `_new` staging; a cloud document's body is its gzip as downloaded, SM1; a local one's gzipped, SM2c) | `analysis/` via `intel/store.py`, `collect/cloud_intel.py` | `recommend/`, `export/`, `web/` (one parsed record per process, `IntelCache`) |
 | Player state | inventory, journal (`purchases`, `posts`, `auction_mail`, `payouts`, `crafts`, `disenchants`, `mail_sent`), `professions`, `recipes`, `known_recipes`, `characters`, `cost_basis`, `gather_events`, `farming_sessions`, `manual_rates`, `positions`, `position_lots` | `state/` | `recommend/`, `app/` |
@@ -353,3 +353,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-09: MC3c built: the finder looks in the Microsoft Store build's `Claude-Data` folder first and names an `mcpServers` put inside another section (SPEC §3.8.1, MCP22–MCP23); no new component or flow.
 - 2026-11-09: sold-price fix spec merge (`docs/plans/sold-price.md`): planned `sold_prices_d1` in the market history, written at ingest beside `lifetimes_d1`, and summary schema 16's `sold_med7` and `sold_units7`, published and read by nothing until SP2.
 - 2026-11-09: the AI assistant batch closed (MC0–MC3, `docs/plans/mcp-server.md` §10); the database's read-only edge to the server is drawn as built.
+- 2026-11-09: SP1a built: `sold_prices_d1` written at ingest beside `lifetimes_d1` (`engine/lifetime_prices.py`, which also takes over the new listings' positions from `engine/volume.py`), and summary schema 16's `sold_med7` and `sold_units7` (published side by side with schemas 13–15); nothing reads them yet.

@@ -13,6 +13,7 @@ from dataclasses import dataclass, replace
 
 from ahsync.engine import confidence, fees, patterns, prices, profile, sell_through, sellprob
 from ahsync.engine.capacity import GEAR_CLASSES, slot_of
+from ahsync.engine.lifetime_prices import weighted_median
 from ahsync.engine.profile import Profile
 from ahsync.engine.sellprob import MarketSettings, Supply
 from ahsync.engine.volume import (ID_METHOD_VERSION, VOLUME_METHOD_VERSION, Cover, DailyVolume, Volume, daily_volume, median_daily_supply,
@@ -424,6 +425,20 @@ def measured_undercut(new_listings: dict[int, dict[int, float]], price: int | No
     return sellprob.undercut_share(rows, price, lowest_now)
 
 
+def sold_median7(item: ItemHistory, week: range) -> tuple[int | None, float]:
+    """The units-weighted median of the week's sold prices and its units (SPEC §2.4 Sold prices, BZ53).
+
+    Args:
+        item: The item's history (its sold prices by day).
+        week: The day numbers sold/day is taken over (the last 7).
+
+    Returns:
+        (copper or None, units), lifetime_prices.weighted_median over those days.
+    """
+    return weighted_median((price, units) for day in week
+                           for price, units in sorted(item.sold_prices.get(day, {}).items()))
+
+
 def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings: MarketSettings) -> ItemIntel:
     """One item's intelligence from its stored history (SPEC §3.3).
 
@@ -473,6 +488,7 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
         max(ref, settings.min_gear_units) if gear else ref,
         settings.max_supply_share_gear if gear else settings.max_supply_share,
         volume.volume_score, book_age, settings.max_trend_total)
+    sold_med7, sold_units7 = sold_median7(item, week)
     intel = ItemIntel(
         key, cur.price if cur else None, cur.qty if cur else None, now_ms - cur.at if cur else None,
         med7, med30, p10, p90,
@@ -488,7 +504,8 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
         commodity=any(row[sell_through.COMMODITY] for row in item.lifetimes.values()) if item.lifetimes else None,
         supply7=median_daily_supply(item.hourly_supply, now_ms, 7),
         supply14=median_daily_supply(item.hourly_supply, now_ms, 14),
-        sell_chance=sell_chance_now(quote, base, now_ms, settings), unseen_per_day=unseen_per_day(item, week, volume))
+        sell_chance=sell_chance_now(quote, base, now_ms, settings), unseen_per_day=unseen_per_day(item, week, volume),
+        sold_med7=sold_med7, sold_units7=sold_units7)
     return replace(intel, **window_lines(intel, quote, base, hourly, now_ms, settings))
 
 
