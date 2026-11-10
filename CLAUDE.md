@@ -25,6 +25,7 @@ python tools/snapshot.py       # whole-plan snapshot vs tests/fixtures/worlds/w1
 python tools/gen_world.py      # regenerate the snapshot's fixture world w1.json (fixed seed), then snapshot.py --update
 python tools/lifetimes_report.py --raw <raw/market folder> --out docs/plans/blizzard-cloud-lifetimes.md   # M33 step 1: band, fate and relist distributions
 python tools/sales_report.py --raw <raw/market folder> --catalog <document.json.gz> --out docs/plans/blizzard-cloud-sales.md   # before M33b: cheapest-first, cancel floor, listing age, evidence, sold vs ask
+python tools/sold_price_report.py --document <document.json.gz> --out docs/plans/sold-price-report.md   # sold median against the ask medians (SP1b; the 2026-11-21 review)
 python -m ahsync.mcp --data-dir <data folder>   # the AI assistant bridge Claude launches (SPEC §3.8; the app's server must be enabled)
 python -m ahsync_app           # the app shell from source: window, tray, setup, per-user folders (needs requirements-app.txt)
 python tools/build.py build 0.0.0   # local build: PyInstaller, then Inno Setup (Windows) or the dmg (macOS); needs requirements-app.txt + pyinstaller

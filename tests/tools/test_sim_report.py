@@ -22,7 +22,7 @@ def test_the_inference_report_runs_the_chosen_rows_per_seed(tmp_path):
     assert rep.main(["inference", "--rows", "SM10,SM11", "--seeds", "1,2", "--out", str(out)]) == 0
     text = out.read_text(encoding="utf-8")
     assert text.startswith("# Inference against truth")
-    assert text.count("| SM10 |") == 4 and text.count("| SM11 | 2 |") == 2 and "| pass |" in text
+    assert text.count("| SM10 |") == 6 and text.count("| SM11 | 2 |") == 2 and "| pass |" in text
     assert rep.main(["inference", "--rows", "SM99"]) == 2
 
 
