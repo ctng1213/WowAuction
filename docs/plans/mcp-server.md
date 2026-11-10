@@ -1,6 +1,6 @@
 # Plan: ask an AI assistant about your AHSync data (MCP server, MC0–MC3)
 
-Written for: the user, who approves it, and the Opus session that runs the batch. **Status: approved by the user 2026-11-08, with standing approval for MC0–MC3** (option B and the mockup `docs/mockups/ai-assistant.html`). MC0, the spec merge, is SPEC §3.8 and scenarios MCP1–MCP16, SEC18–SEC20. Tasks are tagged **Opus** (judgement) or **Sonnet** (routine), each with a one-line reason.
+Written for: the user, who approves it, and the Opus session that runs the batch. **Status: done 2026-11-09.** MC0–MC3 are on main (#75, #80, #81, #89, #91) and §8's acceptance was confirmed by the user's manual check (§10). Approved by the user 2026-11-08, with standing approval for MC0–MC3 (option B and the mockup `docs/mockups/ai-assistant.html`). MC0, the spec merge, is SPEC §3.8 and scenarios MCP1–MCP16, SEC18–SEC20. Tasks are tagged **Opus** (judgement) or **Sonnet** (routine), each with a one-line reason.
 
 **What this batch is.** A local, read-only [MCP](https://modelcontextprotocol.io) server that runs inside AHSync, started and stopped by a button on the Status page. An assistant that speaks MCP (Claude Desktop, Claude Code) connects to it on your computer and uses it to read your data. The assistant does the thinking: it ranks, compares, spots trends and looks things up on the web. The server gives it complete, current, well-described data. It never changes anything, and it listens only on your own computer (127.0.0.1), only while you have it enabled.
 
@@ -44,6 +44,14 @@ How the assistant answers is left to it.
    - The same card shows the Claude setup and the privacy note.
 8. **Nothing is off limits** (the user, 2026-11-08). The access is read-only, so the assistant may read everything the allowlist in §4 names.
 9. **ChatGPT is a follow-up batch** (the user, 2026-11-08). This batch is Claude only.
+
+Decided during execution:
+
+10. **`item_group_stats`, a bulk read by item group, joined MC2** (the user, 2026-11-09). Classic has no Fish subclass, so the assistant decides what counts as a fish; the `fishing` group is the gathering catalog's list.
+11. **The card reads Claude Desktop's config, read-only, and shows the exact edit** (MC3b, the user, 2026-11-09). The Microsoft Store build has no Settings → Developer page, and AHSync never writes Claude's files (SPEC §3.8.1, MCP18–MCP21).
+12. **The Store build's file is `%LOCALAPPDATA%\Claude-Data\claude_<id>\claude_desktop_config.json`** (MC3c, found from Claude's own log on build 4.23118). That folder wins over any other; the `LocalCache` copy stays on the list for older builds, UNVERIFIED (MCP22, LESSONS 2026-11-09).
+13. **Every edit the card asks for starts with quitting Claude Desktop, says exactly where each paste goes, and carries its own comma**; an `mcpServers` inside another section is named (MC3c, MCP23). The guide and the log checks are `INSTALL.md` §7.
+14. **Don't stack PRs on this repo**: a stacked PR merges into its base branch, not main (#76, #79). Target main and say which to merge first.
 
 ## 2. Working rules
 
@@ -152,7 +160,7 @@ None left. The user answered on 2026-11-08:
 - nothing is off limits while the access is read-only;
 - `market_stats` lives in memory only;
 - the server runs inside AHSync, started and stopped by an Enable / Disable button whose press is the agreement to its memory (decisions 2, 6, 7).
-- 2026-11-09: a bulk read by item group (`item_group_stats`, MC2); Claude's own plans are the next batch (§9).
+- 2026-11-09: a bulk read by item group (`item_group_stats`, MC2); Claude's own plans are the next batch (§11).
 
 ## 8. Acceptance (the whole batch)
 
@@ -165,7 +173,14 @@ None left. The user answered on 2026-11-08:
 - No tool can change the database (the SEC scenarios pass), no response exceeds its bounds, and the port is open only on 127.0.0.1, only while enabled, and only to requests with the key.
 - `tools/verify.ps1` passes. The whole-plan snapshot and every golden are unchanged.
 
-## 9. The follow-up batch: Claude's plans (decided by the user, 2026-11-09; designed after MC3)
+## 10. Outcome (2026-11-09)
+
+- MC0 #75; MC1 and MC2 #80 (from the stacked #76 and #79); MC3 #81; MC3b #89; MC3c #91. Released in v0.1.13 (MC3), v0.1.14 (MC3b) and v0.1.15 (MC3c).
+- The user's manual check: Claude Desktop connected on Windows (Microsoft Store build) and on a Mac (`~/Library/Application Support/Claude`), and Claude Code with the copied command. Disable gives Claude the "turn it on" message, a closed AHSync gives "start it", and an enabled server comes back after a restart.
+- Left open: the Store build's `LocalCache` folder for builds before 4.23118 (UNVERIFIED in SPEC §3.8.1).
+- Next: §11, Claude's plans.
+
+## 11. The follow-up batch: Claude's plans (decided by the user, 2026-11-09; designed after MC3)
 
 Claude may add its own actions to the plan, which the addon shows and tracks like the engine's. The user's decisions:
 

@@ -78,7 +78,7 @@ flowchart LR
   DB --> Export --> DataFiles --> AEngine
   DataFiles --> Reselect --> UI
   DB --> Web --> Dashboard
-  DB -. read-only, planned MC1 .-> MCPS
+  DB -- read-only, MC1 --> MCPS
   Claude -. stdio .-> Bridge -. 127.0.0.1 + key .-> MCPS
 ```
 
@@ -352,3 +352,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-09: MC3b built: the AI assistant card reads Claude Desktop's config, read-only, to say which file to change (`mcp/claude_config.py`, SPEC §3.8.1); no new component or flow.
 - 2026-11-09: MC3c built: the finder looks in the Microsoft Store build's `Claude-Data` folder first and names an `mcpServers` put inside another section (SPEC §3.8.1, MCP22–MCP23); no new component or flow.
 - 2026-11-09: sold-price fix spec merge (`docs/plans/sold-price.md`): planned `sold_prices_d1` in the market history, written at ingest beside `lifetimes_d1`, and summary schema 16's `sold_med7` and `sold_units7`, published and read by nothing until SP2.
+- 2026-11-09: the AI assistant batch closed (MC0–MC3, `docs/plans/mcp-server.md` §10); the database's read-only edge to the server is drawn as built.
