@@ -1,7 +1,7 @@
 """The database's schema version and the steps that bring an older database up to it (SPEC §3.2 "Format version")."""
 from __future__ import annotations
 
-SCHEMA_VERSION = 29
+SCHEMA_VERSION = 30
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
 # that a migrated database has exactly schema.sql's tables and indexes).
@@ -262,5 +262,13 @@ MIGRATIONS: dict[int, str] = {
         ALTER TABLE posts ADD COLUMN returned_units INTEGER NOT NULL DEFAULT 0;
         CREATE INDEX IF NOT EXISTS auction_mail_post ON auction_mail(post_id);
         CREATE INDEX IF NOT EXISTS payouts_mail ON payouts(mail_id)
+    """,
+    # 30: the units each item sold per day by the price they sold at, from auction lifetimes (SPEC §2.4, BZ52). Empty
+    # until a daily run or a rebuild recomputes the days.
+    30: """
+        CREATE TABLE IF NOT EXISTS sold_prices_d1(
+            market TEXT NOT NULL, key INTEGER NOT NULL, day INTEGER NOT NULL, src TEXT NOT NULL, prices TEXT NOT NULL,
+            PRIMARY KEY(market, key, day, src)
+        ) WITHOUT ROWID
     """,
 }

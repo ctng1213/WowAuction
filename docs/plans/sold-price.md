@@ -28,6 +28,7 @@ From `docs/plans/market-simulator.md` §1.13 and §1.32 and `docs/plans/blizzard
    - Sales of listings no snapshot saw are a smaller, separate risk (§7), not SM10's subject.
 2. **D1 A**: during the comparison the sold price is in the summary document and `tools/sold_price_report.py` only; no screen changes until the switch.
 3. **D2 A**: the switch (SP2) is decided at the 2026-11-21 real-data review.
+4. **Decided while building SP1a (2026-11-09).** (a) The sold prices live in a new module, `engine/lifetime_prices.py`, not `engine/volume.py`, which was at the 1,000-line limit; the new listings' positions (BZ29) moved there with their test. (b) An ending's price is its last sighting's (`volume.lifetimes` refreshes it each sighting; Blizzard's unit buyout is not known to change, so this matches the first sighting today), and an ending with no price contributes nothing. (c) The analysis reads only the last 7 days of `sold_prices_d1`, not the 90-day volume window. (d) The cloud publishes schemas 13–16 side by side, one more document per run. **Open: `tools/bench.py --summary` was not run** (no current summary on the build machine); it is owed before or right after the deploy, against the newest summary.
 
 ## 1b. Decided at planning (the user, 2026-11-09: D1 A, D2 A)
 
@@ -90,7 +91,7 @@ Written into [SCENARIOS.md](../SCENARIOS.md) at the spec merge (SP0), not repeat
 ## 6. Milestones
 
 - **SP0, spec merge.** SPEC §2.4 (sold prices kept), §2.4's document fields (schema 16), §3.3 (the weighted median's rule), §8.10 (SM18); SCENARIOS rows, SM10 and SM11 rewritten there and in `docs/plans/market-simulator.md` §3; pending IDs; ARCHITECTURE (the new table and contract fields). Opus: meaning-changing docs.
-- **SP1a, record and publish.** `engine/volume.py` (the sold prices per gap), migration 30, `history/writes.py` and `reads.py`, `collect/observations.py`, `analysis/market.py` and the contract (schema 16), the cloud's ingest and prune; BZ52–BZ54; `tools/bench.py --summary` (the cloud budget is 600 MB). Opus: the contract and migration have several writers.
+- **SP1a, record and publish. Built 2026-11-09** (the cloud bench owed, §1c item 4). `engine/volume.py` (the sold prices per gap), migration 30, `history/writes.py` and `reads.py`, `collect/observations.py`, `analysis/market.py` and the contract (schema 16), the cloud's ingest and prune; BZ52–BZ54; `tools/bench.py --summary` (the cloud budget is 600 MB). Opus: the contract and migration have several writers.
 - **SP1b, the report and the simulator rows.** `tools/sold_price_report.py`, SM10/SM11 updates, SM18. Sonnet for the report (it only draws numbers from a documented format), Opus for SM18's world.
 - **SP1c, deploy.** Deploying the cloud job is the user's (`cdk deploy`). The comparison week starts then.
 - **SP2** after the review: its own spec merge, approval and milestones.

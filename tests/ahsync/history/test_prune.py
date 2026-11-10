@@ -27,6 +27,12 @@ def test_S6_rows_89d23h_and_90d01h_old_keep_the_first_and_delete_the_second(tmp_
 
     assert db.conn.execute("SELECT t FROM candles_h1").fetchall() == [(kept,)]
     assert report.deleted["candles_h1"] == 1
+    days = [(NOW - duration_ms(age)) // 86_400_000 for age in ("80d", "100d")]   # sold prices: by whole days (BZ52)
+    with db.transaction():
+        for day in days:
+            db.replace_sold_prices_day(MARKET, day, "blizzard", {linen: {50: 1.0}})
+    assert prune(db, NOW).deleted["sold_prices_d1"] == 1
+    assert db.conn.execute("SELECT day FROM sold_prices_d1").fetchall() == [(days[0],)]
     db.close()
 
 

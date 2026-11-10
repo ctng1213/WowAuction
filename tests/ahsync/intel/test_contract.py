@@ -198,6 +198,16 @@ def test_BZ47_schema_14_writes_items_as_rows_and_schema_13_as_objects_with_plain
 
 
 
+def test_BZ54_sold_med7_and_its_units_round_trip_in_schema_16_and_older_documents_read_none_and_0():
+    intel = MarketIntelligence("m", 1_000, 900, 1, {2589: replace(ITEM, sold_med7=100, sold_units7=100.0)})
+    back = from_json(to_json(intel)).items[2589]
+    assert (back.sold_med7, back.sold_units7) == (100, 100.0)
+    fifteen = json.loads(to_json(intel, schema=15))                      # what a schema-15 reader asks for
+    assert "sold_med7" not in fifteen["item_fields"] and len(fifteen["items"]["2589"]) == len(fifteen["item_fields"])
+    old = from_json(json.dumps(fifteen)).items[2589]
+    assert (old.sold_med7, old.sold_units7) == (None, 0.0)
+
+
 def test_BZ49_unseen_per_day_round_trips_in_schema_15_and_is_left_out_of_older_rows():
     intel = MarketIntelligence("m", 1_000, 900, 1, {2589: replace(ITEM, unseen_per_day=11.76)})
     assert from_json(to_json(intel)).items[2589].unseen_per_day == 11.76

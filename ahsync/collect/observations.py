@@ -15,8 +15,8 @@ from ahsync.collect.provider import SnapshotObservation, snapshot_problems
 from ahsync.collect.snapshots import SnapshotStore
 from ahsync.db.sqlite import BookScan, Database
 from ahsync.engine.volume import (ID_METHOD_VERSION, LIFETIME_LOOKBACK_MS, MAX_GAP_MS, SALES_PAIR_MAX_GAP_MS, IdBook, covered_seconds,
-                                  gap_hours, group_book, life_flows, lifetimes, new_listing_positions,
-                                  sold_by_hour)
+                                  gap_hours, group_book, life_flows, lifetimes, sold_by_hour)
+from ahsync.engine.lifetime_prices import new_listing_positions, sold_prices
 
 DAY_MS = 86_400_000
 
@@ -75,7 +75,7 @@ def id_days(store: SnapshotStore, market: str, src: str, at_ms: int) -> set[int]
 
 
 def recompute_id_days(db: Database, store: SnapshotStore, market: str, src: str, days: set[int]) -> set[int]:
-    """Some days' id volume, ended listings and hourly sales of one source, from auction lifetimes (SPEC §2.4).
+    """Some days' id volume, ended listings, sold prices and hourly sales of one source, from auction lifetimes (SPEC §2.4).
 
     One `lifetimes` pass per day, over the snapshots from LIFETIME_LOOKBACK_MS (66 h: an ending's life and posting gaps,
     plus the day of gaps its early-leave rate reads, BZ44) before it to MAX_GAP_MS
@@ -100,7 +100,7 @@ def recompute_id_days(db: Database, store: SnapshotStore, market: str, src: str,
         day_ms = day * DAY_MS
         times = store.times(market, src, day_ms - LIFETIME_LOOKBACK_MS, day_ms + DAY_MS - 1 + MAX_GAP_MS)
         lt = lifetimes((store.load(market, src, at) for at in times), keep_from_ms=day_ms - MAX_GAP_MS)
-        flows, positions = life_flows(lt), new_listing_positions(lt)
+        flows, positions, sold = life_flows(lt), new_listing_positions(lt), sold_prices(lt)
         gaps = [g for g in sorted(flows) if g[1] // DAY_MS == day]
         volume: dict[int, list[float]] = {}
         ended: dict[int, list[float]] = {}
@@ -122,6 +122,7 @@ def recompute_id_days(db: Database, store: SnapshotStore, market: str, src: str,
                               ("ids", covered_seconds(gaps)) if gaps else None, unseen)
         db.replace_lifetimes_day(market, day, src, {k: tuple(v) for k, v in sorted(ended.items())})
         db.replace_new_listings_day(market, day, src, merge_positions(positions.get(g, {}) for g in gaps))
+        db.replace_sold_prices_day(market, day, src, merge_positions(sold.get(g, {}) for g in gaps))   # BZ52
         hours = {h for gap in gaps for h in gap_hours(gap)}
         rates = sold_by_hour(flows, hours)
         for first, last in _runs(sorted(hours)):
@@ -131,7 +132,7 @@ def recompute_id_days(db: Database, store: SnapshotStore, market: str, src: str,
 
 
 def merge_positions(per_gap: Iterable[dict[int, dict[int, float]]]) -> dict[int, dict[int, float]]:
-    """Several gaps' new-listing positions summed per item and position.
+    """Several gaps' new-listing positions (or sold prices, BZ52) summed per item and position (or price).
 
     Args:
         per_gap: key -> position -> units, one mapping per gap.

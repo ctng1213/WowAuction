@@ -70,6 +70,13 @@ CREATE TABLE IF NOT EXISTS new_listings_d1(
     PRIMARY KEY(market, key, day, src)
 ) WITHOUT ROWID;
 
+-- Units sold per item and day by the unit price they sold at, from auction lifetimes: "<price>:<units>,...", by
+-- price, units to 3 decimals (SPEC §2.4 Sold prices, BZ52). Published as sold_med7 beside the ask medians.
+CREATE TABLE IF NOT EXISTS sold_prices_d1(
+    market TEXT NOT NULL, key INTEGER NOT NULL, day INTEGER NOT NULL, src TEXT NOT NULL, prices TEXT NOT NULL,
+    PRIMARY KEY(market, key, day, src)
+) WITHOUT ROWID;
+
 CREATE TABLE IF NOT EXISTS current(
     market TEXT NOT NULL, key INTEGER NOT NULL, price INTEGER, qty INTEGER, at INTEGER NOT NULL, src TEXT NOT NULL,
     PRIMARY KEY(market, key, src)

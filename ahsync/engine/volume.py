@@ -257,6 +257,8 @@ class Ending:
     tier1: bool | None = None     # posted at or below the lowest other price; None when its posting wasn't seen (BZ41)
     overlap: float = 0.0          # the gap's overlap with its expiry window alone, 0-1 (`expired_fraction`): 0 = it
                                   # could not have expired; `expired` weighs selling against it (BZ44)
+    price: int | None = None      # unit buyout, copper, at its last sighting: a sale's price; None = unknown, no
+                                  # sold price (SPEC §2.4, BZ52)
 
 
 @dataclass(frozen=True)
@@ -266,7 +268,7 @@ class Lifetimes:
     gaps: tuple[tuple[int, int], ...]                      # (earlier ms, later ms) of linked snapshots, ascending
     seen: dict[tuple[int, int], frozenset[int]]            # gap -> item keys listed in either of its snapshots
     endings: tuple[Ending, ...]
-    fills: tuple[tuple[int, int, int, tuple[int, int]], ...]     # (auction, key, units bought, gap): partial fills
+    fills: tuple[tuple[int, int, int, tuple[int, int], int], ...]   # (auction, key, units bought, gap, unit price)
     # (auction, key, units, gap, unit price, lowest other price of the key in that snapshot or None): new listings
     # first seen after a linked gap; the price against the book feeds the undercut share (SPEC §2.4, BZ29)
     listed: tuple[tuple[int, int, int, tuple[int, int], int, int | None], ...]
@@ -342,8 +344,8 @@ def match_relists(vanished: list[tuple], new: list[Auction], gap: tuple[int, int
     one ending, lowest ids first; only an ending that may have left early (expired < 1) is matched.
 
     Args:
-        vanished: (auction, key, units, expired share, cancelled, tier1) of the auctions gone in the gap, by
-            auction id (`cancelled` and `tier1` as Ending's).
+        vanished: (auction, key, units, expired share, cancelled, tier1, unit price) of the auctions gone in the
+            gap, by auction id (`cancelled`, `tier1` and `price` as Ending's).
         new: The auctions first seen after it, by auction id.
         gap: (earlier ms, later ms).
 
@@ -354,12 +356,12 @@ def match_relists(vanished: list[tuple], new: list[Auction], gap: tuple[int, int
     for a in new:
         free.setdefault((a.key, a.qty), []).append(a.id)
     endings = []
-    for auction, key, qty, expired, cancelled, tier1 in vanished:
+    for auction, key, qty, expired, cancelled, tier1, price in vanished:
         ids = free.get((key, qty))
         matched = bool(ids) and expired < 1.0
         if matched:
             ids.pop(0)
-        endings.append(Ending(auction, key, qty, gap, expired, matched, cancelled, tier1))
+        endings.append(Ending(auction, key, qty, gap, expired, matched, cancelled, tier1, price=price))
     return endings
 
 
@@ -396,39 +398,6 @@ def lowest_other(best: list[tuple[int, int]], auction: int) -> int | None:
     return others[0] if others else None
 
 
-def new_listing_positions(lt: Lifetimes) -> dict[tuple[int, int], dict[int, dict[int, float]]]:
-    """New listings' units by their position against the book at first sight (SPEC §2.4, §3.3.2, BZ29).
-
-    Args:
-        lt: From `lifetimes`.
-
-    Returns:
-        gap -> item key -> position -> units, the position being price ÷ the lowest other price, in thousandths
-        rounded half up (floor(x × 1000 + 0.5), §3.3); a listing with no other auction of its key is left out.
-    """
-    out: dict[tuple[int, int], dict[int, dict[int, float]]] = {}
-    for _, key, units, gap, price, lowest in lt.listed:
-        if lowest is None:
-            continue
-        position = position_milli(price, lowest)
-        by_position = out.setdefault(gap, {}).setdefault(key, {})
-        by_position[position] = by_position.get(position, 0.0) + units
-    return out
-
-
-def position_milli(price: int, lowest: int) -> int:
-    """A price's position against a lowest price, in thousandths (SPEC §3.3 rounding).
-
-    Args:
-        price: Copper per unit.
-        lowest: The lowest other price, copper per unit (> 0).
-
-    Returns:
-        floor(price × 1000 ÷ lowest + 0.5), in integers only.
-    """
-    return (2 * price * 1000 + lowest) // (2 * lowest)
-
-
 def vanished_in(live: dict[int, list], current: Sequence[Auction], at_ms: int) -> list[tuple]:
     """The auctions gone from a snapshot, each with its expired share and whether it was a cancel (BZ22, BZ40).
 
@@ -442,7 +411,7 @@ def vanished_in(live: dict[int, list], current: Sequence[Auction], at_ms: int) -
         at_ms: The later snapshot's time.
 
     Returns:
-        (auction, key, units, expired share, cancelled, tier1) per auction gone, by auction id.
+        (auction, key, units, expired share, cancelled, tier1, unit price) per auction gone, by auction id.
     """
     kept: dict[int, int] = {}                      # key -> cheapest price among auctions unchanged across the gap
     ids = set()
@@ -457,7 +426,7 @@ def vanished_in(live: dict[int, list], current: Sequence[Auction], at_ms: int) -
             continue
         expired = expired_fraction(window, at_ms)
         cancelled = commodity and expired == 0.0 and kept.get(key, price) < price
-        out.append((auction, key, units, expired, cancelled, tier1))
+        out.append((auction, key, units, expired, cancelled, tier1, price))
     return out
 
 
@@ -525,9 +494,10 @@ def lifetimes(books: Iterable[IdBook], max_gap_ms: int = MAX_GAP_MS, keep_from_m
                 live[a.id] = [a.key, a.qty, window, a.price, a.commodity, tier1]
                 continue
             state[4] = state[4] or a.commodity       # a snapshot stored before M33b reads False (review, M33b-1)
+            state[3] = a.price                       # the last sighting's price is the one it sold at (BZ52)
             if a.qty < state[1]:
                 if keep:
-                    fills.append((a.id, a.key, state[1] - a.qty, gap))
+                    fills.append((a.id, a.key, state[1] - a.qty, gap, a.price))
                 state[1] = a.qty
             state[2], clash = narrow(state[2], book.at_ms, a.band)
             clashes += clash
@@ -574,7 +544,7 @@ def life_flows(lt: Lifetimes) -> dict[tuple[int, int], dict[int, LifeFlow]]:
         if e.tier1:
             row[8] += 1.0
             row[9] += left
-    for _, key, units, gap in lt.fills:
+    for _, key, units, gap, _ in lt.fills:
         totals[gap][key][0] += units
     for _, key, units, gap, *_ in lt.listed:
         totals[gap][key][2] += units

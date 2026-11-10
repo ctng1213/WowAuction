@@ -53,6 +53,31 @@ def test_V36_a_snapshot_with_ids_prices_items_and_feeds_id_and_group_volume_idem
     assert volume(db) == expected
 
 
+def test_BZ52_a_day_stores_what_sold_by_price_and_a_rerun_writes_the_same_row(db, tmp_path):
+    store = SnapshotStore(tmp_path / "snapshots")
+    ingest_snapshot(db, store, FIRST)
+    ingest_snapshot(db, store, SECOND)                  # Linen 1 (20 at 50 c) left early; 50 Ore bought at 30 c
+    rows = lambda: db.conn.execute("SELECT key, src, prices FROM sold_prices_d1 ORDER BY key").fetchall()
+    assert rows() == [(LINEN, "blizzard", "50:20.000"), (ORE, "blizzard", "30:50.000")]
+    ingest_snapshot(db, store, SECOND)
+    assert rows() == [(LINEN, "blizzard", "50:20.000"), (ORE, "blizzard", "30:50.000")]
+    with db.transaction():
+        db.replace_sold_prices_day(M, D, "blizzard", {LINEN: {200: 3.0, 48: 5.0, 50: 10.0}, ORE: {}})
+    assert rows() == [(LINEN, "blizzard", "48:5.000,50:10.000,200:3.000")]       # by price; an empty item is no row
+
+
+def test_BZ52_snapshots_with_a_sale_a_partial_buy_and_a_cancel_store_only_what_sold(db, tmp_path):
+    store, bracers = SnapshotStore(tmp_path / "snapshots"), 6584
+    first = snap(T, Auction(1, bracers, 3, 200, 4), Auction(2, LINEN, 8, 45, 4, True), Auction(3, LINEN, 5, 40, 4, True),
+                 Auction(4, LINEN, 12, 48, 4, True))
+    second = snap(T + HOUR, Auction(3, LINEN, 5, 40, 4, True), Auction(4, LINEN, 7, 48, 4, True))
+    ingest_snapshot(db, store, first)
+    ingest_snapshot(db, store, second)      # the bracers sold; 5 Linen bought at 48 c; the 45 c Linen left while the
+    #                                         cheaper 40 c stayed untouched: a cancel (BZ40), no sale
+    assert db.conn.execute("SELECT key, prices FROM sold_prices_d1 ORDER BY key").fetchall() == [
+        (LINEN, "48:5.000"), (bracers, "200:3.000")]
+
+
 def test_FM32_a_crash_after_the_file_before_the_commit_is_mended_by_delivering_it_again(db, tmp_path, monkeypatch):
     store = SnapshotStore(tmp_path / "snapshots")
     ingest_snapshot(db, store, FIRST)
@@ -93,13 +118,14 @@ def snap(at: int, *auctions: Auction) -> SnapshotObservation:
     return SnapshotObservation(M, "blizzard", at, tuple(auctions))
 
 
-def day_rows(db: Database, day: int) -> tuple[list, list, list]:
-    """A day's id volume, ended listings and new-listing positions."""
+def day_rows(db: Database, day: int) -> tuple[list, list, list, list]:
+    """A day's id volume, ended listings, new-listing positions and sold prices."""
     return (db.conn.execute("SELECT key, sold, expired, listed FROM volume_d1 WHERE src = 'blizzard' AND day = ? "
                             "ORDER BY key", (day,)).fetchall(),
             db.conn.execute("SELECT key, ended, expired, matched FROM lifetimes_d1 WHERE day = ? ORDER BY key",
                             (day,)).fetchall(),
-            db.conn.execute("SELECT key, positions FROM new_listings_d1 WHERE day = ? ORDER BY key", (day,)).fetchall())
+            db.conn.execute("SELECT key, positions FROM new_listings_d1 WHERE day = ? ORDER BY key", (day,)).fetchall(),
+            db.conn.execute("SELECT key, prices FROM sold_prices_d1 WHERE day = ? ORDER BY key", (day,)).fetchall())
 
 
 def sparse_store(tmp_path) -> SnapshotStore:

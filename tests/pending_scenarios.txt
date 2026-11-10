@@ -80,5 +80,3 @@ SD26-SD27
 SD30
 SD34
 SX1-SX10
-# Sold-price fix SP1 (docs/plans/sold-price.md): sold prices kept and published.
-BZ52-BZ54

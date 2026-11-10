@@ -76,6 +76,9 @@ class ItemHistory:
     new_listings: dict[int, dict[int, float]] = field(default_factory=dict)
     # day -> source -> of its sold, the units estimated sold before first sight (id sources only, BZ45, V44)
     unseen: dict[int, dict[str, float]] = field(default_factory=dict)
+    # day -> unit price copper -> units sold at it, summed over id sources, the window's last 7 days only (SPEC §2.4
+    # Sold prices, BZ52, BZ53)
+    sold_prices: dict[int, dict[int, float]] = field(default_factory=dict)
 
 
 class ItemCatalog(dict):
@@ -206,6 +209,9 @@ class HistoryReads:
         news = _Groups(self.conn.execute(
             "SELECT key, day, positions FROM new_listings_d1 WHERE market = ? AND day >= ? ORDER BY key, day, src",
             (market, window.volume_from_day)))
+        sold = _Groups(self.conn.execute(          # only the 7 days sold_med7 reads (BZ53), not the volume window
+            "SELECT key, day, prices FROM sold_prices_d1 WHERE market = ? AND day >= ? ORDER BY key, day, src",
+            (market, max(window.volume_from_day, window.to_ms // 86_400_000 - 6))))
         # The recent complete scans first (newest first, ties: scan id), then only their entries:
         # a join over every stored book would read and sort all of them.
         scans = self.conn.execute(
@@ -226,7 +232,7 @@ class HistoryReads:
                 [tuple(r) for r in sales.take(key)], _best_per_time(d1.take(key), ranked),
                 CurrentPrice(*current[0]) if current else None, _volume_by_day([r[:5] for r in volume]),
                 _newest_book(books.take(key), rank), cover, _lifetimes_by_day(ends.take(key)),
-                _positions_by_day(news.take(key)), _unseen_by_day(volume))
+                _positions_by_day(news.take(key)), _unseen_by_day(volume), _positions_by_day(sold.take(key)))
 
     def priced_keys(self, market: str, since_ms: int) -> list[int]:
         """Item keys with any price data in a market since a time.
@@ -542,13 +548,14 @@ def _best_per_time(rows: list[tuple], ranked: dict[str, int]) -> list[tuple]:
 
 
 def _positions_by_day(rows: list[tuple]) -> dict[int, dict[int, float]]:
-    """Stored new-listing positions, unpacked and summed per day over their sources (SPEC §3.3.2, BZ29).
+    """Stored new-listing positions (or sold prices), unpacked and summed per day over their sources (SPEC §3.3.2, BZ29;
+    §2.4 Sold prices, BZ52).
 
     Args:
-        rows: (day, "<position>:<units>,...") rows, by day.
+        rows: (day, "<position>:<units>,...") rows, by day; a sold-price row's numbers before the colon are prices.
 
     Returns:
-        day -> position -> units.
+        day -> position (or price) -> units.
     """
     out: dict[int, dict[int, float]] = {}
     for day, packed in rows:

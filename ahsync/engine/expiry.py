@@ -140,7 +140,7 @@ def tally_early_leaves(live: dict[int, list], vanished: list[tuple], gap_ms: int
     Returns:
         Item key -> (listing-ms exposed, whole ms; listings that left early), by key.
     """
-    gone = {auction: cancelled for auction, _, _, _, cancelled, _ in vanished}
+    gone = {auction: cancelled for auction, _, _, _, cancelled, *_ in vanished}
     tally: dict[int, list] = {}
     for auction, state in sorted(live.items()):
         if state[2][0] < at_ms:                       # it could expire in this gap: not evidence of a sale rate

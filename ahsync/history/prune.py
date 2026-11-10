@@ -53,6 +53,7 @@ def prune(db: Database, now_ms: int, retention_days: int = 90, book_days: int = 
     deleted["volume_cover"] = db.delete_before("volume_cover", cutoff_ms // DAY_MS)
     deleted["lifetimes_d1"] = db.delete_before("lifetimes_d1", cutoff_ms // DAY_MS)
     deleted["new_listings_d1"] = db.delete_before("new_listings_d1", cutoff_ms // DAY_MS)
+    deleted["sold_prices_d1"] = db.delete_before("sold_prices_d1", cutoff_ms // DAY_MS)       # BZ52
     deleted["fetch_failures"] = db.delete_before("fetch_failures", cutoff_ms // HOUR_MS)
     deleted["observed_hours"] = db.delete_before("observed_hours", cutoff_ms // HOUR_MS)   # SRC16
     deleted["ahledger_rows"] = db.delete_before("ahledger_rows", cutoff_ms // 1000)        # its `updated` is in s

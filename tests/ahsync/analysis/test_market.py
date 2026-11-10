@@ -448,6 +448,18 @@ def bare_intel(key: int):
                      None, 0, None, None)
 
 
+def test_BZ53_sold_med7_weighs_the_weeks_sold_prices_by_units_and_leaves_older_days_out():
+    from types import SimpleNamespace
+
+    from ahsync.analysis.market import sold_median7
+    week = range(20_394, 20_401)
+    days = {20_394: {100: 60.0}, 20_399: {200: 40.0}, 20_393: {500: 500.0}}        # the 8th day back is outside it
+    assert sold_median7(SimpleNamespace(sold_prices=days), week) == (100, 100.0)
+    halves = {20_394: {100: 50.0}, 20_400: {200: 50.0}}
+    assert sold_median7(SimpleNamespace(sold_prices=halves), week) == (150, 100.0)
+    assert sold_median7(SimpleNamespace(sold_prices={}), week) == (None, 0.0)
+
+
 def test_BZ49_unseen_per_day_is_sold_per_days_unseen_share_over_the_week_of_the_id_source():
     from types import SimpleNamespace
 

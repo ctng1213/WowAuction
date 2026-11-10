@@ -14,7 +14,7 @@ from collections.abc import Iterable, Mapping
 
 
 def unseen_sales(gaps: Iterable[tuple[int, int]], first_seen: Iterable[tuple[int, int, tuple[int, int], bool]],
-                 fills: Iterable[tuple[int, int, int, tuple]],
+                 fills: Iterable[tuple[int, int, int, tuple, int]],
                  sold_endings: Mapping[tuple[int, tuple[int, int]], float]) -> dict[tuple[int, int], dict[int, float]]:
     """Estimated units sold before first sight, per gap and item.
 
@@ -23,7 +23,7 @@ def unseen_sales(gaps: Iterable[tuple[int, int]], first_seen: Iterable[tuple[int
         first_seen: (auction, key, posting gap, commodity) per listing first seen after any linked gap of the pass,
             kept or not (its posting gap may lie before the kept range while its first observed gap is kept), the
             commodity flag being the listing's own.
-        fills: (auction, key, units bought, gap) per partial fill.
+        fills: (auction, key, units bought, gap, unit price) per partial fill.
         sold_endings: (auction, gap) -> units its ending counted sold in that gap (cancels left out).
 
     Returns:
@@ -34,7 +34,7 @@ def unseen_sales(gaps: Iterable[tuple[int, int]], first_seen: Iterable[tuple[int
     """
     after = {g[0]: g for g in gaps}
     sold: dict[tuple[int, tuple[int, int]], float] = dict(sold_endings)
-    for auction, _, units, gap in fills:
+    for auction, _, units, gap, _ in fills:
         sold[(auction, gap)] = sold.get((auction, gap), 0.0) + units
     out: dict[tuple[int, int], dict[int, float]] = {}
     for auction, key, posted, commodity in first_seen:
