@@ -112,14 +112,15 @@ CLAUDE.md's, plus:
 | SM7 | Thin, new and disappearing items | thin-data rules hold; "needs N more days" |
 | SM8 | Rebuild against incremental, with a refused snapshot, a duplicated record and a skipped daily run | byte-identical document (FM72) |
 | SM9 | The buyer model 25 points optimistic from week 3, then corrected | K8 warns within 2 weeks and clears within 2 weeks; Brier per week |
-| SM10 | A gear item listed at 15 g for 30 h while its sales are 2 g posts that sell within the hour | the close against the sold price measured (fails by design today: closes are asks) |
-| SM11 | SM10's closes, but the sales really are at 15 g | post price within 5% of the true sold price (keeps the sold-price fix honest) |
+| SM10 | (rewritten 2026-11-09, `docs/plans/sold-price.md` §1c) A thin gear item selling about once a day at about 2 g, each listing seen before it sells; a 15 g listing up 30 h that expires unsold | the close and the post price near 15 g; `sold_med7` near 2 g |
+| SM11 | (rewritten 2026-11-09) SM10's item while demand rises until buyers take the 15 g listing | `sold_med7` follows the true sold price; at SP2 the post price within 5% of the true sold price (keeps the sold-price fix honest) |
 | SM12 | Raid nights planted, Tue/Thu 19–22 at 3× demand, over 4 weeks | windows found by week 3, peak ±1 h; the trust gate holds in week 1 |
 | SM13 | SM12, then the peak moves to Saturday from week 5 | the top window's rank flips by week 7 (the 2-week half-life) |
 | SM14 | A churning seller: 1,000 units nightly at 2×, all expire; real sales 20 a day | sold/day 20 ±10%; expired share ≈ 0.98; turnover never counted as sales |
 | SM15 | A thin item with true P 0.9 in a class at 0.3 | blended ≈ 0.39, marked "class est." (fails by design: borrowing drags a good thin item down; the error is reported) |
 | SM16 | Five planted regimes over 45 days with noise | the right label from day 30; a flat series mislabelled in ≤ 10% of seeds |
 | SM17 | We sell 10 a day of an item that sells 1 a day | our share of sold/day reported (fails by design: the API names no seller) |
+| SM18 | (planned, `docs/plans/sold-price.md` SP1b) A lone cheap listing under a commodity's real level, re-posted when bought | today's post price and a confirmed floor's for a grid of N and K, measured (§1.32) |
 
 ### Tier 2b: decision quality (`SD`, the report)
 
