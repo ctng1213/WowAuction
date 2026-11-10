@@ -1,4 +1,4 @@
-"""Find Claude Desktop's config and read what it says about AHSync, read-only (SPEC §3.8.1, MCP18-MCP21).
+"""Find Claude Desktop's config and read what it says about AHSync, read-only (SPEC §3.8.1, MCP18-MCP23).
 
 The Status card tells the user which file to change and what to put in it; the user makes the change. This module
 never creates, writes or renames anything of Claude's. It reads one file, at most 1 MB, and keeps only
@@ -18,6 +18,9 @@ from ahsync.engine.mcp_view import ClaudeConfig
 CONFIG_NAME = "claude_desktop_config.json"
 MAX_BYTES = 1_000_000                    # SPEC §3.8.1: never read more than 1 MB of Claude's file
 STORE_PACKAGE = re.compile(r"Claude_[a-z0-9]{13}")    # the Microsoft Store's package folder for Claude Desktop
+# The Store build's data folder, %LOCALAPPDATA%\Claude-Data\claude_<13>: its log loads the sign-in from there and
+# its README calls it "the data Claude keeps" (found on 4.23118, 2026-11-09; SPEC §3.8.1). Its case varies.
+DATA_FOLDER = re.compile(r"claude_[a-z0-9]{13}", re.IGNORECASE)
 
 
 def find_claude_config(env: Mapping[str, str], home: Path, platform: str) -> ClaudeConfig:
@@ -33,20 +36,36 @@ def find_claude_config(env: Mapping[str, str], home: Path, platform: str) -> Cla
         the "unreadable" state.
     """
     system = "windows" if platform == "win32" else "macos" if platform == "darwin" else "other"
-    folders = [f for f in candidate_folders(env, home, system) if is_dir(f)]
+    data = [f for f in data_folders(env, system) if is_dir(f)]
+    folders = data + [f for f in candidate_folders(env, home, system) if is_dir(f)]
     if not folders:
         return ClaudeConfig(system=system, state="not_found")
-    chosen = choose_folder(folders)
+    chosen = choose_folder(data or folders)          # Claude's data folder, when there is one, is the one it reads
     others = [f for f in folders if f != chosen]
     found = read_config(chosen / CONFIG_NAME)
     return ClaudeConfig(system=system, state=found.state, path=str(chosen / CONFIG_NAME), entry=found.entry,
-                        empty=found.empty,
-                        error_line=found.error_line, reason=found.reason,
-                        other_folder=str(others[0]) if others else None)
+                        empty=found.empty, error_line=found.error_line, reason=found.reason,
+                        section=found.section, other_folder=str(others[0]) if others else None)
+
+
+def data_folders(env: Mapping[str, str], system: str) -> list[Path]:
+    """The Store build's data folders, which Claude reads its config from whenever one exists (SPEC §3.8.1, MCP22).
+
+    Args:
+        env: The environment (LOCALAPPDATA).
+        system: "windows", "macos" or "other".
+
+    Returns:
+        %LOCALAPPDATA%\\Claude-Data\\claude_<13 letters or digits> on Windows (either case), each still under
+        Claude-Data once links are resolved, by name; [] elsewhere or when there is none.
+    """
+    if system != "windows" or not env.get("LOCALAPPDATA"):
+        return []
+    return linked_inside(Path(env["LOCALAPPDATA"]) / "Claude-Data", DATA_FOLDER, ())
 
 
 def candidate_folders(env: Mapping[str, str], home: Path, system: str) -> list[Path]:
-    """The fixed list of folders Claude Desktop keeps its config in (SPEC §3.8.1, MCP18).
+    """The other folders Claude Desktop keeps its config in, used when there is no data folder (SPEC §3.8.1, MCP18).
 
     Args:
         env: The environment.
@@ -63,33 +82,34 @@ def candidate_folders(env: Mapping[str, str], home: Path, system: str) -> list[P
         return []
     folders = [Path(env["APPDATA"]) / "Claude"] if env.get("APPDATA") else []
     if env.get("LOCALAPPDATA"):
-        folders += store_folders(Path(env["LOCALAPPDATA"]) / "Packages")
+        folders += linked_inside(Path(env["LOCALAPPDATA"]) / "Packages", STORE_PACKAGE,
+                                 ("LocalCache", "Roaming", "Claude"))
     return folders
 
 
-def store_folders(packages: Path) -> list[Path]:
-    """The Microsoft Store build's copies of Claude's folder, under %LOCALAPPDATA%\\Packages (SPEC §3.8.1).
+def linked_inside(root: Path, pattern: re.Pattern, tail: tuple[str, ...]) -> list[Path]:
+    """The folders root/<name>/<tail> whose name matches, and that stay under root once links are resolved.
 
     Args:
-        packages: %LOCALAPPDATA%\\Packages.
+        root: The folder to list (%LOCALAPPDATA%\\Packages or Claude-Data).
+        pattern: The whole name a subfolder must have.
+        tail: The path inside each matching subfolder.
 
     Returns:
-        <package>\\LocalCache\\Roaming\\Claude for each package named Claude_ plus 13 lowercase letters or digits
-        that still lies under Packages once links are resolved, sorted by package name; [] when Packages can't be
-        listed.
+        The folders, sorted by subfolder name; [] when root can't be listed. They may not exist.
     """
     try:
-        root = packages.resolve()
-        names = sorted(entry.name for entry in os.scandir(packages) if entry.is_dir())
+        resolved = root.resolve()
+        names = sorted(entry.name for entry in os.scandir(root) if entry.is_dir())
     except OSError:
         return []
     folders = []
     for name in names:
-        if not STORE_PACKAGE.fullmatch(name):
+        if not pattern.fullmatch(name):
             continue
-        folder = packages / name / "LocalCache" / "Roaming" / "Claude"
+        folder = root.joinpath(name, *tail)
         try:
-            if folder.resolve().is_relative_to(root):
+            if folder.resolve().is_relative_to(resolved):
                 folders.append(folder)
         except OSError:
             continue
@@ -173,11 +193,12 @@ def read_config(path: Path) -> ClaudeConfig:
         path: The file.
 
     Returns:
-        A ClaudeConfig with only state, entry, empty, error_line and reason set: "no_file" (missing, or blank with
+        A ClaudeConfig with only state, entry, empty, error_line, reason and section set: "no_file" (missing, or blank with
         empty), "unreadable" (over 1 MB, or it can't be opened or decoded), "invalid" (not JSON, too deep or too big
-        a number to parse, or a top level or mcpServers that isn't an object), "no_servers" (empty: the file is
-        `{}`), "no_entry" (empty: mcpServers is `{}`), or "entry" with the ahsync entry's command and args (an
-        empty tuple when they aren't a string and a list of strings that can be shown).
+        a number to parse, or a top level or mcpServers that isn't an object), "nested" (no top-level mcpServers,
+        but one inside the section named by section), "no_servers" (empty: the file is `{}`), "no_entry" (empty:
+        mcpServers is `{}`), or "entry" with the ahsync entry's command and args (an empty tuple when they aren't a
+        string and a list of strings that can be shown).
     """
     try:
         if not path.is_file():
@@ -203,12 +224,35 @@ def read_config(path: Path) -> ClaudeConfig:
         return ClaudeConfig(system="", state="invalid")
     servers = document.get("mcpServers")
     if servers is None:
+        section = nested_in(document)
+        if section is not None:
+            return ClaudeConfig(system="", state="nested", section=section)
         return ClaudeConfig(system="", state="no_servers", empty=not document)
     if not isinstance(servers, dict):
         return ClaudeConfig(system="", state="invalid")
     if "ahsync" not in servers:
         return ClaudeConfig(system="", state="no_entry", empty=not servers)
     return ClaudeConfig(system="", state="entry", entry=entry_command(servers["ahsync"]))
+
+
+def nested_in(document: dict) -> str | None:
+    """The top-level section an "mcpServers" was put inside by mistake, where Claude doesn't look (MCP23).
+
+    Args:
+        document: The parsed config, which has no top-level mcpServers.
+
+    Returns:
+        The first such section's name, in file order; None when there is none, or its name can't be shown as UTF-8.
+        Only the name is kept, nothing in the section.
+    """
+    for name, value in document.items():
+        if isinstance(value, dict) and "mcpServers" in value:
+            try:
+                name.encode("utf-8")
+            except UnicodeEncodeError:
+                return None
+            return name
+    return None
 
 
 def entry_command(entry: object) -> tuple[str, ...]:

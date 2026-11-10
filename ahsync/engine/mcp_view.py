@@ -30,6 +30,11 @@ SET_UP = ("✓ Claude Desktop is set up for AHSync. If you just changed the file
           "reopen it.")
 QUIT_HOW = {"windows": "right-click its icon by the clock, then Quit", "macos": "Claude → Quit Claude"}
 NOTEPAD = " In Notepad, choose Save as type: All files, so it isn't saved as .txt."
+# MC3c: Claude saves its own settings into this file, so an edit made while it runs can be saved over.
+QUIT_FIRST = "Quit Claude Desktop completely first ({how}). It saves its settings into this file while it runs."
+CHECK = "Press Check again below. This card should then say ✓ Claude Desktop is set up for AHSync."
+REOPEN = "Reopen Claude Desktop. In a new chat, AHSync is listed among Claude's connectors."
+FIRST_BRACE = "right after the file's very first { (its first character)"
 
 
 @dataclass(frozen=True)
@@ -40,13 +45,14 @@ class ClaudeConfig:
     """
 
     system: str                        # "windows", "macos" or "other"
-    state: str                         # not_found, no_file, no_servers, no_entry, entry, invalid, unreadable
+    state: str                         # not_found, no_file, no_servers, nested, no_entry, entry, invalid, unreadable
     path: str | None = None            # claude_desktop_config.json's full path; None when not_found
     entry: tuple[str, ...] = ()        # state "entry": the ahsync entry's command and args; () when malformed
     empty: bool = False                # no_file: the file exists but is blank; no_servers: it is {}; no_entry:
                                        # mcpServers is {} (so there is no entry before ours to put a comma after)
     error_line: int | None = None      # state "invalid": the line the JSON breaks on; None for a wrong-kind section
     reason: str | None = None          # state "unreadable": why, e.g. "it's over 1 MB"
+    section: str | None = None         # state "nested": the top-level section mcpServers was put inside (MC3c)
     other_folder: str | None = None    # another Claude folder that exists but isn't the one used
 
 
@@ -157,7 +163,7 @@ def _step(text: str, code: str | None = None) -> dict:
 
 
 def desktop_setup(found: ClaudeConfig, command: tuple[str, ...]) -> dict:
-    """The Claude Desktop tab: which file to change and exactly how (SPEC §3.8.1 table, MCP19).
+    """The Claude Desktop tab: which file to change and exactly how (SPEC §3.8.1 table, MCP19, MCP23).
 
     Args:
         found: What AHSync found of Claude's config.
@@ -165,64 +171,80 @@ def desktop_setup(found: ClaudeConfig, command: tuple[str, ...]) -> dict:
 
     Returns:
         {"status": "ok" | "todo" | "warn" | "missing", "message", "steps": [{"text", "code"}], "note"}; every state
-        but not_found has the file's full path as a step. Nothing of the file but the ahsync entry's command is used.
+        but not_found has the file's full path as a step. An edit is: quit Claude, open the file, the change, Check
+        again, reopen Claude. Nothing of the file but the ahsync entry's command and a section's name is used.
     """
     if found.state == "not_found":
         return {"status": "missing", "message": NOT_FOUND, "steps": [], "note": None}
-    entry = bridge_entry(command)
-    path, status, steps = found.path, "todo", []
-    quit_step = _step(f"Quit Claude Desktop completely ({QUIT_HOW.get(found.system, 'quit it from its menu')}), then "
-                      "reopen it. In a new chat, AHSync is listed among Claude's connectors.")
-    if found.state == "no_file" and found.empty:
-        message = "Claude Desktop's config file is empty. Fill it in:"
-        steps = [_step("Open this file:", path),
-                 _step("Paste this into it and save:", desktop_snippet(command)), quit_step]
-    elif found.state == "no_file":
-        message = "Claude Desktop has no config file yet. Create it:"
-        notepad = NOTEPAD if found.system == "windows" else ""
-        steps = [_step("Create this file:", path), _step("Paste this into it and save." + notepad,
-                                                          desktop_snippet(command)), quit_step]
-    elif found.state == "no_servers" and found.empty:
-        message = "Add AHSync to Claude Desktop's config file:"
-        steps = [_step("Open this file:", path),
-                 _step("Replace everything in it with this, then save:", desktop_snippet(command)), quit_step]
-    elif found.state == "no_servers":
-        message = "Add AHSync to Claude Desktop's config file:"
-        steps = [_step("Open this file:", path),
-                 _step("Add this just before its last }, and put a comma after the entry before it, then save:",
-                       member_snippet("mcpServers", {"ahsync": entry})), quit_step]
-    elif found.state == "no_entry" and found.empty:
-        message = "Add AHSync to Claude Desktop's config file:"
-        steps = [_step("Open this file:", path),
-                 _step('Put this between the { and } after "mcpServers":, then save:',
-                       member_snippet("ahsync", entry)), quit_step]
-    elif found.state == "no_entry":
-        message = "Add AHSync to Claude Desktop's config file:"
-        steps = [_step("Open this file:", path),
-                 _step('Add this just before the } that closes "mcpServers", and put a comma after the entry '
-                       "before it, then save:", member_snippet("ahsync", entry)), quit_step]
-    elif found.state == "entry" and _same_bridge(found.entry, command, found.system):
+    path, status = found.path, "todo"
+    reopen = _step(REOPEN)
+    if found.state == "entry" and _same_bridge(found.entry, command, found.system):
         status, message, steps = "ok", SET_UP, [_step("The file:", path)]
-    elif found.state == "entry":
-        started = " ".join(found.entry) if found.entry else "an entry AHSync can't read"
-        message = f"Claude Desktop's config starts a different program for AHSync: {started}"
-        steps = [_step("Open this file:", path),
-                 _step('Replace its "ahsync" entry with this, keeping the comma after it if there was one, then '
-                       "save:", member_snippet("ahsync", entry)), quit_step]
     elif found.state == "invalid":
         near = f" near line {found.error_line}" if found.error_line is not None else ""
         status = "warn"
         message = (f"This file isn't valid JSON{near}, so Claude Desktop can't read it either. Fix it, save, then "
                    "press Check again.")
         steps = [_step("The file:", path)]
-    else:
+    elif found.state == "unreadable":
         status = "warn"
         message = f'AHSync couldn\'t read this file ({found.reason}). It needs this entry inside "mcpServers":'
         steps = [_step("The file:", path)] if path else []      # no path: the search itself failed
-        steps += [_step("The entry:", member_snippet("ahsync", entry)), quit_step]
+        steps += [_step("The entry:", member_snippet("ahsync", bridge_entry(command))), reopen]
+    else:
+        message, opening, change = _edit(found, command)
+        status = "warn" if found.state == "nested" else status
+        quit_first = _step(QUIT_FIRST.format(how=QUIT_HOW.get(found.system, "quit it from its menu")))
+        steps = [quit_first, _step(opening, path), *change, _step(CHECK), reopen]
     note = (f"Claude also has a folder at {found.other_folder}; this uses the one Claude used last."
             if found.other_folder else None)
     return {"status": status, "message": message, "steps": steps + [_step(WEB_SEARCH)], "note": note}
+
+
+def _edit(found: ClaudeConfig, command: tuple[str, ...]) -> tuple[str, str, list[dict]]:
+    """The change to make for a file that needs one (SPEC §3.8.1 table; MC3c: every paste says exactly where).
+
+    Args:
+        found: A config in state no_file, no_servers, nested, no_entry, or entry with another program.
+        command: This install's bridge.
+
+    Returns:
+        (the tab's message, the step naming the file, the change's steps). Each, followed literally, gives valid
+        JSON: a paste after a { carries its own comma when something follows it.
+    """
+    entry = bridge_entry(command)
+    add = "Add AHSync to Claude Desktop's config file:"
+    servers = member_snippet("mcpServers", {"ahsync": entry})
+    if found.state == "no_file" and found.empty:
+        return ("Claude Desktop's config file is empty. Fill it in:", "Open this file:",
+                [_step("Paste this into it and save:", desktop_snippet(command))])
+    if found.state == "no_file":
+        notepad = NOTEPAD if found.system == "windows" else ""
+        return ("Claude Desktop has no config file yet. Create it:", "Create this file:",
+                [_step("Paste this into it and save." + notepad, desktop_snippet(command))])
+    if found.state == "no_servers" and found.empty:
+        return add, "Open this file:", [_step("Replace everything in it with this, then save:",
+                                              desktop_snippet(command))]
+    if found.state == "no_servers":
+        return add, "Open this file:", [_step(f"Add this {FIRST_BRACE}, then save. It goes at the top level, not "
+                                              'inside another section such as "preferences":', servers + ",")]
+    if found.state == "nested":
+        return (f'The "mcpServers" section is inside "{found.section}", where Claude Desktop doesn\'t look for it. '
+                "Move it to the top level:", "Open this file:",
+                [_step(f'Cut the whole "mcpServers": {{ … }} section out of "{found.section}", with the one comma '
+                       "that joined it to the entry beside it."),
+                 _step(f"Paste it {FIRST_BRACE}, type a comma after it, then save. Its \"ahsync\" entry should "
+                       "read:", member_snippet("ahsync", entry))])
+    if found.state == "no_entry" and found.empty:
+        return add, "Open this file:", [_step('Put this between the { and } after "mcpServers":, then save:',
+                                              member_snippet("ahsync", entry))]
+    if found.state == "no_entry":
+        return add, "Open this file:", [_step('Add this right after the { that follows "mcpServers":, then save:',
+                                              member_snippet("ahsync", entry) + ",")]
+    started = " ".join(found.entry) if found.entry else "an entry AHSync can't read"
+    return (f"Claude Desktop's config starts a different program for AHSync: {started}", "Open this file:",
+            [_step('Replace its "ahsync" entry with this, keeping the comma after it if there was one, then save:',
+                   member_snippet("ahsync", entry))])
 
 
 def code_snippet(command: tuple[str, ...]) -> str:

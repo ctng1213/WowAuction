@@ -39,7 +39,7 @@ def test_MCP1_running_shows_where_it_runs_its_memory_its_data_and_the_setup():
                                                  "code": f"claude mcp add ahsync -- {WINDOWS[0]}"}
     assert len(card["ask"]) == 3
     found = replace(RUNNING, claude=ClaudeConfig(system="windows", state="no_file", path=PATH))
-    assert mcp_card(found)["setup"]["desktop"]["steps"][0] == {"text": "Create this file:", "code": PATH}
+    assert mcp_card(found)["setup"]["desktop"]["steps"][1] == {"text": "Create this file:", "code": PATH}
 
 
 def codes(setup: dict) -> list:
@@ -55,41 +55,49 @@ def test_MCP19_not_found_asks_to_install_claude_and_names_no_file():
 
 def test_MCP19_no_file_gives_the_path_and_the_whole_config():
     setup = desktop_setup(ClaudeConfig(system="windows", state="no_file", path=PATH), WINDOWS)
-    assert setup["status"] == "todo" and codes(setup)[0] == PATH
-    assert json.loads(codes(setup)[1]) == {"mcpServers": {"ahsync": {"command": WINDOWS[0]}}}
-    assert "Save as type: All files" in setup["steps"][1]["text"]
-    assert setup["steps"][2]["text"].startswith("Quit Claude Desktop completely (right-click its icon by the clock")
-    assert setup["steps"][3]["text"].startswith("Turn on web search")
+    assert setup["status"] == "todo" and codes(setup)[1] == PATH
+    assert json.loads(codes(setup)[2]) == {"mcpServers": {"ahsync": {"command": WINDOWS[0]}}}
+    assert "Save as type: All files" in setup["steps"][2]["text"]
+    assert [s["text"] for s in setup["steps"][:2]] == [
+        "Quit Claude Desktop completely first (right-click its icon by the clock, then Quit). It saves its settings "
+        "into this file while it runs.", "Create this file:"]
+    assert [s["text"] for s in setup["steps"][3:]] == [
+        "Press Check again below. This card should then say ✓ Claude Desktop is set up for AHSync.",
+        "Reopen Claude Desktop. In a new chat, AHSync is listed among Claude's connectors.",
+        "Turn on web search in Claude, so it can check Wowhead for fishing levels and farming spots."]
     mac = desktop_setup(ClaudeConfig(system="macos", state="no_file", path="/Users/u/c.json"), ("/A", "--mcp"))
-    assert "Notepad" not in mac["steps"][1]["text"] and "Claude → Quit Claude" in mac["steps"][2]["text"]
+    assert "Notepad" not in mac["steps"][2]["text"] and "Claude → Quit Claude" in mac["steps"][0]["text"]
 
 
 def test_MCP19_a_file_without_mcpservers_gets_the_block_to_add():
     setup = desktop_setup(ClaudeConfig(system="windows", state="no_servers", path=PATH), WINDOWS)
-    assert setup["steps"][1]["text"] == ("Add this just before its last }, and put a comma after the entry before "
-                                         "it, then save:")
-    assert json.loads("{" + codes(setup)[1] + "}") == {"mcpServers": {"ahsync": {"command": WINDOWS[0]}}}
-    # followed literally on {"a": 1}: the block before the last }, a comma after "a"'s value
-    assert json.loads('{"a": 1,\n' + codes(setup)[1] + "}")["mcpServers"]["ahsync"]["command"] == WINDOWS[0]
+    assert setup["steps"][2]["text"] == ("Add this right after the file's very first { (its first character), then "
+                                         'save. It goes at the top level, not inside another section such as '
+                                         '"preferences":')
+    # followed literally on {"a": 1} (the snippet carries its own comma): a top-level mcpServers beside "a"
+    assert json.loads("{" + codes(setup)[2] + '\n"a": 1}') == {"mcpServers": {"ahsync": {"command": WINDOWS[0]}},
+                                                              "a": 1}
 
 
 def test_MCP19_mcpservers_without_ahsync_gets_the_entry_to_add():
     setup = desktop_setup(ClaudeConfig(system="windows", state="no_entry", path=PATH), ("/A", "--mcp"))
-    assert setup["steps"][1]["text"].startswith('Add this just before the } that closes "mcpServers", and put a comma')
-    assert json.loads("{" + codes(setup)[1] + "}") == {"ahsync": {"command": "/A", "args": ["--mcp"]}}
+    assert setup["steps"][2]["text"] == 'Add this right after the { that follows "mcpServers":, then save:'
+    # followed literally on {"mcpServers": {"other": {}}}
+    assert json.loads('{"mcpServers": {' + codes(setup)[2] + '"other": {}}}') == {"mcpServers": {
+        "ahsync": {"command": "/A", "args": ["--mcp"]}, "other": {}}}
 
 
 def test_MCP19_empty_objects_ask_for_no_comma():
     blank = desktop_setup(ClaudeConfig(system="windows", state="no_file", path=PATH, empty=True), WINDOWS)
-    assert (blank["message"], blank["steps"][0]["text"], blank["steps"][1]["text"]) == (
+    assert (blank["message"], blank["steps"][1]["text"], blank["steps"][2]["text"]) == (
         "Claude Desktop's config file is empty. Fill it in:", "Open this file:", "Paste this into it and save:")
     braces = desktop_setup(ClaudeConfig(system="windows", state="no_servers", path=PATH, empty=True), WINDOWS)
-    assert braces["steps"][1]["text"] == "Replace everything in it with this, then save:"
-    assert json.loads(codes(braces)[1]) == {"mcpServers": {"ahsync": {"command": WINDOWS[0]}}}
+    assert braces["steps"][2]["text"] == "Replace everything in it with this, then save:"
+    assert json.loads(codes(braces)[2]) == {"mcpServers": {"ahsync": {"command": WINDOWS[0]}}}
     servers = desktop_setup(ClaudeConfig(system="windows", state="no_entry", path=PATH, empty=True), WINDOWS)
-    assert servers["steps"][1]["text"] == 'Put this between the { and } after "mcpServers":, then save:'
+    assert servers["steps"][2]["text"] == 'Put this between the { and } after "mcpServers":, then save:'
     # followed literally on {"mcpServers": {}}: the entry between the braces, no comma anywhere
-    assert json.loads('{"mcpServers": {' + codes(servers)[1] + "}}") == {"mcpServers": {"ahsync": {
+    assert json.loads('{"mcpServers": {' + codes(servers)[2] + "}}") == {"mcpServers": {"ahsync": {
         "command": WINDOWS[0]}}}
 
 
@@ -97,8 +105,8 @@ def test_MCP19_an_old_entry_is_replaced_and_the_right_one_is_set_up():
     old = desktop_setup(ClaudeConfig(system="windows", state="entry", path=PATH, entry=("C:\\Old\\ahsync-mcp.exe",)),
                         WINDOWS)
     assert old["message"] == "Claude Desktop's config starts a different program for AHSync: C:\\Old\\ahsync-mcp.exe"
-    assert json.loads("{" + codes(old)[1] + "}") == {"ahsync": {"command": WINDOWS[0]}}
-    assert old["steps"][1]["text"] == ('Replace its "ahsync" entry with this, keeping the comma after it if there '
+    assert json.loads("{" + codes(old)[2] + "}") == {"ahsync": {"command": WINDOWS[0]}}
+    assert old["steps"][2]["text"] == ('Replace its "ahsync" entry with this, keeping the comma after it if there '
                                        "was one, then save:")
     unreadable = desktop_setup(ClaudeConfig(system="windows", state="entry", path=PATH, entry=()), WINDOWS)
     assert unreadable["message"].endswith("an entry AHSync can't read")
@@ -130,6 +138,26 @@ def test_MCP18_the_other_folder_is_named_in_a_note():
     found = ClaudeConfig(system="windows", state="no_file", path=PATH, other_folder="C:\\Users\\you\\AppData\\Roaming\\Claude")
     assert desktop_setup(found, WINDOWS)["note"] == ("Claude also has a folder at C:\\Users\\you\\AppData\\Roaming\\Claude; "
                                                      "this uses the one Claude used last.")
+
+
+def test_MCP23_a_section_nested_by_mistake_is_moved_to_the_top_level():
+    setup = desktop_setup(ClaudeConfig(system="windows", state="nested", path=PATH, section="preferences"), WINDOWS)
+    assert (setup["status"], setup["message"]) == ("warn", 'The "mcpServers" section is inside "preferences", where '
+                                                   "Claude Desktop doesn't look for it. Move it to the top level:")
+    assert [s["text"] for s in setup["steps"][1:4]] == [
+        "Open this file:",
+        'Cut the whole "mcpServers": { … } section out of "preferences", with the one comma that joined it to the '
+        "entry beside it.",
+        "Paste it right after the file's very first { (its first character), type a comma after it, then save. Its "
+        '"ahsync" entry should read:']
+    assert setup["steps"][0]["text"].startswith("Quit Claude Desktop completely first")
+    assert codes(setup)[1:4] == [PATH, None, member_snippet("ahsync", {"command": WINDOWS[0]})]
+    # followed literally on the user's file of 2026-11-09: cut (with its comma), paste after the first {, a comma
+    section = '"mcpServers": {\n' + codes(setup)[3] + "\n}"
+    before = '{"coworkUserFilesPath": "x", "preferences": {"sidebarMode": "chat", ' + section + "}}"
+    after = "{" + section + "," + before[1:].replace(", " + section, "")
+    assert json.loads(after) == {"mcpServers": {"ahsync": {"command": WINDOWS[0]}}, "coworkUserFilesPath": "x",
+                                 "preferences": {"sidebarMode": "chat"}}
 
 
 def test_MCP4_a_failed_enable_says_why_and_offers_enable_again():
