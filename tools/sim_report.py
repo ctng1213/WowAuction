@@ -20,13 +20,13 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path[:0] = [str(Path(__file__).resolve().parents[1]), str(Path(__file__).resolve().parent)]
 
-from sim import decision, decision_crafts, decision_gathering, inference  # noqa: E402
+from sim import decision, decision_crafts, decision_gathering, inference, sold_prices  # noqa: E402
 from sim.inference import Measure  # noqa: E402
 from sim.scorers import GOLD, Score  # noqa: E402
 
 ROWS: dict[str, Callable[[Path, int], list[Measure]]] = {
     "SM1": inference.sm1, "SM2": inference.sm2, "SM3": inference.sm3, "SM4": inference.sm4,
-    "SM5": inference.sm5, "SM10": inference.sm10, "SM11": inference.sm11}
+    "SM5": inference.sm5, **sold_prices.SOLD_PRICE_ROWS}
 
 MARKS = {True: "met", False: "**missed**", None: "not exercised"}   # a decision line's mark
 

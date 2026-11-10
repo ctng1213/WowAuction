@@ -21,7 +21,7 @@ from ahsync.engine import sellprob
 from ahsync.engine.volume import MAX_GAP_MS, Lifetimes, VolumePrior, lifetimes, posterior_rate
 from ahsync.intel.contract import MarketIntelligence
 from lifetimes_report import relist_estimate
-from sim.market import DAY_MS, HOUR_MS, Item, Planted, World
+from sim.market import DAY_MS, HOUR_MS, Item, World
 from sim.runner import Run, market_books, simulate
 from sim.truth import Truth
 
@@ -521,55 +521,3 @@ def sold_price_truth(truth: Truth, key: int, from_ms: int, to_ms: int) -> int | 
         if seen >= middle:
             return price
     return None  # unreachable: seen reaches total
-
-
-def sm10_world(seed: int, fair: int) -> World:
-    """SM10/SM11's market: one gear item listed at 15 g for 30 h (planted), and sellers who post near `fair`
-    to buyers who buy within the hour.
-
-    Args:
-        seed: The world's seed.
-        fair: The other sellers' and the buyers' price, copper (2 g for SM10, about 15 g for SM11).
-
-    Returns:
-        The World, 2 days.
-    """
-    item = gear(6585, "Scouting Gloves", fair, 72, 24, price_mix=((1.0, 1.0, 1.0),), anchor=1.0, buyer_level=1.3,
-                buyer_spread=0.05)
-    planted = (Planted(START_MS + HOUR_MS, item.key, 1, 15 * GOLD, 24),
-               Planted(START_MS + 25 * HOUR_MS, item.key, 1, 15 * GOLD, 24, START_MS + 31 * HOUR_MS))
-    return World(seed, START_MS, 2, (item,), planted=planted)
-
-
-def sm10(folder: Path, seed: int = 1, fair: int = 2 * GOLD, row: str = "SM10") -> list[Measure]:
-    """SM10: the hourly closes are asks, so a 15 g listing sets them while the item really sells at 2 g.
-
-    Args:
-        folder: An empty folder for the run.
-        seed: The world's seed.
-        fair: The real sales' price, copper.
-        row: The scenario ID (SM11 runs the same world at 15 g).
-
-    Returns:
-        med7 and the post price against the true sold price over the run (reported: fails by design while
-        closes are asks).
-    """
-    run = simulate(sm10_world(seed, fair), folder)
-    i = run.documents[-1].items[6585]
-    sold = sold_price_truth(run.truth, 6585, START_MS, run.snapshots[-1])
-    return [Measure(row, "med7 against the true sold price", i.med7, sold, "reported"),
-            Measure(row, "post price against the true sold price", i.post_price, sold, "reported")]
-
-
-def sm11(folder: Path, seed: int = 1) -> list[Measure]:
-    """SM11: SM10's 15 g closes, but the item really sells at about 15 g; the post price must hold.
-
-    Args:
-        folder: An empty folder for the run.
-        seed: The world's seed.
-
-    Returns:
-        SM10's measures, the post price's band ±5% of the true sold price.
-    """
-    med7, post = sm10(folder, seed, 15 * GOLD - 500, "SM11")
-    return [med7, Measure("SM11", post.what, post.engine, post.truth, "±5%", within(post.engine, post.truth, 0.05))]

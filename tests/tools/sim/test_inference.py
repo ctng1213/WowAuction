@@ -8,8 +8,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
 
-from sim.inference import (DAY_MS, HOUR_MS, Measure, planned_blend, sm1, sm2, sm3, sm4, sm5, sm10,  # noqa: E402
-                           sm11, sold_price_truth, window_gaps, within)
+from sim.inference import (DAY_MS, HOUR_MS, Measure, planned_blend, sm1, sm2, sm3, sm4, sm5,  # noqa: E402
+                           sold_price_truth, window_gaps, within)
 from sim.truth import Event, Truth  # noqa: E402
 
 DAY0 = 1_793_923_200_000
@@ -94,13 +94,3 @@ def test_SM5_the_tier_blend_moves_from_the_model_to_the_evidence_as_listings_gro
     assert weight.passed and weight.engine == pytest.approx(0.5) and weight.truth == pytest.approx(0.9)
     [t1] = [m for m in measures if m.what.startswith("tier 1 sell-through")]
     assert within(t1.engine, t1.truth, points=0.05)
-
-
-def test_SM10_closes_are_asks_so_a_15g_listing_sets_them_while_sales_are_at_2g(tmp_path):
-    med7, _ = sm10(tmp_path)                                          # fails by design until the sold-price fix
-    assert med7.truth == 20_000 and med7.engine == 150_000
-
-
-def test_SM11_when_sales_really_are_at_15g_the_post_price_holds(tmp_path):
-    _, post = sm11(tmp_path)
-    assert post.passed and post.truth == 149_500
