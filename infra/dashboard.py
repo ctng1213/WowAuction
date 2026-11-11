@@ -12,6 +12,9 @@ METRIC_NAMESPACE = "WowAuction"      # ahcloud.aws.NAMESPACE, as in market_stack
 WIDTH = 24                           # a dashboard row's width in grid units
 LOG_QUERY = ("fields @timestamp, @message", "filter @message like /WARNING|ERROR/", "sort @timestamp desc",
              "limit 50")
+# The runs' profile lines (BZ64, BZ65): JSON, so Logs Insights finds their fields; newest first
+PROFILE_QUERY = ("fields @timestamp, profile, outcome, total_ms, @message", "filter ispresent(profile)",
+                 "sort @timestamp desc", "limit 50")
 
 
 def dashboard_name(market: str) -> str:
@@ -99,6 +102,9 @@ def add_dashboard(scope: Construct, market: str, alarms: list[cloudwatch.Alarm],
     rows.append([cloudwatch.LogQueryWidget(title="Analyzer and Ingest warnings and errors", width=WIDTH, height=8,
                                            log_group_names=[group.log_group_name for group in log_groups],
                                            query_lines=list(LOG_QUERY))])
+    rows.append([cloudwatch.LogQueryWidget(title="Run profiles: each stage's ms and memory (MB)", width=WIDTH,
+                                           height=8, log_group_names=[group.log_group_name for group in log_groups],
+                                           query_lines=list(PROFILE_QUERY))])
     rows.append([cloudwatch.TextWidget(width=WIDTH, height=3, markdown=(
         "**Recovering the cloud state**: see the section \"Recovering the cloud state (rebuild)\" in `infra/README.md`. "
         "The public status page (`status.html`) reads S3, so it also counts runs made locally; "

@@ -231,6 +231,7 @@ def handler(event: Any, context: Any) -> dict:
         answer = {"mode": mode, "state": outcome.state, "observations_until_ms": outcome.observations_until_ms}
     else:
         outcome = run_daily(data, intel, market, WORKDIR)
+        print(outcome.profile)                          # one JSON log line for Logs Insights (BZ65)
         answer = {"mode": mode, "state": outcome.state, "built_ms": outcome.built_ms, "items": outcome.items}
     finished_ms = clock.now_ms()
     emit(market, f"{mode}_{outcome.state}", finished_ms)
