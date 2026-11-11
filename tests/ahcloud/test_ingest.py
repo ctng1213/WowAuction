@@ -473,18 +473,58 @@ def test_the_compact_store_keeps_every_snapshot_a_replay_reads():
     assert COMPACT_DAYS * DAY_MS >= max(2 * DAY_MS + LIFETIME_LOOKBACK_MS, DAY_MS + LIFETIME_LOOKBACK_MS)
 
 
-def test_BZ67_the_download_reaches_back_from_the_newest_book_not_an_empty_house(tmp_path, monkeypatch):
+def downloads(monkeypatch) -> list[int]:
+    """Record where each run's compact download starts (the downloads still happen)."""
+    asked: list[int] = []
+    real = ingest.download_compact
+    monkeypatch.setattr(ingest, "download_compact", lambda data, root, market, first, last: (
+        asked.append(first), real(data, root, market, first, last)))
+    return asked
+
+
+def without_state(data) -> None:
+    """The uploaded history as the batch pass left it: no carried state (the cutover, BZ67)."""
+    path = data.root / DB_KEY
+    db = Database.open(path, 0, None)
+    with db.transaction():
+        db.clear_life_state(M, "blizzard")
+    db.close()
+
+
+def test_BZ56_a_scheduled_run_downloads_the_database_and_the_new_raw_only(tmp_path, monkeypatch):
+    data, _ = stores(tmp_path, (A_MS, SNAP_A))
+    ingest_run(data, tmp_path)
+    asked = downloads(monkeypatch)
+    data.put(raw_key(M, B_MS), SNAP_B)
+    assert ingest_run(data, tmp_path).ingested == 1 and asked == []            # D2: no compact file read
+
+
+def test_BZ67_the_cutover_downloads_from_the_newest_book_not_an_empty_house(tmp_path, monkeypatch, caplog):
     empty_ms = A_MS + DAY_MS                                     # the newest raw is an empty house, a day after A
     b_ms = empty_ms + HOUR
     data, _ = stores(tmp_path, (A_MS, SNAP_A), (empty_ms, empty_house(empty_ms)))
     ingest_run(data, tmp_path)                                   # the history: A's book, and the empty one remembered
+    without_state(data)
     data.put(raw_key(M, b_ms), shifted(SNAP_B, b_ms))
-    asked = []
-    real = ingest.download_compact
-    monkeypatch.setattr(ingest, "download_compact", lambda data, root, market, first, last: (
-        asked.append(first), real(data, root, market, first, last)))
+    asked = downloads(monkeypatch)
+    caplog.set_level("INFO", logger="ahcloud.ingest")
     ingest_run(data, tmp_path)
     assert asked == [bootstrap_window(A_MS)[0]]                  # from A, the state's newest, not the empty house
+    assert any("replay: downloading the compact snapshots" in r.getMessage() for r in caplog.records)
+    asked.clear()
+    data.put(raw_key(M, b_ms + HOUR), shifted(SNAP_C, b_ms + HOUR))
+    ingest_run(data, tmp_path)
+    assert asked == []                                            # the state is carried from then on
+
+
+def test_BZ66_a_late_snapshot_downloads_from_66_hours_before_it(tmp_path, monkeypatch):
+    data, _ = stores(tmp_path, (A_MS, SNAP_A), (C_MS, SNAP_C))
+    ingest_run(data, tmp_path)
+    data.put(raw_key(M, B_MS), SNAP_B)                           # older than C, stored after it
+    data.put(STATE_KEY, b"{}")                                   # (past the early exit, as BZ13)
+    asked = downloads(monkeypatch)
+    ingest_run(data, tmp_path)
+    assert asked == [B_MS - LIFETIME_LOOKBACK_MS]
 
 
 def test_BZ64_each_ingest_run_profiles_its_stages_in_one_log_line(tmp_path):

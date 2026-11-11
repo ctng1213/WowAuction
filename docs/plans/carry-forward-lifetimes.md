@@ -67,6 +67,15 @@ The user, on what a run reads: **the 66 h is the repair path's, never the daily 
 
     It also noted that the damage check counts rows, so a corrupted row with an intact count, or a damaged ledger, would fold silently; accepted as designed. After the fixes the gate was rerun: the Linux cutover check found 0 differences in 1,818,755 rows; the Mac closed-day check found every daily row equal and only the Lambda-written 23:00 hour different, as before.
 
+### Decided by Opus during CF3 (2026-11-11)
+
+29. **Whether a run replays is decided before it downloads** (`ahcloud.ingest.replay_from`), with the same tests the lifetimes apply: a state missing, damaged (its counts) or behind the history's newest book → the bootstrap window; a pending snapshot older than that book → 66 h before it. Otherwise no compact file is read (D2's rule; BZ56 restated, tested: a scheduled run downloads nothing but the database and the new raw). The download logs one line.
+30. **The remote compact index is written from the remote listing** after the upload and the deletions (FM83 restated): a run's local store now holds only what it downloaded and wrote, so its local index no longer lists the store.
+31. **The rebuild cap is 15** (D5, from CF0's worst case; CF2's measured step keeps it: 27 s book + about 8 s lifetimes a snapshot, after about 30 s fixed, under 10 minutes). Revisited with the week's profile lines.
+32. **The alarms are unchanged**: `IngestSlowRun` at 12 minutes is now far above a normal run (about 1 minute) and above the cutover's expected 9–10 minutes, still below the 15-minute timeout; `HistoryBehind` (3 h for 3 h) still means a stall. Revisited with the week's runs if the cutover alarms.
+33. **SM19 needed a late snapshot in the simulator**: `tools/sim/runner.RunSettings.late` (snapshot number → stored after that many later ones). SM19 holds a snapshot across a daily run, checks the late replay ran (it counts `replay_late` calls: its log line doesn't reach pytest's `caplog` inside the simulator; it runs once, for the held snapshot), then capped runs 12, 5 and 1 and a rebuild give byte-identical documents.
+34. **D4's dry run is documented in `infra/README.md`** (Deploy): copy the history and the compact store read-only, run `tools/carry_check.py` in a `python:3.12-slim` container, expect `"differences": 0`; then the first run rebuilds the state, with the local run as the fallback.
+
 ### Facts measured (2026-11-11)
 
 **The profile line** (15:46 UTC, 1 snapshot, 4,096 MB):
@@ -278,6 +287,8 @@ Gate: every existing lifetime scenario unchanged, VI8 passing, 100% engine branc
 The whole-plan snapshot does not move (the desktop is untouched).
 
 ### CF3: the cloud (Opus; SM19 and the README are routine)
+
+**Code built 2026-11-11** (§1 items 29–34): steps 1–5 below; the deploy (6) and the week-later sizing (7) follow with the user.
 
 1. `ahcloud/ingest.py`: no compact download in steady state, replay on demand, the bootstrap, the caps (D5).
 2. SM19 and the SM8 extension; BZ56, BZ57 and BZ64's meaning restated.

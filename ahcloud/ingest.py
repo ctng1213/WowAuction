@@ -46,8 +46,9 @@ STATE_KEY = "state/ingest.json"
 SRC = "blizzard"
 DAY_MS, HOUR_MS, MINUTE_MS = 86_400_000, 3_600_000, 60_000
 MAX_SNAPSHOTS_PER_RUN = 12              # raw objects per scheduled run, about 12 h of market time (plan decision 3)
-# A rebuild's runs take more: provisional until IS0 measures a snapshot's cost on Lambda (plan §3 IS0).
-REBUILD_SNAPSHOTS_PER_RUN = 60
+# A rebuild's runs take more: as many as fit in 10 minutes at the worst measured cost, about 35 s a snapshot (its
+# book 27 s and its lifetimes about 8 s) after about 30 s of download, catalog and upload (carry-forward plan D5, CF0).
+REBUILD_SNAPSHOTS_PER_RUN = 15
 CLOUD_BOOK_DAYS = 2                     # the cloud needs only the newest book and the day's pairs (SPEC §2.4)
 COMPACT_DAYS = 5                        # compact snapshots kept: a replay (a late snapshot, at most a day old, or the
                                         # state's rebuild) reads LIFETIME_LOOKBACK_MS (66 h) before the first gap it writes:
@@ -288,7 +289,10 @@ def _ingest(db: Database, data: Store, client: BlizzardClient, market: str, run:
 
 def _ingest_batch(db: Database, data: Store, market: str, store: SnapshotStore,
                   work: tuple[_Run, list[str], int]) -> tuple[list[int], list[int]]:
-    """Download the compact window, then ingest the batch, each snapshot's book and lifetimes timed as stages.
+    """Ingest the batch, each snapshot's book and lifetimes timed as stages; the compact snapshots a replay needs first.
+
+    A scheduled run reads only the database (the carried state is in it) and the new raw (D2's rule): compact files
+    are downloaded only when a replay will run (`replay_from`), and the line logged says so.
 
     Args:
         db: The history database.
@@ -301,16 +305,40 @@ def _ingest_batch(db: Database, data: Store, market: str, store: SnapshotStore,
         (the times refused, the times of empty houses), both remembered in meta.
     """
     run, batch, last = work
-    if run.etag is not None and not run.fresh:                       # a rebuild starts the compact store afresh
-        with run.profile.stage("download"):        # a late snapshot's replay, or the state's rebuild (BZ66, BZ67)
-            newest = db.newest_scan_at(market, SRC) or last      # an empty house has no book: not the state's
-            first = min(key_time_ms(batch[0]) - LIFETIME_LOOKBACK_MS, bootstrap_window(newest)[0])
+    first = replay_from(db, market, batch) if run.etag is not None and not run.fresh else None   # a rebuild: none
+    if first is not None:
+        log.info("replay: downloading the compact snapshots from %s", first)
+        with run.profile.stage("download"):
             download_compact(data, store.root, market, first, last)
     refused, empty = ingest_pending(db, data, store, market, (batch, run.profile))
     with run.profile.stage("ingest"):
         remember(db, REFUSED, refused)
         remember(db, EMPTY, empty)
     return refused, empty
+
+
+def replay_from(db: Database, market: str, batch: list[str]) -> int | None:
+    """The oldest compact snapshot the batch's lifetimes will replay from, or None when none replays (SPEC §2.4).
+
+    The same tests `collect.observations.advance_lifetimes` makes: a state missing, damaged or behind the history's
+    newest book is rebuilt (`bootstrap_window`, BZ67, FM86); a snapshot older than that book is late (66 h before
+    it, BZ66). An empty house leaves no book, so its time is never the state's.
+
+    Args:
+        db: The history database.
+        market: Market id.
+        batch: The raw keys to ingest, oldest first.
+
+    Returns:
+        UTC ms, or None.
+    """
+    newest = db.newest_scan_at(market, SRC)
+    if newest is None:
+        return None
+    state = db.load_life_state(market, SRC)
+    starts = [bootstrap_window(newest)[0]] if state is None or state.prev_at != newest else []
+    starts += [key_time_ms(k) - LIFETIME_LOOKBACK_MS for k in batch[:1] if key_time_ms(k) < newest]
+    return min(starts) if starts else None
 
 
 def _write_back(db: Database, data: Store, market: str, store: SnapshotStore, run: _Run, written: list[int],
@@ -435,21 +463,26 @@ def upload_compact_files(data: Store, root: Path, market: str, times: list[int])
 
 
 def finish_compact(data: Store, root: Path, market: str, keep_from_ms: int) -> None:
-    """After the database upload: the compact index (for reading by hand; runs build their own) and the old files.
+    """After the database upload: the old files deleted, then the compact index (for reading by hand; runs build
+    their own) listing what remains, since a run's local store holds only what it downloaded and wrote.
 
     Args:
         data: The data store.
-        root: The local snapshot store's root.
+        root: The local snapshot store's root (unused: the remote listing is the truth).
         market: Market id.
         keep_from_ms: Remote files older than this are deleted (the local prune already dropped them).
     """
-    folder, prefix = root / market / SRC, compact_prefix(market)
-    if (folder / "index.json").exists():
-        data.put(prefix + "index.json", (folder / "index.json").read_bytes())
+    prefix = compact_prefix(market)
+    kept = []
     for key in sorted(data.list(prefix)):
         name = key.rsplit("/", 1)[1]
-        if name != "index.json" and int(name.split(".")[0]) < keep_from_ms:
+        if name == "index.json":
+            continue
+        if int(name.split(".")[0]) < keep_from_ms:
             data.delete(key)
+        else:
+            kept.append(int(name.split(".")[0]))
+    data.put(prefix + "index.json", json.dumps(sorted(kept)).encode("utf-8"))
 
 
 def search_ranges(client: BlizzardClient, ids: list[int], namespace: str) -> dict[int, tuple]:

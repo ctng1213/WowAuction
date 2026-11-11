@@ -45,7 +45,7 @@ flowchart LR
     Collector[ahcloud/collector.py, built M30<br/>Lambda every 15 min · If-Modified-Since]
     Raw[(S3 data bucket, built M30: raw/ + state/<br/>one gzipped envelope per snapshot, kept forever)]
     Analyzer[ahcloud/analyzer.py, built M31<br/>daily: ingest → analysis → baselines, history.db round trip<br/>since IS1: daily analysis only, history.db read-only<br/>hourly per raw object: reprice_item + last hour, no database]
-    Ingest[ahcloud/ingest.py, built IS1, deployed IS3<br/>Lambda at :10 and :40 · the oldest 12 pending snapshots<br/>the one writer of history.db + state/ingest.json]
+    Ingest[ahcloud/ingest.py, built IS1, deployed IS3<br/>Lambda at :10 and :40 · the oldest 12 pending snapshots<br/>the one writer of history.db + state/ingest.json<br/>reads the database and the new raw; compact files only to replay]
     IntelS3[(S3 intel bucket, built M30<br/>MarketIntelligence JSON by sha256 + latest-schema.json, M31)]
     CF[CloudFront, built M30<br/>public, the intel bucket only]
     CW[CloudWatch: alarms → SNS email, built M30–M39, H1<br/>dashboard, built H1]
@@ -138,15 +138,15 @@ flowchart TD
   Scans[Your scans] -->|overlay cur only, IU6| Plan
 ```
 
-**Planned (the carry-forward lifetimes batch, `docs/plans/carry-forward-lifetimes.md`; SPEC §2.4 "One snapshot at a time"): inside Ingest.** The engine and the history halves are built (`engine/lifetimes.step`; `collect/observations.ingest_snapshot` with `history/lifetime_store.py`, schema 31); the run's downloads are the batch's last milestone. A scheduled run will read only the state and the new raw; the compact store is the replay's input only (today a run still downloads the compact window, so a replay can run).
+**Built (the carry-forward lifetimes batch, `docs/plans/carry-forward-lifetimes.md`; SPEC §2.4 "One snapshot at a time"): inside Ingest.** `engine/lifetimes.step`; `collect/observations.ingest_snapshot` with `history/lifetime_store.py` (schema 31); `ahcloud/ingest.replay_from`. A scheduled run reads only the state (in the database) and the new raw; the compact store is the replay's input only, downloaded when a replay will run.
 
 ```mermaid
 flowchart LR
-  New[(raw/: the new snapshot)] --> Step[engine/lifetimes.step<br/>built]
-  State[(history.db: lifetime_state,<br/>open_auctions, leave_tallies · built)] --> Step
+  New[(raw/: the new snapshot)] --> Step[engine/lifetimes.step]
+  State[(history.db: lifetime_state,<br/>open_auctions, leave_tallies)] --> Step
   Step -->|the next state| State
-  Step -->|GapRecord| Ledger[(history.db: gap_flows, gap_seen<br/>kept 2 days · built)]
-  Ledger --> Fold[collect/observations: the fold<br/>the open day + the last 7 hours · built]
+  Step -->|GapRecord| Ledger[(history.db: gap_flows, gap_seen<br/>kept 2 days)]
+  Ledger --> Fold[collect/observations: the fold<br/>the open day + the last 7 hours]
   Fold --> Rows[(volume_d1 + cover, lifetimes_d1,<br/>new_listings_d1, sold_prices_d1, sales_h1)]
   Rows --> Analysis[the 09:00 analysis, unchanged]
   Compact[(state/snapshots/: compact, 5 days)] -.replay only: a late snapshot,<br/>the cutover, a damaged state.-> Step
@@ -389,3 +389,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-11: H2 built: the analyzer writes `state/analyzer.json` and the public `status/<market>.json` (`ahcloud/status.py`) after every run, reading the three state files, the pointers and, from CloudWatch, the stack's alarm states and the last day's error, mismatch and refusal counts; the collector writes its state file on every run. Ingest is wired in as the third function.
 - 2026-11-11: carry-forward lifetimes spec merge and its engine milestone (`docs/plans/carry-forward-lifetimes.md`): the lifetimes move from `engine/volume.py` to `engine/lifetimes.py`, where `lifetimes()` is now `step` folded over the snapshots (`LifeState`, `GapRecord`, `expiry.LeaveWindow`; VI8); the planned path inside Ingest is drawn in §2. No component or flow changes yet.
 - 2026-11-11: carry-forward lifetimes, the history milestone: schema 31's carried state and per-gap ledger (`history/lifetime_store.py`); each snapshot steps the state and folds its day and recent hours from the ledger (`collect/observations`), replaying from the compact store only for a late snapshot, the cutover or a damaged state; `recompute_id_days` is gone. The Ingest diagram in §2 marks what is built.
+- 2026-11-11: carry-forward lifetimes, the cloud milestone: a scheduled Ingest run downloads the database and the new raw only; compact snapshots only for a replay (`ahcloud/ingest.replay_from`), and the remote compact index is written from the remote listing; the rebuild cap is 15. The Ingest diagram in §2 is built.
