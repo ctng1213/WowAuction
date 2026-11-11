@@ -483,7 +483,7 @@ def _pascal_body(source: str, header: str) -> str:
     return source[start:source.index("\nend;", start)]
 
 
-def test_FM82_the_installer_refuses_while_the_assistant_bridge_runs_before_anything_is_touched():
+def test_FM85_the_installer_refuses_while_the_assistant_bridge_runs_before_anything_is_touched():
     root = Path(__file__).resolve().parents[2]
     iss = (root / "packaging" / "windows" / "ahsync.iss").read_text(encoding="utf-8")
     recipe = (root / "packaging" / "ahsync.spec").read_text(encoding="utf-8")

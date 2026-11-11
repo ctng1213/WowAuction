@@ -91,7 +91,7 @@ begin
   end;
 end;
 
-{ True when the AI assistant bridge runs (FM82). Claude starts ahsync-mcp.exe,
+{ True when the AI assistant bridge runs (FM85). Claude starts ahsync-mcp.exe,
   not AHSync, and it lives until Claude closes it (SPEC 3.8), so the installer
   can neither stop it nor wait it out. A running exe can't be replaced, and
   the [InstallDelete] of _internal would already have run: an abort then leaves an
