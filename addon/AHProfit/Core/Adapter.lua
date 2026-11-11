@@ -220,6 +220,7 @@ local function SplitFields(itemString)
 end
 
 local bonusSuffix = nil   -- bonus ID -> suffix id, decoded on first use from Data/BonusSuffixes.lua
+local suffixBonus = nil   -- suffix id -> its lowest bonus ID (UI27), built from bonusSuffix on first use
 
 --- The suffix id a bonus ID gives, from AHF's bonusLists table (Data/BonusSuffixes.lua).
 ---@param bonusId number|nil  A bonus ID from an item link
@@ -267,6 +268,35 @@ function Adapter.ItemKey(link)
   local v = SuffixValue(fields)
   if not v then return -itemId end
   return itemId + KEY_SUFFIX_FACTOR * v
+end
+
+--- The bonus ID that gives a suffix id: the lowest one, when several do (UI27).
+---@param suffixId number
+---@return number|nil  nil when no known bonus ID gives it
+local function BonusForSuffix(suffixId)
+  if not suffixBonus then
+    SuffixForBonus(nil)                   -- decodes bonusSuffix on first use
+    suffixBonus = {}
+    for bonus, suffix in pairs(bonusSuffix) do
+      if suffixBonus[suffix] == nil or bonus < suffixBonus[suffix] then suffixBonus[suffix] = bonus end
+    end
+  end
+  return suffixBonus[suffixId]
+end
+
+--- An item string for an item key, to show the game's item tooltip (UI27); ItemKey's inverse for keys it makes.
+--- A random suffix goes in as its bonus ID, the form Forever's links use: "item:14117::::::::::::1:12742".
+--- A key whose suffix is unknown (-itemId, or a v no bonus ID gives) shows the base item.
+--- UNVERIFIED: that Forever's SetHyperlink accepts a bare bonus-ID item string and shows the suffixed item.
+---@param key number   Item key (SPEC §2.1)
+---@return string      "item:<id>" or "item:<id>::::::::::::1:<bonus>"
+function Adapter.ItemString(key)
+  if key < 0 then return "item:" .. -key end
+  local itemId = key % KEY_SUFFIX_FACTOR
+  local v = (key - itemId) / KEY_SUFFIX_FACTOR
+  local bonus = v > 0 and BonusForSuffix(v / 2)
+  if not bonus then return "item:" .. itemId end
+  return "item:" .. itemId .. string.rep(":", BONUS_COUNT_FIELD - 1) .. "1:" .. bonus
 end
 
 -- Item quality by the colour an item link is printed in (Blizzard's ITEM_QUALITY_COLORS).
