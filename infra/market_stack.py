@@ -137,7 +137,7 @@ class MarketStack(Stack):
         function = lambda_.Function(
             self, "Analyzer", runtime=lambda_.Runtime.PYTHON_3_12, architecture=lambda_.Architecture.ARM_64,
             handler="ahcloud.analyzer.handler", code=lambda_.Code.from_asset(config.asset_path),
-            timeout=Duration.minutes(15), memory_size=2048, ephemeral_storage_size=Size.gibibytes(4),
+            timeout=Duration.minutes(15), memory_size=8192, ephemeral_storage_size=Size.gibibytes(4),
             reserved_concurrent_executions=1, log_group=log_group, dead_letter_queue=dead_letters,
             retry_attempts=1,
             environment={"DATA_BUCKET": self.data.bucket_name, "INTEL_BUCKET": self.intel.bucket_name,
