@@ -17,6 +17,7 @@ VERSION = re.compile(r"([0-9]+)\.([0-9]+)\.([0-9]+)")
 RELEASE_PAGE = "https://github.com/ctng1213/WowAuction/releases/tag/"   # + tag: never a URL from the answer
 OFFLINE, NOT_FOUND, UNAVAILABLE = "offline", "not_found", "unavailable"    # a check that got no release (FM52)
 INSTALL_FAILED = "install"          # download_failed after an install that left the old version running (FM55)
+BRIDGE_IN_USE = "bridge_in_use"     # blocked: the AI assistant bridge runs from the install folder (FM87)
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,7 @@ class UpdateState:
     updated_to: str | None = None        # the version the last install brought, "0.4.0" (M27)
     updated_ms: int | None = None        # when that install was found to have worked
     left_beta: bool = False              # switched from the beta to the stable channel (DR26)
+    blocked: str | None = None           # why the last install of `downloaded` wasn't started (FM87); None: it may be
 
 
 def parse_tag(tag: object) -> tuple[int, int, int] | None:
@@ -228,7 +230,8 @@ def update_text(state: UpdateState, now_ms: int, offset_ms: int) -> dict:
 
 
 def waiting(state: UpdateState) -> dict:
-    """A verified download waiting for the next start (DR20, DR25), or one that can't install itself (FM54).
+    """A verified download waiting for the next start (DR20, DR25), one that can't install itself (FM54), or one
+    held back while Claude runs the AI assistant bridge from the install folder (FM87).
 
     Args:
         state: With `downloaded` set.
@@ -240,6 +243,10 @@ def waiting(state: UpdateState) -> dict:
         return line("Update downloaded · AHSync can't replace itself here; install it from the release page",
                     "amber", state.url)
     beta = " (beta)" if state.prerelease else ""
+    if state.blocked == BRIDGE_IN_USE:
+        return line(f"AHSync {state.downloaded}{beta} downloaded · quit Claude Desktop (it runs the AI assistant bridge), "
+                    f"then Restart to update · you run {state.version}", "amber", state.url,
+                    f"update ready · {state.downloaded}", True)
     return line(f"AHSync {state.downloaded}{beta} downloaded · installs at the next start · you run {state.version}",
                 "amber", state.url, f"update ready · {state.downloaded}", True)
 

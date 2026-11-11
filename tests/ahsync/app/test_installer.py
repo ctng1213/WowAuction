@@ -84,6 +84,25 @@ def test_FM55_an_install_that_left_the_old_version_says_so_and_tries_again_tomor
     assert line(db, "0.3.1")["class"] == "amber" and list(folder.iterdir()) == []
 
 
+def test_FM87_while_claude_runs_the_bridge_the_update_waits_and_says_to_quit_claude(waiting):
+    db, data, folder = waiting
+    write_meta(db, {"prerelease": "1"})
+    beta = Config(update_channel="beta")                                   # as the user's app
+    never = lambda path: pytest.fail("the installer would refuse: it may not start")   # noqa: E731
+    assert not installer.install(db, "0.3.1", beta, folder, asset, never, lambda: "bridge_in_use")
+    meta = read_meta(db)
+    assert "pending" not in meta and meta["downloaded"] == "0.4.0" and meta["blocked"] == "bridge_in_use"
+    assert [p.name for p in folder.iterdir()] == [SETUP]                       # the download is kept
+    assert installer.settle(db, data, "0.3.1", NOW, lambda: None) is None      # nothing to settle: no failure
+    assert update_text(read_state(db, "0.3.1", beta), NOW + 60_000, 0) == {
+        "text": "AHSync 0.4.0 (beta) downloaded · quit Claude Desktop (it runs the AI assistant bridge), then Restart "
+                "to update · you run 0.3.1", "url": "https://github.com/ctng1213/WowAuction/releases/tag/v0.4.0",
+        "pill": "update ready · 0.4.0", "restart": True, "class": "amber"}
+    applied: list[Path] = []
+    assert installer.install(db, "0.3.1", beta, folder, asset, applied.append, lambda: None)   # Claude quit
+    assert applied == [folder / SETUP] and "blocked" not in read_meta(db)
+
+
 def test_FM54_an_app_that_cannot_replace_itself_installs_nothing(waiting):
     db, _data, folder = waiting
     write_meta(db, {"cant_replace": "1"})

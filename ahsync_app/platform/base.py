@@ -193,6 +193,17 @@ class Platform:
         """
         return True
 
+    def update_blocker(self, exe: Path) -> str | None:
+        """Why the update's install would be refused right now, so it waits instead of failing (FM87).
+
+        Args:
+            exe: The running executable.
+
+        Returns:
+            None (macOS swaps the bundle, which a running bridge doesn't stop); Windows names the running bridge.
+        """
+        return None
+
     def apply_update(self, path: Path, exe: Path) -> None:
         """Start the detached install of a verified update; the shell exits right after (SPEC §3.7.9; DR22, DR23).
 

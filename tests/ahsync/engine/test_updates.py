@@ -52,6 +52,14 @@ def test_DR20_DR25_a_verified_download_waits_for_the_next_start():
     assert text(beta)["text"] == "AHSync 0.4.0 (beta) downloaded · installs at the next start · you run 0.3.1"
 
 
+def test_FM87_a_download_held_back_by_the_bridge_says_to_quit_claude_and_keeps_its_button():
+    state = UpdateState("0.3.1", checked_ms=FRI_0600, tag="v0.4.0", url=PAGE, downloaded="0.4.0",
+                        blocked=updates.BRIDGE_IN_USE)
+    assert text(state) == {"text": "AHSync 0.4.0 downloaded · quit Claude Desktop (it runs the AI assistant bridge), "
+                                   "then Restart to update · you run 0.3.1", "url": PAGE,
+                           "pill": "update ready · 0.4.0", "restart": True, "class": "amber"}
+
+
 def test_a_download_that_cannot_install_itself_points_at_the_release_page():     # FM54's text (M27 installs)
     state = UpdateState("0.3.1", checked_ms=FRI_0600, tag="v0.4.0", url=PAGE, downloaded="0.4.0", cant_replace=True)
     assert text(state) == {"text": "Update downloaded · AHSync can't replace itself here; install it from the release "

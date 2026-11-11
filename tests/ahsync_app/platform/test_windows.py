@@ -5,9 +5,37 @@ from pathlib import Path
 
 import pytest
 
-from ahsync_app.platform.windows import WindowsPlatform
+from ahsync_app.platform.windows import WindowsPlatform, file_in_use
 
 LOCAL = r"C:\Users\u\AppData\Local"
+
+
+def test_FM87_the_update_waits_while_the_bridge_next_to_ahsync_exe_runs():
+    exe = Path(r"C:\Users\u\AppData\Local\Programs\AHSync\AHSync.exe")
+    asked: list[Path] = []
+
+    def running(path: Path) -> bool:
+        """Claude runs the bridge."""
+        asked.append(path)
+        return True
+
+    assert WindowsPlatform({}, Path(r"C:\Users\u"), in_use=running).update_blocker(exe) == "bridge_in_use"
+    assert asked == [exe.parent / "ahsync-mcp.exe"]
+    assert WindowsPlatform({}, Path(r"C:\Users\u"), in_use=lambda path: False).update_blocker(exe) is None
+
+
+def test_FM87_a_file_that_opens_for_writing_or_is_missing_is_not_in_use(tmp_path, monkeypatch):
+    bridge = tmp_path / "ahsync-mcp.exe"
+    bridge.write_bytes(b"MZ")
+    assert file_in_use(bridge) is False and bridge.read_bytes() == b"MZ"       # opened, never changed
+    assert file_in_use(tmp_path / "missing.exe") is False
+
+    def refused(*_args, **_kwargs):
+        """Windows refuses write access to a running program's file (a sharing violation)."""
+        raise PermissionError(32, "The process cannot access the file because it is being used by another process")
+
+    monkeypatch.setattr("builtins.open", refused)
+    assert file_in_use(bridge) is True
 
 
 def test_DR1_the_per_user_folders_are_under_localappdata():

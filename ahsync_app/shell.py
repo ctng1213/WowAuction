@@ -209,7 +209,8 @@ def install_waiting(dirs: AppDirs, world: ShellWorld) -> bool:
     platform = world.platform
     try:
         return installer.install(db, version.VERSION, config, dirs.data_dir / UPDATES_DIR, platform.update_asset_name,
-                                 lambda asset: platform.apply_update(asset, world.exe))
+                                 lambda asset: platform.apply_update(asset, world.exe),
+                                 lambda: platform.update_blocker(world.exe))
     except Exception as error:         # never a traceback at start or quit (M1)
         log.warning("no update installed: %s: %s", type(error).__name__, error)
         return False
@@ -418,12 +419,45 @@ class Session:
         platform, exe = self.world.platform, self.world.exe
         return lambda _data_dir: platform.bridge_command(exe)
 
-    def restart_to_update(self) -> None:
+    def restart_to_update(self, db: Database | None = None) -> bool:
         """Restart to update (the tray item, offered only while an update waits): stop; start() installs on the way
-        out, re-checking that it still may."""
+        out, re-checking that it still may. While the installer would refuse (FM87) AHSync keeps running instead,
+        since stopping would end it with nothing installed.
+
+        Args:
+            db: The dashboard's database, to record the blocker for the Update line; None opens the app's own.
+
+        Returns:
+            True when the stop was asked; False when blocked.
+        """
+        reason = self.world.platform.update_blocker(self.world.exe)
+        if reason is not None:
+            self.record_blocker(db, reason)
+            return False
         log.info("restart to update")
         self.state.restart_update = True
         self.stop.set()
+        return True
+
+    def record_blocker(self, db: Database | None, reason: str) -> None:
+        """Record why Restart to update didn't stop AHSync, for the Update line (FM87); a failure is logged.
+
+        Args:
+            db: The dashboard's database; None opens `data/ahsync.db` for this one write.
+            reason: The platform's `update_blocker()`.
+        """
+        if db is not None:
+            installer.record_blocker(db, reason)
+            return
+        try:
+            own = open_server_db(self.dirs.data_dir / "ahsync.db")
+        except (DatabaseError, sqlite3.Error, OSError):
+            log.warning("the update is not installed now: %s", reason)
+            return
+        try:
+            installer.record_blocker(own, reason)
+        finally:
+            own.close()
 
     def restart_from_dashboard(self, db: Database, config: Config) -> bool:
         """POST /api/update/restart: stop and install, only when a verified update waits that may install itself.
@@ -433,14 +467,14 @@ class Session:
             config: The running settings.
 
         Returns:
-            True when the stop was asked; False when nothing may install (the endpoint answers 409).
+            True when the stop was asked; False when nothing may install or the install is blocked (FM87): the
+            endpoint answers 409.
         """
         platform = self.world.platform
         if installer.waiting_install(db, version.VERSION, config, self.dirs.data_dir / UPDATES_DIR,
                                      platform.update_asset_name) is None:
             return False
-        self.restart_to_update()
-        return True
+        return self.restart_to_update(db)
 
     def dashboard_ready(self, app: object) -> None:
         """Keep run()'s dashboard: the tray reads the update state through it and toggles through its handlers.

@@ -81,7 +81,7 @@ def download(db: Database, transport: Transport, clock: Clock, data_dir: Path, v
         write_meta(db, {"download_failed": reason})
         return True
     remove_others(folder, path)
-    write_meta(db, {"downloaded": target, "downloaded_path": str(path), "download_failed": None})
+    write_meta(db, {"downloaded": target, "downloaded_path": str(path), "download_failed": None, "blocked": None})
     log.info("update %s downloaded and verified: %s", target, path.name)
     return True
 
