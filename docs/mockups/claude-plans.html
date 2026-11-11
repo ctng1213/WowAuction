@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Proposal: Claude's picks in the plan (the write switch, the labels, the totals)</title>
+<style>
+  :root { color-scheme: dark;
+    --bg: #0e0d0b; --surface: #181612; --surface-2: #221f19; --border: #3d3424; --border-hi: #8a6d2f;
+    --text: #ece3cc; --muted: #9b917b; --accent: #ffd100; --pos: #3ddc4f; --neg: #ff4a3d; --amber: #ffb02e; --info: #69ccf0;
+    --q1: #fff; --q2: #1eff00;
+    --serif: "Friz Quadrata TT", "Palatino Linotype", "Book Antiqua", Georgia, serif; }
+  * { box-sizing: border-box; }
+  body { margin: 24px; max-width: 1240px; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  h1 { font: 22px var(--serif); color: var(--accent); margin: 0 0 4px; } h2 { font: 17px var(--serif); color: var(--accent); margin: 32px 0 8px; }
+  p.note { color: #c9c4b6; max-width: 1050px; } .muted { color: var(--muted); } .pos { color: var(--pos); } .amber { color: var(--amber); } .neg { color: var(--neg); }
+  .row { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+  .row > div { flex: 1 1 520px; min-width: 0; }
+  .cap { font-size: 12px; color: var(--muted); margin: 0 0 6px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; box-shadow: inset 0 0 0 1px #000, 0 3px 12px rgba(0,0,0,.5); }
+  .card-h { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); background: linear-gradient(#241f16, #1a1711); }
+  .card-h b { flex: 1; font: 15px var(--serif); color: var(--accent); font-weight: normal; }
+  .pill { padding: 2px 10px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: #0b0a08; white-space: nowrap; }
+  .pill.ok { color: var(--pos); border-color: #2c6b32; } .pill.muted { color: var(--muted); }
+  .pill.gold { color: var(--accent); border-color: var(--border-hi); } .pill.warn { color: var(--amber); border-color: #7a5a1b; }
+  .pill.claude { color: #e8c4ff; border-color: #6a4a8a; background: #1a1322; padding: 0 7px; font-size: 11px; }
+  .body { padding: 12px 14px; }
+  .btn { display: inline-block; padding: 3px 12px; border: 1px solid #000; border-radius: 3px; font-size: 12px; cursor: pointer; color: var(--accent);
+         background: linear-gradient(#8a1a14, #4d0c09); box-shadow: inset 0 0 0 1px #b2392f, 0 1px 2px #000; text-shadow: 0 1px 1px #000; font-family: inherit; }
+  .btn.primary { background: linear-gradient(#6b5420, #3a2c10); box-shadow: inset 0 0 0 1px #c9a64a, 0 1px 2px #000; }
+  .btn.small { padding: 1px 8px; font-size: 11px; }
+  .switch { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: #100e0b; margin-top: 10px; }
+  .switch input { margin-top: 3px; accent-color: #c9a64a; width: 16px; height: 16px; }
+  .switch b { font-weight: 600; } .switch .sub { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 12px 0 0; font-size: 13px; }
+  .kv dt { color: var(--muted); } .kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+  .privacy { margin-top: 12px; padding: 8px 12px; border-left: 4px solid var(--info); background: #12161a; border-radius: 4px; font-size: 13px; }
+  .actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+  .new { outline: 1px dashed var(--amber); outline-offset: 3px; }
+  pre { margin: 6px 0; padding: 8px 10px; background: #0b0a08; border: 1px solid var(--border); border-radius: 4px; font: 12px/1.4 Consolas, "SF Mono", monospace; color: #e8dcc0; overflow-x: auto; }
+  code { font: 12px Consolas, "SF Mono", monospace; color: #e8dcc0; background: #0b0a08; padding: 0 4px; border-radius: 3px; }
+  /* Dashboard tables, as dashboard.html draws them */
+  table.dash { border-collapse: collapse; font-size: 13px; width: 100%; margin-top: 6px; }
+  table.dash th { text-align: left; color: var(--muted); font-weight: normal; font-size: 12px; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+  table.dash td { padding: 5px 8px; border-bottom: 1px solid #2a2520; vertical-align: top; }
+  table.dash td.num, table.dash th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .sub { display: block; font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .act { display: inline-block; padding: 0 6px; border-radius: 3px; font-size: 11px; font-weight: 600; color: #000; }
+  .act.buy { background: #69ccf0; } .act.post { background: #ffd100; } .act.craft { background: #ff8000; } .act.de { background: #a335ee; color: #fff; }
+  .red { color: var(--neg); font-size: 12px; padding: 4px 8px; }
+  .foot { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--muted); padding: 6px 8px; }
+  .tiles { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+  .tile { flex: 1 1 160px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 12px; }
+  .tile b { display: block; font-size: 16px; font-weight: normal; color: var(--text); margin: 2px 0; }
+  .tile .l { color: var(--muted); }
+  /* The addon's Portfolio tab, as addon.html draws it: 640 px wide, game fonts; this is a sketch of the one changed section */
+  .addon { width: 640px; background: #0a0908; border: 2px solid #5a4a2a; border-radius: 4px; padding: 6px; font: 12px/1.3 "Friz Quadrata TT", "Palatino Linotype", Georgia, serif; }
+  .addon .sec { display: flex; justify-content: space-between; color: var(--accent); padding: 4px 6px 2px; border-bottom: 1px solid #3d3424; margin-top: 6px; }
+  .addon table { border-collapse: collapse; width: 100%; } .addon td, .addon th { padding: 2px 5px; white-space: nowrap; }
+  .addon th { color: var(--muted); font-weight: normal; text-align: left; font-size: 11px; } .addon th.n, .addon td.n { text-align: right; }
+  .addon tr.line td { color: var(--muted); font-size: 11px; padding-top: 0; } .addon .q1 { color: var(--q1); } .addon .q2 { color: var(--q2); }
+  .addon .tot { color: var(--muted); font-size: 11px; padding: 3px 6px 0; }
+  .addon .pill { font-size: 10px; padding: 0 6px; }
+  /* A sketch of Claude's chat, only to show what the user sees there */
+  .chat { background: #262624; border-radius: 10px; padding: 14px; font: 14px/1.5 system-ui, sans-serif; color: #e8e6e3; }
+  .msg { margin: 8px 0; } .me { background: #3a3936; border-radius: 10px; padding: 8px 12px; display: inline-block; }
+  .tool { font-size: 12px; color: #a8a49c; border: 1px solid #44433f; border-radius: 6px; padding: 6px 10px; margin: 6px 0; }
+  .tool pre { background: #1e1e1c; border-color: #44433f; color: #d7d3cb; margin: 4px 0 0; }
+</style>
+</head>
+<body>
+<h1>Proposal: Claude's picks in the plan</h1>
+<p class="note"><b>Approved by the user 2026-11-10</b> (plan <code>docs/plans/claude-plans.md</code> §1, CP0–CP5; the user's decisions in <code>docs/plans/mcp-server.md</code> §11). Claude may add its own trades to your plan: a <b>pick</b> is a plan action like the engine's, labelled <b>Claude</b>, shown and tracked the same way. Four kinds: a post of your stock, a flip, a craft, and a hold (buy, then post at a target price when the hold ends). Its gold is reserved ahead of the engine, which fills only the room left and plans nothing on that item; a pick may take all of your risk room (the user, 2026-11-10), and Claude is told so. Three things change on screen, each marked <span class="new" style="padding:0 4px">new</span> below: a second switch on the AI assistant card (decided: option B), the Claude label on plan rows with a per-origin line in the footers, and a per-origin line in History's tile. Numbers are the mockups' world (Amaya 21 g, Brugan 10 g 40 s, capacity 6 g 49 s 40 c); the picks are a flip of 40 Mageweave Cloth (buy at or below 8 s, sell at 12 s) and a craft of 2 Silver Rod by Brugan (sell at 75 s, mats 2 Silver Bar from the AH at 30 s).</p>
+
+<h2>1. The Status card: a second switch for writes (decided 2026-11-10, option B)</h2>
+<div class="row"><div>
+<p class="cap">Running, writes off (the default after the update, and for every install that pressed Enable under the read-only wording). The read access is exactly as approved in <a href="ai-assistant.html">ai-assistant.html</a>; only the switch is new.</p>
+<div class="card">
+  <div class="card-h"><b>AI assistant (Claude)</b><span class="pill ok">running</span></div>
+  <div class="body">
+    <p style="margin:0 0 10px;font-size:13px">Claude can read your AHSync data to answer your questions. <span class="muted">It runs on your computer only, and only while enabled.</span></p>
+    <div class="actions"><button class="btn">Disable</button><span class="muted">running on this computer only · since Sun 13:10</span></div>
+    <dl class="kv"><dt>Market table</dt><dd>1.7 MB · 10,236 items</dd><dt>Claude sees</dt><dd>the refresh of Sun 13:00</dd><dt>Characters</dt><dd>2</dd></dl>
+    <label class="switch new"><input type="checkbox"><span><b>Let Claude add picks to my plan</b><span class="sub">Off: Claude can only read. On: Claude can put trades into your plan (a post of your stock, a flip, a craft, or a buy to sell later), labelled Claude on the dashboard and in the addon. They go in at once, ahead of the engine's own rows, and may use all of your risk room; you take one out with Skip. Claude never spends your gold: you do, in game. At most 20 picks, each for 7 days unless Claude says otherwise.</span></span></label>
+    <div class="privacy">What Claude reads is sent to Anthropic to answer you: prices, your characters, their gold, professions and trades.</div>
+  </div>
+</div>
+</div>
+<div>
+<p class="cap">Writes on. The switch is a token-checked <code>POST /api/mcp {"writes": true}</code> like Enable (SEC21); it is remembered (<code>mcp_writes</code> in config.toml). Turning it off refuses new picks and keeps the ones already in the plan until they end. Disable stops everything.</p>
+<div class="card">
+  <div class="card-h"><b>AI assistant (Claude)</b><span class="pill ok">running</span><span class="pill claude new">can add picks</span></div>
+  <div class="body">
+    <p style="margin:0 0 10px;font-size:13px">Claude can read your AHSync data to answer your questions, <b>and add picks to your plan</b>. <span class="muted">It runs on your computer only, and only while enabled.</span></p>
+    <div class="actions"><button class="btn">Disable</button><span class="muted">running on this computer only · since Sun 13:10</span></div>
+    <dl class="kv"><dt>Market table</dt><dd>1.7 MB · 10,236 items</dd><dt>Claude sees</dt><dd>the refresh of Sun 13:00</dd><dt>Characters</dt><dd>2</dd><dt class="new">Claude's picks</dt><dd class="new">2 active · 3g 80s reserved · 6 done, +1g 20s realized</dd></dl>
+    <label class="switch new"><input type="checkbox" checked><span><b>Let Claude add picks to my plan</b><span class="sub">On: Claude can put trades into your plan (a post of your stock, a flip, a craft, or a buy to sell later), labelled Claude, ahead of the engine's own rows and up to all of your risk room. You take one out with Skip. Claude never spends your gold: you do, in game. At most 20 picks, each for 7 days unless Claude says otherwise.</span></span></label>
+    <div class="privacy">What Claude reads is sent to Anthropic to answer you: prices, your characters, their gold, professions and trades. <span class="new">With picks on, what Claude reads on the web can shape the trades it adds, up to all of your risk room; every pick is labelled, needs your own click in game to spend anything, and one Skip removes it.</span></div>
+  </div>
+</div>
+</div></div>
+<p class="note">Turning the switch off refuses new picks and keeps the ones already in the plan until they end; Disable stops everything. A pick removed with Skip (dashboard: at once; addon: at the next /reload) can be added again by Claude, as a new pick.</p>
+
+<h2>2. The dashboard: Today's section B with a pick, and the footers (D109)</h2>
+<p class="cap">The Strategy cell names the origin and the kind. A pick's note is the row's sub-line, with a craft's mat lines in the engine's wording. The row sorts by expected net like any funded row; the label, not the position, says it is Claude's. Skip removes the pick (decided: Skip is the remove) and the engine refills within seconds. With 3g 80s reserved first, the engine had 2g 69s 40c to fund its own rows; the engine's own Silver Rod craft is gone (the product is Claude's), and Thick Leather now fits where Mithril Spurs (3 g) doesn't.</p>
+<div class="card"><div class="body" style="padding-top:6px">
+<table class="dash">
+  <tr><th>Strategy</th><th>Action</th><th>Item</th><th class="num">Qty</th><th class="num">Each</th><th class="num">Total</th><th class="num">Expected net</th><th class="num">Chance</th><th class="num">Risk</th><th>Character</th><th>Status</th><th></th></tr>
+  <tr><td>Craft</td><td><span class="act post">POST</span></td><td><span style="color:var(--q1)">Copper Rod</span><span class="sub">craft 1 first · post now</span></td><td class="num">1</td><td class="num">1g 2s</td><td class="num">1g 2s</td><td class="num pos">+63s 6c</td><td class="num">94%</td><td class="num">0.0%</td><td>Amaya</td><td><span class="pill ok">funded</span></td><td><span class="btn small">Skip</span></td></tr>
+  <tr class="new"><td><span class="pill claude">Claude</span> · Flip</td><td><span class="act buy">BUY</span></td><td><span style="color:var(--q1)">Mageweave Cloth</span><span class="sub">buy 40 at or below 8s · then: post now at 12s · "cheap against its 30-day median (10s 40c), 4.2 sold a day"</span></td><td class="num">40</td><td class="num">8s</td><td class="num">3g 20s</td><td class="num pos">+1g 2s 40c</td><td class="num">81%</td><td class="num">10.2%</td><td>Amaya</td><td><span class="pill ok">funded</span></td><td><span class="btn small">Skip</span></td></tr>
+  <tr class="new"><td><span class="pill claude">Claude</span> · Craft</td><td><span class="act craft">CRAFT</span></td><td><span style="color:var(--q1)">Silver Rod</span><span class="sub">buy 2 Silver Bar on the AH · 60s · then: post now at 75s · "rods sell steadily at 70–80s; the bars are cheap today"</span></td><td class="num">2</td><td class="num">30s</td><td class="num">60s</td><td class="num pos">+82s 50c</td><td class="num">91%</td><td class="num">1.9%</td><td>Brugan</td><td><span class="pill ok">funded</span></td><td><span class="btn small">Skip</span></td></tr>
+  <tr><td>Flip</td><td><span class="act buy">BUY</span></td><td><span style="color:var(--q1)">Thick Leather</span><span class="sub">then: post Thu 19:00</span></td><td class="num">30</td><td class="num">5s 36c</td><td class="num">1g 60s 80c</td><td class="num pos">+55s</td><td class="num">90%</td><td class="num">5.1%</td><td>Amaya</td><td><span class="pill ok">funded</span></td><td><span class="btn small">Skip</span></td></tr>
+  <tr><td>Disenchant</td><td><span class="act de">DE</span></td><td><span style="color:var(--q2)">Scouting Gloves of the Monkey</span></td><td class="num">1</td><td class="num">8s</td><td class="num">8s</td><td class="num pos">+6s 25c</td><td class="num">100%</td><td class="num">0.3%</td><td>Amaya</td><td><span class="pill ok">funded</span></td><td><span class="btn small">Skip</span></td></tr>
+  <tr><td colspan="12" class="red">capacity reached · 99s 60c left</td></tr>
+  <tr class="muted"><td>Flip</td><td><span class="act buy">BUY</span></td><td>Mithril Spurs</td><td class="num">1</td><td class="num">3g</td><td class="num">3g</td><td class="num">+73s 42c</td><td class="num">85%</td><td class="num">9.6%</td><td>Amaya</td><td>Exceeds risk tolerance</td><td></td></tr>
+</table>
+<div class="foot"><span>5 of 20 funded · expected +3g 9s 21c · gold needed 5g 49s 80c · profit 56% on cash · 1 alternative excluded (in no total) <span class="new">· Claude's picks: 2 · 3g 80s reserved first</span></span><span class="muted">Mon 10:38</span></div>
+</div></div>
+<p class="cap" style="margin-top:14px">History's tiles (D110): the "Plan actions" tile gains a per-origin second line; the Portfolio page's tiles gain "Reserved for Claude's picks" beside committed capital. All sums are <code>engine/history_view</code>'s and <code>portfolio_view</code>'s, grouped by origin.</p>
+<div class="tiles">
+  <div class="tile"><span class="l">Plan actions</span><b>41 done</b>3 missed · 2 skipped<span class="sub new">Claude: 6 done · <span class="pos">+1g 20s</span> realized · 1 expired</span></div>
+  <div class="tile"><span class="l">Realized profit</span><b class="pos">+9g 84s</b>21 payouts · after cost and deposit</div>
+  <div class="tile new"><span class="l">Reserved for Claude's picks</span><b>3g 80s</b>2 active picks · taken before the engine's rows</div>
+  <div class="tile"><span class="l">Committed capital</span><b>4g 18s</b>open positions' cost left</div>
+</div>
+
+<h2>3. The addon's Portfolio tab: Today with a pick (UI26)</h2>
+<p class="cap">The one changed section, at the addon's 640 px width (layout as <a href="addon.html">addon.html</a>'s Portfolio tab), on Amaya's character; Brugan's tab shows the Silver Rod craft the same way, with its mat line. A pick's row shows <b>Claude</b> in Status, in the pill style of a "local" position; its note is the grey line under the item; the totals line counts its rows. Right-click → Mark as skipped removes the pick at the next /reload (the dashboard's Skip, at once). Shopping, the Craft tab and the Sell fill treat its buy, craft and post like any other.</p>
+<div class="addon">
+  <div class="sec"><span>Today</span><span class="muted">realized today · funded, then unfunded</span></div>
+  <table>
+    <tr><th></th><th>Item</th><th class="n">Qty</th><th class="n">Each</th><th class="n">Total</th><th class="n">Net</th><th class="n">P</th><th class="n">Risk</th><th>Status</th></tr>
+    <tr><td><span class="act post">POST</span></td><td class="q1">Copper Rod</td><td class="n">1</td><td class="n">1g 2s</td><td class="n">1g 2s</td><td class="n pos">+63s 6c</td><td class="n">94% <span class="pos">●</span></td><td class="n">0.0%</td><td></td></tr>
+    <tr class="line"><td></td><td colspan="8">craft 1 first · post now</td></tr>
+    <tr class="new"><td><span class="act buy">BUY</span></td><td class="q1">Mageweave Cloth</td><td class="n">40</td><td class="n">8s</td><td class="n">3g 20s</td><td class="n pos">+1g 2s 40c</td><td class="n">81% <span class="pos">●</span></td><td class="n">10.2%</td><td><span class="pill claude">Claude</span></td></tr>
+    <tr class="line new"><td></td><td colspan="8">then: post now at 12s · "cheap against its 30-day median (10s 40c), 4.2 sold a day"</td></tr>
+    <tr><td><span class="act de">DE</span></td><td class="q2">Scouting Gloves of the Monkey</td><td class="n">1</td><td class="n">8s</td><td class="n">8s</td><td class="n pos">+6s 25c</td><td class="n">100% <span class="pos">●</span></td><td class="n">0.3%</td><td></td></tr>
+    <tr class="muted"><td><span class="act de">DE</span></td><td>Grunt's Bracers of Defense</td><td class="n">1</td><td class="n">15s</td><td class="n">15s</td><td class="n">+6s</td><td class="n">100%</td><td class="n">0.5%</td><td>Required profession unavailable</td></tr>
+  </table>
+  <div class="tot">3 rows · <span class="pos">+1g 71s 71c</span> · cost 3g 28s · 52% on cash <span class="new">· Claude 1 row</span></div>
+  <div class="sec"><span>Next 7 days</span><span class="muted">unchanged: a pick with a later post shows here the same way</span></div>
+</div>
+
+<h2>4. What Claude sees (a sketch; the tools' exact fields are the plan's §3.1)</h2>
+<div class="row"><div>
+<p class="cap">Adding a pick. The answer carries the engine's chance and net at Claude's price, so Claude can tell the user what the plan thinks of it.</p>
+<div class="chat">
+  <div class="msg"><span class="me">Mageweave looks cheap. Put a flip in my plan: 40 at up to 8s, sell at 12s.</span></div>
+  <div class="tool">AHSync · add_pick<pre>{"market": "forever.pvp.horde.us", "character": "Amaya-Grommash", "kind": "flip",
+ "item": "Mageweave Cloth", "qty": 40, "max_buy_price": 800, "sell_price": 1200,
+ "note": "cheap against its 30-day median (10s 40c), 4.2 sold a day"}</pre>
+<pre>{"pick": {"pick_id": "claude:forever.pvp.horde.us:1794046680000:1", "status": "active",
+  "expires": "2026-11-16T10:38:00Z", "chance": 0.81, "expected_net": 10240,
+  "gold_needed": 32000, "actions": [{"id": "…:buy", "status": "pending"}, {"id": "…:post", "status": "pending"}]},
+ "replan": "queued",
+ "warnings": ["this pick takes 3g 20s + deposit of the 6g 49s 40c of risk room left: the engine can plan 3g 29s 40c"]}</pre></div>
+  <div class="msg">Done: it's in your plan for 7 days, labelled Claude, ahead of the engine's rows. AHSync gives it an 81% chance to sell at 12s, about +1g 2s net. It takes half your risk room; a pick bigger than the 6g 49s 40c would go in too, but then the engine would plan nothing until something sells.</div>
+  <div class="msg"><span class="me">Also have Brugan make 2 Silver Rods and sell them at 75s.</span></div>
+  <div class="tool">AHSync · add_pick <code>{"kind": "craft", "character": "Brugan-Grommash", "item": "Silver Rod", "qty": 2, "sell_price": 7500}</code><pre>{"pick": {"pick_id": "…:2", "status": "active", "recipe": 7421, "chance": 0.91, "expected_net": 8250, "gold_needed": 6000,
+  "mats": [{"item": "Silver Bar", "qty": 2, "source": "AH", "price": 3000}],
+  "actions": [{"id": "…:buy:2842", "status": "pending"}, {"id": "…:craft", "status": "pending"}, {"id": "…:post", "status": "pending"}]},
+ "replan": "queued", "warnings": []}</pre></div>
+  <div class="msg">In: Brugan buys 2 Silver Bar on the AH (30s each), crafts, and posts at 75s. AHSync prices the mats itself from the last refresh; if a craft lost gold at 75s it would have refused and told me by how much.</div>
+</div>
+</div>
+<div>
+<p class="cap">Asking how the picks did. The realized text is History's, from the same matching every action gets.</p>
+<div class="chat">
+  <div class="msg"><span class="me">How are your picks doing?</span></div>
+  <div class="tool">AHSync · list_picks <code>{"status": "all"}</code><pre>{"picks": [
+  {"pick_id": "…:1", "kind": "flip", "item": "Mageweave Cloth", "status": "active",
+   "actions": [{"id": "…:buy", "status": "done", "done_qty": 40, "done_at": "…"}, {"id": "…:post", "status": "pending"}],
+   "expected_net": 10240, "realized": "nothing sold yet"},
+  {"pick_id": "…:0", "kind": "post", "item": "Linen Cloth", "status": "done", "expected_net": 410, "realized": 388},
+  {"pick_id": "…:2", "kind": "post", "item": "Wool Cloth", "status": "removed", "reason": "skipped"}],
+ "totals": {"active": 1, "done": 6, "expired": 1, "removed": 1, "expected_done": 11800, "realized_done": 12000}}</pre></div>
+  <div class="msg">Six picks are done and together they realized +1g 20s against +1g 18s expected. The Mageweave flip is bought (40 at 7s 50c) and waiting to sell; you skipped the Wool Cloth post. If you want it back, say so: a removed pick never blocks a new one.</div>
+  <div class="msg"><span class="me">I skipped the Mageweave one in game just now. Add it again at 11s.</span></div>
+  <div class="tool">AHSync · add_pick <code>{"kind": "flip", "item": "Mageweave Cloth", "qty": 40, "max_buy_price": 750, "sell_price": 1100, …}</code><pre>{"pick": {"pick_id": "…:1", "status": "active", …}, "already": true,
+ "note": "a pick on Mageweave Cloth is still in your plan; skip it on the dashboard, or /reload, then ask again"}</pre></div>
+  <div class="msg">AHSync still has the old pick: an in-game skip reaches it at your next /reload. Skip it on the dashboard, or /reload, and I'll add the 11s one.</div>
+</div>
+</div></div>
+
+<h2>5. What this mockup does not change</h2>
+<p class="note">The Today and Week lists' columns, sorting and footers; the addon's other tabs, the tooltip and the AH panel; every page without a pick (the fixture world has none, so every golden but the new UI26 stays). A pick's row behaves as its kind does: its buy is on the Shopping list, its post fills the Sell tab, a done buy opens a position on the Portfolio tab. The engine's rows after a pick are whatever the optimizer funds with the capacity left; this mockup shows one outcome of that.</p>
+</body>
+</html>
