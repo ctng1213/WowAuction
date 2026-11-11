@@ -55,6 +55,17 @@ python3.12 -m venv .venv-cloud && .venv-cloud/bin/pip install -r requirements-cl
 aws login                                                     # your own AWS credentials
 ```
 
+## Reading the dashboard
+
+The stack creates a CloudWatch dashboard, `WowAuction-<market with dashes>` (e.g. `WowAuction-forever-normal-horde-us`), in the console under CloudWatch → Dashboards. It shows 7 days by default:
+
+- **Alarms**: all seven, each emailing on ALARM and again on OK. `NoDailyBaselines` fires after 27 hours without a daily publish (09:00 UTC run, so about 13:00 the next day); `AnalyzerSlowRun` fires on any analyzer run over 12 of its 15 minutes, a warning before runs start timing out. A rebuild on the Lambda that runs long trips it too; that one is expected.
+- **New snapshots** and **summaries published** per hour: a gap in the first is Blizzard or the collector; a gap in the second while snapshots arrive is the analyzer.
+- Per function: **runs** (errors, invocations, throttles) and the **longest run**, with the timeout drawn as a line.
+- The **dead-letter queue**, the **warnings** (`daily_refused`, `hourly_no_base`, `mismatch`), and the analyzer's last 50 WARNING or ERROR log lines.
+
+The metric graphs count only runs in AWS: `python -m ahcloud` on your machine writes its metric lines to the terminal. The status page (planned, SPEC §2.4) reads S3 and counts both.
+
 ## Recovering the cloud state (rebuild)
 
 A rebuild throws `state/history.db` and the compact snapshots away and replays the raw of the retention window (the last 90 days plus 2.5 days, FM76) into a fresh database, then uploads it and publishes. Use it when the daily run fails with `DatabaseError` (FM72), or to apply a changed volume method to the stored days at once; day to day the daily run keeps everything current.
