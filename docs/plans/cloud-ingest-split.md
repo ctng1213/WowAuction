@@ -32,6 +32,15 @@ Decided by Opus during execution (2026-11-11):
 16. **Metrics**: `ingest_<outcome>`, `history_lag_minutes` (Maximum per hour; FM84's alarm treats a missing hour as breaching, since every run reports it) and `ingest_refused`, which replaces `daily_refused` on the dashboard. The dashboard shows Ingest's runs, durations and log lines.
 17. **The local `ingest` command is uncapped** (no Lambda limit); `analyze --daily` needs no credentials now.
 
+From the independent review of IS1 (2026-11-11; Opus's fixes, within the approved design):
+
+18. **Empty houses are remembered** (meta `empty_snapshots`, BZ62): they leave no `scans` row, so with the cap 12 of them inside a day would have made every run retake the same batch.
+19. **The compact store survives a lost race** (FM83): a run downloads only the files up to the history's newest snapshot and indexes exactly those, uploads only the files it wrote (replacing any copy, so a rebuild never keeps an old history's), and writes the remote index and deletes old files only after its database upload succeeds.
+20. **A history from nothing is a rebuild** (BZ63), and the rebuild mark also clears when nothing is left pending (a refused newest snapshot no longer holds it forever).
+21. **A long local rebuild pauses `IngestSchedule`** (infra/README.md), since Ingest uploads about hourly and a 2-hour rebuild would always lose its conditional upload; the command line reports a lost race in one line and exits 1.
+22. **Accepted, not changed:** the catalog's retry time for an id neither search knows follows each batch's newest snapshot, so capped runs and one uncapped run can retry an unknown id at different times (as daily runs and a rebuild already could); documents differ only if Blizzard's answer changes in between. `run_ingest` keeps 7 parameters, as `run_daily` had.
+23. **Found, out of scope:** `hourly.advance` raises on a malformed newest raw snapshot, so the daily analysis and the hourly mode fail until a good snapshot arrives (on `main` before this batch too). For the user to schedule.
+
 Facts measured on 2026-11-11:
 
 | What | Value | Source |

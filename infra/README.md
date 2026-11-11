@@ -79,14 +79,16 @@ The metric graphs count only runs in AWS: `python -m ahcloud` on your machine wr
 
 A rebuild throws `state/history.db` and the compact snapshots away and replays the raw of the retention window (the last 90 days plus 2.5 days, FM76) into a fresh database. Use it when a run fails with `DatabaseError` (FM72), or to apply a changed volume method to the stored days at once; day to day Ingest keeps the history current.
 
-1. **In the cloud**: invoke the **Ingest** function (not the analyzer) with `{"mode": "rebuild"}`. It starts a fresh history marked rebuilding until the newest raw, and its scheduled runs carry on at the rebuild cap (`REBUILD_SNAPSHOTS_PER_RUN`) until the history reaches the mark; meanwhile the daily analysis publishes nothing (`daily_rebuilding`) and the hourly prices carry on (BZ61). `NoDailyBaselines` may fire if it takes over a day; it clears at the next analysis.
-2. **On your machine, to be done sooner** (no time limit there; about 80 s per day of raw on a recent Mac):
+1. **In the cloud**: invoke the **Ingest** function (not the analyzer) with `{"mode": "rebuild"}`. It starts a fresh history marked rebuilding until the newest raw, and its scheduled runs carry on at the rebuild cap (`REBUILD_SNAPSHOTS_PER_RUN`) until the history reaches the mark; meanwhile the daily analysis publishes nothing (`daily_rebuilding`) and the hourly prices carry on (BZ61). `NoDailyBaselines` may fire if it takes over a day, and `HistoryBehind` fires while the history is days behind the raw (about 90 days at first, 120 snapshots an hour at the rebuild cap); both clear once it is done.
+2. **On your machine, to be done sooner** (no time limit there; about 80 s per day of raw on a recent Mac, so a full window takes about 2 hours). Ingest uploads the history about every hour, which would refuse a 2-hour rebuild's upload every time, so pause its schedule first and resume it afterwards (`HistoryBehind` may email while it is paused):
 
    ```sh
+   aws events disable-rule --name <the stack's IngestSchedule rule>     # the rule name is in the CloudFormation stack's resources
    .venv-cloud/bin/python -m ahcloud rebuild --store s3://<data-bucket> --intel s3://<intel-bucket>
+   aws events enable-rule --name <the stack's IngestSchedule rule>
    ```
 
-   It uses Blizzard's credentials for the catalog (above), then runs the analysis and publishes to the real intel bucket. If an Ingest run uploads while it runs (every :10 and :40), the rebuild's upload is refused (`PreconditionFailed`: it is conditional on the ETag it saw at its start) and nothing is published; run it again. The analyzer never writes the database, so its runs can carry on.
+   The rebuild uses Blizzard's credentials for the catalog (above), then runs the analysis and publishes to the real intel bucket. If an Ingest run uploads while it runs anyway, the rebuild's upload is refused (it is conditional on the ETag it saw at its start), the command says so and exits 1, and nothing is published; run it again. The analyzer never writes the database, so its runs can carry on.
 3. **Check** the new pointer through CloudFront (`/intel/<market>/latest-<schema>.json`): its `built_ms` is the newest raw snapshot's time.
 
 To try a rebuild without touching the cloud, add `--out data/rebuild-check`: the buckets are only read and every write lands in the folder.

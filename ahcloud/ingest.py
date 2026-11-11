@@ -58,6 +58,8 @@ RETENTION_DAYS = 90                     # history kept in the cloud (SPEC §2.4)
 # oldest kept day's own 24 h and the 36 h its lifetimes read before it (FM76). Older raw would be pruned anyway.
 REBUILD_REPLAY_MS = RETENTION_DAYS * DAY_MS + DAY_MS + LIFETIME_LOOKBACK_MS
 REFUSED = "refused_snapshots"           # meta key: snapshot times refused whole, never tried again (FM74)
+EMPTY = "empty_snapshots"               # meta key: empty-house snapshot times (BZ5), ingested as nothing, never pending
+                                        # again (BZ62; they leave no scans row)
 WORKDIR = Path("/tmp/ahcloud-ingest")   # Lambda's ephemeral disk; emptied by every run that downloads
 
 log = logging.getLogger(__name__)
@@ -206,9 +208,10 @@ def _pending(db: Database, data: Store, market: str, last: int) -> tuple[list[st
         last: The newest snapshot in the history (0 for a first run or a rebuild).
 
     Returns:
-        (keys without a `scans` row and not refused, oldest first; the newest listed key's time, None when none).
+        (keys without a `scans` row, not refused and not empty, oldest first; the newest listed key's time, None
+        when none).
     """
-    refused = set(json.loads(db.get_meta(REFUSED) or "[]"))
+    refused = set(json.loads(db.get_meta(REFUSED) or "[]")) | set(json.loads(db.get_meta(EMPTY) or "[]"))
     after = raw_key(market, last - DAY_MS) if last else ""            # older raw is ingested or pruned (BZ14)
     listed = data.list(f"raw/{market}/", start_after=after)
     if not last and listed:                                           # a first run or a rebuild: the window only (FM76)
@@ -233,7 +236,7 @@ def _ingest(db: Database, data: Store, client: BlizzardClient, market: str, run:
     """
     last = int(db.get_meta(LAST_INGESTED) or 0)
     pending, newest = _pending(db, data, market, last)
-    if run.fresh and newest is not None:
+    if (run.fresh or run.etag is None) and not last and newest is not None:     # a history from nothing (BZ61, BZ63)
         db.set_meta(REBUILDING, str(newest))
     mark = int(db.get_meta(REBUILDING) or 0) or None
     limit = None if run.cap is None else REBUILD_SNAPSHOTS_PER_RUN if mark else run.cap
@@ -241,33 +244,68 @@ def _ingest(db: Database, data: Store, client: BlizzardClient, market: str, run:
     left = len(pending) - len(batch)
     seen = key_time_ms(batch[-1]) if left else newest
     if not batch:
-        state = "empty" if not last else "up_to_date"
-        outcome = IngestOutcome(state, 0, 0, 0, last or None, 0, mark)
+        outcome = IngestOutcome("up_to_date" if last else "empty", 0, 0, 0, last or None, 0, mark)
         if last:
             write_state(data, outcome, seen, run.clock.now_ms(), run.started_ms)
         return outcome
     store = SnapshotStore(run.workdir / "snapshots")
     if run.etag is not None and not run.fresh:                       # a rebuild starts the compact store afresh
         first_day = (key_time_ms(batch[0]) - SALES_PAIR_MAX_GAP_MS) // DAY_MS           # id_days' first day
-        download_compact(data, store.root, market, first_day * DAY_MS - LIFETIME_LOOKBACK_MS)
-    new_refusals = ingest_pending(db, data, store, market, batch)
-    if new_refusals:
-        refused = set(json.loads(db.get_meta(REFUSED) or "[]"))
-        db.set_meta(REFUSED, json.dumps(sorted(refused | set(new_refusals))))
-    last = max([last] + [key_time_ms(k) for k in batch if key_time_ms(k) not in new_refusals])
-    lag = (newest or 0) - (seen or 0)
-    if not last:                       # everything so far was refused: keep the refusals, or the next run retries them
-        outcome = IngestOutcome("empty", 0, len(new_refusals), left, None, lag, mark)
-    else:
+        download_compact(data, store.root, market, first_day * DAY_MS - LIFETIME_LOOKBACK_MS, last)
+    refused, empty = ingest_pending(db, data, store, market, batch)
+    remember(db, REFUSED, refused)
+    remember(db, EMPTY, empty)
+    last = max([last] + [key_time_ms(k) for k in batch if key_time_ms(k) not in refused])
+    written = [key_time_ms(k) for k in batch if key_time_ms(k) not in set(refused) | set(empty)]
+    if last:
         _finish_history(db, client, market, store, last)
-        mark = _clear_mark(db, mark, last)
-        upload_compact(data, store.root, market, last - COMPACT_DAYS * DAY_MS)
-        outcome = IngestOutcome("ingested", len(batch) - len(new_refusals), len(new_refusals), left, last, lag, mark)
+        mark = _clear_mark(db, mark, last, left)
+    lag = (newest or 0) - (seen or 0)
+    outcome = (IngestOutcome("ingested", len(written), len(refused), left, last, lag, mark) if last
+               else IngestOutcome("empty", 0, len(refused), left, None, lag, mark))   # all refused: keep the refusals
+    _write_back(db, data, market, store, run, written, last)
+    write_state(data, outcome, seen, run.clock.now_ms(), run.started_ms)
+    return outcome
+
+
+def _write_back(db: Database, data: Store, market: str, store: SnapshotStore, run: _Run, written: list[int],
+                last: int) -> None:
+    """Upload the run's work in the order that keeps a lost race harmless (FM83).
+
+    This run's new compact files first (named by their time; any run writes the same bytes for one), then the
+    database with If-Match, and only after that succeeds the compact index and the deletion of old files.
+
+    Args:
+        db: The history database.
+        data: The data store.
+        market: Market id.
+        store: The local compact snapshot store.
+        run: The run's fixed facts.
+        written: Times of the snapshots this run stored, UTC ms.
+        last: The newest snapshot in the history, UTC ms; 0 when there is none yet.
+
+    Raises:
+        ahcloud.store.PreconditionFailed: Another writer uploaded the database meanwhile.
+    """
+    upload_compact_files(data, store.root, market, written)
     copy = run.workdir / "upload.db"
     db.conn.execute("VACUUM INTO ?", (str(copy),))
     data.put(DB_KEY, copy.read_bytes(), if_match=run.etag)
-    write_state(data, outcome, seen, run.clock.now_ms(), run.started_ms)
-    return outcome
+    if last:
+        finish_compact(data, store.root, market, last - COMPACT_DAYS * DAY_MS)
+
+
+def remember(db: Database, name: str, times: list[int]) -> None:
+    """Add snapshot times to a meta list (refused or empty), so they are never pending again.
+
+    Args:
+        db: The history database.
+        name: The meta key, REFUSED or EMPTY.
+        times: Snapshot times, UTC ms; nothing is written when empty.
+    """
+    if times:
+        known = set(json.loads(db.get_meta(name) or "[]"))
+        db.set_meta(name, json.dumps(sorted(known | set(times))))
 
 
 def _finish_history(db: Database, client: BlizzardClient, market: str, store: SnapshotStore, last: int) -> None:
@@ -287,43 +325,68 @@ def _finish_history(db: Database, client: BlizzardClient, market: str, store: Sn
     db.set_meta(LAST_INGESTED, str(last))
 
 
-def _clear_mark(db: Database, mark: int | None, last: int) -> int | None:
-    """Clear the rebuilding mark once the history has reached it (BZ61).
+def _clear_mark(db: Database, mark: int | None, last: int, left: int) -> int | None:
+    """Clear the rebuilding mark once the history has reached it, or nothing is left to take (BZ61).
 
     Args:
         db: The history database.
         mark: The mark, UTC ms, or None.
         last: The newest snapshot now in the history, UTC ms.
+        left: Snapshots still pending after this run (0 also when the newest raw was refused or empty).
 
     Returns:
         The mark still set, or None.
     """
-    if mark is not None and last >= mark:
+    if mark is not None and (last >= mark or left == 0):
         with db.transaction():
             db.conn.execute("DELETE FROM meta WHERE name = ?", (REBUILDING,))
         return None
     return mark
 
 
-def download_compact(data: Store, root: Path, market: str, from_ms: int) -> None:
-    """Fetch the compact store's index and its files from a time on, into a local SnapshotStore folder.
+def download_compact(data: Store, root: Path, market: str, from_ms: int, to_ms: int) -> None:
+    """Fetch the compact files of a time range into a local SnapshotStore folder, and index exactly those.
+
+    The index is built from the files fetched, never read from the remote `index.json`: a run that lost a race may
+    have written that (FM83), and files after the history's newest snapshot may be a lost run's or, during a
+    rebuild, the old history's.
 
     Args:
         data: The data store.
         root: The local snapshot store's root.
         market: Market id.
         from_ms: The oldest snapshot a recompute could read.
+        to_ms: The history's newest snapshot; later files are left out.
     """
     folder = root / market / SRC
     folder.mkdir(parents=True, exist_ok=True)
+    times = []
     for key in data.list(compact_prefix(market)):
         name = key.rsplit("/", 1)[1]
-        if name == "index.json" or int(name.split(".")[0]) >= from_ms:
+        if name != "index.json" and from_ms <= int(name.split(".")[0]) <= to_ms:
             (folder / name).write_bytes(data.get(key).data)
+            times.append(int(name.split(".")[0]))
+    (folder / "index.json").write_bytes(json.dumps(sorted(times)).encode("utf-8"))
 
 
-def upload_compact(data: Store, root: Path, market: str, keep_from_ms: int) -> None:
-    """Upload the compact files the store holds and its index; delete the remote files the index dropped.
+def upload_compact_files(data: Store, root: Path, market: str, times: list[int]) -> None:
+    """Upload the compact files this run wrote, replacing any copy (an old history's, during a rebuild).
+
+    Args:
+        data: The data store.
+        root: The local snapshot store's root.
+        market: Market id.
+        times: The snapshot times this run stored, UTC ms; any the local prune already dropped are skipped.
+    """
+    folder, prefix = root / market / SRC, compact_prefix(market)
+    for at_ms in sorted(times):
+        path = folder / f"{at_ms}.json.gz"
+        if path.exists():
+            data.put(prefix + path.name, path.read_bytes())
+
+
+def finish_compact(data: Store, root: Path, market: str, keep_from_ms: int) -> None:
+    """After the database upload: the compact index (for reading by hand; runs build their own) and the old files.
 
     Args:
         data: The data store.
@@ -332,12 +395,9 @@ def upload_compact(data: Store, root: Path, market: str, keep_from_ms: int) -> N
         keep_from_ms: Remote files older than this are deleted (the local prune already dropped them).
     """
     folder, prefix = root / market / SRC, compact_prefix(market)
-    remote = set(data.list(prefix))
-    for path in sorted(folder.glob("*.json.gz")):
-        if prefix + path.name not in remote:
-            data.put(prefix + path.name, path.read_bytes())
-    data.put(prefix + "index.json", (folder / "index.json").read_bytes())
-    for key in sorted(remote):
+    if (folder / "index.json").exists():
+        data.put(prefix + "index.json", (folder / "index.json").read_bytes())
+    for key in sorted(data.list(prefix)):
         name = key.rsplit("/", 1)[1]
         if name != "index.json" and int(name.split(".")[0]) < keep_from_ms:
             data.delete(key)
@@ -403,7 +463,8 @@ def fill_catalog(db: Database, client: BlizzardClient, keys: list[int], now_ms: 
     return written
 
 
-def ingest_pending(db: Database, data: Store, store: SnapshotStore, market: str, pending: list[str]) -> list[int]:
+def ingest_pending(db: Database, data: Store, store: SnapshotStore, market: str,
+                   pending: list[str]) -> tuple[list[int], list[int]]:
     """Ingest raw snapshots in order, setting aside any that is refused whole (FM33, FM74), then their id volume.
 
     A refused snapshot is stored nowhere (`ingest_snapshot` checks before writing) and logged with its key and
@@ -418,9 +479,9 @@ def ingest_pending(db: Database, data: Store, store: SnapshotStore, market: str,
         pending: Raw keys without a `scans` row, in time order.
 
     Returns:
-        The times of the snapshots refused, ascending.
+        (the times of the snapshots refused, those of empty houses or vanished objects (BZ5, BZ62)), ascending.
     """
-    refused, days = [], set()
+    refused, empty, days = [], [], set()
     for key in pending:
         try:
             observation = snapshot(data, key, market)
@@ -431,12 +492,14 @@ def ingest_pending(db: Database, data: Store, store: SnapshotStore, market: str,
         if problems:
             log.warning("refused %s: %s", key, "; ".join(problems))
             refused.append(key_time_ms(key))
-        elif observation is not None:                               # an empty house ingests nothing (BZ5)
+        elif observation is None:                                   # an empty house ingests nothing (BZ5)
+            empty.append(key_time_ms(key))
+        else:
             ingest_snapshot(db, store, observation, id_volume=False)
             days |= id_days(store, market, SRC, observation.at_ms)
     with db.transaction():
         recompute_id_days(db, store, market, SRC, days)
-    return refused
+    return refused, empty
 
 
 def emit_outcome(market: str, outcome: IngestOutcome, now_ms: int) -> None:

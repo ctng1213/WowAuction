@@ -29,7 +29,7 @@ from ahcloud.credentials import WHERE, CredentialsMissing, lookup
 from ahcloud.daily import run_daily
 from ahcloud.hourly import run_hourly
 from ahcloud.ingest import run_ingest
-from ahcloud.store import LocalStore, OverlayStore, Store
+from ahcloud.store import LocalStore, OverlayStore, PreconditionFailed, Store
 from ahsync.clock import SystemClock
 from ahsync.collect.blizzard import BlizzardClient, BlizzardError
 from ahsync.collect.client import Transport, TransportError, UrllibTransport
@@ -115,6 +115,10 @@ def main(argv: list[str] | None = None, env: dict[str, str] | None = None, home:
     client = BlizzardClient(transport or UrllibTransport(), clock, found.client_id, found.secret)
     try:
         return _run(args, client, clock)
+    except PreconditionFailed:                                        # FM83: an Ingest run uploaded meanwhile
+        print("error: another writer uploaded the history meanwhile; run it again "
+              "(pause IngestSchedule first for a long rebuild, infra/README.md)", file=sys.stderr)
+        return 1
     except (BlizzardError, TransportError, DatabaseError) as error:
         print(f"error: {type(error).__name__}: {error}", file=sys.stderr)
         return 1

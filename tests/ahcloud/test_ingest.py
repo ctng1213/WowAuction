@@ -12,11 +12,11 @@ import pytest
 
 from ahcloud import ingest
 from ahcloud.daily import run_daily
-from ahcloud.ingest import (COMPACT_DAYS, DB_KEY, LAST_INGESTED, REBUILD_REPLAY_MS, REBUILDING, REFUSED, STATE_KEY,
+from ahcloud.ingest import (COMPACT_DAYS, DB_KEY, EMPTY, LAST_INGESTED, REBUILD_REPLAY_MS, REBUILDING, REFUSED, STATE_KEY,
                             compact_prefix, key_time_ms, read_state, run_ingest)
 from ahcloud.publish import read_latest
 from ahcloud.store import LocalStore, PreconditionFailed
-from ahsync.collect.blizzard import raw_key
+from ahsync.collect.blizzard import raw_envelope, raw_key
 from ahsync.db.sqlite import Database, DatabaseError
 from ahsync.engine.volume import LIFETIME_LOOKBACK_MS, SALES_PAIR_MAX_GAP_MS
 from tests.support.cloud_world import (A_MS, B, B_MS, C_MS, HOUR, LINEN, M, SNAP_A, SNAP_B, SNAP_C, SPAULDERS,
@@ -102,8 +102,8 @@ def test_BZ56_an_ingest_run_writes_the_history_then_its_state_and_publishes_noth
     data.put = lambda key, value, if_match=None: (order.append(key), original(key, value, if_match))[1]
     outcome = ingest_run(data, tmp_path)
     assert (outcome.state, outcome.ingested, outcome.pending, outcome.lag_ms) == ("ingested", 2, 0, 0)
-    assert order[-2:] == [DB_KEY, STATE_KEY]                                     # the state only after the history
-    assert all(k.startswith(compact_prefix(M)) for k in order[:-2])
+    assert order[-3:] == [DB_KEY, compact_prefix(M) + "index.json", STATE_KEY]  # the index and state after the history
+    assert all(k.startswith(compact_prefix(M)) and k.endswith("000.json.gz") for k in order[:-3])   # the new files first
     state = read_state(data)
     assert (state["last_ingested_at_ms"], state["newest_seen_ms"], state["pending"]) == (C_MS, C_MS, 0)
     assert (state["outcome"], state["ingested"], state["refused"], state["finished_ms"]) == ("ingested", 2, 0, NOW)
@@ -111,8 +111,11 @@ def test_BZ56_an_ingest_run_writes_the_history_then_its_state_and_publishes_noth
 
 
 def test_BZ57_a_backlog_drains_twelve_snapshots_a_run_and_ends_where_one_run_would(tmp_path):
-    snaps = hourly_snaps(A_MS, 30)
-    data, intel = stores(tmp_path / "capped", *snaps)
+    snaps = hourly_snaps(A_MS, 31)
+    data, intel = stores(tmp_path / "capped", snaps[0])
+    ingest_run(data, tmp_path / "capped")                                        # a history exists
+    for at_ms, envelope in snaps[1:]:
+        data.put(raw_key(M, at_ms), envelope)                                     # then 30 pending
     runs = [ingest_run(data, tmp_path / "capped") for _ in range(3)]
     assert [(r.ingested, r.pending) for r in runs] == [(12, 18), (12, 6), (6, 0)]
     assert runs[0].lag_ms == (30 - 12) * HOUR and runs[2].lag_ms == 0
@@ -166,10 +169,37 @@ def test_FM83_a_run_that_lost_the_race_fails_without_overwriting_or_moving_its_s
         return original(key, value, if_match)
 
     data.put = another_writer_first
+    index = data.get(compact_prefix(M) + "index.json").data
     with pytest.raises(PreconditionFailed):
         ingest_run(data, tmp_path)
     assert data.get(DB_KEY).data == b"a local rebuild's database"            # never overwritten blind
     assert read_state(data) == state                                           # the state file not written
+    assert data.get(compact_prefix(M) + "index.json").data == index           # nor the compact index
+
+
+def test_FM83_a_lost_runs_compact_index_never_misleads_the_next_run(tmp_path):
+    snaps = hourly_snaps(A_MS, 4)
+    whole_data, whole_intel = stores(tmp_path / "whole", *snaps)
+    cycle(whole_data, whole_intel, tmp_path / "whole", cap=None)
+    data, intel = stores(tmp_path / "raced", *snaps[:2])
+    ingest_run(data, tmp_path / "raced")
+    for at_ms, envelope in snaps[2:]:
+        data.put(raw_key(M, at_ms), envelope)
+    data.put(compact_prefix(M) + "index.json", b"[]")                       # a lost run's index, missing everything
+    cycle(data, intel, tmp_path / "raced")
+    assert read_latest(intel, M)[1].sha256 == read_latest(whole_intel, M)[1].sha256      # built from the files
+
+
+def test_FM83_the_command_line_says_another_writer_won(tmp_path, monkeypatch, capsys):
+    from ahcloud import __main__ as cli
+
+    def lost(*args, **kwargs):
+        raise PreconditionFailed(DB_KEY)
+
+    monkeypatch.setattr(cli, "run_ingest", lost)
+    env = {"BLIZZARD_CLIENT_ID": "a", "BLIZZARD_CLIENT_SECRET": "b"}
+    assert cli.main(["ingest", "--store", str(tmp_path)], env=env, home=tmp_path) == 1
+    assert "another writer uploaded the history meanwhile; run it again" in capsys.readouterr().err
 
 
 def test_BZ13_a_late_snapshot_is_ingested_in_time_order(tmp_path):
@@ -239,7 +269,8 @@ def test_FM74_a_refused_snapshot_is_set_aside_and_the_rest_is_ingested(tmp_path,
     assert (again.state, again.ingested, again.refused) == ("up_to_date", 0, 0)
 
 
-def test_FM74_a_first_batch_refused_whole_is_kept_so_the_next_run_moves_on(tmp_path):
+def test_FM74_a_first_batch_refused_whole_is_kept_so_the_next_run_moves_on(tmp_path, monkeypatch):
+    monkeypatch.setattr(ingest, "REBUILD_SNAPSHOTS_PER_RUN", 2)                  # a history from nothing (BZ63)
     bad = [(A_MS + i * HOUR, house(B, [], [{**linen(2455, 10), "time_left": "EXPIRED"}])) for i in range(2)]
     bad = [(at, shifted(envelope, at)) for at, envelope in bad]
     data, _ = stores(tmp_path, *bad, (A_MS + 2 * HOUR, shifted(SNAP_B, A_MS + 2 * HOUR)))
@@ -363,9 +394,62 @@ def test_BZ61_a_rebuild_runs_over_several_runs_and_the_analysis_waits_for_it(tmp
     assert read_latest(intel, M)[1].sha256 == incremental.sha256              # the incremental history's document
 
 
+def empty_house(at_ms: int) -> bytes:
+    """An empty house (BZ5): the auctions body has no `auctions` key."""
+    stamp = format_datetime(datetime.fromtimestamp(at_ms / 1000, timezone.utc), usegmt=True)
+    return raw_envelope(2, 113, stamp, 0, json.dumps({"id": 113, "name": "Empty"}).encode(),
+                        json.dumps({"id": 113, "auctions": []}).encode())
+
+
+def test_BZ62_empty_houses_in_a_backlog_never_stall_ingest(tmp_path):
+    empties = [(A_MS + i * HOUR, empty_house(A_MS + i * HOUR)) for i in range(1, 14)]
+    last_ms = A_MS + 14 * HOUR
+    data, _ = stores(tmp_path, (A_MS, SNAP_A))
+    ingest_run(data, tmp_path)                                                   # a history holding A
+    for at_ms, envelope in [*empties, (last_ms, shifted(SNAP_B, last_ms))]:
+        data.put(raw_key(M, at_ms), envelope)
+    first = ingest_run(data, tmp_path)
+    assert (first.state, first.ingested, first.pending) == ("ingested", 0, 2)          # 12 empty
+    second = ingest_run(data, tmp_path)
+    assert (second.ingested, second.pending, second.last_ingested_at_ms) == (1, 0, last_ms)   # 1 empty, then B
+    db = history(data, tmp_path)
+    try:
+        assert json.loads(db.get_meta(EMPTY)) == [at for at, _ in empties]
+    finally:
+        db.close()
+    data.put(STATE_KEY, b"{}")                                               # the full path: nothing pending again
+    assert ingest_run(data, tmp_path).state == "up_to_date"
+
+
+def test_BZ63_a_history_from_nothing_is_marked_rebuilding_until_it_catches_up(tmp_path, monkeypatch):
+    monkeypatch.setattr(ingest, "REBUILD_SNAPSHOTS_PER_RUN", 2)
+    snaps = hourly_snaps(A_MS, 3)
+    data, intel = stores(tmp_path, *snaps)                                   # raw, and no history.db
+    first = ingest_run(data, tmp_path)
+    assert (first.ingested, first.pending, first.rebuilding_until_ms) == (2, 1, snaps[-1][0])
+    assert run_daily(data, intel, M, tmp_path / "run").state == "rebuilding"
+    assert ingest_run(data, tmp_path).rebuilding_until_ms is None
+    assert run_daily(data, intel, M, tmp_path / "run").state == "published"
+
+
+def test_BZ61_a_rebuild_whose_newest_snapshot_is_refused_still_finishes(tmp_path):
+    bad_ms = B_MS
+    data, intel = stores(tmp_path, (A_MS, SNAP_A), (bad_ms, house(B, [], [{**linen(2455, 10), "time_left": "EXPIRED"}])))
+    outcome = ingest_run(data, tmp_path, cap=None, fresh=True)
+    assert (outcome.ingested, outcome.refused, outcome.rebuilding_until_ms) == (1, 1, None)
+    db = history(data, tmp_path)
+    try:
+        assert db.get_meta(REBUILDING) is None                                    # so the analysis may publish
+    finally:
+        db.close()
+
+
 def test_the_handler_reports_its_outcome_and_the_historys_lag(tmp_path, monkeypatch):
     data = LocalStore(tmp_path / "data")
-    for at_ms, envelope in hourly_snaps(A_MS, 14):
+    snaps = hourly_snaps(A_MS, 15)
+    data.put(raw_key(M, snaps[0][0]), snaps[0][1])
+    ingest_run(data, tmp_path)                                                   # a history exists
+    for at_ms, envelope in snaps[1:]:
         data.put(raw_key(M, at_ms), envelope)
     for name, value in {"DATA_BUCKET": "data", "MARKET": M, "SECRET_NAME": "wowauction/blizzard-api"}.items():
         monkeypatch.setenv(name, value)
