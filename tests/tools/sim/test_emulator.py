@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
 from ahcloud.store import LocalStore  # noqa: E402
 from ahsync.collect.blizzard import open_envelope  # noqa: E402
 from ahsync.collect.provider import SnapshotObservation, snapshot_problems  # noqa: E402
-from ahsync.engine.volume import life_flows, lifetimes, sold_by_hour  # noqa: E402
+from ahsync.engine.lifetimes import life_flows, lifetimes, sold_by_hour  # noqa: E402
 from sim.emulator import (capture, envelope, id_book, records, snapshot_times, store_snapshot,  # noqa: E402
                           time_left, with_conflict, with_duplicate)
 from sim.market import HOUR_MS, MINUTE_MS, Live  # noqa: E402

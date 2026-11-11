@@ -85,3 +85,9 @@ SX1-SX10
 # H2 built (CS2-CS11, BZ55, FM81, SEC21)
 # H3 (also SEC21's page half: textContent only, one relative fetch)
 CS12
+
+# Carry-forward lifetimes (docs/plans/carry-forward-lifetimes.md): the engine built (VI8); the history and the cloud to come
+BZ66
+BZ67
+FM86
+SM19

@@ -12,7 +12,8 @@ sys.path.insert(0, str(ROOT / "tools"))
 import lifetimes_report as rep  # noqa: E402
 
 from ahsync.collect.blizzard import raw_key  # noqa: E402
-from ahsync.engine.volume import Auction, IdBook, lifetimes  # noqa: E402
+from ahsync.engine.volume import Auction, IdBook  # noqa: E402
+from ahsync.engine.lifetimes import lifetimes  # noqa: E402
 from tests.support.cloud_world import A_MS, B_MS, C_MS, LINEN, M, SNAP_A, SNAP_B, SNAP_C, SPAULDERS  # noqa: E402
 
 H = 3_600_000

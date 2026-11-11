@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from ahsync.engine.lifetime_prices import new_listing_positions, position_milli, sold_prices, units_milli, weighted_median
-from ahsync.engine.volume import Auction, Ending, IdBook, Lifetimes, lifetimes
+from ahsync.engine.volume import Auction, IdBook
+from ahsync.engine.lifetimes import Ending, Lifetimes, lifetimes
 
 HOUR_MS = 3_600_000
 LINEN, ORE, BRACERS = 2589, 2770, 6584

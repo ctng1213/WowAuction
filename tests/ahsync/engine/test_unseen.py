@@ -4,7 +4,8 @@ from __future__ import annotations
 import pytest
 
 from ahsync.engine.unseen import unseen_sales
-from ahsync.engine.volume import Auction, IdBook, life_flows, lifetimes
+from ahsync.engine.volume import Auction, IdBook
+from ahsync.engine.lifetimes import life_flows, lifetimes
 
 H = 3_600_000
 LINEN, GLOVES = 2589, 6585

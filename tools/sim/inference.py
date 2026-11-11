@@ -18,7 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ahsync.engine import sellprob
-from ahsync.engine.volume import MAX_GAP_MS, Lifetimes, VolumePrior, lifetimes, posterior_rate
+from ahsync.engine.volume import MAX_GAP_MS, VolumePrior, posterior_rate
+from ahsync.engine.lifetimes import Lifetimes, lifetimes
 from ahsync.intel.contract import MarketIntelligence
 from lifetimes_report import relist_estimate
 from sim.market import DAY_MS, HOUR_MS, Item, World
@@ -400,7 +401,7 @@ def tier_evidence(lt: Lifetimes, key: int, limits: Sequence[float] = sellprob.TI
     """Each tier's ended listings as the lifetimes see them (BZ28's quantity, M33b): sold share per listing.
 
     Args:
-        lt: The lifetimes (`volume.lifetimes`).
+        lt: The lifetimes (`lifetimes.lifetimes`).
         key: Item key.
         limits: Tier edges, price ÷ the lowest other price at first sight (SPEC §3.3.2; SM5 varies them).
 

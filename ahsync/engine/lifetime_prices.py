@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from itertools import accumulate
 
-from ahsync.engine.volume import Lifetimes
+from ahsync.engine.lifetimes import Lifetimes
 
 UNITS_MILLI = 1000          # sold units are stored and compared in thousandths (SPEC §3.3 units-weighted median)
 
@@ -56,7 +56,7 @@ def sold_prices(lt: Lifetimes) -> dict[tuple[int, int], dict[int, dict[int, floa
     have no price and are left out.
 
     Args:
-        lt: From `volume.lifetimes`.
+        lt: From `lifetimes.lifetimes`.
 
     Returns:
         gap -> item key -> unit price copper -> units (float); items and prices with no units are left out.

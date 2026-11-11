@@ -3,7 +3,7 @@
     python tools/lifetimes_report.py --raw data/cloud-live/raw/forever.normal.horde.us \
         --catalog data/cloud-live/document.json.gz --out docs/plans/blizzard-cloud-lifetimes.md
 
-Reads every raw envelope under --raw (read-only), follows the auctions with `engine.volume.lifetimes`, and writes a
+Reads every raw envelope under --raw (read-only), follows the auctions with `engine.lifetimes.lifetimes`, and writes a
 markdown report: band against age since posting (the band bounds, BZ24), clashes with the rules, short at first
 sight, how endings split between sold and expired, and relist matches by kind and stack (the relist decision).
 The report is a temporary plan file; it changes no number in the product.
@@ -26,7 +26,8 @@ if str(ROOT) not in sys.path:
 from ahsync.collect.blizzard import BlizzardError, http_date_ms, open_envelope, parse_snapshot
 from ahsync.collect.provider import load_bonus_suffixes
 from ahsync.engine.capacity import GEAR_CLASSES
-from ahsync.engine.volume import HOUR_MS, MAX_GAP_MS, Ending, IdBook, Lifetimes, lifetimes
+from ahsync.engine.volume import HOUR_MS, MAX_GAP_MS, IdBook
+from ahsync.engine.lifetimes import Ending, Lifetimes, lifetimes
 
 BANDS = {1: "SHORT", 2: "MEDIUM", 3: "LONG", 4: "VERY_LONG"}
 MAX_AGE_H = 25

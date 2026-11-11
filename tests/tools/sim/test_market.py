@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
 
-from ahsync.engine.volume import lifetimes  # noqa: E402
+from ahsync.engine.lifetimes import lifetimes  # noqa: E402
 from sim.emulator import capture, id_book, snapshot_times  # noqa: E402
 from sim.market import DAY_MS, HOUR_MS, Item, Market, Planted, World  # noqa: E402
 
