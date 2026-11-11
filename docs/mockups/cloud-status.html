@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proposal: the cloud status page</title>
+<style>
+  :root { --bg: #0f1115; --panel: #171a21; --text: #e6e6e6; --muted: #8f8a7d; --label: #8fd3ff; --gold: #ffd100;
+          --ok: #4cd964; --warn: #ffb347; --bad: #ff5c5c; --line: #2a2f3a;
+          --cell-analysed: #2f9e4f; --cell-collected: #1d5a6e; --cell-missing: #b33a3a; --cell-future: #1b1f27; }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) { --bg: #f6f5f1; --panel: #ffffff; --text: #1d1d1f; --muted: #6b665a; --label: #1f6fa8;
+          --gold: #8a6d00; --ok: #1f8a3c; --warn: #b86e00; --bad: #c62828; --line: #dedad0;
+          --cell-analysed: #3aa95a; --cell-collected: #8cc7d8; --cell-missing: #d9534f; --cell-future: #eeece6; }
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.45 -apple-system, "Segoe UI", sans-serif; margin: 0; padding: 16px; }
+  .doc { max-width: 1180px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; } h2 { font-size: 16px; margin: 32px 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+  p.note { color: var(--muted); max-width: 900px; } code { font-size: 12px; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); } .muted { color: var(--muted); }
+  .pair { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+  .pair > * { min-width: 0; max-width: 100%; }
+  .cap { font-size: 12px; color: var(--muted); margin: 0 0 6px; max-width: 420px; }
+
+  /* The page itself (what status.html draws). */
+  .page { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 16px; width: 100%; max-width: 760px; }
+  .page.phone { max-width: 390px; }
+  .top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .top .market { font-weight: 600; } .top .asof { font-size: 12px; color: var(--muted); }
+  .verdict { margin: 12px 0; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel);
+             display: flex; gap: 10px; align-items: center; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; }
+  .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
+  .verdict b { font-size: 16px; }
+  .slas { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+  .sla { background: var(--panel); border: 1px solid var(--line); border-left-width: 4px; border-radius: 6px; padding: 8px 10px; }
+  .sla.ok { border-left-color: var(--ok); } .sla.warn { border-left-color: var(--warn); } .sla.bad { border-left-color: var(--bad); }
+  .sla .name { font-size: 12px; color: var(--label); } .sla .val { font-weight: 600; } .sla .sub { font-size: 12px; color: var(--muted); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; margin-top: 12px; }
+  .card-h { padding: 8px 12px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .card-h span { font-size: 12px; color: var(--muted); }
+  .rows { padding: 4px 12px 8px; }
+  .row { display: flex; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--line); align-items: baseline; flex-wrap: wrap; }
+  .row:last-child { border-bottom: 0; }
+  .row .k { color: var(--label); width: 150px; flex: 0 0 auto; font-size: 13px; }
+  .row .v { flex: 1 1 200px; } .row .v .sub { display: block; font-size: 12px; color: var(--muted); }
+  .grid-wrap { padding: 10px 12px; overflow-x: auto; }
+  .grid { display: grid; grid-template-columns: 54px repeat(24, minmax(12px, 1fr)); gap: 2px; min-width: 360px; font-size: 10px; }
+  .grid .lbl { color: var(--muted); font-size: 11px; white-space: nowrap; align-self: center; }
+  .grid .hr { color: var(--muted); text-align: center; }
+  .c { height: 16px; border-radius: 2px; }
+  .c.a { background: var(--cell-analysed); } .c.l { background: var(--cell-collected); } .c.m { background: var(--cell-missing); }
+  .c.f { background: var(--cell-future); } .c.p { background: var(--cell-collected); outline: 2px solid var(--gold); outline-offset: -2px; }
+  .c.d { box-shadow: inset 2px 0 0 var(--gold); }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); padding: 0 12px 10px; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: -2px; margin-right: 4px; }
+  .foot { font-size: 12px; color: var(--muted); margin-top: 12px; }
+  .banner { padding: 10px 12px; border-radius: 6px; margin: 12px 0; font-size: 13px; }
+  .banner.bad { background: color-mix(in srgb, var(--bad) 15%, transparent); border: 1px solid var(--bad); }
+  .banner.warn { background: color-mix(in srgb, var(--warn) 15%, transparent); border: 1px solid var(--warn); }
+  .ann { outline: 1px dashed var(--warn); outline-offset: 2px; }
+  .picker { display: inline-flex; gap: 4px; align-items: center; }
+  .picker select, .picker button { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 4px;
+                                   font: inherit; font-size: 12px; padding: 3px 6px; max-width: 230px; }
+  .picker button { width: 28px; cursor: pointer; } .picker button:disabled { opacity: .35; cursor: default; }
+</style>
+</head>
+<body>
+<div class="doc">
+<h1>Proposal: the cloud status page</h1>
+<p class="note"><b>Approved by the user, 2026-11-10</b> (the week picker added the same day; 12 blocks, not 13, at the spec merge). A static page, <code>status.html</code>, served by the summaries' CloudFront distribution next to <code>status/&lt;market&gt;.json</code>, which the analyzer rewrites at the end of every run (plan <code>docs/plans/cloud-status.md</code>). Every value and colour below is in that JSON, made and tested in Python (<code>ahcloud/status.py</code>). The page computes one thing itself: how old the JSON is (decision 5). All times are UTC, because the SLAs are UTC. The sample shows <b>14:30 UTC on Tue 10 Nov</b>, viewed at 14:37.</p>
+
+<h2>1. A normal day (one SLA amber)</h2>
+<div class="pair">
+<div class="page" id="normal">
+  <div class="top"><span class="market">forever · normal · horde · US</span><span class="asof">status written 14:30 UTC · <span class="ann">7 min ago</span></span></div>
+  <div class="verdict"><span class="dot warn"></span><div><b>Running, 1 warning</b><br><span class="muted" style="font-size:12px">The daily run used 66% of its time limit.</span></div></div>
+  <div class="slas">
+    <div class="sla ok"><div class="name">Every hour collected</div><div class="val">24 of 24 hours</div><div class="sub">last 24 h · newest snapshot 12 min old</div></div>
+    <div class="sla ok"><div class="name">Hourly prices published</div><div class="val">4 min behind</div><div class="sub">prices up to 14:14 · newest snapshot 14:18</div></div>
+    <div class="sla ok"><div class="name">Daily analysis</div><div class="val">Published 09:06</div><div class="sub">today · due by 09:30 · next 09:00 Wed</div></div>
+    <div class="sla ok"><div class="name">No failed runs</div><div class="val">0 errors</div><div class="sub">last 24 h · dead-letter queue empty</div></div>
+    <div class="sla warn"><div class="name">Run time vs limit</div><div class="val">Daily 9 min 54 s of 15 min</div><div class="sub">66% · hourly 41 s · collector 3 s</div></div>
+  </div>
+
+  <div class="card"><div class="card-h"><b>Functions</b><span>alarms: all OK</span></div><div class="rows">
+    <div class="row"><span class="k">Collector</span><span class="v"><span class="ok">●</span> 14:30 · no new snapshot<span class="sub">Blizzard hasn't refreshed since 14:18 · last new snapshot 14:18 (3,412 auctions) · runs every 15 min</span></span></div>
+    <div class="row"><span class="k">Analyzer, hourly</span><span class="v"><span class="ok">●</span> 14:19 · prices published<span class="sub">triggered by the 14:18 snapshot</span></span></div>
+    <div class="row"><span class="k">Analyzer, daily</span><span class="v"><span class="ok">●</span> 09:00 · baselines published<span class="sub">24 snapshots read · 1,862 items · 0 refused</span></span></div>
+    <div class="row"><span class="k">Failed events</span><span class="v"><span class="ok">●</span> dead-letter queue empty</span></div>
+  </div></div>
+
+  <div class="card"><div class="card-h"><b>Hours</b>
+      <span class="picker ann"><button type="button" data-step="1" aria-label="Earlier week">‹</button><select id="wk-normal" aria-label="Week"></select><button type="button" data-step="-1" aria-label="Later week">›</button></span></div>
+    <div class="grid-wrap"><div class="grid" id="grid-normal"></div></div>
+    <div class="legend"><span><i style="background:var(--cell-analysed)"></i>analysed</span><span><i style="background:var(--cell-collected)"></i>collected, not analysed (yet)</span><span><i style="background:var(--cell-missing)"></i>no snapshot</span><span><i style="background:var(--cell-collected);outline:2px solid var(--gold);outline-offset:-2px"></i>this hour</span><span><i style="background:var(--cell-future)"></i>future, or before collection began</span><span>▏ the daily run · UTC</span></div>
+    <div class="rows"><div class="row"><span class="k">This week</span><span class="v" id="miss-normal"></span></div></div>
+  </div>
+
+  <div class="card"><div class="card-h"><b>Freshness</b><span>ages at 14:30</span></div><div class="rows">
+    <div class="row"><span class="k">Newest snapshot</span><span class="v">14:18 · 12 min</span></div>
+    <div class="row"><span class="k">Hourly prices</span><span class="v">up to 14:14 · 16 min</span></div>
+    <div class="row"><span class="k">Daily baselines</span><span class="v">09:06 · 5 h 24 min</span></div>
+  </div></div>
+
+  <div class="card"><div class="card-h"><b>Blizzard and the document</b><span>last 24 h</span></div><div class="rows">
+    <div class="row"><span class="k">Snapshot interval</span><span class="v">typically 60 min · longest 1 h 58 min</span></div>
+    <div class="row"><span class="k">Mismatched answers</span><span class="v">1<span class="sub">the two halves of the house disagreed; refetched next run (BZ9)</span></span></div>
+    <div class="row"><span class="k">Summary document</span><span class="v">schemas 13–16 · largest 6.2 MB · 1,862 items</span></div>
+  </div></div>
+
+  <div class="foot">Cost alerts arrive by email (budget $5/month). Details: the CloudWatch dashboard <i>WowAuction-&lt;market&gt;</i> (AWS console login).</div>
+</div>
+
+<div>
+  <p class="cap"><b>Same page at phone width.</b> The SLA tiles stack; the hour grid scrolls sideways inside its card, never the page.</p>
+  <div class="page phone">
+    <div class="top"><span class="market">forever · normal · horde · US</span><span class="asof">written 14:30 UTC · 7 min ago</span></div>
+    <div class="verdict"><span class="dot warn"></span><div><b>Running, 1 warning</b><br><span class="muted" style="font-size:12px">The daily run used 66% of its time limit.</span></div></div>
+    <div class="slas">
+      <div class="sla ok"><div class="name">Every hour collected</div><div class="val">24 of 24 hours</div></div>
+      <div class="sla ok"><div class="name">Hourly prices published</div><div class="val">4 min behind</div></div>
+      <div class="sla ok"><div class="name">Daily analysis</div><div class="val">Published 09:06</div></div>
+      <div class="sla ok"><div class="name">No failed runs</div><div class="val">0 errors</div></div>
+      <div class="sla warn"><div class="name">Run time vs limit</div><div class="val">Daily 66% of limit</div></div>
+    </div>
+    <div class="card"><div class="card-h"><b>Hours</b>
+        <span class="picker"><button type="button" data-step="1" aria-label="Earlier week">‹</button><select id="wk-phone" aria-label="Week"></select><button type="button" data-step="-1" aria-label="Later week">›</button></span></div>
+      <div class="grid-wrap"><div class="grid" id="grid-phone"></div></div>
+      <div class="rows"><div class="row"><span class="v" id="miss-phone"></span></div></div></div>
+    <p class="cap" style="margin-top:8px">…then Functions, Freshness, Blizzard and the document, as above.</p>
+  </div>
+</div>
+</div>
+<p class="note">The <span class="ann">dashed</span> value is the one number the browser computes: now minus <code>written_ms</code>. Everything else is fixed text from the JSON, as of 14:30. The ages under <i>Freshness</i> are as of that time, which the card header says.</p>
+<p class="note"><b>The week picker</b> (<span class="ann">dashed</span>; try it). It offers 7-day blocks ending today: the last 7 days (the default), then each 7 days before that: <b>12 blocks</b> (84 days), inside the 90 days the summary's record of analysed hours reaches. Each option's label carries that week's verdict ("complete", "9 h missing"), so a bad week shows without opening it; ‹ goes back a week and › forward. The JSON holds all 13 weeks of cells as one character per hour (about 2 KB), plus each week's label and its missing-hours line, all made in Python: choosing a week only redraws. The picker stops at the first week with a snapshot; that week's hours before collection began are blank.</p>
+
+<h2>2. The thresholds behind the colours</h2>
+<div class="card" style="max-width:900px"><div class="rows">
+  <div class="row"><span class="k">Every hour collected</span><span class="v"><span class="ok">green</span> 24/24 hours in the last 24 h and newest ≤ 75 min · <span class="warn">amber</span> 1–2 hours missing, or newest 75 min – 3 h · <span class="bad">red</span> newest &gt; 3 h (alarm NoNewSnapshot)</span></div>
+  <div class="row"><span class="k">Hourly prices</span><span class="v"><span class="ok">green</span> ≤ 20 min behind the newest snapshot · <span class="warn">amber</span> 20 min – 3 h, or the last hourly run had no baseline · <span class="bad">red</span> &gt; 3 h (alarm NoMarketSummary)</span></div>
+  <div class="row"><span class="k">Daily analysis</span><span class="v"><span class="ok">green</span> today's published by 09:30 · <span class="warn">amber</span> late, before 12:00 · <span class="bad">red</span> none for 27 h (alarm NoDailyBaselines, tightened from 36 h)</span></div>
+  <div class="row"><span class="k">No failed runs</span><span class="v"><span class="ok">green</span> 0 errors in 24 h, queue empty · <span class="warn">amber</span> a snapshot refused by the daily run (by design, FM74) · <span class="bad">red</span> any error alarm, or the queue not empty</span></div>
+  <div class="row"><span class="k">Run time vs limit</span><span class="v"><span class="ok">green</span> &lt; 66% of the function's timeout · <span class="warn">amber</span> 66–90% · <span class="bad">red</span> &gt; 90% (new alarm: analyzer over 12 min)</span></div>
+  <div class="row"><span class="k">The status itself</span><span class="v"><span class="ok">green</span> ≤ 70 min old · <span class="warn">amber</span> 70 min – 3 h · <span class="bad">red</span> &gt; 3 h. The limits come from the JSON; the browser only compares.</span></div>
+</div></div>
+<p class="note">The headline is the worst colour among the SLAs and the status's own age. Its text names the worst one; with two or more ambers it reads "Running, N warnings".</p>
+
+<h2>3. The other states</h2>
+<div class="pair">
+<div>
+  <p class="cap"><b>Red: the collector is failing.</b> The cause is named, and what still works says so.</p>
+  <div class="page phone">
+    <div class="top"><span class="market">forever · normal · horde · US</span><span class="asof">written 14:30 UTC · 6 min ago</span></div>
+    <div class="verdict"><span class="dot bad"></span><div><b>Collection stopped</b><br><span class="muted" style="font-size:12px">No new snapshot for 3 h 12 min.</span></div></div>
+    <div class="slas">
+      <div class="sla bad"><div class="name">Every hour collected</div><div class="val">21 of 24 hours</div><div class="sub">newest snapshot 3 h 12 min old</div></div>
+      <div class="sla bad"><div class="name">No failed runs</div><div class="val">13 collector errors</div><div class="sub">alarm CollectorErrors since 11:15</div></div>
+      <div class="sla ok"><div class="name">Hourly prices published</div><div class="val">up to date</div><div class="sub">nothing new to publish</div></div>
+    </div>
+  </div>
+</div>
+<div>
+  <p class="cap"><b>The status stopped updating.</b> Only the analyzer writes it, so a stale status means the analyzer itself isn't finishing. The page keeps the last values but greys them.</p>
+  <div class="page phone">
+    <div class="top"><span class="market">forever · normal · horde · US</span><span class="asof">written 10:58 UTC · <span class="bad">3 h 39 min ago</span></span></div>
+    <div class="banner bad"><b>This status is 3 h 39 min old.</b> The analyzer writes it after every run, so the analyzer may be failing or timing out. Your alarm emails and the CloudWatch dashboard have the current picture. The values below are from 10:58.</div>
+    <div class="slas" style="opacity:.5">
+      <div class="sla ok"><div class="name">Every hour collected</div><div class="val">24 of 24 hours</div></div>
+      <div class="sla ok"><div class="name">Hourly prices published</div><div class="val">3 min behind</div></div>
+    </div>
+  </div>
+</div>
+<div>
+  <p class="cap"><b>Couldn't load.</b> The JSON is missing, unreadable or not the expected schema. No partial page.</p>
+  <div class="page phone">
+    <div class="top"><span class="market">AHSync cloud status</span></div>
+    <div class="banner bad"><b>Couldn't load the status.</b> status/forever.normal.horde.us.json answered 404. It appears after the analyzer's first run following the deploy. <a href="" style="color:var(--label)">Try again</a></div>
+  </div>
+  <p class="cap" style="margin-top:14px"><b>Loading.</b> A single line, "Loading the status…", until the JSON arrives (at most 10 s, then <i>Couldn't load</i>).</p>
+  <p class="cap"><b>New deploy, no data yet.</b> The JSON exists but there's no snapshot: the verdict reads "Waiting for the first snapshot", the grid is all future cells, and the SLAs are grey "not yet measured".</p>
+</div>
+</div>
+
+<h2>4. What the page does not show</h2>
+<p class="note">No bucket names, account id, ARNs, function names, log text or Blizzard credentials: the JSON is public, like the summaries (SEC row in the spec merge). No cost figures (decision 6). No per-item market data: that is the summary document's job. The CloudWatch dashboard (milestone H1) has the drill-down: per-function errors, invocations, throttles and durations, queue depth, metric bars and the warning log lines.</p>
+</div>
+
+<script>
+// Mockup only: sample weeks. In the real JSON each week is {label, days, cells, missing}, cells one character per
+// hour (a analysed, l collected, m missing, p this hour, f future or before collection), all made by ahcloud/status.py.
+const WEEKS = [
+  {label: "Last 7 days: 4–10 Nov · 2 h missing", days: ["Wed 4", "Thu 5", "Fri 6", "Sat 7", "Sun 8", "Mon 9", "Tue 10"],
+   cell: (i, h) => i === 2 && (h === 3 || h === 4) ? "m" : i === 6 ? (h < 9 ? "a" : h < 14 ? "l" : h === 14 ? "p" : "f") : "a",
+   missing: "2 hours missing: Fri 6 Nov 03:00–04:00"},
+  {label: "28 Oct – 3 Nov · complete", days: ["Wed 28", "Thu 29", "Fri 30", "Sat 31", "Sun 1", "Mon 2", "Tue 3"],
+   cell: () => "a", missing: "Complete: 168 of 168 hours analysed"},
+  {label: "21–27 Oct · 9 h missing", days: ["Wed 21", "Thu 22", "Fri 23", "Sat 24", "Sun 25", "Mon 26", "Tue 27"],
+   cell: (i, h) => i === 3 && h >= 6 && h <= 13 ? "m" : i === 5 && h === 20 ? "m" : i === 1 && h === 11 ? "l" : "a",
+   missing: "9 hours missing: Sat 24 Oct 06:00–13:00, Mon 26 Oct 20:00 · 1 hour collected but not analysed (refused): Thu 22 Oct 11:00"},
+  {label: "14–20 Oct · collection began Fri 16", days: ["Wed 14", "Thu 15", "Fri 16", "Sat 17", "Sun 18", "Mon 19", "Tue 20"],
+   cell: (i, h) => i < 2 || (i === 2 && h < 17) ? "f" : "a", missing: "Collection began Fri 16 Oct 17:00 · complete since"},
+];
+function drawGrid(id, w, short) {
+  const g = document.getElementById(id); g.innerHTML = "<span></span>";
+  for (let h = 0; h < 24; h++) g.insertAdjacentHTML("beforeend", `<span class="hr">${short && h % 6 ? "" : String(h).padStart(2, "0")}</span>`);
+  WEEKS[w].days.forEach((d, i) => {
+    g.insertAdjacentHTML("beforeend", `<span class="lbl">${d}</span>`);
+    for (let h = 0; h < 24; h++)
+      g.insertAdjacentHTML("beforeend", `<span class="c ${WEEKS[w].cell(i, h)}${h === 9 ? " d" : ""}" title="${d} ${String(h).padStart(2, "0")}:00"></span>`);
+  });
+}
+function wirePicker(name, short) {
+  const sel = document.getElementById("wk-" + name), card = sel.closest(".card");
+  WEEKS.forEach((w, i) => sel.add(new Option(w.label, i)));
+  const show = () => {
+    const w = +sel.value; drawGrid("grid-" + name, w, short);
+    document.getElementById("miss-" + name).textContent = WEEKS[w].missing;
+    card.querySelector('[data-step="1"]').disabled = w === WEEKS.length - 1;
+    card.querySelector('[data-step="-1"]').disabled = w === 0;
+  };
+  sel.addEventListener("change", show);
+  card.querySelectorAll("[data-step]").forEach(b => b.addEventListener("click", () => { sel.value = +sel.value + +b.dataset.step; show(); }));
+  show();
+}
+wirePicker("normal", false); wirePicker("phone", true);
+</script>
+</body>
+</html>

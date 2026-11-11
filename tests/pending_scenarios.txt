@@ -79,3 +79,10 @@ SD26-SD27
 SD30
 SD34
 SX1-SX10
+
+# The cloud status page (SPEC §2.4 The status page; docs/plans/cloud-status.md; mockup docs/mockups/cloud-status.html)
+# H1 built (CS1, FM79, FM80)
+# H2
+CS2-CS11 BZ55 FM81 SEC21
+# H3
+CS12

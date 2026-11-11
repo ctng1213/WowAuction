@@ -107,12 +107,33 @@ def test_BZ34_the_analyzer_runs_daily_hourly_and_on_every_new_raw_object(templat
     template.has_resource_properties("AWS::Lambda::EventInvokeConfig", {"MaximumRetryAttempts": 1})
 
 
+def alarms_of(template):
+    """The stack's alarms by description."""
+    return {a["Properties"]["AlarmDescription"]: a["Properties"] for a in template.find_resources("AWS::CloudWatch::Alarm").values()}
+
+
 def test_FM70_failures_and_stale_baselines_alarm(template):
-    alarms = {a["Properties"]["AlarmDescription"]: a["Properties"] for a in template.find_resources("AWS::CloudWatch::Alarm").values()}
-    assert len(alarms) == 6
-    baselines = next(a for d, a in alarms.items() if "36 hours" in d)
-    assert (baselines["MetricName"], baselines["Period"] * baselines["EvaluationPeriods"]) == ("daily_published", 36 * 3600)
-    assert any("dead-letter" in d for d in alarms)
+    alarms = alarms_of(template)
+    assert len(alarms) == 7
+    assert any("dead-letter" in d for d in alarms) and any("analyzer failed" in d for d in alarms)
+
+
+def test_FM79_no_daily_baselines_for_27_hours_alarms(template):
+    baselines = next(a for d, a in alarms_of(template).items() if "No daily baselines" in d)
+    assert (baselines["MetricName"], baselines["Period"], baselines["EvaluationPeriods"]) == ("daily_published", 3600, 27)
+    assert (baselines["Statistic"], baselines["Threshold"], baselines["ComparisonOperator"], baselines["TreatMissingData"]) == (
+        "Sum", 1, "LessThanThreshold", "breaching")
+    assert "27 hours" in next(d for d in alarms_of(template) if "No daily baselines" in d)
+    assert baselines["AlarmActions"] and baselines["OKActions"]
+
+
+def test_FM80_an_analyzer_run_over_12_minutes_alarms(template):
+    slow = next(a for d, a in alarms_of(template).items() if "over 12 minutes" in d)
+    assert (slow["Namespace"], slow["MetricName"], slow["Statistic"]) == ("AWS/Lambda", "Duration", "Maximum")
+    assert (slow["Threshold"], slow["ComparisonOperator"], slow["TreatMissingData"]) == (
+        720000, "GreaterThanThreshold", "notBreaching")
+    assert slow["Dimensions"][0]["Name"] == "FunctionName" and "Analyzer" in json.dumps(slow["Dimensions"])
+    assert slow["AlarmActions"] and slow["OKActions"]
 
 
 def test_FM77_no_published_summary_for_3_hours_alarms(template):
