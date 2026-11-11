@@ -2067,6 +2067,7 @@ The dot after each chance is its confidence. Hovering "85% ◐" shows "Confidenc
   - **Volume** is units sold per day. The dashboard also shows the source and the units on the AH.
   - Rows with nothing to sell (mat buys, mail) show "—" in both.
 - **Every column header shows a tooltip on hover** (`GameTooltip`) saying what the column means, with the same texts as the dashboard where the column is the same (§3.5). The texts live in `UI/ViewModel.lua`.
+- **Hovering an item row shows the game's item tooltip** (UI27, UI28; the user, 2026-11-11): what hovering the item in your bags shows, the AHProfit block (§4.3 tooltip) included, from `Adapter.ShowItemTooltip`. The key becomes an item string with `Adapter.ItemString`, a random suffix as its bonus ID (`item:14117::::::::::::1:12742`, the lowest bonus ID `Data/BonusSuffixes.lua` maps to the suffix); a suffix no bonus ID gives shows the base item. In the window, an unfunded Portfolio row keeps its excluded-rows tip (UI19) and headings and notes show none. In the AH panel, a Post row's click hint and an unfunded row's reason go under the item.
 - Your sell record (§3.3.3) appears as a second line under the row, but only when it changed the recommendation.
 - Long item names are cut off with "…". The list scrolls, and the window never grows past its size.
 - Money uses gold, silver and copper coin icons.
@@ -2074,7 +2075,8 @@ The dot after each chance is its confidence. Hovering "85% ◐" shows "Confidenc
 - **Empty states:**
   - With no `MarketIntelligence.lua` yet: "Run AHSync, then /reload".
   - With nothing to do: "Nothing to do in the next hour." (the Portfolio tab without a snapshot); with one and nothing funded, the D.7 block (UI19).
-  - Data more than 24 h old: the age badge turns amber.
+  - The age badge ("data 2 h old", in the title bar, the tooltip header and the minimap button's tooltip) is the age of the newest auction snapshot behind the data (the market's `observationsUntil`), not of the export, so it says how old the prices are; a file without `observationsUntil` falls back to `generatedAt` (UI26, `Core/Market.lua` `Market.DataMs`). It updates at `/reload`, like the files.
+  - Data more than 24 h old: the age badge turns amber; the minimap dot and the Portfolio tab's "market data too old" use the same age.
 - Disenchant and Craft numbers are re-checked live against the fresh in-game scan.
 
 **AH side panel**, docked to the right of the auction house window, 300 px wide:

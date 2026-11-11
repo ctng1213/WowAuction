@@ -102,6 +102,28 @@ describe("MainWindow", function()
     assert_eq(Stubs.tooltip.shown, false)
   end)
 
+  it("UI27 hovering an item row shows the item's tooltip; a row's own tip wins; a heading shows none", function()
+    local MainWindow = Boot()
+    Stubs.Slash("/ahp")
+    local row = MainWindow.Frames().rows[1]
+    row:GetScript("OnEnter")(row)
+    assert_eq({ Stubs.tooltip.shown, Stubs.tooltip.owner == row, Stubs.tooltip.hyperlink }, { true, true, "item:2589" })
+    row:GetScript("OnLeave")(row)
+    assert_eq(Stubs.tooltip.shown, false)
+    row.tip = { title = "Not funded today", lines = { { text = "Linen Cloth · POST ×20" } } }
+    row:GetScript("OnEnter")(row)
+    assert_eq({ Stubs.tooltip.hyperlink, Stubs.tooltip.lines[1] }, { nil, "Not funded today" })
+    row:GetScript("OnLeave")(row)
+    local heading = MainWindow.Frames().rows[2]
+    heading.isRow, heading.key, heading.tip = false, 2589, nil
+    heading:GetScript("OnEnter")(heading)
+    assert_eq(Stubs.tooltip.shown, false)
+    row.tip = nil
+    GameTooltip.SetHyperlink = function() error("Unknown link type") end   -- a link the client rejects: no popup
+    row:GetScript("OnEnter")(row)
+    assert_eq(Stubs.tooltip.shown, false)
+  end)
+
   it("only the logged-in character's actions show, and there is no Who column", function()
     Stubs.Reset()
     UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48) }, NOW)

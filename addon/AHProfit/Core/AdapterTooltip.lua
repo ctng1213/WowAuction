@@ -193,6 +193,21 @@ function Adapter.ShowTooltip(owner, title, text)
   GameTooltip:Show()
 end
 
+--- Show the game's item tooltip for an item key next to a frame (UI27, UI28): what hovering it in your bags shows,
+--- the AHProfit block included (the item hook adds it), then an optional hint under it. Hidden when the client
+--- rejects the link.
+---@param owner table      The frame hovered
+---@param key number       Item key (SPEC §2.1)
+---@param hint string|nil  Wrapped text under the item (a Post row's click hint, an unfunded row's reason)
+function Adapter.ShowItemTooltip(owner, key, hint)
+  HideDividers(GameTooltip)
+  GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+  -- A link the client rejects raises ("Unknown link type"): hide rather than pop up a Lua error (SPEC §5.2).
+  if not pcall(GameTooltip.SetHyperlink, GameTooltip, Adapter.ItemString(key)) then return GameTooltip:Hide() end
+  if hint then GameTooltip:AddLine(hint, 1, 1, 1, true) end
+  GameTooltip:Show()
+end
+
 --- Show a tooltip of several lines on a frame: wrapped text lines and two-column lines (the Portfolio tab's excluded
 --- rows, UI19), each already coloured as RGB; without an item block's rules (TT42).
 ---@param owner table           The frame hovered

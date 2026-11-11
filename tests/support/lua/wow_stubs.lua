@@ -538,7 +538,10 @@ local function InstallCore()
   Stubs.tooltip = { shown = false, lines = {} }
   Stubs.tooltip.doubles, Stubs.tooltip.hooks = {}, {}
   Define("GameTooltip", {
-    SetOwner = function(_, owner) Stubs.tooltip.owner, Stubs.tooltip.lines, Stubs.tooltip.doubles = owner, {}, {} end,
+    SetOwner = function(_, owner)
+      Stubs.tooltip.owner, Stubs.tooltip.lines, Stubs.tooltip.doubles, Stubs.tooltip.hyperlink = owner, {}, {}, nil
+    end,
+    SetHyperlink = function(_, link) Stubs.tooltip.hyperlink = link end,   -- the item's own lines aren't modelled
     SetText = function(_, text) Stubs.tooltip.lines[1] = text end,
     AddLine = function(_, text) Stubs.tooltip.lines[#Stubs.tooltip.lines + 1] = text end,
     AddDoubleLine = function(_, left, right, _, _, _, r, g, b)

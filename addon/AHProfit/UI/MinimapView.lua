@@ -52,13 +52,13 @@ function MinimapView.SavedAngle(setting)
 end
 
 --- Seconds until the data turns amber (over 24 h old), for one timer that shows the dot then (SPEC §4.3).
----@param generatedAt number|nil  The market file's generatedAt, ms; nil without one
+---@param dataMs number|nil   The newest snapshot behind the data (Market.DataMs, UI26), ms; nil without a file
 ---@param nowMs number
----@param staleMs number           Age at which data is old, ms (ViewModel.STALE_MS)
----@return number|nil              Whole seconds, at least 1; nil when there is no file or it is already old
-function MinimapView.SecondsUntilStale(generatedAt, nowMs, staleMs)
-  if generatedAt == nil then return nil end
-  local leftMs = generatedAt + staleMs - nowMs
+---@param staleMs number       Age at which data is old, ms (ViewModel.STALE_MS)
+---@return number|nil          Whole seconds, at least 1; nil when there is no file or it is already old
+function MinimapView.SecondsUntilStale(dataMs, nowMs, staleMs)
+  if dataMs == nil then return nil end
+  local leftMs = dataMs + staleMs - nowMs
   if leftMs < 0 then return nil end
   return math.floor(leftMs / 1000) + 1
 end

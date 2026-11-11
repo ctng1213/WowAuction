@@ -54,7 +54,7 @@ end
 ---@return table             MinimapView.Tip's input
 local function TipInput(withToday)
   local info = Adapter.PlayerInfo()
-  local input = { age = VM.Age(Market.Times(), Adapter.NowMs()), marketProblem = Market.Problem(),
+  local input = { age = VM.Age(Market.DataMs(), Adapter.NowMs()), marketProblem = Market.Problem(),
                   planStale = Plan.Problem() ~= nil, name = info.name or "" }
   input.inCombat = Adapter.InCombat()                -- the Today list is real work: never in combat (SPEC §5.1)
   if withToday and not input.inCombat and not input.marketProblem and Plan.HasPlan() then
@@ -151,7 +151,7 @@ function MinimapButton.OnLogin()
   Place(View.SavedAngle(setting))
   button:SetShown(not setting.hidden)
   MinimapButton.UpdateDot()
-  local seconds = View.SecondsUntilStale(Market.Times(), Adapter.NowMs(), VM.STALE_MS)
+  local seconds = View.SecondsUntilStale(Market.DataMs(),Adapter.NowMs(), VM.STALE_MS)
   if seconds then Adapter.After(seconds, MinimapButton.UpdateDot) end   -- the files only change at /reload: one timer
 end
 

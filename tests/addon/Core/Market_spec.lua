@@ -42,6 +42,16 @@ describe("Market", function()
     assert_eq(newest, generated - 3600000)
   end)
 
+  it("UI26 the age badge measures from the newest snapshot, or the export time without one", function()
+    local Market = Boot(EX2)
+    local generated, newest = Market.Times()
+    assert_eq(Market.DataMs(), newest)
+    assert_eq(Market.DataMs(), generated - 3600000)
+    Market = Boot(EX2, function(file) for _, m in pairs(file.markets) do m.observationsUntil = nil end end)
+    assert_eq(Market.DataMs(), Market.Times())
+    assert_eq(Boot(nil).DataMs(), nil)
+  end)
+
   it("EX20 an item's last field is its 14-day median; a file written before it has none", function()
     local Market = Boot(EX2)
     local fields = "45,20,60,49,49,40,60,4,480,0,93,86,72,42,20,42,0,900,70,0,24"

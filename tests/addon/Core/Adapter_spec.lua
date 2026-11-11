@@ -32,6 +32,17 @@ describe("Adapter", function()
     assert_eq(Adapter.ItemKey(link), 14117 + 2147483648 * 28644)   -- 61512521627429
   end)
 
+  it("UI27 an item key's item string: a plain id, a suffix as its bonus ID, the base item when the suffix is unknown", function()
+    local Adapter = Boot()
+    AHProfit.Data = { BONUS_SUFFIXES = "12742:14322;12688:14296;12999:14322" }
+    local gloves = 14117 + 2147483648 * 28644
+    assert_eq(Adapter.ItemString(2589), "item:2589")
+    assert_eq(Adapter.ItemString(gloves), "item:14117::::::::::::1:12742")      -- the lower of 12742 and 12999
+    assert_eq(Adapter.ItemKey(Adapter.ItemString(gloves)), gloves)
+    assert_eq(Adapter.ItemString(14117 + 2147483648 * 2), "item:14117")         -- suffix 1: no bonus gives it
+    assert_eq(Adapter.ItemString(-14117), "item:14117")
+  end)
+
   it("a crafted item with no bonus IDs keeps its plain key", function()
     local Adapter = Boot()
     local link = "|cnIQ2:|Hitem:4239::::::::14:1489::::::::Player-4619-01486581:|h[Embossed Leather Gloves]|h|r"

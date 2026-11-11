@@ -206,6 +206,14 @@ function Market.Times()
   return s.file.generatedAt, s.market.observationsUntil
 end
 
+--- The time the age badge measures from (UI26): the newest auction snapshot behind this market's data, so
+--- "data 32 min old" is how old the prices are, not when AHSync last exported; a file without it, its export time.
+---@return number|nil  UTC ms; nil without usable data
+function Market.DataMs()
+  local generatedAt, newest = Market.Times()
+  return newest or generatedAt
+end
+
 --- This character's market id, from the checked file.
 ---@return string|nil  nil without usable data
 function Market.MarketId()
