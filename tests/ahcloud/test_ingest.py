@@ -17,6 +17,7 @@ from ahcloud.ingest import (COMPACT_DAYS, DB_KEY, EMPTY, LAST_INGESTED, REBUILD_
 from ahcloud.publish import read_latest
 from ahcloud.store import LocalStore, PreconditionFailed
 from ahsync.collect.blizzard import raw_envelope, raw_key
+from ahsync.collect.observations import bootstrap_window
 from ahsync.db.sqlite import Database, DatabaseError
 from ahsync.engine.volume import SALES_PAIR_MAX_GAP_MS
 from ahsync.engine.lifetimes import LIFETIME_LOOKBACK_MS
@@ -466,10 +467,24 @@ def test_the_handler_reports_its_outcome_and_the_historys_lag(tmp_path, monkeypa
     assert ingest.handler({"mode": "rebuild"}, None)["mode"] == "rebuild"
 
 
-def test_the_compact_store_keeps_every_snapshot_a_late_snapshots_recompute_reads():
-    # a snapshot a day late recomputes from the day 2 h before it; that day can start a further day earlier
-    worst = DAY_MS + SALES_PAIR_MAX_GAP_MS + DAY_MS + LIFETIME_LOOKBACK_MS
-    assert COMPACT_DAYS * DAY_MS >= worst
+def test_the_compact_store_keeps_every_snapshot_a_replay_reads():
+    # the state's rebuild writes the ledger from the start of the day before the newest snapshot's (up to 48 h back)
+    # and replays 66 h before that; a late snapshot (a day old at most) replays 66 h before itself
+    assert COMPACT_DAYS * DAY_MS >= max(2 * DAY_MS + LIFETIME_LOOKBACK_MS, DAY_MS + LIFETIME_LOOKBACK_MS)
+
+
+def test_BZ67_the_download_reaches_back_from_the_newest_book_not_an_empty_house(tmp_path, monkeypatch):
+    empty_ms = A_MS + DAY_MS                                     # the newest raw is an empty house, a day after A
+    b_ms = empty_ms + HOUR
+    data, _ = stores(tmp_path, (A_MS, SNAP_A), (empty_ms, empty_house(empty_ms)))
+    ingest_run(data, tmp_path)                                   # the history: A's book, and the empty one remembered
+    data.put(raw_key(M, b_ms), shifted(SNAP_B, b_ms))
+    asked = []
+    real = ingest.download_compact
+    monkeypatch.setattr(ingest, "download_compact", lambda data, root, market, first, last: (
+        asked.append(first), real(data, root, market, first, last)))
+    ingest_run(data, tmp_path)
+    assert asked == [bootstrap_window(A_MS)[0]]                  # from A, the state's newest, not the empty house
 
 
 def test_BZ64_each_ingest_run_profiles_its_stages_in_one_log_line(tmp_path):

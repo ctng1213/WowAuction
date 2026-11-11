@@ -138,15 +138,15 @@ flowchart TD
   Scans[Your scans] -->|overlay cur only, IU6| Plan
 ```
 
-**Planned (the carry-forward lifetimes batch, `docs/plans/carry-forward-lifetimes.md`; SPEC §2.4 "One snapshot at a time"): inside Ingest.** The engine half is built (`engine/lifetimes.step`); the tables and the run are the batch's next milestones. A scheduled run reads only the state and the new raw; the compact store is the replay's input only.
+**Planned (the carry-forward lifetimes batch, `docs/plans/carry-forward-lifetimes.md`; SPEC §2.4 "One snapshot at a time"): inside Ingest.** The engine and the history halves are built (`engine/lifetimes.step`; `collect/observations.ingest_snapshot` with `history/lifetime_store.py`, schema 31); the run's downloads are the batch's last milestone. A scheduled run will read only the state and the new raw; the compact store is the replay's input only (today a run still downloads the compact window, so a replay can run).
 
 ```mermaid
 flowchart LR
   New[(raw/: the new snapshot)] --> Step[engine/lifetimes.step<br/>built]
-  State[(history.db: lifetime_state,<br/>open_auctions, leave_tallies)] --> Step
+  State[(history.db: lifetime_state,<br/>open_auctions, leave_tallies · built)] --> Step
   Step -->|the next state| State
-  Step -->|GapRecord| Ledger[(history.db: gap_flows, gap_seen<br/>kept 2 days)]
-  Ledger --> Fold[collect/observations: the fold<br/>the open day + the last 7 hours]
+  Step -->|GapRecord| Ledger[(history.db: gap_flows, gap_seen<br/>kept 2 days · built)]
+  Ledger --> Fold[collect/observations: the fold<br/>the open day + the last 7 hours · built]
   Fold --> Rows[(volume_d1 + cover, lifetimes_d1,<br/>new_listings_d1, sold_prices_d1, sales_h1)]
   Rows --> Analysis[the 09:00 analysis, unchanged]
   Compact[(state/snapshots/: compact, 5 days)] -.replay only: a late snapshot,<br/>the cutover, a damaged state.-> Step
@@ -197,7 +197,7 @@ sequenceDiagram
 
 | Family | Tables | Written by | Read by |
 |---|---|---|---|
-| Market history | `candles_h1`, `candles_d1`, `current`, `scans`, `book_entries`, `volume_d1`, `volume_cover`, `sales_h1`, `lifetimes_d1`, `new_listings_d1`, `sold_prices_d1` (built SP1a: the price each sold auction left at), `observed_hours`, `ahledger_rows`, `source_state`, `sync_state`, `fetch_failures` | `collect/` | `history/reads.py` |
+| Market history | `candles_h1`, `candles_d1`, `current`, `scans`, `book_entries`, `volume_d1`, `volume_cover`, `sales_h1`, `lifetimes_d1`, `new_listings_d1`, `sold_prices_d1` (built SP1a: the price each sold auction left at), Ingest's own `lifetime_state`, `open_auctions`, `leave_tallies`, `gap_flows`, `gap_seen` (the carried lifetimes and their 2-day ledger, schema 31; never read by the analysis), `observed_hours`, `ahledger_rows`, `source_state`, `sync_state`, `fetch_failures` | `collect/` | `history/reads.py` |
 | Items | `items` | `collect/` | everywhere, via the catalog |
 | Intelligence | `intel` (+ `_new` staging; a cloud document's body is its gzip as downloaded, SM1; a local one's gzipped, SM2c) | `analysis/` via `intel/store.py`, `collect/cloud_intel.py` | `recommend/`, `export/`, `web/` (one parsed record per process, `IntelCache`) |
 | Player state | inventory, journal (`purchases`, `posts`, `auction_mail`, `payouts`, `crafts`, `disenchants`, `mail_sent`), `professions`, `recipes`, `known_recipes`, `characters`, `cost_basis`, `gather_events`, `farming_sessions`, `manual_rates`, `positions`, `position_lots` | `state/` | `recommend/`, `app/` |
@@ -388,3 +388,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-11: IS1 built (code and infrastructure in one milestone): `ahcloud/ingest.py` and the Ingest Lambda write the history; the analyzer's daily mode reads it and holds no secret; three Ingest alarms; deployed at IS3.
 - 2026-11-11: H2 built: the analyzer writes `state/analyzer.json` and the public `status/<market>.json` (`ahcloud/status.py`) after every run, reading the three state files, the pointers and, from CloudWatch, the stack's alarm states and the last day's error, mismatch and refusal counts; the collector writes its state file on every run. Ingest is wired in as the third function.
 - 2026-11-11: carry-forward lifetimes spec merge and its engine milestone (`docs/plans/carry-forward-lifetimes.md`): the lifetimes move from `engine/volume.py` to `engine/lifetimes.py`, where `lifetimes()` is now `step` folded over the snapshots (`LifeState`, `GapRecord`, `expiry.LeaveWindow`; VI8); the planned path inside Ingest is drawn in §2. No component or flow changes yet.
+- 2026-11-11: carry-forward lifetimes, the history milestone: schema 31's carried state and per-gap ledger (`history/lifetime_store.py`); each snapshot steps the state and folds its day and recent hours from the ledger (`collect/observations`), replaying from the compact store only for a late snapshot, the cutover or a damaged state; `recompute_id_days` is gone. The Ingest diagram in §2 marks what is built.

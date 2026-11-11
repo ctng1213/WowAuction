@@ -1,7 +1,7 @@
 """The database's schema version and the steps that bring an older database up to it (SPEC §3.2 "Format version")."""
 from __future__ import annotations
 
-SCHEMA_VERSION = 30
+SCHEMA_VERSION = 31
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
 # that a migrated database has exactly schema.sql's tables and indexes).
@@ -269,6 +269,42 @@ MIGRATIONS: dict[int, str] = {
         CREATE TABLE IF NOT EXISTS sold_prices_d1(
             market TEXT NOT NULL, key INTEGER NOT NULL, day INTEGER NOT NULL, src TEXT NOT NULL, prices TEXT NOT NULL,
             PRIMARY KEY(market, key, day, src)
+        ) WITHOUT ROWID
+    """,
+    # 31: auction lifetimes carried from snapshot to snapshot and the per-gap ledger (SPEC §2.4 "One snapshot at a time",
+    # the carry-forward lifetimes batch). Empty: the first Ingest run builds the state from the compact store (BZ67).
+    31: """
+        CREATE TABLE IF NOT EXISTS lifetime_state(
+            market TEXT NOT NULL, src TEXT NOT NULL, prev_at INTEGER NOT NULL, auctions INTEGER NOT NULL,
+            tally_rows INTEGER NOT NULL,
+            PRIMARY KEY(market, src)
+        ) WITHOUT ROWID;
+
+        CREATE TABLE IF NOT EXISTS open_auctions(
+            market TEXT NOT NULL, src TEXT NOT NULL, auction INTEGER NOT NULL, key INTEGER NOT NULL, qty INTEGER NOT NULL,
+            win_start INTEGER NOT NULL, win_end INTEGER NOT NULL, price INTEGER NOT NULL, commodity INTEGER NOT NULL,
+            tier1 INTEGER, posted_start INTEGER, posted_end INTEGER,
+            PRIMARY KEY(market, src, auction)
+        ) WITHOUT ROWID;
+
+        CREATE TABLE IF NOT EXISTS leave_tallies(
+            market TEXT NOT NULL, src TEXT NOT NULL, gap_end INTEGER NOT NULL, key INTEGER NOT NULL,
+            exposed_ms INTEGER NOT NULL, leaves INTEGER NOT NULL, commodity INTEGER NOT NULL,
+            PRIMARY KEY(market, src, gap_end, key)
+        ) WITHOUT ROWID;
+
+        CREATE TABLE IF NOT EXISTS gap_flows(
+            market TEXT NOT NULL, src TEXT NOT NULL, gap_end INTEGER NOT NULL, key INTEGER NOT NULL,
+            sold REAL NOT NULL, expired REAL NOT NULL, listed REAL NOT NULL, ended REAL NOT NULL,
+            expired_listings REAL NOT NULL, matched REAL NOT NULL, cancelled REAL NOT NULL, cancels REAL NOT NULL,
+            t1_ended REAL NOT NULL, t1_left REAL NOT NULL, commodity INTEGER NOT NULL, unseen REAL NOT NULL,
+            positions TEXT NOT NULL, prices TEXT NOT NULL,
+            PRIMARY KEY(market, src, gap_end, key)
+        ) WITHOUT ROWID;
+
+        CREATE TABLE IF NOT EXISTS gap_seen(
+            market TEXT NOT NULL, src TEXT NOT NULL, gap_end INTEGER NOT NULL, gap_start INTEGER NOT NULL, keys TEXT NOT NULL,
+            PRIMARY KEY(market, src, gap_end)
         ) WITHOUT ROWID
     """,
 }

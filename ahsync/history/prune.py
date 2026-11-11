@@ -1,4 +1,5 @@
-"""Retention policy (SPEC §3.2): 90 days of history, 30 days of order books, rule tombstones and closed positions 90 days.
+"""Retention policy (SPEC §3.2): 90 days of history, 30 days of order books, rule tombstones and closed positions 90 days,
+the lifetimes' per-gap ledger 2 days (SPEC §2.4).
 
 `cost_basis` and live item rules are kept until they no longer apply, so they
 are never pruned here. The DB primitives live in db.py; this module only
@@ -12,6 +13,7 @@ from ahsync.clock import DAY_MS, HOUR_MS
 from ahsync.db.sqlite import Database
 
 BOOK_RETENTION_DAYS = 30
+LEDGER_DAYS = 2               # the lifetimes' per-gap ledger: the open day and a late snapshot's replay (SPEC §2.4)
 MS_TABLES = ("candles_h1", "candles_d1", "sales_h1", "posts", "purchases", "crafts", "disenchants", "auction_mail", "payouts",
              "untracked", "mail_sent",
              "skips", "actions", "gather_events")
@@ -54,6 +56,8 @@ def prune(db: Database, now_ms: int, retention_days: int = 90, book_days: int = 
     deleted["lifetimes_d1"] = db.delete_before("lifetimes_d1", cutoff_ms // DAY_MS)
     deleted["new_listings_d1"] = db.delete_before("new_listings_d1", cutoff_ms // DAY_MS)
     deleted["sold_prices_d1"] = db.delete_before("sold_prices_d1", cutoff_ms // DAY_MS)       # BZ52
+    for table in ("gap_flows", "gap_seen"):                # only Ingest writes them; 2 days cover every re-fold
+        deleted[table] = db.delete_before(table, now_ms - LEDGER_DAYS * DAY_MS)
     deleted["fetch_failures"] = db.delete_before("fetch_failures", cutoff_ms // HOUR_MS)
     deleted["observed_hours"] = db.delete_before("observed_hours", cutoff_ms // HOUR_MS)   # SRC16
     deleted["ahledger_rows"] = db.delete_before("ahledger_rows", cutoff_ms // 1000)        # its `updated` is in s

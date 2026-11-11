@@ -33,12 +33,11 @@ from ahsync.clock import Clock, SystemClock
 from ahsync.collect.blizzard import (FALLBACK_NAMESPACE, SEARCH_SPAN, STATIC_NAMESPACE, BlizzardClient, BlizzardError,
                                      catalog_row, raw_key)
 from ahsync.collect.client import UrllibTransport
-from ahsync.collect.observations import id_days, ingest_snapshot, recompute_id_days
+from ahsync.collect.observations import bootstrap_window, ingest_snapshot
 from ahsync.collect.provider import snapshot_problems
 from ahsync.collect.snapshots import SnapshotStore
 from ahsync.db.sqlite import Database
 from ahsync.engine.item_key import KEY_SUFFIX_FACTOR
-from ahsync.engine.volume import SALES_PAIR_MAX_GAP_MS
 from ahsync.engine.lifetimes import LIFETIME_LOOKBACK_MS
 from ahsync.history.prune import prune
 
@@ -50,8 +49,9 @@ MAX_SNAPSHOTS_PER_RUN = 12              # raw objects per scheduled run, about 1
 # A rebuild's runs take more: provisional until IS0 measures a snapshot's cost on Lambda (plan §3 IS0).
 REBUILD_SNAPSHOTS_PER_RUN = 60
 CLOUD_BOOK_DAYS = 2                     # the cloud needs only the newest book and the day's pairs (SPEC §2.4)
-COMPACT_DAYS = 5                        # compact snapshots kept: a late snapshot (a day old) recomputes from the day 2 h
-                                        # before it, whose pass reads LIFETIME_LOOKBACK_MS (66 h) earlier: 116 h at worst
+COMPACT_DAYS = 5                        # compact snapshots kept: a replay (a late snapshot, at most a day old, or the
+                                        # state's rebuild) reads LIFETIME_LOOKBACK_MS (66 h) before the first gap it writes:
+                                        # about 90 h at worst (SPEC §2.4)
 MISSING_RETRY_MS = 7 * DAY_MS           # an id the item search didn't know is asked again after a week (BZ16)
 LAST_INGESTED = "last_ingested_at_ms"   # meta key: the newest snapshot in history.db (BZ12)
 REBUILDING = "rebuilding_until_ms"      # meta key: a rebuild is under way until the history reaches this (BZ61)
@@ -288,7 +288,7 @@ def _ingest(db: Database, data: Store, client: BlizzardClient, market: str, run:
 
 def _ingest_batch(db: Database, data: Store, market: str, store: SnapshotStore,
                   work: tuple[_Run, list[str], int]) -> tuple[list[int], list[int]]:
-    """Download the compact window, ingest the batch, then recompute the days it touched, each as a stage.
+    """Download the compact window, then ingest the batch, each snapshot's book and lifetimes timed as stages.
 
     Args:
         db: The history database.
@@ -302,16 +302,14 @@ def _ingest_batch(db: Database, data: Store, market: str, store: SnapshotStore,
     """
     run, batch, last = work
     if run.etag is not None and not run.fresh:                       # a rebuild starts the compact store afresh
-        with run.profile.stage("download"):
-            first_day = (key_time_ms(batch[0]) - SALES_PAIR_MAX_GAP_MS) // DAY_MS       # id_days' first day
-            download_compact(data, store.root, market, first_day * DAY_MS - LIFETIME_LOOKBACK_MS, last)
+        with run.profile.stage("download"):        # a late snapshot's replay, or the state's rebuild (BZ66, BZ67)
+            newest = db.newest_scan_at(market, SRC) or last      # an empty house has no book: not the state's
+            first = min(key_time_ms(batch[0]) - LIFETIME_LOOKBACK_MS, bootstrap_window(newest)[0])
+            download_compact(data, store.root, market, first, last)
+    refused, empty = ingest_pending(db, data, store, market, (batch, run.profile))
     with run.profile.stage("ingest"):
-        refused, empty, days = ingest_pending(db, data, store, market, batch)
         remember(db, REFUSED, refused)
         remember(db, EMPTY, empty)
-    with run.profile.stage("recompute"):
-        with db.transaction():
-            recompute_id_days(db, store, market, SRC, days)
     return refused, empty
 
 
@@ -515,41 +513,41 @@ def fill_catalog(db: Database, client: BlizzardClient, keys: list[int], now_ms: 
 
 
 def ingest_pending(db: Database, data: Store, store: SnapshotStore, market: str,
-                   pending: list[str]) -> tuple[list[int], list[int], set[int]]:
+                   work: tuple[list[str], Profile]) -> tuple[list[int], list[int]]:
     """Ingest raw snapshots in order, setting aside any that is refused whole (FM33, FM74).
 
     A refused snapshot is stored nowhere (`ingest_snapshot` checks before writing) and logged with its key and
-    reason; the rest go on, so one bad answer from Blizzard never stops the cloud. The caller recomputes the days
-    the batch touches once, not once per snapshot (each day reads 66 h before it, SPEC §2.4).
+    reason; the rest go on, so one bad answer from Blizzard never stops the cloud. Each snapshot commits on its own,
+    its book timed as the stage "ingest" and its lifetimes (the step and the fold, SPEC §2.4) as "recompute" (BZ64).
 
     Args:
         db: The history database.
         data: The data store (raw/).
         store: The local compact snapshot store.
         market: Market id.
-        pending: Raw keys without a `scans` row, in time order.
+        work: (raw keys without a `scans` row, in time order; the run's profile).
 
     Returns:
-        (the times of the snapshots refused, those of empty houses or vanished objects (BZ5, BZ62), ascending;
-        the days whose id volume and lifetimes need recomputing).
+        (the times of the snapshots refused, those of empty houses or vanished objects (BZ5, BZ62), ascending).
     """
-    refused, empty, days = [], [], set()
+    pending, profile = work
+    refused, empty = [], []
     for key in pending:
-        try:
-            observation = snapshot(data, key, market)
-        except BlizzardError as error:
-            problems = [str(error)]
-        else:
-            problems = snapshot_problems(observation) if observation is not None else []
+        with profile.stage("ingest"):
+            try:
+                observation = snapshot(data, key, market)
+            except BlizzardError as error:
+                observation, problems = None, [str(error)]
+            else:
+                problems = snapshot_problems(observation) if observation is not None else []
         if problems:
             log.warning("refused %s: %s", key, "; ".join(problems))
             refused.append(key_time_ms(key))
         elif observation is None:                                   # an empty house ingests nothing (BZ5)
             empty.append(key_time_ms(key))
         else:
-            ingest_snapshot(db, store, observation, id_volume=False)
-            days |= id_days(store, market, SRC, observation.at_ms)
-    return refused, empty, days
+            ingest_snapshot(db, store, observation, profile.stage)
+    return refused, empty
 
 
 def emit_outcome(market: str, outcome: IngestOutcome, now_ms: int) -> None:
