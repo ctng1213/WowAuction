@@ -290,6 +290,16 @@ The whole-plan snapshot does not move (the desktop is untouched).
 
 **Code built 2026-11-11** (§1 items 29–34): steps 1–5 below; the deploy (6) and the week-later sizing (7) follow with the user.
 
+**Deployed 2026-11-11 about 22:25 UTC** by the user (`main` 2a53923), after D4's dry run passed: `tools/carry_check.py` in the `python:3.12-slim` container against a fresh read-only copy (newest snapshot 21:22) rebuilt the state in 90 s and found 0 differences in 1,837,000 derived rows. The Ingest runs that followed (Lambda's own profile lines):
+
+| Run (UTC) | Code | total | download | ingest | recompute | catalog + prune + upload | Lambda memory |
+|---|---|---|---|---|---|---|---|
+| 19:45, 20:45, 21:45 | batch | 284–296 s | 13.5 s | 20–22 s | 235–244 s | 14–19 s | 2,592–2,662 MB |
+| 22:40, the cutover | carried | 348 s | 16.7 s | 22.2 s | 293 s (the rebuild, then one step) | 15.4 s | 2,493 MB |
+| 23:40, the first steady run | carried | **59.8 s** | **6.7 s** (the database only) | 24.0 s | **11.9 s** | 15.8 s | 2,275 MB |
+
+The cutover logged its one line ("the state is at None ... rebuilding it from the snapshot store") and took no fallback. Ingest's own "replay: downloading" line was logged at INFO, which the Lambda drops; it is WARNING since this record's PR, so a replay's download shows. A steady run is a fifth of the old one, as §3 estimated (about 60 s). Still to watch: the 09:00 analysis on the carried history, and a week of profile lines for step 7.
+
 1. `ahcloud/ingest.py`: no compact download in steady state, replay on demand, the bootstrap, the caps (D5).
 2. SM19 and the SM8 extension; BZ56, BZ57 and BZ64's meaning restated.
 3. `IngestSlowRun` and `HistoryBehind` thresholds revisited; `infra/README.md`.

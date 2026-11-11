@@ -307,7 +307,7 @@ def _ingest_batch(db: Database, data: Store, market: str, store: SnapshotStore,
     run, batch, last = work
     first = replay_from(db, market, batch) if run.etag is not None and not run.fresh else None   # a rebuild: none
     if first is not None:
-        log.info("replay: downloading the compact snapshots from %s", first)
+        log.warning("replay: downloading the compact snapshots from %s", first)   # a repair, never routine (D2)
         with run.profile.stage("download"):
             download_compact(data, store.root, market, first, last)
     refused, empty = ingest_pending(db, data, store, market, (batch, run.profile))
