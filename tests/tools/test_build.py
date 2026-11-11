@@ -475,3 +475,25 @@ def test_FM73_a_notarization_that_stalls_twice_stops_the_build(tmp_path):
     world.run = lambda args, **kwargs: build.Result(124)
     with pytest.raises(build.BuildError, match=r"notarytool submit failed \(exit 124\) after 2 attempts"):
         build.notarize(world, "dist/AHSync-0.1.1-macos-arm64.dmg")
+
+
+def _pascal_body(source: str, header: str) -> str:
+    """The text of one Inno Setup [Code] routine, from its header line to its closing `end;` at column 0."""
+    start = source.index(header)
+    return source[start:source.index("\nend;", start)]
+
+
+def test_FM82_the_installer_refuses_while_the_assistant_bridge_runs_before_anything_is_touched():
+    root = Path(__file__).resolve().parents[2]
+    iss = (root / "packaging" / "windows" / "ahsync.iss").read_text(encoding="utf-8")
+    recipe = (root / "packaging" / "ahsync.spec").read_text(encoding="utf-8")
+    assert 'name="ahsync-mcp"' in recipe                        # the bridge the recipe builds is the one the check names
+    assert "ProcessCount('ahsync-mcp.exe') > 0" in _pascal_body(iss, "function BridgeRunning: Boolean;")
+    # Inno Setup runs PrepareToInstall before [InstallDelete] and [Files]: refusing there touches nothing.
+    for header in ("function PrepareToInstall(", "function InitializeUninstall: Boolean;"):
+        body = _pascal_body(iss, header)
+        assert "BridgeRunningText" in body
+        assert body.index("BridgeRunning") < body.index("StopAHSync")    # a refused install leaves AHSync running
+    assert "Quit Claude (or the app using the assistant), then run the installer again." in iss
+    code = iss[iss.index("\n[Code]\n") + 1:].splitlines()[1:]
+    assert not [line for line in code if line.lstrip().startswith("[")]   # ISCC reads such a line as a section, even in a comment
