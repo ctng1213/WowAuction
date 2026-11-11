@@ -35,6 +35,17 @@ The user, on what a run reads: **the 66 h is the repair path's, never the daily 
 11. **Scenario IDs re-checked against `main` 58dddb3 and every remote branch**: BZ66, BZ67, FM86, SM19 and VI8 are free (the highest in use are BZ65, FM85, SEC22, SM18 and VI7). Re-check again just before each merge.
 12. **`pwsh` is not installed on the user's Mac**, so each milestone runs `tools/verify.ps1`'s steps directly: `python tools/gen_lua_fixtures.py`, pytest with engine coverage, `lua5.1 tests/support/lua/runner.lua tests/addon` (from `~/tools/lua51`), then `python tools/snapshot.py`. Python is 3.12 (`~/.pyenv/versions/3.12.16`). The Windows run is CI's.
 
+### Decided by Opus during CF1 (2026-11-11)
+
+13. **VI8's oracle is a frozen copy of the batch pass** (`tests/support/batch_lifetimes.py`, copied verbatim from `main` 148e390 with the `EarlyLeaveRates`, `tally_early_leaves`, `vanished_in`, `lifetimes` and `life_flows` it used). Since `lifetimes()` is now the fold of `step` (D3), comparing the two would be circular; the frozen copy is what makes VI8 a check. It must never be edited to make VI8 pass. VI8 was shown to fail on two planted slips (the rate window's edge off by one; the unseen credit dropped).
+14. **`expiry.LeaveWindow` replaces `EarlyLeaveRates`**: the same formula over the same integer sums, carried in the state and windowed by time (added and dropped per gap) instead of indexed with prefix sums over a whole pass. D7 is implemented as two flags already known when they are used: a tally row is pooled by whether any of its tallied listings carried the commodity flag then (`tally_early_leaves` returns it as a third value), and an ending by its own listing's flag.
+15. **A gap's `LifeFlow.commodity` is the gap's own flag** (the keys flagged in its later snapshot plus its vanished commodity listings), not the pass-wide set. This is D7 applied to the flow, and it is what the per-gap ledger stores. It equals the old pass-wide value whenever a key's flag is constant (CF0).
+16. **`Lifetimes` keeps its fields and gains `records`** (the kept gaps' `GapRecord`s); `life_flows` reads the records through `gap_flows`, and raises on a `Lifetimes` with gaps but no records. The tools and `lifetime_prices` are unchanged.
+17. **Every scenario row of the batch is merged now** (VI8 built; BZ66, BZ67, FM86 and SM19 listed in `tests/pending_scenarios.txt`), so the IDs are claimed on `main` early. The "Changed" rows of §6 land with the milestones that change them. SCENARIOS and SPEC say "the carry-forward lifetimes batch", never "CF2": `CF1`–`CF4` are already scenario IDs (the confidence scenarios).
+18. **The real-data identity check** (the gate's real-data half, run on the CF0 copy of the live store): on 2026-11-10's pass (93 snapshots, 34 kept gaps, 984,368 endings, 8,453 fills, 1,075,247 listings), the fold and the frozen batch pass gave equal gaps, seen keys, endings, fills, listings, first sightings, clashes, commodity keys, flows, hourly rates, listing positions and sold prices, compared exactly. The window reaches the pre-flag snapshots of 11-07 and they still agree, as CF0 predicted. Time: the fold 88.6 s against the batch's 92.6 s (loading included), both at a 1.9 GB high-water mark, so the tools and today's recompute are no slower.
+
+19. **The independent review of CF1** found no output difference from the batch pass (its own stress run: 400 worlds of up to 250 snapshots, 0 mismatches; VI8's generator drops the 24 h window in 812 of its 1,000 cases). Of its three low findings, two are fixed: `step` raises on a snapshot not after its state, and `LeaveWindow.advance` on a gap not after its newest tally (before, a repeat silently restarted every auction, and an older gap would have broken the window's sums; CF2's replay and idempotency rely on the caller checking first). The third stays as a documented precondition: ids are unique within a book. The product path refuses a snapshot listing an id twice (FM33), but `tools/lifetimes_report.py` and the simulator read raw directly, and raising there would abort a report over one bad answer from Blizzard (BZ38).
+
 ### Facts measured (2026-11-11)
 
 **The profile line** (15:46 UTC, 1 snapshot, 4,096 MB):
@@ -222,6 +233,8 @@ On the user's machine against the live store, read only (`--out`; nothing is upl
 The numbers go into §1 ("CF0's measurements"), with D5's rebuild cap and D4's cutover estimate derived from them. No code changes.
 
 ### CF1: the engine (Opus, judgement: formula identity)
+
+**Built 2026-11-11** (§1 items 13–18): `engine/lifetimes.py` (474 lines; `volume.py` down to 608), `expiry.LeaveWindow`, VI8, the moved tests with their numbers unchanged, and the real-data identity check.
 
 1. `engine/lifetimes.py`: the mechanical move out of `volume.py` first, then `LifeState`, `GapRecord`, `step`, the windowed rates, and `lifetimes` as the fold (§3 item 2).
 2. `tests/ahsync/engine/test_lifetimes.py`: the moved tests, plus VI8.

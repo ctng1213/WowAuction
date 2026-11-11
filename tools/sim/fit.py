@@ -4,7 +4,7 @@
 
 `observe` reads snapshots, real or simulated, and keeps only what a snapshot can show: where each new listing sits
 against the cheapest other price when first seen, its band and units then, how many new listings an item gets an
-hour, and the lifetimes' sold, unseen, expired and cancelled units (`engine.volume.lifetimes`). `fit_item` maps
+hour, and the lifetimes' sold, unseen, expired and cancelled units (`engine.lifetimes.lifetimes`). `fit_item` maps
 one item's observations to a market `Item` directly. What a snapshot under-sees (sellers who undercut the cheapest
 price and are bought before any snapshot, listings bought out before their first snapshot, the buyers' rate) is
 not fitted: calibrating it by simulation diverged, since a busy item's observed sales are not monotone in its true
@@ -23,7 +23,8 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path[:0] = [str(Path(__file__).resolve().parents[2]), str(Path(__file__).resolve().parents[1])]
 
-from ahsync.engine.volume import HOUR_MS, IdBook, life_flows, lifetimes
+from ahsync.engine.volume import HOUR_MS, IdBook
+from ahsync.engine.lifetimes import life_flows, lifetimes
 from sim.market import Item
 
 NEW_GAP_MS = 90 * 60_000          # a listing first seen after a gap up to this long was posted in it: its band is fresh

@@ -38,7 +38,8 @@ from ahsync.collect.provider import snapshot_problems
 from ahsync.collect.snapshots import SnapshotStore
 from ahsync.db.sqlite import Database
 from ahsync.engine.item_key import KEY_SUFFIX_FACTOR
-from ahsync.engine.volume import LIFETIME_LOOKBACK_MS, SALES_PAIR_MAX_GAP_MS
+from ahsync.engine.volume import SALES_PAIR_MAX_GAP_MS
+from ahsync.engine.lifetimes import LIFETIME_LOOKBACK_MS
 from ahsync.history.prune import prune
 
 DB_KEY = "state/history.db"

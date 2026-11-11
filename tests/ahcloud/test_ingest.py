@@ -18,7 +18,8 @@ from ahcloud.publish import read_latest
 from ahcloud.store import LocalStore, PreconditionFailed
 from ahsync.collect.blizzard import raw_envelope, raw_key
 from ahsync.db.sqlite import Database, DatabaseError
-from ahsync.engine.volume import LIFETIME_LOOKBACK_MS, SALES_PAIR_MAX_GAP_MS
+from ahsync.engine.volume import SALES_PAIR_MAX_GAP_MS
+from ahsync.engine.lifetimes import LIFETIME_LOOKBACK_MS
 from tests.support.cloud_world import (A_MS, B, B_MS, C_MS, HOUR, LINEN, M, SNAP_A, SNAP_B, SNAP_C, SPAULDERS,
                                        FakeCatalog, house, linen)
 from tests.support.fake_clock import FakeClock

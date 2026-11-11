@@ -138,6 +138,20 @@ flowchart TD
   Scans[Your scans] -->|overlay cur only, IU6| Plan
 ```
 
+**Planned (the carry-forward lifetimes batch, `docs/plans/carry-forward-lifetimes.md`; SPEC §2.4 "One snapshot at a time"): inside Ingest.** The engine half is built (`engine/lifetimes.step`); the tables and the run are the batch's next milestones. A scheduled run reads only the state and the new raw; the compact store is the replay's input only.
+
+```mermaid
+flowchart LR
+  New[(raw/: the new snapshot)] --> Step[engine/lifetimes.step<br/>built]
+  State[(history.db: lifetime_state,<br/>open_auctions, leave_tallies)] --> Step
+  Step -->|the next state| State
+  Step -->|GapRecord| Ledger[(history.db: gap_flows, gap_seen<br/>kept 2 days)]
+  Ledger --> Fold[collect/observations: the fold<br/>the open day + the last 7 hours]
+  Fold --> Rows[(volume_d1 + cover, lifetimes_d1,<br/>new_listings_d1, sold_prices_d1, sales_h1)]
+  Rows --> Analysis[the 09:00 analysis, unchanged]
+  Compact[(state/snapshots/: compact, 5 days)] -.replay only: a late snapshot,<br/>the cutover, a damaged state.-> Step
+```
+
 Rules encoded in this flow (SPEC references): the full refresh is the only heavy pass and runs once a day (§3.1.1); re-plans after a SavedVariables read touch only the plan and pages from the published intelligence, under one second (§3.1.2); publication is staging tables plus an atomic swap (§5.2); the addon files carry a schema and export version and the addon refuses mismatches (§3.5).
 
 ## 3. Player data flow: the game to positions, history and rates
@@ -373,3 +387,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-11: the cloud's ingest split spec merge (`docs/plans/cloud-ingest-split.md`): a planned Ingest Lambda (`ahcloud/ingest.py`, every 30 min, at most 12 snapshots a run) becomes the only writer of `state/history.db`, and the analyzer's daily mode becomes the analysis alone, reading the history; after the 2026-11-10 timeouts (LESSONS 2026-11-11).
 - 2026-11-11: IS1 built (code and infrastructure in one milestone): `ahcloud/ingest.py` and the Ingest Lambda write the history; the analyzer's daily mode reads it and holds no secret; three Ingest alarms; deployed at IS3.
 - 2026-11-11: H2 built: the analyzer writes `state/analyzer.json` and the public `status/<market>.json` (`ahcloud/status.py`) after every run, reading the three state files, the pointers and, from CloudWatch, the stack's alarm states and the last day's error, mismatch and refusal counts; the collector writes its state file on every run. Ingest is wired in as the third function.
+- 2026-11-11: carry-forward lifetimes spec merge and its engine milestone (`docs/plans/carry-forward-lifetimes.md`): the lifetimes move from `engine/volume.py` to `engine/lifetimes.py`, where `lifetimes()` is now `step` folded over the snapshots (`LifeState`, `GapRecord`, `expiry.LeaveWindow`; VI8); the planned path inside Ingest is drawn in §2. No component or flow changes yet.
