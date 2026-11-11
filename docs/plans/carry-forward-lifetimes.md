@@ -2,7 +2,7 @@
 
 Written for: the user and the Opus session that runs this batch. Brief by Opus and review by Fable, 2026-11-11; every decision approved by the user on 2026-11-11. Rewritten into plan shape on 2026-11-11 (the brief's §9 decisions are now §1; its design and findings are §3 and §4).
 
-**Why.** Each run of the cloud's Ingest recomputes auction lifetimes from scratch. For every day its snapshots touch, `ahsync/collect/observations.py` `recompute_id_days` runs one `engine/volume.lifetimes` pass over the compact snapshots from 66 h before the day to 6 h after it: about 96 snapshots of about 30k auctions each. That pass is 325 of a 1-snapshot run's 379 s and its whole 1,770 MB high-water mark. This batch replaces it with state carried from snapshot to snapshot. A run compares each new snapshot only with the one before it, and the daily analysis reads per-day summaries, as it already does.
+**Why.** Each run of the cloud's Ingest recomputes auction lifetimes from scratch. For every day its snapshots touch, `ahsync/collect/observations.py` `recompute_id_days` runs one `engine/volume.lifetimes` pass over the compact snapshots from 66 h before the day to 6 h after it: about 93 snapshots of about 180k auctions each (CF0). That pass is 325 of a 1-snapshot run's 379 s and its whole 1,770 MB high-water mark. This batch replaces it with state carried from snapshot to snapshot. A run compares each new snapshot only with the one before it, and the daily analysis reads per-day summaries, as it already does.
 
 ## 1. What is decided (do not re-litigate)
 
@@ -20,7 +20,7 @@ The user, on what a run reads: **the 66 h is the repair path's, never the daily 
 2. **D2, repair by replay from 66 h before the point** (§3 item 5): one primitive, no checkpoints. Rejected: daily state checkpoints (about 2 MB a day more, a second thing to keep right). **Condition, a working rule (§2): the normal path reads only the snapshot before.** A scheduled run compares each new snapshot with the carried state and nothing older. The 66 h replay runs only for a late snapshot, a missing or damaged state, or the cutover, and logs that it ran.
 3. **D3, `lifetimes()` becomes the fold of `step`** (§3 item 2): one implementation, so the existing scenarios and the four tools exercise `step`, and identity holds by construction. The invariant VI8 checks it as well. CF1 is judgement work (a subtle 100-line function is rewritten). Rejected: keeping both implementations, with only a property test as the guard.
 4. **D4, the cutover is the first cloud run with the new code**: it bootstraps by replaying from `last − 66 h` (about 70 steps, about 4 min by today's cost, inside 900 s). Before deploying, a local `--out` dry run must show that the bootstrap reproduces yesterday's rows byte for byte (CF2's gate). **Fallback** (agreed, the brief's open question 2): the long-rebuild routine. Pause `IngestSchedule`, run `python -m ahcloud ingest` locally once, resume (infra/README.md).
-5. **D5, caps and memory.** Scheduled runs keep the cap of 12. The rebuild cap is set from CF0's measurement of the `ingest` stage (about 20 expected). Memory is sized after a week of runs, as in the split plan's decision 4. Profiling the 27 s `ingest` stage is out of scope; it is a separate small item if a faster rebuild is wanted.
+5. **D5, caps and memory.** Scheduled runs keep the cap of 12. The rebuild cap is set from CF0's measurement of the `ingest` stage: **15** (CF0's measurements, below). Memory is sized after a week of runs, as in the split plan's decision 4. Profiling the 27 s `ingest` stage is out of scope; it is a separate small item if a faster rebuild is wanted.
 6. **D6, the profile stage keeps the name `recompute`** and now times the step and the fold. BZ64 and the dashboard's "Run profiles" widget stay unchanged; only BZ64's meaning is restated.
 7. **D7, the commodity pool uses the flags known at the time** (§4 item 2), stated in SPEC §2.4 item 4. CF0 checks on the real data that no key's flag flips. Rejected: carrying a "keys ever seen as commodity" set.
 8. **D8, measure first** (CF0, §5).
@@ -64,7 +64,55 @@ The user, on what a run reads: **the 66 h is the repair path's, never the daily 
 
 ### CF0's measurements
 
-*(Recorded by CF0. CF1 does not start before they are here.)*
+Measured 2026-11-11 on the user's Mac (Python 3.12) from a read-only copy of the live data bucket: `state/history.db` (354 MB, up from 311 MB at the brief) and all 117 compact snapshots (2026-11-06 18:21 to 2026-11-11 17:22 UTC). Nothing was written to the bucket. The scripts lived in the session's scratchpad. The Lambda's numbers are its own `profile` lines (Logs Insights, the last 2 days).
+
+**The Lambda's profiled runs** (every `ingested` run since profiling was turned on; each took 1 snapshot):
+
+| Run (UTC) | download | ingest | recompute (snapshots in the pass) | total | memory high-water |
+|---|---|---|---|---|---|
+| 11-11 15:46 | 14.1 s | 26.7 s | 324.6 s (80) | 379 s | 1,770 MB |
+| 11-11 16:44 | 13.7 s | 14.3 s | 190.5 s (81) | 231 s | 1,800 MB |
+| 11-11 17:44 | 13.4 s | 14.7 s | 191.0 s (82) | 234 s | 1,828 MB |
+
+The brief's profile, the 15:46 run, was the slow one: per snapshot it ran about 1.7× slower than the next two in both of its stages.
+
+**The batch pass of a closed day, locally** (2026-11-10: 93 snapshots, 184k auctions each on average):
+
+| Piece | Time | Per snapshot |
+|---|---|---|
+| loading the compact files (`SnapshotStore.load`) | 28.0 s | 0.30 s |
+| `lifetimes` without the loading | 52.1 s | 0.56 s |
+| `life_flows`, `new_listing_positions`, `sold_prices`, `sold_by_hour` | 2.2 s | |
+| all the day's `replace_*` writes (22.9k `volume_d1` rows, 21.5k `lifetimes_d1`, 12.6k `new_listings_d1`, 21.5k `sold_prices_d1`, the hours) | 0.84 s | |
+| `recompute_id_days` end to end | 83.7 s | 0.90 s |
+| memory high-water, `recompute_id_days` (the books streamed) | 1,890 MB | |
+| memory high-water, the 93 books held in a list | 4,029 MB | |
+
+**The Lambda against the Mac**: about 2.6× slower on the normal runs (recompute 2.35 s per snapshot against 0.90 s; ingest 14.5 s against 6.6 s at about 2.2×), and about 4.5× on the slow 15:46 run. The estimates below use 2.6× and 4.5× as typical and worst.
+
+**The `ingest` stage of one snapshot, locally**: 6.6 s (1.8 s reading and parsing the raw object from S3, 4.8 s `ingest_snapshot` without the id volume; 177k auctions), at a 418 MB high-water mark. It was the newest raw snapshot, which is already ingested, so this timed the upsert path over existing rows; the Lambda's 14.3–26.7 s above are first ingests.
+
+**The commodity flag (D7) holds.** 28,550 keys appear in the 117 snapshots, and 1,123 of them are ever flagged as commodities. 737 of those 1,123 carry both values, but only because of a format change. The first 21 compact files (11-06 18:21 to 11-07 15:xx) were stored before the flag existed and carry no flags at all. From 11-07 16:16 on, every one of the 1,123 keys is flagged in every snapshot it appears in, and no key is ever flagged and unflagged in the same snapshot. No key with a bonus suffix is ever flagged. The pre-flag files leave the compact store on 2026-11-12, and the cutover's 66 h window (from about 11-08 23:00) lies wholly after the change. So the causal pool gives the same rates as the pass-wide union on everything CF2's gate and the cutover read.
+
+**Sizes the carried design stores** (from the same pass; the brief assumed about 30k auctions, LESSONS 2026-11-11):
+
+| What | Measured |
+|---|---|
+| open auctions (`open_auctions` rows) | 245,775 at the pass's end (14,151 keys); 177–184k in a typical snapshot |
+| leave tallies over 24 h (`leave_tallies` rows) | about 277k (median 11.6k keys a gap) |
+| ledger flow rows (`gap_flows`) | median 13.1k a gap, 301k a day; about 600k for the 2 days kept |
+| position and price entries | median 6.2k and 7.7k a gap |
+| seen keys | median 13.1k a gap |
+
+**What follows** (estimates, checked when CF2 and CF3 measure the real step):
+
+- **The step's engine cost** is about 0.86 s per snapshot locally (load plus `lifetimes`), so about 2.2 s on Lambda, 3.9 s at worst. Rewriting 246k open-auction rows, reading back the open day's ledger for the fold (up to about 300k rows by 23:00) and reading the state at the start of a run are new costs. **CF2 times them on the real data**; if they come to more than a few seconds, an incremental write of the open auctions (delete the vanished, upsert the changed) replaces "rewritten whole" (§3 item 1). The rows written are the same either way, so this is an implementation choice, not a change to the design.
+- **The database grows by about 90 MB** (the ledger about 60 MB, the tallies about 14 MB, the open auctions about 17 MB; estimated at the row counts above), from 354 MB to about 440 MB. That adds about 3–4 s to the download and about 1 s to the upload.
+- **A steady-state run** is about state 0.1 s + download 17 s + ingest 14.5 s + step and fold about 5–10 s + catalog 8 s + upload 6 s ≈ 50–55 s, against today's 231 s (379 s at worst). This is close to the plan's estimate of 60 s.
+- **Memory**: one book (about 45 MB in Python) and the state (about 250k live auctions and 277k tallies, a few hundred MB as Python objects) instead of the pass's 1.9 GB. Sized after a week (D5).
+- **The rebuild cap (D5): 15**, set from the worst case. A rebuild snapshot costs ingest (14.3–26.7 s) plus step and fold (about 3–8 s): about 20 s typical, 35 s at worst. A run's fixed cost is about 30 s (download, catalog, upload). Under the split plan's 10-minute rule, (600 − 30) ÷ 35 ≈ 16, rounded down to 15 for margin. Typical runs would fit about 27. CF3 sets 15 and re-measures; the week-later PR revisits it with the measured step.
+- **The cutover (D4)**: a replay of about 66 compact snapshots costs about 66 × (0.86 s × 2.6) ≈ 2.5 min (4.3 min at the worst ratio), plus the compact download (about 66 files of 1.2–1.5 MB, in-region) and the open day's fold, then the pending snapshots at about 20–35 s each. With 3 pending that is about 4–6 min, inside 900 s with margin. D4(a) stands; the fallback is unchanged.
+- **The scheduled cap of 12** (D5): 12 × 20–35 s + 30 s ≈ 4.5–7.5 min, inside 900 s.
 
 ## 2. Working rules
 
@@ -92,7 +140,7 @@ The user's words, made precise: **every snapshot extends or finishes the auction
 
 1. **The carried state**, per market and source, in `history.db`. It must travel with the database: the `If-Match` upload keeps them consistent (FM83), and a rebuild gets both or neither.
    - `lifetime_state(market, src, prev_at)`: the newest snapshot the state has seen. After a run it always equals `meta.last_ingested_at_ms`; that is the damage check (FM86).
-   - `open_auctions(market, src, auction, key, qty, win_start, win_end, price, commodity, tier1, posted_start, posted_end)`: `lifetimes`' `live` dict plus the posting gap. The posting gap is NULL when the auction was first seen at a hole (no unseen credit, as `first_seen` has no such row today). About 30k rows, rewritten whole each snapshot, since every window narrows anyway.
+   - `open_auctions(market, src, auction, key, qty, win_start, win_end, price, commodity, tier1, posted_start, posted_end)`: `lifetimes`' `live` dict plus the posting gap. The posting gap is NULL when the auction was first seen at a hole (no unseen credit, as `first_seen` has no such row today). About 180–250k rows (CF0; the brief's 30k was wrong), rewritten whole each snapshot, since every window narrows anyway, unless CF2's timing calls for the incremental write (§1, CF0's measurements).
    - `leave_tallies(market, src, gap_end, gap_start, key, exposed_ms, leaves, commodity)`: `tally_early_leaves`' output per gap (BZ44), kept for gaps ending in the last 24 h. `rate` reads `(end − 24 h, end]`, so rows with `gap_end ≤ S − 24 h` are dropped at each step. Pooled by the row's flag (D7).
    - The previous snapshot's key set is derived from the keys of `open_auctions`, not stored.
 2. **The engine** (`ahsync/engine/lifetimes.py`, new; `tests/ahsync/engine/test_lifetimes.py`).
@@ -151,8 +199,8 @@ Each item says what the code does today and what it means for carrying state. "C
 4. **Each hourly row has two writers** (confirmed). `ingest_snapshot` first runs `recompute_sales_hours`, which rewrites `[floor(S) − 2 h, floor(S)]` with book-pair rates; then the id pass rewrites every hour the day's gaps credit. Book pairs credit the earlier book's hour, and id gaps credit from the earlier snapshot's hour for `round(gap)` hours. So the id hours are a superset, and the ids must be written after the pairs, every snapshot. The gaps that credit hour H end in `(H − 6 h, H + 7 h]`. The hours a snapshot S can change are `[floor(S) − 6 h, floor(S)]`: the new gap's hours plus what the pair writer touched.
 5. **When rows become final** (confirmed). A gap belongs to the day of its later snapshot, so day D is final once a snapshot at or after D+1 00:00 is ingested. Hour H is final once the newest snapshot is at or after H + 1 h. Nothing earlier is ever revised (item 1). So a day's rows are re-folded at every snapshot of the day and are final at its first snapshot of the next day.
 6. **Late snapshots are bounded** (confirmed). `_pending` lists raw only from `last − 1 day` (BZ14: older raw is ingested or pruned), so the cloud inserts a snapshot at most a day late. A replay from 66 h before it needs compact snapshots from about 90 h back, which `COMPACT_DAYS` = 5 already covers (the same "116 h at worst" arithmetic).
-7. **Memory and time** (confirmed from the profile; the split is assumed). The 1,770 MB high-water mark is the pass holding 96 snapshots' kept records. The per-snapshot step holds one snapshot and the state (about 30k live auctions plus 24 h of tallies). The pass costs about 3.4 s per snapshot loaded (325 s ÷ 96). So a steady-state run should take about download 10 s + ingest 27 s + step 4 s + catalog 8 s + upload 6 s ≈ 1 min, and 4,096 MB is oversized (measure, then shrink).
-8. **The 27 s `ingest` stage becomes the bound** (confirmed per snapshot; the cause is assumed to be `store_book`, `store_scan_prices`, `recompute_sales_hours` and `recompute_book_volume` over 30k auctions). 12 snapshots take about 6 min, which is fine. The rebuild cap of 60 at about 30 min still times out, so that cap is set from this stage (about 20) unless the stage is profiled and cut (out of scope, D5).
+7. **Memory and time** (confirmed from the profile; the split is assumed). The 1,770 MB high-water mark is the pass holding 96 snapshots' kept records. The per-snapshot step holds one snapshot and the state (about 250k live auctions plus 24 h of tallies; CF0 corrected the brief's 30k). The pass costs about 3.4 s per snapshot loaded (325 s ÷ 96). So a steady-state run should take about download 10 s + ingest 27 s + step 4 s + catalog 8 s + upload 6 s ≈ 1 min, and 4,096 MB is oversized (measure, then shrink).
+8. **The 27 s `ingest` stage becomes the bound** (confirmed per snapshot; the cause is assumed to be `store_book`, `store_scan_prices`, `recompute_sales_hours` and `recompute_book_volume` over about 180k auctions). 12 snapshots take about 6 min, which is fine. The rebuild cap of 60 at about 30 min still times out, so that cap is set from this stage (CF0: 15) unless the stage is profiled and cut (out of scope, D5).
 9. **`engine/volume.py` is 970 lines** (confirmed). The 1,000-line limit forces the lifetimes family into its own module before anything is added (§3 item 2).
 10. **Nothing changes for the analysis** (confirmed: `analysis/market.py` and `history/reads.py` read only `volume_d1`, `volume_cover`, `sales_h1`, `lifetimes_d1`, `new_listings_d1` and `sold_prices_d1`). The user's "the analyze step goes over the summaries" is already true. The carried state and the ledger belong to Ingest alone.
 11. **The profile's stage names are a contract** (confirmed: BZ64 lists them, and the dashboard's Logs Insights widget reads `stages_ms`). Hence D6.
@@ -162,6 +210,8 @@ Each item says what the code does today and what it means for carrying state. "C
 ## 5. Milestones
 
 ### CF0: measure (Opus: the caps, the cutover estimate and D7 rest on these numbers)
+
+**Done 2026-11-11**; the numbers are in §1 (CF0's measurements). D7 holds, the rebuild cap is 15, and the cutover fits. The brief's size of a snapshot was wrong (about 180k auctions, not 30k), so CF2 times the state's writes on the real data.
 
 On the user's machine against the live store, read only (`--out`; nothing is uploaded):
 
