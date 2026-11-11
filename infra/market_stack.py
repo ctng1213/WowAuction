@@ -7,8 +7,9 @@ Two buckets, so the public/private line is a bucket boundary rather than a prefi
 The collector runs every 15 minutes; the analyzer runs daily at DAILY_HOUR_UTC for the baselines and on every
 new raw object (with an hourly fallback schedule) for the state, failed events going to a dead-letter queue.
 Both have reserved concurrency 1, environments of names only, and the one Blizzard secret. Alarms (either
-function failing, the dead-letter queue not empty, no new snapshot for 3 hours, no daily baselines for 36
-hours) and a monthly budget email the user through one SNS topic.
+function failing, the dead-letter queue not empty, no new snapshot or published summary for 3 hours, no daily
+baselines for 27 hours, an analyzer run over 12 minutes) and a monthly budget email the user through one SNS
+topic; a CloudWatch dashboard shows them all (infra/dashboard.py).
 """
 from __future__ import annotations
 
@@ -34,12 +35,15 @@ from aws_cdk import (
 )
 from constructs import Construct
 
+from infra.dashboard import METRIC_NAMESPACE, add_dashboard
+
 # The services this stack bills, as Cost Explorer names them, so the budget measures WowAuction alone and other
 # resources in the account can't trip it (the user, 2026-11-06; the account's own budget watches everything).
 BUDGET_SERVICES = ("AWS Lambda", "Amazon Simple Storage Service", "Amazon CloudFront", "AmazonCloudWatch",
                    "Amazon Simple Notification Service", "Amazon Simple Queue Service", "AWS Secrets Manager")
-METRIC_NAMESPACE = "WowAuction"      # ahcloud.aws.NAMESPACE: the functions' metric lines
-
+COLLECTOR_TIMEOUT = Duration.minutes(2)
+ANALYZER_TIMEOUT = Duration.minutes(15)
+SLOW_RUN = Duration.minutes(12)        # the analyzer duration alarm (FM80)
 
 
 @dataclass(frozen=True)
@@ -76,7 +80,10 @@ class MarketStack(Stack):
         self.collector = self._collector(config)
         self.analyzer, self.dead_letters = self._analyzer(config)
         self.distribution = self._distribution()
-        self._alarms(config)
+        alarms = self._alarms(config)
+        add_dashboard(self, config.market, alarms,
+                      [("Collector", self.collector, COLLECTOR_TIMEOUT), ("Analyzer", self.analyzer, ANALYZER_TIMEOUT)],
+                      self.dead_letters, self.analyzer_logs)
         self._budget(config)
 
     def _buckets(self) -> tuple[s3.Bucket, s3.Bucket]:
@@ -110,7 +117,7 @@ class MarketStack(Stack):
         function = lambda_.Function(
             self, "Collector", runtime=lambda_.Runtime.PYTHON_3_12, architecture=lambda_.Architecture.ARM_64,
             handler="ahcloud.collector.handler", code=lambda_.Code.from_asset(config.asset_path),
-            timeout=Duration.minutes(2), memory_size=512, reserved_concurrent_executions=1, log_group=log_group,
+            timeout=COLLECTOR_TIMEOUT, memory_size=512, reserved_concurrent_executions=1, log_group=log_group,
             environment={"BUCKET": self.data.bucket_name, "MARKET": config.market, "RULESET": str(config.ruleset),
                          "HOUSE": str(config.house), "SECRET_NAME": config.secret_name})
         self.data.grant_read(function, "state/*")
@@ -132,12 +139,12 @@ class MarketStack(Stack):
         """
         dead_letters = sqs.Queue(self, "AnalyzerDeadLetters", retention_period=Duration.days(14),
                                  enforce_ssl=True)
-        log_group = logs.LogGroup(self, "AnalyzerLogs", retention=logs.RetentionDays.ONE_MONTH,
-                                  removal_policy=RemovalPolicy.DESTROY)
+        log_group = self.analyzer_logs = logs.LogGroup(self, "AnalyzerLogs", retention=logs.RetentionDays.ONE_MONTH,
+                                                       removal_policy=RemovalPolicy.DESTROY)
         function = lambda_.Function(
             self, "Analyzer", runtime=lambda_.Runtime.PYTHON_3_12, architecture=lambda_.Architecture.ARM_64,
             handler="ahcloud.analyzer.handler", code=lambda_.Code.from_asset(config.asset_path),
-            timeout=Duration.minutes(15), memory_size=2048, ephemeral_storage_size=Size.gibibytes(4),
+            timeout=ANALYZER_TIMEOUT, memory_size=2048, ephemeral_storage_size=Size.gibibytes(4),
             reserved_concurrent_executions=1, log_group=log_group, dead_letter_queue=dead_letters,
             retry_attempts=1,
             environment={"DATA_BUCKET": self.data.bucket_name, "INTEL_BUCKET": self.intel.bucket_name,
@@ -173,11 +180,15 @@ class MarketStack(Stack):
                 viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
                 allowed_methods=cloudfront.AllowedMethods.ALLOW_GET_HEAD, cache_policy=cache))
 
-    def _alarms(self, config: MarketConfig) -> None:
-        """Email on failures, on 3 hours without a new snapshot or a published summary, and on stale baselines.
+    def _alarms(self, config: MarketConfig) -> list[cloudwatch.Alarm]:
+        """Email on failures, on 3 hours without a new snapshot or a published summary, on stale baselines and on
+        a slow analyzer run (SPEC §2.4 Alerts).
 
         Args:
             config: The market's settings.
+
+        Returns:
+            Every alarm, each emailing on ALARM and on OK, in the dashboard's order.
         """
         action = cw_actions.SnsAction(self.alerts)
         errors = self.collector.metric_errors(period=Duration.minutes(15), statistic="Sum").create_alarm(
@@ -204,16 +215,23 @@ class MarketStack(Stack):
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
             treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
             alarm_description="An analyzer event failed twice and waits in the dead-letter queue (FM70)")
-        daily = cloudwatch.Metric(namespace=METRIC_NAMESPACE, metric_name="daily_published",
-                                  dimensions_map={"market": config.market}, period=Duration.hours(6), statistic="Sum")
-        baselines = daily.create_alarm(
-            self, "NoDailyBaselines", threshold=1, evaluation_periods=6,
+        # 27 one-hour periods: the daily run is due by 09:30 UTC and missing at 12:00 (FM79); the desktop's
+        # own 36 h rule (S24) is separate.
+        baselines = hourly_sum(config.market, "daily_published").create_alarm(
+            self, "NoDailyBaselines", threshold=1, evaluation_periods=27,
             comparison_operator=cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
             treat_missing_data=cloudwatch.TreatMissingData.BREACHING,
-            alarm_description="No daily baselines published for 36 hours (S24)")
-        for alarm in (errors, stale, analyzer_errors, dead, baselines, self._no_summary_alarm(config)):
+            alarm_description="No daily baselines published for 27 hours (FM79)")
+        slow = self.analyzer.metric_duration(period=Duration.minutes(15), statistic="Maximum").create_alarm(
+            self, "AnalyzerSlowRun", threshold=SLOW_RUN.to_milliseconds(), evaluation_periods=1,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+            alarm_description="An analyzer run took over 12 minutes (timeout 15) (FM80)")
+        alarms = [errors, stale, analyzer_errors, dead, baselines, self._no_summary_alarm(config), slow]
+        for alarm in alarms:
             alarm.add_alarm_action(action)
             alarm.add_ok_action(action)
+        return alarms
 
     def _no_summary_alarm(self, config: MarketConfig) -> cloudwatch.Alarm:
         """The alarm for 3 hours without a published market summary, hourly or daily (SPEC §2.4 Alerts, FM77).

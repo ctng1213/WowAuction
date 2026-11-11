@@ -47,7 +47,7 @@ flowchart LR
     Analyzer[ahcloud/analyzer.py, built M31<br/>daily: ingest → analysis → baselines, history.db round trip<br/>hourly per raw object: reprice_item + last hour, no database]
     IntelS3[(S3 intel bucket, built M30<br/>MarketIntelligence JSON by sha256 + latest-schema.json, M31)]
     CF[CloudFront, built M30<br/>public, the intel bucket only]
-    CW[CloudWatch: alarms → SNS email, built M30–M39<br/>dashboard, planned H1]
+    CW[CloudWatch: alarms → SNS email, built M30–M39, H1<br/>dashboard, built H1]
     StatusDoc[status/market.json, planned H2<br/>ahcloud/status.py: SLAs, 12 weeks of hours]
   end
 
@@ -348,6 +348,7 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-08: SM2b built: the summary is schema 14, the compact form (items as rows under `item_fields`, run-length profile strings), published beside 13; no component or flow changes.
 - 2026-11-08: SM2c built: a local market's summary is stored gzipped in `intel.body`, as a cloud one is; no component or flow changes.
 - 2026-11-10: cloud status spec merge (SPEC §2.4 The status page, H1–H3 planned, `docs/plans/cloud-status.md`): §1 gains CloudWatch (alarms built, the dashboard planned), the status document the analyzer writes to the intel bucket from the raw listing, both state files and CloudWatch's alarm states and error counts, and the public `status.html` served by CloudFront; all dashed planned edges.
+- 2026-11-10: H1 built: the CloudWatch dashboard (`infra/dashboard.py`), `NoDailyBaselines` at 27 h and the new `AnalyzerSlowRun` alarm (over 12 min); no flow changes.
 - 2026-11-08: BZ45's display (D106): the id pass stores each day's estimated unseen units (`volume_d1.unseen`, database schema 28) and the market summary carries `unseen_per_day` per item (summary schema 15, BZ49; published beside 13 and 14); the item detail reads it. A contract change on the summary; no component or flow changes. Deploy the cloud analyzer before the desktop release that reads schema 15.
 - 2026-11-08: MS2 built: the simulator's fitting from collected raw (`tools/sim/fit.py`), the SM rows' measures against truth (`tools/sim/inference.py`) and the inference report (`tools/sim_report.py`); test tooling only, no component, flow or contract changes.
 - 2026-11-08: MS3 built: paper trading in the simulator (`tools/sim/trader.py`, `scorers.py`, `decision.py`; `tools/sim_report.py decision`): synthetic characters write SavedVariables that AHSync imports, tracks and re-plans on, as in production; test tooling only, no component, flow or contract changes.

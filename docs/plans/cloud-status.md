@@ -37,7 +37,10 @@ Decided at the spec merge (2026-11-10), within the approved design:
 
 ## 3. Milestones
 
-### H1: the CloudWatch dashboard and the alarm changes (config only; CS1, FM79, FM80)
+### H1: the CloudWatch dashboard and the alarm changes (config only; CS1, FM79, FM80) — built 2026-11-10
+
+Built as planned. The alarm-window check: CloudWatch allows alarms over a day long (evaluated once an hour, `docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/alarm-evaluation.html`), so 27 one-hour periods; the slow-run alarm is `AnalyzerSlowRun` (Duration maximum per 15 min over 720,000 ms).
+
 
 - `infra/dashboard.py` + `tests/infra/test_dashboard.py`: the alarm-status widget (all 7); `snapshot_written` per hour over 7 d; `hourly_published + daily_published` per hour; per function Errors, Invocations, Throttles, Duration max with the timeout annotated; DLQ depth; `daily_refused`, `hourly_no_base`, `mismatch`; a Logs Insights widget of the analyzer's WARNING/ERROR lines; a text widget linking `infra/README.md`'s recovery section.
 - `market_stack.py`: NoDailyBaselines at 27 h (decision 2); AnalyzerDuration > 12 min (decision 3). **Check first**: CloudWatch's limit on period × evaluation periods (today's alarm uses 6 h × 6, possibly for this reason); 1 h × 27 or 3 h × 9.
