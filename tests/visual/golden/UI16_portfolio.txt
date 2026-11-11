@@ -5,7 +5,7 @@ Frame AHProfitWindow 640,320 640x440
   FontString - 715,331 88x10 "Grommash · Horde"
   Button AHProfitWindowClose 1252,324 24x24
   Frame AHProfitWindowAge 1150,327 96x18
-    FontString - 1176,331 44x10 "data now"
+    FontString - 1165,331 66x10 "data 1 h old"
   Button AHProfitWindowTabPortfolio 650,356 62x22 "Portfolio"
   Button AHProfitWindowTabDisenchant 714,356 68x22 "Disenchant"
   Button AHProfitWindowTabCraft 784,356 46x22 "Craft"

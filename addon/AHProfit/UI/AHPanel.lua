@@ -129,14 +129,15 @@ local function Unfunded(charId, fundedKeys)
   return { shopping = shopping, posts = posts }
 end
 
---- A row's hover: its own text when it has one (an unfunded row's reason), else what a Post click does.
+AHPanel.POST_HINT = "Click: put it on the AH's Sell tab with this price and quantity, then press the AH's Post button. "
+                    .. "Right-click: keep it for yourself."
+
+--- A row's hover: the game's item tooltip (UI28) with, under it, the row's own text when it has one (an unfunded
+--- row's reason), else what a Post click does.
 ---@param row table
 local function OnRowEnter(row)
-  if row.hoverText then return Adapter.ShowTooltip(row, row.itemName, row.hoverText) end
-  if row.isPost then
-    Adapter.ShowTooltip(row, "Post", "Click: put it on the AH's Sell tab with this price and quantity, then press the AH's "
-                                     .. "Post button. Right-click: keep it for yourself.")
-  end
+  if not row.key then return end
+  Adapter.ShowItemTooltip(row, row.key, row.hoverText or (row.isPost and AHPanel.POST_HINT or nil))
 end
 
 --- Explain a button or row on hover.

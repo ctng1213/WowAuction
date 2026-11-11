@@ -342,19 +342,19 @@ function ViewModel.Decisions(keys, recordOf, lookOf, decided)
   return lines
 end
 
---- The title bar's age badge (SPEC §4.3, UI5).
----@param generatedAt number|nil  When AHSync wrote the market data, ms
+--- The title bar's age badge (SPEC §4.3, UI5, UI26).
+---@param dataMs number|nil  The newest auction snapshot behind the data (Market.DataMs), UTC ms
 ---@param nowMs number
----@return table                  { text = "data 2 h old", amber = boolean }; "no data" without a file
-function ViewModel.Age(generatedAt, nowMs)
-  if generatedAt == nil then return { text = "no data", amber = true } end
-  local minutes = math.floor(math.max(0, nowMs - generatedAt) / 60000)
+---@return table             { text = "data 2 h old", amber = boolean }; "no data" without a file
+function ViewModel.Age(dataMs, nowMs)
+  if dataMs == nil then return { text = "no data", amber = true } end
+  local minutes = math.floor(math.max(0, nowMs - dataMs) / 60000)
   local text
   if minutes < 1 then text = "now"
   elseif minutes < 60 then text = minutes .. " min"
   elseif minutes < 1440 then text = math.floor(minutes / 60) .. " h"
   else text = math.floor(minutes / 1440) .. " d" end
-  return { text = "data " .. text .. (minutes < 1 and "" or " old"), amber = nowMs - generatedAt > ViewModel.STALE_MS }
+  return { text = "data " .. text .. (minutes < 1 and "" or " old"), amber = nowMs - dataMs > ViewModel.STALE_MS }
 end
 
 --- What the window shows about an item besides the plan: its name, quality and market activity.

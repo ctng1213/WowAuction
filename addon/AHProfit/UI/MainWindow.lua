@@ -236,11 +236,23 @@ local function AnchorTall(row)
   row.sub:SetPoint("TOPRIGHT", c.adjusted, "BOTTOMRIGHT", 0, 0)
 end
 
---- A row's hover: the excluded-row tooltip on an unfunded Portfolio row (UI19), else the hover tint.
+--- A row's hover: the hover tint, and the excluded-row tooltip on an unfunded Portfolio row (UI19), else the
+--- game's item tooltip on an item row (UI27).
 ---@param row table
 local function OnRowEnter(row)
   row.hover:SetShown(row.isRow == true)
-  if row.tip then MainWindow.ShowTip(row, row.tip) end
+  row.tipShown = true
+  if row.tip then MainWindow.ShowTip(row, row.tip)
+  elseif row.isRow and row.key then Adapter.ShowItemTooltip(row, row.key)
+  else row.tipShown = false end
+end
+
+--- A row's mouse leaving: the tint goes, and the tooltip the row showed.
+---@param row table
+local function OnRowLeave(row)
+  row.hover:Hide()
+  if row.tipShown then Adapter.HideTooltip() end
+  row.tipShown = false
 end
 
 --- A row's click: right-click lists the section's excluded rows on an unfunded row (UI19), else opens the keep
@@ -270,7 +282,7 @@ local function BuildRow(list, i)
   row:EnableMouse(true)
   row:SetScript("OnMouseUp", function(self, button) OnRowClick(self, button) end)
   row:SetScript("OnEnter", function(self) OnRowEnter(self) end)
-  row:SetScript("OnLeave", function(self) self.hover:Hide(); if self.tip then Adapter.HideTooltip() end end)
+  row:SetScript("OnLeave", function(self) OnRowLeave(self) end)
   row.cells = {}
   for _, set in ipairs(MainWindow.SETS) do row.cells[set] = BuildCells(row, MainWindow.COLUMNS[set], "FontString") end
   BuildBadges(row)
@@ -576,7 +588,7 @@ end
 local function RenderChrome(nowMs)
   local info = Adapter.PlayerInfo()
   ui.sub:SetText(info.realm .. " · " .. info.faction)
-  local age = VM.Age(Market.Times(), nowMs)
+  local age = VM.Age(Market.DataMs(), nowMs)
   local tone = age.amber and COLORS.amber or COLORS.pos
   ui.age:SetText(age.text)
   Tint(ui.age, tone)

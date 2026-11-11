@@ -290,9 +290,9 @@ end
 ---@return table[]|nil  TooltipView.Lines
 function Tooltip.Lines(key, nowMs, bound)
   local offsetMs = Adapter.LocalOffsetMs(nowMs)
-  local generatedAt = Market.Times()
-  if not generatedAt then return nil end
-  local age = VM.Age(generatedAt, nowMs)
+  local dataMs = Market.DataMs()
+  if not dataMs then return nil end
+  local age = VM.Age(dataMs, nowMs)
   local item = Market.Item(key)
   if not item then return TV.Lines({ age = age, noData = true }) end
   local panel = AHProfit.AHPanel and AHProfit.AHPanel.Frames()
