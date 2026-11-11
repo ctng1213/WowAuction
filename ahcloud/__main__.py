@@ -141,6 +141,7 @@ def _analyze(args: argparse.Namespace) -> int:
     with tempfile.TemporaryDirectory(prefix="ahcloud-") as work:      # the run's scratch folder, like Lambda's /tmp
         result = run_daily(data, intel, args.market, Path(work) / "run")
     print(f"daily: {result.state}, {result.items} items")
+    print(result.profile)
     return 0
 
 
@@ -165,9 +166,11 @@ def _run(args: argparse.Namespace, client: BlizzardClient, clock: SystemClock) -
     with tempfile.TemporaryDirectory(prefix="ahcloud-") as work:      # the run's scratch folder, like Lambda's /tmp
         ingested = run_ingest(data, client, args.market, Path(work) / "ingest", clock, cap=None, fresh=fresh)
         print(f"ingest: {ingested.state}, {ingested.ingested} snapshots ingested, {ingested.refused} refused")
+        print(ingested.profile)
         if args.command == "rebuild":
             result = run_daily(data, open_store(args.intel or args.store, args.out), args.market, Path(work) / "run")
             print(f"rebuild: {result.state}, {result.items} items")
+            print(result.profile)
     return 0
 
 

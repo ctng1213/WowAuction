@@ -59,7 +59,7 @@ class MarketConfig:
     alert_email: str                 # where alarms and the budget write
     secret_name: str = "wowauction/blizzard-api"
     asset_path: str = "build/lambda"  # tools/build_lambda.py's output
-    budget_usd: int = 5
+    budget_usd: int = 20             # Ingest's measured cost, accepted 2026-11-11 (about $14 expected)
     daily_hour_utc: int = 9           # the daily run (SPEC §2.4)
 
 
@@ -136,7 +136,7 @@ class MarketStack(Stack):
     def _ingest(self, config: MarketConfig) -> lambda_.Function:
         """The Ingest function: the history's one writer, its schedule and its grants (SPEC §2.4 Ingest, IS1).
 
-        No retries and no dead-letter queue: the next scheduled run is the retry (FM82).
+        No retries and no dead-letter queue: the next scheduled run is the retry (FM85).
 
         Args:
             config: The market's settings.
@@ -266,7 +266,7 @@ class MarketStack(Stack):
         return alarms
 
     def _ingest_alarms(self, config: MarketConfig) -> list[cloudwatch.Alarm]:
-        """Ingest failing, running long, or the history falling behind the raw (SPEC §2.4 Alerts; FM82, FM84).
+        """Ingest failing, running long, or the history falling behind the raw (SPEC §2.4 Alerts; FM85, FM84).
 
         Args:
             config: The market's settings.
@@ -278,7 +278,7 @@ class MarketStack(Stack):
             self, "IngestErrors", threshold=1, evaluation_periods=1,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
             treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
-            alarm_description="An Ingest run failed; the next scheduled run retries it (FM82)")
+            alarm_description="An Ingest run failed; the next scheduled run retries it (FM85)")
         slow = self.ingest.metric_duration(period=Duration.minutes(15), statistic="Maximum").create_alarm(
             self, "IngestSlowRun", threshold=SLOW_RUN.to_milliseconds(), evaluation_periods=1,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,

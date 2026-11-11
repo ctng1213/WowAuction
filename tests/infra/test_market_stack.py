@@ -78,7 +78,7 @@ def test_alarms_and_the_budget_email_the_user(template):
         "WowAuction", 3, 3600, "breaching")
     assert all(a["Properties"]["AlarmActions"] for a in alarms.values())
     template.has_resource_properties("AWS::Budgets::Budget", {"Budget": Match.object_like(
-        {"BudgetLimit": {"Amount": 5, "Unit": "USD"}, "TimeUnit": "MONTHLY"})})
+        {"BudgetLimit": {"Amount": 20, "Unit": "USD"}, "TimeUnit": "MONTHLY"})})
     [budget] = template.find_resources("AWS::Budgets::Budget").values()
     services = budget["Properties"]["Budget"]["FilterExpression"]["Dimensions"]
     assert services["Key"] == "SERVICE" and "AWS Lambda" in services["Values"] and "Amazon Elastic Compute Cloud - Compute" not in services["Values"]
@@ -195,7 +195,7 @@ def test_SEC22_only_ingest_writes_the_history_and_the_analyzer_holds_no_secret(t
     assert props["EphemeralStorage"] == {"Size": 4096} and "DeadLetterConfig" not in props
 
 
-def test_FM82_ingest_runs_at_10_and_40_past_and_never_retries(template):
+def test_FM85_ingest_runs_at_10_and_40_past_and_never_retries(template):
     template.has_resource_properties("AWS::Events::Rule", {
         "ScheduleExpression": "cron(10,40 * * * ? *)",
         "Targets": Match.array_with([Match.object_like({"RetryPolicy": {"MaximumRetryAttempts": 0}})])})

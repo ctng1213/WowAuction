@@ -1,4 +1,4 @@
-"""The Ingest Lambda: raw snapshots into the history, its one writer (SPEC §2.4 Ingest; BZ56-BZ58, BZ61, FM82, FM83).
+"""The Ingest Lambda: raw snapshots into the history, its one writer (SPEC §2.4 Ingest; BZ56-BZ58, BZ61, FM83, FM85).
 
 A run reads `state/ingest.json` and the raw listing, and stops when nothing is newer. Otherwise, in a fresh folder,
 it downloads `state/history.db` (AHSync's own schema) and the compact snapshot store's window; ingests the oldest
@@ -19,7 +19,7 @@ import json
 import logging
 import os
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -27,6 +27,7 @@ from typing import Any
 from ahcloud import aws
 from ahcloud.credentials import from_secret
 from ahcloud.hourly import snapshot
+from ahcloud.profile import Profile
 from ahcloud.store import Store
 from ahsync.clock import Clock, SystemClock
 from ahsync.collect.blizzard import (FALLBACK_NAMESPACE, SEARCH_SPAN, STATIC_NAMESPACE, BlizzardClient, BlizzardError,
@@ -76,6 +77,7 @@ class IngestOutcome:
     last_ingested_at_ms: int | None = None
     lag_ms: int = 0                     # the newest raw minus the newest snapshot ingested or refused (FM84)
     rebuilding_until_ms: int | None = None
+    profile: str = field(default="", compare=False)   # the run's profile line (BZ64), printed by the caller
 
 
 @dataclass(frozen=True)
@@ -88,6 +90,7 @@ class _Run:
     started_ms: int                     # the run's start, UTC ms (for the state file's duration)
     workdir: Path                       # this run's folder
     clock: Clock                        # the state file's times only; the history's times are the snapshots'
+    profile: Profile                    # the run's stage times (BZ64)
 
 
 def key_time_ms(key: str) -> int:
@@ -170,32 +173,49 @@ def run_ingest(data: Store, client: BlizzardClient, market: str, workdir: Path, 
             database's ETag at the start, so a run that uploaded meanwhile makes the rebuild fail.
 
     Returns:
-        What it did.
+        What it did, with its profile line (BZ64).
 
     Raises:
         ahcloud.store.PreconditionFailed: Another writer uploaded the database meanwhile; the state file is not
             written (FM83).
         ahsync.db.sqlite.DatabaseError: The downloaded database is damaged (FM72: run a rebuild).
     """
-    started_ms = clock.now_ms()
-    state = {} if fresh else read_state(data)
-    seen = state.get("newest_seen_ms")
-    if isinstance(seen, int) and not data.list(f"raw/{market}/", start_after=raw_key(market, seen)):
+    profile, started_ms = Profile("ingest"), clock.now_ms()
+    with profile.stage("state"):
+        state = {} if fresh else read_state(data)
+        seen = state.get("newest_seen_ms")
+        nothing_new = isinstance(seen, int) and not data.list(f"raw/{market}/", start_after=raw_key(market, seen))
+    if nothing_new:
         outcome = IngestOutcome("up_to_date", 0, 0, 0, state.get("last_ingested_at_ms"), 0,
                                 state.get("rebuilding_until_ms"))
         write_state(data, outcome, seen, clock.now_ms(), started_ms)
-        return outcome
-    shutil.rmtree(workdir, ignore_errors=True)
-    workdir.mkdir(parents=True)
-    found = data.get(DB_KEY)
-    if found and not fresh:
-        (workdir / "history.db").write_bytes(found.data)
-    db = Database.open(workdir / "history.db", 0, None)
+        return _profiled(outcome, profile)
+    with profile.stage("download"):
+        shutil.rmtree(workdir, ignore_errors=True)
+        workdir.mkdir(parents=True)
+        found = data.get(DB_KEY)
+        if found and not fresh:
+            (workdir / "history.db").write_bytes(found.data)
+        db = Database.open(workdir / "history.db", 0, None)
     try:
-        run = _Run(found.etag if found else None, fresh, cap, started_ms, workdir, clock)
-        return _ingest(db, data, client, market, run)
+        run = _Run(found.etag if found else None, fresh, cap, started_ms, workdir, clock, profile)
+        return _profiled(_ingest(db, data, client, market, run), profile)
     finally:
         db.close()
+
+
+def _profiled(outcome: IngestOutcome, profile: Profile) -> IngestOutcome:
+    """The outcome with the run's profile line.
+
+    Args:
+        outcome: What the run did.
+        profile: Its stage times.
+
+    Returns:
+        The outcome, its `profile` set to the line (outcome and snapshot count only; no key or name).
+    """
+    return replace(outcome, profile=profile.line(outcome=outcome.state, snapshots=outcome.ingested,
+                                                 refused=outcome.refused, pending=outcome.pending))
 
 
 def _pending(db: Database, data: Store, market: str, last: int) -> tuple[list[str], int | None]:
@@ -229,13 +249,14 @@ def _ingest(db: Database, data: Store, client: BlizzardClient, market: str, run:
         data: The data store.
         client: The Blizzard client.
         market: Market id.
-        run: The run's fixed facts, its folder and clock.
+        run: The run's fixed facts, its folder, clock and profile.
 
     Returns:
         What it did.
     """
     last = int(db.get_meta(LAST_INGESTED) or 0)
-    pending, newest = _pending(db, data, market, last)
+    with run.profile.stage("state"):
+        pending, newest = _pending(db, data, market, last)
     if (run.fresh or run.etag is None) and not last and newest is not None:     # a history from nothing (BZ61, BZ63)
         db.set_meta(REBUILDING, str(newest))
     mark = int(db.get_meta(REBUILDING) or 0) or None
@@ -249,23 +270,48 @@ def _ingest(db: Database, data: Store, client: BlizzardClient, market: str, run:
             write_state(data, outcome, seen, run.clock.now_ms(), run.started_ms)
         return outcome
     store = SnapshotStore(run.workdir / "snapshots")
-    if run.etag is not None and not run.fresh:                       # a rebuild starts the compact store afresh
-        first_day = (key_time_ms(batch[0]) - SALES_PAIR_MAX_GAP_MS) // DAY_MS           # id_days' first day
-        download_compact(data, store.root, market, first_day * DAY_MS - LIFETIME_LOOKBACK_MS, last)
-    refused, empty = ingest_pending(db, data, store, market, batch)
-    remember(db, REFUSED, refused)
-    remember(db, EMPTY, empty)
+    refused, empty = _ingest_batch(db, data, market, store, (run, batch, last))
     last = max([last] + [key_time_ms(k) for k in batch if key_time_ms(k) not in refused])
     written = [key_time_ms(k) for k in batch if key_time_ms(k) not in set(refused) | set(empty)]
     if last:
-        _finish_history(db, client, market, store, last)
+        _finish_history(db, client, market, store, (run, last))
         mark = _clear_mark(db, mark, last, left)
     lag = (newest or 0) - (seen or 0)
     outcome = (IngestOutcome("ingested", len(written), len(refused), left, last, lag, mark) if last
                else IngestOutcome("empty", 0, len(refused), left, None, lag, mark))   # all refused: keep the refusals
-    _write_back(db, data, market, store, run, written, last)
-    write_state(data, outcome, seen, run.clock.now_ms(), run.started_ms)
+    with run.profile.stage("upload"):
+        _write_back(db, data, market, store, run, written, last)
+        write_state(data, outcome, seen, run.clock.now_ms(), run.started_ms)
     return outcome
+
+
+def _ingest_batch(db: Database, data: Store, market: str, store: SnapshotStore,
+                  work: tuple[_Run, list[str], int]) -> tuple[list[int], list[int]]:
+    """Download the compact window, ingest the batch, then recompute the days it touched, each as a stage.
+
+    Args:
+        db: The history database.
+        data: The data store.
+        market: Market id.
+        store: The local compact snapshot store.
+        work: (the run, the batch's raw keys oldest first, the history's newest snapshot before it, UTC ms).
+
+    Returns:
+        (the times refused, the times of empty houses), both remembered in meta.
+    """
+    run, batch, last = work
+    if run.etag is not None and not run.fresh:                       # a rebuild starts the compact store afresh
+        with run.profile.stage("download"):
+            first_day = (key_time_ms(batch[0]) - SALES_PAIR_MAX_GAP_MS) // DAY_MS       # id_days' first day
+            download_compact(data, store.root, market, first_day * DAY_MS - LIFETIME_LOOKBACK_MS, last)
+    with run.profile.stage("ingest"):
+        refused, empty, days = ingest_pending(db, data, store, market, batch)
+        remember(db, REFUSED, refused)
+        remember(db, EMPTY, empty)
+    with run.profile.stage("recompute"):
+        with db.transaction():
+            recompute_id_days(db, store, market, SRC, days)
+    return refused, empty
 
 
 def _write_back(db: Database, data: Store, market: str, store: SnapshotStore, run: _Run, written: list[int],
@@ -308,20 +354,24 @@ def remember(db: Database, name: str, times: list[int]) -> None:
         db.set_meta(name, json.dumps(sorted(known | set(times))))
 
 
-def _finish_history(db: Database, client: BlizzardClient, market: str, store: SnapshotStore, last: int) -> None:
-    """After a batch: the catalog for new items, the prune, and the newest snapshot recorded.
+def _finish_history(db: Database, client: BlizzardClient, market: str, store: SnapshotStore,
+                    work: tuple[_Run, int]) -> None:
+    """After a batch: the catalog for new items, the prune, and the newest snapshot recorded, each as a stage.
 
     Args:
         db: The history database.
         client: The Blizzard client.
         market: Market id.
         store: The local compact snapshot store.
-        last: The newest snapshot now in the history, UTC ms.
+        work: (the run, the newest snapshot now in the history, UTC ms).
     """
-    keys = sorted({k for (k,) in db.conn.execute("SELECT DISTINCT key FROM current WHERE market = ?", (market,))})
-    fill_catalog(db, client, keys, last)
-    prune(db, last, RETENTION_DAYS, CLOUD_BOOK_DAYS)
-    store.prune(market, SRC, last - COMPACT_DAYS * DAY_MS)
+    run, last = work
+    with run.profile.stage("catalog"):
+        keys = sorted({k for (k,) in db.conn.execute("SELECT DISTINCT key FROM current WHERE market = ?", (market,))})
+        fill_catalog(db, client, keys, last)
+    with run.profile.stage("prune"):
+        prune(db, last, RETENTION_DAYS, CLOUD_BOOK_DAYS)
+        store.prune(market, SRC, last - COMPACT_DAYS * DAY_MS)
     db.set_meta(LAST_INGESTED, str(last))
 
 
@@ -464,12 +514,12 @@ def fill_catalog(db: Database, client: BlizzardClient, keys: list[int], now_ms: 
 
 
 def ingest_pending(db: Database, data: Store, store: SnapshotStore, market: str,
-                   pending: list[str]) -> tuple[list[int], list[int]]:
-    """Ingest raw snapshots in order, setting aside any that is refused whole (FM33, FM74), then their id volume.
+                   pending: list[str]) -> tuple[list[int], list[int], set[int]]:
+    """Ingest raw snapshots in order, setting aside any that is refused whole (FM33, FM74).
 
     A refused snapshot is stored nowhere (`ingest_snapshot` checks before writing) and logged with its key and
-    reason; the rest go on, so one bad answer from Blizzard never stops the cloud. The days the batch touches get
-    their lifetimes recomputed once at the end, not once per snapshot (each day reads 36 h before it, SPEC §2.4).
+    reason; the rest go on, so one bad answer from Blizzard never stops the cloud. The caller recomputes the days
+    the batch touches once, not once per snapshot (each day reads 66 h before it, SPEC §2.4).
 
     Args:
         db: The history database.
@@ -479,7 +529,8 @@ def ingest_pending(db: Database, data: Store, store: SnapshotStore, market: str,
         pending: Raw keys without a `scans` row, in time order.
 
     Returns:
-        (the times of the snapshots refused, those of empty houses or vanished objects (BZ5, BZ62)), ascending.
+        (the times of the snapshots refused, those of empty houses or vanished objects (BZ5, BZ62), ascending;
+        the days whose id volume and lifetimes need recomputing).
     """
     refused, empty, days = [], [], set()
     for key in pending:
@@ -497,9 +548,7 @@ def ingest_pending(db: Database, data: Store, store: SnapshotStore, market: str,
         else:
             ingest_snapshot(db, store, observation, id_volume=False)
             days |= id_days(store, market, SRC, observation.at_ms)
-    with db.transaction():
-        recompute_id_days(db, store, market, SRC, days)
-    return refused, empty
+    return refused, empty, days
 
 
 def emit_outcome(market: str, outcome: IngestOutcome, now_ms: int) -> None:
@@ -537,6 +586,7 @@ def handler(event: Any, context: Any) -> dict:
     client = BlizzardClient(UrllibTransport(), clock, found.client_id, found.secret)
     fresh = isinstance(event, dict) and event.get("mode") == "rebuild"
     outcome = run_ingest(aws.S3Store(env["DATA_BUCKET"]), client, market, WORKDIR, clock, fresh=fresh)
+    print(outcome.profile)                              # one JSON log line for Logs Insights (BZ64)
     emit_outcome(market, outcome, clock.now_ms())
     return {"mode": "rebuild" if fresh else "scheduled", "state": outcome.state, "ingested": outcome.ingested,
             "refused": outcome.refused, "pending": outcome.pending}

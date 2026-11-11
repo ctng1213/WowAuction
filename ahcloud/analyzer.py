@@ -66,5 +66,6 @@ def handler(event: Any, context: Any) -> dict:
         emit(market, f"hourly_{outcome.state}", clock.now_ms())
         return {"mode": mode, "state": outcome.state, "observations_until_ms": outcome.observations_until_ms}
     result = run_daily(data, intel, market, WORKDIR)
+    print(result.profile)                               # one JSON log line for Logs Insights (BZ65)
     emit(market, f"daily_{result.state}", clock.now_ms())
     return {"mode": mode, "state": result.state, "built_ms": result.built_ms, "items": result.items}
