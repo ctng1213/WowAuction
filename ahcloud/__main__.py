@@ -1,8 +1,12 @@
 """Run the cloud job on this machine with the same code as the Lambdas (SPEC §2.4, plan decision 17).
 
     python -m ahcloud collect --house 113 [--store data/cloud]
+    python -m ahcloud ingest [--rebuild] [--store data/cloud] [--out <folder>]
     python -m ahcloud analyze --daily | --hourly [--store data/cloud] [--intel <store>] [--out <folder>]
     python -m ahcloud rebuild [--store data/cloud] [--intel <store>] [--out <folder>]
+
+`ingest` takes every pending snapshot (no Lambda time limit here, so no cap); `rebuild` is a fresh uncapped
+ingest, then the daily analysis. The analysis needs no credentials; collecting and ingesting do (the catalog).
 
 A store is a folder or `s3://<bucket>` (your own AWS credentials). `--intel` is where the summaries go (the
 same store as `--store` when left out). `--out <folder>` reproduces a cloud run without touching the cloud:
@@ -24,6 +28,7 @@ from ahcloud.collector import Settings, run
 from ahcloud.credentials import WHERE, CredentialsMissing, lookup
 from ahcloud.daily import run_daily
 from ahcloud.hourly import run_hourly
+from ahcloud.ingest import run_ingest
 from ahcloud.store import LocalStore, OverlayStore, Store
 from ahsync.clock import SystemClock
 from ahsync.collect.blizzard import BlizzardClient, BlizzardError
@@ -58,18 +63,21 @@ def parser() -> argparse.ArgumentParser:
     collect = sub.add_parser("collect", help="fetch the house and store a new snapshot")
     collect.add_argument("--house", type=int, required=True, help="the auction house id (SPEC §6 item 23)")
     collect.add_argument("--ruleset", type=int, default=2)
+    ingest = sub.add_parser("ingest", help="every pending raw snapshot into the history")
+    ingest.add_argument("--rebuild", action="store_true", help="into a fresh history, from the retention window (FM72)")
     analyze = sub.add_parser("analyze", help="run the analyzer once")
     which = analyze.add_mutually_exclusive_group(required=True)
-    which.add_argument("--daily", action="store_true", help="the baselines (the day's snapshots into history)")
+    which.add_argument("--daily", action="store_true", help="the baselines from the history")
     which.add_argument("--hourly", action="store_true", help="the newest snapshot's prices over the latest document")
-    rebuild = sub.add_parser("rebuild", help="replay every raw snapshot into a fresh history (FM72)")
-    for command in (collect, analyze, rebuild):
+    rebuild = sub.add_parser("rebuild", help="replay every raw snapshot into a fresh history, then analyze (FM72)")
+    for command in (collect, ingest, analyze, rebuild):
         command.add_argument("--store", default="data/cloud", help="the data store: a folder, or s3://<bucket>")
         command.add_argument("--market", default="forever.normal.horde.us")
         command.add_argument("--secret", help="a Secrets Manager secret's name, used when no local credentials exist")
+    for command in (ingest, analyze, rebuild):
+        command.add_argument("--out", help="a folder that takes every write, so the stores are only read")
     for command in (analyze, rebuild):
         command.add_argument("--intel", help="the summaries' store (default: the data store)")
-        command.add_argument("--out", help="a folder that takes every write, so the stores are only read")
     return top
 
 
@@ -92,11 +100,12 @@ def main(argv: list[str] | None = None, env: dict[str, str] | None = None, home:
         return 2
     args = parser().parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    if args.command == "analyze" and args.hourly:                     # the one mode that needs no credentials
-        intel = open_store(args.intel or args.store, args.out)
-        outcome = run_hourly(open_store(args.store, args.out), intel, args.market)
-        print(f"hourly: {outcome.state} (prices to {outcome.observations_until_ms})")
-        return 0
+    if args.command == "analyze":                                     # the analysis needs no credentials
+        try:
+            return _analyze(args)
+        except DatabaseError as error:
+            print(f"error: {type(error).__name__}: {error}", file=sys.stderr)
+            return 1
     try:
         found = lookup(dict(os.environ) if env is None else env, home or Path.home(), args.secret, aws.get_secret)
     except CredentialsMissing as error:
@@ -111,8 +120,28 @@ def main(argv: list[str] | None = None, env: dict[str, str] | None = None, home:
         return 1
 
 
+def _analyze(args: argparse.Namespace) -> int:
+    """The analyze subcommand: the daily analysis or the hourly mode.
+
+    Args:
+        args: The parsed arguments.
+
+    Returns:
+        0.
+    """
+    data, intel = open_store(args.store, args.out), open_store(args.intel or args.store, args.out)
+    if args.hourly:
+        outcome = run_hourly(data, intel, args.market)
+        print(f"hourly: {outcome.state} (prices to {outcome.observations_until_ms})")
+        return 0
+    with tempfile.TemporaryDirectory(prefix="ahcloud-") as work:      # the run's scratch folder, like Lambda's /tmp
+        result = run_daily(data, intel, args.market, Path(work) / "run")
+    print(f"daily: {result.state}, {result.items} items")
+    return 0
+
+
 def _run(args: argparse.Namespace, client: BlizzardClient, clock: SystemClock) -> int:
-    """The collect, daily and rebuild subcommands, with credentials in hand.
+    """The collect, ingest and rebuild subcommands, with credentials in hand.
 
     Args:
         args: The parsed arguments.
@@ -128,10 +157,13 @@ def _run(args: argparse.Namespace, client: BlizzardClient, clock: SystemClock) -
         print(f"{outcome.state}: {outcome.key or 'nothing written'} ({outcome.auctions} auctions)")
         return 0
     data = open_store(args.store, args.out)
-    intel = open_store(args.intel or args.store, args.out)
+    fresh = args.command == "rebuild" or args.rebuild
     with tempfile.TemporaryDirectory(prefix="ahcloud-") as work:      # the run's scratch folder, like Lambda's /tmp
-        result = run_daily(data, intel, client, args.market, Path(work) / "run", fresh=args.command == "rebuild")
-    print(f"{args.command}: {result.state}, {result.ingested} snapshots ingested, {result.items} items")
+        ingested = run_ingest(data, client, args.market, Path(work) / "ingest", clock, cap=None, fresh=fresh)
+        print(f"ingest: {ingested.state}, {ingested.ingested} snapshots ingested, {ingested.refused} refused")
+        if args.command == "rebuild":
+            result = run_daily(data, open_store(args.intel or args.store, args.out), args.market, Path(work) / "run")
+            print(f"rebuild: {result.state}, {result.items} items")
     return 0
 
 

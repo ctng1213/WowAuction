@@ -1,4 +1,4 @@
-"""Tests for infra/market_stack.py: the template's security boundaries and wiring (SPEC §2.4, SEC17).
+"""Tests for infra/market_stack.py: the template's security boundaries and wiring (SPEC §2.4, SEC17, SEC22).
 
 Skipped where aws-cdk-lib is not installed (it is an infra-only dependency, requirements-infra.txt), so the
 regular CI test job is unchanged.
@@ -93,7 +93,7 @@ def analyzer_of(template):
 
 def test_SEC17_the_analyzer_environment_holds_names_only(template):
     props = analyzer_of(template)
-    assert set(props["Environment"]["Variables"]) == {"DATA_BUCKET", "INTEL_BUCKET", "MARKET", "SECRET_NAME"}
+    assert set(props["Environment"]["Variables"]) == {"DATA_BUCKET", "INTEL_BUCKET", "MARKET"}       # no secret (SEC22)
     assert (props["ReservedConcurrentExecutions"], props["Timeout"], props["MemorySize"]) == (1, 900, 8192)
     assert props["EphemeralStorage"] == {"Size": 4096} and "TargetArn" in json.dumps(props["DeadLetterConfig"])
 
@@ -114,7 +114,7 @@ def alarms_of(template):
 
 def test_FM70_failures_and_stale_baselines_alarm(template):
     alarms = alarms_of(template)
-    assert len(alarms) == 7
+    assert len(alarms) == 10
     assert any("dead-letter" in d for d in alarms) and any("analyzer failed" in d for d in alarms)
 
 
@@ -128,7 +128,7 @@ def test_FM79_no_daily_baselines_for_27_hours_alarms(template):
 
 
 def test_FM80_an_analyzer_run_over_12_minutes_alarms(template):
-    slow = next(a for d, a in alarms_of(template).items() if "over 12 minutes" in d)
+    slow = next(a for d, a in alarms_of(template).items() if "An analyzer run took over 12 minutes" in d)
     assert (slow["Namespace"], slow["MetricName"], slow["Statistic"]) == ("AWS/Lambda", "Duration", "Maximum")
     assert (slow["Threshold"], slow["ComparisonOperator"], slow["TreatMissingData"]) == (
         720000, "GreaterThanThreshold", "notBreaching")
@@ -149,3 +149,69 @@ def test_FM77_no_published_summary_for_3_hours_alarms(template):
     assert all(s["Metric"]["Dimensions"] == [{"Name": "market", "Value": "forever.normal.horde.us"}] for s in inputs.values())
     assert alarm["AlarmActions"] and alarm["OKActions"]
 
+
+def function_named(template, handler):
+    """A function's properties by its handler."""
+    [function] = [f for f in template.find_resources("AWS::Lambda::Function").values()
+                  if f["Properties"].get("Handler") == handler]
+    return function["Properties"]
+
+
+def statements_of(template, handler):
+    """Every IAM statement on the role of the function with this handler."""
+    role = function_named(template, handler)["Role"]["Fn::GetAtt"][0]
+    return [s for p in template.find_resources("AWS::IAM::Policy").values()
+            if {"Ref": role} in p["Properties"]["Roles"] for s in p["Properties"]["PolicyDocument"]["Statement"]]
+
+
+def actions(statement):
+    """A statement's actions as a list."""
+    action = statement["Action"]
+    return action if isinstance(action, list) else [action]
+
+
+def writes(statements):
+    """The resources of every S3 write or delete, as JSON text."""
+    return [json.dumps(s["Resource"]) for s in statements
+            if any(a.startswith(("s3:PutObject", "s3:DeleteObject", "s3:Abort")) for a in actions(s))]
+
+
+def bucket_id(template, prefix):
+    """The logical id of the bucket whose id starts with prefix ("Data" or "Intel")."""
+    return next(k for k in template.find_resources("AWS::S3::Bucket") if k.startswith(prefix))
+
+
+def test_SEC22_only_ingest_writes_the_history_and_the_analyzer_holds_no_secret(template):
+    data, intel = bucket_id(template, "Data"), bucket_id(template, "Intel")
+    ingest = statements_of(template, "ahcloud.ingest.handler")
+    analyzer = statements_of(template, "ahcloud.analyzer.handler")
+    assert any("secretsmanager:GetSecretValue" in actions(s) for s in ingest)
+    assert not any(a.startswith("secretsmanager:") for s in analyzer for a in actions(s))
+    assert all(data in w and "/state/*" in w for w in writes(ingest)) and writes(ingest)
+    assert all(intel in w and data not in w for w in writes(analyzer)) and writes(analyzer)
+    props = function_named(template, "ahcloud.ingest.handler")
+    assert set(props["Environment"]["Variables"]) == {"DATA_BUCKET", "MARKET", "SECRET_NAME"}
+    assert (props["ReservedConcurrentExecutions"], props["Timeout"], props["MemorySize"]) == (1, 900, 4096)
+    assert props["EphemeralStorage"] == {"Size": 4096} and "DeadLetterConfig" not in props
+
+
+def test_FM82_ingest_runs_at_10_and_40_past_and_never_retries(template):
+    template.has_resource_properties("AWS::Events::Rule", {
+        "ScheduleExpression": "cron(10,40 * * * ? *)",
+        "Targets": Match.array_with([Match.object_like({"RetryPolicy": {"MaximumRetryAttempts": 0}})])})
+    configs = [c["Properties"] for c in template.find_resources("AWS::Lambda::EventInvokeConfig").values()]
+    assert sorted(c["MaximumRetryAttempts"] for c in configs) == [0, 1]                 # Ingest 0, the analyzer 1
+    failed = next(a for d, a in alarms_of(template).items() if "Ingest run failed" in d)
+    assert (failed["MetricName"], failed["Period"], failed["Threshold"]) == ("Errors", 3600, 1)
+    slow = next(a for d, a in alarms_of(template).items() if "Ingest run took over 12 minutes" in d)
+    assert (slow["MetricName"], slow["Threshold"]) == ("Duration", 720000) and "Ingest" in json.dumps(slow["Dimensions"])
+
+
+def test_FM84_the_history_three_hours_behind_for_three_hours_alarms(template):
+    behind = next(a for d, a in alarms_of(template).items() if "History more than 3 hours behind" in d)
+    assert (behind["Namespace"], behind["MetricName"], behind["Statistic"], behind["Period"]) == (
+        "WowAuction", "history_lag_minutes", "Maximum", 3600)
+    assert (behind["Threshold"], behind["EvaluationPeriods"], behind["ComparisonOperator"], behind["TreatMissingData"]) == (
+        180, 3, "GreaterThanThreshold", "breaching")
+    assert behind["Dimensions"] == [{"Name": "market", "Value": "forever.normal.horde.us"}]
+    assert behind["AlarmActions"] and behind["OKActions"]

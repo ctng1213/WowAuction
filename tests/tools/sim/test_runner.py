@@ -61,6 +61,16 @@ def test_SM8_a_rebuild_from_raw_gives_the_daily_runs_document_byte_for_byte_thro
     assert to_json(rebuilt) == to_json(run.documents[-1]), f"seed {world.seed}"
 
 
+def test_SM8_capped_ingest_runs_give_the_uncapped_document_byte_for_byte(tmp_path):
+    world = World(8, START, 4, ITEMS)
+    faults = {5: "conflict", 30: "duplicate"}
+    whole = simulate(world, tmp_path / "whole", RunSettings(skip_daily=frozenset({1}), faults=faults, ingest_cap=None))
+    for cap in (5, 1):
+        capped = simulate(world, tmp_path / f"cap{cap}", RunSettings(skip_daily=frozenset({1}), faults=faults,
+                                                                      ingest_cap=cap))
+        assert [to_json(d) for d in capped.documents] == [to_json(d) for d in whole.documents], f"seed {world.seed} cap {cap}"
+
+
 def test_the_market_alone_gives_the_snapshots_simulate_stores(tmp_path):
     world = World(4, START, 1, ITEMS)
     run = simulate(world, tmp_path)

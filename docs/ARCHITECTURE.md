@@ -44,8 +44,8 @@ flowchart LR
     BAPI[Blizzard Game Data API<br/>ruleset 2 · the Horde house · hourly Last-Modified]
     Collector[ahcloud/collector.py, built M30<br/>Lambda every 15 min · If-Modified-Since]
     Raw[(S3 data bucket, built M30: raw/ + state/<br/>one gzipped envelope per snapshot, kept forever)]
-    Analyzer[ahcloud/analyzer.py, built M31<br/>daily: ingest → analysis → baselines, history.db round trip<br/>from IS1: daily analysis only, history.db read-only<br/>hourly per raw object: reprice_item + last hour, no database]
-    Ingest[ahcloud/ingest.py, planned IS1–IS2<br/>Lambda at :10 and :40 · the oldest 12 pending snapshots<br/>the one writer of history.db + state/ingest.json]
+    Analyzer[ahcloud/analyzer.py, built M31<br/>daily: ingest → analysis → baselines, history.db round trip<br/>since IS1: daily analysis only, history.db read-only<br/>hourly per raw object: reprice_item + last hour, no database]
+    Ingest[ahcloud/ingest.py, built IS1, deployed IS3<br/>Lambda at :10 and :40 · the oldest 12 pending snapshots<br/>the one writer of history.db + state/ingest.json]
     IntelS3[(S3 intel bucket, built M30<br/>MarketIntelligence JSON by sha256 + latest-schema.json, M31)]
     CF[CloudFront, built M30<br/>public, the intel bucket only]
     CW[CloudWatch: alarms → SNS email, built M30–M39, H1<br/>dashboard, built H1]
@@ -65,9 +65,9 @@ flowchart LR
   BAPI --> Collector
   Collector --> Raw
   Raw -- S3 event --> Analyzer
-  Raw -. raw/ + state/, planned IS1 .-> Ingest
-  Ingest -. history.db, planned IS1 .-> Raw
-  Ingest -. metrics, planned IS2 .-> CW
+  Raw -- raw/ + state/, IS1 --> Ingest
+  Ingest -- history.db + ingest.json, IS1 --> Raw
+  Ingest -.metrics.-> CW
   Analyzer --> IntelS3
   IntelS3 --> CF
   CF -- collect/cloud_intel.py, built M32a --> Intel
@@ -371,3 +371,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-09: SP1a built: `sold_prices_d1` written at ingest beside `lifetimes_d1` (`engine/lifetime_prices.py`, which also takes over the new listings' positions from `engine/volume.py`), and summary schema 16's `sold_med7` and `sold_units7` (published side by side with schemas 13–15); nothing reads them yet.
 - 2026-11-09: SP1b built: `tools/sold_price_report.py` and the sold-price rows SM10, SM11, SM18 (`tools/sim/sold_prices.py`); test tooling only, no component, flow or contract changes.
 - 2026-11-11: the cloud's ingest split spec merge (`docs/plans/cloud-ingest-split.md`): a planned Ingest Lambda (`ahcloud/ingest.py`, every 30 min, at most 12 snapshots a run) becomes the only writer of `state/history.db`, and the analyzer's daily mode becomes the analysis alone, reading the history; after the 2026-11-10 timeouts (LESSONS 2026-11-11).
+- 2026-11-11: IS1 built (code and infrastructure in one milestone): `ahcloud/ingest.py` and the Ingest Lambda write the history; the analyzer's daily mode reads it and holds no secret; three Ingest alarms; deployed at IS3.

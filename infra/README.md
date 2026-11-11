@@ -46,6 +46,15 @@ python -m ahcloud collect --house <id> --store s3://<data-bucket> # into the rea
 
 Blizzard credentials are read from, in order: `BLIZZARD_CLIENT_ID` and `BLIZZARD_CLIENT_SECRET` in the environment, `~/.ahsync/blizzard` (two lines: the client id, then the secret; `chmod 600`), or `--secret wowauction/blizzard-api` through Secrets Manager. A credential is never accepted on the command line.
 
+The history has one writer, the Ingest function; the analysis only reads it (SPEC §2.4 Ingest). Locally:
+
+```sh
+python -m ahcloud ingest --store s3://<data-bucket>                                    # every pending snapshot, no cap
+python -m ahcloud analyze --daily --store s3://<data-bucket> --intel s3://<intel-bucket>   # the baselines; no credentials
+```
+
+To catch the history up by hand (Ingest stalled, FM84), run `ingest` then `analyze --daily`; start well away from :10 and :40, or a scheduled run's upload may refuse yours (`PreconditionFailed`, FM83): run it again.
+
 To reproduce a cloud run, point `--store` at a folder holding the same `raw/` and `state/` objects, or read the real buckets and write elsewhere with `--out <folder>`.
 
 The `s3://` stores need boto3 on your machine, in its own environment (botocore needs `python-dateutil` < 3, which the infra environment's pin rules out):
@@ -59,25 +68,25 @@ aws login                                                     # your own AWS cre
 
 The stack creates a CloudWatch dashboard, `WowAuction-<market with dashes>` (e.g. `WowAuction-forever-normal-horde-us`), in the console under CloudWatch → Dashboards. It shows 7 days by default:
 
-- **Alarms**: all seven, each emailing on ALARM and again on OK. `NoDailyBaselines` fires after 27 hours without a daily publish (09:00 UTC run, so about 13:00 the next day); `AnalyzerSlowRun` fires on any analyzer run over 12 of its 15 minutes, a warning before runs start timing out. A rebuild on the Lambda that runs long trips it too; that one is expected.
+- **Alarms**: all ten, each emailing on ALARM and again on OK. `NoDailyBaselines` fires after 27 hours without a daily publish (09:00 UTC run, so about 13:00 the next day); `AnalyzerSlowRun` fires on any analyzer run over 12 of its 15 minutes, a warning before runs start timing out. `IngestErrors`, `IngestSlowRun` and `HistoryBehind` (the history 3 hours behind the newest raw, for 3 hours) are Ingest's.
 - **New snapshots** and **summaries published** per hour: a gap in the first is Blizzard or the collector; a gap in the second while snapshots arrive is the analyzer.
 - Per function: **runs** (errors, invocations, throttles) and the **longest run**, with the timeout drawn as a line.
-- The **dead-letter queue**, the **warnings** (`daily_refused`, `hourly_no_base`, `mismatch`), and the analyzer's last 50 WARNING or ERROR log lines.
+- The **dead-letter queue**, the **warnings** (`ingest_refused`, `hourly_no_base`, `mismatch`), and the analyzer's and Ingest's last 50 WARNING or ERROR log lines.
 
 The metric graphs count only runs in AWS: `python -m ahcloud` on your machine writes its metric lines to the terminal. The status page (planned, SPEC §2.4) reads S3 and counts both.
 
 ## Recovering the cloud state (rebuild)
 
-A rebuild throws `state/history.db` and the compact snapshots away and replays the raw of the retention window (the last 90 days plus 2.5 days, FM76) into a fresh database, then uploads it and publishes. Use it when the daily run fails with `DatabaseError` (FM72), or to apply a changed volume method to the stored days at once; day to day the daily run keeps everything current.
+A rebuild throws `state/history.db` and the compact snapshots away and replays the raw of the retention window (the last 90 days plus 2.5 days, FM76) into a fresh database. Use it when a run fails with `DatabaseError` (FM72), or to apply a changed volume method to the stored days at once; day to day Ingest keeps the history current.
 
-1. **The Lambda first**, while the raw is short (by an estimate from today's runs a day of raw takes the analyzer about 5 minutes; it stops at 15): invoke the analyzer with `{"mode": "rebuild"}`. Its reserved concurrency keeps it from overlapping a daily or hourly run.
-2. **On your machine when the Lambda times out** (no time limit there; about 80 s per day of raw on a recent Mac):
+1. **In the cloud**: invoke the **Ingest** function (not the analyzer) with `{"mode": "rebuild"}`. It starts a fresh history marked rebuilding until the newest raw, and its scheduled runs carry on at the rebuild cap (`REBUILD_SNAPSHOTS_PER_RUN`) until the history reaches the mark; meanwhile the daily analysis publishes nothing (`daily_rebuilding`) and the hourly prices carry on (BZ61). `NoDailyBaselines` may fire if it takes over a day; it clears at the next analysis.
+2. **On your machine, to be done sooner** (no time limit there; about 80 s per day of raw on a recent Mac):
 
    ```sh
    .venv-cloud/bin/python -m ahcloud rebuild --store s3://<data-bucket> --intel s3://<intel-bucket>
    ```
 
-   It uses Blizzard's credentials for the catalog (above) and publishes to the real intel bucket. Start it well away from the daily run (09:00 UTC). If a daily run still uploads while it runs, the rebuild's upload is refused (`PreconditionFailed`: it is conditional on the ETag it saw at its start) and nothing is published; run it again. Hourly runs don't touch the database and can carry on.
+   It uses Blizzard's credentials for the catalog (above), then runs the analysis and publishes to the real intel bucket. If an Ingest run uploads while it runs (every :10 and :40), the rebuild's upload is refused (`PreconditionFailed`: it is conditional on the ETag it saw at its start) and nothing is published; run it again. The analyzer never writes the database, so its runs can carry on.
 3. **Check** the new pointer through CloudFront (`/intel/<market>/latest-<schema>.json`): its `built_ms` is the newest raw snapshot's time.
 
 To try a rebuild without touching the cloud, add `--out data/rebuild-check`: the buckets are only read and every write lands in the folder.
