@@ -41,14 +41,15 @@ def test_CS1_one_dashboard_shows_alarms_publishes_functions_queue_warnings_and_l
     assert props["DashboardName"] == "WowAuction-forever-normal-horde-us"
     body = body_text(props)
     alarm_ids = [key for key in template.find_resources("AWS::CloudWatch::Alarm")]
-    assert len(alarm_ids) == 7 and all(alarm_id in body for alarm_id in alarm_ids)
-    for name in ("snapshot_written", "hourly_published", "daily_published", "daily_refused", "hourly_no_base",
+    assert len(alarm_ids) == 10 and all(alarm_id in body for alarm_id in alarm_ids)
+    for name in ("snapshot_written", "hourly_published", "daily_published", "ingest_refused", "hourly_no_base",
                  "mismatch"):
         assert f'\\"{name}\\"' in body or f'"{name}"' in body, name
     for metric in ("Errors", "Invocations", "Throttles", "Duration", "ApproximateNumberOfMessagesVisible"):
         assert metric in body, metric
-    assert '"value":120000' in body and '"value":900000' in body          # the two timeouts annotated
-    assert "filter @message like /WARNING|ERROR/" in body and "AnalyzerLogs" in body
+    assert '"value":120000' in body and body.count('"value":900000') == 2   # the three timeouts annotated
+    assert "filter @message like /WARNING|ERROR/" in body and "AnalyzerLogs" in body and "IngestLogs" in body
+    assert "Ingest: runs per hour" in body
     assert "infra/README.md" in body and '"start":"-P7D"' in body
 
 

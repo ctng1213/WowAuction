@@ -2,7 +2,8 @@
 
 The market runs forward to each Blizzard refresh; the snapshot goes into a local data store under the collector's
 key; the hourly mode runs on it (optional: it is slow at scale and the daily document is what most scenarios
-read); and at `DAILY_HOUR_UTC` each simulated day the daily mode ingests what arrived and publishes. The catalog's
+read); and at `DAILY_HOUR_UTC` each simulated day Ingest runs take what arrived (capped per run, as the schedule's
+runs would, until nothing is pending) and the daily analysis publishes. The catalog's
 item search is answered from the world's items. Nothing here changes the cloud code: it reads the store exactly
 as it reads S3. Faults (a refused snapshot, a repeated record, a skipped daily run) are injected by settings.
 """
@@ -15,6 +16,7 @@ from typing import Protocol
 
 from ahcloud.daily import run_daily
 from ahcloud.hourly import run_hourly
+from ahcloud.ingest import MAX_SNAPSHOTS_PER_RUN, run_ingest
 from ahcloud.publish import read_latest
 from ahcloud.store import LocalStore
 from ahsync.collect.blizzard import QUALITY
@@ -39,6 +41,22 @@ class RunSettings:
     skip_refresh: float = 0.0                          # chance an hour has no Blizzard refresh
     skip_daily: frozenset[int] = frozenset()           # simulated day numbers (0 = the start's day) with no daily run
     faults: dict[int, str] = field(default_factory=dict)   # snapshot number -> one of FAULTS
+    ingest_cap: int | None = MAX_SNAPSHOTS_PER_RUN     # snapshots per Ingest run; None uncapped (SM8 compares both)
+
+
+@dataclass(frozen=True)
+class AtClock:
+    """A clock stopped at one time: Ingest reads it only for its state file's times."""
+
+    at_ms: int
+
+    def now_ms(self) -> int:
+        """The fixed time.
+
+        Returns:
+            UTC ms.
+        """
+        return self.at_ms
 
 
 class Agent(Protocol):
@@ -179,7 +197,9 @@ def rebuild(run: Run, world: World, folder: Path) -> MarketIntelligence:
     Returns:
         The rebuild's published document.
     """
-    run_daily(run.data, run.intel, SimCatalog(world), world.market, folder / "work", fresh=True)
+    run_ingest(run.data, SimCatalog(world), world.market, folder / "ingest", AtClock(run.snapshots[-1]), cap=None,
+               fresh=True)
+    run_daily(run.data, run.intel, world.market, folder / "work")
     found = read_latest(run.intel, world.market)
     assert found is not None, "the rebuild published nothing"
     return found[0]
@@ -223,11 +243,33 @@ def _daily(run: Run, catalog: SimCatalog, world: World, at_ms: int, settings: Ru
     """
     if (at_ms - world.start_ms // DAY_MS * DAY_MS) // DAY_MS in settings.skip_daily or not run.snapshots:
         return
-    run_daily(run.data, run.intel, catalog, world.market, run.folder / "work")
+    drain(run, catalog, world, at_ms, settings.ingest_cap)
+    run_daily(run.data, run.intel, world.market, run.folder / "work")
     found = read_latest(run.intel, world.market)
     if found is not None:
         run.documents.append(found[0])
         run.published.append(found[0])
+
+
+def drain(run: Run, catalog: SimCatalog, world: World, at_ms: int, cap: int | None) -> int:
+    """Ingest runs until nothing is pending, as the schedule's runs would between two daily analyses.
+
+    Args:
+        run: The run so far.
+        catalog: The catalog stand-in.
+        world: The scenario.
+        at_ms: The time the runs happen at, UTC ms.
+        cap: Snapshots per run; None uncapped.
+
+    Returns:
+        How many Ingest runs it took.
+    """
+    runs = 0
+    while True:
+        runs += 1
+        outcome = run_ingest(run.data, catalog, world.market, run.folder / "ingest", AtClock(at_ms), cap=cap)
+        if not outcome.pending:
+            return runs
 
 
 def _first_daily(start_ms: int) -> int:

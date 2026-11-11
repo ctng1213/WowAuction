@@ -4,12 +4,13 @@ Two buckets, so the public/private line is a bucket boundary rather than a prefi
 - **data** (private): `raw/` (Blizzard's snapshots, kept forever, Standard-IA after 30 days) and `state/`.
 - **intel** (read only by the CloudFront distribution, through origin access control): the published
   summaries; objects expire after 7 days.
-The collector runs every 15 minutes; the analyzer runs daily at DAILY_HOUR_UTC for the baselines and on every
-new raw object (with an hourly fallback schedule) for the state, failed events going to a dead-letter queue.
-Both have reserved concurrency 1, environments of names only, and the one Blizzard secret. Alarms (either
-function failing, the dead-letter queue not empty, no new snapshot or published summary for 3 hours, no daily
-baselines for 27 hours, an analyzer run over 12 minutes) and a monthly budget email the user through one SNS
-topic; a CloudWatch dashboard shows them all (infra/dashboard.py).
+The collector runs every 15 minutes; Ingest at :10 and :40, the history's one writer (IS1); the analyzer daily at
+DAILY_HOUR_UTC for the baselines, reading the history, and on every new raw object (with an hourly fallback
+schedule) for the state, failed events going to a dead-letter queue. All have reserved concurrency 1 and
+environments of names only; the collector and Ingest read the one Blizzard secret, the analyzer none (SEC22).
+Alarms (a function failing, the dead-letter queue not empty, no new snapshot or published summary for 3 hours, no
+daily baselines for 27 hours, an analyzer or Ingest run over 12 minutes, the history 3 hours behind the raw) and a
+monthly budget email the user through one SNS topic; a CloudWatch dashboard shows them all (infra/dashboard.py).
 """
 from __future__ import annotations
 
@@ -43,7 +44,9 @@ BUDGET_SERVICES = ("AWS Lambda", "Amazon Simple Storage Service", "Amazon CloudF
                    "Amazon Simple Notification Service", "Amazon Simple Queue Service", "AWS Secrets Manager")
 COLLECTOR_TIMEOUT = Duration.minutes(2)
 ANALYZER_TIMEOUT = Duration.minutes(15)
-SLOW_RUN = Duration.minutes(12)        # the analyzer duration alarm (FM80)
+INGEST_TIMEOUT = Duration.minutes(15)
+SLOW_RUN = Duration.minutes(12)        # the analyzer and Ingest duration alarms (FM80)
+HISTORY_BEHIND_MINUTES = 180           # the history this far behind the raw, for 3 hours, alarms (FM84)
 
 
 @dataclass(frozen=True)
@@ -78,12 +81,14 @@ class MarketStack(Stack):
         self.alerts.add_subscription(subscriptions.EmailSubscription(config.alert_email))
         self.secret = secretsmanager.Secret.from_secret_name_v2(self, "BlizzardSecret", config.secret_name)
         self.collector = self._collector(config)
+        self.ingest = self._ingest(config)
         self.analyzer, self.dead_letters = self._analyzer(config)
         self.distribution = self._distribution()
-        alarms = self._alarms(config)
+        alarms = self._alarms(config) + self._ingest_alarms(config)
         add_dashboard(self, config.market, alarms,
-                      [("Collector", self.collector, COLLECTOR_TIMEOUT), ("Analyzer", self.analyzer, ANALYZER_TIMEOUT)],
-                      self.dead_letters, self.analyzer_logs)
+                      [("Collector", self.collector, COLLECTOR_TIMEOUT), ("Ingest", self.ingest, INGEST_TIMEOUT),
+                       ("Analyzer", self.analyzer, ANALYZER_TIMEOUT)],
+                      self.dead_letters, [self.analyzer_logs, self.ingest_logs])
         self._budget(config)
 
     def _buckets(self) -> tuple[s3.Bucket, s3.Bucket]:
@@ -128,6 +133,34 @@ class MarketStack(Stack):
                     targets=[targets.LambdaFunction(function, retry_attempts=0)])
         return function
 
+    def _ingest(self, config: MarketConfig) -> lambda_.Function:
+        """The Ingest function: the history's one writer, its schedule and its grants (SPEC §2.4 Ingest, IS1).
+
+        No retries and no dead-letter queue: the next scheduled run is the retry (FM82).
+
+        Args:
+            config: The market's settings.
+
+        Returns:
+            The function.
+        """
+        log_group = self.ingest_logs = logs.LogGroup(self, "IngestLogs", retention=logs.RetentionDays.ONE_MONTH,
+                                                     removal_policy=RemovalPolicy.DESTROY)
+        function = lambda_.Function(
+            self, "Ingest", runtime=lambda_.Runtime.PYTHON_3_12, architecture=lambda_.Architecture.ARM_64,
+            handler="ahcloud.ingest.handler", code=lambda_.Code.from_asset(config.asset_path),
+            timeout=INGEST_TIMEOUT, memory_size=4096, ephemeral_storage_size=Size.gibibytes(4),
+            reserved_concurrent_executions=1, log_group=log_group, retry_attempts=0,
+            environment={"DATA_BUCKET": self.data.bucket_name, "MARKET": config.market,
+                         "SECRET_NAME": config.secret_name})
+        self.data.grant_read(function, "raw/*")
+        self.data.grant_read_write(function, "state/*")
+        self.secret.grant_read(function)
+        # :10 and :40, so the snapshot the collector saves around :30 is in the history before the analysis
+        events.Rule(self, "IngestSchedule", schedule=events.Schedule.cron(minute="10,40"),
+                    targets=[targets.LambdaFunction(function, retry_attempts=0)])
+        return function
+
     def _analyzer(self, config: MarketConfig) -> tuple[lambda_.Function, sqs.Queue]:
         """The analyzer function: its schedules, the S3 event, its dead-letter queue and its grants (M31).
 
@@ -148,11 +181,10 @@ class MarketStack(Stack):
             reserved_concurrent_executions=1, log_group=log_group, dead_letter_queue=dead_letters,
             retry_attempts=1,
             environment={"DATA_BUCKET": self.data.bucket_name, "INTEL_BUCKET": self.intel.bucket_name,
-                         "MARKET": config.market, "SECRET_NAME": config.secret_name})
+                         "MARKET": config.market})
         self.data.grant_read(function, "raw/*")
-        self.data.grant_read_write(function, "state/*")
+        self.data.grant_read(function, "state/*")                  # the history is Ingest's (SEC22)
         self.intel.grant_read_write(function)
-        self.secret.grant_read(function)
         function.add_event_source(event_sources.S3EventSource(
             self.data, events=[s3.EventType.OBJECT_CREATED], filters=[s3.NotificationKeyFilter(prefix="raw/")]))
         events.Rule(self, "AnalyzerDaily", schedule=events.Schedule.cron(minute="0", hour=str(config.daily_hour_utc)),
@@ -232,6 +264,40 @@ class MarketStack(Stack):
             alarm.add_alarm_action(action)
             alarm.add_ok_action(action)
         return alarms
+
+    def _ingest_alarms(self, config: MarketConfig) -> list[cloudwatch.Alarm]:
+        """Ingest failing, running long, or the history falling behind the raw (SPEC §2.4 Alerts; FM82, FM84).
+
+        Args:
+            config: The market's settings.
+
+        Returns:
+            The three alarms, each emailing on ALARM and on OK.
+        """
+        errors = self.ingest.metric_errors(period=Duration.hours(1), statistic="Sum").create_alarm(
+            self, "IngestErrors", threshold=1, evaluation_periods=1,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+            alarm_description="An Ingest run failed; the next scheduled run retries it (FM82)")
+        slow = self.ingest.metric_duration(period=Duration.minutes(15), statistic="Maximum").create_alarm(
+            self, "IngestSlowRun", threshold=SLOW_RUN.to_milliseconds(), evaluation_periods=1,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+            alarm_description="An Ingest run took over 12 minutes (timeout 15) (FM80)")
+        lag = cloudwatch.Metric(namespace=METRIC_NAMESPACE, metric_name="history_lag_minutes",
+                                dimensions_map={"market": config.market}, period=Duration.hours(1),
+                                statistic="Maximum")
+        # every Ingest run reports its lag, so an hour without the metric is an hour Ingest did not finish
+        behind = lag.create_alarm(
+            self, "HistoryBehind", threshold=HISTORY_BEHIND_MINUTES, evaluation_periods=3,
+            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+            treat_missing_data=cloudwatch.TreatMissingData.BREACHING,
+            alarm_description="History more than 3 hours behind the raw, for 3 hours (FM84)")
+        action = cw_actions.SnsAction(self.alerts)
+        for alarm in (errors, slow, behind):
+            alarm.add_alarm_action(action)
+            alarm.add_ok_action(action)
+        return [errors, slow, behind]
 
     def _no_summary_alarm(self, config: MarketConfig) -> cloudwatch.Alarm:
         """The alarm for 3 hours without a published market summary, hourly or daily (SPEC §2.4 Alerts, FM77).

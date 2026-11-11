@@ -66,7 +66,7 @@ def function_widgets(title: str, function: lambda_.Function, timeout: Duration) 
 
 def add_dashboard(scope: Construct, market: str, alarms: list[cloudwatch.Alarm],
                   functions: list[tuple[str, lambda_.Function, Duration]], dead_letters: sqs.Queue,
-                  analyzer_logs: logs.LogGroup) -> cloudwatch.Dashboard:
+                  log_groups: list[logs.LogGroup]) -> cloudwatch.Dashboard:
     """The dashboard: alarm states, publishes, each function's runs and durations, the queue, warnings and logs.
 
     Args:
@@ -75,7 +75,7 @@ def add_dashboard(scope: Construct, market: str, alarms: list[cloudwatch.Alarm],
         alarms: Every alarm of the stack, in display order.
         functions: (display name, function, timeout) per function.
         dead_letters: The analyzer's dead-letter queue.
-        analyzer_logs: The analyzer's log group, for the warning lines.
+        log_groups: The analyzer's and Ingest's log groups, for the warning lines.
 
     Returns:
         The dashboard (7 days shown by default).
@@ -95,9 +95,9 @@ def add_dashboard(scope: Construct, market: str, alarms: list[cloudwatch.Alarm],
             dead_letters.metric_approximate_number_of_messages_visible(period=hour, statistic="Maximum",
                                                                        label="waiting")]),
         cloudwatch.GraphWidget(title="Warnings per hour", width=WIDTH // 2, left=[
-            market_metric(market, name) for name in ("daily_refused", "hourly_no_base", "mismatch")])])
-    rows.append([cloudwatch.LogQueryWidget(title="Analyzer warnings and errors", width=WIDTH, height=8,
-                                           log_group_names=[analyzer_logs.log_group_name],
+            market_metric(market, name) for name in ("ingest_refused", "hourly_no_base", "mismatch")])])
+    rows.append([cloudwatch.LogQueryWidget(title="Analyzer and Ingest warnings and errors", width=WIDTH, height=8,
+                                           log_group_names=[group.log_group_name for group in log_groups],
                                            query_lines=list(LOG_QUERY))])
     rows.append([cloudwatch.TextWidget(width=WIDTH, height=3, markdown=(
         "**Recovering the cloud state**: see the section \"Recovering the cloud state (rebuild)\" in `infra/README.md`. "

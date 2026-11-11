@@ -23,6 +23,24 @@ Decided by Opus while planning (2026-11-11), each open to the user's veto at app
 10. **A rebuild is Ingest from a fresh database.** It marks the database `rebuilding_until_ms` = the newest raw at its start; while the mark is set each run takes the **rebuild cap** (sized in IS0: as many snapshots as fit in 10 min) instead of 12, and the daily analysis skips its publish (the hourly prices carry on). The mark clears when the history reaches it. `python -m ahcloud rebuild` on your machine stays, uncapped.
 11. **Ingest starts at 4,096 MB** (its peak is measured in IS3 and sized with the analyzer's).
 
+Decided by Opus during execution (2026-11-11):
+
+12. **IS1 and IS2 are one milestone and one PR.** The code alone on `main` would remove ingestion from the cloud at the next deploy from `main` (the analyzer would stop ingesting before an Ingest function exists), and the status-page session deploys from `main` too.
+13. **The rebuild cap is 60, provisional**, until IS0 measures a snapshot's cost on Lambda; a rebuild run takes it *instead of* 12.
+14. **The early exit compares against `newest_seen_ms`**, not `last_ingested_at_ms`: every raw key up to it is ingested or refused, so a refused newest snapshot doesn't force a full run every 30 minutes. A run that finds nothing new rewrites `state/ingest.json` with its own outcome and times and the history's values unchanged, so the file still never leads the database.
+15. **A first batch refused whole is uploaded** (the history then holds only its refusals). Before the cap this case returned without writing; with the cap it would have retried the same batch forever.
+16. **Metrics**: `ingest_<outcome>`, `history_lag_minutes` (Maximum per hour; FM84's alarm treats a missing hour as breaching, since every run reports it) and `ingest_refused`, which replaces `daily_refused` on the dashboard. The dashboard shows Ingest's runs, durations and log lines.
+17. **The local `ingest` command is uncapped** (no Lambda limit); `analyze --daily` needs no credentials now.
+
+From the independent review of IS1 (2026-11-11; Opus's fixes, within the approved design):
+
+18. **Empty houses are remembered** (meta `empty_snapshots`, BZ62): they leave no `scans` row, so with the cap 12 of them inside a day would have made every run retake the same batch.
+19. **The compact store survives a lost race** (FM83): a run downloads only the files up to the history's newest snapshot and indexes exactly those, uploads only the files it wrote (replacing any copy, so a rebuild never keeps an old history's), and writes the remote index and deletes old files only after its database upload succeeds.
+20. **A history from nothing is a rebuild** (BZ63), and the rebuild mark also clears when nothing is left pending (a refused newest snapshot no longer holds it forever).
+21. **A long local rebuild pauses `IngestSchedule`** (infra/README.md), since Ingest uploads about hourly and a 2-hour rebuild would always lose its conditional upload; the command line reports a lost race in one line and exits 1.
+22. **Accepted, not changed:** the catalog's retry time for an id neither search knows follows each batch's newest snapshot, so capped runs and one uncapped run can retry an unknown id at different times (as daily runs and a rebuild already could); documents differ only if Blizzard's answer changes in between. `run_ingest` keeps 7 parameters, as `run_daily` had.
+23. **Found, out of scope:** `hourly.advance` raises on a malformed newest raw snapshot, so the daily analysis and the hourly mode fail until a good snapshot arrives (on `main` before this batch too). For the user to schedule.
+
 Facts measured on 2026-11-11:
 
 | What | Value | Source |
@@ -51,14 +69,16 @@ The analysis alone uses about 1.9 GB, so at 2 GB every snapshot was ingested at 
 2. The per-snapshot ingest cost on Lambda = (duration − the analysis's share) ÷ snapshots, from (1) and the profile above.
 3. Check: 12 × that cost + download, VACUUM and upload ≤ 10 min at 4 GB, with margin. Set the rebuild cap = ⌊(10 min − fixed) ÷ per-snapshot cost⌋. Recorded here.
 
-### IS1: the code split (Opus: merge logic, the byte-identity invariant)
+### IS1: the split, code and infrastructure (Opus: merge logic, the byte-identity invariant, IAM; one PR, §1 item 12)
+
+**Built 2026-11-11.** Steps 1–4 below and IS2's 1–4. Verification: the full pytest suite with engine coverage, the Lua runner, the infra tests (SEC17, SEC22, FM82, FM84, CS1), SM8 with caps 5 and 1 against uncapped, and the whole-plan snapshot unchanged; `/security-review` on the branch.
 
 1. `ahcloud/ingest.py` + `tests/ahcloud/test_ingest.py`: `run_ingest(data, client, market, workdir, cap, fresh)` (the early exit, download, ingest the oldest `cap` pending, refusals, catalog, prune, compact upload, `VACUUM INTO`, conditional put, then `state/ingest.json`; the rebuild mark) and its `handler`. Moved from `daily.py`: `ingest_pending` and the ingest half of `_ingest_and_publish`.
 2. `ahcloud/daily.py`: the analysis only. Download the history read-only; skip with `rebuilding` while the mark is set; `analyze_market` at `now_ms` = `meta.last_ingested_at_ms`; carry, advance, publish. No database upload.
 3. `ahcloud/analyzer.py`: modes `daily` and `hourly`; `rebuild` moves to Ingest. `python -m ahcloud ingest [--rebuild]`; `analyze --daily` is the analysis only; `rebuild` = an uncapped fresh ingest, then the analysis (same command as today).
 4. Tests: §4's rows; SM8 extended with capped runs (12, then 5, then 1) against one uncapped run.
 
-### IS2: the infrastructure (Opus: IAM and alarms; security-sensitive, `/security-review` before done)
+### IS2: the infrastructure (merged into IS1, §1 item 12; IAM and alarms, security-sensitive)
 
 1. `infra/market_stack.py`: the Ingest function (same asset, `ahcloud.ingest.handler`; 15 min, 4,096 MB, 4 GB disk, reserved concurrency 1, `retry_attempts=0`), its schedule (decision 7), grants: `raw/*` read, `state/*` read-write, the Blizzard secret. The analyzer: `state/*` read-only, no secret.
 2. Alarms: `IngestErrors` (any error in an hour), `HistoryBehind` (FM84), `IngestSlowRun` (over 12 min, as H1's `AnalyzerSlowRun`). `infra/dashboard.py`: Ingest in the per-function widgets.
