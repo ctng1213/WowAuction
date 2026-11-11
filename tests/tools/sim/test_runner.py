@@ -1,4 +1,4 @@
-"""Tests for tools/sim/runner.py: simulated worlds through the real cloud job (SPEC §2.4, §8.10; SU9, SM8)."""
+"""Tests for tools/sim/runner.py: simulated worlds through the real cloud job (SPEC §2.4, §8.10; SU9, SM8, SM19)."""
 from __future__ import annotations
 
 import sys
@@ -8,6 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
 
+from ahsync.collect import observations  # noqa: E402
 from ahsync.intel.contract import to_json  # noqa: E402
 from sim.market import DAY_MS, Item, World  # noqa: E402
 from sim.runner import RunSettings, SimCatalog, market_books, rebuild, simulate  # noqa: E402
@@ -70,6 +71,24 @@ def test_SM8_capped_ingest_runs_give_the_uncapped_document_byte_for_byte(tmp_pat
                                                                       ingest_cap=cap))
         assert [to_json(d) for d in capped.documents] == [to_json(d) for d in whole.documents], f"seed {world.seed} cap {cap}"
 
+
+
+def test_SM19_a_late_snapshot_keeps_capped_runs_and_a_rebuild_byte_identical(tmp_path, monkeypatch):
+    world = World(8, START, 4, ITEMS)
+    times = simulate(world, tmp_path / "times", RunSettings(ingest_cap=None)).snapshots
+    daily = START + 2 * DAY_MS + 9 * 3_600_000                 # the third day's analysis, 09:00
+    late = max(k for k, at in enumerate(times) if at < daily - 2 * 3_600_000)   # newer ones are ingested at 09:00
+    after = min(k for k, at in enumerate(times) if at > daily) - late             # ... and it lands after them
+    settings = dict(skip_daily=frozenset({1}), faults={5: "conflict", 30: "duplicate"}, late={late: after})
+    replays: list[int] = []
+    real = observations.replay_late
+    monkeypatch.setattr(observations, "replay_late", lambda *a: (replays.append(a[4]), real(*a))[1])
+    whole = simulate(world, tmp_path / "whole", RunSettings(**settings, ingest_cap=None))
+    assert replays == [times[late]]                            # it did land late, and was linked where it belongs
+    for cap in (12, 5, 1):
+        capped = simulate(world, tmp_path / f"cap{cap}", RunSettings(**settings, ingest_cap=cap))
+        assert [to_json(d) for d in capped.documents] == [to_json(d) for d in whole.documents], f"seed {world.seed} cap {cap}"
+    assert to_json(rebuild(whole, world, tmp_path / "rebuild")) == to_json(whole.documents[-1]), f"seed {world.seed}"
 
 def test_the_market_alone_gives_the_snapshots_simulate_stores(tmp_path):
     world = World(4, START, 1, ITEMS)

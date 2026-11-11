@@ -33,7 +33,18 @@ cdk deploy -c house=<id> -c alert_email=<you@example.com>
 
 `house` is the auction house id (SPEC §6 item 23), and `alert_email` receives the alarms and the budget warnings. AWS sends a confirmation email for the SNS subscription: click it, or no alert arrives. Optional context: `market` (default `forever.normal.horde.us`), `ruleset` (2).
 
-Rebuild the asset before every deploy that changes `ahsync/` or `ahcloud/`; `cdk diff` shows what a deploy would change. To remove the stack, run `cdk destroy`. The buckets are kept (`RETAIN`), so the raw snapshots survive; delete them by hand only if you mean to lose the history.
+Rebuild the asset before every deploy that changes `ahsync/` or `ahcloud/`; `cdk diff` shows what a deploy would change.
+
+**Before deploying a change to the lifetimes or the history** (SPEC §2.4 "One snapshot at a time"), dry-run the cutover against the live history: copy it read-only, then let `tools/carry_check.py` rebuild the carried state in a copy and compare every row the analysis reads. Run it in a Linux container, not on a Mac: the stored rows were written on Lambda, and macOS's `math.exp` can differ from glibc's in the last bit (LESSONS 2026-11-11). It must print `"differences": 0`.
+
+```sh
+aws s3 cp s3://<data-bucket>/state/history.db check/history.db
+aws s3 sync s3://<data-bucket>/state/snapshots/ check/snapshots/
+docker run --rm -v "$PWD":/src:ro -v "$PWD/check":/check:ro -w /src python:3.12-slim \
+  python tools/carry_check.py --db /check/history.db --snapshots /check/snapshots
+```
+
+The first Ingest run with the carried state then rebuilds it the same way (about 4 minutes on Lambda) and logs one line saying so; every later run reads only the database and the new raw. If that first run times out, pause `IngestSchedule`, run `python -m ahcloud ingest --store s3://<data-bucket>` once on your machine, and resume (as for a long rebuild below). To remove the stack, run `cdk destroy`. The buckets are kept (`RETAIN`), so the raw snapshots survive; delete them by hand only if you mean to lose the history.
 
 ## Running the job locally
 
@@ -81,9 +92,9 @@ After every run the analyzer writes `status/<market>.json` to the intel bucket (
 
 ## Recovering the cloud state (rebuild)
 
-A rebuild throws `state/history.db` and the compact snapshots away and replays the raw of the retention window (the last 90 days plus 2.5 days, FM76) into a fresh database. Use it when a run fails with `DatabaseError` (FM72), or to apply a changed volume method to the stored days at once; day to day Ingest keeps the history current.
+A rebuild throws `state/history.db` and the compact snapshots away and replays the raw of the retention window (the last 90 days plus 1 day plus 66 h, FM76) into a fresh database. Use it when a run fails with `DatabaseError` (FM72), or to apply a changed volume method to the stored days at once; day to day Ingest keeps the history current.
 
-1. **In the cloud**: invoke the **Ingest** function (not the analyzer) with `{"mode": "rebuild"}`. It starts a fresh history marked rebuilding until the newest raw, and its scheduled runs carry on at the rebuild cap (`REBUILD_SNAPSHOTS_PER_RUN`) until the history reaches the mark; meanwhile the daily analysis publishes nothing (`daily_rebuilding`) and the hourly prices carry on (BZ61). `NoDailyBaselines` may fire if it takes over a day, and `HistoryBehind` fires while the history is days behind the raw (about 90 days at first, 120 snapshots an hour at the rebuild cap); both clear once it is done.
+1. **In the cloud**: invoke the **Ingest** function (not the analyzer) with `{"mode": "rebuild"}`. It starts a fresh history marked rebuilding until the newest raw, and its scheduled runs carry on at the rebuild cap (`REBUILD_SNAPSHOTS_PER_RUN`) until the history reaches the mark; meanwhile the daily analysis publishes nothing (`daily_rebuilding`) and the hourly prices carry on (BZ61). `NoDailyBaselines` may fire if it takes over a day, and `HistoryBehind` fires while the history is days behind the raw (about 90 days at first, 30 snapshots an hour at the rebuild cap of 15 a run); both clear once it is done.
 2. **On your machine, to be done sooner** (no time limit there; about 80 s per day of raw on a recent Mac, so a full window takes about 2 hours). Ingest uploads the history about every hour, which would refuse a 2-hour rebuild's upload every time, so pause its schedule first and resume it afterwards (`HistoryBehind` may email while it is paused):
 
    ```sh

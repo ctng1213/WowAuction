@@ -42,6 +42,7 @@ class RunSettings:
     skip_daily: frozenset[int] = frozenset()           # simulated day numbers (0 = the start's day) with no daily run
     faults: dict[int, str] = field(default_factory=dict)   # snapshot number -> one of FAULTS
     ingest_cap: int | None = MAX_SNAPSHOTS_PER_RUN     # snapshots per Ingest run; None uncapped (SM8 compares both)
+    late: dict[int, int] = field(default_factory=dict)  # snapshot number -> stored after this many later ones (SM19)
 
 
 @dataclass(frozen=True)
@@ -129,7 +130,7 @@ def simulate(world: World, folder: Path, settings: RunSettings = RunSettings(), 
     Args:
         world: The scenario.
         folder: An empty folder for the stores, the run's scratch space and `truth.jsonl`.
-        settings: Cadence and faults.
+        settings: Cadence, faults and late snapshots.
         agent: Who else acts on the market between snapshots (our trader, `trader.py`), or None; it is handed every
             document published so far, the hourly ones too when settings.hourly.
 
@@ -144,6 +145,7 @@ def simulate(world: World, folder: Path, settings: RunSettings = RunSettings(), 
     schedule = snapshot_times(world.start_ms, end_ms, random.Random(world.seed + SCHEDULE_SEED_OFFSET),
                               settings.skip_refresh)
     daily_at = _first_daily(world.start_ms)
+    held: list[tuple[int, int, bytes]] = []            # (stored after this snapshot number, time, envelope)
     for number, at_ms in enumerate(schedule):
         while daily_at <= at_ms:
             _daily(run, catalog, world, daily_at, settings)
@@ -152,13 +154,22 @@ def simulate(world: World, folder: Path, settings: RunSettings = RunSettings(), 
             market.run_until(wake)
             agent.act(market, run.published, wake)
         market.run_until(at_ms)
-        store_snapshot(data, world.market, at_ms, _snapshot(market, at_ms, settings.faults.get(number)))
+        envelope_bytes = _snapshot(market, at_ms, settings.faults.get(number))
+        if number in settings.late:
+            held.append((number + settings.late[number], at_ms, envelope_bytes))
+        else:
+            store_snapshot(data, world.market, at_ms, envelope_bytes)
+        for due in [h for h in held if h[0] <= number]:              # a late one lands after newer ones (BZ66)
+            store_snapshot(data, world.market, due[1], due[2])
+            held.remove(due)
         run.snapshots.append(at_ms)
         if settings.hourly and run.documents:
             run_hourly(data, intel, world.market)
             found = read_latest(intel, world.market)
             if found is not None and found[0].observations_until_ms != run.published[-1].observations_until_ms:
                 run.published.append(found[0])
+    for _, at_ms, envelope_bytes in held:                 # still held at the end: stored now
+        store_snapshot(data, world.market, at_ms, envelope_bytes)
     _daily(run, catalog, world, daily_at, settings)      # the last snapshots, ingested as the next day's run would
     (folder / "truth.jsonl").write_bytes(run.truth.to_jsonl())
     return run
