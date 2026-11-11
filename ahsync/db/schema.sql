@@ -77,6 +77,51 @@ CREATE TABLE IF NOT EXISTS sold_prices_d1(
     PRIMARY KEY(market, key, day, src)
 ) WITHOUT ROWID;
 
+-- Auction lifetimes carried from snapshot to snapshot (SPEC §2.4 "One snapshot at a time"; schema 31). Ingest's own:
+-- the analysis never reads them. lifetime_state: the newest snapshot the carried state has seen, per market and source,
+-- with the open auctions and tally rows it holds (a load that counts otherwise finds the state damaged, FM86).
+CREATE TABLE IF NOT EXISTS lifetime_state(
+    market TEXT NOT NULL, src TEXT NOT NULL, prev_at INTEGER NOT NULL, auctions INTEGER NOT NULL,
+    tally_rows INTEGER NOT NULL,
+    PRIMARY KEY(market, src)
+) WITHOUT ROWID;
+
+-- The auctions of that snapshot: units, expiry window (start, end] ms, unit price at the last sighting, the commodity
+-- flag, tier 1 (NULL when its posting wasn't seen) and its posting gap (NULL when first seen in the first snapshot or
+-- after a hole).
+CREATE TABLE IF NOT EXISTS open_auctions(
+    market TEXT NOT NULL, src TEXT NOT NULL, auction INTEGER NOT NULL, key INTEGER NOT NULL, qty INTEGER NOT NULL,
+    win_start INTEGER NOT NULL, win_end INTEGER NOT NULL, price INTEGER NOT NULL, commodity INTEGER NOT NULL,
+    tier1 INTEGER, posted_start INTEGER, posted_end INTEGER,
+    PRIMARY KEY(market, src, auction)
+) WITHOUT ROWID;
+
+-- The early-leave tallies of the gaps that ended in the last 24 h (BZ44): listing-ms exposed, listings that left
+-- early, and the flag the row is pooled by (D7).
+CREATE TABLE IF NOT EXISTS leave_tallies(
+    market TEXT NOT NULL, src TEXT NOT NULL, gap_end INTEGER NOT NULL, key INTEGER NOT NULL,
+    exposed_ms INTEGER NOT NULL, leaves INTEGER NOT NULL, commodity INTEGER NOT NULL,
+    PRIMARY KEY(market, src, gap_end, key)
+) WITHOUT ROWID;
+
+-- What each gap learned, per item (its LifeFlow, nonzero rows only), with its new listings' positions and its sold
+-- prices as "<position or price>:<units>,..." with exact floats; kept 2 days, folded into the *_d1 rows and sales_h1.
+CREATE TABLE IF NOT EXISTS gap_flows(
+    market TEXT NOT NULL, src TEXT NOT NULL, gap_end INTEGER NOT NULL, key INTEGER NOT NULL,
+    sold REAL NOT NULL, expired REAL NOT NULL, listed REAL NOT NULL, ended REAL NOT NULL,
+    expired_listings REAL NOT NULL, matched REAL NOT NULL, cancelled REAL NOT NULL, cancels REAL NOT NULL,
+    t1_ended REAL NOT NULL, t1_left REAL NOT NULL, commodity INTEGER NOT NULL, unseen REAL NOT NULL,
+    positions TEXT NOT NULL, prices TEXT NOT NULL,
+    PRIMARY KEY(market, src, gap_end, key)
+) WITHOUT ROWID;
+
+-- Every linked gap the ledger holds, with the item keys listed in either of its snapshots (comma-separated, ascending),
+-- so the zero rows of volume_d1 and sales_h1 are folded too.
+CREATE TABLE IF NOT EXISTS gap_seen(
+    market TEXT NOT NULL, src TEXT NOT NULL, gap_end INTEGER NOT NULL, gap_start INTEGER NOT NULL, keys TEXT NOT NULL,
+    PRIMARY KEY(market, src, gap_end)
+) WITHOUT ROWID;
+
 CREATE TABLE IF NOT EXISTS current(
     market TEXT NOT NULL, key INTEGER NOT NULL, price INTEGER, qty INTEGER, at INTEGER NOT NULL, src TEXT NOT NULL,
     PRIMARY KEY(market, key, src)

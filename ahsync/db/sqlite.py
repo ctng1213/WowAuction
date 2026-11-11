@@ -20,6 +20,7 @@ from pathlib import Path
 from ahsync.engine.item_key import KEY_SUFFIX_FACTOR
 from ahsync.state.writes import IngestWrites
 from ahsync.history.reads import CurrentPrice, HistoryReads  # noqa: F401  (CurrentPrice re-exported)
+from ahsync.history.lifetime_store import LifetimeStore
 from ahsync.history.writes import HistoryWrites
 from ahsync.intel.store import IntelCache, IntelStore
 from ahsync.recommend.store import RecommendStore
@@ -39,7 +40,7 @@ CANDLE_TABLES = ("candles_h1", "candles_d1")
 PRUNABLE = {
     "candles_h1": "t", "candles_d1": "t", "sales_h1": "t", "volume_d1": "day", "volume_cover": "day", "lifetimes_d1": "day", "new_listings_d1": "day", "sold_prices_d1": "day", "posts": "at", "purchases": "at",
     "crafts": "at", "disenchants": "at", "auction_mail": "at", "payouts": "at", "untracked": "at", "mail_sent": "at", "skips": "at", "actions": "run_at",
-    "gather_events": "at",
+    "gather_events": "at", "gap_flows": "gap_end", "gap_seen": "gap_end",
     "fetch_failures": "hour", "observed_hours": "hour", "ahledger_rows": "updated",
 }
 
@@ -170,7 +171,7 @@ def restore_newest_backup(path: Path, backup_dir: Path, now_ms: int) -> Path | N
     return None
 
 
-class Database(IngestWrites, HistoryReads, HistoryWrites, StateReads, JournalReads, IntelStore, RecommendStore,
+class Database(IngestWrites, HistoryReads, HistoryWrites, LifetimeStore, StateReads, JournalReads, IntelStore, RecommendStore,
                PositionStore, GatheringStore):
     """A connection to data/ahsync.db with AHSync's queries and upserts."""
 

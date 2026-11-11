@@ -81,3 +81,16 @@ def test_closed_positions_go_90_days_after_they_close_and_open_ones_stay(tmp_pat
     assert [r[0] for r in db.conn.execute("SELECT position_id FROM positions ORDER BY position_id")] == ["open", "recent"]
     assert report.deleted["positions"] == 1
     db.close()
+
+
+def test_the_lifetimes_ledger_keeps_2_days(tmp_path):
+    from ahsync.engine.lifetimes import LifeFlow
+    from ahsync.history.lifetime_store import GapSummary
+    db = open_db(tmp_path)
+    ends = (NOW - 2 * DAY_MS, NOW - 2 * DAY_MS - 1)                  # exactly 2 days old stays; a ms older goes
+    with db.transaction():
+        db.write_gaps(MARKET, "blizzard", [GapSummary((end - 3_600_000, end), {7: LifeFlow(sold=1.0)}, {}, {}) for end in ends])
+    report = prune(db, NOW)
+    assert (report.deleted["gap_flows"], report.deleted["gap_seen"]) == (1, 1)
+    assert db.conn.execute("SELECT gap_end FROM gap_seen").fetchall() == [(ends[0],)]
+    db.close()
