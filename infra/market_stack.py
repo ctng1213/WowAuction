@@ -6,8 +6,10 @@ Two buckets, so the public/private line is a bucket boundary rather than a prefi
   summaries; objects expire after 7 days.
 The collector runs every 15 minutes; Ingest at :10 and :40, the history's one writer (IS1); the analyzer daily at
 DAILY_HOUR_UTC for the baselines, reading the history, and on every new raw object (with an hourly fallback
-schedule) for the state, failed events going to a dead-letter queue. All have reserved concurrency 1 and
-environments of names only; the collector and Ingest read the one Blizzard secret, the analyzer none (SEC22).
+schedule) for the state, failed events going to a dead-letter queue, and after every run writes the public status
+(SPEC §2.4 The status page), reading the stack's alarms and the last day's metrics (SEC21). All have reserved
+concurrency 1 and environments of names only; the collector and Ingest read the one Blizzard secret, the analyzer
+none (SEC22).
 Alarms (a function failing, the dead-letter queue not empty, no new snapshot or published summary for 3 hours, no
 daily baselines for 27 hours, an analyzer or Ingest run over 12 minutes, the history 3 hours behind the raw) and a
 monthly budget email the user through one SNS topic; a CloudWatch dashboard shows them all (infra/dashboard.py).
@@ -17,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from aws_cdk import (
-    Duration, RemovalPolicy, Size, Stack,
+    ArnFormat, Duration, RemovalPolicy, Size, Stack,
     aws_budgets as budgets,
     aws_cloudfront as cloudfront,
     aws_cloudfront_origins as origins,
@@ -25,6 +27,7 @@ from aws_cdk import (
     aws_cloudwatch_actions as cw_actions,
     aws_events as events,
     aws_events_targets as targets,
+    aws_iam as iam,
     aws_lambda as lambda_,
     aws_lambda_event_sources as event_sources,
     aws_logs as logs,
@@ -181,10 +184,15 @@ class MarketStack(Stack):
             reserved_concurrent_executions=1, log_group=log_group, dead_letter_queue=dead_letters,
             retry_attempts=1,
             environment={"DATA_BUCKET": self.data.bucket_name, "INTEL_BUCKET": self.intel.bucket_name,
-                         "MARKET": config.market})
+                         "MARKET": config.market, "ALARM_PREFIX": f"{self.stack_name}-",
+                         "COLLECTOR_FUNCTION": self.collector.function_name,
+                         "INGEST_FUNCTION": self.ingest.function_name})
         self.data.grant_read(function, "raw/*")
         self.data.grant_read(function, "state/*")                  # the history is Ingest's (SEC22)
-        self.intel.grant_read_write(function)
+        function.add_to_role_policy(iam.PolicyStatement(              # its own run record, for the status (SEC21)
+            actions=["s3:PutObject"], resources=[self.data.arn_for_objects("state/analyzer.json")]))
+        self.intel.grant_read_write(function)                      # the summaries and status/<market>.json
+        self._status_grants(function)
         function.add_event_source(event_sources.S3EventSource(
             self.data, events=[s3.EventType.OBJECT_CREATED], filters=[s3.NotificationKeyFilter(prefix="raw/")]))
         events.Rule(self, "AnalyzerDaily", schedule=events.Schedule.cron(minute="0", hour=str(config.daily_hour_utc)),
@@ -194,6 +202,20 @@ class MarketStack(Stack):
                     targets=[targets.LambdaFunction(function, retry_attempts=0,
                                                     event=events.RuleTargetInput.from_object({"mode": "hourly"}))])
         return function, dead_letters
+
+    def _status_grants(self, function: lambda_.Function) -> None:
+        """What the status needs from CloudWatch: the stack's alarm states and the last day's sums (SEC21).
+
+        DescribeAlarms is scoped to the alarms CloudFormation names after the stack; GetMetricData has no
+        resource-level scoping, so it takes "*" (it only reads).
+
+        Args:
+            function: The analyzer.
+        """
+        alarms = self.format_arn(service="cloudwatch", resource="alarm", resource_name=f"{self.stack_name}-*",
+                                 arn_format=ArnFormat.COLON_RESOURCE_NAME)
+        function.add_to_role_policy(iam.PolicyStatement(actions=["cloudwatch:DescribeAlarms"], resources=[alarms]))
+        function.add_to_role_policy(iam.PolicyStatement(actions=["cloudwatch:GetMetricData"], resources=["*"]))
 
     def _distribution(self) -> cloudfront.Distribution:
         """CloudFront in front of the intel bucket only, HTTPS only, honouring each object's Cache-Control.

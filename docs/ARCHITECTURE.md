@@ -49,7 +49,7 @@ flowchart LR
     IntelS3[(S3 intel bucket, built M30<br/>MarketIntelligence JSON by sha256 + latest-schema.json, M31)]
     CF[CloudFront, built M30<br/>public, the intel bucket only]
     CW[CloudWatch: alarms → SNS email, built M30–M39, H1<br/>dashboard, built H1]
-    StatusDoc[status/market.json, planned H2<br/>ahcloud/status.py: SLAs, 12 weeks of hours]
+    StatusDoc[status/market.json, built H2<br/>ahcloud/status.py: SLAs, 12 weeks of hours<br/>after every analyzer run, from the three state files]
   end
 
   Phone[status.html, planned H3<br/>any browser, from CloudFront]
@@ -73,8 +73,8 @@ flowchart LR
   CF -- collect/cloud_intel.py, built M32a --> Intel
   Collector -.metrics.-> CW
   Analyzer -.metrics.-> CW
-  CW -. alarm states, error counts, planned H2 .-> Analyzer
-  Analyzer -. planned H2 .-> StatusDoc -. planned H2 .-> IntelS3
+  CW -- alarm states, 24 h error counts, H2 --> Analyzer
+  Analyzer -- H2 --> StatusDoc -- H2 --> IntelS3
   CF -. planned H3 .-> Phone
   GH -- the update job in run, M25 --> Shell
   Shell -.planned.-> Web
@@ -372,3 +372,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-09: SP1b built: `tools/sold_price_report.py` and the sold-price rows SM10, SM11, SM18 (`tools/sim/sold_prices.py`); test tooling only, no component, flow or contract changes.
 - 2026-11-11: the cloud's ingest split spec merge (`docs/plans/cloud-ingest-split.md`): a planned Ingest Lambda (`ahcloud/ingest.py`, every 30 min, at most 12 snapshots a run) becomes the only writer of `state/history.db`, and the analyzer's daily mode becomes the analysis alone, reading the history; after the 2026-11-10 timeouts (LESSONS 2026-11-11).
 - 2026-11-11: IS1 built (code and infrastructure in one milestone): `ahcloud/ingest.py` and the Ingest Lambda write the history; the analyzer's daily mode reads it and holds no secret; three Ingest alarms; deployed at IS3.
+- 2026-11-11: H2 built: the analyzer writes `state/analyzer.json` and the public `status/<market>.json` (`ahcloud/status.py`) after every run, reading the three state files, the pointers and, from CloudWatch, the stack's alarm states and the last day's error, mismatch and refusal counts; the collector writes its state file on every run. Ingest is wired in as the third function.

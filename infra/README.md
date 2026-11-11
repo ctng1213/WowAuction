@@ -73,7 +73,11 @@ The stack creates a CloudWatch dashboard, `WowAuction-<market with dashes>` (e.g
 - Per function: **runs** (errors, invocations, throttles) and the **longest run**, with the timeout drawn as a line.
 - The **dead-letter queue**, the **warnings** (`ingest_refused`, `hourly_no_base`, `mismatch`), and the analyzer's and Ingest's last 50 WARNING or ERROR log lines.
 
-The metric graphs count only runs in AWS: `python -m ahcloud` on your machine writes its metric lines to the terminal. The status page (planned, SPEC §2.4) reads S3 and counts both.
+The metric graphs count only runs in AWS: `python -m ahcloud` on your machine writes its metric lines to the terminal.
+
+## The status document
+
+After every run the analyzer writes `status/<market>.json` to the intel bucket (SPEC §2.4 The status page): the five SLAs, the 12 weeks of hours, the functions' last runs, freshness and the document. It is public through CloudFront (`https://<distribution>/status/<market>.json`) and holds no bucket, function or alarm name (SEC21); the page that draws it is H3. It reads `state/collector.json`, `state/ingest.json` and the analyzer's own `state/analyzer.json`, the stack's alarms (`DescribeAlarms`, prefix `<stack>-`) and the last day's `Errors`, `mismatch` and `ingest_refused` (`GetMetricData`). A failed status write never fails the run: it logs one line and emits `status_failed` (FM81), and the status's age on the page is the signal. Collector and Ingest runs on your machine show up in it, because they write the same state files; a local `analyze` does not write it.
 
 ## Recovering the cloud state (rebuild)
 

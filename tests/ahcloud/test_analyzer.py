@@ -1,6 +1,8 @@
 """Tests for ahcloud/analyzer.py and the ingest/analyze/rebuild commands: one code path, Lambda or laptop (BZ31, BZ34)."""
 from __future__ import annotations
 
+import json
+import logging
 
 import pytest
 
@@ -12,8 +14,12 @@ from ahcloud.publish import read_latest
 from ahcloud.store import LocalStore
 from ahsync.collect.blizzard import raw_key
 from tests.support.cloud_world import A_MS, B_MS, C_MS, M, SNAP_A, SNAP_B, SNAP_C, FakeCatalog
-from tests.support.fake_aws import FakeS3Client
+from tests.support.fake_aws import ClientError, FakeS3Client
 from tests.support.fake_clock import FakeClock
+
+ENV = {"DATA_BUCKET": "data", "INTEL_BUCKET": "intel", "MARKET": M, "ALARM_PREFIX": "WowAuctionMarket-",
+       "COLLECTOR_FUNCTION": "WowAuctionMarket-Collector8A1B-xYz", "INGEST_FUNCTION": "WowAuctionMarket-Ingest77C2-qRs",
+       "AWS_LAMBDA_FUNCTION_NAME": "WowAuctionMarket-Analyzer3F9D-aBc"}
 
 @pytest.mark.parametrize("event, mode", [({"mode": "daily"}, "daily"), ({"mode": "rebuild"}, "hourly"),
                                          ({"mode": "hourly"}, "hourly"), ({"Records": [{"s3": {}}]}, "hourly"),
@@ -27,12 +33,15 @@ def lambda_world(monkeypatch, tmp_path, *snaps):
     data, intel = FakeS3Client(), FakeS3Client()
     for at_ms, envelope in snaps:
         data.objects[raw_key(M, at_ms)] = envelope
-    for name, value in {"DATA_BUCKET": "data", "INTEL_BUCKET": "intel", "MARKET": M}.items():
+    for name, value in ENV.items():
         monkeypatch.setenv(name, value)
     monkeypatch.setattr(analyzer.aws, "S3Store", lambda bucket: S3Store(bucket, {"data": data, "intel": intel}[bucket]))
     monkeypatch.setattr(analyzer, "WORKDIR", tmp_path / "lambda-tmp")
     lines = []
     monkeypatch.setattr(analyzer.aws, "metric", lambda name, value, dims, now: lines.append(name))
+    alarms = [(f"WowAuctionMarket-{name}1A2B3C4D-x", "OK", C_MS) for name in ("CollectorErrors", "AnalyzerErrors")]
+    monkeypatch.setattr(analyzer.aws, "alarm_states", lambda prefix: alarms + [("Other-Alarm", "ALARM", C_MS)])
+    monkeypatch.setattr(analyzer.aws, "metric_sums", lambda queries, start, end: {key: 0 for key in queries})
     return data, intel, lines
 
 
@@ -101,3 +110,70 @@ def test_BZ31_out_reproduces_a_cloud_run_without_writing_to_the_cloud(monkeypatc
     assert main(["rebuild", "--store", "s3://data", "--intel", "s3://intel", "--out", str(out)], env=env, home=tmp_path) == 0
     assert (data.objects, intel.objects) == before                              # the buckets were only read
     assert read_latest(LocalStore(out), M)[1].sha256 == cloud_doc.sha256         # the rebuild matches the cloud's
+
+
+def test_CS11_every_run_records_itself_and_writes_the_status(monkeypatch, tmp_path):
+    data, intel, _ = lambda_world(monkeypatch, tmp_path, (A_MS, SNAP_A), (B_MS, SNAP_B))
+    analyzer.handler({"mode": "hourly"}, None)                                     # no_base: still a status
+    ingest_cloud(data, tmp_path)
+    analyzer.handler({"mode": "daily"}, None)
+    state = json.loads(data.objects["state/analyzer.json"])
+    assert (state["hourly"]["outcome"], state["daily"]["outcome"], state["daily"]["items"]) == ("no_base", "published", 2)
+    assert state["daily"]["published_ms"] == state["daily"]["finished_ms"]
+    key = f"status/{M}.json"
+    assert intel.headers[key] == {"CacheControl": "max-age=60", "ContentType": "application/json"}
+    doc = json.loads(intel.objects[key])
+    assert (doc["schema"], doc["market"]) == (1, M)
+    assert doc["document"][0]["value"].endswith("2 items")
+    assert [r["value"].split(" · ")[1] for r in doc["functions"]["rows"][2:4]] == ["no baselines yet",
+                                                                                 "baselines published"]
+
+
+def test_FM81_a_failed_status_write_never_costs_the_run_its_outcome(monkeypatch, tmp_path, caplog):
+    data, intel, metrics = lambda_world(monkeypatch, tmp_path, (A_MS, SNAP_A), (B_MS, SNAP_B))
+    ingest_cloud(data, tmp_path)
+    analyzer.handler({"mode": "daily"}, None)
+    data.objects[raw_key(M, C_MS)] = SNAP_C
+    real_put = intel.put_object
+
+    def denied(**kwargs):
+        if kwargs["Key"].startswith("status/"):
+            raise ClientError("AccessDenied", "PutObject")
+        return real_put(**kwargs)
+
+    intel.put_object = denied
+    before = intel.objects[f"status/{M}.json"]
+    with caplog.at_level(logging.WARNING, logger="ahcloud.analyzer"):
+        assert analyzer.handler({"mode": "hourly"}, None)["state"] == "published"
+    assert metrics[-2:] == ["hourly_published", "status_failed"]
+    assert [r.getMessage() for r in caplog.records] == [
+        f"status status/{M}.json not written: ClientError: An error occurred (AccessDenied) when calling the PutObject operation"]
+    assert read_latest(S3Store("intel", intel), M)[0].observations_until_ms == C_MS
+    intel.put_object = real_put
+    analyzer.handler({"mode": "hourly"}, None)
+    assert intel.objects[f"status/{M}.json"] != before and metrics[-1] == "hourly_up_to_date"
+
+
+def test_SEC21_the_status_holds_no_bucket_function_or_alarm_name(monkeypatch, tmp_path):
+    data, intel, _ = lambda_world(monkeypatch, tmp_path, (A_MS, SNAP_A), (B_MS, SNAP_B))
+    ingest_cloud(data, tmp_path)
+    analyzer.handler({"mode": "daily"}, None)
+    text = intel.objects[f"status/{M}.json"].decode("utf-8")
+    for secret in ("WowAuctionMarket", "Collector8A1B", "Ingest77C2", "Analyzer3F9D", "1A2B3C4D", "Other-Alarm",
+                   '"data"', '"intel"', "arn:", "Traceback"):
+        assert secret not in text
+
+
+def test_FM81_with_under_a_minute_left_the_status_step_is_skipped(monkeypatch, tmp_path, caplog):
+    data, intel, metrics = lambda_world(monkeypatch, tmp_path, (A_MS, SNAP_A), (B_MS, SNAP_B))
+    ingest_cloud(data, tmp_path)
+
+    class NearTimeout:
+        def get_remaining_time_in_millis(self):
+            return 59_000
+
+    with caplog.at_level(logging.WARNING, logger="ahcloud.analyzer"):
+        assert analyzer.handler({"mode": "daily"}, NearTimeout())["state"] == "published"
+    assert metrics == ["daily_published", "status_failed"]
+    assert f"status/{M}.json" not in intel.objects and "state/analyzer.json" not in data.objects
+    assert [r.getMessage() for r in caplog.records] == [f"status status/{M}.json not written: 59000 ms left of the run"]

@@ -28,6 +28,17 @@ Decided at the spec merge (2026-11-10), within the approved design:
 11. **Error counts and `mismatch` come from `GetMetricData`** (24 h sums), alongside `DescribeAlarms`: a crashed run writes no state, so only CloudWatch counts it. `GetMetricData` has no resource-level scoping (SEC21).
 12. **Run durations come from the state files** (each run measures itself), not CloudWatch; a run that times out shows as an error instead.
 
+Decided during H2 (2026-11-11), within the approved design, recorded in SPEC and SCENARIOS:
+
+13. **Ingest is the third function** (IS1 landed first, so H2 wires it, as SPEC said): `TIMEOUTS_S` has Ingest's 900 s, `IngestErrors` is a red alarm in CS5, its run is a Functions row and the history a Freshness row.
+14. **"Snapshot refused" counts `ingest_refused` over the last 24 h** (`GetMetricData`), not the newest run's: Ingest runs twice an hour, so a per-run count would clear within 30 min. "by Ingest in the last 24 h".
+15. **`DescribeAlarms` uses the stack's name as the prefix** (`ALARM_PREFIX`, scoped in IAM to `alarm:<stack>-*`), and `ahcloud.status.ALARM_IDS` maps CloudFormation's names (`<stack>-<id><hash>-<suffix>`) to ids. Giving the alarms fixed names instead would replace all ten on deploy; the stack test holds every alarm to an id.
+16. **The analyzer may write one data-bucket key, `state/analyzer.json`** (SEC21 had listed only `status/*`, which the intel bucket's existing read-write already covers). It keeps `published_ms` per mode, so a daily run that publishes nothing doesn't lose the last publish.
+17. **The status lists `raw/<market>/` itself** rather than reusing the run's listing (one more LIST a run; keeps `run_hourly` and `run_daily` unchanged), and takes the run's document for `coverage` and the item count, reading the latest only when the run published none.
+18. **Before the first daily run after the deploy, the daily SLA is grey** ("no daily run recorded yet"): the pointers can't tell a daily publish from an hourly one.
+19. **Local `python -m ahcloud analyze` writes no status**; the next Lambda run does.
+20. **The status step has a time budget** (from the independent review): skipped with under 60 s of the run left, and its CloudWatch calls bounded (5 s connect, 10 s read, 2 attempts), so it can never time out a run that published (FM81). `DescribeAlarms`' scoping to `alarm:<stack>-*` is checked on the first run after the deploy; if IAM refuses a prefix query, it takes `*` (read-only) and SEC21 says so.
+
 ## 2. Working rules
 
 - CLAUDE.md's batch rules: one worktree and PR per milestone, scenario rows before code, docs in the same commit, `tools/verify.ps1`'s steps run by hand on macOS.
@@ -47,7 +58,10 @@ Built as planned. The alarm-window check: CloudWatch allows alarms over a day lo
 - SPEC §2.4 Alerts; the FM/S rows touched; `infra/README.md` "Reading the dashboard"; ARCHITECTURE change log.
 - The user runs `cdk deploy`.
 
-### H2: the status document (code; CS2–CS11, BZ55, FM81, SEC21)
+### H2: the status document (code; CS2–CS11, BZ55, FM81, SEC21) — built 2026-11-11
+
+Built as planned, with decisions 13–19. The intel bucket's expiry is scoped in H3 with the page (CS12): the status is rewritten every run, so the whole-bucket rule never reaches it.
+
 
 - `ahcloud/status.py` (pure) + test: the SLA colours, headline, the 13 weeks of grid with each week's label and missing-hours text (decision 8), freshness, Blizzard cadence (median and longest interval between the last 24 h's snapshots), document facts, next daily run; `to_json` with a `schema` field and the page's age limits.
 - `ahcloud/aws.py`: `alarm_states` (DescribeAlarms, scoped to the stack's alarm names); IAM grant in the stack.
@@ -65,7 +79,7 @@ Built as planned. The alarm-window check: CloudWatch allows alarms over a day lo
 
 1. ~~Approve the mockup and §1 items 7–9~~ (approved 2026-11-10).
 2. Approve the spec merge (SPEC §2.4, SCENARIOS, `tests/pending_scenarios.txt`) and a standing approval for H1–H3.
-3. `cdk deploy` after H1, and again after H2 + H3.
+3. `cdk deploy` after H1, after H2, and after H3.
 
 ## 5. Risks and open questions
 

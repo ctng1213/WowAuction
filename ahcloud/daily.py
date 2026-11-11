@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import shutil
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from ahcloud.hourly import advance
@@ -33,6 +33,8 @@ class DailyOutcome:
     state: str                          # "published", "rebuilding" (a rebuild under way, BZ61) or "empty"
     built_ms: int | None = None
     items: int = 0                      # items in the document
+    # the document published, for the status (CS8, CS10); None when nothing was
+    document: MarketIntelligence | None = field(default=None, compare=False, repr=False)
 
 
 def coverage(db: Database, market: str, now_ms: int) -> tuple[tuple[int, int], ...]:
@@ -132,7 +134,7 @@ def _analyze_and_publish(db: Database, data: Store, intel_store: Store, market: 
     carried = carry_state(intel, prior[0] if prior else None)
     intel = advance(data, carried, market) or replace(carried, observations_until_ms=last)
     publish(intel_store, intel)
-    return DailyOutcome("published", intel.built_ms, len(intel.items))
+    return DailyOutcome("published", intel.built_ms, len(intel.items), intel)
 
 
 def carry_state(base: MarketIntelligence, prior: MarketIntelligence | None) -> MarketIntelligence:

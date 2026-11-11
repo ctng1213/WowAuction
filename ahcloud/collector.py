@@ -4,7 +4,8 @@
 Lambda handler and `python -m ahcloud collect` are thin callers of the same code (plan decision 17, BZ31).
 A run makes one attempt: a failure raises, the Lambda's error alarm emails, and the schedule is the retry
 (FM68). The raw envelope is written before the state file, so a crash between them refetches the same
-snapshot and rewrites the same key with the same bytes (BZ8).
+snapshot and rewrites the same key with the same bytes (BZ8). Every run that gets an answer writes the state file,
+so the status page can tell "Blizzard hasn't refreshed" from "the collector is dead" (BZ55).
 """
 from __future__ import annotations
 
@@ -47,22 +48,45 @@ class Outcome:
     empty: bool = False
 
 
-def last_modified_of(store: Store) -> str | None:
-    """The last stored snapshot's Last-Modified, from the state file.
+def read_state(store: Store) -> dict:
+    """The state file: `last_modified` (the newest stored snapshot's) and the last run's facts (BZ55).
 
     Args:
         store: The object store.
 
     Returns:
-        The header value, or None before the first snapshot.
+        The state; {} before the first run, or when the file can't be read (the next snapshot is then refetched).
     """
     found = store.get(STATE_KEY)
-    return json.loads(found.data).get("last_modified") if found else None
+    if found is None:
+        return {}
+    try:
+        state = json.loads(found.data)
+    except ValueError:
+        return {}
+    return state if isinstance(state, dict) else {}
+
+
+def write_state(store: Store, last_modified: str | None, auctions: int | None, outcome: str, started_ms: int,
+                finished_ms: int) -> None:
+    """Write the state file after a run that got an answer (SPEC §2.4 The status page, BZ55).
+
+    Args:
+        store: The object store.
+        last_modified: The newest stored snapshot's Last-Modified (moved only after its raw object is written).
+        auctions: The newest stored snapshot's auction count; None before one.
+        outcome: "written", "unchanged" or "mismatch".
+        started_ms: The run's start, UTC ms (`last_checked_ms`).
+        finished_ms: Its end, UTC ms.
+    """
+    state = {"last_modified": last_modified, "last_checked_ms": started_ms, "last_outcome": outcome,
+             "last_duration_ms": finished_ms - started_ms, "last_auctions": auctions}
+    store.put(STATE_KEY, json.dumps(state, sort_keys=True).encode("utf-8"))
 
 
 def run(store: Store, client: BlizzardClient, clock: Clock, settings: Settings,
         emit: Callable[[str, float], None]) -> Outcome:
-    """Fetch the house; store a new snapshot's raw envelope, then the state file (SPEC §2.4, BZ7, BZ8, BZ9).
+    """Fetch the house; store a new snapshot's raw envelope, then the state file (SPEC §2.4, BZ7, BZ8, BZ9, BZ55).
 
     Args:
         store: The object store (S3, or a folder).
@@ -78,9 +102,12 @@ def run(store: Store, client: BlizzardClient, clock: Clock, settings: Settings,
         ahsync.collect.blizzard.BlizzardError: A request failed or the snapshot is malformed; nothing is written.
         ahsync.collect.client.TransportError: The network failed; nothing is written.
     """
-    since = last_modified_of(store)
+    started_ms = clock.now_ms()
+    state = read_state(store)
+    since = state.get("last_modified")
     fetch = client.fetch_house(settings.ruleset, settings.house, since)
     if fetch.state != "new":
+        write_state(store, since, state.get("last_auctions"), fetch.state, started_ms, clock.now_ms())
         emit(fetch.state, 1)
         log.info("house %s %s since %s", settings.house, fetch.state, since)
         return Outcome(fetch.state, last_modified=since)
@@ -89,8 +116,8 @@ def run(store: Store, client: BlizzardClient, clock: Clock, settings: Settings,
     key = raw_key(settings.market, fetch.at_ms)
     store.put(key, raw_envelope(settings.ruleset, settings.house, fetch.last_modified, clock.now_ms(),
                                 fetch.auctions, fetch.commodities))
-    store.put(STATE_KEY, json.dumps({"last_modified": fetch.last_modified}).encode("utf-8"))
     count = len(parsed.observation.auctions) if parsed.observation else 0
+    write_state(store, fetch.last_modified, count, "written", started_ms, clock.now_ms())
     emit("snapshot_written", 1)
     log.info("house %s snapshot %s: %d auctions, %d bid-only left out%s", settings.house, fetch.last_modified,
              count, parsed.bid_only, ", empty house" if parsed.empty else "")
