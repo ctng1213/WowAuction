@@ -94,7 +94,7 @@ def analyzer_of(template):
 def test_SEC17_the_analyzer_environment_holds_names_only(template):
     props = analyzer_of(template)
     assert set(props["Environment"]["Variables"]) == {"DATA_BUCKET", "INTEL_BUCKET", "MARKET", "SECRET_NAME"}
-    assert (props["ReservedConcurrentExecutions"], props["Timeout"], props["MemorySize"]) == (1, 900, 2048)
+    assert (props["ReservedConcurrentExecutions"], props["Timeout"], props["MemorySize"]) == (1, 900, 8192)
     assert props["EphemeralStorage"] == {"Size": 4096} and "TargetArn" in json.dumps(props["DeadLetterConfig"])
 
 
