@@ -93,8 +93,8 @@ end;
 
 { True when the AI assistant bridge runs (FM79). Claude starts ahsync-mcp.exe,
   not AHSync, and it lives until Claude closes it (SPEC 3.8), so the installer
-  can neither stop it nor wait it out. A running exe can't be replaced, and the
-  [InstallDelete] of _internal would already have run: an abort then leaves an
+  can neither stop it nor wait it out. A running exe can't be replaced, and
+  the [InstallDelete] of _internal would already have run: an abort then leaves an
   install with no Python standard library. So refuse before anything is touched. }
 function BridgeRunning: Boolean;
 begin

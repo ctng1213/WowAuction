@@ -495,3 +495,5 @@ def test_FM79_the_installer_refuses_while_the_assistant_bridge_runs_before_anyth
         assert "BridgeRunningText" in body
         assert body.index("BridgeRunning") < body.index("StopAHSync")    # a refused install leaves AHSync running
     assert "Quit Claude (or the app using the assistant), then run the installer again." in iss
+    code = iss[iss.index("\n[Code]\n") + 1:].splitlines()[1:]
+    assert not [line for line in code if line.lstrip().startswith("[")]   # ISCC reads such a line as a section, even in a comment
