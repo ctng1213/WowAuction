@@ -61,6 +61,7 @@ Filename: "{app}\AHSync.exe"; Flags: nowait; Check: WizardSilent
 [Code]
 const
   StopFailedText = 'AHSync did not stop. Quit it from the tray icon, then run the installer again.';
+  BridgeRunningText = 'The AHSync AI assistant bridge (ahsync-mcp.exe) is in use. Quit Claude (or the app using the assistant), then run the installer again.';
 
 { Returns the folder holding the lock and stop files. }
 function DataDir: String;
@@ -75,19 +76,29 @@ begin
   Result := (not FileExists(LockFile)) or DeleteFile(LockFile);
 end;
 
-{ How many AHSync.exe processes run (WMI); 0 when WMI can't answer. }
-function AHSyncProcessCount: Integer;
+{ How many processes named ExeName (for example 'AHSync.exe') run (WMI); 0 when WMI can't answer. }
+function ProcessCount(ExeName: String): Integer;
 var
   Locator, Service, Processes: Variant;
 begin
   try
     Locator := CreateOleObject('WbemScripting.SWbemLocator');
     Service := Locator.ConnectServer('.', 'root\CIMV2');
-    Processes := Service.ExecQuery('SELECT ProcessId FROM Win32_Process WHERE Name = ''AHSync.exe''');
+    Processes := Service.ExecQuery('SELECT ProcessId FROM Win32_Process WHERE Name = ''' + ExeName + '''');
     Result := Processes.Count;
   except
     Result := 0;
   end;
+end;
+
+{ True when the AI assistant bridge runs (FM79). Claude starts ahsync-mcp.exe,
+  not AHSync, and it lives until Claude closes it (SPEC 3.8), so the installer
+  can neither stop it nor wait it out. A running exe can't be replaced, and the
+  [InstallDelete] of _internal would already have run: an abort then leaves an
+  install with no Python standard library. So refuse before anything is touched. }
+function BridgeRunning: Boolean;
+begin
+  Result := ProcessCount('ahsync-mcp.exe') > 0;
 end;
 
 { Quits a running AHSync the way tools/deploy.py --restart does: write
@@ -118,29 +129,42 @@ begin
     update's installer starts while the old AHSync is exiting): wait up to 10 s
     more for AHSync.exe to be gone, so no file in the install folder is still in use. }
   Waited := 0;
-  while Result and (Waited < 10000) and (AHSyncProcessCount > 0) do
+  while Result and (Waited < 10000) and (ProcessCount('AHSync.exe') > 0) do
   begin
     Sleep(500);
     Waited := Waited + 500;
   end;
 end;
 
-{ Runs before files are copied; a non-empty result aborts with that message. }
+{ Runs before [InstallDelete] and before files are copied; a non-empty result
+  aborts with that message and touches nothing. The bridge is checked first, so
+  a refused install leaves a running AHSync running. A silent update that is
+  refused exits non-zero, and the app's cmd wrapper relaunches the old AHSync (FM55). }
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
-  if not StopAHSync then
+  if BridgeRunning then
+    Result := BridgeRunningText
+  else if not StopAHSync then
     Result := StopFailedText;
 end;
 
-{ The uninstaller quits AHSync the same way; False aborts the uninstall. }
+{ The uninstaller refuses while the bridge runs and quits AHSync the same way;
+  False aborts the uninstall. }
 function InitializeUninstall: Boolean;
+var
+  Refusal: String;
 begin
-  Result := StopAHSync;
+  Refusal := '';
+  if BridgeRunning then
+    Refusal := BridgeRunningText
+  else if not StopAHSync then
+    Refusal := StopFailedText;
+  Result := (Refusal = '');
   if not Result then
   begin
     if not UninstallSilent then
-      MsgBox(StopFailedText, mbError, MB_OK);
+      MsgBox(Refusal, mbError, MB_OK);
   end;
 end;
 
