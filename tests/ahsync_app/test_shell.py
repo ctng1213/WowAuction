@@ -899,6 +899,63 @@ def test_DR22_restart_to_update_installs_once_run_returns_and_the_lock_is_free(t
     assert answers == [True] and app.platform.applied == [("AHSync-0.4.0-windows-x64-setup.exe", "AHSync.exe", True)]
 
 
+class Bridged(Installing):
+    """Installing, while Claude runs the AI assistant bridge from the install folder until `blocked` is cleared."""
+
+    blocked: str | None = "bridge_in_use"
+
+    def update_blocker(self, exe: Path) -> str | None:
+        return self.blocked
+
+
+def blocked_meta(data: Path) -> str | None:
+    """update.blocked in the app's database."""
+    from ahsync.app.update_check import read_meta
+    db = Database.open(data / "ahsync.db", FakeClock().now_ms(), None)
+    try:
+        return read_meta(db).get("blocked")
+    finally:
+        db.close()
+
+
+def test_FM87_while_the_bridge_runs_a_start_runs_the_old_version_and_keeps_the_download(tmp_path, monkeypatch):
+    monkeypatch.setattr(shell.version, "VERSION", "0.3.1")
+    app = FakeApp(tmp_path, Bridged(tmp_path))
+    app.configure(tmp_path / "wow")
+    data = app.platform.app_dirs().data_dir
+    setup = offer_update(data)
+    assert shell.start(True, app.world()) == 0
+    assert app.calls != [] and app.platform.applied == []          # run() ran: AHSync started as usual
+    assert pending(data) is None and blocked_meta(data) == "bridge_in_use" and setup.exists()
+
+
+def test_FM87_restart_to_update_keeps_ahsync_running_until_claude_is_quit(tmp_path, monkeypatch):
+    monkeypatch.setattr(shell.version, "VERSION", "0.3.1")
+    answers: list[bool] = []
+
+    def restart_twice(data: Path) -> bool:
+        """The update arrives; the Status card's button while Claude runs, the tray's, then the button once quit."""
+        if not answers:
+            offer_update(data)
+            db = Database.open(data / "ahsync.db", FakeClock().now_ms(), None)
+            try:
+                answers.append(app.hooks[0].restart(db, Config()))
+            finally:
+                db.close()
+            session = app.hooks[0].restart.__self__                   # the tray's item calls it without a db
+            answers.append(session.restart_to_update())
+            answers.append(blocked_meta(data) == "bridge_in_use")
+            app.platform.blocked = None                              # Claude quit: the bridge exited
+            answers.append(session.restart_to_update())
+        return False
+
+    app = FakeApp(tmp_path, Bridged(tmp_path), until=restart_twice)
+    app.configure(tmp_path / "wow")
+    assert shell.start(True, app.world()) == 0
+    assert answers == [False, False, True, True]
+    assert app.platform.applied == [("AHSync-0.4.0-windows-x64-setup.exe", "AHSync.exe", True)]
+
+
 def test_DR32_the_window_opens_on_the_loading_page_and_loads_the_dashboard_once_it_answers(tmp_path):
     app = FakeApp(tmp_path, until=lambda _d: False)
     app.configure(tmp_path / "wow")

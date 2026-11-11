@@ -26,7 +26,7 @@ LIST_URL = f"{REPO}/releases?per_page=20"              # the beta channel takes 
 DAY_MS = 86_400_000
 KEYS = ("checked_ms", "etag", "tag", "url", "prerelease", "failure", "failed_since_ms", "downloaded",
         "downloaded_path", "download_failed", "download_tried_ms", "left_beta", "cant_replace", "updated_to",
-        "updated_ms", "pending")
+        "updated_ms", "pending", "blocked")
 
 
 def read_meta(db: Database) -> dict[str, str]:
@@ -82,7 +82,8 @@ def read_state(db: Database, version: str, config: Config) -> UpdateState:
     return UpdateState(version, config.update_channel, config.auto_update, number("checked_ms"), meta.get("tag"),
                        meta.get("url"), meta.get("prerelease") == "1", meta.get("failure"), number("failed_since_ms"),
                        meta.get("downloaded"), meta.get("download_failed"), meta.get("cant_replace") == "1",
-                       meta.get("updated_to"), number("updated_ms"), meta.get("left_beta") == "1")
+                       meta.get("updated_to"), number("updated_ms"), meta.get("left_beta") == "1",
+                       blocked=meta.get("blocked"))
 
 
 def due(db: Database, version: str, config: Config, now_ms: int, at_start: bool = False) -> bool:

@@ -1,10 +1,11 @@
 """Windows: %LOCALAPPDATA%, the Windows WoW folders, the Run key and the silent upgrade (SPEC §3.7.2, §3.7.9)."""
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path, PureWindowsPath
 from typing import Protocol
 
+from ahsync.engine.updates import BRIDGE_IN_USE
 from ahsync_app.platform.base import APP_NAME, WOW_NAMES, AppDirs, Platform, Processes
 
 # Battle.net installs under either root: Program Files (x86) for older installs, Program Files for newer ones.
@@ -14,6 +15,29 @@ RUN_VALUE = APP_NAME
 # Inno Setup's silent upgrade (DR22). /NOCLOSEAPPLICATIONS keeps the script's CloseApplications=no: its [Code] stops
 # AHSync through the stop file, since Restart Manager would hang on the window cancelling its close.
 SILENT = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCLOSEAPPLICATIONS"
+BRIDGE_EXE = "ahsync-mcp.exe"     # the AI assistant bridge next to AHSync.exe (SPEC §3.8.2)
+
+
+def file_in_use(path: Path) -> bool:
+    """Whether a program file is running, so nothing can replace it (FM87).
+
+    Windows refuses write access to the file of a running program (a sharing violation); opening it for read and
+    write, without writing, finds that out. The file is never changed.
+
+    Args:
+        path: The program file.
+
+    Returns:
+        True when write access is refused; False when it is granted, or the file is missing or unreadable for
+        another reason (the installer's own check, FM82, still stands behind this one).
+    """
+    try:
+        with open(path, "r+b"):
+            return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
 
 
 class RunKey(Protocol):
@@ -104,7 +128,7 @@ class WindowsPlatform(Platform):
     name = "windows"
 
     def __init__(self, env: Mapping[str, str], home: Path, run_key: RunKey | None = None,
-                 processes: Processes | None = None) -> None:
+                 processes: Processes | None = None, in_use: Callable[[Path], bool] = file_in_use) -> None:
         """Keep what the answers depend on.
 
         Args:
@@ -112,11 +136,13 @@ class WindowsPlatform(Platform):
             home: The user's profile folder, used when LOCALAPPDATA is not set.
             run_key: The Run key; None uses the real one through winreg.
             processes: Starts the installer (the real one by default; a recorder in tests).
+            in_use: Whether a program file is running (`file_in_use`; a fake in tests).
         """
         self.env = env
         self.home = home
         self.run_key = run_key if run_key is not None else WinRegRunKey()
         self.processes = processes or Processes()
+        self.in_use = in_use
 
     def bridge_command(self, exe: Path) -> tuple[str, ...]:
         """`ahsync-mcp.exe`, the console bridge installed next to AHSync.exe: the app is windowed, so it has no
@@ -128,7 +154,18 @@ class WindowsPlatform(Platform):
         Returns:
             (the bridge's full path,).
         """
-        return (str(PureWindowsPath(str(exe)).parent / "ahsync-mcp.exe"),)
+        return (str(PureWindowsPath(str(exe)).parent / BRIDGE_EXE),)
+
+    def update_blocker(self, exe: Path) -> str | None:
+        """Whether the installer would refuse now: it can't replace the bridge while Claude runs it (FM82, FM87).
+
+        Args:
+            exe: AHSync.exe; the bridge is installed next to it.
+
+        Returns:
+            BRIDGE_IN_USE while `ahsync-mcp.exe` runs; else None.
+        """
+        return BRIDGE_IN_USE if self.in_use(exe.parent / BRIDGE_EXE) else None
 
     def app_dirs(self) -> AppDirs:
         """`%LOCALAPPDATA%\\AHSync\\config.toml` and `…\\data`: machine-local, not Roaming (SPEC §3.7.3, DR1).

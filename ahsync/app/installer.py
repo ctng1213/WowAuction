@@ -54,7 +54,7 @@ def waiting_install(db: Database, version: str, config: Config, updates_dir: Pat
 
 
 def install(db: Database, version: str, config: Config, updates_dir: Path, asset_name: Callable[[str], str],
-            apply: Callable[[Path], None]) -> bool:
+            apply: Callable[[Path], None], blocker: Callable[[], str | None] = lambda: None) -> bool:
     """Start installing the waiting update; the caller exits right after (DR22, DR23).
 
     Args:
@@ -64,18 +64,21 @@ def install(db: Database, version: str, config: Config, updates_dir: Path, asset
         updates_dir: As `waiting_install`.
         asset_name: As `waiting_install`.
         apply: The platform's `apply_update` for the running executable: starts the installer or the swap helper.
+        blocker: The platform's `update_blocker` for it: a reason the installer would refuse now (FM87), else None.
 
     Returns:
-        True when the install was started (the caller exits); False when nothing waits or it couldn't start.
+        True when the install was started (the caller exits); False when nothing waits, it is blocked or it couldn't
+        start.
 
     Side effects:
-        `update.pending` is set before `apply` and cleared again when `apply` fails in any way.
+        `update.pending` is set before `apply` and cleared again when `apply` fails in any way; `update.blocked`
+        records a blocker (the download stays and waits) and is cleared once the install starts.
     """
     path = waiting_install(db, version, config, updates_dir, asset_name)
-    if path is None:
+    if path is None or record_blocker(db, blocker()):
         return False
     target = read_state(db, version, config).downloaded
-    write_meta(db, {"pending": target})
+    write_meta(db, {"pending": target, "blocked": None})
     try:
         apply(path)
     except Exception as error:                      # never a traceback at start or quit: the app runs on (M1)
@@ -83,6 +86,26 @@ def install(db: Database, version: str, config: Config, updates_dir: Path, asset
         write_meta(db, {"pending": None})
         return False
     log.info("installing the update to %s", target)
+    return True
+
+
+def record_blocker(db: Database, reason: str | None) -> bool:
+    """Record why a waiting update isn't installed now, so the Update line says what to do (FM87).
+
+    The installer refuses while the AI assistant bridge runs from the install folder (FM82); starting it anyway
+    would count as a failed install and throw the download away. Held back, the download keeps waiting.
+
+    Args:
+        db: The database.
+        reason: The platform's `update_blocker()`; None when nothing blocks the install.
+
+    Returns:
+        True when blocked (`update.blocked` set, logged); False when it may install.
+    """
+    if reason is None:
+        return False
+    write_meta(db, {"blocked": reason})
+    log.warning("the update is not installed now: %s (quit Claude Desktop, then Restart to update)", reason)
     return True
 
 
