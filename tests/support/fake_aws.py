@@ -2,7 +2,8 @@
 
 `FakeS3Client` answers the calls `ahcloud.aws.S3Store` makes (get_object, put_object with IfMatch,
 list_objects_v2 through a paginator) from a dict, with ETags as S3 quotes them and pages of `page_size` keys,
-so the real store class is tested, not a stand-in. `FakeSecrets` answers get_secret_value.
+so the real store class is tested, not a stand-in. `FakeSecrets` answers get_secret_value. `FakeCloudWatch` answers
+describe_alarms (through a paginator) and get_metric_data (in pages, with NextToken).
 """
 from __future__ import annotations
 
@@ -50,6 +51,7 @@ class FakeS3Client:
 
     def __init__(self, page_size: int = 1000) -> None:
         self.objects: dict[str, bytes] = {}
+        self.headers: dict[str, dict[str, str]] = {}               # key -> CacheControl / ContentType of the last put
         self.page_size = page_size
         self.calls: list[tuple] = []
 
@@ -64,8 +66,10 @@ class FakeS3Client:
         data = self.objects[Key]
         return {"Body": io.BytesIO(data), "ETag": self.etag(data)}
 
-    def put_object(self, Bucket: str, Key: str, Body: bytes, IfMatch: str | None = None) -> dict:   # noqa: N803
+    def put_object(self, Bucket: str, Key: str, Body: bytes, IfMatch: str | None = None,   # noqa: N803
+                   **headers: str) -> dict:
         self.calls.append(("put", Bucket, Key, IfMatch))
+        self.headers[Key] = headers
         if IfMatch is not None:
             if Key not in self.objects:
                 raise ClientError("NoSuchKey", "PutObject")
@@ -97,3 +101,35 @@ class FakeSecrets:
         if self.denied:
             raise ClientError("AccessDeniedException", "GetSecretValue")
         return {"SecretString": self.values[SecretId]}
+
+
+class _AlarmPages:
+    def __init__(self, client: "FakeCloudWatch") -> None:
+        self._client = client
+
+    def paginate(self, AlarmNamePrefix: str = "", AlarmTypes: list | None = None):   # noqa: N803  boto3's names
+        self._client.calls.append(("describe_alarms", AlarmNamePrefix, tuple(AlarmTypes or ())))
+        alarms = [a for a in self._client.alarms if a["AlarmName"].startswith(AlarmNamePrefix)]
+        for start in range(0, len(alarms), 2):                         # pages of two, to test the paging
+            yield {"MetricAlarms": alarms[start:start + 2]}
+
+
+class FakeCloudWatch:
+    """CloudWatch's describe_alarms and get_metric_data over lists the test fills."""
+
+    def __init__(self, alarms: list[dict] | None = None, values: dict[str, list[list[float]]] | None = None) -> None:
+        self.alarms = alarms or []                  # DescribeAlarms' MetricAlarms entries
+        self.values = values or {}                  # query id -> one list of values per page
+        self.calls: list[tuple] = []
+
+    def get_paginator(self, name: str) -> _AlarmPages:
+        assert name == "describe_alarms"
+        return _AlarmPages(self)
+
+    def get_metric_data(self, MetricDataQueries: list, StartTime, EndTime, NextToken: str | None = None) -> dict:  # noqa: N803
+        self.calls.append(("get_metric_data", tuple(q["Id"] for q in MetricDataQueries), StartTime, EndTime, NextToken))
+        page = int(NextToken or 0)
+        pages = max((len(v) for v in self.values.values()), default=1)
+        results = [{"Id": q["Id"], "Values": self.values.get(q["Id"], [[]] * pages)[page]
+                    if page < len(self.values.get(q["Id"], [])) else []} for q in MetricDataQueries]
+        return {"MetricDataResults": results, **({"NextToken": str(page + 1)} if page + 1 < pages else {})}

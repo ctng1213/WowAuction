@@ -38,12 +38,14 @@ def test_BZ7_a_new_snapshot_writes_its_envelope_then_the_state_file_and_the_metr
     envelope = json.loads(gzip.decompress(store.get(KEY_B).data))
     assert (envelope["house"], envelope["ruleset"], envelope["last_modified"], envelope["fetched_ms"]) == (113, 2, B, B_MS + 60_000)
     assert envelope["auctions"] == json.loads(recorded("house_113_auctions"))
-    assert json.loads(store.get(STATE_KEY).data) == {"last_modified": B}
+    assert json.loads(store.get(STATE_KEY).data) == {
+        "last_modified": B, "last_checked_ms": B_MS + 60_000, "last_outcome": "written", "last_duration_ms": 0,
+        "last_auctions": outcome.auctions}
     assert metrics == [("snapshot_written", 1)]
     assert outcome.auctions + outcome.bid_only == len(envelope["auctions"]["auctions"]) + len(envelope["commodities"]["auctions"])
 
 
-def test_BZ8_unchanged_writes_nothing_and_a_crash_before_the_state_file_rewrites_the_same_bytes(tmp_path):
+def test_BZ8_unchanged_writes_no_raw_object_and_a_crash_before_the_state_file_rewrites_the_same_bytes(tmp_path):
     store, http = LocalStore(tmp_path), BlizzardHttp()
     collect(store, http)
     first = store.get(KEY_B).data
@@ -65,6 +67,34 @@ def test_BZ8_a_new_refresh_adds_the_next_hours_object():
     assert store.list("raw/") == [KEY_B, outcome.key]
 
 
+def slow(http, clock, seconds):
+    """The transport, taking `seconds` of the fake clock per GET (a run's duration)."""
+    def call(request):
+        if request.method == "GET":
+            clock.sleep(seconds / 2)
+        return http(request)
+    return call
+
+
+def test_BZ55_every_run_writes_the_state_file(tmp_path):
+    store, http = LocalStore(tmp_path), BlizzardHttp()
+    first, _ = collect(store, http)                                          # B, a new snapshot
+    clock = FakeClock(B_MS + 28 * 60_000)
+    collect(store, slow(http, clock, 2.95), clock)                            # both 304, in 2,950 ms
+    assert json.loads(store.get(STATE_KEY).data) == {
+        "last_modified": B, "last_checked_ms": B_MS + 28 * 60_000, "last_outcome": "unchanged",
+        "last_duration_ms": 2950, "last_auctions": first.auctions}
+    auctions_new, commodities_old = BlizzardHttp(C), BlizzardHttp(B)
+    collect(store, lambda r: (commodities_old if "/commodities" in r.url else auctions_new)(r))
+    state = json.loads(store.get(STATE_KEY).data)
+    assert (state["last_outcome"], state["last_modified"], state["last_auctions"]) == ("mismatch", B, first.auctions)
+    http.stamp = C
+    later, _ = collect(store, http)
+    state = json.loads(store.get(STATE_KEY).data)
+    assert (state["last_outcome"], state["last_modified"], state["last_auctions"]) == ("written", C, later.auctions)
+    assert store.get(later.key) is not None                                   # the raw object, then the state
+
+
 def test_BZ9_halves_from_different_refreshes_write_nothing(tmp_path):
     store, http = LocalStore(tmp_path), BlizzardHttp()
     collect(store, http)
@@ -75,7 +105,8 @@ def test_BZ9_halves_from_different_refreshes_write_nothing(tmp_path):
 
     outcome, metrics = collect(store, split)
     assert outcome.state == "mismatch" and metrics == [("mismatch", 1)]
-    assert store.list("raw/") == [KEY_B] and json.loads(store.get(STATE_KEY).data) == {"last_modified": B}
+    state = json.loads(store.get(STATE_KEY).data)
+    assert store.list("raw/") == [KEY_B] and (state["last_modified"], state["last_outcome"]) == (B, "mismatch")
 
 
 def test_FM68_a_failed_run_writes_nothing_and_raises_after_one_attempt(tmp_path):

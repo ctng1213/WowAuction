@@ -380,9 +380,9 @@ def test_AR9_the_cloud_is_a_thin_wrapper_over_the_same_pipeline():
     for path in tree_sources(CLOUD_SRC):
         for line, name in imports_of(path):
             top = name.split(".")[0]
-            if top == "boto3" and path.name != "aws.py":
-                problems.append(f"{rel(path)}:{line} imports boto3 outside ahcloud/aws.py")
-            elif top in sys.stdlib_module_names or name == "__future__" or top == "boto3":
+            if top in ("boto3", "botocore") and path.name != "aws.py":       # the AWS SDK, botocore its config
+                problems.append(f"{rel(path)}:{line} imports {top} outside ahcloud/aws.py")
+            elif top in sys.stdlib_module_names or name == "__future__" or top in ("boto3", "botocore"):
                 continue
             elif not any(name == m or name.startswith(m + ".") for m in CLOUD_MAY_IMPORT):
                 problems.append(f"{rel(path)}:{line} imports {name}")

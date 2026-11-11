@@ -35,6 +35,8 @@ class DailyOutcome:
     built_ms: int | None = None
     items: int = 0                      # items in the document
     profile: str = field(default="", compare=False)   # the run's profile line (BZ65), printed by the caller
+    # the document published, for the status (CS8, CS10); None when nothing was
+    document: MarketIntelligence | None = field(default=None, compare=False, repr=False)
 
 
 def coverage(db: Database, market: str, now_ms: int) -> tuple[tuple[int, int], ...]:
@@ -155,7 +157,7 @@ def _analyze_and_publish(db: Database, data: Store, intel_store: Store, market: 
         intel = advance(data, carried, market) or replace(carried, observations_until_ms=last)
     with profile.stage("publish"):
         publish(intel_store, intel)
-    return DailyOutcome("published", intel.built_ms, len(intel.items))
+    return DailyOutcome("published", intel.built_ms, len(intel.items), intel)
 
 
 def carry_state(base: MarketIntelligence, prior: MarketIntelligence | None) -> MarketIntelligence:

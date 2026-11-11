@@ -12,6 +12,7 @@ import pytest
 cdk = pytest.importorskip("aws_cdk")
 from aws_cdk.assertions import Match, Template  # noqa: E402
 
+from ahcloud.status import ALARM_IDS, DAILY_HOUR_UTC, TIMEOUTS_S  # noqa: E402
 from infra.market_stack import MarketConfig, MarketStack  # noqa: E402
 
 CONFIG = MarketConfig(market="forever.normal.horde.us", ruleset=2, house=113, alert_email="alerts@example.com")
@@ -93,7 +94,10 @@ def analyzer_of(template):
 
 def test_SEC17_the_analyzer_environment_holds_names_only(template):
     props = analyzer_of(template)
-    assert set(props["Environment"]["Variables"]) == {"DATA_BUCKET", "INTEL_BUCKET", "MARKET"}       # no secret (SEC22)
+    variables = props["Environment"]["Variables"]
+    assert set(variables) == {"DATA_BUCKET", "INTEL_BUCKET", "MARKET", "ALARM_PREFIX", "COLLECTOR_FUNCTION",
+                              "INGEST_FUNCTION"}                                                 # no secret (SEC22)
+    assert variables["ALARM_PREFIX"] == "Test-"
     assert (props["ReservedConcurrentExecutions"], props["Timeout"], props["MemorySize"]) == (1, 900, 8192)
     assert props["EphemeralStorage"] == {"Size": 4096} and "TargetArn" in json.dumps(props["DeadLetterConfig"])
 
@@ -188,7 +192,8 @@ def test_SEC22_only_ingest_writes_the_history_and_the_analyzer_holds_no_secret(t
     assert any("secretsmanager:GetSecretValue" in actions(s) for s in ingest)
     assert not any(a.startswith("secretsmanager:") for s in analyzer for a in actions(s))
     assert all(data in w and "/state/*" in w for w in writes(ingest)) and writes(ingest)
-    assert all(intel in w and data not in w for w in writes(analyzer)) and writes(analyzer)
+    assert all((intel in w and data not in w) or (data in w and w.endswith('/state/analyzer.json"]]}'))
+               for w in writes(analyzer)) and writes(analyzer)
     props = function_named(template, "ahcloud.ingest.handler")
     assert set(props["Environment"]["Variables"]) == {"DATA_BUCKET", "MARKET", "SECRET_NAME"}
     assert (props["ReservedConcurrentExecutions"], props["Timeout"], props["MemorySize"]) == (1, 900, 4096)
@@ -215,3 +220,25 @@ def test_FM84_the_history_three_hours_behind_for_three_hours_alarms(template):
         180, 3, "GreaterThanThreshold", "breaching")
     assert behind["Dimensions"] == [{"Name": "market", "Value": "forever.normal.horde.us"}]
     assert behind["AlarmActions"] and behind["OKActions"]
+
+
+def test_SEC21_the_analyzer_reads_only_its_stacks_alarms_and_writes_its_own_record(template):
+    data = bucket_id(template, "Data")
+    analyzer = statements_of(template, "ahcloud.analyzer.handler")
+    cloudwatch = {a: s["Resource"] for s in analyzer for a in actions(s) if a.startswith("cloudwatch:")}
+    assert set(cloudwatch) == {"cloudwatch:DescribeAlarms", "cloudwatch:GetMetricData"}
+    assert cloudwatch["cloudwatch:GetMetricData"] == "*"               # no resource-level scoping exists for it
+    assert "alarm:Test-*" in json.dumps(cloudwatch["cloudwatch:DescribeAlarms"])
+    data_writes = [w for w in writes(analyzer) if data in w]
+    assert len(data_writes) == 1 and "/state/analyzer.json" in data_writes[0]
+    [record] = [s for s in analyzer if "/state/analyzer.json" in json.dumps(s["Resource"])]
+    assert actions(record) == ["s3:PutObject"]                          # nothing else on its one key
+    names = set(template.find_resources("AWS::CloudWatch::Alarm"))      # every alarm has an id the status knows
+    assert all(any(name.startswith(known) for known in ALARM_IDS) for name in names) and len(names) == len(ALARM_IDS)
+
+
+def test_CS6_the_status_timeouts_and_daily_hour_are_the_stacks(template):
+    timeouts = {handler.split(".")[1]: function_named(template, handler)["Timeout"]
+                for handler in ("ahcloud.collector.handler", "ahcloud.ingest.handler", "ahcloud.analyzer.handler")}
+    assert timeouts == TIMEOUTS_S
+    template.has_resource_properties("AWS::Events::Rule", {"ScheduleExpression": f"cron(0 {DAILY_HOUR_UTC} * * ? *)"})

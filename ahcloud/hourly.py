@@ -10,7 +10,7 @@ so the hourly cadence can't move a window or a rate (BZ33). `built_ms` stays the
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 
 from ahcloud.publish import publish, read_latest, settings_from_dict
 from ahcloud.store import Store
@@ -32,6 +32,8 @@ class HourlyOutcome:
     state: str                             # "published", "up_to_date" (nothing newer) or "no_base" (no document yet)
     observations_until_ms: int | None = None
     repriced: int = 0                      # items the snapshot listed
+    # the document the run ended with (published, or the latest when up to date), for the status (CS8, CS10)
+    document: MarketIntelligence | None = field(default=None, compare=False, repr=False)
 
 
 def snapshot(store: Store, key: str, market: str) -> SnapshotObservation | None:
@@ -203,7 +205,7 @@ def run_hourly(data: Store, intel_store: Store, market: str) -> HourlyOutcome:
         return HourlyOutcome("no_base")
     updated = advance(data, latest[0], market)
     if updated is None:
-        return HourlyOutcome("up_to_date", latest[0].observations_until_ms)
+        return HourlyOutcome("up_to_date", latest[0].observations_until_ms, document=latest[0])
     publish(intel_store, updated)
     listed = {i.key for i in updated.items.values() if i.cur_age_ms == 0}
-    return HourlyOutcome("published", updated.observations_until_ms, len(listed))
+    return HourlyOutcome("published", updated.observations_until_ms, len(listed), updated)
