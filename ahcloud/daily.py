@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import json
 import shutil
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from ahcloud.hourly import advance
 from ahcloud.ingest import DB_KEY, LAST_INGESTED, REBUILDING, SRC
+from ahcloud.profile import Profile
 from ahcloud.publish import publish, read_latest, settings_to_dict
 from ahcloud.store import Store
 from ahsync.analysis.market import analyze_market
@@ -33,6 +34,7 @@ class DailyOutcome:
     state: str                          # "published", "rebuilding" (a rebuild under way, BZ61) or "empty"
     built_ms: int | None = None
     items: int = 0                      # items in the document
+    profile: str = field(default="", compare=False)   # the run's profile line (BZ65), printed by the caller
 
 
 def coverage(db: Database, market: str, now_ms: int) -> tuple[tuple[int, int], ...]:
@@ -85,26 +87,43 @@ def run_daily(data: Store, intel_store: Store, market: str, workdir: Path,
         settings: The analysis settings (the code's defaults; they travel in the document).
 
     Returns:
-        What it did.
+        What it did, with its profile line (BZ65).
 
     Raises:
         ahsync.db.sqlite.DatabaseError: The downloaded database is damaged (FM72: run a rebuild).
     """
-    shutil.rmtree(workdir, ignore_errors=True)
-    workdir.mkdir(parents=True)
-    found = data.get(DB_KEY)
+    profile = Profile("daily")
+    with profile.stage("download"):
+        shutil.rmtree(workdir, ignore_errors=True)
+        workdir.mkdir(parents=True)
+        found = data.get(DB_KEY)
+        if found is not None:
+            (workdir / "history.db").write_bytes(found.data)
     if found is None:
-        return DailyOutcome("empty")
-    (workdir / "history.db").write_bytes(found.data)
-    db = Database.open(workdir / "history.db", 0, None)
+        return _profiled(DailyOutcome("empty"), profile)
+    with profile.stage("download"):
+        db = Database.open(workdir / "history.db", 0, None)
     try:
-        return _analyze_and_publish(db, data, intel_store, market, settings)
+        return _profiled(_analyze_and_publish(db, data, intel_store, market, (settings, profile)), profile)
     finally:
         db.close()
 
 
+def _profiled(outcome: DailyOutcome, profile: Profile) -> DailyOutcome:
+    """The outcome with the run's profile line.
+
+    Args:
+        outcome: What the run did.
+        profile: Its stage times.
+
+    Returns:
+        The outcome, its `profile` set to the line (outcome and item count only).
+    """
+    return replace(outcome, profile=profile.line(outcome=outcome.state, items=outcome.items))
+
+
 def _analyze_and_publish(db: Database, data: Store, intel_store: Store, market: str,
-                         settings: MarketSettings) -> DailyOutcome:
+                         run: tuple[MarketSettings, Profile]) -> DailyOutcome:
     """The run's body, with the downloaded history open (see run_daily).
 
     Args:
@@ -112,26 +131,30 @@ def _analyze_and_publish(db: Database, data: Store, intel_store: Store, market: 
         data: The data store.
         intel_store: The intel store.
         market: Market id.
-        settings: The analysis settings.
+        run: (the analysis settings, the run's profile).
 
     Returns:
         What it did.
     """
+    settings, profile = run
     if db.get_meta(REBUILDING):
         return DailyOutcome("rebuilding")
     last = int(db.get_meta(LAST_INGESTED) or 0)
     if not last:
         return DailyOutcome("empty")
-    intel, _failed = analyze_market(db, market, last, settings, (SRC,))
-    intel = replace(intel, catalog=catalog_of(db, list(intel.items)), coverage=coverage(db, market, last),
-                    settings=settings_to_dict(settings), ages_at_ms=last)
-    try:
-        prior = read_latest(intel_store, market)
-    except ValueError:                                              # a torn pointer: rebuild the rings from now
-        prior = None
-    carried = carry_state(intel, prior[0] if prior else None)
-    intel = advance(data, carried, market) or replace(carried, observations_until_ms=last)
-    publish(intel_store, intel)
+    with profile.stage("analyze"):
+        intel, _failed = analyze_market(db, market, last, settings, (SRC,))
+        intel = replace(intel, catalog=catalog_of(db, list(intel.items)), coverage=coverage(db, market, last),
+                        settings=settings_to_dict(settings), ages_at_ms=last)
+    with profile.stage("layer"):
+        try:
+            prior = read_latest(intel_store, market)
+        except ValueError:                                          # a torn pointer: rebuild the rings from now
+            prior = None
+        carried = carry_state(intel, prior[0] if prior else None)
+        intel = advance(data, carried, market) or replace(carried, observations_until_ms=last)
+    with profile.stage("publish"):
+        publish(intel_store, intel)
     return DailyOutcome("published", intel.built_ms, len(intel.items))
 
 

@@ -23,7 +23,7 @@ Decided by Opus while planning (2026-11-11), each open to the user's veto at app
 10. **A rebuild is Ingest from a fresh database.** It marks the database `rebuilding_until_ms` = the newest raw at its start; while the mark is set each run takes the **rebuild cap** (sized in IS0: as many snapshots as fit in 10 min) instead of 12, and the daily analysis skips its publish (the hourly prices carry on). The mark clears when the history reaches it. `python -m ahcloud rebuild` on your machine stays, uncapped.
 11. **Ingest starts at 4,096 MB** (its peak is measured in IS3 and sized with the analyzer's).
 
-Decided by Opus during execution (2026-11-11):
+Decided by Opus during execution (2026-11-11; FM82 of the spec merge is FM85 since IS3, as #99 took FM82 first):
 
 12. **IS1 and IS2 are one milestone and one PR.** The code alone on `main` would remove ingestion from the cloud at the next deploy from `main` (the analyzer would stop ingesting before an Ingest function exists), and the status-page session deploys from `main` too.
 13. **The rebuild cap is 60, provisional**, until IS0 measures a snapshot's cost on Lambda; a rebuild run takes it *instead of* 12.
@@ -40,6 +40,8 @@ From the independent review of IS1 (2026-11-11; Opus's fixes, within the approve
 21. **A long local rebuild pauses `IngestSchedule`** (infra/README.md), since Ingest uploads about hourly and a 2-hour rebuild would always lose its conditional upload; the command line reports a lost race in one line and exits 1.
 22. **Accepted, not changed:** the catalog's retry time for an id neither search knows follows each batch's newest snapshot, so capped runs and one uncapped run can retry an unknown id at different times (as daily runs and a rebuild already could); documents differ only if Blizzard's answer changes in between. `run_ingest` keeps 7 parameters, as `run_daily` had.
 23. **Found, out of scope:** `hourly.advance` raises on a malformed newest raw snapshot, so the daily analysis and the hourly mode fail until a good snapshot arrives (on `main` before this batch too). For the user to schedule.
+24. **Ingest's real cost is accepted** (the user, 2026-11-11, option 4 of four: ingest only when 6 are pending plus an 08:40 flush; every 6 hours; a cheaper lifetimes recompute; accept). IS3's first run took 373 s for 2 snapshots, mostly a fixed cost per run (the lifetimes recompute of the day is the likely part; not yet measured), so about 24 such runs a day put Lambda at about $13 a month. The stack's budget goes from $5 to $20 a month (Opus: about $14 expected, with room before the 80% warning).
+25. **Profiling, for right-sizing later** (the user, 2026-11-11): a JSON log line per Ingest run and per daily analysis with each stage's milliseconds and the memory high-water mark after it (BZ64, BZ65); a log line rather than metrics, so it costs no custom metric. Memory and the rebuild cap are sized from it after a week (item 4).
 
 Facts measured on 2026-11-11:
 
@@ -71,7 +73,7 @@ The analysis alone uses about 1.9 GB, so at 2 GB every snapshot was ingested at 
 
 ### IS1: the split, code and infrastructure (Opus: merge logic, the byte-identity invariant, IAM; one PR, §1 item 12)
 
-**Built 2026-11-11.** Steps 1–4 below and IS2's 1–4. Verification: the full pytest suite with engine coverage, the Lua runner, the infra tests (SEC17, SEC22, FM82, FM84, CS1), SM8 with caps 5 and 1 against uncapped, and the whole-plan snapshot unchanged; `/security-review` on the branch.
+**Built 2026-11-11.** Steps 1–4 below and IS2's 1–4. Verification: the full pytest suite with engine coverage, the Lua runner, the infra tests (SEC17, SEC22, FM85, FM84, CS1), SM8 with caps 5 and 1 against uncapped, and the whole-plan snapshot unchanged; `/security-review` on the branch.
 
 1. `ahcloud/ingest.py` + `tests/ahcloud/test_ingest.py`: `run_ingest(data, client, market, workdir, cap, fresh)` (the early exit, download, ingest the oldest `cap` pending, refusals, catalog, prune, compact upload, `VACUUM INTO`, conditional put, then `state/ingest.json`; the rebuild mark) and its `handler`. Moved from `daily.py`: `ingest_pending` and the ingest half of `_ingest_and_publish`.
 2. `ahcloud/daily.py`: the analysis only. Download the history read-only; skip with `rebuilding` while the mark is set; `analyze_market` at `now_ms` = `meta.last_ingested_at_ms`; carry, advance, publish. No database upload.
@@ -105,7 +107,7 @@ New:
 | BZ59 | the 09:00 analysis; the history's newest snapshot is 08:22 | the history downloaded and not written back; `analyze_market` at 08:22; the document published with `built_ms` 08:22, the hourly fields carried and advanced as today | the analysis only reads |
 | BZ60 | the history is 30 h behind the newest raw (Ingest stalled) at 09:00 | the analysis still publishes, `built_ms` = the history's newest snapshot; the hourly runs layer the newer prices over it; FM84 has alarmed | stale baselines beat none |
 | BZ61 | a rebuild is invoked; the newest raw is R; the 09:00 analysis falls during it | the first run starts a fresh history marked rebuilding until R and uploads with `If-Match` on the ETag seen at its start (FM76); runs continue at the rebuild cap; the analysis skips its publish ("rebuilding") while the mark is set; when the history reaches R the mark clears and the next analysis publishes the document an incremental history gives (FM72) | a rebuild runs in the cloud and never publishes half a history |
-| FM82 | an Ingest run times out or crashes mid-batch | nothing uploaded, `state/ingest.json` unchanged; the next scheduled run starts from the same history; `IngestErrors` emails | a failed ingest loses one run, not a day |
+| FM85 | an Ingest run times out or crashes mid-batch | nothing uploaded, `state/ingest.json` unchanged; the next scheduled run starts from the same history; `IngestErrors` emails | a failed ingest loses one run, not a day |
 | FM83 | an Ingest upload finds the ETag changed (a local rebuild uploaded meanwhile) | `PreconditionFailed`, `state/ingest.json` not written; the next run starts from the live history | the history is never overwritten blind |
 | FM84 | the history's newest snapshot is more than 3 h older than the newest raw, for 3 h | "History behind" emails; clears when Ingest catches up | a stalled ingest is noticed, not only a failing one |
 | SEC22 | the synthesized stack | Ingest may read `raw/*`, read and write `state/*` and read the Blizzard secret; the analyzer may read `raw/*` and `state/*` and write only the intel bucket (and `state/analyzer.json` with H2), with no secret | one writer for the history; least privilege |

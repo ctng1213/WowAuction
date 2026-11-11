@@ -1,5 +1,5 @@
 """Tests for ahcloud/ingest.py: raw snapshots into the history, its one writer (SPEC §2.4 Ingest; BZ10-BZ16,
-BZ56-BZ58, BZ61, FM72-FM76, FM82, FM83)."""
+BZ56-BZ58, BZ61, FM72-FM76, FM83, FM85)."""
 from __future__ import annotations
 
 import gzip
@@ -301,7 +301,7 @@ def test_FM72_a_damaged_database_fails_the_ingest_run(tmp_path):
     assert data.get(STATE_KEY) is None
 
 
-def test_FM82_a_run_that_dies_mid_batch_leaves_the_history_and_the_next_run_redoes_it(tmp_path):
+def test_FM85_a_run_that_dies_mid_batch_leaves_the_history_and_the_next_run_redoes_it(tmp_path):
     data, _ = stores(tmp_path, (A_MS, SNAP_A))
     ingest_run(data, tmp_path)
     before, state = data.get(DB_KEY).etag, read_state(data)
@@ -469,3 +469,23 @@ def test_the_compact_store_keeps_every_snapshot_a_late_snapshots_recompute_reads
     # a snapshot a day late recomputes from the day 2 h before it; that day can start a further day earlier
     worst = DAY_MS + SALES_PAIR_MAX_GAP_MS + DAY_MS + LIFETIME_LOOKBACK_MS
     assert COMPACT_DAYS * DAY_MS >= worst
+
+
+def test_BZ64_each_ingest_run_profiles_its_stages_in_one_log_line(tmp_path):
+    data, _ = stores(tmp_path, (A_MS, SNAP_A))
+    ingest_run(data, tmp_path)
+    data.put(raw_key(M, B_MS), SNAP_B)
+    data.put(raw_key(M, C_MS), SNAP_C)
+    full = json.loads(ingest_run(data, tmp_path).profile)
+    assert (full["profile"], full["outcome"], full["snapshots"], full["pending"]) == ("ingest", "ingested", 2, 0)
+    assert set(full["stages_ms"]) == {"state", "download", "ingest", "recompute", "catalog", "prune", "upload"}
+    assert all(isinstance(ms, int) and ms >= 0 for ms in full["stages_ms"].values())
+    assert sum(full["stages_ms"].values()) <= full["total_ms"]
+    marks = [full["rss_mb"][s] for s in ("state", "download", "ingest", "recompute", "catalog", "prune", "upload")
+             if s in full["rss_mb"]]
+    assert marks == sorted(marks)                                                # a high-water mark never falls
+    early = json.loads(ingest_run(data, tmp_path).profile)
+    assert (early["outcome"], set(early["stages_ms"])) == ("up_to_date", {"state"})
+    text = json.dumps(full) + json.dumps(early)
+    assert M not in text and "raw/" not in text and "state/" not in text      # no key, market or bucket
+    assert "profile" not in data.get(STATE_KEY).data.decode()                  # not in the state file

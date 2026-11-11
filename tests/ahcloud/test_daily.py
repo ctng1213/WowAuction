@@ -122,3 +122,17 @@ def test_the_daily_run_keeps_the_hourly_rings_it_did_not_build(tmp_path):
     daily = read_latest(intel, M)[0]
     assert daily.items[LINEN].recent_closes == hourly and daily.observations_until_ms == C_MS == daily.built_ms
     assert carry_state(daily, None).observations_until_ms is None
+
+
+def test_BZ65_the_daily_analysis_profiles_its_stages_in_one_log_line(tmp_path, monkeypatch):
+    import json
+    data, intel = ingested(tmp_path, (A_MS, SNAP_A), (B_MS, SNAP_B))
+    line = json.loads(analyze(data, intel, tmp_path).profile)
+    assert (line["profile"], line["outcome"], line["items"]) == ("daily", "published", 2)
+    assert set(line["stages_ms"]) == {"download", "analyze", "layer", "publish"}
+    assert sum(line["stages_ms"].values()) <= line["total_ms"]
+    assert "profile" not in json.dumps(read_latest(intel, M)[1].__dict__, default=str)      # not in the pointer
+    monkeypatch.setattr("ahcloud.ingest.REBUILD_SNAPSHOTS_PER_RUN", 1)
+    run_ingest(data, FakeCatalog(), M, tmp_path / "ingest", FakeClock(C_MS), cap=1, fresh=True)
+    waiting = json.loads(analyze(data, intel, tmp_path).profile)
+    assert (waiting["outcome"], set(waiting["stages_ms"])) == ("rebuilding", {"download"})

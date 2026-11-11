@@ -49,6 +49,7 @@ def test_CS1_one_dashboard_shows_alarms_publishes_functions_queue_warnings_and_l
         assert metric in body, metric
     assert '"value":120000' in body and body.count('"value":900000') == 2   # the three timeouts annotated
     assert "filter @message like /WARNING|ERROR/" in body and "AnalyzerLogs" in body and "IngestLogs" in body
+    assert "filter ispresent(profile)" in body and "Run profiles" in body                 # BZ64, BZ65
     assert "Ingest: runs per hour" in body
     assert "infra/README.md" in body and '"start":"-P7D"' in body
 
