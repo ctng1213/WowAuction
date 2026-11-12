@@ -1,7 +1,7 @@
 -- Engine/Fees.lua: the AH cut, deposits and auction durations (SPEC §3.4 Fees).
 -- Port of ahsync/engine/fees.py; keep the two formula-for-formula identical (CLAUDE.md).
 -- Forever's durations are 2, 8 and 24 h (verified 2026-10-18). The deposit rule was checked in game on 2026-11-08
--- (SPEC §6 item 4): 5%, 20% and 60% of the vendor value, floored, at least 1s an auction.
+-- (SPEC §6 item 4): 5%, 20% and 60% of the vendor value, floored, at least 1c an auction (1s until 2026-11-11).
 
 local AHProfit = AHProfit
 AHProfit.Engine = AHProfit.Engine or {}
@@ -12,7 +12,7 @@ AHProfit.Engine.Fees = Fees
 Fees.AH_CUT = 0.05                          -- faction AH cut on a sale
 Fees.DURATIONS_H = { 2, 8, 24 }             -- shortest first
 Fees.DEPOSIT_BP = { [2] = 500, [8] = 2000, [24] = 6000 }  -- basis points of vendor sell × qty
-Fees.MIN_DEPOSIT_COPPER = 100               -- the least an auction's deposit can be
+Fees.MIN_DEPOSIT_COPPER = 1                 -- the least an auction's deposit can be (1s until 2026-11-11)
 
 --- Deposit for posting an auction, refunded when it sells, lost when it expires or is cancelled (SPEC §3.4 Fees).
 ---@param vendorSellCopper number  Vendor sell price per unit, copper; 0 when unknown (the minimum then)

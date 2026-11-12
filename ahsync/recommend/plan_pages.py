@@ -53,7 +53,7 @@ def _deposit(a: PlanAction, items: dict[int, ItemInfo]) -> int | None:
 
     Returns:
         Copper; None for anything but a post with a duration. An item without a vendor price, or missing from
-        `items`, pays the 1s minimum (P27), as the addon's Today rows do.
+        `items`, pays the 1c minimum (P27), as the addon's Today rows do.
     """
     if a.kind != "post" or a.duration_h is None:
         return None

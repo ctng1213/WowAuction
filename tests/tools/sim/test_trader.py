@@ -66,7 +66,7 @@ def test_SU12_the_ledger_balances_after_every_event_and_each_moves_only_its_buck
     market.post(2589, 30, 40, 24, "s1")
     step(lambda: trader.buy(market, amaya, 2589, 30, 40), "cash", "bags")
     a, = trader.post(market, amaya, 2589, 10, 60, 2)                     # 50 units cost 1,200: 240 each post
-    trader.post(market, amaya, 2589, 10, 70, 24, cancel_at_ms=START + 3 * HOUR_MS)     # deposits: the 1 s minimum
+    trader.post(market, amaya, 2589, 10, 70, 24, cancel_at_ms=START + 3 * HOUR_MS)     # deposits: 6c and 78c (P27)
     step(lambda: market.take(a.id, 4, "b1") or trader.observe(market), "listed", "deposits", "mail_gold")
     step(lambda: market.run_until(START + 2 * HOUR_MS) or trader.observe(market), "listed", "deposits", "mail_items")
     step(lambda: market.run_until(START + 3 * HOUR_MS) or trader.observe(market), "listed", "deposits", "mail_items")
@@ -76,7 +76,8 @@ def test_SU12_the_ledger_balances_after_every_event_and_each_moves_only_its_buck
     assert all(changed <= named for changed, named in moved), moved
     # Sold 4 of a (cost 96 of its 240); vendored 5 of 41 units costing 984 (120): 20 found units cost 0.
     assert ledger.gains == (4 * 60 - 96) + (5 * 13 - 120)
-    assert ledger.cuts == 12 and ledger.deposits_lost == 2 * 100 - 100 * 4 // 10      # a's share returned with its sale
+    assert ledger.cuts == 12 and ledger.deposits_lost == (6 - 6 * 4 // 10) + 78      # a's share returned with its sale;
+    #   10 × 13c × 5% = 6.5 floored for 2 h, × 60% = 78 for 24 h
     mails = [(e["type"], e.get("outcome")) for e in trader.events if e["type"] in ("auction_mail", "payout")]
     assert mails == [("auction_mail", "sold"), ("payout", None), ("auction_mail", "expired"),
                      ("auction_mail", "cancelled")]                       # by arrival: the sale's letter came at 01:00

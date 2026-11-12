@@ -30,7 +30,7 @@ describe("Posts", function()
     Stubs.FireEvent("AUCTION_HOUSE_AUCTION_CREATED")
     local linen, gloves = AHProfitDB.events[1], AHProfitDB.events[2]
     assert_eq({ linen.type, linen.key, linen.stack, linen.price, linen.durationH, linen.deposit, linen.confirmed },
-              { "post", 2589, 20, 55, 24, 100, true })                -- 3c vendor × 20 × 60% = 36c: the 1s minimum
+              { "post", 2589, 20, 55, 24, 36, true })                 -- 3c vendor × 20 × 60% = 36c, over the 1c minimum
     assert_eq({ gloves.key, gloves.price, gloves.durationH, gloves.confirmed }, { 6585, 900, 2, false })
   end)
 

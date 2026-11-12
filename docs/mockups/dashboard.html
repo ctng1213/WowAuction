@@ -467,8 +467,8 @@ const GA_PRICE_AGE_H = 26;          // hours since the AH prices were seen; over
 const GA_STALE_H = 24;
 const GA_STRENGTH_MIN = 40;         // seasonality strength under this: "no timing edge" (config timing_edge_min_strength, SPEC §3.6)
 const GA_CUT = 0.05;                // AH cut (SPEC §3.4 Fees)
-const GA_DEPOSIT_RATE = 0.60;       // 24 h deposit: 60% of the vendor value (fees.DEPOSIT_BP[24]), at least 1s an auction (P27)
-const gaDepositUnit = vendor => Math.max(100, Math.floor(vendor * 20 * GA_DEPOSIT_RATE)) / 20;   // one 20-unit post ÷ 20
+const GA_DEPOSIT_RATE = 0.60;       // 24 h deposit: 60% of the vendor value (fees.DEPOSIT_BP[24]), at least 1c an auction (P27)
+const gaDepositUnit = vendor => Math.max(1, Math.floor(vendor * 20 * GA_DEPOSIT_RATE)) / 20;   // one 20-unit post ÷ 20
 const GA_SESSION_MIN_UNITS = 20;    // units that confirm a session
 const GA_DEFAULT_P_CHEAPEST = 50;   // SPEC §3.3.2 default chance with no sales data when you'd be the cheapest (a tie included); else 25
 const GA_DAY_ONE_AGE_MIN = 12;      // the day-one state: your first in-game scan, 12 min old, and no price history
@@ -756,7 +756,7 @@ function gaDetail(n) {
           <div><span>Net per unit</span><b>${money(it.price)} − 5% cut ${gaCopper(it.price * GA_CUT)} − (1 − ${it.P}%) × ${gaCopper(gaDepositUnit(it.vendor))} deposit = ${gaCopper(nu)}</b></div>
           <div><span>Net gold/hr</span><b class="pos">${r.rate} × ${gaCopper(nu)} = ${money(gaNetHr(it, r.rate))}</b></div>
         </div>
-        <div class="legend">Deposit: ${gaCopper(gaDepositUnit(it.vendor))} a unit for 24 h (60% of the ${it.vendor}c vendor price, at least 1s a 20-unit auction), refunded on a sale, so only the ${100 - it.P}% chance it expires costs it. Estimates: a listed price is not a sale.</div>
+        <div class="legend">Deposit: ${gaCopper(gaDepositUnit(it.vendor))} a unit for 24 h (60% of the ${it.vendor}c vendor price, at least 1c a 20-unit auction), refunded on a sale, so only the ${100 - it.P}% chance it expires costs it. Estimates: a listed price is not a sale.</div>
       </div>
       <div style="min-width:0">
         <div class="muted" style="font-size:12px;margin-bottom:6px">Price by hour of the week (<code>how</code>), local time</div>${gaHeat(windows)}

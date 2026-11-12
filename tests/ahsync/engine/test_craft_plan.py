@@ -295,12 +295,12 @@ def test_C24_the_crafts_are_funded_from_the_gold_of_the_crafter_gather_picks():
     w = world((both,), products={ROD: product(ROD, 9000, supply_now=200, vendor_sell=0)})
     lots = (Lot("Brugan-G", BAR, 2),)                                                # Brugan holds the 2 owned bars
     result = plans.plan(WeekInputs(lots, {}, replace(w, market=replace(market, owned={BAR: 2.0}))), NOW,
-                        gold={"Amaya-G": 100_000, "Brugan-G": 10_100})                # 10g and 1g 1s
+                        gold={"Amaya-G": 100_000, "Brugan-G": 10_001})                # 10g and 1g 1c
     made = next(a for a in result.actions if a.kind == "craft")
-    # Brugan's 1g 1s buys 10 bars and the rods' one post's 1s minimum deposit: with his 2 owned bars that is 6 crafts,
+    # Brugan's 1g 1c buys 10 bars and the rods' one post's 1c minimum deposit: with his 2 owned bars that is 6 crafts,
     # though Amaya's 10g could have bought more.
     assert (made.char_id, made.qty) == ("Brugan-G", 6)
-    assert dict(result.selection.reserved) == {"Brugan-G": 10_100} and not [a for a in result.actions if a.kind == "mail"]
+    assert dict(result.selection.reserved) == {"Brugan-G": 10_001} and not [a for a in result.actions if a.kind == "mail"]
     assert {a.reason for a in result.alternatives} == {"Insufficient gold on Brugan (needs 20s, has 0c)"}
 
 

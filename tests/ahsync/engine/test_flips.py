@@ -101,16 +101,16 @@ def test_R16_two_characters_never_fill_the_same_demand():
 
 
 def test_R19_the_exposure_budget_caps_a_buy_not_a_share_of_your_gold_per_buy():
-    # All your gold is 30 g; risk tolerance 30% makes the exposure budget 9 g. Silk (stack 20, no vendor price: the 1s
-    # minimum deposit) is listed as 10 at 40 s and 20 at 41 s: the first auction (4 g + 1 s) is funded, the second
-    # (8 g 20 s + 1 s) doesn't fit the 4 g 99 s left.
+    # All your gold is 30 g; risk tolerance 30% makes the exposure budget 9 g. Silk (stack 20, no vendor price: the 1c
+    # minimum deposit) is listed as 10 at 40 s and 20 at 41 s: the first auction (4 g + 1 c) is funded, the second
+    # (8 g 20 s + 1 c) doesn't fit the 4 g 99 s 99 c left.
     expensive = silk(book=((4000, 10, 4, 1), (4100, 20, 4, 1)), cur=4000, cur_qty=10, level=10000, post_price=10000,
                      vendor_sell=0)
     result = plans.plan(world({SILK: expensive}), NOW, gold={"Amaya-G": 300_000}, ps=PortfolioSettings())
     [buy] = [a for a in result.actions if a.kind == "buy"]
     assert (buy.qty, buy.price) == (10, 4000) and result.accounting.risk_budget == 90_000
     [why] = [a.reason for a in result.alternatives]
-    assert why == "Exceeds risk tolerance (needs 8g 21s, 4g 99s left)"
+    assert why == "Exceeds risk tolerance (needs 8g 20s 1c, 4g 99s 99c left)"
 
 
 def test_no_flip_without_a_selling_window_or_a_paying_auction():

@@ -36,7 +36,7 @@ def test_new_plan_and_kept_history_become_view_actions():
     priced = plan_pages.view_actions(actions, rows, history, ITEMS)
     assert (priced[2].deposit, priced[3].deposit) == (None, 120)     # D62: 20 × 10c × 60% for 24 h, the post's risk
     unknown = plan_pages.view_actions(actions, rows, history, {})
-    assert unknown[3].deposit == 100                                 # an item without facts: the 1s minimum (P27)
+    assert unknown[3].deposit == 1                                   # an item without facts: the 1c minimum (P27)
     mail = [PlanAction("mail", "Brugan-G", LINEN, 6, None, NOW, None, None, None, None, 0.0, 0.0, chain="c",
                        to_char="Amaya-G")]
     assert plan_rows(mail, M, NOW)[0][-2] == "Amaya-G"               # C22: the recipient is stored

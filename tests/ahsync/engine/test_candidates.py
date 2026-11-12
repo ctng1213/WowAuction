@@ -20,12 +20,12 @@ def test_PF4_a_flips_batches_end_at_the_first_that_loses_and_each_needs_the_one_
     assert [b.candidate.batch for b in opp.batches] == [1, 2]                  # the 12c stack doesn't pay: 266 < 288
     first, second = (b.candidate for b in opp.batches)
     assert (first.expected_net, second.expected_net) == (166, 106)            # 20 × 14 × 0.95 = 266 on Sunday: − 100, − 160
-    gold = first.gold_needed                                                   # 1s for the stack, 1s of deposit (the minimum)
+    gold = first.gold_needed                                                   # 1s for the stack, 12c of deposit (20 × 1c × 60%)
     funded = plans.plan(empty_world(facts={LINEN: linen_book()}), NOW, gold={"Amaya-G": gold})
     assert [a.qty for a in funded.actions if a.kind == "buy"] == [20]          # batch 1 only
     assert [a.window_start_ms is not None for a in funded.actions if a.kind == "post"] == [True]   # later, never now (R29)
-    assert [a.reason for a in funded.alternatives] == ["Insufficient gold (needs 2s 60c, all characters hold 2s)"]
-    assert second.gold_needed == 260                                          # 1s 60c of Linen + the 1s deposit
+    assert [a.reason for a in funded.alternatives] == ["Insufficient gold (needs 1s 72c, all characters hold 1s 12c)"]
+    assert second.gold_needed == 172                                          # 1s 60c of Linen + the 12c deposit
 
 
 def test_PF20_a_buy_for_later_needs_its_selling_window_to_be_a_pattern():
