@@ -74,7 +74,7 @@ describe("Options", function()
     assert_eq({ live.postPrice, live.chance, live.live, item.postPrice }, { 39, 0.8, true, 45 })
     local row = Options.SellOne(2589, 20, live, 3, NOW, "Amaya-Grommash")
     assert_eq({ math.floor(row.net * 10 + 0.5), row.chance, row.ownNote },
-              { 5848, 80, "post now at the live price · AHSync has no plan for it" })   -- 584.8c
+              { 6024, 80, "post now at the live price · AHSync has no plan for it" })   -- 602.4c
     assert_eq(Options.Reprice({ chance = 0.5 }, {}, nil, 0, NOW).postPrice, nil)        -- nothing to price by
     assert_eq(Options.Reprice({ med7 = 49, refStack = 1, chance = 0.5 }, {}, nil, 0, NOW).postPrice, 49)
   end)

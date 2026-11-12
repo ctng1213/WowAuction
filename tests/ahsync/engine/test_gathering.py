@@ -170,12 +170,12 @@ def test_under_all_characters_the_highest_rate_among_the_eligible_ones_wins_ties
 
 def test_GA6_net_per_unit_and_gold_per_hour_for_copper_ore():
     dep = g.deposit_per_unit(5)
-    assert dep == 5.0                                         # 60% of 20 × 5c = 60c, under the 1s minimum: 100c ÷ 20
+    assert dep == 3.0                                         # 60% of 20 × 5c = 60c, over the 1c minimum: 60c ÷ 20
     net = g.net_per_unit(220, 0.85, 5)
-    assert net == pytest.approx(208.25)                     # 220 − 11 − 0.15 × 5
-    assert g.net_per_hour(38, net) == pytest.approx(7913.5)   # "79s 14c" half up
+    assert net == pytest.approx(208.55)                     # 220 − 11 − 0.15 × 3
+    assert g.net_per_hour(38, net) == pytest.approx(7924.9)   # "79s 25c" half up
     assert g.gross_per_hour(38, 220) == 8360                  # "83s 60c"
-    assert g.deposit_per_unit(None) == 5.0 and g.deposit_per_unit(0) == 5.0       # unknown: the 1s minimum ÷ 20
+    assert g.deposit_per_unit(None) == 0.05 and g.deposit_per_unit(0) == 0.05     # unknown: the 1c minimum ÷ 20
 
 
 def test_GA7_no_sales_data_takes_the_default_chance_at_the_ah_price():

@@ -161,7 +161,7 @@ function ViewModel.RowMoney(a, members, look)
   local spend = 0
   if a.kind == "buy" then
     spend = (a.price or 0) * a.qty
-  elseif a.kind == "post" and a.duration and look then        -- SPEC §3.4 Risk; no vendor price: the 1s minimum (P27)
+  elseif a.kind == "post" and a.duration and look then        -- SPEC §3.4 Risk; no vendor price: the 1c minimum (P27)
     spend = AHProfit.Engine.Fees.DepositCopper(look.vendorSell or 0, a.qty, a.duration)
   end
   return ViewModel.Money(a.price), total, spend

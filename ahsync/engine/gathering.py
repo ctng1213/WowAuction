@@ -346,7 +346,7 @@ def deposit_per_unit(vendor_sell: int | None) -> float:
         vendor_sell: The vendor sell price per unit, copper; None when unknown.
 
     Returns:
-        Float copper: 60% of the vendor price for 24 h, and at least the 1s minimum ÷ 20 (5c) a unit, which an
+        Float copper: 60% of the vendor price for 24 h, and at least the 1c minimum ÷ 20 (0.05c) a unit, which an
         unknown vendor price also gets (SPEC §3.4 Fees).
     """
     return deposit_copper(vendor_sell or 0, DEPOSIT_STACK, DEPOSIT_HOURS) / DEPOSIT_STACK

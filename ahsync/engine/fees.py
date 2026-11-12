@@ -3,7 +3,8 @@
 Ported to addon/AHProfit/Engine/Fees.lua; keep the two identical.
 
 The durations are Forever's (2, 8 and 24 h, verified 2026-10-18). The deposit rule was checked in game by
-the user on 2026-11-08 (SPEC §6 item 4): 5%, 20% and 60% of the vendor value, floored, at least 1s an auction.
+the user on 2026-11-08 (SPEC §6 item 4): 5%, 20% and 60% of the vendor value, floored, at least 1c an auction (1s
+until the user reported the change, 2026-11-11).
 """
 from __future__ import annotations
 
@@ -12,7 +13,7 @@ DURATIONS_H = (2, 8, 24)           # Forever's auction durations, shortest first
 # Deposit as basis points of vendor sell price × quantity, per duration (checked in game 2026-11-08: a 11s 73c
 # Oiled Blunderbuss took 2s 34c for 8 h). Integer basis points keep the floor exact in both languages.
 DEPOSIT_BP = {2: 500, 8: 2000, 24: 6000}
-MIN_DEPOSIT_COPPER = 100           # the least an auction's deposit can be, whatever its value (checked 2026-11-08)
+MIN_DEPOSIT_COPPER = 1             # the least an auction's deposit can be, whatever its value (1s until 2026-11-11, the user)
 
 
 def deposit_copper(vendor_sell_copper: int, qty: int, duration_h: int) -> int:

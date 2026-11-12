@@ -73,7 +73,7 @@ describe("PlanView", function()
     local _, _, deposit = VM.RowMoney({ kind = "post", qty = 76, price = 2500, duration = 24 }, nil, { vendorSell = 138 })
     local _, _, unknown = VM.RowMoney({ kind = "post", qty = 1, price = 5 }, nil, nil)   -- no item facts: none shown
     local _, _, minimum = VM.RowMoney({ kind = "post", qty = 1, price = 5, duration = 2 }, nil, {})   -- no vendor price
-    assert_eq({ deposit, VM.Risk(deposit, GOLD), unknown, minimum }, { 6292, "2.0%", 0, 100 })
+    assert_eq({ deposit, VM.Risk(deposit, GOLD), unknown, minimum }, { 6292, "2.0%", 0, 1 })   -- the 1c minimum
   end)
 
   it("A73 holds and vendor sales are no rows on Today and count toward no total", function()

@@ -25,7 +25,7 @@ def at(day: int, hour: int, week: int = 0) -> int:
 
 def raid_nights(wed: float, thu: float, **changes) -> SellFacts:
     """An item with Tue, Wed and Thu 20:00-23:00 windows peaking at 20:00; level 10s; no vendor value, so a post's
-    deposit is the 1s minimum (P27), lost only by the share that doesn't sell."""
+    deposit is the 1c minimum (P27), lost only by the share that doesn't sell."""
     how = [1.0] * 168
     how[WED * 24 + 20], how[THU * 24 + 20] = wed, thu
     windows = tuple(PlanWindow(d * 24 + 20, 3, d * 24 + 20, 6) for d in (TUE, WED, THU))
@@ -49,10 +49,10 @@ def chances(monkeypatch):
 
 def test_M1_a_missed_tuesday_peak_moves_to_wednesday(chances):
     chances[WED] = 0.88
-    f = raid_nights(wed=1.1510, thu=1.0)                           # 0.88 × 11s 51c × 0.95 − 0.12 × 1s = 9s 50c: 95%
+    f = raid_nights(wed=1.1510, thu=1.0)                           # 0.88 × 11s 51c × 0.95 − 0.12 × 1c = 9s 62c: 96%
     r = missed.replan_missed(ANCHOR, at(TUE, 23), 1, f, at(TUE, 23, 0) + 30 * 60_000, WEEK_END, S, 0.5, 0.10)
     assert (r.kind, r.at_ms, r.window[0]) == ("post", at(WED, 12), at(WED, 20))   # posted 8 h before the 20:00 peak
-    assert round(r.net) == 950 and r.p == 0.88 and r.tried[0].failed == ""
+    assert round(r.net) == 962 and r.p == 0.88 and r.tried[0].failed == ""
 
 
 def test_M2_wednesday_missed_too_and_thursday_is_20_percent_below_so_it_holds(chances):
