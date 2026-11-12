@@ -55,18 +55,20 @@ def test_CS11_the_status_put_carries_its_cache_control_and_content_type():
                               "intel/m/latest-16.json": {}}
 
 
-def test_SEC21_alarm_states_read_only_the_stacks_alarms_every_page():
+def test_SEC21_alarm_states_read_only_the_stacks_alarms_by_name_every_page():
     when = datetime(2026, 11, 10, 11, 15, tzinfo=timezone.utc)
     alarms = [{"AlarmName": f"WowAuctionMarket-{name}", "StateValue": state, "StateUpdatedTimestamp": when}
-              for name, state in (("NoNewSnapshotA-x", "OK"), ("CollectorErrorsB-y", "ALARM"), ("IngestErrorsC-z", "OK"))]
+              for name, state in (("NoNewSnapshot", "OK"), ("CollectorErrors", "ALARM"), ("IngestErrors", "OK"))]
     later = datetime(2026, 11, 10, 12, 0, tzinfo=timezone.utc)                  # an update that kept the state
     alarms[1] = {**alarms[1], "StateUpdatedTimestamp": later, "StateTransitionedTimestamp": when}
     client = FakeCloudWatch(alarms + [{"AlarmName": "Other-Alarm", "StateValue": "ALARM", "StateUpdatedTimestamp": when}])
-    found = alarm_states("WowAuctionMarket-", client)
-    assert found == [("WowAuctionMarket-CollectorErrorsB-y", "ALARM", 1794309300000),
-                     ("WowAuctionMarket-IngestErrorsC-z", "OK", 1794309300000),
-                     ("WowAuctionMarket-NoNewSnapshotA-x", "OK", 1794309300000)]
-    assert client.calls == [("describe_alarms", "WowAuctionMarket-", ("MetricAlarm",))]
+    names = ["WowAuctionMarket-CollectorErrors", "WowAuctionMarket-IngestErrors", "WowAuctionMarket-NoNewSnapshot",
+             "WowAuctionMarket-HistoryBehind"]                                  # one not created yet: simply absent
+    found = alarm_states(names, client)
+    assert found == [("WowAuctionMarket-CollectorErrors", "ALARM", 1794309300000),
+                     ("WowAuctionMarket-IngestErrors", "OK", 1794309300000),
+                     ("WowAuctionMarket-NoNewSnapshot", "OK", 1794309300000)]
+    assert client.calls == [("describe_alarms", tuple(names), ("MetricAlarm",))]
 
 
 def test_CS5_metric_sums_add_every_page_and_read_0_without_data():

@@ -27,7 +27,7 @@ PRICES_STALE_MS = 3 * HOUR_MS                        # NoMarketSummary's limit (
 TIMEOUTS_S = {"collector": 120, "ingest": 900, "analyzer": 900}   # the stack test holds these equal (CS6)
 RUN_AMBER_PCT, RUN_RED_PCT = 66, 90                  # CS6: amber from 66%, red over 90%
 WEEK_BLOCKS = 12                                     # 84 days, inside the document's 90-day coverage (CS8)
-# The stack's alarms, by the logical id CloudFormation puts after the stack name (SEC21 scopes DescribeAlarms to them).
+# The stack's alarms, each named "<stack>-<id>" (infra/market_stack.py), asked for by those names (SEC21).
 ALARM_IDS = ("CollectorErrors", "NoNewSnapshot", "IngestErrors", "IngestSlowRun", "HistoryBehind", "AnalyzerErrors",
              "AnalyzerDeadLettersWaiting", "NoDailyBaselines", "NoMarketSummary", "AnalyzerSlowRun")
 ERROR_ALARMS = (("CollectorErrors", "collector"), ("IngestErrors", "ingest"), ("AnalyzerErrors", "analyzer"))
@@ -789,20 +789,30 @@ def market_label(market: str) -> str:
     return " · ".join(parts[:-1] + [parts[-1].upper()])
 
 
+def alarm_names(prefix: str) -> list[str]:
+    """The stack's alarm names, as the status asks CloudWatch for them (SEC21).
+
+    Args:
+        prefix: The stack's name and "-".
+
+    Returns:
+        "<stack>-<id>" for every id in ALARM_IDS, in that order.
+    """
+    return [prefix + known for known in ALARM_IDS]
+
+
 def alarm_id(name: str, prefix: str) -> str | None:
-    """An alarm's id from its CloudFormation name, "<stack>-<id><hash>-<suffix>".
+    """An alarm's id from its name, "<stack>-<id>".
 
     Args:
         name: The alarm's full name.
         prefix: The stack's name and "-".
 
     Returns:
-        Its id in ALARM_IDS, or None for an alarm that isn't the stack's.
+        Its id in ALARM_IDS, or None for an alarm that isn't one of the stack's.
     """
-    if not name.startswith(prefix):
-        return None
-    rest = name[len(prefix):]
-    return next((known for known in ALARM_IDS if rest.startswith(known)), None)
+    rest = name[len(prefix):] if name.startswith(prefix) else None
+    return rest if rest in ALARM_IDS else None
 
 
 def ints_only(state: object) -> dict:

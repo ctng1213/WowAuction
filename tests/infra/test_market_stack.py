@@ -12,7 +12,7 @@ import pytest
 cdk = pytest.importorskip("aws_cdk")
 from aws_cdk.assertions import Match, Template  # noqa: E402
 
-from ahcloud.status import ALARM_IDS, DAILY_HOUR_UTC, TIMEOUTS_S  # noqa: E402
+from ahcloud.status import DAILY_HOUR_UTC, TIMEOUTS_S, alarm_names  # noqa: E402
 from infra.market_stack import MarketConfig, MarketStack  # noqa: E402
 
 CONFIG = MarketConfig(market="forever.normal.horde.us", ruleset=2, house=113, alert_email="alerts@example.com")
@@ -233,8 +233,8 @@ def test_SEC21_the_analyzer_reads_only_its_stacks_alarms_and_writes_its_own_reco
     assert len(data_writes) == 1 and "/state/analyzer.json" in data_writes[0]
     [record] = [s for s in analyzer if "/state/analyzer.json" in json.dumps(s["Resource"])]
     assert actions(record) == ["s3:PutObject"]                          # nothing else on its one key
-    names = set(template.find_resources("AWS::CloudWatch::Alarm"))      # every alarm has an id the status knows
-    assert all(any(name.startswith(known) for known in ALARM_IDS) for name in names) and len(names) == len(ALARM_IDS)
+    names = {a["Properties"]["AlarmName"] for a in template.find_resources("AWS::CloudWatch::Alarm").values()}
+    assert names == set(alarm_names("Test-"))                           # every alarm "<stack>-<id>", asked for by name
 
 
 def test_CS6_the_status_timeouts_and_daily_hour_are_the_stacks(template):

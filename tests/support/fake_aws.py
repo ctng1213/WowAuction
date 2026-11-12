@@ -107,9 +107,14 @@ class _AlarmPages:
     def __init__(self, client: "FakeCloudWatch") -> None:
         self._client = client
 
-    def paginate(self, AlarmNamePrefix: str = "", AlarmTypes: list | None = None):   # noqa: N803  boto3's names
-        self._client.calls.append(("describe_alarms", AlarmNamePrefix, tuple(AlarmTypes or ())))
-        alarms = [a for a in self._client.alarms if a["AlarmName"].startswith(AlarmNamePrefix)]
+    def paginate(self, AlarmNames: list | None = None, AlarmNamePrefix: str = "",          # noqa: N803  boto3's names
+                 AlarmTypes: list | None = None):
+        """DescribeAlarms' pages, as the analyzer's role sees them: a request by name prefix is checked against
+        `alarm:*` and refused under its grant on `alarm:<stack>-*`; a request by names passes (measured 2026-11-12)."""
+        if AlarmNamePrefix or not AlarmNames:
+            raise ClientError("AccessDenied", "DescribeAlarms")
+        self._client.calls.append(("describe_alarms", tuple(AlarmNames), tuple(AlarmTypes or ())))
+        alarms = [a for a in self._client.alarms if a["AlarmName"] in AlarmNames]
         for start in range(0, len(alarms), 2):                         # pages of two, to test the paging
             yield {"MetricAlarms": alarms[start:start + 2]}
 
