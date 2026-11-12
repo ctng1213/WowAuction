@@ -21,7 +21,7 @@ from ahcloud.daily import DailyOutcome, run_daily
 from ahcloud.hourly import HourlyOutcome, run_hourly
 from ahcloud.ingest import key_time_ms, read_state as read_ingest_state
 from ahcloud.publish import PUBLISHED_SCHEMAS, pointer_key, read_latest
-from ahcloud.status import Alarm, PointerFacts, StatusInputs, alarm_id, build_status, to_json
+from ahcloud.status import Alarm, PointerFacts, StatusInputs, alarm_id, alarm_names, build_status, to_json
 from ahcloud.store import Store
 from ahsync.clock import SystemClock
 from ahsync.intel.contract import MarketIntelligence
@@ -164,7 +164,7 @@ def cloud_facts(env: Mapping[str, str], market: str, now_ms: int) -> dict:
         StatusInputs fields: alarms, errors, mismatch, refused.
     """
     prefix = env["ALARM_PREFIX"]
-    alarms = tuple(Alarm(found, state, since) for name, state, since in aws.alarm_states(prefix)
+    alarms = tuple(Alarm(found, state, since) for name, state, since in aws.alarm_states(alarm_names(prefix))
                    if (found := alarm_id(name, prefix)) is not None)
     functions = {"collector": env["COLLECTOR_FUNCTION"], "ingest": env["INGEST_FUNCTION"],
                  "analyzer": env["AWS_LAMBDA_FUNCTION_NAME"]}

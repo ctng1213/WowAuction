@@ -39,8 +39,8 @@ def lambda_world(monkeypatch, tmp_path, *snaps):
     monkeypatch.setattr(analyzer, "WORKDIR", tmp_path / "lambda-tmp")
     lines = []
     monkeypatch.setattr(analyzer.aws, "metric", lambda name, value, dims, now: lines.append(name))
-    alarms = [(f"WowAuctionMarket-{name}1A2B3C4D-x", "OK", C_MS) for name in ("CollectorErrors", "AnalyzerErrors")]
-    monkeypatch.setattr(analyzer.aws, "alarm_states", lambda prefix: alarms + [("Other-Alarm", "ALARM", C_MS)])
+    alarms = [(f"WowAuctionMarket-{name}", "OK", C_MS) for name in ("CollectorErrors", "AnalyzerErrors")]
+    monkeypatch.setattr(analyzer.aws, "alarm_states", lambda names: [a for a in alarms if a[0] in names])
     monkeypatch.setattr(analyzer.aws, "metric_sums", lambda queries, start, end: {key: 0 for key in queries})
     return data, intel, lines
 

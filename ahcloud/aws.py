@@ -144,19 +144,23 @@ def cloudwatch_client() -> Any:
     return boto3.client("cloudwatch", config=Config(**CLOUDWATCH_TIMEOUTS))
 
 
-def alarm_states(prefix: str, client: Any = None) -> list[tuple[str, str, int]]:
-    """The metric alarms whose names start with a prefix (the stack's), with their states (SEC21).
+def alarm_states(names: list[str], client: Any = None) -> list[tuple[str, str, int]]:
+    """The stack's metric alarms, asked for by name, with their states (SEC21).
+
+    By name, never by prefix: the role may describe only `alarm:<stack>-*`, and a prefix request is checked against
+    `alarm:*` and refused (LESSONS 2026-11-12).
 
     Args:
-        prefix: The alarm-name prefix, e.g. "WowAuctionMarket-".
+        names: The alarms' full names, e.g. "WowAuctionMarket-CollectorErrors" (at most 100).
         client: A boto3 cloudwatch client; None makes one.
 
     Returns:
-        (name, state, when it entered that state in UTC ms) per alarm, sorted by name.
+        (name, state, when it entered that state in UTC ms) per alarm found, sorted by name; a name with no alarm
+        is left out.
     """
     if client is None:
         client = cloudwatch_client()
-    pages = client.get_paginator("describe_alarms").paginate(AlarmNamePrefix=prefix, AlarmTypes=["MetricAlarm"])
+    pages = client.get_paginator("describe_alarms").paginate(AlarmNames=list(names), AlarmTypes=["MetricAlarm"])
     # StateTransitionedTimestamp is when the state last changed; StateUpdatedTimestamp also moves on other updates
     return sorted((a["AlarmName"], a["StateValue"],
                    int((a.get("StateTransitionedTimestamp") or a["StateUpdatedTimestamp"]).timestamp() * 1000))

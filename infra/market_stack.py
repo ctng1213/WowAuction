@@ -203,10 +203,22 @@ class MarketStack(Stack):
                                                     event=events.RuleTargetInput.from_object({"mode": "hourly"}))])
         return function, dead_letters
 
+    def _alarm_name(self, alarm_id: str) -> str:
+        """An alarm's fixed name, "<stack>-<id>", so the status can ask CloudWatch for it by name (SEC21: under the
+        grant on `alarm:<stack>-*` a request by prefix is refused, one by name passes).
+
+        Args:
+            alarm_id: Its id, one of `ahcloud.status.ALARM_IDS`.
+
+        Returns:
+            The name.
+        """
+        return f"{self.stack_name}-{alarm_id}"
+
     def _status_grants(self, function: lambda_.Function) -> None:
         """What the status needs from CloudWatch: the stack's alarm states and the last day's sums (SEC21).
 
-        DescribeAlarms is scoped to the alarms CloudFormation names after the stack; GetMetricData has no
+        DescribeAlarms is scoped to the stack's alarms, named `<stack>-<id>` and asked for by name; GetMetricData has no
         resource-level scoping, so it takes "*" (it only reads).
 
         Args:
@@ -246,7 +258,7 @@ class MarketStack(Stack):
         """
         action = cw_actions.SnsAction(self.alerts)
         errors = self.collector.metric_errors(period=Duration.minutes(15), statistic="Sum").create_alarm(
-            self, "CollectorErrors", threshold=1, evaluation_periods=1,
+            self, "CollectorErrors", alarm_name=self._alarm_name("CollectorErrors"), threshold=1, evaluation_periods=1,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
             treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
             alarm_description="The collector failed (FM67, FM68)")
@@ -254,30 +266,30 @@ class MarketStack(Stack):
                                     dimensions_map={"market": config.market}, period=Duration.hours(1),
                                     statistic="Sum")
         stale = written.create_alarm(
-            self, "NoNewSnapshot", threshold=1, evaluation_periods=3,
+            self, "NoNewSnapshot", alarm_name=self._alarm_name("NoNewSnapshot"), threshold=1, evaluation_periods=3,
             comparison_operator=cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
             treat_missing_data=cloudwatch.TreatMissingData.BREACHING,
             alarm_description="No new snapshot for 3 hours (FM68)")
         analyzer_errors = self.analyzer.metric_errors(period=Duration.hours(1), statistic="Sum").create_alarm(
-            self, "AnalyzerErrors", threshold=1, evaluation_periods=1,
+            self, "AnalyzerErrors", alarm_name=self._alarm_name("AnalyzerErrors"), threshold=1, evaluation_periods=1,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
             treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
             alarm_description="The analyzer failed (FM70, FM72)")
         dead = self.dead_letters.metric_approximate_number_of_messages_visible(
             period=Duration.minutes(15), statistic="Maximum").create_alarm(
-            self, "AnalyzerDeadLettersWaiting", threshold=1, evaluation_periods=1,
+            self, "AnalyzerDeadLettersWaiting", alarm_name=self._alarm_name("AnalyzerDeadLettersWaiting"), threshold=1, evaluation_periods=1,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
             treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
             alarm_description="An analyzer event failed twice and waits in the dead-letter queue (FM70)")
         # 27 one-hour periods: the daily run is due by 09:30 UTC and missing at 12:00 (FM79); the desktop's
         # own 36 h rule (S24) is separate.
         baselines = hourly_sum(config.market, "daily_published").create_alarm(
-            self, "NoDailyBaselines", threshold=1, evaluation_periods=27,
+            self, "NoDailyBaselines", alarm_name=self._alarm_name("NoDailyBaselines"), threshold=1, evaluation_periods=27,
             comparison_operator=cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
             treat_missing_data=cloudwatch.TreatMissingData.BREACHING,
             alarm_description="No daily baselines published for 27 hours (FM79)")
         slow = self.analyzer.metric_duration(period=Duration.minutes(15), statistic="Maximum").create_alarm(
-            self, "AnalyzerSlowRun", threshold=SLOW_RUN.to_milliseconds(), evaluation_periods=1,
+            self, "AnalyzerSlowRun", alarm_name=self._alarm_name("AnalyzerSlowRun"), threshold=SLOW_RUN.to_milliseconds(), evaluation_periods=1,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
             treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
             alarm_description="An analyzer run took over 12 minutes (timeout 15) (FM80)")
@@ -297,12 +309,12 @@ class MarketStack(Stack):
             The three alarms, each emailing on ALARM and on OK.
         """
         errors = self.ingest.metric_errors(period=Duration.hours(1), statistic="Sum").create_alarm(
-            self, "IngestErrors", threshold=1, evaluation_periods=1,
+            self, "IngestErrors", alarm_name=self._alarm_name("IngestErrors"), threshold=1, evaluation_periods=1,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
             treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
             alarm_description="An Ingest run failed; the next scheduled run retries it (FM85)")
         slow = self.ingest.metric_duration(period=Duration.minutes(15), statistic="Maximum").create_alarm(
-            self, "IngestSlowRun", threshold=SLOW_RUN.to_milliseconds(), evaluation_periods=1,
+            self, "IngestSlowRun", alarm_name=self._alarm_name("IngestSlowRun"), threshold=SLOW_RUN.to_milliseconds(), evaluation_periods=1,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
             treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
             alarm_description="An Ingest run took over 12 minutes (timeout 15) (FM80)")
@@ -311,7 +323,7 @@ class MarketStack(Stack):
                                 statistic="Maximum")
         # every Ingest run reports its lag, so an hour without the metric is an hour Ingest did not finish
         behind = lag.create_alarm(
-            self, "HistoryBehind", threshold=HISTORY_BEHIND_MINUTES, evaluation_periods=3,
+            self, "HistoryBehind", alarm_name=self._alarm_name("HistoryBehind"), threshold=HISTORY_BEHIND_MINUTES, evaluation_periods=3,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
             treat_missing_data=cloudwatch.TreatMissingData.BREACHING,
             alarm_description="History more than 3 hours behind the raw, for 3 hours (FM84)")
@@ -338,7 +350,7 @@ class MarketStack(Stack):
                                                          "daily": hourly_sum(config.market, "daily_published")},
                                           period=Duration.hours(1), label="summaries published")
         return total.create_alarm(
-            self, "NoMarketSummary", threshold=1, evaluation_periods=3,
+            self, "NoMarketSummary", alarm_name=self._alarm_name("NoMarketSummary"), threshold=1, evaluation_periods=3,
             comparison_operator=cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
             treat_missing_data=cloudwatch.TreatMissingData.BREACHING,
             alarm_description="No market summary published for 3 hours: snapshots may arrive while the analyzer stalls (FM77)")

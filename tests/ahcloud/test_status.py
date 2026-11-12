@@ -248,12 +248,14 @@ def test_CS11_the_page_only_draws():
     assert "undefined" not in first and "NaN" not in first and "None" not in first
 
 
-@pytest.mark.parametrize("name, found", [("WowAuctionMarket-CollectorErrors0693A698-T47Th1GLS2o6", "CollectorErrors"),
-                                         ("WowAuctionMarket-IngestSlowRunF005933A-Uf7vWU6fUQnY", "IngestSlowRun"),
-                                         ("OtherStack-CollectorErrors1-X", None),
-                                         ("WowAuctionMarket-SomethingElse-X", None)])
+@pytest.mark.parametrize("name, found", [("WowAuctionMarket-CollectorErrors", "CollectorErrors"),
+                                         ("WowAuctionMarket-IngestSlowRun", "IngestSlowRun"),
+                                         ("WowAuctionMarket-CollectorErrors0693A698-T47Th1GLS2o6", None),  # the old names
+                                         ("OtherStack-CollectorErrors", None),
+                                         ("WowAuctionMarket-SomethingElse", None)])
 def test_SEC21_alarm_ids_come_from_the_stacks_names(name, found):
     assert status.alarm_id(name, "WowAuctionMarket-") == found
+    assert status.alarm_names("WowAuctionMarket-")[:2] == ["WowAuctionMarket-CollectorErrors", "WowAuctionMarket-NoNewSnapshot"]
 
 
 @pytest.mark.parametrize("ms, text", [(0, "0 min"), (12 * MIN + 59_999, "12 min"), (60 * MIN, "1 h"),
