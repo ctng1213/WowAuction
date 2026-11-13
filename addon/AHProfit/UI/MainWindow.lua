@@ -46,7 +46,7 @@ MainWindow.COLUMNS = {
               { "Status", "status", 150, "LEFT" } },
   pfWeek = { { "", "action", 40, "LEFT" }, { "Item", "item", nil, "LEFT" }, { "Plan", "plan", 154, "LEFT" },
              { "Net", "net", 56, "RIGHT" }, { "Adjusted", "adjusted", 84, "RIGHT" }, { "Status", "status", 150, "LEFT" } },
-  disenchant = { { "Item", "item", nil, "LEFT" }, { "ilvl", "ilvl", 30, "RIGHT" }, { "Skill", "skill", 34, "RIGHT" },
+  disenchant = { { "Item", "item", nil, "LEFT" }, { "ilvl", "ilvl", 30, "RIGHT" },
                  { "Buy", "buy", 52, "RIGHT" }, { "EV", "ev", 56, "RIGHT" }, { "Profit", "profit", 70, "RIGHT" },
                  { "Chance", "chance", 46, "RIGHT" }, { "Volume", "volume", 52, "RIGHT" } },
   inventory = { { "Item", "item", nil, "LEFT" }, { "Where", "where", 44, "LEFT" }, { "Qty", "qty", 28, "RIGHT" },

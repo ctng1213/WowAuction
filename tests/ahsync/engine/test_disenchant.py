@@ -47,7 +47,7 @@ def test_a_material_without_a_sell_value_counts_as_zero():
 
 def test_outcomes_from_the_real_table():
     skill, outcomes = de.outcomes_for(DE_TABLE, UNCOMMON, 25, WEAPON)
-    assert skill == 25
+    assert skill == 1                       # Forever: no skill brackets (R34)
     assert outcomes[0][1] == 0.75           # weapons are mostly essence
     assert de.outcomes_for(DE_TABLE, 1, 25, ARMOR) is None
 

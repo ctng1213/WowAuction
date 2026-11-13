@@ -33,7 +33,6 @@ ViewModel.COLUMN_HELP = {
   Volume = "Units the market sells per day (last 7 days)",
   Risk = "Gold this action spends ÷ all your gold. Amber above 25%",
   ilvl = "Item level: sets the disenchant results",
-  Skill = "Enchanting skill needed to disenchant it",
   Buy = "Cheapest buyout on the AH: your latest scan's, else AHSync's",
   EV = "Expected value of the mats: average results × their sell value",
   Profit = "EV − buy price",
@@ -571,7 +570,7 @@ end
 
 -- ------------------------------------------------------------------ Disenchant tab (A23)
 
---- The Disenchant tab's rows: always shown, each with the skill it needs (A23).
+--- The Disenchant tab's rows: always shown; any Enchanting skill disenchants any item on Forever (A23, R34).
 ---@param targets table[]   Options.Disenchant
 ---@param lookOf function   key -> look
 ---@param bestSkill number|nil  Your best Enchanting skill; nil without an enchanter
@@ -585,19 +584,15 @@ function ViewModel.DisenchantRows(targets, lookOf, bestSkill)
       local tenths = ViewModel.RoundHalfUp(m.units * 10)
       if tenths > 0 then parts[#parts + 1] = math.floor(tenths / 10) .. "." .. tenths % 10 .. " " .. lookOf(m.key).name end
     end
-    if bestSkill == nil then
-      parts[#parts + 1] = "no enchanter yet"
-    elseif t.skill > bestSkill then
-      parts[#parts + 1] = "needs Enchanting " .. t.skill .. " (best " .. bestSkill .. ")"
-    end
+    if bestSkill == nil then parts[#parts + 1] = "no enchanter yet" end
     rows[#rows + 1] = {
-      key = t.key, item = look.name, quality = look.quality, ilvl = tostring(t.ilvl), skill = tostring(t.skill),
+      key = t.key, item = look.name, quality = look.quality, ilvl = tostring(t.ilvl),
       buy = ViewModel.Money(t.buy), ev = ViewModel.Money(t.ev), profit = ViewModel.SignedMoney(t.profit),
       netColor = "pos", kind = "de",
       chance = t.matChance and (ViewModel.RoundHalfUp(t.matChance * 100) .. "%") or "—",   -- the mats sell (SPEC §3.5)
       dot = t.matChance and ViewModel.Level(mat.conf) or nil,
       volume = mat.soldPerDay and (ViewModel.RoundHalfUp(mat.soldPerDay) .. "/day") or "—",
-      note = table.concat(parts, " · "), muted = bestSkill ~= nil and t.skill > bestSkill,
+      note = table.concat(parts, " · "),
     }
   end
   return rows
@@ -608,8 +603,8 @@ end
 ---@param bestSkill number|nil
 ---@return string
 function ViewModel.DisenchantFooter(rows, bestSkill)
-  local who = bestSkill and ("best Enchanting " .. bestSkill) or "no enchanter yet: what one could disenchant"
-  return #rows .. (#rows == 1 and " target" or " targets") .. " · " .. who
+  local count = #rows .. (#rows == 1 and " target" or " targets")
+  return bestSkill and count or (count .. " · no enchanter yet: what one could disenchant")
 end
 
 -- ------------------------------------------------------------------ AH side panel (SPEC §4.3, UI7, A24)

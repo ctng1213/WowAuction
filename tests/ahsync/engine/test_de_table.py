@@ -29,3 +29,10 @@ def test_bands_do_not_overlap():
 def test_the_addon_data_file_is_generated_from_this_table():
     committed = (ROOT / "addon" / "AHProfit" / "Data" / "Disenchant.lua").read_text(encoding="utf-8")
     assert committed.replace("\r\n", "\n") == gen.render(DE_TABLE), "run python tools/gen_disenchant_data.py"
+
+
+def test_R34_forever_has_no_disenchant_skill_brackets():
+    from ahsync.engine import disenchant
+    skill, _ = disenchant.outcomes_for(DE_TABLE, UNCOMMON, 40, "armor")   # Classic gated ilvl 36-40 at Enchanting 100
+    assert skill == 1 and disenchant.can_disenchant(skill, 60)           # De's Enchanting 60 is enough
+    assert {row[4] for row in DE_TABLE} == {1}                            # every band, every quality
