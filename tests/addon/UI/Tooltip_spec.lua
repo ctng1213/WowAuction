@@ -174,6 +174,22 @@ describe("Tooltip", function()
     Stubs.ITEM_NAMES[6585], Stubs.ITEM_COLORS[6585], Stubs.ITEM_CLASSES[6585], Stubs.ITEM_BIND[6585] = "Scouting Gloves", nil, nil, nil
   end)
 
+  it("TT44 Disenchant Value shows for a bound item without market data when you can disenchant it", function()
+    Boot()
+    Stubs.ITEM_NAMES[6585], Stubs.ITEM_COLORS[6585] = "Scouting Gloves", "1eff00"
+    Stubs.ITEM_CLASSES[6585], Stubs.ITEM_BIND[6585] = 4, 1                -- Bind on Pickup: never listed, no row
+    local dust = "300,20,30,300,300,,,0,,,1,50,,,20,285,0,900;;"
+    AHProfitMarket.markets[UIWorld.MARKET].I[10940] = dust
+    AHProfitMarket.checksum = "2:" .. (#AHProfitMarket.markets[UIWorld.MARKET].I[2589] + #dust)
+    AHProfit.Market.Reset()
+    assert_eq(Texts(6585), { "AHProfit | data 2 h old", "no market data yet | " })
+    AHProfitDB.professions["Amaya-Grommash"] = { Enchanting = { skill = 100, max = 150 } }
+    assert_eq(Texts(6585), { "AHProfit | data 2 h old", "no market data yet | ", "---",
+      "Disenchant Value  5s 63c", "   75% · 2.5 Strange Dust @ 3s = 5s 63c",                -- 0.75 × 2.5 × 300 = 562.5c
+      "   20% · 1.5 Item 10939 · no price", "   5% · 1 Item 10978 · no price" })   -- no AH price: no comparison
+    Stubs.ITEM_NAMES[6585], Stubs.ITEM_COLORS[6585], Stubs.ITEM_CLASSES[6585], Stubs.ITEM_BIND[6585] = "Scouting Gloves", nil, nil, nil
+  end)
+
   it("the plan's action for this character comes before the addon's own option", function()
     Boot()
     UIWorld.Plan({ { id = "p", kind = "post", key = 2589, qty = 20, price = 55, at = NOW + 26 * HOUR, net = 1046, chance = 92,
