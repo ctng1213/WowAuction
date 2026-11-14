@@ -1,7 +1,7 @@
 """The database's schema version and the steps that bring an older database up to it (SPEC §3.2 "Format version")."""
 from __future__ import annotations
 
-SCHEMA_VERSION = 31
+SCHEMA_VERSION = 32
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
 # that a migrated database has exactly schema.sql's tables and indexes).
@@ -306,5 +306,11 @@ MIGRATIONS: dict[int, str] = {
             market TEXT NOT NULL, src TEXT NOT NULL, gap_end INTEGER NOT NULL, gap_start INTEGER NOT NULL, keys TEXT NOT NULL,
             PRIMARY KEY(market, src, gap_end)
         ) WITHOUT ROWID
+    """,
+    # 32: what each action's expected net takes off for its units, so the addon's Do line can show Paid and Profit
+    # (SPEC §3.5 paid, §4.3, EX22). NULL in older rows reads as 0; the next plan writes it.
+    32: """
+        ALTER TABLE actions ADD COLUMN paid INTEGER;
+        ALTER TABLE plan_new ADD COLUMN paid INTEGER
     """,
 }

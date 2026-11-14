@@ -14,6 +14,9 @@ Written for: the Opus session that runs this batch in Claude Code on this repo. 
 
 Decisions made during execution are appended here.
 
+8. **DL1: `paid` is an explicit `PlanAction` field, not `expected − net`.** A bought disenchant's own step and a hold carry net 0 by design (the chain's net sits on the buy), so `expected − net` would call the mats' whole value paid. Each constructor sets it where it takes the cost off; actions whose net is elsewhere carry 0.
+9. **DL1 finding, acted on in DL3: a crafted product's post says "Mats", not "Paid".** Its `paid` is `expected − profit`, the mats valued as the craft plan values them, owned mats at their market value (w1: 12,133 c against a 7,440 c ore buy). That is what the craft gives up, not gold spent, so its line 2 reads "Mats 1g 21s 33c · Profit …", the CRAFT line's word.
+
 ## 2. Working rules
 
 CLAUDE.md's. One branch (`ctn-RCP-000-do-line-wording`), one commit per milestone, each verified with `tools/verify.ps1` and `tools/visual.py`; one PR at the end. A UI change updates the goldens in its commit, the diff reviewed against `docs/mockups/do-line.html` and `docs/mockups/addon.html`. Rows TT8, TT9, TT11–TT13, TT15, TT21 and A21 describe today's Do texts: their expected texts are updated in the milestone that changes them (DL3), with the new IDs' tests.

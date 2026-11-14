@@ -500,7 +500,7 @@ describe("MainWindow", function()
   it("A23 the Disenchant tab is always there, even with no enchanter on the account", function()
     Stubs.Reset()
     local gloves, dust = "800,1,30,1100,1100,,,0,,,1,50,,,1,,0,500;;", "600,20,30,600,600,,,0,2100,,90,80,,,20,600,0,800;;"
-    _G.AHProfitMarket = { schemaVersion = 1, exportVersion = 6, generatedAt = NOW, charMarkets = {},
+    _G.AHProfitMarket = { schemaVersion = 1, exportVersion = 7, generatedAt = NOW, charMarkets = {},
       markets = { [UIWorld.MARKET] = { observationsUntil = NOW, curveHour = 0, I = { [6585] = gloves, [10940] = dust }, C = {},
                                        D = { [6585] = "1,2,18,a" } } } }
     AHProfitMarket.checksum = "3:" .. (#gloves + #dust + #"1,2,18,a")
@@ -652,7 +652,7 @@ describe("MainWindow", function()
     Stubs.Reset()
     UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48) }, NOW - UIWorld.HOUR)
     UIWorld.Plan({})
-    AHProfitMarket.exportVersion, AHProfitPlan.exportVersion = 7, 7
+    AHProfitMarket.exportVersion, AHProfitPlan.exportVersion = 8, 8
     Stubs.Login()
     Stubs.Slash("/ahp")
     assert_eq(AHProfit.MainWindow.Frames().footer:GetText(), "This addon is older than AHSync's files: run tools/deploy.py, then /reload")

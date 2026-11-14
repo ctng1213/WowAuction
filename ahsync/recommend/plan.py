@@ -305,7 +305,7 @@ def plan_rows(actions: list[PlanAction], market: str, now_ms: int,
             None for your stock's rest.
 
     Returns:
-        Rows in `actions` column order, cand_id last.
+        Rows in `actions` column order, cand_id then paid (copper, half up; None for 0, EX22) last.
     """
     rows, first_of_chain = [], {}
     week = week_start_ms(now_ms)
@@ -318,5 +318,5 @@ def plan_rows(actions: list[PlanAction], market: str, now_ms: int,
                      0, None, parent, a.window_start_ms, a.window_end_ms,
                      a.net if a.kind == "post" else None, a.window_start_ms if a.kind == "post" else None, None, week,
                      a.peak_ms, a.source, a.duration_h if a.kind == "post" else None, a.to_char,
-                     cand_ids[n] if n < len(cand_ids) else None))
+                     cand_ids[n] if n < len(cand_ids) else None, round_half_up(a.paid) if a.paid else None))
     return rows

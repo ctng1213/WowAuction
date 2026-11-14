@@ -33,8 +33,8 @@ class RecommendStore:
         self.conn.executemany(
             "INSERT OR REPLACE INTO plan_new(action_id, run_at, slot_ms, char_id, kind, key, qty, price, expected_net, "
             "conf, status, done_qty, done_at, parent_id, window_start_ms, window_end_ms, anchor_net, anchor_window_ms, "
-            "replaces_id, week_start_ms, peak_ms, source, duration_h, to_char, cand_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+            "replaces_id, week_start_ms, peak_ms, source, duration_h, to_char, cand_id, paid) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
 
     def stage_alternatives(self, market: str, rows: list[tuple[str, str, str, str, str]]) -> None:
         """Write a market's unfunded candidates into the staging table, published with the plan (SPEC §3.4D, M9).
@@ -127,15 +127,15 @@ class RecommendStore:
 
         Returns:
             (action_id, char_id, kind, key, qty, price, slot_ms, expected_net, parent_id, window_end_ms, status,
-            conf = the planned chance to sell, peak_ms, source, duration_h, to_char = a mail's recipient), pending and
-            late only, by time then id.
+            conf = the planned chance to sell, peak_ms, source, duration_h, to_char = a mail's recipient, paid copper
+            or None = 0), pending and late only, by time then id.
         """
         if not char_ids:
             return []
         marks = ",".join("?" * len(char_ids))
         return [tuple(r) for r in self.conn.execute(
             f"SELECT action_id, char_id, kind, key, qty, price, slot_ms, expected_net, parent_id, window_end_ms, status, "
-            f"conf, peak_ms, source, duration_h, to_char FROM actions WHERE status IN ('pending', 'late') "
+            f"conf, peak_ms, source, duration_h, to_char, paid FROM actions WHERE status IN ('pending', 'late') "
             f"AND char_id IN ({marks}) "
             f"ORDER BY slot_ms, action_id",
             tuple(char_ids))]
@@ -186,7 +186,8 @@ class RecommendStore:
         self.conn.execute(
             "INSERT OR REPLACE INTO actions(action_id, run_at, slot_ms, char_id, kind, key, qty, price, expected_net, "
             "conf, status, done_qty, done_at, parent_id, window_start_ms, window_end_ms, anchor_net, anchor_window_ms, "
-            "replaces_id, week_start_ms, duration_h) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "replaces_id, week_start_ms, duration_h, paid) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             row)
 
     def history_actions(self, char_ids: list[str], from_ms: int, to_ms: int) -> list[tuple]:

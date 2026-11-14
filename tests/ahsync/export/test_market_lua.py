@@ -183,4 +183,4 @@ def test_the_tooltips_market_lines_travel_after_sales_days():
     assert gear[26] == "" and gear[30] == "0"                                    # no rates; not a commodity
     assert item_text(LINEN_INTEL).split(";")[0].endswith(",7")                   # trailing empty fields are left out
     text = market_lua.market_lua([intel(item)], {}, {}, BUILT, coverage30={M: 33})
-    assert "coverage30 = 33 }," in text and "exportVersion = 6," in text
+    assert "coverage30 = 33 }," in text and "exportVersion = 7," in text

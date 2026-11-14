@@ -123,6 +123,8 @@ class PlanAction:
     chain: str | None = None      # links a buy to its follow-up post, e.g. "flip:2589" (SPEC §3.4 expected net)
     source: str | None = None     # buys: "vendor" or "ah" (D41)
     to_char: str | None = None    # mail: the character it goes to (C22); char_id is the sender
+    paid: float = 0.0             # what net takes off for the units, float copper; 0 for an action whose chain's net
+                                  # sits on another action (SPEC §3.5 paid, EX22)
 
 
 @dataclass(frozen=True)
@@ -606,10 +608,10 @@ def _action(kind: str, char_id: str, opt: PostOption | None, totals: list, f: Se
         actor = f.de_char if kind == "de" else char_id
         price = f.vendor_sell if kind == "vendor" else None
         return PlanAction(kind, actor, f.key, qty, price, now_ms, None, None, None, None, expected,
-                          net if kind != "hold" else 0.0)
+                          net if kind != "hold" else 0.0, paid=f.paid_each * qty if kind != "hold" else 0.0)
     start, end, best = opt.window if opt.window else (None, None, None)
     return PlanAction("post", char_id, f.key, qty, opt.price, opt.at_ms, start, end, best, sold / qty, expected, net,
-                      opt.duration_h)
+                      opt.duration_h, paid=f.paid_each * qty)
 
 
 def sell_plan(lots: Sequence[Lot], facts: dict[int, SellFacts], now_ms: int, s: PlanSettings,

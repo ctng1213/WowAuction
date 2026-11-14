@@ -256,7 +256,8 @@ CREATE TABLE IF NOT EXISTS actions(
     replaces_id TEXT, week_start_ms INTEGER, peak_ms INTEGER, source TEXT,  -- source: buys, 'vendor' | 'ah' (D41)
     duration_h INTEGER,                   -- posts: the auction duration, hours (EX9)
     to_char TEXT,                         -- mail: the recipient; char_id is the sender (C22)
-    cand_id TEXT                          -- the funded candidate whose opportunity made it; NULL for your stock's rest (M14)
+    cand_id TEXT,                         -- the funded candidate whose opportunity made it; NULL for your stock's rest (M14)
+    paid INTEGER                          -- what expected_net takes off for the units, copper; NULL = 0 (EX22)
 );
 
 -- Staging twin of actions for the atomic swap after a full refresh (§3.1.1, §5.2).
@@ -265,7 +266,7 @@ CREATE TABLE IF NOT EXISTS plan_new(
     qty INTEGER, price INTEGER, expected_net REAL, conf REAL, status TEXT, done_qty INTEGER, done_at INTEGER,
     parent_id TEXT, window_start_ms INTEGER, window_end_ms INTEGER, anchor_net REAL, anchor_window_ms INTEGER,
     replaces_id TEXT, week_start_ms INTEGER, peak_ms INTEGER, source TEXT, duration_h INTEGER, to_char TEXT,
-    cand_id TEXT
+    cand_id TEXT, paid INTEGER
 );
 
 -- Unfunded portfolio candidates and the reason they were left out (SPEC §3.4D.6), swapped in with the plan.
