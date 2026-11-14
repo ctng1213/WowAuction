@@ -39,6 +39,7 @@ from ahsync.web.setup_app import SetupApp
 from ahsync_app import autostart, tray
 from ahsync_app.app_info import app_payload
 from ahsync_app.platform.base import AppDirs, Platform
+from ahsync.engine import updates
 from ahsync.engine.updates import UpdateState, newer, ready, tag_version
 from ahsync_app.tray import TrayState
 from ahsync_app.window import Webview, Window, WindowUnavailable
@@ -60,6 +61,17 @@ class Tray(Protocol):
 
     def refresh(self) -> None:
         """Rebuild the menu when the state changed."""
+
+    def notify(self, title: str, message: str) -> bool:
+        """Show a desktop notification from the icon (FM88).
+
+        Args:
+            title: The notification's title.
+            message: Its text.
+
+        Returns:
+            True when shown; False when the icon can't.
+        """
 
     def stop(self) -> None:
         """Remove the icon; ends run()'s loop."""
@@ -234,6 +246,7 @@ class Session:
         self.stop = threading.Event()
         self.window = Window(world.webview(dirs.data_dir / "webview") if world.webview else None, world.opener)
         self.tray: Tray | None = None
+        self.blocked_reason: str | None = None   # why the last Restart to update was refused (FM88)
         self.worker: threading.Thread | None = None
         self.setup = not dirs.config_file.exists()      # only a missing config: an existing one is never rewritten (DR5)
         self.config = None if self.setup else load_settings(dirs.config_file, world)
@@ -428,9 +441,10 @@ class Session:
             db: The dashboard's database, to record the blocker for the Update line; None opens the app's own.
 
         Returns:
-            True when the stop was asked; False when blocked.
+            True when the stop was asked; False when blocked (`self.blocked_reason` then says why, FM88).
         """
         reason = self.world.platform.update_blocker(self.world.exe)
+        self.blocked_reason = reason
         if reason is not None:
             self.record_blocker(db, reason)
             return False
@@ -459,7 +473,16 @@ class Session:
         finally:
             own.close()
 
-    def restart_from_dashboard(self, db: Database, config: Config) -> bool:
+    def say_blocked(self) -> None:
+        """A blocked Restart to update from the tray says why where it was pressed (FM88): a notification with what to
+        do, and the Status card, whose Update line says the same.
+        """
+        message = updates.blocker_message(self.blocked_reason or "")
+        if self.tray is not None and hasattr(self.tray, "notify"):
+            self.tray.notify("AHSync can't update yet", message)
+        self.window.open(f"{self.home()}/#status")
+
+    def restart_from_dashboard(self, db: Database, config: Config) -> bool | str:
         """POST /api/update/restart: stop and install, only when a verified update waits that may install itself.
 
         Args:
@@ -467,14 +490,16 @@ class Session:
             config: The running settings.
 
         Returns:
-            True when the stop was asked; False when nothing may install or the install is blocked (FM87): the
-            endpoint answers 409.
+            True when the stop was asked; False when nothing may install (409 no_update); the blocker's reason when
+            the install is blocked (FM87), so the endpoint's 409 can say why (FM88).
         """
         platform = self.world.platform
         if installer.waiting_install(db, version.VERSION, config, self.dirs.data_dir / UPDATES_DIR,
                                      platform.update_asset_name) is None:
             return False
-        return self.restart_to_update(db)
+        if self.restart_to_update(db):
+            return True
+        return self.blocked_reason or False
 
     def dashboard_ready(self, app: object) -> None:
         """Keep run()'s dashboard: the tray reads the update state through it and toggles through its handlers.
@@ -558,7 +583,8 @@ class Session:
         elif action == tray.DOWNLOAD and update.url:
             self.world.opener(update.url)        # the release page, in the browser (SPEC §3.7.1)
         elif action == tray.RESTART_UPDATE:
-            self.restart_to_update()
+            if not self.restart_to_update():
+                self.say_blocked()               # FM88: the click says why
         elif self.dashboard is None:
             log.info("tray item %s waits until AHSync runs", action)
         elif action == tray.AUTO_UPDATE:

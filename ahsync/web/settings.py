@@ -11,6 +11,7 @@ from dataclasses import replace
 
 from ahsync.app.update_check import write_meta
 from ahsync.config import CHANNELS, ConfigError, write_setting
+from ahsync.engine import updates
 from ahsync.engine.app_view import BAD_LOCATION_TEXT
 from ahsync.engine.mcp_view import NO_CLAUDE, ClaudeConfig, McpFacts, mcp_card
 from ahsync.web.responses import Response, body_field, json_response
@@ -82,12 +83,16 @@ class SettingsEndpoints:
         """Restart to update from the Status card (SPEC §3.7.9; SEC15): stop, and the shell installs on the way out.
 
         Returns:
-            200 {"restarting": true} once the stop is asked; 409 {"error": "no_update"} when no verified update
-            waits that may install itself; 404 without the app shell.
+            200 {"restarting": true} once the stop is asked; 409 {"error": <the blocker>, "message": what to do} when
+            the install can't run now (FM88); 409 {"error": "no_update"} when no verified update waits that may
+            install itself; 404 without the app shell.
         """
         if self.app_hooks is None:
             return json_response(404, {"error": "not_found"})
-        if not self.app_hooks.restart(self.db, self.config):
+        answer = self.app_hooks.restart(self.db, self.config)
+        if isinstance(answer, str):
+            return json_response(409, {"error": answer, "message": updates.blocker_message(answer)})
+        if not answer:
             return json_response(409, {"error": "no_update"})
         log.info("restart to update asked from the dashboard")
         return json_response(200, {"restarting": True})

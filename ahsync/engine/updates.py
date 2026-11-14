@@ -266,3 +266,17 @@ def not_checked(state: UpdateState, offset_ms: int) -> dict:
     since = weekday_time(state.failed_since_ms or state.checked_ms or 0, offset_ms)
     what = "offline" if state.failure == OFFLINE else "GitHub unavailable"
     return line(f"not checked: {what} since {since}", "muted")
+
+
+def blocker_message(reason: str) -> str:
+    """What to do about an install that can't run now, for the place Restart to update was pressed (FM88).
+
+    Args:
+        reason: The platform's update_blocker() (BRIDGE_IN_USE, or a reason a later build adds).
+
+    Returns:
+        One sentence, e.g. "Quit Claude Desktop (it runs the AI assistant bridge), then press Restart to update."
+    """
+    if reason == BRIDGE_IN_USE:
+        return "Quit Claude Desktop (it runs the AI assistant bridge), then press Restart to update."
+    return f"The update can't install right now ({reason}). Try Restart to update again later."

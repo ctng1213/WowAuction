@@ -521,6 +521,10 @@ class FakeTray:
     def refresh(self) -> None:
         pass
 
+    def notify(self, title: str, message: str) -> bool:
+        self.events.append(f"notify: {title}: {message}")
+        return True
+
     def stop(self) -> None:
         self.events.append("stop")
         self.stopped.set()
@@ -952,7 +956,7 @@ def test_FM87_restart_to_update_keeps_ahsync_running_until_claude_is_quit(tmp_pa
     app = FakeApp(tmp_path, Bridged(tmp_path), until=restart_twice)
     app.configure(tmp_path / "wow")
     assert shell.start(True, app.world()) == 0
-    assert answers == [False, False, True, True]
+    assert answers == ["bridge_in_use", False, True, True]          # FM88: the dashboard's answer names the blocker
     assert app.platform.applied == [("AHSync-0.4.0-windows-x64-setup.exe", "AHSync.exe", True)]
 
 
@@ -978,3 +982,34 @@ def test_DR32_the_window_opens_on_the_loading_page_and_loads_the_dashboard_once_
     view = FakeWebview(script)
     assert shell.start(False, windowed(app, view)) == 0
     view.check()
+
+
+def test_FM88_a_blocked_restart_says_why_from_the_tray_and_the_status_card(tmp_path, monkeypatch):
+    monkeypatch.setattr(shell.version, "VERSION", "0.3.1")
+    seen: list = []
+
+    def press_restart(data: Path) -> bool:
+        """0.4.0 waits while Claude runs the bridge; Restart to update from the Status card, then twice from the tray."""
+        if not seen:
+            offer_update(data)
+            db = Database.open(data / "ahsync.db", FakeClock().now_ms(), None)
+            try:
+                seen.append(app.hooks[0].restart(db, Config()))                # the Status card's POST
+            finally:
+                db.close()
+            session = app.hooks[0].restart.__self__
+            session.tray = FakeTray(lambda: None, session.act, lambda: 0)
+            session.act(shell.tray.RESTART_UPDATE)
+            session.act(shell.tray.RESTART_UPDATE)
+            seen.append(list(session.tray.events))
+            seen.append(list(app.opened))
+        return True                                                              # done: run() returns
+
+    app = FakeApp(tmp_path, Bridged(tmp_path), until=press_restart)
+    app.configure(tmp_path / "wow")
+    assert shell.start(True, app.world()) == 0
+    note = "notify: AHSync can't update yet: Quit Claude Desktop (it runs the AI assistant bridge), then press Restart to update."
+    assert seen[0] == "bridge_in_use"                                           # the endpoint's 409 names it
+    assert seen[1] == [note, note]                                              # each tray click says why
+    assert len(seen[2]) == 2 and all(url.endswith("/#status") for url in seen[2])   # and opens the Status card
+    assert app.platform.applied == []                                           # nothing installed, AHSync kept

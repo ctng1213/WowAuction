@@ -88,7 +88,7 @@ class AppHooks:
     dashboard_ready: Callable[[object], None] = lambda app: None   # gets the DashboardApp, for the tray's toggles
     can_replace: Callable[[], bool] = lambda: True                 # whether the app may replace itself (FM54, M27)
     forget_previous: Callable[[], None] = lambda: None             # cleanup after an update that worked (M27)
-    restart: Callable[[Database, Config], bool] = lambda db, config: False   # Restart to update: True once stopping
+    restart: Callable[[Database, Config], bool | str] = lambda db, config: False   # True once stopping; a blocker (FM88)
     update_checks: ManualCheck = field(default_factory=ManualCheck)  # Check for updates in the tray (DR34)
     mcp_command: Callable[[Path], tuple[str, ...]] | None = None    # data dir -> the bridge Claude launches (§3.8.1)
 

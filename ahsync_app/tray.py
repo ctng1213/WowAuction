@@ -263,6 +263,26 @@ class PystrayIcon:
         if stopping:
             self.gui(icon.stop)        # queued on macOS, so it can't be lost before NSApp.run() starts (FM61)
 
+    def notify(self, title: str, message: str) -> bool:
+        """Show a desktop notification from the icon (FM88): Windows shows it as a toast from the tray.
+
+        Args:
+            title: The notification's title.
+            message: Its text.
+
+        Returns:
+            True when shown; False without an icon yet or where pystray's backend has no notifications (logged).
+        """
+        icon = self.icon
+        if icon is None:
+            return False
+        try:
+            icon.notify(message, title)
+        except Exception as error:          # NotImplementedError on some backends; never break the tray's click
+            log.info("no tray notification: %s", type(error).__name__)
+            return False
+        return True
+
     def refresh(self) -> None:
         """Rebuild the menu and the hover text when the state changed (called each shell tick)."""
         icon = self.icon                   # stop() on the worker may clear it meanwhile

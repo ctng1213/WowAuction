@@ -1073,6 +1073,13 @@ def test_SEC15_restart_to_update_stops_only_with_a_verified_update_and_a_good_wr
     assert stops == [] and "tok-123" not in caplog.text                                  # nothing stopped
     reply = app.handle("POST", restart, write_headers(), b"{}")
     assert (reply.status, json.loads(reply.body), stops) == (200, {"restarting": True}, [True])
+    blocked = DashboardApp(db, Config(markets=(M,)), FakeClock(), refreshes, token="tok-123", port=8765,
+                           config_path=tmp_path / "config.toml",
+                           app_hooks=AppHooks(lambda _db, _config: {}, lambda e: ("set", e),
+                                              restart=lambda _db, _config: "bridge_in_use"))
+    reply = blocked.handle("POST", restart, write_headers(), b"{}")                       # FM88: the click says why
+    assert (reply.status, json.loads(reply.body)) == (409, {"error": "bridge_in_use",
+                                                            "message": "Quit Claude Desktop (it runs the AI assistant bridge), then press Restart to update."})
     write_meta(db, {"cant_replace": "1"})                                                # FM54: it can't install itself
     assert app.handle("POST", restart, write_headers(), b"{}").status == 409
     no_shell = DashboardApp(db, Config(markets=(M,)), FakeClock(), refreshes, token="tok-123", port=8765)
