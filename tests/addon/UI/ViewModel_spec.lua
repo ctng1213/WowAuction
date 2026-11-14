@@ -173,14 +173,14 @@ describe("ViewModel", function()
                      mats = { { key = 10940, units = 1.875 }, { key = 10939, units = 0.3 }, { key = 10978, units = 0.04 } } }
     local row = VM.DisenchantRows({ target }, Look, nil)[1]
     assert_eq({ row.ilvl, row.skill, row.buy, row.ev, row.profit, row.chance, row.dot, row.volume },
-              { "18", "1", "8s", "14s 25c", "+6s 25c", "80%", "high", "210/day" })
+              { "18", nil, "8s", "14s 25c", "+6s 25c", "80%", "high", "210/day" })
     assert_eq(row.note, "1.9 Strange Dust · 0.3 Greater Magic Essence · no enchanter yet")
     assert_eq(VM.DisenchantRows({ target }, Look, 150)[1].note, "1.9 Strange Dust · 0.3 Greater Magic Essence")
-    target.skill = 225
-    local high = VM.DisenchantRows({ target }, Look, 150)[1]
-    assert_eq({ high.muted, high.note:match("needs.*$") }, { true, "needs Enchanting 225 (best 150)" })
+    target.skill = 225                                   -- a skill in the data never gates or greys a row (R34)
+    local high = VM.DisenchantRows({ target }, Look, 1)[1]
+    assert_eq({ high.muted, high.note }, { nil, "1.9 Strange Dust · 0.3 Greater Magic Essence" })
     assert_eq({ VM.DisenchantFooter({ row }, nil), VM.DisenchantFooter({}, 150) },
-              { "1 target · no enchanter yet: what one could disenchant", "0 targets · best Enchanting 150" })
+              { "1 target · no enchanter yet: what one could disenchant", "0 targets" })
     LOOKS[6585], LOOKS[10940], LOOKS[10939], LOOKS[10978] = nil, nil, nil, nil
   end)
 

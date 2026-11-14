@@ -511,7 +511,7 @@ describe("MainWindow", function()
     AHProfit.MainWindow.ShowTab("disenchant")
     local row = FirstRow("disenchant")
     assert_eq({ row.item, row.skill, row.buy, row.chance:match("^%d+%%") },
-              { "Scouting Gloves", "1", AHProfit.ViewModel.WithCoins("8s"), "80%" })
+              { "Scouting Gloves", nil, AHProfit.ViewModel.WithCoins("8s"), "80%" })   -- no Skill column (R34)
     assert_eq(ui.footer:GetText(), "1 target · no enchanter yet: what one could disenchant")
   end)
 

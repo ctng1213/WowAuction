@@ -294,7 +294,10 @@ function Tooltip.Lines(key, nowMs, bound)
   if not dataMs then return nil end
   local age = VM.Age(dataMs, nowMs)
   local item = Market.Item(key)
-  if not item then return TV.Lines({ age = age, noData = true }) end
+  if not item then   -- a bound item is never listed, yet its disenchant value still matters (TT44)
+    local _, _, boundMats = DisenchantValue(key, bound)
+    return TV.Lines({ age = age, noData = true, mats = boundMats })
+  end
   local panel = AHProfit.AHPanel and AHProfit.AHPanel.Frames()
   local atAH = panel ~= nil and panel.frame:IsShown()
   local cur, ageText, listed = PriceNow(key, item, nowMs, atAH)

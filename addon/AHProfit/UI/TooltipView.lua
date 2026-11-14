@@ -425,7 +425,8 @@ end
 --- windows), Disenchant Value (when one of your characters can, or the item is Bind on Equip and not soulbound,
 --- TT43; Tooltip.lua decides), Vendor Price (when known) and Inventory (only
 --- when you hold some), with a divider before each section: Do, the market lines, the best times, Disenchant Value,
---- and Vendor Price with Inventory (TT42). Without market data: the header and "no market data yet" (TT18).
+--- and Vendor Price with Inventory (TT42). Without market data: the header and "no market data yet" (TT18), then
+--- Disenchant Value when it would show (TT44).
 ---@param f table  { age = { text, amber }, coverage (hours or nil), noData, doing (DoOf's), market = { cur, ageText,
 ---                med7, med14, med30, listed, supply7, supply14, supply30, chance1000, chancePrice, commodity, st,
 ---                stHow }, offsetMs, buy = { price, slot, weeks, now, pct1000 } or nil, sell = (the same, est) or
@@ -440,6 +441,10 @@ function TooltipView.Lines(f)
     local only = Line("no market data yet", "")
     only.labelMuted = true
     lines[2] = only
+    if f.mats then                     -- TT44: no AH price, so no comparison in the title
+      lines[3] = { label = "", value = "", spans = {}, divider = true }
+      for _, line in ipairs(TooltipView.DisenchantLines(f.mats, nil)) do lines[#lines + 1] = line end
+    end
     return lines
   end
   header.coverage = TooltipView.CoverageText(f.coverage)

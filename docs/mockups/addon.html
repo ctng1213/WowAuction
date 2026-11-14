@@ -211,7 +211,7 @@
   <tr><td>Disenchant</td><td>What disenchanting one is worth and its difference from the price now. Only shown when one of your characters can disenchant it.</td></tr>
   <tr><td>Best time to sell / buy</td><td>The week's top window, its expected price, the difference from now and its strength: <i>early</i> (under 3 weeks of data), <i>pattern</i> (3–5 weeks) or <i>established</i> (6 weeks or more). Never left out. When now falls inside the best sell window it reads "now (Sat 17–21) · 12s 30c · pattern", and the Do line adds "best time to sell is now" (on a second value-only line if it doesn't fit; variant 14). When the price now is below every buy window's expected price it reads "now · cheaper than Tue 20–23 (7s 10c)", shortened to "now · under Tue 20–23 (7s 10c)" when it would pass 320 wide (variant 9). On an AH browse row the Do line then adds "best time to buy is now".</td></tr>
   <tr><td>Activity</td><td>Sales per day, units listed now and days of supply, in muted text.</td></tr>
-  <tr><td>No market data</td><td>Two lines only: the header with the data age, and "no market data yet".</td></tr>
+  <tr><td>No market data</td><td>The header with the data age, and "no market data yet"; then Disenchant Value when it would show (a bound item has no market row, TT44).</td></tr>
 </table>
 
 
@@ -549,7 +549,7 @@ const VIEWS = {
   },
   Disenchant: {
     ctl: 'Min chance: 50% ▾',
-    footer: `<span>6 targets · 4 confirmed by live search</span><span>Enchanter: Amaya (skill 142)</span>`,
+    footer: `<span>6 targets · 4 confirmed by live search</span><span>Enchanter: Amaya (any Enchanting skill disenchants anything, R34)</span>`,
     note: `<b>Disenchant</b>: AH items worth buying to disenchant (SPEC §3.4A). The addon builds this list itself (SPEC §4.0), for the <b>shortlist</b> in <code>MarketIntelligence.lua</code>, from that intelligence plus what it sees live, so it still works without a desktop plan. <b>Live</b> shows the in-game search result: ✓ still listed at that price, ✗ gone, … not searched yet.`,
     html: () => `<table>${head([['Item'], ['ilvl', 1], ['Buy', 1], ['Mats'], ['EV', 1], ['Profit', 1], ...PAIR, ['Risk', 1], ['Live']])}
       ${de('Ridge Cleaver of the Bear', 29, 1500, '1.2 Lesser Astral', 2310, 810, '✓')}

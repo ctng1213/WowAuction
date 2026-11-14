@@ -200,15 +200,16 @@ def test_IU13_a_replan_follows_new_stock_from_the_published_intelligence_and_kee
 
 def test_PF10_a_skill_read_from_savedvariables_funds_a_waiting_candidate_without_reading_history(db, monkeypatch):
     with db.transaction():
-        db.conn.execute("UPDATE professions SET skill = 20 WHERE char_id = ? AND profession = 'Enchanting'", (AMAYA,))
+        db.conn.execute("DELETE FROM professions WHERE profession = 'Enchanting'")   # PF9: nobody has Enchanting
     refresh.refresh_all(db, NOW, CFG)
     buys = "SELECT kind FROM actions WHERE key = ? AND status = 'pending' ORDER BY kind"
     assert db.conn.execute(buys, (GLOVES,)).fetchall() == []
     waiting = [(c, why) for c, _, _, why, _ in db.alternatives(M) if c.startswith(f"disenchant:{GLOVES}:")]
-    assert [why for _, why in waiting] == ["Required profession unavailable: Enchanting 25"]   # ilvl 25 needs 25
+    assert [why for _, why in waiting] == ["Required profession unavailable: Enchanting 1"]    # any skill (R34)
     intel_before = db.conn.execute("SELECT built FROM intel WHERE market = ?", (M,)).fetchone()
     with db.transaction():
-        db.conn.execute("UPDATE professions SET skill = 150 WHERE char_id = ? AND profession = 'Enchanting'", (AMAYA,))
+        db.conn.execute("INSERT INTO professions(char_id, profession, skill, max_skill) VALUES (?, 'Enchanting', 150, 150)",
+                        (AMAYA,))
     monkeypatch.setattr(refresh, "analyze_market", lambda *a: pytest.fail("a re-plan reads no history"))
     assert refresh.replan_all(db, NOW + HOUR, CFG) == [M]
     assert db.conn.execute(buys, (GLOVES,)).fetchall() == [("buy",), ("de",)]                 # now funded
@@ -416,7 +417,7 @@ def test_D71_with_no_enchanter_the_disenchant_page_lists_research_and_the_portfo
     funded = {r["item"] for r in today["funded"] + portfolio["week"]["funded"]}
     [excluded] = [r for r in today["excluded"] if r["item"] == "Embossed Leather Gloves"]
     assert "Embossed Leather Gloves" not in funded
-    assert (excluded["status"], excluded["detail"]) == ("Required profession unavailable: Enchanting 25",
+    assert (excluded["status"], excluded["detail"]) == ("Required profession unavailable: Enchanting 1",
                                                         "no character has Enchanting")
     assert all(r["item"] != "Embossed Leather Gloves" for r in db.view("today", M)[0]["by_min"]["0"]["rows"])
 
