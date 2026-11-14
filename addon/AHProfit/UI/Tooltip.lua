@@ -280,7 +280,34 @@ local function DoFor(key, item, nowMs, facts)
                    shopping = ShoppingOf(actions, key), actions = actions, allActions = Plan.AllActions,
                    unfunded = UnfundedOf(key), own = own, deValue = facts.deValue, usedBy = UsedBy(charId),
                    nameOf = NameOf, nowMs = nowMs, offsetMs = Adapter.LocalOffsetMs(nowMs),
+                   profitMode = Tooltip.ProfitMode(),
                    sellNow = facts.sell and facts.sell.now, buyNow = facts.buy and facts.buy.cheaperNow })
+end
+
+Tooltip.PROFIT_MODES = { full = true, expected = true }
+
+--- The Do line's money mode (SPEC §4.3, UI29): "full" (the default) or "expected", kept for the account.
+---@return string
+function Tooltip.ProfitMode()
+  local db = DB.Get()
+  local mode = db and db.profitMode
+  return Tooltip.PROFIT_MODES[mode] and mode or "full"
+end
+
+--- /ahp profit [full|expected] (UI29): say the mode, or set it; the next tooltip shows it, no /reload needed.
+---@param word string|nil  "full", "expected", or nil / "" to print the mode
+function Tooltip.ProfitCommand(word)
+  if word == nil or word == "" then
+    local mode = Tooltip.ProfitMode()
+    return Adapter.Print("profit shown: " .. mode .. (mode == "full"
+      and " (the default) · /ahp profit expected to average in the chance of selling"
+      or " · /ahp profit full to show the profit if it all sells"))
+  end
+  if not Tooltip.PROFIT_MODES[word] then return Adapter.Print("usage: /ahp profit [full|expected]") end
+  local db = DB.Get()
+  if not db then return Adapter.Print("the profit setting can't be saved: " .. tostring(DB.SetupError())) end
+  db.profitMode = word
+  Adapter.Print("profit shown: " .. word)
 end
 
 --- The tooltip lines for an item (SPEC §4.3, TT8-TT21); nil without a market file.
@@ -353,6 +380,9 @@ local function Painted(line)
     return text .. ValueText(line), "", valueRgb, valueRgb
   end
   if line.isDo then left = Paint("Do: ", "label") .. Paint(line.verb, line.verbColor) .. Paint(line.rest, "value") end
+  if line.plainLeft then          -- a Do's line 2: quantity and price in the value colour, "+53%" in its own (SPEC §4.3)
+    return ValueText({ value = line.label, spans = line.leftSpans or {} }), ValueText(line), RGB.value, valueRgb
+  end
   return left, ValueText(line), line.labelMuted and RGB.muted or RGB.label, valueRgb
 end
 

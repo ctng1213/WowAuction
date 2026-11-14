@@ -16,6 +16,8 @@ Decisions made during execution are appended here.
 
 8. **DL1: `paid` is an explicit `PlanAction` field, not `expected − net`.** A bought disenchant's own step and a hold carry net 0 by design (the chain's net sits on the buy), so `expected − net` would call the mats' whole value paid. Each constructor sets it where it takes the cost off; actions whose net is elsewhere carry 0.
 9. **DL1 finding, acted on in DL3: a crafted product's post says "Mats", not "Paid".** Its `paid` is `expected − profit`, the mats valued as the craft plan values them, owned mats at their market value (w1: 12,133 c against a 7,440 c ore buy). That is what the craft gives up, not gold spent, so its line 2 reads "Mats 1g 21s 33c · Profit …", the CRAFT line's word.
+10. **DL3: a craft's Mats is its `paid`, with no fallback.** Falling back to the gold its chain spends on buys (the old "mats 2s 48c") gave TT11's fixture "Profit +54s 52c" against a plan net of 9s 71c, since the owned bars cost nothing there. A file without `paid` shows no Mats and no profit.
+11. **DL3: a right part moves under only when it does not fit** (TT31's rule, applied to line 2). The mockup drew a bought post later on three lines; by the 320 px estimate its full-mode line 2 fits, so it takes two, and its longer expected-mode text takes three.
 
 ## 2. Working rules
 

@@ -26,7 +26,7 @@ describe("Tooltip layout", function()
         if i == 4 and lines[3].isDo and l.label == "" and not l.divider then continued[#continued + 1] = n end   -- lines[2]: a divider
       end
     end
-    assert_eq(continued, { 1, 2, 4, 8, 9, 12, 14 }, "a long Do value continues on a line with an empty label")
+    assert_eq(continued, { 8, 9 }, "a long Do value continues on a line with an empty label")   -- the rest have line 2 (TT45)
     Layout.GoldenText("UI17_tooltip", table.concat(out, "\n") .. "\n", 2)
   end)
 end)

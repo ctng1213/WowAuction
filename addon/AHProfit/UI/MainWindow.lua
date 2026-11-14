@@ -750,6 +750,8 @@ end
 function MainWindow.Toggle(args)
   if args == "perf" then return MainWindow.Perf() end
   if args == "minimap" then return AHProfit.MinimapButton.ToggleShown() end   -- UI23
+  local profit = args and args:match("^profit%s*(%S*)$")
+  if profit then return AHProfit.Tooltip.ProfitCommand(profit) end           -- UI29
   if not ui then Build() end
   if args == "portfolio" then
     view.tab, view.offset = args, 0

@@ -71,7 +71,7 @@ describe("Tooltip", function()
     Stubs.Advance(1)
     local texts = Texts(2589)
     assert_eq({ texts[3], texts[4], texts[#texts] },
-              { "Do: POST 20 now at 45c | +8s 40c · 90% chance", " | then nothing", "Inventory  Total: 20 · Bags: 20" })
+              { "Do: POST now | Sells for 8s 55c · 90%", "   20× at 45c | ", "Inventory  Total: 20 · Bags: 20" })   -- 20 × 45 × 0.95
     Stubs.HoverItem(2589)
     local header, market = tip.doubles[1], tip.doubles[6]
     assert_eq({ header[1]:match("AHProfit"), header[2]:match("data 2 h old|r |T.-WHITE8X8:7:7:0:0:8:8:0:8:0:8:61:219:79|t|c") ~= nil },
@@ -81,7 +81,7 @@ describe("Tooltip", function()
     assert_eq({ market[1]:match("^|cffffd100Market Price|r  "), market[1]:match("steady$"), market[2] },
               { "|cffffd100Market Price|r  ", "steady", "" })   -- joined: the title in price gold, steady plain (TT42)
     assert_eq(header[2]:match("|t|c%x+ · — coverage|r$") ~= nil, true)   -- the dot follows the age, then the coverage (TT40)
-    assert_eq(tip.doubles[4][1], " ")                                              -- the value-only line's label (TT24)
+    assert_eq(tip.doubles[4][1], "   20× at 45" .. AHProfit.ViewModel.COINS.c)   -- line 2, plain, with its coin (TT45, UI30)
   end)
 
   it("UI30 a tooltip line's left part draws its money with coins too", function()
@@ -90,8 +90,28 @@ describe("Tooltip", function()
     Stubs.FireEvent("BAG_UPDATE_DELAYED")
     Stubs.Advance(1)
     Stubs.HoverItem(2589)
-    local left = tip.doubles[3][1]                                     -- the Do line: "POST 20 now at 45c"
+    local left = tip.doubles[4][1]                                     -- the Do's line 2: "20× at 45c" (TT45)
     assert_eq({ left:find("45" .. AHProfit.ViewModel.COINS.c, 1, true) ~= nil, left:find("45c", 1, true) }, { true, nil })
+  end)
+
+  it("UI29 /ahp profit says the mode, switches it for the account without a reload, and keeps it across one", function()
+    Boot()
+    Stubs.Slash("/ahp profit")
+    assert_eq(Stubs.chat[#Stubs.chat]:match("profit shown: full %(the default%) · /ahp profit expected") ~= nil, true,
+              Stubs.chat[#Stubs.chat])
+    Stubs.world.containers = { [0] = { size = 1, slots = { [1] = { id = 2589, count = 20 } } } }
+    Stubs.FireEvent("BAG_UPDATE_DELAYED")
+    Stubs.Advance(1)
+    Stubs.Slash("/ahp profit expected")
+    assert_eq({ AHProfitDB.profitMode, Stubs.chat[#Stubs.chat]:match("profit shown: expected") ~= nil,
+                Texts(2589)[4]:match("Expected Profit") ~= nil }, { "expected", true, true })   -- the next hover, no reload
+    Stubs.Reset({ keepSaved = true })
+    Stubs.Login()
+    assert_eq(AHProfit.Tooltip.ProfitMode(), "expected")
+    Stubs.Slash("/ahp profit full")
+    assert_eq(AHProfitDB.profitMode, "full")
+    Stubs.Slash("/ahp profit sometimes")
+    assert_eq({ AHProfitDB.profitMode, Stubs.chat[#Stubs.chat]:match("usage: /ahp profit") ~= nil }, { "full", true })
   end)
 
   it("TT6 the price at best time includes the trend up to the window's best hour", function()
@@ -206,6 +226,6 @@ describe("Tooltip", function()
                      peak = NOW + 34 * HOUR } })
     AHProfit.Plan.Reset()
     local texts = Texts(2589)
-    assert_eq({ texts[3], texts[4] }, { "Do: POST Fri 10:53 | 55c · +22% vs now · 92%", " | for the 18:53 peak" })
+    assert_eq({ texts[3], texts[4] }, { "Do: POST Fri 10:53–18:53 | Sells for 10s 45c · 92%", "   20× at 55c · +22% vs now | " })
   end)
 end)

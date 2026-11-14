@@ -1,8 +1,8 @@
 -- 1 bag item with a planned post
 126 AHProfit | data 2 h old
   0 ---
-258 Do: POST 5 now at 41s | +63s 6c · 58% chance
- 82  | then nothing
+242 Do: POST now | Sells for 1g 94s 75c · 58%
+ 72    5× at 41s | 
   0 ---
 182 Market Price  42s (2 h) · steady
 209    (7d) 40s · (14d) 43s · (30d) 45s
@@ -21,8 +21,8 @@
 -- 2 bag item planned for a later peak
 126 AHProfit | data 2 h old
   0 ---
-269 Do: POST Sat 10:00 | 4g 50s · +53% vs now · 85%
-115  | for the 18:00 peak
+308 Do: POST Sat 10:00–18:00 | Sells for 4g 27s 50c · 85%
+171    1× at 4g 50s · +53% vs now | 
   0 ---
 204 Market Price  2g 95s (2 h) · steady
 275    (7d) 3g 10s · (14d) 3g 30s · (30d) 3g 80s
@@ -63,8 +63,8 @@
 -- 4 craft mat in bags (on Brugan, who knows the recipe)
 126 AHProfit | data 2 h old
   0 ---
-220 Do: CRAFT 5 Copper Rod | +9s 71c · 90%
-209  | mats 2s 48c · then post Sat 10:00
+253 Do: CRAFT 5× Copper Rod | Sells for 57s · 90%
+154    then post Sat 10:00–18:00 | 
   0 ---
 182 Market Price  10s (2 h) · steady
 275    (7d) 9s 60c · (14d) 9s 55c · (30d) 9s 50c
@@ -82,7 +82,7 @@
 -- 5 mail step (on Amaya, who holds the bars)
 126 AHProfit | data 2 h old
   0 ---
-253 Do: MAIL 6 to Brugan | for crafting Copper Rod
+258 Do: MAIL 6× to Brugan | for crafting Copper Rod
   0 ---
 182 Market Price  10s (2 h) · steady
 275    (7d) 9s 60c · (14d) 9s 55c · (30d) 9s 50c
@@ -100,7 +100,8 @@
 -- 6 disenchant
 126 AHProfit | data 2 h old
   0 ---
-275 Do: DISENCHANT | +6s 25c · mats 14s 25c · 100%
+225 Do: DISENCHANT now | Mats worth 14s 25c
+ 28    1× | 
   0 ---
 160 Market Price  8s (2 h) · low
 237    (7d) 10s · (14d) 10s 50c · (30d) 11s
@@ -139,7 +140,8 @@
 -- 8 unfunded alternative (on Brugan)
 126 AHProfit | data 2 h old
   0 ---
-280 Do: UNFUNDED craft · +80c | exceeds risk tolerance
+231 Do: UNFUNDED craft · Expected Profit +80c | 
+137  | exceeds risk tolerance
 159  | needs 45s, 24s 40c left
   0 ---
 204 Market Price  5s 20c (2 h) · steady
@@ -192,8 +194,8 @@
 -- 12 stale data (more than 24 h old)
 126 AHProfit | data 2 d old (amber)
   0 ---
-258 Do: POST 5 now at 41s | +63s 6c · 58% chance
- 82  | then nothing
+242 Do: POST now | Sells for 1g 94s 75c · 58%
+ 72    5× at 41s | 
   0 ---
 182 Market Price  42s (2 h) · steady
 209    (7d) 40s · (14d) 43s · (30d) 45s
@@ -226,8 +228,9 @@
 -- 14 bag item inside its best sell window (Fri 18:30)
 126 AHProfit | data 2 h old
   0 ---
-258 Do: POST 5 now at 41s | +63s 6c · 58% chance
-231  | then nothing · best time to sell is now
+242 Do: POST now | Sells for 1g 94s 75c · 58%
+ 72    5× at 41s | 
+148  | best time to sell is now
   0 ---
 182 Market Price  42s (2 h) · steady
 209    (7d) 40s · (14d) 43s · (30d) 45s

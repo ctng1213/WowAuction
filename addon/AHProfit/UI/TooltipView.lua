@@ -347,44 +347,120 @@ function TooltipView.InventoryLine(h)
   return Section(Line("Inventory", table.concat(parts, " · ")), "own")
 end
 
---- A Do line's verb, the rest of its left text, its value and the value-only lines under it (SPEC §4.3 Do).
----@param d table  From TooltipView.DoOf
----@param cur number|nil
----@return string, string, string, table, string|nil, string[]  verb, rest, value, spans, value colour, second lines
-local function DoParts(d, cur)
-  local M, S = ViewModel.Money, ViewModel.SignedMoney
-  if d.kind == "post" and d.now then
-    local net = S(d.net)
-    return "POST", " " .. d.qty .. " now at " .. M(d.price), net .. " · " .. (d.chance or "—") .. "% chance",
-           { { net, d.net < 0 and "neg" or "pos" } }, nil, { d.next or "then nothing" }
-  elseif d.kind == "post" then
-    local delta, colour = TooltipView.Delta(d.price, cur)
-    local value = M(d.price) .. (delta and (" · " .. delta .. " vs now") or "") .. (d.chance and (" · " .. d.chance .. "%") or "")
-    return "POST", " " .. d.at, value, delta and { { delta, colour } } or {}, nil,
-           d.peak and { "for the " .. d.peak .. " peak" } or {}
-  elseif d.kind == "hold" then
-    return "HOLD", " until " .. d["until"], "no window pays this week", {}, nil, {}
-  elseif d.kind == "craft" then
-    local net, steps = S(d.net), {}
-    if d.mats and d.mats > 0 then steps[#steps + 1] = "mats " .. M(d.mats) end
-    if d.next then steps[#steps + 1] = d.next end
-    return "CRAFT", " " .. d.qty .. " " .. d.product, net .. (d.chance and (" · " .. d.chance .. "%") or ""),
-           { { net, d.net < 0 and "neg" or "pos" } }, nil, #steps > 0 and { table.concat(steps, " · ") } or {}
-  elseif d.kind == "mail" then
-    return "MAIL", " " .. d.qty .. " to " .. d.to, d.product and ("for crafting " .. d.product) or "for its plan", {}, nil, {}
-  elseif d.kind == "de" then
-    local net = S(d.net)
-    return "DISENCHANT", "", net .. (d.mats and (" · mats " .. M(d.mats)) or "") .. " · " .. (d.chance or 100) .. "%",
-           { { net, d.net < 0 and "neg" or "pos" } }, nil, {}
-  elseif d.kind == "buy" then
-    return "BUY", " ≤ " .. M(d.max) .. (d.purpose and (" · " .. d.purpose) or ""), "funded · " .. d.qty .. " needed",
-           {}, nil, {}
-  elseif d.kind == "unfunded" then
-    return "UNFUNDED", " " .. d.strategy .. " · " .. S(d.net), d.short, {}, "amber", d.detail and { d.detail } or {}
-  elseif d.kind == "kept" then
-    return "KEPT", " for yourself", d.all and "keep all" or ("keep at least " .. d.keep), {}, nil, { "right-click to change" }
+--- What the units bring in if they all sell (SPEC §4.3 Sells for): qty × price less the AH cut, float copper.
+---@param qty number    Units
+---@param price number  Copper each
+---@return number
+function TooltipView.SellsFor(qty, price)
+  return qty * price * (1 - AHProfit.Engine.Fees.AH_CUT)
+end
+
+--- The money on a Do's line 2 (SPEC §4.3, the profit mode): Paid (or Mats) and Profit in full, Paid and the plan's
+--- Expected Profit in expected; your own stock has nothing in full and "Expected Profit" in expected.
+---@param d table             { mode "full" | "expected", paid (copper, 0 = none), paidLabel ("Paid" | "Mats"), net }
+---@param full number|nil     The full profit's base (Sells for, or Mats worth), float copper; nil = only the expected
+---@param always boolean|nil  Show the full profit in either mode (a disenchant always happens)
+---@return string|nil, table  The text (nil = nothing) and its coloured spans
+local function MoneyText(d, full, always)
+  local paid = d.paid or 0
+  local parts, spans = {}, {}
+  if paid > 0 then parts[1] = (d.paidLabel or "Paid") .. " " .. ViewModel.Money(paid) end
+  local profit, label
+  if full and paid > 0 and (always or d.mode ~= "expected") then
+    profit, label = ViewModel.RoundHalfUp(full - paid), "Profit"
+  elseif d.net and (d.mode == "expected" or not full) then   -- no full profit to show: the plan's (a craft without a post)
+    profit, label = ViewModel.RoundHalfUp(d.net), "Expected Profit"
   end
-  return "VENDOR", " " .. M(d.price) .. " each", "nothing better", {}, nil, {}
+  if profit then
+    local amount = ViewModel.SignedMoney(profit)
+    parts[#parts + 1] = label .. " " .. amount
+    spans[1] = { amount, profit < 0 and "neg" or "pos" }
+  end
+  if #parts == 0 then return nil, spans end
+  return table.concat(parts, " · "), spans
+end
+
+--- A post's when, line 1 (SPEC §4.3): "now", or the time frame from the post time to the window's best hour
+--- ("Sat 10:00–18:00"; the day again when the best hour falls on another day).
+---@param d table  { now, atDay, atClock, peakDay, peakClock }
+---@return string
+local function PostWhen(d)
+  if d.now then return "now" end
+  if not d.peakClock then return d.atDay .. " " .. d.atClock end
+  local peak = (d.peakDay ~= d.atDay) and (d.peakDay .. " " .. d.peakClock) or d.peakClock
+  return d.atDay .. " " .. d.atClock .. "–" .. peak
+end
+
+--- A post's Do (SPEC §4.3, TT45-TT47): when and Sells for, then quantity and price (a later one compared with now),
+--- and the money.
+---@param d table         From TooltipView.DoOf
+---@param cur number|nil  The price now
+---@return table          DoShape's shape
+local function PostShape(d, cur)
+  local M, sells = ViewModel.Money, TooltipView.SellsFor(d.qty, d.price)
+  local subLeft, subSpans = d.qty .. "× at " .. M(d.price), {}
+  if not d.now then
+    local delta, colour = TooltipView.Delta(d.price, cur)
+    if delta then
+      subLeft = subLeft .. " · " .. delta .. " vs now"
+      subSpans[1] = { delta, colour }
+    end
+  end
+  local money, spans = MoneyText(d, sells)
+  return { verb = "POST", rest = " " .. PostWhen(d),
+           value = "Sells for " .. M(ViewModel.RoundHalfUp(sells)) .. " · " .. (d.chance or "—") .. "%", spans = {},
+           sub = { left = subLeft, leftSpans = subSpans, right = money, spans = spans }, seconds = { d.next } }
+end
+
+--- A craft's Do (TT48): the product and Sells for (from its chain's posts), then its next step and Mats with the
+--- profit.
+---@param d table  From TooltipView.DoOf
+---@return table   DoShape's shape
+local function CraftShape(d)
+  local M = ViewModel.Money
+  local value = d.sells and ("Sells for " .. M(ViewModel.RoundHalfUp(d.sells)) .. " · " .. (d.chance or "—") .. "%") or ""
+  local money, spans = MoneyText({ mode = d.mode, paid = d.mats, paidLabel = "Mats", net = d.net }, d.sells)
+  return { verb = "CRAFT", rest = " " .. d.qty .. "× " .. d.product, value = value, spans = {},
+           sub = { left = d.next or "", right = money, spans = spans }, seconds = {} }
+end
+
+--- A disenchant's Do (TT49): Mats worth, then the units and the money; a bought one's profit shows in both modes.
+---@param d table  From TooltipView.DoOf
+---@return table   DoShape's shape
+local function DeShape(d)
+  local worth = d.mats and ViewModel.RoundHalfUp(d.mats) or nil
+  local money, spans = MoneyText(d, worth, true)
+  return { verb = "DISENCHANT", rest = " now", value = worth and ("Mats worth " .. ViewModel.Money(worth)) or "",
+           spans = {}, sub = { left = d.qty .. "×", right = money, spans = spans }, seconds = {} }
+end
+
+--- A Do's parts (SPEC §4.3 Do): verb, the rest of line 1's left text, its value, spans and colour; line 2 (sub,
+--- indented: left text and money, or nil); and the value-only lines under them.
+---@param d table         From TooltipView.DoOf
+---@param cur number|nil  The price now
+---@return table          { verb, rest, value, spans, colour, sub = { left, leftSpans, right, spans } | nil, seconds }
+local function DoShape(d, cur)
+  local M = ViewModel.Money
+  if d.kind == "post" then return PostShape(d, cur) end
+  if d.kind == "craft" then return CraftShape(d) end
+  if d.kind == "de" then return DeShape(d) end
+  local verb, rest, value, colour, seconds = "VENDOR", " " .. M(d.price or 0) .. " each", "nothing better", nil, {}
+  if d.kind == "hold" then
+    verb, rest, value = "HOLD", " until " .. d["until"], "no window pays this week"
+  elseif d.kind == "mail" then
+    verb, rest = "MAIL", " " .. d.qty .. "× to " .. d.to
+    value = d.product and ("for crafting " .. d.product) or "for its plan"
+  elseif d.kind == "buy" then
+    verb, rest = "BUY", " ≤ " .. M(d.max) .. (d.purpose and (" · " .. d.purpose) or "")
+    value = "funded · " .. d.qty .. " needed"
+  elseif d.kind == "unfunded" then
+    verb, rest = "UNFUNDED", " " .. d.strategy .. " · Expected Profit " .. ViewModel.SignedMoney(d.net)
+    value, colour, seconds = d.short, "amber", { d.detail }
+  elseif d.kind == "kept" then
+    verb, rest, value = "KEPT", " for yourself", d.all and "keep all" or ("keep at least " .. d.keep)
+    seconds = { "right-click to change" }
+  end
+  return { verb = verb, rest = rest, value = value, spans = {}, colour = colour, seconds = seconds }
 end
 
 --- Append a note to the Do line's last value-only line when it fits, else on a line of its own (TT14, TT21).
@@ -399,23 +475,50 @@ local function AddNote(seconds, text)
   end
 end
 
---- The Do line and the value-only lines under it (SPEC §4.3): a long value continues on a line with an empty label.
+--- Whether a two-column line fits the block's width, coins counted as drawn (TT31).
+---@param left string
+---@param right string
+---@return boolean
+local function Fits(left, right)
+  return TooltipView.Width(ViewModel.WithCoins(left), ViewModel.WithCoins(right)) <= TooltipView.WIDTH
+end
+
+--- Line 2 of a Do (SPEC §4.3): indented, its left part plain; its money moves under it when both would pass 320 px.
+---@param sub table|nil  DoShape's sub
+---@param lines table[]  Changed: line 2 and any moved money appended
+local function AddSub(sub, lines)
+  if not sub or (sub.left == "" and not sub.right) then return end
+  local line2 = Line(TooltipView.INDENT .. sub.left, sub.right or "", sub.spans)
+  line2.leftSpans, line2.plainLeft = sub.leftSpans, true
+  lines[#lines + 1] = line2
+  if sub.right and not Fits(line2.label, sub.right) then
+    line2.value, line2.spans = "", {}
+    lines[#lines + 1] = Line("", sub.right, sub.spans)
+  end
+end
+
+--- The Do lines (SPEC §4.3): line 1, line 2 indented under it, then the value-only lines; a right part that would
+--- pass 320 px goes on a value-only line under its line (TT31).
 ---@param d table          From TooltipView.DoOf
 ---@param cur number|nil   The price now
----@return table[]         Lines; the first has verb, verbColor and rest (its label is "Do: " .. verb .. rest)
+---@return table[]         Lines
 function TooltipView.DoLines(d, cur)
-  local verb, rest, value, spans, colour, seconds = DoParts(d, cur)
+  local shape = DoShape(d, cur)
+  local seconds = {}
+  for i = 1, table.maxn(shape.seconds) do if shape.seconds[i] then seconds[#seconds + 1] = shape.seconds[i] end end
   if d.sellNow then AddNote(seconds, "best time to sell is now") end
   if d.buyNow then AddNote(seconds, "best time to buy is now") end
-  local first = Line("Do: " .. verb .. rest, value, spans)
-  first.verb, first.rest, first.verbColor, first.valueColor, first.isDo = verb, rest, TooltipView.VERB_COLOR[verb], colour, true
+  local first = Line("Do: " .. shape.verb .. shape.rest, shape.value, shape.spans)
+  first.verb, first.rest, first.verbColor, first.valueColor, first.isDo = shape.verb, shape.rest,
+    TooltipView.VERB_COLOR[shape.verb], shape.colour, true
   local lines = { first }
-  if TooltipView.Width(ViewModel.WithCoins(first.label), ViewModel.WithCoins(value)) > TooltipView.WIDTH then
+  if shape.value ~= "" and not Fits(first.label, shape.value) then
     first.value, first.spans = "", {}
-    local moved = Line("", value, spans)
-    moved.valueColor = colour
+    local moved = Line("", shape.value, shape.spans)
+    moved.valueColor = shape.colour
     lines[2] = moved
   end
+  AddSub(shape.sub, lines)
   for _, text in ipairs(seconds) do lines[#lines + 1] = Line("", text) end
   return lines
 end
@@ -517,36 +620,51 @@ local function FirstAction(ctx)
   return best
 end
 
---- A post's Do, now or later.
+--- Whether an action's chain makes something: its post's paid is then the mats the craft used (SPEC §4.3, DL3).
+---@param actions table[]
+---@param a table
+---@return boolean
+local function InCraftChain(actions, a)
+  for _, b in ipairs(ChainOf(actions, a)) do
+    if b.kind == "craft" then return true end
+  end
+  return false
+end
+
+--- A post's Do, now or later (SPEC §4.3, TT45-TT47): units, price, chance, the plan's net and what it paid, and a
+--- later one's post time and best hour.
 ---@param a table    The post
 ---@param ctx table
 ---@return table
 local function PostDo(a, ctx)
-  if a.at <= ctx.nowMs + HOUR_MS then
-    return { kind = "post", now = true, qty = a.qty, price = a.price, net = a.net or 0, chance = a.chance }
+  local d = { kind = "post", now = a.at <= ctx.nowMs + HOUR_MS, qty = a.qty, price = a.price, net = a.net or 0,
+              chance = a.chance, paid = a.paid or 0, paidLabel = InCraftChain(ctx.actions, a) and "Mats" or "Paid" }
+  if not d.now then
+    d.atDay, d.atClock = ViewModel.Clock(a.at, ctx.offsetMs)
+    if a.peak then d.peakDay, d.peakClock = ViewModel.Clock(a.peak, ctx.offsetMs) end
   end
-  local day, clock = ViewModel.Clock(a.at, ctx.offsetMs)
-  local peak = a.peak and select(2, ViewModel.Clock(a.peak, ctx.offsetMs)) or nil
-  return { kind = "post", now = false, at = day .. " " .. clock, price = a.price, chance = a.chance, peak = peak }
+  return d
 end
 
---- A craft's Do for one of its mats: the product, the chain's net and its first post's chance, the mats it buys
---- and when it posts (TT11).
+--- A craft's Do for one of its mats (TT11, TT48): the product, what its chain's posts bring in and the first one's
+--- chance and time frame, the mats as the plan values them (its paid; 0 from an older file: no profit shown) and the
+--- chain's net.
 ---@param a table    The craft
 ---@param ctx table
 ---@return table
 local function CraftDo(a, ctx)
-  local mats, chance, nextStep = 0, nil, nil
+  local sells, chance, nextStep = nil, nil, nil
   for _, b in ipairs(ChainOf(ctx.actions, a)) do
-    if b.kind == "buy" then mats = mats + (b.price or 0) * b.qty end
-    if b.kind == "post" and not nextStep then
-      chance = b.chance
-      local day, clock = ViewModel.Clock(b.at, ctx.offsetMs)
-      nextStep = "then post " .. day .. " " .. clock
+    if b.kind == "post" and b.key == a.key then
+      sells = (sells or 0) + TooltipView.SellsFor(b.qty, b.price)
+      if not nextStep then
+        chance = b.chance
+        nextStep = "then post " .. PostWhen(PostDo(b, ctx))
+      end
     end
   end
-  return { kind = "craft", qty = a.qty, product = ctx.nameOf(a.key), net = a.net or 0, chance = chance, mats = mats,
-           next = nextStep }
+  return { kind = "craft", qty = a.qty, product = ctx.nameOf(a.key), net = a.net or 0, chance = chance, sells = sells,
+           mats = a.paid or 0, next = nextStep }   -- the mats as the plan values them, owned ones too (DL3)
 end
 
 --- A hold's Do: until the weekday it moves on, "next" when that is more than six days away (TT10).
@@ -572,6 +690,22 @@ local function MailDo(a, ctx)
   return { kind = "mail", qty = a.qty, to = ViewModel.ShortName(a.to or "?"), product = product }
 end
 
+--- A disenchant's Do (TT49): its units, the mats' worth for all of them, what the plan paid (its own, else its
+--- chain's buy) and the plan's net.
+---@param a table    The disenchant
+---@param ctx table
+---@return table
+local function DeDo(a, ctx)
+  local paid = a.paid or 0
+  if paid == 0 then
+    for _, b in ipairs(ChainOf(ctx.actions, a)) do
+      if b.kind == "buy" and b.key == a.key then paid = paid + (b.paid or 0) end
+    end
+  end
+  return { kind = "de", qty = a.qty or 1, net = a.net or 0, paid = paid,
+           mats = ctx.deValue and ctx.deValue * (a.qty or 1) or nil }
+end
+
 --- The Do of a plan action.
 ---@param a table
 ---@param ctx table
@@ -581,7 +715,7 @@ local function FromAction(a, ctx)
   if a.kind == "craft" then return CraftDo(a, ctx) end
   if a.kind == "hold" then return HoldDo(a, ctx) end
   if a.kind == "mail" then return MailDo(a, ctx) end
-  if a.kind == "de" then return { kind = "de", net = a.net or 0, mats = ctx.deValue, chance = a.chance } end
+  if a.kind == "de" then return DeDo(a, ctx) end
   return { kind = "vendor", price = a.price }
 end
 
@@ -626,5 +760,6 @@ function TooltipView.DoOf(ctx)
     end
   end
   if d and d.kind == "post" and d.now and ctx.sellNow then d.sellNow = true end
+  if d then d.mode = ctx.profitMode or "full" end
   return d
 end
