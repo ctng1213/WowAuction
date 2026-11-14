@@ -22,6 +22,16 @@ local function Variant(n)
   return TW.Texts(lines), lines
 end
 
+--- A character's actions after your newer events, as Plan.Actions hands them to the tooltip (FM18, DL3).
+---@param actions table[]  Decoded actions (changed)
+---@param events table[]   AHProfitDB.events rows of character "A-R", all after the plan
+---@return table[]         The actions left
+local function Done(actions, events)
+  for _, e in ipairs(events) do e.char, e.at = "A-R", e.at or TW.NOW end
+  AHProfitDB.events = events
+  return (AHProfit.Plan.DoneLocally("A-R", actions, 0))
+end
+
 --- A JSON null from the generated fixtures as nil.
 ---@param v any
 ---@return any
@@ -275,6 +285,12 @@ describe("TooltipView", function()
               "   10× at 60c | Paid 4s · Profit +1s 70c" }, { "+1s 70c", "pos" } })          -- 570 − 400
     ctx.profitMode = "expected"
     assert_eq(TW.Texts(TV.DoLines(TV.DoOf(ctx), 60))[2], "   10× at 60c | Paid 4s · Expected Profit +35c")
+    local half = { id = "h", kind = "post", key = 4234, qty = 10, price = 60, at = TW.NOW, net = 35, chance = 70, paid = 400 }
+    ctx.actions = Done({ half }, { { type = "post", key = 4234, stack = 5 } })              -- 5 of the 10 already posted
+    assert_eq(TW.Texts(TV.DoLines(TV.DoOf(ctx), 60))[2], "   5× at 60c | Paid 2s · Expected Profit +18c")   -- 35 × 5/10
+    ctx.profitMode = nil
+    assert_eq(TW.Texts(TV.DoLines(TV.DoOf(ctx), 60))[2], "   5× at 60c | Paid 2s · Profit +85c")   -- 285 − 200
+    ctx.actions = { post }
     ctx.profitMode, post.price = nil, 40                                                     -- 380 − 400: a loss, red
     lines = TV.DoLines(TV.DoOf(ctx), 60)
     assert_eq({ lines[2].value, lines[2].spans[1] }, { "Paid 4s · Profit −20c", { "−20c", "neg" } })
@@ -314,6 +330,13 @@ describe("TooltipView", function()
     ctx.key, ctx.held, ctx.actions = TW.ROD, 4, { craft, post }                              -- the rods once crafted
     assert_eq(TW.Texts(TV.DoLines(TV.DoOf(ctx), 1090)), { "Do: POST Sat 10:00–18:00 | Sells for 44s · 90%",
               "   4× at 11s 58c · +6% vs now | Mats 30s · Profit +14s" })                     -- Mats, not Paid (DL1)
+    AHProfitDB.recipes = { Blacksmithing = { [7818] = { product = TW.ROD } } }
+    ctx.actions = Done({ { id = "c", kind = "craft", key = TW.ROD, qty = 4, at = TW.NOW, net = 1200, paid = 3000 },
+                         { id = "p", parent = "c", kind = "post", key = TW.ROD, qty = 4, price = 1158, at = TW.At(5, 10),
+                           peak = TW.At(5, 18), net = 1200, chance = 90, paid = 3000 } },
+                       { { type = "craft", spell = 7818, count = 4 } })                     -- the craft is done and gone
+    assert_eq({ #ctx.actions, TW.Texts(TV.DoLines(TV.DoOf(ctx), 1090))[2] },
+              { 1, "   4× at 11s 58c · +6% vs now | Mats 30s · Profit +14s" })
   end)
 
   it("TT49 a disenchant, bought or yours, and an unfunded row, in each mode", function()
@@ -325,6 +348,13 @@ describe("TooltipView", function()
     assert_eq(TW.Texts(TV.DoLines(TV.DoOf(ctx), 800)), bought)
     ctx.profitMode = "expected"
     assert_eq(TW.Texts(TV.DoLines(TV.DoOf(ctx), 800)), bought)                    -- a disenchant always happens
+    ctx.actions, ctx.profitMode = Done({ { id = "b", kind = "buy", key = 6585, qty = 1, price = 800, at = TW.NOW, net = 625,
+                                           paid = 800 },
+                                         { id = "d", parent = "b", kind = "de", key = 6585, qty = 1, at = TW.NOW, net = 0,
+                                           paid = 0 } },
+                                       { { type = "purchase", key = 6585, qty = 1 } }), nil   -- bought: the buy is gone
+    assert_eq({ #ctx.actions, TW.Texts(TV.DoLines(TV.DoOf(ctx), 800)) }, { 1, bought })
+    ctx.profitMode = "expected"
     ctx.actions = { { id = "d", kind = "de", key = 6585, qty = 1, at = TW.NOW, net = 1425, paid = 0 } }
     assert_eq(TW.Texts(TV.DoLines(TV.DoOf(ctx), 800)), { "Do: DISENCHANT now | Mats worth 14s 25c",
                                                          "   1× | Expected Profit +14s 25c" })

@@ -103,7 +103,7 @@ describe("Plan", function()
     local actions = Plan.Actions(A)
     assert_eq(actions[1], { id = "m:1:0", kind = "post", key = 2589, qty = 20, price = 55, at = T + 5 * HOUR, net = 1046,
                             windowEnd = T + 10 * HOUR, status = "pending", chance = 93, peak = T + 13 * HOUR, vendor = false,
-                            paid = 0 })
+                            paid = 0, planQty = 20, chainCraft = false, chainBuyPaid = 0 })   -- DL3's chain notes
     assert_eq({ actions[2].kind, actions[2].price, actions[2].parent, actions[2].status }, { "hold", nil, "m:1:0", "late" })
     assert_eq(Plan.Actions(B), {})
     assert_eq({ Plan.Rule(2589) }, { "no_buy", T })

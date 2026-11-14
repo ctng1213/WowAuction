@@ -352,7 +352,7 @@ end
 ---@param price number  Copper each
 ---@return number
 function TooltipView.SellsFor(qty, price)
-  return qty * price * (1 - AHProfit.Engine.Fees.AH_CUT)
+  return AHProfit.Engine.Fees.SaleNet(price, qty)
 end
 
 --- The money on a Do's line 2 (SPEC §4.3, the profit mode): Paid (or Mats) and Profit in full, Paid and the plan's
@@ -368,7 +368,7 @@ local function MoneyText(d, full, always)
   local profit, label
   if full and paid > 0 and (always or d.mode ~= "expected") then
     profit, label = ViewModel.RoundHalfUp(full - paid), "Profit"
-  elseif d.net and (d.mode == "expected" or not full) then   -- no full profit to show: the plan's (a craft without a post)
+  elseif d.net and d.net ~= 0 and (d.mode == "expected" or not full) then   -- the plan's; 0 = its net sits elsewhere
     profit, label = ViewModel.RoundHalfUp(d.net), "Expected Profit"
   end
   if profit then
@@ -625,6 +625,7 @@ end
 ---@param a table
 ---@return boolean
 local function InCraftChain(actions, a)
+  if a.chainCraft ~= nil then return a.chainCraft end            -- noted before done steps went (Plan.DoneLocally)
   for _, b in ipairs(ChainOf(actions, a)) do
     if b.kind == "craft" then return true end
   end
@@ -641,7 +642,7 @@ local function PostDo(a, ctx)
               chance = a.chance, paid = a.paid or 0, paidLabel = InCraftChain(ctx.actions, a) and "Mats" or "Paid" }
   if not d.now then
     d.atDay, d.atClock = ViewModel.Clock(a.at, ctx.offsetMs)
-    if a.peak then d.peakDay, d.peakClock = ViewModel.Clock(a.peak, ctx.offsetMs) end
+    if a.peak and a.peak > a.at then d.peakDay, d.peakClock = ViewModel.Clock(a.peak, ctx.offsetMs) end
   end
   return d
 end
@@ -697,6 +698,7 @@ end
 ---@return table
 local function DeDo(a, ctx)
   local paid = a.paid or 0
+  if paid == 0 and a.chainBuyPaid then paid = a.chainBuyPaid end   -- noted before the buy went (Plan.DoneLocally)
   if paid == 0 then
     for _, b in ipairs(ChainOf(ctx.actions, a)) do
       if b.kind == "buy" and b.key == a.key then paid = paid + (b.paid or 0) end
