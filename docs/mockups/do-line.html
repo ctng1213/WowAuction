@@ -19,6 +19,7 @@
   .lbl { color: var(--label); } .post { color: var(--post); } .craft { color: var(--craft); } .de { color: var(--de); }
   .n { white-space: nowrap; } .n .t { margin-right: 6px; }
   .c-price { color: var(--s-price); } .c-stock { color: var(--s-stock); } .c-chance { color: var(--s-chance); }
+  .c-time { color: #c9a6ff; } .c-de { color: #ff9ad5; } .c-own { color: #d8d2c2; }
   .rule { height: 1px; background: #55648a; margin: 5px 0; }
   .mode { display: inline-block; padding: 1px 8px; border: 1px solid var(--line); border-radius: 10px; font-size: 12px; margin-right: 6px; }
   .mode.on { border-color: var(--gold); color: var(--gold); }
@@ -47,7 +48,17 @@
 <h3>Heavy Leather the plan bought, posted later.</h3>
 <div class="row" id="laterBought"></div>
 
-<h2>3. The other Do lines with money</h2>
+<h2>3. Craft and disenchant, whole tooltips</h2>
+<h3>Hovering Copper Bar in Brugan's bags: the plan crafts 4 Copper Rod (mats 30s; the chain posts the rods Sat 10:00 for the 18:00 peak at 11s 58c, 90%; expected profit 12s). Sells for 4 × 11s 58c × 0.95 = 44s; full profit 44s − 30s = +14s.</h3>
+<div class="row" id="craft"></div>
+<h3>Hovering one of those Copper Rods once crafted: its post. Its line 2 says <b>Mats</b>, not Paid: the craft plan values the mats you already owned at their market price, so this is what the craft used up, not gold spent.</h3>
+<div class="row" id="craftPost"></div>
+<h3>Hovering Scouting Gloves the plan bought at 8s to disenchant: mats worth 14s 25c (75% · 2.5 Soul Dust at 6s, 20% · 1.5 Lesser Mystic Essence at 10s); 8s now, 10s 7-day median. A disenchant always happens, so both modes show the same profit.</h3>
+<div class="row" id="deBought"></div>
+<h3>Hovering Scouting Gloves you already had: nothing paid, so in full mode line 1 says it all.</h3>
+<div class="row" id="deOwn"></div>
+
+<h2>4. The other Do lines with money</h2>
 <table>
   <tr><th>Do</th><th>Today</th><th><span class="mode on">full</span></th><th><span class="mode">expected</span></th></tr>
   <tr><td><span class="craft">CRAFT</span> 4× Copper Rod</td><td><span class="pos">+12s</span> · 90%<br><span class="muted">mats 30s</span></td>
@@ -63,7 +74,7 @@
 </table>
 <p class="note muted">"Mats worth" is the mats' value at their sale prices, as today. An unfunded row keeps the plan's expected profit in both modes: the plan skipped it, and that number is what it compared; the file has no "sells for" for it.</p>
 
-<h2>4. Notes on building it</h2>
+<h2>5. Notes on building it</h2>
 <table>
   <tr><td>Sells for, Profit</td><td>qty × price × 0.95, and Sells for − Paid, made in <code>UI/ViewModel.lua</code> and tested.</td></tr>
   <tr><td>Paid</td><td>One new field: AHSync adds each action's cost basis to <code>PortfolioPlan.lua</code> (it already computes it, SPEC §3.4 expected net). Until a file has it, every post shows the your-stock shape.</td></tr>
@@ -108,6 +119,53 @@
         doLine('Fri 10:00–18:00', 'Sells for 6s 65c · 80%') + sub('10× at 70c · +17% vs now') + under(`Paid 4s · Expected Profit ${P('+1s 56c')}`)],
     ],
   };
+  // Whole tooltips for a craft and a disenchant: a Do line of any verb, then that item's own market sections.
+  const doAny = (verb, cls, left, right) =>
+    `<div class="l"><span><span class="lbl">Do:</span> <span class="${cls}">${verb}</span>${left ? ' ' + left : ''}</span><span>${right}</span></div>`;
+  const sec = (cls, title, value, lbs) => `<div class="n"><span class="t ${cls}">${title}</span>${value}</div>`
+    + (lbs || []).map(x => `<div class="n" style="padding-left:12px;color:#c4c0b4">${x}</div>`).join('');
+  const N = t => `<span class="neg">${t}</span>`, A = t => `<span style="color:var(--amber)">${t}</span>`;
+  const BAR = '<div class="rule"></div>' + sec('c-price', 'Market Price', '62c now · steady', ['(7d) 61c · (14d) 60c · (30d) 60c'])
+    + sec('c-stock', 'Market Inventory', '1,240 listed now', ['(7d) 1,310 · (14d) 1,290 · (30d) 1,300'])
+    + sec('c-chance', 'Sell Chance Now', '81% at 62c', ['(7d) 83% · (14d) 82% · (30d) 82%'])
+    + '<div class="rule"></div>' + sec('c-own', 'Inventory', 'Total: 8 · Bags: 8');
+  const ROD = '<div class="rule"></div>' + sec('c-price', 'Market Price', '10s 90c now · steady', ['(7d) 11s · (14d) 11s 20c · (30d) 11s 10c'])
+    + sec('c-stock', 'Market Inventory', '64 listed now', ['(7d) 70 · (14d) 72 · (30d) 71'])
+    + sec('c-chance', 'Sell Chance Now', '72% at 10s 90c', ['(7d) 74% · (14d) 73% · (30d) 73%'])
+    + '<div class="rule"></div>' + sec('c-time', 'Best Sell Time', 'pattern', ['11s 58c · Saturday Evening · 90%'])
+    + '<div class="rule"></div>' + sec('c-own', 'Inventory', 'Total: 4 · Bags: 4');
+  const GLOVES = '<div class="rule"></div>' + sec('c-price', 'Market Price', `8s now · ${N('low')}`, ['(7d) 10s · (14d) 11s · (30d) 11s'])
+    + sec('c-stock', 'Market Inventory', '12 listed now', ['(7d) 14 · (14d) 15 · (30d) 15'])
+    + '<div class="rule"></div>' + sec('c-de', 'Disenchant Value', `<span class="pos">78% above AH</span> · 14s 25c`,
+        ['75% · 2.5 Soul Dust @ 6s = 11s 25c', '20% · 1.5 Lesser Mystic Essence @ 10s = 3s'])
+    + '<div class="rule"></div>' + sec('c-own', 'Vendor Price', '1s 10c') + sec('c-own', 'Inventory', 'Total: 1 · Bags: 1');
+  const WHOLE = {
+    craft: [
+      ['Today.', doAny('CRAFT', 'craft', '4 Copper Rod', `${P('+12s')} · 90%`) + under('mats 30s · then post Sat 10:00'), BAR],
+      [`${full} the next step on the left of line 2, the money on its right.`, doAny('CRAFT', 'craft', '4× Copper Rod', 'Sells for 44s · 90%')
+        + sub('then post Sat 10:00–18:00', `Mats 30s · Profit ${P('+14s')}`), BAR],
+      [`${exp}`, doAny('CRAFT', 'craft', '4× Copper Rod', 'Sells for 44s · 90%')
+        + sub('then post Sat 10:00–18:00', `Mats 30s · Expected Profit ${P('+12s')}`), BAR],
+    ],
+    craftPost: [
+      ['Today.', doLine('Sat 10:00', '11s 58c · +6% vs now · 90%') + under('for the 18:00 peak'), ROD],
+      [`${full}`, doLine('Sat 10:00–18:00', 'Sells for 44s · 90%') + sub('4× at 11s 58c · +6% vs now') + under(`Mats 30s · Profit ${P('+14s')}`), ROD],
+      [`${exp}`, doLine('Sat 10:00–18:00', 'Sells for 44s · 90%') + sub('4× at 11s 58c · +6% vs now') + under(`Mats 30s · Expected Profit ${P('+12s')}`), ROD],
+    ],
+    deBought: [
+      ['Today.', doAny('DISENCHANT', 'de', '', `${P('+6s 25c')} · mats 14s 25c · 100%`), GLOVES],
+      [`${full} and ${exp} alike.`, doAny('DISENCHANT', 'de', 'now', 'Mats worth 14s 25c') + sub('1×', `Paid 8s · Profit ${P('+6s 25c')}`), GLOVES],
+    ],
+    deOwn: [
+      ['Today.', doAny('DISENCHANT', 'de', '', `${P('+14s 25c')} · mats 14s 25c · 100%`), GLOVES],
+      [`${full}`, doAny('DISENCHANT', 'de', 'now', 'Mats worth 14s 25c') + sub('1×'), GLOVES],
+      [`${exp}`, doAny('DISENCHANT', 'de', 'now', 'Mats worth 14s 25c') + sub('1×', `Expected Profit ${P('+14s 25c')}`), GLOVES],
+    ],
+  };
+  for (const [id, variants] of Object.entries(WHOLE)) {
+    document.getElementById(id).innerHTML = variants.map(([cap, body, rest]) =>
+      `<div><p class="cap">${cap}</p><div class="tooltip">${header}${body}${rest}</div></div>`).join('');
+  }
   for (const [id, variants] of Object.entries(ROWS)) {
     document.getElementById(id).innerHTML = variants.map(([cap, body]) =>
       `<div><p class="cap">${cap}</p><div class="tooltip">${header}${body}${market}</div></div>`).join('');
