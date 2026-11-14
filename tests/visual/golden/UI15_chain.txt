@@ -53,9 +53,9 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 705,402 170x20 "Fish Bowl"
       Texture - 654,406 48x12
     Frame AHProfitWindowRow2 650,422 606x20
-      FontString - 705,422 547x20 "buy 76 Empty Vial from a vendor · 15s 20c"
+      FontString - 705,422 547x20 "buy 76 Empty Vial from a vendor · 15   20  "
     Frame AHProfitWindowRow3 650,442 606x20
-      FontString - 705,442 547x20 "buy 76 Raw Brilliant Smallfish on the AH · 57s"
+      FontString - 705,442 547x20 "buy 76 Raw Brilliant Smallfish on the AH · 57  "
     Frame AHProfitWindowRow4 650,462 606x20
       FontString - 705,462 547x20 "then: post Sun 08:53, for the 16:53 peak"
     Frame AHProfitWindowRow5 650,482 606x20 (hidden)

@@ -28,7 +28,6 @@ AHPanel.COLUMNS = {
   post = { { "Item", 0, 82, "LEFT", "item" }, { "List price", 84, 58, "RIGHT", "each" }, { "Qty", 144, 26, "RIGHT", "qty" },
            { "Est. profit", 172, 64, "RIGHT", "postNet" }, { "Chance", 238, 46, "RIGHT", "chance" } },
 }
-local MONEY = { each = true, postNet = true }
 AHPanel.ICONS = { found = "Interface\\RaidFrame\\ReadyCheck-Ready", gone = "Interface\\RaidFrame\\ReadyCheck-NotReady",
                   checking = "Interface\\RaidFrame\\ReadyCheck-Waiting" }
 local FLAT = "Interface\\Buttons\\WHITE8X8"
@@ -336,7 +335,7 @@ local function FillShop(row, line)
   for _, cell in ipairs(row.cells) do cell:SetTextColor(WHITE[1], WHITE[2], WHITE[3]) end
   row.icon:SetTexture(AHPanel.ICONS[line.state])
   row.item:SetText(line.item)
-  row.why:SetText(line.why)
+  row.why:SetText(VM.WithCoins(line.why))
   local tint = WHY_COLORS[line.whyKind] or MUTED
   row.why:SetTextColor(tint[1], tint[2], tint[3])
   row.colA:SetText(VM.WithCoins(line.price))
@@ -360,7 +359,7 @@ local function FillPost(row, line)
   for _, cell in ipairs(row.cells) do cell:SetTextColor(WHITE[1], WHITE[2], WHITE[3]) end
   for i, c in ipairs(AHPanel.COLUMNS.post) do
     local text = line[c[5]]
-    row.cells[i]:SetText(MONEY[c[5]] and VM.WithCoins(text) or text)
+    row.cells[i]:SetText(VM.WithCoins(text))                              -- coins in every cell (UI30)
   end
   row.profit:SetTextColor(line.postNetColor == "neg" and 1 or 0.24, line.postNetColor == "neg" and 0.29 or 0.86,
                             line.postNetColor == "neg" and 0.24 or 0.31)
@@ -439,7 +438,7 @@ end
 function AHPanel.ShowScan()
   if not ui then return end
   local s = VM.ScanStatus(Replicate.Progress(), AHPanel.BAR_WIDTH)
-  if s.text then ui.status:SetText(s.text) end
+  if s.text then ui.status:SetText(VM.WithCoins(s.text)) end
   ui.bar:SetShown(s.shown)
   ui.fill:SetShown(s.shown and s.px > 0)
   if s.px > 0 then ui.fill:SetWidth(s.px) end

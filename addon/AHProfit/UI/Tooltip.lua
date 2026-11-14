@@ -330,12 +330,12 @@ local function ValueText(line)
   return right
 end
 
---- One line as drawn: left and right text with their colour escapes and coins. A joined or indented line is all in
---- its left text, coloured as its value, with the title painted in its section's colour (TT42); a divider is a
---- spacer the Adapter draws a rule across.
+--- One line's texts with their colour escapes, before coins (Tooltip.Draw adds them). A joined or indented line is
+--- all in its left text, coloured as its value, with the title painted in its section's colour (TT42); a divider is
+--- a spacer the Adapter draws a rule across.
 ---@param line table  A TooltipView line
 ---@return string, string, table, table, string|nil  left, right, left RGB, right RGB, "divider" for a divider
-function Tooltip.Draw(line)
+local function Painted(line)
   if line.divider then return " ", " ", RGB.value, RGB.value, "divider" end
   local left = line.label
   if line.header then         -- the age and its dot amber when stale; the coverage always muted (TT19, TT40)
@@ -354,6 +354,14 @@ function Tooltip.Draw(line)
   end
   if line.isDo then left = Paint("Do: ", "label") .. Paint(line.verb, line.verbColor) .. Paint(line.rest, "value") end
   return left, ValueText(line), line.labelMuted and RGB.muted or RGB.label, valueRgb
+end
+
+--- One line as drawn: Painted's texts with coin icons in both parts, the left one too (UI30).
+---@param line table  A TooltipView line
+---@return string, string, table, table, string|nil  left, right, left RGB, right RGB, "divider" for a divider
+function Tooltip.Draw(line)
+  local left, right, leftRgb, rightRgb, kind = Painted(line)
+  return VM.WithCoins(left), VM.WithCoins(right), leftRgb, rightRgb, kind
 end
 
 --- Add the block to a tooltip that shows an item; failures are swallowed (never break a tooltip).

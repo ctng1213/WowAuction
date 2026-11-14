@@ -29,8 +29,6 @@ MainWindow.CHANCE_STEPS = { 0, 25, 50, 75 }
 -- its label, so all of them fit beside the Min chance box at the minimum width.
 MainWindow.TABS = { { "portfolio", "Portfolio", 62 }, { "disenchant", "Disenchant", 68 }, { "craft", "Craft", 46 },
                     { "flip", "Flip", 40 }, { "inventory", "Inventory", 62 }, { "reservations", "Reservations", 78 } }
-MainWindow.MONEY_FIELDS = { each = true, total = true, net = true, worth = true, buy = true, ev = true, profit = true,
-                            mats = true, sell = true, adjusted = true }
 
 -- Column sets: { header, row field, width (nil = fills), justify }; columns after the filling one anchor from the
 -- right. "today" is the Portfolio tab without a snapshot (the plan's Today rows); pf* are its sections with one.
@@ -509,7 +507,7 @@ local function FillRow(row, line, set)
   for _, c in ipairs(MainWindow.COLUMNS[set]) do
     local text = line[c[2]]
     if set == "pfWeek" and c[2] == "adjusted" then text = line.adjustedArrow end
-    cells[c[2]]:SetText(MainWindow.MONEY_FIELDS[c[2]] and VM.WithCoins(text) or text)
+    cells[c[2]]:SetText(VM.WithCoins(text))                                -- coins in every cell (UI30)
   end
   if cells.action then
     Tint(cells.action, COLORS.black)
@@ -519,7 +517,7 @@ local function FillRow(row, line, set)
   Tint(cells.item, line.muted and COLORS.muted or QUALITY[line.quality] or QUALITY[1])
   if set == "pfWeek" then
     cells.item:SetText(line.item .. " " .. MUTED_ESCAPE .. line.qty .. "|r")
-    row.sub:SetText(line.wait .. " · " .. line.premium)
+    row.sub:SetText(VM.WithCoins(line.wait .. " · " .. line.premium))
   end
   if cells.status then
     cells.status:SetHeight((line.height or MainWindow.ROW_HEIGHT) - 2)
@@ -570,12 +568,12 @@ local function Fill(row, line)
   if kind == "row" then
     FillRow(row, line, set)
   elseif kind == "note" then
-    row.note:SetText(line.text)
+    row.note:SetText(VM.WithCoins(line.text))
   elseif kind == "foot" then
     row.note:SetText(VM.WithCoins(line.text))
   elseif kind == "section" then
     row.dayLabel:SetText(line.label)
-    row.dayTotal:SetText(line.right or VM.WithCoins(line.total or ""))
+    row.dayTotal:SetText(VM.WithCoins(line.right or line.total or ""))
     Tint(row.dayTotal, line.right and COLORS.muted or COLORS[line.netColor] or COLORS.muted)
   elseif kind == "empty" then
     row.dayLabel:SetText(line.title)
@@ -672,7 +670,8 @@ function MainWindow.Render()
   end
   ui.empty:SetShown(#lines == 0)
   ui.empty:SetText(computed.empty)
-  ui.footer:SetText(VM.FooterText(DB.SetupError(), Market.Problem(), Plan.Problem() or computed.problem, computed.footer))
+  ui.footer:SetText(VM.WithCoins(VM.FooterText(DB.SetupError(), Market.Problem(), Plan.Problem() or computed.problem,
+                                                computed.footer)))
   ui.budget:SetText(computed.right and VM.WithCoins(computed.right) or ("Budget " .. VM.WithCoins(VM.Money(gold))))
   ui.track:SetShown(page.scrollable)
   ui.thumb:SetShown(page.scrollable)
@@ -692,7 +691,8 @@ function MainWindow.ShowTip(owner, tip)
     if line.text then
       lines[i] = { text = line.text, rgb = COLORS[line.colour] or COLORS.white, wrap = line.wrap }
     else
-      lines[i] = { left = line.left, right = VM.WithCoins(line.right), leftRgb = COLORS.muted, rightRgb = COLORS.white }
+      lines[i] = { left = VM.WithCoins(line.left), right = VM.WithCoins(line.right), leftRgb = COLORS.muted,
+                   rightRgb = COLORS.white }
     end
   end
   Adapter.ShowTooltipLines(owner, tip.title, lines)

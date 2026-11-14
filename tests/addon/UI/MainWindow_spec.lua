@@ -4,6 +4,11 @@
 local Stubs = require("wow_stubs")
 local UIWorld = require("ui_world")
 
+--- Text as the window draws it: money with coin icons (UI30).
+---@param text string
+---@return string
+local function W(text) return AHProfit.ViewModel.WithCoins(text) end
+
 local NOW = 1760000000000
 
 --- Log in with one Linen post due now and one Copper Bar buy tomorrow.
@@ -195,7 +200,7 @@ describe("MainWindow", function()
     assert_eq({ row.item, row.source, row.crafts, row.mats, row.profit, row.chance:match("^%d+%%") },
               { "Copper Rod", "Mixed", "×3", AHProfit.ViewModel.WithCoins("20s"), AHProfit.ViewModel.WithCoins("+56s"), "100%" })
     assert_eq({ ui.rows[2].note:GetText(), ui.rows[3].note:GetText(), ui.rows[4]:IsShown(), ui.footer:GetText() },
-              { "use 4 owned Copper Bar", "buy 2 Copper Bar on the AH · 20s", false, "1 of 2 known recipes pay now" })
+              { "use 4 owned Copper Bar", W("buy 2 Copper Bar on the AH · 20s"), false, "1 of 2 known recipes pay now" })
   end)
 
   it("A28 the Flip tab lists the plan's flips, re-checked against the live AH", function()
@@ -222,7 +227,7 @@ describe("MainWindow", function()
     local row = FirstRow("flip")
     assert_eq({ row.item, row.qty, row.buy, row.sell, row.when, row.profit, row.chance:match("^%d+%%"), row.risk },
               { "Linen Cloth", "×20", VM.WithCoins("40c"), VM.WithCoins("55c"), "Sat 18:00", VM.WithCoins("+2s 10c"), "88%", "8.0%" })
-    assert_eq(ui.rows[2].note:GetText(), "post Sat 10:00, for the 18:00 peak · in 2 days · on the AH now from 38c")
+    assert_eq(ui.rows[2].note:GetText(), W("post Sat 10:00, for the 18:00 peak · in 2 days · on the AH now from 38c"))
     assert_eq(ui.footer:GetText(), VM.WithCoins("1 flip · capital needed 8s · 1 gone"))
   end)
 
@@ -242,7 +247,7 @@ describe("MainWindow", function()
     AHProfit.MainWindow.ShowTab("flip")
     local ui, VM = AHProfit.MainWindow.Frames(), AHProfit.ViewModel
     assert_eq({ ui.rows[1].cells.flip.item:GetText(), ui.rows[3].cells.flip.item:GetText() }, { "Linen Cloth", "Silk Cloth" })
-    assert_eq(ui.rows[4].note:GetText(), "gone: nothing on the AH at or below 50c now")
+    assert_eq(ui.rows[4].note:GetText(), W("gone: nothing on the AH at or below 50c now"))
     assert_eq(ui.footer:GetText(), VM.WithCoins("1 flip · capital needed 40c · 1 gone"))
   end)
 
@@ -264,7 +269,7 @@ describe("MainWindow", function()
     -- 7 crafts (14 listed × 0.5) of a 99c kit (94.05c after the cut) from 38c vendor wood.
     assert_eq({ row.item, row.source, row.crafts, row.mats, row.profit },
               { "Basic Campfire Kit", "Vendor", "×7", VM.WithCoins("2s 66c"), VM.WithCoins("+3s 92c") })
-    assert_eq(ui.rows[2].note:GetText(), "buy 7 Simple Wood from a vendor · 2s 66c")
+    assert_eq(ui.rows[2].note:GetText(), W("buy 7 Simple Wood from a vendor · 2s 66c"))
     Stubs.ITEM_NAMES[4471], Stubs.ITEM_NAMES[4470] = nil, nil
   end)
 
@@ -282,7 +287,7 @@ describe("MainWindow", function()
     Stubs.Slash("/ahp")
     AHProfit.MainWindow.ShowTab("craft")
     local ui, VM = AHProfit.MainWindow.Frames(), AHProfit.ViewModel
-    assert_eq({ FirstRow("craft").source, ui.rows[2].note:GetText() }, { "Vendor", "buy 9 Simple Wood from a vendor · 3s 42c" })
+    assert_eq({ FirstRow("craft").source, ui.rows[2].note:GetText() }, { "Vendor", W("buy 9 Simple Wood from a vendor · 3s 42c") })
     Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 4470, count = 9 } } } }   -- bought from the vendor
     Stubs.FireEvent("BAG_UPDATE_DELAYED")
     Stubs.Advance(2)
@@ -310,7 +315,7 @@ describe("MainWindow", function()
     AHProfit.MainWindow.ShowTab("craft")
     local ui, notes = AHProfit.MainWindow.Frames(), {}
     for i = 2, 4 do notes[#notes + 1] = ui.rows[i].note:GetText() end
-    assert_eq(notes, { "use 10 owned Linen Cloth", "buy 2 Coarse Thread from a vendor · 20c", "buy 1 Wool Cloth on the AH · 33c" })
+    assert_eq(notes, { "use 10 owned Linen Cloth", W("buy 2 Coarse Thread from a vendor · 20c"), W("buy 1 Wool Cloth on the AH · 33c") })
     Stubs.ITEM_NAMES[4240] = nil
   end)
 
@@ -340,7 +345,7 @@ describe("MainWindow", function()
       if row:IsShown() and row.note:IsShown() then notes[#notes + 1] = row.note:GetText() end
     end
     local vendored = false
-    for _, text in ipairs(notes) do vendored = vendored or text == "Vendor at 9c each" end
+    for _, text in ipairs(notes) do vendored = vendored or text == W("Vendor at 9c each") end
     assert_eq(vendored, true)
     AHProfit.MainWindow.ShowTab("craft")
     assert_eq(ui.empty:GetText(), "None of your recipes pays right now.")
@@ -403,7 +408,7 @@ describe("MainWindow", function()
               { VM.CHECK .. " made", "×1", "×1 on the AH · ends in 11 h", false })
     Stubs.Advance(12 * 3600)                                      -- the auction has ended
     AHProfit.MainWindow.Refresh()
-    assert_eq({ FirstRow("craft").source, ui.rows[2].note:GetText() }, { "Vendor", "buy 1 Simple Wood from a vendor · 38c" })
+    assert_eq({ FirstRow("craft").source, ui.rows[2].note:GetText() }, { "Vendor", W("buy 1 Simple Wood from a vendor · 38c") })
     Stubs.ITEM_NAMES[4471], Stubs.ITEM_NAMES[4470] = nil, nil
   end)
 
@@ -450,7 +455,7 @@ describe("MainWindow", function()
     AHProfit.MainWindow.ShowTab("inventory")
     local ui, row = AHProfit.MainWindow.Frames(), FirstRow("inventory")
     assert_eq({ row.item, row.where, row.qty, row.worth }, { "Basic Campfire Kit", "AH", "×1", AHProfit.ViewModel.WithCoins("76c") })
-    assert_eq({ ui.rows[2].note:GetText(), ui.rows[3]:IsShown() }, { "listed at 80c each · ends in 11 h", false })
+    assert_eq({ ui.rows[2].note:GetText(), ui.rows[3]:IsShown() }, { W("listed at 80c each · ends in 11 h"), false })
     Stubs.ITEM_NAMES[4471] = nil
   end)
 
@@ -492,7 +497,7 @@ describe("MainWindow", function()
     assert_eq({ row.item, row.where, row.qty, row.worth, row.chance:match("^%d+%%") },
               { "Linen Cloth", "bags", "×20", AHProfit.ViewModel.WithCoins("8s 40c"), "90%" })
     assert_eq({ ui.rows[2].note:GetText(), ui.rows[3].cells.inventory.item:GetText(), ui.rows[4].note:GetText() },
-              { "Post now at 45c", "Hearthstone", "Bound · not planned" })
+              { W("Post now at 45c"), "Hearthstone", "Bound · not planned" })
     assert_eq({ ui.footer:GetText(), ui.chance:IsShown(), ui.headers.inventory:IsShown() },
               { AHProfit.ViewModel.WithCoins("2 items · worth 8s 40c"), false, true })
   end)

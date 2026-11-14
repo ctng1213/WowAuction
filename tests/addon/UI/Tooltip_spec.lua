@@ -84,6 +84,16 @@ describe("Tooltip", function()
     assert_eq(tip.doubles[4][1], " ")                                              -- the value-only line's label (TT24)
   end)
 
+  it("UI30 a tooltip line's left part draws its money with coins too", function()
+    local tip = Boot()
+    Stubs.world.containers = { [0] = { size = 1, slots = { [1] = { id = 2589, count = 20 } } } }
+    Stubs.FireEvent("BAG_UPDATE_DELAYED")
+    Stubs.Advance(1)
+    Stubs.HoverItem(2589)
+    local left = tip.doubles[3][1]                                     -- the Do line: "POST 20 now at 45c"
+    assert_eq({ left:find("45" .. AHProfit.ViewModel.COINS.c, 1, true) ~= nil, left:find("45c", 1, true) }, { true, nil })
+  end)
+
   it("TT6 the price at best time includes the trend up to the window's best hour", function()
     Boot(nil, 20)                                                   -- +2%/day; Sat 19:00 UTC is 2.42 days away
     assert_eq(ValueUnder(2589, "Best Sell Time"), "58c · Saturday Evening · —")   -- floor(49 × 1.12 × 1.0484 + 0.5)
