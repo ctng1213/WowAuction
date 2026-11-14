@@ -138,3 +138,8 @@ def test_only_ascii_digits_make_a_tag_and_a_bad_stored_tag_never_breaks_the_line
     assert updates.parse_tag("v٠.٤.٠") is None                  # Arabic-Indic digits
     assert text(UpdateState("0.4.1", checked_ms=FRI_0600, tag="vbad", left_beta=True))["text"] == \
         "up to date · checked 06:00"
+
+
+def test_FM88_a_blocked_install_says_what_to_do_in_one_sentence():
+    assert updates.blocker_message(updates.BRIDGE_IN_USE) == "Quit Claude Desktop (it runs the AI assistant bridge), then press Restart to update."
+    assert updates.blocker_message("something_new") == "The update can't install right now (something_new). Try Restart to update again later."

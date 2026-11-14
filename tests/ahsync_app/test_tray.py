@@ -261,3 +261,27 @@ def test_FM66_a_click_returns_at_once_and_its_action_runs_off_the_gui_thread():
     assert sorted(a for a, _t in ran) == ["open", "status"]
     assert all(t is not threading.current_thread() for _a, t in ran)
 
+
+def test_FM88_notify_shows_a_notification_through_the_icon_and_fails_softly():
+    class Notifying(FakeIcon):
+        """An icon whose backend shows notifications."""
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.notes: list = []
+
+        def notify(self, message: str, title: str) -> None:
+            self.notes.append((title, message))
+
+    class Silent(FakeIcon):
+        """A backend without notifications (pystray raises NotImplementedError there)."""
+
+        def notify(self, message: str, title: str) -> None:
+            raise NotImplementedError
+
+    adapter = tray.PystrayIcon(lambda: None, lambda a: None, lambda: 0)
+    assert adapter.notify("AHSync", "hello") is False                            # no icon yet
+    adapter.icon = Notifying()
+    assert adapter.notify("AHSync", "hello") is True and adapter.icon.notes == [("AHSync", "hello")]
+    adapter.icon = Silent()
+    assert adapter.notify("AHSync", "hello") is False
