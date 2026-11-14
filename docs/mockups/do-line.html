@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Proposal: what the Do line's money means</title>
+<style>
+  :root { --bg: #0f1115; --text: #e6e6e6; --muted: #8f8a7d; --label: #8fd3ff; --gold: #ffd100;
+          --pos: #4cd964; --neg: #ff5c5c; --amber: #ffb347; --line: #2a2f3a; --s-price: #ffd100; --s-stock: #8fd3ff;
+          --s-chance: #6fe08a; --post: #ffd100; --craft: #ff9f43; --de: #c58cff; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.45 -apple-system, "Segoe UI", sans-serif; margin: 24px; max-width: 1240px; }
+  h1 { font-size: 20px; margin: 0 0 4px; } h2 { font-size: 16px; margin: 30px 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+  h3 { font-size: 13px; color: var(--muted); font-weight: normal; margin: 14px 0 6px; }
+  p.note { color: #c9c4b6; max-width: 1050px; } .muted { color: var(--muted); } .pos { color: var(--pos); } .neg { color: var(--neg); }
+  .row { display: flex; gap: 22px; flex-wrap: wrap; align-items: flex-start; }
+  .cap { font-size: 12px; color: var(--muted); margin: 0 0 6px; max-width: 300px; min-height: 48px; }
+  .tooltip { width: 300px; background: #0b0e1a; border: 1px solid #5a6a8a; border-radius: 4px; padding: 8px 10px; font-size: 12px; }
+  .hdr { display: flex; justify-content: space-between; color: var(--gold); margin-bottom: 2px; }
+  .l { display: flex; justify-content: space-between; gap: 8px; white-space: nowrap; } .l > span:last-child { margin-left: auto; text-align: right; }
+  .lbl { color: var(--label); } .post { color: var(--post); } .craft { color: var(--craft); } .de { color: var(--de); }
+  .n { white-space: nowrap; } .n .t { margin-right: 6px; }
+  .c-price { color: var(--s-price); } .c-stock { color: var(--s-stock); } .c-chance { color: var(--s-chance); }
+  .rule { height: 1px; background: #55648a; margin: 5px 0; }
+  .mode { display: inline-block; padding: 1px 8px; border: 1px solid var(--line); border-radius: 10px; font-size: 12px; margin-right: 6px; }
+  .mode.on { border-color: var(--gold); color: var(--gold); }
+  table { border-collapse: collapse; font-size: 13px; } td, th { padding: 4px 10px; border-bottom: 1px solid var(--line); vertical-align: top; text-align: left; }
+  td:first-child { white-space: nowrap; } th { color: var(--muted); font-weight: normal; }
+</style>
+</head>
+<body>
+<h1>Proposal: what the Do line's money means</h1>
+<p class="note"><b>Round 3, 2026-11-13.</b> Decided so far: one shape for your stock and bought stock; <b>Sells for</b> (what the units bring in if they sell, after the AH's 5%) with the chance; <b>Paid</b> only when the plan bought the stock; no "then nothing"; <b>now</b>, or <b>later</b> with its time frame; the quantity as <b>20×</b> (also on CRAFT and MAIL: "4× Copper Rod", "MAIL 6× to Brugan"); <b>when</b> on the Do line and <b>quantity and price</b> under it, for now and later alike. New: the money on line 2 has <b>two modes</b>, switched in game and kept for the account, like <code>/ahp minimap</code>:</p>
+<table>
+  <tr><td><span class="mode on">full</span> default</td><td><code>/ahp profit full</code>: the profit if it all sells, <b>Profit = Sells for − Paid</b>, and the chance is told separately on line 1. Your own stock shows no line 2: its profit would equal Sells for.</td></tr>
+  <tr><td><span class="mode">expected</span></td><td><code>/ahp profit expected</code>: the plan's <b>Expected Profit</b>, which averages in the chance of not selling (the unsold units go to the vendor or disenchanting, and the deposit is lost), less Paid. Shown for your own stock too.</td></tr>
+  <tr><td>Either</td><td><code>/ahp profit</code> alone says which mode is on. The setting changes only the wording and the number shown; the plan, its ranking and what it funds are the same in both.</td></tr>
+</table>
+
+<h2>1. Post now</h2>
+<h3>Linen Cloth you had: 20 at 18c, 88%. Sells for 20 × 18c × 0.95 = 3s 42c. Expected: 0.88 × 342 + 0.12 × (20 × 2c vendor − 4c deposit) = 3s 5c.</h3>
+<div class="row" id="own"></div>
+<h3>Heavy Leather the plan bought: 10 at 40c (4s), posted at 60c, 70%. Sells for 5s 70c; full profit 5s 70c − 4s = +1s 70c. Expected: 0.7 × 570 + 0.3 × (150 − 30) − 400 = +35c.</h3>
+<div class="row" id="bought"></div>
+
+<h2>2. Post later</h2>
+<h3>Mithril Spurs you had: 1 for Saturday's 18:00 peak at 4g 50s, 85%, 2g 95s now. Sells for 4g 27s 50c. Expected: 0.85 × 4g 27s 50c + 0.15 × (1g DE value − 30s deposit) = 3g 73s 88c.</h3>
+<div class="row" id="later"></div>
+<h3>Heavy Leather the plan bought, posted later.</h3>
+<div class="row" id="laterBought"></div>
+
+<h2>3. The other Do lines with money</h2>
+<table>
+  <tr><th>Do</th><th>Today</th><th><span class="mode on">full</span></th><th><span class="mode">expected</span></th></tr>
+  <tr><td><span class="craft">CRAFT</span> 4× Copper Rod</td><td><span class="pos">+12s</span> · 90%<br><span class="muted">mats 30s</span></td>
+      <td>Sells for 44s · 90%<br>Mats 30s · Profit <span class="pos">+14s</span></td>
+      <td>Sells for 44s · 90%<br>Mats 30s · Expected Profit <span class="pos">+12s</span></td></tr>
+  <tr><td><span class="de">DISENCHANT</span>, bought</td><td><span class="pos">+6s 25c</span> · mats 14s 25c · 100%</td>
+      <td>Mats worth 14s 25c<br>Paid 8s · Profit <span class="pos">+6s 25c</span></td>
+      <td>the same: a disenchant always happens, so nothing to average</td></tr>
+  <tr><td><span class="de">DISENCHANT</span>, your stock</td><td><span class="pos">+14s 25c</span> · mats 14s 25c · 100%</td>
+      <td>Mats worth 14s 25c</td><td>Mats worth 14s 25c<br>Expected Profit <span class="pos">+14s 25c</span></td></tr>
+  <tr><td>UNFUNDED flip</td><td>flip · <span class="pos">+5s</span></td>
+      <td>flip · Expected Profit <span class="pos">+5s</span></td><td>the same</td></tr>
+</table>
+<p class="note muted">"Mats worth" is the mats' value at their sale prices, as today. An unfunded row keeps the plan's expected profit in both modes: the plan skipped it, and that number is what it compared; the file has no "sells for" for it.</p>
+
+<h2>4. Notes on building it</h2>
+<table>
+  <tr><td>Sells for, Profit</td><td>qty × price × 0.95, and Sells for − Paid, made in <code>UI/ViewModel.lua</code> and tested.</td></tr>
+  <tr><td>Paid</td><td>One new field: AHSync adds each action's cost basis to <code>PortfolioPlan.lua</code> (it already computes it, SPEC §3.4 expected net). Until a file has it, every post shows the your-stock shape.</td></tr>
+  <tr><td>The setting</td><td>Account-wide, in <code>AHProfitDB</code>, like the minimap button's (UI23); read at draw time, so a switch shows on the next hover without a /reload.</td></tr>
+  <tr><td>Time frame</td><td>From the post time to the selling window's best hour; both are in the plan file already.</td></tr>
+  <tr><td>Layout</td><td>Line 1: <b>Do: POST now</b> or <b>Do: POST Sat 10:00–18:00</b>, Sells for on the right. Line 2, indented: quantity and price ("20× at 18c"; a post later adds "· +53% vs now"), Paid and Profit on the right. A post later from bought stock puts Paid and Profit on a third line, since its line 2 is full. Every line fits 320 px at the small font; anything longer moves under, as today (TT31).</td></tr>
+</table>
+
+<script>
+  const header = '<div class="hdr"><span>AHProfit</span><span class="muted">data 12 min old · 5% coverage</span></div><div class="rule"></div>';
+  const market = '<div class="rule"></div><div class="n"><span class="t c-price">Market Price</span>19c now · steady</div>'
+    + '<div class="n"><span class="t c-stock">Market Inventory</span>24,808 listed now</div>'
+    + '<div class="n"><span class="t c-chance">Sell Chance Now</span>74% at 19c</div>';
+  const doLine = (left, right) => `<div class="l"><span><span class="lbl">Do:</span> <span class="post">POST</span> ${left}</span><span>${right}</span></div>`;
+  const under = text => `<div class="l"><span></span><span>${text}</span></div>`;
+  // Line 2 of the proposed Do: quantity and price indented under "Do: POST", the money on the right.
+  const sub = (left, right) => `<div class="l"><span style="padding-left:12px">${left}</span><span>${right || ''}</span></div>`;
+  const P = t => `<span class="pos">${t}</span>`;
+  const full = '<span class="mode on">full</span>', exp = '<span class="mode">expected</span>';
+
+  const ROWS = {
+    own: [
+      ['Today.', doLine('20 now at 18c', `${P('+3s 5c')} · 88% chance`) + under('then nothing')],
+      [`${full} the profit would equal Sells for, so no money on line 2.`, doLine('now', 'Sells for 3s 42c · 88%') + sub('20× at 18c')],
+      [`${exp} the plan's average, chance counted.`, doLine('now', 'Sells for 3s 42c · 88%') + sub('20× at 18c', `Expected Profit ${P('+3s 5c')}`)],
+    ],
+    bought: [
+      ['Today.', doLine('10 now at 60c', `${P('+35c')} · 70% chance`) + under('then nothing')],
+      [`${full} if all 10 sell; 70% says how likely that is.`, doLine('now', 'Sells for 5s 70c · 70%') + sub('10× at 60c', `Paid 4s · Profit ${P('+1s 70c')}`)],
+      [`${exp} the average over selling (70%) and not (30%).`, doLine('now', 'Sells for 5s 70c · 70%') + sub('10× at 60c', `Paid 4s · Expected Profit ${P('+35c')}`)],
+    ],
+    later: [
+      ['Today, your stock.', doLine('Sat 10:00', '4g 50s · +53% vs now · 85%') + under('for the 18:00 peak')],
+      [`${full} your stock: the comparison with now sits with the price.`, doLine('Sat 10:00–18:00', 'Sells for 4g 27s 50c · 85%') + sub('1× at 4g 50s · +53% vs now')],
+      [`${exp} your stock.`, doLine('Sat 10:00–18:00', 'Sells for 4g 27s 50c · 85%') + sub('1× at 4g 50s · +53% vs now')
+        + under(`Expected Profit ${P('+3g 73s 88c')}`)],
+    ],
+    laterBought: [
+      [`${full} bought (10 at 40c, for Friday's 18:00 peak at 70c, 80%, 60c now): 10 × 70c × 0.95 = 6s 65c; 6s 65c − 4s = +2s 65c.`,
+        doLine('Fri 10:00–18:00', 'Sells for 6s 65c · 80%') + sub('10× at 70c · +17% vs now') + under(`Paid 4s · Profit ${P('+2s 65c')}`)],
+      [`${exp} bought: 0.8 × 665 + 0.2 × (150 − 30) − 400 = +1s 56c.`,
+        doLine('Fri 10:00–18:00', 'Sells for 6s 65c · 80%') + sub('10× at 70c · +17% vs now') + under(`Paid 4s · Expected Profit ${P('+1s 56c')}`)],
+    ],
+  };
+  for (const [id, variants] of Object.entries(ROWS)) {
+    document.getElementById(id).innerHTML = variants.map(([cap, body]) =>
+      `<div><p class="cap">${cap}</p><div class="tooltip">${header}${body}${market}</div></div>`).join('');
+  }
+</script>
+</body>
+</html>

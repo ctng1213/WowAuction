@@ -86,3 +86,13 @@ SX1-SX10
 # H3 (also SEC21's page half: textContent only, one relative fetch)
 CS12
 
+# do-line batch (spec merge 2026-11-13): the Do line's money, /ahp profit, coins everywhere, the paid export
+TT45
+TT46
+TT47
+TT48
+TT49
+TT50
+UI29
+UI30
+EX22
