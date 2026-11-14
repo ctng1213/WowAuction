@@ -90,12 +90,20 @@ describe("Plan", function()
                 Plan.DecodeAction("p;post;2589;20;55;1;0;;;pending;93;;;24").to }, { "Amaya-Grommash", nil, nil })
   end)
 
+  it("EX22 a post decodes with what its net takes off; an empty field and an older 15-field string give 0", function()
+    local Plan = LoginWithRows()
+    assert_eq({ Plan.DecodeAction("h;post;4234;10;60;1;35;;;pending;70;;;24;;400").paid,
+                Plan.DecodeAction("l;post;2589;20;18;1;305;;;pending;88;;;24;;").paid,
+                Plan.DecodeAction("l;post;2589;20;18;1;305;;;pending;88;;;24;").paid }, { 400, 0, 0 })
+  end)
+
   it("EX3 decodes the open actions and the rules, clears included", function()
     local Plan = LoginWithRows()
     assert_eq(Plan.Problem(), nil)
     local actions = Plan.Actions(A)
     assert_eq(actions[1], { id = "m:1:0", kind = "post", key = 2589, qty = 20, price = 55, at = T + 5 * HOUR, net = 1046,
-                            windowEnd = T + 10 * HOUR, status = "pending", chance = 93, peak = T + 13 * HOUR, vendor = false })
+                            windowEnd = T + 10 * HOUR, status = "pending", chance = 93, peak = T + 13 * HOUR, vendor = false,
+                            paid = 0, planQty = 20, chainCraft = false, chainBuyPaid = 0 })   -- DL3's chain notes
     assert_eq({ actions[2].kind, actions[2].price, actions[2].parent, actions[2].status }, { "hold", nil, "m:1:0", "late" })
     assert_eq(Plan.Actions(B), {})
     assert_eq({ Plan.Rule(2589) }, { "no_buy", T })
@@ -129,7 +137,7 @@ describe("Plan", function()
   end)
 
   it("FM35 a plan from a newer AHSync says to deploy the addon", function()
-    local Plan = LoginWithRows(function(plan) plan.exportVersion = 7 end)
+    local Plan = LoginWithRows(function(plan) plan.exportVersion = 8 end)
     assert_eq({ Plan.Actions(A), #AHProfitDB.scans }, { {}, 3 })
     assert_eq(Plan.Problem(), "This addon is older than AHSync's files: run tools/deploy.py, then /reload")
   end)

@@ -68,6 +68,7 @@ def test_IU10_the_idle_status_pass_marks_missed_without_history_and_the_plan_fil
     kind, status, replaces, anchor, start = s["post1:r"]
     assert (kind, status, replaces, anchor, start) == ("post", "pending", "post1", 780.0, MONDAY + WED * DAY + 20 * HOUR)
     assert counts == {"late": 1, "missed": 2, "replaced": 1, "positions": 0}
+    assert db.conn.execute("SELECT paid FROM actions WHERE action_id = 'post1:r'").fetchone() == (None,)   # EX22: no cost
     assert status_pass(db, CFG, NOW) == {"late": 0, "missed": 0, "replaced": 0, "positions": 0}   # nothing to change
     exported = {r[0]: r[10] for r in db.addon_actions(["Amaya-G"])}                   # what PortfolioPlan.lua gets
     assert "buy1" not in exported and "post1" not in exported and exported["post2"] == "late"

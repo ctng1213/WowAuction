@@ -53,7 +53,7 @@ from ahsync.intel.contract import IntelWindow, ItemIntel, MarketIntelligence, ag
 MARKET_SCHEMA_VERSION = 1      # the addon refuses any other (FM17)
 # Bumped on ANY change to either addon file's format, additive or not, so an addon and an AHSync of
 # different builds say which side is stale (SPEC §3.5, FM34, FM35). Equals AHProfit.EXPORT_VERSION (Core/Market.lua).
-EXPORT_VERSION = 6              # 6: the tooltip's market lines: sell-through, supply 7/14, Sell Chance Now, windows'
+EXPORT_VERSION = 7              # 7: plan actions end in paid (EX22); 6: the tooltip's market lines: sell-through, supply 7/14, Sell Chance Now, windows'
                                 # percentages, coverage30 (M33b); 5: market items end in salesDays (EX21); 4: K, G and the portfolio snapshot (EX17, EX18); 3: closes30
                                 # (TT23, PP4); 2: a mail's recipient (EX16)
 HOUR_MS = 3_600_000

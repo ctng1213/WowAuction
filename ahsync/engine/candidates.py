@@ -658,6 +658,6 @@ def _later_actions(f: SellFacts, o: PostOption, stacks: list, price: int, buy_ms
     chain = f"later:{f.key}:{buy_ms // HOUR_MS}"
     start, end, best = o.window
     return [PlanAction("buy", char_id, f.key, units, price, buy_ms, None, None, None, None, expected,
-                       expected - price * units, chain=chain, source="ah"),
+                       expected - price * units, chain=chain, source="ah", paid=price * units),
             PlanAction("post", char_id, f.key, units, o.price, max(o.at_ms, buy_ms), start, end, best, sold / units,
-                       expected, expected - price * units, o.duration_h, chain)]
+                       expected, expected - price * units, o.duration_h, chain, paid=price * units)]

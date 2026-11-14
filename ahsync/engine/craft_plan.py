@@ -265,12 +265,12 @@ def chain_actions(recipe: craft.Recipe, option: craft.CraftOption, world: CraftW
                 out += [_step("mail", sender, key, sent, at, chain, to_char=option.crafter) for sender, sent in sends]
             at += STEP_MS if mail else 0
             out.append(PlanAction("craft", option.crafter, recipe.product, option.crafts, None, at, None, None, None,
-                                  None, expected, profit, chain=chain))
+                                  None, expected, profit, chain=chain, paid=expected - profit))
         at += STEP_MS
     o = opts[i]
     start, end, best = o.window if o.window else (None, None, None)
     out.append(PlanAction("post", option.crafter, recipe.product, units, o.price, max(o.at_ms, at), start, end, best,
-                          p, expected, profit, o.duration_h, chain))
+                          p, expected, profit, o.duration_h, chain, paid=expected - profit))
     return out
 
 

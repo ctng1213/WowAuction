@@ -209,7 +209,7 @@ describe("MainWindow layout", function()
     Layout.Golden("UI15_chain", ui.frame)
     assert_eq({ ui.rows[1].cells.today.action:GetText(), ui.rows[2].note:GetText(), ui.rows[4].note:GetText(),
                 ui.rows[5]:IsShown() },
-              { "CRAFT", "buy 76 Empty Vial from a vendor · 15s 20c", "then: post Sun 08:53, for the 16:53 peak", false })
+              { "CRAFT", AHProfit.ViewModel.WithCoins("buy 76 Empty Vial from a vendor · 15s 20c"), "then: post Sun 08:53, for the 16:53 peak", false })
     Stubs.ITEM_NAMES[3371], Stubs.ITEM_NAMES[6303], Stubs.ITEM_NAMES[6370] = nil, nil, nil
   end)
 

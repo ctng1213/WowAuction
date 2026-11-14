@@ -71,7 +71,8 @@ function MinimapButton.ShowTip(owner)
   local lines = {}
   if tip.problem then lines[1] = { text = tip.problem, rgb = AMBER, wrap = true } end
   for _, line in ipairs(tip.lines) do
-    lines[#lines + 1] = { left = line.left, right = VM.WithCoins(line.right), leftRgb = MUTED, rightRgb = { 1, 1, 1 } }
+    lines[#lines + 1] = { left = VM.WithCoins(line.left), right = VM.WithCoins(line.right), leftRgb = MUTED,
+                          rightRgb = { 1, 1, 1 } }
   end
   lines[#lines + 1] = { text = tip.hint, rgb = HINT }
   Adapter.ShowTooltipLines(owner, tip.title, lines, { text = tip.age, rgb = tip.ageAmber and AMBER or MUTED })

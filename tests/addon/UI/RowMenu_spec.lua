@@ -43,7 +43,7 @@ describe("RowMenu", function()
     assert_eq({ menu.frame:IsShown(), AHProfitDB.reserves["Amaya-Grommash"], Suggested(panel) }, { false, "159,10", "×3" })
     Stubs.Slash("/ahp")
     AHProfit.MainWindow.ShowTab("inventory")
-    assert_eq(AHProfit.MainWindow.Frames().rows[2].note:GetText(), "Keeping 10 for yourself · Post now at 24c")
+    assert_eq(AHProfit.MainWindow.Frames().rows[2].note:GetText(), AHProfit.ViewModel.WithCoins("Keeping 10 for yourself · Post now at 24c"))
 
     panel.post[1]:Click("RightButton")
     menu.keepAll:Click()

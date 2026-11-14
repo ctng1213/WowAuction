@@ -410,11 +410,15 @@ ViewModel.COINS = { g = "|TInterface\\MoneyFrame\\UI-GoldIcon:0:0:1:0|t",
                     s = "|TInterface\\MoneyFrame\\UI-SilverIcon:0:0:1:0|t",
                     c = "|TInterface\\MoneyFrame\\UI-CopperIcon:0:0:1:0|t" }
 
---- Money text with coin icons in place of the g, s and c letters: "1g 18s" -> "1<gold> 18<silver>".
----@param text string  From Money or SignedMoney; "—" and other text pass unchanged
----@return string
+--- Text with coin icons in place of money's g, s and c letters: "1g 18s" -> "1<gold> 18<silver>" (UI30). Only a
+--- whole word of digits then g, s or c is money: "1st", "Sat 10:00" and the hex digits of a colour escape pass
+--- unchanged, and running it twice changes nothing. Coin money before painting it: an amount right after a colour
+--- escape ("|cff40dc505s") is not a whole word, so it keeps its letter.
+---@param text string|number|nil  Any text to draw
+---@return string|nil             The text with coins; nil for nil
 function ViewModel.WithCoins(text)
-  return (tostring(text):gsub("(%d+)([gsc])", function(n, unit) return n .. ViewModel.COINS[unit] end))
+  if text == nil then return nil end
+  return (tostring(text):gsub("%f[%w](%d+)([gsc])%f[%W]", function(n, unit) return n .. ViewModel.COINS[unit] end))
 end
 
 --- The footer's text: the most urgent problem first, so a blank tab is never silent (FM23, FM34, FM35, EX4).

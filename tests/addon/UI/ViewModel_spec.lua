@@ -164,6 +164,16 @@ describe("ViewModel", function()
     assert_eq(VM.Age(nil, NOW), { text = "no data", amber = true })
   end)
 
+  it("UI30 coins replace money's letters only: whole words of digits then g, s or c", function()
+    local VM = Boot()
+    local G, S, C = VM.COINS.g, VM.COINS.s, VM.COINS.c
+    assert_eq({ VM.WithCoins("4g 5s 6c"), VM.WithCoins("+1s 70c"), VM.WithCoins("20× at 18c") },
+              { "4" .. G .. " 5" .. S .. " 6" .. C, "+1" .. S .. " 70" .. C, "20× at 18" .. C })
+    assert_eq({ VM.WithCoins("1st"), VM.WithCoins("Sat 10:00"), VM.WithCoins("3 stacks"), VM.WithCoins("|cff9c0000x|r") },
+              { "1st", "Sat 10:00", "3 stacks", "|cff9c0000x|r" })          -- a colour's hex digits are not money
+    assert_eq({ VM.WithCoins(VM.WithCoins("2s 66c")), VM.WithCoins(nil) }, { VM.WithCoins("2s 66c"), nil })   -- idempotent
+  end)
+
   it("A23 Disenchant rows say what the mats are and whether an enchanter on the account can do it", function()
     local VM = Boot()
     LOOKS[6585], LOOKS[10940], LOOKS[10939], LOOKS[10978] = { name = "Scouting Gloves", quality = 2 },

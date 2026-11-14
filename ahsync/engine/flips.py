@@ -280,13 +280,13 @@ def flip_actions(f: SellFacts, stage: _Stage, char_id: str, now_ms: int, s: Plan
     chain = chain or f"flip:{f.key}"
     opts = post_options(f, now_ms, s)
     buy = PlanAction("buy", char_id, f.key, stage.units, stage.top_price, now_ms, None, None, None, None,
-                     stage.expected, stage.expected - stage.cost, chain=chain, source="ah")
+                     stage.expected, stage.expected - stage.cost, chain=chain, source="ah", paid=stage.cost)
     posts = []
     for (i, price), (units, expected, sold, cost) in sorted(stage.posts.items()):
         o = opts[i]
         start, end, best = o.window if o.window else (None, None, None)
         posts.append(PlanAction("post", char_id, f.key, units, price, o.at_ms, start, end, best, sold / units,
-                                expected, expected - cost, o.duration_h, chain))
+                                expected, expected - cost, o.duration_h, chain, paid=cost))
     return [buy] + sorted(posts, key=lambda a: (a.at_ms, a.price))
 
 

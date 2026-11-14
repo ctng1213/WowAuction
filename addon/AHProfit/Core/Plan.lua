@@ -79,10 +79,11 @@ local function Optional(s)
 end
 
 --- Split one action string (EX3).
----@param text string  "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status;chance;peakMs;source;durationH;toChar"
+---@param text string  "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status;chance;peakMs;source;durationH;toChar;paid"
 ---@return table       Fields by name; numbers as numbers, empty fields nil; vendor = true for a vendor buy (EX7);
 ---                    duration in hours for a post (EX9), nil from an older 13-field string; to = a mail's
----                    recipient (C22, EX16)
+---                    recipient (C22, EX16); paid = copper net takes off for the units, 0 when empty or from an
+---                    older 15-field string (EX22)
 function Plan.DecodeAction(text)
   local f, i = {}, 0
   for field in (text .. ";"):gmatch("([^;]*);") do
@@ -92,7 +93,7 @@ function Plan.DecodeAction(text)
   return { id = f[1], kind = f[2], key = tonumber(f[3]), qty = tonumber(f[4]), price = tonumber(f[5]),
            at = tonumber(f[6]), net = tonumber(f[7]), parent = Optional(f[8]), windowEnd = tonumber(f[9]),
            status = f[10], chance = tonumber(f[11]), peak = tonumber(f[12]), vendor = f[13] == "v",
-           duration = tonumber(f[14]), to = Optional(f[15] or "") }
+           duration = tonumber(f[14]), to = Optional(f[15] or ""), paid = tonumber(f[16] or "") or 0 }
 end
 
 --- A recipe's product, from the recipes the addon has seen.
@@ -119,15 +120,45 @@ local function EventDid(db, e)
   return nil
 end
 
+--- Note on each action, before done ones go, what its whole chain held (SPEC §4.3 Do line, DL3): whether it makes
+--- something (a craft step), and what its buys cost. A post of a crafted product says Mats, and a bought
+--- disenchant its Paid, even after the craft or the buy is done and gone.
+---@param actions table[]  Decoded actions (changed: chainCraft, chainBuyPaid and planQty added)
+local function NoteChains(actions)
+  local chains = {}
+  for _, a in ipairs(actions) do
+    local id = a.parent or a.id or a                              -- an action without an id is its own chain
+    local c = chains[id] or { craft = false, buyPaid = 0 }
+    chains[id] = c
+    if a.kind == "craft" then c.craft = true end
+    if a.kind == "buy" then c.buyPaid = c.buyPaid + (a.paid or 0) end
+  end
+  for _, a in ipairs(actions) do
+    local c = chains[a.parent or a.id or a]
+    a.chainCraft, a.chainBuyPaid, a.planQty = c.craft, c.buyPaid, a.qty
+  end
+end
+
+--- Scale a partly done action's paid and net to the units left (DL3): Paid and Profit are for what is still to do.
+---@param a table  A decoded action after DoneLocally lowered its qty
+local function ScaleLeft(a)
+  if a.qty >= a.planQty or a.planQty <= 0 then return end
+  local share = a.qty / a.planQty
+  a.paid = math.floor((a.paid or 0) * share + 0.5)
+  if a.net then a.net = a.net * share end
+end
+
 --- Mark the actions your events after the plan already did, locally and provisionally (SPEC §5.2, FM18):
 --- each confirmed purchase, post or craft newer than the character's ingestedUntil takes its units off
---- the earliest open action of the same kind and item; an action with nothing left goes.
+--- the earliest open action of the same kind and item; an action with nothing left goes, and one partly done keeps
+--- the paid and net of the units left (DL3).
 ---@param charId string
 ---@param actions table[]   The character's decoded actions, in time order (their qty is lowered)
 ---@param since number|nil  The character's ingestedUntil, ms; nil = AHSync has read none of its events
 ---@return table[], number  The actions left, and the events applied
 function Plan.DoneLocally(charId, actions, since)
   local db, applied = AHProfit.DB.Get() or {}, 0
+  NoteChains(actions)
   for _, e in ipairs(db.events or {}) do
     local kind, key, units = EventDid(db, e)
     if kind and key and e.char == charId and e.at > (since or 0) then
@@ -143,7 +174,10 @@ function Plan.DoneLocally(charId, actions, since)
   end
   local left = {}
   for _, a in ipairs(actions) do
-    if a.qty > 0 then left[#left + 1] = a end
+    if a.qty > 0 then
+      ScaleLeft(a)
+      left[#left + 1] = a
+    end
   end
   return left, applied
 end

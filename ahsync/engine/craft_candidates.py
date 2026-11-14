@@ -467,6 +467,6 @@ def _de_actions(key: int, d: DeInfo, taken: Sequence[tuple[int, int]], char_id: 
     ev = d.ev_each * units
     chain = f"de:{key}"
     return [PlanAction("buy", char_id, key, units, taken[-1][0], now_ms, None, None, None, None, ev, ev - cost,
-                       chain=chain, source="ah"),
+                       chain=chain, source="ah", paid=cost),
             PlanAction("de", char_id, key, units, None, now_ms + STEP_MS, None, None, None, None, ev, 0.0,
                        chain=chain)]
