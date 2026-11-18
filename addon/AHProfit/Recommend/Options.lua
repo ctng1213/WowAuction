@@ -212,12 +212,14 @@ end
 ---@param recipes table[]  Recipes considered
 ---@param owned table      key -> units you carry, not yet used
 ---@param ctx table        { itemOf, levelsOf, vendorBuyOf (key -> vendor price or nil; optional) }
----@return table           A Craft.Option market
+---@return table           A Craft.Option market; its owned holds only the recipes' mats, since Craft.Option copies
+---                        all of it on every try (A102)
 local function CraftMarket(recipes, owned, ctx)
-  local market = { owned = owned, hold = {}, vendor = {}, books = {} }
+  local market = { owned = {}, hold = {}, vendor = {}, books = {} }
   for _, r in ipairs(recipes) do
     for _, reagent in ipairs(r.reagents) do
       local key = reagent[1]
+      market.owned[key] = owned[key]
       local item, levels = ctx.itemOf(key), ctx.levelsOf(key)
       local vendor = ctx.vendorBuyOf and ctx.vendorBuyOf(key) or nil
       market.vendor[key] = vendor
@@ -239,6 +241,33 @@ local function CraftMarket(recipes, owned, ctx)
   return market
 end
 
+--- One recipe's option against the units still owned (Options.Crafts' step).
+---@param r table       A known recipe
+---@param units table   key -> units carried (the cap's held units)
+---@param owned table   key -> units carried, not yet used by an earlier pick
+---@param ctx table     As Options.Crafts
+---@return table        Craft.Option's option, with p (the product's chance)
+local function CraftOption(r, units, owned, ctx)
+  local net, p = Options.ProductNet(r, ctx.itemOf(r.product), ctx.vendorOf(r.product) or 0)
+  local listed = (ctx.listed or {})[r.product]
+  local mine = listed and listed.units or 0
+  local cap = Options.CraftCap(r, ctx.itemOf(r.product), (units[r.product] or 0) + mine, ctx.nowMs, mine)
+  local option = Craft.Option(r, CraftMarket({ r }, owned, ctx), net, ctx.budget, cap)          -- A64
+  option.p = p
+  return option
+end
+
+--- Whether a recipe uses any of some mats.
+---@param r table     A known recipe
+---@param keys table  key -> anything
+---@return boolean
+local function UsesAny(r, keys)
+  for _, reagent in ipairs(r.reagents) do
+    if keys[reagent[1]] ~= nil then return true end
+  end
+  return false
+end
+
 --- The addon's own craft actions (A9, A20): the best-paying craft first, each using what the
 --- ones before it left, until none pays. SPEC GAP: vendor-sold mats have no buy price in game
 --- data the addon keeps, so only owned and AH mats are used.
@@ -253,15 +282,15 @@ function Options.Crafts(recipes, units, ctx)
   for _, r in ipairs(recipes) do
     if not (ctx.vendorBuyOf and ctx.vendorBuyOf(r.product)) then left[#left + 1] = r end   -- R23: no vendor products
   end
+  local options = {}            -- A102: recipe -> its option; only what the owned units change is evaluated again
   while #left > 0 do
     local best, bestAt
     for i, r in ipairs(left) do
-      local net, p = Options.ProductNet(r, ctx.itemOf(r.product), ctx.vendorOf(r.product) or 0)
-      local listed = (ctx.listed or {})[r.product]
-      local mine = listed and listed.units or 0
-      local cap = Options.CraftCap(r, ctx.itemOf(r.product), (units[r.product] or 0) + mine, ctx.nowMs, mine)
-      local option = Craft.Option(r, CraftMarket({ r }, owned, ctx), net, ctx.budget, cap)          -- A64
-      option.p = p
+      local option = options[r]
+      if not option then
+        option = CraftOption(r, units, owned, ctx)
+        options[r] = option
+      end
       if option.crafts > 0 and (not best or option.profit > best.profit) then best, bestAt = option, i end
     end
     if not best then break end
@@ -269,6 +298,9 @@ function Options.Crafts(recipes, units, ctx)
     for key, used in pairs(best.ownedUsed) do
       owned[key] = owned[key] - used
       reserved[key] = (reserved[key] or 0) + used
+    end
+    for _, other in ipairs(left) do
+      if UsesAny(other, best.ownedUsed) then options[other] = nil end
     end
     out[#out + 1] = { id = "own:craft:" .. r.spell, kind = "craft", key = r.product, qty = best.crafts, net = best.profit,
                       chance = best.p and math.floor(best.p * 100 + 0.5) or nil, at = ctx.nowMs, status = "pending",

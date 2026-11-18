@@ -23,6 +23,8 @@ local ICON = "Interface\\AddOns\\AHProfit\\Media\\MinimapIcon"
 local AMBER, MUTED, HINT = { 1, 0.69, 0.18 }, { 0.56, 0.54, 0.49 }, { 0.67, 0.67, 0.67 }
 
 local button, dot = nil, nil
+local today = { key = nil, atMs = nil, value = nil }   -- A103: the hover's last Today list, reused for GRACE_MS
+MinimapButton.GRACE_MS = 5 * 60000      -- A103 (the user's choice, 2026-11-18): the hover line may lag your bags by this
 
 --- The saved setting, to read: an empty one until a drag or /ahp minimap first writes it.
 ---@return table  AHProfitDB.minimap ({ angle, hidden }), or a fresh {} (not stored)
@@ -58,10 +60,29 @@ local function TipInput(withToday)
                   planStale = Plan.Problem() ~= nil, name = info.name or "" }
   input.inCombat = Adapter.InCombat()                -- the Today list is real work: never in combat (SPEC §5.1)
   if withToday and not input.inCombat and not input.marketProblem and Plan.HasPlan() then
-    local ok, today = pcall(AHProfit.MainWindow.Today, (info.name or "") .. "-" .. (info.realm or ""))
-    input.today, input.failed = ok and today or nil, not ok
+    local ok, list = pcall(MinimapButton.Today, (info.name or "") .. "-" .. (info.realm or ""))
+    input.today, input.failed = ok and list or nil, not ok
   end
   return input
+end
+
+--- The hover's Today list (A103): the last one while it is under GRACE_MS old, for the same character and Min chance;
+--- else worked out again. Only this hover line can lag (the window and the AH panel work out their own). A failure is
+--- never kept.
+---@param charId string
+---@return table  MainWindow.Today's result
+function MinimapButton.Today(charId)
+  local key, nowMs = charId .. ":" .. AHProfit.MainWindow.MinChance(), Adapter.NowMs()
+  if today.key ~= key or not today.atMs or nowMs - today.atMs >= MinimapButton.GRACE_MS then
+    today.value = AHProfit.MainWindow.Today(charId)
+    today.key, today.atMs = key, nowMs
+  end
+  return today.value
+end
+
+--- Forget the hover's Today list, so the next hover works it out (tests).
+function MinimapButton.Forget()
+  today = { key = nil, atMs = nil, value = nil }
 end
 
 --- Hover: the data age, this character's Today count and expected net, and the hint (UI20).

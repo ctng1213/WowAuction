@@ -158,6 +158,23 @@ describe("Options", function()
               { 1, 16, 0 })
   end)
 
+  it("A102 Today's crafts evaluate a recipe again only after a pick used one of its mats", function()
+    local Options = Boot()
+    local rod = { spell = 2663, product = 6217, yieldMin = 1, yieldMax = 1, reagents = { { 2840, 2 } }, crafters = 1 }
+    local pants = { spell = 2662, product = 2852, yieldMin = 1, yieldMax = 1, reagents = { { 2840, 2 } }, crafters = 1 }
+    local bolt = { spell = 2963, product = 2996, yieldMin = 1, yieldMax = 1, reagents = { { 2589, 2 } }, crafters = 1 }
+    local items = { [6217] = { postPrice = 4000, chance = 1 }, [2852] = { postPrice = 3000, chance = 1 },
+                    [2996] = { postPrice = 500, chance = 1 }, [2840] = { sellValue = 950 }, [2589] = { sellValue = 10 } }
+    local Craft, calls = AHProfit.Engine.Craft, 0
+    local Option = Craft.Option
+    Craft.Option = function(...) calls = calls + 1; return Option(...) end
+    local rows = Options.Crafts({ rod, pants, bolt }, { [2840] = 6, [2589] = 10 }, Ctx({}, items, {}))
+    Craft.Option = Option
+    assert_eq({ #rows, rows[1].key, rows[1].qty, rows[2].key, rows[2].qty }, { 2, 6217, 3, 2996, 5 })
+    -- 3 on the first pass; the rod took the bars, so only the pants again (the bolt kept); nothing after the bolt
+    assert_eq(calls, 4)
+  end)
+
   it("A20 a mat a craft uses is not also offered for sale", function()
     local Options = Boot()
     local rod = { spell = 2663, product = 6217, yieldMin = 1, yieldMax = 1, reagents = { { 2840, 2 } }, crafters = 1 }
