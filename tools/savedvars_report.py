@@ -182,6 +182,8 @@ def report_diagnostics(data: AHProfitData, verbose: bool) -> None:
             print(f"  {namespace}: {len(functions)} functions: {' '.join(functions)}")
     print(f"  last trade skill window: {(d.trade_skill or 'none opened this session').replace('|', '  ')}")
     print(f"  last full scan read: {(d.scan or 'no scan this session').replace('|', '  ')}")
+    print(f"  AH panel (ms; budget 2 per redraw, 4 per disenchant step): "
+          f"{(d.panel or 'not opened this session').replace('|', '  ')}")
     print(f"  own auctions: {own_auctions_line(d.own_auctions)}")
     print("  capture trace (money takes, disenchants, loot windows; oldest first):")
     for line in d.traces or ("nothing taken, disenchanted or looted this session",):

@@ -23,4 +23,20 @@ describe("Live", function()
     assert_eq({ Live.Item(2589, 2000), Live.Item(4306, nil) }, { nil, {} })
   end)
 
+  it("A99 an item's live levels are sorted once per book, the same table answering each caller", function()
+    Stubs.Reset()
+    Stubs.Login()
+    local Live, sorts = AHProfit.Live, 0
+    local book = { [2589] = { [45] = { [101] = 1 }, [40] = { [101] = 2 } } }
+    AHProfit.Scan.Replicate.LastBook = function() return { at = 2000, book = book } end
+    local levels = Live.Levels
+    Live.Levels = function(prices) sorts = sorts + 1; return levels(prices) end
+    local first = Live.Item(2589, 1000)
+    assert_eq({ first, rawequal(Live.Item(2589, 1000), first), rawequal(Live.Item(2589, nil), first), sorts },
+              { { { price = 40, units = 40 }, { price = 45, units = 20 } }, true, true, 1 })
+    local newer = { [2589] = { [38] = { [101] = 1 } } }
+    AHProfit.Scan.Replicate.LastBook = function() return { at = 3000, book = newer } end
+    assert_eq({ Live.Item(2589, 1000), sorts }, { { { price = 38, units = 20 } }, 2 })   -- a newer book, its own levels
+  end)
+
 end)

@@ -27,6 +27,7 @@ class Diagnostics:
     scan: str | None = None                # last full-scan read "calls=..|n=..|skipped=..|steps=..|maxStepMs=..|kind=..|rows=..|dropped=.."
     traces: tuple[str, ...] = ()           # last capture decisions, oldest first ("take 1 money=.. -> payout")
     own_auctions: str | None = None        # owned-auction probe "timeLeftSeconds=number|nil" (A70); None: none read
+    panel: str | None = None               # AH panel timings "openMs=..|redrawMs=..|slowestMs=..|redraws=..|deSteps=.." (A100)
 
 
 
@@ -75,4 +76,5 @@ def read_diagnostics(value: object) -> Diagnostics | None:
         skill_lines=text("skillLines"), merchant=text("merchant"), setup_error=text("setupError"),
         namespaces=tuple(namespaces), professions=text("professions"), trade_skill=text("tradeSkill"), scan=text("scan"),
         traces=tuple(t for t in (text("traces") or "").split(";") if t), own_auctions=text("ownAuctions"),
+        panel=text("panel"),
     )

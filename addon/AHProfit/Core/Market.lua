@@ -30,6 +30,8 @@ Market.FIELDS = { "cur", "curQty", "curAgeMin", "med7", "med30", "p10", "p90", "
 local state = nil                  -- { status, market = { I, C, observationsUntil, curveHour }, file } once checked
 local cache, cached = {}, 0
 local candidates, graph = {}, nil  -- decoded K strings by position; the decoded G
+local disenchantable = nil         -- { of = the state it was parsed from, items } (A96)
+local curves, curvesCached = {}, 0 -- decoded curves, kept like items (A101)
 
 --- Count and total length of every item and curve string, the file's checksum.
 ---@param markets table  AHProfitMarket.markets
@@ -181,12 +183,30 @@ end
 function Market.Curve(key)
   local s = State()
   if s.status ~= "ok" then return nil end
+  local curve = curves[key]
+  if curve then return curve end                               -- A101: decoded once, callers only read it
   local text = s.market.C[key]
   if not text then return nil end
   local SellProb = AHProfit.Engine.SellProb
   local full = #text == 24 * #SellProb.CURVE_AHEAD
-  return { rows = SellProb.DecodeCurve(text, full and #SellProb.CURVE_AHEAD or 3),
-           aheadPoints = full and SellProb.CURVE_AHEAD or { 0, 5, 20 }, refreshMs = s.market.curveHour * 3600000 }
+  curve = { rows = SellProb.DecodeCurve(text, full and #SellProb.CURVE_AHEAD or 3),
+            aheadPoints = full and SellProb.CURVE_AHEAD or { 0, 5, 20 }, refreshMs = s.market.curveHour * 3600000 }
+  if curvesCached >= Market.CACHE_LIMIT then curves, curvesCached = {}, 0 end
+  curves[key], curvesCached = curve, curvesCached + 1
+  return curve
+end
+
+--- An item's current price alone, without decoding the item (A101): the live portfolio prices every item of its
+--- graph, more than the item cache holds.
+---@param key number  Item key
+---@return number|nil  Copper a unit (Market.Item(key).cur); nil when unknown or not listed
+function Market.Cur(key)
+  local item = cache[key]
+  if item then return item.cur end
+  local s = State()
+  if s.status ~= "ok" then return nil end
+  local text = s.market.I[key]
+  return text and tonumber(text:match("^([^,;]*)")) or nil
 end
 
 --- The hours this market was observed in the last 30 days, for the tooltip header's coverage (TT40).
@@ -235,7 +255,8 @@ end
 --- Forget the checked file and the caches (tests, and a future reload of the data).
 function Market.Reset()
   state, cache, cached = nil, {}, 0
-  candidates, graph = {}, nil
+  candidates, graph, disenchantable = {}, nil, nil
+  curves, curvesCached = {}, 0
 end
 
 --- Split a text on a separator, keeping empty fields.
@@ -349,11 +370,12 @@ function Market.FlipOffers()
   return out
 end
 
---- Items one could disenchant, with what that takes (A23).
+--- Items one could disenchant, with what that takes (A23). Parsed once per checked file (A96): callers only read it.
 ---@return table  key -> { skill, quality, ilvl, kind = "armor" | "weapon" }; empty without usable data
 function Market.Disenchantable()
   local s = State()
   if s.status ~= "ok" then return {} end
+  if disenchantable and disenchantable.of == s then return disenchantable.items end
   local out = {}
   for key, text in pairs(s.market.D or {}) do
     local skill, quality, ilvl, kind = text:match("^(%d+),(%d+),(%d+),([aw])$")
@@ -362,5 +384,6 @@ function Market.Disenchantable()
                    kind = kind == "w" and "weapon" or "armor" }
     end
   end
+  disenchantable = { of = s, items = out }
   return out
 end

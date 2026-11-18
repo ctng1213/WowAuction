@@ -36,6 +36,7 @@ Core\Plan.lua
 Recommend\Live.lua
 Capture\Purchases.lua
 Recommend\Options.lua
+Recommend\DeTargets.lua
 Recommend\Reserves.lua
 Recommend\Reselect.lua
 Recommend\Adapt.lua

@@ -51,16 +51,14 @@ end
 local function LivePrice(key)
   local levels = LevelsOf(key)
   if levels then return levels[1] and levels[1].price end
-  local item = Market.Item(key)
-  return item and item.cur
+  return Market.Cur(key)                                      -- A101: no decode for a price
 end
 
 --- The price the export was valued at: the market file's.
 ---@param key number
 ---@return number|nil
 local function BasePrice(key)
-  local item = Market.Item(key)
-  return item and item.cur
+  return Market.Cur(key)
 end
 
 --- What a merchant pays for one of an item, from the item cache.

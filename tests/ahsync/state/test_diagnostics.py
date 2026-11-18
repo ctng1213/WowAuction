@@ -52,3 +52,9 @@ def test_A70_the_owned_auctions_probe_is_read_for_the_report():
     assert report.own_auctions_line("timeLeftSeconds=nil").endswith("shows each auction's time-left band")
     assert report.own_auctions_line("timeLeftSeconds=number").endswith("each auction's end is saved")
     assert report.own_auctions_line(None).startswith("none read")
+
+
+def test_A100_the_AH_panel_timings_are_read_for_the_report():
+    text = "openMs=1.20|redrawMs=0.80|slowestMs=1.50|redraws=12|deSteps=13|deMaxStepMs=3.10|deJobs=1"
+    assert read_diagnostics({"panel": text}).panel == text
+    assert read_diagnostics({"panel": 5}).panel is None and read_diagnostics({}).panel is None

@@ -186,4 +186,17 @@ describe("Market", function()
     assert_eq({ #Market.Curve(10).rows[1], #Market.Curve(11).rows[1] }, { 8, 3 })   -- every 10th is shortlisted
     Market.CACHE_LIMIT = 500
   end)
+
+  it("A101 an item's price is read without decoding it, and a curve is decoded once", function()
+    local Market = Boot(EX2)
+    local decoded, Decode = 0, Market.Decode
+    Market.Decode = function(text) decoded = decoded + 1; return Decode(text) end
+    assert_eq({ Market.Cur(2589), Market.Cur(6948), Market.Cur(1), decoded }, { 45, nil, nil, 0 })
+    assert_eq({ Market.Item(2589).cur, Market.Cur(2589), decoded }, { 45, 45, 1 })      -- the cached item's, once decoded
+    local curves, DecodeCurve = 0, AHProfit.Engine.SellProb.DecodeCurve
+    AHProfit.Engine.SellProb.DecodeCurve = function(...) curves = curves + 1; return DecodeCurve(...) end
+    local curve = Market.Curve(2589)
+    assert_eq({ rawequal(Market.Curve(2589), curve), curves }, { true, 1 })
+    AHProfit.Engine.SellProb.DecodeCurve = DecodeCurve
+  end)
 end)
