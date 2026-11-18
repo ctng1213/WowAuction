@@ -89,28 +89,27 @@ describe("MinimapButton", function()
               { 1, "Click: open AHProfit · Drag: move" }, "in combat: the age and the hint only")
     Stubs.LeaveCombat()
     AHProfit.MainWindow.Today = function() error("boom") end
-    AHProfit.MinimapButton.Changed()                              -- A103: a hover reuses the last list until a change
+    AHProfit.MinimapButton.Forget()                               -- A103: a hover reuses the last list for 5 min
     button.scripts.OnEnter(button)
     assert_eq(Stubs.tooltip.doubles[2][2], "couldn't read the plan")
   end)
 
-  it("A103 the hover reuses its Today list until gold, bags or prices change, the minute turns or Min chance moves", function()
+  it("A103 the hover reuses its Today list for 5 minutes, gold and bags changing or not; Min chance moving rebuilds it", function()
     local button = LogIn()
     local Today, built = AHProfit.MainWindow.Today, 0
     AHProfit.MainWindow.Today = function(...) built = built + 1; return Today(...) end
     button.scripts.OnEnter(button)
-    button.scripts.OnEnter(button)
-    assert_eq(built, 1)
     Stubs.FireEvent("PLAYER_MONEY")
+    Stubs.Advance(299)
     button.scripts.OnEnter(button)
-    assert_eq(built, 2, "gold changed")
-    Stubs.Advance(60)
+    assert_eq(built, 1, "gold changed, 4 min 59 s later: the last list")
+    Stubs.Advance(1)
     button.scripts.OnEnter(button)
-    assert_eq(built, 3, "a minute later")
+    assert_eq(built, 2, "5 minutes after it was built")
     Stubs.Slash("/ahp")
     AHProfit.MainWindow.NextMinChance()
     button.scripts.OnEnter(button)
-    assert_eq({ built, Stubs.tooltip.doubles[2][1] }, { 4, "Now on Amaya" }, "Min chance moved")
+    assert_eq({ built, Stubs.tooltip.doubles[2][1] }, { 3, "Now on Amaya" }, "Min chance moved")
   end)
 
   it("UI20 data that turns 24 h old during the session gets its dot from the timer set at login", function()
