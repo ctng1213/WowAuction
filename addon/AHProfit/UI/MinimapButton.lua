@@ -23,6 +23,8 @@ local ICON = "Interface\\AddOns\\AHProfit\\Media\\MinimapIcon"
 local AMBER, MUTED, HINT = { 1, 0.69, 0.18 }, { 0.56, 0.54, 0.49 }, { 0.67, 0.67, 0.67 }
 
 local button, dot = nil, nil
+local changes = 0                       -- A103: counts what can change the Today list (bags, gold, prices, ...)
+local today = { stamp = nil, value = nil }   -- the hover's last Today list, reused while its stamp holds
 
 --- The saved setting, to read: an empty one until a drag or /ahp minimap first writes it.
 ---@return table  AHProfitDB.minimap ({ angle, hidden }), or a fresh {} (not stored)
@@ -58,10 +60,28 @@ local function TipInput(withToday)
                   planStale = Plan.Problem() ~= nil, name = info.name or "" }
   input.inCombat = Adapter.InCombat()                -- the Today list is real work: never in combat (SPEC §5.1)
   if withToday and not input.inCombat and not input.marketProblem and Plan.HasPlan() then
-    local ok, today = pcall(AHProfit.MainWindow.Today, (info.name or "") .. "-" .. (info.realm or ""))
-    input.today, input.failed = ok and today or nil, not ok
+    local ok, list = pcall(MinimapButton.Today, (info.name or "") .. "-" .. (info.realm or ""))
+    input.today, input.failed = ok and list or nil, not ok
   end
   return input
+end
+
+--- The hover's Today list (A103): worked out again only after something it reads changed, the minute turned (posts
+--- come due) or the window's Min chance moved; otherwise the last one. A failure is never kept.
+---@param charId string
+---@return table  MainWindow.Today's result
+function MinimapButton.Today(charId)
+  local stamp = table.concat({ charId, changes, math.floor(Adapter.NowMs() / 60000), AHProfit.MainWindow.MinChance() }, ":")
+  if today.stamp ~= stamp then
+    today.value = AHProfit.MainWindow.Today(charId)
+    today.stamp = stamp
+  end
+  return today.value
+end
+
+--- Something the Today list reads changed: the next hover works it out again (A103).
+function MinimapButton.Changed()
+  changes = changes + 1
 end
 
 --- Hover: the data age, this character's Today count and expected net, and the hint (UI20).
@@ -173,3 +193,11 @@ function MinimapButton.Frame()
 end
 
 Events.Register("PLAYER_LOGIN", MinimapButton.OnLogin)
+-- A103: what the Today list reads. The plan and market files change only at /reload.
+Events.Register("PLAYER_MONEY", MinimapButton.Changed)
+AHProfit.Capture.Inventory.OnChange(MinimapButton.Changed)
+AHProfit.Capture.Purchases.OnChange(MinimapButton.Changed)
+AHProfit.Capture.Professions.OnLearned(MinimapButton.Changed)
+AHProfit.Scan.Replicate.OnBook(MinimapButton.Changed)
+AHProfit.Live.OnSearch(MinimapButton.Changed)
+AHProfit.RowMenu.OnChange(MinimapButton.Changed)

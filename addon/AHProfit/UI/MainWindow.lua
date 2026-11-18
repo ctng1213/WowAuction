@@ -713,6 +713,12 @@ function MainWindow.Today(charId)
   return WindowLines.Today(charId, view.minChance)
 end
 
+--- The window's Min chance filter, percent (the minimap hover's Today list uses it too, A103).
+---@return number
+function MainWindow.MinChance()
+  return view.minChance
+end
+
 --- Switch tabs and redraw from the top.
 ---@param tab string  A MainWindow.TABS key
 function MainWindow.ShowTab(tab)
