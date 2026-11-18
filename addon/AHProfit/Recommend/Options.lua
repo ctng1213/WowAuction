@@ -333,40 +333,55 @@ function Options.WithoutGoneBuys(actions, levelsOf)
   return kept, gone
 end
 
---- Disenchant targets on the AH (A23), for any enchanter: the buy price (the live scan's cheapest,
---- else the file's), the expected mats at their sell values, and the profit; unprofitable items
---- are left out. Each target says the skill it needs, so the tab is useful without an enchanter.
----@param candidates table  Market.Disenchantable()
----@param ctx table         { itemOf (key -> market item), levelsOf (key -> live levels or nil) }
----@return table[]          { key, ilvl, skill, buy, ev, profit, mats = { { key, units } }, mainMat, matChance },
----                         best profit first
-function Options.Disenchant(candidates, ctx)
+--- One item's disenchant target (A23): the buy price (the live scan's cheapest, else the file's), the expected mats
+--- at their sell values, and the profit; nil when it doesn't pay or can't be priced.
+---@param tbl table  AHProfit.Engine.Disenchant.Table()
+---@param key number
+---@param c table    Market.Disenchantable()'s entry { skill, quality, ilvl, kind }
+---@param ctx table  { itemOf (key -> market item), levelsOf (key -> live levels or nil) }
+---@return table|nil { key, ilvl, skill, buy, ev, profit, mats = { { key, units } }, mainMat, matChance }
+function Options.DisenchantOne(tbl, key, c, ctx)
   local Disenchant = AHProfit.Engine.Disenchant
-  local tbl, out = Disenchant.Table(), {}
-  for key, c in pairs(candidates) do
-    local item, levels = ctx.itemOf(key), ctx.levelsOf(key)
-    local buy = levels and levels[1] and levels[1].price or (not levels and item and item.cur) or nil
-    local _, outcomes = Disenchant.OutcomesFor(tbl, c.quality, c.ilvl, c.kind)
-    if buy and outcomes then
-      local values, mats = {}, {}
-      for i, o in ipairs(outcomes) do
-        local mat = ctx.itemOf(o[1])
-        values[i] = mat and mat.sellValue or 0
-        mats[i] = { key = o[1], units = o[2] * (o[3] + o[4]) / 2 }
-      end
-      local ev = Disenchant.ExpectedValue(outcomes, values)
-      if ev - buy > 0 then
-        local main = ctx.itemOf(outcomes[1][1])
-        out[#out + 1] = { key = key, ilvl = c.ilvl, skill = c.skill, buy = buy, ev = ev, profit = ev - buy, mats = mats,
-                          mainMat = outcomes[1][1], matChance = main and main.chance }
-      end
-    end
+  local item, levels = ctx.itemOf(key), ctx.levelsOf(key)
+  local buy = levels and levels[1] and levels[1].price or (not levels and item and item.cur) or nil
+  local _, outcomes = Disenchant.OutcomesFor(tbl, c.quality, c.ilvl, c.kind)
+  if not (buy and outcomes) then return nil end
+  local values, mats = {}, {}
+  for i, o in ipairs(outcomes) do
+    local mat = ctx.itemOf(o[1])
+    values[i] = mat and mat.sellValue or 0
+    mats[i] = { key = o[1], units = o[2] * (o[3] + o[4]) / 2 }
   end
+  local ev = Disenchant.ExpectedValue(outcomes, values)
+  if ev - buy <= 0 then return nil end
+  local main = ctx.itemOf(outcomes[1][1])
+  return { key = key, ilvl = c.ilvl, skill = c.skill, buy = buy, ev = ev, profit = ev - buy, mats = mats,
+           mainMat = outcomes[1][1], matChance = main and main.chance }
+end
+
+--- Sort disenchant targets best profit first, then by key.
+---@param out table[]  Options.DisenchantOne's rows; sorted in place
+---@return table[]     The same list
+function Options.SortDisenchant(out)
   table.sort(out, function(a, b)
     if a.profit ~= b.profit then return a.profit > b.profit end
     return a.key < b.key
   end)
   return out
+end
+
+--- Disenchant targets on the AH (A23), for any enchanter: Options.DisenchantOne for every candidate, unprofitable
+--- items left out. Each target says the skill it needs, so the tab is useful without an enchanter. The AH panel
+--- reads them through Recommend/DeTargets.lua instead, worked out in steps (A96).
+---@param candidates table  Market.Disenchantable()
+---@param ctx table         { itemOf (key -> market item), levelsOf (key -> live levels or nil) }
+---@return table[]          Options.DisenchantOne's rows, best profit first
+function Options.Disenchant(candidates, ctx)
+  local tbl, out = AHProfit.Engine.Disenchant.Table(), {}
+  for key, c in pairs(candidates) do
+    out[#out + 1] = Options.DisenchantOne(tbl, key, c, ctx)
+  end
+  return Options.SortDisenchant(out)
 end
 
 --- The best skill in a profession across every character AHProfit has seen on the account.

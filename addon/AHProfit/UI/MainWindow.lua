@@ -765,11 +765,15 @@ function MainWindow.Toggle(args)
   end
 end
 
---- /ahp perf: the real numbers against the budgets (SPEC §5.1): the last scan's slowest steps and the live
---- portfolio's last repricing and reselection.
+--- /ahp perf: the real numbers against the budgets (SPEC §5.1): the last scan's slowest steps, the AH panel's open
+--- and redraws and its disenchant targets' steps (A100), and the live portfolio's last repricing and reselection.
 function MainWindow.Perf()
   local s = AHProfit.Scan.Replicate.Stats()
   Adapter.Print(string.format("scan: slowest step %.2f ms, redraw %.2f ms (budget 4 ms)", s.maxStepMs or 0, s.notifyMs or 0))
+  Adapter.Print(AHProfit.AHPanel.PerfLine() .. " (budget 2 ms)")
+  local de = AHProfit.DeTargets.Perf()
+  Adapter.Print(string.format("disenchant targets: slowest step %.2f ms, %d steps, %d runs (budget 4 ms)", de.maxStepMs,
+                              de.steps, de.jobs))
   for _, line in ipairs(AHProfit.Adapt.PerfLines()) do Adapter.Print(line .. " (budget 2 ms)") end
   Adapter.Print(AHProfit.Capture.Gather.PerfLine() .. " (one table write per window)")
 end

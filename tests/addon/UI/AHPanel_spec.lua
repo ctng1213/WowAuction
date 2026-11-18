@@ -284,6 +284,18 @@ describe("AHPanel", function()
     Stubs.ITEM_NAMES[4470] = nil
   end)
 
+  it("A100 /ahp perf and the diagnostics say how long the AH open and the panel's redraws took", function()
+    OpenAH()
+    Stubs.Slash("/ahp perf")
+    local text = table.concat(Stubs.chat, " | ")
+    assert_eq({ text:find("AH panel: open 0.00 ms, last redraw 0.00 ms, slowest 0.00 ms (1 redraws) (budget 2 ms)", 1, true) ~= nil,
+                text:find("disenchant targets: slowest step 0.00 ms, 0 steps, 0 runs (budget 4 ms)", 1, true) ~= nil },
+              { true, true })
+    Stubs.FireEvent("PLAYER_LOGOUT")
+    assert_eq(AHProfitDB.diagnostics.panel,
+              "openMs=0.00|redrawMs=0.00|slowestMs=0.00|redraws=1|deSteps=0|deMaxStepMs=0.00|deJobs=0")
+  end)
+
   it("A40 Shopping's For column says why each item is bought: CRAFT, FLIP or DE", function()
     Stubs.Reset()
     UIWorld.Market({ [2840] = UIWorld.Item(500, 80, 40), [4306] = UIWorld.Item(70, 80, 60) }, NOW - 3600000)
@@ -293,7 +305,7 @@ describe("AHPanel", function()
                    { id = "t", kind = "post", key = 4306, qty = 5, price = 105, at = NOW, net = 50, parent = "s" } })
     Stubs.Login()
     AHProfitDB.professions["Amaya-Grommash"] = { Enchanting = { skill = 300, max = 300 } }
-    AHProfit.Options.Disenchant = function() return { { key = 6585, skill = 1, ev = 900 } } end
+    AHProfit.DeTargets.Rows = function() return { { key = 6585, skill = 1, ev = 900 } }, true end
     AHWorld.Install()
     Stubs.FireEvent("AUCTION_HOUSE_SHOW")
     local ui, why = AHProfit.AHPanel.Frames(), {}

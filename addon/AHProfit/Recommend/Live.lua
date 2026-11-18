@@ -10,6 +10,7 @@ AHProfit.Live = Live
 
 local searched = {}            -- item id -> { price, units, at } from AH search results this session (A24)
 local searchListeners = {}     -- called after a search result is noted
+local sorted = { book = nil, levels = {} }   -- A99: each item's Live.Levels from one book, sorted once
 
 --- Units listed at one price of a book.
 ---@param slots table  stack * 5 + band -> count
@@ -41,10 +42,24 @@ function Live.Book(observationsUntil)
   return last
 end
 
+--- An item's levels from a book, sorted once per book and item (A99).
+---@param book table  A complete scan's book
+---@param key number
+---@return table[]    As Live.Levels; shared, so callers only read it
+local function BookLevels(book, key)
+  if sorted.book ~= book then sorted = { book = book, levels = {} } end
+  local levels = sorted.levels[key]
+  if not levels then
+    levels = Live.Levels(book[key])
+    sorted.levels[key] = levels
+  end
+  return levels
+end
+
 --- An item's live listings, or nil without a newer scan.
 ---@param key number
 ---@param observationsUntil number|nil
----@return table[]|nil  As Live.Levels; nil means "use the market file"
+---@return table[]|nil  As Live.Levels, shared between callers, who only read it (A99); nil means "use the market file"
 function Live.Item(key, observationsUntil)
   -- A search result is per item id; a random-suffix key matches it by its item id (A38).
   local itemId = key < 0 and -key or key % 2147483648
@@ -54,7 +69,7 @@ function Live.Item(key, observationsUntil)
     return { { price = found.price, units = found.units } }      -- a search newer than any scan (A24)
   end
   if not last then return nil end
-  return Live.Levels(last.book[key])
+  return BookLevels(last.book, key)
 end
 
 --- Remember an AH search result: an item's cheapest price and units listed, seen now (A24).
@@ -76,7 +91,7 @@ end
 
 --- Forget search results (tests).
 function Live.Reset()
-  searched = {}
+  searched, sorted = {}, { book = nil, levels = {} }
 end
 
 --- The two cheapest prices of one item's book, without building its levels.

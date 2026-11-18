@@ -43,6 +43,7 @@ local searchedThisVisit = {}      -- key -> true: searched since the AH opened (
 local current = nil               -- the panel's last view
 local lastSearch = nil            -- the key the last search was for, until its results arrive (A38)
 local pendingSell = nil           -- { price, untilMs }: put the price back once after the AH's own (A29)
+local perf = { openMs = 0, redrawMs = 0, slowestMs = 0, redraws = 0 }   -- A100: the open's and the redraws' time
 AHPanel.REFILL_MS = 10000
 AHPanel.BAR_WIDTH = 280             -- the Full scan bar, px (A43)
 
@@ -83,7 +84,7 @@ local function Targets(charId)
   end
   local best = Options.BestSkill(DB.Get() or {}, "Enchanting")
   if best then
-    for _, t in ipairs(Options.Disenchant(Market.Disenchantable(), { itemOf = Market.Item, levelsOf = LevelsOf })) do
+    for _, t in ipairs((AHProfit.DeTargets.Rows())) do         -- worked out in steps, never in this frame (A96)
       if t.skill <= best and not seen[t.key] and #out < AHPanel.SHOP_ROWS then
         out[#out + 1], seen[t.key] = { key = t.key, qty = 1, price = math.floor(t.ev), why = "de" }, true
       end
@@ -369,6 +370,7 @@ end
 --- Redraw the panel from the live data.
 function AHPanel.Render()
   if not ui then return end
+  local start = Adapter.ProfileMs()
   local info = Adapter.PlayerInfo()
   local charId = info.name .. "-" .. info.realm
   local gold = VM.TotalGold((DB.Get() or {}).characters)
@@ -382,6 +384,8 @@ function AHPanel.Render()
   ui.footer:SetText(VM.WithCoins(current.footer))
   ui.empty:SetShown(#current.shopping == 0)
   ui.empty:SetText("Nothing to buy right now.")
+  local spent = Adapter.ProfileMs() - start
+  perf.redrawMs, perf.slowestMs, perf.redraws = spent, math.max(perf.slowestMs, spent), perf.redraws + 1
 end
 
 --- Search the AH for one row's item (a click, so a hardware event).
@@ -448,10 +452,33 @@ end
 function AHPanel.OnShow()
   local anchor = Adapter.AuctionFrame()
   if not anchor then return end
+  local start = Adapter.ProfileMs()
   if not ui then Build(anchor) end
   ui.status:SetText("")
   ui.frame:Show()
   AHPanel.Render()
+  perf.openMs = Adapter.ProfileMs() - start
+end
+
+--- The panel's timings for /ahp perf and the diagnostics (A100).
+---@return table  { openMs (the last AH open), redrawMs (the last redraw), slowestMs (this session), redraws }, ms
+function AHPanel.Perf()
+  return perf
+end
+
+--- The panel's and its disenchant targets' timings for the diagnostics (A100, SPEC §2.2.1).
+---@return string  "openMs=..|redrawMs=..|slowestMs=..|redraws=..|deSteps=..|deMaxStepMs=..|deJobs=.."; ms
+function AHPanel.Describe()
+  local de = AHProfit.DeTargets.Perf()
+  return string.format("openMs=%.2f|redrawMs=%.2f|slowestMs=%.2f|redraws=%d|deSteps=%d|deMaxStepMs=%.2f|deJobs=%d",
+                       perf.openMs, perf.redrawMs, perf.slowestMs, perf.redraws, de.steps, de.maxStepMs, de.jobs)
+end
+
+--- /ahp perf's line for the panel (A100).
+---@return string  "AH panel: open 1.20 ms, last redraw 0.80 ms, slowest 1.50 ms (12 redraws)"
+function AHPanel.PerfLine()
+  return string.format("AH panel: open %.2f ms, last redraw %.2f ms, slowest %.2f ms (%d redraws)", perf.openMs,
+                       perf.redrawMs, perf.slowestMs, perf.redraws)
 end
 
 --- AUCTION_HOUSE_CLOSED: hide the panel; the search queue is dropped (FM24).
@@ -482,6 +509,7 @@ function AHPanel.Frames()
 end
 
 Events.Register("AUCTION_HOUSE_SHOW", AHPanel.OnShow)
+AHProfit.DeTargets.OnReady(function() if ui and ui.frame:IsShown() then AHPanel.Render() end end)   -- A96
 Events.Register("AUCTION_HOUSE_CLOSED", AHPanel.OnClosed)
 Events.Register("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED", AHPanel.OnBrowseResults)
 Events.Register("COMMODITY_SEARCH_RESULTS_UPDATED", AHPanel.OnSellSearch)
