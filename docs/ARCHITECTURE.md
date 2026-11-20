@@ -169,6 +169,9 @@ flowchart TD
   Accounting --> Plan[the portfolio plan]
   Positions --> History[History page: expected vs realized per position]
   Sessions --> Gathering[Gathering page: items/hr, net gold/hr]
+  Catalog[(data/cooldown_catalog.json<br/>curated; generated into Data/Cooldowns.lua)] -.planned CD1.-> Cooldowns
+  Journal -.planned CD2: recipe_cooldowns.-> Cooldowns[engine/cooldowns.py + cooldowns_view.py<br/>states, groups, money; Cooldowns page at request time]
+  Cooldowns -.planned CD3: the CD export section.-> AddonCD[Addon Cooldowns tab: lookups only, planned CD4]
   Importer -->|re-plan| Plan
   Plan --> Export[PortfolioPlan.lua]
   Export --> AddonLocal[Addon: local positions until AHSync reads them]
@@ -200,7 +203,7 @@ sequenceDiagram
 | Market history | `candles_h1`, `candles_d1`, `current`, `scans`, `book_entries`, `volume_d1`, `volume_cover`, `sales_h1`, `lifetimes_d1`, `new_listings_d1`, `sold_prices_d1` (built SP1a: the price each sold auction left at), Ingest's own `lifetime_state`, `open_auctions`, `leave_tallies`, `gap_flows`, `gap_seen` (the carried lifetimes and their 2-day ledger, schema 31; never read by the analysis), `observed_hours`, `ahledger_rows`, `source_state`, `sync_state`, `fetch_failures` | `collect/` | `history/reads.py` |
 | Items | `items` | `collect/` | everywhere, via the catalog |
 | Intelligence | `intel` (+ `_new` staging; a cloud document's body is its gzip as downloaded, SM1; a local one's gzipped, SM2c) | `analysis/` via `intel/store.py`, `collect/cloud_intel.py` | `recommend/`, `export/`, `web/` (one parsed record per process, `IntelCache`) |
-| Player state | inventory, journal (`purchases`, `posts`, `auction_mail`, `payouts`, `crafts`, `disenchants`, `mail_sent`), `professions`, `recipes`, `known_recipes`, `characters`, `cost_basis`, `gather_events`, `farming_sessions`, `manual_rates`, `positions`, `position_lots` | `state/` | `recommend/`, `app/` |
+| Player state | inventory, journal (`purchases`, `posts`, `auction_mail`, `payouts`, `crafts`, `disenchants`, `mail_sent`), `professions`, `recipes`, `known_recipes`, `recipe_cooldowns` (planned CD2), `characters`, `cost_basis`, `gather_events`, `farming_sessions`, `manual_rates`, `positions`, `position_lots` | `state/` | `recommend/`, `app/` |
 | Plan and pages | `actions`, `alternatives`, `export_candidates`, `portfolio_snapshot`, `views` (+ `_new` staging), `item_rules`, `reserves`, `sell_records` | `recommend/` | `export/`, `web/` |
 | Operations | `status`, `meta` (the `update.*` keys, M25), backups on disk, raw snapshots on disk, `<data>/updates/` (the verified download, M25) | all | Status page |
 
@@ -390,3 +393,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-11: carry-forward lifetimes spec merge and its engine milestone (`docs/plans/carry-forward-lifetimes.md`): the lifetimes move from `engine/volume.py` to `engine/lifetimes.py`, where `lifetimes()` is now `step` folded over the snapshots (`LifeState`, `GapRecord`, `expiry.LeaveWindow`; VI8); the planned path inside Ingest is drawn in §2. No component or flow changes yet.
 - 2026-11-11: carry-forward lifetimes, the history milestone: schema 31's carried state and per-gap ledger (`history/lifetime_store.py`); each snapshot steps the state and folds its day and recent hours from the ledger (`collect/observations`), replaying from the compact store only for a late snapshot, the cutover or a damaged state; `recompute_id_days` is gone. The Ingest diagram in §2 marks what is built.
 - 2026-11-11: carry-forward lifetimes, the cloud milestone: a scheduled Ingest run downloads the database and the new raw only; compact snapshots only for a replay (`ahcloud/ingest.replay_from`), and the remote compact index is written from the remote listing; the rebuild cap is 15. The Ingest diagram in §2 is built.
+- 2026-11-20: Cooldowns spec merge (CD0, `docs/plans/cooldowns.md`, SPEC §3.4F): §3 gains the planned curated cooldown catalog (`data/cooldown_catalog.json`, shipped in the addon as the generated `Data/Cooldowns.lua`), the ready times (`recipe_cooldowns`, from the addon's `cooldowns` field), `engine/cooldowns` and `cooldowns_view` behind a Cooldowns page built at request time, and the `CD` export section feeding an addon tab that only looks up; §5's player state gains `recipe_cooldowns`. Nothing reaches the plan (the planner fix is deferred).

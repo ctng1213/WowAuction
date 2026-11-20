@@ -121,6 +121,7 @@ AHSync reads `WTF/Account/*/SavedVariables/AHProfit.lua`. It watches the file an
 | **Professions** and skill level per character | login, skill change |
 | **Recipe definitions per profession** (account-wide): product, yield min/max, reagents with counts, vendor-sold reagents, skill needed, cooldown | profession window opened (once per profession is enough) |
 | **Known recipes per character**: spell ids | profession window opened on that character |
+| **Cooldown ready times per character** (planned CD2, §3.4F.3): spell, ready time, source, when observed | a profession window opened or updated; login and bag updates for a held tool; a catalog spell cast succeeding |
 | **Inventory per character**: bags, bank, mail, each with a **bound** flag | bag/bank/mail events |
 | **Own active auctions**: item, unit price, stack, time-left band | AH events |
 | **Own AH scans** (full or partial): scan time, kind, and the order book as rows `[key, unitPrice, stack, band, count]` | AH open + scan button / auto |
@@ -189,6 +190,9 @@ AHProfitDB = {
   },
   vendorReagents = "2320;2321",                -- keys a merchant was seen selling (§3.4B)
   knownRecipes = { ["Brugan-Grommash"] = "2662;2663" },        -- spell ids, ascending
+  cooldowns = {                                -- per character (planned CD2, §3.4F.3): "spell,readyAtMs,source,atMs" by spell
+    ["Amaya-Grommash"] = "17187,1760172800000,c,1760000000000;17559,1760086400000,g,1760001000000",
+  },                                           -- source g = the game reported it, c = the addon saw the cast; newest atMs wins
   inventory = {                                -- per character; each location replaced whole, with its own time
     ["Amaya-Grommash"] = { bags = "2840,20,0;6948,1,1", bagsAt = 1760000000000,  -- "key,qty,bound(0/1)"
                            bank = nil, bankAt = nil,           -- nil until first visited; "" = visited, empty
@@ -505,6 +509,7 @@ professions(char_id, profession, skill, max_skill,           PK(char_id,professi
 recipes(profession, spell_id, product_key, yield_min, yield_max, skill_req, cooldown_s,  PK(profession,spell_id))
 reagents(profession, spell_id, key, count,                   PK(profession,spell_id,key))
 known_recipes(char_id, spell_id,                             PK(char_id,spell_id))
+recipe_cooldowns(char_id, spell_id, ready_at_ms, source, observed_ms,  PK(char_id,spell_id))   -- planned CD2 (§3.4F.3); upserted, the newer observed_ms wins
 inventory(char_id, location, key, qty, bound,                PK(char_id,location,key,bound))
 own_auctions(char_id, key, price, stack, band, count, seen,  PK(char_id,key,price,stack,band))
 snapshots(char_id, location, at,                             PK(char_id,location))   -- capture time of each place, incl. auctions
@@ -1284,6 +1289,138 @@ AHF being offline changes nothing except that the price age is your own scan's. 
 - No multi-material session gold/hr (the pasted spec's §9.1) and no separate session history: sessions show only on the rate card.
 - The rest of the pasted spec's §13 is out of scope (§9).
 
+#### 3.4F Cooldowns: what your profession cooldowns are worth
+
+**Planned: CD1–CD4** (`docs/plans/cooldowns.md`, draft 3, approved by the user 2026-11-20; mockup [docs/mockups/cooldowns.html](mockups/cooldowns.html); CD1–CD31, FM89, FM90, EX23, EX24, UI31, every ID pending).
+
+**Cooldowns** is a research view, a dashboard page and an addon tab, of the items made by profession **cooldowns**: transmutes, Mooncloth, the Salt Shaker's Refined Deeprock Salt. For each one it shows:
+- what it is, and the skill it needs;
+- **how long the cooldown is**;
+- what the product sells for, and what one use nets;
+- whether each character is ready, and whether they can make it now.
+
+It suggests nothing to the plan (F.9).
+
+The examples use the mockup's world:
+
+| Character | Professions | Notes |
+|---|---|---|
+| Amaya (logged in) | Alchemy 280, Herbalism 290 | knows Arcanite, Undeath to Water, Water to Air, Mithril to Truesilver and Iron to Gold; her transmute cooldown is ready; she holds 1 Thorium Bar and 1 Arcane Crystal in her bags and 1 Mithril Bar in her bank |
+| Tessa | Alchemy 300 | knows Arcanite, Earth to Water, Undeath to Water and Elemental Fire; used Arcanite, so her transmute group has 1 d 2 h left; data from Wed 09:15 |
+| Sorvin | Alchemy 230 | knows Iron to Gold and Mithril to Truesilver; group ready; holds Iron Bar |
+| Brugan | Leatherworking 262, Skinning 260 | Salt Shaker in his bags, 1 d 4 h left |
+| Mira | Tailoring 260, Leatherworking 255 | knows Mooncloth (2 d 3 h left); no Salt Shaker |
+| Keldor | Tailoring 245 | |
+
+Prices: Arcanite Bar 45g, Thorium Bar 1g 20s, Arcane Crystal 28g, Mooncloth 22g, Felcloth 3g 50s, Refined Deeprock Salt 4g 50s, Deeprock Salt 15s, Essence of Water 3g, Essence of Earth 2g 40s, Essence of Undeath 1g, Essence of Air 2g 80s, Truesilver Bar 2g 10s, Mithril Bar 60s, Gold Bar 1g 30s, Iron Bar 40s, Heart of Fire 1g 50s, and Elemental Fire 1g 20s, last seen 9 days ago. All transmutes share one cooldown, the group `transmute`.
+
+**F.1 The catalog** (CD1–CD3). What has a cooldown comes from a **static data file**, `ahsync/data/cooldown_catalog.json` (CLAUDE.md exempts `data/*` from mirroring). It never comes from AH data: a price never makes an item a cooldown item. The client can't say which recipes have a cooldown, what skill they need, or how long the cooldown is (§2.2.1: `skill` and `cooldown` are captured as unknown), so the list is **curated by us and shipped complete** inside the addon from its first release. The game only says when each character is ready (F.3) and flags what the list missed (F.7).
+- **Inclusion rule**: every profession spell that creates an item and has a non-zero recovery time (its own cooldown or its category's), plus every tool item whose Use spell creates an item and has a cooldown (the Salt Shaker). The rows are compiled by hand from Classic (1.12) spell pages, keeping each page's URL.
+- **One row per spell**:
+  - `spell` (the recipe's spell id, or the tool's Use spell);
+  - `name`;
+  - `profession` (one of §2.2.1's professions);
+  - `skill` (1–300);
+  - `cooldown_s` (> 0);
+  - `group` (optional: the shared cooldown's name);
+  - `product` (the AHF item key, §2.1);
+  - `yield_min` and `yield_max`;
+  - `reagents` (`[[key, count], …]`, by key);
+  - `tool` (optional: the tool's item key);
+  - `url` and an optional `note`.
+- The file's `_comment` carries its version and the Forever caveat, as `gathering_catalog.json`'s does. Version 1 lists 14 rows: Arcanite, Iron to Gold, Mithril to Truesilver, the 8 elemental transmutes, Elemental Fire, Mooncloth and the Salt Shaker.
+- **Loaded at the edge**: `recommend/cooldowns_page.py` reads the file, and `engine.cooldowns.catalog(rows)` (pure) validates it. A row is skipped with a Status line when:
+  - its profession is unknown;
+  - its skill is outside 1–300;
+  - its cooldown is not positive;
+  - it has no product or no reagents list;
+  - it duplicates a spell already listed;
+  - its group's members have different professions.
+
+  The other rows still show (CD2). The Status topic is `cooldown_catalog`: "cooldown catalog: 14 recipes", or "cooldown catalog: 1 row skipped (Mooncloth: skill 350 outside 1–300)". A file that can't be read leaves the page empty with "cooldown catalog not read (…): the Cooldowns page is empty".
+- **Shipped in the addon** (D5, CD3): `tools/gen_cooldown_data.py` writes `addon/AHProfit/Data/Cooldowns.lua` from the JSON, with the same version (§4.5). A test fails when the two disagree. A fix to the list reaches every user with the next addon release.
+
+**F.2 Eligibility and the row states** (CD9–CD11). A character's state for a catalog row is the first of these that applies:
+1. it lacks the profession: no state, so the row is not in its addon view and not in Who;
+2. its skill is below `skill`: **below skill** (the addon shows "—"; Who shows "needs 275 (230)");
+3. it doesn't know the recipe (`known_recipes`): **not learned**. A tool row has no recipe, so this never applies to one;
+4. the tool is in neither its bags nor its bank: **needs item**;
+5. no ready time is stored for the row or its group (F.3): **not read**;
+6. the ready time is in the future: **cooling**, with the time left;
+7. otherwise: **ready**.
+
+The rules behind these states:
+- **The tool counts as held when it is in that character's own bags or bank**, as of the last capture of each (§2.2.1 `inventory`). The bank is readable only while open, so a character who never opened it is judged on the bags alone. Another character's copy, or one in the mail, doesn't count.
+- **Not learned, needs item and not read are orange** in both views. Hovering names what is missing: "Recipe: Transmute: Earth to Water", "Salt Shaker not in Mira's bags or bank", or "…'s cooldown hasn't been read yet. Open the profession window, carry the tool in your bags at login, or use it once".
+- **Shared cooldowns** (D10): the rows of one `group` share one ready time per character, the latest stored for any member. Using any member locks the group for the period of the member used. The Cooldown cell says "shared", and hovering lists the group ("one cooldown for all 12 transmutes").
+
+**F.3 Ready times** (CD12, CD30, FM89). A character's ready time for a spell comes from three sources:
+1. **The game reports it**: `C_TradeSkillUI.GetRecipeCooldown(spell)` when a profession window opens or updates, and `C_Container.GetItemCooldown(tool)` at login, on bag updates and on `BAG_UPDATE_COOLDOWN`, which needs no window. Both are `-- UNVERIFIED:` (§6 item 7).
+2. **The addon saw the use**: `UNIT_SPELLCAST_SUCCEEDED` for a catalog spell records ready = the cast time + the row's `cooldown_s`. This turns the row (and its group) to the full period at once, and it works even when Forever lacks the APIs of source 1.
+3. **Neither has happened**: not read.
+
+Each observation is stored with its time (§2.2.1 `cooldowns`), and the newest one wins: a later cast replaces an earlier report, and a later report corrects an earlier cast. A ready time in the past is ready. The addon refreshes the text when the tab is shown and on these events, never in `OnUpdate` (§5.1).
+
+**F.4 Money** (CD4–CD7). All money is made by `engine.cooldowns` and exported; the addon computes none (D1).
+- **Mats** = Σ count × the mat's price (`cur`, §3.3), integer copper. A mat without a price makes Mats, Net / use and Per week "—".
+- **Net / use** = `fees.sale_net(product price, average yield)` − Mats, float copper, shown with `floor(x + 0.5)` (§3.3). The deposit is left out: it is refunded when the auction sells (§3.4 Fees), and Net / use is what a use earns if it sells.
+  - Arcanite: 45g × 0.95 = 42g 75s, less 29g 20s = **13g 55s**.
+  - Elemental Fire: 3 × 1g 20s × 0.95 = 3g 42s, less 1g 50s = **1g 92s**.
+- **Per week** = Net / use × 7 days ÷ the cooldown in days, **per character, never summed over characters** (D4).
+  - Arcanite: 13g 55s × 7 ÷ 2 = **47g 42s 50c**.
+  - Mooncloth: 13g 90s × 7 ÷ 4 = **24g 32s 50c**.
+  - Grouped rows are alternatives: each assumes every use of the group goes to it.
+- **Red** below zero (Water to Undeath: 95s − 3g = **−2g 5s**, per week −14g 35s).
+- **The price** is the product's `cur` (D2). A price older than 7 days shows muted with its age ("1g 20s · 9 d old") and still sorts by its value. "—" means no price was ever seen, and such rows sort last.
+
+**F.5 Can Make** (CD13, CD14, CD19; D8, D11).
+- **Yes** when the character is ready (F.2 state 7) and holds every mat in its own bags.
+- **Yes (bank)** when it is ready but a needed mat or the tool is only in its bank.
+- **No** otherwise. Hovering gives the first reason, in F.2's order, then the mats: "needs skill 300", "not learned", "needs Salt Shaker", "cooldown not read", "on cooldown 1 d 2 h", "missing 1 Essence of Water".
+- Mats on another character or in the mail don't count: they would have to be mailed first.
+- In a group, several rows can say Yes for one character, but only one can be used. Hovering says "shared: one of these per cooldown".
+- It is a lookup and comparison of counts, so the addon may compute it (D1).
+
+**F.6 The dashboard page** (CD15–CD21; the page `cooldowns`, after Gathering).
+- **Rows**: every catalog row, whatever the profession. The view (`engine.cooldowns_view`) is built **when the page is requested**, with that request's `now_ms`, from the rows staged at the last refresh and the stored ready times, so every countdown is current (CD20). No history is read.
+- **Columns**: Item · recipe, Profession, Skill, Cooldown, Made from, AH price, Mats, Net / use, Per week, Sold / day (the intelligence's sales per day), Who, Can Make. Every header sorts. The default is AH price, highest first; ties go to the recipe name, then the spell id.
+- **Who**: one line per character with the profession, best first: Ready, then the soonest time left, then not learned, needs item or not read (orange), then below skill. Ties are by name.
+  - Beyond 3 characters it shows "N Ready of M", the first 3 lines and "+K more: 2 cooling down, 1 not learned, 1 below 275", with the full list on hover.
+  - It shows "—" when none of your characters has the profession.
+- **Can Make**: Yes when any character's is Yes, else Yes (bank) when any character's is, else No. Hovering lists who ("Sorvin (bags)") or each character's reason. Its header sorts Yes, Yes (bank), No, with ties by AH price.
+- **Filters**:
+  - **Profession**: every profession of §2.2.1, with or without rows; one without reads "no cooldown recipes".
+  - **Just my characters**: at least one of your characters has the profession, at any skill.
+  - **My skill level only**: at least one has it at or above the row's skill. A not-learned, needs-item or not-read row stays. It implies Just my characters.
+  - An empty result says which filter emptied it: "No cooldown recipe matches. Keldor has Tailoring 245; Mooncloth needs 250. Turn off "My skill level only" to see it."
+
+**F.7 Status** (CD1, CD2, CD28, CD29):
+- the catalog line (F.1);
+- "Seen in game, not in the catalog: Transmute: Starsilver (Amaya). Add it to cooldown_catalog.json.": a spell with a reported cooldown (F.3 source 1) that the catalog lacks; the addon shows it as a row with Skill "seen in game";
+- "Catalog item unknown to the market: 12360 Arcanite Bar";
+- "cooldown catalog v2 in the addon, v1 in AHSync's export: update AHSync" (or the other way round).
+
+When the two catalogs differ, a spell only the addon knows shows "—" money, and AHSync ignores stored ready times for a spell its catalog lacks.
+
+**F.8 The addon tab** (§4.3, CD22–CD27, UI31). It lists the chosen character's professions only, but every catalog row of them, learned or not and at any skill, in one list sorted by AH price.
+- **The character row**: the account's characters with a profession that has cooldown rows, the logged-in one first and marked "you", the rest by name. More than 6 wrap to a second line. It starts on the logged-in character.
+- **Other characters: no recalculation** (D1). Their skill, known recipes, ready times, bags and bank are what the addon stored for them (the bar says "data from Wed 09:15"). The money is the exported `CD` row (§3.5). Without a market file, every money column is "—".
+- **Columns**: Item · recipe (the profession too when the character has two), Skill ("300 · you 280" amber below it, "has N" for another character), Cooldown, Ready, AH price, Mats, Net / use, Can Make.
+- **Hovers**:
+  - the AH price or the item name: the normal AHProfit market tooltip;
+  - Mats: units only ("Arcane Crystal: need 1 · Amaya has 1 (bags) · buy 0");
+  - Net / use: "from the 14:32 export".
+- **Footer**, logged-in view only: "Also ready now (stored): Sorvin, 1 transmute (Iron to Gold)", counted once per group.
+
+**F.9 What Cooldowns does not do.**
+- It doesn't plan. The Craft and Portfolio planner keeps treating a captured-unknown cooldown as no limit until the deferred fix (the plan's D3: CD5a fills `cooldown_s` from the catalog; CD5b adds ready times and groups), which waits for the planning algorithm's rework after the 2026-11-21 review.
+- Also not done in this batch:
+  - a column for the products you hold (the Portfolio posts your stock, D7);
+  - ready reminders;
+  - the period cross-check (`GetSpellBaseCooldown`) and the mats-against-schematic cross-check;
+  - the character dropdown;
+  - a report tool for seen-in-game rows.
+
 #### 3.4.0 Missed peaks: move, or hold for next week
 
 An item usually has several peaks a week, for example raid nights on Tue, Wed and Thu. These are its best selling windows (§3.3.4). A planned post targets one of them, its **original peak**. Its expected net there, `E_orig`, is the **anchor**.
@@ -1388,6 +1525,7 @@ Some items you hold are for your own use: food, potions, mats for your own gear.
      - **The detail** below the table for the selected row (Copper Ore by default): §3.4E.7's order, the rate card first after the price card.
      - **States**: day one (§3.4E.8); no catalog match ("No farmable material matches "thorium". The catalog covers what it knows how to gather; clear the search or the filters."); a character with no gathering profession and the toggle on (the info alert "Brugan can gather nothing yet: Monster drops only." with the Monster rows left); no rates anywhere ("Farm for 20+ units and the addon records your rate. Every row keeps its price and sell window meanwhile."); prices stale (amber, used as they are); an active manual override.
      - Every cell, note, footer, filter field and sort key is built by `engine/gathering_view` (§8.5); the page computes nothing.
+   - **Cooldowns** (**planned CD3**: `engine/cooldowns`, `engine/cooldowns_view`, `recommend/cooldowns_page`; §3.4F.6; desktop only; after Gathering in the page bar). Every catalog cooldown row, with the Profession, Just my characters and My skill level only filters, Who and Can Make, as in the mockup [docs/mockups/cooldowns.html](mockups/cooldowns.html). Unlike the other pages, its view is built at each request from the staged rows and the stored ready times, so its countdowns are current (CD20).
    - **Inventory**: what you own, what you paid, what it's worth, and its plan. Selecting a row shows *why*: the 30-day price line and the hour-of-week heat map behind its sell slot
      - **Worth** is counted once per item across all its rows, then split by quantity: the expected value of its planned posts, disenchants and vendor sales, plus its other units (held for a later week, or used by a planned craft, "6 for crafting Copper Rod") at their hold value. A disenchant planned for another character shows who ("Disenchant (Brugan)"). Bound and ignored items say "not planned" and have no worth (D25–D28).
      - **Paid** is the account-wide cost basis per unit; with none it is 0, "before tracking" (D29).
@@ -1500,8 +1638,9 @@ Some items you hold are for your own use: food, potions, mats for your own gear.
        - `K` = an array, one string per exported candidate, funded ones first in funding order, then the best alternatives by adjusted profit, `candidate_export` (150) in all (`engine.portfolio.export_subset`): `"cid;strategy;charId;outKey;outQty;inputs;gold;cashBasis;net;chance1000;saleMs;windowEndMs;conf;needs;status"`. `cid` is the candidate id (§3.4D.3) and `strategy` its code (`flip`, `buy_later`, `craft`, `multistage`, `disenchant`, `sell_stock`); `inputs` is `key:count:source` joined by `/`, by key (source `own`, `ah`, `vendor` or `craft`; a reagent with several sources joins them with `+`, e.g. `own+ah`; a flip or a buy for later has none, its buy is the output itself); `gold` (gold needed) and `cashBasis` (the cost basis of bought stock it uses) are copper, so profit % = net ÷ (gold + cashBasis) (D.8); `net` is copper rounded half up; `chance1000` the chance in thousandths; `saleMs` its expected sale hour and `windowEndMs` the end of the window it sells in (empty selling now); `conf` a percent; `needs` is `Profession:skill` (empty when none); `status` is empty for a funded row, else the reason code of §3.4D.6 (`selection.reason_code`: `profession`, `uncertain`, `stale`, `volume`, `no_listing`, `liquidity`, `missing`, `claimed`, `gold_all`, `gold_char`, `limit`, `risk`). It carries what repricing, feasibility and selection need, and nothing else: no history and no 168-slot profile (IU12). The addon decodes a candidate only when asked (`Market.Candidate(i)`, cached; `Market.CandidateCount()`).
        - `G` = the dependency graph (`engine.graph.build`), limited to the recipes your characters on that market know (enchants without a product left out) plus the exported items one could disenchant: `R[spell] = "product:yield1000:key*count/key*count"` (yield1000 the average yield in thousandths, reagents by key), the reverse index `U[key] = "spell,spell"` (the recipes that use an item), `G.DE = "key,key"` (the exported items one could disenchant, the keys of `D`; results come from `Data/Disenchant.lua`) and `G.order = "key,key"`, every graph item in a topological order (inputs before what they make; a depth-first walk from each item in ascending key order). A recipe loop is cut on the desktop the way chains cut it (C13): a reagent already on the path being walked is not followed again, that edge is left out of `U` and of the order's constraint (`R` keeps the recipe whole), and the export logs it at INFO, "recipe loop on <market>: item <key> is not followed back into spell <spell> (C13)" (FM39's desktop half; the addon's check is `Graph.Load`, built M12). The addon decodes `G` once, when first asked (`Market.Graph()`).
        - **Budget** (FM40): the 3 MB check counts the whole file (items, curves, `D`, `K`, `G`). When it would pass, the export leaves out the lowest-adjusted alternatives first (ties: the later in export order), never a funded row, and rebuilds until it fits (`addon_files.fit_market`, `portfolio_lua.trim_candidates`); Status says "candidate export trimmed to 112 of 150 to fit 2 MB" (`candidate_export_trimmed`), and clears when every candidate fits again. When even the funded rows alone don't fit, every alternative is left out and the file is written over budget with the usual size warning.
-     - **The shortlist** (EX1): what you hold, your recipes' products and reagents, open plan actions, the rows of the desktop lists, and items in your *partial* (targeted) scans of the last 7 days. Full scans are left out because they cover the whole AH.
-     - **The checksum** is `"<strings>:<their total length>"` over every `I`, `C`, `D`, `K`, `R` and `U` string and each market's `G.DE` and `G.order` (an empty one counts as no string): cheap to check at login, and a truncated or mixed-up file fails it. A file whose `schemaVersion` differs, or whose checksum fails, is refused with a status line, never a Lua error (FM17).
+     - **The cooldowns** (**planned CD3**, §3.4F.4, EX23): per market, `CD = { v = <catalog version>, [spell] = "mats;net;perWeek" }`, one string per catalog row: Mats in integer copper, Net / use and Per week rounded with `floor(x + 0.5)`, an empty field meaning "—". They are inside the checksum, and `EXPORT_VERSION` goes to 8 on both sides in the same milestone.
+     - **The shortlist** (EX1): what you hold, your recipes' products and reagents, every cooldown catalog product and mat (planned CD3, EX24), open plan actions, the rows of the desktop lists, and items in your *partial* (targeted) scans of the last 7 days. Full scans are left out because they cover the whole AH.
+     - **The checksum** is `"<strings>:<their total length>"` over every `I`, `C`, `D`, `K`, `R`, `U` and `CD` string and each market's `G.DE` and `G.order` (an empty one counts as no string): cheap to check at login, and a truncated or mixed-up file fails it. A file whose `schemaVersion` differs, or whose checksum fails, is refused with a status line, never a Lua error (FM17).
      - AHSync writes it after every published full refresh (`export/addon_files.py`); a write blocked 3 times leaves the old file and a Status warning (FM14), and a file over 3 MB first loses its lowest alternatives, then is written with a warning (FM40).
    - **`PortfolioPlan.lua`** (account-specific): the desktop's plan with action ids so the addon can mark them done, your sell record per item (its record line and not-selling flag, EX8), the item rules, your reserves (EX12), `basedOnUntil` (the newest event it includes), and `ingestedUntil` per character for the pruning handshake (§2.2), written only after the database commit.
      - **Format** (`export/plan_lua.py`, read by `Core/Plan.lua`): `AHProfitPlan = { schemaVersion, exportVersion, generatedAt, checksum, basedOnUntil, ingestedUntil = { [charId] = ms }, actions = { [charId] = { "id;kind;key;qty;price;atMs;net;parentId;windowEndMs;status;chance;peakMs;source;durationH;toChar;paid", ... } }, rules = { [key] = "rule,setAtMs" } }`. `toChar` is a mail's recipient (`actions.to_char`) and empty for any other action (EX16); it came with `EXPORT_VERSION` 2 on both sides (`export/market_lua.py`, `Core/Market.lua`), so an addon and an AHSync of different builds say which is stale (FM34, FM35), and the addon reads it as `to`. `paid` (**built DL1**: `engine.plan.PlanAction.paid`, set where each action's cost is taken off: `plan.py`, `candidates.py`, `craft_candidates.py`, `craft_plan.py`, `flips.py`, and a missed post's replacement in `recommend/status_pass.py`; EX22) is what the action's net already takes off for its units, stored as `actions.paid` (schema 32) in copper, half up, empty for 0, so the Do line can show Paid and Profit (§4.3); it comes with `EXPORT_VERSION` 7, and an older string decodes as 0. `Plan.IncomingMail(charId)` is the open mail other characters' plans send to a character. Only open actions (pending, late) travel, in time order; `net` is copper, rounded half up, and `chance` the planned chance to sell in whole percent (from `actions.conf`, which holds each action's planned `P'`), and `peakMs` the hour a post is for (`actions.peak_ms`); cleared rules travel as `none` so a clear on the dashboard beats an older rule in game. `basedOnUntil` is the newest `ingestedUntil`. The checksum works like `MarketIntelligence.lua`'s, over every action and rule string (EX3), and since `EXPORT_VERSION` 4 every `portfolio`, `gold` and position string and each `reserved` amount's decimal digits.
@@ -2024,6 +2163,7 @@ The window's tabs, each shown in the mockup:
 | Portfolio (built, M13: `UI/PortfolioView.lua` over the live reselection, §4.0, its lines gathered by `UI/WindowLines.lua` and drawn by `UI/MainWindow.lua`; A76–A80, A84, UI16, UI19) | **replaces Today and Week** (D76's addon half: the tab bar reads Portfolio, Disenchant, Craft, Flip, Inventory, Reservations); the character you're playing's share of AHSync's one shared plan, reselected live (§4.0), in three sections, as in the mockup (A79, UI16). A top line, the only place the addon shows cross-character totals, cached from AHSync's last snapshot: "portfolio 35g 58s · 30% risk · capacity 6g 49s 40c · 24s 40c unallocated · snapshot 10:38". **Positions** (`Plan.LivePositions`, local ones included since M14): Item · Qty · Status (the stage badge) · Net · Next, then "committed 70s · est. +10s 72c · +9% on committed capital · % leaves out Wool Cloth (found stock only)" (D.8); with local positions the foot says "committed 77s 60c (7s 60c local) · …" and the top line "portfolio 35g 58s · 30% risk · committed 4g 18s + 7s 60c local · capacity 6g 41s 80c · …" (A81). **Today**: action · Item · Qty · Each · Total · Net · Chance · Volume · Risk · Status, with chain lines under each row; funded rows first, then the unfunded ones greyed with their reason in Status (no red line in the addon), then "funded: cost 20s 60c · profit +12s 8c · 59% on cash". As on the old Today tab, a row your sell record changed has its record line under it, a **Needs a decision** section for "not selling" items follows the Today section (right-click: Blacklist or Keep), and the **Min chance** dropdown filters Today's rows for view only: a hidden funded row stays funded and the footer counts it (A84). **Next 7 days**: action · Item (×qty) · Plan ("buy Tue 20:00 · sell Thu 19:00") · Net · Adjusted ("→ +41s 75c" over "3.35 d · 31.75%") · Status, then its totals line. Footer: "funded profit +92s 62c · cost 2g 52s · 37% on cash" and "24s 40c unallocated" (0.1.6, the user 2026-11-07: the capacity is already in the top line, so the footer keeps what stays unallocated; the left text wraps rather than run into the right). The list scrolls inside the window: the sections, their column headings and totals lines are lines of one pooled list, and a row is 30 px tall where its Status wraps (within 150 px) or, in Next 7 days, for the Adjusted sub-line. Excluded rows follow the funded ones in the dashboard's order (left out only for gold, capacity or a list limit first, then D.6's order, then adjusted profit). Hovering an excluded row shows its tooltip: "Not funded today (Brugan)", the row ("Lesser Mana Potion · CRAFT ×10"), its reason ("Exceeds risk tolerance: needs 45s, 24s 40c left") and detail line, Expected net, then the snapshot's Risk limit ("10g 67s 40c · committed 4g 18s") and Funded before it ("6g 25s of 6g 49s 40c"); right-clicking one lists every excluded row of its section that way (UI19). Empty state (D.7, `PortfolioView.EmptyBlock`): "Nothing funded: risk budget exhausted" with "10g 88s committed of a 10g 67s 40c limit. New rows come back as positions sell.", positions still shown, the top line led by the character's live gold ("Amaya 14g 30s · portfolio 35g 58s · 30% risk · capacity 0c · snapshot 10:38") and the footer "funded profit 0c" · "3 positions" (UI19). Without a portfolio snapshot (no `PortfolioPlan.lua`, or none for this market) the tab shows the plan's actions due now and the addon's own options, as the old Today tab did (`UI/PlanView.lua`; A15, A52, A71, A73, A74), so it is never blank |
 | Disenchant | **always shown**, even with no enchanter on the account: an alt may be the one (A23). Item, ilvl, buy (the live scan's cheapest, else the file's), EV, profit, Chance · Volume (of the main mat), and a note with the expected mats; "no enchanter yet" when nobody on the account has Enchanting (any skill disenchants any item on Forever, R34, so there is no skill column). Only targets that pay. Live search state (✓ / ✗ / …) comes with the AH panel |
 | Craft | Dashboard: product, who knows it, **source** (Owned / AH / Vendor / Mixed, plus "+ crafted" for chains; filterable), crafts, mat gold each and total ("—" when you own every mat), profit, Chance · Volume, risk, cooldown; a note lists which mats are owned and which are bought. The addon's tab is the character you're playing: product, Source, ×, Mats (gold for the mats to buy, "—" when you own them all), profit, Chance · Volume, risk, and a note of the mats used and bought. Each known recipe is costed on its own against what you carry less what you keep; only recipes that pay are listed (A27, UI11). Source is Owned, AH, Vendor or Mixed (C17, C18), and the note has one grey line per mat (A34): "use 4 owned Simple Wood", "buy 3 Coarse Thread from a vendor · 30c", "buy 2 Copper Bar on the AH · 20s" (A30, A34) With no row to show, the addon says why: no recipes seen yet, none pays, or none pays at the market file's default chance because the products' sales rates are unknown (a placeholder, not a verdict; A95). |
+| Cooldowns (planned CD4, §3.4F.8) | the chosen character's professions, every catalog cooldown row of them: Item · recipe, Skill, Cooldown, Ready, AH price, Mats, Net / use, Can Make, sorted by AH price; the character row starts on the logged-in character and opens the others' stored data without recalculation |
 | Flip | Dashboard: item, quantity, buy each and total, expected sell price, sell slot, profit, Chance · Volume, risk %. The addon's tab lists the flips AHSync's plan has for the character you're playing (a buy whose chain ends in a post): item, Qty, Buy (at or below), Sell, When (the post's peak), Profit (the chain's), Chance (its first post's), Risk, and a note with the post time and the live cheapest price. A live scan drops a flip that is gone or now costs more than its buy price, and the footer counts it (A28, UI13) |
 | Inventory | what the character you're playing holds: item, where (bags, bank, mail), quantity, worth, Chance · Volume, and its plan as a note under the row (AHSync's, marked "(AHSync)", or the addon's own: "Post now at 45c", "For crafting Copper Rod", "Bound · not planned"), best worth first (A22). Paid joins it with tracking (M6b), and listed auctions with On the AH |
 | Inventory (your auctions) | the character's active auctions as rows with Where "AH": units, worth if sold (price × units × 0.95), note "listed at 80c each · ends in 11 h", from the last own-auctions snapshot; one past its end is left out (A50) |
@@ -2209,6 +2349,8 @@ Clicking a row runs an AH search for it, and the shopping and post lists show al
 
 ### 4.5 Static data
 
+`Data/Cooldowns.lua` (**planned CD1**, §3.4F.1) is generated from `ahsync/data/cooldown_catalog.json` by `tools/gen_cooldown_data.py`, with the same version, and is never edited by hand. It ships the full curated cooldown list with the addon, so every user has it with or without AHSync.
+
 `Data/Disenchant.lua` holds quality × ilvl band × armor/weapon → material probabilities, plus the Enchanting skill per band. The materials are seeded from Classic Era values and must be verified for Forever. The skill is 1 for every band: on Forever any Enchanting skill disenchants any item (the user, 2026-11-13; Forever guides agree, no official source yet), where Classic needed 25–225 by item level (R34).
 
 ## 5. Architecture and tech
@@ -2245,6 +2387,7 @@ The system is built as separate components that talk only through versioned cont
 | Desktop Recommendations | `recommend/` | per-character Disenchant, Craft, Flip, Sell options from intelligence + state | collection, history |
 | Portfolio Optimizer | `recommend/portfolio.py` and `recommend/plan.py` (inputs and rows); built (M9): `engine/portfolio.py`'s contracts (the candidate record, the accounting, the export subset, profit %); built (M10): `engine/candidates.py` and `engine/craft_candidates.py` (stage A), `engine/selection.py` (stage B, validation, reasons), `engine/timing.py` (the premium), `engine/allocation.py` (the pipeline), over `engine/plan.py`, `engine/flips.py`, `engine/craft_plan.py`, `engine/week.py`; built (M11): `engine/graph.py` (the dependency graph), `export/portfolio_lua.py` (its strings); built (M14): `engine/positions.py`, `engine/position_views.py`, `recommend/positions_pass.py` | the cross-character plan: capital, shared market capacity, transfers (§3.4C); the funded portfolio and its alternatives (§3.4D); positions (§3.4D.9) | raw collection |
 | Gathering (built M16: `engine/gathering.py`, `engine/gathering_view.py`, `recommend/gathering_page.py`, the data file; built M17: `engine/sessions.py`, `state/gathering.py`, `Capture/Gather.lua`; built M18: `engine/gathering_history.py`) | `engine/gathering.py` (catalog, eligibility, rates, observed categories, unplaced loot), `engine/sessions.py`, `engine/gathering_view.py`, `engine/gathering_history.py` (the historical columns and the detail), `state/gathering.py`, `recommend/gathering_page.py`, the data file `data/gathering_catalog.json`; the addon's `Capture/Gather.lua` | the farmable catalog, eligibility, loot events, farming sessions, rates and manual overrides, the Gathering page (§3.4E) | funding, candidates, positions: farmed items are found stock the optimizer sells like any other |
+| Cooldowns (planned CD1–CD4) | `engine/cooldowns.py` (catalog, states, groups, money), `engine/cooldowns_view.py`, `recommend/cooldowns_page.py`, `state` (the `cooldowns` field and `recipe_cooldowns`), the data file `data/cooldown_catalog.json` and its generated addon twin `Data/Cooldowns.lua`; the addon's `Capture/Professions.lua` ready times, `UI/ViewModel.lua` rows and the Cooldowns tab | the curated cooldown catalog, ready times, the Cooldowns page and tab (§3.4F) | the plan: cooldowns suggest nothing to it until the deferred planner fix (§3.4F.9) |
 | Dashboard | `web/` | showing results; writes only through its secured endpoints (§3.5) | any calculation |
 | Engine | `engine/` | the pure formulas every component above uses (§3.3, §3.4) | I/O of any kind |
 | Lifecycle | `app/` | the scheduler and the order of a refresh: analysis → recommendations → publish | formulas |
@@ -2550,7 +2693,11 @@ Data moves through many hand-offs: AHF and AHledger → AHSync → SQLite → `M
 4. ~~**AH fees and auction durations**~~: answered 2026-11-08 (§3.4 Fees, P27): the deposit is `max(1 s, floor(vendor × units × 5% / 20% / 60%))` per auction (the minimum 1 c since 2026-11-11, the user), lost on an expiry or a cancel; the 5% cut is taken from published game references (not yet seen on a payout). The durations are verified: 2, 8 and 24 h (2026-10-18).
 5. **Time-left bands**: the bounds of short / medium / long / very long (§3.3.1). **Partly answered M33a (2026-11-07)**: Blizzard's API reads `LONG` as 2–12 h and `VERY_LONG` as over 12 h left (§2.4, 22 h of house 114); the week's measurement (BZ24) and the game client's own bands are open.
 6. **AH search limits**: whether searches are throttled, and whether each one needs a hardware click (§4.0).
-7. **Recipe cooldown API** for transmutes and similar recipes.
+7. **Recipe cooldown API** for transmutes and similar recipes. Checked in CD2 (§3.4F.3):
+   - whether `C_TradeSkillUI.GetRecipeCooldown` gives the time left on Forever;
+   - whether `C_Container.GetItemCooldown` reads a tool held in the bank;
+   - whether `UNIT_SPELLCAST_SUCCEEDED` carries the transmute's spell id;
+   - whether Forever's transmutes share one cooldown (the catalog's `group`).
 8. **Tracking hooks**: the post and buy functions to hook, the sold / expired / won system messages, the mail invoice API, and the send-mail hook. Also check whether mail between your own characters arrives instantly or after a delay (it changes how mail steps are spaced in a chain).
 9. **wow-ui-sim spike** (§8.4, layer 3): can it load a Classic-style addon (`## Interface: 16001`) and render AHProfit's frames headless through Docker on Windows? It targets the retail client, and Classic support is not documented.
 10. ~~**Folder name after launch.**~~ Answered 2026-11-06: `_forever_` (§1, §3.7.3).
@@ -2661,6 +2808,11 @@ Data moves through many hand-offs: AHF and AHledger → AHSync → SQLite → `M
 | H2 | **Built (2026-11-11). Cloud status: the status document**: `ahcloud/status.py`, the collector's state on every run, `state/analyzer.json`, `status/<market>.json`, the analyzer's CloudWatch reads | CS2–CS11, BZ55, FM81, SEC21 pass |
 | H3 | **Cloud status: the page**: `infra/status/status.html` deployed by the stack, the intel expiry scoped to `intel/` | CS12 passes; the headless render clean; the page seen on a phone after `cdk deploy` |
 | M40 | **The addon after v0.1.3's in-game test** (`docs/plans/addon-vendor-tooltip.md`): Sales Rate without days of supply and with its days of data while thin (TT32; the market file's `salesDays`, `EXPORT_VERSION` 5, EX21, EX14); Inventory as "Total: 29 · Bags: 4 · Bank: 1 · Mail: 24" (TT30); Flip rows whose Sell and Profit show whole and whose note says how far the When time is (A28, A59, UI24); with M32c part 2 (A92, BZ25) in the same release | TT30, TT32, EX14, EX21, A28, A59, UI24 pass; the goldens match the mockup; the user's in-game check |
+| CD0 | **Cooldowns: the spec merge** (`docs/plans/cooldowns.md`): §3.4F, the `cooldowns` field, `recipe_cooldowns`, the `CD` export, the tab and page, scenarios CD1–CD31, FM89, FM90, EX23, EX24, UI31 pending | this table row; `tests/test_conventions.py` passes |
+| CD1 | **Cooldowns: the catalog**: `data/cooldown_catalog.json` (14 rows), `engine.cooldowns.catalog`, `tools/gen_cooldown_data.py` → `Data/Cooldowns.lua` | CD1–CD3 pass |
+| CD2 | **Cooldowns: ready times**: the Adapter reads, the cast record, the `cooldowns` field, `recipe_cooldowns` (migration), checked in game (§6 item 7) | CD12, CD30, CD31, FM89, FM90 pass; `tools/savedvars_report.py` shows the field |
+| CD3 | **Cooldowns: the dashboard and the export**: `engine/cooldowns`, `engine/cooldowns_view`, `recommend/cooldowns_page`, the page, the `CD` section and the shortlist, `EXPORT_VERSION` 8 on both sides | CD4–CD21, CD28, CD29, EX23, EX24 pass; the headless render clean; the bench in budget |
+| CD4 | **Cooldowns: the addon tab**: `UI/ViewModel.lua` rows, the tab, the character row, the hovers | CD22–CD27, UI31 pass; the goldens reviewed against the mockup |
 
 ## 8. Testing
 
@@ -2736,6 +2888,7 @@ The cloud status page (§2.4) follows the same rule with `ahcloud/status.py` as 
 | Positions (built, M14) | `positions.place`, `positions.track`, `positions.committed`, `position_views.evaluate`, `position_views.found_rows`, `position_views.history_judged`, `history_view.judged_rows` | PO1–PO13, PF22 |
 | Gold pill, Inventory filter (planned) | `views.gold_pill`, `inventory_view` per character | D74, D75 |
 | Gathering (built M16: `gathering.catalog`, `eligible`, `effective_rate`, `net_per_unit`, `net_per_hour`, `gathering_view.gathering_view`; built M17: `gathering.observed_rate`, `observed_rates`, `sessions.sessions`, the rate card's lines and override; built M18: `gathering_history.columns`, `detail`, `median_lines`, `gathering.observed_categories`, `unplaced_text`) |
+| Cooldowns (planned CD3, CD4) | `cooldowns.catalog`, `cooldowns.states`, `cooldowns.money`, `cooldowns.can_make`, `cooldowns_view.cooldowns_view` (filters, Who, sort); the addon's `ViewModel` Cooldowns rows | CD1–CD31 |
  `gathering.catalog`, `gathering.eligible`, `gathering.observed_rate`, `gathering.effective_rate` (manual → observed → fallback), `gathering.net_per_unit`, `gathering.net_per_hour`; `sessions.sessions` (candidates, confirmation, the open candidate); `gathering_view.gathering_view` (`by_char` rows, notes, footers, filter fields and sort keys, the freshness line), `gathering_view.rate_card`, `gathering_view.detail` (price card, heatmap marks, the reading line, top windows, seasonality); `views.delta_percent` (deviation, the window price's delta) | GA1–GA34, D80–D88 |
 | Status | `status_view.status_view` (alerts, cards), `collect.catchup`, `sell_record.calibration`, `tracking.profit_sums` (the profit line); built (M19): the AHledger line and alerts with their link; built (M20): `coverage.coverage` (the Data coverage card: `cells` with each `title`, `scale`, `sources` with ages, shares and `newest_class`, `union`, `none` with `gap_text`, `sub`, `rule`) | S1–S10, D32–D36, D103, K1–K3, K6, K7; built S18, S19, FM43, FM44, FM46, D89–D96 |
 | Weekly patterns, best windows | `patterns.sell_windows`, `patterns.weighted_median` | W1–W7 |
