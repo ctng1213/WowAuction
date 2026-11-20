@@ -39,6 +39,14 @@ local function Act(id, kind, net, at, chance, more)
 end
 
 describe("ViewModel", function()
+  it("A106 the title line and Refresh Plan's chat line say when the plan was worked out, in local time", function()
+    local VM, at = AHProfit.ViewModel, 1760000000000          -- 2025-10-09 08:53:20 UTC
+    assert_eq({ VM.Subtitle("Grommash", "Horde", nil, 0), VM.Subtitle("Grommash", "Horde", at, 0),
+                VM.Subtitle("Grommash", "Horde", at, -7 * 3600000), VM.Refreshed(at, 3600000) },
+              { "Grommash · Horde", "Grommash · Horde · plan 08:53", "Grommash · Horde · plan 01:53",
+                "plan refreshed at 09:53" })
+  end)
+
   it("formats money, signed money and risk exactly as the dashboard does", function()
     local VM = Boot()
     assert_eq({ VM.Money(11810), VM.Money(-20), VM.Money(0), VM.Money(nil), VM.Money(213.75), VM.Money(10000) },

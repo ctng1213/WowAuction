@@ -68,7 +68,7 @@ end
 -- Results kept until a full scan finishes, a reserve or rule changes, or (crafts) the character or its recipes change
 -- (A105): the own crafts cost about 5 s at the AH on 2026-11-20 and the Disenchant tab 0.1-0.9 s, and a bag, gold or
 -- item-name change rebuilt them on every redraw. Callers only read them.
-local keptCrafts = {}       -- { charId, book, rules, count, crafts, reserved }
+local keptCrafts = {}       -- { charId, book, rules, count, crafts, reserved, atMs (when worked out, UTC ms) }
 local keptDisenchant = {}   -- { book, targets }
 
 --- The own crafts of CharacterActions, kept (A105).
@@ -81,9 +81,16 @@ local function KeptCrafts(charId, recipes, units, ctx)
   local k, book, rules = keptCrafts, CurrentBook(), AHProfit.RowMenu.Version()
   if k.charId ~= charId or k.book ~= book or k.rules ~= rules or k.count ~= #recipes then
     local crafts, reserved = Options.Crafts(recipes, units, ctx)
-    keptCrafts = { charId = charId, book = book, rules = rules, count = #recipes, crafts = crafts, reserved = reserved }
+    keptCrafts = { charId = charId, book = book, rules = rules, count = #recipes, crafts = crafts, reserved = reserved,
+                   atMs = Adapter.NowMs() }
   end
   return keptCrafts.crafts, keptCrafts.reserved
+end
+
+--- When the kept own crafts were worked out: the window's "plan 14:32" (A106).
+---@return number|nil  UTC ms; nil before the first time, or after Forget
+function WindowLines.PlanAtMs()
+  return keptCrafts.atMs
 end
 
 --- Forget the kept crafts and disenchant targets, so the next lines work them out again (Refresh, A106).

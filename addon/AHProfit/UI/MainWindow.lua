@@ -596,7 +596,7 @@ end
 ---@param nowMs number
 local function RenderChrome(nowMs)
   local info = Adapter.PlayerInfo()
-  ui.sub:SetText(info.realm .. " · " .. info.faction)
+  ui.sub:SetText(VM.Subtitle(info.realm, info.faction, WindowLines.PlanAtMs(), Adapter.LocalOffsetMs(nowMs)))
   local age = VM.Age(Market.DataMs(), nowMs)
   local tone = age.amber and COLORS.amber or COLORS.pos
   ui.age:SetText(age.text)
@@ -763,14 +763,19 @@ end
 
 --- Refresh Plan (the title bar's button, /ahp replan): work out the kept own crafts, Disenchant targets, the AH panel's
 --- Post list and the minimap hover's list again now, from the bags and gold as they are (A106; kept since A104, A105).
---- Side effects: redraws the window and the AH panel when they are shown.
+--- Side effects: works them out at once (the window's tab may not need them), redraws the window and the AH panel when
+--- they are shown, and says "plan refreshed at 14:32" in chat.
 function MainWindow.Rebuild()
   WindowLines.Forget()
   AHProfit.AHPanel.Forget()
   AHProfit.MinimapButton.Forget()
+  local info = Adapter.PlayerInfo()
+  pcall(WindowLines.Today, info.name .. "-" .. info.realm, view.minChance)
   if ui and ui.frame:IsShown() then MainWindow.Refresh() end
   local panel = AHProfit.AHPanel.Frames()
   if panel and panel.frame:IsShown() then AHProfit.AHPanel.Render() end
+  local atMs = WindowLines.PlanAtMs()
+  if atMs then Adapter.Print(VM.Refreshed(atMs, Adapter.LocalOffsetMs(atMs))) end
 end
 
 --- Open or close the window; /ahp portfolio opens the Portfolio tab, /ahp minimap hides or shows the minimap button
@@ -779,7 +784,7 @@ end
 function MainWindow.Toggle(args)
   if args == "perf" then return MainWindow.Perf() end
   if args == "minimap" then return AHProfit.MinimapButton.ToggleShown() end   -- UI23
-  if args == "replan" then MainWindow.Rebuild(); return Adapter.Print(VM.REFRESHED) end      -- A106
+  if args == "replan" then return MainWindow.Rebuild() end                                    -- A106
   local profit = args and args:match("^profit%s*(%S*)$")
   if profit then return AHProfit.Tooltip.ProfitCommand(profit) end           -- UI29
   if not ui then Build() end

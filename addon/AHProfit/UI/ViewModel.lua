@@ -652,7 +652,28 @@ ViewModel.REFRESH_LABEL = "Refresh Plan"
 ViewModel.REFRESH_HELP = "Work out the proposed actions again now (your own crafts, post-now rows, disenchant targets) "
   .. "from your bags and gold as they are. They are otherwise kept until a full scan finishes; prices and what you "
   .. "hold update on their own."
-ViewModel.REFRESHED = "plan refreshed: proposed actions worked out again from your bags and gold now"
+
+--- The window's title line: realm and faction, then when the proposed actions were last worked out (A106).
+---@param realm string
+---@param faction string
+---@param planAtMs number|nil  When the kept actions were worked out, UTC ms; nil before the first time
+---@param offsetMs number      Local time minus UTC, ms
+---@return string              "Grommash · Horde · plan 14:32"
+function ViewModel.Subtitle(realm, faction, planAtMs, offsetMs)
+  local text = realm .. " · " .. faction
+  if not planAtMs then return text end
+  local _, hour = ViewModel.Clock(planAtMs, offsetMs)
+  return text .. " · plan " .. hour
+end
+
+--- Refresh Plan's chat line (A106).
+---@param planAtMs number  When the actions were worked out again, UTC ms
+---@param offsetMs number  Local time minus UTC, ms
+---@return string          "plan refreshed at 14:32"
+function ViewModel.Refreshed(planAtMs, offsetMs)
+  local _, hour = ViewModel.Clock(planAtMs, offsetMs)
+  return "plan refreshed at " .. hour
+end
 
 ViewModel.READ_SHARE = 0.85            -- A43: reading fills this much of the scan bar; saving the rest
 

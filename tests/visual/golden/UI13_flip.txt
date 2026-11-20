@@ -2,7 +2,7 @@ Frame AHProfitWindow 680,360 560x360
   Texture - 682,362 556x28
   Texture - 682,390 556x1
   FontString - 692,370 53x12 "AHProfit"
-  FontString - 755,371 259x10 "Grommash · Horde"
+  FontString - 755,371 259x10 "Grommash · Horde · plan 08:53"
   Button AHProfitWindowClose 1212,364 24x24
   Frame AHProfitWindowAge 1110,367 96x18
     FontString - 1125,371 66x10 "data 1 h old"

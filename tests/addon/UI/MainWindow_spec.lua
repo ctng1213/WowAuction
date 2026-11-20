@@ -46,8 +46,13 @@ describe("MainWindow", function()
     assert_eq({ ui.refresh:GetText(), built }, { "Refresh Plan", 1 }, "opened, then the bags changed: built once")
     ui.refresh.scripts.OnEnter(ui.refresh)
     assert_eq({ Stubs.tooltip.lines[1], Stubs.tooltip.lines[2] }, { "Refresh Plan", AHProfit.ViewModel.REFRESH_HELP })
+    local clock = select(2, AHProfit.ViewModel.Clock(NOW, AHProfit.Adapter.LocalOffsetMs(NOW)))
+    assert_eq(ui.sub:GetText(), "Grommash · Horde · plan " .. clock, "the title line says when the plan was worked out")
+    Stubs.Advance(120)
     ui.refresh:Click("LeftButton")
-    assert_eq(built, 2, "the button")
+    local later = select(2, AHProfit.ViewModel.Clock(NOW + 120000, AHProfit.Adapter.LocalOffsetMs(NOW + 120000)))
+    assert_eq({ built, ui.sub:GetText(), Stubs.chat[#Stubs.chat] },
+              { 2, "Grommash · Horde · plan " .. later, "|cffffd100AHProfit:|r plan refreshed at " .. later }, "the button")
     Stubs.Slash("/ahp replan")
     assert_eq({ built, ui.frame:IsShown(), Stubs.chat[#Stubs.chat]:match("plan refreshed") ~= nil }, { 3, true, true })
   end)
@@ -71,8 +76,10 @@ describe("MainWindow", function()
               { "POST", "Linen Cloth", "×20", coins("55c"), coins("11s"), coins("+10s 46c"), row.chance, "48/day", nil })
     assert_eq(row.chance:match("^92%% |T.-:7:7:0:0:8:8:0:8:0:8:(%d+:%d+:%d+)|t$"), "61:219:79")   -- the high (green) dot
     local ui = MainWindow.Frames()
+    local clock = select(2, AHProfit.ViewModel.Clock(NOW, AHProfit.Adapter.LocalOffsetMs(NOW)))   -- A106
     assert_eq({ ui.age:GetText(), ui.sub:GetText(), ui.footer:GetText(), ui.budget:GetText() },
-              { "data 1 h old", "Grommash · Horde", coins("1 action · expected +10s 46c"), "Budget " .. coins("12g 34s 56c") })
+              { "data 1 h old", "Grommash · Horde · plan " .. clock, coins("1 action · expected +10s 46c"),
+                "Budget " .. coins("12g 34s 56c") })
     assert_eq(ui.rows[2]:IsShown(), false)
   end)
 
