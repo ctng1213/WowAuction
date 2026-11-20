@@ -265,7 +265,8 @@ def test_savedvars_hook_ingests_the_changed_file(tmp_path):
     path = write_savedvars(tmp_path, clock, age_ms=60_000)
     db = Database.open(tmp_path / "ahsync.db", clock.now_ms(), None)
     ctx = SyncContext(None, db, clock, None)
-    build_hooks(ctx, Config(realms={"Grommash": "pvp"}), tmp_path / "backups").savedvars_changed(path)
+    build_hooks(ctx, Config(realms={"Grommash": "pvp"}, wow_path=str(tmp_path / "wow")),
+                tmp_path / "backups").savedvars_changed(path)
     assert db.count("characters") == 2 and db.count("posts") == 1
     db.close()
 
@@ -345,7 +346,8 @@ def test_S17_a_rewritten_savedvariables_file_logs_its_read_and_the_re_plan(tmp_p
     db = Database.open(tmp_path / "ahsync.db", clock.now_ms(), None)
     ctx = SyncContext(None, db, clock, None)
     with caplog.at_level(logging.INFO, logger="ahsync"):
-        build_hooks(ctx, Config(realms={"Grommash": "pvp"}), tmp_path / "backups").savedvars_changed(path)
+        build_hooks(ctx, Config(realms={"Grommash": "pvp"}, wow_path=str(tmp_path / "wow")),
+                    tmp_path / "backups").savedvars_changed(path)
     db.close()
     lines = [r.getMessage() for r in caplog.records if r.levelname == "INFO"]
     assert lines[0].startswith("read AHProfit.lua: 0 scans, 1 events stored")

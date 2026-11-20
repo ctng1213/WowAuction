@@ -17,11 +17,14 @@ from tests.support.fake_clock import FakeClock
 
 @pytest.fixture
 def published(db, tmp_path):  # noqa: F811
-    """The seeded world's document published at the origin, and the cloud config pointing at it."""
+    """The seeded world's document published at the origin, and the cloud config pointing at it.
+
+    The addon files go to a WoW folder under tmp_path: the default is the user's real install (tests/conftest.py).
+    """
     document = cloud_document(db)
     store = LocalStore(tmp_path / "cloud")
     publish(store, document)
-    cfg = replace(cloud_cfg(), cloud=replace(cloud_cfg().cloud, intel_url=ORIGIN))
+    cfg = replace(cloud_cfg(), cloud=replace(cloud_cfg().cloud, intel_url=ORIGIN), wow_path=str(tmp_path / "wow"))
     return document, store, cfg
 
 
