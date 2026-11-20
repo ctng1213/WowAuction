@@ -88,6 +88,5 @@ CS12
 
 
 # Cooldowns (docs/plans/cooldowns.md): CD1 catalog, CD2 ready times, CD3 dashboard + export, CD4 addon tab
-CD4-CD11 CD13-CD29
-EX23 EX24
+CD14 CD22-CD29
 UI31

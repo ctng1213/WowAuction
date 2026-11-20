@@ -17,6 +17,7 @@ from pathlib import Path
 from ahsync.config import Config
 from ahsync.db.sqlite import Database
 from ahsync.engine import disenchant
+from ahsync.engine.cooldowns import catalog, catalog_keys
 from ahsync.engine.coverage import ranges_to_hours
 from ahsync.engine.de_table import DE_TABLE
 from ahsync.engine.graph import Graph, build, graph_recipe
@@ -26,6 +27,7 @@ from ahsync.export.market_lua import EXPORT_VERSION, item_count, market_lua, wan
 from ahsync.export.plan_lua import PortfolioFields, plan_lua
 from ahsync.export.portfolio_lua import candidate_text, portfolio_text, position_text, trim_candidates
 from ahsync.intel.contract import MarketIntelligence
+from ahsync.recommend.cooldowns_page import read_catalog
 from ahsync.recommend.plan import flip_offers, sell_records
 from ahsync.state.importer import ingested_until
 
@@ -99,7 +101,7 @@ def shortlist(db: Database, market: str, now_ms: int) -> set[int]:
 
     Returns:
         Item keys: what you hold, your recipes' products and reagents, open plan actions,
-        desktop list rows and items in your partial scans of the last 7 days.
+        desktop list rows, items in your partial scans of the last 7 days, and every cooldown catalog item.
     """
     char_ids = [c for c, _ in db.characters_in(market)]
     keys = {key for _, _, key, _, _ in db.holdings(char_ids)}
@@ -110,7 +112,25 @@ def shortlist(db: Database, market: str, now_ms: int) -> set[int]:
     stored = db.view("disenchant", market)
     if stored is not None:
         keys |= {row["key"] for row in stored[0].get("rows", []) if "key" in row}
+    rows, _, _ = read_catalog()                                     # every cooldown catalog item (SPEC §3.5, EX24)
+    keys |= catalog_keys(catalog(rows)[0])
     return keys
+
+
+def cooldown_rows(db: Database, market: str) -> tuple[int | None, dict[str, str]]:
+    """The staged Cooldowns page's money for the addon (SPEC §3.4F.4, §3.5, EX23).
+
+    Args:
+        db: Database.
+        market: Market id.
+
+    Returns:
+        (the catalog version, spell -> "mats;net;perWeek"); (None, {}) before the page is staged.
+    """
+    stored = db.view("cooldowns", market)
+    if stored is None:
+        return None, {}
+    return stored[0].get("version"), dict(stored[0].get("export", {}))
 
 
 DE_KINDS = {2: ("weapon", "w"), 4: ("armor", "a")}     # WoW item class -> DE table kind, export code
@@ -180,6 +200,7 @@ def export_market(db: Database, cfg: Config, now_ms: int, sleep: Callable[[float
     graphs = {i.market: market_graph(db, i, shortlists[i.market], de) for i in intels}             # EX18
     rows = {i.market: candidate_rows(db, i.market) for i in intels}                                # EX17
     covered = {i.market: coverage30(db, i, now_ms) for i in intels}                                # TT40
+    cooldowns = {i.market: cooldown_rows(db, i.market) for i in intels}                            # EX23
 
     def build_text(kept: dict[str, list[str]]) -> str:
         """The whole file with these candidates.
@@ -191,7 +212,7 @@ def export_market(db: Database, cfg: Config, now_ms: int, sleep: Callable[[float
             MarketIntelligence.lua's text.
         """
         return market_lua(intels, shortlists, char_markets, now_ms, de, vendor, flips, cfg.sell_window_hours, kept,
-                          graphs, covered)
+                          graphs, covered, cooldowns)
     text, kept = fit_market(build_text, rows, MAX_MARKET_BYTES)
     _trim_status(db, rows, kept, MAX_MARKET_BYTES, now_ms)
     ok = _write(db, folder / MARKET_FILE, text, MAX_MARKET_BYTES, now_ms, sleep, replace)

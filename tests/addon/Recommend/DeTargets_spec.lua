@@ -14,7 +14,7 @@ local function MarketWithDe(items, de)
   local count, length = 0, 0
   for _, text in pairs(items) do count, length = count + 1, length + #text end
   for _, text in pairs(de) do count, length = count + 1, length + #text end
-  _G.AHProfitMarket = { schemaVersion = 1, exportVersion = 7, generatedAt = NOW - 3600000, checksum = count .. ":" .. length,
+  _G.AHProfitMarket = { schemaVersion = 1, exportVersion = 8, generatedAt = NOW - 3600000, checksum = count .. ":" .. length,
                         charMarkets = { ["Amaya-Grommash"] = UIWorld.MARKET },
                         markets = { [UIWorld.MARKET] = { observationsUntil = NOW - 3600000, curveHour = 0, I = items, C = {},
                                                          D = de } } }

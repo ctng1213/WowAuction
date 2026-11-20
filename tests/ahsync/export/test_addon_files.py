@@ -19,6 +19,11 @@ HOUR, DAY = 3_600_000, 86_400_000
 M = "forever.pvp.horde.us"
 BAR, ROD, LINEN, GLOVES, SILK, WOOL, ORE = 2840, 6217, 2589, 6585, 4306, 2592, 2771
 
+from ahsync.engine.cooldowns import catalog_keys
+from tests.support.cooldowns_world import catalog
+
+COOLDOWN_KEYS = catalog_keys(catalog())     # the shortlist always holds the cooldown catalog's items (EX24)
+
 
 @pytest.fixture
 def db(tmp_path):
@@ -61,9 +66,9 @@ def test_EX1_the_shortlist_is_holdings_recipes_plan_lists_and_recent_targeted_sc
     db.store_book(BookScan("p1", M, "local", "Brugan-G", now - 2 * DAY, "partial", 0.1), [(SILK, 70, 20, 3, 1)])
     db.store_book(BookScan("f1", M, "local", "Brugan-G", now - DAY, "full"), [(WOOL, 30, 20, 3, 1)])
     db.store_book(BookScan("p0", M, "local", "Brugan-G", now - 9 * DAY, "partial", 0.1), [(ORE, 50, 20, 3, 1)])
-    assert addon_files.shortlist(db, M, now) == {BAR, ROD, LINEN, SILK}      # no Disenchant page yet
+    assert addon_files.shortlist(db, M, now) == {BAR, ROD, LINEN, SILK} | COOLDOWN_KEYS   # no Disenchant page yet
     publish(db, now, LINEN)                  # the refresh's plan replaces the open actions: Linen's post is gone
-    assert addon_files.shortlist(db, M, now) == {BAR, ROD, GLOVES, SILK}
+    assert addon_files.shortlist(db, M, now) == {BAR, ROD, GLOVES, SILK} | COOLDOWN_KEYS
 
 
 def test_FM14_a_rename_blocked_three_times_keeps_the_old_file_and_warns(db, tmp_path):
@@ -169,11 +174,11 @@ def test_EX14_both_addon_files_carry_export_version_4_after_schema_version_outsi
     now = FakeClock().now_ms()
     cfg, folder = plan_with_one_action(db, tmp_path, now)
     assert addon_files.export_market(db, cfg, now, lambda s: None) and addon_files.export_plan(db, cfg, now, lambda s: None)
-    assert addon_files.EXPORT_VERSION == 7                  # 7: paid (EX22); 6: the market lines (M33b); 5: salesDays (EX21); 4: K, G (EX17)
+    assert addon_files.EXPORT_VERSION == 8                  # 8: CD (EX23); 7: paid (EX22); 6: the market lines (M33b); 5: salesDays (EX21); 4: K, G (EX17)
     for name in ("MarketIntelligence.lua", "PortfolioPlan.lua"):
         header = (folder / name).read_text(encoding="utf-8").splitlines()
         at = header.index("  schemaVersion = 1,")
-        assert header[at + 1] == "  exportVersion = 7,"
+        assert header[at + 1] == "  exportVersion = 8,"
     plan = (folder / "PortfolioPlan.lua").read_text(encoding="utf-8")
     action = f"a1;post;{LINEN};20;55;{now};1046;;;pending;80;;;;;"
     # The action string and Brugan's gold ("100," with no snapshot time): the export version counts in neither.
@@ -192,8 +197,8 @@ def test_EX15_each_written_addon_file_is_logged_with_its_size_time_and_contents(
     market_bytes = (folder / "MarketIntelligence.lua").stat().st_size
     plan_bytes = (folder / "PortfolioPlan.lua").stat().st_size
     assert [r.getMessage() for r in caplog.records if r.levelname == "INFO"] == [
-        f"wrote MarketIntelligence.lua: {market_bytes} bytes, generatedAt {now}, exportVersion 7, 1 items",
-        f"wrote PortfolioPlan.lua: {plan_bytes} bytes, generatedAt {now}, exportVersion 7, 1 open actions"]
+        f"wrote MarketIntelligence.lua: {market_bytes} bytes, generatedAt {now}, exportVersion 8, 1 items",
+        f"wrote PortfolioPlan.lua: {plan_bytes} bytes, generatedAt {now}, exportVersion 8, 1 open actions"]
 
     caplog.clear()
 
@@ -336,3 +341,7 @@ def test_coverage30_counts_a_cloud_summarys_hours_or_the_local_observed_hours_in
         assert addon_files.coverage30(db, MarketIntelligence("n", now, now, 1, {}), now) == 0
     finally:
         db.close()
+
+
+def test_EX24_every_cooldown_catalog_item_is_on_the_shortlist_and_exported_even_with_an_old_price(db):
+    assert {12363, 12360, 9149, 15846} <= addon_files.shortlist(db, M, 1_760_000_000_000)    # Arcane Crystal, …

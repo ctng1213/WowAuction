@@ -54,3 +54,55 @@ def test_CD2_an_unreadable_catalog_leaves_the_page_empty_and_nothing_raises(tmp_
     assert page.read_catalog(write(tmp_path, {"recipes": {}})) == ([], None, "cooldown catalog not read (no recipes "
                                                                               "list): the Cooldowns page is empty")
     assert page.read_catalog(write(tmp_path, {"version": "1", "recipes": []})) == ([], None, "")
+
+
+class WorldDb(FakeDb):
+    """Two characters' stored data and the world's prices, as the database gives them."""
+
+    def __init__(self):
+        """Amaya (an alchemist with a stone, Arcanite ready) and Brugan (a leatherworker with a banked shaker)."""
+        super().__init__()
+        self.now = 1_760_000_000_000
+
+    def current_price(self, market, key):
+        """The world's price, seen an hour ago; Thorium Bar too, though it is only a mat."""
+        from ahsync.history.reads import CurrentPrice
+        price = {12360: 450000, 12359: 12000, 12363: 280000}.get(key)
+        return CurrentPrice(key, price, 5, self.now - 3_600_000, "ahf") if price else None
+
+    def known_spells(self, char_ids):
+        """Amaya knows Arcanite."""
+        return {"Amaya-Grommash": frozenset({17187})}
+
+    def recipe_cooldowns(self, char_ids):
+        """Arcanite ready an hour ago; the Salt Shaker in 2 days."""
+        return {("Amaya-Grommash", 17187): (self.now - 3_600_000, "c", self.now - 49 * 3_600_000),
+                ("Brugan-Grommash", 19566): (self.now + 172_800_000, "g", self.now)}
+
+    def holdings(self, char_ids):
+        """Amaya's mats and stone in her bags (two stacks of Thorium); Brugan's shaker in his bank."""
+        return [("Amaya-Grommash", "bags", 9149, 1, True), ("Amaya-Grommash", "bags", 12359, 1, False),
+                ("Amaya-Grommash", "bags", 12359, 1, True), ("Amaya-Grommash", "bags", 12363, 1, False),
+                ("Brugan-Grommash", "bags", 8150, 1, False), ("Brugan-Grommash", "bank", 15846, 1, True)]
+
+    def character_sheets(self, char_ids):
+        """The two characters' professions."""
+        return [("Amaya-Grommash", "MAGE", 60, "Horde", "m", 0, 1, self.now, (("Alchemy", 280, 300),)),
+                ("Brugan-Grommash", "WARRIOR", 60, "Horde", "m", 0, 0, self.now, (("Leatherworking", 262, 300),))]
+
+
+def test_CD1_the_page_holds_only_catalog_rows_and_reads_each_characters_stored_data():
+    from ahsync.history.reads import ItemInfo
+    db = WorldDb()
+    items = {12360: ItemInfo(12360, "Arcanite Bar", 2, 60, 7, None, None, 20)}
+    staged = page.cooldowns_page(db, "m", ["Amaya-Grommash", "Brugan-Grommash"], {}, items, db.now)
+    assert len(staged["rows"]) == 15 and 12359 not in {r["product"] for r in staged["rows"]}   # Thorium: a mat only
+    arcanite = next(r for r in staged["rows"] if r["spell"] == 17187)
+    assert (arcanite["item"], arcanite["mats"], arcanite["net"]) == ("Arcanite Bar", 292000, 135500)
+    assert arcanite["standings"] == [{"char": "Amaya-Grommash", "name": "Amaya", "skill": 280, "state": "timed",
+                                      "ready_at": db.now - 3_600_000, "bank": False, "missing": ""}]
+    salt = next(r for r in staged["rows"] if r["spell"] == 19566)
+    assert [(st["name"], st["state"], st["bank"]) for st in salt["standings"]] == [("Brugan", "timed", True)]
+    assert salt["item"] == "item 15409"                                            # no name known yet
+    assert staged["export"]["17187"] == "292000;135500;474250" and staged["version"] == 1
+    assert db.status["cooldown_catalog"][2] == {"text": "cooldown catalog: 15 recipes"}

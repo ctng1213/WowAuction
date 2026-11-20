@@ -94,3 +94,17 @@ def test_the_status_line_counts_in_the_singular():
     kept, _ = cooldowns.catalog([SALT])
     assert cooldowns.catalog_text(kept, []) == "cooldown catalog: 1 recipe"
     assert cooldowns.catalog_text([], ["Salt: no product"]) == "cooldown catalog: 1 row skipped (Salt: no product)"
+
+
+def test_can_make_names_a_missing_tool_and_an_unread_cooldown():
+    shaker, = [r for r in cooldowns.catalog([SALT])[0]]
+    needs = cooldowns.Standing("B", "Brugan", 262, "needs_item")
+    assert cooldowns.can_make(shaker, needs, 0, {15846: "Salt Shaker"}) == ("no", "needs Salt Shaker")
+    assert cooldowns.can_make(shaker, needs, 0, {}) == ("no", "needs its tool")
+    assert cooldowns.can_make(shaker, cooldowns.Standing("B", "Brugan", 262, "not_read"), 0, {}) == \
+        ("no", "cooldown not read")
+
+
+def test_catalog_keys_are_every_product_mat_and_tool():
+    kept, _ = cooldowns.catalog([ARCANITE, MOONCLOTH, SALT])
+    assert cooldowns.catalog_keys(kept) == {12360, 12359, 12363, 14342, 14256, 15409, 8150, 15846}

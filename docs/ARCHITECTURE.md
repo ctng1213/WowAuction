@@ -171,7 +171,7 @@ flowchart TD
   Sessions --> Gathering[Gathering page: items/hr, net gold/hr]
   Catalog[(data/cooldown_catalog.json<br/>curated; generated into Data/Cooldowns.lua)] -.built CD1.-> Cooldowns
   Journal -.built CD2: recipe_cooldowns.-> Cooldowns[engine/cooldowns.py + cooldowns_view.py<br/>states, groups, money; Cooldowns page at request time]
-  Cooldowns -.planned CD3: the CD export section.-> AddonCD[Addon Cooldowns tab: lookups only, planned CD4]
+  Cooldowns -.built CD3: the CD export section.-> AddonCD[Addon Cooldowns tab: lookups only, planned CD4]
   Importer -->|re-plan| Plan
   Plan --> Export[PortfolioPlan.lua]
   Export --> AddonLocal[Addon: local positions until AHSync reads them]
@@ -396,3 +396,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-20: Cooldowns spec merge (CD0, `docs/plans/cooldowns.md`, SPEC §3.4F): §3 gains the planned curated cooldown catalog (`data/cooldown_catalog.json`, shipped in the addon as the generated `Data/Cooldowns.lua`), the ready times (`recipe_cooldowns`, from the addon's `cooldowns` field), `engine/cooldowns` and `cooldowns_view` behind a Cooldowns page built at request time, and the `CD` export section feeding an addon tab that only looks up; §5's player state gains `recipe_cooldowns`. Nothing reaches the plan (the planner fix is deferred).
 - 2026-11-20: CD1 built: the curated cooldown catalog (`data/cooldown_catalog.json`, 15 rows) with its validation (`engine.cooldowns.catalog`) and Status line (`recommend.cooldowns_page`), generated into the addon as `Data/Cooldowns.lua` (`tools/gen_cooldown_data.py`, loaded by the `.toc`). The research corrected the design: transmutes need a Philosopher's Stone, and Elemental Fire has its own cooldown (LESSONS).
 - 2026-11-20: CD2 built: the addon's cooldown reads (`Core/AdapterCooldowns.lua`) and ready times (`Capture/Cooldowns.lua`, the `cooldowns` field), ingested into `recipe_cooldowns` (schema 33). A "no time left" reading counts only once the client is trusted (D15). The in-game check is pending.
+- 2026-11-20: CD3 built: `engine/cooldowns` states, money and Can Make, `engine/cooldowns_view` (staged at refresh, rendered at each request with the server's clock), the dashboard's Cooldowns page, and the market file's `CD` table with `EXPORT_VERSION` 8 on both sides; the shortlist carries every catalog item.

@@ -88,7 +88,7 @@ def test_MCP13_get_page_errors_are_plain_sentences(ctx, args, message):
 
 
 def test_MCP11_every_page_answers_within_its_lists_limit(ctx):
-    for page in ("portfolio", "today", "week", "on_ah", "disenchant", "craft", "flip", "gathering", "inventory",
+    for page in ("portfolio", "today", "week", "on_ah", "disenchant", "craft", "flip", "gathering", "cooldowns", "inventory",
                  "history", "rules", "characters", "status"):
         out = get_page(ctx, {"page": page, "limit": 5})
         assert out["page"] == page and isinstance(out["data"], dict)
@@ -143,3 +143,9 @@ def test_a_search_that_matches_nothing_still_takes_a_valid_sort_and_nested_cuts_
     portfolio = get_page(ctx, {"page": "portfolio", "limit": 1})
     assert all("[" in path or "." not in path or not path.startswith("rows") for path in portfolio["cut"])
     assert len(set(portfolio["cut"])) == len(portfolio["cut"])
+
+
+def test_CD20_the_assistants_cooldowns_page_is_rendered_with_its_clock(ctx):
+    out = get_page(ctx, {"page": "cooldowns", "limit": 3})["data"]
+    assert len(out["rows"]) == 3 and "who" in out["rows"][0] and "standings" not in out["rows"][0]
+    assert out["header"].startswith("15 recipes")

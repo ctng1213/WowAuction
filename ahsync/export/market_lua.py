@@ -53,7 +53,7 @@ from ahsync.intel.contract import IntelWindow, ItemIntel, MarketIntelligence, ag
 MARKET_SCHEMA_VERSION = 1      # the addon refuses any other (FM17)
 # Bumped on ANY change to either addon file's format, additive or not, so an addon and an AHSync of
 # different builds say which side is stale (SPEC §3.5, FM34, FM35). Equals AHProfit.EXPORT_VERSION (Core/Market.lua).
-EXPORT_VERSION = 7              # 7: plan actions end in paid (EX22); 6: the tooltip's market lines: sell-through, supply 7/14, Sell Chance Now, windows'
+EXPORT_VERSION = 8              # 8: the cooldowns' CD table (SPEC §3.4F, EX23); 7: plan actions end in paid (EX22); 6: the tooltip's market lines: sell-through, supply 7/14, Sell Chance Now, windows'
                                 # percentages, coverage30 (M33b); 5: market items end in salesDays (EX21); 4: K, G and the portfolio snapshot (EX17, EX18); 3: closes30
                                 # (TT23, PP4); 2: a mail's recipient (EX16)
 HOUR_MS = 3_600_000
@@ -259,8 +259,8 @@ def checksum(markets: Iterable[list[tuple[int, str, str]]], des: Iterable[Mappin
     Args:
         markets: Each market's exported items.
         des: Each market's exported D strings (only those of exported items).
-        extra: Every K, R and U string and each market's G.DE and G.order (portfolio_strings); empty ones
-            are not counted.
+        extra: Every K, R and U string, each market's G.DE and G.order (portfolio_strings) and its CD strings;
+            empty ones are not counted.
 
     Returns:
         "<number of strings>:<their total length>".
@@ -342,7 +342,8 @@ def market_lua(intels: Sequence[MarketIntelligence], shortlists: Mapping[str, se
                disenchantable: Mapping[int, str] | None = None, vendor: Mapping[int, int] | None = None,
                flips: Mapping[str, Mapping[int, str]] | None = None, window_hours: int = 8,
                candidates: Mapping[str, Sequence[str]] | None = None, graphs: Mapping[str, Graph] | None = None,
-               coverage30: Mapping[str, int] | None = None) -> str:
+               coverage30: Mapping[str, int] | None = None,
+               cooldowns: Mapping[str, tuple[int | None, Mapping[str, str]]] | None = None) -> str:
     """The whole MarketIntelligence.lua (SPEC §3.5, EX2).
 
     Args:
@@ -358,6 +359,8 @@ def market_lua(intels: Sequence[MarketIntelligence], shortlists: Mapping[str, se
         candidates: Market -> its K strings in export order (portfolio_lua.candidate_text, EX17); none when absent.
         graphs: Market -> its dependency graph (EX18); an empty one when absent.
         coverage30: Market -> hours observed in the last 720 (TT40); 0 when absent.
+        cooldowns: Market -> (catalog version, spell -> "mats;net;perWeek") from the staged Cooldowns page (SPEC §3.4F.4,
+            EX23); an empty CD table when absent.
 
     Returns:
         Lua source defining the global AHProfitMarket.
@@ -377,9 +380,14 @@ def market_lua(intels: Sequence[MarketIntelligence], shortlists: Mapping[str, se
         offers = ", ".join(f"[{key}] = {lua_string(text)}" for key, text in sorted((flips or {}).get(intel.market, {}).items())
                            if key in exported)
         rows = _supply_rows(intel, shortlists.get(intel.market, set()) & exported, window_hours)
+        cd_version, cd_rows = (cooldowns or {}).get(intel.market, (None, {}))
+        cd = ", ".join([f"v = {cd_version}"] * (cd_version is not None) +
+                       [f"[{spell}] = {lua_string(cd_rows[spell])}" for spell in sorted(cd_rows, key=int)])
+        extra += [cd_rows[spell] for spell in sorted(cd_rows, key=int)]
         entries.append(f"  [{lua_string(intel.market)}] = {{ observationsUntil = {until}, "
                        f"curveHour = {intel.built_ms // HOUR_MS}, I = I{n}, C = C{n}, D = D{n}, F = {{ {offers} }}, "
-                       f"S = {{ {rows} }}, K = K{n}, G = G{n}, coverage30 = {(coverage30 or {}).get(intel.market, 0)} }},")
+                       f"S = {{ {rows} }}, K = K{n}, G = G{n}, coverage30 = {(coverage30 or {}).get(intel.market, 0)}, "
+                       f"CD = {{ {cd} }} }},")
     chars = ", ".join(f"[{lua_string(c)}] = {lua_string(m)}" for c, m in sorted(char_markets.items()))
     vendors = ", ".join(f"[{key}] = {price}" for key, price in sorted((vendor or {}).items()))
     lines += ["AHProfitMarket = {", f"  schemaVersion = {MARKET_SCHEMA_VERSION},",

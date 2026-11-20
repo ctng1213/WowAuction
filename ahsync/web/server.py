@@ -42,6 +42,7 @@ from ahsync.config import (CHANNELS, Config, ConfigError, is_cloud_market, marke
 from ahsync.db.sqlite import Database
 from ahsync.intel.store import IntelCache
 from ahsync.engine.app_view import BAD_LOCATION_TEXT
+from ahsync.engine.cooldowns_view import render as cooldowns_render
 from ahsync.engine.gathering import catalog, eligible, why_not_eligible
 from ahsync.engine.mcp_view import NO_CLAUDE, ClaudeConfig
 from ahsync.engine.status_view import cloud_freshness
@@ -63,7 +64,8 @@ MAX_BODY_BYTES = 4096
 BUSY_TIMEOUT_MS = 5000
 
 # SPEC §3.5 dashboard data. Every page is staged by the full refresh except status, built on request.
-PAGES = ("portfolio", "today", "week", "on_ah", "disenchant", "craft", "flip", "gathering", "inventory", "history",
+PAGES = ("portfolio", "today", "week", "on_ah", "disenchant", "craft", "flip", "gathering", "cooldowns", "inventory",
+         "history",
          "rules", "characters", "status")
 GET_PATHS = ("/", "/api/markets", "/api/items", "/api/app")
 POST_PATHS = ("/api/refresh", "/api/skip", "/api/rule", "/api/reserve", "/api/risk_tolerance", "/api/manual_rate",
@@ -325,6 +327,8 @@ class DashboardApp(SettingsEndpoints):
         if stored is None:
             return json_response(404, {"error": "no_refresh_yet"})
         payload, built_ms = stored
+        if page == "cooldowns":                     # SPEC §3.4F.6: the clock applied at each request (CD20)
+            payload = cooldowns_render(payload, self.clock.now_ms())
         body = {"built": built_ms, "prices_newer": newer, "credit": source_credit(primary), "data": payload}
         if freshness is not False:
             body["freshness"] = freshness

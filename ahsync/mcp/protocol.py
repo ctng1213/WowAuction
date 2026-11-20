@@ -12,8 +12,8 @@ import json
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
 SERVER_NAME = "AHSync"
 # The dashboard pages get_page serves; the same as web.server.PAGES (a test checks).
-PAGES = ("portfolio", "today", "week", "on_ah", "disenchant", "craft", "flip", "gathering", "inventory", "history",
-         "rules", "characters", "status")
+PAGES = ("portfolio", "today", "week", "on_ah", "disenchant", "craft", "flip", "gathering", "cooldowns", "inventory",
+         "history", "rules", "characters", "status")
 
 PARSE_ERROR, INVALID_REQUEST, METHOD_NOT_FOUND, INVALID_PARAMS = -32700, -32600, -32601, -32602
 

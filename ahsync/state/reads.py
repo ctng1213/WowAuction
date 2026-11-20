@@ -287,6 +287,22 @@ class StateReads:
                                  f"WHERE char_id IN ({marks}) ORDER BY char_id, spell_id", list(char_ids))
         return {(c, s): (ready, source, seen) for c, s, ready, source, seen in rows}
 
+    def known_spells(self, char_ids: list[str]) -> dict[str, frozenset[int]]:
+        """The spell ids each character knows, whether or not their recipes are defined (SPEC §3.4F.2).
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            Character id -> its known spell ids; a character with none is absent.
+        """
+        marks = ",".join("?" * len(char_ids))
+        found: dict[str, set[int]] = {}
+        for c, spell in self.conn.execute(f"SELECT char_id, spell_id FROM known_recipes WHERE char_id IN ({marks}) "
+                                          f"ORDER BY char_id, spell_id", list(char_ids)):
+            found.setdefault(c, set()).add(spell)
+        return {c: frozenset(s) for c, s in found.items()}
+
     def owned_units(self, char_ids: list[str]) -> dict[int, int]:
         """Unbound units you own in bags, bank and mail across the characters, less what each keeps
         for itself (SPEC §3.4B owned, §3.4.3, R20).

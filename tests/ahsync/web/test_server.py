@@ -332,8 +332,8 @@ def test_views_of_an_unconfigured_market_are_404(app):
 
 
 def test_every_contract_page_is_routed_and_unknown_pages_are_404(app):
-    assert set(PAGES) == {"portfolio", "disenchant", "craft", "today", "week", "on_ah", "flip", "gathering", "inventory",
-                          "history", "rules", "characters", "status"}
+    assert set(PAGES) == {"portfolio", "disenchant", "craft", "today", "week", "on_ah", "flip", "gathering", "cooldowns",
+                          "inventory", "history", "rules", "characters", "status"}
     for page in PAGES:
         if page != "status":                      # built on request, never "no refresh yet"
             assert json.loads(app.handle("GET", f"/api/views/{page}", GOOD).body) == {"error": "no_refresh_yet"}
@@ -674,13 +674,13 @@ def test_every_portfolio_column_has_its_tooltip_and_the_market_columns_in_order(
 
 def test_D76_the_page_bar_keeps_today_and_week_between_portfolio_and_on_the_ah():
     # The addon half (a Portfolio tab, no Today or Week) is MainWindow_spec's "the tab bar reads Portfolio, …".
-    # Since M16 Gathering follows Flip (D80).
+    # Since M16 Gathering follows Flip (D80); since CD3 Cooldowns follows Gathering (SPEC §3.5).
     page = INDEX_HTML.read_text(encoding="utf-8")
     order = page[page.index("const ORDER = "):page.index("const nav = ")]
     assert re.findall(r"\['([^']+)', '(\w+)'\]", order) == [
         ("Portfolio", "portfolio"), ("Today", "today"), ("Week", "week"), ("On the AH", "on_ah"),
         ("Disenchant", "disenchant"), ("Craft", "craft"), ("Flip", "flip"), ("Gathering", "gathering"),
-        ("Inventory", "inventory"), ("History", "history"), ("Rules", "rules"), ("Characters", "characters"),
+        ("Cooldowns", "cooldowns"), ("Inventory", "inventory"), ("History", "history"), ("Rules", "rules"), ("Characters", "characters"),
         ("Status", "status")]
     assert [p for _, p in re.findall(r"\['([^']+)', '(\w+)'\]", order)] == list(PAGES)
 
@@ -1202,4 +1202,21 @@ def test_D108_a_pages_main_table_scrolls_in_a_box_that_ends_above_the_windows_bo
     assert "<div class=\"scrollx fit\"><table><thead><tr>${head}</tr></thead><tbody>${shown" in render
     gathering = page[page.index("function gaPage"):page.index("// Gathering's own controls")]
     assert "<div class=\"scrollx fit\"><table>" in gathering
-    assert page.count("scrollx fit") == 2                                  # only the main tables; small ones keep .scrollx
+    cooldowns = page[page.index("function cdPage"):page.index("function cdBind")]
+    assert "<div class=\"scrollx fit\"><table>" in cooldowns                  # SPEC §3.4F.6, CD3
+    assert page.count("scrollx fit") == 3                                  # only the main tables; small ones keep .scrollx
+
+
+def test_CD20_the_cooldowns_page_is_rendered_at_each_request_with_the_servers_clock(app, db):
+    from ahsync.engine.cooldowns_view import render
+    from tests.support import cooldowns_world as cw
+    now = app.clock.now_ms()
+    tessa = cw.with_(cw.TESSA, ready={17187: (now + 26 * cw.HOUR, now - 22 * cw.HOUR)})
+    staged = cw.base(holders=[cw.AMAYA, tessa])
+    publish(db, "cooldowns", M, staged)
+    first = json.loads(app.handle("GET", "/api/views/cooldowns", GOOD).body)["data"]
+    assert first == render(staged, now)
+    tessa_line = lambda data: next(r for r in data["rows"] if r["spell"] == 17187)["who"]["lines"][1]["text"]
+    assert tessa_line(first) == "Tessa 1 d 2 h"
+    app.clock.advance(cw.HOUR)
+    assert tessa_line(json.loads(app.handle("GET", "/api/views/cooldowns", GOOD).body)["data"]) == "Tessa 1 d 1 h"
