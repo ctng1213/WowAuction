@@ -10,6 +10,7 @@ Core\AdapterDiagnostics.lua
 Core\AdapterTooltip.lua
 Data\BonusSuffixes.lua
 Data\Disenchant.lua
+Data\Cooldowns.lua
 Core\Events.lua
 Core\DB.lua
 Core\ItemNames.lua

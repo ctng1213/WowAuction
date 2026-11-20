@@ -1,6 +1,6 @@
 # Cooldowns tab: plan (draft 3, 2026-11-20)
 
-Status: **approved by the user 2026-11-20, with standing approval for CD0–CD4. CD0 (the spec merge) done.** Draft 3 folds in the independent (Fable) review, which recommended approval with changes, and the user's answers to it. The mockup is [docs/mockups/cooldowns.html](../mockups/cooldowns.html). After approval comes the spec merge (CD0): SPEC §3.4F, §4.3, §2.2.1, §3.5 and the CD scenarios. After that the milestones run one at a time.
+Status: **approved by the user 2026-11-20, with standing approval for CD0–CD4. CD0 (the spec merge) and CD1 (the catalog) done.** Draft 3 folds in the independent (Fable) review, which recommended approval with changes, and the user's answers to it. The mockup is [docs/mockups/cooldowns.html](../mockups/cooldowns.html). After approval comes the spec merge (CD0): SPEC §3.4F, §4.3, §2.2.1, §3.5 and the CD scenarios. After that the milestones run one at a time.
 
 ## 0. The objective
 
@@ -70,13 +70,16 @@ This adds one research view for items made by profession **cooldowns** (transmut
   - Ready times are stored in **UTC ms** (the project's convention), not seconds.
 - **D10, shared cooldowns** (user, 2026-11-20: "yes", mark the group). A catalog `group` (for example "transmute") shares one ready time per character. The tab marks it in the Cooldown cell ("2 d · shared"), and counts one ready use per group. Whether Classic or Forever transmutes actually share is confirmed while the catalog is built (CD1) and in game (CD2). The mockup shows them shared.
 - **D11, bank** (user, 2026-11-20). When a needed mat or the tool is only in the bank, Can Make reads **Yes (bank)**.
+- **D12, the Philosopher's Stone** (user, 2026-11-20, during CD1). The catalog research found that every transmute needs a Philosopher's Stone held in the bags or bank. So a recipe may also need a tool, and "Needs item" applies to transmutes too; when both are missing, "Not learned" shows first. A tool use (the Salt Shaker) is marked `tool_use` and has no recipe to learn. This corrects D6's "the two can't both apply".
+- **D13, short cooldowns** (user, 2026-11-20). Transmute: Elemental Fire has its own 10-minute cooldown, outside the transmute group. It stays listed, with Cooldown "10 m". Per week is "—" for any cooldown under 1 day, and hovering says "not limited by the cooldown: limited by the mats".
+- **D14, the SnowMaster 9000** (user, 2026-11-20). An Engineering 190 tool use (Snowballs, likely Winter Veil) matches the rule and is listed. The catalog has 15 rows.
 
 ## 2. How the cooldown list is derived
 
 1. **Catalog (source of truth, curated by us, shipped complete)**: `ahsync/data/cooldown_catalog.json`.
    - Each row has `spell`, `name`, `profession`, `skill`, `cooldown_s`, optional `group`, `product`, `yield_min`/`yield_max`, `reagents`, optional `tool` (the Salt Shaker's item key), `url` and an optional `note`.
    - Inclusion rule: a profession spell that creates an item and has a non-zero recovery time (its own cooldown or its category's), plus tool items whose Use spell creates an item and has a cooldown.
-   - Compiled by hand from Classic (1.12) spell pages, keeping each URL. The draft has 14 rows: Arcanite, Iron to Gold, Mithril to Truesilver, 8 elemental transmutes, Elemental Fire, Mooncloth and the Salt Shaker.
+   - Compiled by hand from Classic (1.12) spell pages, keeping each URL. It has 15 rows (CD1): Arcanite, Iron to Gold (1 d), Mithril to Truesilver, 8 elemental transmutes, Elemental Fire (10 m, not shared), Mooncloth, and the Salt Shaker's and SnowMaster 9000's tool uses.
    - The `_comment` holds the version and the Forever caveat, as in `gathering_catalog.json`.
    - `tools/gen_cooldown_data.py` writes the addon's `Data/Cooldowns.lua` from it, with the same version. A test fails when the two disagree.
 2. **The game tells us when each character is ready** (D9). A recipe the game reports a cooldown for that the catalog lacks becomes a "seen in game" row with unknown skill.
@@ -114,7 +117,7 @@ Each milestone runs in its own worktree, is verified with `tools/verify.ps1` (wi
 - **Other characters' data ages** (D1): the tab shows when each character's data was captured ("data from Tue 18:02"). A ready time can be wrong if that character played on another machine since.
 - **Thin markets**: Per week assumes every unit sells. Sold / day sits beside it, and D4 keeps it per character.
 - **Addon tab width**: a seventh tab must still fit beside the Min chance box at minimum width. It is checked in CD4's goldens.
-- **Export size**: 14 `CD` rows plus about 30 shortlisted items is negligible against 3 MB, but the bench confirms it.
+- **Export size**: 15 `CD` rows plus about 30 shortlisted items is negligible against 3 MB, but the bench confirms it.
 - **The addon's own scan prices**: if the addon shows a fresher scanned price than the exported `cur`, AH price and the exported Net / use can disagree until the next AHSync export. CD4 checks which price the tooltip path uses, and says "net from the 14:32 export" on hover.
 
 ## 6. Not in this batch

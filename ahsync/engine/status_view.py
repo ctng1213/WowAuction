@@ -281,6 +281,7 @@ def message(row: StatusRow, offset_ms: int) -> tuple[str, str]:
         "window_unavailable": ("App window unavailable", "The dashboard opens in your browser."),   # FM56
         "gathering_catalog": ("Gathering catalog", str(d.get("text", ""))),          # SPEC §3.4E.1, GA2
         "gathering_unplaced": ("Gathered, not in the catalog", str(d.get("text", ""))),   # SPEC §3.5 Status, GA34
+        "cooldown_catalog": ("Cooldown catalog", str(d.get("text", ""))),            # SPEC §3.4F.1, CD1, CD2
         "ahledger_unreachable": ("AHledger unreachable", f"AHledger: unreachable since {weekday_time(d.get('since_ms', row.at_ms), offset_ms)} "
                                                          f"({d.get('tries', 0)} tries)"),
         "ahledger_format": ("AHledger format changed", f"AHledger format changed: {d.get('endpoint', '?')}"),

@@ -1291,7 +1291,7 @@ AHF being offline changes nothing except that the price age is your own scan's. 
 
 #### 3.4F Cooldowns: what your profession cooldowns are worth
 
-**Planned: CD1–CD4** (`docs/plans/cooldowns.md`, draft 3, approved by the user 2026-11-20; mockup [docs/mockups/cooldowns.html](mockups/cooldowns.html); CD1–CD31, FM89, FM90, EX23, EX24, UI31, every ID pending).
+**Built: CD1, the catalog** (2026-11-20: `data/cooldown_catalog.json`, `engine.cooldowns.catalog`, `catalog_text`, `recommend.cooldowns_page.read_catalog`, `load_catalog`, `tools/gen_cooldown_data.py`, `Data/Cooldowns.lua`; F.1, CD1–CD3). **Planned: CD2–CD4** (`docs/plans/cooldowns.md`, draft 3, approved by the user 2026-11-20; mockup [docs/mockups/cooldowns.html](mockups/cooldowns.html); CD1–CD31, FM89, FM90, EX23, EX24, UI31, every ID pending).
 
 **Cooldowns** is a research view, a dashboard page and an addon tab, of the items made by profession **cooldowns**: transmutes, Mooncloth, the Salt Shaker's Refined Deeprock Salt. For each one it shows:
 - what it is, and the skill it needs;
@@ -1306,13 +1306,13 @@ The examples use the mockup's world:
 | Character | Professions | Notes |
 |---|---|---|
 | Amaya (logged in) | Alchemy 280, Herbalism 290 | knows Arcanite, Undeath to Water, Water to Air, Mithril to Truesilver and Iron to Gold; her transmute cooldown is ready; she holds 1 Thorium Bar and 1 Arcane Crystal in her bags and 1 Mithril Bar in her bank |
-| Tessa | Alchemy 300 | knows Arcanite, Earth to Water, Undeath to Water and Elemental Fire; used Arcanite, so her transmute group has 1 d 2 h left; data from Wed 09:15 |
+| Tessa | Alchemy 300 | knows Arcanite, Earth to Water, Undeath to Water and Elemental Fire; used Arcanite, so her transmute group has 1 d 2 h left, while Elemental Fire is ready; holds a Heart of Fire; data from Wed 09:15 |
 | Sorvin | Alchemy 230 | knows Iron to Gold and Mithril to Truesilver; group ready; holds Iron Bar |
 | Brugan | Leatherworking 262, Skinning 260 | Salt Shaker in his bags, 1 d 4 h left |
 | Mira | Tailoring 260, Leatherworking 255 | knows Mooncloth (2 d 3 h left); no Salt Shaker |
 | Keldor | Tailoring 245 | |
 
-Prices: Arcanite Bar 45g, Thorium Bar 1g 20s, Arcane Crystal 28g, Mooncloth 22g, Felcloth 3g 50s, Refined Deeprock Salt 4g 50s, Deeprock Salt 15s, Essence of Water 3g, Essence of Earth 2g 40s, Essence of Undeath 1g, Essence of Air 2g 80s, Truesilver Bar 2g 10s, Mithril Bar 60s, Gold Bar 1g 30s, Iron Bar 40s, Heart of Fire 1g 50s, and Elemental Fire 1g 20s, last seen 9 days ago. All transmutes share one cooldown, the group `transmute`.
+Prices: Arcanite Bar 45g, Thorium Bar 1g 20s, Arcane Crystal 28g, Mooncloth 22g, Felcloth 3g 50s, Refined Deeprock Salt 4g 50s, Deeprock Salt 15s, Essence of Water 3g, Essence of Earth 2g 40s, Essence of Undeath 1g, Essence of Air 2g 80s, Truesilver Bar 2g 10s, Mithril Bar 60s, Gold Bar 1g 30s, Iron Bar 40s, Heart of Fire 1g 50s, and Elemental Fire 1g 20s, last seen 9 days ago. Every transmute except Elemental Fire (its own 10 minutes) shares one cooldown, the group `transmute`, and every alchemist holds a Philosopher's Stone.
 
 **F.1 The catalog** (CD1–CD3). What has a cooldown comes from a **static data file**, `ahsync/data/cooldown_catalog.json` (CLAUDE.md exempts `data/*` from mirroring). It never comes from AH data: a price never makes an item a cooldown item. The client can't say which recipes have a cooldown, what skill they need, or how long the cooldown is (§2.2.1: `skill` and `cooldown` are captured as unknown), so the list is **curated by us and shipped complete** inside the addon from its first release. The game only says when each character is ready (F.3) and flags what the list missed (F.7).
 - **Inclusion rule**: every profession spell that creates an item and has a non-zero recovery time (its own cooldown or its category's), plus every tool item whose Use spell creates an item and has a cooldown (the Salt Shaker). The rows are compiled by hand from Classic (1.12) spell pages, keeping each page's URL.
@@ -1326,25 +1326,27 @@ Prices: Arcanite Bar 45g, Thorium Bar 1g 20s, Arcane Crystal 28g, Mooncloth 22g,
   - `product` (the AHF item key, §2.1);
   - `yield_min` and `yield_max`;
   - `reagents` (`[[key, count], …]`, by key);
-  - `tool` (optional: the tool's item key);
+  - `tool` (optional: an item the character must hold, the Philosopher's Stone for a transmute or the tool of a tool use);
+  - `tool_use` (optional, true: the row is the tool's Use spell, the Salt Shaker's, so there is no recipe to learn);
   - `url` and an optional `note`.
-- The file's `_comment` carries its version and the Forever caveat, as `gathering_catalog.json`'s does. Version 1 lists 14 rows: Arcanite, Iron to Gold, Mithril to Truesilver, the 8 elemental transmutes, Elemental Fire, Mooncloth and the Salt Shaker.
+- The file's `_comment` carries its version and the Forever caveat, as `gathering_catalog.json`'s does. Version 1 lists 15 rows, every item-creating recipe of the 12 professions checked: Arcanite, Iron to Gold, Mithril to Truesilver, the 8 elemental transmutes and Elemental Fire (all 12 need a Philosopher's Stone; Elemental Fire has its own 10-minute cooldown), Mooncloth (made at a moonwell), and the tool uses of the Salt Shaker and the SnowMaster 9000 (Engineering 190, Snowballs).
 - **Loaded at the edge**: `recommend/cooldowns_page.py` reads the file, and `engine.cooldowns.catalog(rows)` (pure) validates it. A row is skipped with a Status line when:
   - its profession is unknown;
   - its skill is outside 1–300;
   - its cooldown is not positive;
   - it has no product or no reagents list;
+  - it is a tool use without a tool;
   - it duplicates a spell already listed;
   - its group's members have different professions.
 
-  The other rows still show (CD2). The Status topic is `cooldown_catalog`: "cooldown catalog: 14 recipes", or "cooldown catalog: 1 row skipped (Mooncloth: skill 350 outside 1–300)". A file that can't be read leaves the page empty with "cooldown catalog not read (…): the Cooldowns page is empty".
+  The other rows still show (CD2). The Status topic is `cooldown_catalog`: "cooldown catalog: 15 recipes", or "cooldown catalog: 1 row skipped (Mooncloth: skill 350 outside 1–300)". A file that can't be read leaves the page empty with "cooldown catalog not read (…): the Cooldowns page is empty".
 - **Shipped in the addon** (D5, CD3): `tools/gen_cooldown_data.py` writes `addon/AHProfit/Data/Cooldowns.lua` from the JSON, with the same version (§4.5). A test fails when the two disagree. A fix to the list reaches every user with the next addon release.
 
 **F.2 Eligibility and the row states** (CD9–CD11). A character's state for a catalog row is the first of these that applies:
 1. it lacks the profession: no state, so the row is not in its addon view and not in Who;
 2. its skill is below `skill`: **below skill** (the addon shows "—"; Who shows "needs 275 (230)");
-3. it doesn't know the recipe (`known_recipes`): **not learned**. A tool row has no recipe, so this never applies to one;
-4. the tool is in neither its bags nor its bank: **needs item**;
+3. it doesn't know the recipe (`known_recipes`): **not learned**. A tool use has no recipe to learn, so this never applies to one;
+4. the row has a `tool` (a transmute's Philosopher's Stone, the Salt Shaker) that is in neither its bags nor its bank: **needs item**. A transmute can need both; not learned shows first;
 5. no ready time is stored for the row or its group (F.3): **not read**;
 6. the ready time is in the future: **cooling**, with the time left;
 7. otherwise: **ready**.
@@ -1352,7 +1354,7 @@ Prices: Arcanite Bar 45g, Thorium Bar 1g 20s, Arcane Crystal 28g, Mooncloth 22g,
 The rules behind these states:
 - **The tool counts as held when it is in that character's own bags or bank**, as of the last capture of each (§2.2.1 `inventory`). The bank is readable only while open, so a character who never opened it is judged on the bags alone. Another character's copy, or one in the mail, doesn't count.
 - **Not learned, needs item and not read are orange** in both views. Hovering names what is missing: "Recipe: Transmute: Earth to Water", "Salt Shaker not in Mira's bags or bank", or "…'s cooldown hasn't been read yet. Open the profession window, carry the tool in your bags at login, or use it once".
-- **Shared cooldowns** (D10): the rows of one `group` share one ready time per character, the latest stored for any member. Using any member locks the group for the period of the member used. The Cooldown cell says "shared", and hovering lists the group ("one cooldown for all 12 transmutes").
+- **Shared cooldowns** (D10): the rows of one `group` share one ready time per character, the latest stored for any member. Using any member locks the group for the period of the member used. The Cooldown cell says "shared", and hovering lists the group ("one cooldown for all 11 transmutes; Elemental Fire has its own").
 
 **F.3 Ready times** (CD12, CD30, FM89). A character's ready time for a spell comes from three sources:
 1. **The game reports it**: `C_TradeSkillUI.GetRecipeCooldown(spell)` when a profession window opens or updates, and `C_Container.GetItemCooldown(tool)` at login, on bag updates and on `BAG_UPDATE_COOLDOWN`, which needs no window. Both are `-- UNVERIFIED:` (§6 item 7).
@@ -1370,6 +1372,7 @@ Each observation is stored with its time (§2.2.1 `cooldowns`), and the newest o
   - Arcanite: 13g 55s × 7 ÷ 2 = **47g 42s 50c**.
   - Mooncloth: 13g 90s × 7 ÷ 4 = **24g 32s 50c**.
   - Grouped rows are alternatives: each assumes every use of the group goes to it.
+  - A cooldown under 1 day doesn't limit the output (Elemental Fire's 10 minutes): Per week is "—", and hovering says "not limited by the cooldown: limited by the mats" (the user, 2026-11-20).
 - **Red** below zero (Water to Undeath: 95s − 3g = **−2g 5s**, per week −14g 35s).
 - **The price** is the product's `cur` (D2). A price older than 7 days shows muted with its age ("1g 20s · 9 d old") and still sorts by its value. "—" means no price was ever seen, and such rows sort last.
 
@@ -1395,7 +1398,7 @@ Each observation is stored with its time (§2.2.1 `cooldowns`), and the newest o
   - An empty result says which filter emptied it: "No cooldown recipe matches. Keldor has Tailoring 245; Mooncloth needs 250. Turn off "My skill level only" to see it."
 
 **F.7 Status** (CD1, CD2, CD28, CD29):
-- the catalog line (F.1);
+- the catalog line (F.1, "cooldown catalog: 15 recipes");
 - "Seen in game, not in the catalog: Transmute: Starsilver (Amaya). Add it to cooldown_catalog.json.": a spell with a reported cooldown (F.3 source 1) that the catalog lacks; the addon shows it as a row with Skill "seen in game";
 - "Catalog item unknown to the market: 12360 Arcanite Bar";
 - "cooldown catalog v2 in the addon, v1 in AHSync's export: update AHSync" (or the other way round).
@@ -2349,7 +2352,7 @@ Clicking a row runs an AH search for it, and the shopping and post lists show al
 
 ### 4.5 Static data
 
-`Data/Cooldowns.lua` (**planned CD1**, §3.4F.1) is generated from `ahsync/data/cooldown_catalog.json` by `tools/gen_cooldown_data.py`, with the same version, and is never edited by hand. It ships the full curated cooldown list with the addon, so every user has it with or without AHSync.
+`Data/Cooldowns.lua` (**built CD1**, §3.4F.1) is generated from `ahsync/data/cooldown_catalog.json` by `tools/gen_cooldown_data.py`, with the same version, and is never edited by hand. It ships the full curated cooldown list with the addon, so every user has it with or without AHSync.
 
 `Data/Disenchant.lua` holds quality × ilvl band × armor/weapon → material probabilities, plus the Enchanting skill per band. The materials are seeded from Classic Era values and must be verified for Forever. The skill is 1 for every band: on Forever any Enchanting skill disenchants any item (the user, 2026-11-13; Forever guides agree, no official source yet), where Classic needed 25–225 by item level (R34).
 
@@ -2387,7 +2390,7 @@ The system is built as separate components that talk only through versioned cont
 | Desktop Recommendations | `recommend/` | per-character Disenchant, Craft, Flip, Sell options from intelligence + state | collection, history |
 | Portfolio Optimizer | `recommend/portfolio.py` and `recommend/plan.py` (inputs and rows); built (M9): `engine/portfolio.py`'s contracts (the candidate record, the accounting, the export subset, profit %); built (M10): `engine/candidates.py` and `engine/craft_candidates.py` (stage A), `engine/selection.py` (stage B, validation, reasons), `engine/timing.py` (the premium), `engine/allocation.py` (the pipeline), over `engine/plan.py`, `engine/flips.py`, `engine/craft_plan.py`, `engine/week.py`; built (M11): `engine/graph.py` (the dependency graph), `export/portfolio_lua.py` (its strings); built (M14): `engine/positions.py`, `engine/position_views.py`, `recommend/positions_pass.py` | the cross-character plan: capital, shared market capacity, transfers (§3.4C); the funded portfolio and its alternatives (§3.4D); positions (§3.4D.9) | raw collection |
 | Gathering (built M16: `engine/gathering.py`, `engine/gathering_view.py`, `recommend/gathering_page.py`, the data file; built M17: `engine/sessions.py`, `state/gathering.py`, `Capture/Gather.lua`; built M18: `engine/gathering_history.py`) | `engine/gathering.py` (catalog, eligibility, rates, observed categories, unplaced loot), `engine/sessions.py`, `engine/gathering_view.py`, `engine/gathering_history.py` (the historical columns and the detail), `state/gathering.py`, `recommend/gathering_page.py`, the data file `data/gathering_catalog.json`; the addon's `Capture/Gather.lua` | the farmable catalog, eligibility, loot events, farming sessions, rates and manual overrides, the Gathering page (§3.4E) | funding, candidates, positions: farmed items are found stock the optimizer sells like any other |
-| Cooldowns (planned CD1–CD4) | `engine/cooldowns.py` (catalog, states, groups, money), `engine/cooldowns_view.py`, `recommend/cooldowns_page.py`, `state` (the `cooldowns` field and `recipe_cooldowns`), the data file `data/cooldown_catalog.json` and its generated addon twin `Data/Cooldowns.lua`; the addon's `Capture/Professions.lua` ready times, `UI/ViewModel.lua` rows and the Cooldowns tab | the curated cooldown catalog, ready times, the Cooldowns page and tab (§3.4F) | the plan: cooldowns suggest nothing to it until the deferred planner fix (§3.4F.9) |
+| Cooldowns (built CD1: the catalog, `engine/cooldowns.catalog`, the data file and its addon twin; planned CD2–CD4) | `engine/cooldowns.py` (catalog, states, groups, money), `engine/cooldowns_view.py`, `recommend/cooldowns_page.py`, `state` (the `cooldowns` field and `recipe_cooldowns`), the data file `data/cooldown_catalog.json` and its generated addon twin `Data/Cooldowns.lua`; the addon's `Capture/Professions.lua` ready times, `UI/ViewModel.lua` rows and the Cooldowns tab | the curated cooldown catalog, ready times, the Cooldowns page and tab (§3.4F) | the plan: cooldowns suggest nothing to it until the deferred planner fix (§3.4F.9) |
 | Dashboard | `web/` | showing results; writes only through its secured endpoints (§3.5) | any calculation |
 | Engine | `engine/` | the pure formulas every component above uses (§3.3, §3.4) | I/O of any kind |
 | Lifecycle | `app/` | the scheduler and the order of a refresh: analysis → recommendations → publish | formulas |
@@ -2808,8 +2811,8 @@ Data moves through many hand-offs: AHF and AHledger → AHSync → SQLite → `M
 | H2 | **Built (2026-11-11). Cloud status: the status document**: `ahcloud/status.py`, the collector's state on every run, `state/analyzer.json`, `status/<market>.json`, the analyzer's CloudWatch reads | CS2–CS11, BZ55, FM81, SEC21 pass |
 | H3 | **Cloud status: the page**: `infra/status/status.html` deployed by the stack, the intel expiry scoped to `intel/` | CS12 passes; the headless render clean; the page seen on a phone after `cdk deploy` |
 | M40 | **The addon after v0.1.3's in-game test** (`docs/plans/addon-vendor-tooltip.md`): Sales Rate without days of supply and with its days of data while thin (TT32; the market file's `salesDays`, `EXPORT_VERSION` 5, EX21, EX14); Inventory as "Total: 29 · Bags: 4 · Bank: 1 · Mail: 24" (TT30); Flip rows whose Sell and Profit show whole and whose note says how far the When time is (A28, A59, UI24); with M32c part 2 (A92, BZ25) in the same release | TT30, TT32, EX14, EX21, A28, A59, UI24 pass; the goldens match the mockup; the user's in-game check |
-| CD0 | **Cooldowns: the spec merge** (`docs/plans/cooldowns.md`): §3.4F, the `cooldowns` field, `recipe_cooldowns`, the `CD` export, the tab and page, scenarios CD1–CD31, FM89, FM90, EX23, EX24, UI31 pending | this table row; `tests/test_conventions.py` passes |
-| CD1 | **Cooldowns: the catalog**: `data/cooldown_catalog.json` (14 rows), `engine.cooldowns.catalog`, `tools/gen_cooldown_data.py` → `Data/Cooldowns.lua` | CD1–CD3 pass |
+| CD0 | **Built (2026-11-20). Cooldowns: the spec merge** (`docs/plans/cooldowns.md`): §3.4F, the `cooldowns` field, `recipe_cooldowns`, the `CD` export, the tab and page, scenarios CD1–CD31, FM89, FM90, EX23, EX24, UI31 pending | this table row; `tests/test_conventions.py` passes |
+| CD1 | **Built (2026-11-20). Cooldowns: the catalog**: `data/cooldown_catalog.json` (15 rows), `engine.cooldowns.catalog`, `tools/gen_cooldown_data.py` → `Data/Cooldowns.lua` | CD1–CD3 pass |
 | CD2 | **Cooldowns: ready times**: the Adapter reads, the cast record, the `cooldowns` field, `recipe_cooldowns` (migration), checked in game (§6 item 7) | CD12, CD30, CD31, FM89, FM90 pass; `tools/savedvars_report.py` shows the field |
 | CD3 | **Cooldowns: the dashboard and the export**: `engine/cooldowns`, `engine/cooldowns_view`, `recommend/cooldowns_page`, the page, the `CD` section and the shortlist, `EXPORT_VERSION` 8 on both sides | CD4–CD21, CD28, CD29, EX23, EX24 pass; the headless render clean; the bench in budget |
 | CD4 | **Cooldowns: the addon tab**: `UI/ViewModel.lua` rows, the tab, the character row, the hovers | CD22–CD27, UI31 pass; the goldens reviewed against the mockup |

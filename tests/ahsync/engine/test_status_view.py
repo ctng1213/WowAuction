@@ -130,6 +130,7 @@ def test_D36_premium_shows_on_the_api_card_and_warns_near_its_end():
     ("window_unavailable", {}, "App window unavailable", "The dashboard opens in your browser."),
     ("gathering_catalog", {"text": "gathering catalog: 1 row skipped (Mithril Ore: unknown profession 'Minning')"},
      "Gathering catalog", "1 row skipped (Mithril Ore"),
+    ("cooldown_catalog", {"text": "cooldown catalog: 14 recipes"}, "Cooldown catalog", "14 recipes"),
     ("something_new", {}, "something_new", ""),
 ])
 def test_every_stored_kind_reads_as_a_sentence(kind, data, title, phrase):
