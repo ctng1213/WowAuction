@@ -237,6 +237,10 @@ class _Apply:
             self.guarded(f"professions[{char_id!r}]", lambda c=char_id: self.db.replace_professions(c, skills[c]))
         for char_id in sorted(self.follows & known.keys()):
             self.guarded(f"knownRecipes[{char_id!r}]", lambda c=char_id: self._known(c, known[c]))
+        for r in data.cooldowns:
+            if r.char_id in self.follows:
+                self.guarded(f"cooldowns[{r.char_id!r}][{r.spell_id}]", lambda r=r: self.db.upsert_recipe_cooldown(
+                    r.char_id, r.spell_id, r.ready_at_ms, r.source, r.observed_ms))
         for key in data.vendor_reagents:
             if self.db.add_vendor_reagent(key):
                 self.mark([key])

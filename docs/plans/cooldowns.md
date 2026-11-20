@@ -1,6 +1,6 @@
 # Cooldowns tab: plan (draft 3, 2026-11-20)
 
-Status: **approved by the user 2026-11-20, with standing approval for CD0–CD4. CD0 (the spec merge) and CD1 (the catalog) done.** Draft 3 folds in the independent (Fable) review, which recommended approval with changes, and the user's answers to it. The mockup is [docs/mockups/cooldowns.html](../mockups/cooldowns.html). After approval comes the spec merge (CD0): SPEC §3.4F, §4.3, §2.2.1, §3.5 and the CD scenarios. After that the milestones run one at a time.
+Status: **approved by the user 2026-11-20, with standing approval for CD0–CD4. CD0 (the spec merge), CD1 (the catalog) and CD2 (ready times; the in-game check pending, D16) done.** Draft 3 folds in the independent (Fable) review, which recommended approval with changes, and the user's answers to it. The mockup is [docs/mockups/cooldowns.html](../mockups/cooldowns.html). After approval comes the spec merge (CD0): SPEC §3.4F, §4.3, §2.2.1, §3.5 and the CD scenarios. After that the milestones run one at a time.
 
 ## 0. The objective
 
@@ -72,6 +72,8 @@ This adds one research view for items made by profession **cooldowns** (transmut
 - **D11, bank** (user, 2026-11-20). When a needed mat or the tool is only in the bank, Can Make reads **Yes (bank)**.
 - **D12, the Philosopher's Stone** (user, 2026-11-20, during CD1). The catalog research found that every transmute needs a Philosopher's Stone held in the bags or bank. So a recipe may also need a tool, and "Needs item" applies to transmutes too; when both are missing, "Not learned" shows first. A tool use (the Salt Shaker) is marked `tool_use` and has no recipe to learn. This corrects D6's "the two can't both apply".
 - **D13, short cooldowns** (user, 2026-11-20). Transmute: Elemental Fire has its own 10-minute cooldown, outside the transmute group. It stays listed, with Cooldown "10 m". Per week is "—" for any cooldown under 1 day, and hovering says "not limited by the cooldown: limited by the mats".
+- **D15, trusting a "no time left" reading** (user, 2026-11-20, during CD2, from the wow-adapter consult). Only a real time left, or a cast the addon saw, is stored at first. Once the client has given a real time left, "no time left" from a learned recipe in an open window, or from a tool in the bags, also counts as ready. Until then the row says Not read. This guards against an API that answers nothing.
+- **D16, the in-game check** (user, 2026-11-20). CD2's in-game verification (SPEC §6 item 7) is run by the user before the batch's PR merges, so CD3 and CD4 go ahead. Steps: open each profession window, use a transmute or the Salt Shaker, `/reload`, then `python tools/savedvars_report.py`; the diagnostics' `apis` and the `cd g`/`cd t` traces show what Forever returns.
 - **D14, the SnowMaster 9000** (user, 2026-11-20). An Engineering 190 tool use (Snowballs, likely Winter Veil) matches the rule and is listed. The catalog has 15 rows.
 
 ## 2. How the cooldown list is derived

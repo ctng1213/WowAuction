@@ -273,6 +273,20 @@ class StateReads:
                                  tuple(sorted(crafters.split(",")))))
         return out
 
+    def recipe_cooldowns(self, char_ids: list[str]) -> dict[tuple[str, int], tuple[int, str, int]]:
+        """When each character can use its cooldown spells again (SPEC §3.4F.3).
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            (char id, spell id) -> (ready at, UTC ms; source "g" or "c"; observed at, UTC ms).
+        """
+        marks = ",".join("?" * len(char_ids))
+        rows = self.conn.execute(f"SELECT char_id, spell_id, ready_at_ms, source, observed_ms FROM recipe_cooldowns "
+                                 f"WHERE char_id IN ({marks}) ORDER BY char_id, spell_id", list(char_ids))
+        return {(c, s): (ready, source, seen) for c, s, ready, source, seen in rows}
+
     def owned_units(self, char_ids: list[str]) -> dict[int, int]:
         """Unbound units you own in bags, bank and mail across the characters, less what each keeps
         for itself (SPEC §3.4B owned, §3.4.3, R20).

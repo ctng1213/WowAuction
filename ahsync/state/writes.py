@@ -187,6 +187,26 @@ class IngestWrites:
                               [(char_id, spell_id) for spell_id in sorted(spell_ids - old)])
         return old ^ spell_ids
 
+    def upsert_recipe_cooldown(self, char_id: str, spell_id: int, ready_at_ms: int, source: str,
+                               observed_ms: int) -> bool:
+        """Store when a character can use a cooldown spell again; the newer observation wins (SPEC §3.4F.3, CD31).
+
+        Args:
+            char_id: "Name-Realm".
+            spell_id: The catalog spell.
+            ready_at_ms: When it is ready, UTC ms.
+            source: "g" (the game reported it) or "c" (the addon saw the cast).
+            observed_ms: When that was learned, UTC ms.
+
+        Returns:
+            True when the row was inserted or changed; a row no newer than the stored one changes nothing.
+        """
+        row = {"char_id": char_id, "spell_id": spell_id, "ready_at_ms": ready_at_ms, "source": source,
+               "observed_ms": observed_ms}
+        merge = {c: f"excluded.{c}" for c in ("ready_at_ms", "source", "observed_ms")}
+        return self._upsert("recipe_cooldowns", row, ("char_id", "spell_id"), merge,
+                            "excluded.observed_ms > recipe_cooldowns.observed_ms")
+
     def add_vendor_reagent(self, key: int) -> bool:
         """Record an item a merchant was seen selling; add-only.
 

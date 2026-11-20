@@ -193,6 +193,7 @@ AHProfitDB = {
   cooldowns = {                                -- per character (planned CD2, §3.4F.3): "spell,readyAtMs,source,atMs" by spell
     ["Amaya-Grommash"] = "17187,1760172800000,c,1760000000000;17559,1760086400000,g,1760001000000",
   },                                           -- source g = the game reported it, c = the addon saw the cast; newest atMs wins
+  cooldownReadsTrusted = true,                 -- built CD2: this client once gave a real time left (§3.4F.3, D15)
   inventory = {                                -- per character; each location replaced whole, with its own time
     ["Amaya-Grommash"] = { bags = "2840,20,0;6948,1,1", bagsAt = 1760000000000,  -- "key,qty,bound(0/1)"
                            bank = nil, bankAt = nil,           -- nil until first visited; "" = visited, empty
@@ -1291,7 +1292,7 @@ AHF being offline changes nothing except that the price age is your own scan's. 
 
 #### 3.4F Cooldowns: what your profession cooldowns are worth
 
-**Built: CD1, the catalog** (2026-11-20: `data/cooldown_catalog.json`, `engine.cooldowns.catalog`, `catalog_text`, `recommend.cooldowns_page.read_catalog`, `load_catalog`, `tools/gen_cooldown_data.py`, `Data/Cooldowns.lua`; F.1, CD1–CD3). **Planned: CD2–CD4** (`docs/plans/cooldowns.md`, draft 3, approved by the user 2026-11-20; mockup [docs/mockups/cooldowns.html](mockups/cooldowns.html); CD1–CD31, FM89, FM90, EX23, EX24, UI31, every ID pending).
+**Built: CD2, the ready times** (2026-11-20: `Core/AdapterCooldowns.lua`, `Capture/Cooldowns.lua`, the `cooldowns` and `cooldownReadsTrusted` fields, `state.savedvars.CooldownReady`, `recipe_cooldowns` (schema 33), `StateReads.recipe_cooldowns`; F.3, CD12 and CD30's capture halves, CD31, CD32, FM89, FM90; **the in-game check of §6 item 7 is pending, before the batch's PR merges**). **Built: CD1, the catalog** (2026-11-20: `data/cooldown_catalog.json`, `engine.cooldowns.catalog`, `catalog_text`, `recommend.cooldowns_page.read_catalog`, `load_catalog`, `tools/gen_cooldown_data.py`, `Data/Cooldowns.lua`; F.1, CD1–CD3). **Planned: CD3–CD4** (`docs/plans/cooldowns.md`, draft 3, approved by the user 2026-11-20; mockup [docs/mockups/cooldowns.html](mockups/cooldowns.html); CD1–CD32, FM89, FM90, EX23, EX24, UI31).
 
 **Cooldowns** is a research view, a dashboard page and an addon tab, of the items made by profession **cooldowns**: transmutes, Mooncloth, the Salt Shaker's Refined Deeprock Salt. For each one it shows:
 - what it is, and the skill it needs;
@@ -1361,7 +1362,9 @@ The rules behind these states:
 2. **The addon saw the use**: `UNIT_SPELLCAST_SUCCEEDED` for a catalog spell records ready = the cast time + the row's `cooldown_s`. This turns the row (and its group) to the full period at once, and it works even when Forever lacks the APIs of source 1.
 3. **Neither has happened**: not read.
 
-Each observation is stored with its time (§2.2.1 `cooldowns`), and the newest one wins: a later cast replaces an earlier report, and a later report corrects an earlier cast. A ready time in the past is ready. The addon refreshes the text when the tab is shown and on these events, never in `OnUpdate` (§5.1).
+Each observation is stored with its time (§2.2.1 `cooldowns`), and the newest one wins: a later cast replaces an earlier report, and a later report corrects an earlier cast.
+- **What a report is** (**built CD2**, the user's D15, CD32): a real time left (at least 2 s, above the global cooldown) is always stored and marks the client **trusted** (`cooldownReadsTrusted`). "No time left" (nil, or 0) counts as ready, stored as a report with ready = now, **only once the client is trusted**: before that it could be an API that doesn't work, an item not yet loaded or a read before the server sent cooldowns, and it would wipe a good cast record. One real time left anywhere in the open window trusts every reading of that window. A recipe is read only when the window says the character knows it; a tool only when it is in the bags (bound or not, from the bag snapshot), on `BAG_UPDATE_COOLDOWN`, never at login.
+- **The clock**: the game's item cooldowns are on `GetTime()`, system uptime in seconds. The addon turns them into UTC ms with `Adapter.NowMs()`, unwraps a start from before a reboot (`start > GetTime()`: less 2^32 ms, UNVERIFIED) and ignores readings under 2 s (the global cooldown). A ready time in the past is ready. The addon refreshes the text when the tab is shown and on these events, never in `OnUpdate` (§5.1).
 
 **F.4 Money** (CD4–CD7). All money is made by `engine.cooldowns` and exported; the addon computes none (D1).
 - **Mats** = Σ count × the mat's price (`cur`, §3.3), integer copper. A mat without a price makes Mats, Net / use and Per week "—".
@@ -2505,9 +2508,9 @@ ahsync_app/   (built M22: __main__.py, shell.py without window or tray, platform
   autostart.py the shared start-at-login decisions: when to enable, self-heal, refuse a translocated app
   platform/    base.py (the Platform protocol, thirteen members, §3.7.2), windows.py, macos.py, __init__.py (current(): the one sys.platform read)
 addon/AHProfit/
-  Core/       Adapter.lua (every game API call) with AdapterAH.lua (its auction house half: panel, Sell tab, replicate scan), AdapterTooltip.lua (its tooltip half: header and cell tooltips, the item tooltip hook, the block's lines and divider rules) and AdapterDiagnostics.lua (its diagnostics), Events.lua, DB.lua (AHProfitDB setup, migrations, pruning; §2.2.1), Diagnostics.lua (§2.2.1), Market.lua (reads MarketIntelligence.lua: checks, lazy decode), Plan.lua (reads PortfolioPlan.lua; prunes at login)
+  Core/       Adapter.lua (every game API call) with AdapterAH.lua (its auction house half: panel, Sell tab, replicate scan), AdapterTooltip.lua (its tooltip half: header and cell tooltips, the item tooltip hook, the block's lines and divider rules), AdapterDiagnostics.lua (its diagnostics) and AdapterCooldowns.lua (built CD2: its cooldown reads, §3.4F.3), Events.lua, DB.lua (AHProfitDB setup, migrations, pruning; §2.2.1), Diagnostics.lua (§2.2.1), Market.lua (reads MarketIntelligence.lua: checks, lazy decode), Plan.lua (reads PortfolioPlan.lua; prunes at login)
   Capture/    Characters.lua, Professions.lua, Inventory.lua, Auctions.lua (your own auctions, A41), Mail.lua, Posts.lua, Purchases.lua, Crafts.lua,
-              Gather.lua (built M17: gathering loot, §3.4E.3)
+              Gather.lua (built M17: gathering loot, §3.4E.3), Cooldowns.lua (built CD2: ready times, §3.4F.3)
   Scan/       Search.lua, Replicate.lua
   Engine/     Fees.lua, SellProb.lua, Disenchant.lua, Craft.lua, Prices.lua, Timing.lua, Portfolio.lua (the selection), Graph.lua (route costs and repricing; the rest of it addon-only)   (ports of ahsync/engine)
   Recommend/  Options.lua (the addon's own Disenchant / Craft / Flip / Sell options for the shortlist, §4.0), Live.lua (listings from the last in-game scan), DeTargets.lua (the AH panel's disenchant targets, worked out in steps, A96), Reselect.lua (the live reselection, pure), Adapt.lua (its live state and events, §4.0)
@@ -2813,7 +2816,7 @@ Data moves through many hand-offs: AHF and AHledger → AHSync → SQLite → `M
 | M40 | **The addon after v0.1.3's in-game test** (`docs/plans/addon-vendor-tooltip.md`): Sales Rate without days of supply and with its days of data while thin (TT32; the market file's `salesDays`, `EXPORT_VERSION` 5, EX21, EX14); Inventory as "Total: 29 · Bags: 4 · Bank: 1 · Mail: 24" (TT30); Flip rows whose Sell and Profit show whole and whose note says how far the When time is (A28, A59, UI24); with M32c part 2 (A92, BZ25) in the same release | TT30, TT32, EX14, EX21, A28, A59, UI24 pass; the goldens match the mockup; the user's in-game check |
 | CD0 | **Built (2026-11-20). Cooldowns: the spec merge** (`docs/plans/cooldowns.md`): §3.4F, the `cooldowns` field, `recipe_cooldowns`, the `CD` export, the tab and page, scenarios CD1–CD31, FM89, FM90, EX23, EX24, UI31 pending | this table row; `tests/test_conventions.py` passes |
 | CD1 | **Built (2026-11-20). Cooldowns: the catalog**: `data/cooldown_catalog.json` (15 rows), `engine.cooldowns.catalog`, `tools/gen_cooldown_data.py` → `Data/Cooldowns.lua` | CD1–CD3 pass |
-| CD2 | **Cooldowns: ready times**: the Adapter reads, the cast record, the `cooldowns` field, `recipe_cooldowns` (migration), checked in game (§6 item 7) | CD12, CD30, CD31, FM89, FM90 pass; `tools/savedvars_report.py` shows the field |
+| CD2 | **Built (2026-11-20; the in-game check pending). Cooldowns: ready times**: the Adapter reads, the cast record, the `cooldowns` field, `recipe_cooldowns` (migration), checked in game (§6 item 7) | CD12, CD30, CD31, FM89, FM90 pass; `tools/savedvars_report.py` shows the field |
 | CD3 | **Cooldowns: the dashboard and the export**: `engine/cooldowns`, `engine/cooldowns_view`, `recommend/cooldowns_page`, the page, the `CD` section and the shortlist, `EXPORT_VERSION` 8 on both sides | CD4–CD21, CD28, CD29, EX23, EX24 pass; the headless render clean; the bench in budget |
 | CD4 | **Cooldowns: the addon tab**: `UI/ViewModel.lua` rows, the tab, the character row, the hovers | CD22–CD27, UI31 pass; the goldens reviewed against the mockup |
 

@@ -1,7 +1,7 @@
 """The database's schema version and the steps that bring an older database up to it (SPEC §3.2 "Format version")."""
 from __future__ import annotations
 
-SCHEMA_VERSION = 32
+SCHEMA_VERSION = 33
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
 # that a migrated database has exactly schema.sql's tables and indexes).
@@ -312,5 +312,12 @@ MIGRATIONS: dict[int, str] = {
     32: """
         ALTER TABLE actions ADD COLUMN paid INTEGER;
         ALTER TABLE plan_new ADD COLUMN paid INTEGER
+    """,
+    # 33: when each character can use a cooldown spell again, from the addon (SPEC §3.4F.3, CD31).
+    33: """
+        CREATE TABLE IF NOT EXISTS recipe_cooldowns(
+            char_id TEXT NOT NULL, spell_id INTEGER NOT NULL, ready_at_ms INTEGER NOT NULL,
+            source TEXT NOT NULL, observed_ms INTEGER NOT NULL,
+            PRIMARY KEY(char_id, spell_id))
     """,
 }

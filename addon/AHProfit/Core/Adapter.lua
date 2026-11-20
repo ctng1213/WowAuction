@@ -1,7 +1,7 @@
 -- Core/Adapter.lua: the only file that touches WoW globals (CLAUDE.md, SPEC §5).
 -- Forever's API is partly unverified (SPEC §6), so every guess is marked
 -- "-- UNVERIFIED:" and fixes stay in this one file (with Core/AdapterAH.lua, its auction house
--- half, split off for size). Everything here is cold
+-- half, Core/AdapterTooltip.lua, Core/AdapterDiagnostics.lua and Core/AdapterCooldowns.lua, split off for size). Everything here is cold
 -- path (login, window opened, debounced bag change), so plain tables are fine.
 
 local AHProfit = AHProfit or {}
@@ -529,6 +529,12 @@ function Adapter.ReadRecipeWindow(kind)
     if recipe then recipes[#recipes + 1] = recipe end
   end
   return { profession = profession, rank = rank, max = maxRank, recipes = recipes }
+end
+
+--- Whether the open modern trade skill window is the player's own and fully loaded (Capture/Cooldowns).
+---@return boolean  false with no modern window, while loading, or for a linked, guild or NPC window
+function Adapter.OwnTradeWindowReady()
+  return type(C_TradeSkillUI) == "table" and ModernWindowIsOwnAndReady()
 end
 
 --- The event that says the open trade skill window's list changed.
