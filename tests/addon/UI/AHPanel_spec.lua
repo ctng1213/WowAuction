@@ -284,7 +284,8 @@ describe("AHPanel", function()
     Stubs.FireEvent("AUCTION_HOUSE_CLOSED")
     Stubs.FireEvent("AUCTION_HOUSE_SHOW")
     assert_eq({ built, ui.post[1].qty:GetText() }, { 1, "×15" }, "open, search, post, open again: one build, the bag cap live")
-    AHProfit.Scan.Replicate.LastBook = function() return { at = NOW, book = { [2589] = { [40] = { [1 * 5 + 4] = 9 } } } } end
+    local scan = { at = NOW, book = { [2589] = { [40] = { [1 * 5 + 4] = 9 } } } }     -- one stored book, as in game
+    AHProfit.Scan.Replicate.LastBook = function() return scan end
     AHProfit.Scan.Replicate.NotifyBook()
     assert_eq(built, 2, "a finished scan")
     AHProfit.RowMenu.Open(ui.frame, 2589, "Linen Cloth")
