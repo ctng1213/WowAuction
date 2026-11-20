@@ -264,6 +264,40 @@ describe("AHPanel", function()
     Stubs.ITEM_NAMES[4471] = nil
   end)
 
+  it("A104 Post's Today list is built once; opens, searches and posts reuse it; a scan, a reserve or Min chance rebuild it", function()
+    Stubs.Reset()
+    Stubs.world.containers = { [0] = { size = 1, slots = { [1] = { id = 2589, count = 20 } } } }
+    UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48) }, NOW - 3600000)
+    UIWorld.Plan({ { id = "p", kind = "post", key = 2589, qty = 20, price = 55, at = NOW, net = 1000, chance = 92 } })
+    Stubs.Define("C_AuctionHouse", Stubs.ReplicateHouse({ auctions = {} }))
+    Stubs.Login()
+    AHWorld.Install()
+    local TodayRows, built = AHProfit.MainWindow.TodayRows, 0
+    AHProfit.MainWindow.TodayRows = function(...) built = built + 1; return TodayRows(...) end
+    Stubs.FireEvent("AUCTION_HOUSE_SHOW")
+    local ui = AHProfit.AHPanel.Frames()
+    C_AuctionHouse.GetBrowseResults = function() return { { itemKey = { itemID = 2589 }, minPrice = 40, totalQuantity = 9 } } end
+    Stubs.FireEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
+    Stubs.world.containers[0].slots = { [1] = { id = 2589, count = 15 } }    -- 5 Linen posted
+    Stubs.FireEvent("BAG_UPDATE_DELAYED")
+    Stubs.Advance(2)
+    Stubs.FireEvent("AUCTION_HOUSE_CLOSED")
+    Stubs.FireEvent("AUCTION_HOUSE_SHOW")
+    assert_eq({ built, ui.post[1].qty:GetText() }, { 1, "×15" }, "open, search, post, open again: one build, the bag cap live")
+    AHProfit.Scan.Replicate.LastBook = function() return { at = NOW, book = { [2589] = { [40] = { [1 * 5 + 4] = 9 } } } } end
+    AHProfit.Scan.Replicate.NotifyBook()
+    assert_eq(built, 2, "a finished scan")
+    AHProfit.RowMenu.Open(ui.frame, 2589, "Linen Cloth")
+    AHProfit.RowMenu.Keep(5)
+    assert_eq(built, 3, "a reserve")
+    Stubs.Slash("/ahp")
+    AHProfit.MainWindow.NextMinChance()
+    built = 0
+    Stubs.FireEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
+    Stubs.FireEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
+    assert_eq(built, 1, "Min chance moved: built once, then reused")
+  end)
+
   it("A32 a vendor buy stays off Shopping, which lists only what to buy on the AH", function()
     Stubs.Reset()
     Stubs.ITEM_NAMES[4470] = "Simple Wood"
