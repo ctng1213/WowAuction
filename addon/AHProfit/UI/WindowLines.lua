@@ -57,6 +57,47 @@ local function LiveItem(key)
   return Options.Reprice(item, levels, Market.Curve(key), VendorOf(key) or 0, Adapter.NowMs())
 end
 
+--- The live scan's book the kept results were worked out from: false when no scan is newer than the market file.
+---@return table|boolean
+local function CurrentBook()
+  local _, newest = Market.Times()
+  local last = Live.Book(newest)
+  return last and last.book or false
+end
+
+-- Results kept until a full scan finishes, a reserve or rule changes, or (crafts) the character or its recipes change
+-- (A105): the own crafts cost about 5 s at the AH on 2026-11-20 and the Disenchant tab 0.1-0.9 s, and a bag, gold or
+-- item-name change rebuilt them on every redraw. Callers only read them.
+local keptCrafts = {}       -- { charId, book, rules, count, crafts, reserved, atMs (when worked out, UTC ms) }
+local keptDisenchant = {}   -- { book, targets }
+
+--- The own crafts of CharacterActions, kept (A105).
+---@param charId string
+---@param recipes table[]  The recipes the plan doesn't craft
+---@param units table      key -> units the crafts may use
+---@param ctx table        Options.Crafts' context
+---@return table[], table  Options.Crafts' actions and reserved units
+local function KeptCrafts(charId, recipes, units, ctx)
+  local k, book, rules = keptCrafts, CurrentBook(), AHProfit.RowMenu.Version()
+  if k.charId ~= charId or k.book ~= book or k.rules ~= rules or k.count ~= #recipes then
+    local crafts, reserved = Options.Crafts(recipes, units, ctx)
+    keptCrafts = { charId = charId, book = book, rules = rules, count = #recipes, crafts = crafts, reserved = reserved,
+                   atMs = Adapter.NowMs() }
+  end
+  return keptCrafts.crafts, keptCrafts.reserved
+end
+
+--- When the kept own crafts were worked out: the window's "plan 14:32" (A106).
+---@return number|nil  UTC ms; nil before the first time, or after Forget
+function WindowLines.PlanAtMs()
+  return keptCrafts.atMs
+end
+
+--- Forget the kept crafts and disenchant targets, so the next lines work them out again (Refresh, A106).
+function WindowLines.Forget()
+  keptCrafts, keptDisenchant = {}, {}
+end
+
 --- What this character has up on the AH, by item, from its last own-auctions snapshot (A42).
 ---@param charId string
 ---@param nowMs number
@@ -100,7 +141,7 @@ local function CharacterActions(charId, nowMs)
   local ctx = { itemOf = LiveItem, levelsOf = LevelsOf, vendorOf = VendorOf, vendorBuyOf = Market.VendorPrice,
                 listed = Listed(charId, nowMs), nowMs = nowMs, charId = charId, planned = planned,
                 budget = AHProfit.Adapt.Cap() }      -- the live cap (A64)
-  local crafts, reserved = Options.Crafts(recipes, units, ctx)
+  local crafts, reserved = KeptCrafts(charId, recipes, units, ctx)
   ctx.reserved = reserved
   for _, a in ipairs(crafts) do actions[#actions + 1] = a end
   for _, a in ipairs(Options.Sell(units, ctx)) do actions[#actions + 1] = a end
@@ -303,7 +344,12 @@ function WindowLines.Lines(tab, nowMs, gold, minChance)
   local charId = info.name .. "-" .. info.realm
   if tab == "disenchant" then
     local best = Options.BestSkill(DB.Get() or {}, "Enchanting")
-    local targets = Options.Disenchant(Market.Disenchantable(), { itemOf = LiveItem, levelsOf = LevelsOf })
+    local book = CurrentBook()
+    if keptDisenchant.book ~= book or not keptDisenchant.targets then              -- A105
+      keptDisenchant = { book = book,
+                         targets = Options.Disenchant(Market.Disenchantable(), { itemOf = LiveItem, levelsOf = LevelsOf }) }
+    end
+    local targets = keptDisenchant.targets
     local rows = VM.DisenchantRows(targets, LookOf, best)
     return { lines = VM.WithNotes(rows), footer = VM.DisenchantFooter(rows, best),
              empty = "Nothing on the AH pays to disenchant right now." }

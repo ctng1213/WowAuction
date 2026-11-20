@@ -17,6 +17,7 @@ local FLAT = "Interface\\Buttons\\WHITE8X8"
 local ui = nil
 local target = nil          -- { key, name } the menu is for
 local listeners = {}        -- called after a reserve changes
+local version = 0           -- counts reserve and rule changes: kept results read it (A105)
 
 --- A menu entry: a full-width text button.
 ---@param parent table
@@ -103,6 +104,7 @@ function RowMenu.Keep(qty)
   if db and target then
     local info = Adapter.PlayerInfo()
     Reserves.Set(db, info.name .. "-" .. info.realm, target.key, (qty and qty ~= 0) and qty or nil)
+    version = version + 1
     for _, fn in ipairs(listeners) do fn() end
   end
   RowMenu.Close()
@@ -115,9 +117,16 @@ function RowMenu.SetRule(rule)
   if db and target then
     db.rules = db.rules or {}
     db.rules[target.key] = { rule = rule, setAt = Adapter.NowMs() }
+    version = version + 1
     for _, fn in ipairs(listeners) do fn() end
   end
   RowMenu.Close()
+end
+
+--- How many reserves and rules have changed this session; a kept result built at another count is stale (A105).
+---@return number
+function RowMenu.Version()
+  return version
 end
 
 --- Close the menu.

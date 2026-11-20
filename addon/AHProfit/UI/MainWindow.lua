@@ -321,6 +321,17 @@ local function BuildTitle(frame)
   ui.badge:SetPoint("RIGHT", ui.close, "LEFT", -6, 0)
   ui.age = ui.badge:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   ui.age:SetPoint("CENTER", ui.badge, "CENTER", 0, 0)
+  ui.refresh = Adapter.CreateFrame("Button", "AHProfitWindowRefresh", frame, "BackdropTemplate")   -- A106
+  ui.refresh:SetSize(84, 20)
+  ui.refresh:SetPoint("RIGHT", ui.badge, "LEFT", -6, 0)
+  ui.refresh:SetNormalFontObject("GameFontHighlightSmall")
+  ui.refresh:SetText(VM.REFRESH_LABEL)
+  Flat(ui.refresh, COLORS.black, COLORS.border)
+  ui.refresh:SetScript("OnClick", function() MainWindow.Rebuild() end)
+  ui.refresh:SetScript("OnEnter", function(self) Adapter.ShowTooltip(self, VM.REFRESH_LABEL, VM.REFRESH_HELP) end)
+  ui.refresh:SetScript("OnLeave", function() Adapter.HideTooltip() end)
+  ui.sub:SetPoint("RIGHT", ui.refresh, "LEFT", -6, 0)          -- a long realm name stops short of the button
+  ui.sub:SetJustifyH("LEFT")
 end
 
 --- Build the tab buttons and the Min chance box, above a rule (the mockup's .tabs).
@@ -585,7 +596,7 @@ end
 ---@param nowMs number
 local function RenderChrome(nowMs)
   local info = Adapter.PlayerInfo()
-  ui.sub:SetText(info.realm .. " · " .. info.faction)
+  ui.sub:SetText(VM.Subtitle(info.realm, info.faction, WindowLines.PlanAtMs(), Adapter.LocalOffsetMs(nowMs)))
   local age = VM.Age(Market.DataMs(), nowMs)
   local tone = age.amber and COLORS.amber or COLORS.pos
   ui.age:SetText(age.text)
@@ -750,12 +761,30 @@ function MainWindow.Refresh()
   MainWindow.Render()
 end
 
+--- Refresh Plan (the title bar's button, /ahp replan): work out the kept own crafts, Disenchant targets, the AH panel's
+--- Post list and the minimap hover's list again now, from the bags and gold as they are (A106; kept since A104, A105).
+--- Side effects: works them out at once (the window's tab may not need them), redraws the window and the AH panel when
+--- they are shown, and says "plan refreshed at 14:32" in chat.
+function MainWindow.Rebuild()
+  WindowLines.Forget()
+  AHProfit.AHPanel.Forget()
+  AHProfit.MinimapButton.Forget()
+  local info = Adapter.PlayerInfo()
+  pcall(WindowLines.Today, info.name .. "-" .. info.realm, view.minChance)
+  if ui and ui.frame:IsShown() then MainWindow.Refresh() end
+  local panel = AHProfit.AHPanel.Frames()
+  if panel and panel.frame:IsShown() then AHProfit.AHPanel.Render() end
+  local atMs = WindowLines.PlanAtMs()
+  if atMs then Adapter.Print(VM.Refreshed(atMs, Adapter.LocalOffsetMs(atMs))) end
+end
+
 --- Open or close the window; /ahp portfolio opens the Portfolio tab, /ahp minimap hides or shows the minimap button
 --- (SPEC §4.3).
 ---@param args string  The rest of the slash command line
 function MainWindow.Toggle(args)
   if args == "perf" then return MainWindow.Perf() end
   if args == "minimap" then return AHProfit.MinimapButton.ToggleShown() end   -- UI23
+  if args == "replan" then return MainWindow.Rebuild() end                                    -- A106
   local profit = args and args:match("^profit%s*(%S*)$")
   if profit then return AHProfit.Tooltip.ProfitCommand(profit) end           -- UI29
   if not ui then Build() end
