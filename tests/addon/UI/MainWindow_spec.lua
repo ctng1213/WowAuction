@@ -34,6 +34,24 @@ local function FirstRow(tab)
 end
 
 describe("MainWindow", function()
+  it("A106 Refresh Plan works the proposed actions out again; a bag change alone doesn't; /ahp replan too, with a chat line", function()
+    local MainWindow = Boot()
+    local Crafts, built = AHProfit.Options.Crafts, 0
+    AHProfit.Options.Crafts = function(...) built = built + 1; return Crafts(...) end
+    Stubs.Slash("/ahp")
+    local ui = MainWindow.Frames()
+    Stubs.world.containers = { [0] = { size = 1, slots = { [1] = { id = 2589, count = 5 } } } }
+    Stubs.FireEvent("BAG_UPDATE_DELAYED")
+    Stubs.Advance(2)
+    assert_eq({ ui.refresh:GetText(), built }, { "Refresh Plan", 1 }, "opened, then the bags changed: built once")
+    ui.refresh.scripts.OnEnter(ui.refresh)
+    assert_eq({ Stubs.tooltip.lines[1], Stubs.tooltip.lines[2] }, { "Refresh Plan", AHProfit.ViewModel.REFRESH_HELP })
+    ui.refresh:Click("LeftButton")
+    assert_eq(built, 2, "the button")
+    Stubs.Slash("/ahp replan")
+    assert_eq({ built, ui.frame:IsShown(), Stubs.chat[#Stubs.chat]:match("plan refreshed") ~= nil }, { 3, true, true })
+  end)
+
   it("/ahp opens and closes the window; it is built only when first opened", function()
     local MainWindow = Boot()
     assert_eq(MainWindow.Frames(), nil)

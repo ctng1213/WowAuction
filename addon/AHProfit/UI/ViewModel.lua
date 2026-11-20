@@ -647,6 +647,13 @@ function ViewModel.PostableRows(rows, held, limit)
 end
 
 ViewModel.WHY_LABELS = { craft = "CRAFT", flip = "FLIP", de = "DE" }
+-- Refresh Plan (A106): the button's label, its hover and /ahp replan's chat line.
+ViewModel.REFRESH_LABEL = "Refresh Plan"
+ViewModel.REFRESH_HELP = "Work out the proposed actions again now (your own crafts, post-now rows, disenchant targets) "
+  .. "from your bags and gold as they are. They are otherwise kept until a full scan finishes; prices and what you "
+  .. "hold update on their own."
+ViewModel.REFRESHED = "plan refreshed: proposed actions worked out again from your bags and gold now"
+
 ViewModel.READ_SHARE = 0.85            -- A43: reading fills this much of the scan bar; saving the rest
 
 --- A count with thousands separators.

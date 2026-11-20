@@ -86,7 +86,7 @@ local function KeptCrafts(charId, recipes, units, ctx)
   return keptCrafts.crafts, keptCrafts.reserved
 end
 
---- Forget the kept crafts and disenchant targets (tests).
+--- Forget the kept crafts and disenchant targets, so the next lines work them out again (Refresh, A106).
 function WindowLines.Forget()
   keptCrafts, keptDisenchant = {}, {}
 end
