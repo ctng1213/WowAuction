@@ -54,6 +54,7 @@ function Stubs.NewWorld()
     inCombat = false,
     localOffsetS = 0,         -- the machine's local time minus UTC, seconds (date() uses it)
     uncached = {},            -- [itemId] = true: GetItemInfo returns nil, as before the client caches it
+    itemCooldowns = {},       -- [itemId] = { start, duration, enable } for C_Container.GetItemCooldown (GetTime clock)
     skillLines = {},          -- { name, header = bool, collapsed = bool, rank, max }
     containers = {},          -- [bagId] = { size = n, slots = { [slot] = { id, count, bound, suffix, noLink } } }
     inbox = {},               -- one array of { id, count, noLink = bool } attachments per mail
@@ -221,7 +222,7 @@ end
 --- A fake modern C_TradeSkillUI (Dragonflight-era shape) showing one open profession window.
 --- Define it with Stubs.Define("C_TradeSkillUI", Stubs.ModernTradeSkill{...}) before Stubs.Login().
 ---@param window table  { name, rank, max, linked = bool, ready = bool (default true),
----                      recipes = { { id, out (item id|nil), learned = bool,
+---                      recipes = { { id, out (item id|nil), learned = bool, cooldown = seconds left|nil,
 ---                                    reagents = { { itemId, count, optional = bool } } } } }
 ---@return table        The fake namespace
 function Stubs.ModernTradeSkill(window)
@@ -241,7 +242,8 @@ function Stubs.ModernTradeSkill(window)
     for i, recipe in ipairs(window.recipes) do ids[i] = recipe.id end
     return ids
   end
-  function api.GetRecipeInfo(id) return { recipeID = id, learned = byId[id].learned } end
+  function api.GetRecipeInfo(id) return byId[id] and { recipeID = id, learned = byId[id].learned } end
+  function api.GetRecipeCooldown(id) return byId[id] and byId[id].cooldown end   -- seconds left, nil = none
   function api.GetRecipeSchematic(id)
     local slots = {}
     for i, reagent in ipairs(byId[id].reagents) do
@@ -394,6 +396,11 @@ local function InstallItems()
   end
   Define("C_Container", {
     GetContainerNumSlots = numSlots,
+    GetItemCooldown = function(id)                       -- world.itemCooldowns[id] = { start, duration, enable }
+      local c = Stubs.world.itemCooldowns[id]
+      if c then return c[1], c[2], c[3] end
+      return 0, 0, true
+    end,
     GetContainerItemInfo = function(bag, slot)
       local item = SlotItem(bag, slot)
       if not item then return nil end
@@ -506,6 +513,7 @@ local function InstallCore()
   Define("GetRealmName", function() return Stubs.world.player.realm end)
   Define("GetMoney", function() return Stubs.world.money end)
   Define("GetServerTime", function() return math.floor(Stubs.world.serverTime) end)
+  Define("GetTime", function() return 1000 + clock end)     -- system uptime, seconds; moves with Stubs.Advance
   Define("InCombatLockdown", function() return Stubs.world.inCombat end)
   -- date(): the client's, with the machine's time zone fixed by world.localOffsetS so tests are deterministic.
   Define("date", function(format, seconds)

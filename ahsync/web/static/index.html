@@ -710,6 +710,63 @@ async function setManualRate(id, char, key, typed, el) {
   el.disabled = false;
 }
 
+// ---------- Cooldowns (SPEC §3.4F.6, §3.5): every text, flag, sort key, filter list and view comes from engine/cooldowns_view.py ----------
+// Columns: [header, numeric?, sort key in row.sort (or null)]. Name, Skill, Cooldown and Can Make sort ascending first, the money and price columns descending.
+const CD_COLS = [['Item · recipe', 0, 'name'], ['Profession', 0, null], ['Skill', 1, 'skill'], ['Cooldown', 1, 'cooldown'], ['Made from', 0, null],
+                 ['AH price', 1, 'price'], ['Mats', 1, 'mats'], ['Net / use', 1, 'net'], ['Per week', 1, 'per_week'], ['Sold / day', 1, 'sold'],
+                 ['Who', 0, null], ['Can Make', 1, 'can_make']];
+const CD_ASC_FIRST = ['name', 'skill', 'cooldown', 'can_make'];
+const CD_WHO_CLASSES = { ready: 'pos', amber: 'amber', muted: 'muted' };
+const cdTitle = t => t ? ` title="${esc(t)}"` : '';
+// The view the toggles pick: "My skill level only" implies "Just my characters" (a precomputed view, no row tests here).
+const cdMode = values => values.skillOnly ? 'skill' : values.mine ? 'mine' : 'all';
+const cdWho = w => {
+  const lines = (w.lines || []).map(l => `<span class="sub ${CD_WHO_CLASSES[l.cls] || ''}">${esc(l.text)}</span>`);
+  return (w.summary ? `<b>${esc(w.summary)}</b>` : '') + lines.join('') + (w.more ? `<span class="sub muted">${esc(w.more)}</span>` : '');
+};
+const cdRow = r => `<tr><td>${esc(r.item.text)}${r.item.sub ? `<span class="sub">${esc(r.item.sub)}</span>` : ''}</td><td>${esc(r.profession)}</td>` +
+  `<td class="num ${r.skill.amber ? 'amber' : ''}">${esc(r.skill.text)}</td>` +
+  `<td class="num"${cdTitle(r.cooldown.hover)}>${esc(r.cooldown.text)}${r.cooldown.sub ? `<span class="sub">${esc(r.cooldown.sub)}</span>` : ''}</td>` +
+  `<td style="white-space:normal">${esc(r.made_from)}</td>` +
+  `<td class="num ${r.price.muted ? 'muted' : ''}">${esc(r.price.text)}${r.price.sub ? `<span class="sub">${esc(r.price.sub)}</span>` : ''}</td>` +
+  `<td class="num"${cdTitle(r.mats.hover)}>${dash(r.mats.text)}</td><td class="num ${r.net.neg ? 'neg' : ''}">${dash(r.net.text)}</td>` +
+  `<td class="num ${r.per_week.neg ? 'neg' : ''}"${cdTitle(r.per_week.hover)}>${dash(r.per_week.text)}</td><td class="num">${dash(r.sold)}</td>` +
+  `<td${cdTitle(r.who.hover)}>${cdWho(r.who)}</td><td class="num ${CD_WHO_CLASSES[r.can_make.cls] || ''}"${cdTitle(r.can_make.hover)}>${esc(r.can_make.text)}</td></tr>`;
+// The page: the filters and header line, then the table of the chosen view's rows (in its order unless a header was clicked), or its notice.
+function cdPage(d, values, id) {
+  const view = (d.views || {})[`${values.profession || ''}|${cdMode(values)}`] || { keys: [], notice: null };
+  const byKey = Object.fromEntries((d.rows || []).map(r => [String(r.spell), r]));
+  const shown = sortRows(id, view.keys.map(k => byKey[String(k)]).filter(Boolean));
+  const help = d.help || {}, sort = state.sort[id] || {};
+  const head = CD_COLS.map(([t, num, key]) => `<th class="${num ? 'num ' : ''}${key ? 'sort' : ''}${key && sort.key === key ? ' sorted' + (sort.asc ? ' asc' : '') : ''}"` +
+    `${key ? ` data-cdkey="${key}"` : ''}${cdTitle(help[t])}>${esc(t)}</th>`).join('');
+  const filters = `<div class="filters"><label>Profession <select class="select" data-filter="profession">${gaOptions(d.professions, values.profession || '')}</select></label>` +
+    `<label><input type="checkbox" data-cdtoggle="mine"${values.mine || values.skillOnly ? ' checked' : ''}> Just my characters</label>` +
+    `<label><input type="checkbox" data-cdtoggle="skillOnly"${values.skillOnly ? ' checked' : ''}> My skill level only</label>` +
+    `<span class="muted">${esc(d.header)}</span></div>`;
+  const body = shown.length
+    ? `<div class="scrollx fit"><table><thead><tr>${head}</tr></thead><tbody>${shown.map(cdRow).join('')}</tbody></table></div>`
+    : `<div class="alert info" style="margin:0;border-radius:0;border-width:0 0 1px 4px"><span class="grow">${esc(view.notice || '')}</span></div>`;
+  return filters + body;
+}
+// The toggles and the header sort (first click: descending for money and price, ascending for CD_ASC_FIRST; again reverses).
+function cdBind(id, card, values) {
+  card.querySelectorAll('input[data-cdtoggle]').forEach(el => {
+    el.onchange = () => {
+      if (el.dataset.cdtoggle === 'skillOnly') { values.skillOnly = el.checked; if (el.checked) values.mine = true; }
+      else { values.mine = el.checked; if (!el.checked) values.skillOnly = false; }
+      render(id);
+    };
+  });
+  card.querySelectorAll('th[data-cdkey]').forEach(th => {
+    th.onclick = () => {
+      const key = th.dataset.cdkey, cur = state.sort[id];
+      state.sort[id] = cur && cur.key === key ? { key, asc: !cur.asc } : { key, asc: CD_ASC_FIRST.includes(key) };
+      render(id);
+    };
+  });
+}
+
 // ---------- live pages (SPEC §3.5 dashboard data) ----------
 // Each column: [header, numeric?, sort key in row.sort (or null)]. Optional hooks: `pick` chooses the staged view
 // the filters ask for (no computing), `render` draws a page that isn't a table, `footer` adds a summary line,
@@ -765,6 +822,12 @@ const LIVE = {
     // The Character filter only picks one of the engine's complete views (by_char); the page draws, filters and sorts.
     render: (d, values, id) => gaPage(d, values, id),
     bind: gaBind,
+    filters: [],
+  },
+  cooldowns: {
+    lede: 'A research page: every profession\'s item-making cooldowns from AHSync\'s curated catalog (SPEC §3.4F), sorted by AH price. <b>Per week</b> is what one character earns using the recipe every time it is ready; it is per character, never a total.',
+    render: (d, values, id) => cdPage(d, values, id),
+    bind: cdBind,
     filters: [],
   },
   on_ah: {
@@ -920,7 +983,7 @@ const storage = {
 
 // ---------- page chrome: every page, in the mockup's order ----------
 const ORDER = [['Portfolio', 'portfolio'], ['Today', 'today'], ['Week', 'week'], ['On the AH', 'on_ah'], ['Disenchant', 'disenchant'], ['Craft', 'craft'], ['Flip', 'flip'],
-               ['Gathering', 'gathering'], ['Inventory', 'inventory'], ['History', 'history'], ['Rules', 'rules'], ['Characters', 'characters'], ['Status', 'status']];
+               ['Gathering', 'gathering'], ['Cooldowns', 'cooldowns'], ['Inventory', 'inventory'], ['History', 'history'], ['Rules', 'rules'], ['Characters', 'characters'], ['Status', 'status']];
 const nav = document.getElementById('nav');
 const main = document.getElementById('main');
 ORDER.forEach(([name, id]) => {

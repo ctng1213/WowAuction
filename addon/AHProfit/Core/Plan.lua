@@ -278,7 +278,7 @@ end
 function Plan.OnLogin()
   local s = State()
   local db = DB.Get()
-  if s.status == "ok" and db then DB.Prune(db, s.file.ingestedUntil, Adapter.NowMs()) end
+  if s.status == "ok" and db then DB.Prune(db, s.file.ingestedUntil, Adapter.NowMs(), s.file.generatedAt) end
 end
 
 --- The reserves AHSync's plan carries for a character: dashboard and synced ones, clears included (EX12).

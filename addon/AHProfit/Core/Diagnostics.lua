@@ -24,6 +24,8 @@ Diagnostics.APIS = {
   "C_AuctionHouse.ReplicateItems", "C_AuctionHouse.GetNumReplicateItems", "C_AuctionHouse.GetReplicateItemInfo",
   "C_AuctionHouse.GetReplicateItemLink", "C_AuctionHouse.GetReplicateItemTimeLeft",
   "C_AuctionHouse.GetReplicateItemBattlePetInfo", "debugprofilestop", "issecretvalue",
+  -- the cooldown reads (SPEC §3.4F.3, FM89; still to verify on Forever)
+  "C_TradeSkillUI.GetRecipeCooldown", "C_Container.GetItemCooldown", "GetTime",
   -- the AH panel and the tooltip hook (M5, still to verify on Forever)
   "AuctionHouseFrame", "AuctionHouseFrame.SearchBar", "AuctionHouseFrame.SearchBar.StartSearch",
   "AuctionHouseFrame.SearchBar.SetSearchText", "C_AuctionHouse.GetBrowseResults", "C_AuctionHouse.SendBrowseQuery",

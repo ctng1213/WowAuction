@@ -273,6 +273,36 @@ class StateReads:
                                  tuple(sorted(crafters.split(",")))))
         return out
 
+    def recipe_cooldowns(self, char_ids: list[str]) -> dict[tuple[str, int], tuple[int, str, int]]:
+        """When each character can use its cooldown spells again (SPEC §3.4F.3).
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            (char id, spell id) -> (ready at, UTC ms; source "g" or "c"; observed at, UTC ms).
+        """
+        marks = ",".join("?" * len(char_ids))
+        rows = self.conn.execute(f"SELECT char_id, spell_id, ready_at_ms, source, observed_ms FROM recipe_cooldowns "
+                                 f"WHERE char_id IN ({marks}) ORDER BY char_id, spell_id", list(char_ids))
+        return {(c, s): (ready, source, seen) for c, s, ready, source, seen in rows}
+
+    def known_spells(self, char_ids: list[str]) -> dict[str, frozenset[int]]:
+        """The spell ids each character knows, whether or not their recipes are defined (SPEC §3.4F.2).
+
+        Args:
+            char_ids: Character ids.
+
+        Returns:
+            Character id -> its known spell ids; a character with none is absent.
+        """
+        marks = ",".join("?" * len(char_ids))
+        found: dict[str, set[int]] = {}
+        for c, spell in self.conn.execute(f"SELECT char_id, spell_id FROM known_recipes WHERE char_id IN ({marks}) "
+                                          f"ORDER BY char_id, spell_id", list(char_ids)):
+            found.setdefault(c, set()).add(spell)
+        return {c: frozenset(s) for c, s in found.items()}
+
     def owned_units(self, char_ids: list[str]) -> dict[int, int]:
         """Unbound units you own in bags, bank and mail across the characters, less what each keeps
         for itself (SPEC §3.4B owned, §3.4.3, R20).
@@ -507,6 +537,14 @@ class StateReads:
         """
         return [tuple(r) for r in self.conn.execute(
             "SELECT id, realm, faction, market, updated FROM characters ORDER BY id")]
+
+    def character_identities(self) -> list[tuple[str, str, str | None, str]]:
+        """Every character's id, realm, class and faction, for folding realm-less ids (SPEC §2.2.1, RL4).
+
+        Returns:
+            (character id, realm, class token or None, faction), by id.
+        """
+        return [tuple(r) for r in self.conn.execute("SELECT id, realm, class, faction FROM characters ORDER BY id")]
 
     def partial_scan_keys(self, market: str, since_ms: int) -> set[int]:
         """Items in your targeted (partial) AH scans since a time (SPEC §3.5 tier 2, EX1).

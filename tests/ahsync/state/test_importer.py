@@ -649,3 +649,18 @@ def test_S17_every_read_is_logged_with_what_it_stored_or_why_it_was_skipped(tmp_
         ingest_file(path, db, clock, REALMS)
         ingest_file(tmp_path / "AHProfit.lua", db, clock, REALMS)
         assert info_lines() == ["AHProfit.lua not read: unstable", "AHProfit.lua not read: missing"]
+
+
+def test_CD31_ready_times_are_stored_once_and_an_older_observation_never_replaces_a_newer_one(db):
+    table = {"characters": {AMAYA: CHAR[AMAYA] | {"updated": T}},
+             "cooldowns": {AMAYA: "17187,1760172800000,c,1760000000000"}}
+    stored = "SELECT char_id, spell_id, ready_at_ms, source, observed_ms FROM recipe_cooldowns"
+    apply_db(db, table)
+    assert rows(db, stored) == [(AMAYA, 17187, 1760172800000, "c", 1760000000000)]
+    apply_db(db, table)                                                        # the same file again
+    assert rows(db, stored) == [(AMAYA, 17187, 1760172800000, "c", 1760000000000)]
+    apply_db(db, table | {"cooldowns": {AMAYA: "17187,1759000000000,g,1759999999000"}})   # older observation
+    assert rows(db, stored) == [(AMAYA, 17187, 1760172800000, "c", 1760000000000)]
+    apply_db(db, table | {"cooldowns": {AMAYA: "17187,1760100000000,g,1760000500000"}})   # newer: the game's report
+    assert rows(db, stored) == [(AMAYA, 17187, 1760100000000, "g", 1760000500000)]
+    assert db.recipe_cooldowns([AMAYA, BRUGAN]) == {(AMAYA, 17187): (1760100000000, "g", 1760000500000)}

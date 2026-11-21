@@ -320,3 +320,13 @@ def test_A92_an_item_name_row_reads_from_both_ends_and_older_rows_still_read():
     got = {n.key: (n.name, n.quality, n.sell_price, n.class_id) for n in data.item_names}
     assert got == {3486: ("Heavy Grinding Stone", 1, 50, 7), 99: ("Sword, Long", 2, 120, 2),
                    2592: ("Wool Cloth", 1, None, 7), 6948: ("Hearthstone", 1, 0, None), 3300: ("Broken Fang", 0, None, None)}
+
+
+def test_FM90_a_malformed_cooldown_row_is_set_aside_alone():
+    data = read_ahprofit(savedvars_text({"cooldowns": {"Amaya-Grommash": "17187,abc,c,1;17559,1760086400000,g,1760001000000;"
+                                                                         "17560,5,x,6"}}))
+    assert [(c.spell_id, c.ready_at_ms, c.source) for c in data.cooldowns] == [(17559, 1760086400000, "g")]
+    assert [p for p in data.problems if p.startswith("cooldowns")] == [
+        "cooldowns['Amaya-Grommash']: bad row '17187,abc,c,1' (expected spell,readyAtMs,g|c,atMs)",
+        "cooldowns['Amaya-Grommash']: bad row '17560,5,x,6' (expected spell,readyAtMs,g|c,atMs)"]
+    assert read_ahprofit(savedvars_text({})).cooldowns == ()

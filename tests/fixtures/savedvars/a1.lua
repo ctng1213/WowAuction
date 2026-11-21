@@ -21,6 +21,8 @@ AHProfitDB = {
 			["updated"] = 1760003600000,
 		},
 	},
+	["cooldowns"] = {
+	},
 	["events"] = {
 		{
 			["at"] = 1760003660000,

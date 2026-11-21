@@ -8,12 +8,15 @@ Core\Adapter.lua
 Core\AdapterAH.lua
 Core\AdapterDiagnostics.lua
 Core\AdapterTooltip.lua
+Core\AdapterCooldowns.lua
 Data\BonusSuffixes.lua
 Data\Disenchant.lua
+Data\Cooldowns.lua
 Core\Events.lua
 Core\DB.lua
 Core\ItemNames.lua
 Capture\Characters.lua
+Capture\Realmless.lua
 Capture\Professions.lua
 Capture\Inventory.lua
 Capture\Auctions.lua
@@ -31,6 +34,7 @@ Engine\Graph.lua
 Capture\Posts.lua
 Capture\Crafts.lua
 Capture\Gather.lua
+Capture\Cooldowns.lua
 Core\Market.lua
 Core\Plan.lua
 Recommend\Live.lua

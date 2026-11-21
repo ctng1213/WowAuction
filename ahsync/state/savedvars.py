@@ -98,6 +98,17 @@ class KnownRecipe:
 
 
 @dataclass(frozen=True, slots=True)
+class CooldownReady:
+    """When a character can use a cooldown spell again, and how that was learned (SPEC §3.4F.3, §2.2.1 `cooldowns`)."""
+
+    char_id: str
+    spell_id: int
+    ready_at_ms: int       # UTC ms; in the past = ready
+    source: str            # "g" = the game reported it, "c" = the addon saw the cast
+    observed_ms: int       # when it was learned; the newest observation wins
+
+
+@dataclass(frozen=True, slots=True)
 class InventoryRow:
     """Units of one item in one place, summed per bound flag."""
 
@@ -251,6 +262,7 @@ class AHProfitData:
     item_names: tuple[ItemName, ...] = ()    # names of items the addon has seen in your inventory
     reserves: tuple[Reserves, ...] | None = None   # by character; None when the file has no reserves table
     reserves_set_aside: tuple[str, ...] = ()       # characters whose reserves were malformed
+    cooldowns: tuple[CooldownReady, ...] = ()      # ready times per character and spell (SPEC §3.4F.3, CD31)
 
 
 # ---------------------------------------------------------------- item keys
@@ -393,6 +405,37 @@ def _known_recipes(char_id: object, spells: object) -> list[KnownRecipe]:
     """
     char_id = _str(char_id, "character id")
     return [KnownRecipe(char_id, spell) for (spell,) in sorted(_compact_rows(spells, 1, "spell ids"))]
+
+
+COOLDOWN_SOURCES = ("g", "c")
+
+
+def _cooldowns(char_id: object, text: object, problems: list[str]) -> list[CooldownReady]:
+    """Convert one character's ready times; a malformed row is set aside alone (SPEC §3.4F.3, FM90).
+
+    Args:
+        char_id: Its key, "Name-Realm".
+        text: Compact string "spell,readyAtMs,source,atMs;…", source g or c.
+        problems: Problem list, appended to for each row set aside.
+
+    Returns:
+        One CooldownReady per good row, by spell id (the last of two rows for one spell).
+
+    Raises:
+        _RowError: When the key or the value is not a string.
+    """
+    char_id = _str(char_id, "character id")
+    found: dict[int, CooldownReady] = {}
+    for row in _str(text, "cooldowns").split(";") if text != "" else []:
+        fields = row.split(",")
+        good = len(fields) == 4 and all(f.isdigit() for f in (fields[0], fields[1], fields[3])) \
+            and fields[2] in COOLDOWN_SOURCES
+        if not good:
+            problems.append(f"cooldowns[{char_id!r}]: bad row {row!r} (expected spell,readyAtMs,g|c,atMs)")
+            continue
+        spell = int(fields[0])
+        found[spell] = CooldownReady(char_id, spell, int(fields[1]), fields[2], int(fields[3]))
+    return [found[s] for s in sorted(found)]
 
 
 _TIME_FIELDS = {"bags": "bagsAt", "bank": "bankAt", "mail": "mailAt"}
@@ -741,6 +784,7 @@ def read_ahprofit(text: str) -> AHProfitData:
     reserves_problems: list[str] = []
     reserves = _each(db.get("reserves"), "reserves", reserves_problems, _reserves)
     problems.extend(reserves_problems)
+    cooldowns = tuple(_each(db.get("cooldowns"), "cooldowns", problems, lambda k, v: _cooldowns(k, v, problems)))
     return AHProfitData(
         format_version=version,
         addon_version=addon_version,
@@ -763,6 +807,7 @@ def read_ahprofit(text: str) -> AHProfitData:
         item_names=item_names,
         reserves=None if db.get("reserves") is None else tuple(_with_times(reserves, db.get("reserveTimes"), problems)),
         reserves_set_aside=_reserves_set_aside(db.get("reserves"), reserves),
+        cooldowns=cooldowns,
     )
 
 

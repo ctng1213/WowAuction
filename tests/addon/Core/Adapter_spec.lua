@@ -13,9 +13,9 @@ end
 describe("Adapter", function()
   it("the .toc lists the Core and Capture files in load order", function()
     Stubs.Reset()
-    assert_eq(Stubs.TocFiles(), { "Core/Adapter.lua", "Core/AdapterAH.lua", "Core/AdapterDiagnostics.lua", "Core/AdapterTooltip.lua", "Data/BonusSuffixes.lua", "Data/Disenchant.lua", "Core/Events.lua", "Core/DB.lua", "Core/ItemNames.lua",
-      "Capture/Characters.lua", "Capture/Professions.lua", "Capture/Inventory.lua", "Capture/Auctions.lua", "Capture/Mail.lua", "Scan/Replicate.lua", "Core/Diagnostics.lua",
-      "Engine/Fees.lua", "Engine/SellProb.lua", "Engine/Disenchant.lua", "Engine/Craft.lua", "Engine/Prices.lua", "Engine/Timing.lua", "Engine/Portfolio.lua", "Engine/Graph.lua", "Capture/Posts.lua", "Capture/Crafts.lua", "Capture/Gather.lua", "Core/Market.lua", "Core/Plan.lua", "Recommend/Live.lua", "Capture/Purchases.lua", "Recommend/Options.lua", "Recommend/DeTargets.lua", "Recommend/Reserves.lua", "Recommend/Reselect.lua", "Recommend/Adapt.lua", "UI/ViewModel.lua", "UI/PlanView.lua", "UI/PortfolioView.lua", "UI/CraftView.lua", "UI/FlipView.lua", "UI/InventoryView.lua", "UI/TooltipView.lua", "UI/RowMenu.lua", "UI/WindowLines.lua", "UI/MainWindow.lua", "UI/Tooltip.lua", "UI/AHPanel.lua", "UI/MinimapView.lua", "UI/MinimapButton.lua" })
+    assert_eq(Stubs.TocFiles(), { "Core/Adapter.lua", "Core/AdapterAH.lua", "Core/AdapterDiagnostics.lua", "Core/AdapterTooltip.lua", "Core/AdapterCooldowns.lua", "Data/BonusSuffixes.lua", "Data/Disenchant.lua", "Data/Cooldowns.lua", "Core/Events.lua", "Core/DB.lua", "Core/ItemNames.lua",
+      "Capture/Characters.lua", "Capture/Realmless.lua", "Capture/Professions.lua", "Capture/Inventory.lua", "Capture/Auctions.lua", "Capture/Mail.lua", "Scan/Replicate.lua", "Core/Diagnostics.lua",
+      "Engine/Fees.lua", "Engine/SellProb.lua", "Engine/Disenchant.lua", "Engine/Craft.lua", "Engine/Prices.lua", "Engine/Timing.lua", "Engine/Portfolio.lua", "Engine/Graph.lua", "Capture/Posts.lua", "Capture/Crafts.lua", "Capture/Gather.lua", "Capture/Cooldowns.lua", "Core/Market.lua", "Core/Plan.lua", "Recommend/Live.lua", "Capture/Purchases.lua", "Recommend/Options.lua", "Recommend/DeTargets.lua", "Recommend/Reserves.lua", "Recommend/Reselect.lua", "Recommend/Adapt.lua", "UI/ViewModel.lua", "UI/PlanView.lua", "UI/PortfolioView.lua", "UI/CraftView.lua", "UI/FlipView.lua", "UI/InventoryView.lua", "UI/TooltipView.lua", "UI/RowMenu.lua", "UI/WindowLines.lua", "UI/MainWindow.lua", "UI/Tooltip.lua", "UI/AHPanel.lua", "UI/MinimapView.lua", "UI/MinimapButton.lua" })
   end)
 
   it("item key of a plain item link is its item id", function()
@@ -80,6 +80,22 @@ describe("Adapter", function()
     assert_eq(Adapter.PlayerInfo(), { name = "Amaya", realm = "Grommash", faction = "Horde", class = "MAGE", level = 60 })
     assert_eq(Adapter.Money(), 1234567)
     assert_eq(Adapter.InCombat(), false)
+  end)
+
+  it("RL1 an empty realm asks the fallback with name, class and faction; a named realm never does", function()
+    local Adapter = Boot()
+    Stubs.world.player.realm = ""
+    assert_eq(Adapter.PlayerInfo().realm, "")                                      -- no fallback set
+    local asked
+    Adapter.SetRealmFallback(function(name, class, faction) asked = { name, class, faction } return nil end)
+    assert_eq(Adapter.PlayerInfo().realm, "")                                      -- it can't tell
+    assert_eq(asked, { "Amaya", "MAGE", "Horde" })
+    Adapter.SetRealmFallback(function() return "Grommash" end)
+    assert_eq(Adapter.PlayerInfo().realm, "Grommash")
+    Stubs.world.player.realm = "Stormrage"
+    Adapter.SetRealmFallback(function() error("not asked") end)
+    assert_eq(Adapter.PlayerInfo().realm, "Stormrage")
+    Adapter.SetRealmFallback(nil)
   end)
 
   it("a collapsed Skills header makes the skill lines unreadable (nil)", function()

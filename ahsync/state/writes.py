@@ -187,6 +187,26 @@ class IngestWrites:
                               [(char_id, spell_id) for spell_id in sorted(spell_ids - old)])
         return old ^ spell_ids
 
+    def upsert_recipe_cooldown(self, char_id: str, spell_id: int, ready_at_ms: int, source: str,
+                               observed_ms: int) -> bool:
+        """Store when a character can use a cooldown spell again; the newer observation wins (SPEC §3.4F.3, CD31).
+
+        Args:
+            char_id: "Name-Realm".
+            spell_id: The catalog spell.
+            ready_at_ms: When it is ready, UTC ms.
+            source: "g" (the game reported it) or "c" (the addon saw the cast).
+            observed_ms: When that was learned, UTC ms.
+
+        Returns:
+            True when the row was inserted or changed; a row no newer than the stored one changes nothing.
+        """
+        row = {"char_id": char_id, "spell_id": spell_id, "ready_at_ms": ready_at_ms, "source": source,
+               "observed_ms": observed_ms}
+        merge = {c: f"excluded.{c}" for c in ("ready_at_ms", "source", "observed_ms")}
+        return self._upsert("recipe_cooldowns", row, ("char_id", "spell_id"), merge,
+                            "excluded.observed_ms > recipe_cooldowns.observed_ms")
+
     def add_vendor_reagent(self, key: int) -> bool:
         """Record an item a merchant was seen selling; add-only.
 
@@ -351,6 +371,54 @@ class IngestWrites:
         return self._upsert("item_rules", row, ("key",), {c: f"excluded.{c}" for c in ("rule", "set_at", "source")},
                             "excluded.set_at > item_rules.set_at OR "
                             "(excluded.set_at = item_rules.set_at AND excluded.rule > item_rules.rule)")
+
+    def move_character(self, old: str, new: str, ingested_prefix: str) -> set[int]:
+        """Move every row of one character id to another (SPEC §2.2.1, RL4: a realm-less id into its real one).
+
+        Each place's snapshot (bags, bank, mail, auctions) is taken whole from whichever id has the newer one,
+        the real id on a tie, so an item sold since never comes back. Every other row keyed by a column named
+        char_id or to_char moves, the real id's row winning a clash, so a table added later is covered too.
+        The real id keeps its own ingestedUntil: the realm-less one is dropped, never taken as a maximum,
+        so the pruning handshake still stops before any row set aside (§2.2, §5.2 rule 5).
+
+        Args:
+            old: The id to remove, e.g. "Amaya-".
+            new: The id to keep, e.g. "Amaya-Grommash".
+            ingested_prefix: The meta name prefix of each character's ingestedUntil.
+
+        Returns:
+            The item keys of both ids' bags, bank, mail and auctions, for the incremental update.
+        """
+        keys = {k for (k,) in self.conn.execute("SELECT key FROM inventory WHERE char_id IN (?, ?) UNION "
+                                                "SELECT key FROM own_auctions WHERE char_id IN (?, ?)",
+                                                (old, new, old, new))}
+        for location, at in self.conn.execute("SELECT location, at FROM snapshots WHERE char_id = ? ORDER BY location",
+                                              (old,)).fetchall():
+            kept = self.conn.execute("SELECT at FROM snapshots WHERE char_id = ? AND location = ?",
+                                     (new, location)).fetchone()
+            self._drop_snapshot(new if kept is None or at > kept[0] else old, location)
+        tables = [t for (t,) in self.conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")]
+        for table in tables:                   # names from sqlite_master, never from input
+            for column in [r[1] for r in self.conn.execute(f'PRAGMA table_info("{table}")')]:
+                if column in ("char_id", "to_char"):
+                    self.conn.execute(f'UPDATE OR IGNORE "{table}" SET "{column}" = ? WHERE "{column}" = ?', (new, old))
+                    self.conn.execute(f'DELETE FROM "{table}" WHERE "{column}" = ?', (old,))
+        self.conn.execute("DELETE FROM characters WHERE id = ?", (old,))
+        self.conn.execute("DELETE FROM meta WHERE name = ?", (ingested_prefix + old,))
+        return keys
+
+    def _drop_snapshot(self, char_id: str, location: str) -> None:
+        """Delete one place's snapshot of a character: its rows and its time.
+
+        Args:
+            char_id: "Name-Realm".
+            location: 'bags', 'bank', 'mail' (table inventory) or 'auctions' (table own_auctions).
+        """
+        if location == "auctions":
+            self.conn.execute("DELETE FROM own_auctions WHERE char_id = ?", (char_id,))
+        else:
+            self.conn.execute("DELETE FROM inventory WHERE char_id = ? AND location = ?", (char_id, location))
+        self.conn.execute("DELETE FROM snapshots WHERE char_id = ? AND location = ?", (char_id, location))
 
     def character_market(self, char_id: str) -> str | None:
         """A stored character's market.

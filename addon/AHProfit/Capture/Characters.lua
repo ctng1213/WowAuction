@@ -16,6 +16,24 @@ function Characters.CurrentId()
   return info.name .. "-" .. info.realm
 end
 
+--- The realm of the one stored character with this name, class and faction that has a realm (SPEC §2.2.1, RL1).
+---@param db table           The database
+---@param name string        Character name
+---@param class string|nil   Class file token, e.g. "MAGE"
+---@param faction string|nil "Horde" or "Alliance"
+---@return string|nil        The realm; nil when no stored character, or several on different realms, match
+function Characters.StoredRealm(db, name, class, faction)
+  local found = nil
+  for _, row in pairs(db.characters) do      -- the answer doesn't depend on the order
+    if type(row) == "table" and row.name == name and row.class == class and row.faction == faction
+        and type(row.realm) == "string" and row.realm ~= "" then
+      if found and found ~= row.realm then return nil end
+      found = row.realm
+    end
+  end
+  return found
+end
+
 --- Write the logged-in character's row, replacing the old one; its initial-login time is kept.
 ---@param db table  The database; db.characters[charId] is replaced
 ---@return string   The character id
@@ -72,10 +90,34 @@ local function CaptureLive()
   if db then Characters.Capture(db) end
 end
 
---- PLAYER_LOGIN: capture right away.
-local function OnLogin()
-  CaptureLive()
+--- Fold every realm-less character whose real id can be told (Capture/Realmless, RL2).
+---@param db table  The database
+local function FoldRealmless(db)
+  local Realmless = AHProfit.Capture.Realmless
+  if not Realmless then return end
+  Realmless.FoldAll(db, function(row) return Characters.StoredRealm(db, row.name, row.class, row.faction) end)
 end
+
+--- PLAYER_LOGIN: fold realm-less copies into their real ids, then capture right away. A failed fold is kept
+--- for the diagnostics and the capture still runs.
+local function OnLogin()
+  local db = DB.Get()
+  if not db then return end
+  Events.Protected(FoldRealmless, db)
+  Characters.Capture(db)
+end
+
+--- The realm PlayerInfo uses when the client reports none: the stored one of the same character (SPEC §2.2.1).
+---@param name string|nil     The character's name
+---@param class string|nil    Class file token
+---@param faction string|nil  "Horde" or "Alliance"
+---@return string|nil         The realm, or nil
+local function RealmFallback(name, class, faction)
+  local db = DB.Get()
+  return db and name and Characters.StoredRealm(db, name, class, faction) or nil
+end
+
+Adapter.SetRealmFallback(RealmFallback)
 
 --- PLAYER_MONEY and PLAYER_LEVEL_UP: bursty while looting, and UnitLevel lags
 --- the level-up event, so capture once after the debounce (SPEC §5.1).

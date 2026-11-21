@@ -25,6 +25,7 @@ from ahsync.engine.plan_chains import Arriving
 from ahsync.engine.positions import committed
 from ahsync.engine.views import GOLD_PAGES, gold_pill
 from ahsync.export.addon_files import coverage30
+from ahsync.recommend.cooldowns_page import cooldowns_page
 from ahsync.recommend.gathering_page import gathering_page
 from ahsync.recommend.history_page import history_page
 from ahsync.recommend.inventory_page import inventory_page
@@ -213,6 +214,8 @@ def _stage_recommendations(db: Database, market: str, stats: dict, now_ms: int, 
     # scan); research only, so nothing of it touches the plan (E.9).
     pages["gathering"] = gathering_page(db, market, char_ids, stats, items, now_ms, offset_ms, cfg,
                                        prices_ms=prices_ms)                                   # D80, GA35
+    # SPEC §3.4F.6: research only, staged without the clock; the server renders it at each request (CD20).
+    pages["cooldowns"] = cooldowns_page(db, market, char_ids, stats, items, now_ms, prices_ms=prices_ms)
     pill = gold_pill([g for _, g in characters], now_ms, offset_ms)                            # D74
     for page, body in pages.items():
         db.stage_view(page, market, {**body, "gold": pill} if page in GOLD_PAGES else body, now_ms)

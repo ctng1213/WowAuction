@@ -350,6 +350,14 @@ CREATE TABLE IF NOT EXISTS known_recipes(
     PRIMARY KEY(char_id, spell_id)
 );
 
+-- When each character can use a cooldown spell again (SPEC §3.4F.3, schema 33): source 'g' = the game reported
+-- it, 'c' = the addon saw the cast; the newer observed_ms wins.
+CREATE TABLE IF NOT EXISTS recipe_cooldowns(
+    char_id TEXT NOT NULL, spell_id INTEGER NOT NULL, ready_at_ms INTEGER NOT NULL,
+    source TEXT NOT NULL, observed_ms INTEGER NOT NULL,
+    PRIMARY KEY(char_id, spell_id)
+);
+
 -- SPEC GAP: §3.2 has no table for SavedVariables' vendorReagents (keys a merchant was seen selling, §3.4B).
 CREATE TABLE IF NOT EXISTS vendor_reagents(
     key INTEGER PRIMARY KEY

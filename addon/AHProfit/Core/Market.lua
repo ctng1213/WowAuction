@@ -13,7 +13,7 @@ AHProfit.Market = Market
 Market.SCHEMA_VERSION = 1          -- must equal ahsync/export/market_lua.py MARKET_SCHEMA_VERSION (FM17)
 -- The build of both generated files' format; must equal ahsync/export/market_lua.py EXPORT_VERSION. A file of
 -- another build says which side is stale (FM34, FM35). Core/Plan.lua, which loads after this file, reads it too.
-AHProfit.EXPORT_VERSION = 7            -- 7: plan actions end in paid (EX22); 6: the tooltip's market lines (M33b); 5: market items end in salesDays (EX21); 4: K, G and the portfolio
+AHProfit.EXPORT_VERSION = 8            -- 8: the cooldowns' CD table (SPEC §3.4F, EX23); 7: plan actions end in paid (EX22); 6: the tooltip's market lines (M33b); 5: market items end in salesDays (EX21); 4: K, G and the portfolio
                                        -- snapshot (EX17, EX18); 3: closes30 (TT23, PP4); 2: a mail's recipient (C22)
 Market.CACHE_LIMIT = 500           -- decoded items kept before the cache starts again
 Market.FIELDS = { "cur", "curQty", "curAgeMin", "med7", "med30", "p10", "p90", "trend10", "sold10", "listed10",
@@ -48,6 +48,9 @@ local function Checksum(markets)
     for _, text in pairs(g.U or {}) do count, length = count + 1, length + #text end
     for _, text in ipairs({ g.DE or "", g.order or "" }) do
       if text ~= "" then count, length = count + 1, length + #text end   -- an empty one counts as no string
+    end
+    for key, text in pairs(m.CD or {}) do
+      if key ~= "v" and text ~= "" then count, length = count + 1, length + #text end   -- EX23
     end
   end
   return count .. ":" .. length
@@ -215,6 +218,26 @@ function Market.Coverage30()
   local s = State()
   if s.status ~= "ok" then return nil end
   return s.market.coverage30
+end
+
+--- One cooldown catalog row's money, as AHSync exported it (SPEC §3.4F.4, §3.5, EX23). The addon computes none (D1).
+---@param spell number  The catalog spell
+---@return table|nil    { mats, net, perWeek } in copper, each nil for "—"; nil when the file has no such row
+function Market.Cooldown(spell)
+  local s = State()
+  if s.status ~= "ok" then return nil end
+  local text = (s.market.CD or {})[spell]
+  if not text then return nil end
+  local mats, net, perWeek = text:match("^([^;]*);([^;]*);([^;]*)$")
+  return { mats = tonumber(mats), net = tonumber(net), perWeek = tonumber(perWeek) }
+end
+
+--- The cooldown catalog version AHSync exported, to compare with the addon's own (SPEC §3.4F.7, CD29).
+---@return number|nil  nil without usable data or before AHSync staged the Cooldowns page
+function Market.CooldownVersion()
+  local s = State()
+  if s.status ~= "ok" then return nil end
+  return (s.market.CD or {}).v
 end
 
 --- When the file was written and the newest observation it holds, for the age badge.

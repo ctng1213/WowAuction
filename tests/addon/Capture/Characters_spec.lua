@@ -51,4 +51,32 @@ describe("Characters", function()
     assert_eq(AHProfitDB, { formatVersion = 99 })
     assert_eq(AHProfit.Events.Errors(), {})
   end)
+
+  it("RL1 an empty realm from the client uses the realm of the one stored character with that name", function()
+    Stubs.Reset()
+    Stubs.world.player.realm = ""
+    AHProfitDB = { formatVersion = 1, characters = { ["Amaya-Grommash"] = { name = "Amaya", realm = "Grommash",
+                                                      class = "MAGE", faction = "Horde" } } }
+    Stubs.Login()
+    assert_eq(AHProfit.Capture.Characters.CurrentId(), "Amaya-Grommash")
+    assert_eq(AHProfitDB.characters["Amaya-"], nil)
+    assert_eq(AHProfitDB.characters["Amaya-Grommash"].realm, "Grommash")
+    Stubs.Reset()
+    Stubs.world.player.realm = ""
+    AHProfitDB = { formatVersion = 1, characters = {
+      ["Amaya-Grommash"] = { name = "Amaya", realm = "Grommash", class = "MAGE", faction = "Horde" },
+      ["Amaya-Stormrage"] = { name = "Amaya", realm = "Stormrage", class = "MAGE", faction = "Horde" } } }
+    Stubs.Login()
+    assert_eq(AHProfit.Capture.Characters.CurrentId(), "Amaya-")                  -- two realms: it can't tell
+    Stubs.Reset()
+    Stubs.world.player.realm = ""
+    AHProfitDB = { formatVersion = 1, characters = { ["Amaya-Grommash"] = { name = "Amaya", realm = "Grommash",
+                                                      class = "WARRIOR", faction = "Horde" } } }
+    Stubs.Login()
+    assert_eq(AHProfit.Capture.Characters.CurrentId(), "Amaya-")                  -- another Amaya: a warrior
+    Stubs.Reset()
+    Stubs.world.player.realm = ""
+    Stubs.Login()
+    assert_eq(AHProfit.Capture.Characters.CurrentId(), "Amaya-")                  -- nothing stored yet
+  end)
 end)

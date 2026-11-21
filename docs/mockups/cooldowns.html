@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Proposal: Cooldowns tab (addon and dashboard)</title>
+<style>
+  :root { --bg: #0f1115; --text: #e6e6e6; --muted: #8f8a7d; --label: #8fd3ff; --gold: #ffd100;
+          --pos: #4cd964; --neg: #ff5c5c; --amber: #ffb347; --line: #2a2f3a; --panel: #15171c; --wow: #0b0e1a; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.45 -apple-system, "Segoe UI", sans-serif; margin: 24px; max-width: 1280px; }
+  h1 { font-size: 20px; margin: 0 0 4px; } h2 { font-size: 16px; margin: 32px 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+  h3 { font-size: 13px; color: var(--muted); font-weight: normal; margin: 14px 0 6px; }
+  p.note { color: #c9c4b6; max-width: 1080px; } .muted { color: var(--muted); } .pos { color: var(--pos); } .neg { color: var(--neg); }
+  .amber { color: var(--amber); } .gold { color: var(--gold); } .ready { color: var(--pos); }
+  .q-common { color: #fff; } .q-uncommon { color: #1eff00; } .q-rare { color: #0070dd; }
+  table { border-collapse: collapse; font-size: 13px; } td, th { padding: 4px 10px; border-bottom: 1px solid var(--line); vertical-align: top; text-align: left; }
+  th { color: var(--muted); font-weight: normal; white-space: nowrap; } td.r, th.r { text-align: right; white-space: nowrap; }
+  th.sorted { color: var(--gold); }
+  .sub { font-size: 11px; color: var(--muted); display: block; }
+  .row { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+  /* addon frame */
+  .wow { background: var(--wow); border: 1px solid #5a4a1a; border-radius: 4px; width: 760px; font-size: 12px; }
+  .wow .title { display: flex; justify-content: space-between; padding: 6px 10px; color: var(--gold); border-bottom: 1px solid #2a2410; }
+  .wow .tabs { display: flex; gap: 2px; padding: 6px 8px 0; }
+  .wow .tab { padding: 3px 9px; background: #121216; border: 1px solid #222; border-bottom: none; color: #b8b2a0; }
+  .wow .tab.on { background: #29261a; color: var(--gold); border-color: #5a4a1a; }
+  .wow .tab.new { outline: 1px dashed var(--amber); }
+  .wow .bar { display: flex; gap: 10px; align-items: center; padding: 6px 10px; border-top: 1px solid #2a2410; border-bottom: 1px solid #1c1c1c; }
+  .wow .btn { padding: 2px 8px; border: 1px solid #5a4a1a; background: #1a1810; color: var(--gold); }
+  .wow .chip { padding: 1px 7px; border: 1px solid #333; border-radius: 9px; color: #c9c4b6; }
+  .wow table { width: 100%; font-size: 12px; } .wow td, .wow th { padding: 3px 8px; border-bottom: 1px solid #1a1a1a; }
+  .wow .grp td { color: var(--label); background: #10131c; }
+  .wow .foot { padding: 5px 10px; color: var(--muted); }
+  /* dashboard */
+  .dash { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; }
+  .filters { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 6px 0 10px; }
+  .sel { border: 1px solid var(--line); border-radius: 4px; padding: 3px 10px; background: #0f1115; }
+  .tog { display: inline-flex; gap: 6px; align-items: center; } .tog i { width: 28px; height: 14px; border-radius: 7px; background: #333; display: inline-block; position: relative; }
+  .tog i::after { content: ""; position: absolute; left: 2px; top: 2px; width: 10px; height: 10px; border-radius: 5px; background: #999; }
+  .tog.on i { background: #5a4a1a; } .tog.on i::after { left: 16px; background: var(--gold); }
+  .card { border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px; margin: 10px 0; background: #12141a; }
+  .notice { border-left: 3px solid var(--amber); padding: 6px 10px; background: #1a1610; margin: 8px 0; }
+  ol li, ul li { margin: 3px 0; }
+  .flow { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; margin: 10px 0; }
+  .flow .box { border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; width: 290px; background: #12141a; font-size: 13px; }
+  .flow .box b { color: var(--gold); } .flow .arrow { align-self: center; color: var(--muted); font-size: 20px; }
+</style>
+</head>
+<body>
+<h1>Proposal: Cooldowns tab, in the addon and on the dashboard</h1>
+<p class="note"><b>Draft 3, approved 2026-11-20; corrected in CD1 by the catalog research (Philosopher's Stone, Elemental Fire's own 10 minutes, Iron to Gold 1 d, the SnowMaster 9000).</b> This draft folds in the independent review and the user's answers: shared transmute cooldowns, "Not read", "Yes (bank)", and the planner fix deferred to a later batch. It is a research view of items made by profession <b>cooldowns</b>: transmutes, Mooncloth, Refined Deeprock Salt and the like. They are worth a lot because nobody can make many of them. The tab answers which cooldown items exist for a profession, what skill each needs, how long the cooldown is, what it sells for now, what one use earns after mats and the AH cut, whether each character is ready, and whether they can make it now. <b>All prices, skills, cooldown lengths and the transmute group below are illustrative.</b> The real values come from the catalog (section 1) and the market.</p>
+<p class="note">The illustrative account has six characters with a cooldown profession:</p>
+<ul class="note">
+  <li><b>Amaya</b> (logged in): Alchemy 280 / Herbalism 290.</li>
+  <li><b>Tessa</b>: Alchemy 300. She used Transmute: Arcanite yesterday, so the whole shared transmute cooldown has 1 d 2 h left.</li>
+  <li><b>Sorvin</b>: Alchemy 230.</li>
+  <li><b>Brugan</b>: Leatherworking 262 / Skinning 260, with a Salt Shaker in his bags.</li>
+  <li><b>Mira</b>: Tailoring 260 / Leatherworking 255, no Salt Shaker.</li>
+  <li><b>Keldor</b>: Tailoring 245.</li>
+</ul>
+<p class="note">In this illustration <b>all Alchemy transmutes share one cooldown</b> (the catalog group "transmute"). Whether they do on Forever is confirmed while the catalog is built. Net per use = units made × AH unit price × 0.95 (the AH cut) − mats at their AH price. The deposit is left out of this illustration only; the build uses <code>engine/fees</code> like every other tab.</p>
+
+<h2>1. How the list of cooldown items is derived</h2>
+<p class="note">The game's client cannot tell us which recipes have a cooldown, what skill they need, or how long the cooldown is (SPEC §2.2.1 captures both as "unknown"; §6 item 7). A high AH price never makes something a cooldown item either.</p>
+<ul class="note">
+  <li>So the list is <b>curated by us and shipped complete inside the addon from its first release</b>. Every addon user gets every cooldown recipe on day one, without playing or adding anything.</li>
+  <li>The game never builds the list. It only tells us <b>when each character is ready</b>, and <b>flags anything the curated list missed</b>. We fix the list and ship the fix to everyone with the next addon update.</li>
+</ul>
+<div class="flow">
+  <div class="box"><b>1. The catalog</b> (static file, curated)<br><code>ahsync/data/cooldown_catalog.json</code>, generated into the addon as <code>Data/Cooldowns.lua</code> with the same version.<br><br>In WoW's own spell data, a craft is a cooldown craft when its spell has a <b>recovery time</b>: the spell's cooldown, or its category's (a shared cooldown, the catalog's <code>group</code>). Classic databases show this as "Cooldown: 2 days" on the spell page.<br><br>So the rule is <b>every profession spell that creates an item and has a non-zero cooldown</b>, plus every <b>tool item</b> whose Use spell creates an item and has a cooldown (the Salt Shaker). One row per spell, each with its source URL.</div>
+  <div class="arrow">→</div>
+  <div class="box"><b>2. The game says when you're ready</b> (addon)<br>Three sources, and the game's own report wins:
+    <ol style="margin:4px 0 0 18px;padding:0">
+      <li>the game reports the time left: <code>C_TradeSkillUI.GetRecipeCooldown</code> when a profession window opens, and <code>C_Container.GetItemCooldown</code> for a tool at login and on bag updates, with no window needed;</li>
+      <li>the addon saw a catalog spell cast succeed, and records the cast time plus the catalog's period;</li>
+      <li>neither has happened yet: <span class="amber">Not read</span>.</li>
+    </ol>
+    The APIs are <span class="amber">UNVERIFIED on Forever</span>; source 2 works without them. A recipe the game reports a cooldown for that the catalog lacks becomes a <b>seen in game</b> row.</div>
+  <div class="arrow">→</div>
+  <div class="box"><b>3. The market only prices it</b><br>The AH price and sales come from the same place as every other tab: the intelligence's current price. A price more than 7 days old shows muted with its age, and "—" means no price was ever seen. An item is never <i>added</i> because it is expensive.<br><br><b>Cross-checks on Status:</b>
+    <ul style="margin:4px 0 0 18px;padding:0">
+      <li>a catalog item the market doesn't know (likely changed on Forever);</li>
+      <li>the addon's catalog version against the one AHSync exports.</li>
+    </ul></div>
+</div>
+<h3>The catalog (CD1): 15 Classic Era cooldown crafts, found by checking all 1,379 item-creating recipes of the 12 professions on Wowhead Classic. Checked against Forever in game in CD2.</h3>
+<table>
+  <tr><th>Profession</th><th>Recipe (spell)</th><th>Makes</th><th>From</th><th class="r">Skill</th><th class="r">Cooldown</th><th>Group</th><th>Note</th></tr>
+  <tr><td>Alchemy</td><td>Transmute: Arcanite</td><td>1 Arcanite Bar</td><td>Thorium Bar, Arcane Crystal</td><td class="r">275</td><td class="r">2 d</td><td>transmute?</td><td></td></tr>
+  <tr><td>Alchemy</td><td>Transmute: Iron to Gold</td><td>1 Gold Bar</td><td>Iron Bar</td><td class="r">225</td><td class="r">1 d</td><td>transmute?</td><td class="muted"></td></tr>
+  <tr><td>Alchemy</td><td>Transmute: Mithril to Truesilver</td><td>1 Truesilver Bar</td><td>Mithril Bar</td><td class="r">225</td><td class="r">2 d</td><td>transmute?</td><td class="muted"></td></tr>
+  <tr><td>Alchemy</td><td>8 elemental transmutes: Earth to Water, Water to Air, Air to Fire, Fire to Earth, Earth to Life, Life to Earth, Undeath to Water, Water to Undeath</td><td>1 essence</td><td>1 essence</td><td class="r">275</td><td class="r">1 d</td><td>transmute?</td><td></td></tr>
+  <tr><td>Alchemy</td><td>Transmute: Elemental Fire</td><td>3 Elemental Fire</td><td>Heart of Fire</td><td class="r">300</td><td class="r">10 m</td><td></td><td class="muted">its own 10-minute cooldown, not the shared one</td></tr>
+  <tr><td>Tailoring</td><td>Mooncloth</td><td>1 Mooncloth</td><td>2 Felcloth</td><td class="r">250</td><td class="r">4 d</td><td></td><td class="muted">made at a moonwell</td></tr>
+  <tr><td>Leatherworking</td><td>Salt Shaker (a tool, not a recipe)</td><td>1 Refined Deeprock Salt</td><td>Deeprock Salt; tool: Salt Shaker</td><td class="r">250</td><td class="r">3 d</td><td></td><td class="muted">the tool must be in that character's bags or bank</td></tr>
+  <tr><td>Engineering</td><td>SnowMaster 9000 (a tool)</td><td>1 Snowball</td><td>Refreshing Spring Water; tool: SnowMaster 9000</td><td class="r">190</td><td class="r">1 d</td><td></td><td class="muted">likely a Winter Veil item</td></tr>
+  <tr><td colspan="8" class="muted"><b>Every transmute needs a Philosopher's Stone</b> in the alchemist's bags or bank, as well as the recipe. "transmute?": the shared cooldown is implied by Wowhead comments and the wiki, not stated by the game data, so CD2 confirms it in game; if they don't share, the group is dropped and every row keeps its own time. Blacksmithing, Enchanting, Cooking, First Aid and the gathering professions have no item-making cooldowns. They still appear in the dashboard's Profession filter, with "no cooldown recipes" when chosen.</td></tr>
+</table>
+
+<h2>2. Addon: the Cooldowns tab</h2>
+<p class="note">A seventh tab after Craft.</p>
+<ul class="note">
+  <li><b>What it lists:</b> the chosen character's professions only, but <b>every catalog recipe of those professions</b>, learned or not and whatever the skill.</li>
+  <li><b>Sort:</b> by <b>AH unit price, highest first</b>; ties by recipe name A–Z.</li>
+  <li><b>The character row:</b> lists your characters that have a profession with cooldown recipes. It starts on the one you're logged in as ("you"); click another name to see theirs.</li>
+  <li><b>Nothing is recalculated for the other characters.</b> Their skill, known recipes, ready times, bags and bank are what the addon stored when they last played (the bar says when). The money columns are what AHSync exported.</li>
+  <li><b>No money in the addon:</b> the addon computes no money at all. Without AHSync, those columns show "—".</li>
+  <li><b>Hovers:</b> the AH price or the item name shows the normal AHProfit market tooltip; Mats lists each mat in units (needed, held, to buy).</li>
+  <li><b>Shared cooldowns:</b> a transmute used puts every transmute on cooldown. The Cooldown cell says "shared", and several "Yes" rows on one character are alternatives: one per cooldown.</li>
+</ul>
+
+<h3>2a. Amaya, logged in, Alchemy 280: her own live captures. Her transmute cooldown is ready. The footer shows who else is ready now.</h3>
+<div class="wow">
+  <div class="title"><span>AHProfit</span><span class="muted">plan 14:32 · prices 26 min old</span></div>
+  <div class="tabs"><span class="tab">Portfolio</span><span class="tab">Disenchant</span><span class="tab">Craft</span><span class="tab on new">Cooldowns</span><span class="tab">Flip</span><span class="tab">Inventory</span><span class="tab">Reservations</span></div>
+  <div class="bar"><span class="btn">Amaya · you</span><span class="chip">Brugan</span><span class="chip">Keldor</span><span class="chip">Mira</span><span class="chip">Sorvin</span><span class="chip">Tessa</span></div>
+  <div class="bar"><span class="gold">Amaya</span><span class="chip">Alchemy 280</span><span class="muted">Herbalism: no cooldown recipes · live</span></div>
+  <table>
+    <tr><th>Item · recipe</th><th class="r">Skill</th><th class="r">Cooldown</th><th class="r">Ready</th><th class="r sorted">AH price</th><th class="r">Mats</th><th class="r">Net / use</th><th class="r">Can Make</th></tr>
+    <tr><td><span class="q-common">Arcanite Bar</span><span class="sub">Transmute: Arcanite</span></td><td class="r">275</td><td class="r">2 d<span class="sub">shared</span></td><td class="r ready">ready</td><td class="r">45g</td><td class="r">29g 20s</td><td class="r pos">13g 55s</td><td class="r ready">Yes</td></tr>
+    <tr><td><span class="q-common">Essence of Water</span><span class="sub">Transmute: Earth to Water</span></td><td class="r">275</td><td class="r">1 d<span class="sub">shared</span></td><td class="r amber">Not learned</td><td class="r">3g</td><td class="r">2g 40s</td><td class="r pos">45s</td><td class="r muted">No</td></tr>
+    <tr><td><span class="q-common">Essence of Water</span><span class="sub">Transmute: Undeath to Water</span></td><td class="r">275</td><td class="r">1 d<span class="sub">shared</span></td><td class="r ready">ready</td><td class="r">3g</td><td class="r">1g</td><td class="r pos">1g 85s</td><td class="r muted">No</td></tr>
+    <tr><td><span class="q-common">Essence of Air</span><span class="sub">Transmute: Water to Air</span></td><td class="r">275</td><td class="r">1 d<span class="sub">shared</span></td><td class="r ready">ready</td><td class="r">2g 80s</td><td class="r">3g</td><td class="r neg">−34s</td><td class="r muted">No</td></tr>
+    <tr><td><span class="q-uncommon">Truesilver Bar</span><span class="sub">Transmute: Mithril to Truesilver</span></td><td class="r">225</td><td class="r">2 d<span class="sub">shared</span></td><td class="r ready">ready</td><td class="r">2g 10s</td><td class="r">60s</td><td class="r pos">1g 39s 50c</td><td class="r ready">Yes (bank)</td></tr>
+    <tr><td><span class="q-uncommon">Gold Bar</span><span class="sub">Transmute: Iron to Gold</span></td><td class="r">225</td><td class="r">1 d<span class="sub">shared</span></td><td class="r ready">ready</td><td class="r">1g 30s</td><td class="r">40s</td><td class="r pos">83s 50c</td><td class="r muted">No</td></tr>
+    <tr><td><span class="q-common">Elemental Fire</span><span class="sub">Transmute: Elemental Fire · makes 3</span></td><td class="r amber">300 · you 280</td><td class="r">10 m</td><td class="r muted">—</td><td class="r muted">1g 20s<span class="sub">9 d old</span></td><td class="r">1g 50s</td><td class="r pos">1g 92s</td><td class="r muted">No</td></tr>
+    <tr><td><span class="q-common">Essence of Undeath</span><span class="sub">Transmute: Water to Undeath</span></td><td class="r">275</td><td class="r">1 d<span class="sub">shared</span></td><td class="r amber">Not learned</td><td class="r">1g</td><td class="r">3g</td><td class="r neg">−2g 5s</td><td class="r muted">No</td></tr>
+  </table>
+  <div class="foot">Shared transmute cooldown: Arcanite and Truesilver both say Yes, but Amaya can do one of them per cooldown. Hovering either says so. Also ready now (stored): <span class="ready">Sorvin</span>, 1 transmute (Iron to Gold) · <span class="ready">Tessa</span>, 1 (Elemental Fire). Click a name above to see them.</div>
+</div>
+
+<div class="row">
+<div>
+<h3>2b. Tessa clicked (logged in as Amaya). The same recipes and exported money, with her stored skill, recipes and ready time. One use of Arcanite put all her transmutes on the same 1 d 2 h.</h3>
+<div class="wow" style="width:620px">
+  <div class="bar"><span class="chip">Amaya · you</span><span class="chip">Brugan</span><span class="chip">Keldor</span><span class="chip">Mira</span><span class="chip">Sorvin</span><span class="btn">Tessa</span></div>
+  <div class="bar"><span class="gold">Tessa</span><span class="chip">Alchemy 300</span><span class="muted">data from Wed 09:15</span></div>
+  <table>
+    <tr><th>Item · recipe</th><th class="r">Skill</th><th class="r">Cooldown</th><th class="r">Ready</th><th class="r sorted">AH price</th><th class="r">Net / use</th><th class="r">Can Make</th></tr>
+    <tr><td>Arcanite Bar<span class="sub">Transmute: Arcanite</span></td><td class="r">275</td><td class="r">2 d<span class="sub">shared</span></td><td class="r">1 d 2 h</td><td class="r">45g</td><td class="r pos">13g 55s</td><td class="r muted">No</td></tr>
+    <tr><td>Essence of Water<span class="sub">Transmute: Earth to Water</span></td><td class="r">275</td><td class="r">1 d<span class="sub">shared</span></td><td class="r">1 d 2 h</td><td class="r">3g</td><td class="r pos">45s</td><td class="r muted">No</td></tr>
+    <tr><td>Essence of Water<span class="sub">Transmute: Undeath to Water</span></td><td class="r">275</td><td class="r">1 d<span class="sub">shared</span></td><td class="r">1 d 2 h</td><td class="r">3g</td><td class="r pos">1g 85s</td><td class="r muted">No</td></tr>
+    <tr><td>Essence of Air<span class="sub">Transmute: Water to Air</span></td><td class="r">275</td><td class="r">1 d<span class="sub">shared</span></td><td class="r amber">Not learned</td><td class="r">2g 80s</td><td class="r neg">−34s</td><td class="r muted">No</td></tr>
+    <tr><td>Truesilver Bar<span class="sub">Transmute: Mithril to Truesilver</span></td><td class="r">225</td><td class="r">2 d<span class="sub">shared</span></td><td class="r amber">Not learned</td><td class="r">2g 10s</td><td class="r pos">1g 39s 50c</td><td class="r muted">No</td></tr>
+    <tr><td>Gold Bar<span class="sub">Transmute: Iron to Gold</span></td><td class="r">225</td><td class="r">1 d<span class="sub">shared</span></td><td class="r amber">Not learned</td><td class="r">1g 30s</td><td class="r pos">83s 50c</td><td class="r muted">No</td></tr>
+    <tr><td>Elemental Fire<span class="sub">Transmute: Elemental Fire · makes 3</span></td><td class="r">300</td><td class="r">10 m</td><td class="r ready">ready</td><td class="r muted">1g 20s<span class="sub">9 d old</span></td><td class="r pos">1g 92s</td><td class="r ready">Yes</td></tr>
+    <tr><td>Essence of Undeath<span class="sub">Transmute: Water to Undeath</span></td><td class="r">275</td><td class="r">1 d<span class="sub">shared</span></td><td class="r amber">Not learned</td><td class="r">1g</td><td class="r neg">−2g 5s</td><td class="r muted">No</td></tr>
+  </table>
+  <div class="foot">Ready times count down from what Tessa's last login stored. A "ready" may already be used if she played on another machine since.</div>
+</div>
+
+<h3>2c. Mira clicked: two professions in one list, still sorted by price. The profession is on the sub-line.</h3>
+<div class="wow" style="width:620px">
+  <div class="bar"><span class="chip">Amaya · you</span><span class="chip">Brugan</span><span class="chip">Keldor</span><span class="btn">Mira</span><span class="chip">Sorvin</span><span class="chip">Tessa</span></div>
+  <div class="bar"><span class="gold">Mira</span><span class="chip">Tailoring 260</span><span class="chip">Leatherworking 255</span><span class="muted">data from Mon 21:40</span></div>
+  <table>
+    <tr><th>Item · recipe</th><th class="r">Skill</th><th class="r">Cooldown</th><th class="r">Ready</th><th class="r sorted">AH price</th><th class="r">Net / use</th><th class="r">Can Make</th></tr>
+    <tr><td>Mooncloth<span class="sub">Tailoring · Mooncloth</span></td><td class="r">250</td><td class="r">4 d</td><td class="r">2 d 3 h</td><td class="r">22g</td><td class="r pos">13g 90s</td><td class="r muted">No</td></tr>
+    <tr><td>Refined Deeprock Salt<span class="sub">Leatherworking · Salt Shaker (tool)</span></td><td class="r">250</td><td class="r">3 d</td><td class="r amber">Needs item</td><td class="r">4g 50s</td><td class="r pos">4g 12s 50c</td><td class="r muted">No</td></tr>
+  </table>
+</div>
+</div>
+
+<div style="width:500px">
+<h3>Sorvin, Brugan and Keldor, compact (the same layout when clicked)</h3>
+<div class="wow" style="width:500px">
+  <div class="bar"><span class="gold">Sorvin</span><span class="chip">Alchemy 230</span><span class="muted">data from Thu 07:05</span></div>
+  <table>
+    <tr><td>Arcanite Bar<span class="sub">Transmute: Arcanite</span></td><td class="r amber">275 · has 230</td><td class="r">2 d<span class="sub">shared</span></td><td class="r muted">—</td><td class="r muted">No</td></tr>
+    <tr><td colspan="5" class="muted">… the five 275 transmutes and Elemental Fire: amber, "—", No …</td></tr>
+    <tr><td>Truesilver Bar<span class="sub">Transmute: Mithril to Truesilver</span></td><td class="r">225</td><td class="r">2 d<span class="sub">shared</span></td><td class="r ready">ready</td><td class="r muted">No</td></tr>
+    <tr><td>Gold Bar<span class="sub">Transmute: Iron to Gold</span></td><td class="r">225</td><td class="r">1 d<span class="sub">shared</span></td><td class="r ready">ready</td><td class="r ready">Yes</td></tr>
+  </table>
+  <div class="bar"><span class="gold">Brugan</span><span class="chip">Leatherworking 262</span><span class="muted">data from Tue 18:02</span></div>
+  <table>
+    <tr><td>Refined Deeprock Salt<span class="sub">Leatherworking · Salt Shaker (tool)</span></td><td class="r">250</td><td class="r">3 d</td><td class="r">1 d 4 h</td><td class="r muted">No</td></tr>
+  </table>
+  <div class="bar"><span class="gold">Keldor</span><span class="chip">Tailoring 245</span><span class="muted">data from Sun 12:30</span></div>
+  <table>
+    <tr><td>Mooncloth<span class="sub">Tailoring · Mooncloth</span></td><td class="r amber">250 · has 245</td><td class="r">4 d</td><td class="r muted">—</td><td class="r muted">No</td></tr>
+  </table>
+</div>
+
+<h3>Column rules</h3>
+<table>
+  <tr><td>Character row</td><td>Your characters with a profession that has catalog (or seen-in-game) cooldown recipes: the logged-in one first, marked "you", then the rest by name. More than 6 wrap to a second line. A character without such a profession is not in the row.</td></tr>
+  <tr><td>Item · recipe</td><td>The product name in its quality colour; the profession when the character has two; the recipe; and "makes N" when it makes more than 1.</td></tr>
+  <tr><td>Skill</td><td>The catalog's required skill. <span class="amber">Amber</span> with "you N" (logged in) or "has N" (another character) when below it.</td></tr>
+  <tr><td>Cooldown</td><td>How long the recipe is locked after each use: "2 d", "3 d", "20 h". "shared" when it is in a group. Hovering lists the group ("one cooldown for all 11 transmutes; Elemental Fire has its own") and says that using any of them locks all of them for the period of the one used.</td></tr>
+  <tr><td>Ready</td><td>
+    <ul style="margin:0;padding-left:18px">
+      <li><span class="ready">ready</span>, or the time left (the group's, for a shared cooldown).</li>
+      <li>In orange when the skill is high enough:
+        <ul style="margin:0;padding-left:18px">
+          <li><span class="amber">Not learned</span>: the recipe is missing.</li>
+          <li><span class="amber">Needs item</span>: the tool (a transmute's Philosopher's Stone, the Salt Shaker) is in neither this character's bags nor bank. Another character's copy doesn't count. When a transmute lacks both the recipe and the Stone, Not learned shows.</li>
+          <li><span class="amber">Not read</span>: the ready time has never been captured. Hover: "Salt Shaker's cooldown hasn't been read yet. Carry it in your bags at login, or use it once." For a recipe: "Open Alchemy once, or use it."</li>
+        </ul></li>
+      <li>"—" when the skill is missing.</li>
+      <li>Hovering names what's missing. A tool held only in the bank counts as held, and the hover adds "Salt Shaker is in the bank".</li>
+      <li>For other characters, the time counts down from the stored ready time. It is refreshed when the tab is shown and on capture events, never every frame.</li>
+    </ul></td></tr>
+  <tr><td>AH price</td><td>The product's current lowest unit price (the tooltip's price). Sorted by this, highest first. Muted with its age when more than 7 days old ("9 d old"). "—" when no price has ever been seen. Hovering shows the normal AHProfit market tooltip for the item.</td></tr>
+  <tr><td>Mats</td><td>The mats per use at their AH price, as exported. Hovering lists each mat in units only: "Arcane Crystal: need 1 · Amaya has 1 (bags) · buy 0".</td></tr>
+  <tr><td>Per week (dashboard)</td><td>Net / use × 7 ÷ the cooldown in days. "—" when the cooldown is under 1 day (Elemental Fire's 10 m): the cooldown doesn't limit it, the mats do.</td></tr>
+  <tr><td>Net / use</td><td>Exported by AHSync: units made × price after the cut, less the deposit and the mats. Red when below zero. "—" without a price. Hovering says which export it comes from ("from the 14:32 export").</td></tr>
+  <tr><td>Can Make</td><td>
+    <ul style="margin:0;padding-left:18px">
+      <li><span class="ready">Yes</span> when this character can use it right now: the skill is met, the recipe is learned, the tool is held, the cooldown (or its group's) is ready, and the mats are in this character's own bags.</li>
+      <li><span class="ready">Yes (bank)</span> when a needed mat or the tool is only in the bank (as of the last bank visit).</li>
+      <li><span class="muted">No</span> otherwise. Hovering gives the first reason: "on cooldown 1 d 2 h", "missing 1 Essence of Water", "not learned", "needs Salt Shaker", "cooldown not read", "needs skill 300".</li>
+      <li>In a shared group, several Yes rows are alternatives: the hover says "shared: one of these per cooldown".</li>
+    </ul></td></tr>
+  <tr><td>Also ready now</td><td>Logged-in view only: the other characters with a stored ready cooldown, counted <b>once per group</b>, with up to 3 recipe names each.</td></tr>
+</table>
+</div>
+</div>
+
+<h3>Addon states</h3>
+<table>
+  <tr><td>The logged-in character has no cooldown profession</td><td class="muted">The row still lists the others, and the bar says "Amaya's professions (Herbalism, Skinning) have no cooldown recipes. Click a character above." The first other character is not opened automatically.</td></tr>
+  <tr><td>Professions never captured</td><td class="muted">"Open your profession windows once so AHProfit can read your skills." (the Craft tab's existing line)</td></tr>
+  <tr><td>A ready time never captured</td><td class="muted">Ready says <span class="amber">Not read</span> (orange) and Can Make says No ("cooldown not read"). It clears the first time the game reports the time, or the addon sees the recipe or tool used. Skill still compares, because skills are read at login.</td></tr>
+  <tr><td>Just used</td><td class="muted">On the cast's success the row turns to the full period ("2 d") at once, and so does every row in its group. The tab doesn't wait for the next window open.</td></tr>
+  <tr><td>No market file yet</td><td class="muted">Every price and money column shows "—"; rows sort by recipe name; "No prices yet: run AHSync."</td></tr>
+  <tr><td>The addon's catalog is newer than AHSync's export</td><td class="muted">A recipe only the addon knows shows with "—" money; Status says "catalog v2 in the addon, v1 in AHSync's export: update AHSync".</td></tr>
+  <tr><td>A Forever recipe the catalog lacks</td><td class="muted">Its row shows "seen in game" in the Skill column (skill unknown) and its time left; Status asks for it to be added to the shipped list.</td></tr>
+</table>
+
+<h2>3. Dashboard: the Cooldowns page</h2>
+<p class="note">A research page, desktop only, next to Craft and Gathering.</p>
+<ul class="note">
+  <li><b>What it lists:</b> <b>every profession's</b> cooldown recipes from the catalog. Three filters narrow it.</li>
+  <li><b>Sort:</b> by AH unit price, highest first. Every column header sorts.</li>
+  <li><b>Built when the page loads</b>, from the stored ready times and the current time, so every countdown is current.</li>
+  <li><b>Per week</b> is what one character earns using this recipe every time it is ready: net per use × 7 ÷ cooldown days. For a shared group, the rows are alternatives, not a total.</li>
+  <li><b>Who</b> lists every character with the profession, one line each, best first: Ready, then soonest; then not learned, needs item or not read (orange); then below the skill. Ties are by name.</li>
+</ul>
+<div class="dash">
+  <h1 style="margin-top:0">Cooldowns</h1>
+  <div class="filters">
+    <span>Profession <span class="sel">All professions</span></span>
+    <span class="tog"><i></i>Just my characters</span>
+    <span class="tog"><i></i>My skill level only</span>
+    <span class="muted">15 recipes · prices 26 min old · 6 characters</span>
+  </div>
+  <table>
+    <tr><th>Item · recipe</th><th>Profession</th><th class="r">Skill</th><th class="r">Cooldown</th><th>Made from</th><th class="r sorted">AH price</th><th class="r">Mats</th><th class="r">Net / use</th><th class="r">Per week</th><th class="r">Sold / day</th><th>Who</th><th class="r">Can Make</th></tr>
+    <tr><td>Arcanite Bar<span class="sub">Transmute: Arcanite</span></td><td>Alchemy</td><td class="r">275</td><td class="r">2 d<span class="sub">shared</span></td><td>Thorium Bar, Arcane Crystal</td><td class="r">45g</td><td class="r">29g 20s</td><td class="r pos">13g 55s</td><td class="r pos">47g 42s 50c</td><td class="r">6</td><td><span class="ready">Amaya Ready</span><span class="sub">Tessa 1 d 2 h</span><span class="sub amber">Sorvin needs 275 (230)</span></td><td class="r ready">Yes</td></tr>
+    <tr><td>Mooncloth<span class="sub">Mooncloth</span></td><td>Tailoring</td><td class="r">250</td><td class="r">4 d</td><td>2 Felcloth</td><td class="r">22g</td><td class="r">7g</td><td class="r pos">13g 90s</td><td class="r pos">24g 32s 50c</td><td class="r">3</td><td>Mira 2 d 3 h<span class="sub amber">Keldor needs 250 (245)</span></td><td class="r muted">No</td></tr>
+    <tr><td>Refined Deeprock Salt<span class="sub">Salt Shaker (tool)</span></td><td>Leatherworking</td><td class="r">250</td><td class="r">3 d</td><td>Deeprock Salt</td><td class="r">4g 50s</td><td class="r">15s</td><td class="r pos">4g 12s 50c</td><td class="r pos">9g 62s 50c</td><td class="r">4</td><td>Brugan 1 d 4 h<span class="sub amber">Mira needs item</span></td><td class="r muted">No</td></tr>
+    <tr><td>Essence of Water<span class="sub">Transmute: Earth to Water</span></td><td>Alchemy</td><td class="r">275</td><td class="r">1 d<span class="sub">shared</span></td><td>Essence of Earth</td><td class="r">3g</td><td class="r">2g 40s</td><td class="r pos">45s</td><td class="r pos">3g 15s</td><td class="r">9</td><td>Tessa 1 d 2 h<span class="sub amber">Amaya not learned</span><span class="sub amber">Sorvin needs 275 (230)</span></td><td class="r muted">No</td></tr>
+    <tr><td>Essence of Water<span class="sub">Transmute: Undeath to Water</span></td><td>Alchemy</td><td class="r">275</td><td class="r">1 d<span class="sub">shared</span></td><td>Essence of Undeath</td><td class="r">3g</td><td class="r">1g</td><td class="r pos">1g 85s</td><td class="r pos">12g 95s</td><td class="r">9</td><td><span class="ready">Amaya Ready</span><span class="sub">Tessa 1 d 2 h</span><span class="sub amber">Sorvin needs 275 (230)</span></td><td class="r muted">No</td></tr>
+    <tr><td>Essence of Air<span class="sub">Transmute: Water to Air</span></td><td>Alchemy</td><td class="r">275</td><td class="r">1 d<span class="sub">shared</span></td><td>Essence of Water</td><td class="r">2g 80s</td><td class="r">3g</td><td class="r neg">−34s</td><td class="r neg">−2g 38s</td><td class="r">5</td><td><span class="ready">Amaya Ready</span><span class="sub amber">Tessa not learned</span><span class="sub amber">Sorvin needs 275 (230)</span></td><td class="r muted">No</td></tr>
+    <tr><td>Truesilver Bar<span class="sub">Transmute: Mithril to Truesilver</span></td><td>Alchemy</td><td class="r">225</td><td class="r">2 d<span class="sub">shared</span></td><td>Mithril Bar</td><td class="r">2g 10s</td><td class="r">60s</td><td class="r pos">1g 39s 50c</td><td class="r pos">4g 88s 25c</td><td class="r">14</td><td><span class="ready">Amaya Ready</span><span class="sub ready">Sorvin Ready</span><span class="sub amber">Tessa not learned</span></td><td class="r ready">Yes (bank)</td></tr>
+    <tr><td>Gold Bar<span class="sub">Transmute: Iron to Gold</span></td><td>Alchemy</td><td class="r">225</td><td class="r">1 d<span class="sub">shared</span></td><td>Iron Bar</td><td class="r">1g 30s</td><td class="r">40s</td><td class="r pos">83s 50c</td><td class="r pos">5g 84s 50c</td><td class="r">11</td><td><span class="ready">Amaya Ready</span><span class="sub ready">Sorvin Ready</span><span class="sub amber">Tessa not learned</span></td><td class="r ready">Yes</td></tr>
+    <tr><td>Elemental Fire<span class="sub">Transmute: Elemental Fire · makes 3</span></td><td>Alchemy</td><td class="r">300</td><td class="r">10 m</td><td>Heart of Fire</td><td class="r muted">1g 20s<span class="sub">9 d old</span></td><td class="r">1g 50s</td><td class="r pos">1g 92s</td><td class="r muted">—</td><td class="r">0</td><td><span class="ready">Tessa Ready</span><span class="sub amber">Amaya needs 300 (280)</span><span class="sub amber">Sorvin needs 300 (230)</span></td><td class="r ready">Yes</td></tr>
+    <tr><td>Essence of Undeath<span class="sub">Transmute: Water to Undeath</span></td><td>Alchemy</td><td class="r">275</td><td class="r">1 d<span class="sub">shared</span></td><td>Essence of Water</td><td class="r">1g</td><td class="r">3g</td><td class="r neg">−2g 5s</td><td class="r neg">−14g 35s</td><td class="r">2</td><td><span class="amber">Amaya not learned</span><span class="sub amber">Tessa not learned</span><span class="sub amber">Sorvin needs 275 (230)</span></td><td class="r muted">No</td></tr>
+    <tr><td colspan="12" class="muted">… 4 more elemental transmutes (Air to Fire, Fire to Earth, Earth to Life, Life to Earth) and the SnowMaster 9000 (Engineering). Footer: "15 cooldown recipes in the catalog (v1). A recipe not in the catalog is never listed here unless the game reported it (seen in game)."</td></tr>
+  </table>
+</div>
+
+<h3>How Who scales: an Arcanite row on another account, with 7 alchemists</h3>
+<div class="dash">
+  <table>
+    <tr><th>Item · recipe</th><th class="r">Net / use</th><th class="r">Per week</th><th>Who</th></tr>
+    <tr><td>Arcanite Bar<span class="sub">Transmute: Arcanite</span></td><td class="r pos">13g 55s</td><td class="r pos">47g 42s 50c</td><td><b class="ready">2 Ready</b> <span class="muted">of 7</span><span class="sub ready">Anwen Ready</span><span class="sub ready">Ilsa Ready</span><span class="sub">Corin 4 h 20 m</span><span class="sub muted">+4 more: 2 cooling down, 1 not learned, 1 below 275 (hover for the list)</span></td></tr>
+  </table>
+  <p class="muted" style="margin:6px 0 0">Up to 3 characters show in full. More collapse into "+N more" with a breakdown, and the full list is on hover. The "N Ready of M" line appears once there are more than 3, and counts characters, each once, because a shared cooldown gives each character one use. Per week stays per character (D4): with 2 ready, using both today earns 2 × 13g 55s, but the column does not multiply.</p>
+</div>
+
+<h3>Filters and what they keep</h3>
+<table>
+  <tr><th>Filter</th><th>Keeps a recipe when</th><th>In the example</th></tr>
+  <tr><td>Profession</td><td>its profession is the one chosen. The list holds every profession, with or without catalog rows.</td><td>Leatherworking → only Refined Deeprock Salt (Who: Brugan, Mira).</td></tr>
+  <tr><td>Just my characters</td><td>at least one of your characters has the profession, at any skill.</td><td>No change here: Alchemy, Tailoring and Leatherworking are all yours.</td></tr>
+  <tr><td>My skill level only</td><td>at least one of your characters has the profession at or above the recipe's skill, learned or not. A "not learned", "needs item" or "not read" row stays: you can train the recipe, get the tool, or read the time. It implies Just my characters. A row stays even if only one character qualifies, and Who still lists the others.</td><td>Nothing goes: Tessa (300) covers every Alchemy row and Mira (260) covers Mooncloth. Without Tessa and Mira, Elemental Fire and Mooncloth would go.</td></tr>
+</table>
+<div class="card"><b>Both toggles on, Profession: Tailoring, on an account with only Keldor as a tailor</b>
+  <div class="notice">No cooldown recipe matches. Keldor has Tailoring 245; Mooncloth needs 250. Turn off "My skill level only" to see it.</div>
+</div>
+<div class="card"><b>Can Make column</b>
+  <ul>
+    <li><span class="ready">Yes</span> when at least one of your characters can use it right now. This is the addon's rule: skill, learned, tool, cooldown or group ready, and the mats in that character's own bags. Hovering lists who: "Sorvin (bags)". Gold Bar is Yes through Sorvin; Amaya is ready but holds no Iron Bar.</li>
+    <li><span class="ready">Yes (bank)</span> when the only way is with a mat or the tool from the bank. Truesilver Bar: Amaya's Mithril Bar is in her bank, and Sorvin has none.</li>
+    <li><span class="muted">No</span> otherwise. Hovering gives each character's reason. Mats on another character don't count: they would have to be mailed first.</li>
+    <li>Clicking the header sorts Yes, then Yes (bank), then No; ties by AH price.</li>
+  </ul>
+</div>
+<div class="card"><b>Who column rules</b>
+  <ul>
+    <li>One line per character with the profession, best first: "&lt;name&gt; Ready", then the soonest time left, then <span class="amber">"&lt;name&gt; not learned"</span>, <span class="amber">"&lt;name&gt; needs item"</span> or <span class="amber">"&lt;name&gt; not read"</span> (orange; hovering names what's missing), then "&lt;name&gt; needs N (has M)". Ties are by name.</li>
+    <li>A shared cooldown shows the group's time on every row of the group. Tessa's 1 d 2 h is on every transmute she knows.</li>
+    <li>More than 3 characters: "N Ready of M", the first 3 lines, then "+K more" with a breakdown, and the full list on hover.</li>
+    <li>"—" when none of your characters has the profession.</li>
+    <li>Per week is per character (D4). The column does not add characters, because one market can rarely absorb several characters' output.</li>
+  </ul>
+</div>
+<div class="card"><b>Status page additions</b>
+  <ul>
+    <li>"cooldown catalog: 15 recipes", or "cooldown catalog: 1 row skipped (Mooncloth: skill 350 outside 1–300)".</li>
+    <li>"Seen in game, not in the catalog: Transmute: Starsilver (Amaya). Add it to cooldown_catalog.json."</li>
+    <li>"Catalog item unknown to the market: 12360 Arcanite Bar" (Forever may have changed it).</li>
+    <li>"cooldown catalog v2 in the addon, v1 in AHSync's export: update AHSync" (or the other way round).</li>
+  </ul>
+</div>
+
+<h2>4. Not in this proposal</h2>
+<ul>
+  <li><b>The planner fix (D3).</b> Wanted, but deferred to a later batch, after the planning algorithm is reworked following the 2026-11-21 review. Until then the Craft and Portfolio plans don't use the catalog's cooldowns.</li>
+  <li><b>Not built this time:</b>
+    <ul>
+      <li>reminders or alerts when a cooldown is ready;</li>
+      <li>the character dropdown (the row wraps instead);</li>
+      <li>the report tool for seen-in-game recipes;</li>
+      <li>the cooldown-length and mats cross-checks.</li>
+    </ul></li>
+  <li><b>Choosing which transmute to spend in a shared group:</b> the tab shows them side by side; the higher Net / use is the answer.</li>
+  <li><b>Buying the mats:</b> the tab is research only.</li>
+</ul>
+</body>
+</html>

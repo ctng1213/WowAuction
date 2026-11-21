@@ -76,7 +76,7 @@ describe("Inventory", function()
     Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 2840, count = 6 } } } }
     for bag = 0, 4 do Stubs.FireEvent("BAG_UPDATE", bag) end
     Stubs.FireEvent("BAG_UPDATE_DELAYED")
-    assert_eq(Stubs.PendingTimers(), 1)
+    assert_eq(Stubs.PendingTimers(), 2)            -- one bag capture, one tool cooldown read (CD33)
     Stubs.Advance(0.5)
     assert_eq(AHProfitDB.inventory["Amaya-Grommash"].bags, "2840,6,0")
   end)

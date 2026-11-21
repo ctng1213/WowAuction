@@ -16,6 +16,7 @@ from ahsync.app.status_page import status_page
 from ahsync.clock import Clock
 from ahsync.config import Config, market_sources
 from ahsync.db.sqlite import Database
+from ahsync.engine.cooldowns_view import render as cooldowns_render
 from ahsync.export.addon_files import coverage30
 from ahsync.engine.gathering import catalog
 from ahsync.mcp import query as data
@@ -200,7 +201,8 @@ def _trim(value: object, limit: int, path: str, cut: dict) -> object:
 
 
 def _stored_page(ctx: ToolContext, page: str, market: str) -> tuple[dict, int]:
-    """A page's payload: the stored view, or the Status page built now (it changes between refreshes).
+    """A page's payload: the stored view, or the Status page built now (it changes between refreshes); the
+    Cooldowns page is the stored view rendered now (SPEC §3.4F.6).
 
     Args:
         ctx: The context.
@@ -219,6 +221,8 @@ def _stored_page(ctx: ToolContext, page: str, market: str) -> tuple[dict, int]:
     stored = ctx.db.view(page, market)
     if stored is None:
         raise ToolError(NO_REFRESH.format(market=market))
+    if page == "cooldowns":                         # SPEC §3.4F.6: the clock is applied at each request (CD20)
+        return cooldowns_render(stored[0], now), stored[1]
     return stored
 
 

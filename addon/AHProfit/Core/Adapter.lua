@@ -1,7 +1,7 @@
 -- Core/Adapter.lua: the only file that touches WoW globals (CLAUDE.md, SPEC §5).
 -- Forever's API is partly unverified (SPEC §6), so every guess is marked
 -- "-- UNVERIFIED:" and fixes stay in this one file (with Core/AdapterAH.lua, its auction house
--- half, split off for size). Everything here is cold
+-- half, Core/AdapterTooltip.lua, Core/AdapterDiagnostics.lua and Core/AdapterCooldowns.lua, split off for size). Everything here is cold
 -- path (login, window opened, debounced bag change), so plain tables are fine.
 
 local AHProfit = AHProfit or {}
@@ -181,15 +181,29 @@ end
 
 -- ------------------------------------------------------------------ player
 
+local realmFallback = nil   -- function(name, class, faction) -> realm|nil, set by Capture/Characters (SPEC §2.2.1)
+
+--- Set what PlayerInfo uses when the client reports no realm name.
+---@param fn function|nil  function(name, class, faction) -> the realm to use, or nil when it can't tell
+function Adapter.SetRealmFallback(fn)
+  realmFallback = fn
+end
+
 --- Identity and level of the logged-in character.
 ---@return table  { name, realm, faction ("Horde"|"Alliance"), class (file token, e.g. "MAGE"), level }
 function Adapter.PlayerInfo()
   local _, classToken = UnitClass("player")
+  local name, faction = UnitName("player"), UnitFactionGroup("player")
+  -- SPEC GAP: realm as shown by GetRealmName(); realms with spaces keep them.
+  local realm = GetRealmName()
+  -- Forever returns "" since a patch (seen 2026-11-20): use the stored realm of the same character (SPEC §2.2.1).
+  -- UNVERIFIED: that it stays "" all session, that UnitName("player") has no realm suffix, and that Forever has
+  -- no other source of the realm (UnitFullName, GetNormalizedRealmName).
+  if (realm == nil or realm == "") and realmFallback then realm = realmFallback(name, classToken, faction) end
   return {
-    name = UnitName("player"),
-    -- SPEC GAP: realm as shown by GetRealmName(); realms with spaces keep them.
-    realm = GetRealmName(),
-    faction = UnitFactionGroup("player"),
+    name = name,
+    realm = realm or "",
+    faction = faction,
     class = classToken,
     level = UnitLevel("player"),
   }
@@ -529,6 +543,12 @@ function Adapter.ReadRecipeWindow(kind)
     if recipe then recipes[#recipes + 1] = recipe end
   end
   return { profession = profession, rank = rank, max = maxRank, recipes = recipes }
+end
+
+--- Whether the open modern trade skill window is the player's own and fully loaded (Capture/Cooldowns).
+---@return boolean  false with no modern window, while loading, or for a linked, guild or NPC window
+function Adapter.OwnTradeWindowReady()
+  return type(C_TradeSkillUI) == "table" and ModernWindowIsOwnAndReady()
 end
 
 --- The event that says the open trade skill window's list changed.

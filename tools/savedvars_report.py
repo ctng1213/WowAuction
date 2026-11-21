@@ -90,6 +90,9 @@ def report_character(data: AHProfitData, char_id: str, gaps: list[tuple[str, str
     known = sum(1 for k in data.known_recipes if k.char_id == char_id)
     print("  professions: " + (", ".join(f"{p.profession} {p.skill}/{p.max_skill}" for p in professions) or "none"))
     print(f"  known recipes: {known}")
+    ready = [c for c in data.cooldowns if c.char_id == char_id]
+    print("  cooldowns: " + (", ".join(f"{c.spell_id} {'game' if c.source == 'g' else 'cast'} ready "
+                                       f"{local_time(c.ready_at_ms)}" for c in ready) or "none read"))   # §3.4F.3
     if not professions:
         gaps.append(("professions", char.name))
     if professions and not known:

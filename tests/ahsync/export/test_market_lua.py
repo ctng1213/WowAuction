@@ -1,6 +1,7 @@
 """Tests for ahsync/export/market_lua.py: MarketIntelligence.lua (SPEC §3.5), AR6, IU12, EX2."""
 from __future__ import annotations
 
+import re
 from dataclasses import replace
 
 from ahsync.engine.sellprob import encode_curve
@@ -37,7 +38,7 @@ def test_EX2_the_file_holds_compact_item_strings_curves_and_a_checked_header():
     strings = len("45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900,,0,,,7;138:4:139:1120:7;") + 3 + len(",,,,,,,0,,,,6,,,1,,1,250,,0;;")
     assert f'checksum = "3:{strings}"' in text and "schemaVersion = 1," in text and f"generatedAt = {BUILT}," in text
     assert f'charMarkets = {{ ["Amaya-Grommash"] = "{M}" }}' in text
-    assert f'["{M}"] = {{ observationsUntil = {BUILT - HOUR}, curveHour = {BUILT // HOUR}, I = I1, C = C1, D = D1, F = {{  }}, S = {{  }}, K = K1, G = G1, coverage30 = 0 }},' in text
+    assert f'["{M}"] = {{ observationsUntil = {BUILT - HOUR}, curveHour = {BUILT // HOUR}, I = I1, C = C1, D = D1, F = {{  }}, S = {{  }}, K = K1, G = G1, coverage30 = 0, CD = {{  }} }},' in text
 
 
 def test_AR6_the_shortlist_keeps_the_full_curve_and_others_get_the_0_5_20_columns_unchanged():
@@ -183,4 +184,20 @@ def test_the_tooltips_market_lines_travel_after_sales_days():
     assert gear[26] == "" and gear[30] == "0"                                    # no rates; not a commodity
     assert item_text(LINEN_INTEL).split(";")[0].endswith(",7")                   # trailing empty fields are left out
     text = market_lua.market_lua([intel(item)], {}, {}, BUILT, coverage30={M: 33})
-    assert "coverage30 = 33 }," in text and "exportVersion = 7," in text
+    assert "coverage30 = 33, CD = {  } }," in text and "exportVersion = 8," in text
+
+
+def test_EX23_the_cooldowns_money_is_a_cd_table_inside_the_checksum():
+    empty = MarketIntelligence(M, BUILT, BUILT - HOUR, 1, {})
+    plain = market_lua.market_lua([empty], {M: set()}, {}, BUILT)
+    text = market_lua.market_lua([empty], {M: set()}, {}, BUILT, cooldowns={M: (1, {"17564": "30000;;",
+                                                                         "17187": "292000;135500;474250"})})
+    assert 'CD = { v = 1, [17187] = "292000;135500;474250", [17564] = "30000;;" } },' in text
+    assert "exportVersion = 8," in text
+    count, length = (int(n) for n in re.search(r'checksum = "(\d+):(\d+)"', plain).groups())
+    assert f'checksum = "{count + 2}:{length + 20 + 7}"' in text
+
+
+def test_EX24_a_shortlisted_cooldown_mat_is_exported_with_a_nine_day_old_price():
+    crystal = replace(LINEN_INTEL, key=12363, cur=280000, cur_age_ms=9 * 24 * HOUR)
+    assert market_lua.wanted(12363, crystal, {12363}) and not market_lua.wanted(12363, crystal, set())
