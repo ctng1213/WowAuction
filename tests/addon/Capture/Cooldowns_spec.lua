@@ -78,6 +78,24 @@ describe("Cooldowns", function()
     assert_eq(salt.readyAt - salt.at, 259099000)        -- 900 + 259200 - GetTime 1001 (two debounces of 0.5 s)
   end)
 
+  it("CD33 a tool moved into the bags is read after the bag change, and at login, with no cooldown event", function()
+    Stubs.Reset()
+    Stubs.world.itemCooldowns[15846] = { 900, 259200, true }                       -- Salt Shaker, on cooldown
+    Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 2840, count = 5 } } } }
+    Stubs.Login()
+    Stubs.Advance(0.5)
+    assert_eq(AHProfitDB.cooldowns[AMAYA], nil)                                    -- not in the bags yet
+    Stubs.world.containers[0].slots[2] = { id = 15846, count = 1, bound = true }   -- moved from the bank
+    Stubs.FireEvent("BAG_UPDATE_DELAYED")
+    Stubs.Advance(0.5)
+    local salt = AHProfit.Capture.Cooldowns.Decode(AHProfitDB.cooldowns[AMAYA])[19566]
+    assert_eq(salt and salt.source, "g")
+    AHProfitDB.cooldowns = {}
+    Stubs.Login()                                                                  -- a /reload with it held
+    Stubs.Advance(0.5)
+    assert_eq(AHProfit.Capture.Cooldowns.Decode(AHProfitDB.cooldowns[AMAYA])[19566].source, "g")
+  end)
+
   it("FM89 with no cooldown APIs nothing breaks: casts are still recorded and the probe lists them missing", function()
     Stubs.Reset()
     local trade = Alchemy(3600)

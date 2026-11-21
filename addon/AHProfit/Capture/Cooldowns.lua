@@ -196,3 +196,7 @@ Events.Register("UNIT_SPELLCAST_SUCCEEDED", Cooldowns.OnCast)
 Events.Register("TRADE_SKILL_SHOW", OnTradeWindow)
 Events.Register("TRADE_SKILL_CLOSE", OnTradeWindow)
 Events.Register("BAG_UPDATE_COOLDOWN", OnBagCooldown)
+-- A tool moved into the bags fires no BAG_UPDATE_COOLDOWN (found in game, CD33), so the tools are also read at
+-- login and after bag changes. Capture/Inventory loads first, so its bag snapshot is written before this read.
+Events.Register("PLAYER_LOGIN", OnBagCooldown)
+Events.Register("BAG_UPDATE_DELAYED", OnBagCooldown)
