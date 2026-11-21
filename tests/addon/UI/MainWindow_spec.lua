@@ -83,11 +83,11 @@ describe("MainWindow", function()
     assert_eq(ui.rows[2]:IsShown(), false)
   end)
 
-  it("the tab bar reads Portfolio, Disenchant, Craft, Flip, Inventory, Reservations; /ahp portfolio opens Portfolio", function()
+  it("the tab bar reads Portfolio, Disenchant, Craft, Cooldowns, Flip, Inventory, Reservations; /ahp portfolio opens Portfolio", function()
     local MainWindow = Boot()
     local labels = {}
     for i, t in ipairs(MainWindow.TABS) do labels[i] = t[2] end
-    assert_eq(labels, { "Portfolio", "Disenchant", "Craft", "Flip", "Inventory", "Reservations" })
+    assert_eq(labels, { "Portfolio", "Disenchant", "Craft", "Cooldowns", "Flip", "Inventory", "Reservations" })
     Stubs.Slash("/ahp")
     MainWindow.ShowTab("flip")
     Stubs.Slash("/ahp portfolio")

@@ -7,12 +7,13 @@ Frame AHProfitWindow 640,320 640x440
   Frame AHProfitWindowAge 1150,327 96x18
     FontString - 1165,331 66x10 "data 1 h old"
   Button AHProfitWindowRefresh 1060,326 84x20 "Refresh Plan"
-  Button AHProfitWindowTabPortfolio 650,356 62x22 "Portfolio"
-  Button AHProfitWindowTabDisenchant 714,356 68x22 "Disenchant"
-  Button AHProfitWindowTabCraft 784,356 46x22 "Craft"
-  Button AHProfitWindowTabFlip 832,356 40x22 "Flip"
-  Button AHProfitWindowTabInventory 874,356 62x22 "Inventory"
-  Button AHProfitWindowTabReservations 938,356 78x22 "Reservations"
+  Button AHProfitWindowTabPortfolio 650,356 60x22 "Portfolio"
+  Button AHProfitWindowTabDisenchant 712,356 65x22 "Disenchant"
+  Button AHProfitWindowTabCraft 779,356 38x22 "Craft"
+  Button AHProfitWindowTabCooldowns 819,356 60x22 "Cooldowns"
+  Button AHProfitWindowTabFlip 881,356 32x22 "Flip"
+  Button AHProfitWindowTabInventory 915,356 60x22 "Inventory"
+  Button AHProfitWindowTabReservations 977,356 76x22 "Reservations"
   Texture - 642,378 636x1
   Button AHProfitWindowMinChance 1140,356 130x20 "Min chance: 50%   "
   Frame AHProfitWindowHeadertoday 650,380 606x20
@@ -39,6 +40,7 @@ Frame AHProfitWindow 640,320 640x440
   Frame AHProfitWindowHeaderflip 650,380 606x20 (hidden)
   Frame AHProfitWindowHeaderinventory 650,380 606x20 (hidden)
   Frame AHProfitWindowHeaderreservations 650,380 606x20 (hidden)
+  Frame AHProfitWindowHeadercooldowns 650,380 606x20 (hidden)
   Button AHProfitWindowTop 650,380 606x20 (hidden)
   Frame AHProfitWindowList 650,402 620x240
     Frame AHProfitWindowRow1 650,402 606x20
@@ -53,11 +55,43 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 878,402 28x20 "×76"
       FontString - 705,402 170x20 "Fish Bowl"
       Texture - 654,406 48x12
+      Button - 653,402 186x24 (hidden)
+      Button - 842,398 40x28 (hidden)
+      Button - 885,398 58x28 (hidden)
+      Button - 946,398 66x28 (hidden)
+      Button - 1015,398 54x28 (hidden)
+      Button - 1072,398 56x28 (hidden)
+      Button - 1131,398 58x28 (hidden)
+      Button - 1192,398 60x28 (hidden)
     Frame AHProfitWindowRow2 650,422 606x20
+      Button - 653,422 186x24 (hidden)
+      Button - 842,418 40x28 (hidden)
+      Button - 885,418 58x28 (hidden)
+      Button - 946,418 66x28 (hidden)
+      Button - 1015,418 54x28 (hidden)
+      Button - 1072,418 56x28 (hidden)
+      Button - 1131,418 58x28 (hidden)
+      Button - 1192,418 60x28 (hidden)
       FontString - 705,422 547x20 "buy 76 Empty Vial from a vendor · 15   20  "
     Frame AHProfitWindowRow3 650,442 606x20
+      Button - 653,442 186x24 (hidden)
+      Button - 842,438 40x28 (hidden)
+      Button - 885,438 58x28 (hidden)
+      Button - 946,438 66x28 (hidden)
+      Button - 1015,438 54x28 (hidden)
+      Button - 1072,438 56x28 (hidden)
+      Button - 1131,438 58x28 (hidden)
+      Button - 1192,438 60x28 (hidden)
       FontString - 705,442 547x20 "buy 76 Raw Brilliant Smallfish on the AH · 57  "
     Frame AHProfitWindowRow4 650,462 606x20
+      Button - 653,462 186x24 (hidden)
+      Button - 842,458 40x28 (hidden)
+      Button - 885,458 58x28 (hidden)
+      Button - 946,458 66x28 (hidden)
+      Button - 1015,458 54x28 (hidden)
+      Button - 1072,458 56x28 (hidden)
+      Button - 1131,458 58x28 (hidden)
+      Button - 1192,458 60x28 (hidden)
       FontString - 705,462 547x20 "then: post Sun 08:53, for the 16:53 peak"
     Frame AHProfitWindowRow5 650,482 606x20 (hidden)
     Frame AHProfitWindowRow6 650,502 606x20 (hidden)
@@ -70,6 +104,18 @@ Frame AHProfitWindow 640,320 640x440
     Frame AHProfitWindowHeaderpfPositions 650,402 606x20 (hidden)
     Frame AHProfitWindowHeaderpfToday 650,402 606x20 (hidden)
     Frame AHProfitWindowHeaderpfWeek 650,402 606x20 (hidden)
+  Button AHProfitWindowCdChar1 650,382 84x20 (hidden)
+  Button AHProfitWindowCdChar2 736,382 84x20 (hidden)
+  Button AHProfitWindowCdChar3 822,382 84x20 (hidden)
+  Button AHProfitWindowCdChar4 908,382 84x20 (hidden)
+  Button AHProfitWindowCdChar5 994,382 84x20 (hidden)
+  Button AHProfitWindowCdChar6 1080,382 84x20 (hidden)
+  Button AHProfitWindowCdChar7 650,404 84x20 (hidden)
+  Button AHProfitWindowCdChar8 736,404 84x20 (hidden)
+  Button AHProfitWindowCdChar9 822,404 84x20 (hidden)
+  Button AHProfitWindowCdChar10 908,404 84x20 (hidden)
+  Button AHProfitWindowCdChar11 994,404 84x20 (hidden)
+  Button AHProfitWindowCdChar12 1080,404 84x20 (hidden)
   Texture - 642,731 636x1
   FontString - 652,740 516x10 "1 action · expected +12   4   48  "
   FontString - 1180,740 88x10 "Budget 31   40  "

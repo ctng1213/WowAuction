@@ -15,13 +15,24 @@ local Characters = AHProfit.Capture.Characters
 local Cooldowns = {}
 AHProfit.Capture.Cooldowns = Cooldowns
 
-local catalog = nil   -- spell -> { cooldownS, tool, toolUse }, decoded once from Data/Cooldowns.lua
+local catalog = nil   -- spell -> its row, decoded once from Data/Cooldowns.lua
+local listeners = {}  -- called after a reading or a cast changed what is stored (the Cooldowns tab, D23)
 local spells = {}     -- the catalog's spell ids, ascending (never rely on pairs order, SPEC §8.6)
 local tradeOpen = false
 local TRADE_UPDATE = Adapter.TradeUpdateEvent()
 
+--- A catalog row's reagents, "key,count/key,count" by key.
+---@param text string
+---@return table[]  { key, count } each, in the string's order (by key)
+local function DecodeReagents(text)
+  local out = {}
+  for key, count in string.gmatch(text or "", "(%d+),(%d+)") do out[#out + 1] = { key = tonumber(key), count = tonumber(count) } end
+  return out
+end
+
 --- The catalog's spells, decoded on first use (SPEC §5.1 lazy decode).
----@return table  spell id -> { cooldownS = seconds, tool = item id|nil, toolUse = bool }
+---@return table  spell id -> { spell, name, profession, skill, cooldownS = seconds, group|nil, product,
+---               yieldMin, yieldMax, reagents = { { key, count } }, tool = item id|nil, toolUse = bool }
 function Cooldowns.Catalog()
   if catalog then return catalog end
   catalog = {}
@@ -30,7 +41,10 @@ function Cooldowns.Catalog()
     for field in string.gmatch(row .. ";", "([^;]*);") do f[#f + 1] = field end
     local spell = tonumber(f[1])
     if spell then
-      catalog[spell] = { cooldownS = tonumber(f[5]), tool = tonumber(f[11]), toolUse = f[12] == "1" }
+      catalog[spell] = { spell = spell, name = f[2], profession = f[3], skill = tonumber(f[4]),
+                         cooldownS = tonumber(f[5]), group = f[6] ~= "" and f[6] or nil, product = tonumber(f[7]),
+                         yieldMin = tonumber(f[8]), yieldMax = tonumber(f[9]), reagents = DecodeReagents(f[10]),
+                         tool = tonumber(f[11]), toolUse = f[12] == "1" }
       spells[#spells + 1] = spell
     end
   end
@@ -143,6 +157,17 @@ function Cooldowns.ReadTools(db)
   end
 end
 
+--- Call a function whenever the stored ready times may have changed.
+---@param fn function  Called with no arguments, out of combat
+function Cooldowns.OnChange(fn)
+  listeners[#listeners + 1] = fn
+end
+
+--- Tell the listeners (already debounced by the caller, so never in combat).
+local function Notify()
+  for _, fn in ipairs(listeners) do fn() end
+end
+
 --- UNIT_SPELLCAST_SUCCEEDED: a catalog spell cast by the player starts its cooldown (SPEC §3.4F.3 source 2).
 -- Runs on every player cast, in combat too: one table lookup, no allocation for other spells.
 ---@param _ string      The event
@@ -156,18 +181,25 @@ function Cooldowns.OnCast(_, unit, _guid, spellId)
   if not (row and db and row.cooldownS) then return end
   local now = Adapter.NowMs()
   Cooldowns.Record(db, Characters.CurrentId(), spellId, now + row.cooldownS * 1000, "c", now)
+  Events.Debounce("cooldowns.changed", Notify)        -- a cast may come in combat: the redraw waits (SPEC §5.1)
 end
 
 --- Read the open trade skill window into the live database.
 local function ReadTradeLive()
   local db = DB.Get()
-  if db and tradeOpen then Cooldowns.ReadTradeWindow(db) end
+  if db and tradeOpen then
+    Cooldowns.ReadTradeWindow(db)
+    Notify()
+  end
 end
 
 --- Read the held tools into the live database.
 local function ReadToolsLive()
   local db = DB.Get()
-  if db then Cooldowns.ReadTools(db) end
+  if db then
+    Cooldowns.ReadTools(db)
+    Notify()
+  end
 end
 
 --- The window's updates and BAG_UPDATE_COOLDOWN are bursty: debounce each.

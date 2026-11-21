@@ -119,8 +119,11 @@ describe("Cooldowns", function()
     Stubs.Login()
     local C = AHProfit.Capture.Cooldowns
     local catalog = C.Catalog()
-    assert_eq(catalog[17187], { cooldownS = 172800, tool = 9149, toolUse = false })
-    assert_eq(catalog[19566], { cooldownS = 259200, tool = 15846, toolUse = true })
+    assert_eq(catalog[17187], { spell = 17187, name = "Transmute: Arcanite", profession = "Alchemy", skill = 275,
+      cooldownS = 172800, group = "transmute", product = 12360, yieldMin = 1, yieldMax = 1,
+      reagents = { { key = 12359, count = 1 }, { key = 12363, count = 1 } }, tool = 9149, toolUse = false })
+    assert_eq({ catalog[19566].cooldownS, catalog[19566].tool, catalog[19566].toolUse, catalog[19566].group },
+              { 259200, 15846, true, nil })
     assert_eq(C.Catalog() == catalog, true)
     local text = "17187,1760172800000,c,1760000000000;17559,1760086400000,g,1760001000000"
     assert_eq(C.Encode(C.Decode(text)), text)

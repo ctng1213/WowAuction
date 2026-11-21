@@ -26,9 +26,10 @@ MainWindow.GAP = 3
 MainWindow.CHANCE_STEPS = { 0, 25, 50, 75 }
 -- The mockup's order. Portfolio replaces Today and Week (D76). Disenchant is always there: an alt may be the
 -- enchanter (A23). Reservations lists what you keep for yourself, to change or undo it (A26). Each tab is as wide as
--- its label, so all of them fit beside the Min chance box at the minimum width.
-MainWindow.TABS = { { "portfolio", "Portfolio", 62 }, { "disenchant", "Disenchant", 68 }, { "craft", "Craft", 46 },
-                    { "flip", "Flip", 40 }, { "inventory", "Inventory", 62 }, { "reservations", "Reservations", 78 } }
+-- its label, so all of them fit beside the Min chance box at the minimum width (seven since Cooldowns, D22).
+MainWindow.TABS = { { "portfolio", "Portfolio", 60 }, { "disenchant", "Disenchant", 65 }, { "craft", "Craft", 38 },
+                    { "cooldowns", "Cooldowns", 60 }, { "flip", "Flip", 32 }, { "inventory", "Inventory", 60 },
+                    { "reservations", "Reservations", 76 } }
 
 -- Column sets: { header, row field, width (nil = fills), justify }; columns after the filling one anchor from the
 -- right. "today" is the Portfolio tab without a snapshot (the plan's Today rows); pf* are its sections with one.
@@ -57,10 +58,14 @@ MainWindow.COLUMNS = {
            { "Chance", "chance", 46, "RIGHT" }, { "Risk", "risk", 34, "RIGHT" } },
   reservations = { { "Item", "item", nil, "LEFT" }, { "Keeping", "keeping", 52, "RIGHT" }, { "Held", "held", 44, "RIGHT" },
                    { "Free", "free", 44, "RIGHT" } },
+  cooldowns = { { "Item · recipe", "item", nil, "LEFT" }, { "Skill", "skill", 40, "RIGHT" },
+                { "Cooldown", "cooldown", 58, "RIGHT" }, { "Ready", "ready", 66, "RIGHT" }, { "AH price", "price", 54, "RIGHT" },
+                { "Mats", "mats", 56, "RIGHT" }, { "Net / use", "net", 58, "RIGHT" }, { "Can Make", "canMake", 60, "RIGHT" } },
 }
 -- Every set a pooled row carries cells for, in build order; the header strip above the list shows the fixed ones.
-MainWindow.SETS = { "today", "pfPositions", "pfToday", "pfWeek", "disenchant", "craft", "flip", "inventory", "reservations" }
-MainWindow.FIXED = { "today", "disenchant", "craft", "flip", "inventory", "reservations" }
+MainWindow.SETS = { "today", "pfPositions", "pfToday", "pfWeek", "disenchant", "craft", "flip", "inventory", "reservations",
+                    "cooldowns" }
+MainWindow.FIXED = { "today", "disenchant", "craft", "flip", "inventory", "reservations", "cooldowns" }
 MainWindow.PF_SETS = { "pfPositions", "pfToday", "pfWeek" }
 
 -- The mockup's palette (docs/mockups/addon.html :root), as 0-1 RGB.
@@ -69,7 +74,7 @@ local COLORS = { pos = { 0.24, 0.86, 0.31 }, neg = { 1, 0.29, 0.24 }, muted = { 
                  border = { 0.42, 0.35, 0.2 }, panel = { 0.05, 0.05, 0.06 }, strip = { 0.13, 0.13, 0.09 },
                  line = { 0.13, 0.13, 0.13 }, hover = { 0.12, 0.11, 0.07 }, tabOn = { 0.16, 0.15, 0.09 },
                  tabOff = { 0.07, 0.07, 0.08 }, black = { 0, 0, 0 }, track = { 0.1, 0.1, 0.1 }, thumb = { 0.35, 0.29, 0.15 },
-                 funded = { 0.24, 0.86, 0.31 }, white = { 1, 1, 1 } }
+                 funded = { 0.24, 0.86, 0.31 }, white = { 1, 1, 1 }, orange = { 1, 0.5, 0.12 } }
 local QUALITY = { [0] = { 0.62, 0.62, 0.62 }, [1] = { 1, 1, 1 }, [2] = { 0.12, 1, 0 }, [3] = { 0, 0.44, 0.87 },
                   [4] = { 0.64, 0.21, 0.93 }, [5] = { 1, 0.5, 0 } }
 local BADGES = { buy = { 0.37, 0.71, 1 }, post = { 1, 0.82, 0 }, de = { 0.7, 0.48, 1 }, craft = { 1, 0.6, 0.24 },
@@ -85,9 +90,10 @@ local ARROW = "|TInterface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up:14:14|t"
 local MUTED_ESCAPE = "|cff8f8a7c"
 
 local ui = nil                     -- the frames, once built
+local PlaceList                    -- the Cooldowns tab's chrome and the list under it (defined before Render)
 local computed = nil               -- what the tab shows (WindowLines.Lines), until something changes
-local lastGood = nil               -- the last computed lines without an error (A5)
-local view = { tab = "portfolio", offset = 0, minChance = 50 }
+local lastGood = {}                -- tab -> the last computed lines without an error (A5)
+local view = { tab = "portfolio", offset = 0, minChance = 50 }   -- cdChar: the Cooldowns tab's character (nil: you)
 
 --- Colour a font string from an { r, g, b } triple.
 ---@param region table
@@ -115,6 +121,13 @@ local function Flat(frame, fill, edge)
   frame:SetBackdrop({ bgFile = FLAT, edgeFile = FLAT, edgeSize = 1 })
   frame:SetBackdropColor(fill[1], fill[2], fill[3], 0.96)
   frame:SetBackdropBorderColor(edge[1], edge[2], edge[3])
+end
+
+--- Colour a Cooldowns character button: the selected one like the open tab (CD23).
+---@param button table
+---@param on boolean  The character shown
+local function PaintCharButton(button, on)
+  Flat(button, on and COLORS.tabOn or COLORS.tabOff, COLORS.border)
 end
 
 --- A 1-px horizontal rule across a frame at some distance from its top.
@@ -285,6 +298,7 @@ local function BuildRow(list, i)
   for _, set in ipairs(MainWindow.SETS) do row.cells[set] = BuildCells(row, MainWindow.COLUMNS[set], "FontString") end
   BuildBadges(row)
   AnchorTall(row)
+  AHProfit.CooldownsTab.BuildRow(row, row.cells.cooldowns)
   row.note = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   row.note:SetWordWrap(false)
   row.note:SetJustifyH("LEFT")
@@ -456,6 +470,10 @@ local function Build()
   BuildTitle(frame)
   BuildTabs(frame)
   BuildList(frame)
+  ui.cd = AHProfit.CooldownsTab.Build(frame, function(charId)          -- a character button (SPEC §3.4F.8)
+    view.cdChar, view.offset = charId, 0
+    MainWindow.Refresh()
+  end)
   BuildFooter(frame)
   frame:Hide()                     -- a new frame is shown; the window opens with /ahp
   Adapter.CloseWithEscape("AHProfitWindow")
@@ -492,6 +510,7 @@ local function ShowParts(row, kind, set)
     if row.badges[s] then row.badges[s]:SetShown(active) end
   end
   row.sub:SetShown(kind == "row" and set == "pfWeek")
+  AHProfit.CooldownsTab.ShowRow(row, kind == "row" and set == "cooldowns")
   row.note:SetShown(kind == "note" or kind == "foot" or kind == "empty")
   row.dayLabel:SetShown(kind == "section" or kind == "empty")
   row.dayTotal:SetShown(kind == "section")
@@ -539,6 +558,7 @@ local function FillRow(row, line, set)
   if cells.profit then Tint(cells.profit, COLORS[line.netColor] or COLORS.pos) end
   if cells.risk then Tint(cells.risk, line.riskAmber and COLORS.amber or COLORS.muted) end
   if line.dot and cells.chance then cells.chance:SetText(line.chance .. Dot(line.dot)) end
+  if set == "cooldowns" then AHProfit.CooldownsTab.FillRow(row, line, Tint, COLORS) end
 end
 
 --- Place a row's note: under the Item column for a note line (UI14), the full width for a totals line, centred under
@@ -622,15 +642,18 @@ end
 ---@return table       WindowLines.Lines' result
 local function Compute(nowMs, gold)
   local problem = Market.Problem()
-  if problem then return { lines = {}, footer = "", empty = problem } end
-  local ok, result = pcall(WindowLines.Lines, view.tab, nowMs, gold, view.minChance)
+  -- The Cooldowns tab shows the stored data without prices (CD24); the footer still says what is wrong.
+  if problem and view.tab ~= "cooldowns" then return { lines = {}, footer = "", empty = problem } end
+  local ok, result = pcall(WindowLines.Lines, view.tab, nowMs, gold, view.minChance, view.cdChar)
   if ok then
-    lastGood = result
+    lastGood[view.tab] = result
     return result
   end
   local why = tostring(result):gsub("^.-:%d+: ", "")
-  return { lines = lastGood and lastGood.lines or {}, footer = "couldn't update: " .. why .. " (showing the last good list)",
-           empty = "couldn't update: " .. why, top = lastGood and lastGood.top, right = lastGood and lastGood.right }
+  local good = lastGood[view.tab]
+  return { lines = good and good.lines or {}, footer = "couldn't update: " .. why .. " (showing the last good list)",
+           empty = "couldn't update: " .. why, top = good and good.top, right = good and good.right,
+           cooldowns = good and good.cooldowns }
 end
 
 --- Lay the page's lines over the pooled rows, each at its own height, and put a section's header strip over its
@@ -658,6 +681,22 @@ local function LayOut(page)
   end
 end
 
+--- The Cooldowns tab's character buttons and bar, with its header strip and the list moved down under them.
+---@param data table|nil  WindowLines' cooldowns block; nil on another tab
+---@return number         The px taken from the list
+PlaceList = function(data)
+  local shift = AHProfit.CooldownsTab.Layout(ui.cd, data, PaintCharButton)
+  local header = ui.headers.cooldowns
+  header:ClearAllPoints()
+  header:SetPoint("TOPLEFT", ui.frame, "TOPLEFT", 10, -60 - shift)
+  header:SetPoint("TOPRIGHT", ui.frame, "TOPRIGHT", -24, -60 - shift)
+  ui.list:ClearAllPoints()
+  ui.list:SetPoint("TOPLEFT", ui.frame, "TOPLEFT", 10, -82 - shift)
+  ui.list:SetPoint("TOPRIGHT", ui.frame, "TOPRIGHT", -10, -82 - shift)
+  ui.list:SetHeight(MainWindow.ROWS * MainWindow.ROW_HEIGHT - shift)
+  return shift
+end
+
 --- Redraw the window from the view model.
 function MainWindow.Render()
   if not ui then return end
@@ -670,7 +709,7 @@ function MainWindow.Render()
   end
   RenderChrome(nowMs)
   local lines = computed.lines
-  local track = MainWindow.ROWS * MainWindow.ROW_HEIGHT
+  local track = MainWindow.ROWS * MainWindow.ROW_HEIGHT - PlaceList(view.tab == "cooldowns" and computed.cooldowns or nil)
   local page = VM.PageByHeight(lines, view.offset, track, MainWindow.ROWS, MainWindow.ROW_HEIGHT)
   view.offset = page.offset
   LayOut(page)
@@ -795,6 +834,7 @@ function MainWindow.Toggle(args)
   elseif ui.frame:IsShown() then
     ui.frame:Hide()
   else
+    view.cdChar = nil                                    -- the Cooldowns tab starts on you (SPEC §3.4F.8)
     ui.frame:Show()
     MainWindow.Refresh()
   end
@@ -821,7 +861,7 @@ end
 
 --- Forget the view state (tests).
 function MainWindow.Reset()
-  ui, view, computed, lastGood = nil, { tab = "portfolio", offset = 0, minChance = 50 }, nil, nil
+  ui, view, computed, lastGood = nil, { tab = "portfolio", offset = 0, minChance = 50 }, nil, {}
 end
 
 --- /ahp: open the window; a failure becomes a chat line, never a Lua error popup (SPEC §4.3, A5).
@@ -836,3 +876,7 @@ Adapter.RegisterSlash("AHPROFIT", { "/ahp", "/ahprofit" }, function(args) MainWi
 AHProfit.Scan.Replicate.OnBook(function() if ui and ui.frame:IsShown() then MainWindow.Refresh() end end)
 AHProfit.RowMenu.OnChange(function() if ui and ui.frame:IsShown() then MainWindow.Refresh() end end)
 Inventory.OnChange(function() MainWindow.OnBags() end)
+-- A cooldown read or cast redraws the Cooldowns tab (SPEC §3.4F.8, D23); the capture debounces it, never in combat.
+AHProfit.Capture.Cooldowns.OnChange(function()
+  if ui and ui.frame:IsShown() and view.tab == "cooldowns" then MainWindow.Refresh() end
+end)

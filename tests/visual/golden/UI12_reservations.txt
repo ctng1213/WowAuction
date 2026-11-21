@@ -7,12 +7,13 @@ Frame AHProfitWindow 680,360 560x360
   Frame AHProfitWindowAge 1110,367 96x18
     FontString - 1125,371 66x10 "data 1 h old"
   Button AHProfitWindowRefresh 1020,366 84x20 "Refresh Plan"
-  Button AHProfitWindowTabPortfolio 690,396 62x22 "Portfolio"
-  Button AHProfitWindowTabDisenchant 754,396 68x22 "Disenchant"
-  Button AHProfitWindowTabCraft 824,396 46x22 "Craft"
-  Button AHProfitWindowTabFlip 872,396 40x22 "Flip"
-  Button AHProfitWindowTabInventory 914,396 62x22 "Inventory"
-  Button AHProfitWindowTabReservations 978,396 78x22 "Reservations"
+  Button AHProfitWindowTabPortfolio 690,396 60x22 "Portfolio"
+  Button AHProfitWindowTabDisenchant 752,396 65x22 "Disenchant"
+  Button AHProfitWindowTabCraft 819,396 38x22 "Craft"
+  Button AHProfitWindowTabCooldowns 859,396 60x22 "Cooldowns"
+  Button AHProfitWindowTabFlip 921,396 32x22 "Flip"
+  Button AHProfitWindowTabInventory 955,396 60x22 "Inventory"
+  Button AHProfitWindowTabReservations 1017,396 76x22 "Reservations"
   Texture - 682,418 556x1
   Button AHProfitWindowMinChance 1100,396 130x20 "Min chance: 50%   " (hidden)
   Frame AHProfitWindowHeadertoday 690,420 526x20 (hidden)
@@ -29,6 +30,7 @@ Frame AHProfitWindow 680,360 560x360
     Button - 1066,420 52x20
     FontString - 693,420 370x20 "Item"
     Button - 693,420 370x20
+  Frame AHProfitWindowHeadercooldowns 690,420 526x20 (hidden)
   Button AHProfitWindowTop 690,420 526x20 (hidden)
   Frame AHProfitWindowList 690,442 540x240
     Frame AHProfitWindowRow1 690,442 526x20
@@ -37,18 +39,42 @@ Frame AHProfitWindow 680,360 560x360
       FontString - 1121,442 44x20 "×0"
       FontString - 1066,442 52x20 "5"
       FontString - 693,442 370x20 "Linen Cloth"
+      Button - 693,442 106x24 (hidden)
+      Button - 802,438 40x28 (hidden)
+      Button - 845,438 58x28 (hidden)
+      Button - 906,438 66x28 (hidden)
+      Button - 975,438 54x28 (hidden)
+      Button - 1032,438 56x28 (hidden)
+      Button - 1091,438 58x28 (hidden)
+      Button - 1152,438 60x28 (hidden)
     Frame AHProfitWindowRow2 690,462 526x20
       Texture - 692,462 522x1
       FontString - 1168,462 44x20 "×3"
       FontString - 1121,462 44x20 "×13"
       FontString - 1066,462 52x20 "10"
       FontString - 693,462 370x20 "Refreshing Spring Water"
+      Button - 693,462 106x24 (hidden)
+      Button - 802,458 40x28 (hidden)
+      Button - 845,458 58x28 (hidden)
+      Button - 906,458 66x28 (hidden)
+      Button - 975,458 54x28 (hidden)
+      Button - 1032,458 56x28 (hidden)
+      Button - 1091,458 58x28 (hidden)
+      Button - 1152,458 60x28 (hidden)
     Frame AHProfitWindowRow3 690,482 526x20
       Texture - 692,482 522x1
       FontString - 1168,482 44x20 "—"
       FontString - 1121,482 44x20 "×7"
       FontString - 1066,482 52x20 "All"
       FontString - 693,482 370x20 "Silk Cloth"
+      Button - 693,482 106x24 (hidden)
+      Button - 802,478 40x28 (hidden)
+      Button - 845,478 58x28 (hidden)
+      Button - 906,478 66x28 (hidden)
+      Button - 975,478 54x28 (hidden)
+      Button - 1032,478 56x28 (hidden)
+      Button - 1091,478 58x28 (hidden)
+      Button - 1152,478 60x28 (hidden)
     Frame AHProfitWindowRow4 690,502 526x20 (hidden)
     Frame AHProfitWindowRow5 690,522 526x20 (hidden)
     Frame AHProfitWindowRow6 690,542 526x20 (hidden)
@@ -61,6 +87,18 @@ Frame AHProfitWindow 680,360 560x360
     Frame AHProfitWindowHeaderpfPositions 690,442 526x20 (hidden)
     Frame AHProfitWindowHeaderpfToday 690,442 526x20 (hidden)
     Frame AHProfitWindowHeaderpfWeek 690,442 526x20 (hidden)
+  Button AHProfitWindowCdChar1 690,422 84x20 (hidden)
+  Button AHProfitWindowCdChar2 776,422 84x20 (hidden)
+  Button AHProfitWindowCdChar3 862,422 84x20 (hidden)
+  Button AHProfitWindowCdChar4 948,422 84x20 (hidden)
+  Button AHProfitWindowCdChar5 1034,422 84x20 (hidden)
+  Button AHProfitWindowCdChar6 1120,422 84x20 (hidden)
+  Button AHProfitWindowCdChar7 690,444 84x20 (hidden)
+  Button AHProfitWindowCdChar8 776,444 84x20 (hidden)
+  Button AHProfitWindowCdChar9 862,444 84x20 (hidden)
+  Button AHProfitWindowCdChar10 948,444 84x20 (hidden)
+  Button AHProfitWindowCdChar11 1034,444 84x20 (hidden)
+  Button AHProfitWindowCdChar12 1120,444 84x20 (hidden)
   Texture - 682,691 556x1
   FontString - 692,700 469x10 "3 items kept · click a row to change it"
   FontString - 1173,700 55x10 "Budget 0  "
