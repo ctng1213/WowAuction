@@ -265,9 +265,50 @@ end
 ---@param db table               The database; scans and events are changed in place
 ---@param ingestedUntil table    `ingestedUntil` from PortfolioPlan.lua: charId -> ms
 ---@param nowMs number           Current time, ms
+---@param generatedAt number|nil When AHSync wrote that file, ms (ends a fold's guard, RL2)
 ---@return number                Rows removed
-function DB.Prune(db, ingestedUntil, nowMs)
-  return PruneArray(db.scans, ingestedUntil, nowMs) + PruneArray(db.events, ingestedUntil, nowMs)
+function DB.Prune(db, ingestedUntil, nowMs, generatedAt)
+  local safe = DB.SafeIngestedUntil(db, ingestedUntil, generatedAt)
+  return PruneArray(db.scans, safe, nowMs) + PruneArray(db.events, safe, nowMs)
+end
+
+--- Note that a realm-less id's rows now carry a real id, so pruning waits for AHSync to commit both. The note
+--- is kept in the saved data (db.realmFolds[new] = { old, at }), so it outlives a /reload.
+---@param db table    The database
+---@param old string  "Name-"
+---@param new string  "Name-Realm"
+---@param atMs number When the fold ran, ms
+function DB.NoteFold(db, old, new, atMs)
+  db.realmFolds = type(db.realmFolds) == "table" and db.realmFolds or {}
+  db.realmFolds[new] = { old = old, at = atMs }
+end
+
+--- ingestedUntil as pruning may use it (SPEC §5.2 rule 5, RL2): a folded id prunes only up to the earlier of
+--- its own and the realm-less id's value, and not at all when AHSync committed nothing under one of them.
+--- A note ends once a file AHSync wrote after the fold no longer lists the realm-less id (AHSync folded too).
+---@param db table                 The database; finished notes are removed from db.realmFolds
+---@param ingestedUntil table      charId -> ms, from PortfolioPlan.lua
+---@param generatedAt number|nil   When AHSync wrote that file, ms
+---@return table                   charId -> ms; the same table when no fold is pending
+function DB.SafeIngestedUntil(db, ingestedUntil, generatedAt)
+  local notes = db.realmFolds
+  if type(notes) ~= "table" or next(notes) == nil then return ingestedUntil end
+  local safe, ids = {}, {}
+  for id, ms in pairs(ingestedUntil) do safe[id] = ms end
+  for new in pairs(notes) do ids[#ids + 1] = new end       -- collected first: notes change below
+  for _, new in ipairs(ids) do
+    local note = notes[new]
+    local oldMs = type(note) == "table" and ingestedUntil[note.old] or nil
+    if type(note) ~= "table" or (oldMs == nil and type(generatedAt) == "number" and type(note.at) == "number"
+                                 and generatedAt > note.at) then
+      notes[new] = nil
+    else
+      local ownMs = ingestedUntil[new]
+      safe[new] = (type(ownMs) == "number" and type(oldMs) == "number") and math.min(ownMs, oldMs) or nil
+    end
+  end
+  if next(notes) == nil then db.realmFolds = nil end
+  return safe
 end
 
 Events.Register("ADDON_LOADED", DB.OnAddonLoaded)

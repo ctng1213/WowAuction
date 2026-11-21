@@ -16,6 +16,7 @@ Core\Events.lua
 Core\DB.lua
 Core\ItemNames.lua
 Capture\Characters.lua
+Capture\Realmless.lua
 Capture\Professions.lua
 Capture\Inventory.lua
 Capture\Auctions.lua

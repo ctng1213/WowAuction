@@ -372,6 +372,54 @@ class IngestWrites:
                             "excluded.set_at > item_rules.set_at OR "
                             "(excluded.set_at = item_rules.set_at AND excluded.rule > item_rules.rule)")
 
+    def move_character(self, old: str, new: str, ingested_prefix: str) -> set[int]:
+        """Move every row of one character id to another (SPEC §2.2.1, RL4: a realm-less id into its real one).
+
+        Each place's snapshot (bags, bank, mail, auctions) is taken whole from whichever id has the newer one,
+        the real id on a tie, so an item sold since never comes back. Every other row keyed by a column named
+        char_id or to_char moves, the real id's row winning a clash, so a table added later is covered too.
+        The real id keeps its own ingestedUntil: the realm-less one is dropped, never taken as a maximum,
+        so the pruning handshake still stops before any row set aside (§2.2, §5.2 rule 5).
+
+        Args:
+            old: The id to remove, e.g. "Amaya-".
+            new: The id to keep, e.g. "Amaya-Grommash".
+            ingested_prefix: The meta name prefix of each character's ingestedUntil.
+
+        Returns:
+            The item keys of both ids' bags, bank, mail and auctions, for the incremental update.
+        """
+        keys = {k for (k,) in self.conn.execute("SELECT key FROM inventory WHERE char_id IN (?, ?) UNION "
+                                                "SELECT key FROM own_auctions WHERE char_id IN (?, ?)",
+                                                (old, new, old, new))}
+        for location, at in self.conn.execute("SELECT location, at FROM snapshots WHERE char_id = ? ORDER BY location",
+                                              (old,)).fetchall():
+            kept = self.conn.execute("SELECT at FROM snapshots WHERE char_id = ? AND location = ?",
+                                     (new, location)).fetchone()
+            self._drop_snapshot(new if kept is None or at > kept[0] else old, location)
+        tables = [t for (t,) in self.conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")]
+        for table in tables:                   # names from sqlite_master, never from input
+            for column in [r[1] for r in self.conn.execute(f'PRAGMA table_info("{table}")')]:
+                if column in ("char_id", "to_char"):
+                    self.conn.execute(f'UPDATE OR IGNORE "{table}" SET "{column}" = ? WHERE "{column}" = ?', (new, old))
+                    self.conn.execute(f'DELETE FROM "{table}" WHERE "{column}" = ?', (old,))
+        self.conn.execute("DELETE FROM characters WHERE id = ?", (old,))
+        self.conn.execute("DELETE FROM meta WHERE name = ?", (ingested_prefix + old,))
+        return keys
+
+    def _drop_snapshot(self, char_id: str, location: str) -> None:
+        """Delete one place's snapshot of a character: its rows and its time.
+
+        Args:
+            char_id: "Name-Realm".
+            location: 'bags', 'bank', 'mail' (table inventory) or 'auctions' (table own_auctions).
+        """
+        if location == "auctions":
+            self.conn.execute("DELETE FROM own_auctions WHERE char_id = ?", (char_id,))
+        else:
+            self.conn.execute("DELETE FROM inventory WHERE char_id = ? AND location = ?", (char_id, location))
+        self.conn.execute("DELETE FROM snapshots WHERE char_id = ? AND location = ?", (char_id, location))
+
     def character_market(self, char_id: str) -> str | None:
         """A stored character's market.
 

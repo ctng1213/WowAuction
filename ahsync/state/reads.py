@@ -538,6 +538,14 @@ class StateReads:
         return [tuple(r) for r in self.conn.execute(
             "SELECT id, realm, faction, market, updated FROM characters ORDER BY id")]
 
+    def character_identities(self) -> list[tuple[str, str, str | None, str]]:
+        """Every character's id, realm, class and faction, for folding realm-less ids (SPEC §2.2.1, RL4).
+
+        Returns:
+            (character id, realm, class token or None, faction), by id.
+        """
+        return [tuple(r) for r in self.conn.execute("SELECT id, realm, class, faction FROM characters ORDER BY id")]
+
     def partial_scan_keys(self, market: str, since_ms: int) -> set[int]:
         """Items in your targeted (partial) AH scans since a time (SPEC §3.5 tier 2, EX1).
 

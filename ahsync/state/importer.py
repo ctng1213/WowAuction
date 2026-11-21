@@ -30,6 +30,7 @@ from ahsync.engine.sessions import GatherEvent, SessionSettings
 from ahsync.state import savedvars as sv
 from ahsync.collect.local_scans import derive_from_scans
 from ahsync.state import untracked
+from ahsync.state.realmless import realmless_folds
 from ahsync.db.sqlite import BookScan, Database
 from ahsync.app.scheduler import STABLE_MS, file_mtime_ms
 
@@ -194,6 +195,28 @@ class _Apply:
             keys: Item keys.
         """
         self.dirty.update(k for k in keys if k is not None and not sv.is_unknown_suffix(k))
+
+    def fold_realmless(self, data: sv.AHProfitData) -> None:
+        """Fold each stored realm-less character into its real id, when this file shows the addon did (RL4).
+
+        A failed fold, of any database error, is undone alone and recorded as a problem, so the file is still
+        stored (SPEC §5.2 rule 6). The empty realm's Status warning goes once no realm-less character is left.
+
+        Args:
+            data: The parsed file.
+        """
+        file_ids = {c.char_id for c in data.characters}
+        folds = realmless_folds(self.db.character_identities(), file_ids)
+        for old, new in folds:
+            try:
+                with self.db.savepoint():
+                    self.mark(self.db.move_character(old, new, INGESTED_UNTIL_PREFIX))
+            except (sqlite3.Error, ValueError) as exc:
+                self.problems.append(f"fold of {old!r} into {new!r}: {exc}")
+                continue
+            log.info("folded the realm-less character %s into %s (SPEC §2.2.1)", old, new)
+        if folds and not any(realm == "" for _, realm, _, _ in self.db.character_identities()):
+            self.db.clear_status("realm:")
 
     def characters(self, characters: Iterable[sv.Character]) -> None:
         """Store characters with their market; an unknown realm gets a Status line (SPEC §3.2).
@@ -499,13 +522,15 @@ def apply_data(db: Database, data: sv.AHProfitData, realms: Mapping[str, str], n
     Side effects:
         Each character's ingestedUntil moves to the newest scan or event time stored for
         it, but stops 1 s before its oldest row set aside (by the parser or on storing),
-        only after the commit, and never backwards (SPEC §2.2, §5.2 rule 5).
+        only after the commit, and never backwards (SPEC §2.2, §5.2 rule 5). A stored
+        character without a realm that the file no longer lists is folded into its real id (RL4).
     """
     work = _Apply(db, realms, now_ms, markets)
     for row in data.rejected:
         work.pruning.set_aside(row.char_id, row.at_ms)
     with db.transaction():
-        work.characters(data.characters)       # first: scans and posts look up the market
+        work.fold_realmless(data)              # first: every later step, untracked included, sees one id (RL4)
+        work.characters(data.characters)       # then: scans and posts look up the market
         work.recipes(data)
         held = untracked.before(db.conn, {p.char_id: p.at_ms for p in data.inventories if p.location == "bags"})
         work.snapshots(data)
