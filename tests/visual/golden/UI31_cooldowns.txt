@@ -33,12 +33,12 @@ Frame AHProfitWindow 680,360 560x360
     Button - 975,462 54x20
     FontString - 906,462 66x20 "Ready"
     Button - 906,462 66x20
-    FontString - 857,462 46x20 "Cooldown"
-    Button - 857,462 46x20
-    FontString - 814,462 40x20 "Skill"
-    Button - 814,462 40x20
-    FontString - 693,462 118x20 "Item · recipe"
-    Button - 693,462 118x20
+    FontString - 845,462 58x20 "Cooldown"
+    Button - 845,462 58x20
+    FontString - 802,462 40x20 "Skill"
+    Button - 802,462 40x20
+    FontString - 693,462 106x20 "Item · recipe"
+    Button - 693,462 106x20
   Button AHProfitWindowTop 690,420 526x20 (hidden)
   Frame AHProfitWindowList 690,484 540x198
     Frame AHProfitWindowRow1 690,484 526x30
@@ -48,15 +48,15 @@ Frame AHProfitWindow 680,360 560x360
       FontString - 1032,485 56x28 "29   20  "
       FontString - 975,485 54x28 "45  "
       FontString - 906,485 66x28 "ready"
-      FontString - 857,485 46x28 "2 d"
-      FontString - 814,485 40x28 "275"
-      FontString - 693,484 118x29 "Arcanite Bar"
-      FontString - 693,499 118x12 "Transmute: Arcanite"
-      Button - 693,484 118x29
-      FontString - 814,499 40x12
-      Button - 814,485 40x28
-      FontString - 857,499 46x12 "shared"
-      Button - 857,485 46x28
+      FontString - 845,485 58x28 "2 d"
+      FontString - 802,485 40x28 "275"
+      FontString - 693,484 106x29 "Arcanite Bar"
+      FontString - 693,499 106x12 "Transmute: Arcanite"
+      Button - 693,484 106x29
+      FontString - 802,499 40x12
+      Button - 802,485 40x28
+      FontString - 845,499 58x12 "shared"
+      Button - 845,485 58x28
       Button - 906,485 66x28
       FontString - 975,499 54x12
       Button - 975,485 54x28
@@ -70,15 +70,15 @@ Frame AHProfitWindow 680,360 560x360
       FontString - 1032,515 56x28 "2   40  "
       FontString - 975,515 54x28 "3  "
       FontString - 906,515 66x28 "Not learned"
-      FontString - 857,515 46x28 "1 d"
-      FontString - 814,515 40x28 "275"
-      FontString - 693,514 118x29 "Essence of Water"
-      FontString - 693,529 118x12 "Transmute: Earth to …"
-      Button - 693,514 118x29
-      FontString - 814,529 40x12
-      Button - 814,515 40x28
-      FontString - 857,529 46x12 "shared"
-      Button - 857,515 46x28
+      FontString - 845,515 58x28 "1 d"
+      FontString - 802,515 40x28 "275"
+      FontString - 693,514 106x29 "Essence of Water"
+      FontString - 693,529 106x12 "Transmute: Earth t…"
+      Button - 693,514 106x29
+      FontString - 802,529 40x12
+      Button - 802,515 40x28
+      FontString - 845,529 58x12 "shared"
+      Button - 845,515 58x28
       Button - 906,515 66x28
       FontString - 975,529 54x12
       Button - 975,515 54x28
@@ -92,15 +92,15 @@ Frame AHProfitWindow 680,360 560x360
       FontString - 1032,545 56x28 "1  "
       FontString - 975,545 54x28 "3  "
       FontString - 906,545 66x28 "ready"
-      FontString - 857,545 46x28 "1 d"
-      FontString - 814,545 40x28 "275"
-      FontString - 693,544 118x29 "Essence of Water"
-      FontString - 693,559 118x12 "Transmute: Undeath t…"
-      Button - 693,544 118x29
-      FontString - 814,559 40x12
-      Button - 814,545 40x28
-      FontString - 857,559 46x12 "shared"
-      Button - 857,545 46x28
+      FontString - 845,545 58x28 "1 d"
+      FontString - 802,545 40x28 "275"
+      FontString - 693,544 106x29 "Essence of Water"
+      FontString - 693,559 106x12 "Transmute: Undeath…"
+      Button - 693,544 106x29
+      FontString - 802,559 40x12
+      Button - 802,545 40x28
+      FontString - 845,559 58x12 "shared"
+      Button - 845,545 58x28
       Button - 906,545 66x28
       FontString - 975,559 54x12
       Button - 975,545 54x28
@@ -114,15 +114,15 @@ Frame AHProfitWindow 680,360 560x360
       FontString - 1032,575 56x28 "3  "
       FontString - 975,575 54x28 "2   80  "
       FontString - 906,575 66x28 "ready"
-      FontString - 857,575 46x28 "1 d"
-      FontString - 814,575 40x28 "275"
-      FontString - 693,574 118x29 "Essence of Air"
-      FontString - 693,589 118x12 "Transmute: Water to …"
-      Button - 693,574 118x29
-      FontString - 814,589 40x12
-      Button - 814,575 40x28
-      FontString - 857,589 46x12 "shared"
-      Button - 857,575 46x28
+      FontString - 845,575 58x28 "1 d"
+      FontString - 802,575 40x28 "275"
+      FontString - 693,574 106x29 "Essence of Air"
+      FontString - 693,589 106x12 "Transmute: Water t…"
+      Button - 693,574 106x29
+      FontString - 802,589 40x12
+      Button - 802,575 40x28
+      FontString - 845,589 58x12 "shared"
+      Button - 845,575 58x28
       Button - 906,575 66x28
       FontString - 975,589 54x12
       Button - 975,575 54x28
@@ -136,15 +136,15 @@ Frame AHProfitWindow 680,360 560x360
       FontString - 1032,605 56x28 "—"
       FontString - 975,605 54x28 "2   40  "
       FontString - 906,605 66x28 "Not learned"
-      FontString - 857,605 46x28 "1 d"
-      FontString - 814,605 40x28 "275"
-      FontString - 693,604 118x29 "Essence of Earth"
-      FontString - 693,619 118x12 "Transmute: Fire to E…"
-      Button - 693,604 118x29
-      FontString - 814,619 40x12
-      Button - 814,605 40x28
-      FontString - 857,619 46x12 "shared"
-      Button - 857,605 46x28
+      FontString - 845,605 58x28 "1 d"
+      FontString - 802,605 40x28 "275"
+      FontString - 693,604 106x29 "Essence of Earth"
+      FontString - 693,619 106x12 "Transmute: Fire to…"
+      Button - 693,604 106x29
+      FontString - 802,619 40x12
+      Button - 802,605 40x28
+      FontString - 845,619 58x12 "shared"
+      Button - 845,605 58x28
       Button - 906,605 66x28
       FontString - 975,619 54x12
       Button - 975,605 54x28
@@ -158,15 +158,15 @@ Frame AHProfitWindow 680,360 560x360
       FontString - 1032,635 56x28 "—"
       FontString - 975,635 54x28 "2   40  "
       FontString - 906,635 66x28 "Not learned"
-      FontString - 857,635 46x28 "1 d"
-      FontString - 814,635 40x28 "275"
-      FontString - 693,634 118x29 "Essence of Earth"
-      FontString - 693,649 118x12 "Transmute: Life to E…"
-      Button - 693,634 118x29
-      FontString - 814,649 40x12
-      Button - 814,635 40x28
-      FontString - 857,649 46x12 "shared"
-      Button - 857,635 46x28
+      FontString - 845,635 58x28 "1 d"
+      FontString - 802,635 40x28 "275"
+      FontString - 693,634 106x29 "Essence of Earth"
+      FontString - 693,649 106x12 "Transmute: Life to…"
+      Button - 693,634 106x29
+      FontString - 802,649 40x12
+      Button - 802,635 40x28
+      FontString - 845,649 58x12 "shared"
+      Button - 845,635 58x28
       Button - 906,635 66x28
       FontString - 975,649 54x12
       Button - 975,635 54x28

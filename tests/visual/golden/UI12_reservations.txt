@@ -39,9 +39,9 @@ Frame AHProfitWindow 680,360 560x360
       FontString - 1121,442 44x20 "×0"
       FontString - 1066,442 52x20 "5"
       FontString - 693,442 370x20 "Linen Cloth"
-      Button - 693,442 118x24 (hidden)
-      Button - 814,438 40x28 (hidden)
-      Button - 857,438 46x28 (hidden)
+      Button - 693,442 106x24 (hidden)
+      Button - 802,438 40x28 (hidden)
+      Button - 845,438 58x28 (hidden)
       Button - 906,438 66x28 (hidden)
       Button - 975,438 54x28 (hidden)
       Button - 1032,438 56x28 (hidden)
@@ -53,9 +53,9 @@ Frame AHProfitWindow 680,360 560x360
       FontString - 1121,462 44x20 "×13"
       FontString - 1066,462 52x20 "10"
       FontString - 693,462 370x20 "Refreshing Spring Water"
-      Button - 693,462 118x24 (hidden)
-      Button - 814,458 40x28 (hidden)
-      Button - 857,458 46x28 (hidden)
+      Button - 693,462 106x24 (hidden)
+      Button - 802,458 40x28 (hidden)
+      Button - 845,458 58x28 (hidden)
       Button - 906,458 66x28 (hidden)
       Button - 975,458 54x28 (hidden)
       Button - 1032,458 56x28 (hidden)
@@ -67,9 +67,9 @@ Frame AHProfitWindow 680,360 560x360
       FontString - 1121,482 44x20 "×7"
       FontString - 1066,482 52x20 "All"
       FontString - 693,482 370x20 "Silk Cloth"
-      Button - 693,482 118x24 (hidden)
-      Button - 814,478 40x28 (hidden)
-      Button - 857,478 46x28 (hidden)
+      Button - 693,482 106x24 (hidden)
+      Button - 802,478 40x28 (hidden)
+      Button - 845,478 58x28 (hidden)
       Button - 906,478 66x28 (hidden)
       Button - 975,478 54x28 (hidden)
       Button - 1032,478 56x28 (hidden)

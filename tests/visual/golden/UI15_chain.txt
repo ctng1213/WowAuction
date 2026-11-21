@@ -55,18 +55,18 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 878,402 28x20 "×76"
       FontString - 705,402 170x20 "Fish Bowl"
       Texture - 654,406 48x12
-      Button - 653,402 198x24 (hidden)
-      Button - 854,398 40x28 (hidden)
-      Button - 897,398 46x28 (hidden)
+      Button - 653,402 186x24 (hidden)
+      Button - 842,398 40x28 (hidden)
+      Button - 885,398 58x28 (hidden)
       Button - 946,398 66x28 (hidden)
       Button - 1015,398 54x28 (hidden)
       Button - 1072,398 56x28 (hidden)
       Button - 1131,398 58x28 (hidden)
       Button - 1192,398 60x28 (hidden)
     Frame AHProfitWindowRow2 650,422 606x20
-      Button - 653,422 198x24 (hidden)
-      Button - 854,418 40x28 (hidden)
-      Button - 897,418 46x28 (hidden)
+      Button - 653,422 186x24 (hidden)
+      Button - 842,418 40x28 (hidden)
+      Button - 885,418 58x28 (hidden)
       Button - 946,418 66x28 (hidden)
       Button - 1015,418 54x28 (hidden)
       Button - 1072,418 56x28 (hidden)
@@ -74,9 +74,9 @@ Frame AHProfitWindow 640,320 640x440
       Button - 1192,418 60x28 (hidden)
       FontString - 705,422 547x20 "buy 76 Empty Vial from a vendor · 15   20  "
     Frame AHProfitWindowRow3 650,442 606x20
-      Button - 653,442 198x24 (hidden)
-      Button - 854,438 40x28 (hidden)
-      Button - 897,438 46x28 (hidden)
+      Button - 653,442 186x24 (hidden)
+      Button - 842,438 40x28 (hidden)
+      Button - 885,438 58x28 (hidden)
       Button - 946,438 66x28 (hidden)
       Button - 1015,438 54x28 (hidden)
       Button - 1072,438 56x28 (hidden)
@@ -84,9 +84,9 @@ Frame AHProfitWindow 640,320 640x440
       Button - 1192,438 60x28 (hidden)
       FontString - 705,442 547x20 "buy 76 Raw Brilliant Smallfish on the AH · 57  "
     Frame AHProfitWindowRow4 650,462 606x20
-      Button - 653,462 198x24 (hidden)
-      Button - 854,458 40x28 (hidden)
-      Button - 897,458 46x28 (hidden)
+      Button - 653,462 186x24 (hidden)
+      Button - 842,458 40x28 (hidden)
+      Button - 885,458 58x28 (hidden)
       Button - 946,458 66x28 (hidden)
       Button - 1015,458 54x28 (hidden)
       Button - 1072,458 56x28 (hidden)

@@ -27,9 +27,9 @@ Frame AHProfitWindow 640,320 640x440
     FontString - 654,385 528x10 "portfolio 35   58   · 30% risk · capacity 6   49   40   · 24   40   unallocated · snapshot 10:38"
   Frame AHProfitWindowList 650,402 620x240
     Frame AHProfitWindowRow1 650,402 606x20
-      Button - 653,402 198x24 (hidden)
-      Button - 854,398 40x28 (hidden)
-      Button - 897,398 46x28 (hidden)
+      Button - 653,402 186x24 (hidden)
+      Button - 842,398 40x28 (hidden)
+      Button - 885,398 58x28 (hidden)
       Button - 946,398 66x28 (hidden)
       Button - 1015,398 54x28 (hidden)
       Button - 1072,398 56x28 (hidden)
@@ -39,9 +39,9 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 1153,407 99x10 "this character · 3"
       Texture - 652,421 602x1
     Frame AHProfitWindowRow2 650,422 606x20
-      Button - 653,422 198x24 (hidden)
-      Button - 854,418 40x28 (hidden)
-      Button - 897,418 46x28 (hidden)
+      Button - 653,422 186x24 (hidden)
+      Button - 842,418 40x28 (hidden)
+      Button - 885,418 58x28 (hidden)
       Button - 946,418 66x28 (hidden)
       Button - 1015,418 54x28 (hidden)
       Button - 1072,418 56x28 (hidden)
@@ -54,9 +54,9 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 870,442 118x20 "Partially sold"
       FontString - 991,442 56x20 "+6  "
       FontString - 1050,442 203x20 "post now"
-      Button - 653,442 198x24 (hidden)
-      Button - 854,438 40x28 (hidden)
-      Button - 897,438 46x28 (hidden)
+      Button - 653,442 186x24 (hidden)
+      Button - 842,438 40x28 (hidden)
+      Button - 885,438 58x28 (hidden)
       Button - 946,438 66x28 (hidden)
       Button - 1015,438 54x28 (hidden)
       Button - 1072,438 56x28 (hidden)
@@ -69,9 +69,9 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 870,462 118x20 "Holding"
       FontString - 991,462 56x20 "+4   72  "
       FontString - 1050,462 203x20 "hold · found, uses no capital"
-      Button - 653,462 198x24 (hidden)
-      Button - 854,458 40x28 (hidden)
-      Button - 897,458 46x28 (hidden)
+      Button - 653,462 186x24 (hidden)
+      Button - 842,458 40x28 (hidden)
+      Button - 885,458 58x28 (hidden)
       Button - 946,458 66x28 (hidden)
       Button - 1015,458 54x28 (hidden)
       Button - 1072,458 56x28 (hidden)
@@ -84,18 +84,18 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 870,482 118x20 "Needs reconciliation"
       FontString - 991,482 56x20 "—"
       FontString - 1050,482 203x20 "—"
-      Button - 653,482 198x24 (hidden)
-      Button - 854,478 40x28 (hidden)
-      Button - 897,478 46x28 (hidden)
+      Button - 653,482 186x24 (hidden)
+      Button - 842,478 40x28 (hidden)
+      Button - 885,478 58x28 (hidden)
       Button - 946,478 66x28 (hidden)
       Button - 1015,478 54x28 (hidden)
       Button - 1072,478 56x28 (hidden)
       Button - 1131,478 58x28 (hidden)
       Button - 1192,478 60x28 (hidden)
     Frame AHProfitWindowRow6 650,502 606x20
-      Button - 653,502 198x24 (hidden)
-      Button - 854,498 40x28 (hidden)
-      Button - 897,498 46x28 (hidden)
+      Button - 653,502 186x24 (hidden)
+      Button - 842,498 40x28 (hidden)
+      Button - 885,498 58x28 (hidden)
       Button - 946,498 66x28 (hidden)
       Button - 1015,498 54x28 (hidden)
       Button - 1072,498 56x28 (hidden)
@@ -103,9 +103,9 @@ Frame AHProfitWindow 640,320 640x440
       Button - 1192,498 60x28 (hidden)
       FontString - 654,502 598x20 "committed 70   · est. +10   72   · +9% on committed capital · % leaves out Wool Cloth (found stock only)"
     Frame AHProfitWindowRow7 650,522 606x20
-      Button - 653,522 198x24 (hidden)
-      Button - 854,518 40x28 (hidden)
-      Button - 897,518 46x28 (hidden)
+      Button - 653,522 186x24 (hidden)
+      Button - 842,518 40x28 (hidden)
+      Button - 885,518 58x28 (hidden)
       Button - 946,518 66x28 (hidden)
       Button - 1015,518 54x28 (hidden)
       Button - 1072,518 56x28 (hidden)
@@ -115,9 +115,9 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 1043,527 209x10 "realized today · funded, then unfunded"
       Texture - 652,541 602x1
     Frame AHProfitWindowRow8 650,542 606x20
-      Button - 653,542 198x24 (hidden)
-      Button - 854,538 40x28 (hidden)
-      Button - 897,538 46x28 (hidden)
+      Button - 653,542 186x24 (hidden)
+      Button - 842,538 40x28 (hidden)
+      Button - 885,538 58x28 (hidden)
       Button - 946,538 66x28 (hidden)
       Button - 1015,538 54x28 (hidden)
       Button - 1072,538 56x28 (hidden)
@@ -136,18 +136,18 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 815,562 24x20 "×1"
       FontString - 693,562 119x20 "Scouting Gloves of t…"
       Texture - 654,566 36x12
-      Button - 653,562 198x24 (hidden)
-      Button - 854,558 40x28 (hidden)
-      Button - 897,558 46x28 (hidden)
+      Button - 653,562 186x24 (hidden)
+      Button - 842,558 40x28 (hidden)
+      Button - 885,558 58x28 (hidden)
       Button - 946,558 66x28 (hidden)
       Button - 1015,558 54x28 (hidden)
       Button - 1072,558 56x28 (hidden)
       Button - 1131,558 58x28 (hidden)
       Button - 1192,558 60x28 (hidden)
     Frame AHProfitWindowRow10 650,582 606x20
-      Button - 653,582 198x24 (hidden)
-      Button - 854,578 40x28 (hidden)
-      Button - 897,578 46x28 (hidden)
+      Button - 653,582 186x24 (hidden)
+      Button - 842,578 40x28 (hidden)
+      Button - 885,578 58x28 (hidden)
       Button - 946,578 66x28 (hidden)
       Button - 1015,578 54x28 (hidden)
       Button - 1072,578 56x28 (hidden)
@@ -167,18 +167,18 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 815,602 24x20 "×1"
       FontString - 693,602 119x20 "Embossed Leather Glo…"
       Texture - 654,606 36x12
-      Button - 653,602 198x24 (hidden)
-      Button - 854,598 40x28 (hidden)
-      Button - 897,598 46x28 (hidden)
+      Button - 653,602 186x24 (hidden)
+      Button - 842,598 40x28 (hidden)
+      Button - 885,598 58x28 (hidden)
       Button - 946,598 66x28 (hidden)
       Button - 1015,598 54x28 (hidden)
       Button - 1072,598 56x28 (hidden)
       Button - 1131,598 58x28 (hidden)
       Button - 1192,598 60x28 (hidden)
     Frame AHProfitWindowRow12 650,622 606x20
-      Button - 653,622 198x24 (hidden)
-      Button - 854,618 40x28 (hidden)
-      Button - 897,618 46x28 (hidden)
+      Button - 653,622 186x24 (hidden)
+      Button - 842,618 40x28 (hidden)
+      Button - 885,618 58x28 (hidden)
       Button - 946,618 66x28 (hidden)
       Button - 1015,618 54x28 (hidden)
       Button - 1072,618 56x28 (hidden)

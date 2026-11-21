@@ -51,18 +51,18 @@ Frame AHProfitWindow 680,360 560x360
       FontString - 911,442 28x20 "×3"
       FontString - 862,442 46x20 "Owned"
       FontString - 693,442 166x20 "Copper Rod"
-      Button - 693,442 118x24 (hidden)
-      Button - 814,438 40x28 (hidden)
-      Button - 857,438 46x28 (hidden)
+      Button - 693,442 106x24 (hidden)
+      Button - 802,438 40x28 (hidden)
+      Button - 845,438 58x28 (hidden)
       Button - 906,438 66x28 (hidden)
       Button - 975,438 54x28 (hidden)
       Button - 1032,438 56x28 (hidden)
       Button - 1091,438 58x28 (hidden)
       Button - 1152,438 60x28 (hidden)
     Frame AHProfitWindowRow2 690,462 526x20
-      Button - 693,462 118x24 (hidden)
-      Button - 814,458 40x28 (hidden)
-      Button - 857,458 46x28 (hidden)
+      Button - 693,462 106x24 (hidden)
+      Button - 802,458 40x28 (hidden)
+      Button - 845,458 58x28 (hidden)
       Button - 906,458 66x28 (hidden)
       Button - 975,458 54x28 (hidden)
       Button - 1032,458 56x28 (hidden)

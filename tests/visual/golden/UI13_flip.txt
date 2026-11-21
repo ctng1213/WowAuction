@@ -51,18 +51,18 @@ Frame AHProfitWindow 680,360 560x360
       FontString - 869,442 46x20 "40  "
       FontString - 838,442 28x20 "×20"
       FontString - 693,442 142x20 "Linen Cloth"
-      Button - 693,442 118x24 (hidden)
-      Button - 814,438 40x28 (hidden)
-      Button - 857,438 46x28 (hidden)
+      Button - 693,442 106x24 (hidden)
+      Button - 802,438 40x28 (hidden)
+      Button - 845,438 58x28 (hidden)
       Button - 906,438 66x28 (hidden)
       Button - 975,438 54x28 (hidden)
       Button - 1032,438 56x28 (hidden)
       Button - 1091,438 58x28 (hidden)
       Button - 1152,438 60x28 (hidden)
     Frame AHProfitWindowRow2 690,462 526x20
-      Button - 693,462 118x24 (hidden)
-      Button - 814,458 40x28 (hidden)
-      Button - 857,458 46x28 (hidden)
+      Button - 693,462 106x24 (hidden)
+      Button - 802,458 40x28 (hidden)
+      Button - 845,458 58x28 (hidden)
       Button - 906,458 66x28 (hidden)
       Button - 975,458 54x28 (hidden)
       Button - 1032,458 56x28 (hidden)
@@ -79,18 +79,18 @@ Frame AHProfitWindow 680,360 560x360
       FontString - 869,482 46x20 "70  "
       FontString - 838,482 28x20 "×5"
       FontString - 693,482 142x20 "Silk Cloth"
-      Button - 693,482 118x24 (hidden)
-      Button - 814,478 40x28 (hidden)
-      Button - 857,478 46x28 (hidden)
+      Button - 693,482 106x24 (hidden)
+      Button - 802,478 40x28 (hidden)
+      Button - 845,478 58x28 (hidden)
       Button - 906,478 66x28 (hidden)
       Button - 975,478 54x28 (hidden)
       Button - 1032,478 56x28 (hidden)
       Button - 1091,478 58x28 (hidden)
       Button - 1152,478 60x28 (hidden)
     Frame AHProfitWindowRow4 690,502 526x20
-      Button - 693,502 118x24 (hidden)
-      Button - 814,498 40x28 (hidden)
-      Button - 857,498 46x28 (hidden)
+      Button - 693,502 106x24 (hidden)
+      Button - 802,498 40x28 (hidden)
+      Button - 845,498 58x28 (hidden)
       Button - 906,498 66x28 (hidden)
       Button - 975,498 54x28 (hidden)
       Button - 1032,498 56x28 (hidden)

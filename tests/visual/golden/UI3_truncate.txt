@@ -55,9 +55,9 @@ Frame AHProfitWindow 680,360 560x360
       FontString - 838,442 28x20 "×3"
       FontString - 745,442 90x20 "Scouting Gloves…"
       Texture - 694,446 48x12
-      Button - 693,442 118x24 (hidden)
-      Button - 814,438 40x28 (hidden)
-      Button - 857,438 46x28 (hidden)
+      Button - 693,442 106x24 (hidden)
+      Button - 802,438 40x28 (hidden)
+      Button - 845,438 58x28 (hidden)
       Button - 906,438 66x28 (hidden)
       Button - 975,438 54x28 (hidden)
       Button - 1032,438 56x28 (hidden)
@@ -75,9 +75,9 @@ Frame AHProfitWindow 680,360 560x360
       FontString - 838,462 28x20 "×2"
       FontString - 745,462 90x20 "Copper Bar"
       Texture - 694,466 48x12
-      Button - 693,462 118x24 (hidden)
-      Button - 814,458 40x28 (hidden)
-      Button - 857,458 46x28 (hidden)
+      Button - 693,462 106x24 (hidden)
+      Button - 802,458 40x28 (hidden)
+      Button - 845,458 58x28 (hidden)
       Button - 906,458 66x28 (hidden)
       Button - 975,458 54x28 (hidden)
       Button - 1032,458 56x28 (hidden)
@@ -95,9 +95,9 @@ Frame AHProfitWindow 680,360 560x360
       FontString - 838,482 28x20 "×1"
       FontString - 745,482 90x20 "Linen Cloth"
       Texture - 694,486 48x12
-      Button - 693,482 118x24 (hidden)
-      Button - 814,478 40x28 (hidden)
-      Button - 857,478 46x28 (hidden)
+      Button - 693,482 106x24 (hidden)
+      Button - 802,478 40x28 (hidden)
+      Button - 845,478 58x28 (hidden)
       Button - 906,478 66x28 (hidden)
       Button - 975,478 54x28 (hidden)
       Button - 1032,478 56x28 (hidden)

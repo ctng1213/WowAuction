@@ -59,7 +59,7 @@ MainWindow.COLUMNS = {
   reservations = { { "Item", "item", nil, "LEFT" }, { "Keeping", "keeping", 52, "RIGHT" }, { "Held", "held", 44, "RIGHT" },
                    { "Free", "free", 44, "RIGHT" } },
   cooldowns = { { "Item · recipe", "item", nil, "LEFT" }, { "Skill", "skill", 40, "RIGHT" },
-                { "Cooldown", "cooldown", 46, "RIGHT" }, { "Ready", "ready", 66, "RIGHT" }, { "AH price", "price", 54, "RIGHT" },
+                { "Cooldown", "cooldown", 58, "RIGHT" }, { "Ready", "ready", 66, "RIGHT" }, { "AH price", "price", 54, "RIGHT" },
                 { "Mats", "mats", 56, "RIGHT" }, { "Net / use", "net", 58, "RIGHT" }, { "Can Make", "canMake", 60, "RIGHT" } },
 }
 -- Every set a pooled row carries cells for, in build order; the header strip above the list shows the fixed ones.

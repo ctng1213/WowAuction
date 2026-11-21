@@ -27,9 +27,9 @@ Frame AHProfitWindow 640,320 640x440
     FontString - 654,385 440x10 "Amaya 14   30   · portfolio 35   58   · 30% risk · capacity 0   · snapshot 10:38"
   Frame AHProfitWindowList 650,402 620x240
     Frame AHProfitWindowRow1 650,402 606x20
-      Button - 653,402 198x24 (hidden)
-      Button - 854,398 40x28 (hidden)
-      Button - 897,398 46x28 (hidden)
+      Button - 653,402 186x24 (hidden)
+      Button - 842,398 40x28 (hidden)
+      Button - 885,398 58x28 (hidden)
       Button - 946,398 66x28 (hidden)
       Button - 1015,398 54x28 (hidden)
       Button - 1072,398 56x28 (hidden)
@@ -39,9 +39,9 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 1153,407 99x10 "this character · 3"
       Texture - 652,421 602x1
     Frame AHProfitWindowRow2 650,422 606x20
-      Button - 653,422 198x24 (hidden)
-      Button - 854,418 40x28 (hidden)
-      Button - 897,418 46x28 (hidden)
+      Button - 653,422 186x24 (hidden)
+      Button - 842,418 40x28 (hidden)
+      Button - 885,418 58x28 (hidden)
       Button - 946,418 66x28 (hidden)
       Button - 1015,418 54x28 (hidden)
       Button - 1072,418 56x28 (hidden)
@@ -54,9 +54,9 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 870,442 118x20 "Partially sold"
       FontString - 991,442 56x20 "+6  "
       FontString - 1050,442 203x20 "post now"
-      Button - 653,442 198x24 (hidden)
-      Button - 854,438 40x28 (hidden)
-      Button - 897,438 46x28 (hidden)
+      Button - 653,442 186x24 (hidden)
+      Button - 842,438 40x28 (hidden)
+      Button - 885,438 58x28 (hidden)
       Button - 946,438 66x28 (hidden)
       Button - 1015,438 54x28 (hidden)
       Button - 1072,438 56x28 (hidden)
@@ -69,9 +69,9 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 870,462 118x20 "Holding"
       FontString - 991,462 56x20 "+4   72  "
       FontString - 1050,462 203x20 "hold · found, uses no capital"
-      Button - 653,462 198x24 (hidden)
-      Button - 854,458 40x28 (hidden)
-      Button - 897,458 46x28 (hidden)
+      Button - 653,462 186x24 (hidden)
+      Button - 842,458 40x28 (hidden)
+      Button - 885,458 58x28 (hidden)
       Button - 946,458 66x28 (hidden)
       Button - 1015,458 54x28 (hidden)
       Button - 1072,458 56x28 (hidden)
@@ -84,18 +84,18 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 870,482 118x20 "Needs reconciliation"
       FontString - 991,482 56x20 "—"
       FontString - 1050,482 203x20 "—"
-      Button - 653,482 198x24 (hidden)
-      Button - 854,478 40x28 (hidden)
-      Button - 897,478 46x28 (hidden)
+      Button - 653,482 186x24 (hidden)
+      Button - 842,478 40x28 (hidden)
+      Button - 885,478 58x28 (hidden)
       Button - 946,478 66x28 (hidden)
       Button - 1015,478 54x28 (hidden)
       Button - 1072,478 56x28 (hidden)
       Button - 1131,478 58x28 (hidden)
       Button - 1192,478 60x28 (hidden)
     Frame AHProfitWindowRow6 650,502 606x20
-      Button - 653,502 198x24 (hidden)
-      Button - 854,498 40x28 (hidden)
-      Button - 897,498 46x28 (hidden)
+      Button - 653,502 186x24 (hidden)
+      Button - 842,498 40x28 (hidden)
+      Button - 885,498 58x28 (hidden)
       Button - 946,498 66x28 (hidden)
       Button - 1015,498 54x28 (hidden)
       Button - 1072,498 56x28 (hidden)
@@ -103,9 +103,9 @@ Frame AHProfitWindow 640,320 640x440
       Button - 1192,498 60x28 (hidden)
       FontString - 654,502 598x20 "committed 70   · est. +10   72   · +9% on committed capital · % leaves out Wool Cloth (found stock only)"
     Frame AHProfitWindowRow7 650,522 606x50
-      Button - 653,522 198x39 (hidden)
-      Button - 854,533 40x28 (hidden)
-      Button - 897,533 46x28 (hidden)
+      Button - 653,522 186x39 (hidden)
+      Button - 842,533 40x28 (hidden)
+      Button - 885,533 58x28 (hidden)
       Button - 946,533 66x28 (hidden)
       Button - 1015,533 54x28 (hidden)
       Button - 1072,533 56x28 (hidden)
