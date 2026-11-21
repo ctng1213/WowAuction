@@ -71,7 +71,25 @@ From `docs/plans/market-simulator.md` §1.13 and §1.32 and `docs/plans/blizzard
 
 24. **Approved** (the user, 2026-11-21): the design as items 14 to 23 leave it. Where the section "SP2 as proposed" in §3 differs from items 19 to 23 (bounds from what sold only at 20+ units; the post-now ceiling carries the current hour's pattern; the level is pattern-neutral; sold prices are stored per hour), the items win, and the spec merge writes them. The `market-sim` agent (`.claude/agents/market-sim.md`) gives the design one independent analysis before that merge.
 
-**Still open:** whether the hourly run refreshes the level for items with new sales (a bench decides); the buy side and the chance fix are not yet simulated; gear at about 2 sales a week (item 12). SP2's spec merge is next.
+25. **The independent analysis** (2026-11-21; an Opus agent on the `market-sim` instructions, its own code over the summary, the hourly record and a full pass of the raw; its SM20 numbers match item 7 and 8). It reproduced items 1, 7, 8 and 22(b), and found:
+    - (a) **Dividing by today's `how` wrecks the level.** `how` is a slot's close ÷ med30, so a price that crashed on a Wednesday reads as "Wednesdays are cheap". Its 168-slot mean is 5%+ off 1 for 51% of commodities and 62% of gear. Dividing sold prices by it moves the 2-day level 5%+ for 57% of 774 busy commodities and 2×+ for 17 (Bloodbelly Fish 269 c to 16,667 c; Shellfish 90 c to 756 c).
+    - (b) **Item 22(c) overstated the daily cycle.** Hours shuffled within each day already give 6–8% of items "5%+ dearer"; between two halves of the days the items' swings correlate at 0.22 and 13% are 5%+ dearer in both. About 13% of commodities have an afternoon premium of about 4%.
+    - (c) **Item 22(a)'s 1.9× is the peak hour against the lowest hour**; evening against morning as blocks is about 1.6×.
+    - (d) **No weekday effect yet** (week 1 against week 2 per item: 0.02), and busy commodities fell a median 17% a week.
+    - (e) **The overstatement of item 1 is gear's**: commodities read 1.00–1.04 in every band, and on gear with under 3 sold units the sold median is often the same lone listing as med7 (63% at 0–1 units).
+    - (f) **Sold prices predict the next 72 hours' sold median better than the ask blend in every band**, gear at 1–5 units in 30 days included (median error 0.22 against 0.35, the blend 24% high). On gear the half-life hardly matters (1, 2 or 4 days within 0.01); on commodities 1 day wins in every band (0.16 against 0.22 at 5–10 units).
+    - (g) **In SM20 (prototype variants)** a 1-day half-life earns 0.71 against 0.46 on gear after a drop and 0.74 against 0.64 on the commodity after a rise, and 0.86 against 0.88 when steady (inside the noise); a threshold of 10 is worse than 5 on every seed (0.77 against 0.88); a threshold of 3 equals 5 when steady.
+    - (h) **About 10% of sold units come from endings that may be expiries**, priced about 1.2× the clean median (p90 2.9–4.1×): the top of a sold curve is inflated. At a 2-day weighting gear with 20–50 units has about 19 effective units, at 5–10 about 5.
+    - (i) **SM20's worlds flatter the sold level on gear and cannot show its commodity case**: gear med7 ÷ sold is 1.23–1.92 there against 1.22–1.30 real; the commodity's p90_30 ÷ sold is 1.02–1.15 against 1.89 real.
+26. **Decided by the user (2026-11-21), after item 25:**
+    - (a) **The pattern is rebuilt before it is used on the level** (option A). An hour's observation is its close ÷ the item's median close over the week centred on it (3.5 days each side), not ÷ med30, so a move of the level is not a pattern and a full week cancels its own rhythm; the newest 3.5 days give no observation yet. The slots, the weeks' weighting, the 3-week rule, the weekday fallback and the smoothing stay. The pattern stays on asks (item 21).
+    - (b) **A 1-day half-life**, checked again once the market has 30 days of data (from 2026-12-06). The level looks back 30 days; at 1 day, sales older than about 4 days hardly count.
+    - (c) **The threshold is 3 sold units** in the 30 days, not 5.
+    - (d) **Commodities keep the sold level**: one level for everything (item 18).
+    - The user's worked example, kept for the scenarios: an item sliding 2 c a day, mornings 5% cheap, evenings 5% dear, Thursday evening 10% dear; at Thursday 20:00 the level is 100 c under the rebuilt pattern at 1 day, 102 c at 2 days, and 107 c if the pattern is not removed.
+27. **For the simulator, from item 25** (added to item 23): a pattern world (the buyers' rhythm, about 13% of items with a 4% afternoon premium, an item that crashes 90% over 3 days) with an hourly fair-price factor that does not change demand; a falling regime (2–3% a day) beside SM20's steady, rise and drop; a commodity shaped like the real one; SM20's gear asks retuned to the real ratios; the expiry-ambiguous share reported from the truth.
+
+**Still open:** the three questions under "Open" in §3's SP2 design; whether the hourly run can refresh the level; the buy side and the chance fix, not yet simulated; the unexplained step in gear's posting on 2026-11-12 (the share at the cheapest price fell from about 75% to 55% overnight).
 
 ## 1b. Decided at planning (the user, 2026-11-09: D1 A, D2 A)
 
@@ -120,52 +138,62 @@ Sketched now so SP1 records what it needs; specified at its own spec merge once 
 - The confirmed floor replaces `curOthers − 1` with the cheapest confirmed price − 1.
 - It changes `engine/prices.py` and `Engine/Prices.lua` together, the whole-plan snapshot moves (reviewed), and SD5, SD9, SD11 and SD29 are rerun.
 
-### SP2 as proposed on 2026-11-21 (approved by the user the same day, as amended by §1d items 19 to 24; replaces the sketch above)
+### SP2 as approved on 2026-11-21 (§1d items 14 to 27; replaces the sketch above)
 
-**Objective.** One price level per item, made by the analysis job, that every price recommendation reads: the post price, the best sell, the best buy, flips, and the craft, disenchant and gathering values that pass through them (§1d items 14 and 18). The sell chance learns the price level (§1d item 17).
+**Objective.** One price level per item, made by the analysis job, that every price recommendation reads: the post price, the best sell, the best buy, flips, and the craft, disenchant and gathering values that pass through them. The sell chance learns the price level.
 
-**The level** (new, published per item; summary schema 17):
+**Sold prices by hour** (new table `sold_prices_h1`, kept 30 days). Each gap's sold prices are stored under the clock hour of the snapshot that found the auctions gone, in the row format of `sold_prices_d1`. `sold_prices_d1`, `sold_med7` and `sold_units7` stay as they are.
 
-- `level`: the units-weighted median (SPEC §3.3, BZ53's rule) of the last 30 days' sold prices, each unit weighted `0.5 ^ (age in days ÷ 2)`, when at least 5 units sold in those days; else the floor of the 4:2:1 mean of med7, med14 and med30 over the ones known; None when neither exists.
-- `level_source`: `"sold"` or `"asks"`, and `level_units`, the sold units behind a sold level.
-- `sold_curve`: for a sold level, the same weighted prices' 0, 10, 25, 50, 75, 90 and 100th percentiles (nearest rank over the weighted units). Its 50th is the level.
-- med7, med14, med30, p10_30, p90_30 and `sold_med7` stay published: the tooltip's price history and the dashboard read them, and the suspect-price check (FM5, FM31) stays on asks, since it tests an ask for a typo and recommends no price.
+**The pattern** (`how`, rebuilt; §1d item 26(a)). An hourly close gives its slot one observation: the close ÷ the median of the item's hourly closes in the 168 hours centred on it (84 before, the hour itself and 83 after). It needs that whole week to lie inside the item's history and at least 84 closes in it. Everything after that is as today: the weighted median over the weeks, three weeks for a slot, the weekday fallback, the smoothing. It is not normalised: the centred median makes its mean about 1, and SP2a measures it.
 
-**What reads it** (every DECISION site found on 2026-11-21; file and function):
+**The level** (published per item; summary schema 17):
+
+- With at least 3 sold units in the last 30 days: each stored price is divided by the pattern of its own hour of the week (rounded half up to copper), each unit weighted `0.5 ^ (age in hours ÷ 24)`, age being the document's hour less the sale's; the level is the units-weighted median of those (SPEC §3.3's rule, over the weighted units). `level_source` is `"sold"`, `level_units` the unweighted units.
+- Otherwise the floor of the 4:2:1 mean of med7, med14 and med30 over the ones known; `level_source` `"asks"`. None when there is neither.
+- With at least 20 sold units: `sold_curve`, the same weighted prices' 0, 10, 25, 50, 75, 90 and 100th percentiles (the lowest price whose cumulative weighted units reach the share). The low bound is its 10th, the high bound the larger of its 90th and the level.
+- Under 20 units, and for an ask level: the low bound is `p10_30` (the level when that is unknown or above it), the high bound the level.
+- med7, med14, med30, p10_30, p90_30 and `sold_med7` stay published: the tooltip's price history and the dashboard read them, and the suspect-price check (FM5, FM31) stays on asks.
+
+**What reads it:**
 
 | Today | Becomes |
 |---|---|
-| Post price `min(curOthers − 1, max(med7, p90_30))`, med7 alone on thin data (`prices.post_price`, `relist_price`; `Prices.lua` PostPrice, RelistPrice; `analysis.market.now_fields`, `reprice_item`, `with_scan`; `Options.Reprice`, `Reselect.RepriceSale`) | `min(curOthers − 1, level)`; without a competitor, the level. PP2 and PP4 are replaced; R28's grounding stays |
-| The level a forecast multiplies, med7 else med30 (`contract.price_level`, `analysis.market` ForecastFacts, `recommend.plan.sell_facts`) | `level` |
-| A forecast's clamp `[p10_30, max(med7, p90_30)]`, the level itself on thin data (`plan.slot_price`, TT22, TT23) | a sold level: `[sold_curve 10th, sold_curve 90th]`; an ask level: `[p10_30, level]` (asks earn no premium, as thin data does today) |
-| Buy for later when `cur < p10_30` (`candidates._flip_first`, `_flip_opportunity`) | `cur <` the sold curve's 10th for a sold level; `p10_30` otherwise |
-| Buy windows' `sell_net`, a later buy's expected price, flips' sale price and the exported flip offers (`patterns.sell_net_price`, `buy_windows`, `window_forecast`; `candidates._later_choice`; `flips.flip_offer`; `recommend.plan.window_candidate`, `flip_offers`) | unchanged formulas, fed the level and the clamp above |
-| Sell value, hence disenchant, craft product and holdings values (`recommend/pages`, `portfolio`, `plan.de_offer`) | follow the post price; no rule of their own |
+| A window's forecast `level × how × trend`, level med7 else med30, clamped `[p10_30, max(med7, p90_30)]`, the level itself on thin data (`contract.price_level`, `plan.slot_price`, TT22, TT23) | the same formula on the new level, clamped to `[low bound, high bound]` |
+| Post price `min(curOthers − 1, max(med7, p90_30))`, med7 alone on thin data (`prices.post_price`, `relist_price`; `Prices.lua`; `analysis.market`; `Options.Reprice`, `Reselect.RepriceSale`) | `min(curOthers − 1, ceiling)`, the ceiling being the forecast of the current hour (`level × how` now, clamped to the bounds); without a competitor, the ceiling. PP2 and PP4 are replaced by PP5 |
+| Buy for later when `cur < p10_30` (`candidates._flip_first`, `_flip_opportunity`) | `cur <` the low bound |
+| Buy windows' `sell_net`, a later buy's expected price, flips' sale price and the exported flip offers | unchanged formulas, fed the level and the bounds |
+| Sell value, hence disenchant, craft product and holdings values | follow the post price; no rule of their own |
 
-**The sell chance.** In the queue simulation (SPEC §3.3.2) the hourly demand is multiplied by a price acceptance `a(p)`: 1 at or under the level; above it, the share of the sold curve's units at or above `p` ÷ 0.5, read by linear interpolation between the curve's points, 0 above its 100th. An ask-level item has no curve and keeps `a = 1`. Sold prices under-read what buyers would have paid (they took the cheapest), which is why `a` is 1 up to the level and not 0.5 there. The curve the addon reads is built at the post-now price, at or under the level, so it is unchanged; a window's chance and a price above the level are where `a` acts. **Simulated before it is built** (SM21), since the formula is new.
+The addon reprices after a scan, so it needs the pattern of the current hour: the market file gains the level, the two bounds and the 168-slot pattern per item (packed as `supply_how` is), and `EXPORT_VERSION` rises. `/ahp perf` checks the addon's memory.
 
-**Hourly.** The daily run computes the level for every item. The hourly run refreshes it for the items whose day gained sold prices, if `tools/bench.py --summary` keeps the cloud under 600 MB and the hourly run inside its time; else it stays daily and the plan says so.
+**The sell chance.** In the queue simulation (SPEC §3.3.2) the hourly demand is multiplied by a price acceptance `a(p)`: 1 at or under the level; above it, the share of the sold curve's units at or above `p` ÷ 0.5, read by linear interpolation between the curve's points, 0 at its 100th and above. The curve is scaled by the hour's pattern as the level is. An item without a curve keeps `a = 1`: its recommended prices never exceed its level. **Simulated before it is built** (SM21).
 
-**Non-goals.** No confirmed floor (§1d item 16). No new display of the level or its source on the dashboard, the addon or the tooltip (a mockup round of its own). No change to how sales are counted, to `how` or to the windows' shape. Gear at about 2 sales a week (§1d item 12) is not fixed here.
+**Hourly.** The daily run computes the level for every item. The hourly run refreshes it only if a run with the history fits its time and the 600 MB budget (`tools/bench.py --summary`); the hourly mode reads no database today, so this is a bench and a design step of SP2b, and the level stays daily if it fails.
 
-**Constraints.** `engine/prices.py` and `Engine/Prices.lua` change together (the `engine-parity` agent reviews); the exported market string gains the level and the clamp bounds, so `EXPORT_VERSION` rises and the addon must be redeployed with the app; a schema-16 reader ignores the new fields (`ADDED_IN`); the whole-plan snapshot moves and its diff is reviewed; engine branch coverage stays 100%.
+**Non-goals.** No confirmed floor. No new display of the level or its source (a mockup round of its own). No change to how sales are counted, to `sales_how`, or to the windows' shape. No pattern built from sold prices (decided from real data once the hourly sold prices have several weeks). Thin data's "post now only" rule (PF30) stays on the count of closes. Gear at about 2 sales a week is helped by the threshold of 3 but not solved.
+
+**Constraints.** `engine/prices.py` and `Engine/Prices.lua` change together (the `engine-parity` agent reviews); a schema-16 reader ignores the new fields (`ADDED_IN`) and a schema-16 document is priced from an ask level built from its medians; the addon is redeployed with the app; the whole-plan snapshot moves and its diff is reviewed; engine branch coverage stays 100%; the cloud bench stays under 600 MB with the hourly table.
 
 **Acceptance.**
-- A flip's resale price never exceeds the level: the 2026-11-18 items (Tome of Arcane Brilliance, Writ: Sniper Scope, Black Diamond) read their sold levels, not p90_30, on the real summary.
-- SM10 and SM11's post prices land within ±5% of the true sold price; SM20's `sold half-life` rule and the built level give the same prices.
+- A flip's resale price never exceeds the high bound: the 2026-11-18 items (Tome of Arcane Brilliance, Writ: Sniper Scope, Black Diamond) read their sold levels, not p90_30, on the real summary.
+- On the real summary no busy commodity's level differs 2× from its unadjusted level (Bloodbelly Fish and Shellfish read their recent sold prices).
+- SM23's crashed item: the level within ±10% of its worth two days after the crash; the afternoon-premium items' level within ±3% of their worth at any hour.
+- SM10 and SM11's post prices land within ±5% of the true sold price; SM20's sold half-life rule, at 1 day and 3 units, and the built level give the same prices.
 - SD5, SD9, SD11 and SD29 are rerun and reported.
-- A desktop-built market (no auction ids) prices from the ask level and nothing else changes for it.
+- A desktop-built market (no auction ids) prices from the ask level, with the rebuilt pattern.
 
-**Open questions.**
-1. The forecast's ceiling and the buy-later floor from the sold curve's 90th and 10th (proposed), or kept on the ask percentiles? Gear cancels count as sales and sit in the curve's top.
-2. Does a price above the level ever need recommending? Only windows can exceed it; if the ceiling were the level too, the acceptance curve would matter only for prices the user sets.
+**Open, each measured in SP2a and taken to the user if it would change a rule.**
+1. The bounds' top: whether the curve should leave out expiry-ambiguous endings, or use a lower percentile, given §1d item 25(h) (SM24).
+2. Whether a slot's pattern should be shrunk towards 1 until it repeats (item 25(b): most single-fortnight cycles do not replicate).
+3. The half-life at 30 days of data (item 26(b)).
 
 **Milestones.**
-- **SP2-0, spec merge** (after approval): SPEC §2.4, §3.3, §3.3.2, §3.3.4, §3.4 and the contract; SCENARIOS rows and pending IDs; ARCHITECTURE. Opus: meaning-changing documents.
-- **SP2a, measure the unmeasured.** SM21 (the acceptance formula: predicted against true sell-through by price) and SM22 (the buy side: flips and buy-for-later under the level, earned per gold spent). A result that changes a rule goes to the user before SP2c. Opus: new worlds.
-- **SP2b, the level.** `engine/lifetime_prices` (the weighted level and curve), `analysis/market` and the contract (schema 17), the hourly refresh and the bench. Opus: a contract with several writers.
-- **SP2c, everything reads it.** The table above in Python and Lua, the export, the snapshot, the SD reruns. Opus: byte identity and the ported twin.
-- **SP2d, the chance.** `engine/sellprob` and what the plan's simulations pass it. Opus: an engine algorithm.
+- **SP2-0, spec merge** (this change): SPEC §2.4, §3.3, §3.3.2, §3.3.4, §3.4, §5.0 and §8.10; SCENARIOS rows and pending IDs; ARCHITECTURE. Fable: meaning-changing documents.
+- **SP2s, the simulator** (§1d items 23 and 27): the sellers refitted, the pattern world, the falling regime, the real-shaped commodity; the rows that move are reported. Opus: new worlds.
+- **SP2a, measure the unmeasured.** SM21 (the acceptance), SM22 (the buy side), SM23 (the pattern and the level), SM24 (the bounds). A result that changes a rule goes to the user before SP2c. Opus: new worlds.
+- **SP2b, the pattern, the hourly table and the level.** `engine/profile` (W17), migration and `sold_prices_h1` (BZ68), `engine/lifetime_prices` (BZ69, BZ70), `analysis/market` and the contract (schema 17, BZ71), the cloud's bench and a rebuild from raw. Opus: a contract with several writers.
+- **SP2c, everything reads it.** The table above in Python and Lua (PP5, TT51, R35), the export, the snapshot, the SD reruns. Opus: byte identity and the ported twin.
+- **SP2d, the chance.** `engine/sellprob` (P28) and what the plan's simulations pass it. Opus: an engine algorithm.
 - **SP2e, deploy and check.** The cloud deploy is the user's; then the acceptance check on the real summary.
 
 ## 4. Non-goals
@@ -185,7 +213,7 @@ Written into [SCENARIOS.md](../SCENARIOS.md) at the spec merge (SP0), not repeat
 - **SP1a, record and publish. Built 2026-11-09** (the cloud bench owed, §1c item 4). `engine/volume.py` (the sold prices per gap), migration 30, `history/writes.py` and `reads.py`, `collect/observations.py`, `analysis/market.py` and the contract (schema 16), the cloud's ingest and prune; BZ52–BZ54; `tools/bench.py --summary` (the cloud budget is 600 MB). Opus: the contract and migration have several writers.
 - **SP1b, the report and the simulator rows. Built 2026-11-09** (§1c item 5). `tools/sold_price_report.py`, SM10/SM11 updates, SM18. Sonnet for the report (it only draws numbers from a documented format), Opus for SM18's world.
 - **SP1c, deploy.** Deploying the cloud job is the user's (`cdk deploy`). The comparison week starts then.
-- **SP2** after the review: its own spec merge, approval and milestones.
+- **SP2** after the review: its own spec merge, approval and milestones (§3, "SP2 as approved").
 
 ## 7. Risks
 

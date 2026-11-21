@@ -147,7 +147,7 @@ flowchart LR
   Step -->|the next state| State
   Step -->|GapRecord| Ledger[(history.db: gap_flows, gap_seen<br/>kept 2 days)]
   Ledger --> Fold[collect/observations: the fold<br/>the open day + the last 7 hours]
-  Fold --> Rows[(volume_d1 + cover, lifetimes_d1,<br/>new_listings_d1, sold_prices_d1, sales_h1)]
+  Fold --> Rows[(volume_d1 + cover, lifetimes_d1,<br/>new_listings_d1, sold_prices_d1, sales_h1,<br/>sold_prices_h1 planned SP2b)]
   Rows --> Analysis[the 09:00 analysis, unchanged]
   Compact[(state/snapshots/: compact, 5 days)] -.replay only: a late snapshot,<br/>the cutover, a damaged state.-> Step
 ```
@@ -400,3 +400,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-20: a character stored without a realm folds into its real id: the addon's `Capture/Realmless.lua` in the saved file at login, then AHSync's `state/realmless` (with `Database.move_character`) first in the import of the file that shows it (SPEC §2.2.1, RL1–RL4).
 - 2026-11-20: CD4 built: the addon's Cooldowns tab (`UI/CooldownsView.lua` rows from the stored data and the exported CD money, `UI/CooldownsTab.lua` frames, `WindowLines.CooldownLines`), refreshed by `Capture/Cooldowns.OnChange`.
 - 2026-11-21: the sold-price review (`docs/plans/sold-price.md` §1d): SM20 (`tools/sim/price_rules.py`) paper-trades the candidate price levels; test tooling only, no component, flow or contract changes. SP2's single price level is drawn at its spec merge.
+- 2026-11-21: SP2 spec merge (`docs/plans/sold-price.md` §3, SPEC §3.3): planned `sold_prices_h1` in the market history (the sold prices per hour, 30 days), summary schema 17's `level`, `level_source`, `level_units` and `sold_curve`, the market file's level, bounds and per-item pattern (a new `EXPORT_VERSION`), and `how` rebuilt against each hour's own week. The plan, the windows, the post price and the sell chance read the level in place of the ask medians; no component is added.
