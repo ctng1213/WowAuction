@@ -7,12 +7,13 @@ Frame AHProfitWindow 640,320 640x440
   Frame AHProfitWindowAge 1150,327 96x18
     FontString - 1165,331 66x10 "data 1 h old"
   Button AHProfitWindowRefresh 1060,326 84x20 "Refresh Plan"
-  Button AHProfitWindowTabPortfolio 650,356 62x22 "Portfolio"
-  Button AHProfitWindowTabDisenchant 714,356 68x22 "Disenchant"
-  Button AHProfitWindowTabCraft 784,356 46x22 "Craft"
-  Button AHProfitWindowTabFlip 832,356 40x22 "Flip"
-  Button AHProfitWindowTabInventory 874,356 62x22 "Inventory"
-  Button AHProfitWindowTabReservations 938,356 78x22 "Reservations"
+  Button AHProfitWindowTabPortfolio 650,356 60x22 "Portfolio"
+  Button AHProfitWindowTabDisenchant 712,356 65x22 "Disenchant"
+  Button AHProfitWindowTabCraft 779,356 38x22 "Craft"
+  Button AHProfitWindowTabCooldowns 819,356 60x22 "Cooldowns"
+  Button AHProfitWindowTabFlip 881,356 32x22 "Flip"
+  Button AHProfitWindowTabInventory 915,356 60x22 "Inventory"
+  Button AHProfitWindowTabReservations 977,356 76x22 "Reservations"
   Texture - 642,378 636x1
   Button AHProfitWindowMinChance 1140,356 130x20 "Min chance: 50%   "
   Frame AHProfitWindowHeadertoday 650,380 606x20 (hidden)
@@ -21,14 +22,31 @@ Frame AHProfitWindow 640,320 640x440
   Frame AHProfitWindowHeaderflip 650,380 606x20 (hidden)
   Frame AHProfitWindowHeaderinventory 650,380 606x20 (hidden)
   Frame AHProfitWindowHeaderreservations 650,380 606x20 (hidden)
+  Frame AHProfitWindowHeadercooldowns 650,380 606x20 (hidden)
   Button AHProfitWindowTop 650,380 606x20
     FontString - 654,385 528x10 "portfolio 35   58   · 30% risk · capacity 6   49   40   · 24   40   unallocated · snapshot 10:38"
   Frame AHProfitWindowList 650,402 620x240
     Frame AHProfitWindowRow1 650,402 606x20
+      Button - 653,402 198x24 (hidden)
+      Button - 854,398 40x28 (hidden)
+      Button - 897,398 46x28 (hidden)
+      Button - 946,398 66x28 (hidden)
+      Button - 1015,398 54x28 (hidden)
+      Button - 1072,398 56x28 (hidden)
+      Button - 1131,398 58x28 (hidden)
+      Button - 1192,398 60x28 (hidden)
       FontString - 654,406 59x12 "Positions"
       FontString - 1153,407 99x10 "this character · 3"
       Texture - 652,421 602x1
     Frame AHProfitWindowRow2 650,422 606x20
+      Button - 653,422 198x24 (hidden)
+      Button - 854,418 40x28 (hidden)
+      Button - 897,418 46x28 (hidden)
+      Button - 946,418 66x28 (hidden)
+      Button - 1015,418 54x28 (hidden)
+      Button - 1072,418 56x28 (hidden)
+      Button - 1131,418 58x28 (hidden)
+      Button - 1192,418 60x28 (hidden)
     Frame AHProfitWindowRow3 650,442 606x20
       Texture - 652,442 602x1
       FontString - 654,442 150x20 "Mageweave Cloth"
@@ -36,6 +54,14 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 870,442 118x20 "Partially sold"
       FontString - 991,442 56x20 "+6  "
       FontString - 1050,442 203x20 "post now"
+      Button - 653,442 198x24 (hidden)
+      Button - 854,438 40x28 (hidden)
+      Button - 897,438 46x28 (hidden)
+      Button - 946,438 66x28 (hidden)
+      Button - 1015,438 54x28 (hidden)
+      Button - 1072,438 56x28 (hidden)
+      Button - 1131,438 58x28 (hidden)
+      Button - 1192,438 60x28 (hidden)
     Frame AHProfitWindowRow4 650,462 606x20
       Texture - 652,462 602x1
       FontString - 654,462 150x20 "Wool Cloth"
@@ -43,6 +69,14 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 870,462 118x20 "Holding"
       FontString - 991,462 56x20 "+4   72  "
       FontString - 1050,462 203x20 "hold · found, uses no capital"
+      Button - 653,462 198x24 (hidden)
+      Button - 854,458 40x28 (hidden)
+      Button - 897,458 46x28 (hidden)
+      Button - 946,458 66x28 (hidden)
+      Button - 1015,458 54x28 (hidden)
+      Button - 1072,458 56x28 (hidden)
+      Button - 1131,458 58x28 (hidden)
+      Button - 1192,458 60x28 (hidden)
     Frame AHProfitWindowRow5 650,482 606x20
       Texture - 652,482 602x1
       FontString - 654,482 150x20 "Medium Leather"
@@ -50,13 +84,45 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 870,482 118x20 "Needs reconciliation"
       FontString - 991,482 56x20 "—"
       FontString - 1050,482 203x20 "—"
+      Button - 653,482 198x24 (hidden)
+      Button - 854,478 40x28 (hidden)
+      Button - 897,478 46x28 (hidden)
+      Button - 946,478 66x28 (hidden)
+      Button - 1015,478 54x28 (hidden)
+      Button - 1072,478 56x28 (hidden)
+      Button - 1131,478 58x28 (hidden)
+      Button - 1192,478 60x28 (hidden)
     Frame AHProfitWindowRow6 650,502 606x20
+      Button - 653,502 198x24 (hidden)
+      Button - 854,498 40x28 (hidden)
+      Button - 897,498 46x28 (hidden)
+      Button - 946,498 66x28 (hidden)
+      Button - 1015,498 54x28 (hidden)
+      Button - 1072,498 56x28 (hidden)
+      Button - 1131,498 58x28 (hidden)
+      Button - 1192,498 60x28 (hidden)
       FontString - 654,502 598x20 "committed 70   · est. +10   72   · +9% on committed capital · % leaves out Wool Cloth (found stock only)"
     Frame AHProfitWindowRow7 650,522 606x20
+      Button - 653,522 198x24 (hidden)
+      Button - 854,518 40x28 (hidden)
+      Button - 897,518 46x28 (hidden)
+      Button - 946,518 66x28 (hidden)
+      Button - 1015,518 54x28 (hidden)
+      Button - 1072,518 56x28 (hidden)
+      Button - 1131,518 58x28 (hidden)
+      Button - 1192,518 60x28 (hidden)
       FontString - 654,526 33x12 "Today"
       FontString - 1043,527 209x10 "realized today · funded, then unfunded"
       Texture - 652,541 602x1
     Frame AHProfitWindowRow8 650,542 606x20
+      Button - 653,542 198x24 (hidden)
+      Button - 854,538 40x28 (hidden)
+      Button - 897,538 46x28 (hidden)
+      Button - 946,538 66x28 (hidden)
+      Button - 1015,538 54x28 (hidden)
+      Button - 1072,538 56x28 (hidden)
+      Button - 1131,538 58x28 (hidden)
+      Button - 1192,538 60x28 (hidden)
     Frame AHProfitWindowRow9 650,562 606x20
       Texture - 652,562 602x1
       FontString - 654,562 36x20 "DE"
@@ -70,7 +136,23 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 815,562 24x20 "×1"
       FontString - 693,562 119x20 "Scouting Gloves of t…"
       Texture - 654,566 36x12
+      Button - 653,562 198x24 (hidden)
+      Button - 854,558 40x28 (hidden)
+      Button - 897,558 46x28 (hidden)
+      Button - 946,558 66x28 (hidden)
+      Button - 1015,558 54x28 (hidden)
+      Button - 1072,558 56x28 (hidden)
+      Button - 1131,558 58x28 (hidden)
+      Button - 1192,558 60x28 (hidden)
     Frame AHProfitWindowRow10 650,582 606x20
+      Button - 653,582 198x24 (hidden)
+      Button - 854,578 40x28 (hidden)
+      Button - 897,578 46x28 (hidden)
+      Button - 946,578 66x28 (hidden)
+      Button - 1015,578 54x28 (hidden)
+      Button - 1072,578 56x28 (hidden)
+      Button - 1131,578 58x28 (hidden)
+      Button - 1192,578 60x28 (hidden)
       FontString - 693,582 559x20 "disenchant now · sell today 18:00"
     Frame AHProfitWindowRow11 650,602 606x20
       Texture - 652,602 602x1
@@ -85,7 +167,23 @@ Frame AHProfitWindow 640,320 640x440
       FontString - 815,602 24x20 "×1"
       FontString - 693,602 119x20 "Embossed Leather Glo…"
       Texture - 654,606 36x12
+      Button - 653,602 198x24 (hidden)
+      Button - 854,598 40x28 (hidden)
+      Button - 897,598 46x28 (hidden)
+      Button - 946,598 66x28 (hidden)
+      Button - 1015,598 54x28 (hidden)
+      Button - 1072,598 56x28 (hidden)
+      Button - 1131,598 58x28 (hidden)
+      Button - 1192,598 60x28 (hidden)
     Frame AHProfitWindowRow12 650,622 606x20
+      Button - 653,622 198x24 (hidden)
+      Button - 854,618 40x28 (hidden)
+      Button - 897,618 46x28 (hidden)
+      Button - 946,618 66x28 (hidden)
+      Button - 1015,618 54x28 (hidden)
+      Button - 1072,618 56x28 (hidden)
+      Button - 1131,618 58x28 (hidden)
+      Button - 1192,618 60x28 (hidden)
       FontString - 693,622 559x20 "disenchant now · sell today 18:00"
     Frame AHProfitWindowHeaderpfPositions 650,422 606x20
       FontString - 654,422 150x20 "Item"
@@ -122,6 +220,18 @@ Frame AHProfitWindow 640,320 640x440
     Frame AHProfitWindowHeaderpfWeek 650,402 606x20 (hidden)
     Texture - 1262,402 8x240
     Texture - 1263,402 6x115
+  Button AHProfitWindowCdChar1 650,382 84x20 (hidden)
+  Button AHProfitWindowCdChar2 736,382 84x20 (hidden)
+  Button AHProfitWindowCdChar3 822,382 84x20 (hidden)
+  Button AHProfitWindowCdChar4 908,382 84x20 (hidden)
+  Button AHProfitWindowCdChar5 994,382 84x20 (hidden)
+  Button AHProfitWindowCdChar6 1080,382 84x20 (hidden)
+  Button AHProfitWindowCdChar7 650,404 84x20 (hidden)
+  Button AHProfitWindowCdChar8 736,404 84x20 (hidden)
+  Button AHProfitWindowCdChar9 822,404 84x20 (hidden)
+  Button AHProfitWindowCdChar10 908,404 84x20 (hidden)
+  Button AHProfitWindowCdChar11 994,404 84x20 (hidden)
+  Button AHProfitWindowCdChar12 1080,404 84x20 (hidden)
   Texture - 642,731 636x1
   FontString - 652,740 489x10 "funded profit +92   62   · cost 2   52   · 37% on cash"
   FontString - 1153,740 116x10 "24   40   unallocated"

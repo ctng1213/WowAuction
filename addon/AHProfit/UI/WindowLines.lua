@@ -241,6 +241,31 @@ local function FlipLines(charId, nowMs, offset, gold)
            empty = "No flips right now: none in AHSync's plan, and no market offer under its buy price." }
 end
 
+--- The Cooldowns tab (SPEC §3.4F.8): the chosen character's catalog rows from what the addon stored, the money from
+--- AHSync's export, the character row, the bar and, in your own view, who else is ready.
+---@param loggedIn string  Your character's id
+---@param shown string     The character clicked (your own by default)
+---@param nowMs number
+---@param offset number    Local time minus UTC, ms
+---@return table           { lines, footer, empty, cooldowns = { characters, shown, bar } }
+function WindowLines.CooldownLines(loggedIn, shown, nowMs, offset)
+  local db, Cooldowns = DB.Get() or {}, AHProfit.Capture.Cooldowns
+  local characters = VM.CooldownCharacters(db, loggedIn, Cooldowns.Catalog(), Cooldowns.Spells())
+  local generatedAt = Market.Times()
+  local clock = generatedAt and select(2, VM.Clock(generatedAt, offset)) or nil
+  local ctx = { live = shown == loggedIn, nowMs = nowMs, offsetMs = offset, fileMs = generatedAt, exportClock = clock,
+                lookOf = LookOf, nameOf = function(key) return LookOf(key).name end, itemOf = Market.Item,
+                moneyOf = Market.Cooldown }
+  local bar, none = VM.CooldownBar(db, shown, ctx)
+  local lines = none and {} or VM.CooldownRows(db, shown, ctx)
+  for _, line in ipairs(lines) do line.height = AHProfit.CooldownsTab.ROW_H end
+  local footer = {}
+  footer[#footer + 1] = VM.CooldownVersionLine(AHProfit.Data.COOLDOWNS_VERSION, Market.CooldownVersion())   -- CD29
+  if ctx.live then footer[#footer + 1] = VM.CooldownFooter(db, characters, ctx) end                       -- CD14
+  return { lines = lines, footer = table.concat(footer, " · "), empty = none and "" or "No cooldown recipes.",
+           cooldowns = { characters = characters, shown = shown, bar = bar } }
+end
+
 --- What the Craft tab says when no row shows (A95): no recipes yet; none pays; or none pays at the default chance
 --- because the products' sales rates are unknown, so the verdict rests on a placeholder, not a measurement.
 ---@param recipes table[]   Known recipes ({ product, ... })
@@ -338,7 +363,7 @@ end
 ---@param minChance number  Percent
 ---@return table            { lines, footer, empty, top (Portfolio's top line or nil), right (the footer's right side
 ---                         or nil), own (the Portfolio tab without a snapshot) }
-function WindowLines.Lines(tab, nowMs, gold, minChance)
+function WindowLines.Lines(tab, nowMs, gold, minChance, cdChar)
   local offset = Adapter.LocalOffsetMs(nowMs)
   local info = Adapter.PlayerInfo()
   local charId = info.name .. "-" .. info.realm
@@ -355,6 +380,7 @@ function WindowLines.Lines(tab, nowMs, gold, minChance)
              empty = "Nothing on the AH pays to disenchant right now." }
   end
   if tab == "craft" then return CraftLines(charId, nowMs, offset, gold) end
+  if tab == "cooldowns" then return WindowLines.CooldownLines(charId, cdChar or charId, nowMs, offset) end
   if tab == "flip" then return FlipLines(charId, nowMs, offset, gold) end
   if tab == "reservations" then
     local rows = VM.Reservations(Reserves.Get(DB.Get() or {}, charId), Holdings(charId), LookOf)

@@ -118,7 +118,7 @@ describe("MainWindow layout", function()
     assert_eq({ note, item }, { item, item }, "Portfolio without a snapshot: after the badge")
   end)
 
-  it("UI13 the Flip tab at the minimum size: the six tabs fit beside the Min chance box", function()
+  it("UI13 the Flip tab at the minimum size: the seven tabs fit beside the Min chance box", function()
     Stubs.Reset()
     local SAT10, SAT18, SUN11 = 1760176800000, 1760205600000, 1760266800000   -- Sat 11 Oct 10:00 and 18:00, Sun 11:00 UTC
     UIWorld.Market({ [2589] = UIWorld.Item(45, 86, 48), [4306] = UIWorld.Item(70, 80, 60), [2840] = UIWorld.Item(500, 80, 40) },
@@ -137,9 +137,10 @@ describe("MainWindow layout", function()
     AHProfit.MainWindow.ShowTab("flip")
     local ui = AHProfit.MainWindow.Frames()
     ui.frame:SetSize(560, 360)
-    local snapshot = Layout.Golden("UI13_flip", ui.frame)
-    -- The last tab ends at x 1056, before the Min chance box at 1100.
-    assert_eq(snapshot:find("AHProfitWindowTabReservations 978,396 78x22", 1, true) ~= nil, true)
+    Layout.Golden("UI13_flip", ui.frame)
+    local rects = Layout.Resolve(UIParent)
+    local last, chance = rects[ui.tabs.reservations], rects[ui.chance]
+    assert_eq(last.x + last.w <= chance.x, true, "the last tab ends before the Min chance box (D22)")
     assert_eq(ui.rows[1].cells.flip.item:GetText(), "Linen Cloth")
   end)
 
@@ -222,7 +223,7 @@ describe("MainWindow layout", function()
     local rects = Layout.Resolve(UIParent)
     local last, chance = rects[ui.tabs.reservations], rects[ui.chance]
     assert_eq({ last.x + last.w <= chance.x, ui.thumb:IsShown(), ui.top:IsShown() }, { true, true, true },
-              "the six tabs fit beside Min chance; the sections scroll; the top line shows")
+              "the seven tabs fit beside Min chance; the sections scroll; the top line shows")
     local VM, checked = AHProfit.ViewModel, 0
     for _, step in ipairs({ 0, 6, 100 }) do
       AHProfit.MainWindow.Scroll(step)
@@ -275,5 +276,33 @@ describe("MainWindow layout", function()
       assert_eq(width <= 320, true, (line.text or line.left) .. " is " .. width .. " px wide")
     end
     World.Unname(Stubs)
+  end)
+
+  it("UI31 the Cooldowns tab in Amaya's view at the minimum size: the character row, two-line rows, the footer", function()
+    local CW = require("cooldowns_world")
+    Stubs.Reset()
+    CW.InstallMarket(UIWorld, NOW)
+    UIWorld.Plan({})
+    Stubs.Login()
+    CW.Load(Stubs)
+    Stubs.Slash("/ahp")
+    AHProfit.MainWindow.ShowTab("cooldowns")
+    local ui = AHProfit.MainWindow.Frames()
+    ui.frame:SetSize(560, 360)
+    AHProfit.MainWindow.Render()
+    Layout.Golden("UI31_cooldowns", ui.frame)
+    local rects = Layout.Resolve(UIParent)
+    local last, chance = rects[ui.tabs.reservations], rects[ui.chance]
+    assert_eq(last.x + last.w <= chance.x, true, "seven tabs fit beside Min chance at 560 px")
+    local shown = 0
+    for _, row in ipairs(ui.rows) do
+      if row:IsShown() then
+        shown = shown + 1
+        local r, list = rects[row], rects[ui.list]
+        assert_eq(r.y >= list.y and r.y + r.h <= list.y + list.h, true, "row " .. shown .. " inside the list")
+      end
+    end
+    assert_eq({ shown > 0, ui.rows[1].cells.cooldowns.item:GetText(), ui.cd.buttons[1]:GetText() },
+              { true, "Arcanite Bar", "Amaya · you" })
   end)
 end)

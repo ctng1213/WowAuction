@@ -48,6 +48,15 @@ ViewModel.COLUMN_HELP = {
   Keeping = "Units this character keeps for itself; \"All\" keeps every one. Click the row to change it",
   Held = "Units held in bags, bank and mail",
   Free = "Units above what you keep: the only ones suggested for selling or crafting",
+  -- The Cooldowns tab (SPEC §3.4F.8).
+  ["Item · recipe"] = "What a cooldown makes, in its quality colour, and the recipe or tool that makes it",
+  Skill = "The skill the recipe needs. Amber with the character's own when it is below",
+  Cooldown = "How long the recipe is locked after each use; \"shared\": one cooldown for its whole group",
+  Ready = "Ready, or the time left. Orange: Not learned, Needs item (the tool isn't in the bags or bank) or Not read",
+  ["AH price"] = "The product's lowest price in AHSync's export; muted with its age past 7 days. Hover for its tooltip",
+  ["Net / use"] = "What one use earns if it sells: units made × price after the cut, less the mats (AHSync's export)",
+  ["Can Make"] = "Yes when this character can use it now: skill, recipe, tool, cooldown and mats in its bags. "
+                 .. "Yes (bank): a mat or the tool is in the bank",
   Source = "Where the mats come from: Owned (your bags), AH, Vendor, or Mixed (more than one)",
   ["×"] = "Crafts that each still pay, given the mats you have and what the AH lists",
   Mats = "Gold for the mats you need to buy, at the AH's current prices. \"—\": you own them all",

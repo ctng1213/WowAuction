@@ -171,7 +171,7 @@ flowchart TD
   Sessions --> Gathering[Gathering page: items/hr, net gold/hr]
   Catalog[(data/cooldown_catalog.json<br/>curated; generated into Data/Cooldowns.lua)] -.built CD1.-> Cooldowns
   Journal -.built CD2: recipe_cooldowns.-> Cooldowns[engine/cooldowns.py + cooldowns_view.py<br/>states, groups, money; Cooldowns page at request time]
-  Cooldowns -.built CD3: the CD export section.-> AddonCD[Addon Cooldowns tab: lookups only, planned CD4]
+  Cooldowns -.built CD3: the CD export section.-> AddonCD[Addon Cooldowns tab: lookups only, built CD4]
   Importer -->|re-plan| Plan
   Plan --> Export[PortfolioPlan.lua]
   Export --> AddonLocal[Addon: local positions until AHSync reads them]
@@ -398,3 +398,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-20: CD2 built: the addon's cooldown reads (`Core/AdapterCooldowns.lua`) and ready times (`Capture/Cooldowns.lua`, the `cooldowns` field), ingested into `recipe_cooldowns` (schema 33). A "no time left" reading counts only once the client is trusted (D15). The in-game check is pending.
 - 2026-11-20: CD3 built: `engine/cooldowns` states, money and Can Make, `engine/cooldowns_view` (staged at refresh, rendered at each request with the server's clock), the dashboard's Cooldowns page, and the market file's `CD` table with `EXPORT_VERSION` 8 on both sides; the shortlist carries every catalog item.
 - 2026-11-20: a character stored without a realm folds into its real id: the addon's `Capture/Realmless.lua` in the saved file at login, then AHSync's `state/realmless` (with `Database.move_character`) first in the import of the file that shows it (SPEC §2.2.1, RL1–RL4).
+- 2026-11-20: CD4 built: the addon's Cooldowns tab (`UI/CooldownsView.lua` rows from the stored data and the exported CD money, `UI/CooldownsTab.lua` frames, `WindowLines.CooldownLines`), refreshed by `Capture/Cooldowns.OnChange`.
