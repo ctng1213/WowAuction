@@ -43,6 +43,7 @@ local searchedThisVisit = {}      -- key -> true: searched since the AH opened (
 local current = nil               -- the panel's last view
 local lastSearch = nil            -- the key the last search was for, until its results arrive (A38)
 local pendingSell = nil           -- { price, untilMs }: put the price back once after the AH's own (A29)
+local kept = { key = nil, rows = nil }   -- Post's Today rows and their "charId:minChance" (A104)
 local perf = { openMs = 0, redrawMs = 0, slowestMs = 0, redraws = 0 }   -- A100: the open's and the redraws' time
 AHPanel.REFILL_MS = 10000
 AHPanel.BAR_WIDTH = 280             -- the Full scan bar, px (A43)
@@ -93,13 +94,31 @@ local function Targets(charId)
   return out
 end
 
---- What to post now: this character's Today posts for items in its bags (A30).
+--- This character's Today rows at the window's Min chance, built once and kept until AHPanel.Forget (A104): a build
+--- evaluates every craft, about 5 s at the AH on 2026-11-20, and only a scan, a reserve or a rule should pay it.
+---@param charId string
+---@return table[]  Today rows (read only)
+local function KeptToday(charId)
+  local key = charId .. ":" .. AHProfit.MainWindow.MinChance()
+  if kept.key ~= key then
+    kept.rows = AHProfit.MainWindow.TodayRows(charId)
+    kept.key = key
+  end
+  return kept.rows
+end
+
+--- What to post now: this character's Today posts for items in its bags (A30), capped at the bags as they are now (A31).
 ---@param charId string
 ---@return table[]  Today rows
 local function Posts(charId)
   local bags = (((DB.Get() or {}).inventory or {})[charId] or {}).bags
   local held = Options.Units(AHProfit.Capture.Inventory.Decode(bags))
-  return VM.PostableRows(AHProfit.MainWindow.TodayRows(charId), held, AHPanel.POST_ROWS)
+  return VM.PostableRows(KeptToday(charId), held, AHPanel.POST_ROWS)
+end
+
+--- Drop the kept Today list, so the next redraw builds it again (a finished scan, a reserve or a rule, A104).
+function AHPanel.Forget()
+  kept = { key = nil, rows = nil }
 end
 
 --- The rows the live portfolio left out (SPEC §4.0, A82): its excluded buys for Shopping (not already a funded row)
@@ -514,10 +533,10 @@ Events.Register("AUCTION_HOUSE_CLOSED", AHPanel.OnClosed)
 Events.Register("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED", AHPanel.OnBrowseResults)
 Events.Register("COMMODITY_SEARCH_RESULTS_UPDATED", AHPanel.OnSellSearch)
 Events.Register("ITEM_SEARCH_RESULTS_UPDATED", AHPanel.OnSellSearch)
-Replicate.OnBook(function() if ui and ui.frame:IsShown() then AHPanel.Render() end end)
+Replicate.OnBook(function() AHPanel.Forget(); if ui and ui.frame:IsShown() then AHPanel.Render() end end)   -- A104
 Replicate.OnProgress(function() if ui and ui.frame:IsShown() then AHPanel.ShowScan() end end)
 -- A post (or a buy) changes the bags; redraw once they have been read again (A31).
 AHProfit.Capture.Inventory.OnChange(function() if ui and ui.frame:IsShown() then AHPanel.Render() end end)
-AHProfit.RowMenu.OnChange(function() if ui and ui.frame:IsShown() then AHPanel.Render() end end)
+AHProfit.RowMenu.OnChange(function() AHPanel.Forget(); if ui and ui.frame:IsShown() then AHPanel.Render() end end)
 -- A confirmed purchase lowers Shopping's quantity (A39).
 AHProfit.Capture.Purchases.OnChange(function() if ui and ui.frame:IsShown() then AHPanel.Render() end end)

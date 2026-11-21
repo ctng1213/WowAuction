@@ -32,6 +32,47 @@ describe("WindowLines", function()
     local flip = AHProfit.WindowLines.Lines("flip", NOW, 314000, 50)
     assert_eq(flip.empty, "No flips right now: none in AHSync's plan, and no market offer under its buy price.")
   end)
+  it("A105 the own crafts and the Disenchant tab are kept across bag changes and tabs; a scan or a reserve rebuilds them", function()
+    Stubs.Reset()
+    Stubs.world.money = 10000000
+    _G.AHProfitPlan = nil
+    Stubs.world.containers = { [0] = { size = 2, slots = { [1] = { id = 2840, count = 4 } } } }
+    UIWorld.Market({ [6217] = UIWorld.Item(4100, 86, 6, { postPrice = 4000, chance = 1, sellValue = 3800, refStack = 1 }),
+                     [2840] = UIWorld.Item(1000, 80, 40, { curQty = 2, postPrice = 1000, sellValue = 950 }) }, NOW)
+    Stubs.Login()
+    AHProfitDB.knownRecipes["Amaya-Grommash"] = "2663"
+    AHProfitDB.recipes.Blacksmithing = { [2663] = { product = 6217, yieldMin = 1, yieldMax = 1, reagents = "2840,2" } }
+    local Options, crafts, disenchants = AHProfit.Options, 0, 0
+    local Crafts, Disenchant = Options.Crafts, Options.Disenchant
+    Options.Crafts = function(...) crafts = crafts + 1; return Crafts(...) end
+    Options.Disenchant = function(...) disenchants = disenchants + 1; return Disenchant(...) end
+    local Lines = AHProfit.WindowLines.Lines
+    local first = Lines("craft", NOW, 10000000, 0).lines[1].item
+    Stubs.world.containers[0].slots = { [1] = { id = 2840, count = 2 } }
+    Stubs.FireEvent("BAG_UPDATE_DELAYED")
+    Stubs.Advance(2)
+    Lines("craft", NOW, 10000000, 0)
+    Lines("portfolio", NOW, 10000000, 0)
+    Lines("inventory", NOW, 10000000, 0)
+    Lines("disenchant", NOW, 10000000, 0)
+    Lines("disenchant", NOW, 10000000, 0)
+    assert_eq({ crafts, disenchants, Lines("craft", NOW, 10000000, 0).lines[1].item }, { 1, 1, first },
+              "bags changed, four tabs drawn: one craft evaluation, one disenchant pass")
+    local scan = { at = NOW + 1, book = { [2840] = { [900] = { [1 * 5 + 4] = 9 } } } }     -- one stored book, as in game
+    AHProfit.Scan.Replicate.LastBook = function() return scan end
+    AHProfit.Scan.Replicate.NotifyBook()
+    Lines("craft", NOW, 10000000, 0)
+    Lines("disenchant", NOW, 10000000, 0)
+    assert_eq({ crafts, disenchants }, { 2, 2 }, "a finished scan")
+    Stubs.Slash("/ahp")
+    AHProfit.RowMenu.Open(AHProfit.MainWindow.Frames().frame, 2840, "Copper Bar")
+    crafts = 0
+    AHProfit.RowMenu.Keep(1)
+    Lines("craft", NOW, 10000000, 0)
+    Lines("craft", NOW, 10000000, 0)
+    assert_eq(crafts, 1, "a reserve: rebuilt once (by the window's own redraw), then reused")
+  end)
+
   it("A94 every tab builds on the live Forever client, which has no global GetItemInfo", function()
     Stubs.Reset()
     Stubs.LiveForeverClient()
