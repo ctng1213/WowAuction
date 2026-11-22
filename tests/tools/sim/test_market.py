@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import sys
+
+import pytest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
@@ -131,3 +133,16 @@ def test_planted_auctions_are_posted_on_time_and_cancelled_when_told():
     m.run_until(START + 4 * HOUR_MS)
     assert [(e.kind, e.at_ms, e.price, e.actor) for e in m.truth.events] == [
         ("post", START + HOUR_MS, 150_000, "p0"), ("cancel", START + 3 * HOUR_MS, 150_000, "p0")]
+
+
+def test_an_hourly_fair_price_moves_with_the_clock_and_shifts_must_be_in_order():
+    hourly = tuple(2.0 if slot == 0 else 1.0 for slot in range(168))      # Monday 00:00 UTC is dear
+    item = Item(1, "x", True, 100, 0, 0, hourly=hourly, shifts=((0, 0.5, 1.0),))
+    monday = 1_794_182_400_000                                            # Mon 2026-11-09 00:00 UTC
+    market = Market(World(1, monday - 1, 1, (item,)))
+    market.run_until(monday)
+    assert market._fair(item) == 100.0                                    # x 2 at the hour, x 0.5 by the shift
+    market.run_until(monday + HOUR_MS)
+    assert market._fair(item) == 50.0
+    with pytest.raises(ValueError):
+        Market(World(1, 0, 1, (Item(2, "y", True, 1, 0, 0, shifts=((5, 1.0, 1.0), (1, 1.0, 1.0))),)))
