@@ -47,6 +47,9 @@ BUDGET_SERVICES = ("AWS Lambda", "Amazon Simple Storage Service", "Amazon CloudF
                    "Amazon Simple Notification Service", "Amazon Simple Queue Service", "AWS Secrets Manager")
 COLLECTOR_TIMEOUT = Duration.minutes(2)
 ANALYZER_TIMEOUT = Duration.minutes(15)
+# Ingest's and the analyzer's /tmp, Lambda's maximum: the history (1.67 GB on 2026-11-22) and its VACUUM INTO copy
+# outgrew 4 GiB and every Ingest run failed `database or disk is full` (LESSONS 2026-11-22).
+EPHEMERAL_GIB = 10
 INGEST_TIMEOUT = Duration.minutes(15)
 SLOW_RUN = Duration.minutes(12)        # the analyzer and Ingest duration alarms (FM80)
 HISTORY_BEHIND_MINUTES = 180           # the history this far behind the raw, for 3 hours, alarms (FM84)
@@ -152,7 +155,7 @@ class MarketStack(Stack):
         function = lambda_.Function(
             self, "Ingest", runtime=lambda_.Runtime.PYTHON_3_12, architecture=lambda_.Architecture.ARM_64,
             handler="ahcloud.ingest.handler", code=lambda_.Code.from_asset(config.asset_path),
-            timeout=INGEST_TIMEOUT, memory_size=4096, ephemeral_storage_size=Size.gibibytes(4),
+            timeout=INGEST_TIMEOUT, memory_size=4096, ephemeral_storage_size=Size.gibibytes(EPHEMERAL_GIB),
             reserved_concurrent_executions=1, log_group=log_group, retry_attempts=0,
             environment={"DATA_BUCKET": self.data.bucket_name, "MARKET": config.market,
                          "SECRET_NAME": config.secret_name})
@@ -180,7 +183,7 @@ class MarketStack(Stack):
         function = lambda_.Function(
             self, "Analyzer", runtime=lambda_.Runtime.PYTHON_3_12, architecture=lambda_.Architecture.ARM_64,
             handler="ahcloud.analyzer.handler", code=lambda_.Code.from_asset(config.asset_path),
-            timeout=ANALYZER_TIMEOUT, memory_size=8192, ephemeral_storage_size=Size.gibibytes(4),
+            timeout=ANALYZER_TIMEOUT, memory_size=8192, ephemeral_storage_size=Size.gibibytes(EPHEMERAL_GIB),
             reserved_concurrent_executions=1, log_group=log_group, dead_letter_queue=dead_letters,
             retry_attempts=1,
             environment={"DATA_BUCKET": self.data.bucket_name, "INTEL_BUCKET": self.intel.bucket_name,
