@@ -14,6 +14,7 @@ positions (some exactly at the cheapest price, some just above, a few under it),
 """
 from __future__ import annotations
 
+import bisect
 import heapq
 import math
 import random
@@ -61,8 +62,11 @@ class Item:
     relist_share: float = 0.0         # share of cancels whose seller posts the same units again at once (a relist)
     bots: int = 0                     # undercut bots: each hour each cancels its auction and posts 1 c under the rest
     # From each (UTC ms, price factor, demand factor) on, until the next, the fair price is × price factor and buyers
-    # arrive × demand factor (a lasting drop, a drift, a quiet day; SD rows). () = constant (every earlier world).
+    # arrive × demand factor (a lasting drop, a drift, a quiet day; SD rows), in ascending time order. () = constant.
     shifts: tuple[tuple[int, float, float], ...] = ()
+    # 168 fair-price multipliers by hour of week (UTC, Mon 00:00 first): what buyers will pay and what sellers think
+    # the item is worth move with the clock, while buyers come as often (`weekly` shapes that). () = flat.
+    hourly: tuple[float, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -123,6 +127,9 @@ class Market:
         Args:
             world: The scenario.
             truth: The log to write to; a new one when None.
+
+        Raises:
+            ValueError: An item's shifts are not in ascending time order.
         """
         self.world, self.truth = world, truth if truth is not None else Truth()
         self.rng = random.Random(world.seed)
@@ -134,6 +141,10 @@ class Market:
         self._next_id = FIRST_AUCTION_ID
         self._actors = 0
         self._bots: list[list] = []                 # bot number -> [item key, name, its live auction id or None]
+        self._shift_starts = {key: [start for start, _, _ in item.shifts] for key, item in self.items.items()}
+        for key, starts in self._shift_starts.items():
+            if starts != sorted(starts):
+                raise ValueError(f"item {key}'s shifts are not in time order")
         for key in sorted(self.items):
             self._schedule_arrival(self.items[key], "seller", world.start_ms)
             self._schedule_arrival(self.items[key], "buyer", world.start_ms)
@@ -344,14 +355,11 @@ class Market:
         Returns:
             (price factor, demand factor) of the last shift at or before at_ms; (1, 1) before the first.
         """
-        factors = (1.0, 1.0)
-        for start, price, demand in item.shifts:
-            if start <= at_ms:
-                factors = (price, demand)
-        return factors
+        last = bisect.bisect_right(self._shift_starts[item.key], at_ms) - 1
+        return (1.0, 1.0) if last < 0 else item.shifts[last][1:]
 
     def _fair(self, item: Item) -> float:
-        """An item's fair price now, its shifts applied.
+        """An item's fair price now, its shifts and its hour of the week applied.
 
         Args:
             item: The item.
@@ -359,7 +367,8 @@ class Market:
         Returns:
             Copper, float.
         """
-        return item.fair_price * self._shift(item, self.now_ms)[0]
+        clock = item.hourly[slot_of(self.now_ms // HOUR_MS)] if item.hourly else 1.0
+        return item.fair_price * self._shift(item, self.now_ms)[0] * clock
 
     def _schedule_arrival(self, item: Item, who: str, after_ms: int) -> None:
         """Queue an item's next seller or buyer: a Poisson process, thinned by the weekly profile for buyers.

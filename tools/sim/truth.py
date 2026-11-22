@@ -175,14 +175,28 @@ class Truth:
             Units of the buys whose auction's first snapshot (the first at or after its post) came before the buy;
             units bought out before any snapshot saw them are left out.
         """
+        return sum(self.seen_sold_prices(key, from_ms, to_ms, snapshots).values())
+
+    def seen_sold_prices(self, key: int, from_ms: int, to_ms: int, snapshots: Sequence[int]) -> dict[int, int]:
+        """The prices of the units bought in a span after their auction was in a snapshot (what a sold price can be).
+
+        Args:
+            key: Item key.
+            from_ms: Start, exclusive, UTC ms.
+            to_ms: End, inclusive, UTC ms.
+            snapshots: Snapshot times, ascending, UTC ms.
+
+        Returns:
+            Unit price copper -> units, over the buys `seen_sold_units` counts.
+        """
         posted = {e.auction: e.at_ms for e in self.events if e.key == key and e.kind == "post"}
-        seen = 0
+        seen: dict[int, int] = {}
         for e in self.between(key, from_ms, to_ms):
             if e.kind != "buy":
                 continue
             first = bisect.bisect_left(snapshots, posted[e.auction])
             if first < len(snapshots) and snapshots[first] < e.at_ms:
-                seen += e.units
+                seen[e.price] = seen.get(e.price, 0) + e.units
         return seen
 
     def seen(self, key: int, snapshots: Sequence[int]) -> frozenset[int]:
