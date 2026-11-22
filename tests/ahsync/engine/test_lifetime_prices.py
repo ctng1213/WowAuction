@@ -94,6 +94,16 @@ def test_BZ69_the_level_is_the_recency_weighted_sold_median_else_the_ask_blend()
     assert price_level([sold(30 * 24, 80, 9.0)], NOW, None, asks, None).source == "asks"   # older than 30 days
 
 
+def test_BZ72_a_thin_items_ask_level_is_held_under_its_few_sales():
+    asks = (60, 90, 120)                                                       # the ask level 77 c
+    assert price_level([sold(0, 50, 2.0)], NOW, None, asks, None) == Level(50, "asks", 2.0, None, 50, 50)
+    assert price_level([sold(0, 100, 2.0)], NOW, None, asks, None).level == 77           # never raised
+    assert fields(price_level([sold(0, 50, 2.999)], NOW, None, asks, None), "level", "source") == (50, "asks")
+    assert price_level([sold(48, 50, 1.0)], NOW, None, asks, None).level == 50          # one sale, 48 h old
+    assert price_level([sold(0, 50, 2.0)], NOW, None, asks, 40) == Level(50, "asks", 2.0, None, 40, 50)   # p10_30 40 c
+    assert price_level([], NOW, None, asks, None).level == 77
+
+
 def test_BZ70_the_bounds_come_from_the_clean_sold_curve_at_20_weighted_units():
     rows = [sold(0, 80, 2.0), sold(0, 100, 14.0), sold(0, 150, 4.0)]
     assert price_level(rows, NOW, None, (None, None, None), 60) ==         Level(100, "sold", 20.0, (80, 80, 100, 100, 100, 150, 150), 80, 150)
