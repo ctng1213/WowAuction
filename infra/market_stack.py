@@ -109,7 +109,9 @@ class MarketStack(Stack):
         data = s3.Bucket(self, "Data", lifecycle_rules=[s3.LifecycleRule(
             id="raw-to-infrequent-access", prefix="raw/",
             transitions=[s3.Transition(storage_class=s3.StorageClass.INFREQUENT_ACCESS,
-                                       transition_after=Duration.days(30))])], **common)
+                                       transition_after=Duration.days(30))]),
+            s3.LifecycleRule(id="abandoned-uploads", abort_incomplete_multipart_upload_after=Duration.days(1))],
+            **common)                                  # a run killed mid-upload leaves parts; a day later they go (FM91)
         intel = s3.Bucket(self, "Intel", lifecycle_rules=[s3.LifecycleRule(
             id="expire-old-summaries", expiration=Duration.days(7))], **common)
         return data, intel

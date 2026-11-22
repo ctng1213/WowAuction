@@ -78,3 +78,73 @@ def test_CS5_metric_sums_add_every_page_and_read_0_without_data():
     assert metric_sums(queries, 1794234600000, 1794321000000, client) == {"collector": 6, "mismatch": 1, "refused": 0}
     assert [c[4] for c in client.calls] == [None, "1"]
     assert client.calls[0][2] == datetime(2026, 11, 9, 14, 30, tzinfo=timezone.utc)
+
+
+def test_FM91_a_large_file_goes_up_in_parts_and_a_failed_or_lost_upload_is_aborted(tmp_path, monkeypatch):
+    from ahcloud import aws
+    from ahcloud.store import PreconditionFailed
+    monkeypatch.setattr(aws, "PART_BYTES", 4)
+    client, path = FakeS3Client(), tmp_path / "history.db"
+    store = S3Store("b", client)
+    path.write_bytes(b"0123456789")                                             # 3 parts: 4, 4 and 2 bytes
+    etag = store.put_file("state/history.db", path)
+    assert [c[3:] for c in client.calls if c[0] == "part"] == [(1, 4), (2, 4), (3, 2)]
+    assert client.objects["state/history.db"] == b"0123456789" and etag.endswith('-3"')
+    assert store.etag("state/history.db") == etag and store.etag("state/other") is None
+
+    def broken(**_kwargs):
+        raise ClientError("InternalError", "UploadPart")
+
+    real = client.upload_part
+    client.upload_part = broken
+    with pytest.raises(ClientError, match="InternalError"):
+        store.put_file("state/history.db", path, if_match=etag)
+    client.upload_part = real
+    assert client.calls[-1][0] == "abort" and not client.uploads                # no parts left behind
+    client.put_object(Bucket="b", Key="state/history.db", Body=b"another writer")   # a lost race
+    with pytest.raises(PreconditionFailed):
+        store.put_file("state/history.db", path, if_match=etag)
+    assert [c[0] for c in client.calls[-2:]] == ["complete", "abort"] and not client.uploads
+    assert client.objects["state/history.db"] == b"another writer"
+
+
+def test_a_small_file_is_one_conditional_put_from_the_file():
+    import tempfile
+    from pathlib import Path
+    client = FakeS3Client()
+    store = S3Store("b", client)
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / "x"
+        path.write_bytes(b"small")
+        etag = store.put_file("state/x", path)
+        store.put_file("state/x", path, if_match=etag)
+    assert [c[3] for c in client.calls if c[0] == "put"] == [None, etag] and client.objects["state/x"] == b"small"
+
+
+def test_FM91_a_failed_abort_never_hides_the_lost_race_and_part_checksums_reach_the_completion(tmp_path, monkeypatch):
+    from ahcloud import aws
+    from ahcloud.store import PreconditionFailed
+    monkeypatch.setattr(aws, "PART_BYTES", 4)
+    client, path = FakeS3Client(), tmp_path / "history.db"
+    store = S3Store("b", client)
+    path.write_bytes(b"0123456789")
+    etag = store.put_file("state/history.db", path)
+    completions = []
+    real_complete = client.complete_multipart_upload
+
+    def complete(**kw):
+        completions.append(kw["MultipartUpload"]["Parts"])
+        return real_complete(**kw)
+
+    client.complete_multipart_upload = complete
+    etag = store.put_file("state/history.db", path, if_match=etag)
+    assert [p["ChecksumCRC32"] for p in completions[-1]] == [client.crc32(b) for b in (b"0123", b"4567", b"89")]
+
+    def gone(**_kwargs):
+        raise ClientError("NoSuchUpload", "AbortMultipartUpload")
+
+    client.abort_multipart_upload = gone
+    client.put_object(Bucket="b", Key="state/history.db", Body=b"another writer")
+    with pytest.raises(PreconditionFailed):                    # still a lost race, though the abort failed
+        store.put_file("state/history.db", path, if_match=etag)
+

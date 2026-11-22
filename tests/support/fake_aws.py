@@ -7,8 +7,10 @@ describe_alarms (through a paginator) and get_metric_data (in pages, with NextTo
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import io
+import zlib
 
 
 class ClientError(Exception):
@@ -52,6 +54,9 @@ class FakeS3Client:
     def __init__(self, page_size: int = 1000) -> None:
         self.objects: dict[str, bytes] = {}
         self.headers: dict[str, dict[str, str]] = {}               # key -> CacheControl / ContentType of the last put
+        self.etags: dict[str, str] = {}                            # key -> its ETag; a multipart one ends "-<parts>"
+        self.uploads: dict[str, dict[int, bytes]] = {}             # open multipart uploads: id -> part -> bytes
+        self.algorithms: dict[str, str | None] = {}                # their checksum algorithm at creation
         self.page_size = page_size
         self.calls: list[tuple] = []
 
@@ -64,23 +69,80 @@ class FakeS3Client:
         if Key not in self.objects:
             raise NoSuchKey()
         data = self.objects[Key]
-        return {"Body": io.BytesIO(data), "ETag": self.etag(data)}
+        return {"Body": io.BytesIO(data), "ETag": self.stored_etag(Key)}
+
+    def head_object(self, Bucket: str, Key: str) -> dict:         # noqa: N803
+        self.calls.append(("head", Bucket, Key))
+        if Key not in self.objects:
+            raise ClientError("404", "HeadObject")
+        return {"ETag": self.stored_etag(Key)}
+
+    def stored_etag(self, Key: str) -> str:                       # noqa: N803
+        """An object's ETag: a multipart upload's as recorded, else the MD5 S3 gives a single put (tests may set
+        `objects` directly)."""
+        return self.etags.get(Key) or self.etag(self.objects[Key])
+
+    def _check(self, Key: str, IfMatch: str | None, operation: str) -> None:   # noqa: N803
+        if IfMatch is not None:
+            if Key not in self.objects:
+                raise ClientError("NoSuchKey", operation)
+            if self.stored_etag(Key) != IfMatch:
+                raise ClientError("PreconditionFailed", operation)
+
+    def create_multipart_upload(self, Bucket: str, Key: str, ChecksumAlgorithm: str | None = None) -> dict:   # noqa: N803
+        upload = f"u{len(self.calls)}"
+        self.calls.append(("create_upload", Bucket, Key, upload))
+        self.uploads[upload] = {}
+        self.algorithms[upload] = ChecksumAlgorithm
+        return {"UploadId": upload}
+
+    @staticmethod
+    def crc32(data: bytes) -> str:
+        return base64.b64encode(zlib.crc32(data).to_bytes(4, "big")).decode("ascii")
+
+    def upload_part(self, Bucket: str, Key: str, UploadId: str, PartNumber: int, Body: bytes,   # noqa: N803
+                    ChecksumAlgorithm: str | None = None) -> dict:
+        self.calls.append(("part", Bucket, Key, PartNumber, len(Body)))
+        self.uploads[UploadId][PartNumber] = bytes(Body)
+        answer = {"ETag": self.etag(bytes(Body))}
+        if ChecksumAlgorithm == "CRC32":
+            answer["ChecksumCRC32"] = self.crc32(bytes(Body))
+        return answer
+
+    def complete_multipart_upload(self, Bucket: str, Key: str, UploadId: str, MultipartUpload: dict,   # noqa: N803
+                                  IfMatch: str | None = None) -> dict:
+        self.calls.append(("complete", Bucket, Key, IfMatch))
+        self._check(Key, IfMatch, "CompleteMultipartUpload")
+        parts = self.uploads[UploadId]
+        for given in MultipartUpload["Parts"]:            # S3: a part's checksum must match how the upload was created
+            want = self.crc32(parts[given["PartNumber"]]) if self.algorithms[UploadId] == "CRC32" else None
+            if given.get("ChecksumCRC32") != want or given["ETag"] != self.etag(parts[given["PartNumber"]]):
+                raise ClientError("InvalidPart", "CompleteMultipartUpload")
+        self.uploads.pop(UploadId)
+        numbers = [p["PartNumber"] for p in MultipartUpload["Parts"]]
+        assert numbers == sorted(parts), "every part, in order"
+        self.objects[Key] = b"".join(parts[n] for n in numbers)
+        self.etags[Key] = self.etag(self.objects[Key])[:-1] + f'-{len(numbers)}"'
+        return {"ETag": self.etags[Key]}
+
+    def abort_multipart_upload(self, Bucket: str, Key: str, UploadId: str) -> dict:   # noqa: N803
+        self.calls.append(("abort", Bucket, Key, UploadId))
+        self.uploads.pop(UploadId, None)
+        return {}
 
     def put_object(self, Bucket: str, Key: str, Body: bytes, IfMatch: str | None = None,   # noqa: N803
                    **headers: str) -> dict:
         self.calls.append(("put", Bucket, Key, IfMatch))
         self.headers[Key] = headers
-        if IfMatch is not None:
-            if Key not in self.objects:
-                raise ClientError("NoSuchKey", "PutObject")
-            if self.etag(self.objects[Key]) != IfMatch:
-                raise ClientError("PreconditionFailed", "PutObject")
-        self.objects[Key] = bytes(Body)
-        return {"ETag": self.etag(self.objects[Key])}
+        self._check(Key, IfMatch, "PutObject")
+        self.objects[Key] = Body.read() if hasattr(Body, "read") else bytes(Body)
+        self.etags.pop(Key, None)
+        return {"ETag": self.stored_etag(Key)}
 
     def delete_object(self, Bucket: str, Key: str) -> dict:     # noqa: N803
         self.calls.append(("delete", Bucket, Key))
         self.objects.pop(Key, None)
+        self.etags.pop(Key, None)
         return {}
 
     def get_paginator(self, name: str) -> _Paginator:

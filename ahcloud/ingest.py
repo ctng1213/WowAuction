@@ -4,8 +4,9 @@ A run reads `state/ingest.json` and the raw listing, and stops when nothing is n
 it downloads `state/history.db` (AHSync's own schema) and the compact snapshot store's window; ingests the oldest
 pending raw snapshots, at most `MAX_SNAPSHOTS_PER_RUN` (a snapshot is one raw object, one picture of the house at one
 Blizzard refresh), in time order, so a repeated, late or dropped event comes out the same; fills the catalog for new
-items from Blizzard's item search; prunes (books 2 days, history 90); uploads the compact files and a `VACUUM INTO`
-copy of the database with If-Match on the ETag downloaded; and only then writes `state/ingest.json`, which can
+items from Blizzard's item search; prunes (books 2 days, history 90); uploads the compact files and then the
+database itself, checkpointed and streamed, with If-Match on the ETag downloaded (FM91; a `VACUUM INTO` copy
+until 2026-11-22); and only then writes `state/ingest.json`, which can
 therefore lag the database but never lead it. A backlog drains over successive scheduled runs. The daily analysis
 (`ahcloud.daily`) only reads what this writes.
 
@@ -195,12 +196,11 @@ def run_ingest(data: Store, client: BlizzardClient, market: str, workdir: Path, 
     with profile.stage("download"):
         shutil.rmtree(workdir, ignore_errors=True)
         workdir.mkdir(parents=True)
-        found = data.get(DB_KEY)
-        if found and not fresh:
-            (workdir / "history.db").write_bytes(found.data)
-        db = Database.open(workdir / "history.db", 0, None)
+        path = workdir / "history.db"
+        etag = data.etag(DB_KEY) if fresh else data.get_file(DB_KEY, path)   # streamed, never whole in memory (FM91)
+        db = Database.open(path, 0, None)
     try:
-        run = _Run(found.etag if found else None, fresh, cap, started_ms, workdir, clock, profile)
+        run = _Run(etag, fresh, cap, started_ms, workdir, clock, profile)
         return _profiled(_ingest(db, data, client, market, run), profile)
     finally:
         db.close()
@@ -361,9 +361,7 @@ def _write_back(db: Database, data: Store, market: str, store: SnapshotStore, ru
         ahcloud.store.PreconditionFailed: Another writer uploaded the database meanwhile.
     """
     upload_compact_files(data, store.root, market, written)
-    copy = run.workdir / "upload.db"
-    db.conn.execute("VACUUM INTO ?", (str(copy),))
-    data.put(DB_KEY, copy.read_bytes(), if_match=run.etag)
+    data.put_file(DB_KEY, checkpointed(db), if_match=run.etag)    # the working file itself: one copy (FM91)
     if last:
         finish_compact(data, store.root, market, last - COMPACT_DAYS * DAY_MS)
 
@@ -379,6 +377,29 @@ def remember(db: Database, name: str, times: list[int]) -> None:
     if times:
         known = set(json.loads(db.get_meta(name) or "[]"))
         db.set_meta(name, json.dumps(sorted(known | set(times))))
+
+
+def checkpointed(db: Database) -> Path:
+    """The database file with every committed write in it, ready to upload as it is (SPEC §2.4, FM91).
+
+    The history is in WAL mode, so recent commits may sit in its -wal file; a TRUNCATE checkpoint moves them into the
+    main file and empties the log. Ingest is the only connection, so nothing can hold the checkpoint back.
+
+    Args:
+        db: The history, with no transaction open.
+
+    Returns:
+        The database's file.
+
+    Raises:
+        RuntimeError: A transaction is open, or the checkpoint could not finish (another connection held it back).
+    """
+    if db.conn.in_transaction:
+        raise RuntimeError("the history has a transaction open; nothing was uploaded")
+    busy, _, _ = db.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+    if busy:
+        raise RuntimeError("the history's checkpoint was held back; nothing was uploaded")
+    return db.path
 
 
 def _finish_history(db: Database, client: BlizzardClient, market: str, store: SnapshotStore,
