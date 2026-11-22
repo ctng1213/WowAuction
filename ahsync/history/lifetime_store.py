@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ahsync.engine.expiry import LeaveWindow
 from ahsync.engine.lifetimes import LifeFlow, LifeState
@@ -25,6 +25,7 @@ class GapSummary:
     flows: dict[int, LifeFlow]                         # every item listed in either snapshot, zeros included
     positions: dict[int, dict[int, float]]             # key -> position (thousandths) -> units (BZ29)
     prices: dict[int, dict[int, float]]                # key -> unit price copper -> units (BZ52)
+    clean: dict[int, dict[int, float]] = field(default_factory=dict)   # of them, the clean units (BZ68)
 
 
 def encode_units(by_value: Mapping[int, float]) -> str:
@@ -154,9 +155,10 @@ class LifetimeStore:
                               (market, src, end, s.gap[0], ",".join(map(str, sorted(s.flows)))))
             self.conn.executemany(
                 f"INSERT INTO gap_flows(market, src, gap_end, key, {', '.join(FLOW_FIELDS)}, commodity, unseen, positions, "
-                f"prices) VALUES ({', '.join('?' * (len(FLOW_FIELDS) + 8))})",
+                f"prices, clean) VALUES ({', '.join('?' * (len(FLOW_FIELDS) + 9))})",
                 [(market, src, end, key, *(getattr(f, n) for n in FLOW_FIELDS), int(f.commodity), f.unseen,
-                  encode_units(s.positions.get(key, {})), encode_units(s.prices.get(key, {})))
+                  encode_units(s.positions.get(key, {})), encode_units(s.prices.get(key, {})),
+                  encode_units(s.clean.get(key, {})))
                  for key, f in sorted(s.flows.items()) if f != LifeFlow() or key in s.positions or key in s.prices])
 
     def delete_gaps_from(self, market: str, src: str, from_end_ms: int) -> list[tuple[int, int]]:
@@ -185,7 +187,8 @@ class LifetimeStore:
             src: Source name.
             from_end_ms: The earliest gap end, inclusive, UTC ms.
             to_end_ms: The latest gap end, inclusive, UTC ms.
-            units: Also read the positions and prices (False leaves them empty: the hours need only the flows).
+            units: Also read the positions, prices and clean units (False leaves them empty: the hours need only the
+                flows).
 
         Returns:
             The gaps by end, each with a flow for every seen item (zeros where the ledger has no row).
@@ -195,8 +198,9 @@ class LifetimeStore:
                 "SELECT gap_end, gap_start, keys FROM gap_seen WHERE market = ? AND src = ? AND gap_end BETWEEN ? AND ? "
                 "ORDER BY gap_end", (market, src, from_end_ms, to_end_ms)):
             out[end] = GapSummary((start, end), {int(k): LifeFlow() for k in keys.split(",") if k}, {}, {})
-        for end, key, *values, commodity, unseen, positions, prices in self.conn.execute(
-                f"SELECT gap_end, key, {', '.join(FLOW_FIELDS)}, commodity, unseen, positions, prices FROM gap_flows "
+        for end, key, *values, commodity, unseen, positions, prices, clean in self.conn.execute(
+                f"SELECT gap_end, key, {', '.join(FLOW_FIELDS)}, commodity, unseen, positions, prices, clean "
+                "FROM gap_flows "
                 "WHERE market = ? AND src = ? AND gap_end BETWEEN ? AND ? ORDER BY gap_end, key",
                 (market, src, from_end_ms, to_end_ms)):
             summary = out[end]
@@ -205,6 +209,8 @@ class LifetimeStore:
                 summary.positions[key] = decode_units(positions)
             if units and prices:
                 summary.prices[key] = decode_units(prices)
+            if units and clean:                        # NULL in rows from before schema 34: no clean units
+                summary.clean[key] = decode_units(clean)
         return [out[end] for end in sorted(out)]
 
 

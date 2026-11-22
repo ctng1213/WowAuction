@@ -77,6 +77,14 @@ CREATE TABLE IF NOT EXISTS sold_prices_d1(
     PRIMARY KEY(market, key, day, src)
 ) WITHOUT ROWID;
 
+-- The same by the clock hour of the snapshot that found the auctions gone (hour start, UTC ms), with each price's
+-- clean units apart, those of endings that cannot have expired: "<price>:<units>:<clean>,..." (SPEC §2.4, BZ68;
+-- schema 34). Kept 30 days; the price level reads it (§3.3).
+CREATE TABLE IF NOT EXISTS sold_prices_h1(
+    market TEXT NOT NULL, key INTEGER NOT NULL, hour INTEGER NOT NULL, src TEXT NOT NULL, prices TEXT NOT NULL,
+    PRIMARY KEY(market, key, hour, src)
+) WITHOUT ROWID;
+
 -- Auction lifetimes carried from snapshot to snapshot (SPEC §2.4 "One snapshot at a time"; schema 31). Ingest's own:
 -- the analysis never reads them. lifetime_state: the newest snapshot the carried state has seen, per market and source,
 -- with the open auctions and tally rows it holds (a load that counts otherwise finds the state damaged, FM86).
@@ -111,7 +119,7 @@ CREATE TABLE IF NOT EXISTS gap_flows(
     sold REAL NOT NULL, expired REAL NOT NULL, listed REAL NOT NULL, ended REAL NOT NULL,
     expired_listings REAL NOT NULL, matched REAL NOT NULL, cancelled REAL NOT NULL, cancels REAL NOT NULL,
     t1_ended REAL NOT NULL, t1_left REAL NOT NULL, commodity INTEGER NOT NULL, unseen REAL NOT NULL,
-    positions TEXT NOT NULL, prices TEXT NOT NULL,
+    positions TEXT NOT NULL, prices TEXT NOT NULL, clean TEXT,             -- clean: schema 34 (BZ68)
     PRIMARY KEY(market, src, gap_end, key)
 ) WITHOUT ROWID;
 

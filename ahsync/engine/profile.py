@@ -4,9 +4,12 @@ Each slot's value is a recency-weighted median over the weeks of history. A slot
 with data from at least 3 different weeks is used as is (confidence high); with
 1-2 weeks it falls back to its weekday's value (confidence low); with none it is
 flat. Values are then smoothed as the mean of the slot and the 2 slots on each side.
+`how`'s observations are each hourly close against the item's own centred week (W17), so a price that moved and
+stayed is not read as a pattern.
 """
 from __future__ import annotations
 
+import bisect
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -20,6 +23,8 @@ SMOOTH_RADIUS = 2      # slots on each side in the smoothing mean
 PACK_SCALE = 1000                # packed profiles keep ratios in thousandths (SPEC §5.0 contents)
 STRENGTH_MIN_HELD_OUT = 24      # held-out closes seasonality strength needs (SPEC §3.3.6)
 STRENGTH_FULL_WEEKS = 6         # weeks of data at which strength is no longer scaled down
+CENTRED_BEFORE, CENTRED_AFTER = 84, 83   # hours before and after a close in the week it is set against (W17)
+CENTRED_MIN_CLOSES = 84                  # closes that week needs (half of it)
 
 
 @dataclass(frozen=True)
@@ -93,25 +98,65 @@ def _smooth(values: list[float]) -> tuple[float, ...]:
                  for s in range(SLOTS))
 
 
+def centred_ratios(hourly: Sequence[tuple[int, int]], now_ms: int) -> list[tuple[int, float]]:
+    """Each hourly close against the median of the item's closes in the week centred on it (SPEC §3.3 `how`, W17).
+
+    The week is the 168 hours from 84 before the close's hour to 83 after it. An hour gives an observation only
+    when that whole week lies inside the item's history (from its first close to the last hour that has ended by
+    now) and holds at least
+    CENTRED_MIN_CLOSES closes, so a price that moved and stayed is no pattern and the newest 84 hours give none.
+
+    Args:
+        hourly: (hour start ms, close copper), at most one per hour, any order.
+        now_ms: Now, UTC ms; closes after it are ignored.
+
+    Returns:
+        (hour start ms, close ÷ the week's median by SPEC §3.3's rule), ascending; an hour whose median is 0 is left
+        out.
+    """
+    points = sorted((t, c) for t, c in hourly if t <= now_ms)
+    if not points:
+        return []
+    first, window, out = points[0][0], [], []
+    right = left = 0
+    for t, close in points:
+        start, end = t - CENTRED_BEFORE * HOUR_MS, t + CENTRED_AFTER * HOUR_MS
+        while right < len(points) and points[right][0] <= end:
+            bisect.insort(window, points[right][1])
+            right += 1
+        while points[left][0] < start:
+            del window[bisect.bisect_left(window, points[left][1])]
+            left += 1
+        if start < first or end + HOUR_MS > now_ms or len(window) < CENTRED_MIN_CLOSES:   # its last hour ended
+            continue
+        mid = len(window) // 2
+        middle = window[mid] if len(window) % 2 else (window[mid - 1] + window[mid]) // 2
+        if middle > 0:
+            out.append((t, close / middle))
+    return out
+
+
 def price_profile(hourly: Sequence[tuple[int, int]], med30: int | None, now_ms: int,
                   half_life_weeks: float = 4) -> Profile:
-    """`how`: weighted median close per slot ÷ med30, with fallbacks and smoothing (SPEC §3.3).
+    """`how`: weighted median per slot of each close against its centred week, with fallbacks and smoothing
+    (SPEC §3.3, W17; until SP2b each slot's close ÷ med30).
 
     Args:
         hourly: (hour start ms, close copper), one per item and hour, any history length.
-        med30: The 30-day median in copper.
+        med30: The 30-day median in copper; only its absence matters (no recent close: flat).
         now_ms: Now, UTC ms.
         half_life_weeks: pattern_half_life_weeks.
 
     Returns:
-        The profile; flat 1.0 everywhere when there is no data or no med30.
+        The profile, not normalised; flat 1.0 everywhere when there is no observation or no med30. A slot's weeks
+        count the weeks it has an observation in.
     """
-    by_slot, week_sets = _observations(hourly, now_ms, half_life_weeks)
+    by_slot, week_sets = _observations(centred_ratios(hourly, now_ms), now_ms, half_life_weeks)
     weeks = tuple(len(w) for w in week_sets)
     confident = tuple(w >= MIN_WEEKS for w in weeks)
     if not med30:
         return Profile(tuple([1.0] * SLOTS), weeks, confident)
-    ratios = [1.0 if v is None else v / med30 for v in _raw_slots(by_slot, week_sets)]
+    ratios = [1.0 if v is None else v for v in _raw_slots(by_slot, week_sets)]
     return Profile(_smooth(ratios), weeks, confident)
 
 

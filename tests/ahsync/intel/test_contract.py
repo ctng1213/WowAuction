@@ -208,6 +208,26 @@ def test_BZ54_sold_med7_and_its_units_round_trip_in_schema_16_and_older_document
     assert (old.sold_med7, old.sold_units7) == (None, 0.0)
 
 
+def test_BZ71_the_level_round_trips_in_schema_17_and_a_schema_16_document_is_priced_from_its_ask_level():
+    from ahsync.engine.lifetime_prices import Level
+    from ahsync.engine.sellprob import MarketSettings
+    from ahsync.intel.contract import published_level
+    curve = (80, 80, 100, 100, 100, 150, 150)
+    linen = replace(ITEM, level=100, level_source="sold", level_units=30.0, sold_curve=curve)
+    settings = MarketSettings(level_divides_by_pattern=True).to_dict()
+    intel = MarketIntelligence("m", 1_000, 900, 1, {2589: linen}, settings=settings)
+    back = from_json(to_json(intel))
+    assert back.items[2589] == linen and back.settings["level_divides_by_pattern"] is True
+    assert published_level(linen) == Level(100, "sold", 30.0, curve, 80, 150)
+    sixteen = json.loads(to_json(intel, schema=16))                      # what this release still publishes beside it
+    assert "level" not in sixteen["item_fields"] and "level_divides_by_pattern" not in sixteen["settings"]
+    assert MarketSettings.from_dict(sixteen["settings"]) == MarketSettings()    # an older reader's settings still load
+    assert MarketSettings.from_dict({**settings, "a_newer_key": 1}).level_divides_by_pattern is True   # skipped
+    older = replace(from_json(json.dumps(sixteen)).items[2589], med7=60, med14=90, med30=120, p10_30=50)
+    assert (older.level, older.level_source, older.sold_curve) == (None, None, None)
+    assert published_level(older) == Level(77, "asks", 0.0, None, 50, 77)     # floor(540 ÷ 7), bounds p10_30 and it
+
+
 def test_BZ49_unseen_per_day_round_trips_in_schema_15_and_is_left_out_of_older_rows():
     intel = MarketIntelligence("m", 1_000, 900, 1, {2589: replace(ITEM, unseen_per_day=11.76)})
     assert from_json(to_json(intel)).items[2589].unseen_per_day == 11.76

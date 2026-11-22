@@ -124,7 +124,7 @@ def test_AR1_analysis_gives_identical_intelligence_from_sqlite_and_from_memory(t
     assert (rod.sold_per_day, rod.volume_source, rod.units_on_ah, rod.ref_stack) ==         (pytest.approx((42 + 1 / 12) / (7 + 1 / 12)), "books", 7, 1)
     assert all(len(unpack(v, w).values) == 168 for v, w in ((rod.how, rod.how_weeks), (rod.sales_how, rod.sales_weeks),
                                                               (rod.supply_how, rod.supply_weeks)))
-    assert rod.how and len(rod.curve) == 24 * 8
+    assert rod.how == "" and rod.sales_how and len(rod.curve) == 24 * 8   # 7 days hold no centred week (W17)
     assert from_memory.items[2840].curve == ""                  # no sales data: no curve
 
 
@@ -176,12 +176,13 @@ def test_AR5_the_intelligence_holds_the_weekly_patterns_windows_and_curve():
     intel, failed = market.analyze_market(SevenWeeks(), M, W_NOW, MarketSettings())
     bar = intel.items[2840]
     assert failed == {}
-    assert bar.how_weeks == bar.sales_weeks == bar.supply_weeks == "7*168"                 # run-length (BZ47)
+    assert bar.sales_weeks == bar.supply_weeks == "7*168"                                  # run-length (BZ47)
+    assert bar.how_weeks == "6*168"              # W17: the first and last 84 hours have no centred week
     assert unpack(bar.how, bar.how_weeks).values[4] == 0.8          # Mon 04:00, packed in thousandths
     # Smoothed sales are 5.6 on Tue 18-20 (2 + 8 + 8 + 8 + 2 over 5 slots), 4.4 next to them: under 0.9 × 5.6.
-    assert [(w.start_slot, w.hours, w.best_slot, w.weeks) for w in bar.sell_windows] == [(TUE + 18, 3, TUE + 18, 7)]
+    assert [(w.start_slot, w.hours, w.best_slot, w.weeks) for w in bar.sell_windows] == [(TUE + 18, 3, TUE + 18, 6)]   # W17: 6 weeks of centred observations
     # W15: the window's forecast: 100c × 1.0 (within p10..p90 = 100c), floor(0.5 × 20 listed) = 10 units, and the
-    # confidence with its 7 weeks as the pattern component.
+    # confidence with its 6 weeks of centred observations as the pattern component (W17; still 69).
     assert [(w.expected_price, w.exec_qty, w.conf) for w in bar.sell_windows] == [(100, 10, 69)]
     # Smoothed price is 0.8 on Mon 03-06 (three 1.0s and two 0.5s), 0.9 next to them: above 0.8 ÷ 0.9, so it
     # qualifies; but its forecast is raised to p10 (100c), and 100c can't pay against 95c after the cut: a buy
@@ -446,6 +447,27 @@ def bare_intel(key: int):
     from ahsync.intel.contract import ItemIntel
     return ItemIntel(key, None, None, None, None, None, None, None, 0.0, None, None, None, None, {}, None, 1, 0.5, True,
                      None, 0, None, None)
+
+
+def test_the_analysis_publishes_the_level_and_divides_by_the_pattern_only_when_switched_on():
+    from dataclasses import replace
+
+    from ahsync.engine.lifetime_prices import SoldHour
+    monday_four = W_NOW - 6 * DAY - 19 * HOUR                    # the last Mon 04:00: `how` 0.8 there (AR5)
+
+    class Sold(SevenWeeks):
+        """AR5's bar, with 3 units sold at 80 c on the last Mon 04:00."""
+
+        def market_history(self, market_id, window):
+            """The bar with its sold prices by hour."""
+            for item in super().market_history(market_id, window):
+                yield replace(item, sold_hours=[SoldHour(monday_four, 80, 3.0, 3.0)])
+    off = market.analyze_market(Sold(), M, W_NOW, MarketSettings())[0].items[2840]
+    assert (off.level, off.level_source, off.level_units, off.sold_curve) == (80, "sold", 3.0, None)
+    on = market.analyze_market(Sold(), M, W_NOW, MarketSettings(level_divides_by_pattern=True))[0].items[2840]
+    assert on.level == 100                                       # 80 ÷ 0.8
+    plain = market.analyze_market(SevenWeeks(), M, W_NOW, MarketSettings())[0].items[2840]
+    assert (plain.level, plain.level_source) == (100, "asks")    # no sales: the ask blend of 100 c medians
 
 
 def test_BZ53_sold_med7_weighs_the_weeks_sold_prices_by_units_and_leaves_older_days_out():

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Protocol
 
 from ahsync.collect.provider import source_precedence
+from ahsync.engine.lifetime_prices import LEVEL_HOURS, SoldHour
 
 DEFAULT_RANK = {"local": 0, "ahf": 1}   # the per-item reads' rank, HistoryWindow's default (SRC3)
 SUFFIX_TABLE = Path(__file__).resolve().parents[1] / "data" / "bonus_suffixes.json"   # tools/gen_bonus_suffixes.py
@@ -79,6 +80,9 @@ class ItemHistory:
     # day -> unit price copper -> units sold at it, summed over id sources, the window's last 7 days only (SPEC §2.4
     # Sold prices, BZ52, BZ53)
     sold_prices: dict[int, dict[int, float]] = field(default_factory=dict)
+    # The last 30 days' sold prices by hour, each with its clean units, one row per stored price and source (SPEC §2.4,
+    # §3.3 The price level; BZ68), by hour then price
+    sold_hours: list[SoldHour] = field(default_factory=list)
 
 
 class ItemCatalog(dict):
@@ -212,6 +216,9 @@ class HistoryReads:
         sold = _Groups(self.conn.execute(          # only the 7 days sold_med7 reads (BZ53), not the volume window
             "SELECT key, day, prices FROM sold_prices_d1 WHERE market = ? AND day >= ? ORDER BY key, day, src",
             (market, max(window.volume_from_day, window.to_ms // 86_400_000 - 6))))
+        hours = _Groups(self.conn.execute(         # the price level's 30 days (SPEC §3.3, BZ68)
+            "SELECT key, hour, prices FROM sold_prices_h1 WHERE market = ? AND hour > ? ORDER BY key, hour, src",
+            (market, window.to_ms - LEVEL_HOURS * 3_600_000)))
         # The recent complete scans first (newest first, ties: scan id), then only their entries:
         # a join over every stored book would read and sort all of them.
         scans = self.conn.execute(
@@ -232,7 +239,8 @@ class HistoryReads:
                 [tuple(r) for r in sales.take(key)], _best_per_time(d1.take(key), ranked),
                 CurrentPrice(*current[0]) if current else None, _volume_by_day([r[:5] for r in volume]),
                 _newest_book(books.take(key), rank), cover, _lifetimes_by_day(ends.take(key)),
-                _positions_by_day(news.take(key)), _unseen_by_day(volume), _positions_by_day(sold.take(key)))
+                _positions_by_day(news.take(key)), _unseen_by_day(volume), _positions_by_day(sold.take(key)),
+                _sold_hours(hours.take(key)))
 
     def priced_keys(self, market: str, since_ms: int) -> list[int]:
         """Item keys with any price data in a market since a time.
@@ -545,6 +553,23 @@ def _best_per_time(rows: list[tuple], ranked: dict[str, int]) -> list[tuple]:
         elif order < best[-1][2]:
             best[-1] = (t, value, order)
     return [(t, value) for t, value, _ in best]
+
+
+def _sold_hours(rows: list[tuple]) -> list[SoldHour]:
+    """Stored sold prices by hour, unpacked (SPEC §2.4, BZ68).
+
+    Args:
+        rows: (hour start ms, "<price>:<units>:<clean>,...") rows, by hour and source.
+
+    Returns:
+        One SoldHour per stored price, in row order.
+    """
+    out = []
+    for hour, packed in rows:
+        for part in filter(None, packed.split(",")):
+            price, units, clean = part.split(":")
+            out.append(SoldHour(hour, int(price), float(units), float(clean)))
+    return out
 
 
 def _positions_by_day(rows: list[tuple]) -> dict[int, dict[int, float]]:

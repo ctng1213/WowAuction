@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, replace
 
-from ahsync.engine import confidence, fees, patterns, prices, profile, sell_through, sellprob
+from ahsync.engine import confidence, fees, lifetime_prices, patterns, prices, profile, sell_through, sellprob
 from ahsync.engine.capacity import GEAR_CLASSES, slot_of
 from ahsync.engine.lifetime_prices import weighted_median
 from ahsync.engine.profile import Profile
@@ -489,6 +489,8 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
         settings.max_supply_share_gear if gear else settings.max_supply_share,
         volume.volume_score, book_age, settings.max_trend_total)
     sold_med7, sold_units7 = sold_median7(item, week)
+    divide = how.values if settings.level_divides_by_pattern and any(how.weeks) else None   # §3.3; off by default
+    priced = lifetime_prices.price_level(item.sold_hours, now_ms, divide, (med7, med14, med30), p10)
     intel = ItemIntel(
         key, cur.price if cur else None, cur.qty if cur else None, now_ms - cur.at if cur else None,
         med7, med30, p10, p90,
@@ -505,7 +507,8 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
         supply7=median_daily_supply(item.hourly_supply, now_ms, 7),
         supply14=median_daily_supply(item.hourly_supply, now_ms, 14),
         sell_chance=sell_chance_now(quote, base, now_ms, settings), unseen_per_day=unseen_per_day(item, week, volume),
-        sold_med7=sold_med7, sold_units7=sold_units7)
+        sold_med7=sold_med7, sold_units7=sold_units7, level=priced.level, level_source=priced.source,
+        level_units=priced.units, sold_curve=priced.curve)
     return replace(intel, **window_lines(intel, quote, base, hourly, now_ms, settings))
 
 

@@ -5,7 +5,8 @@ import pytest
 
 from ahsync.engine import profile
 from ahsync.engine.prices import weekday_hour
-from ahsync.engine.profile import Profile, _slot, pack, price_profile, unpack, sales_profile, seasonality_strength, strength, supply_profile
+from ahsync.engine.profile import (Profile, _slot, centred_ratios, pack, price_profile, unpack, sales_profile,
+                                   seasonality_strength, strength, supply_profile)
 
 HOUR_MS = 3_600_000
 WEEK_MS = 7 * 24 * HOUR_MS
@@ -38,7 +39,7 @@ def test_P3_a_slot_with_four_weeks_of_a_saturday_rise_reads_1_2_with_high_confid
     profile = price_profile(history(4, saturday_rise), med30=100, now_ms=NOW)
     assert profile.values[SAT + 18] == pytest.approx(1.2)
     assert profile.confident[SAT + 18] is True
-    assert profile.weeks[SAT + 18] == 4
+    assert profile.weeks[SAT + 18] == 3        # W17: the first and last 84 hours have no centred week
 
 
 def test_P4_one_week_of_data_falls_back_to_the_weekday_with_low_confidence():
@@ -46,6 +47,23 @@ def test_P4_one_week_of_data_falls_back_to_the_weekday_with_low_confidence():
     # Saturday's 24 closes: 19 at 100 c and 5 at 120 c → weekday median 100 c → 1.0
     assert profile.values[SAT + 18] == pytest.approx(1.0)
     assert profile.confident[SAT + 18] is False
+
+
+def test_W17_the_pattern_is_set_against_the_items_own_week():
+    start = NOW + HOUR_MS - 35 * 24 * HOUR_MS
+    hours = [start + h * HOUR_MS for h in range(35 * 24)]
+    fallen = [(t, 100 if t < start + 21 * 24 * HOUR_MS else 20) for t in hours]
+    assert all(v == pytest.approx(1.0) for v in price_profile(fallen, med30=60, now_ms=NOW).values)
+    thursday = [(t, 110 if 3 * 24 + 18 <= _slot(t) <= 3 * 24 + 22 else 100) for t in hours]
+    profile = price_profile(thursday, med30=100, now_ms=NOW)
+    assert profile.values[3 * 24 + 20] == pytest.approx(1.10) and profile.values[TUE + 12] == pytest.approx(1.0)
+    seen = [t for t, _ in centred_ratios(thursday, NOW)]
+    assert seen[0] == start + 84 * HOUR_MS and seen[-1] == NOW - 84 * HOUR_MS     # the newest 84 h give none
+    target = start + 300 * HOUR_MS
+    thin = [(t, c) for t, c in thursday if not target - 84 * HOUR_MS <= t < target]        # its week keeps 84
+    assert target in dict(centred_ratios(thin, NOW))
+    thinner = [(t, c) for t, c in thin if t != target + HOUR_MS]                            # 83: no observation
+    assert target not in dict(centred_ratios(thinner, NOW))
 
 
 def test_price_profile_without_data_or_median_is_flat():
@@ -56,6 +74,11 @@ def test_price_profile_without_data_or_median_is_flat():
 def test_future_observations_are_ignored():
     future = [(NOW + HOUR_MS, 500)]
     assert price_profile(future, med30=100, now_ms=NOW).weeks == tuple([0] * 168)
+    assert sales_profile(future, now_ms=NOW).weeks == tuple([0] * 168)
+
+
+def test_a_week_whose_median_is_zero_gives_no_observation():
+    assert centred_ratios(history(3, lambda s: 0), NOW) == []
 
 
 def test_sales_profile_has_mean_one_and_rises_where_buyers_are():

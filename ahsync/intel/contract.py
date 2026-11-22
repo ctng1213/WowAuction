@@ -12,9 +12,9 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field, fields, replace
 
-from ahsync.engine import profile
+from ahsync.engine import lifetime_prices, profile
 
-INTEL_SCHEMA_VERSION = 16      # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
+INTEL_SCHEMA_VERSION = 17      # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
                                # 5: median_daily_supply (V23); 6: observed_listing_turnover (V37); 7: volume_kind (D57);
                                # 8: closes_30d (TT23); 9: each window's forecast: expected price, executable quantity,
                                # confidence, and buying windows ranked by actionable value (W14, W15); 10: the cloud
@@ -28,7 +28,9 @@ INTEL_SCHEMA_VERSION = 16      # 2: weekly patterns, windows, strength, curve (A
                                # no new field: profiles run-length coded and items as rows under `item_fields` (BZ47);
                                # 15: per item unseen_per_day, the part of sold_per_day estimated sold before first sight
                                # (BZ45, BZ49); 16: per item sold_med7 and sold_units7, the units-weighted median of
-                               # the last 7 days' sold prices and its units (SPEC §2.4 Sold prices, BZ53, BZ54)
+                               # the last 7 days' sold prices and its units (SPEC §2.4 Sold prices, BZ53, BZ54);
+                               # 17: per item the price level, its source, its sold units and the sold curve, and
+                               # the settings' level_divides_by_pattern (SPEC §3.3 The price level, BZ71)
 # Fields each schema added, so to_json can write the previous schema for older readers (SPEC §2.4, BZ18).
 ADDED_IN = {10: {"document": ("catalog", "coverage", "settings", "ages_at_ms"),
                  "item": ("last_hour", "recent_closes", "recent_sold", "recent_listed", "recent_units")},
@@ -39,7 +41,9 @@ ADDED_IN = {10: {"document": ("catalog", "coverage", "settings", "ages_at_ms"),
                  "window": ("chance24", "found_share")},
             14: {"document": (), "item": ()},
             15: {"document": (), "item": ("unseen_per_day",)},
-            16: {"document": (), "item": ("sold_med7", "sold_units7")}}
+            16: {"document": (), "item": ("sold_med7", "sold_units7")},
+            17: {"document": (), "item": ("level", "level_source", "level_units", "sold_curve"),
+                 "settings": ("level_divides_by_pattern",)}}
 COMPACT_SINCE = 14             # the schema from which profiles are run-length coded and items written as rows (BZ47)
 PROFILE_FIELDS = ("how", "how_weeks", "sales_how", "sales_weeks", "supply_how", "supply_weeks")
 
@@ -154,6 +158,13 @@ class ItemIntel:
     # nothing until the sold-price switch (SPEC §2.4 Sold prices).
     sold_med7: int | None = None
     sold_units7: float = 0.0
+    # Schema 17 (BZ71). The price level (SPEC §3.3): copper, "sold" or "asks", the sold units in 30 days behind it,
+    # and the clean sold curve (copper at the 0, 10, 25, 50, 75, 90 and 100th percentiles) when it has 20 weighted
+    # units. None, None, 0.0 and None in older documents: `published_level` builds an ask level from the medians.
+    level: int | None = None
+    level_source: str | None = None
+    level_units: float = 0.0
+    sold_curve: tuple[int, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -190,6 +201,24 @@ def price_level(i: ItemIntel) -> int | None:
         Copper; None when neither median is known.
     """
     return i.med7 if i.med7 is not None else i.med30
+
+
+def published_level(i: ItemIntel) -> lifetime_prices.Level:
+    """An item's price level and bounds as its document gives them (SPEC §3.3 The price level, BZ71).
+
+    A schema-17 document carries the level, its source and the sold curve; an older one is priced from the ask
+    level its medians give. The bounds follow §3.3's rule from the curve and `p10_30`.
+
+    Args:
+        i: The item's intelligence.
+
+    Returns:
+        The Level; all None without a level.
+    """
+    level, source = i.level, i.level_source
+    if source is None:
+        level, source = lifetime_prices.ask_level(i.med7, i.med14, i.med30), "asks"
+    return lifetime_prices.level_with_bounds(level, source, i.level_units, i.sold_curve, i.p10_30)
 
 
 def supply_level(i: ItemIntel) -> int | None:
@@ -300,6 +329,8 @@ def to_json(intel: MarketIntelligence, schema: int | None = None) -> str:
         if version > target:
             for name in ADDED_IN[version]["document"]:
                 body.pop(name)
+            for name in ADDED_IN[version].get("settings", ()):      # an older reader refuses a key it doesn't know
+                body.get("settings", {}).pop(name, None)
             for item in body["items"].values():
                 for name in ADDED_IN[version]["item"]:
                     item.pop(name)
@@ -366,6 +397,8 @@ def from_json(text: str) -> MarketIntelligence:
             item["last_hour"] = tuple(item["last_hour"])
         if "sell_through" in item:
             item["sell_through"] = tuple(item["sell_through"])
+        if item.get("sold_curve") is not None:
+            item["sold_curve"] = tuple(item["sold_curve"])
         items[int(key)] = ItemIntel(**item)
     catalog = {int(k): tuple(v) for k, v in body.get("catalog", {}).items()}
     coverage = tuple(tuple(r) for r in body.get("coverage", ()))
