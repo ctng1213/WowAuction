@@ -27,14 +27,18 @@ from sim.runner import Run, market_books, simulate
 from sim.truth import Truth
 
 START_MS = 1_793_923_200_000             # Fri 2026-11-06 00:00 UTC, the collected raw's first day
-# Measured on the 31 real hours (plan §1.27(b)): durations; new commodity listings' price ÷ the cheapest other at
-# first sight (0.8% under, 42.8% at, 18.9% up to 5% above, 16.1% to 15%, 15.1% to 50%, 6.4% over); first-seen
-# commodity stack sizes, rounded to five sizes; gear's 81% at the cheapest price.
-REAL_DURATIONS = ((2, 0.10), (8, 0.77), (24, 0.13))
-REAL_PRICE_MIX = ((0.008, 0.90, 1.00), (0.428, 1.00, 1.00), (0.189, 1.00, 1.05), (0.161, 1.05, 1.15),
-                  (0.151, 1.15, 1.50), (0.064, 1.50, 2.50))
-REAL_STACKS = ((1, 0.30), (2, 0.15), (5, 0.20), (10, 0.10), (20, 0.25))
-GEAR_PRICE_MIX = ((0.81, 1.00, 1.00), (0.19, 1.00, 1.50))
+# Measured on the 348 linked hours of 2026-11-06..21 (sold-price plan §1d items 23 and 27; the first fit was 31
+# hours, plan §1.27(b)): durations; new commodity listings' price ÷ the cheapest other at first sight (0.7% under,
+# 37.0% at, 25.9% up to 5% above, 16.1% to 15%, 14.3% to 50%, 6.0% over); first-seen commodity stack sizes, in five
+# sizes. Commodities at the cheapest price drifted from 43% to 34% over the fortnight. Gear's positions are those of
+# 2026-11-12..21 (8.5% under, 58.5% at): before the 12th 75-80% posted at the cheapest price, then gear listings
+# fell 18% in two days and the share stepped to 55% and stayed (mass posters of same-price gear leaving, it seems).
+REAL_DURATIONS = ((2, 0.12), (8, 0.72), (24, 0.16))
+REAL_PRICE_MIX = ((0.007, 0.90, 1.00), (0.370, 1.00, 1.00), (0.259, 1.00, 1.05), (0.161, 1.05, 1.15),
+                  (0.143, 1.15, 1.50), (0.060, 1.50, 2.50))
+REAL_STACKS = ((1, 0.33), (2, 0.21), (5, 0.17), (10, 0.11), (20, 0.18))
+GEAR_PRICE_MIX = ((0.085, 0.90, 1.00), (0.585, 1.00, 1.00), (0.160, 1.00, 1.05), (0.070, 1.05, 1.15),
+                  (0.055, 1.15, 1.50), (0.045, 1.50, 2.50))
 ANCHOR = 1.1                             # sellers price off at most 1.1 × fair, so the floor mean-reverts (§1.27(c))
 SM2_POSITIONS = ((0.1, 0.90, 0.90), (0.2, 0.98, 0.98), (0.4, 1.00, 1.00), (0.3, 1.10, 1.10))
 SM4_SHIFT = 3                            # the relist estimator's placebo: gaps later (tools/lifetimes_report.py)
