@@ -217,11 +217,34 @@ The addon reprices after a scan, so it needs the pattern of the current hour: th
 3. The half-life at 30 days of data (item 26(b)). **Measured in the simulator:** 1 day stays (item 30(a)); the real-data check from 2026-12-06 stands.
 4. **Added:** whether to turn `level_divides_by_pattern` on, from SM23 re-run once raids open (item 31(a)).
 
+**Resume here (checkpoint 2026-11-22 17:30 UTC).**
+- **State:** `main` at c3fda42, clean; nothing mid-change. SP2-0, SP2s, SP2a (prototypes), SP2b merged and deployed. The cloud
+  publishes schemas 13–17 once a daily run sees the rebuilt history.
+- **The cloud, 2026-11-22:** Ingest failed every run from 05:42 to 15:24 UTC, out of disk (LESSONS 2026-11-22); fixed by #132 (10 GiB
+  disk) and #133 (the history streamed in and out, one copy: S3 multipart, CRC32 per part, If-Match at completion; tested on a
+  scratch key in the data bucket, then the first production run uploaded 6 parts at 1,231 MB peak). The rebuild from raw (Ingest
+  `{"mode": "rebuild"}`) started 15:35 UTC, 303 snapshots pending at 17:17, about 30 an hour: done about 03:30 UTC 2026-11-23, then
+  the 09:00 daily run publishes `latest-17.json`. `HistoryBehind` fires until then. Backups of `state/` in the data bucket:
+  `backups/state-20261122T085053Z/` and `backups/state-20261122T153442Z/`.
+- **Check first:** `latest-17.json` exists; Ingest's state shows `rebuilding_until_ms` null; no alarm in ALARM.
+- **Next action: SP2c**, in a fresh worktree from `main`. Start with PP5 (`engine/prices.post_price` and its Lua twin
+  `Engine/Prices.lua`, a shared scenario), then TT51 (the window forecast clamp), R35, the buy-for-later low bound and flips
+  (the "What reads it" table above), then the export: the market file gains the level, the bounds and 24 h of `how` from
+  `generatedAt`, and `EXPORT_VERSION` rises. Read a level through `contract.published_level` (it prices a schema-16 document
+  from its ask level). The `engine-parity` agent reviews the ported changes; the snapshot moves and is reviewed with the user;
+  the SD rows are rerun; `tools/bench.py --summary` must stay under 600 MB (SP2b's worst case was 589 MB; a schema-17 worst-case
+  document can be built as in §1d item 32(e)).
+- **Known:** `tests/ahsync_app/test_tray.py` fails intermittently on `main` too (not SP2's). The `market-sim` agent is only listed
+  in sessions started from a checkout of `main`.
+- **After SP2c:** SP2d (P28; and the queue model's under-read on gear under the level, item 30(e)); the history's retention
+  (agreed with the user 2026-11-22: hourly prices and sales 45 days plus daily rows to 90, proven in the simulator first, by early
+  December; the history nears the 10 GiB disk around day 80–90); SP2e.
+
 **Milestones.**
-- **SP2-0, spec merge** (this change): SPEC §2.4, §3.3, §3.3.2, §3.3.4, §3.4, §5.0 and §8.10; SCENARIOS rows and pending IDs; ARCHITECTURE. Fable: meaning-changing documents.
-- **SP2s, the simulator** (§1d items 23 and 27): the sellers refitted, the pattern world, the falling regime, the real-shaped commodity; the rows that move are reported. Opus: new worlds.
-- **SP2a, measure the unmeasured.** SM21 (the acceptance), SM22 (the buy side), SM23 (the pattern and the level), SM24 (the bounds). A result that changes a rule goes to the user before SP2c. Opus: new worlds.
-- **SP2b, the pattern, the hourly table and the level. Built 2026-11-22** (§1d item 32; the cloud bench and the rebuild from raw owed before the deploy). `engine/profile` (W17), migration and `sold_prices_h1` with its clean units (BZ68), the `level_divides_by_pattern` setting (item 31(a); BZ69), `engine/lifetime_prices` (BZ69, BZ70), `analysis/market` and the contract (schema 17, BZ71), the cloud's bench and a rebuild from raw. Opus: a contract with several writers.
+- **SP2-0, spec merge. Merged 2026-11-21** (#124, #125): SPEC §2.4, §3.3, §3.3.2, §3.3.4, §3.4, §5.0 and §8.10; SCENARIOS rows and pending IDs; ARCHITECTURE. Fable: meaning-changing documents.
+- **SP2s, the simulator. Merged 2026-11-22** (#126, #127; §1d items 28, 29; items 23 and 27): the sellers refitted, the pattern world, the falling regime, the real-shaped commodity; the rows that move are reported. Opus: new worlds.
+- **SP2a, measure the unmeasured. Measured as prototypes 2026-11-22** (§1d items 30, 31; #129; the SM21–SM24 rows are built with SP2b–SP2d). SM21 (the acceptance), SM22 (the buy side), SM23 (the pattern and the level), SM24 (the bounds). A result that changes a rule goes to the user before SP2c. Opus: new worlds.
+- **SP2b, the pattern, the hourly table and the level. Built 2026-11-22** (#130, bench #131; §1d item 32). **Deployed 2026-11-22 08:50 UTC**; the rebuild from raw started 15:35 UTC (see Resume here). `engine/profile` (W17), migration and `sold_prices_h1` with its clean units (BZ68), the `level_divides_by_pattern` setting (item 31(a); BZ69), `engine/lifetime_prices` (BZ69, BZ70), `analysis/market` and the contract (schema 17, BZ71), the cloud's bench and a rebuild from raw. Opus: a contract with several writers.
 - **SP2c, everything reads it.** The table above in Python and Lua (PP5, TT51, R35), the export, the snapshot, the SD reruns. Opus: byte identity and the ported twin.
 - **SP2d, the chance.** `engine/sellprob` (P28) and what the plan's simulations pass it. Opus: an engine algorithm.
 - **SP2e, deploy and check.** The cloud deploy is the user's; then the acceptance check on the real summary.
