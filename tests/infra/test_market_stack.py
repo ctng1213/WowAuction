@@ -99,7 +99,7 @@ def test_SEC17_the_analyzer_environment_holds_names_only(template):
                               "INGEST_FUNCTION"}                                                 # no secret (SEC22)
     assert variables["ALARM_PREFIX"] == "Test-"
     assert (props["ReservedConcurrentExecutions"], props["Timeout"], props["MemorySize"]) == (1, 900, 8192)
-    assert props["EphemeralStorage"] == {"Size": 4096} and "TargetArn" in json.dumps(props["DeadLetterConfig"])
+    assert props["EphemeralStorage"] == {"Size": 10240} and "TargetArn" in json.dumps(props["DeadLetterConfig"])
 
 
 def test_BZ34_the_analyzer_runs_daily_hourly_and_on_every_new_raw_object(template):
@@ -197,7 +197,7 @@ def test_SEC22_only_ingest_writes_the_history_and_the_analyzer_holds_no_secret(t
     props = function_named(template, "ahcloud.ingest.handler")
     assert set(props["Environment"]["Variables"]) == {"DATA_BUCKET", "MARKET", "SECRET_NAME"}
     assert (props["ReservedConcurrentExecutions"], props["Timeout"], props["MemorySize"]) == (1, 900, 4096)
-    assert props["EphemeralStorage"] == {"Size": 4096} and "DeadLetterConfig" not in props
+    assert props["EphemeralStorage"] == {"Size": 10240} and "DeadLetterConfig" not in props
 
 
 def test_FM85_ingest_runs_at_10_and_40_past_and_never_retries(template):
