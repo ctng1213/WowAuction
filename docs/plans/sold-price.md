@@ -221,25 +221,44 @@ The addon reprices after a scan, so it needs the pattern of the current hour: th
 3. The half-life at 30 days of data (item 26(b)). **Measured in the simulator:** 1 day stays (item 30(a)); the real-data check from 2026-12-06 stands.
 4. **Added:** whether to turn `level_divides_by_pattern` on, from SM23 re-run once raids open (item 31(a)).
 
-**Resume here (checkpoint 2026-11-22 20:30 UTC).**
-- **State:** SP2c built on branch `ctn-RCP-000-sp2c-everything-reads-level` (worktree `C:\Dev\WowAuction-sp2c`), awaiting the
-  user's acceptance of the whole-plan snapshot (§1d item 33(d)) before `tools/snapshot.py --update`, the commit and the PR.
-  The snapshot was accepted and SP2c is PR #135; the thin-level rule of item 34(a) is stacked on it (BZ72).
-- **The cloud, 2026-11-22 17:30 UTC (read-only check):** `latest-17.json` exists (the 09:03 daily run, built from the pre-rebuild
-  history); Ingest's rebuild still runs (`rebuilding_until_ms` = 15:25 UTC, 303 snapshots pending at 17:16, 15 a run of 385 s;
-  the history at 2026-11-09 21:16); `HistoryBehind` in ALARM since 16:38 UTC, the others OK; `IngestErrors` back to OK 16:11 UTC.
-  Done about 03:30 UTC 2026-11-23, then the 09:00 daily run publishes the first document with sold levels.
-- **Check first:** Ingest's state shows `rebuilding_until_ms` null; `HistoryBehind` back to OK; the daily document's items carry
-  `level_source` `sold` where sales exist.
-- **Next action:** after the snapshot is accepted and SP2c merged, deploy the app and the addon together (the addon refuses an
-  `EXPORT_VERSION` 8 file, FM35), then SP2e's acceptance check on the real summary (§3 Acceptance); SP2d (P28; the queue
-  model's under-read on gear under the level, item 30(e)); SM21–SM24 as built rows (SM22 says "built with SP2c" in SCENARIOS
-  but was left out of SP2c: its paper buyer is a simulator feature of its own); the history's retention (agreed with the user
-  2026-11-22: hourly prices and sales 45 days plus daily rows to 90, proven in the simulator first, by early December; the
-  history nears the 10 GiB disk around day 80–90).
-- **Known:** `tests/ahsync_app/test_tray.py` fails intermittently on `main` too (not SP2's). The `market-sim` agent is only listed
-  in sessions started from a checkout of `main`. The AWS CLI session expires; `aws login` is the user's (the bench document
-  was fetched through CloudFront instead).
+**Resume here (checkpoint 2026-11-22, after SP2c).**
+- **State:** `main` holds SP2c (#135) and the thin-level rule (#136, BZ72); the SP2c worktree is removed. Nothing mid-change.
+  `main` writes `EXPORT_VERSION` 9: the installed app (writes 8) and the addon must be updated together (SP2e).
+- **The cloud:** the rebuild from raw ran overnight (done about 03:30 UTC 2026-11-23); the 09:00 UTC daily run publishes the
+  first document with sold levels. **Check first:** Ingest's state shows `rebuilding_until_ms` null; `HistoryBehind` back to OK;
+  the daily document's items carry `level_source` `sold` where sales exist. `aws login` first (the session expires).
+- **Next action: SP2d**, from the handoff below, in a fresh worktree from `main`, on Opus. Then SP2e: build and install the app,
+  deploy the addon, `/reload`, and the acceptance check on the real summary (§3 Acceptance).
+- **Known:** `tests/ahsync_app/test_tray.py` fails intermittently on `main` too. The `market-sim` agent is only listed in
+  sessions started from a checkout of `main`. Decision 34(b)'s measurement (real gear's `how` swing) waits for weeks of
+  rebuilt history.
+
+### SP2d handoff: the chance learns the price level (written 2026-11-22 by the planning session; an Opus session executes it)
+
+**Objective.** A post priced above what the item sells for reads a lower chance, in proportion to how rarely sales happened at that price: SPEC §3.3.2 "Price acceptance" (P28). The sell chance of every post the plan prices above the level (window posts, flips, buys for later, crafts sold at a window, the tooltip's window chance) learns it; posting now is capped at the hour's forecast by PP5, so it is touched only through the low-bound edge. SM21 and SM22 become built rows.
+
+**Decisions already made (do not re-litigate).** `a(p)` is 1 at or under the hour's level (the level × `how[t_k]`), falls with the sold curve above it (scaled by the same `how`), and is 0 from the curve's 100th; an item without a curve keeps `a = 1` (SPEC §3.3.2, the user 2026-11-21; shape confirmed by SM21's prototype, item 30(e)). `a` never exceeds 1: the queue model's under-read of gear *under* the level (item 30(e): 0.52 against a true 0.87 at 0.9×) is measured by the built SM21 and reported, not fixed here; a rule for it is the user's, after the numbers. The addon does not compute `a(p)`: its live reprice never prices above its own ceiling (PP5), so the exported curve, built at the post price, carries the acceptance the addon needs; no Lua twin changes (`Engine/SellProb.lua` holds no simulation). SM22 reports SP2's numbers against the prototype's recorded ones (item 30(f)); "today's level" no longer exists in the engine.
+
+**One spec detail to confirm with the user before coding.** The spec reads `a(p)` = the share of the curve's units at or above `p` ÷ 0.5. That is 1 at the curve's 50th, but the level is the median of *all* units while the curve is the clean ones', so the level usually sits above the curve's 50th and `a` would jump from 1 to below it just above the level. The continuous form, `a(p)` = share at or above `p` ÷ share at or above the level, capped at 1, gives P28's numbers unchanged (there the level is the 50th) and no jump. The planning session recommends the continuous form; it changes SPEC §3.3.2's sentence and is written only once the user says so.
+
+**Design.** The simulation stays what it is: `sellprob.simulate` takes hourly demand. The acceptance is applied to the demand before the queue runs, per clock hour, since the hour's level is `level × how[slot_of(hour)]` and the curve scales with it: a pure function `sellprob.acceptance(price, level, curve, how_at_hour) -> float` and `demand_for(...)` multiplied by it per hour (or an `accepted_demand(hours, sales_how, price, level, curve, how)` beside `demand_for`). PI10's equivalence (flat profile, nothing expiring, `u` = 0, no curve: the old one-line formula) must still hold. Every caller passes the level, the curve and the 168 `how`:
+- `sellprob.posting_chance` (posting now; `analysis/market.now_fields` through `NowBase`, which gains the curve and the 168 `how` beside `how_now`; `recommend/on_ah_page`, `recommend/pages`);
+- `plan.post_chance` (`SellFacts` gains `sold_curve`; `level` and `how` are there), so sell windows, flips (`flips.flip_steps`), buys for later and crafts sold later all learn it;
+- `sellprob.build_curve` (the exported 24 × 8 curve at the post price; the hour's `how` per row);
+- `analysis/market.sell_window_chances` and `_chance_24h` (TT38's chance24 at the window's expected price at its next best hour) and `sell_chance_now` (at `cur`, under the level: `a` = 1 unless `cur` is above it, which is right).
+- The level, curve and `how` come from `contract.published_level` and `profile.unpack_values`; a desktop-built document has no curve, so nothing changes there and the whole-plan snapshot stays byte-identical (a check, not a review).
+- `tools/sim/inference.py` and the paper trader read the same engine; nothing to port.
+
+**Scenarios.** P28 (given numbers; a scenario test), plus the invariants SPEC §8.7 asks of a new formula: `a` non-increasing in `p`, 1 at or under the hour's level, 0 at and above the scaled 100th; P non-increasing in the price at fixed competition; the curve's rows non-increasing along the price. SM21 built: SP2s's worlds with a planted willingness to pay (`market.Item` buyers' maximum ÷ the worth, spread 0.25 as assumed, and 0.15 beside it), gear and a commodity, our posts at 0.9, 1.0, 1.1, 1.25, 1.5 and 2.0× the worth with nothing ahead, seeds 1–3: P28's chance against the true share sold at each step, and the under-read under the level, reported. SM22 built: a `runner.Agent` beside `price_rules.Poster` that runs the real plan (`tools/sim/trader.py` already drives `replan_all` for the SD rows) over SM20's worlds and takes every flip and buy for later it offers, reporting earned per gold spent per regime against the prototype's +0.11 to +0.16 (item 30(f)).
+
+**Tasks.**
+1. Opus: `engine/sellprob` acceptance and the demand hook; P28 and the invariants; PI10 still passes. An engine algorithm.
+2. Opus: the wiring through `NowBase`, `SellFacts`, `build_curve`, the window chances; `analysis/market` and `recommend/plan` tests; the snapshot stays byte-identical.
+3. Opus: SM21's world and row; SM22's paper buyer and row (`tools/sim/`), each with its test under `tests/tools/sim/`; `tools/sim_report.py inference --rows SM21` and the decision report for SM22; seeds 1–3 reported in the plan's §1d.
+4. Sonnet: the documentation marks: SPEC §3.3.2 "planned SP2d" to built with module names, SCENARIOS P28/SM21/SM22 built, `tests/pending_scenarios.txt` (P28, SM21, SM22 out), ARCHITECTURE's change log line.
+5. The `market-sim` agent reviews SM21 and SM22's numbers before the PR; `tools/verify.ps1`; `tools/bench.py` (the desktop mode) only if the curve's build time moves noticeably (24 rows × an acceptance each is a few multiplies per item).
+
+**Acceptance.** P28's numbers; the invariants; SM21 within the prototype's picture (at 1.25–2.0× with nothing ahead the chance reads near the true 0.00–0.41, not today's 0.88–0.98); SM22 reported; the whole-plan snapshot byte-identical; engine branch coverage 100%; one PR. Stop and ask the user for: the spec detail above, any rule for the under-read under the level, and anything SM21 shows that would change `a`'s shape.
 
 **Milestones.**
 - **SP2-0, spec merge. Merged 2026-11-21** (#124, #125): SPEC §2.4, §3.3, §3.3.2, §3.3.4, §3.4, §5.0 and §8.10; SCENARIOS rows and pending IDs; ARCHITECTURE. Fable: meaning-changing documents.
@@ -247,7 +266,7 @@ The addon reprices after a scan, so it needs the pattern of the current hour: th
 - **SP2a, measure the unmeasured. Measured as prototypes 2026-11-22** (§1d items 30, 31; #129; the SM21–SM24 rows are built with SP2b–SP2d). SM21 (the acceptance), SM22 (the buy side), SM23 (the pattern and the level), SM24 (the bounds). A result that changes a rule goes to the user before SP2c. Opus: new worlds.
 - **SP2b, the pattern, the hourly table and the level. Built 2026-11-22** (#130, bench #131; §1d item 32). **Deployed 2026-11-22 08:50 UTC**; the rebuild from raw started 15:35 UTC (see Resume here). `engine/profile` (W17), migration and `sold_prices_h1` with its clean units (BZ68), the `level_divides_by_pattern` setting (item 31(a); BZ69), `engine/lifetime_prices` (BZ69, BZ70), `analysis/market` and the contract (schema 17, BZ71), the cloud's bench and a rebuild from raw. Opus: a contract with several writers.
 - **SP2c, everything reads it. Built 2026-11-22** (§1d item 33). The table above in Python and Lua (PP5, TT51, R35), the export (EX25, `EXPORT_VERSION` 9), the snapshot, the SD reruns. Opus: byte identity and the ported twin.
-- **SP2d, the chance.** `engine/sellprob` (P28) and what the plan's simulations pass it. Opus: an engine algorithm.
+- **SP2d, the chance.** `engine/sellprob` (P28) and what the plan's simulations pass it; SM21 and SM22 built (handoff above). Opus: an engine algorithm.
 - **SP2e, deploy and check.** The cloud deploy is the user's; then the acceptance check on the real summary.
 
 ## 4. Non-goals
