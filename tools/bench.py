@@ -325,13 +325,17 @@ def publish_summaries(document: Path, tmp: Path) -> tuple[str, int]:
     """Publish a real document, and the next hour's copy of it, into two stores for the child process.
 
     Args:
-        document: A published `<sha256>.json.gz` (any schema this AHSync reads).
+        document: A published `<sha256>.json.gz` (any schema this AHSync reads; an older one is published as this
+            AHSync's).
         tmp: The temporary folder; the stores go to tmp/hour1 and tmp/hour2.
 
     Returns:
         (the document's market, its observations_until_ms).
     """
     intel = from_json(gzip.decompress(document.read_bytes()).decode("utf-8"))
+    # An older schema's document reads with the newer fields' defaults, so it is published as this one's: the cloud
+    # deploys after the release that reads a new schema, so the newest real summary is often a schema behind.
+    intel = replace(intel, schema_version=INTEL_SCHEMA_VERSION)
     publish(LocalStore(tmp / "hour1"), intel, (INTEL_SCHEMA_VERSION,))
     later = replace(intel, built_ms=intel.built_ms + HOUR, observations_until_ms=intel.observations_until_ms + HOUR)
     publish(LocalStore(tmp / "hour2"), later, (INTEL_SCHEMA_VERSION,))
