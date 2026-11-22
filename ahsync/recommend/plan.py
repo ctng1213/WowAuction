@@ -11,7 +11,7 @@ from collections.abc import Sequence
 
 from ahsync.config import Config, record_settings
 from ahsync.db.sqlite import Database
-from ahsync.engine import capacity, craft, disenchant, fees, profile
+from ahsync.engine import capacity, craft, disenchant, fees, prices, profile
 from ahsync.engine.capacity import slot_of
 from ahsync.engine.craft_plan import CraftWorld
 from ahsync.engine.flips import flip_offer
@@ -22,7 +22,7 @@ from ahsync.engine.sell_record import Record, ResolvedPost, sell_record
 from ahsync.engine.views import round_half_up
 from ahsync.engine.week import WeekInputs
 from ahsync.history.reads import ItemInfo
-from ahsync.intel.contract import ItemIntel, others_supply, price_level
+from ahsync.intel.contract import ItemIntel, others_supply, price_level, published_level
 from ahsync.recommend.listings import own_listed
 from ahsync.recommend.pages import DE_KIND, craft_market
 from ahsync.state.reads import StateReader
@@ -116,13 +116,14 @@ def sell_facts(i: ItemIntel, info: ItemInfo | None, de: tuple[float, str] | None
         listed now, is taken as it is.
     """
     supply = others_supply(i, sum(units for units, _ in own))                              # V23, R31
+    priced = published_level(i)                                                            # SPEC §3.3, TT51, R35
     return SellFacts(
-        i.key, price_level(i), i.trend7, i.post_price, i.sold_per_day, i.listed_per_day, i.ref_stack,
+        i.key, priced.level, i.trend7, i.post_price, i.sold_per_day, i.listed_per_day, i.ref_stack,
         _pattern(i.how, i.how_weeks, FLAT), _pattern(i.sales_how, i.sales_weeks, FLAT),
         tuple(PlanWindow(w.start_slot, w.hours, w.best_slot, w.weeks) for w in i.sell_windows), i.book or None, i.cur,
         i.cur_qty, (info.vendor_sell if info else None) or 0, de[0] if de else None, de[1] if de else None, 0.0,
         supply, _pattern(i.supply_how, i.supply_weeks, ()),
-        bool(info and info.item_class in GEAR_CLASSES), i.conf, record, i.med7, i.p90_30, i.p10_30,
+        bool(info and info.item_class in GEAR_CLASSES), i.conf, record, priced.low, priced.high,
         tuple(PlanWindow(w.start_slot, w.hours, w.best_slot, w.weeks) for w in i.buy_windows), i.closes_30d,
         i.undercut_share, bool(i.commodity), own)
 
@@ -137,19 +138,16 @@ def window_candidate(i: ItemIntel, min_flip_margin: float, max_trend_total: floa
 
     Returns:
         True when the price level × the best peak hour's price ratio × the most a week of trend adds
-        (at most 1 + max_trend_total), after the cut, ≥ (1 + margin) × cur (SPEC §3.4C.1, R21); never for a
-        suspect cur (FM5).
+        (at most 1 + max_trend_total), within the level's bounds (TT51), after the cut, ≥ (1 + margin) × cur
+        (SPEC §3.4C.1, R21); never for a suspect cur (FM5).
     """
-    level = price_level(i)
-    if not (i.cur and level and i.sell_windows) or i.cur_suspect:
+    priced = published_level(i)
+    if not (i.cur and priced.level and i.sell_windows) or i.cur_suspect:
         return False
     slots = profile.expand(i.how) if i.how else None        # only the windows' best hours are read (§3.1.2 re-plan)
     best = max((int(slots[w.best_slot]) / profile.PACK_SCALE if slots else 1.0) for w in i.sell_windows)
     trend = 1 + min(max_trend_total, max(0.0, min(TREND_CLAMP_PCT, i.trend7)) / 100 * 7)
-    peak = level * best * trend
-    thin = i.closes_30d is not None and i.closes_30d < MIN_HOURLY_CLOSES          # slot_price's ceiling (TT22, TT23)
-    ceiling = [level] if thin else [x for x in (i.med7, i.p90_30) if x is not None]
-    peak = min(peak, max(ceiling)) if ceiling else peak
+    peak = prices.forecast(priced.level, best, trend, priced.low, priced.high)
     return peak * (1 - fees.AH_CUT) >= (1 + min_flip_margin) * i.cur
 
 
@@ -211,9 +209,10 @@ def flip_offers(stats: dict[int, ItemIntel], items: dict[int, ItemInfo], vendor_
         best = max(i.sell_windows, key=lambda w: (how[w.best_slot], -w.best_slot)).best_slot
         days = ((best - slot_of(now_ms // HOUR_MS)) % 168 * HOUR_MS - now_ms % HOUR_MS) / DAY_MS
         vendor_sell = (items[key].vendor_sell if key in items else None) or 0
-        expected, price = flip_offer(price_level(i), how[best], i.trend7, max(0.0, days), i.chance, float(vendor_sell),
+        priced = published_level(i)
+        expected, price = flip_offer(priced.level, how[best], i.trend7, max(0.0, days), i.chance, float(vendor_sell),
                                      fees.deposit_copper(vendor_sell, i.ref_stack, duration), i.ref_stack,
-                                     cfg.max_trend_total, i.p10_30, i.med7, i.p90_30, i.closes_30d)
+                                     cfg.max_trend_total, priced.low, priced.high)
         if expected > 0:
             out[key] = f"{round_half_up(expected)},{price},{best}"
     return out

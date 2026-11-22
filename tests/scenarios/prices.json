@@ -5,11 +5,13 @@
   "call": "post_price",
   "args": {
    "cur_others": 55,
-   "med7": 60,
-   "p90": null
+   "level": 60,
+   "how_now": 1.0,
+   "low": 60,
+   "high": 60
   },
   "expect": 54,
-  "why": "55c - 1c = 54c, below the 60c median"
+  "why": "55c - 1c = 54c, below the 60c level (an ask level, its own ceiling)"
  },
  {
   "id": "PP1",
@@ -17,11 +19,13 @@
   "call": "post_price",
   "args": {
    "cur_others": 70,
-   "med7": 60,
-   "p90": null
+   "level": 60,
+   "how_now": 1.0,
+   "low": 60,
+   "high": 60
   },
   "expect": 60,
-  "why": "70c - 1c = 69c is above the 60c median"
+  "why": "70c - 1c = 69c is above the 60c level (an ask level, its own ceiling)"
  },
  {
   "id": "PP1",
@@ -29,8 +33,10 @@
   "call": "post_price",
   "args": {
    "cur_others": null,
-   "med7": 60,
-   "p90": null
+   "level": 60,
+   "how_now": 1.0,
+   "low": 60,
+   "high": 60
   },
   "expect": 60,
   "why": "nothing else listed"
@@ -41,8 +47,10 @@
   "call": "post_price",
   "args": {
    "cur_others": 55,
-   "med7": null,
-   "p90": null
+   "level": null,
+   "how_now": 1.0,
+   "low": null,
+   "high": null
   },
   "expect": 54,
   "why": "no history yet"
@@ -53,85 +61,139 @@
   "call": "post_price",
   "args": {
    "cur_others": null,
-   "med7": null,
-   "p90": null
+   "level": null,
+   "how_now": 1.0,
+   "low": null,
+   "high": null
   },
   "expect": null,
   "why": "nothing to go by: flagged no price"
  },
  {
-  "id": "PP2",
-  "name": "post price undercuts up to the 30-day p90 above the median",
+  "id": "PP5",
+  "name": "post price undercuts up to the ceiling, this hour's forecast of the level",
   "call": "post_price",
   "args": {
-   "cur_others": 100,
-   "med7": 50,
-   "p90": 80
+   "cur_others": 130,
+   "level": 100,
+   "how_now": 1.1,
+   "low": 80,
+   "high": 150
   },
-  "expect": 80,
-  "why": "min(1g - 1c, max(50s, 80s)) = 80s: the market traded at 80s lately, so it isn't posted at half the going rate"
+  "expect": 110,
+  "why": "min(129c, floor(100c x 1.10 + 0.5) = 110c): the sold level with the hour's pattern is the cap"
  },
  {
-  "id": "PP2",
-  "name": "post price undercuts when that is below the cap",
+  "id": "PP5",
+  "name": "post price is the undercut when it is under the ceiling",
   "call": "post_price",
   "args": {
-   "cur_others": 100,
-   "med7": 50,
-   "p90": 200
+   "cur_others": 105,
+   "level": 100,
+   "how_now": 1.1,
+   "low": 80,
+   "high": 150
   },
-  "expect": 99,
-  "why": "min(99c, max(50c, 2g)) = 99c: the undercut is the lower"
+  "expect": 104,
+  "why": "min(104c, 110c) = 104c"
  },
  {
-  "id": "PP2",
-  "name": "post price without competition is still the median",
+  "id": "PP5",
+  "name": "post price without competition is the ceiling",
   "call": "post_price",
   "args": {
    "cur_others": null,
-   "med7": 50,
-   "p90": 80
+   "level": 100,
+   "how_now": 1.1,
+   "low": 80,
+   "high": 150
   },
-  "expect": 50,
-  "why": "nobody else lists it: med7, never the p90"
+  "expect": 110,
+  "why": "nobody else listed: this hour's forecast, 110c"
  },
  {
-  "id": "PP2",
-  "name": "post price without competition or a median is the p90",
+  "id": "PP5",
+  "name": "the ceiling stops at the high bound",
   "call": "post_price",
   "args": {
    "cur_others": null,
-   "med7": null,
-   "p90": 80
+   "level": 100,
+   "how_now": 1.8,
+   "low": 80,
+   "high": 150
   },
-  "expect": 80,
-  "why": "the one price known"
+  "expect": 150,
+  "why": "100c x 1.80 = 180c is lowered to the high bound 150c, the larger of the curve's 90th and the level"
  },
  {
-  "id": "PP4",
-  "name": "post price on thin data caps at the median",
+  "id": "PP5",
+  "name": "an ask level is its own ceiling",
   "call": "post_price",
   "args": {
-   "cur_others": 1000,
-   "med7": 300,
-   "p90": 2000,
-   "closes": 5
+   "cur_others": 200,
+   "level": 77,
+   "how_now": 1.2,
+   "low": 50,
+   "high": 77
   },
-  "expect": 300,
-  "why": "5 hourly closes in 30 days (< 24): the p90 of 20g is an outlier, so the cap is med7 3g: min(9g 99s 99c, 3g) = 3g"
+  "expect": 77,
+  "why": "an ask level's high bound is itself: 77c x 1.20 = 92c is lowered to 77c, under the 1s 99c undercut"
  },
  {
-  "id": "PP4",
-  "name": "post price with enough closes caps at the p90",
+  "id": "PP5",
+  "name": "the ceiling follows a quiet hour down",
   "call": "post_price",
   "args": {
-   "cur_others": 1000,
-   "med7": 300,
-   "p90": 2000,
-   "closes": 30
+   "cur_others": 200,
+   "level": 77,
+   "how_now": 0.9,
+   "low": 50,
+   "high": 77
   },
-  "expect": 999,
-  "why": "30 hourly closes (>= 24): the cap is max(3g, 20g) = 20g, so the undercut 9g 99s 99c stands"
+  "expect": 69,
+  "why": "floor(77c x 0.90 + 0.5) = floor(69.8) = 69c, inside [50c, 77c]"
+ },
+ {
+  "id": "PP5",
+  "name": "without a level the undercut is uncapped",
+  "call": "post_price",
+  "args": {
+   "cur_others": 55,
+   "level": null,
+   "how_now": 1.0,
+   "low": null,
+   "high": null
+  },
+  "expect": 54,
+  "why": "no level: PP1's rule, 55c - 1c"
+ },
+ {
+  "id": "PP5",
+  "name": "no post price without a level or a competitor",
+  "call": "post_price",
+  "args": {
+   "cur_others": null,
+   "level": null,
+   "how_now": 1.0,
+   "low": null,
+   "high": null
+  },
+  "expect": null,
+  "why": "nothing to go by: flagged no price"
+ },
+ {
+  "id": "PP5",
+  "name": "the ceiling rounds half up before the bounds",
+  "call": "post_price",
+  "args": {
+   "cur_others": null,
+   "level": 77,
+   "how_now": 0.5,
+   "low": null,
+   "high": null
+  },
+  "expect": 39,
+  "why": "77c x 0.5 = 38.5c rounds half up to 39c; without bounds (a level never lacks them in a document) nothing clamps it"
  },
  {
   "id": "R28",
@@ -139,12 +201,14 @@
   "call": "relist_price",
   "args": {
    "cur_others": null,
-   "med7": 1500000,
-   "p90": 1500000,
+   "level": 1500000,
+   "how_now": 1.0,
+   "low": 1500000,
+   "high": 1500000,
    "closes": 4
   },
   "expect": null,
-  "why": "the Spaulders: their only listing is the one bought, and a med7 of 150g from 4 closes grounds nothing"
+  "why": "the Spaulders: their only listing is the one bought, and an ask level of 150g from 4 closes grounds nothing"
  },
  {
   "id": "R28",
@@ -152,12 +216,14 @@
   "call": "relist_price",
   "args": {
    "cur_others": null,
-   "med7": 1500000,
-   "p90": 1500000,
+   "level": 1500000,
+   "how_now": 1.0,
+   "low": 1500000,
+   "high": 1500000,
    "closes": 30
   },
   "expect": 1500000,
-  "why": "30 >= 24 hourly closes ground the level: post_price without a competitor is med7, 150g"
+  "why": "30 >= 24 hourly closes ground the level: post_price without a competitor is the ceiling, 150g"
  },
  {
   "id": "R28",
@@ -165,12 +231,14 @@
   "call": "relist_price",
   "args": {
    "cur_others": 50,
-   "med7": 55,
-   "p90": 60,
+   "level": 55,
+   "how_now": 1.0,
+   "low": 50,
+   "high": 55,
    "closes": 4
   },
   "expect": 49,
-  "why": "Linen at 10c and 50c: the 50c listing grounds the undercut, min(49c, med7 55c) = 49c (PP4 cap)"
+  "why": "Linen at 10c and 50c: the 50c listing grounds the undercut, min(49c, the ceiling 55c) = 49c"
  },
  {
   "id": "R28",
@@ -178,12 +246,14 @@
   "call": "relist_price",
   "args": {
    "cur_others": null,
-   "med7": 60,
-   "p90": null,
+   "level": 60,
+   "how_now": 1.0,
+   "low": 60,
+   "high": 60,
    "closes": null
   },
   "expect": 60,
-  "why": "an unknown count is not thin (as TT23 and PP4)"
+  "why": "an unknown count is not thin (as PF30)"
  },
  {
   "id": "TT7",
@@ -228,125 +298,131 @@
   "why": "1 + 0.02 x 3 = 1.06: 106c"
  },
  {
-  "id": "TT22",
-  "name": "a window forecast never promises more than the last 30 days traded at",
-  "call": "slot_price",
-  "args": {
-   "level": 1500000,
-   "how_best": 52.76,
-   "trend7": 0.0,
-   "days_ahead": 2,
-   "max_trend_total": 0.15,
-   "p10": 1000000,
-   "med7": 1500000,
-   "p90": 1800000
-  },
-  "expect": 1800000,
-  "why": "150g x 52.76 = 7,914g is clamped to max(med7 150g, p90 180g) = 180g"
- },
- {
-  "id": "TT22",
-  "name": "a forecast inside the 30-day range is unchanged",
+  "id": "TT51",
+  "name": "a window forecast from the level inside its bounds",
   "call": "slot_price",
   "args": {
    "level": 100,
    "how_best": 1.2,
    "trend7": 0.0,
-   "days_ahead": 2,
+   "days_ahead": 0,
    "max_trend_total": 0.15,
-   "p10": 90,
-   "med7": 100,
-   "p90": 150
+   "low": 80,
+   "high": 150
   },
   "expect": 120,
-  "why": "1s x 1.2 = 1s 20c lies in [90c, 1s 50c]"
+  "why": "a sold level of 100c with the curve's bounds 80c and 150c: 100c x 1.2 = 120c, inside them"
  },
  {
-  "id": "TT22",
-  "name": "a forecast never falls below the 30-day 10th percentile",
+  "id": "TT51",
+  "name": "a window forecast stops at the high bound",
+  "call": "slot_price",
+  "args": {
+   "level": 100,
+   "how_best": 2.0,
+   "trend7": 0.0,
+   "days_ahead": 0,
+   "max_trend_total": 0.15,
+   "low": 80,
+   "high": 150
+  },
+  "expect": 150,
+  "why": "200c is lowered to the high bound: a window can't promise more than the dearest tenth of sales went for"
+ },
+ {
+  "id": "TT51",
+  "name": "a window forecast is raised to the low bound",
   "call": "slot_price",
   "args": {
    "level": 100,
    "how_best": 0.5,
    "trend7": 0.0,
-   "days_ahead": 2,
+   "days_ahead": 0,
    "max_trend_total": 0.15,
-   "p10": 80,
-   "med7": 100,
-   "p90": 150
+   "low": 80,
+   "high": 150
   },
   "expect": 80,
-  "why": "1s x 0.5 = 50c is raised to p10 80c"
+  "why": "50c is raised to the low bound 80c, the curve's 10th"
  },
  {
-  "id": "TT22",
-  "name": "without the percentiles the forecast is not clamped",
+  "id": "TT51",
+  "name": "under 20 units the level is the ceiling",
   "call": "slot_price",
   "args": {
-   "level": 1500000,
-   "how_best": 52.76,
+   "level": 100,
+   "how_best": 1.2,
    "trend7": 0.0,
-   "days_ahead": 2,
+   "days_ahead": 0,
    "max_trend_total": 0.15,
-   "p10": null,
-   "med7": null,
-   "p90": null
+   "low": 60,
+   "high": 100
   },
-  "expect": 79140000,
-  "why": "nothing to clamp to: 150g x 52.76 = 7,914g"
+  "expect": 100,
+  "why": "a sold level of 12 units has no curve: the bounds are p10_30 60c and the level, so 120c is lowered to 100c"
  },
  {
-  "id": "TT23",
-  "name": "a forecast on thin data earns no premium over the level",
+  "id": "TT51",
+  "name": "under 20 units the floor is p10_30",
   "call": "slot_price",
   "args": {
-   "level": 600,
-   "how_best": 235.0,
+   "level": 100,
+   "how_best": 0.5,
    "trend7": 0.0,
-   "days_ahead": 2,
+   "days_ahead": 0,
    "max_trend_total": 0.15,
-   "p10": null,
-   "med7": 600,
-   "p90": 141000,
-   "closes": 20
+   "low": 60,
+   "high": 100
   },
-  "expect": 600,
-  "why": "20 closes < 24: the ceiling is the level, 6s"
+  "expect": 60,
+  "why": "50c is raised to p10_30, 60c"
  },
  {
-  "id": "TT23",
-  "name": "a forecast on enough closes is clamped to the 30-day p90",
+  "id": "TT51",
+  "name": "an ask level is its own ceiling",
   "call": "slot_price",
   "args": {
-   "level": 600,
-   "how_best": 235.0,
+   "level": 77,
+   "how_best": 1.2,
    "trend7": 0.0,
-   "days_ahead": 2,
+   "days_ahead": 0,
    "max_trend_total": 0.15,
-   "p10": null,
-   "med7": 600,
-   "p90": 141000,
-   "closes": 30
+   "low": 50,
+   "high": 77
   },
-  "expect": 141000,
-  "why": "30 closes: 6s x 235 = 14g 10s, max(med7, p90) = 14g 10s"
+  "expect": 77,
+  "why": "an ask level of 77c with p10_30 50c: 92c is lowered to 77c (thin data's rule, TT23's, now for every level that is only asks)"
  },
  {
-  "id": "TT23",
-  "name": "without a close count the TT22 clamp applies",
+  "id": "TT51",
+  "name": "an ask level's forecast is raised to p10_30",
   "call": "slot_price",
   "args": {
-   "level": 600,
-   "how_best": 235.0,
+   "level": 77,
+   "how_best": 0.5,
    "trend7": 0.0,
-   "days_ahead": 2,
+   "days_ahead": 0,
    "max_trend_total": 0.15,
-   "p10": null,
-   "med7": 600,
-   "p90": 141000,
-   "closes": null
+   "low": 50,
+   "high": 77
   },
-  "expect": 141000,
-  "why": "count unknown: the ceiling is max(med7, p90)"
+  "expect": 50,
+  "why": "floor(38.5 + 0.5) = 39c is raised to the low bound 50c"
+ },
+ {
+  "id": "TT51",
+  "name": "a lone low bound still raises the forecast",
+  "call": "slot_price",
+  "args": {
+   "level": 100,
+   "how_best": 0.805,
+   "trend7": 0.0,
+   "days_ahead": 0,
+   "max_trend_total": 0.15,
+   "low": 85,
+   "high": null
+  },
+  "expect": 85,
+  "why": "100c x 0.805 = 80.5c rounds half up to 81c, then is raised to the low bound 85c; no high bound to lower it"
  }
 ]

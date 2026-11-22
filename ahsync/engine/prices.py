@@ -1,4 +1,5 @@
-"""Pricing primitives per item and market (SPEC §3.3): medians, percentiles, trend, post price.
+"""Pricing primitives per item and market (SPEC §3.3, §3.4): medians, percentiles, trend, the post price and
+the forecast of an hour from the price level.
 
 Pure functions over closes the caller has already read; one close per (item, hour),
 local preferred (SPEC §2.2), is the store's job. Numeric rules (SPEC §3.3) are exact:
@@ -207,51 +208,84 @@ def drop_suspect(closes: Sequence[tuple[int, int]], p10: int | None, p90: int | 
     return [(t, c) for t, c in closes if t not in lone]
 
 
-def post_price(cur_others_copper: int | None, med7: int | None, p90: int | None = None,
-               closes: int | None = None) -> int | None:
-    """Post price p = min(curOthers − 1, max(med7, p90_30)) (SPEC §3.4, PP1, PP2, PP4).
+def clamp_bounds(price: int, low: int | None, high: int | None) -> int:
+    """A forecast kept within the level's bounds (SPEC §3.3 Bounds, §3.3.4, TT51).
 
-    You undercut the cheapest competitor, up to the highest price the market traded at recently, and never post
-    above a price the last 30 days never saw. With fewer than MIN_HOURLY_CLOSES hourly closes in 30 days the cap
-    is med7 alone (PP4): a p90 of a few closes is the outlier, not the market.
+    Args:
+        price: Copper.
+        low: The low bound, copper; None for none.
+        high: The high bound, copper; None for none. Never below low when both are known.
+
+    Returns:
+        The price raised to low, then lowered to high, as far as they are known.
+    """
+    if low is not None:
+        price = max(price, low)
+    if high is not None:
+        price = min(price, high)
+    return price
+
+
+def forecast(level: int, how: float, factor: float, low: int | None, high: int | None) -> int:
+    """The expected price of an hour: level × its pattern × a trend factor, within the bounds (SPEC §3.3.4, TT51, PP5).
+
+    Args:
+        level: The price level (SPEC §3.3), copper.
+        how: The hour's price ratio.
+        factor: The trend factor (1 for the current hour).
+        low: The level's low bound, copper; None for none.
+        high: The level's high bound, copper; None for none.
+
+    Returns:
+        floor(level × how × factor + 0.5), then clamp_bounds.
+    """
+    return clamp_bounds(math.floor(level * how * factor + 0.5), low, high)
+
+
+def post_price(cur_others_copper: int | None, level: int | None, how_now: float, low: int | None,
+               high: int | None) -> int | None:
+    """Post price p = min(curOthers − 1, ceiling), the ceiling being this hour's forecast (SPEC §3.4, PP1, PP5).
+
+    You undercut the cheapest competitor, up to what the item sells for at this hour: the level × the hour's
+    pattern, within the level's bounds. An ask level's high bound is itself, so asks never earn a premium (§3.3).
 
     Args:
         cur_others_copper: Lowest competing buyout in copper, or None.
-        med7: 7-day median in copper, or None.
-        p90: 30-day nearest-rank 90th percentile of hourly closes in copper, or None.
-        closes: Hourly closes in the last 30 days; None when unknown (the cap is then max(med7, p90)).
+        level: The price level (SPEC §3.3), copper, or None.
+        how_now: The current hour's price ratio (1.0 without a pattern).
+        low: The level's low bound, copper; None without a level.
+        high: The level's high bound, copper; None without a level.
 
     Returns:
-        The unit price in copper: with a competitor, the undercut capped at the larger of med7 and p90 (med7
-        alone on thin data when med7 is known; the available one when the other is None; uncapped when both
-        are); without one, med7, else p90; None when nothing is known (the item is flagged "no price").
+        The unit price in copper: with a competitor, the undercut capped at the ceiling (uncapped without a level);
+        without one, the ceiling; None when there is neither (the item is flagged "no price").
     """
-    thin = closes is not None and closes < MIN_HOURLY_CLOSES and med7 is not None
-    known = [v for v in (med7, None if thin else p90) if v is not None]
-    cap = max(known) if known else None
+    ceiling = None if level is None else forecast(level, how_now, 1.0, low, high)
     if cur_others_copper is None:
-        return med7 if med7 is not None else p90
+        return ceiling
     undercut = cur_others_copper - 1
-    return undercut if cap is None else min(undercut, cap)
+    return undercut if ceiling is None else min(undercut, ceiling)
 
 
-def relist_price(cur_others_copper: int | None, med7: int | None, p90: int | None = None,
-                 closes: int | None = None) -> int | None:
+def relist_price(cur_others_copper: int | None, level: int | None, how_now: float, low: int | None,
+                 high: int | None, closes: int | None = None) -> int | None:
     """The price to relist bought units now: the post price, only when it is grounded (SPEC §3.4C.2, R28).
 
-    With another listing left, the undercut grounds it. With none, the price is the level alone, which is
-    grounded only by MIN_HOURLY_CLOSES hourly closes in 30 days: a med7 of four closes is not a price you can
+    With another listing left, the undercut grounds it. With none, the price is the ceiling alone, which is
+    grounded only by MIN_HOURLY_CLOSES hourly closes in 30 days: a level of four closes is not a price you can
     sell at. Stock you already own may still post at post_price.
 
     Args:
         cur_others_copper: Lowest competing buyout left after the buy, copper, or None.
-        med7: 7-day median, copper, or None.
-        p90: 30-day 90th percentile of hourly closes, copper, or None.
+        level: The price level, copper, or None.
+        how_now: The current hour's price ratio.
+        low: The level's low bound, copper, or None.
+        high: The level's high bound, copper, or None.
         closes: Hourly closes in the last 30 days; None when unknown (treated as enough).
 
     Returns:
-        post_price(cur_others, med7, p90, closes), or None when nothing is listed and closes < MIN_HOURLY_CLOSES.
+        post_price(...), or None when nothing is listed and closes < MIN_HOURLY_CLOSES.
     """
     if cur_others_copper is None and closes is not None and closes < MIN_HOURLY_CLOSES:
         return None
-    return post_price(cur_others_copper, med7, p90, closes)
+    return post_price(cur_others_copper, level, how_now, low, high)

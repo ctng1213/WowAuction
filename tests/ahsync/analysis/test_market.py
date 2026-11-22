@@ -293,7 +293,7 @@ def test_IU6_a_newer_in_game_scan_updates_only_the_items_it_priced():
     s = after.items[silk]
     assert (s.cur, s.cur_qty, s.book, s.units_on_ah, s.cur_suspect) == (90, 12, tuple(book), 36, False)
     assert s.cur_age_ms == -HOUR and age_now_ms(s.cur_age_ms, NOW + 3 * HOUR, NOW) == 2 * HOUR   # aged from the scan
-    base = market.NowBase(100, 120, 200, 10.0, 10.0, tuple([1.0] * 168), 8)
+    base = market.NowBase(100, 80, 100, 1.0, 10.0, 10.0, tuple([1.0] * 168), 8)      # the ask level of its 100 c medians
     expected = market.now_fields(market.Quote(90, 12, tuple(book)), base, NOW + HOUR, settings)
     assert (s.post_price, s.ref_stack, s.chance, s.volume_unknown, s.sell_value) == expected   # repriced (decision 2)
     assert s.post_price != intel.items[silk].post_price
@@ -411,13 +411,13 @@ def test_BZ29_the_simulation_uses_the_measured_share_not_the_default():
 
 def test_sell_chance_now_is_a_24h_post_at_the_lowest_listing():
     book = ((90, 12, 4, 1), (95, 20, 4, 2))
-    base = market.NowBase(100, 120, 200, 10.0, 10.0, tuple([1.0] * 168), 8)
+    base = market.NowBase(100, 80, 100, 1.0, 10.0, 10.0, tuple([1.0] * 168), 8)
     quote = market.Quote(90, 12, book)
     day = MarketSettings(sell_window_hours=24)
     supply = sellprob.Supply(10.0, 10.0, book, 90, 12)
     expected = sellprob.posting_chance(supply, 90, market.ref_stack(list(book)), NOW, day, base.sales_values, None)[0]
     assert market.sell_chance_now(quote, base, NOW, MarketSettings()) == expected      # 24 h, whatever the post window
-    assert market.sell_chance_now(quote, market.NowBase(100, 120, 200, None, None, (), 8), NOW, MarketSettings()) is None
+    assert market.sell_chance_now(quote, market.NowBase(100, 80, 100, 1.0, None, None, (), 8), NOW, MarketSettings()) is None
     assert market.sell_chance_now(market.Quote(None, None, None), base, NOW, MarketSettings()) is None
 
 

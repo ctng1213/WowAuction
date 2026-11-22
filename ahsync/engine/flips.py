@@ -291,12 +291,11 @@ def flip_actions(f: SellFacts, stage: _Stage, char_id: str, now_ms: int, s: Plan
 
 
 def flip_offer(level: int, how_best: float, trend7: float, days_ahead: float, p: float, fallback: float, deposit: int,
-               ref: int, max_trend_total: float, p10: int | None = None, med7: int | None = None,
-               p90: int | None = None, closes: int | None = None) -> tuple[float, int]:
+               ref: int, max_trend_total: float, low: int | None = None, high: int | None = None) -> tuple[float, int]:
     """What one reference stack bought now could fetch at the item's best window, market-wide (SPEC §4.3, EX11).
 
     Args:
-        level: Price level (med7, else med30), copper.
+        level: The price level (SPEC §3.3), copper.
         how_best: The best window's best-hour price ratio.
         trend7: Trend, % per day (clamped by slot_price).
         days_ahead: Days until that hour.
@@ -305,13 +304,11 @@ def flip_offer(level: int, how_best: float, trend7: float, days_ahead: float, p:
         deposit: Deposit for the stack, copper.
         ref: Reference stack, units.
         max_trend_total: Config max_trend_total (slot_price's total trend clamp, TT7).
-        p10: 30-day 10th percentile, copper (slot_price's clamp, TT22); None for none.
-        med7: 7-day median, copper.
-        p90: 30-day 90th percentile, copper.
-        closes: Hourly closes in 30 days (TT23); None when unknown.
+        low: The level's low bound, copper (slot_price's clamp, TT51); None for none.
+        high: The level's high bound, copper; None for none.
 
     Returns:
         (expected value per unit after fees, float copper; the window's unit price, copper).
     """
-    price = slot_price(level, how_best, trend7, days_ahead, max_trend_total, p10, med7, p90, closes)
+    price = slot_price(level, how_best, trend7, days_ahead, max_trend_total, low, high)
     return sellprob.expected_post(p, ref, price, fallback, deposit) / ref, price

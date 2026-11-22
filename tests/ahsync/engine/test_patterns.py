@@ -151,7 +151,7 @@ def facts(**changes) -> ForecastFacts:
     Returns:
         The ForecastFacts.
     """
-    base = ForecastFacts(MON_MS, 100, 0.0, None, None, None, 720, 93, FLAT, 20, 0.5, 0.5, 0, 0.15)
+    base = ForecastFacts(MON_MS, 100, 0.0, None, None, 720, 93, FLAT, 20, 0.5, 0.5, 0, 0.15)
     return replace(base, **changes)
 
 
@@ -215,8 +215,8 @@ def test_window_forecasts_follow_supply_trend_and_clamps():
     # forecast stays under p90.
     assert window_forecast(w, facts(trend7=10.0)).price == 125                           # 100 × 1.15 × 1.0896
     assert window_forecast(w, facts(trend7=10.0, max_trend_total=0.05)).price == 121     # 100 × 1.15 × 1.05
-    assert window_forecast(w, facts(trend7=10.0, p90=120)).price == 120
-    assert window_forecast(w, facts(closes_30d=4)).price == 100                          # thin: capped at the level
+    assert window_forecast(w, facts(trend7=10.0, high=120)).price == 120
+    assert window_forecast(w, facts(high=100)).price == 100                              # an ask level: its own ceiling (TT51)
     assert window_forecast(w, facts(closes_30d=None)).conf == 45                          # unknown count: 0 closes
     assert sell_net_price([], 100) == pytest.approx(95.0)
 

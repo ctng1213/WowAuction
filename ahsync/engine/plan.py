@@ -13,7 +13,7 @@ import math
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, replace
 
-from ahsync.engine import fees, sellprob
+from ahsync.engine import fees, prices, sellprob
 from ahsync.engine.capacity import liquidity_cap, slot_of, window_supply
 from ahsync.engine.prices import MIN_HOURLY_CLOSES
 from ahsync.engine.sell_record import Record, repriced, stacks_to_post
@@ -69,7 +69,7 @@ class SellFacts:
     """What the sell plan knows about one item: market intelligence plus your values for it."""
 
     key: int
-    level: int | None                              # price level: med7, else med30 (SPEC §3.4C.1, R21)
+    level: int | None                              # the price level (SPEC §3.3): what the item is worth now
     trend7: float                                  # % per day
     post_price: int | None                         # the posting-now price
     sold_per_day: float | None
@@ -90,11 +90,11 @@ class SellFacts:
     gear: bool = False                             # a weapon or armor: the lenient gear cap (SPEC §3.4 Liquidity)
     conf: int = 0                                  # confidence % of the item's numbers (SPEC §3.3.5)
     record: Record | None = None                   # your own sell record (SPEC §3.3.3); None without one
-    med7: int | None = None                        # 7-day median, copper: the post price's cap (SPEC §3.4, R24)
-    p90: int | None = None                         # 30-day 90th percentile, copper: likewise
-    p10: int | None = None                         # 30-day 10th percentile, copper: buying below it is cheap (§3.4D.3)
+    low: int | None = None                         # the level's low bound, copper (SPEC §3.3): a forecast's floor, and
+                                                   # buying below it is cheap (§3.4D.3, R35)
+    high: int | None = None                        # the level's high bound, copper: a forecast's ceiling (TT51)
     buy_windows: tuple[PlanWindow, ...] = ()       # buying windows, cheapest first (Buy for later, §3.4D.3)
-    closes_30d: int | None = None                  # hourly closes in 30 days; thin data caps forecasts at the level (TT23)
+    closes_30d: int | None = None                  # hourly closes in 30 days; thin data has posting now only (PF30)
     undercut_share: float | None = None            # the document's measured u(p) (BZ29); None for the default
     commodity: bool = False                        # seen in Blizzard's commodities list: a buyer takes any number of
                                                    # an auction's units, so a flip buys lots, not whole auctions (R30)
@@ -168,38 +168,30 @@ def occurrences(windows: Sequence[PlanWindow], now_ms: int, horizon_days: int) -
 
 
 def slot_price(level: int, how_best: float, trend7: float, days_ahead: float, max_trend_total: float,
-               p10: int | None = None, med7: int | None = None, p90: int | None = None,
-               closes: int | None = None) -> int:
-    """Expected price at a window's best hour: level × how × trend factor, clamped (SPEC §3.4C.1, TT6, TT7, TT22).
+               low: int | None = None, high: int | None = None) -> int:
+    """Expected price at a window's best hour: level × how × trend factor, within the bounds (SPEC §3.4C.1, TT6, TT7,
+    TT51).
 
     The trend factor is 1 + trend7 ÷ 100 × days ahead, with trend7 clamped to ±5% a day and the factor
     clamped to 1 ± max_trend_total, so a week of thin data can't move a forecast 35%. The result is then kept
-    within [p10_30, max(med7, p90_30)], as far as they are known: a window can't promise a price the last 30
-    days never traded at (the post-now price's cap, PP2). With fewer than MIN_HOURLY_CLOSES hourly closes in
-    30 days the ceiling is the level itself (TT23): a p90 of a few closes is the outlier, not the market.
+    within the level's bounds (SPEC §3.3): a sold level with a curve can forecast up to what its dearest tenth
+    sold at; any other level is its own ceiling.
 
     Args:
-        level: The price level (med7, else med30), copper.
+        level: The price level (SPEC §3.3), copper.
         how_best: Price ratio of the best hour.
         trend7: % per day, clamped to ±5.
         days_ahead: Days from now to the best hour.
         max_trend_total: Config max_trend_total, a fraction (0.15).
-        p10: The 30-day 10th percentile, copper, the floor; None for none.
-        med7: The 7-day median, copper; with p90 the ceiling is the larger known one.
-        p90: The 30-day 90th percentile, copper.
-        closes: Hourly closes in the last 30 days; None when unknown (the TT22 clamp).
+        low: The level's low bound, copper; None for none.
+        high: The level's high bound, copper; None for none.
 
     Returns:
-        Copper, rounded half up, then raised to p10 and lowered to max(med7, p90) where known, or to the level
-        when closes < MIN_HOURLY_CLOSES.
+        Copper, rounded half up, then raised to low and lowered to high where known (prices.forecast).
     """
     trend = max(-TREND_CLAMP_PCT, min(TREND_CLAMP_PCT, trend7))
     factor = max(1 - max_trend_total, min(1 + max_trend_total, 1 + trend / 100 * days_ahead))
-    price = math.floor(level * how_best * factor + 0.5)
-    if p10 is not None:
-        price = max(price, p10)
-    ceiling = [level] if closes is not None and closes < MIN_HOURLY_CLOSES else [x for x in (med7, p90) if x is not None]
-    return min(price, max(ceiling)) if ceiling else price
+    return prices.forecast(level, how_best, factor, low, high)
 
 
 def thin(f: SellFacts) -> bool:
@@ -241,7 +233,7 @@ def post_options(f: SellFacts, now_ms: int, s: PlanSettings, thin_windows: bool 
         post = max(best - s.post_lead_hours * HOUR_MS, now_ms)
         hours = tuple(sellprob.planned_window(post, end, now_ms))    # never empty: occurrences haven't ended
         price = record_price(f, slot_price(f.level, f.how[slot_of(best // HOUR_MS)], f.trend7, (best - now_ms) / DAY_MS,
-                                           s.max_trend_total, f.p10, f.med7, f.p90, f.closes_30d), s)
+                                           s.max_trend_total, f.low, f.high), s)
         covering = -(-(best + HOUR_MS - post) // HOUR_MS)      # the listing stays up through the best hour
         out.append(PostOption(post, hours, price, (start, end, best), _cap(f, hours, now_ms, s),
                            fees.shortest_duration_covering(covering), weeks))

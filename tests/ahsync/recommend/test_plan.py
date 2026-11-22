@@ -7,7 +7,7 @@ import pytest
 
 from ahsync.config import Config
 from ahsync.db.sqlite import Database
-from ahsync.engine.plan import PlanAction
+from ahsync.engine.plan import PlanAction, slot_price
 from ahsync.history.reads import ItemInfo
 from ahsync.intel.contract import IntelWindow, ItemIntel
 from ahsync.recommend import plan
@@ -95,15 +95,19 @@ def test_rows_link_a_chain_to_its_first_step_and_carry_the_plan_week():
 
 
 
-def test_R21_forecasts_start_from_the_7_day_median_not_a_month_old_level():
+def test_R21_forecasts_start_from_the_price_level_not_a_month_old_median():
     flat = (IntelWindow(2, 116, 2, 1.0, 0),)
-    venom = replace(intel(1475, 90, 85.0, flat), cur_qty=7, med7=103, med30=2094)
-    assert plan.sell_facts(venom, None, None).level == 103
+    venom = replace(intel(1475, 90, 85.0, flat), cur_qty=7, med7=103, med30=2094, level=103, level_source="sold",
+                    level_units=58.0)
+    facts = plan.sell_facts(venom, None, None)
+    assert (facts.level, facts.low, facts.high) == (103, 90, 103)          # a sold level under 20 units: its own ceiling
     assert not plan.flip_candidate(venom, 0.2)                    # 103 × 0.95 = 97.85 < 1.2 × 90
-    month_only = replace(venom, med7=None)
-    assert plan.sell_facts(month_only, None, None).level == 2094
-    assert not plan.flip_candidate(month_only, 0.2)          # 20s 94c is clamped to the 30-day p90, 90c (TT22)
-    assert plan.flip_candidate(replace(month_only, p90_30=2200), 0.2)     # a market that traded at 22s
+    asks = replace(venom, level=None, level_source=None, level_units=0.0)
+    assert plan.sell_facts(asks, None, None).level == (4 * 103 + 2094) // 5                 # the ask level, 5 s 1 c
+    month_only = replace(asks, med7=None)
+    facts = plan.sell_facts(month_only, None, None)
+    assert (facts.level, facts.high) == (2094, 2094)                        # only med30: the ask level is med30...
+    assert slot_price(facts.level, 1.3, 0.0, 2, 0.15, facts.low, facts.high) == 2094   # ...and a forecast never exceeds it
 
 
 def test_sell_records_come_from_your_resolved_posts_the_closes_during_them_and_keep(state):
@@ -142,7 +146,7 @@ def test_R24_a_stack_dumped_below_the_next_price_level_is_a_flip_candidate_witho
     dumped = replace(intel(2589, 10), book=((10, 20, 4, 1), (50, 20, 4, 5)), chance=0.9)
     assert plan.now_candidate(dumped, 0.2) and plan.flip_candidate(dumped, 0.2)     # 49 × 0.95 × 0.9 = 41.9 ≥ 12
     assert not plan.window_candidate(dumped, 0.2)                                   # no selling window
-    assert plan.sell_facts(dumped, None, None).p90 == 10 and plan.sell_facts(dumped, None, None).med7 == 10
+    assert plan.sell_facts(dumped, None, None).high == 10 and plan.sell_facts(dumped, None, None).low == 10
 
 
 def test_R25_the_second_level_too_close_is_no_candidate():

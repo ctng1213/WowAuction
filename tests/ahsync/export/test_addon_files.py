@@ -174,11 +174,11 @@ def test_EX14_both_addon_files_carry_export_version_4_after_schema_version_outsi
     now = FakeClock().now_ms()
     cfg, folder = plan_with_one_action(db, tmp_path, now)
     assert addon_files.export_market(db, cfg, now, lambda s: None) and addon_files.export_plan(db, cfg, now, lambda s: None)
-    assert addon_files.EXPORT_VERSION == 8                  # 8: CD (EX23); 7: paid (EX22); 6: the market lines (M33b); 5: salesDays (EX21); 4: K, G (EX17)
+    assert addon_files.EXPORT_VERSION == 9                  # 9: the level, its bounds, H (EX25); 8: CD (EX23); 7: paid (EX22); 6: the market lines (M33b); 5: salesDays (EX21); 4: K, G (EX17)
     for name in ("MarketIntelligence.lua", "PortfolioPlan.lua"):
         header = (folder / name).read_text(encoding="utf-8").splitlines()
         at = header.index("  schemaVersion = 1,")
-        assert header[at + 1] == "  exportVersion = 8,"
+        assert header[at + 1] == "  exportVersion = 9,"
     plan = (folder / "PortfolioPlan.lua").read_text(encoding="utf-8")
     action = f"a1;post;{LINEN};20;55;{now};1046;;;pending;80;;;;;"
     # The action string and Brugan's gold ("100," with no snapshot time): the export version counts in neither.
@@ -197,8 +197,8 @@ def test_EX15_each_written_addon_file_is_logged_with_its_size_time_and_contents(
     market_bytes = (folder / "MarketIntelligence.lua").stat().st_size
     plan_bytes = (folder / "PortfolioPlan.lua").stat().st_size
     assert [r.getMessage() for r in caplog.records if r.levelname == "INFO"] == [
-        f"wrote MarketIntelligence.lua: {market_bytes} bytes, generatedAt {now}, exportVersion 8, 1 items",
-        f"wrote PortfolioPlan.lua: {plan_bytes} bytes, generatedAt {now}, exportVersion 8, 1 open actions"]
+        f"wrote MarketIntelligence.lua: {market_bytes} bytes, generatedAt {now}, exportVersion 9, 1 items",
+        f"wrote PortfolioPlan.lua: {plan_bytes} bytes, generatedAt {now}, exportVersion 9, 1 open actions"]
 
     caplog.clear()
 

@@ -68,13 +68,15 @@ end
 
 --- One item string with a price (SPEC §3.5 `I`).
 ---@param cur number|nil  Its current price, copper
----@param extra table|nil { postPrice, sellValue, chance1000, supply, refStack, closes30, med7, p90, sold10 (units sold in
----                       10 days, default 10), sell (its sell windows, "start:hours:best:how1000:weeks/...") }
+---@param extra table|nil { postPrice, sellValue, chance1000, supply, refStack, closes30, level, low, high (the price
+---                       level and its bounds, EX25), sold10 (units sold in 10 days, default 10), sell (its sell
+---                       windows, "start:hours:best:how1000:weeks/...") }
 ---@return string
 function World.Item(cur, extra)
   local e = extra or {}
-  local fields = { cur or "", 100, 60, e.med7 or "", "", "", e.p90 or "", 0, e.sold10 or 10, 10, e.supply or "", 80, "",
-                   e.postPrice or "", e.refStack or 1, e.sellValue or "", 0, e.chance1000 or "", "", 0, e.closes30 or 100 }
+  local fields = { cur or "", 100, 60, "", "", "", "", 0, e.sold10 or 10, 10, e.supply or "", 80, "",
+                   e.postPrice or "", e.refStack or 1, e.sellValue or "", 0, e.chance1000 or "", "", 0, e.closes30 or 100,
+                   "", "", "", "", "", "", "", "", "", "", e.level or "", e.low or "", e.high or "" }
   return table.concat(fields, ",") .. ";" .. (e.sell or "") .. ";"
 end
 
@@ -162,10 +164,10 @@ function World.Install(opts)
   local market = { observationsUntil = World.NOW - World.HOUR, curveHour = math.floor(World.NOW / World.HOUR),
                    I = o.items or {}, C = {}, K = K, G = o.G or World.G() }
   local markets = { [World.M] = market }
-  _G.AHProfitMarket = { schemaVersion = 1, exportVersion = 8, generatedAt = World.NOW,
+  _G.AHProfitMarket = { schemaVersion = 1, exportVersion = 9, generatedAt = World.NOW,
                         charMarkets = { [World.AMAYA] = World.M, [World.BRUGAN] = World.M }, markets = markets,
                         checksum = MarketChecksum(markets) }
-  local plan = { schemaVersion = 1, exportVersion = 8, generatedAt = World.NOW, basedOnUntil = World.NOW,
+  local plan = { schemaVersion = 1, exportVersion = 9, generatedAt = World.NOW, basedOnUntil = World.NOW,
                  ingestedUntil = { [World.AMAYA] = World.NOW }, actions = { [World.AMAYA] = o.actions }, rules = {},
                  portfolio = { [World.M] = o.snapshot or (World.NOW .. ";300;150;50;8;20;20;7;1;355800;41800;64940;62500") },
                  gold = { [World.AMAYA] = "210000," .. World.NOW, [World.BRUGAN] = "104000," .. World.NOW },

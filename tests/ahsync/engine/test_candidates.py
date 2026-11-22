@@ -6,7 +6,7 @@ from dataclasses import replace
 from ahsync.engine import candidates as cand, craft, plan
 from ahsync.engine.candidates import DeInfo, Universe
 from ahsync.engine.craft_plan import CraftWorld
-from ahsync.engine.plan import Lot, PlanWindow
+from ahsync.engine.plan import Lot, PlanWindow, SellFacts
 from ahsync.engine.selection import Eligibility, static_reason
 from ahsync.engine.timing import adjusted, premium_micro, wait_hundredths
 from ahsync.engine.week import WeekInputs, prepare
@@ -81,10 +81,25 @@ def test_flip_generation_needs_a_character_and_buys_for_the_richest():
     gi = replace(gen_inputs(), spendable={"Amaya-G": 10, "Brugan-G": 20})
     assert cand.flip_char(gi) == "Brugan-G"
     assert opportunity(universe(w, gi), f"flip:{LINEN}:").batches[0].candidate.char_id == "Brugan-G"
-    low = replace(linen_book(), cur=5, p10=6, windows=(PlanWindow(SUN * 24 + 17, 3, SUN * 24 + 18, 1),),
+    low = replace(linen_book(), cur=5, low=6, windows=(PlanWindow(SUN * 24 + 17, 3, SUN * 24 + 18, 1),),
                   how=tuple(3.0 if h == SUN * 24 + 18 else 1.0 for h in range(168)))
     later = opportunity(universe(empty_world(facts={LINEN: low})), f"buy_later:{LINEN}:")
     assert static_reason(later.batches[0].eligibility, 7) == "Forecast too uncertain (1 week of data)"
+
+
+def test_R35_buy_for_later_is_a_price_under_the_levels_low_bound():
+    window = (PlanWindow(SUN * 24 + 17, 3, SUN * 24 + 18, 6),)
+
+    def strategies(f: SellFacts) -> set[str]:
+        """The strategies generated for one item."""
+        return {o.opp.split(":")[0] for o in universe(empty_world(facts={LINEN: f})).opportunities}
+
+    curve = replace(linen_book(), level=100, low=80, high=150, post_price=78, windows=window,       # the curve's 10th
+                    book=((79, 20, 4, 1), (100, 20, 4, 5)), cur=79, cur_qty=20)                     # is 80 c, p10_30 40 c
+    assert strategies(curve) == {"buy_later"}                           # 79 c: under what the cheapest tenth went for
+    assert strategies(replace(curve, book=((80, 20, 4, 1), (100, 20, 4, 5)), cur=80)) == {"flip"}   # 80 c: not under it
+    asks = replace(curve, level=77, low=50, high=77, post_price=48, book=((49, 20, 4, 1), (77, 20, 4, 5)), cur=49)
+    assert strategies(asks) == {"buy_later"}                            # an ask level: p10_30 50 c, as today
 
 
 def test_buy_for_later_is_left_out_when_nothing_pays_or_no_window_follows():
@@ -201,7 +216,7 @@ def test_PF30_a_window_sale_needs_price_history_and_every_sale_a_known_sales_rat
     assert static_reason(later.batches[0].eligibility, 7) == "Forecast too uncertain (4 closes in 30 d, needs 24)"
     result = plans.plan(empty_world(facts={ESSENCE: essence}), NOW, gold={"Amaya-G": plans.RICH})
     assert "Forecast too uncertain (4 closes in 30 d, needs 24)" in {a.reason for a in result.alternatives}
-    wide = {"med7": 40, "p90": 40, "book": ((5, 20, 4, 1), (40, 20, 4, 5))}  # a 5c stack under 40c: pays either way
+    wide = {"low": 4, "high": 40, "book": ((5, 20, 4, 1), (40, 20, 4, 5))}   # a 5c stack under 40c: pays either way
     potion = linen_book(closes_30d=30, sold_per_day=None, **wide)
     unknown = opportunity(universe(empty_world(facts={LINEN: potion})), f"flip:{LINEN}:")
     assert static_reason(unknown.batches[0].eligibility, 7) == "Sales volume unknown"

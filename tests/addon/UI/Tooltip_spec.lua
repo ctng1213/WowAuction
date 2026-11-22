@@ -1,5 +1,5 @@
 -- Specs for addon/AHProfit/UI/Tooltip.lua: the AHProfit block on item tooltips, gathered from the addon files and
--- the live state and drawn as two-column lines (SPEC §4.3 Tooltip; A21, TT4, TT6, TT22, TT24, TT27, TT30, R21). The lines' words are
+-- the live state and drawn as two-column lines (SPEC §4.3 Tooltip; A21, TT4, TT6, TT51, TT24, TT27, TT30, R21). The lines' words are
 -- TooltipView's (tests/addon/UI/TooltipView_spec.lua).
 
 local Stubs = require("wow_stubs")
@@ -9,14 +9,16 @@ local HOUR = 3600000
 local NOW = 1760000000000
 
 --- Log in with Linen in the market file (written 2 h ago, its price seen 30 min before that).
----@param med7 number|nil     Linen's 7-day median (default 49c, the same as med30)
+---@param level number|nil    Linen's price level, also its med7 (default 49c, the same as med30; SPEC §3.3)
 ---@param trend10 number|nil  Its trend in tenths of a percent a day (default 0)
----@param p90 number|nil      Its 30-day 90th percentile (default 60c)
+---@param high number|nil     The level's high bound, also its p90 (default 60c); the low bound is 40c
 ---@return table  The tooltip stub
-local function Boot(med7, trend10, p90)
+local function Boot(level, trend10, high)
   Stubs.Reset()
-  local linen = "45,20,30," .. (med7 or 49) .. ",49,40," .. (p90 or 60) .. "," .. (trend10 or 0) .. ",480,,93,86,72,45,20,42,0,900;138:4:139:1120:7;"
-  _G.AHProfitMarket = { schemaVersion = 1, exportVersion = 8, generatedAt = NOW - 2 * HOUR, checksum = "1:" .. #linen,
+  local linen = table.concat({ 45, 20, 30, level or 49, 49, 40, high or 60, trend10 or 0, 480, "", 93, 86, 72, 45, 20, 42, 0, 900,
+                               "", "", "", "", "", "", "", "", "", "", "", "", "", level or 49, 40, high or 60 }, ",")
+                .. ";138:4:139:1120:7;"
+  _G.AHProfitMarket = { schemaVersion = 1, exportVersion = 9, generatedAt = NOW - 2 * HOUR, checksum = "1:" .. #linen,
     charMarkets = { ["Amaya-Grommash"] = UIWorld.MARKET },
     markets = { [UIWorld.MARKET] = { observationsUntil = NOW - 2 * HOUR, curveHour = 0, I = { [2589] = linen }, C = {} } } }
   Stubs.Login()
@@ -123,13 +125,13 @@ describe("Tooltip", function()
     assert_eq(Prices.DaysUntilSlot(80, NOW - (NOW % HOUR)), 0)     -- Thu 08:00 UTC is this hour's start
   end)
 
-  it("R21 the price at best time starts from the 7-day median", function()
+  it("R21 the price at best time starts from the price level", function()
     Boot(60, nil, 80)
-    assert_eq(ValueUnder(2589, "Best Sell Time"), "67c · Saturday Evening · —")   -- 60c × 1.12 = 67.2c
+    assert_eq(ValueUnder(2589, "Best Sell Time"), "67c · Saturday Evening · —")   -- 60c × 1.12 = 67.2c, under 80c
   end)
 
-  it("TT22 the price at best time stays within what the last 30 days traded at", function()
-    Boot(60)                                                        -- p90 60c: 67.2c is clamped to max(60c, 60c)
+  it("TT51 the price at best time stays within the level's bounds", function()
+    Boot(60)                                                        -- the high bound 60c: 67.2c is lowered to it
     assert_eq(ValueUnder(2589, "Best Sell Time"), "60c · Saturday Evening · —")
   end)
 

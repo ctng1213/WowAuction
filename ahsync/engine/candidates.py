@@ -396,7 +396,7 @@ def _flip_first(f: SellFacts, char_id: str, ledger: dict, run: Run) -> tuple | N
     if step is None:
         return None
     o = opts[step.option]
-    later = f.p10 is not None and f.cur is not None and f.cur < f.p10 and o.window is not None
+    later = f.low is not None and f.cur is not None and f.cur < f.low and o.window is not None
     sale, cost = sale_ms(o, run.now_ms), step.cost
     cand = candidate_id("buy_later" if later else "flip", f.key, char_id,
                         route_text({}, "now", timing_tag(sale, run.now_ms)), 1)
@@ -492,7 +492,7 @@ def _flip_opportunity(f: SellFacts, opts: Sequence[PostOption], steps: list, cha
         The Opportunity.
     """
     name = gi.names.get(f.key, str(f.key))
-    later = f.p10 is not None and f.cur is not None and f.cur < f.p10 and opts[steps[0].option].window is not None
+    later = f.low is not None and f.cur is not None and f.cur < f.low and opts[steps[0].option].window is not None
     strategy = "buy_later" if later else "flip"
     u.add_resource(f"ah:{f.key}", sum(stack for _, stack, _ in auctions(f.book, f.cur, f.cur_qty)), name)
     batches, units = [], 0
@@ -571,7 +571,7 @@ def _later_choice(f: SellFacts, buy_ms: int, ledger: dict, run: Run) -> tuple | 
         stack); None when no window after the buy pays.
     """
     price = slot_price(f.level, f.how[slot_of(buy_ms // HOUR_MS)], f.trend7, (buy_ms - run.now_ms) / DAY_MS,
-                       run.s.max_trend_total, f.p10, f.med7, f.p90, f.closes_30d)
+                       run.s.max_trend_total, f.low, f.high)
     opts = [o for o in post_options(f, run.now_ms, run.s, thin_windows=True)
             if o.window is not None and o.at_ms >= buy_ms]
     value = timed_value(opts, run)

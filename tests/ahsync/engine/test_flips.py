@@ -189,14 +189,14 @@ def dumped_linen(**changes) -> SellFacts:
     base = SellFacts(LINEN, level=48, trend7=0.0, closes_30d=720, post_price=9, sold_per_day=54.0, listed_per_day=0.0, ref_stack=20,
                      how=tuple([1.0] * 168), sales_how=tuple([1.0] * 168), windows=(),
                      book=((10, 20, 4, 1), (50, 20, 4, 5)), cur=10, cur_qty=20, vendor_sell=10, supply_now=120,
-                     conf=80, med7=48, p90=55)
+                     conf=80, low=48, high=55)
     return replace(base, **changes)
 
 
 def test_R24_a_dumped_stack_is_bought_and_posted_for_its_later_window():
     s = replace(S, default_undercut_share=0.0)
     sat = dumped_linen(windows=(PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18, 6),), book=((10, 20, 4, 1), (50, 20, 1, 5)),
-                       p90=75,                                                  # it has traded at 72c (TT22)
+                       high=75,                                                 # its high bound (TT51)
                        how=tuple(1.5 if h == SAT * 24 + 18 else 1.0 for h in range(168)))
     buy, post = flip(sat, s)
     assert (buy.kind, buy.qty, buy.price, buy.chain) == ("buy", 20, 10, "flip:2589")
@@ -208,15 +208,15 @@ def test_R29_a_flip_sells_only_in_a_window_that_starts_later():
     s = replace(S, default_undercut_share=0.0)
     friday = PlanWindow(4 * 24 + 13, 4, 4 * 24 + 14, 6)                          # Fri 13-17: open at Fri 14:00, now
     how = tuple(1.5 if h in (4 * 24 + 14, SAT * 24 + 18) else (1.17 if h == SAT * 24 + 17 else 1.0) for h in range(168))
-    both = dumped_linen(windows=(friday, PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18, 6)), how=how, p90=75,
+    both = dumped_linen(windows=(friday, PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18, 6)), how=how, high=75,
                         book=((10, 20, 4, 1), (50, 20, 1, 5)))
     buy, *posts = flip(both, s)
     assert (buy.qty, buy.at_ms) == (40, NOW)                                      # both stacks pay at 72c
     assert [(p.qty, p.price, (p.peak_ms - MONDAY) // HOUR) for p in posts] == [
         (20, 72, SAT * 24 + 18), (20, 72, 7 * 24 + 4 * 24 + 14)]                 # Saturday, then next Friday 14:00
     assert all(p.window_start_ms > NOW for p in posts)                            # the open Friday window counts as now
-    assert flip(dumped_linen(windows=(friday,), how=how, p90=75), s) == []      # no window after now: no flip
-    thin = dumped_linen(windows=(PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18, 6),), how=how, p90=75, closes_30d=4)
+    assert flip(dumped_linen(windows=(friday,), how=how, high=75), s) == []     # no window after now: no flip
+    thin = dumped_linen(windows=(PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18, 6),), how=how, high=75, closes_30d=4)
     assert flip(thin, s) == []                                                  # thin data: no windows, no relist
     opts = flips.later_only(plan.post_options(both, NOW, s), NOW)
     assert all(o.window is not None and o.window[0] > NOW for o in opts if o.cap > 0) and any(o.cap > 0 for o in opts)
@@ -224,7 +224,7 @@ def test_R29_a_flip_sells_only_in_a_window_that_starts_later():
 def test_R30_a_commodity_flip_buys_part_of_an_auction_within_the_risk_budget():
     s = replace(S, default_undercut_share=0.0)
     dumped = dict(windows=(PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18, 6),), book=((10, 200, 4, 1), (50, 20, 1, 5)),
-                  p90=75, how=tuple(1.5 if h == SAT * 24 + 18 else 1.0 for h in range(168)), cur_qty=200,
+                  high=75, how=tuple(1.5 if h == SAT * 24 + 18 else 1.0 for h in range(168)), cur_qty=200,
                   sold_per_day=600.0)
     linen = dumped_linen(commodity=True, **dumped)
     assert [o.cap for o in flips.later_only(plan.post_options(linen, NOW, s), NOW)] == [0, 60]   # Saturday: 60 units
@@ -247,7 +247,7 @@ def test_R30_a_commodity_flip_buys_part_of_an_auction_within_the_risk_budget():
 
 def test_R28_thin_data_is_no_flip_and_no_excluded_row():
     s = replace(S, default_undercut_share=0.0)
-    spaulders = dumped_linen(key=7005, level=1_500_000, med7=1_500_000, p90=1_500_000, post_price=1_500_000,
+    spaulders = dumped_linen(key=7005, level=1_500_000, low=1_500_000, high=1_500_000, post_price=1_500_000,
                              book=((3500, 1, 3, 1),), cur=3500, cur_qty=1, ref_stack=1, sold_per_day=1.0,
                              supply_now=1, vendor_sell=100, closes_30d=4)      # one listing at 35s, med7 150g, 4 closes
     thin = plans.plan(world({7005: spaulders}), NOW, s=s, gold={"Amaya-G": RICH})
@@ -259,7 +259,7 @@ def gloves(**changes) -> SellFacts:
     base = SellFacts(4239, level=1500, trend7=0.0, closes_30d=720, post_price=799, sold_per_day=0.0, listed_per_day=0.0, ref_stack=1,
                      how=tuple([1.0] * 168), sales_how=tuple([1.0] * 168), windows=(),
                      book=((800, 1, 3, 1), (1600, 1, 4, 1)), cur=800, cur_qty=1, vendor_sell=100, de_value=2100.0,
-                     de_char="Amaya-G", supply_now=2, conf=75, med7=1500, p90=1500)
+                     de_char="Amaya-G", supply_now=2, conf=75, low=1500, high=1500)
     return replace(base, **changes)
 
 
@@ -269,7 +269,7 @@ def test_R27_a_flip_whose_post_pays_no_more_than_disenchanting_is_not_a_flip():
     assert flip(gloves()) == []
     # Listed at 8s only, med7 and p90 30s, 2.7 sold a day, a Saturday window at 30s: posting there is worth more per
     # glove than the 21s of disenchanting it: a flip.
-    selling = gloves(book=((800, 1, 3, 1),), sold_per_day=2.7, med7=3000, p90=3000, level=3000,
+    selling = gloves(book=((800, 1, 3, 1),), sold_per_day=2.7, low=3000, high=3000, level=3000,
                      windows=(PlanWindow(SAT * 24 + 17, 4, SAT * 24 + 18, 6),))                                         # a flip sells later (R29)
     buy, post = flip(selling)
     assert (buy.qty, buy.price, post.price, post.peak_ms) == (1, 800, 3000, MONDAY + SAT * DAY + 18 * HOUR)

@@ -111,7 +111,7 @@ def linen_book(**changes) -> SellFacts:
         The SellFacts.
     """
     base = facts(LINEN, 14, ref_stack=20, windows=(PlanWindow(SUN * 24 + 17, 3, SUN * 24 + 18, 6),), post_price=13,
-                 med7=14, p90=14, vendor_sell=1,
+                 low=4, high=14, vendor_sell=1,                   # a low bound under the dumps: flips, not buys for later (R35)
                  book=((5, 20, 4, 1), (8, 20, 4, 1), (12, 20, 4, 1), (14, 20, 4, 5)), cur=5, cur_qty=20,
                  sold_per_day=400.0, supply_now=400)
     return replace(base, **changes)
