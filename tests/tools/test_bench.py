@@ -5,7 +5,7 @@ import gzip
 import sys
 from pathlib import Path
 
-from ahsync.intel.contract import MarketIntelligence, to_json
+from ahsync.intel.contract import INTEL_SCHEMA_VERSION, MarketIntelligence, to_json
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 import bench  # noqa: E402
@@ -22,3 +22,11 @@ def test_the_summary_mode_polls_two_hours_and_reports_the_peak(tmp_path, capsys,
     assert bench.summary_only(work, M, 2_000) == 0
     printed = capsys.readouterr().out
     assert "hour 1 poll" in printed and "hour 2 dashboard read" in printed and "-> OK" in printed
+
+
+def test_an_older_schemas_summary_is_benched_as_this_ones(tmp_path):
+    older = MarketIntelligence(M, 1_000, 2_000, 4, {}, schema_version=INTEL_SCHEMA_VERSION - 1)
+    document = tmp_path / "doc.json.gz"
+    document.write_bytes(gzip.compress(to_json(older).encode("utf-8")))
+    assert bench.publish_summaries(document, tmp_path / "work") == (M, 2_000)
+    assert (tmp_path / "work" / "hour1" / "intel" / M / f"latest-{INTEL_SCHEMA_VERSION}.json").exists()
