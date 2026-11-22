@@ -241,8 +241,9 @@ def price_level(sold: Sequence[SoldHour], now_ms: int, how: Sequence[float] | No
     """An item's price level and bounds (SPEC §3.3 The price level; BZ69, BZ70).
 
     A sold level at LEVEL_MIN_UNITS sold units in the 30 days: the units-weighted median (§3.3's rule) of the
-    weighted prices, else the ask level. With a sold curve the bounds are its 10th and the larger of its 90th and
-    the level; otherwise `p10_30` (the level when unknown or above it) and the level.
+    weighted prices, else the ask level, held under the weighted median of the few sales there are (never raised:
+    one or two sales outrank an ask but are not a level, BZ72). With a sold curve the bounds are its 10th and the
+    larger of its 90th and the level; otherwise `p10_30` (the level when unknown or above it) and the level.
 
     Args:
         sold: The item's stored prices by hour (`sold_prices_h1`).
@@ -263,6 +264,9 @@ def price_level(sold: Sequence[SoldHour], now_ms: int, how: Sequence[float] | No
     if level is None:
         level = ask_level(*medians)
         source = "asks" if level is not None else None
+        if level is not None and milli > 0:                          # 1-2 sales hold the ask level down (BZ72)
+            held, _ = weighted_median(weighted_sold(sold, now_ms, how, clean=False))   # units > 0: never None
+            level = min(level, held)
     curve = sold_curve(weighted_sold(sold, now_ms, how, clean=True)) if source == "sold" else None
     return level_with_bounds(level, source, units, curve, p10_30)
 
