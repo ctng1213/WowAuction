@@ -2,18 +2,22 @@
 
 Keys are S3-style ("raw/<market>/2026/11/06/140240.json.gz"), always with "/". `LocalStore` maps them under a
 root folder and refuses any key that could leave it. A write can be conditional on the object's current
-ETag (`if_match`), so a run that lost a race fails instead of overwriting (BZ11); every write is atomic.
+ETag (`if_match`), so a run that lost a race fails instead of overwriting (BZ11); every write is atomic. A large
+object (the history) moves between a file and the store in chunks (`get_file`, `put_file`), never whole in memory
+and never as a second file (FM91).
 """
 from __future__ import annotations
 
 import hashlib
 import os
 import re
+import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+CHUNK_BYTES = 8 * 1024 * 1024              # a streamed read or hash takes this much at a time
 KEY = re.compile(r"^(?!/)(?!.*(?:^|/)\.\.?(?:/|$))[A-Za-z0-9._\-/]+$")   # no absolute path, no "." or ".." part
 
 
@@ -56,6 +60,45 @@ class Store(Protocol):
 
         Raises:
             PreconditionFailed: if_match no longer matches (or the object is gone).
+        """
+        ...
+
+    def etag(self, key: str) -> str | None:
+        """An object's ETag without reading it.
+
+        Args:
+            key: The object's key.
+
+        Returns:
+            Its ETag (the one `get` and `get_file` give); None when there is no such object.
+        """
+        ...
+
+    def get_file(self, key: str, path: Path) -> str | None:
+        """Read an object into a file, a chunk at a time (FM91).
+
+        Args:
+            key: The object's key.
+            path: The file to write; replaced whole, atomically. Left untouched when there is no object.
+
+        Returns:
+            Its ETag; None when there is no such object.
+        """
+        ...
+
+    def put_file(self, key: str, path: Path, if_match: str | None = None) -> str:
+        """Write a file as an object, a chunk at a time, atomically (FM91).
+
+        Args:
+            key: The object's key.
+            path: The file; it must not change while it is written.
+            if_match: Write only if the object's ETag is still this one; None writes unconditionally.
+
+        Returns:
+            The new ETag.
+
+        Raises:
+            PreconditionFailed: if_match no longer matches (or the object is gone); nothing was written.
         """
         ...
 
@@ -107,6 +150,40 @@ def etag_of(data: bytes) -> str:
         Hex digest.
     """
     return hashlib.sha256(data).hexdigest()
+
+
+def file_etag(path: Path) -> str:
+    """A local ETag of a file, read a chunk at a time: the same value `etag_of` gives its bytes.
+
+    Args:
+        path: The file.
+
+    Returns:
+        Hex sha256 digest.
+    """
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        while chunk := source.read(CHUNK_BYTES):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def copy_atomically(source: Path, target: Path) -> None:
+    """Copy a file through a temporary file beside the target and a rename.
+
+    Args:
+        source: The file to copy.
+        target: Replaced whole; its folder is created.
+    """
+    target.parent.mkdir(parents=True, exist_ok=True)
+    handle, temp = tempfile.mkstemp(dir=target.parent, prefix=".tmp-")
+    os.close(handle)
+    try:
+        shutil.copyfile(source, temp)
+        os.replace(temp, target)
+    except BaseException:
+        Path(temp).unlink(missing_ok=True)
+        raise
 
 
 class LocalStore:
@@ -178,6 +255,54 @@ class LocalStore:
             Path(temp).unlink(missing_ok=True)
             raise
         return etag_of(data)
+
+    def etag(self, key: str) -> str | None:
+        """An object's ETag (see Store.etag).
+
+        Args:
+            key: The object's key.
+
+        Returns:
+            Its ETag, or None.
+        """
+        path = self._path(key)
+        return file_etag(path) if path.is_file() else None
+
+    def get_file(self, key: str, path: Path) -> str | None:
+        """Copy an object into a file (see Store.get_file).
+
+        Args:
+            key: The object's key.
+            path: The file to write.
+
+        Returns:
+            Its ETag, or None.
+        """
+        source = self._path(key)
+        if not source.is_file():
+            return None
+        copy_atomically(source, path)
+        return file_etag(path)
+
+    def put_file(self, key: str, path: Path, if_match: str | None = None) -> str:
+        """Copy a file in as an object (see Store.put_file).
+
+        Args:
+            key: The object's key.
+            path: The file.
+            if_match: The ETag it must still have, or None.
+
+        Returns:
+            The new ETag.
+
+        Raises:
+            PreconditionFailed: if_match no longer matches.
+        """
+        if if_match is not None and self.etag(key) != if_match:
+            raise PreconditionFailed(key)
+        target = self._path(key)
+        copy_atomically(path, target)
+        return file_etag(target)
 
     def delete(self, key: str) -> None:
         """Delete an object (see Store.delete).
@@ -251,6 +376,50 @@ class OverlayStore:
                 raise PreconditionFailed(key)
             if_match = None
         return self.overlay.put(key, data, if_match)
+
+    def etag(self, key: str) -> str | None:
+        """The overlay's ETag, else the base's (see Store.etag).
+
+        Args:
+            key: The object's key.
+
+        Returns:
+            Its ETag, or None.
+        """
+        return self.overlay.etag(key) or self.base.etag(key)
+
+    def get_file(self, key: str, path: Path) -> str | None:
+        """The overlay's object, else the base's, into a file (see Store.get_file).
+
+        Args:
+            key: The object's key.
+            path: The file to write.
+
+        Returns:
+            Its ETag, or None.
+        """
+        found = self.overlay.get_file(key, path)
+        return found if found is not None else self.base.get_file(key, path)
+
+    def put_file(self, key: str, path: Path, if_match: str | None = None) -> str:
+        """Write a file to the overlay (see Store.put_file), checked against the base as `put` is.
+
+        Args:
+            key: The object's key.
+            path: The file.
+            if_match: The ETag it must still have, or None.
+
+        Returns:
+            The new ETag.
+
+        Raises:
+            PreconditionFailed: if_match no longer matches.
+        """
+        if if_match is not None and self.overlay.etag(key) is None and (base := self.base.etag(key)) is not None:
+            if base != if_match:
+                raise PreconditionFailed(key)
+            if_match = None
+        return self.overlay.put_file(key, path, if_match)
 
     def delete(self, key: str) -> None:
         """Delete from the overlay only (see Store.delete).

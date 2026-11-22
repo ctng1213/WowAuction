@@ -98,9 +98,7 @@ def run_daily(data: Store, intel_store: Store, market: str, workdir: Path,
     with profile.stage("download"):
         shutil.rmtree(workdir, ignore_errors=True)
         workdir.mkdir(parents=True)
-        found = data.get(DB_KEY)
-        if found is not None:
-            (workdir / "history.db").write_bytes(found.data)
+        found = data.get_file(DB_KEY, workdir / "history.db")      # streamed, never whole in memory (FM91)
     if found is None:
         return _profiled(DailyOutcome("empty"), profile)
     with profile.stage("download"):

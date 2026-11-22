@@ -89,3 +89,18 @@ def test_an_overlay_reads_through_to_the_base_and_writes_only_to_itself(tmp_path
     assert store.list("") == ["intel/m/latest-10.json", "raw/m/2026/11/06/140240.json.gz", "state/history.db"]
     store.delete("raw/m/2026/11/06/140240.json.gz")                           # only the overlay: the base keeps it
     assert base.get("raw/m/2026/11/06/140240.json.gz") is not None
+
+
+def test_FM91_a_file_streams_in_and_out_and_a_conditional_one_needs_the_etag_it_read(store, tmp_path):
+    source, target = tmp_path / "history.db", tmp_path / "work" / "history.db"
+    assert store.etag("state/history.db") is None
+    assert store.get_file("state/history.db", target) is None and not target.exists()     # nothing to read
+    source.write_bytes(b"v1" * 1000)
+    first = store.put_file("state/history.db", source)
+    assert store.etag("state/history.db") == first == store.get("state/history.db").etag
+    assert store.get_file("state/history.db", target) == first and target.read_bytes() == b"v1" * 1000
+    source.write_bytes(b"v2")
+    second = store.put_file("state/history.db", source, if_match=first)
+    with pytest.raises(PreconditionFailed):
+        store.put_file("state/history.db", source, if_match=first)                       # the ETag moved on
+    assert store.get("state/history.db").data == b"v2" and store.etag("state/history.db") == second

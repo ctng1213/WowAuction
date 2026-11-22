@@ -100,8 +100,9 @@ def test_BZ56_an_ingest_run_writes_the_history_then_its_state_and_publishes_noth
     for at_ms, envelope in ((B_MS, SNAP_B), (C_MS, SNAP_C)):
         data.put(raw_key(M, at_ms), envelope)
     order = []
-    original = data.put
+    original, original_file = data.put, data.put_file
     data.put = lambda key, value, if_match=None: (order.append(key), original(key, value, if_match))[1]
+    data.put_file = lambda key, path, if_match=None: (order.append(key), original_file(key, path, if_match))[1]
     outcome = ingest_run(data, tmp_path)
     assert (outcome.state, outcome.ingested, outcome.pending, outcome.lag_ms) == ("ingested", 2, 0, 0)
     assert order[-3:] == [DB_KEY, compact_prefix(M) + "index.json", STATE_KEY]  # the index and state after the history
@@ -163,14 +164,14 @@ def test_FM83_a_run_that_lost_the_race_fails_without_overwriting_or_moving_its_s
     ingest_run(data, tmp_path)
     state = read_state(data)
     data.put(raw_key(M, B_MS), SNAP_B)
-    original = data.put
+    original = data.put_file
 
-    def another_writer_first(key, value, if_match=None):
+    def another_writer_first(key, path, if_match=None):
         if key == DB_KEY:
-            original(DB_KEY, b"a local rebuild's database")
-        return original(key, value, if_match)
+            data.put(DB_KEY, b"a local rebuild's database")
+        return original(key, path, if_match)
 
-    data.put = another_writer_first
+    data.put_file = another_writer_first
     index = data.get(compact_prefix(M) + "index.json").data
     with pytest.raises(PreconditionFailed):
         ingest_run(data, tmp_path)
@@ -545,3 +546,31 @@ def test_BZ64_each_ingest_run_profiles_its_stages_in_one_log_line(tmp_path):
     text = json.dumps(full) + json.dumps(early)
     assert M not in text and "raw/" not in text and "state/" not in text      # no key, market or bucket
     assert "profile" not in data.get(STATE_KEY).data.decode()                  # not in the state file
+
+
+def test_FM91_ingest_uploads_its_working_file_checkpointed_and_never_a_second_copy(tmp_path):
+    import sqlite3
+
+    from ahcloud.ingest import checkpointed
+    data, _ = stores(tmp_path, (A_MS, SNAP_A))
+    ingest_run(data, tmp_path)
+    data.put(raw_key(M, B_MS), SNAP_B)
+    assert ingest_run(data, tmp_path).ingested == 1
+    files = sorted(p.name for p in (tmp_path / "ingest").iterdir() if p.is_file())
+    assert "upload.db" not in files and [f for f in files if f.endswith(".db")] == ["history.db"]
+    assert read_state(data)["last_ingested_at_ms"] == B_MS and history(data, tmp_path).get_meta(LAST_INGESTED) == str(B_MS)
+    db = Database.open(tmp_path / "held.db", 0, None)
+    with db.transaction():
+        db.set_meta("x", "1")
+    reader = sqlite3.connect(tmp_path / "held.db")
+    reader.execute("BEGIN")
+    reader.execute("SELECT * FROM meta").fetchall()                           # a read held open blocks a TRUNCATE
+    with pytest.raises(RuntimeError, match="held back"):
+        checkpointed(db)
+    reader.close()
+    db.conn.execute("BEGIN")
+    with pytest.raises(RuntimeError, match="transaction open"):
+        checkpointed(db)
+    db.conn.execute("ROLLBACK")
+    assert checkpointed(db) == db.path
+    db.close()

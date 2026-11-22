@@ -9,14 +9,41 @@ it; tests hand `S3Store` a fake client.
 from __future__ import annotations
 
 import json
+import logging
+import os
+import tempfile
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable
 
-from ahcloud.store import PreconditionFailed, StoredObject, check_key
+from ahcloud.store import CHUNK_BYTES, PreconditionFailed, StoredObject, check_key
 
 NAMESPACE = "WowAuction"
 # The status's CloudWatch reads are bounded: they run at the end of a run that may be near its timeout (FM81).
 CLOUDWATCH_TIMEOUTS = {"connect_timeout": 5, "read_timeout": 10, "retries": {"max_attempts": 2}}
+# A file is uploaded in parts of this size (S3: 5 MiB to 5 GiB a part, at most 10,000 parts), so a 9 GB history is
+# 135 parts and only one is in memory at a time (FM91); a file no larger goes as one put.
+PART_BYTES = 64 * 1024 * 1024
+# The multipart upload is declared CRC32 at its creation, each part is sent with it and the completion names each
+# part's: S3 checks every part end to end, and newer SDKs (which add a CRC32 to parts on their own) and older ones
+# behave alike. A completion naming checksums of an upload created without one is refused (InvalidPart, measured
+# 2026-11-22 against the data bucket).
+CHECKSUM = "CRC32"
+
+log = logging.getLogger(__name__)
+
+
+def _precondition(error: Exception) -> bool:
+    """Whether an S3 error is a lost conditional write.
+
+    Args:
+        error: A botocore ClientError.
+
+    Returns:
+        True for 412 PreconditionFailed, and for 404 NoSuchKey (a conditional write to a missing key).
+    """
+    code = str(getattr(error, "response", {}).get("Error", {}).get("Code", ""))
+    return code in ("PreconditionFailed", "412", "NoSuchKey", "404")
 
 
 class S3Store:
@@ -72,11 +99,112 @@ class S3Store:
         try:
             answer = self._s3.put_object(Bucket=self.bucket, Key=check_key(key), Body=data, **extra)
         except self._s3.exceptions.ClientError as error:
-            code = str(error.response.get("Error", {}).get("Code", ""))
-            if code in ("PreconditionFailed", "412", "NoSuchKey", "404"):
+            if _precondition(error):
                 raise PreconditionFailed(key) from None
             raise
         return answer["ETag"]
+
+    def etag(self, key: str) -> str | None:
+        """An object's ETag from its headers (see Store.etag).
+
+        Args:
+            key: The object's key.
+
+        Returns:
+            Its ETag, or None when there is no such key.
+        """
+        try:
+            return self._s3.head_object(Bucket=self.bucket, Key=check_key(key))["ETag"]
+        except self._s3.exceptions.ClientError as error:
+            if str(error.response.get("Error", {}).get("Code", "")) in ("404", "NoSuchKey", "NotFound"):
+                return None
+            raise
+
+    def get_file(self, key: str, path: Path) -> str | None:
+        """Stream an object into a file through a temporary file and a rename (see Store.get_file).
+
+        Args:
+            key: The object's key.
+            path: The file to write.
+
+        Returns:
+            Its ETag, or None when there is no such key.
+        """
+        try:
+            answer = self._s3.get_object(Bucket=self.bucket, Key=check_key(key))
+        except self._s3.exceptions.NoSuchKey:
+            return None
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handle, temp = tempfile.mkstemp(dir=path.parent, prefix=".tmp-")
+        try:
+            with os.fdopen(handle, "wb") as out:
+                while chunk := answer["Body"].read(CHUNK_BYTES):
+                    out.write(chunk)
+            os.replace(temp, path)
+        except BaseException:
+            Path(temp).unlink(missing_ok=True)
+            raise
+        return answer["ETag"]
+
+    def put_file(self, key: str, path: Path, if_match: str | None = None) -> str:
+        """Stream a file up: one put when it fits a part, else a multipart upload completed with S3's If-Match
+        (see Store.put_file). A failed multipart upload is aborted, so no parts are left behind (FM91).
+
+        Args:
+            key: The object's key.
+            path: The file.
+            if_match: The ETag it must still have, or None.
+
+        Returns:
+            The new ETag.
+
+        Raises:
+            PreconditionFailed: S3 answered 412 (or 404 for a conditional write to a missing key).
+        """
+        check_key(key)
+        condition = {} if if_match is None else {"IfMatch": if_match}
+        if path.stat().st_size <= PART_BYTES:
+            with path.open("rb") as body:
+                try:
+                    return self._s3.put_object(Bucket=self.bucket, Key=key, Body=body, **condition)["ETag"]
+                except self._s3.exceptions.ClientError as error:
+                    if _precondition(error):
+                        raise PreconditionFailed(key) from None
+                    raise
+        upload = self._s3.create_multipart_upload(Bucket=self.bucket, Key=key, ChecksumAlgorithm=CHECKSUM)["UploadId"]
+        try:
+            parts = []
+            with path.open("rb") as source:
+                while chunk := source.read(PART_BYTES):
+                    number = len(parts) + 1
+                    answer = self._s3.upload_part(Bucket=self.bucket, Key=key, UploadId=upload, PartNumber=number,
+                                                  Body=chunk, ChecksumAlgorithm=CHECKSUM)
+                    parts.append({"PartNumber": number, "ETag": answer["ETag"],
+                                  "ChecksumCRC32": answer["ChecksumCRC32"]})
+            return self._s3.complete_multipart_upload(Bucket=self.bucket, Key=key, UploadId=upload,
+                                                      MultipartUpload={"Parts": parts}, **condition)["ETag"]
+        except BaseException as error:
+            self._abort(key, upload)
+            if isinstance(error, self._s3.exceptions.ClientError) and _precondition(error):
+                raise PreconditionFailed(key) from None
+            raise
+
+    def _abort(self, key: str, upload: str) -> None:
+        """Abort a multipart upload, never hiding the error that caused it (a lost race must still read as one, FM83).
+
+        Args:
+            key: The object's key.
+            upload: The upload's id.
+
+        Side effects:
+            A failed abort is logged and left to the bucket's lifecycle rule, which removes abandoned parts after a
+            day (FM91).
+        """
+        try:
+            self._s3.abort_multipart_upload(Bucket=self.bucket, Key=key, UploadId=upload)
+        except Exception as error:     # noqa: BLE001  the original error is what the caller must see
+            log.warning("abort of the upload of %s failed (%s); the lifecycle rule removes its parts", key,
+                        type(error).__name__)
 
     def delete(self, key: str) -> None:
         """Delete an object (see Store.delete; S3 treats a missing key as deleted).
