@@ -5,7 +5,7 @@ needs an item (SPEC §5.1 lazy decode):
 
     I[key] = "cur,curQty,curAgeMin,med7,med30,p10,p90,trend10,sold10,listed10,supply,conf,
               seasonality,postPrice,refStack,sellValue,volumeUnknown,chance1000,typicalSupply,suspect,closes30,
-              med14,salesDays,supply7,supply14,sellChance1000,st7,st14,st30,stHow,commodity;sellWindows;buyWindows"
+              med14,salesDays,supply7,supply14,sellChance1000,st7,st14,st30,stHow,commodity,level,low,high;sellWindows;buyWindows"
     (trailing empty fields are left out: a missing field is unavailable, as an empty one)
     C[key] = the sell-probability curve, one character per point (SPEC §3.1.1)
 
@@ -18,6 +18,10 @@ needs an item (SPEC §5.1 lazy decode):
   sellChance1000 the 24 h posting-now chance at cur (Sell Chance Now), commodity 1 or 0 ("" unknown). Each market
   carries coverage30, the hours observed in the 720 before generatedAt's hour (the tooltip header's coverage).
   The fields a local market never has come last, so the trailing-empty rule keeps the file small.
+- SP2c (EXPORT_VERSION 9; SPEC §3.3, §3.4 PP5; EX25): level, low and high are the price level and its bounds in copper
+  (an older document's ask level, contract.published_level), so the addon's post price and window prices read what
+  the plan reads. H[key], for the shortlist, is the item's `how` for the 24 hours from generatedAt's hour, two
+  characters per hour (thousandths, base 92 from "#"), left out when all 24 are 1.0; outside the checksum, as S.
 - A window is "start:hours:best:how1000:weeks[:pct1000]" (UTC slots, how_avg in thousandths; pct1000 a selling
   window's 24 h chance or a buying window's found share, in thousandths, left out when unknown; M33b),
   windows joined by "/", best first. Shortlist items carry every window the intelligence
@@ -48,16 +52,21 @@ from ahsync.engine.sellprob import CURVE_AHEAD, CURVE_AHEAD_TOOLTIP
 from ahsync.engine.views import round_half_up
 from dataclasses import replace
 
-from ahsync.intel.contract import IntelWindow, ItemIntel, MarketIntelligence, age_now_ms, ages_reference_ms
+from ahsync.engine.capacity import slot_of
+from ahsync.intel.contract import (IntelWindow, ItemIntel, MarketIntelligence, age_now_ms, ages_reference_ms,
+                                   published_level)
 
 MARKET_SCHEMA_VERSION = 1      # the addon refuses any other (FM17)
 # Bumped on ANY change to either addon file's format, additive or not, so an addon and an AHSync of
 # different builds say which side is stale (SPEC §3.5, FM34, FM35). Equals AHProfit.EXPORT_VERSION (Core/Market.lua).
-EXPORT_VERSION = 8              # 8: the cooldowns' CD table (SPEC §3.4F, EX23); 7: plan actions end in paid (EX22); 6: the tooltip's market lines: sell-through, supply 7/14, Sell Chance Now, windows'
-                                # percentages, coverage30 (M33b); 5: market items end in salesDays (EX21); 4: K, G and the portfolio snapshot (EX17, EX18); 3: closes30
-                                # (TT23, PP4); 2: a mail's recipient (EX16)
+EXPORT_VERSION = 9              # 9: the level, its bounds and the H rows (SP2c, EX25); 8: the cooldowns' CD table (SPEC §3.4F, EX23); 7: plan actions end in
+                                # paid (EX22); 6: the tooltip's market lines: sell-through, supply 7/14, Sell Chance Now, windows' percentages, coverage30 (M33b);
+                                # 5: market items end in salesDays (EX21); 4: K, G and the portfolio snapshot (EX17, EX18); 3: closes30 (TT23, PP4); 2: a mail's
+                                # recipient (EX16)
 HOUR_MS = 3_600_000
 MINUTE_MS = 60_000
+HOW_BASE = 92                  # an H row writes each hour's how (thousandths) as two characters, base 92 from "#" (EX25)
+HOW_HOURS = 24                 # the hours an H row covers, from generatedAt's hour (a session is shorter)
 STALE_PRICE_MS = 7 * 86_400_000   # older prices are left out unless shortlisted (EX5: the file's budget)
 CHUNK = 2000                   # items per generated function: each has its own constant table (A3)
 TOOLTIP_COLUMNS = tuple(CURVE_AHEAD.index(a) for a in CURVE_AHEAD_TOOLTIP)
@@ -150,6 +159,7 @@ def item_text(s: ItemIntel, full: bool = True) -> str:
         "numbers;sellWindows;buyWindows".
     """
     top = None if full else 1
+    priced = published_level(s)
     age = None if s.cur_age_ms is None else s.cur_age_ms // MINUTE_MS
     fields = [_num(s.cur), _num(s.cur_qty), _num(age), _num(s.med7), _num(s.med30), _num(s.p10_30), _num(s.p90_30),
               _tenths(s.trend7), _tenths(s.sold_per_day), _tenths(s.listed_per_day), _num(s.units_on_ah), _num(s.conf),
@@ -161,7 +171,8 @@ def item_text(s: ItemIntel, full: bool = True) -> str:
               _num(sum(s.days_by_source.values()) if s.days_by_source else None),     # EX21: salesDays
               _num(s.supply7), _num(s.supply14), _milli(s.sell_chance),               # M33b, TT36, TT37
               *(_milli(r) for r in s.sell_through), "" if s.sell_through_how == "---" else s.sell_through_how,
-              "" if s.commodity is None else ("1" if s.commodity else "0")]           # M33b, TT37-TT39
+              "" if s.commodity is None else ("1" if s.commodity else "0"),           # M33b, TT37-TT39
+              _num(priced.level), _num(priced.low), _num(priced.high)]               # SP2c, EX25
     return f"{','.join(fields).rstrip(',')};{windows_text(s.sell_windows[:top])};{windows_text(s.buy_windows[:top])}"
 
 
@@ -226,6 +237,49 @@ def _supply_rows(intel: MarketIntelligence, keys: set[int], window_hours: int) -
         s = intel.items[key]
         pattern = profile.unpack(s.supply_how, s.supply_weeks).values if s.supply_how else ()
         row = capacity.supply_factor_row(pattern, intel.built_ms // HOUR_MS, window_hours)
+        if row:
+            parts.append(f"[{key}] = {lua_string(row)}")
+    return ", ".join(parts)
+
+
+def how_row(how: str, first_hour: int) -> str:
+    """An item's price ratios for the 24 hours from an hour, packed for the addon's post price (PP5, EX25).
+
+    Args:
+        how: The item's packed `how` (168 thousandths, run-length coded; "" without a pattern).
+        first_hour: The file's clock hour, floor(generatedAt / 3600000): the row's first pair.
+
+    Returns:
+        48 characters, two per hour: the hour's ratio in thousandths n (clamped to 0-8463) as chr(35 + n ÷ 92)
+        then chr(35 + n mod 92); "" without a pattern, or when every one of the 24 is 1.0.
+    """
+    values = profile.unpack_values(how)
+    if values is None:
+        return ""
+    milli = [round_half_up(values[slot_of(first_hour + h)] * profile.PACK_SCALE) for h in range(HOW_HOURS)]
+    if all(n == profile.PACK_SCALE for n in milli):
+        return ""
+    out = []
+    for n in milli:
+        n = max(0, min(HOW_BASE * HOW_BASE - 1, n))
+        out.append(chr(35 + n // HOW_BASE) + chr(35 + n % HOW_BASE))
+    return "".join(out)
+
+
+def _how_rows(intel: MarketIntelligence, keys: set[int], first_hour: int) -> str:
+    """The shortlist's H rows as a Lua table body (EX25).
+
+    Args:
+        intel: The market's intelligence.
+        keys: Shortlisted, exported item keys.
+        first_hour: generatedAt's clock hour.
+
+    Returns:
+        '[key] = "…", …' for items whose next 24 hours are not all 1.0, by key.
+    """
+    parts = []
+    for key in sorted(keys):
+        row = how_row(intel.items[key].how, first_hour)
         if row:
             parts.append(f"[{key}] = {lua_string(row)}")
     return ", ".join(parts)
@@ -380,13 +434,15 @@ def market_lua(intels: Sequence[MarketIntelligence], shortlists: Mapping[str, se
         offers = ", ".join(f"[{key}] = {lua_string(text)}" for key, text in sorted((flips or {}).get(intel.market, {}).items())
                            if key in exported)
         rows = _supply_rows(intel, shortlists.get(intel.market, set()) & exported, window_hours)
+        hows = _how_rows(intel, shortlists.get(intel.market, set()) & exported, generated_ms // HOUR_MS)
         cd_version, cd_rows = (cooldowns or {}).get(intel.market, (None, {}))
         cd = ", ".join([f"v = {cd_version}"] * (cd_version is not None) +
                        [f"[{spell}] = {lua_string(cd_rows[spell])}" for spell in sorted(cd_rows, key=int)])
         extra += [cd_rows[spell] for spell in sorted(cd_rows, key=int)]
         entries.append(f"  [{lua_string(intel.market)}] = {{ observationsUntil = {until}, "
                        f"curveHour = {intel.built_ms // HOUR_MS}, I = I{n}, C = C{n}, D = D{n}, F = {{ {offers} }}, "
-                       f"S = {{ {rows} }}, K = K{n}, G = G{n}, coverage30 = {(coverage30 or {}).get(intel.market, 0)}, "
+                       f"S = {{ {rows} }}, H = {{ {hows} }}, K = K{n}, G = G{n}, "
+                       f"coverage30 = {(coverage30 or {}).get(intel.market, 0)}, "
                        f"CD = {{ {cd} }} }},")
     chars = ", ".join(f"[{lua_string(c)}] = {lua_string(m)}" for c, m in sorted(char_markets.items()))
     vendors = ", ".join(f"[{key}] = {price}" for key, price in sorted((vendor or {}).items()))

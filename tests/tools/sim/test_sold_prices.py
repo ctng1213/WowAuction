@@ -10,13 +10,14 @@ from sim.sold_prices import GLOVES, HIGH, confirmed_floor, gloves_world, sm10, s
 
 def test_SM10_a_high_ask_that_doesnt_sell_sets_med7_while_sold_med7_reads_what_sold(tmp_path):
     med7, post, sold = sm10(tmp_path)
-    assert med7.truth == 20_000 and med7.engine == HIGH and post.engine == HIGH - 1    # closes are asks
+    assert med7.truth == 20_000 and med7.engine == HIGH            # closes are asks
+    assert post.passed and post.engine == 20_000                    # the post price reads the sold level (SP2c, PP5)
     assert sold.passed and sold.engine == 20_000
 
 
 def test_SM11_when_demand_catches_up_sold_med7_rises_to_what_sells_now(tmp_path):
     sold, post = sm11(tmp_path)
-    assert sold.passed and sold.truth == HIGH and post.band == "reported"
+    assert sold.passed and sold.truth == HIGH and post.passed and post.band == "±5%"
 
 
 def test_SM18_a_lone_cheap_listing_is_undercut_today_and_a_confirmed_floor_prices_at_the_crowd(tmp_path):

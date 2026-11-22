@@ -13,19 +13,22 @@ AHProfit.Market = Market
 Market.SCHEMA_VERSION = 1          -- must equal ahsync/export/market_lua.py MARKET_SCHEMA_VERSION (FM17)
 -- The build of both generated files' format; must equal ahsync/export/market_lua.py EXPORT_VERSION. A file of
 -- another build says which side is stale (FM34, FM35). Core/Plan.lua, which loads after this file, reads it too.
-AHProfit.EXPORT_VERSION = 8            -- 8: the cooldowns' CD table (SPEC §3.4F, EX23); 7: plan actions end in paid (EX22); 6: the tooltip's market lines (M33b); 5: market items end in salesDays (EX21); 4: K, G and the portfolio
+AHProfit.EXPORT_VERSION = 9            -- 9: the level, its bounds and the H rows (SP2c, EX25); 8: the cooldowns' CD table (SPEC §3.4F, EX23); 7: plan actions end in
+                                       -- paid (EX22); 6: the tooltip's market lines (M33b); 5: market items end in salesDays (EX21); 4: K, G and the portfolio
                                        -- snapshot (EX17, EX18); 3: closes30 (TT23, PP4); 2: a mail's recipient (C22)
 Market.CACHE_LIMIT = 500           -- decoded items kept before the cache starts again
 Market.FIELDS = { "cur", "curQty", "curAgeMin", "med7", "med30", "p10", "p90", "trend10", "sold10", "listed10",
                   "supply", "conf", "seasonality", "postPrice", "refStack", "sellValue", "volumeUnknown",
                   "chance1000", "typicalSupply", "suspect", "closes30", "med14", "salesDays", "supply7", "supply14",
-                  "sellChance1000", "st7", "st14", "st30", "stHow", "commodity" }   -- typicalSupply:
+                  "sellChance1000", "st7", "st14", "st30", "stHow", "commodity", "level", "low", "high" }   -- typicalSupply:
                                   -- median daily listed units (EX10); suspect: 1 when AHSync hasn't confirmed cur (A58);
-                                  -- closes30: hourly closes in 30 days (TT23); med14: the 14-day median (EX20);
+                                  -- closes30: hourly closes in 30 days (PF30, R28); med14: the 14-day median (EX20);
                                   -- salesDays: days of the last 7 with sales data behind sold10 (EX21, TT32);
                                   -- M33b (TT35-TT39): supply over 7 and 14 days, Sell Chance Now in thousandths,
                                   -- sell-through in thousandths per lookback, stHow its letters (m, e, c, -; text, not
-                                  -- a number), commodity 1 or 0; trailing empty fields are left out
+                                  -- a number), commodity 1 or 0; SP2c (EX25): level, low and high, the price level
+                                  -- and its bounds in copper (SPEC §3.3); trailing empty fields are left out
+Market.HOW_BASE = 92               -- an H row's two characters per hour: how in thousandths, base 92 from "#" (EX25)
 
 local state = nil                  -- { status, market = { I, C, observationsUntil, curveHour }, file } once checked
 local cache, cached = {}, 0
@@ -174,9 +177,25 @@ function Market.Item(key)
   if cached >= Market.CACHE_LIMIT then cache, cached = {}, 0 end
   item = Market.Decode(text)
   item.supplyRow = s.market.S and s.market.S[key]             -- 24 supply factors for the shortlist (EX13)
+  item.howRow = s.market.H and s.market.H[key]                -- 24 hours of how for the shortlist (EX25)
+  item.generatedAt = s.file.generatedAt
   item.curveHour = s.market.curveHour
   cache[key], cached = item, cached + 1
   return item
+end
+
+--- The item's price ratio for this hour, from its H row (SPEC §3.4 PP5, EX25): two characters per hour since the
+--- file's hour, each hour's how in thousandths, base 92 from "#"; the post price's ceiling is the level × this.
+---@param item table        A market item (howRow, generatedAt)
+---@param nowMs number|nil  Now, UTC ms
+---@return number           The ratio; 1 without a row or a time, or past the row's 24 hours (until the next file)
+function Market.HowAt(item, nowMs)
+  if not (item.howRow and item.generatedAt and nowMs) then return 1 end
+  local hour = math.floor(nowMs / 3600000) - math.floor(item.generatedAt / 3600000)
+  if hour < 0 or hour > 23 then return 1 end
+  local a, b = item.howRow:byte(2 * hour + 1, 2 * hour + 2)
+  if not (a and b and a >= 35 and a <= 126 and b >= 35 and b <= 126) then return 1 end   -- H is outside the checksum
+  return ((a - 35) * Market.HOW_BASE + (b - 35)) / 1000
 end
 
 --- One item's sell-probability curve (SPEC §3.1.1): 24 rows × 8 points for the shortlist; one row × 3 points (the

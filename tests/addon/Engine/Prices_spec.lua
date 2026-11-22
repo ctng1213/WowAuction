@@ -1,5 +1,5 @@
 -- Specs for addon/AHProfit/Engine/Prices.lua: the shared post-price and live-flip scenarios
--- (tests/scenarios/prices.json: PP1, PP2, PP4, R28, FN1, TT7).
+-- (tests/scenarios/prices.json: PP1, PP5, R28, TT7, TT51).
 
 local Stubs = require("wow_stubs")
 
@@ -26,14 +26,13 @@ end
 local function Run(Prices, s)
   local a = s.args
   if s.call == "relist_price" then
-    return Prices.RelistPrice(Value(a.cur_others), Value(a.med7), Value(a.p90), Value(a.closes))
+    return Prices.RelistPrice(Value(a.cur_others), Value(a.level), a.how_now, Value(a.low), Value(a.high), Value(a.closes))
   end
   if s.call == "post_price" then
-    return Prices.PostPrice(Value(a.cur_others), Value(a.med7), Value(a.p90), Value(a.closes))
+    return Prices.PostPrice(Value(a.cur_others), Value(a.level), a.how_now, Value(a.low), Value(a.high))
   end
   if s.call == "slot_price" then
-    return Prices.SlotPrice(a.level, a.how_best, a.trend7, a.days_ahead, a.max_trend_total, Value(a.p10),
-      Value(a.med7), Value(a.p90), Value(a.closes))
+    return Prices.SlotPrice(a.level, a.how_best, a.trend7, a.days_ahead, a.max_trend_total, Value(a.low), Value(a.high))
   end
   error("unknown shared call " .. tostring(s.call))
 end

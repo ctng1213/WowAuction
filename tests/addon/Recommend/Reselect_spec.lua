@@ -108,7 +108,7 @@ describe("Reselect", function()
   it("a sale now is repriced against the live book; a flip relists against the level after the units it buys", function()
     World.Boot(Stubs)
     local R, SellProb, Fees = AHProfit.Reselect, AHProfit.Engine.SellProb, AHProfit.Engine.Fees
-    local item = { postPrice = 1000, chance = 0.5, med7 = 1000, p90 = 1200, closes30 = 100 }
+    local item = { postPrice = 1000, chance = 0.5, level = 1000, low = 900, high = 1200, closes30 = 100 }
     --- E_post as Reselect values a post now.
     ---@param p number
     ---@param qty number

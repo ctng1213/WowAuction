@@ -66,7 +66,7 @@ describe("Options", function()
 
   it("A19 a live scan re-prices what you carry from its cheapest listing and the curve", function()
     local Options = Boot()
-    local item = { postPrice = 45, sellValue = 42, chance = 0.9, med7 = 49, refStack = 20 }
+    local item = { postPrice = 45, sellValue = 42, chance = 0.9, level = 49, low = 40, high = 49, refStack = 20 }
     local rows = {}
     for r = 1, 24 do rows[r] = { 0.8, 0.8, 0.8 } end
     local curve = { rows = rows, aheadPoints = { 0, 5, 20 }, refreshMs = NOW - 3 * 3600000 }
@@ -76,17 +76,17 @@ describe("Options", function()
     assert_eq({ math.floor(row.net * 10 + 0.5), row.chance, row.ownNote },
               { 6024, 80, "post now at the live price · AHSync has no plan for it" })   -- 602.4c
     assert_eq(Options.Reprice({ chance = 0.5 }, {}, nil, 0, NOW).postPrice, nil)        -- nothing to price by
-    assert_eq(Options.Reprice({ med7 = 49, refStack = 1, chance = 0.5 }, {}, nil, 0, NOW).postPrice, 49)
+    assert_eq(Options.Reprice({ level = 49, low = 40, high = 49, refStack = 1, chance = 0.5 }, {}, nil, 0, NOW).postPrice, 49)
   end)
 
   it("A67 with volume unknown and no curve, a live re-price uses the default chance for its position", function()
     local Options = Boot()
-    local item = { postPrice = 45, sellValue = 20, chance = 0.25, med7 = 49, refStack = 20, volumeUnknown = true }
+    local item = { postPrice = 45, sellValue = 20, chance = 0.25, level = 49, low = 40, high = 49, refStack = 20, volumeUnknown = true }
     local live = Options.Reprice(item, { { price = 40, units = 20 } }, nil, 3, NOW)
     assert_eq({ live.postPrice, live.chance }, { 39, 0.5 })                       -- 39c ≤ 40c: the cheapest
     local empty = Options.Reprice(item, {}, nil, 3, NOW)
-    assert_eq({ empty.postPrice, empty.chance }, { 49, 0.5 })                     -- nothing listed: med7
-    local known = Options.Reprice({ med7 = 49, refStack = 20, chance = 0.7 }, { { price = 40, units = 20 } }, nil, 3, NOW)
+    assert_eq({ empty.postPrice, empty.chance }, { 49, 0.5 })                     -- nothing listed: the level
+    local known = Options.Reprice({ level = 49, low = 40, high = 49, refStack = 20, chance = 0.7 }, { { price = 40, units = 20 } }, nil, 3, NOW)
     assert_eq(known.chance, 0.7)                                                   -- no curve, volume known: the file's
     assert_eq(AHProfit.Engine.SellProb.DefaultChance(51, 50, 0.25, 0.5), 0.25)    -- someone cheaper
   end)

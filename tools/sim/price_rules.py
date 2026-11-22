@@ -5,7 +5,8 @@ market. SM20 measures what each candidate level earns instead of arguing it: a p
 every 12 hours at `min(the cheapest other auction − 1 c, the rule's level)` and the row reports what a post earned
 against the item's worth. The rules:
 
-- `today`: the ask ceiling (SPEC §3.4, `prices.post_price`).
+- `today`: the built rule (SPEC §3.4, `prices.post_price`: the document's level with this hour's pattern, within
+  its bounds; until SP2c the ask ceiling, max(med7, p90_30)).
 - `ask blend`: the 7, 14 and 30-day ask medians weighted 4:2:1.
 - `sold 7d`: the published `sold_med7` at 5 or more sold units in 7 days, else today's.
 - `sold half-life`: the sold median over 30 days with a unit's weight halving every day, at 3 or more sold units
@@ -33,7 +34,7 @@ from pathlib import Path
 
 from ahsync.engine import prices
 from ahsync.engine.lifetime_prices import weighted_median
-from ahsync.intel.contract import ItemIntel, MarketIntelligence
+from ahsync.intel.contract import ItemIntel, MarketIntelligence, pattern_at, published_level
 
 from sim.inference import GOLD, START_MS, Measure, commodity, gear
 from sim.market import DAY_MS, HOUR_MS, Market, Planted, World
@@ -66,6 +67,8 @@ HALF_LIFE_DAYS = 1.0                             # SP2's weighting (item 26(b))
 LEVEL_DAYS = 30                                  # the days of sold prices a half-life level reads
 ASK_WEIGHTS = (4, 2, 1)                          # the ask blend's weights on med7, med14 and med30
 RULES = ("today", "ask blend", "sold 7d", "sold half-life")
+SAME_BAND, SAME_SHARE = 0.02, 0.85               # SP2c: the built level within ±2% of the half-life rule's on 85%+ of the same steady
+                                                 # posts (seeds 1-3 at 4 replicates: busy gear 0.89-0.94, hours against days on the rest)
 SEGMENTS = ("steady", "after the rise", "after the drop", "falling")
 GROUPS = ("gear 2 a week", "gear at 5+ a week", CLOTH, REAL)
 # The real summary's ratios each shape is set beside (plan §1d items 1, 25(e) and 25(i)): (med7 ÷ the sold median,
@@ -133,6 +136,12 @@ class Post:
     price: int                        # unit price, copper
     units: int
     sold: int                         # units bought before it expired
+    # A `today` run only, when the document and the prototype both read a sold level (SP2c's "same prices" check;
+    # None otherwise): the document's level, the sold half-life prototype's level for the same post, and the price
+    # without the hour's pattern (min(cheapest − 1, level)).
+    level: int | None = None
+    twin: int | None = None
+    plain: int | None = None
 
 
 def _high_asks(key: int, kind: Kind, multiple: float, durations: Sequence[int]) -> list[Planted]:
@@ -250,7 +259,8 @@ def ask_blend(item: ItemIntel) -> int | None:
     return sum(w * v for w, v in parts) // sum(w for w, _ in parts) if parts else None
 
 
-def rule_price(rule: str, item: ItemIntel, cheapest: int | None, sold: Sequence[tuple[int, float, int]]) -> int | None:
+def rule_price(rule: str, item: ItemIntel, cheapest: int | None, sold: Sequence[tuple[int, float, int]],
+               at_ms: int) -> int | None:
     """The post price a rule gives: the undercut, held under the rule's level.
 
     Args:
@@ -258,6 +268,7 @@ def rule_price(rule: str, item: ItemIntel, cheapest: int | None, sold: Sequence[
         item: The item's published intelligence.
         cheapest: The cheapest other auction's unit price now, copper, or None.
         sold: The item's `sold_rows`.
+        at_ms: The posting time, UTC ms (`today` reads the hour's pattern).
 
     Returns:
         Copper; None when the rule knows no price.
@@ -268,13 +279,15 @@ def rule_price(rule: str, item: ItemIntel, cheapest: int | None, sold: Sequence[
     if rule not in RULES:
         raise KeyError(rule)
     if rule == "today" or (rule == "sold 7d" and (item.sold_med7 is None or item.sold_units7 < WEEK_UNITS)):
-        return prices.post_price(cheapest, item.med7, item.p90_30, item.closes_30d)
+        priced = published_level(item)
+        return prices.post_price(cheapest, priced.level, pattern_at(item, at_ms), priced.low, priced.high)
     level = item.sold_med7 if rule == "sold 7d" else None
     if rule == "sold half-life":
         level, units = sold_level(sold)
         level = level if units >= LEVEL_UNITS else None
     if level is None:                 # the ask blend, and the half-life's fallback
-        return prices.post_price(cheapest, ask_blend(item), None, item.closes_30d)
+        level = ask_blend(item)
+        return prices.post_price(cheapest, level, 1.0, level, level)
     return level if cheapest is None else min(cheapest - 1, level)
 
 
@@ -291,7 +304,7 @@ class Poster:
         """
         self.rule, self.kinds, self.folder = rule, kinds, folder
         self.wake_ms: int = START_MS + WARM_DAYS * DAY_MS + 10 * HOUR_MS + 40 * 60_000   # after the daily run
-        self.posted: list[tuple[int, int, int, int, int]] = []     # (auction id, key, at ms, price, units)
+        self.posted: list[tuple] = []            # (auction id, key, at ms, price, units, level, twin, plain)
         self._sold: dict[int, list[tuple[int, float, int]]] = {}
         self._sold_of = -1                                         # the document the sold rows were read for
 
@@ -323,11 +336,20 @@ class Poster:
             if item is None:
                 continue
             others = [a.price for a in market.by_key[key].values() if a.seller != "us"]
-            price = rule_price(self.rule, item, min(others) if others else None, self._sold.get(key, ()))
+            cheapest, rows = min(others) if others else None, self._sold.get(key, ())
+            price = rule_price(self.rule, item, cheapest, rows, now_ms)
             if price is not None and price >= 1:
                 units = 5 if market.items[key].commodity else 1
                 auction = market.post(key, units, price, POST_HOURS, "us")
-                self.posted.append((auction.id, key, now_ms, price, units))
+                level = twin = plain = None
+                if self.rule == "today" and item.level_source == "sold":
+                    twin, twin_units = sold_level(rows)                          # the same post under both rules
+                    if twin_units >= LEVEL_UNITS:
+                        level = item.level
+                        plain = level if cheapest is None else min(cheapest - 1, level)
+                    else:
+                        twin = None
+                self.posted.append((auction.id, key, now_ms, price, units, level, twin, plain))
 
 
 def trade(rule: str, seed: int, folder: Path, replicates: int = 4, spread: float = BUYER_SPREAD
@@ -351,7 +373,8 @@ def trade(rule: str, seed: int, folder: Path, replicates: int = 4, spread: float
     for event in run.truth.events:
         if event.kind == "buy":
             bought[event.auction] = bought.get(event.auction, 0) + event.units
-    return [Post(key, at, price, units, bought.get(auction, 0)) for auction, key, at, price, units in poster.posted], kinds
+    return [Post(key, at, price, units, bought.get(auction, 0), level, twin, plain)
+            for auction, key, at, price, units, level, twin, plain in poster.posted], kinds
 
 
 def segment_of(kind: Kind, at_ms: int) -> str | None:
@@ -403,6 +426,45 @@ def earned(posts: Sequence[Post], kinds: dict[int, Kind], group: str, segment: s
         return None, None
     return (sum(p.sold * p.price / kinds[p.key].worth_at(p.at_ms) for p in chosen) / units,
             sum(p.sold for p in chosen) / units)
+
+
+def same_levels(posts: Sequence[Post], kinds: dict[int, Kind], group: str) -> tuple[float | None, int]:
+    """How often the built level and the sold half-life prototype's agreed on the same post (SP2c's acceptance).
+
+    Two runs drift apart (our own posts change later sales), so the rules are compared on the same posts: those of a
+    `today` run where both read a sold level, in the steady segment (after a step in the worth the two age
+    conventions, hours against days, disagree for a day by design). The levels are compared, not the prices: the
+    built rule multiplies the hour's pattern in by design (`pattern_cut` reports that).
+
+    Args:
+        posts: A `today` run's posts.
+        kinds: The world's items.
+        group: One of GROUPS.
+
+    Returns:
+        (the share of the group's steady twinned posts whose document level is within ±SAME_BAND of the prototype's;
+        their count); None and 0 without one.
+    """
+    pairs = [(p.level, p.twin) for p in posts if p.twin is not None and group_of(kinds[p.key]) == group
+             and segment_of(kinds[p.key], p.at_ms) == "steady"]
+    if not pairs:
+        return None, 0
+    return sum(abs(level - twin) <= SAME_BAND * twin for level, twin in pairs) / len(pairs), len(pairs)
+
+
+def pattern_cut(posts: Sequence[Post], kinds: dict[int, Kind], group: str) -> float | None:
+    """The share of today's twinned posts the hour's pattern priced under min(cheapest − 1, the level) (reported).
+
+    Args:
+        posts: A `today` run's posts.
+        kinds: The world's items.
+        group: One of GROUPS.
+
+    Returns:
+        The share; None without a twinned post.
+    """
+    chosen = [p for p in posts if p.plain is not None and group_of(kinds[p.key]) == group]
+    return sum(p.price < p.plain for p in chosen) / len(chosen) if chosen else None
 
 
 def shape_ratios(run: Run, kinds: dict[int, Kind], shape: str) -> tuple[float | None, float | None]:
@@ -489,7 +551,10 @@ def sm20(folder: Path, seed: int = 1, replicates: int = 4, rules: Sequence[str] 
 
     Returns:
         The world's `calibration`; then per rule, group and segment: earned per unit posted ÷ the worth, against
-        1.0 (a post sold at the worth), with the share sold in the measure's words.
+        1.0 (a post sold at the worth), with the share sold in the measure's words; for `today`, per group, the
+        share of its steady posts whose built level is within ±SAME_BAND of the sold half-life prototype's for the
+        same post (SP2c: the built level and the prototype give the same prices; band SAME_SHARE), and the share of
+        them the hour's pattern priced under the level (reported).
     """
     out = calibration(folder / "world", seed, replicates)
     for rule in rules:
@@ -500,6 +565,14 @@ def sm20(folder: Path, seed: int = 1, replicates: int = 4, rules: Sequence[str] 
                 sold = "no posts" if share is None else f"{share:.0%} sold"
                 out.append(Measure("SM20", f"{rule}: earned per post ÷ the worth, {group}, {segment} ({sold})",
                                    made, 1.0, "reported"))
+        if rule == "today":
+            for group in GROUPS:
+                share, count = same_levels(posts, kinds, group)
+                out.append(Measure("SM20", f"the built level within ±{SAME_BAND:.0%} of sold half-life's on the same steady "
+                                   f"posts, {group} ({count} posts)", share, 1.0, f"≥ {SAME_SHARE:.0%}",
+                                   None if share is None else share >= SAME_SHARE))
+                out.append(Measure("SM20", f"today's posts the hour's pattern priced under the level, {group}",
+                                   pattern_cut(posts, kinds, group), 0.0, "reported"))
     return out
 
 

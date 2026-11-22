@@ -85,17 +85,16 @@ local function DisenchantValue(key, bound)
   return can, can and Disenchant.ExpectedValue(outcomes, values) or nil, mats
 end
 
---- A window's expected price, as the plan prices it (`plan.slot_price`: level × how with the trend to its best hour,
---- kept within the last 30 days' range; TT6, TT7, TT22, TT23, R21).
+--- A window's expected price, as the plan prices it (`plan.slot_price`: the level × how with the trend to its best
+--- hour, kept within the level's bounds; TT6, TT7, TT51, R21).
 ---@param item table
 ---@param w table
 ---@param nowMs number
 ---@return number|nil  Copper; nil without a level
 local function WindowPrice(item, w, nowMs)
-  local level = item.med7 or item.med30
-  if not level then return nil end
-  return Prices.SlotPrice(level, w.how, item.trend or 0, Prices.DaysUntilSlot(w.best, nowMs), nil, item.p10, item.med7,
-                          item.p90, item.closes30)
+  if not item.level then return nil end
+  return Prices.SlotPrice(item.level, w.how, item.trend or 0, Prices.DaysUntilSlot(w.best, nowMs), nil, item.low,
+                          item.high)
 end
 
 --- The best sell and buy windows' facts for TooltipView.

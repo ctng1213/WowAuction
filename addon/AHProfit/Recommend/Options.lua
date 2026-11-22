@@ -31,7 +31,7 @@ function Options.Units(bags)
 end
 
 --- An item's sell option re-priced from live listings (A19, A67), as analysis prices it (market.analyze_item):
---- post at min(cheapest − 1, max(med7, p90)), P from the curve row for this hour at the units ahead (with volume
+--- post at min(cheapest − 1, the level × this hour's pattern within its bounds; PP5), P from the curve row for this hour at the units ahead (with volume
 --- unknown and no curve, the default chance for the post's position in the live book), and E_post per unit with
 --- the vendor price as the fallback and the deposit for the window.
 ---@param item table          Market.Item(key)
@@ -44,7 +44,7 @@ function Options.Reprice(item, levels, curve, vendorEach, nowMs)
   local live = {}
   for k, v in pairs(item) do live[k] = v end
   local cheapest = levels[1] and levels[1].price
-  local price = Prices.PostPrice(cheapest, item.med7, item.p90, item.closes30)
+  local price = Prices.PostPrice(cheapest, item.level, AHProfit.Market.HowAt(item, nowMs), item.low, item.high)
   if not price then return live end
   local ref = item.refStack or 1
   local p = item.chance or 0

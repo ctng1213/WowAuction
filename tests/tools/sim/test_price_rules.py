@@ -20,19 +20,23 @@ AFTER = START_MS + CHANGE_DAY * DAY_MS
 
 def item(**fields):
     """An item's intelligence with only the fields a rule reads."""
-    base = dict(med7=None, med14=None, med30=None, p90_30=None, closes_30d=100, sold_med7=None, sold_units7=0.0)
+    base = dict(med7=None, med14=None, med30=None, p10_30=None, p90_30=None, closes_30d=100, sold_med7=None,
+                sold_units7=0.0, level=None, level_source=None, level_units=0.0, sold_curve=None, how="")
     return SimpleNamespace(**{**base, **fields})
 
 
-def test_SM20_sold_levels_earn_more_per_post_than_todays_ask_ceiling_on_steady_gear(tmp_path):
-    found = sm20(tmp_path, replicates=1, rules=("today", "sold half-life"))
+def test_SM20_the_built_level_prices_the_same_posts_as_the_sold_half_life_rule(tmp_path):
+    found = sm20(tmp_path, replicates=1, rules=("today", "ask blend"))
     world = [m for m in found if m.what.startswith("world: ")]
     measures = {m.what.split(" (")[0]: m for m in found if not m.what.startswith("world: ")}
     today = measures["today: earned per post ÷ the worth, gear at 5+ a week, steady"]
-    level = measures["sold half-life: earned per post ÷ the worth, gear at 5+ a week, steady"]
-    assert today.band == level.band == "reported" and today.truth == 1.0
-    assert level.engine > today.engine + 0.2            # the review's runs: about 0.85 against 0.35
-    assert len(measures) == 2 * len(SEGMENTS) * len(GROUPS)
+    blend = measures["ask blend: earned per post ÷ the worth, gear at 5+ a week, steady"]
+    assert today.band == blend.band == "reported" and today.truth == 1.0
+    same = measures["the built level within ±2% of sold half-life's on the same steady posts, gear at 5+ a week"]
+    assert same.passed and same.engine >= 0.85 and same.band == "≥ 85%"    # two runs drift apart; the same posts don't
+    cut = measures["today's posts the hour's pattern priced under the level, gear at 5+ a week"]
+    assert cut.band == "reported" and 0 < cut.engine < 0.5                  # the ask pattern cuts some posts by design
+    assert len(measures) == 2 * len(SEGMENTS) * len(GROUPS) + 2 * len(GROUPS)
     assert len(world) == 2 * len(REAL_RATIOS) + len(GROUPS)       # the calibration against the real summary
 
 
@@ -51,19 +55,19 @@ def test_the_ask_blend_weighs_the_medians_4_2_1_over_the_ones_known():
 def test_each_rule_holds_the_undercut_under_its_own_level():
     it = item(med7=150, med14=150, med30=150, p90_30=300, sold_med7=100, sold_units7=6.0)
     sold = [(90, 5.0, 0)]
-    assert rule_price("today", it, 400, sold) == 300                # the ask ceiling, max(med7, p90)
-    assert rule_price("ask blend", it, 400, sold) == 150
-    assert rule_price("sold 7d", it, 400, sold) == 100 and rule_price("sold 7d", it, 80, sold) == 79
-    assert rule_price("sold half-life", it, 400, sold) == 90 and rule_price("sold half-life", it, None, sold) == 90
+    assert rule_price("today", it, 400, sold, 0) == 150             # the built rule: the ask level, its own ceiling (PP5)
+    assert rule_price("ask blend", it, 400, sold, 0) == 150
+    assert rule_price("sold 7d", it, 400, sold, 0) == 100 and rule_price("sold 7d", it, 80, sold, 0) == 79
+    assert rule_price("sold half-life", it, 400, sold, 0) == 90 and rule_price("sold half-life", it, None, sold, 0) == 90
     with pytest.raises(KeyError):
-        rule_price("cheapest", it, 400, sold)
+        rule_price("cheapest", it, 400, sold, 0)
 
 
 def test_a_sold_level_under_its_threshold_falls_back_to_asks():
     it = item(med7=150, med14=150, med30=150, p90_30=300, sold_med7=100, sold_units7=4.0)
-    assert rule_price("sold 7d", it, 400, ()) == 300                # under 5 a week: today's rule
-    assert rule_price("sold half-life", it, 400, [(90, 2.0, 0)]) == 150   # under 3 in 30 days: the ask blend
-    assert rule_price("sold half-life", it, 400, [(90, 3.0, 0)]) == 90    # SP2's threshold, 3 units
+    assert rule_price("sold 7d", it, 400, (), 0) == 150             # under 5 a week: today's rule
+    assert rule_price("sold half-life", it, 400, [(90, 2.0, 0)], 0) == 150   # under 3 in 30 days: the ask blend
+    assert rule_price("sold half-life", it, 400, [(90, 3.0, 0)], 0) == 90    # SP2's threshold, 3 units
 
 
 def test_sold_rows_reads_the_last_days_with_their_age(tmp_path):

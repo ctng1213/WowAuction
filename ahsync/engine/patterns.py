@@ -246,12 +246,11 @@ class ForecastFacts:
     """What forecasting one item's windows needs (SPEC §3.3.4 forecast, §3.4 Liquidity). Money copper, times UTC ms."""
 
     now_ms: int
-    level: int                         # the price level: med7, else med30
+    level: int                         # the price level (SPEC §3.3)
     trend7: float                      # % per day
-    p10: int | None                    # 30-day 10th percentile: the forecast's floor
-    med7: int | None                   # with p90, the forecast's ceiling
-    p90: int | None
-    closes_30d: int | None             # hourly closes in 30 days: thin data caps at the level (TT23)
+    low: int | None                    # the level's low bound: the forecast's floor (TT51)
+    high: int | None                   # the level's high bound: its ceiling
+    closes_30d: int | None             # hourly closes in 30 days: the confidence's closes component
     supply: int | None                 # others' listed units now (else the typical daily supply); None unknown
     supply_how: Sequence[float]        # 168 listed-supply ratios; () without a pattern
     stack: int                         # the fewest units a window allows: the reference stack (gear: its minimum)
@@ -278,7 +277,7 @@ def window_forecast(w: Window, f: ForecastFacts) -> Forecast:
     start_h = now_h + (w.start_slot - slot_of(now_h)) % SLOTS
     best_h = now_h + (w.best_slot - slot_of(now_h)) % SLOTS
     price = slot_price(f.level, w.how_avg, f.trend7, (best_h * HOUR_MS - f.now_ms) / DAY_MS, f.max_trend_total,
-                       f.p10, f.med7, f.p90, f.closes_30d)
+                       f.low, f.high)
     listed = window_supply(f.supply, f.supply_how, now_h, range(start_h, start_h + w.hours))
     conf = confidence.percent(confidence.score(f.closes_30d or 0, f.volume_score, f.book_age_ms, w.weeks, 0))
     return Forecast(price, liquidity_cap(listed, f.share, f.stack), conf)

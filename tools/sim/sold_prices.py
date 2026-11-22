@@ -24,7 +24,7 @@ GLOVES = 6585                        # SM10/SM11's gear item
 CLOTH = 4306                         # SM18's commodity (Silk Cloth)
 HIGH = 15 * GOLD                     # the lone high ask, copper
 BAND = 0.10                          # SM10/SM11: sold_med7 within ±10% of the true sold price (SCENARIOS)
-POST_BAND = 0.05                     # SM11 at SP2: the post price within ±5% (reported until then)
+POST_BAND = 0.05                     # SM10/SM11 since SP2c: the post price within ±5% of the true sold price
 CLOTH_WORTH = 100                    # copper: SM18's fair price
 LONE_PRICE = 60                      # copper: SM18's lone listing
 FLOOR_N = (20, 50, 100)              # SM18's grid: units within FLOOR_BAND of a price confirm it
@@ -63,13 +63,14 @@ def sm10(folder: Path, seed: int = 1) -> list[Measure]:
         seed: The world's seed.
 
     Returns:
-        med7 and the post price against the true sold price (reported), and sold_med7 (±10%).
+        med7 against the true sold price (reported), the post price against it (±5%, SP2c) and sold_med7 (±10%).
     """
     run = simulate(gloves_world(seed, 3), folder)
     i = run.documents[-1].items[GLOVES]
     sold = sold_price_truth(run.truth, GLOVES, START_MS, run.snapshots[-1])
     return [Measure("SM10", "med7 against the true sold price", i.med7, sold, "reported"),
-            Measure("SM10", "post price against the true sold price", i.post_price, sold, "reported"),
+            Measure("SM10", "post price against the true sold price", i.post_price, sold, "±5%",
+                    within(i.post_price, sold, POST_BAND)),
             Measure("SM10", "sold_med7 against the true sold price", i.sold_med7, sold, "±10%",
                     within(i.sold_med7, sold, BAND))]
 
@@ -84,8 +85,7 @@ def sm11(folder: Path, seed: int = 1) -> list[Measure]:
         seed: The world's seed.
 
     Returns:
-        sold_med7 against the median of the buys since the rise (±10%), and the post price against it (reported
-        until SP2, whose band is ±5%).
+        sold_med7 against the median of the buys since the rise (±10%), and the post price against it (±5%, SP2c).
     """
     rise = START_MS + DAY_MS
     run = simulate(gloves_world(seed, 3, rise), folder)
@@ -93,8 +93,8 @@ def sm11(folder: Path, seed: int = 1) -> list[Measure]:
     sold = sold_price_truth(run.truth, GLOVES, rise, run.snapshots[-1])
     return [Measure("SM11", "sold_med7 against the true sold price since the rise", i.sold_med7, sold, "±10%",
                     within(i.sold_med7, sold, BAND)),
-            Measure("SM11", "post price against the true sold price since the rise (SP2: ±5%)", i.post_price, sold,
-                    "reported")]
+            Measure("SM11", "post price against the true sold price since the rise", i.post_price, sold, "±5%",
+                    within(i.post_price, sold, POST_BAND))]
 
 
 def cloth_world(seed: int, days: int) -> World:

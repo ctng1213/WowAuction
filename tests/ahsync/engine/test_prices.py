@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from ahsync.engine.prices import (
+from ahsync.engine.prices import (clamp_bounds, forecast, 
     DAY_MS, HOUR_MS, cur_others, drop_suspect, median, percentile, post_price, relist_price, suspect_price, trend7,
     weekday_hour,
     window_median,
@@ -54,7 +54,7 @@ def test_R12_post_price_does_not_undercut_your_own_lowest_auction():
     book = [(50, 1), (55, 2), (70, 1)]
     own = [(50, 1)]
     assert cur_others(book, own, cur=50) == 55
-    assert post_price(55, 60) == 54
+    assert post_price(55, 60, 1.0, 60, 60) == 54
 
 
 def test_median_and_percentile_of_nothing_is_none():
@@ -104,39 +104,41 @@ def test_cur_others_cases():
 
 
 def test_post_price_with_missing_inputs():
-    assert post_price(None, 60) == 60
-    assert post_price(55, None) == 54
-    assert post_price(None, None) is None
+    assert post_price(None, 60, 1.0, 60, 60) == 60
+    assert post_price(55, None, 1.0, None, None) == 54
+    assert post_price(None, None, 1.0, None, None) is None
 
 
 POST_PRICE = [s for s in SHARED if s["call"] == "post_price"]
 
 
+def shared_post_price(s: dict) -> int | None:
+    """A shared post-price scenario's call."""
+    a = s["args"]
+    return post_price(a["cur_others"], a["level"], a["how_now"], a["low"], a["high"])
+
+
 @pytest.mark.parametrize("s", [s for s in POST_PRICE if s["id"] == "PP1"], ids=lambda s: s["name"])
 def test_PP1_post_price_shared_with_the_addon(s):
-    assert post_price(s["args"]["cur_others"], s["args"]["med7"], s["args"]["p90"]) == s["expect"], s["why"]
+    assert shared_post_price(s) == s["expect"], s["why"]
 
 
-@pytest.mark.parametrize("s", [s for s in POST_PRICE if s["id"] == "PP2"], ids=lambda s: s["name"])
-def test_PP2_post_price_undercuts_up_to_the_30_day_p90(s):
-    assert post_price(s["args"]["cur_others"], s["args"]["med7"], s["args"]["p90"]) == s["expect"], s["why"]
-
-
-@pytest.mark.parametrize("s", [s for s in POST_PRICE if s["id"] == "PP4"], ids=lambda s: s["name"])
-def test_PP4_post_price_on_thin_data_caps_at_the_median(s):
-    a = s["args"]
-    assert post_price(a["cur_others"], a["med7"], a["p90"], a["closes"]) == s["expect"], s["why"]
+@pytest.mark.parametrize("s", [s for s in POST_PRICE if s["id"] == "PP5"], ids=lambda s: s["name"])
+def test_PP5_post_price_is_the_undercut_up_to_this_hours_forecast_of_the_level(s):
+    assert shared_post_price(s) == s["expect"], s["why"]
 
 
 @pytest.mark.parametrize("s", [s for s in SHARED if s["call"] == "relist_price"], ids=lambda s: s["name"])
 def test_R28_a_relist_now_price_must_be_grounded(s):
     a = s["args"]
-    assert relist_price(a["cur_others"], a["med7"], a["p90"], a["closes"]) == s["expect"], s["why"]
+    assert relist_price(a["cur_others"], a["level"], a["how_now"], a["low"], a["high"], a["closes"]) == s["expect"], s["why"]
 
 
-def test_PP4_thin_data_without_a_median_still_caps_at_the_p90():
-    assert post_price(1000, None, 2000, 5) == 999         # no med7 to fall back on: the p90 is the only cap
-    assert post_price(None, None, 2000, 5) == 2000
+def test_TT51_a_forecast_is_kept_within_the_bounds_as_far_as_they_are_known():
+    assert clamp_bounds(120, 80, 150) == 120 and clamp_bounds(50, 80, 150) == 80 and clamp_bounds(200, 80, 150) == 150
+    assert clamp_bounds(50, None, 150) == 50 and clamp_bounds(200, 80, None) == 200
+    assert forecast(100, 1.15, 1.04, 80, 150) == 120                   # floor(119.6 + 0.5)
+    assert forecast(77, 0.5, 1.0, 50, 77) == 50                        # 38.5 rounds to 39, raised to the low bound
 
 
 def test_FM5_a_price_far_out_of_range_is_suspect_until_a_second_hour_confirms_it():

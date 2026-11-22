@@ -19,7 +19,8 @@ from ahsync.engine.sellprob import MarketSettings, Supply
 from ahsync.engine.volume import (ID_METHOD_VERSION, VOLUME_METHOD_VERSION, Cover, DailyVolume, Volume, daily_volume, median_daily_supply,
                                   observed_turnover)
 from ahsync.history.reads import HistoryReader, HistoryWindow, ItemHistory, ItemInfo
-from ahsync.intel.contract import IntelWindow, ItemIntel, MarketIntelligence, ages_reference_ms
+from ahsync.intel.contract import (IntelWindow, ItemIntel, MarketIntelligence, ages_reference_ms, pattern_at,
+                                   published_level)
 
 HOUR_MS = 3_600_000
 DAY_MS = 86_400_000
@@ -174,8 +175,8 @@ def sales_fields(item: ItemHistory, now_ms: int, settings: MarketSettings) -> tu
 
 
 def weekly_fields(item: ItemHistory, med30: int | None, volume: DailyVolume, ref: int, now_ms: int,
-                  settings: MarketSettings, sales: tuple[Profile, dict], undercut: float | None = None
-                  ) -> tuple[dict, tuple[Profile, Profile, Profile]]:
+                  settings: MarketSettings, sales: tuple[Profile, dict], undercut: float | None,
+                  price_pattern: Profile) -> tuple[dict, tuple[Profile, Profile, Profile]]:
     """An item's weekly patterns, seasonality strength and curve (SPEC §3.3.4, §3.3.6, §3.1.1).
 
     Args:
@@ -187,6 +188,7 @@ def weekly_fields(item: ItemHistory, med30: int | None, volume: DailyVolume, ref
         settings: Pattern half-life, window threshold and the posting-now window.
         sales: From sales_fields.
         undercut: The item's measured u(p) for the curve (BZ29); None for default_undercut_share.
+        price_pattern: `how`, from profile.price_profile (built first: the post price reads this hour's ratio, PP5).
 
     Returns:
         (the ItemIntel pattern fields by name, (price, sales, supply) profiles as stored for window_fields).
@@ -195,7 +197,7 @@ def weekly_fields(item: ItemHistory, med30: int | None, volume: DailyVolume, ref
     half_life = settings.pattern_half_life_weeks
     fields: dict = dict(sales[1])
     sales_profile = sales[0]
-    how = _packed("how", profile.price_profile(hourly, med30, now_ms, half_life), fields)
+    how = _packed("how", price_pattern, fields)
     supply = _packed("supply", profile.supply_profile(item.hourly_supply, now_ms, half_life), fields)
     curve, curve_hour = "", None
     if volume.sold_per_day is not None:
@@ -214,9 +216,10 @@ def weekly_fields(item: ItemHistory, med30: int | None, volume: DailyVolume, ref
 class NowBase:
     """What the "now" fields need from an item's baselines (SPEC §3.3; the cloud's hourly mode, §2.4)."""
 
-    med7: int | None                      # copper
-    p90_30: int | None                    # copper
-    closes_30d: int                       # hourly closes in 30 days (PP4's thin-data rule)
+    level: int | None                     # the price level (SPEC §3.3), copper
+    low: int | None                       # its bounds, copper (None without a level)
+    high: int | None
+    how_now: float                        # the current hour's price ratio, as stored (1.0 without a pattern)
     sold_per_day: float | None            # units
     listed_per_day: float | None          # units
     sales_values: tuple[float, ...]       # the stored sales_how profile's 168 ratios (as decoded, W13)
@@ -233,9 +236,26 @@ class Quote:
     book: tuple[tuple[int, int, int, int], ...] | None   # (price, stack, band, count); None without a book
 
 
+def now_base(i: ItemIntel, at_ms: int, vendor_sell: int) -> NowBase:
+    """An item's "now" baselines from its document, for repricing it at a later hour (BZ32, PP5).
+
+    Args:
+        i: The item's intelligence.
+        at_ms: The hour the item is repriced at, UTC ms (its pattern's ratio is read there).
+        vendor_sell: Copper per unit; 0 when unknown.
+
+    Returns:
+        The NowBase: the published level and bounds (an older document's ask level), the hour's `how`, the rates,
+        the stored sales pattern and the measured undercut share.
+    """
+    priced = published_level(i)
+    return NowBase(priced.level, priced.low, priced.high, pattern_at(i, at_ms), i.sold_per_day, i.listed_per_day,
+                   profile.unpack(i.sales_how, i.sales_weeks).values, vendor_sell, i.undercut_share)
+
+
 def now_fields(quote: Quote, base: NowBase, now_ms: int, settings: MarketSettings
                ) -> tuple[int | None, int, float, bool, float | None]:
-    """The post price, reference stack, chance and expected value of posting now (SPEC §3.3.2, PP2, PP4, P26).
+    """The post price, reference stack, chance and expected value of posting now (SPEC §3.3.2, PP5, P26).
 
     One function for the daily analysis and the hourly repricing, so the two can never disagree (BZ32).
 
@@ -249,7 +269,7 @@ def now_fields(quote: Quote, base: NowBase, now_ms: int, settings: MarketSetting
         (post_price copper or None, ref_stack units, chance, volume_unknown, sell_value float copper per unit or None).
     """
     ref = ref_stack(list(quote.book or ()))
-    price = prices.post_price(quote.price, base.med7, base.p90_30, base.closes_30d)
+    price = prices.post_price(quote.price, base.level, base.how_now, base.low, base.high)
     supply = Supply(base.sold_per_day, base.listed_per_day, quote.book, quote.price, quote.qty)
     chance, unknown = sellprob.posting_chance(supply, price, ref, now_ms, settings, base.sales_values, base.undercut_share)
     sell_value = None
@@ -278,8 +298,7 @@ def reprice_item(i: ItemIntel, quote: Quote, now_ms: int, settings: MarketSettin
     Returns:
         The repriced ItemIntel.
     """
-    base = NowBase(i.med7, i.p90_30, i.closes_30d or 0, i.sold_per_day, i.listed_per_day,
-                   profile.unpack(i.sales_how, i.sales_weeks).values, vendor_sell, i.undercut_share)
+    base = now_base(i, now_ms, vendor_sell)
     price, ref, chance, unknown, sell_value = now_fields(quote, base, now_ms, settings)
     book = quote.book or ()
     return replace(i, cur=quote.price, cur_qty=quote.qty, cur_age_ms=0, post_price=price, ref_stack=ref,
@@ -468,11 +487,16 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
     vendor_sell = (info.vendor_sell if info else None) or 0
     quote = Quote(cur.price if cur and cur.price is not None else None, cur.qty if cur else None,
                   tuple(book) if book is not None else None)
-    undercut = measured_undercut(item.new_listings, prices.post_price(quote.price, med7, p90, len(last30)),
+    pattern = profile.price_profile(hourly, med30, now_ms, settings.pattern_half_life_weeks)          # W17
+    how_now = profile.unpack(*profile.pack(pattern)).values[slot_of(now_ms // HOUR_MS)]   # as stored, so the hourly
+    divide = pattern.values if settings.level_divides_by_pattern and any(pattern.weeks) else None   # run agrees; §3.3
+    priced = lifetime_prices.price_level(item.sold_hours, now_ms, divide, (med7, med14, med30), p10)
+    undercut = measured_undercut(item.new_listings,
+                                 prices.post_price(quote.price, priced.level, how_now, priced.low, priced.high),
                                  sellprob.cheapest_other(quote.book, quote.price), now_ms)
-    base = NowBase(med7, p90, len(last30), volume.sold_per_day, volume.listed_per_day, sales[0].values, vendor_sell,
-                   undercut)
-    price, ref, chance, unknown, sell_value = now_fields(quote, base, now_ms, settings)   # PP2, PP4, P26
+    base = NowBase(priced.level, priced.low, priced.high, how_now, volume.sold_per_day, volume.listed_per_day,
+                   sales[0].values, vendor_sell, undercut)
+    price, ref, chance, unknown, sell_value = now_fields(quote, base, now_ms, settings)   # PP5, P26
     book_age = now_ms - newest[0] if newest else None
     recent = [c for t, c in raw if t > now_ms - DAY_MS]
     conf = confidence.percent(confidence.score(len(last30), volume.volume_score, book_age, None, 0))
@@ -480,17 +504,15 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
     units = sum(stack * count for _, stack, _, count in book) if book else (cur.qty if cur else None)
     typical = median_daily_supply(item.hourly_supply, now_ms)
     weekly, (how, sales_profile, supply_profile) = weekly_fields(item, med30, volume, ref, now_ms, settings, sales,
-                                                                 undercut)
-    level, gear = (med7 if med7 is not None else med30), bool(info and info.item_class in GEAR_CLASSES)
-    facts = None if level is None else patterns.ForecastFacts(                     # W15: the window forecasts
-        now_ms, level, trend, p10, med7, p90, len(last30), units if units is not None else typical,
+                                                                 undercut, pattern)
+    gear = bool(info and info.item_class in GEAR_CLASSES)
+    facts = None if priced.level is None else patterns.ForecastFacts(              # W15: the window forecasts
+        now_ms, priced.level, trend, priced.low, priced.high, len(last30), units if units is not None else typical,
         supply_profile.values if any(supply_profile.weeks) else (),
         max(ref, settings.min_gear_units) if gear else ref,
         settings.max_supply_share_gear if gear else settings.max_supply_share,
         volume.volume_score, book_age, settings.max_trend_total)
     sold_med7, sold_units7 = sold_median7(item, week)
-    divide = how.values if settings.level_divides_by_pattern and any(how.weeks) else None   # §3.3; off by default
-    priced = lifetime_prices.price_level(item.sold_hours, now_ms, divide, (med7, med14, med30), p10)
     intel = ItemIntel(
         key, cur.price if cur else None, cur.qty if cur else None, now_ms - cur.at if cur else None,
         med7, med30, p10, p90,
@@ -585,8 +607,7 @@ def with_scan(intel: MarketIntelligence, prices: dict[int, tuple[int, int, int]]
         i, (price, qty, at) = items[key], prices[key]
         book = books.get(key)
         rows = tuple(book[1]) if book else i.book
-        base = NowBase(i.med7, i.p90_30, i.closes_30d or 0, i.sold_per_day, i.listed_per_day,
-                       profile.unpack(i.sales_how, i.sales_weeks).values, vendor_sell.get(key, 0), i.undercut_share)
+        base = now_base(i, at, vendor_sell.get(key, 0))
         quote = Quote(price, qty, rows or None)
         post, ref, chance, unknown, sell_value = now_fields(quote, base, at, settings)
         items[key] = replace(i, cur=price, cur_qty=qty, cur_age_ms=reference - at, book=rows,

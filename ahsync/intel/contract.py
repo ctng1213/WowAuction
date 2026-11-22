@@ -13,6 +13,9 @@ import json
 from dataclasses import asdict, dataclass, field, fields, replace
 
 from ahsync.engine import lifetime_prices, profile
+from ahsync.engine.capacity import slot_of
+
+HOUR_MS = 3_600_000
 
 INTEL_SCHEMA_VERSION = 17      # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
                                # 5: median_daily_supply (V23); 6: observed_listing_turnover (V37); 7: volume_kind (D57);
@@ -122,7 +125,7 @@ class ItemIntel:
     observed_listing_turnover: float | None = None   # units/day that left the AH, 7 days (V37); info only, never sales
     volume_kind: str | None = None        # volume_source's kind, "ids" | "groups" | "own" (D57); None in documents
                                           # before version 7, which are labelled by source name (views.volume_label)
-    closes_30d: int | None = None         # hourly closes in the last 30 days: thin data caps forecasts (TT23); None
+    closes_30d: int | None = None         # hourly closes in the last 30 days: thin data forecasts no window (PF30); None
                                           # in documents before version 8
     # The hourly state (SPEC §2.4, schema 10; BZ32): units sold, expired and newly listed between the two newest
     # snapshots, and the last 24 hours as packed rings of 24 comma-separated values, oldest first ("" for an hour
@@ -192,15 +195,15 @@ class MarketIntelligence:
 
 
 def price_level(i: ItemIntel) -> int | None:
-    """The price level forecasts start from: med7, else med30 (SPEC §3.4C.1, R21).
+    """The price level forecasts start from (SPEC §3.3; R21): the published level, else the ask level its medians give.
 
     Args:
         i: The item's intelligence.
 
     Returns:
-        Copper; None when neither median is known.
+        Copper; None when there is neither a level nor a median.
     """
-    return i.med7 if i.med7 is not None else i.med30
+    return published_level(i).level
 
 
 def published_level(i: ItemIntel) -> lifetime_prices.Level:
@@ -219,6 +222,20 @@ def published_level(i: ItemIntel) -> lifetime_prices.Level:
     if source is None:
         level, source = lifetime_prices.ask_level(i.med7, i.med14, i.med30), "asks"
     return lifetime_prices.level_with_bounds(level, source, i.level_units, i.sold_curve, i.p10_30)
+
+
+def pattern_at(i: ItemIntel, at_ms: int) -> float:
+    """The item's price ratio at an hour, from its stored `how` (SPEC §3.3.4; PP5).
+
+    Args:
+        i: The item's intelligence.
+        at_ms: The hour, UTC ms.
+
+    Returns:
+        The ratio of that hour of the week, as the document stores it (thousandths); 1.0 without a pattern.
+    """
+    values = profile.unpack_values(i.how)
+    return 1.0 if values is None else values[slot_of(at_ms // HOUR_MS)]
 
 
 def supply_level(i: ItemIntel) -> int | None:

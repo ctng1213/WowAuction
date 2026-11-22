@@ -19,6 +19,7 @@ LINEN_INTEL = ItemIntel(LINEN, 45, 20, HOUR, 49, 49, 40, 60, 0.4, 48.0, 0.0, 48.
                         False, 42.4, 86, 93, None, (), how="1000," * 167 + "1000", how_weeks="7," * 167 + "7",
                         seasonality=72, sell_windows=(IntelWindow(5 * 24 + 18, 4, 5 * 24 + 19, 1.12, 7),),
                         curve=CURVE, curve_hour=BUILT // HOUR)
+TAIL = ",,,,,,,,,49,40,49"   # after commodity: the ask level of Linen's 49 c medians, its bounds p10_30 40 c and itself (EX25)
 EMPTY = ItemIntel(SHORT, None, None, None, None, None, None, None, 0.0, None, None, None, None, {}, None, 1, 0.25,
                   True, None, 6, None, None, ())
 
@@ -31,14 +32,14 @@ def intel(*items: ItemIntel) -> MarketIntelligence:
 def test_EX2_the_file_holds_compact_item_strings_curves_and_a_checked_header():
     text = market_lua.market_lua([intel(LINEN_INTEL, EMPTY, replace(EMPTY, key=OTHER))], {M: {SHORT}},
                                  {"Amaya-Grommash": M}, BUILT)
-    assert f'I[{LINEN}]="45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900,,0,,,7;138:4:139:1120:7;"' in text
+    assert f'I[{LINEN}]="45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900,,0,,,7,,,,,,,,,49,40,49;138:4:139:1120:7;"' in text
     assert f'I[{SHORT}]=",,,,,,,0,,,,6,,,1,,1,250,,0;;"' in text and f"I[{OTHER}]" not in text
     linen_curve = market_lua.trim_curve(CURVE, False)
     assert f'C[{LINEN}]="{linen_curve}"' in text and f"C[{SHORT}]" not in text
-    strings = len("45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900,,0,,,7;138:4:139:1120:7;") + 3 + len(",,,,,,,0,,,,6,,,1,,1,250,,0;;")
+    strings = len("45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900,,0,,,7,,,,,,,,,49,40,49;138:4:139:1120:7;") + 3 + len(",,,,,,,0,,,,6,,,1,,1,250,,0;;")
     assert f'checksum = "3:{strings}"' in text and "schemaVersion = 1," in text and f"generatedAt = {BUILT}," in text
     assert f'charMarkets = {{ ["Amaya-Grommash"] = "{M}" }}' in text
-    assert f'["{M}"] = {{ observationsUntil = {BUILT - HOUR}, curveHour = {BUILT // HOUR}, I = I1, C = C1, D = D1, F = {{  }}, S = {{  }}, K = K1, G = G1, coverage30 = 0, CD = {{  }} }},' in text
+    assert f'["{M}"] = {{ observationsUntil = {BUILT - HOUR}, curveHour = {BUILT // HOUR}, I = I1, C = C1, D = D1, F = {{  }}, S = {{  }}, H = {{  }}, K = K1, G = G1, coverage30 = 0, CD = {{  }} }},' in text
 
 
 def test_AR6_the_shortlist_keeps_the_full_curve_and_others_get_the_0_5_20_columns_unchanged():
@@ -79,7 +80,7 @@ def test_A23_disenchantable_exported_items_carry_their_skill_and_kind_and_count_
     text = market_lua.market_lua([intel(LINEN_INTEL, replace(EMPTY, key=OTHER))], {}, {}, BUILT,
                                  {LINEN: "1,2,18,a", OTHER: "1,2,18,w"})
     assert f'D[{LINEN}]="1,2,18,a"' in text and f"D[{OTHER}]" not in text               # OTHER isn't exported
-    strings = len("45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900,,0,,,7;138:4:139:1120:7;") + 3 + len("1,2,18,a")
+    strings = len("45,20,60,49,49,40,60,4,480,480,93,86,72,45,20,42,0,900,,0,,,7,,,,,,,,,49,40,49;138:4:139:1120:7;") + 3 + len("1,2,18,a")
     assert f'checksum = "3:{strings}"' in text
 
 
@@ -104,16 +105,16 @@ def test_EX10_each_item_ends_in_its_typical_daily_supply():
     from ahsync.export.market_lua import item_text
     linen = ItemIntel(LINEN, 45, 20, 3_600_000, 49, 49, 40, 60, 0.0, 48.0, 0.0, 48.0, "ahf", {"ahf": 7}, 45, 20, 0.9,
                       False, 42.0, 86, 93, None, ())
-    assert item_text(replace(linen, median_daily_supply=70)).split(";")[0].endswith(",93,86,,45,20,42,0,900,70,0,,,7")
+    assert item_text(replace(linen, median_daily_supply=70)).split(";")[0].endswith(",93,86,,45,20,42,0,900,70,0,,,7" + TAIL)
     unseen = item_text(replace(linen, units_on_ah=None, median_daily_supply=40)).split(";")[0].split(",")
-    assert (unseen[10], unseen[18], len(unseen)) == ("", "40", 23)
-    assert item_text(linen).split(";")[0].endswith(",,0,,,7")
+    assert (unseen[10], unseen[18], len(unseen)) == ("", "40", 34)
+    assert item_text(linen).split(";")[0].endswith(",,0,,,7" + TAIL)
 
 
 def test_EX20_each_item_ends_in_its_14_day_median():
     from ahsync.export.market_lua import item_text
     numbers = item_text(replace(LINEN_INTEL, med14=52)).split(";")[0].split(",")
-    assert (numbers[21], numbers[20], len(numbers)) == ("52", "", 23)              # after closes30, before salesDays
+    assert (numbers[21], numbers[20], len(numbers)) == ("52", "", 34)              # after closes30, before salesDays
     assert item_text(LINEN_INTEL).split(";")[0].split(",")[21] == ""                 # unknown: empty, never 0
 
 
@@ -129,7 +130,7 @@ def test_A58_each_item_ends_in_whether_its_price_is_unconfirmed():
     from ahsync.export.market_lua import item_text
     linen = ItemIntel(LINEN, 1, 20, 3_600_000, 49, 49, 40, 60, 0.0, 48.0, 0.0, 48.0, "ahf", {"ahf": 7}, 45, 20, 0.9,
                       False, 42.0, 86, 93, None, (), cur_suspect=True)
-    assert item_text(linen).split(";")[0].endswith(",1,,,7")                       # suspect, closes30, med14, salesDays
+    assert item_text(linen).split(";")[0].endswith(",1,,,7" + TAIL)                # suspect, closes30, med14, salesDays
 
 
 def test_EX11_flip_offers_go_in_each_market_entry_for_exported_items_outside_the_checksum():
@@ -149,12 +150,12 @@ def test_EX13_shortlisted_items_with_a_supply_pattern_carry_their_factor_row():
     assert 'S = {  }' in market_lua.market_lua([intel(LINEN_INTEL)], {M: {LINEN}}, {}, BUILT)  # no pattern
 
 
-def test_TT23_each_item_ends_in_its_hourly_closes_over_30_days():
+def test_each_item_carries_its_hourly_closes_over_30_days():
     from ahsync.export.market_lua import item_text
     from ahsync.intel.contract import ItemIntel
     linen = ItemIntel(2589, 45, 20, 3_600_000, 49, 49, 40, 60, 0.0, 48.0, 0.0, 48.0, "ahf", {"ahf": 7}, 45, 20, 0.9,
                       False, 42.4, 86, 93, None, (), closes_30d=31)
-    assert item_text(linen).split(";")[0].endswith(",0,31,,7")
+    assert item_text(linen).split(";")[0].endswith(",0,31,,7" + TAIL)
 
 
 
@@ -178,13 +179,13 @@ def test_the_tooltips_market_lines_travel_after_sales_days():
                    sell_windows=(IntelWindow(138, 4, 139, 1.12, 7, chance24=0.8125),),
                    buy_windows=(IntelWindow(3, 3, 4, 0.85, 7, found_share=0.64),))
     numbers, sell, buy = item_text(item).split(";")
-    assert numbers.split(",")[23:] == ["14859", "14860", "744", "787", "790", "", "mc-", "1"]   # thousandths, half up
+    assert numbers.split(",")[23:] == ["14859", "14860", "744", "787", "790", "", "mc-", "1", "49", "40", "49"]   # thousandths, half up
     assert (sell, buy) == ("138:4:139:1120:7:813", "3:3:4:850:7:640")
     gear = item_text(replace(LINEN_INTEL, commodity=False)).split(";")[0].split(",")
     assert gear[26] == "" and gear[30] == "0"                                    # no rates; not a commodity
-    assert item_text(LINEN_INTEL).split(";")[0].endswith(",7")                   # trailing empty fields are left out
+    assert item_text(replace(LINEN_INTEL, med7=None, med30=None, p10_30=None)).split(";")[0].endswith(",7")   # no level: trailing empties left out
     text = market_lua.market_lua([intel(item)], {}, {}, BUILT, coverage30={M: 33})
-    assert "coverage30 = 33, CD = {  } }," in text and "exportVersion = 8," in text
+    assert "coverage30 = 33, CD = {  } }," in text and "exportVersion = 9," in text
 
 
 def test_EX23_the_cooldowns_money_is_a_cd_table_inside_the_checksum():
@@ -193,7 +194,7 @@ def test_EX23_the_cooldowns_money_is_a_cd_table_inside_the_checksum():
     text = market_lua.market_lua([empty], {M: set()}, {}, BUILT, cooldowns={M: (1, {"17564": "30000;;",
                                                                          "17187": "292000;135500;474250"})})
     assert 'CD = { v = 1, [17187] = "292000;135500;474250", [17564] = "30000;;" } },' in text
-    assert "exportVersion = 8," in text
+    assert "exportVersion = 9," in text
     count, length = (int(n) for n in re.search(r'checksum = "(\d+):(\d+)"', plain).groups())
     assert f'checksum = "{count + 2}:{length + 20 + 7}"' in text
 
@@ -201,3 +202,25 @@ def test_EX23_the_cooldowns_money_is_a_cd_table_inside_the_checksum():
 def test_EX24_a_shortlisted_cooldown_mat_is_exported_with_a_nine_day_old_price():
     crystal = replace(LINEN_INTEL, key=12363, cur=280000, cur_age_ms=9 * 24 * HOUR)
     assert market_lua.wanted(12363, crystal, {12363}) and not market_lua.wanted(12363, crystal, set())
+
+
+def test_EX25_each_item_carries_its_level_and_bounds_and_the_shortlist_its_next_24_hours_of_how():
+    from ahsync.export.market_lua import how_row, item_text
+    how = ",".join("1100" if 20 <= s % 24 <= 22 and s // 24 == 3 else "1000" for s in range(168))   # Thu 20-22 UTC 1.1
+    sold = replace(LINEN_INTEL, level=100, level_source="sold", level_units=30.0, sold_curve=(80, 80, 100, 100, 100, 150, 150),
+                   how=how, how_weeks="7," * 167 + "7")
+    rod = replace(LINEN_INTEL, key=OTHER, med7=77, med14=77, med30=77, p10_30=50, how="", how_weeks="")
+    assert item_text(sold).split(";")[0].endswith(",100,80,150") and item_text(rod).split(";")[0].endswith(",77,50,77")
+    assert item_text(replace(rod, med7=None, med14=None, med30=None)).split(";")[0].endswith(",7")     # no level
+    generated = 497_802 * HOUR                                                 # a Thursday 18:00 UTC (slot 90)
+    row = how_row(how, generated // HOUR)
+    assert row == "-s-s" + ".{" * 3 + "-s" * 19 and len(row) == 48          # 1000 = 10 × 92 + 80; 1100 = 11 × 92 + 88
+    assert how_row(rod.how, generated // HOUR) == "" and how_row("1000*168", generated // HOUR) == ""   # flat: no row
+    assert how_row("8500*168", 0) == "~~" * 24                                 # clamped to 8463 = 91 × 92 + 91
+    text = market_lua.market_lua([intel(sold, rod)], {M: {LINEN, OTHER}}, {}, generated)
+    assert f'H = {{ [{LINEN}] = "{row}" }}, K = K1' in text and f"H = {{ [{OTHER}]" not in text
+    assert "H = {  }, K = K1" in market_lua.market_lua([intel(sold, rod)], {M: set()}, {}, generated)   # tooltip-only
+    flat = market_lua.market_lua([intel(replace(sold, how="", how_weeks=""), rod)], {M: {LINEN, OTHER}}, {}, generated)
+    assert "H = {  }, K = K1" in flat                                             # H is outside the checksum, as S
+    assert re.search(r'checksum = "(\d+):(\d+)"', text).groups() == re.search(r'checksum = "(\d+):(\d+)"', flat).groups()
+    assert "exportVersion = 9," in text

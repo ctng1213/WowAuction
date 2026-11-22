@@ -245,11 +245,21 @@ def test_PL5_a_window_beats_posting_now_only_by_its_required_uplift():
             assert best[1] >= now[0], (SEED_PL5, n)      # posting now never loses to a window worth less
 
 
-@pytest.mark.parametrize("s", [s for s in SHARED if s["call"] == "slot_price"], ids=lambda s: s["name"])
-def test_TT7_the_trend_moves_a_forecast_at_most_15_percent_in_total(s):
+def shared_slot_price(s: dict) -> int:
+    """A shared slot-price scenario's call."""
     a = s["args"]
-    assert plan.slot_price(a["level"], a["how_best"], a["trend7"], a["days_ahead"], a["max_trend_total"],
-                           a.get("p10"), a.get("med7"), a.get("p90"), a.get("closes")) == s["expect"], s["why"]
+    return plan.slot_price(a["level"], a["how_best"], a["trend7"], a["days_ahead"], a["max_trend_total"],
+                           a.get("low"), a.get("high"))
+
+
+@pytest.mark.parametrize("s", [s for s in SHARED if s["id"] == "TT7"], ids=lambda s: s["name"])
+def test_TT7_the_trend_moves_a_forecast_at_most_15_percent_in_total(s):
+    assert shared_slot_price(s) == s["expect"], s["why"]
+
+
+@pytest.mark.parametrize("s", [s for s in SHARED if s["id"] == "TT51"], ids=lambda s: s["name"])
+def test_TT51_a_window_forecast_from_the_level_stays_within_its_bounds(s):
+    assert shared_slot_price(s) == s["expect"], s["why"]
 
 
 def test_TT6_price_at_best_time_includes_the_clamped_trend():

@@ -52,6 +52,22 @@ describe("Market", function()
     assert_eq(Boot(nil).DataMs(), nil)
   end)
 
+  it("EX25 an item carries its level and bounds, and a shortlisted item's H row gives how for this hour", function()
+    local Market = Boot(EX2)
+    local linen = Market.Item(2589)
+    assert_eq({ linen.level, linen.low, linen.high }, { 49, 40, 49 })          -- the ask level of its 49c medians
+    local generatedAt = 497802 * 3600000                                         -- a Thursday 18:00 UTC
+    local row = "-s-s" .. string.rep(".{", 3) .. string.rep("-s", 19)            -- 1.0 at 18 and 19, 1.1 at 20-22
+    local item = { howRow = row, generatedAt = generatedAt }
+    assert_eq({ Market.HowAt(item, generatedAt), Market.HowAt(item, generatedAt + 2 * 3600000 + 1),
+                Market.HowAt(item, generatedAt + 5 * 3600000), Market.HowAt(item, generatedAt + 24 * 3600000),
+                Market.HowAt(item, generatedAt - 1), Market.HowAt({ generatedAt = generatedAt }, generatedAt),
+                Market.HowAt(item, nil) }, { 1, 1.1, 1, 1, 1, 1, 1 })
+    assert_eq(Market.HowAt({ howRow = "~~", generatedAt = 0 }, 0), 8.463)      -- the packing's largest value
+    assert_eq(Market.HowAt({ howRow = " s", generatedAt = 0 }, 0), 1)          -- a byte outside "#".."~": as no row
+    assert_eq(linen.howRow, nil)                                                 -- EX2's Linen is not shortlisted
+  end)
+
   it("EX20 an item's last field is its 14-day median; a file written before it has none", function()
     local Market = Boot(EX2)
     local fields = "45,20,60,49,49,40,60,4,480,0,93,86,72,42,20,42,0,900,70,0,24"
@@ -118,7 +134,7 @@ describe("Market", function()
   end)
 
   it("FM35 a file from a newer AHSync says to deploy the addon", function()
-    local Market = Boot(EX2, function(file) file.exportVersion = 9 end)
+    local Market = Boot(EX2, function(file) file.exportVersion = 10 end)
     assert_eq({ Market.Problem(), Market.Item(2589) }, { "This addon is older than AHSync's files: run tools/deploy.py, then /reload", nil })
   end)
 

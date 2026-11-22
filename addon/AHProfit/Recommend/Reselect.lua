@@ -111,7 +111,8 @@ local function RepriceSale(rc, levels, sale)
     for _, level in ipairs(levels) do if level.price > last then others[#others + 1] = level end end
   end
   local cheapest = others[1] and others[1].price
-  local price = Prices.RelistPrice(cheapest, item.med7, item.p90, item.closes30)
+  local price = Prices.RelistPrice(cheapest, item.level, AHProfit.Market.HowAt(item, sale.nowMs), item.low, item.high,
+                                   item.closes30)
   if not price then return end
   local p = item.chance
   if sale.curve then
