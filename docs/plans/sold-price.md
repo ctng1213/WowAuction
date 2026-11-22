@@ -164,7 +164,7 @@ Sketched now so SP1 records what it needs; specified at its own spec merge once 
 | Buy windows' `sell_net`, a later buy's expected price, flips' sale price and the exported flip offers | unchanged formulas, fed the level and the bounds |
 | Sell value, hence disenchant, craft product and holdings values | follow the post price; no rule of their own |
 
-The addon reprices after a scan, so it needs the pattern of the current hour: the market file gains the level, the two bounds and the 168-slot pattern per item (packed as `supply_how` is), and `EXPORT_VERSION` rises. `/ahp perf` checks the addon's memory.
+The addon reprices after a scan, so it needs the pattern of the current hour: the market file gains the level, the two bounds and the item's pattern for the 24 hours from the file's `generatedAt` (the user, 2026-11-21: a session is at most about 14 hours; packed as `supply_how` is, left out when flat), and `EXPORT_VERSION` rises. Past those hours the addon uses 1.0 until a reload brings a newer file. `/ahp perf` checks the addon's memory.
 
 **The sell chance.** In the queue simulation (SPEC §3.3.2) the hourly demand is multiplied by a price acceptance `a(p)`: 1 at or under the level; above it, the share of the sold curve's units at or above `p` ÷ 0.5, read by linear interpolation between the curve's points, 0 at its 100th and above. The curve is scaled by the hour's pattern as the level is. An item without a curve keeps `a = 1`: its recommended prices never exceed its level. **Simulated before it is built** (SM21).
 
