@@ -13,6 +13,7 @@ from ahsync.clock import DAY_MS, HOUR_MS
 from ahsync.db.sqlite import Database
 
 BOOK_RETENTION_DAYS = 30
+SOLD_HOURS_DAYS = 30          # sold prices by hour: the price level reads 30 days (SPEC §3.3, BZ68)
 LEDGER_DAYS = 2               # the lifetimes' per-gap ledger: the open day and a late snapshot's replay (SPEC §2.4)
 MS_TABLES = ("candles_h1", "candles_d1", "sales_h1", "posts", "purchases", "crafts", "disenchants", "auction_mail", "payouts",
              "untracked", "mail_sent",
@@ -56,6 +57,7 @@ def prune(db: Database, now_ms: int, retention_days: int = 90, book_days: int = 
     deleted["lifetimes_d1"] = db.delete_before("lifetimes_d1", cutoff_ms // DAY_MS)
     deleted["new_listings_d1"] = db.delete_before("new_listings_d1", cutoff_ms // DAY_MS)
     deleted["sold_prices_d1"] = db.delete_before("sold_prices_d1", cutoff_ms // DAY_MS)       # BZ52
+    deleted["sold_prices_h1"] = db.delete_before("sold_prices_h1", now_ms - SOLD_HOURS_DAYS * DAY_MS)   # BZ68
     for table in ("gap_flows", "gap_seen"):                # only Ingest writes them; 2 days cover every re-fold
         deleted[table] = db.delete_before(table, now_ms - LEDGER_DAYS * DAY_MS)
     deleted["fetch_failures"] = db.delete_before("fetch_failures", cutoff_ms // HOUR_MS)

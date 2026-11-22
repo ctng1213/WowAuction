@@ -111,6 +111,26 @@ class HistoryWrites:
             [(market, key, day, src, ",".join(f"{price}:{units:.3f}" for price, units in sorted(by_price.items())))
              for key, by_price in sorted(rows.items()) if by_price])
 
+    def replace_sold_prices_hours(self, market: str, day: int, src: str,
+                                  rows: dict[int, dict[int, dict[int, tuple[float, float]]]]) -> None:
+        """Write one day's sold prices by hour for one source whole (idempotent; SPEC §2.4, BZ68).
+
+        Args:
+            market: Market id.
+            day: Day number: every hour of it is replaced, so an hour no gap credits any more is emptied.
+            src: The id source, e.g. "blizzard".
+            rows: hour start ms -> key -> unit price copper -> (units, clean units), written to 3 decimals,
+                `"price:units:clean,..."` by price.
+        """
+        first = day * 86_400_000
+        self.conn.execute("DELETE FROM sold_prices_h1 WHERE market = ? AND src = ? AND hour BETWEEN ? AND ?",
+                          (market, src, first, first + 86_400_000 - 1))
+        self.conn.executemany(
+            "INSERT INTO sold_prices_h1(market, key, hour, src, prices) VALUES (?, ?, ?, ?, ?)",
+            [(market, key, hour, src, ",".join(f"{price}:{units:.3f}:{clean:.3f}"
+                                              for price, (units, clean) in sorted(by_price.items())))
+             for hour, by_key in sorted(rows.items()) for key, by_price in sorted(by_key.items()) if by_price])
+
     def stale_volume_days(self, market: str, src: str, method: int) -> list[int]:
         """Days whose rows of an estimated source come from an older method (V24).
 

@@ -107,6 +107,7 @@ class Config:
     session_gap_minutes: int = 15               # minutes without loot that end a farming session, 1-120
     timing_edge_min_strength: int = 40          # Gathering shows a sell window from this seasonality strength, 0-100
     launch_wow_after_catchup: bool = False
+    level_divides_by_pattern: bool = False      # the price level divides sold prices by their hour's how (SPEC §3.3; off until SM23 says otherwise)
     ahledger_backfill: bool = True              # fill missing hours from AHledger's per-item history (SPEC §2.3, M21; SRC10, SRC15)
     update_check: bool = True                   # ask GitHub Releases for a newer AHSync once a day (SPEC §3.7.8)
     auto_update: bool = True                    # download, verify and install it; false: only say it is out (§3.7.9)
@@ -129,6 +130,7 @@ _TYPES: dict[str, tuple[tuple[type, ...], str]] = {
     "week_start": ((str,), "one of Mon, Tue, Wed, Thu, Fri, Sat, Sun"),
     "launch_wow_after_catchup": ((bool,), "true or false"),
     "ahledger_backfill": ((bool,), "true or false"),
+    "level_divides_by_pattern": ((bool,), "true or false"),
     "update_check": ((bool,), "true or false"),
     "mcp_enabled": ((bool,), "true or false"),
     "auto_update": ((bool,), "true or false"),
@@ -590,7 +592,8 @@ def market_settings(config: Config) -> MarketSettings:
                           config.default_sell_prob_cheapest,
                           VolumePrior(config.volume_prior_per_day, config.volume_prior_hours),
                           config.max_supply_share, config.max_supply_share_gear, config.min_gear_units,
-                          config.max_trend_total, config.top_buy_windows, config.top_sell_windows)
+                          config.max_trend_total, config.top_buy_windows, config.top_sell_windows,
+                          level_divides_by_pattern=config.level_divides_by_pattern)
 
 
 

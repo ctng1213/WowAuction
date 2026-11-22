@@ -1,7 +1,7 @@
 """The database's schema version and the steps that bring an older database up to it (SPEC §3.2 "Format version")."""
 from __future__ import annotations
 
-SCHEMA_VERSION = 33
+SCHEMA_VERSION = 34
 # version -> SQL that upgrades version-1 to version. A new database gets schema.sql, which is always the
 # latest version; a change to schema.sql adds a step here and bumps SCHEMA_VERSION (test_sqlite checks
 # that a migrated database has exactly schema.sql's tables and indexes).
@@ -319,5 +319,14 @@ MIGRATIONS: dict[int, str] = {
             char_id TEXT NOT NULL, spell_id INTEGER NOT NULL, ready_at_ms INTEGER NOT NULL,
             source TEXT NOT NULL, observed_ms INTEGER NOT NULL,
             PRIMARY KEY(char_id, spell_id))
+    """,
+    # 34: sold prices by hour with their clean units, for the price level (SPEC §2.4, §3.3; BZ68), and the ledger's
+    # clean units per gap. Old ledger rows have none (NULL: no clean units) until a rebuild from raw replays them.
+    34: """
+        CREATE TABLE IF NOT EXISTS sold_prices_h1(
+            market TEXT NOT NULL, key INTEGER NOT NULL, hour INTEGER NOT NULL, src TEXT NOT NULL, prices TEXT NOT NULL,
+            PRIMARY KEY(market, key, hour, src)
+        ) WITHOUT ROWID;
+        ALTER TABLE gap_flows ADD COLUMN clean TEXT
     """,
 }

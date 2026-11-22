@@ -147,7 +147,7 @@ flowchart LR
   Step -->|the next state| State
   Step -->|GapRecord| Ledger[(history.db: gap_flows, gap_seen<br/>kept 2 days)]
   Ledger --> Fold[collect/observations: the fold<br/>the open day + the last 7 hours]
-  Fold --> Rows[(volume_d1 + cover, lifetimes_d1,<br/>new_listings_d1, sold_prices_d1, sales_h1,<br/>sold_prices_h1 planned SP2b)]
+  Fold --> Rows[(volume_d1 + cover, lifetimes_d1,<br/>new_listings_d1, sold_prices_d1, sales_h1,<br/>sold_prices_h1)]
   Rows --> Analysis[the 09:00 analysis, unchanged]
   Compact[(state/snapshots/: compact, 5 days)] -.replay only: a late snapshot,<br/>the cutover, a damaged state.-> Step
 ```
@@ -200,7 +200,7 @@ sequenceDiagram
 
 | Family | Tables | Written by | Read by |
 |---|---|---|---|
-| Market history | `candles_h1`, `candles_d1`, `current`, `scans`, `book_entries`, `volume_d1`, `volume_cover`, `sales_h1`, `lifetimes_d1`, `new_listings_d1`, `sold_prices_d1` (built SP1a: the price each sold auction left at), Ingest's own `lifetime_state`, `open_auctions`, `leave_tallies`, `gap_flows`, `gap_seen` (the carried lifetimes and their 2-day ledger, schema 31; never read by the analysis), `observed_hours`, `ahledger_rows`, `source_state`, `sync_state`, `fetch_failures` | `collect/` | `history/reads.py` |
+| Market history | `candles_h1`, `candles_d1`, `current`, `scans`, `book_entries`, `volume_d1`, `volume_cover`, `sales_h1`, `lifetimes_d1`, `new_listings_d1`, `sold_prices_d1` (built SP1a: the price each sold auction left at), `sold_prices_h1` (built SP2b: the same by hour, with the units that cannot have expired apart, 30 days), Ingest's own `lifetime_state`, `open_auctions`, `leave_tallies`, `gap_flows`, `gap_seen` (the carried lifetimes and their 2-day ledger, schema 31; never read by the analysis), `observed_hours`, `ahledger_rows`, `source_state`, `sync_state`, `fetch_failures` | `collect/` | `history/reads.py` |
 | Items | `items` | `collect/` | everywhere, via the catalog |
 | Intelligence | `intel` (+ `_new` staging; a cloud document's body is its gzip as downloaded, SM1; a local one's gzipped, SM2c) | `analysis/` via `intel/store.py`, `collect/cloud_intel.py` | `recommend/`, `export/`, `web/` (one parsed record per process, `IntelCache`) |
 | Player state | inventory, journal (`purchases`, `posts`, `auction_mail`, `payouts`, `crafts`, `disenchants`, `mail_sent`), `professions`, `recipes`, `known_recipes`, `recipe_cooldowns` (built CD2), `characters`, `cost_basis`, `gather_events`, `farming_sessions`, `manual_rates`, `positions`, `position_lots` | `state/` | `recommend/`, `app/` |
@@ -402,3 +402,4 @@ Nothing is rebuilt at promotion: friends get exactly the files the user tested. 
 - 2026-11-21: the sold-price review (`docs/plans/sold-price.md` §1d): SM20 (`tools/sim/price_rules.py`) paper-trades the candidate price levels; test tooling only, no component, flow or contract changes. SP2's single price level is drawn at its spec merge.
 - 2026-11-22: SP2s (plan §1d items 28 and 29): the simulator's sellers refitted, the pattern world (`tools/sim/pattern_world.py`), SM20's falling regime and real-shaped commodity; test tooling only.
 - 2026-11-21: SP2 spec merge (`docs/plans/sold-price.md` §3, SPEC §3.3): planned `sold_prices_h1` in the market history (the sold prices per hour, 30 days), summary schema 17's `level`, `level_source`, `level_units` and `sold_curve`, the market file's level, bounds and the next 24 hours of each item's pattern (a new `EXPORT_VERSION`), and `how` rebuilt against each hour's own week. The plan, the windows, the post price and the sell chance read the level in place of the ask medians; no component is added.
+- 2026-11-22: SP2b built: `sold_prices_h1` (migration 34, from the ledger's new clean units), the rebuilt pattern (`engine/profile.centred_ratios`, W17) and summary schema 17's price level (`engine/lifetime_prices.price_level`); published, read by nothing until SP2c.

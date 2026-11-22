@@ -547,6 +547,8 @@ class MarketSettings:
     max_trend_total: float = 0.15           # the most the trend may move a window's forecast (TT7)
     top_buy_windows: int = 3                # buying windows kept per item, by actionable value (W14)
     top_sell_windows: int = 3               # selling windows kept per item (W15)
+    level_divides_by_pattern: bool = False  # the price level divides each sold price by its hour's how (SPEC §3.3;
+                                            # off until SM23, re-run once raids open, says otherwise)
 
     def to_dict(self) -> dict[str, object]:
         """The settings as a cloud document carries them (SPEC §2.4 `settings`).
@@ -561,14 +563,15 @@ class MarketSettings:
         """Settings from a cloud document's `settings`; the defaults when empty (a desktop-built document).
 
         Args:
-            values: From to_dict.
+            values: From to_dict; a key this version does not know (a newer AHSync's) is left out.
 
         Returns:
             The settings.
         """
         if not values:
             return cls()
-        fields: dict = dict(values)
+        known = {f.name for f in dataclasses.fields(cls)}
+        fields: dict = {name: value for name, value in values.items() if name in known}   # a newer key is skipped
         if isinstance(fields.get("volume_prior"), dict):
             fields["volume_prior"] = VolumePrior(**fields["volume_prior"])
         return cls(**fields)

@@ -19,7 +19,7 @@ from ahsync.collect.local_scans import (HOUR_MS, book_days, recompute_book_volum
 from ahsync.collect.provider import SnapshotObservation, snapshot_problems
 from ahsync.collect.snapshots import SnapshotStore
 from ahsync.db.sqlite import BookScan, Database
-from ahsync.engine.lifetime_prices import new_listing_positions, sold_prices
+from ahsync.engine.lifetime_prices import clean_sold_prices, new_listing_positions, sold_prices
 from ahsync.engine.lifetimes import (LIFETIME_LOOKBACK_MS, GapRecord, Lifetimes, LifeState, gap_flows, gap_hours,
                                      sold_by_hour, step)
 from ahsync.engine.volume import ID_METHOD_VERSION, SALES_PAIR_MAX_GAP_MS, IdBook, covered_seconds, group_book
@@ -249,7 +249,8 @@ def _replay(db: Database, store: SnapshotStore, where: tuple[str, str], span: tu
 
 
 def summary(record: GapRecord) -> GapSummary:
-    """A gap's record as its ledger entry: flows per item, new listings by position, sold units by price (§2.4).
+    """A gap's record as its ledger entry: flows per item, new listings by position, sold units by price and the
+    clean ones (§2.4).
 
     Args:
         record: From `engine.lifetimes.step`.
@@ -260,7 +261,8 @@ def summary(record: GapRecord) -> GapSummary:
     gap = record.gap
     lt = Lifetimes((gap,), {gap: record.seen}, record.endings, record.fills, record.listed, record.clashes,
                    record.commodities, record.first_seen, (record,))
-    return GapSummary(gap, gap_flows(record), new_listing_positions(lt).get(gap, {}), sold_prices(lt).get(gap, {}))
+    return GapSummary(gap, gap_flows(record), new_listing_positions(lt).get(gap, {}), sold_prices(lt).get(gap, {}),
+                      clean_sold_prices(lt).get(gap, {}))
 
 
 def recent_hours(at_ms: int) -> set[int]:
@@ -277,7 +279,8 @@ def recent_hours(at_ms: int) -> set[int]:
 
 
 def fold_day(db: Database, market: str, src: str, day: int) -> set[int]:
-    """One day's id volume, ended listings, new-listing positions and sold prices, folded from the ledger (§2.4).
+    """One day's id volume, ended listings, new-listing positions and sold prices (by day and by hour), folded from
+    the ledger (§2.4).
 
     The day's gaps (those ending in it; each counts for the day of its later snapshot, its cover too) summed in
     gap order from zero, the same arithmetic as the pass the ledger replaced. Its rows are replaced whole.
@@ -314,7 +317,28 @@ def fold_day(db: Database, market: str, src: str, day: int) -> set[int]:
     db.replace_lifetimes_day(market, day, src, {k: tuple(v) for k, v in sorted(ended.items())})
     db.replace_new_listings_day(market, day, src, merge_positions(g.positions for g in gaps))
     db.replace_sold_prices_day(market, day, src, merge_positions(g.prices for g in gaps))   # BZ52
+    db.replace_sold_prices_hours(market, day, src, sold_hours(gaps))                         # BZ68
     return set(volume)
+
+
+def sold_hours(gaps: Iterable[GapSummary]) -> dict[int, dict[int, dict[int, tuple[float, float]]]]:
+    """Gaps' sold prices by the clock hour of their later snapshot, with the clean units (SPEC §2.4, BZ68).
+
+    Args:
+        gaps: Ledger gaps, in gap order.
+
+    Returns:
+        hour start ms -> key -> unit price copper -> (units, clean units), summed in gap order.
+    """
+    out: dict[int, dict[int, dict[int, tuple[float, float]]]] = {}
+    for g in gaps:
+        by_key = out.setdefault(g.gap[1] // HOUR_MS * HOUR_MS, {})
+        for key, by_price in g.prices.items():
+            mine, clean = by_key.setdefault(key, {}), g.clean.get(key, {})
+            for price, units in by_price.items():
+                had, had_clean = mine.get(price, (0.0, 0.0))
+                mine[price] = (had + units, had_clean + clean.get(price, 0.0))
+    return out
 
 
 def fold_hours(db: Database, market: str, src: str, hours: set[int]) -> set[int]:

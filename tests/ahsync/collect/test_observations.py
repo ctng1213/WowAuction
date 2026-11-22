@@ -7,7 +7,9 @@ import random
 
 import pytest
 
-from ahsync.collect.observations import bootstrap_window, ingest_snapshot
+from ahsync.collect.observations import bootstrap_window, fold_day, ingest_snapshot
+from ahsync.engine.lifetimes import LifeFlow
+from ahsync.history.lifetime_store import GapSummary
 from ahsync.collect.provider import SnapshotObservation
 from ahsync.collect.snapshots import SnapshotStore
 from ahsync.db.sqlite import Database
@@ -70,6 +72,26 @@ def test_BZ52_a_day_stores_what_sold_by_price_and_a_rerun_writes_the_same_row(db
     with db.transaction():
         db.replace_sold_prices_day(M, D, "blizzard", {LINEN: {200: 3.0, 48: 5.0, 50: 10.0}, ORE: {}})
     assert rows() == [(LINEN, "blizzard", "48:5.000,50:10.000,200:3.000")]       # by price; an empty item is no row
+
+
+def test_BZ68_a_day_stores_its_sold_prices_by_hour_with_the_clean_units_apart(db):
+    at = lambda h, m: D * DAY + h * HOUR + m * 60_000
+    def gap(start, end, prices, clean):
+        """A ledger gap of Linen alone."""
+        return GapSummary((start, end), {LINEN: LifeFlow()}, {}, {LINEN: prices}, {LINEN: clean})
+    with db.transaction():
+        db.write_gaps(M, "blizzard", [gap(at(13, 20), at(14, 20), {48: 5.0}, {48: 5.0}),
+                                      gap(at(14, 20), at(14, 50), {48: 2.0, 50: 3.0}, {48: 2.0, 50: 3.0}),
+                                      gap(at(14, 50), at(15, 20), {50: 4.0}, {50: 2.5})])   # 1.5 in an expiry gap
+        fold_day(db, M, "blizzard", D)
+    assert db.conn.execute("SELECT hour, key, prices FROM sold_prices_h1 ORDER BY hour").fetchall() == [
+        (at(14, 0), LINEN, "48:7.000:7.000,50:3.000:3.000"), (at(15, 0), LINEN, "50:4.000:2.500")]
+    assert db.conn.execute("SELECT prices FROM sold_prices_d1").fetchall() == [("48:7.000,50:7.000",)]   # unchanged
+    assert db.read_gaps(M, "blizzard", at(15, 20), at(15, 20))[0].clean == {LINEN: {50: 2.5}}       # the ledger keeps them
+    with db.transaction():
+        db.write_gaps(M, "blizzard", [gap(at(14, 50), at(15, 20), {}, {})])     # a replay that finds nothing sold
+        fold_day(db, M, "blizzard", D)
+    assert [h for h, in db.conn.execute("SELECT hour FROM sold_prices_h1")] == [at(14, 0)]     # its hour is emptied
 
 
 def test_BZ52_snapshots_with_a_sale_a_partial_buy_and_a_cancel_store_only_what_sold(db, tmp_path):

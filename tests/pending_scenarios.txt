@@ -91,6 +91,5 @@ CS12
 CD28
 
 # Sold-price fix SP2: the price level (SPEC §3.3; docs/plans/sold-price.md §3 "SP2 as approved")
-BZ68 BZ69 BZ70 BZ71
-W17 PP5 TT51 R35 P28
+PP5 TT51 R35 P28
 SM21 SM22 SM23 SM24
