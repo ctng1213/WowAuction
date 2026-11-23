@@ -100,6 +100,8 @@ class SellFacts:
                                                    # an auction's units, so a flip buys lots, not whole auctions (R30)
     own_listed: tuple[tuple[int, int | None], ...] = ()   # your auctions listed now: (units, end ms or None if
                                                    # unknown); they fill the caps of the windows they overlap (R31)
+    sold_curve: tuple[int, ...] | None = None      # the level's sold curve (SPEC §3.3 Bounds): a post priced above
+                                                   # the hour's level reads the price acceptance (§3.3.2, P28)
 
 
 @dataclass(frozen=True)
@@ -308,8 +310,9 @@ def post_chance(f: SellFacts, price: int, qty: int, hours: Sequence[int], own_ah
         s: Settings.
 
     Returns:
-        P' in [0, 1]: the simulation (when sales are unknown, the default chance for the post's position,
-        sellprob.default_chance, P25) blended with your own record when there is one (SPEC §3.3.3, O1, O2).
+        P' in [0, 1]: the simulation, its demand cut by the price acceptance above the hour's level (P28; when
+        sales are unknown, the default chance for the post's position, sellprob.default_chance, P25) blended with
+        your own record when there is one (SPEC §3.3.3, O1, O2).
     """
     if f.sold_per_day is None:
         p = sellprob.default_chance(price, sellprob.cheapest_other(f.book, f.cur), s.default_sell_prob,
@@ -320,8 +323,8 @@ def post_chance(f: SellFacts, price: int, qty: int, hours: Sequence[int], own_ah
     if own_ahead:
         ahead = ahead + (sellprob.Competitor(price, own_ahead, 0),)
     u = s.default_undercut_share if f.undercut_share is None else f.undercut_share
-    queue = sellprob.QueueInputs(f.sold_per_day, f.listed_per_day or 0.0, u,
-                                 sellprob.demand_for(hours, f.sales_how), qty, ahead)
+    demand = sellprob.accepted_demand(hours, f.sales_how, price, sellprob.Acceptance(f.level, f.sold_curve, f.how))
+    queue = sellprob.QueueInputs(f.sold_per_day, f.listed_per_day or 0.0, u, demand, qty, ahead)
     return _with_record(f, sellprob.simulate(queue), s)
 
 

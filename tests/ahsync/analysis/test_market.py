@@ -495,3 +495,55 @@ def test_BZ49_unseen_per_day_is_sold_per_days_unseen_share_over_the_week_of_the_
     assert unseen_per_day(item, week, DailyVolume(98.0, 10.0, 50.0, {"books": 7}, 0.6, "books", "groups")) is None
     assert unseen_per_day(SimpleNamespace(volume=item.volume, unseen={}), week, ids) is None   # nothing estimated
     assert unseen_per_day(item, week, DailyVolume(None, None, None)) is None
+
+
+def test_P28_the_now_fields_and_the_window_chances_read_the_price_acceptance():
+    from dataclasses import replace
+
+    from ahsync.intel.contract import IntelWindow
+    curve = (60, 80, 90, 100, 120, 150, 200)
+    cheap = tuple([0.7] * 168)                                   # every hour's level is 70 c; the scaled curve 42..140 c
+    plain = market.NowBase(100, 80, 150, 0.7, 0.75, 0.0, tuple([1.0] * 168), 8, None, None, cheap)   # 0.25 units in 8 h
+    sold = replace(plain, sold_curve=curve)
+    quote = market.Quote(None, None, None)                       # nothing listed: the post price is the ceiling
+    settings = MarketSettings(default_undercut_share=0.0)
+    price, ref, chance, _, _ = market.now_fields(quote, sold, NOW, settings)
+    # PP5's low-bound edge: the 70 c forecast is raised to the low bound, 80 c, above the hour's level, where the
+    # scaled curve (70 c its 50th, 84 c its 75th) puts 32.14% of the units at or above it: a = 0.3214 / 0.5.
+    assert (price, ref) == (80, 1)
+    assert chance == pytest.approx(market.now_fields(quote, plain, NOW, settings)[2] * (1 - 0.678571) / 0.5, rel=1e-5)
+    window = IntelWindow(0, 4, 2, 1.0, 6, expected_price=105)         # a 24 h post at 105 c, the scaled curve's 90th: a = 0.2
+    with_curve = market.sell_window_chances((window,), quote, sold, NOW, settings)[0].chance24
+    without = market.sell_window_chances((window,), quote, plain, NOW, settings)[0].chance24
+    assert with_curve == pytest.approx(without * 0.2)
+    assert market.sell_chance_now(market.Quote(60, 1, ((60, 1, 4, 1),)), sold, NOW, settings) ==         market.sell_chance_now(market.Quote(60, 1, ((60, 1, 4, 1),)), plain, NOW, settings)     # cur under the level
+
+
+def test_P28_now_base_carries_the_documents_curve_and_pattern_and_the_exported_curve_is_built_at_the_post_price():
+    from dataclasses import replace
+
+    from ahsync.engine import profile
+    from ahsync.engine.sellprob import Acceptance
+    from ahsync.intel.contract import ItemIntel
+    how = profile.pack(profile.Profile(tuple([1.0] * 167 + [1.5]), tuple([6] * 168), tuple([True] * 168)))[0]
+    curve = (60, 80, 90, 100, 120, 150, 200)
+    i = ItemIntel(2840, 100, 5, HOUR, 100, 100, 80, 120, 0.0, 10.0, 0.0, 10.0, "books", {"books": 7}, 100, 1, 0.5,
+                  False, 100.0, 60, 5, None, (), how=how, how_weeks="6*168", level=100, level_source="sold",
+                  level_units=30.0, sold_curve=curve)
+    base = market.now_base(i, NOW, 8)
+    assert (base.level, base.low, base.high, base.sold_curve) == (100, 80, 150, curve)
+    assert base.how_values == profile.unpack_values(how) and base.acceptance() == Acceptance(100, curve, base.how_values)
+    older = market.now_base(replace(i, how="", level=None, level_source=None, sold_curve=None), NOW, 8)
+    assert (older.sold_curve, older.how_values, older.acceptance()) == (None, sellprob.FLAT_HOW, Acceptance(100, None, sellprob.FLAT_HOW))
+    # The exported curve (weekly_fields) is built at the post price with the acceptance: a post at 150 c reads
+    # a = 0.2 in every row where the hour's level is 100 c, so its rows sit under the plain curve's.
+    item = next(it for it in SevenWeeks().market_history(M, HistoryWindow(0, W_NOW, 0, 0)) if it.key == 2840)
+    sales = market.sales_fields(item, W_NOW, MarketSettings())
+    pattern = profile.price_profile(item.hourly_closes, 100, W_NOW, 2)
+    plain = market.NowBase(100, 80, 150, 1.0, 10.0, 10.0, sales[0].values, 8, None, None, sellprob.FLAT_HOW)
+    priced, _ = market.weekly_fields(item, 100, replace(plain, sold_curve=curve), 150, 1, W_NOW, MarketSettings(), sales, pattern)
+    at_level, _ = market.weekly_fields(item, 100, plain, 150, 1, W_NOW, MarketSettings(), sales, pattern)
+    rows, plain_rows = sellprob.decode_curve(priced["curve"], 8), sellprob.decode_curve(at_level["curve"], 8)
+    assert rows != plain_rows and all(a <= b for r, s in zip(rows, plain_rows) for a, b in zip(r, s))
+    assert priced["curve"] == sellprob.encode_curve(sellprob.build_curve(10.0, 10.0, 0.5, sales[0].values, W_NOW, 1, price=150,
+                                                                         acc=Acceptance(100, curve, sellprob.FLAT_HOW)))

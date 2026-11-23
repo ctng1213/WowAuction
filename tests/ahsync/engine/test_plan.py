@@ -274,3 +274,15 @@ def test_P25_without_volume_the_chance_follows_where_the_post_would_stand():
     assert plan.post_chance(unknown, 55, 20, hours, 0, S) == 0.25             # 45c is cheaper
     struggling = replace(unknown, record=Record(0, 2, 2, 2, False, False))
     assert plan.post_chance(struggling, 44, 20, hours, 0, S) == pytest.approx((4 * 0.5 + 0) / (4 + 0 + 2))   # 0.333
+
+
+def test_P28_a_post_above_the_hours_level_reads_the_price_acceptance():
+    curve = (40, 45, 47, 49, 55, 65, 80)                       # the level 49 c is the curve's 50th
+    dear = tuple([1.12] * 168)                                   # every hour's level is 55 c
+    quiet = dict(book=(), undercut_share=0.0)                   # nothing ahead at any price, no undercutters
+    sold, plain = linen(sold_curve=curve, how=dear, **quiet), linen(how=dear, **quiet)
+    hours = sellprob.posting_now_window(at(SAT, 18))
+    assert plan.post_chance(sold, 55, 20, hours, 0, S) == plan.post_chance(plain, 55, 20, hours, 0, S)   # at the level
+    assert plan.post_chance(sold, 65, 20, hours, 0, S) < plan.post_chance(plain, 65, 20, hours, 0, S)    # above it
+    flat = tuple([1.0] * 168)                                    # the level 49 c: 55 c is the curve's 75th
+    assert plan.post_chance(linen(sold_curve=curve, how=flat, **quiet), 55, 20, hours, 0, S) ==         pytest.approx(plan.post_chance(linen(how=flat, **quiet), 55, 20, hours, 0, S) * 0.5)

@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field, fields, replace
 
-from ahsync.engine import lifetime_prices, profile
+from ahsync.engine import lifetime_prices, profile, sellprob
 from ahsync.engine.capacity import slot_of
 
 HOUR_MS = 3_600_000
@@ -236,6 +236,19 @@ def pattern_at(i: ItemIntel, at_ms: int) -> float:
     """
     values = profile.unpack_values(i.how)
     return 1.0 if values is None else values[slot_of(at_ms // HOUR_MS)]
+
+
+def price_acceptance(i: ItemIntel) -> sellprob.Acceptance:
+    """What the price acceptance reads of an item's document (SPEC §3.3.2, P28): its level, sold curve and pattern.
+
+    Args:
+        i: The item's intelligence.
+
+    Returns:
+        The Acceptance; without a level or a curve it accepts every price.
+    """
+    priced = published_level(i)
+    return sellprob.Acceptance(priced.level, priced.curve, profile.unpack_values(i.how))
 
 
 def supply_level(i: ItemIntel) -> int | None:
