@@ -50,7 +50,8 @@ def test_the_poster_reads_every_form_of_the_chance_and_P28_never_exceeds_todays(
     assert any(p.under for p in posts) and all(p.chances["P28"] == p.chances["today"] for p in posts if p.under)
     assert posts and {p.shape for p in posts} == set(SHAPES) and {p.step for p in posts} <= set(STEPS)
     for p in posts:
-        assert set(p.chances) == {"today", "P28", "spec", "today, nothing ahead", "P28, nothing ahead"}
+        assert set(p.chances) == {"today", "P28", "spec", "today, nothing ahead", "P28, nothing ahead", "P28, with unseen"}
+        assert p.chances["P28, with unseen"] >= p.chances["P28"] - 1e-12
         assert p.chances["P28"] <= p.chances["today"] + 1e-12
         assert p.chances["P28, nothing ahead"] <= p.chances["today, nothing ahead"] + 1e-12
         assert p.chances["P28"] <= p.chances["P28, nothing ahead"] + 1e-12          # competition only lowers it
@@ -74,6 +75,9 @@ def test_the_queue_chance_with_P28s_factor_is_the_built_posting_chance():
     book = [(90, 1, 4, 1), (110, 1, 3, 1)]
     now = START_MS + 10 * HOUR
     settings = MarketSettings()
+    assert chances(i, book, 95, 1, now, settings, unseen=100.0)["P28, with unseen"] == \
+        sellprob.posting_chance(sellprob.Supply(12.0, 0.0, tuple(book), 90, 1), 95, 1, now, settings, None, 0.0,
+                                sellprob.Acceptance(100, CURVE, None))[0]                    # S doubled at most
     for price in (95, 100, 120, 150, 250):
         read = chances(i, book, price, 1, now, settings)
         assert read["P28"] == queue_chance(i, book, price, 1, now, settings, lambda p, how: sellprob.acceptance(p, 100, CURVE, how))
@@ -90,6 +94,7 @@ def test_the_world_has_each_shape_with_the_planted_spread_and_the_live_book_read
     from sim.acceptance import live_book
     world, keys = acceptance_world(3, replicates=2, spread=0.15)
     assert len(world.items) == 2 * len(SHAPES) and all(i.buyer_spread == 0.15 for i in world.items)
+    assert sum(1 for i in world.items if i.item_class == 4) == 4 and sum(1 for i in world.items if i.commodity) == 2
     assert sorted({shape for shape, _ in keys.values()}) == sorted(SHAPES) and world.seed == 3
     market = Market(world)
     market.run_until(START_MS + HOUR_MS)
