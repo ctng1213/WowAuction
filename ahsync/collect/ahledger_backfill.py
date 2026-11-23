@@ -80,12 +80,14 @@ class AhledgerBackfill:
         run = self._run
         try:
             for _ in range(min(STEP_KEYS, len(run.keys))):
+                if self.client.stopping():            # AHSync is stopping: the next tick never comes (FM92)
+                    return True
                 key = run.keys[0]
                 run.pending.append((key, self._histories(run.address, key)))
                 run.keys.pop(0)
                 if len(run.pending) == CHUNK_KEYS or not run.keys:
                     self._commit(run)
-        except ApiError as error:                 # a Retry-After over 300 s, or AHledger unreachable (FM47)
+        except ApiError as error:                 # a Retry-After over 300 s, AHledger unreachable (FM47), a stop (FM92)
             log.info("AHledger backfill of %s paused at %d of %d items: %s", run.market, run.done, run.total, error)
             self._pause(run)
             return False

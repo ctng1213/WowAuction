@@ -85,6 +85,10 @@ class RateLimited(RetriesExhausted):
     """429 with a Retry-After longer than 300 s: skip this run instead of waiting (SPEC §5.2)."""
 
 
+class Stopped(ApiError):
+    """AHSync is stopping (Quit, Restart to update, the stop file): no further request or retry is sent (FM92)."""
+
+
 class Unauthorized(ApiError):
     """401 even without the key (or with no key to drop)."""
 
@@ -237,7 +241,8 @@ class ApiClient:
 
     def __init__(self, transport: Transport, clock: Clock, api_key: str = "",
                  api_base: str = "https://auctionhouse.fyi/api/v1", per_minute: int = 60,
-                 redactor: Redactor | None = None, paced: bool = False) -> None:
+                 redactor: Redactor | None = None, paced: bool = False,
+                 should_stop: Callable[[], bool] | None = None) -> None:
         """Create a client.
 
         Args:
@@ -249,7 +254,9 @@ class ApiClient:
             redactor: Shared secret registry; one is created if omitted.
             paced: Also space API requests evenly, 60 000 / per_minute ms apart (AHledger, SRC13), so a long run
                 never bursts.
+            should_stop: True once AHSync is stopping: no request or retry starts after that (FM92); None never.
         """
+        self._should_stop = should_stop or (lambda: False)
         self._transport = transport
         self._clock = clock
         self._api_key = api_key
@@ -261,6 +268,14 @@ class ApiClient:
         self._spacing_ms = 60_000 // per_minute if paced else 0
         self.key_rejected = False    # set when a 401 made us drop the key for the rest of the run (FM25)
         self.key_used = False        # set when a keyed request succeeded
+
+    def stopping(self) -> bool:
+        """Whether AHSync is stopping, so a long job should end at its next step (FM92).
+
+        Returns:
+            The should_stop callable's answer.
+        """
+        return self._should_stop()
 
     @property
     def has_key(self) -> bool:
@@ -400,6 +415,8 @@ class ApiClient:
         """
         shown = self.redactor.scrub(url)
         for attempt in range(MAX_RETRIES + 1):
+            if self._should_stop():                   # a slow request's retries never hold up a stop (FM92)
+                raise Stopped(f"stopping: {shown} not asked")
             response = self._send(url, auth, headers)
             if response is not None:
                 self._raise_for_final_status(response, shown, accept_304)

@@ -628,3 +628,19 @@ def test_MCP3_ahsync_starts_the_assistant_when_left_enabled_and_clears_a_stale_k
         assert not second.running and card.mcp_error.startswith(f"Port {port} is in use")
     finally:
         on.stop()
+
+
+def test_FM92_a_stopping_runtime_sends_no_ahledger_request(tmp_path):
+    world = AhfWorld(FakeClock())
+    config = tmp_path / "config.toml"
+    config.write_text(f'wow_path = "{(tmp_path / "wow").as_posix()}"\n', encoding="utf-8")
+    checks = {"n": 0}
+
+    def two_ticks() -> bool:
+        checks["n"] += 1
+        return checks["n"] > 2
+
+    code = run(tmp_path / "data", config, Runtime({}, tmp_path, world.transport, world.clock, two_ticks, io.StringIO(),
+                                                  serve_dashboard=False, stopping=lambda: True))
+    assert code == 0 and checks["n"] == 3                        # the scheduler's own checks are untouched
+    assert not [p for p in world.transport.paths() if "pricetable" in p or "v1/prices/" in p]   # AHledger never asked

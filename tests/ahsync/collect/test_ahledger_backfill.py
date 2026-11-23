@@ -49,7 +49,9 @@ class World:
         def send(request):
             self.times.append((self.clock.now_ms(), request.url))
             return self.transport(request)
-        self.client = ApiClient(send, self.clock, api_base="https://api.ahledger.com", per_minute=300, paced=True)
+        self.stopping = False
+        self.client = ApiClient(send, self.clock, api_base="https://api.ahledger.com", per_minute=300, paced=True,
+                                should_stop=lambda: self.stopping)
         self.source = AhledgerSource(self.client, self.db, self.clock)
         self.backfill = AhledgerBackfill(self.client, self.db, self.clock, self.source, lambda: enabled)
 
@@ -249,3 +251,40 @@ def test_SRC18_a_backfill_tick_before_the_first_table_does_not_skip_the_day(tmp_
     w.run()
     assert [u.rsplit("/", 1)[1] for _, u in w.prices_requests()] == [
         "1?range=7d", "1?range=90d", "2?range=7d", "2?range=90d", "3?range=7d", "3?range=90d"]
+
+
+def test_FM92_a_stop_ends_the_backfill_slice_and_the_clients_retries(tmp_path, close_dbs):
+    keys = list(range(1, 31))
+    w = World(tmp_path, keys)
+    close_dbs.append(w)
+    w.serve_empty(keys)
+    real = w.transport
+
+    def stop_at_third_key(request):
+        if f"/{M}/3?" in request.url:
+            w.stopping = True                       # Restart pressed while key 3 is asked for
+        return real(request)
+    w.transport = stop_at_third_key
+    w.restart()
+    w.stopping = False
+    assert w.backfill.step([(M, M)]) is False       # the slice ends early, as a pause
+    asked = [u.split("/")[-1] for _, u in w.prices_requests()]
+    assert asked == ["1?range=7d", "1?range=90d", "2?range=7d", "2?range=90d", "3?range=7d"]   # no key after the stop
+    # another time: key 1 times out and the stop comes between its retries: no further retry
+    (tmp_path / "b").mkdir()
+    w2 = World(tmp_path / "b", keys)
+    close_dbs.append(w2)
+    w2.serve_empty(keys)
+    w2.transport.fail(path(1, "7d"), 503, times=5)
+    sleeps = []
+    original = w2.clock.sleep
+
+    def sleep(seconds):
+        sleeps.append(seconds)
+        w2.stopping = True                          # the stop arrives during the first backoff
+        original(seconds)
+    w2.clock.sleep = sleep
+    w2.backfill.step([(M, M)])
+    assert [u for _, u in w2.prices_requests()].count(f"https://api.ahledger.com/{path(1, '7d')}") == 1   # no retry
+    assert len(sleeps) == 1 and len(w2.prices_requests()) == 1                   # and no further key
+    assert w2.db.source_state(M, "ahledger")[3] is None          # nothing committed yet: it starts over next time
