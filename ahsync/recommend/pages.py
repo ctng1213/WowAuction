@@ -16,7 +16,7 @@ from ahsync.engine.plan import PlanAction
 from ahsync.engine.planned_crafts import chain_lines, craft_chains
 from ahsync.engine.sellprob import Supply
 from ahsync.history.reads import ItemInfo, suffix_names_of
-from ahsync.intel.contract import ItemIntel, others_supply
+from ahsync.intel.contract import ItemIntel, others_supply, price_acceptance
 from ahsync.recommend.listings import listed_units
 from ahsync.state.reads import RecipeRow, StateReader
 
@@ -184,7 +184,7 @@ def _product_net(stats: ItemIntel | None, recipe: RecipeRow, items: dict[int, It
             else:
                 supply = Supply(stats.sold_per_day, stats.listed_per_day, stats.book or None, stats.cur, stats.cur_qty)
                 p, _ = sellprob.posting_chance(supply, stats.post_price, units, now_ms, market_settings(cfg),
-                                               sales_pattern(stats))
+                                               sales_pattern(stats), None, price_acceptance(stats))
                 duration = fees.shortest_duration_covering(cfg.sell_window_hours)
                 cache[n] = sellprob.expected_post(p, units, stats.post_price, float(vendor_sell),
                                                   fees.deposit_copper(vendor_sell, units, duration))

@@ -3,7 +3,8 @@
 `simulate` (the queue simulation) and `build_curve` run only in AHSync's full refresh.
 The rest is ported to addon/AHProfit/Engine/SellProb.lua and must stay identical:
 `tier_of`, `blend`, `with_record`, `expected_post`, `curve_row`, `from_curve`,
-`quantize`, `encode_curve`, `decode_curve`, `default_chance`.
+`quantize`, `encode_curve`, `decode_curve`, `default_chance`. The price acceptance (`acceptance`,
+`accepted_demand`, P28) is not ported: the addon never prices above its own ceiling (PP5).
 """
 from __future__ import annotations
 
@@ -13,7 +14,9 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from ahsync.engine.capacity import slot_of
 from ahsync.engine.fees import AH_CUT
+from ahsync.engine.lifetime_prices import CURVE_SHARES
 from ahsync.engine.volume import VolumePrior
 
 HOUR_MS = 3_600_000
@@ -305,14 +308,100 @@ def demand_for(hours: Sequence[int], sales_how: Sequence[float]) -> tuple[float,
     Returns:
         The ratio for each hour, in order.
     """
-    return tuple(sales_how[(h // 24 + 3) % 7 * 24 + h % 24] for h in hours)
+    return tuple(sales_how[slot_of(h)] for h in hours)
+
+
+# ---------------------------------------------------------------- price acceptance (SPEC §3.3.2, P28)
+
+@dataclass(frozen=True)
+class Acceptance:
+    """What the price acceptance reads of an item: its level, its sold curve and its hourly price pattern."""
+
+    level: int | None                          # the price level (SPEC §3.3), copper; None without one
+    curve: tuple[int, ...] | None              # the sold curve at lifetime_prices.CURVE_SHARES, copper; None without
+    how: Sequence[float] | None = None         # 168 price ratios, as the document stores them; None for flat
+
+
+def share_at_or_above(price: int, curve: Sequence[int]) -> float:
+    """The share of a sold curve's units priced at or above a price, read between its points (SPEC §3.3.2, P28).
+
+    The curve gives the lowest price whose cumulative units reach each of CURVE_SHARES; between two points the
+    cumulative share is read by linear interpolation. At a price several points share, the lowest share wins, so a
+    mass of units at one price counts as at or above it.
+
+    Args:
+        price: Copper.
+        curve: Copper at CURVE_SHARES, ascending.
+
+    Returns:
+        1 at or under the curve's 0th, 0 at and above its 100th, between them in between.
+    """
+    if price <= curve[0]:
+        return 1.0
+    if price >= curve[-1]:
+        return 0.0
+    k = next(i for i, c in enumerate(curve) if c >= price)        # curve[k - 1] < price <= curve[k]
+    lo, hi = curve[k - 1], curve[k]
+    below = CURVE_SHARES[k - 1] + (CURVE_SHARES[k] - CURVE_SHARES[k - 1]) * (price - lo) / (hi - lo)
+    return 1 - below / 100
+
+
+def acceptance(price: int, level: int | None, curve: Sequence[int] | None, how: float) -> float:
+    """a(p): the share of an hour's buyers who would pay a price (SPEC §3.3.2 Price acceptance, P28).
+
+    1 at or under the hour's level; above it, the share of the sold curve's units at or above the price ÷ the
+    share at or above the hour's level, never more than 1 (the user, 2026-11-22: the continuous form), and 0 from
+    the curve's 100th. The level and the curve are scaled by the hour's pattern as a forecast is (prices.forecast:
+    half up to copper). An item without a level or a curve accepts every price: its recommended prices never
+    exceed its level.
+
+    Args:
+        price: The post's unit price, copper.
+        level: The price level, copper; None without one.
+        curve: The sold curve at CURVE_SHARES, copper; None without one.
+        how: The hour's price ratio (1.0 without a pattern).
+
+    Returns:
+        a in [0, 1].
+    """
+    if level is None or curve is None:
+        return 1.0
+    hour_level = math.floor(level * how + 0.5)
+    if price <= hour_level:
+        return 1.0
+    scaled = [math.floor(c * how + 0.5) for c in curve]
+    at_level = share_at_or_above(hour_level, scaled)
+    if at_level <= 0:
+        return 0.0
+    return min(1.0, share_at_or_above(price, scaled) / at_level)
+
+
+def accepted_demand(hours: Sequence[int], sales_how: Sequence[float], price: int | None,
+                    acc: Acceptance | None) -> tuple[float, ...]:
+    """A window's demand profile with each hour's price acceptance applied (SPEC §3.3.2, P28).
+
+    Args:
+        hours: Hour numbers.
+        sales_how: 168 sales ratios.
+        price: The post's unit price, copper; None leaves the demand as it is.
+        acc: The item's level, curve and pattern; None, or one without a level or a curve, leaves the demand as it is
+            (a = 1 everywhere, so the simulation is exactly what it was: PI10).
+
+    Returns:
+        demand_for(hours, sales_how), each hour's ratio × a(price) at that hour's level.
+    """
+    demand = demand_for(hours, sales_how)
+    if price is None or acc is None or acc.level is None or acc.curve is None:
+        return demand
+    how = acc.how or FLAT_HOW
+    return tuple(d * acceptance(price, acc.level, acc.curve, how[slot_of(h)]) for d, h in zip(demand, hours))
 
 
 # ---------------------------------------------------------------- curves (SPEC §3.1.1)
 
 def build_curve(sold_per_day: float, listed_per_day: float, undercut: float, sales_how: Sequence[float],
                 refresh_ms: int, qty: int, ahead_points: Sequence[int] = CURVE_AHEAD,
-                hours: int = 8) -> list[list[float]]:
+                hours: int = 8, price: int | None = None, acc: Acceptance | None = None) -> list[list[float]]:
     """The sell-probability grid: 24 rows (posting hours from the refresh hour) × units-ahead points.
 
     Args:
@@ -324,6 +413,8 @@ def build_curve(sold_per_day: float, listed_per_day: float, undercut: float, sal
         qty: The reference stack posted.
         ahead_points: Units ahead for each column.
         hours: sell_window_hours.
+        price: The post price the curve is built at, copper, for the price acceptance (P28); None for none.
+        acc: The item's level, sold curve and pattern (P28); None for no acceptance.
 
     Returns:
         P_queue per row and column. SPEC GAP: the ahead units are modelled as one
@@ -334,7 +425,7 @@ def build_curve(sold_per_day: float, listed_per_day: float, undercut: float, sal
     rows_by_demand: dict[tuple[float, ...], list[float]] = {}     # equal demand → equal row (flat profiles)
     grid = []
     for row in range(CURVE_ROWS):
-        demand = demand_for(range(first_hour + row, first_hour + row + hours), sales_how)
+        demand = accepted_demand(range(first_hour + row, first_hour + row + hours), sales_how, price, acc)
         if demand not in rows_by_demand:
             rows_by_demand[demand] = _block_row(sold_per_day, listed_per_day, undercut, demand, qty, ahead_points)
         grid.append(list(rows_by_demand[demand]))
@@ -589,7 +680,8 @@ class Supply:
 
 
 def posting_chance(supply: Supply, price: int | None, qty: int, now_ms: int, settings: MarketSettings,
-                   sales_how: Sequence[float] | None = None, undercut: float | None = None) -> tuple[float, bool]:
+                   sales_how: Sequence[float] | None = None, undercut: float | None = None,
+                   acc: Acceptance | None = None) -> tuple[float, bool]:
     """P for posting qty units now at price, from market data only (no own record, SPEC §3.3.2).
 
     Args:
@@ -600,6 +692,7 @@ def posting_chance(supply: Supply, price: int | None, qty: int, now_ms: int, set
         settings: Defaults and the posting-now window.
         sales_how: The item's 168-slot hourly sales profile, the window's demand (P26); None for flat.
         undercut: The measured u(p) at this post (BZ29); None for default_undercut_share.
+        acc: The item's level, sold curve and pattern, the price acceptance (P28); None for none.
 
     Returns:
         (P, volume_unknown); without sales or a price, the default chance for the post's position (default_chance).
@@ -611,7 +704,8 @@ def posting_chance(supply: Supply, price: int | None, qty: int, now_ms: int, set
     competitors = None if supply.book is None else [(p, float(stack * count), band)
                                                     for p, stack, band, count in supply.book]
     ahead = ahead_of(competitors, price, supply.cur_price, supply.cur_qty)
-    demand = demand_for(posting_now_window(now_ms, settings.sell_window_hours), sales_how or FLAT_HOW)
+    demand = accepted_demand(posting_now_window(now_ms, settings.sell_window_hours), sales_how or FLAT_HOW, price,
+                             acc)
     u = settings.default_undercut_share if undercut is None else undercut
     queue = QueueInputs(supply.sold_per_day, supply.listed_per_day or 0.0, u, demand, qty, ahead)
     return chance(queue, None, 0, 0, 0, settings.default_sell_prob, settings.own_record_weight)

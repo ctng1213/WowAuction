@@ -99,13 +99,16 @@ class Kind:
         return self.worth * factor_at(self.shifts, at_ms)
 
 
-def regime_shifts(regime: str, launch: bool = False) -> tuple[tuple[int, float, float], ...]:
+def regime_shifts(regime: str, launch: bool = False, days: int = DAYS, change_day: int = CHANGE_DAY
+                  ) -> tuple[tuple[int, float, float], ...]:
     """How an item's worth moves over the world (`market.Item.shifts`).
 
     Args:
-        regime: A REGIMES name: steady; a step on CHANGE_DAY (rise, drop); or a slide from the first day (fall).
+        regime: A REGIMES name: steady; a step on the change day (rise, drop); or a slide from the first day (fall).
         launch: The item opens at LAUNCH's multiple of its worth and falls to it over LAUNCH's days (the
             real-shaped commodity), with the regime on top.
+        days: The world's length (DAYS; SM22 runs a longer one).
+        change_day: The day the worth steps (CHANGE_DAY).
 
     Returns:
         (time, price factor, 1.0) in time order: one step for a rise or a drop alone, a step an hour with a slide
@@ -116,13 +119,14 @@ def regime_shifts(regime: str, launch: bool = False) -> tuple[tuple[int, float, 
     """
     if regime not in REGIMES:
         raise KeyError(regime)
-    change = START_MS + CHANGE_DAY * DAY_MS
+    change = START_MS + change_day * DAY_MS
     if not launch and regime != "fall":
         return ((change, STEP[regime], 1.0),) if regime in STEP else ()
-    multiple, days = LAUNCH
-    opening = slide(START_MS, START_MS + days * DAY_MS, 1 - (1 / multiple) ** (1 / days), multiple) if launch else ()
-    falling = slide(START_MS, START_MS + DAYS * DAY_MS, FALL_PER_DAY) if regime == "fall" else ()
-    hours = (START_MS + hour * HOUR_MS for hour in range(DAYS * 24))
+    multiple, launch_days = LAUNCH
+    opening = (slide(START_MS, START_MS + launch_days * DAY_MS, 1 - (1 / multiple) ** (1 / launch_days), multiple)
+               if launch else ())
+    falling = slide(START_MS, START_MS + days * DAY_MS, FALL_PER_DAY) if regime == "fall" else ()
+    hours = (START_MS + hour * HOUR_MS for hour in range(days * 24))
     return tuple((at, factor_at(opening, at) * factor_at(falling, at) * (STEP.get(regime, 1.0) if at >= change else 1.0),
                   1.0) for at in hours)
 
@@ -144,7 +148,7 @@ class Post:
     plain: int | None = None
 
 
-def _high_asks(key: int, kind: Kind, multiple: float, durations: Sequence[int]) -> list[Planted]:
+def _high_asks(key: int, kind: Kind, multiple: float, durations: Sequence[int], days: int = DAYS) -> list[Planted]:
     """A gear item's high ask, posted daily at a multiple of the worth then.
 
     Args:
@@ -152,12 +156,13 @@ def _high_asks(key: int, kind: Kind, multiple: float, durations: Sequence[int]) 
         kind: The item.
         multiple: The ask ÷ the worth.
         durations: The auctions it is posted as each day, back to back from 01:00 UTC: hours, each 2, 8 or 24.
+        days: The world's length.
 
     Returns:
         The planted auctions over the world's days.
     """
     out = []
-    for day in range(DAYS):
+    for day in range(days):
         at = START_MS + (1 + 24 * day) * HOUR_MS
         price = int(kind.worth_at(at) * multiple)
         for hours in durations:
@@ -166,13 +171,16 @@ def _high_asks(key: int, kind: Kind, multiple: float, durations: Sequence[int]) 
     return out
 
 
-def rules_world(seed: int, replicates: int = 4, spread: float = BUYER_SPREAD) -> tuple[World, dict[int, Kind]]:
+def rules_world(seed: int, replicates: int = 4, spread: float = BUYER_SPREAD, days: int = DAYS,
+                change_day: int = CHANGE_DAY) -> tuple[World, dict[int, Kind]]:
     """SM20's market: every gear shape and the commodity, in each regime, `replicates` items of each.
 
     Args:
         seed: The world's seed.
         replicates: Items per shape and regime (the report's 4; a test's 1).
         spread: The buyers' spread (BUYER_SPREAD; the review also ran 0.15).
+        days: The world's length (DAYS; SM22 runs one past the plan's 3-week trust gate).
+        change_day: The day the worth steps (CHANGE_DAY).
 
     Returns:
         (the World, item key -> its Kind).
@@ -180,29 +188,29 @@ def rules_world(seed: int, replicates: int = 4, spread: float = BUYER_SPREAD) ->
     items, planted, kinds = [], [], {}
     key = 1000
     for regime in REGIMES:
-        shifts = regime_shifts(regime)
+        shifts = regime_shifts(regime, days=days, change_day=change_day)
         for shape, (listings, buyers, multiple, durations) in SHAPES.items():
             for n in range(replicates):
                 key += 1
                 kinds[key] = Kind(shape, regime, GEAR_WORTH, shifts)
                 items.append(gear(key, f"{shape}, {regime} {n}", GEAR_WORTH, buyers, listings, price_mix=PRICE_MIX,
                                   cancel_share=CANCEL_SHARE, buyer_level=1.0, buyer_spread=spread, shifts=shifts))
-                planted += _high_asks(key, kinds[key], multiple, durations)
+                planted += _high_asks(key, kinds[key], multiple, durations, days)
         for n in range(replicates):
             key += 1
             kinds[key] = Kind(CLOTH, regime, CLOTH_WORTH, shifts)
             items.append(commodity(key, f"{CLOTH}, {regime} {n}", CLOTH_WORTH, 120, 60, buyer_spread=spread,
                                    shifts=shifts))
             units, share, every, hours = DUMP
-            for hour in range(0, DAYS * 24, every):
+            for hour in range(0, days * 24, every):
                 at = START_MS + hour * HOUR_MS + 50 * 60_000
                 planted.append(Planted(at, key, units, int(kinds[key].worth_at(at) * share), hours))
         for n in range(replicates):
             key += 1
-            kinds[key] = Kind(REAL, regime, CLOTH_WORTH, regime_shifts(regime, launch=True))
+            kinds[key] = Kind(REAL, regime, CLOTH_WORTH, regime_shifts(regime, True, days, change_day))
             items.append(commodity(key, f"{REAL}, {regime} {n}", CLOTH_WORTH, REAL_BUYS, REAL_LISTINGS,
                                    buyer_spread=spread, shifts=kinds[key].shifts))
-    return World(seed, START_MS, DAYS, tuple(items), planted=tuple(planted)), kinds
+    return World(seed, START_MS, days, tuple(items), planted=tuple(planted)), kinds
 
 
 def sold_rows(history: Path, today: int, days: int = LEVEL_DAYS) -> dict[int, list[tuple[int, float, int]]]:

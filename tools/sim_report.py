@@ -20,24 +20,25 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path[:0] = [str(Path(__file__).resolve().parents[1]), str(Path(__file__).resolve().parent)]
 
-from sim import decision, decision_crafts, decision_gathering, inference, price_rules, sold_prices  # noqa: E402
+from sim import (acceptance, decision, decision_buyer, decision_crafts, decision_gathering, inference,  # noqa: E402
+                 price_rules, sold_prices)
 from sim.inference import Measure  # noqa: E402
 from sim.scorers import GOLD, Score  # noqa: E402
 
 ROWS: dict[str, Callable[[Path, int], list[Measure]]] = {
     "SM1": inference.sm1, "SM2": inference.sm2, "SM3": inference.sm3, "SM4": inference.sm4,
-    "SM5": inference.sm5, **sold_prices.SOLD_PRICE_ROWS, **price_rules.PRICE_RULE_ROWS}
+    "SM5": inference.sm5, **sold_prices.SOLD_PRICE_ROWS, **price_rules.PRICE_RULE_ROWS, **acceptance.ACCEPTANCE_ROWS}
 
 MARKS = {True: "met", False: "**missed**", None: "not exercised"}   # a decision line's mark
 
 
 def sd_rows() -> dict:
-    """Every SD row the decision report can run: decision.SD_ROWS, the craft rows and the gathering row.
+    """Every SD row the decision report can run: decision.SD_ROWS, the craft rows, the gathering row and SM22.
 
     Returns:
         Row ID -> its function (folder, seed) -> lines.
     """
-    return {**decision.SD_ROWS, **decision_crafts.CRAFT_ROWS, **decision_gathering.GATHERING_ROWS}
+    return {**decision.SD_ROWS, **decision_crafts.CRAFT_ROWS, **decision_gathering.GATHERING_ROWS, **decision_buyer.BUYER_ROWS}
 
 
 def number(value: float | None) -> str:

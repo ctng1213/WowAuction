@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import pytest
@@ -356,3 +357,74 @@ def test_market_settings_round_trip_through_a_cloud_document():
     assert MarketSettings.from_dict(json.loads(json.dumps(settings.to_dict()))) == settings
     assert MarketSettings.from_dict({}) == MarketSettings()                     # a desktop-built document
     assert MarketSettings.from_dict({"default_sell_prob": 0.4}).default_sell_prob == 0.4   # no prior given
+
+
+# ---------------------------------------------------------------- price acceptance (SPEC §3.3.2, P28, PI18-PI20)
+
+SOLD_CURVE = (60, 80, 90, 100, 120, 150, 200)           # P28's curve: copper at the 0, 10, 25, 50, 75, 90, 100th
+ACCEPT_SEED = 22_112_026
+
+
+def hour_demand(price: int, acc: sp.Acceptance | None, how: float = 1.0) -> float:
+    """The units one hour's buyers take at a price: S = 240/day, a flat profile, one window hour (P28)."""
+    acc = acc if acc is None else sp.Acceptance(acc.level, acc.curve, (how,) * 168)
+    profile = sp.accepted_demand([0], sp.FLAT_HOW, price, acc)
+    return sp.simulate_detail(QueueInputs(240.0, 0.0, 0.0, profile, 1, ())).demand
+
+
+def test_P28_price_acceptance_in_the_sell_chance():
+    acc = sp.Acceptance(100, SOLD_CURVE)
+    assert [hour_demand(p, acc) for p in (100, 120, 135, 150, 175, 200)] == pytest.approx([10, 5, 3.5, 2, 1, 0])
+    assert hour_demand(132, acc, how=1.10) == pytest.approx(5)          # 132 c is the scaled curve's 75th
+    assert hour_demand(500, sp.Acceptance(500, None)) == 10             # no curve: no acceptance
+    assert hour_demand(500, None) == 10
+    # The continuous form (the user, 2026-11-22): the level above the curve's 50th reads 1 at the level, not a jump.
+    above = sp.Acceptance(120, SOLD_CURVE)
+    assert sp.acceptance(120, 120, SOLD_CURVE, 1.0) == 1.0 and sp.acceptance(150, 120, SOLD_CURVE, 1.0) == pytest.approx(0.4)
+    assert hour_demand(121, above) < 10 and hour_demand(121, above) > hour_demand(135, above)
+
+
+def random_acceptance(rng) -> tuple[int, sp.Acceptance]:
+    """A random post price and a random but valid level, curve and pattern."""
+    curve = tuple(sorted(rng.randint(10, 400) for _ in range(len(SOLD_CURVE))))
+    level = rng.randint(curve[0], curve[-1]) if rng.random() < 0.9 else rng.randint(curve[-1], curve[-1] + 50)
+    how = tuple(0.5 + 1.5 * rng.random() for _ in range(168)) if rng.random() < 0.7 else None
+    return rng.randint(1, 500), sp.Acceptance(level, curve, how)
+
+
+ACCEPTANCES = cases(ACCEPT_SEED, random_acceptance)
+
+
+def test_PI18_the_acceptance_is_1_at_the_hours_level_falls_with_the_price_and_is_0_from_the_curves_100th():
+    for i, (price, acc) in enumerate(ACCEPTANCES):
+        how = (acc.how or sp.FLAT_HOW)[i % 168]
+        hour_level, top = math.floor(acc.level * how + 0.5), math.floor(acc.curve[-1] * how + 0.5)
+        a, higher = sp.acceptance(price, acc.level, acc.curve, how), sp.acceptance(price + 1 + i % 40, acc.level, acc.curve, how)
+        check(0 <= a <= 1 and higher <= a + 1e-12, i, (price, acc))
+        check(sp.acceptance(hour_level, acc.level, acc.curve, how) == 1.0, i, (price, acc))
+        check(sp.acceptance(hour_level - 1, acc.level, acc.curve, how) == 1.0, i, (price, acc))
+        check(sp.acceptance(max(top, hour_level + 1), acc.level, acc.curve, how) == 0.0, i, (price, acc))
+        check(sp.acceptance(price, None, acc.curve, how) == 1.0 and sp.acceptance(price, acc.level, None, how) == 1.0, i, acc)
+
+
+def test_PI19_a_higher_price_never_raises_P_at_fixed_competition():
+    settings = sp.MarketSettings()
+    for i, ((price, acc), q) in enumerate(zip(ACCEPTANCES, QUEUES)):
+        supply = sp.Supply(q.sold_per_day, q.listed_per_day, None, None, None)      # nothing ahead, whatever the price
+        lower = sp.posting_chance(supply, price, q.qty, i * HOUR_MS, settings, None, q.undercut_share, acc)[0]
+        higher = sp.posting_chance(supply, price + 1 + i % 60, q.qty, i * HOUR_MS, settings, None, q.undercut_share, acc)[0]
+        check(higher <= lower + 1e-12, i, (price, acc, q))
+        same = sp.posting_chance(supply, price, q.qty, i * HOUR_MS, settings, None, q.undercut_share, None)[0]
+        check(lower <= same + 1e-12, i, (price, acc, q))                           # the acceptance only ever cuts
+
+
+def test_PI20_the_curves_rows_never_rise_with_the_price():
+    for i, (price, acc) in enumerate(ACCEPTANCES[:300]):
+        q = QUEUES[i]
+        args = (q.sold_per_day, q.listed_per_day, q.undercut_share, acc.how or sp.FLAT_HOW, i * HOUR_MS, q.qty)
+        lower, higher = sp.build_curve(*args, price=price, acc=acc), sp.build_curve(*args, price=price + 1 + i % 80, acc=acc)
+        plain = sp.build_curve(*args)
+        for row_lo, row_hi, row_plain in zip(lower, higher, plain):
+            check(all(h <= lo + 1e-12 for lo, h in zip(row_lo, row_hi)), i, (price, acc, q))
+            check(all(lo <= p + 1e-12 for lo, p in zip(row_lo, row_plain)), i, (price, acc, q))
+        check(sp.build_curve(*args, price=price, acc=sp.Acceptance(acc.level, None, acc.how)) == plain, i, acc)

@@ -15,7 +15,7 @@ from ahsync.engine.on_ah_view import Listing, on_ah_view
 from ahsync.engine.sellprob import MarketSettings, Supply
 from ahsync.engine.views import COLUMN_HELP
 from ahsync.history.reads import ItemInfo
-from ahsync.intel.contract import ItemIntel
+from ahsync.intel.contract import ItemIntel, price_acceptance
 from ahsync.recommend.pages import sales_pattern
 from ahsync.recommend.plan_pages import item_looks
 from ahsync.state.reads import StateReader
@@ -43,7 +43,7 @@ def _chance_left(s: ItemIntel, price: int, units: int, left_ms: int, now_ms: int
     hours = max(1, math.ceil(left_ms / HOUR_MS))
     supply = Supply(s.sold_per_day, s.listed_per_day, s.book or None, s.cur, s.cur_qty)
     return sellprob.posting_chance(supply, price, units, now_ms, replace(settings, sell_window_hours=hours),
-                                   sales_pattern(s))[0]
+                                   sales_pattern(s), None, price_acceptance(s))[0]
 
 
 def _below(s: ItemIntel | None, price: int) -> tuple[int, int, int] | None:

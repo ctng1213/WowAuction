@@ -48,3 +48,13 @@ def test_D53_the_chance_counts_only_the_time_an_auction_has_left():
     assert _chance_left(s, 45, 20, 0, now, MarketSettings()) == 0.0               # its time is up
     booked = replace(s, book=((38, 5, 4, 2), (40, 2, 4, 1), (45, 20, 4, 1)))
     assert (_below(booked, 45), _below(booked, 30), _below(s, 45), _below(None, 45)) == ((12, 38, 40), (0, 0, 0), None, None)
+
+
+def test_P28_the_chance_of_the_time_left_reads_the_price_acceptance():
+    from ahsync.engine.sellprob import MarketSettings
+    from ahsync.recommend.on_ah_page import _chance_left
+    now, hour = 1_760_000_000_000, 3_600_000
+    plain = replace(LINEN_INTEL, book=(), cur=None, cur_qty=None, level=49, level_source="sold", level_units=30.0)
+    sold = replace(plain, sold_curve=(40, 45, 47, 49, 55, 65, 80))         # 49 c is the curve's 50th, 55 c its 75th
+    assert _chance_left(sold, 49, 20, 8 * hour, now, MarketSettings()) == _chance_left(plain, 49, 20, 8 * hour, now, MarketSettings())
+    assert _chance_left(sold, 55, 20, 8 * hour, now, MarketSettings()) < _chance_left(plain, 55, 20, 8 * hour, now, MarketSettings())

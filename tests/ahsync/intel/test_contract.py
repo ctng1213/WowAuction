@@ -235,3 +235,15 @@ def test_BZ49_unseen_per_day_round_trips_in_schema_15_and_is_left_out_of_older_r
     assert "unseen_per_day" not in fourteen["item_fields"] and len(fourteen["items"]["2589"]) == len(fourteen["item_fields"])
     assert from_json(json.dumps(fourteen)).items[2589].unseen_per_day is None
     assert "unseen_per_day" not in item_of(to_json(intel, schema=13))
+
+
+def test_P28_price_acceptance_reads_the_documents_level_curve_and_pattern():
+    from ahsync.engine import profile
+    from ahsync.engine.sellprob import Acceptance
+    from ahsync.intel.contract import price_acceptance
+    curve = (80, 80, 100, 100, 100, 150, 150)
+    how = profile.pack(profile.Profile(tuple([1.0] * 167 + [1.5]), tuple([6] * 168), tuple([True] * 168)))[0]
+    linen = replace(ITEM, level=100, level_source="sold", level_units=30.0, sold_curve=curve, how=how)
+    assert price_acceptance(linen) == Acceptance(100, curve, profile.unpack_values(how))
+    older = replace(ITEM, med7=60, med14=90, med30=120, p10_30=50, how="")
+    assert price_acceptance(older) == Acceptance(77, None, None)        # the ask level, no curve: a = 1 everywhere
