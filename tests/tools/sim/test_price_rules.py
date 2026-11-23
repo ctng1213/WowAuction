@@ -35,7 +35,7 @@ def test_SM20_the_built_level_prices_the_same_posts_as_the_sold_half_life_rule(t
     same = measures["the built level within ±2% of sold half-life's on the same steady posts, gear at 5+ a week"]
     assert same.passed and same.engine >= 0.85 and same.band == "≥ 85%"    # two runs drift apart; the same posts don't
     cut = measures["today's posts the hour's pattern priced under the level, gear at 5+ a week"]
-    assert cut.band == "reported" and 0 < cut.engine < 0.5                  # the ask pattern cuts some posts by design
+    assert cut.band == "reported" and cut.engine == 0.0     # P29: the world is under 3 weeks, so the pattern is flat
     assert len(measures) == 2 * len(SEGMENTS) * len(GROUPS) + 2 * len(GROUPS)
     assert len(world) == 2 * len(REAL_RATIOS) + len(GROUPS)       # the calibration against the real summary
 

@@ -42,7 +42,7 @@ def test_P3_a_slot_with_four_weeks_of_a_saturday_rise_reads_1_2_with_high_confid
     assert profile.weeks[SAT + 18] == 3        # W17: the first and last 84 hours have no centred week
 
 
-def test_P4_one_week_of_data_falls_back_to_the_weekday_with_low_confidence():
+def test_P4_one_week_of_data_reads_flat_with_low_confidence():
     profile = price_profile(history(1, saturday_rise), med30=100, now_ms=NOW)
     # Saturday's 24 closes: 19 at 100 c and 5 at 120 c → weekday median 100 c → 1.0
     assert profile.values[SAT + 18] == pytest.approx(1.0)
@@ -183,3 +183,13 @@ def test_BZ47_profiles_are_run_length_coded_and_read_in_either_form():
                 "1," * 10_000, ",".join(["1000"] * 169), ",".join(["1000"] * 167)):
         with pytest.raises(ValueError):
             profile.expand(bad)                                     # a run never grows past 168 slots (SEC16)
+
+
+def test_P29_a_one_day_crash_with_two_weeks_of_data_is_no_pattern():
+    this_monday = NOW - (NOW - MONDAY) % WEEK_MS
+    start = this_monday - 2 * WEEK_MS
+    closes = [(start + h * HOUR_MS, 18 if this_monday <= start + h * HOUR_MS < this_monday + 24 * HOUR_MS else 49)
+              for h in range(21 * 24)]
+    profile = price_profile(closes, med30=49, now_ms=NOW)
+    assert profile.weeks[12] == 2                        # Monday 12:00 has observations from 2 weeks, under 3
+    assert all(v == pytest.approx(1.0) for v in profile.values)

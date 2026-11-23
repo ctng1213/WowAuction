@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from ahsync.engine.market_lines import LineFacts, coverage_text, market_lines
 from ahsync.engine.patterns import SLOTS, WEEKDAYS, Window
-from ahsync.engine.profile import Profile
+from ahsync.engine.profile import MIN_WEEKS, Profile
 from ahsync.engine.views import market_activity, money, round_half_up
 
 HOUR_MS = 3_600_000
@@ -149,16 +149,17 @@ def heatmap(prof: Profile, offset_ms: int, places: int = 2) -> list[dict]:
     return [{"day": WEEKDAYS[d], "cells": cells[d * 24:(d + 1) * 24]} for d in range(7)]
 
 
-def _peak(prof: Profile) -> int | None:
+def _peak(prof: Profile, min_weeks: int = 1) -> int | None:
     """The slot with the highest value among slots with data.
 
     Args:
         prof: A profile.
+        min_weeks: Weeks of data a slot needs to count.
 
     Returns:
-        The UTC slot (ties: the earliest), or None when no slot has data.
+        The UTC slot (ties: the earliest), or None when no slot has that much data.
     """
-    slots = [s for s in range(SLOTS) if prof.weeks[s] > 0]
+    slots = [s for s in range(SLOTS) if prof.weeks[s] >= min_weeks]
     return max(slots, key=lambda s: (prof.values[s], -s)) if slots else None
 
 
@@ -173,9 +174,9 @@ def three_answers(how: Profile, sales: Profile, windows: Sequence[Window], offse
 
     Returns:
         {"price": "Sat 20:00 · ×1.50", "sales": "Tue 19:00 · 3.0× an average hour",
-         "best": "Wed 19:00–20:00"}; "—" for each answer without data.
+         "best": "Wed 19:00–20:00"}; "—" for each answer without data (for the price, without a slot of 3 weeks).
     """
-    price, busy = _peak(how), _peak(sales)
+    price, busy = _peak(how, MIN_WEEKS), _peak(sales)     # P29: a price slot under 3 weeks has no pattern
     return {
         "price": "—" if price is None else
         f"{hour_text(local_slot(price, offset_ms))} · ×{ratio_text(how.values[price], 2)}",
