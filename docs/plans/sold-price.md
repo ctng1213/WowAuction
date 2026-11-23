@@ -137,6 +137,8 @@ From `docs/plans/market-simulator.md` §1.13 and §1.32 and `docs/plans/blizzard
     - (b) **Real gear is not listing-limited.** Of the gear auctions that were the cheapest when first seen, 19% were gone within their first observed gap (commodities 32%): listings sit long enough to be seen, the regime of SM21's busy shape, whose read under the level is within 0.1 (item 35(e)).
     - (c) **The listing-limited shape in SM21** (16 listings and 50 buyers a day; 16 replicates, seeds 1–3): no item has a curve (the ask level, 1.07–1.09× the worth), the engine's sold/day reads 30% low (9.1–10.0 against 13.3–14.1 at spread 0.25), and a post at or under the level reads 0.30–0.46 against a true 0.66–0.80 on the live book and with nothing ahead alike; at 0.7–1.0× the worth every post sold (1.00) while the engine reads 0.28–0.55. **Adding the true unseen sales to `S`, capped at `S`, lifts the read only to 0.32–0.50**: the gap is not the unseen sales but the queue's demand itself, the sales that happened (`S`), three times fewer than the buyers a cheap post finds, which the undercut arrivals (`L × u`) then take first. Item 30(e)'s diagnosis stands as written, and item 36(b)'s candidate rule is dropped (it would not fix the case it was for; a buyer-rate demand would need a rate the snapshots cannot observe). With (b), no rule: real gear sits in the regime where the queue reads within 0.1. LESSONS corrected (the 2026-11-23 entry superseded).
 
+38. **SP2e, 2026-11-23.** (a) **Deployed:** the cloud from main's merge commit c2e7e9e (SP2c + SP2d analysis) at 05:39 UTC (the first attempt rolled back on an empty alert address read from `sns list-subscriptions`; the address is read from the deployed template now, memory); AHSync 0.1.25 tagged on the same commit and published as a pre-release at 06:17 UTC; the addon copied into the AddOns folder (no restart: `deploy.py --restart` starts the source app, not the installed one); the app's update and the `/reload` are the user's. (b) **The cloud after the rebuild:** Ingest up to date from 04:25 UTC, `HistoryBehind` and `IngestErrors` OK; the 08:25 UTC daily run (published 09:05, 312 s, 49,818 items) is the first with sold levels: `level_source` sold on 36,306 items (every item with 3+ sold units in 30 days), asks on 13,512, a sold curve on 3,268; the hourly runs on the new code reprice it (700 MB, as before the deploy). (c) **The acceptance check (§3 Acceptance) on that document, repriced to 14:25 UTC:** the 2026-11-18 items read their sold levels, not p90_30 (Tome of Arcane Brilliance level 1 g 38 s against med7 1 g 40 s and p90_30 20 g; Craftsman's Writ: Sniper Scope 38 s 25 c against p90_30 above 3 g, posting 11 s 99 c under a 12 s cheapest; Black Diamond 23 c against med7 49 c and p90_30 39 s 99 c); the busy commodities (1,095 with 100+ sold units in 7 days) read a level within 0.75–1.24× their 7-day sold median at the 5th–95th percentiles, median 1.00, and the ones outside are week-long moves the 1-day half-life follows (Shellfish 19 c against a 7-day 65 c, its cheapest listing 13 c; Bloodbelly Fish 1 s 90 c against 2 s 50 c); gear's med7 sits a median 1.19× its sold level (p25 1.00, p75 1.72; the review's 1.22–1.30), commodities' 1.00. **Met.** (d) **Observed, for the user:** Black Diamond's hour pattern reads 0.28 at 14:00 UTC (its week's ratios run 0.28–1.63 after the price fell from about 49 c to 18 c), so its post price is the low bound, 10 c, under an 18 c cheapest listing and a 23 c level: the rebuilt pattern on a crashed commodity with a curve, the case item 34(b) left to real data (`tools/hourly_prices_report.py`); worth a look once the rebuilt history has weeks. The whole-plan numbers on the user's machine follow the app's update to 0.1.25.
+
 **Still open:** whether the hourly run can refresh the level; the acceptance's shape for commodities (item 37(a): the cancel-corrected §7 curve, then a fitted γ); SM23 and SM24 as built rows (item 30 is prototypes); the unexplained step in gear's posting on 2026-11-12 (the share at the cheapest price fell from about 75% to 55% overnight).
 
 ## 1b. Decided at planning (the user, 2026-11-09: D1 A, D2 A)
@@ -236,18 +238,17 @@ The addon reprices after a scan, so it needs the pattern of the current hour: th
 3. The half-life at 30 days of data (item 26(b)). **Measured in the simulator:** 1 day stays (item 30(a)); the real-data check from 2026-12-06 stands.
 4. **Added:** whether to turn `level_divides_by_pattern` on, from SM23 re-run once raids open (item 31(a)).
 
-**Resume here (checkpoint 2026-11-23, after SP2d).**
-- **State:** SP2d built on branch `ctn-RCP-000-sp2d-chance-learns-level` (worktree `C:\Dev\WowAuction-sp2d`), §1d item 35,
-  one PR awaiting the user. `main` holds SP2c (#135), the thin-level rule (#136, BZ72) and the handoff (#137).
-  `main` writes `EXPORT_VERSION` 9: the installed app (writes 8) and the addon must be updated together (SP2e).
-- **The cloud (read-only check 2026-11-23 00:10 UTC):** the rebuild from raw was still running: `rebuilding_until_ms` set
-  (15:25 UTC), the history at 2026-11-17 12:17 with 130 snapshots pending at 15 a run; `HistoryBehind` in ALARM since
-  17:38 UTC, `IngestErrors` OK; the published daily document (schema 17, built 04:25 UTC 2026-11-22) predates the rebuild,
-  so no item carries a sold level yet. **Check again before SP2e:** `rebuilding_until_ms` null, `HistoryBehind` OK, and
-  the daily document's items carry `level_source` `sold` where sales exist. `aws login` first (the session expires).
-- **Next action:** SP2e: build and install the app, deploy the addon, `/reload`, and the acceptance check on the real
-  summary (§3 Acceptance). The acceptance's shape waits on §7's cancel-corrected curve (item 37(a)); the under-read has no
-  rule (item 37(c)).
+**Resume here (checkpoint 2026-11-23 15:30 UTC, after SP2e).**
+- **State:** SP2d (#138, #139, #140) and SP2e (item 38) are on `main`; the cloud runs main's code since 05:39 UTC and
+  AHSync 0.1.25 is published (pre-release, not promoted). Nothing mid-change; the worktrees are removed.
+- **The cloud:** healthy; the first daily document with sold levels was published 09:05 UTC and the acceptance check on it
+  is met (item 38(c)). `aws login` first when the session has expired.
+- **The user's side:** update AHSync to 0.1.25 (it rewrites the addon data files at `EXPORT_VERSION` 9), then `/reload`
+  and `tools/savedvars_report.py`.
+- **Next action:** the history's retention (hourly prices and sales 45 days plus daily rows to 90, proven in the simulator
+  first; the history nears Ingest's 10 GiB disk around late December); the open rows SM23 and SM24; whether the hourly run
+  can refresh the level; the acceptance's shape waits on §7's cancel-corrected curve (item 37(a)); the under-read has no
+  rule (item 37(c)); Black Diamond's pattern swing (item 38(d)) once the rebuilt history has weeks.
 - **Known:** `tests/ahsync_app/test_tray.py` fails intermittently on `main` too. The `market-sim` agent is only listed in
   sessions started from a checkout of `main`. Decision 34(b)'s measurement (real gear's `how` swing) waits for weeks of
   rebuilt history.
@@ -286,7 +287,7 @@ The addon reprices after a scan, so it needs the pattern of the current hour: th
 - **SP2b, the pattern, the hourly table and the level. Built 2026-11-22** (#130, bench #131; §1d item 32). **Deployed 2026-11-22 08:50 UTC**; the rebuild from raw started 15:35 UTC (see Resume here). `engine/profile` (W17), migration and `sold_prices_h1` with its clean units (BZ68), the `level_divides_by_pattern` setting (item 31(a); BZ69), `engine/lifetime_prices` (BZ69, BZ70), `analysis/market` and the contract (schema 17, BZ71), the cloud's bench and a rebuild from raw. Opus: a contract with several writers.
 - **SP2c, everything reads it. Built 2026-11-22** (§1d item 33). The table above in Python and Lua (PP5, TT51, R35), the export (EX25, `EXPORT_VERSION` 9), the snapshot, the SD reruns. Opus: byte identity and the ported twin.
 - **SP2d, the chance. Built 2026-11-23** (§1d item 35). `engine/sellprob` (P28) and what the plan's simulations pass it; SM21 and SM22 built (handoff above). Opus: an engine algorithm.
-- **SP2e, deploy and check.** The cloud deploy is the user's; then the acceptance check on the real summary.
+- **SP2e, deploy and check. Done 2026-11-23** (§1d item 38): the cloud deployed from main, 0.1.25 published, the addon copied; the acceptance check on the first real summary with sold levels is met.
 
 ## 4. Non-goals
 
