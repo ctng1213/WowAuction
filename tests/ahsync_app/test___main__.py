@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import socket
 import ssl
+import sys
 from pathlib import Path
+
+import pytest
 
 import ahsync_app.__main__ as app_main
 from ahsync.web.server import AppHooks
@@ -25,6 +28,7 @@ def test_the_port_probe_sees_a_listening_dashboard():
     assert app_main.port_open(port) is False
 
 
+@pytest.mark.skipif(sys.platform not in ("win32", "darwin"), reason="the app runs on Windows and macOS only (SPEC §3.7.2)")
 def test_main_passes_autostart_to_the_shell_and_builds_the_real_world(monkeypatch):
     seen = {}
     monkeypatch.setattr(app_main, "start", lambda autostart, world: seen.update(autostart=autostart, world=world) or 0)
