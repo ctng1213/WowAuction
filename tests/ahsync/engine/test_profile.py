@@ -99,6 +99,27 @@ def test_sales_slots_without_any_weekday_data_take_the_average_hour():
     assert profile.values[3 * 24 + 12] == pytest.approx(1.0)      # a Thursday: no data at all
 
 
+def test_sales_slots_never_observed_take_their_hour_of_day():
+    no_tuesdays = [(t, 4.0 if (t - MONDAY) % (24 * HOUR_MS) < HOUR_MS else 1.0) for t, _ in history(3, lambda s: 0.0)
+                   if not 24 * HOUR_MS <= (t - MONDAY) % WEEK_MS < 48 * HOUR_MS]
+    profile = sales_profile(no_tuesdays, now_ms=NOW)
+    assert profile.weeks[TUE] == 0
+    assert profile.values[TUE] > 1.1 > profile.values[TUE + 12]      # unobserved, Tue 00:00 keeps the midnight rush
+
+
+def test_P30_a_lucky_hour_of_a_thin_item_is_not_its_week():
+    lucky = history(3, lambda s: 0.25)
+    this_monday = NOW - (NOW - MONDAY) % WEEK_MS
+    lucky = [(t, 6.25 if t in (this_monday + HOUR_MS, this_monday - WEEK_MS + HOUR_MS) else v) for t, v in lucky]
+    profile = sales_profile(lucky, now_ms=NOW, half_life_weeks=1e12)        # every week weighted equally
+    for slot in (167, 0, 1, 2, 3):                                           # Sun 23:00 to Mon 03:00
+        assert profile.values[slot] == pytest.approx(1.381, abs=0.001)
+    for slot in (23, 24, 25, 26, 27):                                        # around Tue 01:00
+        assert profile.values[slot] == pytest.approx(1.116, abs=0.001)
+    assert profile.values[12] == pytest.approx(0.960, abs=0.001)
+    assert sum(profile.values) / 168 == pytest.approx(1.0)
+
+
 TUE = 24
 
 
