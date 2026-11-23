@@ -111,3 +111,11 @@ def test_D106_a_cloud_markets_sales_line_says_how_much_of_it_is_estimated_unseen
     assert line(**cloud, unseen_per_day=0.4) == ["Est. sales per day", "52 Blizzard · 7 of 7 days covered"]   # under 1 a day
     assert line(**cloud) == ["Est. sales per day", "52 Blizzard · 7 of 7 days covered"]                     # none estimated
     assert line()[1] == "48 AHF · 7 of 7 days covered"                                                     # AHF: as before
+
+
+def test_P29_the_highest_price_answer_waits_for_three_weeks():
+    two_weeks = prof({}, weeks=2)                      # a price pattern under 3 weeks reads 1.0 everywhere (P29)
+    sales = prof({slot(TUE, 19): 3.0}, weeks=2)        # the sales pattern keeps its own fallback
+    answers = item_detail.three_answers(two_weeks, sales, (), 0)
+    assert answers["price"] == "—" and answers["sales"] == "Tue 19:00 · 3.0× an average hour"
+    assert item_detail.three_answers(prof({slot(SAT, 20): 1.2}, weeks=3), sales, (), 0)["price"] == "Sat 20:00 · ×1.20"

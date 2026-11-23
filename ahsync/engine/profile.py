@@ -138,8 +138,9 @@ def centred_ratios(hourly: Sequence[tuple[int, int]], now_ms: int) -> list[tuple
 
 def price_profile(hourly: Sequence[tuple[int, int]], med30: int | None, now_ms: int,
                   half_life_weeks: float = 4) -> Profile:
-    """`how`: weighted median per slot of each close against its centred week, with fallbacks and smoothing
-    (SPEC §3.3, W17; until SP2b each slot's close ÷ med30).
+    """`how`: weighted median per slot of each close against its centred week, 1.0 for a slot with under 3 weeks,
+    then smoothing (SPEC §3.3, W17, P29; until SP2b each slot's close ÷ med30; until P29 a thin slot took its
+    weekday's median).
 
     Args:
         hourly: (hour start ms, close copper), one per item and hour, any history length.
@@ -156,7 +157,9 @@ def price_profile(hourly: Sequence[tuple[int, int]], med30: int | None, now_ms: 
     confident = tuple(w >= MIN_WEEKS for w in weeks)
     if not med30:
         return Profile(tuple([1.0] * SLOTS), weeks, confident)
-    ratios = [1.0 if v is None else v for v in _raw_slots(by_slot, week_sets)]
+    # No weekday fallback for prices (P29): with under 3 weeks a weekday's median is one crash week, and that
+    # fallback priced worse than a flat pattern on the real market (plan sold-price.md §1d item 39).
+    ratios = [weighted_median(by_slot[s]) if confident[s] else 1.0 for s in range(SLOTS)]
     return Profile(_smooth(ratios), weeks, confident)
 
 

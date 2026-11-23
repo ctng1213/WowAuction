@@ -1,9 +1,17 @@
-# CI (SPEC §3.7.12): the tests on Windows and macOS, then the app's build and, on a v* tag, the pre-release.
+# CI (SPEC §3.7.12): the tests on Windows and macOS (a cloud-only change: Linux), then the app's build and, on a
+# v* tag, the pre-release.
 name: CI
 
+# Branch pushes run nothing: their pull request runs the same tests once (a push run as well doubled every leg).
+# A change of documentation only runs nothing either, except SCENARIOS.md, which tests/test_conventions.py checks
+# against the tests. Tag pushes ignore the path filter, so a release always builds (SPEC §3.7.12).
 on:
   push:
+    branches: [main]
+    tags: ["v*"]
+    paths: ["**", "!docs/**", "!**/*.md", "docs/SCENARIOS.md"]
   pull_request:
+    paths: ["**", "!docs/**", "!**/*.md", "docs/SCENARIOS.md"]
   workflow_dispatch:
     inputs:
       sign:
@@ -14,12 +22,40 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request cancels its run in progress; main and tag runs always finish (a release builds).
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  # Which systems to test on (tools/ci_scope.py, DR35): a change to the cloud only (ahcloud/, infra/) runs once on
+  # Linux, the Lambda's system, and builds no app; anything else, or a change that can't be listed, runs as before.
+  scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      cloud_only: ${{ steps.scope.outputs.cloud_only }}
+      oses: ${{ steps.scope.outputs.oses }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0                     # the diff needs the base commit
+
+      - id: scope
+        env:
+          BASE: >-
+            ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha ||
+            (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/') && github.event.before) || '' }}
+          HEAD_SHA: ${{ github.sha }}
+        run: python3 tools/ci_scope.py "$BASE" "$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
   test:
+    needs: scope
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-15]       # macos-15 is arm64; macos-latest moved to macOS 26 (SPEC §3.7.12)
+        # windows-latest and macos-15 (arm64; macos-latest moved to macOS 26, SPEC §3.7.12), or ubuntu-latest alone
+        os: ${{ fromJSON(needs.scope.outputs.oses) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
@@ -68,10 +104,11 @@ jobs:
   # them. Within the job they reach the policy and build steps only (tools/build.py keeps them from every
   # command but openssl).
   build:
-    needs: test
+    needs: [scope, test]
     if: >-
+      needs.scope.outputs.cloud_only != 'true' && (
       github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' ||
-      github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+      github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     strategy:
       fail-fast: false
       matrix:
