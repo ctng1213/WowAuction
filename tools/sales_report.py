@@ -15,6 +15,11 @@ so it cannot have expired: it was bought or cancelled. The report answers, with 
 4. How many items have enough endings for item, item × tier and item × hour of week × tier estimates.
 5. What early leavers' prices say against the hourly ask closes (a sold-price median against the ask median).
 6. How noisy a 6 h activity count is on busy items, against Poisson.
+7. The nothing-ahead truth (sold-price plan §1d item 36(a)): of the auctions that were the cheapest of their item
+   when seen, the share that left early within 8 h, by their price against the item's sold level (the early
+   leavers' units-weighted median over the span), gear and commodities apart: what SM21's acceptance is checked
+   against; and, for gear, the share of auctions gone within their first observed gap (a proxy for the sales the
+   snapshots never see, item 36(b)).
 
 The report is a temporary plan file; it changes no number in the product.
 """
@@ -37,7 +42,7 @@ for path in (ROOT, ROOT / "tools"):
 from ahsync.collect.blizzard import BlizzardError, open_envelope  # noqa: E402
 from ahsync.engine.sellprob import TIER_LIMITS  # noqa: E402
 from ahsync.engine.volume import HOUR_MS, Auction, IdBook  # noqa: E402
-from lifetimes_report import load_books  # noqa: E402
+from lifetimes_report import gear_of, load_books  # noqa: E402
 
 EARLY_GAP_MS = 2 * HOUR_MS        # a vanish within 2 h of a LONG or VERY_LONG sighting cannot be an expiry
 EARLY_BANDS = (3, 4)              # LONG (2-12 h left) and VERY_LONG (over 12 h)
@@ -46,6 +51,11 @@ EVIDENCE_K = 30                   # endings a cell needs before its own estimate
 SLOTS = 168
 BLOCK_MS = 6 * HOUR_MS
 SILK = 4306
+WINDOW_MS = 8 * HOUR_MS           # section 7: sold within 8 h of being the cheapest (the posting-now window)
+DAY_MS = 24 * HOUR_MS
+LEVEL_DAYS = 1                    # section 7's level: the early leavers of the day and this many days each side
+LEVEL_MIN_LEAVES = 10
+LEVEL_BANDS = ((0.0, 1.0), (1.0, 1.1), (1.1, 1.25), (1.25, 1.5), (1.5, 2.0), (2.0, float("inf")))   # price ÷ the level
 
 
 @dataclass(frozen=True)
@@ -383,6 +393,144 @@ def sold_ask_rows(pairs: dict[int, tuple[int, int, int]], names: dict[int, str],
     return lines
 
 
+@dataclass(frozen=True)
+class Exposure:
+    """One auction's 8 h from the snapshot that first found it the cheapest of its item (section 7)."""
+
+    key: int
+    price: int                    # unit buyout, copper
+    sold: bool                    # it left early within WINDOW_MS of that snapshot
+    first_gap: bool               # it was gone in the very first gap after it was first seen at all
+    at_ms: int = 0                # the snapshot that first found it the cheapest
+
+
+def exposures(books: list[IdBook]) -> list[Exposure]:
+    """Every auction that was the cheapest of its item when seen, followed for 8 h (section 7).
+
+    An auction counts once, from the first snapshot it was the cheapest in (ties count). It is "sold" when it left
+    early (a LONG or VERY_LONG band at its last sighting, gone within a linked gap) within WINDOW_MS of that
+    snapshot; "not sold" when still listed WINDOW_MS later or gone with a short band (it may have expired); left out
+    when the span ends or an unlinked gap comes first.
+
+    Args:
+        books: Snapshots, oldest first.
+
+    Returns:
+        The exposures.
+    """
+    open_: dict[int, list] = {}                          # auction id -> [key, price, from_ms, band, first_seen_ms]
+    first_seen: dict[int, int] = {}
+    out: list[Exposure] = []
+    prev: IdBook | None = None
+    for book in books:
+        linked = prev is not None and book.at_ms - prev.at_ms <= EARLY_GAP_MS
+        present = {a.id: a for a in book.auctions}
+        for auction, (key, price, from_ms, band, seen_ms) in list(open_.items()):
+            if auction in present:
+                open_[auction][3] = present[auction].band
+                if book.at_ms >= from_ms + WINDOW_MS:
+                    out.append(Exposure(key, price, False, False, from_ms))
+                    del open_[auction]
+            elif linked:
+                sold = band in EARLY_BANDS and prev.at_ms < from_ms + WINDOW_MS
+                out.append(Exposure(key, price, sold, seen_ms == from_ms and prev.at_ms == from_ms, from_ms))
+                del open_[auction]
+            else:
+                del open_[auction]
+        by_key: dict[int, int] = {}
+        for a in book.auctions:
+            by_key[a.key] = min(by_key.get(a.key, a.price), a.price)
+            first_seen.setdefault(a.id, book.at_ms)
+        for a in book.auctions:
+            if a.price == by_key[a.key] and a.id not in open_:
+                open_[a.id] = [a.key, a.price, book.at_ms, a.band, first_seen[a.id]]
+        prev = book
+    return out
+
+
+def local_levels(g: Gaps, commodities: frozenset[int]) -> dict[tuple[int, int], int]:
+    """Section 7's level per item and day: the early leavers' units-weighted median over the day and LEVEL_DAYS
+    each side (a fortnight's drift would otherwise put an early listing above a late level).
+
+    Commodity leaves with a cheaper auction kept are left out (cancels under cheapest-first).
+
+    Args:
+        g: The gaps.
+        commodities: Commodity keys.
+
+    Returns:
+        (item key, day number) -> copper, for the days with LEVEL_MIN_LEAVES leaves or more in their window.
+    """
+    by_day: dict[tuple[int, int], list[tuple[int, int]]] = defaultdict(list)
+    for leave in g.leaves:
+        if not (leave.key in commodities and leave.cheaper_kept):
+            by_day[(leave.key, leave.at_ms // DAY_MS)].append((leave.price, leave.units))
+    days: dict[int, set[int]] = defaultdict(set)
+    for key, day in by_day:
+        days[key].add(day)
+    out = {}
+    for key, mine in days.items():
+        for day in range(min(mine) - LEVEL_DAYS, max(mine) + LEVEL_DAYS + 1):
+            window = [p for d in range(day - LEVEL_DAYS, day + LEVEL_DAYS + 1) for p in by_day.get((key, d), ())]
+            if len(window) >= LEVEL_MIN_LEAVES:
+                out[(key, day)] = weighted_median(window)
+    return out
+
+
+def nothing_ahead_rows(ex: list[Exposure], levels: dict[tuple[int, int], int], commodities: frozenset[int]) -> list[str]:
+    """Section 7's table: per shape and price band, the auctions that were cheapest and the share sold within 8 h.
+
+    Args:
+        ex: From exposures.
+        levels: (item key, day) -> its sold level then, copper (local_levels); exposures without one are left out.
+        commodities: Commodity keys.
+
+    Returns:
+        Markdown rows.
+    """
+    cells: dict[tuple[bool, int], list[int]] = defaultdict(lambda: [0, 0])
+    items: dict[bool, set[int]] = defaultdict(set)
+    for e in ex:
+        level = levels.get((e.key, e.at_ms // DAY_MS))
+        if not level:
+            continue
+        ratio = e.price / level
+        band = next(i for i, (lo, hi) in enumerate(LEVEL_BANDS) if lo <= ratio < hi)
+        cell = cells[(e.key in commodities, band)]
+        cell[0] += 1
+        cell[1] += e.sold
+        items[e.key in commodities].add(e.key)
+    rows = []
+    for commodity in (False, True):
+        for i, (lo, hi) in enumerate(LEVEL_BANDS):
+            n, sold = cells.get((commodity, i), (0, 0))
+            label = f"under {hi:.2f}×" if lo == 0 else (f"{lo:.2f}× and over" if hi == float("inf") else f"{lo:.2f}–{hi:.2f}×")
+            rows.append(f"| {'commodities' if commodity else 'gear and the rest'} ({len(items[commodity])} items) | {label} | "
+                        f"{n} | {sold} | {sold / n:.2f} |" if n else
+                        f"| {'commodities' if commodity else 'gear and the rest'} ({len(items[commodity])} items) | {label} | 0 | 0 | — |")
+    return rows
+
+
+def first_gap_rows(ex: list[Exposure], gear: frozenset[int] | None, commodities: frozenset[int]) -> list[str]:
+    """Section 7's second table: the auctions gone in their first observed gap, a proxy for the unseen sales.
+
+    Args:
+        ex: From exposures (the auctions cheapest when first seen are the ones that can leave in that gap).
+        gear: Gear keys from the catalog, or None (then everything that is no commodity).
+        commodities: Commodity keys.
+
+    Returns:
+        Markdown rows: gear, and commodities.
+    """
+    rows = []
+    for name, pick in (("gear", lambda k: (k in gear) if gear is not None else (k not in commodities)),
+                       ("commodities", lambda k: k in commodities)):
+        mine = [e for e in ex if pick(e.key)]
+        gone = sum(1 for e in mine if e.first_gap)
+        rows.append(f"| {name} | {len(mine)} | {gone} | {gone / len(mine):.2f} |" if mine else f"| {name} | 0 | 0 | — |")
+    return rows
+
+
 def noise_rows(g: Gaps, names: dict[int, str], top: int = 8) -> list[str]:
     """Question 6: early leaves per 6 h block on the busiest items, their spread against Poisson's.
 
@@ -411,7 +559,8 @@ def noise_rows(g: Gaps, names: dict[int, str], top: int = 8) -> list[str]:
     return rows
 
 
-def report(books: list[IdBook], skipped: int, commodities: frozenset[int], names: dict[int, str]) -> str:
+def report(books: list[IdBook], skipped: int, commodities: frozenset[int], names: dict[int, str],
+           gear: frozenset[int] | None = None) -> str:
     """The markdown report.
 
     Args:
@@ -419,11 +568,13 @@ def report(books: list[IdBook], skipped: int, commodities: frozenset[int], names
         skipped: Envelopes refused or empty.
         commodities: Commodity keys.
         names: Item names.
+        gear: Gear keys from the catalog (section 7's second table); None for everything that is no commodity.
 
     Returns:
         Markdown text.
     """
     g = gaps(books, commodities)
+    ex = exposures(books)
     span_h = g.span_ms / HOUR_MS
     return "\n".join([
         "# Sales-rate measurements before M33b (temporary)", "",
@@ -453,7 +604,18 @@ def report(books: list[IdBook], skipped: int, commodities: frozenset[int], names
         *sold_ask_rows(sold_vs_ask(g, commodities), names, commodities), "",
         "## 6. Noise of a 6 h activity count", "",
         "| item | 6 h blocks | early leaves per block | observed CV | Poisson CV |", "|---|---|---|---|---|",
-        *noise_rows(g, names), ""])
+        *noise_rows(g, names), "",
+        "## 7. The nothing-ahead truth: the cheapest listing's chance within 8 h, by its price against the sold level", "",
+        "Each auction once, from the first snapshot it was the cheapest of its item in; sold = left early (bought or "
+        "cancelled) within 8 h; the level is the item's early leavers' units-weighted median over that day and the day "
+        "each side (10 or more leaves). This is what SM21's price acceptance is checked against (sold-price plan §1d "
+        "item 36(a)); cancels are in the sold share (section 2's floor says how many).",
+        "", "| shape | price ÷ the level | auctions | sold within 8 h | share |", "|---|---|---|---|---|",
+        *nothing_ahead_rows(ex, local_levels(g, commodities), commodities), "",
+        "Auctions gone within their first observed gap: the nearer to 1, the more of an item's sales the snapshots never "
+        "see at all (item 36(b): a listing bought before any snapshot is invisible, so sold/day reads low).", "",
+        "| shape | auctions cheapest when first seen | gone in that first gap | share |", "|---|---|---|---|",
+        *first_gap_rows([e for e in ex], gear, commodities), ""])
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -471,7 +633,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, required=True, help="the markdown file to write")
     args = parser.parse_args(argv)
     books, skipped = load_books(args.raw)
-    args.out.write_text(report(books, skipped, commodity_keys(args.raw), names_of(args.catalog)), encoding="utf-8")
+    args.out.write_text(report(books, skipped, commodity_keys(args.raw), names_of(args.catalog),
+                                gear_of(args.catalog) if args.catalog else None), encoding="utf-8")
     return 0
 
 

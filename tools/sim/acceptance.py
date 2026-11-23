@@ -17,11 +17,14 @@ cheaper post would find), reported, not fixed (the user decides a rule, if any, 
 
 The worlds are SP2s's shapes (`price_rules`): gear with a wide range of asks and 15% cancels, busy enough for a
 sold curve (a curve needs 20 weighted clean units at a 1-day half-life, about 10 clean sales a day that the hourly
-snapshots saw; at 16 listings and 50 buyers a day the cheap listings sold within minutes, unseen, and no item had a
-curve, at 20 and 15 the clean units fell short, so the row runs 40 listings and 30 buyers a day, where every item
-has one and the level sits under the planted worth, reported); and the commodity. Steady, so the worth is planted
-and known. The buyers' spread of willingness to pay is assumed, not measured (BUYER_SPREAD 0.25; 0.15 beside it),
-and the result is reported under both. Measured only: no pass band.
+snapshots saw; at 20 listings and 15 buyers the clean units fell short, so the row runs 40 listings and 30 buyers a
+day, where every item has one and the level sits under the planted worth, reported); the listing-limited gear (16
+listings and 50 buyers a day), whose cheap listings sell within minutes, before any hourly snapshot sees them, so
+the engine reads a tenth of its sales, no item has a curve and the level is the ask level (item 36(b): the row
+prints the engine's sold/day against the truth, and the under-level read with the true unseen sales added to `S`,
+capped at `S`, the candidate rule, from an untraded run of the same world); and the commodity. Steady, so the worth
+is planted and known. The buyers' spread of willingness to pay is assumed, not measured (BUYER_SPREAD 0.25; 0.15
+beside it), and the result is reported under both. Measured only: no pass band.
 """
 from __future__ import annotations
 
@@ -47,8 +50,10 @@ STEPS = (0.7, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 2.0)   # a post's price ÷ the item
                                                  # of the busy gear, whose floor sits about 0.77× the worth)
 SPREADS = (BUYER_SPREAD, 0.15)                   # the buyers' spread: assumed, so both are run
 REPLICATES = 16                                  # items per shape: each wake posts every step on two of them
-SHAPES = {"gear": (40, 30), "commodity": (60, 120)}   # (listings a day, buyers a day): gear busy enough for a curve
-                                                 # (about 20 clean sales a day seen by the snapshots; see the docstring)
+SHAPES = {"gear": (40, 30), "gear, listing-limited": (16, 50), "commodity": (60, 120)}
+# (listings a day, buyers a day): gear busy enough for a curve (about 20 clean sales a day seen by the snapshots; see the
+# docstring); the listing-limited gear, whose cheap listings sell before a snapshot sees them (item 36(b): no curve, the
+# ask level, and the under-read of item 30(e)); and SM20's commodity.
 FORMS = ("today", "P28", "spec")                 # the chance's readings: no acceptance, built, the spec's ÷ 0.5
 PASSES = {"live book": False, "nothing ahead": True}   # a pass's name -> whether the poster clears the book first
 FLIPPER = "flipper"                              # who buys out the book in the nothing-ahead pass
@@ -87,7 +92,7 @@ def acceptance_world(seed: int, replicates: int = REPLICATES, spread: float = BU
         for n in range(replicates):
             key += 1
             keys[key] = (shape, n)
-            if shape == "gear":
+            if shape.startswith("gear"):
                 items.append(gear(key, f"{shape} {n}", GEAR_WORTH, buyers, listings, price_mix=PRICE_MIX,
                                   cancel_share=CANCEL_SHARE, buyer_level=1.0, buyer_spread=spread))
             else:
@@ -183,8 +188,9 @@ def under_level(item: ItemIntel, price: int, now_ms: int, settings: MarketSettin
 
 
 def chances(item: ItemIntel, book: list[tuple[int, int, int, int]], price: int, units: int, now_ms: int,
-            settings: MarketSettings) -> dict[str, float]:
-    """Every reading of one post's chance (FORMS on the book; today's and P28's with nothing ahead).
+            settings: MarketSettings, unseen: float = 0.0) -> dict[str, float]:
+    """Every reading of one post's chance (FORMS on the book; today's and P28's with nothing ahead; P28 with the
+    unseen sales added to the demand, item 36(b)'s candidate rule).
 
     Args:
         item: The item's intelligence.
@@ -193,6 +199,8 @@ def chances(item: ItemIntel, book: list[tuple[int, int, int, int]], price: int, 
         units: Units posted.
         now_ms: Now, UTC ms.
         settings: The document's settings.
+        unseen: The item's sales a day the snapshots never saw (the truth's, since the engine estimates none for
+            gear, BZ45); 0 for none.
 
     Returns:
         Reading -> P.
@@ -209,21 +217,33 @@ def chances(item: ItemIntel, book: list[tuple[int, int, int, int]], price: int, 
                                                        item.undercut_share, use)[0]
     out["spec"] = queue_chance(item, book, price, units, now_ms, settings,
                                lambda p, how: spec_acceptance(p, acc.level, acc.curve, how))
+    if unseen:                                     # item 36(b)'s candidate: S' = S + min(S, the unseen sales a day)
+        more = Supply(item.sold_per_day + min(item.sold_per_day, unseen), item.listed_per_day, tuple(book),
+                      min(p for p, _, _, _ in book) if book else None,
+                      sum(u for p, u, _, _ in book if p == min(p for p, _, _, _ in book)) if book else None)
+        out["P28, with unseen"] = sellprob.posting_chance(more, price, units, now_ms, settings, sales_how,
+                                                          item.undercut_share, acc)[0]
+    else:
+        out["P28, with unseen"] = out["P28"]
     return out
 
 
 class Acceptor:
     """The paper trader (`runner.Agent`): one lot of every item every POST_EVERY_HOURS, at a step × its worth."""
 
-    def __init__(self, keys: dict[int, tuple[str, int]], clear_ahead: bool = False) -> None:
+    def __init__(self, keys: dict[int, tuple[str, int]], clear_ahead: bool = False,
+                 unseen: dict[int, float] | None = None) -> None:
         """A poster that starts after the warm-up.
 
         Args:
             keys: Item key -> (shape, index), from acceptance_world.
             clear_ahead: Buy every other auction at or under the post's price before posting (the nothing-ahead pass).
+            unseen: Item key -> its true unseen sales a day (from a first run of the same world), for the "P28, with
+                unseen" reading; None for none.
         """
         self.keys = keys
         self.clear_ahead = clear_ahead
+        self.unseen = unseen or {}
         self.wake_ms: int = START_MS + WARM_DAYS * DAY_MS + 10 * HOUR_MS + 40 * 60_000   # after the daily run
         self.wakes = 0
         self.posted: list[tuple[int, Post]] = []                   # (auction id, the post with sold 0)
@@ -262,7 +282,7 @@ class Acceptor:
                     if a.seller != "us" and a.price <= price:
                         market.take(a.id, a.units, FLIPPER)
             book = live_book(market, key, now_ms)
-            read = chances(item, book, price, units, now_ms, settings)
+            read = chances(item, book, price, units, now_ms, settings, self.unseen.get(key, 0.0))
             auction = market.post(key, units, price, POST_HOURS, "us")
             ahead = float(sum(u for p, u, _, _ in book if p <= price))
             self.posted.append((auction.id, Post(key, shape, step, price, units, 0, read, ahead,
@@ -285,7 +305,9 @@ def trade(seed: int, folder: Path, replicates: int = REPLICATES, spread: float =
         against the truth's: a sale nobody's snapshot saw is not in the engine's).
     """
     world, keys = acceptance_world(seed, replicates, spread)
-    poster = Acceptor(keys, clear_ahead)
+    quiet = simulate(world, folder / "quiet", agent=None)           # the same world untraded: each item's unseen sales
+    unseen = {key: max(0.0, truth - engine) for key in keys for engine, truth in [sold_rates(quiet, key)]}
+    poster = Acceptor(keys, clear_ahead, unseen)
     run = simulate(world, folder, agent=poster)
     rates: dict[str, tuple[float, float]] = {}
     for shape in SHAPES:
@@ -385,7 +407,7 @@ def world_measures(posts: Sequence[Post], doc: MarketIntelligence, rates: dict[s
     """
     keys = sorted({p.key for p in posts if p.shape == shape})
     levels = [doc.items[k].level for k in keys if doc.items[k].level is not None]
-    worth = GEAR_WORTH if shape == "gear" else CLOTH_WORTH
+    worth = GEAR_WORTH if shape.startswith("gear") else CLOTH_WORTH
     return [Measure("SM21", f"world: items with a sold curve, {shape}, spread {spread:.2f}", curve_share(doc, keys), 1.0,
                     "reported"),
             Measure("SM21", f"world: sold/day the engine reads against the truth, {shape}, spread {spread:.2f}",
@@ -418,9 +440,13 @@ def pass_measures(posts: Sequence[Post], name: str, shape: str, spread: float) -
                            mean_chance(at, "P28"), share_sold(at), "reported"))
     under = [p for p in posts if p.shape == shape and p.under]
     steps = sorted({p.step for p in under})
+    more = mean_chance(under, "P28, with unseen")
     out.append(Measure("SM21", f"the queue model's read at or under the hour's level over the window (a = 1 by price), "
                        f"{name}: {shape}, spread {spread:.2f} ({len(under)} posts, at "
-                       f"{', '.join(f'{s:.2f}×' for s in steps) or 'no step'})",
+                       f"{', '.join(f'{s:.2f}×' for s in steps) or 'no step'}; with the true unseen sales added to S, "
+                       f"capped at S: {more:.2f})" if under else
+                       f"the queue model's read at or under the hour's level over the window (a = 1 by price), {name}: "
+                       f"{shape}, spread {spread:.2f} (no posts)",
                        mean_chance(under, "P28"), share_sold(under), "reported"))
     return out
 

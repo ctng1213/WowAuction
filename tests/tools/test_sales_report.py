@@ -52,8 +52,32 @@ def test_the_weighted_median_takes_the_lower_middle():
     assert rep.weighted_median([(10, 1), (20, 3)]) == 20
 
 
+def test_the_nothing_ahead_truth_follows_the_cheapest_listing_for_eight_hours():
+    ex = rep.exposures(books())
+    wool = [e for e in ex if e.key == WOOL]
+    assert wool == [rep.Exposure(WOOL, 900, True, True, T0 + H)]   # cheapest when first seen, gone in its first gap
+    assert not [e for e in ex if e.key == SILK]                      # Silk's cheapest is still listed when the span ends
+    rows = rep.nothing_ahead_rows(ex, {(WOOL, (T0 + H) // rep.DAY_MS): 900}, frozenset({SILK}))
+    assert "| gear and the rest (1 items) | 1.00–1.10× | 1 | 1 | 1.00 |" in rows
+    assert all(row.endswith("| 0 | 0 | — |") for row in rows if "1.00–1.10×" not in row)
+    assert rep.nothing_ahead_rows(ex, {}, frozenset({SILK}))[0].endswith("| 0 | 0 | — |")   # no level, no row counted
+    leaves = [rep.Leave(WOOL, 1, 900 + i, T0 + (i % 3) * rep.DAY_MS, None, 1, False) for i in range(12)]
+    g = rep.Gaps(leaves, [], rep.Counter(), rep.Counter(), {}, 0)
+    levels = rep.local_levels(g, frozenset())
+    day = T0 // rep.DAY_MS                                                         # 4 leaves on each of 3 days
+    assert levels[(WOOL, day + 1)] == rep.weighted_median([(900 + i, 1) for i in range(12)])   # the middle day sees all 12
+    assert (WOOL, day) not in levels and (WOOL, day + 3) not in levels            # 8 and 4 leaves: under the 10
+    assert rep.first_gap_rows(ex, frozenset({WOOL}), frozenset({SILK})) == ["| gear | 1 | 1 | 1.00 |", "| commodities | 0 | 0 | — |"]
+    still_up = books() + [rep.IdBook(T0 + 10 * H, (rep.Auction(1, SILK, 2, 10, 4),))]    # seen 10 h on: not sold in 8 h
+    assert [e for e in rep.exposures(still_up) if e.key == SILK] == [rep.Exposure(SILK, 10, False, False, T0)]
+    gone_unlinked = books() + [rep.IdBook(T0 + 10 * H, ())]                               # gone across a 7 h gap
+    assert not [e for e in rep.exposures(gone_unlinked) if e.key == SILK]                 # the unlinked gap drops it
+    linked = books() + [rep.IdBook(T0 + k * H, (rep.Auction(1, SILK, 2, 10, 4),)) for k in range(4, 10)]
+    assert [e for e in rep.exposures(linked) if e.key == SILK] == [rep.Exposure(SILK, 10, False, False, T0)]   # listed 8 h on
+
+
 def test_the_report_has_every_section():
-    text = rep.report(books(), 0, frozenset({SILK}), {SILK: "Silk Cloth"})
-    for heading in ("## 1.", "## 2.", "## 3.", "## 4.", "## 5.", "## 6."):
+    text = rep.report(books(), 0, frozenset({SILK}), {SILK: "Silk Cloth"}, frozenset({WOOL}))
+    for heading in ("## 1.", "## 2.", "## 3.", "## 4.", "## 5.", "## 6.", "## 7."):
         assert heading in text
     assert "4 snapshots over 3.0 h" in text
