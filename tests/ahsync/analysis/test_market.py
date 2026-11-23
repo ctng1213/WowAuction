@@ -179,8 +179,9 @@ def test_AR5_the_intelligence_holds_the_weekly_patterns_windows_and_curve():
     assert bar.sales_weeks == bar.supply_weeks == "7*168"                                  # run-length (BZ47)
     assert bar.how_weeks == "6*168"              # W17: the first and last 84 hours have no centred week
     assert unpack(bar.how, bar.how_weeks).values[4] == 0.8          # Mon 04:00, packed in thousandths
-    # Smoothed sales are 5.6 on Tue 18-20 (2 + 8 + 8 + 8 + 2 over 5 slots), 4.4 next to them: under 0.9 × 5.6.
-    assert [(w.start_slot, w.hours, w.best_slot, w.weeks) for w in bar.sell_windows] == [(TUE + 18, 3, TUE + 18, 6)]   # W17: 6 weeks of centred observations
+    # P30's rate pools Tue 18-20's rush with every day's 18-20 and shrinks it: smoothed about 2.59 an hour there,
+    # 2.41 beside it (above 0.9 × 2.59 = 2.33), 2.23 two away (below it).
+    assert [(w.start_slot, w.hours, w.best_slot, w.weeks) for w in bar.sell_windows] == [(TUE + 17, 5, TUE + 18, 6)]   # W17: 6 weeks of centred observations
     # W15: the window's forecast: 100c × 1.0 (within p10..p90 = 100c), floor(0.5 × 20 listed) = 10 units, and the
     # confidence with its 6 weeks of centred observations as the pattern component (W17; still 69).
     assert [(w.expected_price, w.exec_qty, w.conf) for w in bar.sell_windows] == [(100, 10, 69)]

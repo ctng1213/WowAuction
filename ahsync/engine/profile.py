@@ -1,9 +1,9 @@
 """Hour-of-week profiles: `how`, `sales_how`, `supply_how`, and seasonality strength (SPEC §3.3, §3.3.4, §3.3.6).
 
-Each slot's value is a recency-weighted median over the weeks of history. A slot
-with data from at least 3 different weeks is used as is (confidence high); with
-1-2 weeks it falls back to its weekday's value (confidence low); with none it is
-flat. Values are then smoothed as the mean of the slot and the 2 slots on each side.
+`how` and `supply_how` take each slot's recency-weighted median over the weeks of history: a slot with data from
+at least 3 different weeks is used as is (confidence high); with fewer, `how` reads 1.0 (P29) and `supply_how` its
+weekday's value. `sales_how` is a recency-weighted rate shrunk toward its hour of day and the item's average (P30).
+Values are then smoothed as the mean of the slot and the 2 slots on each side.
 `how`'s observations are each hourly close against the item's own centred week (W17), so a price that moved and
 stayed is not read as a pattern.
 """
@@ -20,6 +20,7 @@ HOUR_MS = 3_600_000
 WEEK_MS = 7 * 86_400_000
 MIN_WEEKS = 3          # weeks of data a slot needs to stand on its own (SPEC §3.3)
 SMOOTH_RADIUS = 2      # slots on each side in the smoothing mean
+SALES_PRIOR_HOURS = 30.0   # pseudo-hours pulling a sales rate toward the level above it (P30; measured, plan §1d 40)
 PACK_SCALE = 1000                # packed profiles keep ratios in thousandths (SPEC §5.0 contents)
 STRENGTH_MIN_HELD_OUT = 24      # held-out closes seasonality strength needs (SPEC §3.3.6)
 STRENGTH_FULL_WEEKS = 6         # weeks of data at which strength is no longer scaled down
@@ -164,7 +165,11 @@ def price_profile(hourly: Sequence[tuple[int, int]], med30: int | None, now_ms: 
 
 
 def sales_profile(sold_per_hour: Sequence[tuple[int, float]], now_ms: int, half_life_weeks: float = 4) -> Profile:
-    """`sales_how`: units sold per slot ÷ the average hour, mean 1.0 (SPEC §3.3).
+    """`sales_how`: each slot's sales rate ÷ the average hour, mean 1.0 (SPEC §3.3, P30).
+
+    A slot's rate is its recency-weighted units ÷ its weighted hours observed, pulled toward its hour of day by
+    SALES_PRIOR_HOURS pseudo-hours; the hour of day pools its 7 weekdays and is pulled toward the item's average
+    hour the same way. Then smoothed as the other profiles.
 
     Args:
         sold_per_hour: (hour start ms, units sold in that hour) from consecutive hourly books.
@@ -172,19 +177,23 @@ def sales_profile(sold_per_hour: Sequence[tuple[int, float]], now_ms: int, half_
         half_life_weeks: pattern_half_life_weeks.
 
     Returns:
-        The profile; a slot without data (nor weekday data) takes the average hour,
-        so it is 1.0 before smoothing; flat 1.0 everywhere with no sales at all.
+        The profile; a slot never observed takes its hour of day's rate, an hour of day never observed the
+        average; flat 1.0 everywhere with no sales at all. Weeks and confidence count the slot's weeks as before.
     """
     by_slot, week_sets = _observations(sold_per_hour, now_ms, half_life_weeks)
     weeks = tuple(len(w) for w in week_sets)
     confident = tuple(w >= MIN_WEEKS for w in weeks)
-    raw = _raw_slots(by_slot, week_sets)
-    known = [v for v in raw if v is not None]
-    mean = sum(known) / len(known) if known else 0.0
-    if mean <= 0:
+    units = [sum(value * weight for value, weight in obs) for obs in by_slot]
+    hours = [sum(weight for _, weight in obs) for obs in by_slot]
+    if sum(units) <= 0:
         return Profile(tuple([1.0] * SLOTS), weeks, confident)
-    filled = [mean if v is None else v for v in raw]
-    smoothed = _smooth(filled)
+    average = sum(units) / sum(hours)
+    # A median of mostly-zero hours made one lucky hour a thin item's whole week (P30); a rate pooled over the
+    # weekdays and pulled toward the average needs evidence before an hour stands out.
+    by_hour = [(sum(units[d * 24 + h] for d in range(7)) + SALES_PRIOR_HOURS * average)
+               / (sum(hours[d * 24 + h] for d in range(7)) + SALES_PRIOR_HOURS) for h in range(24)]
+    rates = [(units[s] + SALES_PRIOR_HOURS * by_hour[s % 24]) / (hours[s] + SALES_PRIOR_HOURS) for s in range(SLOTS)]
+    smoothed = _smooth(rates)
     overall = sum(smoothed) / SLOTS
     return Profile(tuple(v / overall for v in smoothed), weeks, confident)
 
