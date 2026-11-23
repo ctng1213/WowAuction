@@ -123,7 +123,8 @@ def real_world(out: io.TextIOBase | None) -> ShellWorld:
         Returns:
             The real environment, transport and clock.
         """
-        return Runtime(env, home, UrllibTransport(), SystemClock(), should_stop, stream, app_hooks=hooks)
+        return Runtime(env, home, UrllibTransport(), SystemClock(), should_stop, stream, app_hooks=hooks,
+                       stopping=should_stop)            # the stop event has no side effects: long jobs read it (FM92)
 
     bundle = bundle_addon_dir(bool(getattr(sys, "frozen", False)), getattr(sys, "_MEIPASS", None),
                               Path(__file__).resolve().parents[1])

@@ -157,6 +157,9 @@ class Runtime:
     out: IO[str]                        # user-facing start-up messages (stderr in the app)
     serve_dashboard: bool = True        # False in tests that don't exercise the dashboard
     app_hooks: AppHooks | None = None   # the app shell's dashboard paths (SPEC §3.7); None: `python -m ahsync`
+    # Read by long jobs between their requests, so a stop never waits on a slow source (FM92); unlike should_stop it
+    # may be read any number of times. The app shell passes its stop event; run() adds data/ahsync.stop.
+    stopping: Callable[[], bool] = lambda: False
 
 
 def safe_backup(db: Database, backup_dir: Path, now_ms: int) -> None:
@@ -498,8 +501,9 @@ def run(data_dir: Path, config_path: Path, runtime: Runtime, held_lock: Instance
         except ConfigError as error:
             print(f"AHSync can't start: {error}", file=runtime.out)
             return 2
-        outer_stop = runtime.should_stop
-        stoppable = replace(runtime, should_stop=lambda: outer_stop() or stop_file.exists())
+        outer_stop, outer_stopping = runtime.should_stop, runtime.stopping
+        stoppable = replace(runtime, should_stop=lambda: outer_stop() or stop_file.exists(),
+                            stopping=lambda: outer_stopping() or stop_file.exists())
         return _run_configured(data_dir, config, stoppable, config_path)
     finally:
         remove_stop_file(stop_file)
@@ -565,7 +569,8 @@ def _run_configured(data_dir: Path, config: Config, runtime: Runtime, config_pat
             dashboard = serve_dashboard(data_dir, config, clock, refresh_requests, runtime.out, config_path, live.replace,
                                         runtime.app_hooks, db.intel_cache)
         ahledger = AhledgerSource(ApiClient(runtime.transport, clock, "", api_base=AHLEDGER_BASE, per_minute=300,
-                                            redactor=redactor, paced=True), db, clock)          # keyless, its own limit (SRC10)
+                                            redactor=redactor, paced=True, should_stop=runtime.stopping),
+                                  db, clock)                                     # keyless, its own limit (SRC10); FM92
         ctx = SyncContext(api, db, clock, result.caps, config.retention_days, addresses, ahledger)
         hooks = build_hooks(ctx, config, backup_dir, refresh_requests.take, live)
         if runtime.app_hooks is not None:        # only the app shell checks for updates (SPEC §3.7.8)
