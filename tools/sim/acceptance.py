@@ -72,6 +72,7 @@ class Post:
     chances: dict[str, float]         # FORMS, and "today, nothing ahead" and "P28, nothing ahead"
     ahead: float                      # units at or below the price when it was posted
     under: bool = False               # priced at or under the hour's level over its whole window (a = 1 by price)
+    capped: bool = False              # above the level of an item without a curve: a price the plan never posts (item 41)
 
 
 def acceptance_world(seed: int, replicates: int = REPLICATES, spread: float = BUYER_SPREAD
@@ -170,6 +171,9 @@ def queue_chance(item: ItemIntel, book: Sequence[tuple[int, int, int, int]] | No
 def under_level(item: ItemIntel, price: int, now_ms: int, settings: MarketSettings) -> bool:
     """Whether a post sits at or under the hour's level in every hour of its window (the acceptance reads 1).
 
+    An item without a curve reads `a = 1` at every price, but a post above its level is not "under": the plan never
+    posts one there (its high bound is the level, SPEC §3.3), so it is counted apart (plan §1d item 41).
+
     Args:
         item: The item's intelligence.
         price: The post's unit price, copper.
@@ -177,10 +181,10 @@ def under_level(item: ItemIntel, price: int, now_ms: int, settings: MarketSettin
         settings: The document's settings (the window).
 
     Returns:
-        True at or under the level over the window, and for an item without a level or a curve.
+        True at or under the level over the window, and for an item without a level.
     """
     acc = price_acceptance(item)
-    if acc.level is None or acc.curve is None:
+    if acc.level is None:
         return True
     how = acc.how or sellprob.FLAT_HOW
     return all(price <= math.floor(acc.level * how[slot_of(h)] + 0.5)
@@ -285,8 +289,9 @@ class Acceptor:
             read = chances(item, book, price, units, now_ms, settings, self.unseen.get(key, 0.0))
             auction = market.post(key, units, price, POST_HOURS, "us")
             ahead = float(sum(u for p, u, _, _ in book if p <= price))
-            self.posted.append((auction.id, Post(key, shape, step, price, units, 0, read, ahead,
-                                                 under_level(item, price, now_ms, settings))))
+            under = under_level(item, price, now_ms, settings)
+            capped = not under and price_acceptance(item).curve is None
+            self.posted.append((auction.id, Post(key, shape, step, price, units, 0, read, ahead, under, capped)))
 
 
 def trade(seed: int, folder: Path, replicates: int = REPLICATES, spread: float = BUYER_SPREAD,
@@ -318,7 +323,7 @@ def trade(seed: int, folder: Path, replicates: int = REPLICATES, spread: float =
         if event.kind == "buy":
             bought[event.auction] = bought.get(event.auction, 0) + event.units
     posts = [Post(p.key, p.shape, p.step, p.price, p.units, min(p.units, bought.get(auction, 0)), p.chances, p.ahead,
-                  p.under) for auction, p in poster.posted]
+                  p.under, p.capped) for auction, p in poster.posted]
     return posts, run.documents[-1], rates
 
 
@@ -435,8 +440,10 @@ def pass_measures(posts: Sequence[Post], name: str, shape: str, spread: float) -
         words = "; ".join(f"{form} {mean_chance(at, form):.2f}" for form in
                           ("today", "spec", "today, nothing ahead", "P28, nothing ahead")) if at else "no posts"
         clear = sum(1 for p in at if p.ahead == 0)
+        capped = sum(1 for p in at if p.capped)
         out.append(Measure("SM21", f"P28's chance against the share sold, {name}: {shape}, {step:.2f}× the worth, "
-                           f"spread {spread:.2f} ({len(at)} posts, {clear} with nothing ahead; {words})",
+                           f"spread {spread:.2f} ({len(at)} posts, {clear} with nothing ahead, {capped} above the level "
+                           f"without a curve, where the plan never posts; {words})",
                            mean_chance(at, "P28"), share_sold(at), "reported"))
     under = [p for p in posts if p.shape == shape and p.under]
     steps = sorted({p.step for p in under})
