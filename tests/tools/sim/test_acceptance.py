@@ -48,6 +48,8 @@ def test_the_poster_reads_every_form_of_the_chance_and_P28_never_exceeds_todays(
     posts, doc, rates = trade(1, tmp_path, replicates=1, spread=0.25)
     assert set(rates) == set(SHAPES) and all(t > 0 for _, t in rates.values())
     assert any(p.under for p in posts) and all(p.chances["P28"] == p.chances["today"] for p in posts if p.under)
+    assert any(p.capped for p in posts) and not any(p.capped and p.under for p in posts)
+    assert all(p.shape != "gear" for p in posts if p.capped)            # the busy gear has a curve
     assert posts and {p.shape for p in posts} == set(SHAPES) and {p.step for p in posts} <= set(STEPS)
     for p in posts:
         assert set(p.chances) == {"today", "P28", "spec", "today, nothing ahead", "P28, nothing ahead", "P28, with unseen"}
@@ -87,7 +89,9 @@ def test_the_queue_chance_with_P28s_factor_is_the_built_posting_chance():
     assert chances(i, book, 200, 1, now, settings)["P28"] == 0.0            # at the curve's 100th nobody buys
     assert chances(i, book, 95, 1, now, settings)["P28"] == chances(i, book, 95, 1, now, settings)["today"]
     assert under_level(i, 100, now, settings) and not under_level(i, 101, now, settings)
-    assert under_level(replace(i, sold_curve=None), 500, now, settings)
+    bare = replace(i, sold_curve=None)                  # a = 1 at every price, but above its level the plan never posts
+    assert under_level(bare, 100, now, settings) and not under_level(bare, 500, now, settings)
+    assert under_level(replace(bare, level=None, level_source=None, med7=None, med30=None), 500, now, settings)
 
 
 def test_the_world_has_each_shape_with_the_planted_spread_and_the_live_book_reads_the_market():
