@@ -498,7 +498,8 @@ def test_BZ49_unseen_per_day_is_sold_per_days_unseen_share_over_the_week_of_the_
     assert unseen_per_day(item, week, DailyVolume(None, None, None)) is None
 
 
-def test_P28_the_now_fields_and_the_window_chances_read_the_price_acceptance():
+def test_P28_the_now_fields_and_the_window_chances_read_the_price_acceptance(monkeypatch):
+    monkeypatch.setattr(sellprob, "DEMAND_SPREAD", sellprob.NO_SPREAD)   # P28's numbers alone; P31 is tested apart
     from dataclasses import replace
 
     from ahsync.intel.contract import IntelWindow
@@ -520,7 +521,8 @@ def test_P28_the_now_fields_and_the_window_chances_read_the_price_acceptance():
     assert market.sell_chance_now(market.Quote(60, 1, ((60, 1, 4, 1),)), sold, NOW, settings) ==         market.sell_chance_now(market.Quote(60, 1, ((60, 1, 4, 1),)), plain, NOW, settings)     # cur under the level
 
 
-def test_P28_now_base_carries_the_documents_curve_and_pattern_and_the_exported_curve_is_built_at_the_post_price():
+def test_P28_now_base_carries_the_documents_curve_and_pattern_and_the_exported_curve_is_built_at_the_post_price(monkeypatch):
+    monkeypatch.setattr(sellprob, "DEMAND_SPREAD", sellprob.NO_SPREAD)   # P28's numbers alone; P31 is tested apart
     from dataclasses import replace
 
     from ahsync.engine import profile

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from ahsync.engine import sellprob
 from ahsync.history.reads import ItemInfo
 from ahsync.intel.contract import ItemIntel
 from ahsync.recommend.on_ah_page import on_ah_page
@@ -50,7 +51,8 @@ def test_D53_the_chance_counts_only_the_time_an_auction_has_left():
     assert (_below(booked, 45), _below(booked, 30), _below(s, 45), _below(None, 45)) == ((12, 38, 40), (0, 0, 0), None, None)
 
 
-def test_P28_the_chance_of_the_time_left_reads_the_price_acceptance():
+def test_P28_the_chance_of_the_time_left_reads_the_price_acceptance(monkeypatch):
+    monkeypatch.setattr(sellprob, "DEMAND_SPREAD", sellprob.NO_SPREAD)   # P28's numbers alone; P31 is tested apart
     from ahsync.engine.sellprob import MarketSettings
     from ahsync.recommend.on_ah_page import _chance_left
     now, hour = 1_760_000_000_000, 3_600_000

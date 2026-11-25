@@ -276,7 +276,17 @@ def test_P25_without_volume_the_chance_follows_where_the_post_would_stand():
     assert plan.post_chance(struggling, 44, 20, hours, 0, S) == pytest.approx((4 * 0.5 + 0) / (4 + 0 + 2))   # 0.333
 
 
-def test_P28_a_post_above_the_hours_level_reads_the_price_acceptance():
+def test_P31_a_planned_post_of_an_item_with_a_curve_averages_over_the_demand_spread():
+    quiet = dict(book=(), undercut_share=0.0)                   # S 40 a day: 13.33 units over 8 flat hours for 20 posted
+    hours = sellprob.posting_now_window(NOW)
+    assert plan.post_chance(linen(**quiet), 45, 20, hours, 0, S) == pytest.approx(40 / 3 / 20)          # 0.6667
+    curved = linen(sold_curve=(40, 45, 47, 49, 55, 65, 80), **quiet)                       # 45 c is under the level
+    # min(13.33 m, 20) ÷ 20 over the ten m: 0.12, 0.2533, 0.34, 0.4267, 0.5067, 0.6, 0.7133, 0.86, 1, 1
+    assert plan.post_chance(curved, 45, 20, hours, 0, S) == pytest.approx(0.582)
+
+
+def test_P28_a_post_above_the_hours_level_reads_the_price_acceptance(monkeypatch):
+    monkeypatch.setattr(sellprob, "DEMAND_SPREAD", sellprob.NO_SPREAD)   # P28's numbers alone; P31 is tested apart
     curve = (40, 45, 47, 49, 55, 65, 80)                       # the level 49 c is the curve's 50th
     dear = tuple([1.12] * 168)                                   # every hour's level is 55 c
     quiet = dict(book=(), undercut_share=0.0)                   # nothing ahead at any price, no undercutters

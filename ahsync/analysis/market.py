@@ -203,8 +203,10 @@ def weekly_fields(item: ItemHistory, med30: int | None, base: "NowBase", price: 
     curve, curve_hour = "", None
     if base.sold_per_day is not None:
         u = settings.default_undercut_share if base.undercut_share is None else base.undercut_share
+        acc = base.acceptance()
         grid = sellprob.build_curve(base.sold_per_day, base.listed_per_day or 0.0, u, sales_profile.values, now_ms, ref,
-                                    hours=settings.sell_window_hours, price=price, acc=base.acceptance())
+                                    hours=settings.sell_window_hours, price=price, acc=acc,
+                                    spread=sellprob.demand_spread(acc))
         curve, curve_hour = sellprob.encode_curve(grid), now_ms // HOUR_MS
     return {
         **fields,
@@ -228,14 +230,15 @@ class NowBase:
     undercut_share: float | None = None   # measured u(p) at the post-now price (BZ29); None for the default
     sold_curve: tuple[int, ...] | None = None   # the sold curve (SPEC §3.3 Bounds), the price acceptance's (P28)
     how_values: tuple[float, ...] = FLAT_HOW    # the stored price pattern's 168 ratios (flat without one)
+    commodity: bool = False               # seen in Blizzard's commodities list; the demand spread skips it (P31)
 
     def acceptance(self) -> Acceptance:
-        """What the price acceptance reads (SPEC §3.3.2, P28).
+        """What the price acceptance and the demand spread read (SPEC §3.3.2, P28, P31).
 
         Returns:
-            The level, the sold curve and the pattern.
+            The level, the sold curve, the pattern and the commodity flag.
         """
-        return Acceptance(self.level, self.sold_curve, self.how_values)
+        return Acceptance(self.level, self.sold_curve, self.how_values, self.commodity)
 
 
 @dataclass(frozen=True)
@@ -262,7 +265,7 @@ def now_base(i: ItemIntel, at_ms: int, vendor_sell: int) -> NowBase:
     priced = published_level(i)
     return NowBase(priced.level, priced.low, priced.high, pattern_at(i, at_ms), i.sold_per_day, i.listed_per_day,
                    profile.unpack(i.sales_how, i.sales_weeks).values, vendor_sell, i.undercut_share, priced.curve,
-                   profile.unpack_values(i.how) or FLAT_HOW)
+                   profile.unpack_values(i.how) or FLAT_HOW, bool(i.commodity))
 
 
 def now_fields(quote: Quote, base: NowBase, now_ms: int, settings: MarketSettings
@@ -508,8 +511,9 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
     undercut = measured_undercut(item.new_listings,
                                  prices.post_price(quote.price, priced.level, how_now, priced.low, priced.high),
                                  sellprob.cheapest_other(quote.book, quote.price), now_ms)
+    commodity = any(row[sell_through.COMMODITY] for row in item.lifetimes.values()) if item.lifetimes else None
     base = NowBase(priced.level, priced.low, priced.high, how_now, volume.sold_per_day, volume.listed_per_day,
-                   sales[0].values, vendor_sell, undercut, priced.curve, stored.values)
+                   sales[0].values, vendor_sell, undercut, priced.curve, stored.values, bool(commodity))
     price, ref, chance, unknown, sell_value = now_fields(quote, base, now_ms, settings)   # PP5, P26
     book_age = now_ms - newest[0] if newest else None
     recent = [c for t, c in raw if t > now_ms - DAY_MS]
@@ -539,7 +543,7 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
         observed_listing_turnover=observed_turnover(item.hourly_supply, now_ms), med14=med14,
         volume_kind=volume.main_kind, closes_30d=len(last30),
         expired_share=expired_share(item.lifetimes, now_ms), undercut_share=undercut,
-        commodity=any(row[sell_through.COMMODITY] for row in item.lifetimes.values()) if item.lifetimes else None,
+        commodity=commodity,
         supply7=median_daily_supply(item.hourly_supply, now_ms, 7),
         supply14=median_daily_supply(item.hourly_supply, now_ms, 14),
         sell_chance=sell_chance_now(quote, base, now_ms, settings), unseen_per_day=unseen_per_day(item, week, volume),
