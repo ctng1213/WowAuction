@@ -13,7 +13,7 @@ AHProfit.Market = Market
 Market.SCHEMA_VERSION = 1          -- must equal ahsync/export/market_lua.py MARKET_SCHEMA_VERSION (FM17)
 -- The build of both generated files' format; must equal ahsync/export/market_lua.py EXPORT_VERSION. A file of
 -- another build says which side is stale (FM34, FM35). Core/Plan.lua, which loads after this file, reads it too.
-AHProfit.EXPORT_VERSION = 9            -- 9: the level, its bounds and the H rows (SP2c, EX25); 8: the cooldowns' CD table (SPEC §3.4F, EX23); 7: plan actions end in
+AHProfit.EXPORT_VERSION = 10           -- 10: the CD rows' third field is Profit / day (EX23); 9: the level, its bounds and the H rows (SP2c, EX25); 8: the cooldowns' CD table (SPEC §3.4F, EX23); 7: plan actions end in
                                        -- paid (EX22); 6: the tooltip's market lines (M33b); 5: market items end in salesDays (EX21); 4: K, G and the portfolio
                                        -- snapshot (EX17, EX18); 3: closes30 (TT23, PP4); 2: a mail's recipient (C22)
 Market.CACHE_LIMIT = 500           -- decoded items kept before the cache starts again
@@ -241,14 +241,14 @@ end
 
 --- One cooldown catalog row's money, as AHSync exported it (SPEC §3.4F.4, §3.5, EX23). The addon computes none (D1).
 ---@param spell number  The catalog spell
----@return table|nil    { mats, net, perWeek } in copper, each nil for "—"; nil when the file has no such row
+---@return table|nil    { mats, net, perDay } in copper, each nil for "—"; nil when the file has no such row
 function Market.Cooldown(spell)
   local s = State()
   if s.status ~= "ok" then return nil end
   local text = (s.market.CD or {})[spell]
   if not text then return nil end
-  local mats, net, perWeek = text:match("^([^;]*);([^;]*);([^;]*)$")
-  return { mats = tonumber(mats), net = tonumber(net), perWeek = tonumber(perWeek) }
+  local mats, net, perDay = text:match("^([^;]*);([^;]*);([^;]*)$")
+  return { mats = tonumber(mats), net = tonumber(net), perDay = tonumber(perDay) }
 end
 
 --- The cooldown catalog version AHSync exported, to compare with the addon's own (SPEC §3.4F.7, CD29).

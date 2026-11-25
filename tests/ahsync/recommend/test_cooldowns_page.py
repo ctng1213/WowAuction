@@ -104,5 +104,5 @@ def test_CD1_the_page_holds_only_catalog_rows_and_reads_each_characters_stored_d
     salt = next(r for r in staged["rows"] if r["spell"] == 19566)
     assert [(st["name"], st["state"], st["bank"]) for st in salt["standings"]] == [("Brugan", "timed", True)]
     assert salt["item"] == "item 15409"                                            # no name known yet
-    assert staged["export"]["17187"] == "292000;135500;474250" and staged["version"] == 1
+    assert staged["export"]["17187"] == "292000;135500;67750" and staged["version"] == 1
     assert db.status["cooldown_catalog"][2] == {"text": "cooldown catalog: 15 recipes"}

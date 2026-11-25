@@ -15,7 +15,7 @@ CooldownsTab.BAR_H = 18
 CooldownsTab.ROW_H = 30                                     -- a row and its sub-line
 CooldownsTab.TOP = 60                                       -- where the header strip sits on the other tabs
 local SUBS = { item = "sub", skill = "skillSub", cooldown = "shared", price = "priceAge" }   -- cell -> the field under it
-local TIPS = { cooldown = "cooldownTip", ready = "readyTip", mats = "matsTip", net = "netTip",
+local TIPS = { cooldown = "cooldownTip", ready = "readyTip", mats = "matsTip", perDay = "perDayTip",
                canMake = "canMakeTip" }
 local ITEM_CELLS = { item = true, price = true }            -- these show the normal market tooltip (CD26)
 
@@ -157,6 +157,6 @@ function CooldownsTab.FillRow(row, line, tint, colors)
   tint(cells.ready, line.readyColor == "orange" and colors.orange or colors.text)
   tint(cells.price, line.priceAge and colors.muted or colors.text)
   tint(cells.mats, colors.text)
-  tint(cells.net, line.netColor == "neg" and colors.neg or colors.text)
+  tint(cells.perDay, line.perDayColor == "neg" and colors.neg or colors.text)
   tint(cells.canMake, line.canMakeColor == "pos" and colors.pos or colors.muted)
 end

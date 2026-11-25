@@ -17,11 +17,11 @@ CW.NAMES = { [12360] = "Arcanite Bar", [12359] = "Thorium Bar", [12363] = "Arcan
 CW.PRICES = { [12360] = 450000, [12359] = 12000, [12363] = 280000, [14342] = 220000, [14256] = 35000, [15409] = 45000,
   [8150] = 1500, [7080] = 30000, [7076] = 24000, [12808] = 10000, [7082] = 28000, [6037] = 21000, [3860] = 6000,
   [3577] = 13000, [3575] = 4000, [7077] = 15000, [7068] = 12000 }
--- The CD strings AHSync exported for this world ("mats;net;perWeek", tests/support/cooldowns_world.py's base()).
-CW.EXPORT = { [11479] = "4000;8350;58450", [11480] = "6000;13950;48825", [17187] = "292000;135500;474250",
-  [17559] = "28000;;", [17560] = ";;", [17561] = "24000;4500;31500", [17562] = "30000;-3400;-23800",
-  [17563] = "10000;18500;129500", [17564] = "30000;-20500;-143500", [17565] = ";;", [17566] = "24000;;",
-  [18560] = "70000;139000;243250", [19566] = "1500;41250;96250", [21935] = ";;", [25146] = "15000;19200;" }
+-- The CD strings AHSync exported for this world ("mats;net;perDay", tests/support/cooldowns_world.py's base()).
+CW.EXPORT = { [11479] = "4000;8350;8350", [11480] = "6000;13950;6975", [17187] = "292000;135500;67750",
+  [17559] = "28000;;", [17560] = ";;", [17561] = "24000;4500;4500", [17562] = "30000;-3400;-3400",
+  [17563] = "10000;18500;18500", [17564] = "30000;-20500;-20500", [17565] = ";;", [17566] = "24000;;",
+  [18560] = "70000;139000;34750", [19566] = "1500;41250;13750", [21935] = ";;", [25146] = "15000;19200;" }
 
 --- Encode key -> units as an inventory string.
 ---@param units table|nil
@@ -100,8 +100,8 @@ function CW.Ctx(live, noMarket)
   local Market = { Decode = function(spell)
     local text = CW.EXPORT[spell]
     if not text then return nil end
-    local mats, net, week = text:match("^([^;]*);([^;]*);([^;]*)$")
-    return { mats = tonumber(mats), net = tonumber(net), perWeek = tonumber(week) }
+    local mats, net, day = text:match("^([^;]*);([^;]*);([^;]*)$")
+    return { mats = tonumber(mats), net = tonumber(net), perDay = tonumber(day) }
   end }
   return {
     live = live, nowMs = CW.NOW, offsetMs = 0, fileMs = CW.NOW, exportClock = not noMarket and "14:32" or nil,

@@ -185,18 +185,18 @@ def test_the_tooltips_market_lines_travel_after_sales_days():
     assert gear[26] == "" and gear[30] == "0"                                    # no rates; not a commodity
     assert item_text(replace(LINEN_INTEL, med7=None, med30=None, p10_30=None)).split(";")[0].endswith(",7")   # no level: trailing empties left out
     text = market_lua.market_lua([intel(item)], {}, {}, BUILT, coverage30={M: 33})
-    assert "coverage30 = 33, CD = {  } }," in text and "exportVersion = 9," in text
+    assert "coverage30 = 33, CD = {  } }," in text and "exportVersion = 10," in text
 
 
 def test_EX23_the_cooldowns_money_is_a_cd_table_inside_the_checksum():
     empty = MarketIntelligence(M, BUILT, BUILT - HOUR, 1, {})
     plain = market_lua.market_lua([empty], {M: set()}, {}, BUILT)
     text = market_lua.market_lua([empty], {M: set()}, {}, BUILT, cooldowns={M: (1, {"17564": "30000;;",
-                                                                         "17187": "292000;135500;474250"})})
-    assert 'CD = { v = 1, [17187] = "292000;135500;474250", [17564] = "30000;;" } },' in text
-    assert "exportVersion = 9," in text
+                                                                         "17187": "292000;135500;67750"})})
+    assert 'CD = { v = 1, [17187] = "292000;135500;67750", [17564] = "30000;;" } },' in text
+    assert "exportVersion = 10," in text
     count, length = (int(n) for n in re.search(r'checksum = "(\d+):(\d+)"', plain).groups())
-    assert f'checksum = "{count + 2}:{length + 20 + 7}"' in text
+    assert f'checksum = "{count + 2}:{length + 19 + 7}"' in text
 
 
 def test_EX24_a_shortlisted_cooldown_mat_is_exported_with_a_nine_day_old_price():
@@ -223,4 +223,4 @@ def test_EX25_each_item_carries_its_level_and_bounds_and_the_shortlist_its_next_
     flat = market_lua.market_lua([intel(replace(sold, how="", how_weeks=""), rod)], {M: {LINEN, OTHER}}, {}, generated)
     assert "H = {  }, K = K1" in flat                                             # H is outside the checksum, as S
     assert re.search(r'checksum = "(\d+):(\d+)"', text).groups() == re.search(r'checksum = "(\d+):(\d+)"', flat).groups()
-    assert "exportVersion = 9," in text
+    assert "exportVersion = 10," in text

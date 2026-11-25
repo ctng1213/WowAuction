@@ -54,7 +54,7 @@ ViewModel.COLUMN_HELP = {
   Cooldown = "How long the recipe is locked after each use; \"shared\": one cooldown for its whole group",
   Ready = "Ready, or the time left. Orange: Not learned, Needs item (the tool isn't in the bags or bank) or Not read",
   ["AH price"] = "The product's lowest price in AHSync's export; muted with its age past 7 days. Hover for its tooltip",
-  ["Net / use"] = "What one use earns if it sells: units made × price after the cut, less the mats (AHSync's export)",
+  ["Profit / day"] = "What one character earns a day using it every time it is ready: one use's net (units made × price after the cut, less the mats; on hover) ÷ the cooldown in days (AHSync's export)",
   ["Can Make"] = "Yes when this character can use it now: skill, recipe, tool, cooldown and mats in its bags. "
                  .. "Yes (bank): a mat or the tool is in the bank",
   Source = "Where the mats come from: Owned (your bags), AH, Vendor, or Mixed (more than one)",

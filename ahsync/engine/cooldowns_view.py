@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 from ahsync.engine.cooldowns import (
     DAY_S, PROFESSIONS, CooldownRecipe, Holder, Standing, can_make, duration_text, group_members, mats_copper,
-    net_per_use, per_week, standing)
+    net_per_use, per_day, standing)
 from ahsync.engine.views import money, round_half_up
 
 MODES = ("all", "mine", "skill")             # no toggle, Just my characters, My skill level only (implies mine)
@@ -26,7 +26,7 @@ HIDDEN_LABELS = (("cooling", "cooling down"), ("not_learned", "not learned"), ("
 CAN_MAKE = {"yes": ("Yes", "ready", 0), "bank": ("Yes (bank)", "ready", 1), "no": ("No", "muted", 2)}
 COOLDOWNS_HELP = {
     "Cooldown": "How long the recipe is locked after each use. \"shared\": one use locks the whole group",
-    "Per week": "What one character earns using it every time it is ready: Net / use × 7 ÷ the cooldown in days",
+    "Profit / day": "What one character earns a day using it every time it is ready: Net / use ÷ the cooldown in days",
     "Who": "Every character with the profession: Ready, the time left, or what is missing",
     "Can Make": "Yes when a character can use it right now: skill, recipe, tool, cooldown and mats in its own bags",
 }
@@ -56,7 +56,7 @@ def _made_from(recipe: CooldownRecipe, names: Mapping[int, str]) -> str:
 
 
 def _money_row(recipe: CooldownRecipe, prices: Mapping[int, PriceFact], names: Mapping[int, str]) -> dict:
-    """A row's money: Mats, Net / use and Per week, with the mats' hover lines (SPEC §3.4F.4).
+    """A row's money: Mats, Net / use and Profit / day, with the mats' hover lines (SPEC §3.4F.4).
 
     Args:
         recipe: A catalog row.
@@ -64,14 +64,14 @@ def _money_row(recipe: CooldownRecipe, prices: Mapping[int, PriceFact], names: M
         names: Item key -> name.
 
     Returns:
-        {"mats", "net", "per_week" (None when missing or under 1 day), "mats_lines"}.
+        {"mats", "net", "per_day" (None when missing or under 1 day), "mats_lines"}.
     """
     cur = {key: f.price for key, f in prices.items()}
     mats = mats_copper(recipe, cur)
     net = net_per_use(recipe, cur.get(recipe.product), mats)
     lines = [f"{count} {names.get(key, f'item {key}')}: {money(cur.get(key) and cur[key] * count)}"
              for key, count in recipe.reagents]
-    return {"mats": mats, "net": net, "per_week": per_week(recipe, net), "mats_lines": lines}
+    return {"mats": mats, "net": net, "per_day": per_day(recipe, net), "mats_lines": lines}
 
 
 def _standing_dict(st: Standing) -> dict:
@@ -119,7 +119,8 @@ def _base_row(recipe: CooldownRecipe, recipes: Sequence[CooldownRecipe], holders
 
 
 def _order_key(row: dict) -> tuple:
-    """The default order: AH price, highest first; no price last; ties by recipe name, then spell id (CD8).
+    """The default order (CD8): Profit / day, highest first; the rows without one after, by AH price, highest first,
+    with no price last; ties by recipe name, then spell id.
 
     Args:
         row: A staged row.
@@ -127,7 +128,8 @@ def _order_key(row: dict) -> tuple:
     Returns:
         The sort key.
     """
-    return (row["price"] is None, -(row["price"] or 0), row["recipe"], row["spell"])
+    return (row["per_day"] is None, -(row["per_day"] or 0), row["price"] is None, -(row["price"] or 0),
+            row["recipe"], row["spell"])
 
 
 def _notice(profession: str, mode: str, rows: Sequence[dict], holders: Sequence[Holder]) -> str:
@@ -175,15 +177,15 @@ def _views(rows: Sequence[dict], holders: Sequence[Holder]) -> dict:
 
 
 def export_text(row: dict) -> str:
-    """A row's money for the addon's `CD` table (SPEC §3.5, EX23): "mats;net;perWeek", rounded half up.
+    """A row's money for the addon's `CD` table (SPEC §3.5, EX23): "mats;net;perDay", rounded half up.
 
     Args:
         row: A staged row.
 
     Returns:
-        E.g. "292000;135500;474250"; an empty field = "—".
+        E.g. "292000;135500;67750"; an empty field = "—".
     """
-    return ";".join("" if v is None else str(round_half_up(v)) for v in (row["mats"], row["net"], row["per_week"]))
+    return ";".join("" if v is None else str(round_half_up(v)) for v in (row["mats"], row["net"], row["per_day"]))
 
 
 def stage(recipes: Sequence[CooldownRecipe], version: int | None, holders: Sequence[Holder],
@@ -337,12 +339,12 @@ def _cells(row: dict, now_ms: int) -> dict:
                   "sub": f"{row['price_age_days']} d old" if row["price_age_days"] is not None else ""},
         "mats": {"text": money(row["mats"]), "hover": "\n".join(row["mats_lines"])},
         "net": {"text": money(row["net"]), "neg": row["net"] is not None and row["net"] < 0},
-        "per_week": {"text": money(row["per_week"]), "neg": row["per_week"] is not None and row["per_week"] < 0,
+        "per_day": {"text": money(row["per_day"]), "neg": row["per_day"] is not None and row["per_day"] < 0,
                      "hover": SHORT_COOLDOWN if short and row["net"] is not None else ""},
         "sold": "—" if row["sold"] is None else str(round_half_up(row["sold"])),
         "who": _who(row, now_ms), "can_make": {k: can[k] for k in ("text", "cls", "hover")},
         "sort": {"price": row["price"], "skill": row["skill"], "cooldown": row["cooldown_s"], "mats": row["mats"],
-                 "net": row["net"], "per_week": row["per_week"], "sold": row["sold"], "can_make": can["rank"],
+                 "net": row["net"], "per_day": row["per_day"], "sold": row["sold"], "can_make": can["rank"],
                  "name": row["item"]},
     }
 

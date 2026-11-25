@@ -211,6 +211,20 @@ local function PriceCell(item, ctx)
   return ViewModel.Money(cur), ageMs > OLD_PRICE_MS and (math.floor(ageMs / DAY_MS) .. " d old") or nil, cur
 end
 
+--- The Profit / day cell's hover (SPEC §3.4F.8): the Net / use it comes from, why a cooldown under a day has no
+--- Profit / day, and which export the money is from.
+---@param row table          A catalog row
+---@param money table|nil    Market.Cooldown's
+---@param clock string|nil   The export's time ("14:32"); nil without a market file
+---@return string[]|nil      The hover's lines; nil without a Net / use
+local function PerDayTip(row, money, clock)
+  if not (money and money.net) then return nil end
+  local lines = { "Net / use: " .. ViewModel.Money(money.net) }
+  if row.cooldownS * 1000 < DAY_MS then lines[#lines + 1] = "not limited by the cooldown: limited by the mats" end
+  if clock then lines[#lines + 1] = "from the " .. clock .. " export" end
+  return lines
+end
+
 --- One row of the tab (CD9–CD13, CD26).
 ---@param row table   A catalog row
 ---@param who table   As Standing's, plus name
@@ -235,8 +249,9 @@ local function Row(row, who, ctx)
     ready = ready, readyColor = readyColor, readyTip = readyTip,
     price = price, priceAge = age, sortPrice = sortPrice,
     mats = ViewModel.Money(money and money.mats), matsTip = MatsLines(row, cell),
-    net = ViewModel.Money(money and money.net), netColor = money and money.net and money.net < 0 and "neg" or nil,
-    netTip = money and money.net and ctx.exportClock and ("from the " .. ctx.exportClock .. " export") or nil,
+    perDay = ViewModel.CellMoney(money and money.perDay), sortPerDay = money and money.perDay,   -- to the silver (UI25)
+    perDayColor = money and money.perDay and money.perDay < 0 and "neg" or nil,
+    perDayTip = PerDayTip(row, money, ctx.exportClock),
     canMake = can, canMakeColor = can ~= "No" and "pos" or nil,
     canMakeTip = can ~= "No" and row.group and "shared: one of these per cooldown" or (why ~= "" and why or nil),
   }
@@ -257,7 +272,8 @@ local function Who(db, charId)
 end
 
 --- The Cooldowns tab's rows for one character (SPEC §3.4F.8, CD22, CD24, CD25): every catalog row of its
---- professions, learned or not, by AH price highest first, ties by recipe name; by recipe name without prices.
+--- professions, learned or not, by the exported Profit / day highest first, then the rows without one by AH price
+--- highest first, ties by recipe name, then spell; by recipe name without a market file (CD8, CD24).
 ---@param db table       AHProfitDB
 ---@param charId string  The character shown
 ---@param ctx table      { live (the logged-in one), nowMs, lookOf (key -> { name, quality }), nameOf (key -> name),
@@ -278,6 +294,8 @@ function ViewModel.CooldownRows(db, charId, ctx)
     rows[#rows + 1] = Row(catalog[spell], who, rowCtx)
   end
   table.sort(rows, function(a, b)
+    if (a.sortPerDay ~= nil) ~= (b.sortPerDay ~= nil) then return a.sortPerDay ~= nil end
+    if a.sortPerDay and a.sortPerDay ~= b.sortPerDay then return a.sortPerDay > b.sortPerDay end
     if (a.sortPrice ~= nil) ~= (b.sortPrice ~= nil) then return a.sortPrice ~= nil end
     if a.sortPrice and a.sortPrice ~= b.sortPrice then return a.sortPrice > b.sortPrice end
     if a.recipe ~= b.recipe then return a.recipe < b.recipe end
