@@ -245,10 +245,11 @@ def price_acceptance(i: ItemIntel) -> sellprob.Acceptance:
         i: The item's intelligence.
 
     Returns:
-        The Acceptance; without a level or a curve it accepts every price.
+        The Acceptance; without a level or a curve it accepts every price. A commodity is flagged (the demand
+        spread skips it, P31); unknown counts as not one.
     """
     priced = published_level(i)
-    return sellprob.Acceptance(priced.level, priced.curve, profile.unpack_values(i.how))
+    return sellprob.Acceptance(priced.level, priced.curve, profile.unpack_values(i.how), bool(i.commodity))
 
 
 def supply_level(i: ItemIntel) -> int | None:

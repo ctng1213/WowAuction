@@ -310,7 +310,8 @@ def post_chance(f: SellFacts, price: int, qty: int, hours: Sequence[int], own_ah
         s: Settings.
 
     Returns:
-        P' in [0, 1]: the simulation, its demand cut by the price acceptance above the hour's level (P28; when
+        P' in [0, 1]: the simulation, averaged over the demand spread for an item with a sold curve (P31), its
+        demand cut by the price acceptance above the hour's level (P28; when
         sales are unknown, the default chance for the post's position, sellprob.default_chance, P25) blended with
         your own record when there is one (SPEC §3.3.3, O1, O2).
     """
@@ -323,8 +324,10 @@ def post_chance(f: SellFacts, price: int, qty: int, hours: Sequence[int], own_ah
     if own_ahead:
         ahead = ahead + (sellprob.Competitor(price, own_ahead, 0),)
     u = s.default_undercut_share if f.undercut_share is None else f.undercut_share
-    demand = sellprob.accepted_demand(hours, f.sales_how, price, sellprob.Acceptance(f.level, f.sold_curve, f.how))
-    queue = sellprob.QueueInputs(f.sold_per_day, f.listed_per_day or 0.0, u, demand, qty, ahead)
+    acc = sellprob.Acceptance(f.level, f.sold_curve, f.how, f.commodity)
+    demand = sellprob.accepted_demand(hours, f.sales_how, price, acc)
+    queue = sellprob.QueueInputs(f.sold_per_day, f.listed_per_day or 0.0, u, demand, qty, ahead,
+                                 sellprob.demand_spread(acc))
     return _with_record(f, sellprob.simulate(queue), s)
 
 

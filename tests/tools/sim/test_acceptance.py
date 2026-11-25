@@ -85,7 +85,8 @@ def test_the_queue_chance_with_P28s_factor_is_the_built_posting_chance():
         assert read["P28"] == queue_chance(i, book, price, 1, now, settings, lambda p, how: sellprob.acceptance(p, 100, CURVE, how))
         assert read["today"] == queue_chance(i, book, price, 1, now, settings, lambda p, how: 1.0)
         assert read["today, nothing ahead"] == sellprob.posting_chance(sellprob.Supply(6.0, 0.0, None, None, None), price, 1,
-                                                                        now, settings, None, 0.0)[0]
+                                                                        now, settings, None, 0.0,
+                                                                        sellprob.Acceptance(None, CURVE, None))[0]
     assert chances(i, book, 200, 1, now, settings)["P28"] == 0.0            # at the curve's 100th nobody buys
     assert chances(i, book, 95, 1, now, settings)["P28"] == chances(i, book, 95, 1, now, settings)["today"]
     assert under_level(i, 100, now, settings) and not under_level(i, 101, now, settings)

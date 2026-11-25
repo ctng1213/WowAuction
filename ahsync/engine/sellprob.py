@@ -33,6 +33,10 @@ CURVE_ROWS = 24
 CURVE_STEPS = 50                        # P quantized to 2% steps (SPEC §3.1.1, IU11)
 CURVE_CHAR_BASE = 35                    # codes 35-85: no '"' and no '\\'
 FLAT_HOW = (1.0,) * 168                 # a flat hourly sales profile
+# The spread of an 8 h window's demand around S, for items with a sold curve (SPEC §3.3.2, P31): the deciles'
+# midpoints of busy gear's window demand ÷ S on 2026-11-16..18, rescaled to a mean of 1 (plan sold-price §1d item 43).
+DEMAND_SPREAD = (0.18, 0.38, 0.51, 0.64, 0.76, 0.90, 1.07, 1.29, 1.66, 2.61)
+NO_SPREAD = (1.0,)                      # the queue once, at S
 
 
 @dataclass(frozen=True)
@@ -54,6 +58,7 @@ class QueueInputs:
     demand_profile: tuple[float, ...] # sales_how for each window hour, in order
     qty: int                          # q, your units
     ahead: tuple[Competitor, ...]     # competing auctions priced at or below yours
+    spread: tuple[float, ...] = NO_SPREAD   # demand multipliers the chance averages over (P31, demand_spread)
 
 
 def _midpoint(band: int) -> float:
@@ -119,17 +124,42 @@ def simulate_detail(inputs: QueueInputs) -> QueueResult:
 
 
 def simulate(inputs: QueueInputs) -> float:
-    """Queue simulation: the share of your units that sell within the window (SPEC §3.3.2).
+    """Queue simulation: the share of your units that sell within the window (SPEC §3.3.2, P31).
+
+    The queue runs once per multiplier of `inputs.spread`, with S × the multiplier, and the chance is the mean: a
+    window's demand varies around S and the chance is concave in it, so one run at S over-reads (P31).
 
     Args:
-        inputs: Demand, undercut arrivals, your units and the competitors ahead of you.
+        inputs: Demand, undercut arrivals, your units, the competitors ahead of you and the demand spread.
 
     Returns:
-        P_queue in [0, 1]: your units sold ÷ q; 0 when q is 0.
+        P_queue in [0, 1]: the mean over the spread of your units sold ÷ q; 0 when q is 0.
     """
     if inputs.qty <= 0:
         return 0.0
-    return simulate_detail(inputs).yours / inputs.qty
+    total = 0.0
+    for m in inputs.spread:
+        total += simulate_detail(dataclasses.replace(inputs, sold_per_day=inputs.sold_per_day * m)).yours / inputs.qty
+    return total / len(inputs.spread)
+
+
+def demand_spread(acc: Acceptance | None) -> tuple[float, ...]:
+    """The demand multipliers a post's chance averages over (SPEC §3.3.2, P31).
+
+    Only an item with a sold curve that is not a commodity gets the spread: busy gear's sales are what it was
+    measured on. An item selling a few a day has no window demand to measure apart from your own sale (the spread
+    made its under-read worse), and a commodity's window demand was never measured (in the simulator the spread
+    under-read it by about 0.05; plan sold-price §1d item 43(d)).
+
+    Args:
+        acc: The item's level, sold curve, pattern and commodity flag; None for none.
+
+    Returns:
+        DEMAND_SPREAD for a non-commodity with a sold curve, else NO_SPREAD (the queue once at S).
+    """
+    if acc is None or acc.curve is None or acc.commodity:
+        return NO_SPREAD
+    return DEMAND_SPREAD
 
 
 def ahead_of(book: Sequence[tuple[int, float, int]] | None, price: int,
@@ -315,11 +345,13 @@ def demand_for(hours: Sequence[int], sales_how: Sequence[float]) -> tuple[float,
 
 @dataclass(frozen=True)
 class Acceptance:
-    """What the price acceptance reads of an item: its level, its sold curve and its hourly price pattern."""
+    """What the chance reads of an item beyond its rates: its level, sold curve and hourly price pattern (the price
+    acceptance, P28) and whether it is a commodity (the demand spread, P31)."""
 
     level: int | None                          # the price level (SPEC §3.3), copper; None without one
     curve: tuple[int, ...] | None              # the sold curve at lifetime_prices.CURVE_SHARES, copper; None without
     how: Sequence[float] | None = None         # 168 price ratios, as the document stores them; None for flat
+    commodity: bool = False                    # seen in Blizzard's commodities list (False when unknown)
 
 
 def share_at_or_above(price: int, curve: Sequence[int]) -> float:
@@ -401,7 +433,8 @@ def accepted_demand(hours: Sequence[int], sales_how: Sequence[float], price: int
 
 def build_curve(sold_per_day: float, listed_per_day: float, undercut: float, sales_how: Sequence[float],
                 refresh_ms: int, qty: int, ahead_points: Sequence[int] = CURVE_AHEAD,
-                hours: int = 8, price: int | None = None, acc: Acceptance | None = None) -> list[list[float]]:
+                hours: int = 8, price: int | None = None, acc: Acceptance | None = None,
+                spread: tuple[float, ...] = NO_SPREAD) -> list[list[float]]:
     """The sell-probability grid: 24 rows (posting hours from the refresh hour) × units-ahead points.
 
     Args:
@@ -415,6 +448,7 @@ def build_curve(sold_per_day: float, listed_per_day: float, undercut: float, sal
         hours: sell_window_hours.
         price: The post price the curve is built at, copper, for the price acceptance (P28); None for none.
         acc: The item's level, sold curve and pattern (P28); None for no acceptance.
+        spread: The demand multipliers each point averages over (P31, demand_spread).
 
     Returns:
         P_queue per row and column. SPEC GAP: the ahead units are modelled as one
@@ -427,9 +461,34 @@ def build_curve(sold_per_day: float, listed_per_day: float, undercut: float, sal
     for row in range(CURVE_ROWS):
         demand = accepted_demand(range(first_hour + row, first_hour + row + hours), sales_how, price, acc)
         if demand not in rows_by_demand:
-            rows_by_demand[demand] = _block_row(sold_per_day, listed_per_day, undercut, demand, qty, ahead_points)
+            rows_by_demand[demand] = _spread_row(sold_per_day, listed_per_day, undercut, demand, qty, ahead_points,
+                                                 spread)
         grid.append(list(rows_by_demand[demand]))
     return grid
+
+
+def _spread_row(sold_per_day: float, listed_per_day: float, undercut: float, demand: Sequence[float], qty: int,
+                ahead_points: Sequence[int], spread: tuple[float, ...]) -> list[float]:
+    """One curve row averaged over the demand spread, summed in the order `simulate` sums (P31, PI21).
+
+    Args:
+        sold_per_day: S.
+        listed_per_day: L.
+        undercut: u(p).
+        demand: sales_how for each window hour.
+        qty: Your units.
+        ahead_points: Units ahead for each point.
+        spread: The demand multipliers.
+
+    Returns:
+        P_queue per point, the mean over the spread; bit-identical to simulate with the same spread (0 for every
+        point when qty is 0, as `_block_row` gives).
+    """
+    totals = [0.0] * len(ahead_points)
+    for m in spread:
+        row = _block_row(sold_per_day * m, listed_per_day, undercut, demand, qty, ahead_points)
+        totals = [t + p for t, p in zip(totals, row)]
+    return [t / len(spread) for t in totals]
 
 
 def _block_row(sold_per_day: float, listed_per_day: float, undercut: float, demand: Sequence[float], qty: int,
@@ -707,5 +766,5 @@ def posting_chance(supply: Supply, price: int | None, qty: int, now_ms: int, set
     demand = accepted_demand(posting_now_window(now_ms, settings.sell_window_hours), sales_how or FLAT_HOW, price,
                              acc)
     u = settings.default_undercut_share if undercut is None else undercut
-    queue = QueueInputs(supply.sold_per_day, supply.listed_per_day or 0.0, u, demand, qty, ahead)
+    queue = QueueInputs(supply.sold_per_day, supply.listed_per_day or 0.0, u, demand, qty, ahead, demand_spread(acc))
     return chance(queue, None, 0, 0, 0, settings.default_sell_prob, settings.own_record_weight)

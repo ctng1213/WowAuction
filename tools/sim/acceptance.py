@@ -165,7 +165,8 @@ def queue_chance(item: ItemIntel, book: Sequence[tuple[int, int, int, int]] | No
     how = acc.how or sellprob.FLAT_HOW
     demand = tuple(d * factor(price, how[slot_of(h)]) for d, h in zip(sellprob.demand_for(hours, sales_how), hours))
     u = settings.default_undercut_share if item.undercut_share is None else item.undercut_share
-    return sellprob.simulate(QueueInputs(item.sold_per_day, item.listed_per_day or 0.0, u, demand, units, ahead))
+    return sellprob.simulate(QueueInputs(item.sold_per_day, item.listed_per_day or 0.0, u, demand, units, ahead,
+                                         sellprob.demand_spread(acc)))
 
 
 def under_level(item: ItemIntel, price: int, now_ms: int, settings: MarketSettings) -> bool:
@@ -194,7 +195,8 @@ def under_level(item: ItemIntel, price: int, now_ms: int, settings: MarketSettin
 def chances(item: ItemIntel, book: list[tuple[int, int, int, int]], price: int, units: int, now_ms: int,
             settings: MarketSettings, unseen: float = 0.0) -> dict[str, float]:
     """Every reading of one post's chance (FORMS on the book; today's and P28's with nothing ahead; P28 with the
-    unseen sales added to the demand, item 36(b)'s candidate rule).
+    unseen sales added to the demand, item 36(b)'s candidate rule). "today" is the engine without the acceptance
+    (no level), so it keeps the demand spread an item with a curve reads (P31) and differs from P28 only by `a`.
 
     Args:
         item: The item's intelligence.
@@ -216,7 +218,7 @@ def chances(item: ItemIntel, book: list[tuple[int, int, int, int]], price: int, 
         cur = min(p for p, _, _, _ in rows) if rows else None
         supply = Supply(item.sold_per_day, item.listed_per_day, tuple(rows) if rows is not None else None, cur,
                         sum(u for p, u, _, _ in rows if p == cur) if rows else None)
-        for form, use in (("today", None), ("P28", acc)):
+        for form, use in (("today", sellprob.Acceptance(None, acc.curve, acc.how, acc.commodity)), ("P28", acc)):   # P31's spread in both
             out[form + name] = sellprob.posting_chance(supply, price, units, now_ms, settings, sales_how,
                                                        item.undercut_share, use)[0]
     out["spec"] = queue_chance(item, book, price, units, now_ms, settings,

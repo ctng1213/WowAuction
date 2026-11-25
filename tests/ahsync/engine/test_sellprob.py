@@ -1,4 +1,4 @@
-"""Tests for ahsync/engine/sellprob.py: shared scenarios, Python-only scenarios, invariants PI1-PI17, LP1."""
+"""Tests for ahsync/engine/sellprob.py: shared scenarios, Python-only scenarios, invariants PI1-PI21, LP1."""
 from __future__ import annotations
 
 import json
@@ -414,7 +414,8 @@ def test_PI19_a_higher_price_never_raises_P_at_fixed_competition():
         lower = sp.posting_chance(supply, price, q.qty, i * HOUR_MS, settings, None, q.undercut_share, acc)[0]
         higher = sp.posting_chance(supply, price + 1 + i % 60, q.qty, i * HOUR_MS, settings, None, q.undercut_share, acc)[0]
         check(higher <= lower + 1e-12, i, (price, acc, q))
-        same = sp.posting_chance(supply, price, q.qty, i * HOUR_MS, settings, None, q.undercut_share, None)[0]
+        same = sp.posting_chance(supply, price, q.qty, i * HOUR_MS, settings, None, q.undercut_share,
+                                 sp.Acceptance(None, acc.curve, acc.how))[0]          # no level: the spread, no acceptance
         check(lower <= same + 1e-12, i, (price, acc, q))                           # the acceptance only ever cuts
 
 
@@ -422,9 +423,55 @@ def test_PI20_the_curves_rows_never_rise_with_the_price():
     for i, (price, acc) in enumerate(ACCEPTANCES[:300]):
         q = QUEUES[i]
         args = (q.sold_per_day, q.listed_per_day, q.undercut_share, acc.how or sp.FLAT_HOW, i * HOUR_MS, q.qty)
-        lower, higher = sp.build_curve(*args, price=price, acc=acc), sp.build_curve(*args, price=price + 1 + i % 80, acc=acc)
+        kw = dict(acc=acc, spread=sp.demand_spread(acc))
+        lower, higher = sp.build_curve(*args, price=price, **kw), sp.build_curve(*args, price=price + 1 + i % 80, **kw)
         plain = sp.build_curve(*args)
-        for row_lo, row_hi, row_plain in zip(lower, higher, plain):
+        spread = sp.build_curve(*args, spread=sp.demand_spread(acc))             # the same spread, no acceptance
+        for row_lo, row_hi, row_plain in zip(lower, higher, spread):
             check(all(h <= lo + 1e-12 for lo, h in zip(row_lo, row_hi)), i, (price, acc, q))
             check(all(lo <= p + 1e-12 for lo, p in zip(row_lo, row_plain)), i, (price, acc, q))
         check(sp.build_curve(*args, price=price, acc=sp.Acceptance(acc.level, None, acc.how)) == plain, i, acc)
+
+
+# ---------------------------------------------------------------- the demand spread (SPEC §3.3.2, P31, PI21)
+
+def test_P31_the_chance_averages_over_the_spread_of_demand():
+    assert sum(sp.DEMAND_SPREAD) / len(sp.DEMAND_SPREAD) == pytest.approx(1.0)
+    acc, bare = sp.Acceptance(100, SOLD_CURVE), sp.Acceptance(100, None)
+    supply, settings = sp.Supply(24.0, 0.0, None, None, None), sp.MarketSettings()
+    # S 24 a day over a flat 8 h: demand 8 × m units for 10 posted, min(8m, 10) ÷ 10 averaged over the ten m
+    assert sp.posting_chance(supply, 100, 10, 0, settings, None, 0.0, acc)[0] == pytest.approx(0.6552)
+    assert sp.posting_chance(supply, 100, 10, 0, settings, None, 0.0, bare)[0] == pytest.approx(0.8)    # no curve
+    assert sp.posting_chance(supply, 100, 10, 0, settings, None, 0.0, None)[0] == pytest.approx(0.8)
+    assert sp.demand_spread(acc) == sp.DEMAND_SPREAD and sp.demand_spread(bare) == sp.demand_spread(None) == (1.0,)
+    commodity = sp.Acceptance(100, SOLD_CURVE, None, True)                     # a commodity's spread was never measured
+    assert sp.demand_spread(commodity) == (1.0,)
+    assert sp.posting_chance(supply, 100, 10, 0, settings, None, 0.0, commodity)[0] == pytest.approx(0.8)
+    grid = sp.build_curve(24.0, 0.0, 0.0, sp.FLAT_HOW, 0, 10, price=100, acc=acc, spread=sp.demand_spread(acc))
+    assert grid[0][0] == pytest.approx(0.6552)                                  # the exported curve reads it too
+    assert sp.build_curve(24.0, 0.0, 0.0, sp.FLAT_HOW, 0, 10, price=100, acc=bare)[0][0] == pytest.approx(0.8)
+
+
+def random_spread_case(rng):
+    """A random queue, a random curve item and a raised S."""
+    return random_queue(rng), random_acceptance(rng)[1], 1 + rng.random() * 3
+
+
+SPREAD_CASES = cases(SEED + 31, random_spread_case)
+
+
+def test_PI21_the_spread_chance_stays_in_range_rises_with_S_and_is_the_plain_chance_without_a_curve():
+    for i, (q, acc, more) in enumerate(SPREAD_CASES):
+        spread = replace(q, spread=sp.demand_spread(acc))
+        p, higher = sp.simulate(spread), sp.simulate(replace(spread, sold_per_day=q.sold_per_day * more))
+        check(0 <= p <= 1 and higher >= p - 1e-12, i, (q, acc))
+        check(sp.simulate(replace(q, spread=sp.demand_spread(sp.Acceptance(acc.level, None)))) == sp.simulate(q), i, q)
+        quiet = replace(spread, ahead=(), undercut_share=0.0)                   # concave in S: never above the mean's
+        check(sp.simulate(quiet) <= sp.simulate(replace(quiet, spread=sp.NO_SPREAD)) + 1e-12, i, q)
+    for i, (q, acc, _) in enumerate(SPREAD_CASES[:200]):                        # the curve's rows are simulate's
+        row = sp._spread_row(q.sold_per_day, q.listed_per_day, q.undercut_share, q.demand_profile, q.qty,
+                             sp.CURVE_AHEAD, sp.DEMAND_SPREAD)
+        expected = [sp.simulate(QueueInputs(q.sold_per_day, q.listed_per_day, q.undercut_share, q.demand_profile, q.qty,
+                                            (Competitor(0, float(a), 0),) if a else (), sp.DEMAND_SPREAD))
+                    for a in sp.CURVE_AHEAD]
+        check(row == expected, i, q)
