@@ -1,6 +1,7 @@
 """Tests for ahsync/engine/sellprob.py: shared scenarios, Python-only scenarios, invariants PI1-PI21, LP1."""
 from __future__ import annotations
 
+import dataclasses
 import json
 import math
 from pathlib import Path
@@ -437,14 +438,15 @@ def test_PI20_the_curves_rows_never_rise_with_the_price():
 
 def test_P31_the_chance_averages_over_the_spread_of_demand():
     assert sum(sp.DEMAND_SPREAD) / len(sp.DEMAND_SPREAD) == pytest.approx(1.0)
-    acc, bare = sp.Acceptance(100, SOLD_CURVE), sp.Acceptance(100, None)
+    acc, bare = sp.Acceptance(100, SOLD_CURVE, None, "busy"), sp.Acceptance(100, None, None, "thin")
     supply, settings = sp.Supply(24.0, 0.0, None, None, None), sp.MarketSettings()
     # S 24 a day over a flat 8 h: demand 8 × m units for 10 posted, min(8m, 10) ÷ 10 averaged over the ten m
     assert sp.posting_chance(supply, 100, 10, 0, settings, None, 0.0, acc)[0] == pytest.approx(0.6552)
     assert sp.posting_chance(supply, 100, 10, 0, settings, None, 0.0, bare)[0] == pytest.approx(0.8)    # no curve
     assert sp.posting_chance(supply, 100, 10, 0, settings, None, 0.0, None)[0] == pytest.approx(0.8)
     assert sp.demand_spread(acc) == sp.DEMAND_SPREAD and sp.demand_spread(bare) == sp.demand_spread(None) == (1.0,)
-    commodity = sp.Acceptance(100, SOLD_CURVE, None, True)                     # a commodity's spread was never measured
+    assert sp.demand_spread(sp.Acceptance(100, SOLD_CURVE)) == (1.0,)            # the profile gates it, not the curve
+    commodity = sp.Acceptance(100, SOLD_CURVE, None, "commodity")              # commodities wait (P32)
     assert sp.demand_spread(commodity) == (1.0,)
     assert sp.posting_chance(supply, 100, 10, 0, settings, None, 0.0, commodity)[0] == pytest.approx(0.8)
     grid = sp.build_curve(24.0, 0.0, 0.0, sp.FLAT_HOW, 0, 10, price=100, acc=acc, spread=sp.demand_spread(acc))
@@ -453,8 +455,8 @@ def test_P31_the_chance_averages_over_the_spread_of_demand():
 
 
 def random_spread_case(rng):
-    """A random queue, a random curve item and a raised S."""
-    return random_queue(rng), random_acceptance(rng)[1], 1 + rng.random() * 3
+    """A random queue, a random busy item with a curve and a raised S."""
+    return random_queue(rng), dataclasses.replace(random_acceptance(rng)[1], profile="busy"), 1 + rng.random() * 3
 
 
 SPREAD_CASES = cases(SEED + 31, random_spread_case)
@@ -465,7 +467,7 @@ def test_PI21_the_spread_chance_stays_in_range_rises_with_S_and_is_the_plain_cha
         spread = replace(q, spread=sp.demand_spread(acc))
         p, higher = sp.simulate(spread), sp.simulate(replace(spread, sold_per_day=q.sold_per_day * more))
         check(0 <= p <= 1 and higher >= p - 1e-12, i, (q, acc))
-        check(sp.simulate(replace(q, spread=sp.demand_spread(sp.Acceptance(acc.level, None)))) == sp.simulate(q), i, q)
+        check(sp.simulate(replace(q, spread=sp.demand_spread(dataclasses.replace(acc, profile="thin")))) == sp.simulate(q), i, q)
         quiet = replace(spread, ahead=(), undercut_share=0.0)                   # concave in S: never above the mean's
         check(sp.simulate(quiet) <= sp.simulate(replace(quiet, spread=sp.NO_SPREAD)) + 1e-12, i, q)
     for i, (q, acc, _) in enumerate(SPREAD_CASES[:200]):                        # the curve's rows are simulate's

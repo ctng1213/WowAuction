@@ -218,7 +218,7 @@ def chances(item: ItemIntel, book: list[tuple[int, int, int, int]], price: int, 
         cur = min(p for p, _, _, _ in rows) if rows else None
         supply = Supply(item.sold_per_day, item.listed_per_day, tuple(rows) if rows is not None else None, cur,
                         sum(u for p, u, _, _ in rows if p == cur) if rows else None)
-        for form, use in (("today", sellprob.Acceptance(None, acc.curve, acc.how, acc.commodity)), ("P28", acc)):   # P31's spread in both
+        for form, use in (("today", sellprob.Acceptance(None, acc.curve, acc.how, acc.profile)), ("P28", acc)):   # P31's spread in both
             out[form + name] = sellprob.posting_chance(supply, price, units, now_ms, settings, sales_how,
                                                        item.undercut_share, use)[0]
     out["spec"] = queue_chance(item, book, price, units, now_ms, settings,
