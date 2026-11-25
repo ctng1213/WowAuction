@@ -52,7 +52,7 @@ from ahsync.export.addon_files import (DATA_FOLDER, MARKET_FILE, MAX_MARKET_BYTE
 M = "forever.pvp.horde.us"
 HOUR, DAY = 3_600_000, 86_400_000
 NOW = 20_500 * DAY
-BUDGET_S, BUDGET_MB = 120.0, 512.0
+BUDGET_S, BUDGET_MB = 180.0, 512.0   # 120 s until 2026-11-25 (the user: a cloud market skips this analysis; SPEC §3.1.2)
 SUMMARY_BUDGET_MB = 600.0                      # a cloud market's process peak (plan summary-memory §1 item 4)
 ORIGIN = "https://bench.cloudfront.net"
 SEED = 42

@@ -9,6 +9,7 @@ and the rest carry on (FM8).
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
 from ahsync.engine import confidence, fees, lifetime_prices, patterns, prices, profile, sell_through, sellprob
@@ -177,7 +178,8 @@ def sales_fields(item: ItemHistory, now_ms: int, settings: MarketSettings) -> tu
 
 def weekly_fields(item: ItemHistory, med30: int | None, base: "NowBase", price: int | None, ref: int, now_ms: int,
                   settings: MarketSettings, sales: tuple[Profile, dict],
-                  price_pattern: Profile) -> tuple[dict, tuple[Profile, Profile, Profile]]:
+                  price_pattern: Profile, centred: Sequence[tuple[int, float]] | None = None
+                  ) -> tuple[dict, tuple[Profile, Profile, Profile]]:
     """An item's weekly patterns, seasonality strength and curve (SPEC §3.3.4, §3.3.6, §3.1.1).
 
     Args:
@@ -191,6 +193,7 @@ def weekly_fields(item: ItemHistory, med30: int | None, base: "NowBase", price: 
         settings: Pattern half-life, window threshold and the posting-now window.
         sales: From sales_fields.
         price_pattern: `how`, from profile.price_profile (built first: the post price reads this hour's ratio, PP5).
+        centred: The centred ratios `how` was built from, so the seasonality test reuses them; None recomputes.
 
     Returns:
         (the ItemIntel pattern fields by name, (price, sales, supply) profiles as stored for window_fields).
@@ -211,7 +214,7 @@ def weekly_fields(item: ItemHistory, med30: int | None, base: "NowBase", price: 
         curve, curve_hour = sellprob.encode_curve(grid), now_ms // HOUR_MS
     return {
         **fields,
-        "seasonality": profile.seasonality_strength(hourly, med30, now_ms, half_life),
+        "seasonality": profile.seasonality_strength(hourly, med30, now_ms, half_life, centred),
         "curve": curve, "curve_hour": curve_hour,
     }, (how, sales_profile, supply)
 
@@ -504,7 +507,8 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
     vendor_sell = (info.vendor_sell if info else None) or 0
     quote = Quote(cur.price if cur and cur.price is not None else None, cur.qty if cur else None,
                   tuple(book) if book is not None else None)
-    pattern = profile.price_profile(hourly, med30, now_ms, settings.pattern_half_life_weeks)          # W17
+    centred = profile.centred_ratios(hourly, now_ms)                                                   # W17
+    pattern = profile.price_profile_from(centred, med30, now_ms, settings.pattern_half_life_weeks)
     stored = profile.unpack(*profile.pack(pattern))                      # as stored, so the hourly run agrees (BZ32)
     how_now = stored.values[slot_of(now_ms // HOUR_MS)]
     divide = pattern.values if settings.level_divides_by_pattern and any(pattern.weeks) else None   # §3.3
@@ -525,7 +529,7 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
     units = sum(stack * count for _, stack, _, count in book) if book else (cur.qty if cur else None)
     typical = median_daily_supply(item.hourly_supply, now_ms)
     weekly, (how, sales_profile, supply_profile) = weekly_fields(item, med30, base, price, ref, now_ms, settings, sales,
-                                                                 pattern)
+                                                                 pattern, centred)
     gear = bool(info and info.item_class in GEAR_CLASSES)
     facts = None if priced.level is None else patterns.ForecastFacts(              # W15: the window forecasts
         now_ms, priced.level, trend, priced.low, priced.high, len(last30), units if units is not None else typical,
