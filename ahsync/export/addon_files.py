@@ -125,7 +125,7 @@ def cooldown_rows(db: Database, market: str) -> tuple[int | None, dict[str, str]
         market: Market id.
 
     Returns:
-        (the catalog version, spell -> "mats;net;perWeek"); (None, {}) before the page is staged.
+        (the catalog version, spell -> "mats;net;perDay"); (None, {}) before the page is staged.
     """
     stored = db.view("cooldowns", market)
     if stored is None:

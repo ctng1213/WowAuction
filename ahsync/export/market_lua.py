@@ -59,7 +59,7 @@ from ahsync.intel.contract import (IntelWindow, ItemIntel, MarketIntelligence, a
 MARKET_SCHEMA_VERSION = 1      # the addon refuses any other (FM17)
 # Bumped on ANY change to either addon file's format, additive or not, so an addon and an AHSync of
 # different builds say which side is stale (SPEC §3.5, FM34, FM35). Equals AHProfit.EXPORT_VERSION (Core/Market.lua).
-EXPORT_VERSION = 9              # 9: the level, its bounds and the H rows (SP2c, EX25); 8: the cooldowns' CD table (SPEC §3.4F, EX23); 7: plan actions end in
+EXPORT_VERSION = 10             # 10: the CD rows' third field is Profit / day, not Per week (EX23); 9: the level, its bounds and the H rows (SP2c, EX25); 8: the cooldowns' CD table (SPEC §3.4F, EX23); 7: plan actions end in
                                 # paid (EX22); 6: the tooltip's market lines: sell-through, supply 7/14, Sell Chance Now, windows' percentages, coverage30 (M33b);
                                 # 5: market items end in salesDays (EX21); 4: K, G and the portfolio snapshot (EX17, EX18); 3: closes30 (TT23, PP4); 2: a mail's
                                 # recipient (EX16)
@@ -413,7 +413,7 @@ def market_lua(intels: Sequence[MarketIntelligence], shortlists: Mapping[str, se
         candidates: Market -> its K strings in export order (portfolio_lua.candidate_text, EX17); none when absent.
         graphs: Market -> its dependency graph (EX18); an empty one when absent.
         coverage30: Market -> hours observed in the last 720 (TT40); 0 when absent.
-        cooldowns: Market -> (catalog version, spell -> "mats;net;perWeek") from the staged Cooldowns page (SPEC §3.4F.4,
+        cooldowns: Market -> (catalog version, spell -> "mats;net;perDay") from the staged Cooldowns page (SPEC §3.4F.4,
             EX23); an empty CD table when absent.
 
     Returns:

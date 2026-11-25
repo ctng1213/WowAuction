@@ -25,153 +25,153 @@ Frame AHProfitWindow 680,360 560x360
   Frame AHProfitWindowHeadercooldowns 690,462 526x20
     FontString - 1152,462 60x20 "Can Make"
     Button - 1152,462 60x20
-    FontString - 1091,462 58x20 "Net / use"
-    Button - 1091,462 58x20
-    FontString - 1032,462 56x20 "Mats"
-    Button - 1032,462 56x20
-    FontString - 975,462 54x20 "AH price"
-    Button - 975,462 54x20
-    FontString - 906,462 66x20 "Ready"
-    Button - 906,462 66x20
-    FontString - 845,462 58x20 "Cooldown"
-    Button - 845,462 58x20
-    FontString - 802,462 40x20 "Skill"
-    Button - 802,462 40x20
-    FontString - 693,462 106x20 "Item · recipe"
-    Button - 693,462 106x20
+    FontString - 1083,462 66x20 "Profit / day"
+    Button - 1083,462 66x20
+    FontString - 1024,462 56x20 "Mats"
+    Button - 1024,462 56x20
+    FontString - 967,462 54x20 "AH price"
+    Button - 967,462 54x20
+    FontString - 898,462 66x20 "Ready"
+    Button - 898,462 66x20
+    FontString - 837,462 58x20 "Cooldown"
+    Button - 837,462 58x20
+    FontString - 794,462 40x20 "Skill"
+    Button - 794,462 40x20
+    FontString - 693,462 98x20 "Item · recipe"
+    Button - 693,462 98x20
   Button AHProfitWindowTop 690,420 526x20 (hidden)
   Frame AHProfitWindowList 690,484 540x198
     Frame AHProfitWindowRow1 690,484 526x30
       Texture - 692,484 522x1
       FontString - 1152,485 60x28 "Yes"
-      FontString - 1091,485 58x28 "13   55  "
-      FontString - 1032,485 56x28 "29   20  "
-      FontString - 975,485 54x28 "45  "
-      FontString - 906,485 66x28 "ready"
-      FontString - 845,485 58x28 "2 d"
-      FontString - 802,485 40x28 "275"
-      FontString - 693,484 106x29 "Arcanite Bar"
-      FontString - 693,499 106x12 "Transmute: Arcanite"
-      Button - 693,484 106x29
-      FontString - 802,499 40x12
-      Button - 802,485 40x28
-      FontString - 845,499 58x12 "shared"
-      Button - 845,485 58x28
-      Button - 906,485 66x28
-      FontString - 975,499 54x12
-      Button - 975,485 54x28
-      Button - 1032,485 56x28
-      Button - 1091,485 58x28
+      FontString - 1083,485 66x28 "6   78  "
+      FontString - 1024,485 56x28 "29   20  "
+      FontString - 967,485 54x28 "45  "
+      FontString - 898,485 66x28 "ready"
+      FontString - 837,485 58x28 "2 d"
+      FontString - 794,485 40x28 "275"
+      FontString - 693,484 98x29 "Arcanite Bar"
+      FontString - 693,499 98x12 "Transmute: Arcan…"
+      Button - 693,484 98x29
+      FontString - 794,499 40x12
+      Button - 794,485 40x28
+      FontString - 837,499 58x12 "shared"
+      Button - 837,485 58x28
+      Button - 898,485 66x28
+      FontString - 967,499 54x12
+      Button - 967,485 54x28
+      Button - 1024,485 56x28
+      Button - 1083,485 66x28
       Button - 1152,485 60x28
     Frame AHProfitWindowRow2 690,514 526x30
       Texture - 692,514 522x1
       FontString - 1152,515 60x28 "No"
-      FontString - 1091,515 58x28 "45  "
-      FontString - 1032,515 56x28 "2   40  "
-      FontString - 975,515 54x28 "3  "
-      FontString - 906,515 66x28 "Not learned"
-      FontString - 845,515 58x28 "1 d"
-      FontString - 802,515 40x28 "275"
-      FontString - 693,514 106x29 "Essence of Water"
-      FontString - 693,529 106x12 "Transmute: Earth t…"
-      Button - 693,514 106x29
-      FontString - 802,529 40x12
-      Button - 802,515 40x28
-      FontString - 845,529 58x12 "shared"
-      Button - 845,515 58x28
-      Button - 906,515 66x28
-      FontString - 975,529 54x12
-      Button - 975,515 54x28
-      Button - 1032,515 56x28
-      Button - 1091,515 58x28
+      FontString - 1083,515 66x28 "1   85  "
+      FontString - 1024,515 56x28 "1  "
+      FontString - 967,515 54x28 "3  "
+      FontString - 898,515 66x28 "ready"
+      FontString - 837,515 58x28 "1 d"
+      FontString - 794,515 40x28 "275"
+      FontString - 693,514 98x29 "Essence of Water"
+      FontString - 693,529 98x12 "Transmute: Undea…"
+      Button - 693,514 98x29
+      FontString - 794,529 40x12
+      Button - 794,515 40x28
+      FontString - 837,529 58x12 "shared"
+      Button - 837,515 58x28
+      Button - 898,515 66x28
+      FontString - 967,529 54x12
+      Button - 967,515 54x28
+      Button - 1024,515 56x28
+      Button - 1083,515 66x28
       Button - 1152,515 60x28
     Frame AHProfitWindowRow3 690,544 526x30
       Texture - 692,544 522x1
       FontString - 1152,545 60x28 "No"
-      FontString - 1091,545 58x28 "1   85  "
-      FontString - 1032,545 56x28 "1  "
-      FontString - 975,545 54x28 "3  "
-      FontString - 906,545 66x28 "ready"
-      FontString - 845,545 58x28 "1 d"
-      FontString - 802,545 40x28 "275"
-      FontString - 693,544 106x29 "Essence of Water"
-      FontString - 693,559 106x12 "Transmute: Undeath…"
-      Button - 693,544 106x29
-      FontString - 802,559 40x12
-      Button - 802,545 40x28
-      FontString - 845,559 58x12 "shared"
-      Button - 845,545 58x28
-      Button - 906,545 66x28
-      FontString - 975,559 54x12
-      Button - 975,545 54x28
-      Button - 1032,545 56x28
-      Button - 1091,545 58x28
+      FontString - 1083,545 66x28 "83   50  "
+      FontString - 1024,545 56x28 "40  "
+      FontString - 967,545 54x28 "1   30  "
+      FontString - 898,545 66x28 "ready"
+      FontString - 837,545 58x28 "1 d"
+      FontString - 794,545 40x28 "225"
+      FontString - 693,544 98x29 "Gold Bar"
+      FontString - 693,559 98x12 "Transmute: Iron …"
+      Button - 693,544 98x29
+      FontString - 794,559 40x12
+      Button - 794,545 40x28
+      FontString - 837,559 58x12 "shared"
+      Button - 837,545 58x28
+      Button - 898,545 66x28
+      FontString - 967,559 54x12
+      Button - 967,545 54x28
+      Button - 1024,545 56x28
+      Button - 1083,545 66x28
       Button - 1152,545 60x28
     Frame AHProfitWindowRow4 690,574 526x30
       Texture - 692,574 522x1
-      FontString - 1152,575 60x28 "No"
-      FontString - 1091,575 58x28 "−34  "
-      FontString - 1032,575 56x28 "3  "
-      FontString - 975,575 54x28 "2   80  "
-      FontString - 906,575 66x28 "ready"
-      FontString - 845,575 58x28 "1 d"
-      FontString - 802,575 40x28 "275"
-      FontString - 693,574 106x29 "Essence of Air"
-      FontString - 693,589 106x12 "Transmute: Water t…"
-      Button - 693,574 106x29
-      FontString - 802,589 40x12
-      Button - 802,575 40x28
-      FontString - 845,589 58x12 "shared"
-      Button - 845,575 58x28
-      Button - 906,575 66x28
-      FontString - 975,589 54x12
-      Button - 975,575 54x28
-      Button - 1032,575 56x28
-      Button - 1091,575 58x28
+      FontString - 1152,575 60x28 "Yes (bank)"
+      FontString - 1083,575 66x28 "69   75  "
+      FontString - 1024,575 56x28 "60  "
+      FontString - 967,575 54x28 "2   10  "
+      FontString - 898,575 66x28 "ready"
+      FontString - 837,575 58x28 "2 d"
+      FontString - 794,575 40x28 "225"
+      FontString - 693,574 98x29 "Truesilver Bar"
+      FontString - 693,589 98x12 "Transmute: Mithr…"
+      Button - 693,574 98x29
+      FontString - 794,589 40x12
+      Button - 794,575 40x28
+      FontString - 837,589 58x12 "shared"
+      Button - 837,575 58x28
+      Button - 898,575 66x28
+      FontString - 967,589 54x12
+      Button - 967,575 54x28
+      Button - 1024,575 56x28
+      Button - 1083,575 66x28
       Button - 1152,575 60x28
     Frame AHProfitWindowRow5 690,604 526x30
       Texture - 692,604 522x1
       FontString - 1152,605 60x28 "No"
-      FontString - 1091,605 58x28 "—"
-      FontString - 1032,605 56x28 "—"
-      FontString - 975,605 54x28 "2   40  "
-      FontString - 906,605 66x28 "Not learned"
-      FontString - 845,605 58x28 "1 d"
-      FontString - 802,605 40x28 "275"
-      FontString - 693,604 106x29 "Essence of Earth"
-      FontString - 693,619 106x12 "Transmute: Fire to…"
-      Button - 693,604 106x29
-      FontString - 802,619 40x12
-      Button - 802,605 40x28
-      FontString - 845,619 58x12 "shared"
-      Button - 845,605 58x28
-      Button - 906,605 66x28
-      FontString - 975,619 54x12
-      Button - 975,605 54x28
-      Button - 1032,605 56x28
-      Button - 1091,605 58x28
+      FontString - 1083,605 66x28 "45  "
+      FontString - 1024,605 56x28 "2   40  "
+      FontString - 967,605 54x28 "3  "
+      FontString - 898,605 66x28 "Not learned"
+      FontString - 837,605 58x28 "1 d"
+      FontString - 794,605 40x28 "275"
+      FontString - 693,604 98x29 "Essence of Water"
+      FontString - 693,619 98x12 "Transmute: Earth…"
+      Button - 693,604 98x29
+      FontString - 794,619 40x12
+      Button - 794,605 40x28
+      FontString - 837,619 58x12 "shared"
+      Button - 837,605 58x28
+      Button - 898,605 66x28
+      FontString - 967,619 54x12
+      Button - 967,605 54x28
+      Button - 1024,605 56x28
+      Button - 1083,605 66x28
       Button - 1152,605 60x28
     Frame AHProfitWindowRow6 690,634 526x30
       Texture - 692,634 522x1
       FontString - 1152,635 60x28 "No"
-      FontString - 1091,635 58x28 "—"
-      FontString - 1032,635 56x28 "—"
-      FontString - 975,635 54x28 "2   40  "
-      FontString - 906,635 66x28 "Not learned"
-      FontString - 845,635 58x28 "1 d"
-      FontString - 802,635 40x28 "275"
-      FontString - 693,634 106x29 "Essence of Earth"
-      FontString - 693,649 106x12 "Transmute: Life to…"
-      Button - 693,634 106x29
-      FontString - 802,649 40x12
-      Button - 802,635 40x28
-      FontString - 845,649 58x12 "shared"
-      Button - 845,635 58x28
-      Button - 906,635 66x28
-      FontString - 975,649 54x12
-      Button - 975,635 54x28
-      Button - 1032,635 56x28
-      Button - 1091,635 58x28
+      FontString - 1083,635 66x28 "−34  "
+      FontString - 1024,635 56x28 "3  "
+      FontString - 967,635 54x28 "2   80  "
+      FontString - 898,635 66x28 "ready"
+      FontString - 837,635 58x28 "1 d"
+      FontString - 794,635 40x28 "275"
+      FontString - 693,634 98x29 "Essence of Air"
+      FontString - 693,649 98x12 "Transmute: Water…"
+      Button - 693,634 98x29
+      FontString - 794,649 40x12
+      Button - 794,635 40x28
+      FontString - 837,649 58x12 "shared"
+      Button - 837,635 58x28
+      Button - 898,635 66x28
+      FontString - 967,649 54x12
+      Button - 967,635 54x28
+      Button - 1024,635 56x28
+      Button - 1083,635 66x28
       Button - 1152,635 60x28
     Frame AHProfitWindowRow7 690,664 526x20 (hidden)
     Frame AHProfitWindowRow8 690,684 526x20 (hidden)

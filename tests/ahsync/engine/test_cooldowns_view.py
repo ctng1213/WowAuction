@@ -19,30 +19,31 @@ def who(payload: dict, spell: int) -> list[str]:
     return [line["text"] for line in row(payload, spell)["who"]["lines"]]
 
 
-def test_CD4_arcanite_nets_13g_55s_a_use_and_47g_42s_50c_a_week():
+def test_CD4_arcanite_nets_13g_55s_a_use_and_6g_77s_50c_a_day():
     r = row(base(), ARCANITE)
-    assert (r["mats"], r["net"], r["per_week"]) == (292000, 135500, 474250)
+    assert (r["mats"], r["net"], r["per_day"]) == (292000, 135500, 67750)
     cells = row(page(), ARCANITE)
-    assert (cells["mats"]["text"], cells["net"]["text"], cells["per_week"]["text"]) == ("29g 20s", "13g 55s", "47g 42s 50c")
-    assert export_text(r) == "292000;135500;474250"
+    assert (cells["mats"]["text"], cells["net"]["text"], cells["per_day"]["text"]) == ("29g 20s", "13g 55s", "6g 77s 50c")
+    assert export_text(r) == "292000;135500;67750"
 
 
-def test_CD5_yield_three_a_four_day_and_a_three_day_cooldown_and_ten_minutes_give_no_per_week():
+def test_CD5_yield_three_a_four_day_and_a_three_day_cooldown_and_ten_minutes_give_no_profit_per_day():
     fire, moon, salt = (row(base(), s) for s in (FIRE, MOONCLOTH, SALT))
-    assert (fire["net"], fire["per_week"]) == (19200, None)
-    assert row(page(), FIRE)["per_week"] == {"text": "—", "neg": False,
-                                             "hover": "not limited by the cooldown: limited by the mats"}
+    assert (fire["net"], fire["per_day"]) == (19200, None)
+    assert row(page(), FIRE)["per_day"] == {"text": "—", "neg": False,
+                                            "hover": "not limited by the cooldown: limited by the mats"}
     assert row(page(), FIRE)["cooldown"]["text"] == "10 m"
-    assert (moon["net"], moon["per_week"]) == (139000, 243250)
-    assert (salt["net"], salt["per_week"]) == (41250, 96250)
-    assert row(page(), SALT)["per_week"]["text"] == "9g 62s 50c"
+    assert (moon["net"], moon["per_day"]) == (139000, 34750)
+    assert (salt["net"], salt["per_day"]) == (41250, 13750)
+    assert row(page(), SALT)["per_day"]["text"] == "1g 37s 50c"
 
 
 def test_CD6_a_loss_is_red_a_mat_without_a_price_blanks_the_money_and_an_unpriced_product_sorts_last():
     undeath = row(page(), WATER_TO_UNDEATH)
-    assert (undeath["net"], undeath["per_week"]["text"]) == ({"text": "−2g 5s", "neg": True}, "−14g 35s")
+    assert (undeath["net"], undeath["per_day"]["text"]) == ({"text": "−2g 5s", "neg": True}, "−2g 5s")
+    assert undeath["per_day"]["neg"]
     no_water = base(price_facts=cw.prices({7080: PriceFact(None)}))
-    assert [row(no_water, WATER_TO_UNDEATH)[k] for k in ("mats", "net", "per_week")] == [None, None, None]
+    assert [row(no_water, WATER_TO_UNDEATH)[k] for k in ("mats", "net", "per_day")] == [None, None, None]
     assert export_text(row(no_water, WATER_TO_UNDEATH)) == ";;"
     assert row(render(no_water, NOW), WATER_TO_AIR)["price"]["text"] == "2g 80s"
     assert base()["rows"][-1]["price"] is None
@@ -51,21 +52,27 @@ def test_CD6_a_loss_is_red_a_mat_without_a_price_blanks_the_money_and_an_unprice
 def test_CD7_a_price_nine_days_old_is_muted_with_its_age_and_still_sorts_by_its_value():
     fire = row(page(), FIRE)["price"]
     assert fire == {"text": "1g 20s", "muted": True, "sub": "9 d old"}
-    order = [r["spell"] for r in base()["rows"]]
+    by_price = sorted(page()["rows"], key=lambda r: -(r["sort"]["price"] or 0))   # the AH price header (stable)
+    order = [r["spell"] for r in by_price]
     assert order.index(GOLD) < order.index(FIRE) < order.index(WATER_TO_UNDEATH)
+    default = [r["spell"] for r in base()["rows"]]
+    assert default.index(17565) < default.index(FIRE) < default.index(21935)   # after the Essence of Earth rows
 
 
-def test_CD8_the_default_order_is_by_ah_price_then_recipe_name_then_spell():
+def test_CD8_the_default_order_is_by_profit_per_day_then_ah_price_then_recipe_name_then_spell():
     names = [(r["item"], r["recipe"]) for r in base()["rows"]]
     assert names == [
         ("Arcanite Bar", "Transmute: Arcanite"), ("Mooncloth", "Mooncloth"),
-        ("Refined Deeprock Salt", "Salt Shaker"), ("Essence of Water", "Transmute: Earth to Water"),
-        ("Essence of Water", "Transmute: Undeath to Water"), ("Essence of Air", "Transmute: Water to Air"),
+        ("Essence of Water", "Transmute: Undeath to Water"), ("Refined Deeprock Salt", "Salt Shaker"),
+        ("Gold Bar", "Transmute: Iron to Gold"), ("Truesilver Bar", "Transmute: Mithril to Truesilver"),
+        ("Essence of Water", "Transmute: Earth to Water"), ("Essence of Air", "Transmute: Water to Air"),
+        ("Essence of Undeath", "Transmute: Water to Undeath"),
         ("Essence of Earth", "Transmute: Fire to Earth"), ("Essence of Earth", "Transmute: Life to Earth"),
-        ("Truesilver Bar", "Transmute: Mithril to Truesilver"), ("Gold Bar", "Transmute: Iron to Gold"),
-        ("Elemental Fire", "Transmute: Elemental Fire"), ("Essence of Undeath", "Transmute: Water to Undeath"),
+        ("Elemental Fire", "Transmute: Elemental Fire"),
         ("Snowball", "SnowMaster 9000"), ("Essence of Fire", "Transmute: Air to Fire"),
         ("Living Essence", "Transmute: Earth to Life")]
+    assert [round(r["per_day"]) for r in base()["rows"][:9]] == [
+        67750, 34750, 18500, 13750, 8350, 6975, 4500, -3400, -20500]
 
 
 def standing(payload: dict, spell: int, name: str) -> dict:

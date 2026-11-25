@@ -43,18 +43,24 @@ local function With(name, change)
 end
 
 describe("CooldownsView", function()
-  it("CD22 Amaya's own view lists every Alchemy row by AH price, with its bar", function()
+  it("CD22 Amaya's own view lists every Alchemy row by Profit / day, with its bar", function()
     local vm = VM()
     local rows = vm.CooldownRows(CW.DB(), AMAYA, CW.Ctx(true))
-    -- by price: Arcanite 45g; Water 3g (Earth, then Undeath, by recipe name); Air 2g 80s; Earth 2g 40s (Fire, Life);
-    -- Truesilver 2g 10s; Gold 1g 30s; Elemental Fire 1g 20s; Undeath 1g; then the unpriced by recipe name
-    assert_eq(Spells(rows), { 17187, 17561, 17563, 17562, 17560, 17565, 11480, 11479, 25146, 17564, 17559, 17566 })
+    -- by Profit / day: Arcanite 6g 77s 50c; Undeath to Water 1g 85s; Gold 83s 50c; Truesilver 69s 75c; Earth to Water
+    -- 45s; Water to Air -34s; Water to Undeath -2g 5s; then without one, by price: Earth 2g 40s (Fire, Life),
+    -- Elemental Fire 1g 20s (under 1 day); then the unpriced by recipe name
+    assert_eq(Spells(rows), { 17187, 17563, 11479, 11480, 17561, 17562, 17564, 17560, 17565, 25146, 17559, 17566 })
     assert_eq((vm.CooldownBar(CW.DB(), AMAYA, { live = true, offsetMs = 0 })),
               "Amaya · Alchemy 280 · Herbalism: no cooldown recipes · live")
     local arcanite = Row(rows, 17187)
     assert_eq({ arcanite.item, arcanite.sub, arcanite.skill, arcanite.cooldown, arcanite.shared, arcanite.ready,
-                arcanite.price, arcanite.mats, arcanite.net, arcanite.canMake },
-              { "Arcanite Bar", "Transmute: Arcanite", "275", "2 d", "shared", "ready", "45g", "29g 20s", "13g 55s", "Yes" })
+                arcanite.price, arcanite.mats, arcanite.perDay, arcanite.canMake },
+              { "Arcanite Bar", "Transmute: Arcanite", "275", "2 d", "shared", "ready", "45g", "29g 20s", "6g 78s", "Yes" })
+    assert_eq(arcanite.net, nil)                                                     -- no Net / use column: it is on hover
+    local fire, undeath = Row(rows, 25146), Row(rows, 17564)
+    assert_eq({ fire.perDay, fire.perDayTip }, { "—", { "Net / use: 1g 92s", "not limited by the cooldown: limited by the mats",
+                                                       "from the 14:32 export" } })
+    assert_eq({ undeath.perDay, undeath.perDayColor }, { "−2g 5s", "neg" })
   end)
 
   it("CD9 the group's newest stored use locks every transmute; Elemental Fire has its own 10 minutes", function()
@@ -133,7 +139,7 @@ describe("CooldownsView", function()
     local vm = VM()
     assert_eq((vm.CooldownBar(CW.DB(), TESSA, { live = false, offsetMs = 0 })), "Tessa · Alchemy 300 · data from Wed 09:15")
     local rows = vm.CooldownRows(CW.DB(), TESSA, CW.Ctx(false, true))
-    for _, r in ipairs(rows) do assert_eq({ r.price, r.mats, r.net }, { "—", "—", "—" }) end
+    for _, r in ipairs(rows) do assert_eq({ r.price, r.mats, r.perDay }, { "—", "—", "—" }) end
     local recipes = {}
     for i, r in ipairs(rows) do recipes[i] = r.recipe end
     local sorted = {}
@@ -146,19 +152,20 @@ describe("CooldownsView", function()
     local vm = VM()
     local rows = vm.CooldownRows(CW.DB(), "Mira-Grommash", CW.Ctx(false))
     assert_eq(Spells(rows), { 18560, 19566 })
-    assert_eq({ rows[1].sub, rows[1].price, rows[2].sub, rows[2].price },
-              { "Tailoring · Mooncloth", "22g", "Leatherworking · Salt Shaker (tool)", "4g 50s" })
+    assert_eq({ rows[1].sub, rows[1].perDay, rows[2].sub, rows[2].perDay },
+              { "Tailoring · Mooncloth", "3g 48s", "Leatherworking · Salt Shaker (tool)", "1g 38s" })
   end)
 
-  it("CD26 Mats in units only, and Net / use names its export", function()
+  it("CD26 Mats in units only, and Profit / day's hover gives Net / use and names its export", function()
     local vm = VM()
     local arcanite = Row(vm.CooldownRows(CW.DB(), AMAYA, CW.Ctx(true)), 17187)
     assert_eq(arcanite.matsTip, { "Thorium Bar: need 1 · Amaya has 1 (bags) · buy 0",
                                   "Arcane Crystal: need 1 · Amaya has 1 (bags) · buy 0" })
-    assert_eq({ arcanite.netTip, arcanite.key }, { "from the 14:32 export", 12360 })
+    assert_eq({ arcanite.perDayTip, arcanite.key }, { { "Net / use: 13g 55s", "from the 14:32 export" }, 12360 })
     local fire = Row(vm.CooldownRows(CW.DB(), TESSA, CW.Ctx(false)), 25146)
     assert_eq({ fire.price, fire.priceAge, fire.sub }, { "1g 20s", "9 d old", "Transmute: Elemental Fire · makes 3" })
-    assert_eq(Row(vm.CooldownRows(CW.DB(), AMAYA, CW.Ctx(true)), 17562).netColor, "neg")
+    assert_eq(Row(vm.CooldownRows(CW.DB(), AMAYA, CW.Ctx(true)), 17562).perDayColor, "neg")
+    assert_eq(Row(vm.CooldownRows(CW.DB(), TESSA, CW.Ctx(false, true)), 17187).perDayTip, nil)   -- no market file
   end)
 
   it("CD27 a character with no cooldown profession says so and opens nobody", function()

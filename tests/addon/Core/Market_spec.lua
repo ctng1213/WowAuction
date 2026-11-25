@@ -134,7 +134,7 @@ describe("Market", function()
   end)
 
   it("FM35 a file from a newer AHSync says to deploy the addon", function()
-    local Market = Boot(EX2, function(file) file.exportVersion = 10 end)
+    local Market = Boot(EX2, function(file) file.exportVersion = 11 end)
     assert_eq({ Market.Problem(), Market.Item(2589) }, { "This addon is older than AHSync's files: run tools/deploy.py, then /reload", nil })
   end)
 
@@ -178,7 +178,7 @@ describe("Market", function()
 
   it("EX23 the cooldowns' money is read as exported, inside the checksum", function()
     local Market = Boot(EX2)
-    assert_eq(Market.Cooldown(17187), { mats = 292000, net = 135500, perWeek = 474250 })
+    assert_eq(Market.Cooldown(17187), { mats = 292000, net = 135500, perDay = 67750 })
     assert_eq(Market.Cooldown(17564), { mats = 30000 })
     assert_eq(Market.Cooldown(99999), nil)
     assert_eq(Market.CooldownVersion(), 1)

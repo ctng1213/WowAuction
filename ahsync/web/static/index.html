@@ -713,7 +713,7 @@ async function setManualRate(id, char, key, typed, el) {
 // ---------- Cooldowns (SPEC §3.4F.6, §3.5): every text, flag, sort key, filter list and view comes from engine/cooldowns_view.py ----------
 // Columns: [header, numeric?, sort key in row.sort (or null)]. Name, Skill, Cooldown and Can Make sort ascending first, the money and price columns descending.
 const CD_COLS = [['Item · recipe', 0, 'name'], ['Profession', 0, null], ['Skill', 1, 'skill'], ['Cooldown', 1, 'cooldown'], ['Made from', 0, null],
-                 ['AH price', 1, 'price'], ['Mats', 1, 'mats'], ['Net / use', 1, 'net'], ['Per week', 1, 'per_week'], ['Sold / day', 1, 'sold'],
+                 ['AH price', 1, 'price'], ['Mats', 1, 'mats'], ['Net / use', 1, 'net'], ['Profit / day', 1, 'per_day'], ['Sold / day', 1, 'sold'],
                  ['Who', 0, null], ['Can Make', 1, 'can_make']];
 const CD_ASC_FIRST = ['name', 'skill', 'cooldown', 'can_make'];
 const CD_WHO_CLASSES = { ready: 'pos', amber: 'amber', muted: 'muted' };
@@ -730,7 +730,7 @@ const cdRow = r => `<tr><td>${esc(r.item.text)}${r.item.sub ? `<span class="sub"
   `<td style="white-space:normal">${esc(r.made_from)}</td>` +
   `<td class="num ${r.price.muted ? 'muted' : ''}">${esc(r.price.text)}${r.price.sub ? `<span class="sub">${esc(r.price.sub)}</span>` : ''}</td>` +
   `<td class="num"${cdTitle(r.mats.hover)}>${dash(r.mats.text)}</td><td class="num ${r.net.neg ? 'neg' : ''}">${dash(r.net.text)}</td>` +
-  `<td class="num ${r.per_week.neg ? 'neg' : ''}"${cdTitle(r.per_week.hover)}>${dash(r.per_week.text)}</td><td class="num">${dash(r.sold)}</td>` +
+  `<td class="num ${r.per_day.neg ? 'neg' : ''}"${cdTitle(r.per_day.hover)}>${dash(r.per_day.text)}</td><td class="num">${dash(r.sold)}</td>` +
   `<td${cdTitle(r.who.hover)}>${cdWho(r.who)}</td><td class="num ${CD_WHO_CLASSES[r.can_make.cls] || ''}"${cdTitle(r.can_make.hover)}>${esc(r.can_make.text)}</td></tr>`;
 // The page: the filters and header line, then the table of the chosen view's rows (in its order unless a header was clicked), or its notice.
 function cdPage(d, values, id) {
@@ -825,7 +825,7 @@ const LIVE = {
     filters: [],
   },
   cooldowns: {
-    lede: 'A research page: every profession\'s item-making cooldowns from AHSync\'s curated catalog (SPEC §3.4F), sorted by AH price. <b>Per week</b> is what one character earns using the recipe every time it is ready; it is per character, never a total.',
+    lede: 'A research page: every profession\'s item-making cooldowns from AHSync\'s curated catalog (SPEC §3.4F), sorted by Profit / day. <b>Profit / day</b> is what one character earns a day using the recipe every time it is ready (Net / use ÷ the cooldown in days); it is per character, never a total.',
     render: (d, values, id) => cdPage(d, values, id),
     bind: cdBind,
     filters: [],

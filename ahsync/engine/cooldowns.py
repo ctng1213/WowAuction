@@ -358,20 +358,20 @@ def net_per_use(recipe: CooldownRecipe, price: int | None, mats: int | None) -> 
     return sale_net(price, (recipe.yield_min + recipe.yield_max) / 2) - mats
 
 
-def per_week(recipe: CooldownRecipe, net: float | None) -> float | None:
-    """What one character earns using the row every time it is ready (SPEC §3.4F.4, D4, D13).
+def per_day(recipe: CooldownRecipe, net: float | None) -> float | None:
+    """Profit / day: what one character earns a day using the row every time it is ready (SPEC §3.4F.4, D4, D13).
 
     Args:
         recipe: A catalog row.
         net: From net_per_use.
 
     Returns:
-        net × 7 ÷ the cooldown in days, float copper; None without a net, or for a cooldown under 1 day,
+        net ÷ the cooldown in days, float copper; None without a net, or for a cooldown under 1 day,
         which doesn't limit the output.
     """
     if net is None or recipe.cooldown_s < DAY_S:
         return None
-    return net * 7 * DAY_S / recipe.cooldown_s
+    return net * DAY_S / recipe.cooldown_s
 
 
 def duration_text(ms: int) -> str:

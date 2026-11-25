@@ -76,11 +76,11 @@ describe("CooldownsTab", function()
   it("CD24 with no market file the rows still show, every money column reads —, and the footer says to run AHSync", function()
     local ui = Open(nil, true)
     local cells = ui.rows[1].cells.cooldowns
-    assert_eq({ cells.price:GetText(), cells.mats:GetText(), cells.net:GetText() }, { "—", "—", "—" })
+    assert_eq({ cells.price:GetText(), cells.mats:GetText(), cells.perDay:GetText() }, { "—", "—", "—" })
     assert_eq(ui.footer:GetText(), "No market data yet. Run AHSync, then /reload.")    -- the window's own line
   end)
 
-  it("CD26 hovering the price shows the market tooltip; Mats and Net / use show their own text", function()
+  it("CD26 hovering the price shows the market tooltip; Mats and Profit / day show their own text", function()
     local ui = Open()
     local row = ui.rows[1]
     row.cd.hits.skill:GetScript("OnEnter")(row.cd.hits.skill)                      -- nothing of its own: the item
@@ -94,8 +94,9 @@ describe("CooldownsTab", function()
     assert_eq({ Stubs.tooltip.lines[1], Stubs.tooltip.lines[2] },
               { "Arcanite Bar", "Thorium Bar: need 1 · Amaya has 1 (bags) · buy 0" })
     row.cd.hits.mats:GetScript("OnLeave")(row.cd.hits.mats)
-    row.cd.hits.net:GetScript("OnEnter")(row.cd.hits.net)
-    assert_eq(Stubs.tooltip.lines[2], "from the " .. select(2, AHProfit.ViewModel.Clock(CW.NOW, AHProfit.Adapter.LocalOffsetMs(CW.NOW)))
+    row.cd.hits.perDay:GetScript("OnEnter")(row.cd.hits.perDay)
+    assert_eq(Stubs.tooltip.lines[2], "Net / use: 13g 55s")
+    assert_eq(Stubs.tooltip.lines[3], "from the " .. select(2, AHProfit.ViewModel.Clock(CW.NOW, AHProfit.Adapter.LocalOffsetMs(CW.NOW)))
                                       .. " export")
   end)
 
