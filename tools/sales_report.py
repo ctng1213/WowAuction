@@ -18,7 +18,8 @@ so it cannot have expired: it was bought or cancelled. The report answers, with 
 7. The nothing-ahead truth (sold-price plan §1d item 36(a)): of the auctions that were the cheapest of their item
    when seen, the share that left early within 8 h, by their price against the item's sold level (the early
    leavers' units-weighted median over the span), gear and commodities apart: what SM21's acceptance is checked
-   against; and, for gear, the share of auctions gone within their first observed gap (a proxy for the sales the
+   against. The share counts only auctions VERY_LONG then (24 h posts), whose 8 h a hidden expiry can't end (item 42);
+   and, for gear, the share of auctions gone within their first observed gap (a proxy for the sales the
    snapshots never see, item 36(b)).
 
 The report is a temporary plan file; it changes no number in the product.
@@ -46,6 +47,7 @@ from lifetimes_report import gear_of, load_books  # noqa: E402
 
 EARLY_GAP_MS = 2 * HOUR_MS        # a vanish within 2 h of a LONG or VERY_LONG sighting cannot be an expiry
 EARLY_BANDS = (3, 4)              # LONG (2-12 h left) and VERY_LONG (over 12 h)
+VERY_LONG_BAND = 4                # over 12 h left: only a 24 h auction (SPEC §2.4)
 MAX_AGE_H = 24
 EVIDENCE_K = 30                   # endings a cell needs before its own estimate dominates (n ÷ (n + k) ≥ 0.5)
 SLOTS = 168
@@ -402,6 +404,7 @@ class Exposure:
     sold: bool                    # it left early within WINDOW_MS of that snapshot
     first_gap: bool               # it was gone in the very first gap after it was first seen at all
     at_ms: int = 0                # the snapshot that first found it the cheapest
+    clean: bool = False           # VERY_LONG then (over 12 h left): its 8 h can't end in a late band, so no expiry hides
 
 
 def exposures(books: list[IdBook]) -> list[Exposure]:
@@ -410,7 +413,9 @@ def exposures(books: list[IdBook]) -> list[Exposure]:
     An auction counts once, from the first snapshot it was the cheapest in (ties count). It is "sold" when it left
     early (a LONG or VERY_LONG band at its last sighting, gone within a linked gap) within WINDOW_MS of that
     snapshot; "not sold" when still listed WINDOW_MS later or gone with a short band (it may have expired); left out
-    when the span ends or an unlinked gap comes first.
+    when the span ends or an unlinked gap comes first. Only a clean exposure (VERY_LONG when it became the cheapest)
+    has an honest "not sold": durations are 2, 8 and 24 h (SPEC §2.4), so a 2 h post is never LONG and an 8 h post
+    leaves LONG after 6 h, and a sale of either then looks like an expiry (sold-price plan §1d item 42).
 
     Args:
         books: Snapshots, oldest first.
@@ -418,22 +423,22 @@ def exposures(books: list[IdBook]) -> list[Exposure]:
     Returns:
         The exposures.
     """
-    open_: dict[int, list] = {}                          # auction id -> [key, price, from_ms, band, first_seen_ms]
+    open_: dict[int, list] = {}              # auction id -> [key, price, from_ms, band, first_seen_ms, clean]
     first_seen: dict[int, int] = {}
     out: list[Exposure] = []
     prev: IdBook | None = None
     for book in books:
         linked = prev is not None and book.at_ms - prev.at_ms <= EARLY_GAP_MS
         present = {a.id: a for a in book.auctions}
-        for auction, (key, price, from_ms, band, seen_ms) in list(open_.items()):
+        for auction, (key, price, from_ms, band, seen_ms, clean) in list(open_.items()):
             if auction in present:
                 open_[auction][3] = present[auction].band
                 if book.at_ms >= from_ms + WINDOW_MS:
-                    out.append(Exposure(key, price, False, False, from_ms))
+                    out.append(Exposure(key, price, False, False, from_ms, clean))
                     del open_[auction]
             elif linked:
                 sold = band in EARLY_BANDS and prev.at_ms < from_ms + WINDOW_MS
-                out.append(Exposure(key, price, sold, seen_ms == from_ms and prev.at_ms == from_ms, from_ms))
+                out.append(Exposure(key, price, sold, seen_ms == from_ms and prev.at_ms == from_ms, from_ms, clean))
                 del open_[auction]
             else:
                 del open_[auction]
@@ -443,7 +448,7 @@ def exposures(books: list[IdBook]) -> list[Exposure]:
             first_seen.setdefault(a.id, book.at_ms)
         for a in book.auctions:
             if a.price == by_key[a.key] and a.id not in open_:
-                open_[a.id] = [a.key, a.price, book.at_ms, a.band, first_seen[a.id]]
+                open_[a.id] = [a.key, a.price, book.at_ms, a.band, first_seen[a.id], a.band == VERY_LONG_BAND]
         prev = book
     return out
 
@@ -480,6 +485,9 @@ def local_levels(g: Gaps, commodities: frozenset[int]) -> dict[tuple[int, int], 
 def nothing_ahead_rows(ex: list[Exposure], levels: dict[tuple[int, int], int], commodities: frozenset[int]) -> list[str]:
     """Section 7's table: per shape and price band, the auctions that were cheapest and the share sold within 8 h.
 
+    The share counts clean exposures only (VERY_LONG when they became the cheapest); the share over every band is
+    printed beside it, biased low because a late sale of a 2 h or 8 h post looks like an expiry (item 42).
+
     Args:
         ex: From exposures.
         levels: (item key, day) -> its sold level then, copper (local_levels); exposures without one are left out.
@@ -488,7 +496,7 @@ def nothing_ahead_rows(ex: list[Exposure], levels: dict[tuple[int, int], int], c
     Returns:
         Markdown rows.
     """
-    cells: dict[tuple[bool, int], list[int]] = defaultdict(lambda: [0, 0])
+    cells: dict[tuple[bool, int], list[int]] = defaultdict(lambda: [0, 0, 0, 0])   # all, all sold, clean, clean sold
     items: dict[bool, set[int]] = defaultdict(set)
     for e in ex:
         level = levels.get((e.key, e.at_ms // DAY_MS))
@@ -499,15 +507,18 @@ def nothing_ahead_rows(ex: list[Exposure], levels: dict[tuple[int, int], int], c
         cell = cells[(e.key in commodities, band)]
         cell[0] += 1
         cell[1] += e.sold
+        cell[2] += e.clean
+        cell[3] += e.clean and e.sold
         items[e.key in commodities].add(e.key)
     rows = []
     for commodity in (False, True):
         for i, (lo, hi) in enumerate(LEVEL_BANDS):
-            n, sold = cells.get((commodity, i), (0, 0))
+            n, sold, clean, clean_sold = cells.get((commodity, i), (0, 0, 0, 0))
             label = f"under {hi:.2f}×" if lo == 0 else (f"{lo:.2f}× and over" if hi == float("inf") else f"{lo:.2f}–{hi:.2f}×")
+            share = f"{clean_sold / clean:.2f}" if clean else "—"
+            low = f"{sold / n:.2f}" if n else "—"
             rows.append(f"| {'commodities' if commodity else 'gear and the rest'} ({len(items[commodity])} items) | {label} | "
-                        f"{n} | {sold} | {sold / n:.2f} |" if n else
-                        f"| {'commodities' if commodity else 'gear and the rest'} ({len(items[commodity])} items) | {label} | 0 | 0 | — |")
+                        f"{clean} | {clean_sold} | {share} | {n} | {low} |")
     return rows
 
 
@@ -609,8 +620,11 @@ def report(books: list[IdBook], skipped: int, commodities: frozenset[int], names
         "Each auction once, from the first snapshot it was the cheapest of its item in; sold = left early (bought or "
         "cancelled) within 8 h; the level is the item's early leavers' units-weighted median over that day and the day "
         "each side (10 or more leaves). This is what SM21's price acceptance is checked against (sold-price plan §1d "
-        "item 36(a)); cancels are in the sold share (section 2's floor says how many).",
-        "", "| shape | price ÷ the level | auctions | sold within 8 h | share |", "|---|---|---|---|---|",
+        "item 36(a)); cancels are in the sold share (section 2's floor says how many). The share counts only auctions "
+        "VERY_LONG when they became the cheapest (24 h posts): a 2 h post is never LONG and an 8 h post leaves LONG "
+        "after 6 h, so their sales then look like expiries and the share over every band reads low (item 42).",
+        "", "| shape | price ÷ the level | clean auctions | sold within 8 h | share | all auctions | share, every band (low) |",
+        "|---|---|---|---|---|---|---|",
         *nothing_ahead_rows(ex, local_levels(g, commodities), commodities), "",
         "Auctions gone within their first observed gap: the nearer to 1, the more of an item's sales the snapshots never "
         "see at all (item 36(b): a listing bought before any snapshot is invisible, so sold/day reads low).", "",
