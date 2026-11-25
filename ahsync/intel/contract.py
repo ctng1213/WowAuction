@@ -12,12 +12,12 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field, fields, replace
 
-from ahsync.engine import lifetime_prices, profile, sellprob
+from ahsync.engine import lifetime_prices, profile, sales_profile, sellprob
 from ahsync.engine.capacity import slot_of
 
 HOUR_MS = 3_600_000
 
-INTEL_SCHEMA_VERSION = 17      # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
+INTEL_SCHEMA_VERSION = 18      # 2: weekly patterns, windows, strength, curve (AR5); 3: profiles packed (W13); 4: cur_suspect (FM5);
                                # 5: median_daily_supply (V23); 6: observed_listing_turnover (V37); 7: volume_kind (D57);
                                # 8: closes_30d (TT23); 9: each window's forecast: expected price, executable quantity,
                                # confidence, and buying windows ranked by actionable value (W14, W15); 10: the cloud
@@ -33,7 +33,8 @@ INTEL_SCHEMA_VERSION = 17      # 2: weekly patterns, windows, strength, curve (A
                                # (BZ45, BZ49); 16: per item sold_med7 and sold_units7, the units-weighted median of
                                # the last 7 days' sold prices and its units (SPEC §2.4 Sold prices, BZ53, BZ54);
                                # 17: per item the price level, its source, its sold units and the sold curve, and
-                               # the settings' level_divides_by_pattern (SPEC §3.3 The price level, BZ71)
+                               # the settings' level_divides_by_pattern (SPEC §3.3 The price level, BZ71);
+                               # 18: per item the sales profile, busy held 3 days (SPEC §3.3 Sales profiles, BZ73)
 # Fields each schema added, so to_json can write the previous schema for older readers (SPEC §2.4, BZ18).
 ADDED_IN = {10: {"document": ("catalog", "coverage", "settings", "ages_at_ms"),
                  "item": ("last_hour", "recent_closes", "recent_sold", "recent_listed", "recent_units")},
@@ -46,7 +47,8 @@ ADDED_IN = {10: {"document": ("catalog", "coverage", "settings", "ages_at_ms"),
             15: {"document": (), "item": ("unseen_per_day",)},
             16: {"document": (), "item": ("sold_med7", "sold_units7")},
             17: {"document": (), "item": ("level", "level_source", "level_units", "sold_curve"),
-                 "settings": ("level_divides_by_pattern",)}}
+                 "settings": ("level_divides_by_pattern",)},
+            18: {"document": (), "item": ("sales_profile",)}}
 COMPACT_SINCE = 14             # the schema from which profiles are run-length coded and items written as rows (BZ47)
 PROFILE_FIELDS = ("how", "how_weeks", "sales_how", "sales_weeks", "supply_how", "supply_weeks")
 
@@ -168,6 +170,9 @@ class ItemIntel:
     level_source: str | None = None
     level_units: float = 0.0
     sold_curve: tuple[int, ...] | None = None
+    # Schema 18 (SPEC §3.3 Sales profiles, BZ73): "commodity", "busy", "thin" or "rare", the busy line held 3 days
+    # (engine.sales_profile). None in older documents: `published_profile` derives it from the curve, unheld.
+    sales_profile: str | None = None
 
 
 @dataclass(frozen=True)
@@ -224,6 +229,24 @@ def published_level(i: ItemIntel) -> lifetime_prices.Level:
     return lifetime_prices.level_with_bounds(level, source, i.level_units, i.sold_curve, i.p10_30)
 
 
+def published_profile(i: ItemIntel) -> str:
+    """An item's sales profile as its document gives it (SPEC §3.3 Sales profiles, P32, BZ73).
+
+    A schema-18 document carries it, the busy line held 3 days; an older one is classified from its own fields,
+    the sold curve standing for busy (the raw status, no hold), so the demand spread gates as it did.
+
+    Args:
+        i: The item's intelligence.
+
+    Returns:
+        "commodity", "busy", "thin" or "rare".
+    """
+    if i.sales_profile is not None:
+        return i.sales_profile
+    priced = published_level(i)
+    return sales_profile.classify(bool(i.commodity), priced.curve is not None, priced.source, i.sold_per_day)
+
+
 def pattern_at(i: ItemIntel, at_ms: int) -> float:
     """The item's price ratio at an hour, from its stored `how` (SPEC §3.3.4; PP5).
 
@@ -245,11 +268,11 @@ def price_acceptance(i: ItemIntel) -> sellprob.Acceptance:
         i: The item's intelligence.
 
     Returns:
-        The Acceptance; without a level or a curve it accepts every price. A commodity is flagged (the demand
-        spread skips it, P31); unknown counts as not one.
+        The Acceptance; without a level or a curve it accepts every price. It carries the sales profile, which
+        gates the demand spread (P31, P32).
     """
     priced = published_level(i)
-    return sellprob.Acceptance(priced.level, priced.curve, profile.unpack_values(i.how), bool(i.commodity))
+    return sellprob.Acceptance(priced.level, priced.curve, profile.unpack_values(i.how), published_profile(i))
 
 
 def supply_level(i: ItemIntel) -> int | None:

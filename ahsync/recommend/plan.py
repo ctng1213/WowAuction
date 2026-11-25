@@ -22,7 +22,7 @@ from ahsync.engine.sell_record import Record, ResolvedPost, sell_record
 from ahsync.engine.views import round_half_up
 from ahsync.engine.week import WeekInputs
 from ahsync.history.reads import ItemInfo
-from ahsync.intel.contract import ItemIntel, others_supply, price_level, published_level
+from ahsync.intel.contract import ItemIntel, others_supply, price_level, published_level, published_profile
 from ahsync.recommend.listings import own_listed
 from ahsync.recommend.pages import DE_KIND, craft_market
 from ahsync.state.reads import StateReader
@@ -125,7 +125,7 @@ def sell_facts(i: ItemIntel, info: ItemInfo | None, de: tuple[float, str] | None
         supply, _pattern(i.supply_how, i.supply_weeks, ()),
         bool(info and info.item_class in GEAR_CLASSES), i.conf, record, priced.low, priced.high,
         tuple(PlanWindow(w.start_slot, w.hours, w.best_slot, w.weeks) for w in i.buy_windows), i.closes_30d,
-        i.undercut_share, bool(i.commodity), own, priced.curve)
+        i.undercut_share, bool(i.commodity), own, priced.curve, published_profile(i))
 
 
 def window_candidate(i: ItemIntel, min_flip_margin: float, max_trend_total: float = 0.15) -> bool:

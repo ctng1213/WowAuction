@@ -14,13 +14,14 @@ from dataclasses import dataclass, replace
 from ahsync.engine import confidence, fees, lifetime_prices, patterns, prices, profile, sell_through, sellprob
 from ahsync.engine.capacity import GEAR_CLASSES, slot_of
 from ahsync.engine.lifetime_prices import weighted_median
+from ahsync.engine.sales_profile import classify as classify_profile, held_busy
 from ahsync.engine.profile import Profile
 from ahsync.engine.sellprob import FLAT_HOW, Acceptance, MarketSettings, Supply
 from ahsync.engine.volume import (ID_METHOD_VERSION, VOLUME_METHOD_VERSION, Cover, DailyVolume, Volume, daily_volume, median_daily_supply,
                                   observed_turnover)
 from ahsync.history.reads import HistoryReader, HistoryWindow, ItemHistory, ItemInfo
 from ahsync.intel.contract import (IntelWindow, ItemIntel, MarketIntelligence, ages_reference_ms, pattern_at,
-                                   published_level)
+                                   published_level, published_profile)
 
 HOUR_MS = 3_600_000
 DAY_MS = 86_400_000
@@ -230,15 +231,15 @@ class NowBase:
     undercut_share: float | None = None   # measured u(p) at the post-now price (BZ29); None for the default
     sold_curve: tuple[int, ...] | None = None   # the sold curve (SPEC §3.3 Bounds), the price acceptance's (P28)
     how_values: tuple[float, ...] = FLAT_HOW    # the stored price pattern's 168 ratios (flat without one)
-    commodity: bool = False               # seen in Blizzard's commodities list; the demand spread skips it (P31)
+    sales_profile: str | None = None      # the sales profile (P32); "busy" gets the demand spread (P31)
 
     def acceptance(self) -> Acceptance:
-        """What the price acceptance and the demand spread read (SPEC §3.3.2, P28, P31).
+        """What the price acceptance and the demand spread read (SPEC §3.3.2, P28, P31, P32).
 
         Returns:
-            The level, the sold curve, the pattern and the commodity flag.
+            The level, the sold curve, the pattern and the sales profile.
         """
-        return Acceptance(self.level, self.sold_curve, self.how_values, self.commodity)
+        return Acceptance(self.level, self.sold_curve, self.how_values, self.sales_profile)
 
 
 @dataclass(frozen=True)
@@ -265,7 +266,7 @@ def now_base(i: ItemIntel, at_ms: int, vendor_sell: int) -> NowBase:
     priced = published_level(i)
     return NowBase(priced.level, priced.low, priced.high, pattern_at(i, at_ms), i.sold_per_day, i.listed_per_day,
                    profile.unpack(i.sales_how, i.sales_weeks).values, vendor_sell, i.undercut_share, priced.curve,
-                   profile.unpack_values(i.how) or FLAT_HOW, bool(i.commodity))
+                   profile.unpack_values(i.how) or FLAT_HOW, published_profile(i))
 
 
 def now_fields(quote: Quote, base: NowBase, now_ms: int, settings: MarketSettings
@@ -512,8 +513,10 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
                                  prices.post_price(quote.price, priced.level, how_now, priced.low, priced.high),
                                  sellprob.cheapest_other(quote.book, quote.price), now_ms)
     commodity = any(row[sell_through.COMMODITY] for row in item.lifetimes.values()) if item.lifetimes else None
+    kind = classify_profile(bool(commodity), held_busy(item.sold_hours, now_ms, priced.curve is not None), priced.source,
+                            volume.sold_per_day)                                       # §3.3 Sales profiles, P32
     base = NowBase(priced.level, priced.low, priced.high, how_now, volume.sold_per_day, volume.listed_per_day,
-                   sales[0].values, vendor_sell, undercut, priced.curve, stored.values, bool(commodity))
+                   sales[0].values, vendor_sell, undercut, priced.curve, stored.values, kind)
     price, ref, chance, unknown, sell_value = now_fields(quote, base, now_ms, settings)   # PP5, P26
     book_age = now_ms - newest[0] if newest else None
     recent = [c for t, c in raw if t > now_ms - DAY_MS]
@@ -543,7 +546,7 @@ def analyze_item(item: ItemHistory, info: ItemInfo | None, now_ms: int, settings
         observed_listing_turnover=observed_turnover(item.hourly_supply, now_ms), med14=med14,
         volume_kind=volume.main_kind, closes_30d=len(last30),
         expired_share=expired_share(item.lifetimes, now_ms), undercut_share=undercut,
-        commodity=commodity,
+        commodity=commodity, sales_profile=kind,
         supply7=median_daily_supply(item.hourly_supply, now_ms, 7),
         supply14=median_daily_supply(item.hourly_supply, now_ms, 14),
         sell_chance=sell_chance_now(quote, base, now_ms, settings), unseen_per_day=unseen_per_day(item, week, volume),

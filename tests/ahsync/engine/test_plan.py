@@ -280,7 +280,7 @@ def test_P31_a_planned_post_of_an_item_with_a_curve_averages_over_the_demand_spr
     quiet = dict(book=(), undercut_share=0.0)                   # S 40 a day: 13.33 units over 8 flat hours for 20 posted
     hours = sellprob.posting_now_window(NOW)
     assert plan.post_chance(linen(**quiet), 45, 20, hours, 0, S) == pytest.approx(40 / 3 / 20)          # 0.6667
-    curved = linen(sold_curve=(40, 45, 47, 49, 55, 65, 80), **quiet)                       # 45 c is under the level
+    curved = linen(sold_curve=(40, 45, 47, 49, 55, 65, 80), sales_profile="busy", **quiet)   # 45 c: under the level
     # min(13.33 m, 20) ÷ 20 over the ten m: 0.12, 0.2533, 0.34, 0.4267, 0.5067, 0.6, 0.7133, 0.86, 1, 1
     assert plan.post_chance(curved, 45, 20, hours, 0, S) == pytest.approx(0.582)
 

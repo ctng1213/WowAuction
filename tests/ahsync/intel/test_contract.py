@@ -228,6 +228,20 @@ def test_BZ71_the_level_round_trips_in_schema_17_and_a_schema_16_document_is_pri
     assert published_level(older) == Level(77, "asks", 0.0, None, 50, 77)     # floor(540 ÷ 7), bounds p10_30 and it
 
 
+def test_BZ73_the_sales_profile_round_trips_in_schema_18_and_an_older_document_derives_it_from_its_curve():
+    from ahsync.intel.contract import published_profile
+    curve = (80, 80, 100, 100, 100, 150, 150)
+    linen = replace(ITEM, level=100, level_source="sold", level_units=30.0, sold_curve=curve, sales_profile="busy")
+    intel = MarketIntelligence("m", 1_000, 900, 1, {2589: linen})
+    assert from_json(to_json(intel)).items[2589] == linen and published_profile(linen) == "busy"
+    seventeen = json.loads(to_json(intel, schema=17))                      # what this release still publishes beside it
+    assert "sales_profile" not in seventeen["item_fields"]
+    older = from_json(json.dumps(seventeen)).items[2589]
+    assert older.sales_profile is None and published_profile(older) == "busy"      # the curve, unheld
+    held_thin = replace(linen, sales_profile="thin")                       # a curve today, but not yet 3 days
+    assert published_profile(held_thin) == "thin"
+
+
 def test_BZ49_unseen_per_day_round_trips_in_schema_15_and_is_left_out_of_older_rows():
     intel = MarketIntelligence("m", 1_000, 900, 1, {2589: replace(ITEM, unseen_per_day=11.76)})
     assert from_json(to_json(intel)).items[2589].unseen_per_day == 11.76
@@ -244,6 +258,6 @@ def test_P28_price_acceptance_reads_the_documents_level_curve_and_pattern():
     curve = (80, 80, 100, 100, 100, 150, 150)
     how = profile.pack(profile.Profile(tuple([1.0] * 167 + [1.5]), tuple([6] * 168), tuple([True] * 168)))[0]
     linen = replace(ITEM, level=100, level_source="sold", level_units=30.0, sold_curve=curve, how=how)
-    assert price_acceptance(linen) == Acceptance(100, curve, profile.unpack_values(how))
+    assert price_acceptance(linen) == Acceptance(100, curve, profile.unpack_values(how), "busy")   # a curve, no profile stored
     older = replace(ITEM, med7=60, med14=90, med30=120, p10_30=50, how="")
-    assert price_acceptance(older) == Acceptance(77, None, None)        # the ask level, no curve: a = 1 everywhere
+    assert price_acceptance(older) == Acceptance(77, None, None, "rare")    # the ask level, no curve: a = 1 everywhere

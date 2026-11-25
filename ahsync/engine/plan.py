@@ -102,6 +102,7 @@ class SellFacts:
                                                    # unknown); they fill the caps of the windows they overlap (R31)
     sold_curve: tuple[int, ...] | None = None      # the level's sold curve (SPEC §3.3 Bounds): a post priced above
                                                    # the hour's level reads the price acceptance (§3.3.2, P28)
+    sales_profile: str | None = None               # "busy" gets the demand spread (§3.3.2, P31, P32)
 
 
 @dataclass(frozen=True)
@@ -310,7 +311,7 @@ def post_chance(f: SellFacts, price: int, qty: int, hours: Sequence[int], own_ah
         s: Settings.
 
     Returns:
-        P' in [0, 1]: the simulation, averaged over the demand spread for an item with a sold curve (P31), its
+        P' in [0, 1]: the simulation, averaged over the demand spread for busy gear (P31, P32), its
         demand cut by the price acceptance above the hour's level (P28; when
         sales are unknown, the default chance for the post's position, sellprob.default_chance, P25) blended with
         your own record when there is one (SPEC §3.3.3, O1, O2).
@@ -324,7 +325,7 @@ def post_chance(f: SellFacts, price: int, qty: int, hours: Sequence[int], own_ah
     if own_ahead:
         ahead = ahead + (sellprob.Competitor(price, own_ahead, 0),)
     u = s.default_undercut_share if f.undercut_share is None else f.undercut_share
-    acc = sellprob.Acceptance(f.level, f.sold_curve, f.how, f.commodity)
+    acc = sellprob.Acceptance(f.level, f.sold_curve, f.how, f.sales_profile)
     demand = sellprob.accepted_demand(hours, f.sales_how, price, acc)
     queue = sellprob.QueueInputs(f.sold_per_day, f.listed_per_day or 0.0, u, demand, qty, ahead,
                                  sellprob.demand_spread(acc))

@@ -535,9 +535,9 @@ def test_P28_now_base_carries_the_documents_curve_and_pattern_and_the_exported_c
                   level_units=30.0, sold_curve=curve)
     base = market.now_base(i, NOW, 8)
     assert (base.level, base.low, base.high, base.sold_curve) == (100, 80, 150, curve)
-    assert base.how_values == profile.unpack_values(how) and base.acceptance() == Acceptance(100, curve, base.how_values)
+    assert base.how_values == profile.unpack_values(how) and base.acceptance() == Acceptance(100, curve, base.how_values, "busy")
     older = market.now_base(replace(i, how="", level=None, level_source=None, sold_curve=None), NOW, 8)
-    assert (older.sold_curve, older.how_values, older.acceptance()) == (None, sellprob.FLAT_HOW, Acceptance(100, None, sellprob.FLAT_HOW))
+    assert (older.sold_curve, older.how_values, older.acceptance()) == (None, sellprob.FLAT_HOW, Acceptance(100, None, sellprob.FLAT_HOW, "rare"))
     # The exported curve (weekly_fields) is built at the post price with the acceptance: a post at 150 c reads
     # a = 0.2 in every row where the hour's level is 100 c, so its rows sit under the plain curve's.
     item = next(it for it in SevenWeeks().market_history(M, HistoryWindow(0, W_NOW, 0, 0)) if it.key == 2840)

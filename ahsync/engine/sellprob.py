@@ -146,18 +146,18 @@ def simulate(inputs: QueueInputs) -> float:
 def demand_spread(acc: Acceptance | None) -> tuple[float, ...]:
     """The demand multipliers a post's chance averages over (SPEC §3.3.2, P31).
 
-    Only an item with a sold curve that is not a commodity gets the spread: busy gear's sales are what it was
-    measured on. An item selling a few a day has no window demand to measure apart from your own sale (the spread
-    made its under-read worse), and a commodity's window demand was never measured (in the simulator the spread
-    under-read it by about 0.05; plan sold-price §1d item 43(d)).
+    Only busy gear gets the spread (sales profile "busy", P32): its sales are what it was measured on. Thin and rare
+    gear sell too few to measure a window's demand apart from your own sale (the spread made their under-read worse),
+    and a commodity waits for the simulator's overdispersed demand to check the small real gain (plan sold-price §1d
+    item 43(d), the sales-profiles proposal §7).
 
     Args:
-        acc: The item's level, sold curve, pattern and commodity flag; None for none.
+        acc: The item's level, sold curve, pattern and sales profile; None for none.
 
     Returns:
-        DEMAND_SPREAD for a non-commodity with a sold curve, else NO_SPREAD (the queue once at S).
+        DEMAND_SPREAD for the busy profile, else NO_SPREAD (the queue once at S).
     """
-    if acc is None or acc.curve is None or acc.commodity:
+    if acc is None or acc.profile != "busy":
         return NO_SPREAD
     return DEMAND_SPREAD
 
@@ -346,12 +346,12 @@ def demand_for(hours: Sequence[int], sales_how: Sequence[float]) -> tuple[float,
 @dataclass(frozen=True)
 class Acceptance:
     """What the chance reads of an item beyond its rates: its level, sold curve and hourly price pattern (the price
-    acceptance, P28) and whether it is a commodity (the demand spread, P31)."""
+    acceptance, P28) and its sales profile (the demand spread, P31, P32)."""
 
     level: int | None                          # the price level (SPEC §3.3), copper; None without one
     curve: tuple[int, ...] | None              # the sold curve at lifetime_prices.CURVE_SHARES, copper; None without
     how: Sequence[float] | None = None         # 168 price ratios, as the document stores them; None for flat
-    commodity: bool = False                    # seen in Blizzard's commodities list (False when unknown)
+    profile: str | None = None                 # the sales profile (engine.sales_profile, P32); None when unknown
 
 
 def share_at_or_above(price: int, curve: Sequence[int]) -> float:
