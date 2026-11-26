@@ -19,7 +19,7 @@ from pathlib import Path
 from ahsync.engine.fees import AH_CUT
 
 from sim.decision import Line, plan_run
-from sim.inference import GOLD, START_MS
+from sim.inference import COMMODITY_DEMAND_NOISE, GOLD, START_MS
 from sim.market import DAY_MS
 from sim.price_rules import GROUPS, REGIMES, Kind, group_of, rules_world
 from sim.trader import OUR_PREFIX, CharacterSpec
@@ -101,7 +101,7 @@ def sm22(folder: Path, seed: int = 1, replicates: int = 2, days: int = DAYS, cha
         before the end, with the buys, the units bought and the units unsold at the end in the measure's words
         ("not exercised" without a buy); then the late buys, reported apart.
     """
-    world, kinds = rules_world(seed, replicates, days=days, change_day=change_day)
+    world, kinds = rules_world(seed, replicates, days=days, change_day=change_day, demand_noise=COMMODITY_DEMAND_NOISE)
     plan = plan_run(world, folder, BUYER)
     until = START_MS + (days - LATE_DAYS) * DAY_MS
     by_regime = trades(plan.truth.events, kinds, until)

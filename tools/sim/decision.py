@@ -12,7 +12,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from sim.market import DAY_MS, HOUR_MS, Item, Planted, World
-from sim.inference import START_MS, commodity
+from sim.inference import COMMODITY_DEMAND_NOISE, START_MS, commodity
 from sim.runner import RunSettings, simulate
 from sim.scorers import Score, oracle_profit, score
 from sim.trader import OUR_PREFIX, CharacterSpec, Login, NaiveTrader, Trader
@@ -303,8 +303,9 @@ REACTION_HOURS = ((100, 12), (25, 36), (0, 96))   # plan §1.11: an item selling
 
 
 def demand_world(seed: int, days: int, shifts: tuple = ()) -> World:
-    """SD5/SD7's market: three cloths whose buyers, not sellers, set the sales (about 150, 20 and 6 a day), and a
-    cheap dump of each every second morning from day 20 for the plan to flip.
+    """SD5/SD7's market: three cloths whose buyers, not sellers, set the sales (about 150, 20 and 6 a day), with the
+    real market's 8 h demand overdispersion (COMMODITY_DEMAND_NOISE), and a cheap dump of each every second morning
+    from day 20 for the plan to flip.
 
     Args:
         seed: The world's seed.
@@ -314,7 +315,8 @@ def demand_world(seed: int, days: int, shifts: tuple = ()) -> World:
     Returns:
         The World.
     """
-    items = tuple(commodity(key, name, fair, buys, posts, cancel_share=0.06, max_units=most, shifts=shifts)
+    items = tuple(commodity(key, name, fair, buys, posts, cancel_share=0.06, max_units=most, shifts=shifts,
+                            demand_noise=COMMODITY_DEMAND_NOISE)
                   for key, name, fair, buys, posts, most, _, _ in DEMAND_ITEMS)
     dumps = tuple(Planted(START_MS + day * DAY_MS + 8 * HOUR_MS + n, key, units, price, 8)
                   for day in range(20, days, 2) for n, (key, *_, units, price) in enumerate(DEMAND_ITEMS))

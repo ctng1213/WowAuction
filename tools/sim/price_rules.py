@@ -172,7 +172,7 @@ def _high_asks(key: int, kind: Kind, multiple: float, durations: Sequence[int], 
 
 
 def rules_world(seed: int, replicates: int = 4, spread: float = BUYER_SPREAD, days: int = DAYS,
-                change_day: int = CHANGE_DAY) -> tuple[World, dict[int, Kind]]:
+                change_day: int = CHANGE_DAY, demand_noise: float = 0.0) -> tuple[World, dict[int, Kind]]:
     """SM20's market: every gear shape and the commodity, in each regime, `replicates` items of each.
 
     Args:
@@ -181,6 +181,8 @@ def rules_world(seed: int, replicates: int = 4, spread: float = BUYER_SPREAD, da
         spread: The buyers' spread (BUYER_SPREAD; the review also ran 0.15).
         days: The world's length (DAYS; SM22 runs one past the plan's 3-week trust gate).
         change_day: The day the worth steps (CHANGE_DAY).
+        demand_noise: The commodities' 8 h demand overdispersion (Item.demand_noise; SM22 plants the real market's,
+            SM20 keeps steady buyers).
 
     Returns:
         (the World, item key -> its Kind).
@@ -200,7 +202,7 @@ def rules_world(seed: int, replicates: int = 4, spread: float = BUYER_SPREAD, da
             key += 1
             kinds[key] = Kind(CLOTH, regime, CLOTH_WORTH, shifts)
             items.append(commodity(key, f"{CLOTH}, {regime} {n}", CLOTH_WORTH, 120, 60, buyer_spread=spread,
-                                   shifts=shifts))
+                                   shifts=shifts, demand_noise=demand_noise))
             units, share, every, hours = DUMP
             for hour in range(0, days * 24, every):
                 at = START_MS + hour * HOUR_MS + 50 * 60_000
@@ -209,7 +211,7 @@ def rules_world(seed: int, replicates: int = 4, spread: float = BUYER_SPREAD, da
             key += 1
             kinds[key] = Kind(REAL, regime, CLOTH_WORTH, regime_shifts(regime, True, days, change_day))
             items.append(commodity(key, f"{REAL}, {regime} {n}", CLOTH_WORTH, REAL_BUYS, REAL_LISTINGS,
-                                   buyer_spread=spread, shifts=kinds[key].shifts))
+                                   buyer_spread=spread, shifts=kinds[key].shifts, demand_noise=demand_noise))
     return World(seed, START_MS, days, tuple(items), planted=tuple(planted)), kinds
 
 
