@@ -146,3 +146,26 @@ def test_an_hourly_fair_price_moves_with_the_clock_and_shifts_must_be_in_order()
     assert market._fair(item) == 50.0
     with pytest.raises(ValueError):
         Market(World(1, 0, 1, (Item(2, "y", True, 1, 0, 0, shifts=((5, 1.0, 1.0), (1, 1.0, 1.0))),)))
+
+
+def test_demand_noise_spreads_each_8_hour_blocks_buyers_and_leaves_a_world_without_it_as_it_was():
+    def buys(item, days=21, seed=9):
+        """Buy events per 8 h block."""
+        m = Market(World(seed, START, days, (item,)))
+        m.run_until(START + days * DAY_MS)
+        blocks = [0] * (days * 3)
+        for e in m.truth.events:
+            if e.kind == "buy":
+                blocks[(e.at_ms - START) // (8 * HOUR_MS)] += 1
+        return blocks, m.truth.to_jsonl()
+    calm = Item(2589, "Linen Cloth", False, 50, 90, 400, stack=1)        # 30 buyers per 8 h, ample supply
+    noisy = Item(2589, "Linen Cloth", False, 50, 90, 400, stack=1, demand_noise=3.0)
+    (plain, log), (spread, _) = buys(calm), buys(noisy)
+    assert log == buys(Item(2589, "Linen Cloth", False, 50, 90, 400, stack=1, demand_noise=0.0))[1]   # unchanged
+    mean = sum(spread) / len(spread)
+    var = sum((b - mean) ** 2 for b in spread) / len(spread)
+    plain_mean = sum(plain) / len(plain)
+    plain_var = sum((b - plain_mean) ** 2 for b in plain) / len(plain)
+    assert 22 < mean < 38 and 22 < plain_mean < 38                       # the same demand on average
+    assert plain_var < 2 * plain_mean                                    # count noise only: variance ≈ mean
+    assert var > mean + mean * mean / 3 * 0.4                            # overdispersed: m + m²/k, k = 3 (loose)

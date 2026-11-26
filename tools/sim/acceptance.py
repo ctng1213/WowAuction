@@ -28,6 +28,7 @@ beside it), and the result is reported under both. Measured only: no pass band.
 """
 from __future__ import annotations
 
+import dataclasses
 import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -54,6 +55,11 @@ SHAPES = {"gear": (40, 30), "gear, listing-limited": (16, 50), "commodity": (60,
 # (listings a day, buyers a day): gear busy enough for a curve (about 20 clean sales a day seen by the snapshots; see the
 # docstring); the listing-limited gear, whose cheap listings sell before a snapshot sees them (item 36(b): no curve, the
 # ask level, and the under-read of item 30(e)); and SM20's commodity.
+# SM25 (sales-profiles proposal §6.1): each shape's 8 h demand overdispersion, the Gamma shape k of Item.demand_noise,
+# from the real market's clean week (busy gear 1/k 0.33-0.36, commodities 0.45-0.51; thin demand is count noise), and
+# the CV of 8 h demand the real market showed for it (the engine's sold units, 21 windows), the row's target.
+SHAPE_NOISE = {"gear": 3.0, "gear, listing-limited": 0.0, "commodity": 2.0}
+REAL_CV = {"gear": 0.69, "gear, listing-limited": None, "commodity": 0.72}
 FORMS = ("today", "P28", "spec")                 # the chance's readings: no acceptance, built, the spec's ÷ 0.5
 PASSES = {"live book": False, "nothing ahead": True}   # a pass's name -> whether the poster clears the book first
 FLIPPER = "flipper"                              # who buys out the book in the nothing-ahead pass
@@ -75,7 +81,7 @@ class Post:
     capped: bool = False              # above the level of an item without a curve: a price the plan never posts (item 41)
 
 
-def acceptance_world(seed: int, replicates: int = REPLICATES, spread: float = BUYER_SPREAD
+def acceptance_world(seed: int, replicates: int = REPLICATES, spread: float = BUYER_SPREAD, noise: bool = False
                      ) -> tuple[World, dict[int, tuple[str, int]]]:
     """SM21's market: `replicates` steady gear items and commodities with a planted worth.
 
@@ -83,6 +89,8 @@ def acceptance_world(seed: int, replicates: int = REPLICATES, spread: float = BU
         seed: The world's seed.
         replicates: Items per shape.
         spread: The buyers' spread.
+        noise: Plant each shape's measured 8 h demand overdispersion (SHAPE_NOISE; SM25); False for SM21's steady
+            buyers.
 
     Returns:
         (the World, item key -> (its shape, its index)).
@@ -93,11 +101,13 @@ def acceptance_world(seed: int, replicates: int = REPLICATES, spread: float = BU
         for n in range(replicates):
             key += 1
             keys[key] = (shape, n)
+            k = SHAPE_NOISE[shape] if noise else 0.0
             if shape.startswith("gear"):
                 items.append(gear(key, f"{shape} {n}", GEAR_WORTH, buyers, listings, price_mix=PRICE_MIX,
-                                  cancel_share=CANCEL_SHARE, buyer_level=1.0, buyer_spread=spread))
+                                  cancel_share=CANCEL_SHARE, buyer_level=1.0, buyer_spread=spread, demand_noise=k))
             else:
-                items.append(commodity(key, f"{shape} {n}", CLOTH_WORTH, buyers, listings, buyer_spread=spread))
+                items.append(commodity(key, f"{shape} {n}", CLOTH_WORTH, buyers, listings, buyer_spread=spread,
+                                       demand_noise=k))
     return World(seed, START_MS, DAYS, tuple(items)), keys
 
 
@@ -221,6 +231,10 @@ def chances(item: ItemIntel, book: list[tuple[int, int, int, int]], price: int, 
         for form, use in (("today", sellprob.Acceptance(None, acc.curve, acc.how, acc.profile)), ("P28", acc)):   # P31's spread in both
             out[form + name] = sellprob.posting_chance(supply, price, units, now_ms, settings, sales_how,
                                                        item.undercut_share, use)[0]
+        if not name:                               # SM25: the built read without P31's spread, and with it forced on
+            for form, kind in (("P28, no spread", None), ("P28, spread forced", "busy")):
+                out[form] = sellprob.posting_chance(supply, price, units, now_ms, settings, sales_how,
+                                                    item.undercut_share, dataclasses.replace(acc, profile=kind))[0]
     out["spec"] = queue_chance(item, book, price, units, now_ms, settings,
                                lambda p, how: spec_acceptance(p, acc.level, acc.curve, how))
     if unseen:                                     # item 36(b)'s candidate: S' = S + min(S, the unseen sales a day)
@@ -297,7 +311,8 @@ class Acceptor:
 
 
 def trade(seed: int, folder: Path, replicates: int = REPLICATES, spread: float = BUYER_SPREAD,
-          clear_ahead: bool = False) -> tuple[list[Post], MarketIntelligence, dict[str, tuple[float, float]]]:
+          clear_ahead: bool = False, noise: bool = False
+          ) -> tuple[list[Post], MarketIntelligence, dict[str, tuple[float, float]], dict[str, float | None]]:
     """One pass's run: the world traded by the poster, through the unchanged cloud job.
 
     Args:
@@ -306,12 +321,14 @@ def trade(seed: int, folder: Path, replicates: int = REPLICATES, spread: float =
         replicates: Items per shape.
         spread: The buyers' spread.
         clear_ahead: The nothing-ahead pass (PASSES).
+        noise: Plant the measured demand overdispersion (SM25).
 
     Returns:
         (every post with the units it sold, the last daily document, per shape the mean sold/day the engine reads
-        against the truth's: a sale nobody's snapshot saw is not in the engine's).
+        against the truth's: a sale nobody's snapshot saw is not in the engine's, per shape the median CV of an
+        item's units bought per 8 h block over the run; None without a block).
     """
-    world, keys = acceptance_world(seed, replicates, spread)
+    world, keys = acceptance_world(seed, replicates, spread, noise)
     quiet = simulate(world, folder / "quiet", agent=None)           # the same world untraded: each item's unseen sales
     unseen = {key: max(0.0, truth - engine) for key in keys for engine, truth in [sold_rates(quiet, key)]}
     poster = Acceptor(keys, clear_ahead, unseen)
@@ -326,7 +343,37 @@ def trade(seed: int, folder: Path, replicates: int = REPLICATES, spread: float =
             bought[event.auction] = bought.get(event.auction, 0) + event.units
     posts = [Post(p.key, p.shape, p.step, p.price, p.units, min(p.units, bought.get(auction, 0)), p.chances, p.ahead,
                   p.under, p.capped) for auction, p in poster.posted]
-    return posts, run.documents[-1], rates
+    return posts, run.documents[-1], rates, demand_cv(run.truth.events, keys, world)
+
+
+def demand_cv(events: Sequence, keys: dict[int, tuple[str, int]], world: World) -> dict[str, float | None]:
+    """Per shape, the median over its items of the CV of units bought per 8 h block (SM25's calibration).
+
+    Args:
+        events: The run's truth events.
+        keys: Item key -> (its shape, its index).
+        world: The world (its start and length).
+
+    Returns:
+        Shape -> the median CV, None for a shape with no bought block.
+    """
+    blocks = world.days * 3
+    units: dict[int, list[int]] = {key: [0] * blocks for key in keys}
+    for event in events:
+        if event.kind == "buy" and event.key in units:
+            block = (event.at_ms - world.start_ms) // (8 * HOUR_MS)
+            if 0 <= block < blocks:
+                units[event.key][block] += event.units
+    out: dict[str, float | None] = {}
+    for shape in SHAPES:
+        cvs = []
+        for key, (s, _) in sorted(keys.items()):
+            row = units[key]
+            mean = sum(row) / blocks
+            if s == shape and mean > 0:
+                cvs.append(math.sqrt(sum((u - mean) ** 2 for u in row) / blocks) / mean)
+        out[shape] = sorted(cvs)[len(cvs) // 2] if cvs else None
+    return out
 
 
 def share_sold(posts: Sequence[Post]) -> float | None:
@@ -389,8 +436,8 @@ def sm21(folder: Path, seed: int = 1, replicates: int = REPLICATES, spreads: Seq
     out = []
     for spread in spreads:
         for name, clear_ahead in PASSES.items():
-            posts, doc, rates = trade(seed, folder / f"spread-{spread:.2f}-{name.replace(' ', '-')}", replicates,
-                                      spread, clear_ahead)
+            posts, doc, rates, _ = trade(seed, folder / f"spread-{spread:.2f}-{name.replace(' ', '-')}",
+                                         replicates, spread, clear_ahead)
             for shape in SHAPES:
                 if not clear_ahead:
                     out += world_measures(posts, doc, rates, shape, spread)
@@ -460,4 +507,56 @@ def pass_measures(posts: Sequence[Post], name: str, shape: str, spread: float) -
     return out
 
 
-ACCEPTANCE_ROWS = {"SM21": sm21}          # tools/sim_report merges them with its ROWS
+def sm25(folder: Path, seed: int = 1, replicates: int = REPLICATES, spreads: Sequence[float] = (BUYER_SPREAD,)
+         ) -> list[Measure]:
+    """SM25: SM21's shapes with the real market's 8 h demand overdispersion planted (sales-profiles proposal §6.1).
+
+    The simulator's buyers were count noise only (a CV of about 0.32 per 8 h for SM21's gear and 0.16 for its
+    commodity, against 0.69 and 0.72 on the real market), so it could show the demand spread's cost (P31) but not
+    its benefit beyond count noise. Here each shape's buyer rate is × a Gamma multiplier per 8 h block (SHAPE_NOISE).
+
+    Args:
+        folder: An empty folder for the runs.
+        seed: The world's seed.
+        replicates: Items per shape.
+        spreads: The buyers' spreads to run.
+
+    Returns:
+        Per spread and shape: the simulated 8 h demand CV against the real market's (live-book pass); then per pass,
+        the queue model's read at or under the hour's level (a = 1 by price) as built against the share sold, with
+        the read without the demand spread and with it forced on in the words. All reported.
+    """
+    out = []
+    for spread in spreads:
+        for name, clear_ahead in PASSES.items():
+            posts, _, _, cv = trade(seed, folder / f"noise-{spread:.2f}-{name.replace(' ', '-')}", replicates, spread,
+                                    clear_ahead, noise=True)
+            for shape in SHAPES:
+                if not clear_ahead:
+                    out.append(Measure("SM25", f"world: 8 h demand CV, {shape}, spread {spread:.2f} (k "
+                                       f"{SHAPE_NOISE[shape]:.1f}; the real market's against it)", cv[shape],
+                                       REAL_CV[shape], "reported"))
+                out.append(under_measure(posts, name, shape, spread))
+    return out
+
+
+def under_measure(posts: Sequence[Post], name: str, shape: str, spread: float) -> Measure:
+    """SM25's queue row for one pass and shape: the read at or under the hour's level against the share sold.
+
+    Args:
+        posts: The pass's posts.
+        name: The pass's name (PASSES).
+        shape: A SHAPES name.
+        spread: The buyers' spread.
+
+    Returns:
+        A reported measure; the reads without the demand spread and with it forced on are in its words.
+    """
+    under = [p for p in posts if p.shape == shape and p.under]
+    words = (f"{len(under)} posts; no spread {mean_chance(under, 'P28, no spread'):.2f}, spread forced "
+             f"{mean_chance(under, 'P28, spread forced'):.2f}") if under else "no posts"
+    return Measure("SM25", f"the queue model's read at or under the hour's level, overdispersed demand, {name}: "
+                   f"{shape}, spread {spread:.2f} ({words})", mean_chance(under, "P28"), share_sold(under), "reported")
+
+
+ACCEPTANCE_ROWS = {"SM21": sm21, "SM25": sm25}   # tools/sim_report merges them with its ROWS
