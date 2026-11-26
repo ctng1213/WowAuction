@@ -39,6 +39,10 @@ REAL_PRICE_MIX = ((0.007, 0.90, 1.00), (0.370, 1.00, 1.00), (0.259, 1.00, 1.05),
 REAL_STACKS = ((1, 0.33), (2, 0.21), (5, 0.17), (10, 0.11), (20, 0.18))
 GEAR_PRICE_MIX = ((0.085, 0.90, 1.00), (0.585, 1.00, 1.00), (0.160, 1.00, 1.05), (0.070, 1.05, 1.15),
                   (0.055, 1.15, 1.50), (0.045, 1.50, 2.50))
+# A commodity's 8 h demand overdispersion on the real market (the clean week of 2026-11-16, 1/k 0.45-0.51): the
+# Gamma shape the decision worlds plant (Item.demand_noise; sales-profiles proposal §6.2). The inference rows keep
+# steady buyers, so their tables stay comparable run to run.
+COMMODITY_DEMAND_NOISE = 2.0
 ANCHOR = 1.1                             # sellers price off at most 1.1 × fair, so the floor mean-reverts (§1.27(c))
 SM2_POSITIONS = ((0.1, 0.90, 0.90), (0.2, 0.98, 0.98), (0.4, 1.00, 1.00), (0.3, 1.10, 1.10))
 SM4_SHIFT = 3                            # the relist estimator's placebo: gaps later (tools/lifetimes_report.py)
