@@ -13,7 +13,7 @@ from ahsync.intel.contract import ItemIntel
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
 from sim.acceptance import (PASSES, REPLICATES, SHAPES, STEPS, Post, acceptance_world, chances, mean_chance,  # noqa: E402
-                            queue_chance, share_sold, sm21, spec_acceptance, trade, under_level)
+                            queue_chance, share_sold, sm21, sm25, spec_acceptance, trade, under_level)
 from sim.inference import START_MS  # noqa: E402
 from sim.market import HOUR_MS, Market  # noqa: E402
 
@@ -45,14 +45,16 @@ def test_SM21_the_acceptance_is_measured_against_the_share_sold_per_step_and_the
 
 
 def test_the_poster_reads_every_form_of_the_chance_and_P28_never_exceeds_todays(tmp_path):
-    posts, doc, rates = trade(1, tmp_path, replicates=1, spread=0.25)
+    posts, doc, rates, cv = trade(1, tmp_path, replicates=1, spread=0.25)
     assert set(rates) == set(SHAPES) and all(t > 0 for _, t in rates.values())
     assert any(p.under for p in posts) and all(p.chances["P28"] == p.chances["today"] for p in posts if p.under)
     assert any(p.capped for p in posts) and not any(p.capped and p.under for p in posts)
     assert all(p.shape != "gear" for p in posts if p.capped)            # the busy gear has a curve
     assert posts and {p.shape for p in posts} == set(SHAPES) and {p.step for p in posts} <= set(STEPS)
     for p in posts:
-        assert set(p.chances) == {"today", "P28", "spec", "today, nothing ahead", "P28, nothing ahead", "P28, with unseen"}
+        assert set(p.chances) == {"today", "P28", "spec", "today, nothing ahead", "P28, nothing ahead", "P28, with unseen",
+                                  "P28, no spread", "P28, spread forced"}
+        assert p.chances["P28, no spread"] == p.chances["P28"] or p.shape == "gear"   # only busy gear has the spread
         assert p.chances["P28, with unseen"] >= p.chances["P28"] - 1e-12
         assert p.chances["P28"] <= p.chances["today"] + 1e-12
         assert p.chances["P28, nothing ahead"] <= p.chances["today, nothing ahead"] + 1e-12
@@ -61,6 +63,16 @@ def test_the_poster_reads_every_form_of_the_chance_and_P28_never_exceeds_todays(
     assert share_sold([Post(1, "gear", 1.0, 1, 1, 1, {}, 0.0), Post(1, "gear", 1.0, 1, 5, 2, {}, 0.0)]) == 0.5
     assert share_sold([]) is None and mean_chance([], "P28") is None
     assert mean_chance([Post(1, "gear", 1.0, 1, 1, 1, {"P28": 0.2}, 0.0), Post(1, "gear", 1.0, 1, 1, 0, {"P28": 0.6}, 0.0)], "P28") == 0.4
+
+
+def test_SM25_overdispersed_demand_reports_the_demand_cv_and_the_queue_read_with_and_without_the_spread(tmp_path):
+    found = sm25(tmp_path, replicates=2)
+    assert len(found) == len(SHAPES) * (1 + len(PASSES)) and all(m.band == "reported" for m in found)
+    assert sum(1 for m in found if m.what.startswith("world: 8 h demand CV, ")) == len(SHAPES)
+    planted = [m for m in found if m.what.startswith("world: 8 h demand CV, commodity")][0]
+    assert planted.engine is not None and planted.engine > 0.3                    # k = 2: far over count noise (0.16)
+    under = [m for m in found if m.what.startswith("the queue model's read")]
+    assert len(under) == len(PASSES) * len(SHAPES) and all("overdispersed demand" in m.what for m in under)
 
 
 def test_the_specs_half_form_equals_P28s_when_the_level_is_the_curves_50th_and_jumps_above_it():

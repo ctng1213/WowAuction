@@ -24,6 +24,7 @@ from ahsync.engine.capacity import slot_of
 from sim.truth import Event, Truth
 
 MINUTE_MS, HOUR_MS, DAY_MS = 60_000, 3_600_000, 86_400_000
+NOISE_BLOCK_MS = 8 * HOUR_MS          # an overdispersed demand multiplier holds for 8 h (Item.demand_noise)
 BOT_MINUTE = 7                       # bot n acts at n × this many minutes past each hour
 GEAR_CHOICE = 3                      # a gear buyer picks among this many of the cheapest affordable auctions
 FAIR_BAND = (0.7, 1.6)               # a post's price stays within this × the fair price
@@ -67,6 +68,10 @@ class Item:
     # 168 fair-price multipliers by hour of week (UTC, Mon 00:00 first): what buyers will pay and what sellers think
     # the item is worth move with the clock, while buyers come as often (`weekly` shapes that). () = flat.
     hourly: tuple[float, ...] = ()
+    # Overdispersed demand (sales-profiles proposal §6.1): each 8 h block's buyer rate is × G ~ Gamma(k, 1/k), mean 1,
+    # drawn from its own generator seeded by the world, the item and the block, so a world without it draws exactly
+    # what it did. Real 8 h demand: k about 3 for busy gear, about 2 for commodities (1/k 0.33-0.51). 0 = none.
+    demand_noise: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -141,6 +146,7 @@ class Market:
         self._next_id = FIRST_AUCTION_ID
         self._actors = 0
         self._bots: list[list] = []                 # bot number -> [item key, name, its live auction id or None]
+        self._noise: dict[tuple[int, int], float] = {}   # (item key, 8 h block) -> its demand multiplier
         self._shift_starts = {key: [start for start, _, _ in item.shifts] for key, item in self.items.items()}
         for key, starts in self._shift_starts.items():
             if starts != sorted(starts):
@@ -370,8 +376,28 @@ class Market:
         clock = item.hourly[slot_of(self.now_ms // HOUR_MS)] if item.hourly else 1.0
         return item.fair_price * self._shift(item, self.now_ms)[0] * clock
 
+    def _demand_noise(self, item: Item, at_ms: int) -> float:
+        """The buyer-rate multiplier of the 8 h block holding a time (Item.demand_noise).
+
+        Args:
+            item: The item.
+            at_ms: UTC ms.
+
+        Returns:
+            G ~ Gamma(k, 1/k) for the block, the same every time it is asked; 1.0 without demand noise.
+        """
+        if item.demand_noise <= 0:
+            return 1.0
+        block = at_ms // NOISE_BLOCK_MS
+        g = self._noise.get((item.key, block))
+        if g is None:
+            rng = random.Random(f"{self.world.seed}:{item.key}:{block}")
+            g = self._noise[(item.key, block)] = rng.gammavariate(item.demand_noise, 1 / item.demand_noise)
+        return g
+
     def _schedule_arrival(self, item: Item, who: str, after_ms: int) -> None:
-        """Queue an item's next seller or buyer: a Poisson process, thinned by the weekly profile for buyers.
+        """Queue an item's next seller or buyer: a Poisson process, thinned by the weekly profile for buyers, each
+        8 h block's buyer rate × its demand multiplier when the item has demand noise.
 
         Args:
             item: The item.
@@ -383,9 +409,18 @@ class Market:
             return
         shaped = who == "buyer" and bool(item.weekly)
         peak = max(item.weekly) if shaped else 1.0
+        noisy = who == "buyer" and item.demand_noise > 0
         at = float(after_ms)
         while True:
-            at += self.rng.expovariate(rate * peak / DAY_MS)
+            if noisy:                                # each block at its own rate; memoryless, so restart at a boundary
+                block_end = (int(at) // NOISE_BLOCK_MS + 1) * NOISE_BLOCK_MS
+                step = self.rng.expovariate(rate * peak * self._demand_noise(item, int(at)) / DAY_MS)
+                if at + step >= block_end:
+                    at = float(block_end)
+                    continue
+                at += step
+            else:
+                at += self.rng.expovariate(rate * peak / DAY_MS)
             if not shaped or self.rng.random() * peak <= item.weekly[slot_of(int(at) // HOUR_MS)]:
                 break
         self._push(int(at), who, item.key)
