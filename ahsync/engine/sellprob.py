@@ -146,20 +146,24 @@ def simulate(inputs: QueueInputs) -> float:
 def demand_spread(acc: Acceptance | None) -> tuple[float, ...]:
     """The demand multipliers a post's chance averages over (SPEC §3.3.2, P31).
 
-    Only busy gear gets the spread (sales profile "busy", P32): its sales are what it was measured on. Thin and rare
-    gear sell too few to measure a window's demand apart from your own sale (the spread made their under-read worse),
-    and a commodity waits for the simulator's overdispersed demand to check the small real gain (plan sold-price §1d
-    item 43(d), the sales-profiles proposal §7).
+    Busy gear (sales profile "busy", P32) and a commodity with a sold curve get the spread: busy gear's sales are what
+    it was measured on, and a commodity's 8 h demand varies as much (a CV of 0.72 against busy gear's 0.69); on the
+    real market's 24 h stacks the spread moved every commodity row 0.02-0.06 closer to the truth, and in SM25 it took
+    the live book's error from about +0.05 to about 0 (the user, 2026-11-25; plan sold-price §1d item 43(e)). Thin
+    and rare gear sell too few to measure a window's demand apart from your own sale (the spread made their
+    under-read worse; SM25: about −0.3).
 
     Args:
         acc: The item's level, sold curve, pattern and sales profile; None for none.
 
     Returns:
-        DEMAND_SPREAD for the busy profile, else NO_SPREAD (the queue once at S).
+        DEMAND_SPREAD for the busy profile and for a commodity with a sold curve, else NO_SPREAD (the queue once at S).
     """
-    if acc is None or acc.profile != "busy":
+    if acc is None:
         return NO_SPREAD
-    return DEMAND_SPREAD
+    if acc.profile == "busy" or (acc.profile == "commodity" and acc.curve is not None):
+        return DEMAND_SPREAD
+    return NO_SPREAD
 
 
 def ahead_of(book: Sequence[tuple[int, float, int]] | None, price: int,

@@ -446,9 +446,11 @@ def test_P31_the_chance_averages_over_the_spread_of_demand():
     assert sp.posting_chance(supply, 100, 10, 0, settings, None, 0.0, None)[0] == pytest.approx(0.8)
     assert sp.demand_spread(acc) == sp.DEMAND_SPREAD and sp.demand_spread(bare) == sp.demand_spread(None) == (1.0,)
     assert sp.demand_spread(sp.Acceptance(100, SOLD_CURVE)) == (1.0,)            # the profile gates it, not the curve
-    commodity = sp.Acceptance(100, SOLD_CURVE, None, "commodity")              # commodities wait (P32)
-    assert sp.demand_spread(commodity) == (1.0,)
-    assert sp.posting_chance(supply, 100, 10, 0, settings, None, 0.0, commodity)[0] == pytest.approx(0.8)
+    commodity = sp.Acceptance(100, SOLD_CURVE, None, "commodity")              # a commodity with a curve: spread too
+    assert sp.demand_spread(commodity) == sp.DEMAND_SPREAD
+    assert sp.posting_chance(supply, 100, 10, 0, settings, None, 0.0, commodity)[0] == pytest.approx(0.6552)
+    thin_commodity = sp.Acceptance(100, None, None, "commodity")                 # without a curve: once at S
+    assert sp.posting_chance(supply, 100, 10, 0, settings, None, 0.0, thin_commodity)[0] == pytest.approx(0.8)
     grid = sp.build_curve(24.0, 0.0, 0.0, sp.FLAT_HOW, 0, 10, price=100, acc=acc, spread=sp.demand_spread(acc))
     assert grid[0][0] == pytest.approx(0.6552)                                  # the exported curve reads it too
     assert sp.build_curve(24.0, 0.0, 0.0, sp.FLAT_HOW, 0, 10, price=100, acc=bare)[0][0] == pytest.approx(0.8)
