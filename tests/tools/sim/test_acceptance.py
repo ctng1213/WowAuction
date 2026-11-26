@@ -54,7 +54,7 @@ def test_the_poster_reads_every_form_of_the_chance_and_P28_never_exceeds_todays(
     for p in posts:
         assert set(p.chances) == {"today", "P28", "spec", "today, nothing ahead", "P28, nothing ahead", "P28, with unseen",
                                   "P28, no spread", "P28, spread forced"}
-        assert p.chances["P28, no spread"] == p.chances["P28"] or p.shape == "gear"   # only busy gear has the spread
+        assert p.chances["P28, no spread"] == p.chances["P28"] or p.shape in ("gear", "commodity")   # the curve shapes
         assert p.chances["P28, with unseen"] >= p.chances["P28"] - 1e-12
         assert p.chances["P28"] <= p.chances["today"] + 1e-12
         assert p.chances["P28, nothing ahead"] <= p.chances["today, nothing ahead"] + 1e-12
