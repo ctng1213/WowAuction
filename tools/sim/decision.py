@@ -296,7 +296,10 @@ def sd29(folder: Path, seed: int = 1, days: int = DIP_DAY + 2, dip_day: int = DI
 
 DROP_DAY = 28                           # SD5/SD7: demand moves at noon of this day
 INSTALL_DAY = 19                        # SD5/SD7: AHSync installed on a market the cloud has watched since day 0
-DEMAND_ITEMS = ((SILK, "Silk Cloth", 150, 60, 150, 4, 200, 65),          # key, name, fair c, buyers/day, posts/day,
+# Silk's dump was 200 units (1.3 days of its demand) until 2026-11-26: with the demand spread (P31) its steady
+# undercut stream halved the plan's chance and SD7 bought nothing; 50 is about 8 h of demand, still the size of the
+# biggest real lumps (the clean week: a commodity's biggest 8 h window holds 28% of its week's undercut units).
+DEMAND_ITEMS = ((SILK, "Silk Cloth", 150, 60, 150, 4, 50, 65),           # key, name, fair c, buyers/day, posts/day,
                 (4338, "Mageweave Cloth", 400, 9, 12, 6, 12, 240),       # most units a buyer takes, units dumped,
                 (14047, "Runecloth", 800, 4, 6, 5, 5, 480))              # dump price c (below each real floor)
 REACTION_HOURS = ((100, 12), (25, 36), (0, 96))   # plan §1.11: an item selling at least N a day stops buying in H h
