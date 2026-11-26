@@ -55,7 +55,8 @@ def _observations(series: Sequence[tuple[int, float]], now_ms: int, half_life_we
     for t, value in series:
         if t > now_ms:
             continue
-        slot = _slot(t)
+        hour_number = t // HOUR_MS                # _slot(t), inline: this loop runs for every hour of every item
+        slot = (hour_number // 24 + 3) % 7 * 24 + hour_number % 24
         age = (now_ms - t) // WEEK_MS
         weight = weight_of_age.get(age)
         if weight is None:
@@ -153,7 +154,23 @@ def price_profile(hourly: Sequence[tuple[int, int]], med30: int | None, now_ms: 
         The profile, not normalised; flat 1.0 everywhere when there is no observation or no med30. A slot's weeks
         count the weeks it has an observation in.
     """
-    by_slot, week_sets = _observations(centred_ratios(hourly, now_ms), now_ms, half_life_weeks)
+    return price_profile_from(centred_ratios(hourly, now_ms), med30, now_ms, half_life_weeks)
+
+
+def price_profile_from(ratios: Sequence[tuple[int, float]], med30: int | None, now_ms: int,
+                       half_life_weeks: float = 4) -> Profile:
+    """`how` from centred ratios already computed (price_profile's second half; SPEC §3.3, W17, P29).
+
+    Args:
+        ratios: centred_ratios(hourly, now_ms).
+        med30: The 30-day median in copper; only its absence matters (no recent close: flat).
+        now_ms: Now, UTC ms.
+        half_life_weeks: pattern_half_life_weeks.
+
+    Returns:
+        The profile, as price_profile gives it.
+    """
+    by_slot, week_sets = _observations(ratios, now_ms, half_life_weeks)
     weeks = tuple(len(w) for w in week_sets)
     confident = tuple(w >= MIN_WEEKS for w in weeks)
     if not med30:
@@ -239,7 +256,7 @@ def strength(error_profile: float, error_flat: float, weeks: int) -> int | None:
 
 
 def seasonality_strength(hourly: Sequence[tuple[int, int]], med30: int | None, now_ms: int,
-                         half_life_weeks: float = 4) -> int | None:
+                         half_life_weeks: float = 4, centred: Sequence[tuple[int, float]] | None = None) -> int | None:
     """How predictable the weekly price pattern is, tested out of sample (SPEC §3.3.6).
 
     Builds `how` from every week but the latest, then predicts the latest week's
@@ -250,6 +267,9 @@ def seasonality_strength(hourly: Sequence[tuple[int, int]], med30: int | None, n
         med30: The 30-day median in copper.
         now_ms: Now, UTC ms; the held-out week is the 7 days up to it.
         half_life_weeks: pattern_half_life_weeks.
+        centred: centred_ratios(hourly, now_ms) when the caller has them. The held-out pattern's ratios are then
+            those whose centred week ends by the held-out week's start: their windows hold the same closes with or
+            without the latest week, so the result is the one built from scratch, bit for bit.
 
     Returns:
         Strength 0-100, or None for insufficient evidence: fewer than 3 weeks of
@@ -260,8 +280,12 @@ def seasonality_strength(hourly: Sequence[tuple[int, int]], med30: int | None, n
     held_out = [(t, c) for t, c in past if t > now_ms - WEEK_MS]
     if weeks < MIN_WEEKS or len(held_out) < STRENGTH_MIN_HELD_OUT or not med30:
         return None
-    how = price_profile([(t, c) for t, c in past if t <= now_ms - WEEK_MS], med30, now_ms - WEEK_MS,
-                        half_life_weeks).values
+    cut = now_ms - WEEK_MS
+    if centred is None:
+        how = price_profile([(t, c) for t, c in past if t <= cut], med30, cut, half_life_weeks).values
+    else:
+        last = cut - (CENTRED_AFTER + 1) * HOUR_MS          # a centred week must have ended by the cut
+        how = price_profile_from([r for r in centred if r[0] <= last], med30, cut, half_life_weeks).values
     error_profile = sum(abs(c - med30 * how[_slot(t)]) for t, c in held_out) / len(held_out)
     error_flat = sum(abs(c - med30) for _, c in held_out) / len(held_out)
     return strength(error_profile, error_flat, weeks)

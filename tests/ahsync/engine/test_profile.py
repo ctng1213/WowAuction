@@ -214,3 +214,21 @@ def test_P29_a_one_day_crash_with_two_weeks_of_data_is_no_pattern():
     profile = price_profile(closes, med30=49, now_ms=NOW)
     assert profile.weeks[12] == 2                        # Monday 12:00 has observations from 2 weeks, under 3
     assert all(v == pytest.approx(1.0) for v in profile.values)
+
+
+def test_seasonality_from_the_centred_ratios_is_the_one_built_from_scratch():
+    from tests.support.gen import cases
+
+    def series(rng):
+        """A random hourly close history: gaps, a weekly shape, a level shift and noise; and a random now."""
+        weeks, shift_at = rng.randint(2, 7), rng.random()
+        rows = []
+        for t, v in history(weeks, lambda s: 100 + 30 * (s % 24 > 17)):
+            if rng.random() < 0.85:
+                level = 1.3 if t > NOW - shift_at * weeks * WEEK_MS else 1.0
+                rows.append((t, int(v * level * (0.8 + 0.4 * rng.random()))))
+        return rows, NOW - rng.randint(0, 40) * HOUR_MS, rng.choice((None, 100, 120))
+    for i, (closes, now, med30) in enumerate(cases(2_511_2026, series, n=80)):
+        fast = seasonality_strength(closes, med30, now, 2, centred_ratios(closes, now))
+        assert fast == seasonality_strength(closes, med30, now, 2), f"case {i}"
+        assert profile.price_profile_from(centred_ratios(closes, now), med30, now, 2) == price_profile(closes, med30, now, 2)

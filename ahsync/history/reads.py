@@ -546,8 +546,11 @@ def _best_per_time(rows: list[tuple], ranked: dict[str, int]) -> list[tuple]:
         One (time, value) per time, ascending.
     """
     best: list[tuple] = []
+    orders: dict[str, tuple] = {}                 # a source's precedence is the same on every row: once per source
     for t, value, src in rows:
-        order = source_precedence(src, ranked)
+        order = orders.get(src)
+        if order is None:
+            order = orders[src] = source_precedence(src, ranked)
         if not best or best[-1][0] != t:
             best.append((t, value, order))
         elif order < best[-1][2]:
