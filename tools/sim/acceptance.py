@@ -175,8 +175,8 @@ def queue_chance(item: ItemIntel, book: Sequence[tuple[int, int, int, int]] | No
     how = acc.how or sellprob.FLAT_HOW
     demand = tuple(d * factor(price, how[slot_of(h)]) for d, h in zip(sellprob.demand_for(hours, sales_how), hours))
     u = settings.default_undercut_share if item.undercut_share is None else item.undercut_share
-    return sellprob.simulate(QueueInputs(item.sold_per_day, item.listed_per_day or 0.0, u, demand, units, ahead,
-                                         sellprob.demand_spread(acc)))
+    return sellprob.simulate(QueueInputs(item.sold_per_day, item.listed_per_day or 0.0, u, demand, units,
+                                         sellprob.queue_ahead(ahead, price, acc), sellprob.demand_spread(acc)))
 
 
 def under_level(item: ItemIntel, price: int, now_ms: int, settings: MarketSettings) -> bool:

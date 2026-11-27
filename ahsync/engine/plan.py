@@ -326,6 +326,7 @@ def post_chance(f: SellFacts, price: int, qty: int, hours: Sequence[int], own_ah
         ahead = ahead + (sellprob.Competitor(price, own_ahead, 0),)
     u = s.default_undercut_share if f.undercut_share is None else f.undercut_share
     acc = sellprob.Acceptance(f.level, f.sold_curve, f.how, f.sales_profile)
+    ahead = sellprob.queue_ahead(ahead, price, acc)                # a curve commodity's ties stay (P34)
     demand = sellprob.accepted_demand(hours, f.sales_how, price, acc)
     queue = sellprob.QueueInputs(f.sold_per_day, f.listed_per_day or 0.0, u, demand, qty, ahead,
                                  sellprob.demand_spread(acc))
