@@ -143,6 +143,31 @@ def simulate(inputs: QueueInputs) -> float:
     return total / len(inputs.spread)
 
 
+def queue_ahead(ahead: tuple[Competitor, ...], price: int, acc: Acceptance | None) -> tuple[Competitor, ...]:
+    """The competitors ahead as the queue runs them (SPEC §3.3.2, P34).
+
+    A commodity with a sold curve keeps every competitor at the post's own price for the whole window (band 0): its
+    stacks are relisted
+    as fast as they expire and its buyers take a newer stack at an equal price more often than an older one (mean
+    age rank 0.72 on the clean week), so a band's midpoint is no time it leaves the queue. On the real market's 24 h
+    stacks this halved the tied stacks' error (0.12 to 0.065; the user, 2026-11-26; plan sold-price §1d item 44).
+    Only the ties: a strictly cheaper competitor keeps its band's midpoint, since keeping those was never measured and
+    it starved the plan's sell-later posts above the cheapest in every decision world. Gear and commodities without
+    a curve keep the band midpoints (keeping the ties made both worse).
+
+    Args:
+        ahead: The competitors at or below your price, from ahead_of.
+        price: Your unit price, copper.
+        acc: The item's level, sold curve, pattern and sales profile; None for none.
+
+    Returns:
+        `ahead` with the band 0 for each competitor at `price`, for a commodity with a sold curve; otherwise `ahead`.
+    """
+    if acc is None or acc.profile != "commodity" or acc.curve is None:
+        return ahead
+    return tuple(Competitor(c.price, c.units, 0) if c.price == price else c for c in ahead)
+
+
 def demand_spread(acc: Acceptance | None) -> tuple[float, ...]:
     """The demand multipliers a post's chance averages over (SPEC §3.3.2, P31).
 
@@ -770,5 +795,6 @@ def posting_chance(supply: Supply, price: int | None, qty: int, now_ms: int, set
     demand = accepted_demand(posting_now_window(now_ms, settings.sell_window_hours), sales_how or FLAT_HOW, price,
                              acc)
     u = settings.default_undercut_share if undercut is None else undercut
-    queue = QueueInputs(supply.sold_per_day, supply.listed_per_day or 0.0, u, demand, qty, ahead, demand_spread(acc))
+    queue = QueueInputs(supply.sold_per_day, supply.listed_per_day or 0.0, u, demand, qty, queue_ahead(ahead, price, acc),
+                        demand_spread(acc))
     return chance(queue, None, 0, 0, 0, settings.default_sell_prob, settings.own_record_weight)

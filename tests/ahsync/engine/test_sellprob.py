@@ -479,3 +479,22 @@ def test_PI21_the_spread_chance_stays_in_range_rises_with_S_and_is_the_plain_cha
                                             (Competitor(0, float(a), 0),) if a else (), sp.DEMAND_SPREAD))
                     for a in sp.CURVE_AHEAD]
         check(row == expected, i, q)
+
+
+def test_P34_a_curve_commoditys_competitors_stay_in_the_queue_for_the_whole_window():
+    ahead = (sp.Competitor(100, 6.0, LONG),)                     # 6 tied units, LONG: its midpoint is 5 h
+    curve_commodity = sp.Acceptance(100, SOLD_CURVE, None, "commodity")
+    assert sp.queue_ahead(ahead, 100, curve_commodity) == (sp.Competitor(100, 6.0, 0),)
+    cheaper = (sp.Competitor(90, 6.0, LONG),)                    # strictly cheaper: keeps its midpoint (unmeasured)
+    assert sp.queue_ahead(cheaper, 100, curve_commodity) == cheaper
+    for other in (sp.Acceptance(100, None, None, "commodity"), sp.Acceptance(100, SOLD_CURVE, None, "busy"), None):
+        assert sp.queue_ahead(ahead, 100, other) == ahead          # gear and commodities without a curve: midpoints
+    # S 24 a day, 1 unit posted, the spread's m: leaving at 5 h it gets min(1, 3m), staying min(1, max(0, 8m - 6))
+    leave = [sp.simulate(QueueInputs(24.0 * m, 0.0, 0.0, FLAT8, 1, ahead)) for m in sp.DEMAND_SPREAD]
+    stay = [sp.simulate(QueueInputs(24.0 * m, 0.0, 0.0, FLAT8, 1, sp.queue_ahead(ahead, 100, curve_commodity)))
+            for m in sp.DEMAND_SPREAD]
+    assert sum(leave) / 10 == pytest.approx(0.954) and sum(stay) / 10 == pytest.approx(0.508)
+    book = ((100, 6, LONG, 1),)
+    supply = sp.Supply(24.0, 0.0, book, 100, 6)
+    assert sp.posting_chance(supply, 100, 1, 0, sp.MarketSettings(), None, 0.0, curve_commodity)[0] == pytest.approx(0.508)
+
