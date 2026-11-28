@@ -152,8 +152,11 @@ def queue_ahead(ahead: tuple[Competitor, ...], price: int, acc: Acceptance | Non
     age rank 0.72 on the clean week), so a band's midpoint is no time it leaves the queue. On the real market's 24 h
     stacks this halved the tied stacks' error (0.12 to 0.065; the user, 2026-11-26; plan sold-price §1d item 44).
     Only the ties: a strictly cheaper competitor keeps its band's midpoint, since keeping those was never measured and
-    it starved the plan's sell-later posts above the cheapest in every decision world. Gear and commodities without
-    a curve keep the band midpoints (keeping the ties made both worse).
+    it starved the plan's sell-later posts above the cheapest in every decision world. Only posting now
+    (`posting_chance`): it was measured on posts read against the book they met, and a post the plan makes for a later
+    window, read against today's book, priced at the window's forecast, ties the floor there and lost every flip in
+    SD5 and SD7 (a chance of 0.02-0.12 against 0.86; the user, 2026-11-27). Gear and commodities without a curve keep
+    the band midpoints (keeping the ties made both worse).
 
     Args:
         ahead: The competitors at or below your price, from ahead_of.

@@ -296,3 +296,15 @@ def test_P28_a_post_above_the_hours_level_reads_the_price_acceptance(monkeypatch
     assert plan.post_chance(sold, 65, 20, hours, 0, S) < plan.post_chance(plain, 65, 20, hours, 0, S)    # above it
     flat = tuple([1.0] * 168)                                    # the level 49 c: 55 c is the curve's 75th
     assert plan.post_chance(linen(sold_curve=curve, how=flat, **quiet), 55, 20, hours, 0, S) ==         pytest.approx(plan.post_chance(linen(how=flat, **quiet), 55, 20, hours, 0, S) * 0.5)
+
+
+def test_P34_a_planned_post_keeps_the_midpoints_since_the_tie_rule_is_posting_now_only():
+    tied = linen(sold_curve=(40, 45, 47, 49, 55, 65, 80), sales_profile="commodity", commodity=True, book=((45, 6, 3, 1),),
+                 cur=45, cur_qty=6, undercut_share=0.0)
+    hours = sellprob.posting_now_window(NOW)
+    acc = sellprob.Acceptance(tied.level, tied.sold_curve, tied.how, "commodity")
+    leave = sellprob.simulate(sellprob.QueueInputs(tied.sold_per_day, tied.listed_per_day, 0.0,
+                                                   sellprob.accepted_demand(hours, tied.sales_how, 45, acc), 1,
+                                                   (sellprob.Competitor(45, 6.0, 3),), sellprob.demand_spread(acc)))
+    assert plan.post_chance(tied, 45, 1, hours, 0, S) == pytest.approx(leave)     # the tied stack leaves at 5 h
+
